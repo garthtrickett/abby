@@ -5,11 +5,13 @@ import base64
 import getpass
 import json
 import re
+import subprocess
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
 from urllib.error import URLError
 from urllib.parse import quote, urlencode
+from pathlib import Path
 
 from cliniko_availability_probe import ProbeError, request, rows
 
@@ -69,6 +71,12 @@ def main() -> int:
         if len(businesses) != 1 or len(practitioners) != 1 or not types:
             raise ProbeError("expected_one_demo_business_and_practitioner")
         business = businesses[0]
+        detail_status, business_detail = request(base, headers, "GET", f"/businesses/{quote(str(business['id']), safe='')}")
+        if detail_status != 200 or str(business_detail.get("id")) != str(business["id"]):
+            raise ProbeError(f"business_detail_{detail_status}")
+        time_zone_identifier = business_detail.get("time_zone_identifier")
+        if not isinstance(time_zone_identifier, str) or not time_zone_identifier:
+            raise ProbeError("business_timezone_missing")
         original_flag = business.get("show_in_online_bookings")
         if original_flag not in (True, False):
             raise ProbeError("business_flag_not_boolean")
@@ -125,6 +133,30 @@ def main() -> int:
         print(json.dumps({"step": "reconcile_without_post_response", "exact_matches": count, "same_appointment": reconciled_id == appointment_id}))
         if reconciled_id != appointment_id:
             raise ProbeError("exact_reconciliation_unproven")
+
+        adapter_input = {
+            "apiKey": key, "contactEmail": contact, "businessId": business_id,
+            "patientId": patient_id, "appointmentId": appointment_id,
+        }
+        repo_root = Path(__file__).resolve().parents[2]
+        try:
+            adapter = subprocess.run(
+                ["node", str(Path(__file__).with_name("cliniko_appointment_adapter_probe.ts"))],
+                input=json.dumps(adapter_input), text=True, capture_output=True,
+                cwd=repo_root, timeout=60, check=False,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            raise ProbeError("appointment_adapter_unavailable") from None
+        try:
+            adapter_result = json.loads(adapter.stdout)
+        except ValueError:
+            raise ProbeError("appointment_adapter_output_invalid") from None
+        if (adapter.returncode != 0 or adapter_result.get("ok") is not True or
+                adapter_result.get("exact") is not True or adapter_result.get("count") != 1 or
+                adapter_result.get("timeZone") != time_zone_identifier):
+            raise ProbeError("appointment_adapter_read_mismatch")
+        print(json.dumps({"step": "typescript_appointment_adapter", "count": 1,
+                          "exact_synthetic_appointment": True, "timezone_match": True}))
 
         if len(offers) > 1 and isinstance(offers[1].get("appointment_start"), str):
             second_start = offers[1]["appointment_start"]
