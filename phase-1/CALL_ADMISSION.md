@@ -8,4 +8,6 @@ The ledger stores `starting` and an immutable admission receipt. PostgreSQL stor
 
 The same tests run on memory and disposable PostgreSQL storage. They cover replay, number conflict, provider-account separation, routing failure, tenant scope, activation, lease renewal and replay, admission and active-session expiry, disconnect, and admission/activation event persistence. Run `npm test` and `npm run probe:postgres`.
 
-The text harness still uses direct `CallRuntime.start` to create an active synthetic call. Live admission uses `CallAdmissionService.begin`. The next slice needs authenticated transport verification, database-clock lease authority, a durable production migration and worker schedule, a delivery dispatcher, media and transcript adapters, a provider-owned fallback, and voice E2E evidence. No call is ready for live routing from this contract alone.
+The text harness still uses direct `CallRuntime.start` to create an active synthetic call. Live admission uses `CallAdmissionService.begin`. The next slice needs authenticated transport verification, database-clock lease authority, a durable production migration and worker schedule, a delivery dispatcher, media and transcript adapters, a proven provider-owned fallback, and voice E2E evidence. No call is ready for live routing from this contract alone.
+
+The [synthetic admission fallback](ADMISSION_FALLBACK.md) now coordinates new-call failures with an independent provider port and operational alert. Its fake provider outcomes do not establish a live fallback route.
