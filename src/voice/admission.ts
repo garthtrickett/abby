@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import type { LedgerStore } from "../core/ledger.ts";
+import type { ModelKnowledgeContextHost } from "../core/host.ts";
+import { captureKnowledgeSnapshot, validKnowledgeSnapshot } from "../core/knowledge-evidence.ts";
 import { err, ok } from "../core/model.ts";
 import type { Admission, AdmissionReceipt, AdmissionResult, CallPolicy, ProviderCallKey, Result, TransitionFailure } from "../core/model.ts";
 import { unprovenReadiness } from "../core/readiness.ts";
@@ -30,12 +32,15 @@ export class CallAdmissionService {
   private readonly resolvePolicy: PolicyResolver;
   private readonly now: () => string;
   private readonly readiness: AutomationReadiness;
+  private readonly knowledge: ModelKnowledgeContextHost | undefined;
 
-  constructor(ledger: LedgerStore, resolvePolicy: PolicyResolver, now: () => string = () => new Date().toISOString(), readiness: AutomationReadiness = unprovenReadiness) {
+  constructor(ledger: LedgerStore, resolvePolicy: PolicyResolver, now: () => string = () => new Date().toISOString(), readiness: AutomationReadiness = unprovenReadiness,
+              knowledge?: ModelKnowledgeContextHost) {
     this.ledger = ledger;
     this.resolvePolicy = resolvePolicy;
     this.now = now;
     this.readiness = readiness;
+    this.knowledge = knowledge;
   }
 
   async begin(event: AuthenticatedInboundCall): Promise<Result<AdmissionResult, TransitionFailure | RouteFailure>> {
@@ -73,12 +78,27 @@ export class CallAdmissionService {
     }
     const acceptedAt = this.now();
     if (!Number.isFinite(Date.parse(acceptedAt))) return err({ kind: "invalidTransition" });
+    let callPolicy = policy.value;
+    if (this.knowledge) {
+      const captured = await captureKnowledgeSnapshot(this.knowledge, callPolicy.scope, acceptedAt);
+      if (!captured.ok) {
+        const raced = await this.ledger.findAdmission(callId);
+        if (!raced.ok) return raced;
+        return raced.value ? duplicateOrConflict(raced.value, event) : err({ kind: "routeUnavailable" });
+      }
+      callPolicy = { ...callPolicy, knowledgeSnapshot: captured.value };
+    }
+    if (callPolicy.knowledgeSnapshot !== undefined && !validKnowledgeSnapshot(callPolicy.knowledgeSnapshot)) {
+      const raced = await this.ledger.findAdmission(callId);
+      if (!raced.ok) return raced;
+      return raced.value ? duplicateOrConflict(raced.value, event) : err({ kind: "routeUnavailable" });
+    }
     const admission: Admission = {
       key: event.key,
       dialedNumber: event.dialedNumber,
       acceptedAt,
       deadline: new Date(Date.parse(acceptedAt) + 30_000).toISOString(),
     };
-    return this.ledger.admit(callId, policy.value, admission);
+    return this.ledger.admit(callId, callPolicy, admission);
   }
 }

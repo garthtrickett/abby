@@ -60,6 +60,23 @@ async function start(app: ReturnType<typeof fixture>): Promise<void> {
 }
 
 for (const kind of kinds) {
+  test(`${kind}: model result cannot speak a source version approved after call admission`, async () => {
+    const app = fixture(kind, { schemaVersion: 1, kind: "answer", sourceRefs: ["hours"], proposedText: "We open at 10 am." });
+    value(await app.policy.changeAutomationEnabled(app.scope, "0", true, "test-admin"));
+    const policy = value(await app.policy.read(app.scope));
+    value(await new CallRuntime(app.ledger, app.scope).start(app.callId,
+      { ...policy, knowledgeSnapshot: [{ sourceRef: "hours", version: "hours-v1" }] }));
+    const source = value(await app.host.readKnowledge(app.scope, ["hours"]))[0]!;
+    app.host.readKnowledge = async () => ok([{ ...source, version: "hours-v2", approvedText: "We open at 10 am." }]);
+    value(await app.submit(app.turn("turn-new-version", "When do you open?")));
+    value(await app.reception.drain(app.scope, app.callId, now));
+    value(await app.reception.drain(app.scope, app.callId, now));
+    const state = await app.state();
+    assert.deepEqual(state.knowledgeAnswers, []);
+    assert.equal(state.callerMessages.at(-1), "I can't verify that information right now. I'll request staff follow-up.");
+    assert.equal(Object.values(state.staffItems).some(item => item.reason === "systemFailure"), true);
+  });
+
   test(`${kind}: invalid model knowledge context falls back before inference`, async () => {
     const app = fixture(kind, { schemaVersion: 1, kind: "answer", sourceRefs: ["hours"], proposedText: "We open at 9 am." },
       1_000, (host, scope) => {

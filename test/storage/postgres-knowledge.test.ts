@@ -5,6 +5,7 @@ import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresKnowledgeCatalogue } from "../../src/storage/postgres-knowledge-catalogue.ts";
+import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
@@ -36,32 +37,55 @@ test("PostgreSQL knowledge approval is scoped, durable, and compare-and-swap pro
   const approved = await restarted.readKnowledge(scope, [sourceRef]);
   assert.ok(approved.ok);
   assert.equal(approved.value[0]?.approvedText, first.ok ? draft.text : "Wrong competing text");
-  const started = await composition.reception.startCall("knowledge-pg-call", scope);
-  assert.ok(started.ok);
   const at = "2026-09-28T10:00:00.000Z";
+  const started = await composition.reception.startCall("knowledge-pg-call", scope, at);
+  assert.ok(started.ok);
+  const reloadedCall = await new PostgresLedger(db).read("knowledge-pg-call", scope);
+  assert.ok(reloadedCall.ok);
+  assert.deepEqual(reloadedCall.value.policy.knowledgeSnapshot, [{ sourceRef, version: "2" }]);
   const spoken = await composition.reception.answer(scope,
     { callId: "knowledge-pg-call", turnId: "approved-answer", text: "Where can I park?", quality: "clear", at },
     [sourceRef], approved.value[0]!.approvedText, at);
   assert.ok(spoken.ok);
   assert.equal(spoken.value.callerMessages.at(-1), approved.value[0]!.approvedText);
+  assert.deepEqual(spoken.value.policy.knowledgeSnapshot, [{ sourceRef, version: "2" }]);
+  const editDraft = await admin.submit({ ...draft, expectedVersion: "2", text: "Parking is across the road." });
+  assert.ok(editDraft.ok);
+  const stillOld = await composition.reception.answer(scope,
+    { callId: "knowledge-pg-call", turnId: "draft-answer", text: "Where can I park?", quality: "clear", at },
+    [sourceRef], approved.value[0]!.approvedText, at);
+  assert.ok(stillOld.ok);
+  assert.equal(stillOld.value.knowledgeAnswers.at(-1)?.version, "2");
+  assert.ok((await admin.submit({ kind: "knowledge.approve.v1", sourceRef, expectedVersion: "3" })).ok);
+  const editedOldCall = await composition.reception.answer(scope,
+    { callId: "knowledge-pg-call", turnId: "edited-old-call", text: "Where can I park?", quality: "clear", at },
+    [sourceRef], "Parking is across the road.", at);
+  assert.ok(editedOldCall.ok);
+  assert.equal(editedOldCall.value.callerMessages.at(-1), "I can't verify that information right now.");
+  assert.ok((await composition.reception.startCall("knowledge-pg-next-call", scope, at)).ok);
+  const editedNewCall = await composition.reception.answer(scope,
+    { callId: "knowledge-pg-next-call", turnId: "edited-new-call", text: "Where can I park?", quality: "clear", at },
+    [sourceRef], "Parking is across the road.", at);
+  assert.ok(editedNewCall.ok);
+  assert.equal(editedNewCall.value.knowledgeAnswers.at(-1)?.version, "4");
   const foreign = await restarted.readKnowledge(other, [sourceRef]);
   assert.ok(foreign.ok);
   assert.deepEqual(foreign.value, []);
   const listed = await admin.submit({ kind: "knowledge.list.v1" });
   assert.ok(listed.ok && listed.value.kind === "knowledgeList");
-  assert.deepEqual(listed.value.entries.map(entry => entry.status), ["draft", "approved"]);
-  const forbidden = await staff.submit({ kind: "knowledge.revoke.v1", sourceRef, expectedVersion: "2" });
+  assert.deepEqual(listed.value.entries.map(entry => entry.status), ["draft", "approved", "draft", "approved"]);
+  const forbidden = await staff.submit({ kind: "knowledge.revoke.v1", sourceRef, expectedVersion: "4" });
   assert.ok(!forbidden.ok && forbidden.error.kind === "forbidden");
-  const revoked = await admin.submit({ kind: "knowledge.revoke.v1", sourceRef, expectedVersion: "2" });
+  const revoked = await admin.submit({ kind: "knowledge.revoke.v1", sourceRef, expectedVersion: "4" });
   assert.ok(revoked.ok);
-  const later = await admin.submit({ ...draft, expectedVersion: "3", text: "New parking text" });
+  const later = await admin.submit({ ...draft, expectedVersion: "5", text: "New parking text" });
   assert.ok(later.ok);
   const stillRevoked = await restarted.readKnowledge(scope, [sourceRef]);
   assert.ok(stillRevoked.ok);
   assert.deepEqual(stillRevoked.value, []);
   const blocked = await composition.reception.answer(scope,
-    { callId: "knowledge-pg-call", turnId: "revoked-answer", text: "Where can I park?", quality: "clear", at },
-    [sourceRef], approved.value[0]!.approvedText, at);
+    { callId: "knowledge-pg-next-call", turnId: "revoked-answer", text: "Where can I park?", quality: "clear", at },
+    [sourceRef], "Parking is across the road.", at);
   assert.ok(blocked.ok);
   assert.equal(blocked.value.callerMessages.at(-1), "I can't verify that information right now.");
 });

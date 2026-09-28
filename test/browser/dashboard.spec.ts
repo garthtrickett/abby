@@ -31,7 +31,7 @@ async function localDashboard(role: "clinicAdmin" | "staff", availability?: Avai
   const knowledge = new MemoryKnowledgeCatalogue([{ scope, sourceRef: "hours", version: "hours-v1", ownerRef: "clinic-owner",
     approvedText: "We open at 9 am.", approved: true, effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]);
   const reception = new TextReception(ledger, policy, host, availability, undefined, undefined, knowledge);
-  const started = await reception.startCall("before-setting", scope);
+  const started = await reception.startCall("before-setting", scope, "2026-09-28T10:00:00.000Z");
   assert.equal(started.ok, true);
   const gateway = new CommandGateway({ actorRef: `browser-${role}`, role, scope }, policy, reception,
     new CallReview(ledger), new StaffQueue(ledger, () => "2026-09-30T12:00:00.000Z"), new CallOutcomeReport(ledger), ledger, knowledge);
@@ -306,8 +306,15 @@ test("FR-21: clinic admin drafts, approves and revokes a scoped answer", async (
     await expect(page.getByLabel("Knowledge sources")).toContainText("parking · version 2 · approved");
     await page.reload();
     await expect(page.getByLabel("Knowledge sources")).toContainText("parking · version 2 · approved");
+    const oldCall = await app.reception.answer(app.scope,
+      { callId: "before-setting", turnId: "parking-old-call", text: "Parking?", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
+      ["parking"], "Parking is behind the clinic.", "2026-09-28T10:00:00.000Z");
+    assert.ok(oldCall.ok);
+    assert.equal(oldCall.value.knowledgeAnswers.length, 0);
+    assert.equal(oldCall.value.callerMessages.at(-1), "I can't verify that information right now.");
+    assert.ok((await app.reception.startCall("parking-new", app.scope, "2026-09-28T10:00:00.000Z")).ok);
     const approved = await app.reception.answer(app.scope,
-      { callId: "before-setting", turnId: "parking-approved", text: "Parking?", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
+      { callId: "parking-new", turnId: "parking-approved", text: "Parking?", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
       ["parking"], "Parking is behind the clinic.", "2026-09-28T10:00:00.000Z");
     assert.ok(approved.ok);
     assert.equal(approved.value.callerMessages.at(-1), "Parking is behind the clinic.");
@@ -315,7 +322,7 @@ test("FR-21: clinic admin drafts, approves and revokes a scoped answer", async (
     await page.getByRole("button", { name: "Revoke parking" }).click();
     await expect(page.getByLabel("Knowledge sources")).toContainText("parking · version 3 · revoked");
     const revoked = await app.reception.answer(app.scope,
-      { callId: "before-setting", turnId: "parking-revoked", text: "Parking?", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
+      { callId: "parking-new", turnId: "parking-revoked", text: "Parking?", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
       ["parking"], "Parking is behind the clinic.", "2026-09-28T10:00:00.000Z");
     assert.ok(revoked.ok);
     assert.equal(revoked.value.knowledgeAnswers.length, 1);
@@ -340,6 +347,40 @@ test("FR-21: clinic admin drafts, approves and revokes a scoped answer", async (
     assert.equal((await request.post(`${staff.url}/api/knowledge/draft`, { data: { sourceRef: "x", expectedVersion: "0",
       ownerRef: "owner", text: "Text", effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" } })).status(), 403);
   } finally { await staff.close(); }
+});
+
+test("FR-21: an approval edit reaches the next call while an older call keeps its source version", async ({ page }) => {
+  const app = await localDashboard("clinicAdmin");
+  try {
+    await page.goto(app.url);
+    await page.getByRole("textbox", { name: "Knowledge source reference" }).fill("hours");
+    await page.getByRole("textbox", { name: "Knowledge owner reference" }).fill("practice-manager");
+    await page.getByRole("textbox", { name: "Knowledge answer text" }).fill("We open at 10 am.");
+    await page.getByRole("textbox", { name: "Knowledge effective from" }).fill("2026-09-01T00:00:00.000Z");
+    await page.getByRole("textbox", { name: "Knowledge effective until" }).fill("2026-10-01T00:00:00.000Z");
+    await page.getByRole("button", { name: "Save knowledge draft" }).click();
+    await expect(page.getByLabel("Knowledge sources")).toContainText("hours · version 2 · draft");
+    const draftCall = await app.reception.answer(app.scope,
+      { callId: "before-setting", turnId: "old-hours-draft", text: "Hours?", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
+      ["hours"], "We open at 9 am.", "2026-09-28T10:00:00.000Z");
+    assert.ok(draftCall.ok);
+    assert.equal(draftCall.value.knowledgeAnswers.at(-1)?.version, "hours-v1");
+    await page.getByRole("button", { name: "Approve hours" }).click();
+    await expect(page.getByLabel("Knowledge sources")).toContainText("hours · version 3 · approved");
+    const oldCall = await app.reception.answer(app.scope,
+      { callId: "before-setting", turnId: "old-hours-approved", text: "Hours?", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
+      ["hours"], "We open at 10 am.", "2026-09-28T10:00:00.000Z");
+    assert.ok(oldCall.ok);
+    assert.equal(oldCall.value.callerMessages.at(-1), "I can't verify that information right now.");
+    assert.equal(oldCall.value.knowledgeAnswers.length, 1);
+    assert.ok((await app.reception.startCall("after-edit", app.scope, "2026-09-28T10:00:00.000Z")).ok);
+    const newCall = await app.reception.answer(app.scope,
+      { callId: "after-edit", turnId: "new-hours", text: "Hours?", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
+      ["hours"], "We open at 10 am.", "2026-09-28T10:00:00.000Z");
+    assert.ok(newCall.ok);
+    assert.equal(newCall.value.callerMessages.at(-1), "We open at 10 am.");
+    assert.equal(newCall.value.knowledgeAnswers.at(-1)?.version, "3");
+  } finally { await app.close(); }
 });
 
 test("availability read review shows source and status without exposing exact times", async ({ page }) => {

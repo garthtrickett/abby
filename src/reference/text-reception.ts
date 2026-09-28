@@ -1,6 +1,6 @@
 import { EffectWorker } from "../core/effect-worker.ts";
 import type { AppointmentHost, AvailabilityHost, BookingEvidenceHost, HostEffects, KnowledgeHost, ModelKnowledgeContextHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
-import { validKnowledgeSource } from "../core/knowledge-evidence.ts";
+import { captureKnowledgeSnapshot, validCallKnowledgeSource, validKnowledgeSource } from "../core/knowledge-evidence.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err } from "../core/model.ts";
 import type { CallState, FinalCallerTurn, LocationScope, Result, StaffChangeRequest, TransitionFailure, TurnInterpretation } from "../core/model.ts";
@@ -16,6 +16,7 @@ export class TextReception {
   private readonly policy: PolicyStore;
   private readonly host: TextHost;
   private readonly knowledge: KnowledgeHost & Partial<ModelKnowledgeContextHost>;
+  private readonly pinKnowledge: boolean;
   private readonly availability: AvailabilityHost | undefined;
   private readonly appointments: AppointmentHost | undefined;
   private readonly model: ModelWork | undefined;
@@ -26,6 +27,7 @@ export class TextReception {
     this.policy = policy;
     this.host = host;
     this.knowledge = knowledge ?? host;
+    this.pinKnowledge = knowledge !== undefined;
     this.availability = availability;
     this.appointments = appointments;
     this.model = model;
@@ -40,10 +42,14 @@ export class TextReception {
     return new CallRuntime(this.ledger, scope);
   }
 
-  async startCall(callId: string, scope: LocationScope): Promise<Result<CallState, TextReceptionFailure>> {
+  async startCall(callId: string, scope: LocationScope, now: string = new Date().toISOString()): Promise<Result<CallState, TextReceptionFailure>> {
     const policy = await this.policy.read(scope);
     if (!policy.ok) return policy;
-    return this.runtime(scope).start(callId, policy.value);
+    if (!this.pinKnowledge) return this.runtime(scope).start(callId, policy.value);
+    if (!this.knowledge.listModelKnowledge) return err({ kind: "effectFailure" });
+    const snapshot = await captureKnowledgeSnapshot(this.knowledge as ModelKnowledgeContextHost, scope, now);
+    if (!snapshot.ok) return err({ kind: "effectFailure" });
+    return this.runtime(scope).start(callId, { ...policy.value, knowledgeSnapshot: snapshot.value });
   }
 
   async interpretModelTurn(scope: LocationScope, turn: FinalCallerTurn, now: string,
@@ -70,14 +76,20 @@ export class TextReception {
     if (this.knowledge.listModelKnowledge) {
       try {
         const listed = await this.knowledge.listModelKnowledge(scope, now);
-        if (!listed.ok || !Array.isArray(listed.value) || listed.value.length > 8 ||
+        if (!listed.ok || !Array.isArray(listed.value) || listed.value.length > 256 ||
             listed.value.some(source => !validKnowledgeSource(source, scope, now)) ||
             new Set(listed.value.map(source => source.sourceRef)).size !== listed.value.length) {
           const fallback = await runtime.acceptTurn(turn, { kind: "modelFallback" }, now, current.value.conversationRevision);
           if (fallback.ok) this.forgetCanceledModelWork(current.value, fallback.value);
           return fallback;
         }
-        knowledge = listed.value.map(source => ({ sourceRef: source.sourceRef, approvedText: source.approvedText }));
+        const pinned = listed.value.filter(source => validCallKnowledgeSource(source, current.value.policy, now));
+        if (pinned.length > 8) {
+          const fallback = await runtime.acceptTurn(turn, { kind: "modelFallback" }, now, current.value.conversationRevision);
+          if (fallback.ok) this.forgetCanceledModelWork(current.value, fallback.value);
+          return fallback;
+        }
+        knowledge = pinned.map(source => ({ sourceRef: source.sourceRef, approvedText: source.approvedText }));
       } catch {
         const fallback = await runtime.acceptTurn(turn, { kind: "modelFallback" }, now, current.value.conversationRevision);
         if (fallback.ok) this.forgetCanceledModelWork(current.value, fallback.value);
