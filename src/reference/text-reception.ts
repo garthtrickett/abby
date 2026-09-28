@@ -42,14 +42,16 @@ export class TextReception {
     return this.runtime(scope).start(callId, policy.value);
   }
 
-  async interpretModelTurn(scope: LocationScope, turn: FinalCallerTurn, now: string): Promise<Result<CallState, TextReceptionFailure>> {
+  async interpretModelTurn(scope: LocationScope, turn: FinalCallerTurn, now: string,
+                           expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
     if (!this.model) return err({ kind: "effectFailure" });
     const runtime = this.runtime(scope);
     const current = await runtime.read(turn.callId);
     if (!current.ok) return current;
     if (!current.value.policy.automationEnabled || current.value.lifecycle !== "active") return err({ kind: "invalidTransition" });
+    if (expectedConversationRevision !== undefined && expectedConversationRevision !== current.value.conversationRevision) return err({ kind: "staleTurn" });
     if (turn.quality !== "clear") {
-      const accepted = await runtime.acceptTurn(turn, { kind: "clarify" }, now);
+      const accepted = await runtime.acceptTurn(turn, { kind: "clarify" }, now, expectedConversationRevision);
       if (accepted.ok) this.forgetCanceledModelWork(current.value, accepted.value);
       return accepted;
     }

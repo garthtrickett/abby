@@ -8,6 +8,7 @@ import { TurnAssembler } from "./turn-assembler.ts";
 import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 
 export type VoiceIntent =
+  | Readonly<{ kind: "model" }>
   | Readonly<{ kind: "book"; verificationRef: string; offerRef: string }>
   | Readonly<{ kind: "answer"; sourceRefs: readonly string[]; proposedText: string }>
   | Readonly<{ kind: "availability"; from: string; to: string }>
@@ -195,7 +196,11 @@ export class VoiceSession {
       this.cachedIntent = intent.value;
     }
     let result: Result<CallState, VoiceSessionFailure>;
-    if (this.cachedIntent.kind === "book") {
+    if (this.cachedIntent.kind === "model") {
+      result = this.reception.modelEnabled()
+        ? await this.reception.interpretModelTurn(this.scope, turn, now, existing.value.conversationRevision)
+        : await this.runtime.acceptTurn(turn, { kind: "modelFallback" }, now, existing.value.conversationRevision);
+    } else if (this.cachedIntent.kind === "book") {
       result = await this.reception.proposeBooking(this.scope, turn, this.cachedIntent.verificationRef, this.cachedIntent.offerRef, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "answer") {
       result = await this.reception.answer(this.scope, turn, this.cachedIntent.sourceRefs, this.cachedIntent.proposedText, now, existing.value.conversationRevision);
