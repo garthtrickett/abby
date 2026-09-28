@@ -1,6 +1,6 @@
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
-import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "../core/model.ts";
+import { CALL_TERMINAL_REASONS, POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "../core/model.ts";
 import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, Effect, LocationScope, PendingPresentationRef, RecoverableEffectRef, Result, StaffItem, StaffQueueEntry, TransitionAction, TransitionFailure } from "../core/model.ts";
 import { admissionReceipt, initialState, sameAdmission } from "../core/ledger.ts";
 import type { LedgerStore } from "../core/ledger.ts";
@@ -19,6 +19,9 @@ function decodeState(value: unknown, callId: string): Result<CallState, Transiti
       !Array.isArray(data.processedTurnIds) || typeof data.processedTurnDigests !== "object" || data.processedTurnDigests === null || !Array.isArray(data.callerMessages) ||
       (data.knowledgeAnswers !== undefined && !Array.isArray(data.knowledgeAnswers)) ||
       (data.availabilityReads !== undefined && !Array.isArray(data.availabilityReads)) ||
+      (data.terminal !== undefined && (data.lifecycle !== "ended" || typeof data.terminal !== "object" || data.terminal === null ||
+        !CALL_TERMINAL_REASONS.includes((data.terminal as { reason: typeof CALL_TERMINAL_REASONS[number] }).reason) ||
+        typeof (data.terminal as { at?: unknown }).at !== "string" || !Number.isFinite(Date.parse((data.terminal as { at: string }).at)))) ||
       (data.lifecycle === "starting" && (typeof data.admission !== "object" || data.admission === null))) return err({ kind: "storageCorrupt" });
   return ok({ ...(value as CallState), knowledgeAnswers: Array.isArray(data.knowledgeAnswers) ? data.knowledgeAnswers as CallState["knowledgeAnswers"] : [],
     availabilityReads: Array.isArray(data.availabilityReads) ? data.availabilityReads as CallState["availabilityReads"] : [] });
@@ -29,13 +32,13 @@ function auditPayload(action: TransitionAction): Record<string, string> {
     case "sessionActivated":
     case "sessionRenewed":
     case "sessionExpired":
-    case "callEnded":
     case "speechBegan": return { sessionId: action.sessionId };
+    case "callEnded": return { sessionId: action.sessionId, reason: action.reason };
     case "admissionExpired": return {};
     case "callerTurn": return { turnId: action.turn.turnId, interpretation: action.interpretation.kind };
     case "presentationStarted":
-    case "transferPossiblySent":
-    case "presentationResolved": return { presentationId: action.presentationId };
+    case "transferPossiblySent": return { presentationId: action.presentationId };
+    case "presentationResolved": return { presentationId: action.presentationId, status: action.status };
     case "reconciliationDeadline": return { actionKey: action.actionKey };
     case "staffChangeRequested": return { taskKey: action.taskKey, actorRef: action.actorRef, operation: action.change.kind };
     default: return { effectId: action.effectId };

@@ -104,10 +104,18 @@ test("staff dashboard and agent endpoint report scoped outcomes without spoken o
     assert.ok(delivered.ok);
     const other = await app.reception.startCall("another-call", { ...app.scope, tenantId: "other-tenant" });
     assert.ok(other.ok);
+    const callPolicy = await app.policy.read(app.scope);
+    assert.ok(callPolicy.ok);
+    const runtime = new CallRuntime(app.ledger, app.scope);
+    assert.ok((await runtime.admit("browser-disconnect", callPolicy.value, { key: { accountRef: "browser-account", providerCallRef: "browser-disconnect" },
+      dialedNumber: "+6125550100", acceptedAt: "2026-09-28T10:00:00.000Z", deadline: "2026-09-28T10:00:30.000Z" })).ok);
+    assert.ok((await runtime.activate("browser-disconnect", "browser-session", "2026-09-28T10:00:01.000Z")).ok);
+    assert.ok((await runtime.endCall("browser-disconnect", "browser-session", "2026-09-28T10:00:02.000Z", "callerDisconnected")).ok);
     await page.goto(app.url);
     const report = page.getByLabel("Call outcome report");
-    await expect(report).toContainText("1 call(s) loaded");
+    await expect(report).toContainText("2 call(s) loaded");
     await expect(report).toContainText("1 call(s) have a host-confirmed task");
+    await expect(report).toContainText("1 caller disconnect(s)");
     await expect(report).not.toContainText("another-call");
     await expect(report).not.toContainText("Private");
     const response = await request.get(`${app.url}/api/call-outcomes`);

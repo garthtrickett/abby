@@ -14,6 +14,10 @@ export type Admission = Readonly<{
   deadline: string;
 }>;
 export type SessionLease = Readonly<{ sessionId: string; version: number; expiresAt: string; validForMs: number }>;
+export const CALL_TERMINAL_REASONS = ["callerDisconnected", "sessionClosed", "mediaFailure", "localLeaseClosed",
+  "admissionExpired", "leaseExpired", "transferConnected", "transferUnproven"] as const;
+export type CallTerminalReason = typeof CALL_TERMINAL_REASONS[number];
+export type CallTerminal = Readonly<{ reason: CallTerminalReason; at: string }>;
 export type AdmissionReceipt = Readonly<{ callId: string; scope: LocationScope; admission: Admission; lifecycle: "starting" | "active" | "ended" }>;
 export type AdmissionResult = Readonly<{ kind: "created" | "duplicate"; receipt: AdmissionReceipt }>;
 export type ActiveSessionReceipt = Readonly<{ callId: string; scope: LocationScope; lease: SessionLease }>;
@@ -238,6 +242,7 @@ export type CallState = {
   callId: string;
   policy: CallPolicy;
   lifecycle: "starting" | "active" | "ended";
+  terminal?: CallTerminal;
   admission?: Admission;
   sessionLease?: SessionLease;
   version: number;
@@ -270,7 +275,7 @@ export type TransitionAction =
   | Readonly<{ kind: "sessionRenewed"; sessionId: string; expectedLeaseVersion: number; now: string }>
   | Readonly<{ kind: "admissionExpired"; now: string }>
   | Readonly<{ kind: "sessionExpired"; sessionId: string; expectedLeaseVersion: number; now: string }>
-  | Readonly<{ kind: "callEnded"; sessionId: string; now: string }>
+  | Readonly<{ kind: "callEnded"; sessionId: string; reason: "callerDisconnected" | "sessionClosed" | "mediaFailure" | "localLeaseClosed"; now: string }>
   | Readonly<{ kind: "speechBegan"; sessionId: string; now: string }>
   | Readonly<{ kind: "callerTurn"; turn: FinalCallerTurn; interpretation: TurnInterpretation; now: string; expectedConversationRevision?: number }>
   | Readonly<{ kind: "presentationStarted"; presentationId: string; sessionId?: string; now?: string }>

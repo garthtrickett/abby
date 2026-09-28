@@ -1,4 +1,4 @@
-import { err, ok } from "../../core/model.ts";
+import { CALL_TERMINAL_REASONS, err, ok } from "../../core/model.ts";
 import type { CallPolicy, Result, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor, GatewayFailure } from "../../reference/command-gateway.ts";
@@ -69,8 +69,12 @@ export class FetchDashboardPort implements DashboardPort {
     if (!result.ok) return result;
     const reply = record(result.value);
     const call = record(reply?.call);
+    const terminal = record(call?.terminal);
     return reply?.kind === "callSummary" && call && call.callId === callId &&
       (call.lifecycle === "starting" || call.lifecycle === "active" || call.lifecycle === "ended") &&
+      (call.terminal === undefined || (terminal && call.lifecycle === "ended" &&
+        CALL_TERMINAL_REASONS.includes(terminal.reason as typeof CALL_TERMINAL_REASONS[number]) &&
+        typeof terminal.at === "string" && Number.isFinite(Date.parse(terminal.at)))) &&
       Array.isArray(call.actions) && Array.isArray(call.staffItems)
       ? ok(call as CallSummary) : err({ kind: "malformed" });
   }
@@ -82,13 +86,15 @@ export class FetchDashboardPort implements DashboardPort {
     const page = record(reply?.page);
     const totals = record(page?.totals);
     const keys = ["calls", "committedActions", "callsWithUnresolvedActions", "callsWithStaffRequests",
-      "callsWithHostConfirmedTasks", "callsWithStaffNeedsReview", "callsWithSystemFailure"];
+      "callsWithHostConfirmedTasks", "callsWithStaffNeedsReview", "callsWithSystemFailure", "callsWithCallerDisconnect",
+      "callsWithMediaFailure", "callsWithLeaseExpiry", "callsWithTransferConnected"];
     if (reply?.kind !== "callOutcomes" || !page || !totals || !Array.isArray(page.rows) ||
         !keys.every(key => Number.isSafeInteger(totals[key]) && Number(totals[key]) >= 0) ||
         (page.nextAfterCallId !== undefined && typeof page.nextAfterCallId !== "string") ||
         !page.rows.every(value => {
           const row = record(value);
           return row && typeof row.callId === "string" && ["starting", "active", "ended"].includes(String(row.lifecycle)) &&
+            (row.terminalReason === undefined || CALL_TERMINAL_REASONS.includes(row.terminalReason as typeof CALL_TERMINAL_REASONS[number])) &&
             ["committedActions", "unresolvedActions", "staffRequests", "hostConfirmedTasks", "staffNeedsReview"]
               .every(key => Number.isSafeInteger(row[key]) && Number(row[key]) >= 0) && typeof row.systemFailure === "boolean";
         })) return err({ kind: "malformed" });

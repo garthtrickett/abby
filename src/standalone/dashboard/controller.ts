@@ -14,6 +14,10 @@ function appendOutcomes(previous: CallOutcomePage, next: CallOutcomePage): CallO
     callsWithHostConfirmedTasks: previous.totals.callsWithHostConfirmedTasks + next.totals.callsWithHostConfirmedTasks,
     callsWithStaffNeedsReview: previous.totals.callsWithStaffNeedsReview + next.totals.callsWithStaffNeedsReview,
     callsWithSystemFailure: previous.totals.callsWithSystemFailure + next.totals.callsWithSystemFailure,
+    callsWithCallerDisconnect: previous.totals.callsWithCallerDisconnect + next.totals.callsWithCallerDisconnect,
+    callsWithMediaFailure: previous.totals.callsWithMediaFailure + next.totals.callsWithMediaFailure,
+    callsWithLeaseExpiry: previous.totals.callsWithLeaseExpiry + next.totals.callsWithLeaseExpiry,
+    callsWithTransferConnected: previous.totals.callsWithTransferConnected + next.totals.callsWithTransferConnected,
   }, ...(next.nextAfterCallId === undefined ? {} : { nextAfterCallId: next.nextAfterCallId }) };
 }
 

@@ -119,8 +119,8 @@ export class ManagedVoiceSession {
     return this.afterCommit(await this.session.drainEffects(now));
   }
 
-  async end(now: string): Promise<Result<CallState, VoiceSessionFailure>> {
-    try { return await this.session.end(now); }
+  async end(now: string, reason: "callerDisconnected" | "sessionClosed" = "sessionClosed"): Promise<Result<CallState, VoiceSessionFailure>> {
+    try { return await this.session.end(now, reason); }
     finally { await this.close(); }
   }
 }

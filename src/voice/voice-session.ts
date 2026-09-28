@@ -100,7 +100,7 @@ export class VoiceSession {
     this.attached = false;
     this.localSendDeadlineMs = undefined;
     this.activePlayback = undefined;
-    const ended = await this.runtime.endCall(this.callId, this.sessionId, now);
+    const ended = await this.runtime.endCall(this.callId, this.sessionId, now, "localLeaseClosed");
     if (ended.ok) return err({ kind: "leaseLost" });
     const latest = await this.runtime.read(this.callId);
     return latest.ok && latest.value.lifecycle === "ended" ? err({ kind: "leaseLost" }) : ended;
@@ -158,7 +158,7 @@ export class VoiceSession {
     if (!active) return ok(generation);
     const result = await this.runtime.resolvePresentation(this.callId, active.presentationId, cleared ? "interrupted" : "unproven", this.sessionId, now);
     if (!cleared) {
-      const ended = await this.runtime.endCall(this.callId, this.sessionId, now);
+      const ended = await this.runtime.endCall(this.callId, this.sessionId, now, "mediaFailure");
       if (ended.ok) this.attached = false;
       if (!result.ok) return result;
       if (!ended.ok) return ended;
@@ -299,12 +299,12 @@ export class VoiceSession {
     return this.reception.drain(this.scope, this.callId, now);
   }
 
-  async end(now: string): Promise<Result<CallState, VoiceSessionFailure>> {
+  async end(now: string, reason: "callerDisconnected" | "sessionClosed" = "sessionClosed"): Promise<Result<CallState, VoiceSessionFailure>> {
     if (!this.attached) return err({ kind: "sessionUnknown" });
     this.speechOpen = true;
     const active = this.activePlayback;
     this.activePlayback = undefined;
-    const ended = await this.runtime.endCall(this.callId, this.sessionId, now);
+    const ended = await this.runtime.endCall(this.callId, this.sessionId, now, reason);
     if (!ended.ok) return ended;
     this.attached = false;
     this.localSendDeadlineMs = undefined;

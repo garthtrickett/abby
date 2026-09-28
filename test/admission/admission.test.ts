@@ -106,6 +106,7 @@ for (const kind of kinds) {
     failure(await runtime.resolvePresentation(callId, presentationId, "played"), "leaseLost");
     const ended = value(await runtime.endCall(callId, "session-1", "2026-09-28T10:00:12.000Z"));
     assert.equal(ended.lifecycle, "ended");
+    assert.equal(ended.terminal?.reason, "sessionClosed");
     assert.equal(ended.presentations[presentationId]?.status, "unproven");
     failure(await runtime.acceptTurn({ callId, turnId: "late", text: "Yes", quality: "clear", at: now }, { kind: "handoff", reason: "callerRequested" }, now), "invalidTransition");
     failure(await runtime.resolvePresentation(callId, presentationId, "played"), "invalidTransition");
@@ -122,6 +123,7 @@ for (const kind of kinds) {
     assert.equal(value(await monitor.expireDue("2026-09-28T10:00:31.000Z")), 0);
     const ended = value(await runtime.read(callId));
     assert.equal(ended.lifecycle, "ended");
+    assert.equal(ended.terminal?.reason, "admissionExpired");
     failure(await runtime.activate(callId, "session-too-late", "2026-09-28T10:00:31.000Z"), "invalidTransition");
   });
 
@@ -136,6 +138,7 @@ for (const kind of kinds) {
     failure(await first.acceptTurn({ callId: firstId, sessionId: "lease-session-1", turnId: "expired-turn", text: "Hello", quality: "clear", at: "2026-09-28T10:00:31.000Z" }, { kind: "handoff", reason: "callerRequested" }, "2026-09-28T10:00:31.000Z"), "leaseLost");
     assert.equal(value(await monitor.expireDue("2026-09-28T10:00:31.000Z")), 1);
     assert.equal(value(await first.read(firstId)).lifecycle, "ended");
+    assert.equal(value(await first.read(firstId)).terminal?.reason, "leaseExpired");
     failure(await first.renewSession(firstId, "lease-session-1", 1, "2026-09-28T10:00:32.000Z"), "leaseLost");
 
     const secondId = value(await app.service.begin({ ...firstEvent, key: { ...firstEvent.key, providerCallRef: "lease-call-2" } })).receipt.callId;

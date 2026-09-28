@@ -4,7 +4,7 @@ import { availabilityPresentation } from "./availability-presentation.ts";
 import { planStaffChange } from "./staff-work.ts";
 import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "./model.ts";
 import type {
-  ActionRequest, ActionState, CallState, FinalCallerTurn, LocationScope,
+  ActionRequest, ActionState, CallState, CallTerminalReason, FinalCallerTurn, LocationScope,
   Presentation, Result, StaffReason, TransitionAction, TransitionFailure,
   TurnInterpretation,
 } from "./model.ts";
@@ -130,8 +130,9 @@ function supersedeUnsent(state: CallState): void {
   }
 }
 
-function endMedia(state: CallState, now: string): void {
+function endMedia(state: CallState, now: string, reason: CallTerminalReason): void {
   state.lifecycle = "ended";
+  state.terminal = { reason, at: now };
   let unresolvedTransfer = false;
   for (const [id, presentation] of Object.entries(state.presentations)) {
     if (presentation.status === "pending") state.presentations[id] = { ...presentation, status: "superseded" };
@@ -342,17 +343,19 @@ export function transition(current: CallState, action: TransitionAction): Result
     case "admissionExpired": {
       if (state.lifecycle !== "starting" || !state.admission || Date.parse(action.now) < Date.parse(state.admission.deadline)) return err({ kind: "invalidTransition" });
       state.lifecycle = "ended";
+      state.terminal = { reason: "admissionExpired", at: action.now };
       break;
     }
     case "sessionExpired": {
       const lease = state.sessionLease;
       if (state.lifecycle !== "active" || !lease || lease.sessionId !== action.sessionId || lease.version !== action.expectedLeaseVersion || Date.parse(action.now) < Date.parse(lease.expiresAt)) return err({ kind: "leaseLost" });
-      endMedia(state, now);
+      endMedia(state, now, "leaseExpired");
       break;
     }
     case "callEnded": {
+      if (!["callerDisconnected", "sessionClosed", "mediaFailure", "localLeaseClosed"].includes(action.reason)) return err({ kind: "invalidTransition" });
       if (state.lifecycle !== "active" || state.sessionLease?.sessionId !== action.sessionId) return err({ kind: "leaseLost" });
-      endMedia(state, now);
+      endMedia(state, now, action.reason);
       break;
     }
     case "speechBegan": {
@@ -409,7 +412,7 @@ export function transition(current: CallState, action: TransitionAction): Result
         if (action.status === "connected") {
           if (!action.providerConnectionRef?.trim()) return err({ kind: "invalidTransition" });
           state.presentations[presentation.id] = { ...presentation, status: "connected", providerConnectionRef: action.providerConnectionRef };
-          endMedia(state, now);
+          endMedia(state, now, "transferConnected");
         } else {
           state.presentations[presentation.id] = { ...presentation, status: action.status };
           if (action.status === "failed") {
@@ -421,7 +424,7 @@ export function transition(current: CallState, action: TransitionAction): Result
             state.callerMessages.push(approvedText);
           } else if (action.status === "unproven") {
             addStaffTask(state, "systemFailure", now);
-            endMedia(state, now);
+            endMedia(state, now, "transferUnproven");
           }
         }
       } else {
