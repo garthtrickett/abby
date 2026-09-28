@@ -4,6 +4,8 @@ import type { LedgerStore } from "../core/ledger.ts";
 import { err } from "../core/model.ts";
 import type { CallState, FinalCallerTurn, LocationScope, Result, StaffChangeRequest, TransitionFailure, TurnInterpretation } from "../core/model.ts";
 import { CallRuntime } from "../core/runtime.ts";
+import { modelTaskRef } from "../model/work.ts";
+import type { ModelWork } from "../model/work.ts";
 
 export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<StaffLifecycleHost & OperatorAlertHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
@@ -14,17 +16,20 @@ export class TextReception {
   private readonly host: TextHost;
   private readonly availability: AvailabilityHost | undefined;
   private readonly appointments: AppointmentHost | undefined;
+  private readonly model: ModelWork | undefined;
 
-  constructor(ledger: LedgerStore, policy: PolicyStore, host: TextHost, availability?: AvailabilityHost, appointments?: AppointmentHost) {
+  constructor(ledger: LedgerStore, policy: PolicyStore, host: TextHost, availability?: AvailabilityHost, appointments?: AppointmentHost, model?: ModelWork) {
     this.ledger = ledger;
     this.policy = policy;
     this.host = host;
     this.availability = availability;
     this.appointments = appointments;
+    this.model = model;
   }
 
   availabilityEnabled(): boolean { return this.availability !== undefined; }
   appointmentReadEnabled(): boolean { return this.appointments !== undefined; }
+  modelEnabled(): boolean { return this.model !== undefined; }
   staffLifecycleEnabled(): boolean { return !!this.host.advanceTask && !!this.host.reconcileTaskChange; }
 
   private runtime(scope: LocationScope): CallRuntime {
@@ -35,6 +40,48 @@ export class TextReception {
     const policy = await this.policy.read(scope);
     if (!policy.ok) return policy;
     return this.runtime(scope).start(callId, policy.value);
+  }
+
+  async interpretModelTurn(scope: LocationScope, turn: FinalCallerTurn, now: string): Promise<Result<CallState, TextReceptionFailure>> {
+    if (!this.model) return err({ kind: "effectFailure" });
+    const runtime = this.runtime(scope);
+    const current = await runtime.read(turn.callId);
+    if (!current.ok) return current;
+    if (!current.value.policy.automationEnabled || current.value.lifecycle !== "active") return err({ kind: "invalidTransition" });
+    if (turn.quality !== "clear") {
+      const accepted = await runtime.acceptTurn(turn, { kind: "clarify" }, now);
+      if (accepted.ok) this.forgetCanceledModelWork(current.value, accepted.value);
+      return accepted;
+    }
+    const taskRef = modelTaskRef({ scope, turn });
+    const interpretation: TurnInterpretation = { kind: "modelPending", taskRef };
+    if (current.value.processedTurnIds.includes(turn.turnId)) {
+      const prior = await runtime.acceptTurn(turn, interpretation, now);
+      return !prior.ok && prior.error.kind === "keyMismatch"
+        ? runtime.acceptTurn(turn, { kind: "modelFallback" }, now) : prior;
+    }
+    const input = { scope, turn, conversationRevision: current.value.conversationRevision + 1,
+      policyVersion: current.value.policy.policyVersion, promptVersion: this.model.promptVersion };
+    const prepared = this.model.prepare(input);
+    if (!prepared.ok) {
+      if (prepared.error.kind === "keyMismatch") return err({ kind: "keyMismatch" });
+      if (prepared.error.kind === "invalidInput") return err({ kind: "invalidTransition" });
+      const fallback = await runtime.acceptTurn(turn, { kind: "modelFallback" }, now,
+        current.value.conversationRevision);
+      if (fallback.ok) this.forgetCanceledModelWork(current.value, fallback.value);
+      return fallback;
+    }
+    const accepted = await runtime.acceptTurn(turn, interpretation, now, current.value.conversationRevision);
+    if (!accepted.ok && prepared.value.created) this.model.forget(taskRef);
+    if (accepted.ok) this.forgetCanceledModelWork(current.value, accepted.value);
+    return accepted;
+  }
+
+  private forgetCanceledModelWork(before: CallState, after: CallState): void {
+    for (const effect of Object.values(before.effects)) {
+      if ((effect.kind === "model" || effect.kind === "modelKnowledge") && effect.status === "pending" &&
+          after.effects[effect.id]?.status === "canceled") this.model?.forget(effect.taskRef);
+    }
   }
 
   async proposeBooking(scope: LocationScope, turn: FinalCallerTurn, verificationRef: string, offerRef: string, now: string, expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
@@ -142,7 +189,7 @@ export class TextReception {
     const runtime = this.runtime(scope);
     const read = await runtime.read(callId);
     if (!read.ok) return read;
-    const worker = new EffectWorker(runtime, this.host);
+    const worker = new EffectWorker(runtime, this.host, this.model);
     for (const effect of Object.values(read.value.effects)) {
       if (effect.status !== "pending") continue;
       try {

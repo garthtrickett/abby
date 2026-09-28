@@ -7,6 +7,7 @@ import type { Result } from "../src/core/model.ts";
 import { connectPostgres } from "../src/storage/connect.ts";
 import { migrate, migrateTo } from "../src/storage/migrate.ts";
 import { PostgresLedger } from "../src/storage/postgres-ledger.ts";
+import { dropProbeDatabase } from "./drop-probe-database.ts";
 
 function value<T, E>(result: Result<T, E>): T {
   if (!result.ok) throw new Error(`write-stop upgrade probe failed: ${JSON.stringify(result.error)}`);
@@ -51,6 +52,6 @@ try {
     console.log("v5 -> latest upgrade retained the stop audit and in-flight snapshot; resume and re-stop passed");
   } finally { await db.destroy(); }
 } finally {
-  try { if (created) await admin.query(`DROP DATABASE "${name}" WITH (FORCE)`); }
+  try { if (created) await dropProbeDatabase(admin, name); }
   finally { await admin.end(); }
 }

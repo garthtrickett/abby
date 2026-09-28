@@ -121,6 +121,9 @@ export type AppointmentRead = Readonly<{
 }>;
 
 export type TurnInterpretation =
+  | Readonly<{ kind: "modelPending"; taskRef: string }>
+  | Readonly<{ kind: "modelFallback" }>
+  | Readonly<{ kind: "clarify" }>
   | Readonly<{ kind: "requestAction"; request: ActionRequest }>
   | Readonly<{ kind: "affirm"; actionKey: string; digest: string; affirmative: boolean }>
   | Readonly<{ kind: "handoff"; reason: StaffReason }>
@@ -261,6 +264,9 @@ export type StaffQueueEntry = Readonly<{
   alerts?: Partial<Record<StaffAlertReason, StaffAlertState>>;
 }>;
 export type Effect =
+  | Readonly<{ kind: "model"; schemaVersion: 1; id: string; taskRef: string; turnId: string; conversationRevision: number; status: "pending" | "completed" | "canceled" }>
+  | Readonly<{ kind: "modelKnowledge"; schemaVersion: 1; id: string; taskRef: string; turnId: string; conversationRevision: number;
+      sourceRefsDigest: string; status: "pending" | "completed" | "canceled" }>
   | Readonly<{ kind: "hostWrite"; id: string; actionKey: string; mutation: HostMutation; status: "pending" | "possiblySent" | "completed" | "uncertain" | "canceled"; possiblySentAt?: string }>
   | Readonly<{ kind: "hostReconcile"; id: string; actionKey: string; originalEffectId: string; status: "pending" | "completed" }>
   | Readonly<{ kind: "staffTask"; id: string; taskKey: string; status: "pending" | "possiblySent" | "completed" | "uncertain"; possiblySentAt?: string }>
@@ -324,6 +330,9 @@ export type TransitionAction =
   | Readonly<{ kind: "callEnded"; sessionId: string; reason: "callerDisconnected" | "sessionClosed" | "mediaFailure" | "localLeaseClosed"; now: string }>
   | Readonly<{ kind: "speechBegan"; sessionId: string; now: string }>
   | Readonly<{ kind: "callerTurn"; turn: FinalCallerTurn; interpretation: TurnInterpretation; now: string; expectedConversationRevision?: number }>
+  | Readonly<{ kind: "modelResolved"; effectId: string; result: Result<import("../model/proposal.ts").ModelProposal, import("../model/proposal.ts").ModelFailure>; now: string }>
+  | Readonly<{ kind: "modelKnowledgeResolved"; effectId: string; result: Result<readonly ApprovedKnowledge[], Readonly<{ kind: "invalidQuery" | "unavailable" }>>;
+      proposedText?: string; now: string }>
   | Readonly<{ kind: "presentationStarted"; presentationId: string; sessionId?: string; now?: string }>
   | Readonly<{ kind: "transferPossiblySent"; presentationId: string; sessionId: string; now: string }>
   | Readonly<{ kind: "presentationResolved"; presentationId: string; status: "played" | "interrupted" | "failed" | "unproven" | "connected" | "canceled"; providerConnectionRef?: string; sessionId?: string; now?: string }>

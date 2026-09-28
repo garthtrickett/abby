@@ -11,6 +11,7 @@ import { connectPostgres } from "../src/storage/connect.ts";
 import { migrate, migrateTo } from "../src/storage/migrate.ts";
 import { PostgresLedger } from "../src/storage/postgres-ledger.ts";
 import { PostgresPolicyStore } from "../src/storage/postgres-policy-store.ts";
+import { dropProbeDatabase } from "./drop-probe-database.ts";
 
 function value<T, E>(result: Result<T, E>): T {
   if (!result.ok) throw new Error(`probe operation failed: ${JSON.stringify(result.error)}`);
@@ -101,7 +102,7 @@ try {
   }
 } finally {
   try {
-    if (created) await admin.query(`DROP DATABASE "${name}" WITH (FORCE)`);
+    if (created) await dropProbeDatabase(admin, name);
   } finally {
     await admin.end();
   }

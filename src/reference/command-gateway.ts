@@ -35,6 +35,7 @@ export type GatewayCommand =
   | Readonly<{ kind: "settings.appointments.booking.enabled.change.v1"; expectedVersion: string; enabled: boolean }>
   | Readonly<{ kind: "settings.appointments.booking.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "booking.propose.v2"; turn: FinalCallerTurn; verificationRef: string; offerRef: string; now: string }>
+  | Readonly<{ kind: "calls.turn.model.v1"; turn: FinalCallerTurn; now: string }>
   | Readonly<{ kind: "knowledge.answer.v2"; turn: FinalCallerTurn; sourceRefs: readonly string[]; proposedText: string; now: string }>
   | Readonly<{ kind: "availability.read.v2"; turn: FinalCallerTurn; from: string; to: string; now: string }>
   | Readonly<{ kind: "appointments.read.v1"; turn: FinalCallerTurn; verificationRef: string; from: string; to: string; now: string }>
@@ -54,6 +55,7 @@ export type GatewayReply =
   | Readonly<{ kind: "writeStopAudit"; page: WriteStopAuditPage }>
   | Readonly<{ kind: "bookingSettingAudit"; page: BookingSettingAuditPage }>
   | Readonly<{ kind: "bookingProposal"; progress: CallCommandProgress }>
+  | Readonly<{ kind: "modelTurn"; progress: CallCommandProgress }>
   | Readonly<{ kind: "knowledgeAnswer"; progress: CallCommandProgress }>
   | Readonly<{ kind: "availabilityAnswer"; progress: CallCommandProgress }>
   | Readonly<{ kind: "appointmentAnswer"; progress: CallCommandProgress }>
@@ -89,6 +91,7 @@ export class CommandGateway {
 
   listPermitted(): readonly CapabilityDescriptor[] {
     const permitted: CapabilityId[] = ["settings.read.v1", "booking.propose.v2", "knowledge.answer.v2"];
+    if (this.reception.modelEnabled()) permitted.push("calls.turn.model.v1");
     if (this.reception.availabilityEnabled()) permitted.push("availability.read.v2");
     if (this.reception.appointmentReadEnabled()) permitted.push("appointments.read.v1");
     if (this.review) permitted.push("calls.read.v1");
@@ -167,6 +170,12 @@ export class CommandGateway {
         if (!command.turn.turnId || !command.turn.callId || !command.turn.text || !command.verificationRef || !command.offerRef) return err({ kind: "invalid" });
         const result = await this.reception.proposeBooking(this.actor.scope, command.turn, command.verificationRef, command.offerRef, command.now);
         return result.ok ? ok({ kind: "bookingProposal", progress: commandProgress(result.value, command.turn.turnId) }) : result;
+      }
+      case "calls.turn.model.v1": {
+        if (!command.turn || !command.turn.turnId || !command.turn.callId || !command.turn.text ||
+            typeof command.now !== "string" || !Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
+        const result = await this.reception.interpretModelTurn(this.actor.scope, command.turn, command.now);
+        return result.ok ? ok({ kind: "modelTurn", progress: commandProgress(result.value, command.turn.turnId) }) : result;
       }
       case "knowledge.answer.v2": {
         if (!command.turn || !command.turn.turnId || !command.turn.callId || !command.turn.text ||
