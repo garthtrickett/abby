@@ -138,6 +138,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   if (Object.values(state.presentations).some(presentation => presentation.kind === "transfer" && (presentation.status === "started" || presentation.status === "possiblySent"))) return err({ kind: "invalidTransition" });
   if (interpretation.kind !== "affirm") supersedeUnsent(state);
   state.conversationRevision += 1;
+  const messageCount = state.callerMessages.length;
 
   switch (interpretation.kind) {
     case "requestAction": {
@@ -205,6 +206,12 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       }
       break;
     }
+  }
+  const newMessages = state.callerMessages.slice(messageCount);
+  if (newMessages.length > 0 && !state.pendingPresentationId) {
+    const id = createHash("sha256").update(JSON.stringify([state.callId, turn.turnId, "notice"])).digest("hex");
+    state.presentations[id] = { kind: "notice", id, approvedText: newMessages.join(" "), status: "pending" };
+    state.pendingPresentationId = id;
   }
   state.processedTurnIds.push(turn.turnId);
   state.processedTurnDigests[turn.turnId] = turnDigest(turn, interpretation);
