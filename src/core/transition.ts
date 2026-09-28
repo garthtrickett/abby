@@ -6,6 +6,7 @@ import { addStaffTask, planStaffChange } from "./staff-work.ts";
 import { staffedForTransfer } from "./staffed-window.ts";
 import { validKnowledgeSource } from "./knowledge-evidence.ts";
 import { acceptModelKnowledge, acceptModelResult, cancelModelWork } from "./model-result.ts";
+import { redactSettledContent } from "./presentation-retention.ts";
 import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "./model.ts";
 import type {
   ActionRequest, ActionState, CallState, CallTerminalReason, FinalCallerTurn, LocationScope,
@@ -747,6 +748,7 @@ export function transition(current: CallState, action: TransitionAction): Result
       break;
     }
   }
+  redactSettledContent(state);
   state.version = current.version + 1;
   return ok(state);
 }
