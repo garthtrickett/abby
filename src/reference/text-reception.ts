@@ -1,5 +1,5 @@
 import { EffectWorker } from "../core/effect-worker.ts";
-import type { AvailabilityHost, BookingEvidenceHost, HostEffects, KnowledgeHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
+import type { AppointmentHost, AvailabilityHost, BookingEvidenceHost, HostEffects, KnowledgeHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err } from "../core/model.ts";
 import type { CallState, FinalCallerTurn, LocationScope, Result, StaffChangeRequest, TransitionFailure, TurnInterpretation } from "../core/model.ts";
@@ -13,15 +13,18 @@ export class TextReception {
   private readonly policy: PolicyStore;
   private readonly host: TextHost;
   private readonly availability: AvailabilityHost | undefined;
+  private readonly appointments: AppointmentHost | undefined;
 
-  constructor(ledger: LedgerStore, policy: PolicyStore, host: TextHost, availability?: AvailabilityHost) {
+  constructor(ledger: LedgerStore, policy: PolicyStore, host: TextHost, availability?: AvailabilityHost, appointments?: AppointmentHost) {
     this.ledger = ledger;
     this.policy = policy;
     this.host = host;
     this.availability = availability;
+    this.appointments = appointments;
   }
 
   availabilityEnabled(): boolean { return this.availability !== undefined; }
+  appointmentReadEnabled(): boolean { return this.appointments !== undefined; }
   staffLifecycleEnabled(): boolean { return !!this.host.advanceTask && !!this.host.reconcileTaskChange; }
 
   private runtime(scope: LocationScope): CallRuntime {
@@ -96,6 +99,29 @@ export class TextReception {
         else interpretation = { kind: "availabilityFailure", reason: "notEligible" };
       } catch {
         interpretation = { kind: "availabilityFailure", reason: "unavailable" };
+      }
+    }
+    return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);
+  }
+
+  async checkAppointments(scope: LocationScope, turn: FinalCallerTurn, verificationRef: string, from: string, to: string, now: string,
+                          expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
+    const runtime = this.runtime(scope);
+    const current = await runtime.read(turn.callId);
+    if (!current.ok) return current;
+    let interpretation: TurnInterpretation;
+    if (turn.quality !== "clear") {
+      interpretation = { kind: "appointmentsFailure", reason: "unclear" };
+    } else if (!this.appointments) {
+      interpretation = { kind: "appointmentsFailure", reason: "notConfigured" };
+    } else {
+      try {
+        const read = await this.appointments.list(scope, verificationRef, from, to, now);
+        interpretation = read.ok
+          ? { kind: "appointments", from, to, snapshot: read.value }
+          : { kind: "appointmentsFailure", reason: read.error.kind };
+      } catch {
+        interpretation = { kind: "appointmentsFailure", reason: "unavailable" };
       }
     }
     return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);

@@ -29,6 +29,7 @@ export type GatewayCommand =
   | Readonly<{ kind: "booking.propose.v2"; turn: FinalCallerTurn; verificationRef: string; offerRef: string; now: string }>
   | Readonly<{ kind: "knowledge.answer.v2"; turn: FinalCallerTurn; sourceRefs: readonly string[]; proposedText: string; now: string }>
   | Readonly<{ kind: "availability.read.v2"; turn: FinalCallerTurn; from: string; to: string; now: string }>
+  | Readonly<{ kind: "appointments.read.v1"; turn: FinalCallerTurn; verificationRef: string; from: string; to: string; now: string }>
   | Readonly<{ kind: "calls.read.v1"; callId: string }>
   | Readonly<{ kind: "calls.outcomes.v1"; afterCallId?: string }>
   | Readonly<{ kind: "staff.list.v1"; afterTaskKey?: string }>
@@ -44,6 +45,7 @@ export type GatewayReply =
   | Readonly<{ kind: "bookingProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "knowledgeAnswer"; progress: CallCommandProgress }>
   | Readonly<{ kind: "availabilityAnswer"; progress: CallCommandProgress }>
+  | Readonly<{ kind: "appointmentAnswer"; progress: CallCommandProgress }>
   | Readonly<{ kind: "callSummary"; call: CallSummary }>
   | Readonly<{ kind: "callOutcomes"; page: CallOutcomePage }>
   | Readonly<{ kind: "staffQueue"; page: StaffQueuePage }>
@@ -75,6 +77,7 @@ export class CommandGateway {
   listPermitted(): readonly CapabilityDescriptor[] {
     const permitted: CapabilityId[] = ["settings.read.v1", "booking.propose.v2", "knowledge.answer.v2"];
     if (this.reception.availabilityEnabled()) permitted.push("availability.read.v2");
+    if (this.reception.appointmentReadEnabled()) permitted.push("appointments.read.v1");
     if (this.review) permitted.push("calls.read.v1");
     if (this.outcomeReport) permitted.push("calls.outcomes.v1");
     if (this.staffQueue) permitted.push("staff.list.v1");
@@ -134,6 +137,15 @@ export class CommandGateway {
             typeof command.now !== "string" || !Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
         const result = await this.reception.checkAvailability(this.actor.scope, command.turn, command.from, command.to, command.now);
         return result.ok ? ok({ kind: "availabilityAnswer", progress: commandProgress(result.value, command.turn.turnId) }) : result;
+      }
+      case "appointments.read.v1": {
+        if (!command.turn || !command.turn.turnId || !command.turn.callId || !command.turn.text ||
+            !command.verificationRef || command.verificationRef.length > 256 ||
+            typeof command.from !== "string" || typeof command.to !== "string" ||
+            typeof command.now !== "string" || !Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
+        const result = await this.reception.checkAppointments(this.actor.scope, command.turn, command.verificationRef,
+          command.from, command.to, command.now);
+        return result.ok ? ok({ kind: "appointmentAnswer", progress: commandProgress(result.value, command.turn.turnId) }) : result;
       }
       case "calls.read.v1": {
         if (!this.review || !command.callId || command.callId.length > 256) return err({ kind: "invalid" });

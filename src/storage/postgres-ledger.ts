@@ -19,12 +19,14 @@ function decodeState(value: unknown, callId: string): Result<CallState, Transiti
       !Array.isArray(data.processedTurnIds) || typeof data.processedTurnDigests !== "object" || data.processedTurnDigests === null || !Array.isArray(data.callerMessages) ||
       (data.knowledgeAnswers !== undefined && !Array.isArray(data.knowledgeAnswers)) ||
       (data.availabilityReads !== undefined && !Array.isArray(data.availabilityReads)) ||
+      (data.appointmentReads !== undefined && !Array.isArray(data.appointmentReads)) ||
       (data.terminal !== undefined && (data.lifecycle !== "ended" || typeof data.terminal !== "object" || data.terminal === null ||
         !CALL_TERMINAL_REASONS.includes((data.terminal as { reason: typeof CALL_TERMINAL_REASONS[number] }).reason) ||
         typeof (data.terminal as { at?: unknown }).at !== "string" || !Number.isFinite(Date.parse((data.terminal as { at: string }).at)))) ||
       (data.lifecycle === "starting" && (typeof data.admission !== "object" || data.admission === null))) return err({ kind: "storageCorrupt" });
   return ok({ ...(value as CallState), knowledgeAnswers: Array.isArray(data.knowledgeAnswers) ? data.knowledgeAnswers as CallState["knowledgeAnswers"] : [],
-    availabilityReads: Array.isArray(data.availabilityReads) ? data.availabilityReads as CallState["availabilityReads"] : [] });
+    availabilityReads: Array.isArray(data.availabilityReads) ? data.availabilityReads as CallState["availabilityReads"] : [],
+    appointmentReads: Array.isArray(data.appointmentReads) ? data.appointmentReads as CallState["appointmentReads"] : [] });
 }
 
 function auditPayload(action: TransitionAction): Record<string, string> {

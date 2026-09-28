@@ -1,5 +1,5 @@
 import { digestActionRequest, digestTurn } from "../core/digest.ts";
-import type { BookingEvidenceHost, HostEffects, HostReadFailure, KnowledgeHost, KnowledgeReadFailure, OperatorAlertHost, StaffLifecycleHost } from "../core/host.ts";
+import type { BookingEvidenceHost, HostEffects, HostReadFailure, KnowledgeHost, KnowledgeReadFailure, OperatorAlertHost, PatientProofHost, StaffLifecycleHost } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { ActionRequest, ApprovedKnowledge, BookableOffer, HostMutation, HostWriteReceipt, LocationScope, OperatorAlert, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "../core/model.ts";
 
@@ -17,7 +17,7 @@ function validDestination(value: unknown): value is StaffItem["destination"] {
 type Booking = Readonly<{ actionKey: string; hostRef: string; scope: LocationScope; patientRef: string; offerRef: string; payloadDigest: string }>;
 type Task = Readonly<{ taskKey: string; hostTaskRef: string; scope: LocationScope; destination: StaffItem["destination"]; status: "open" | "acknowledged" | "resolved"; payloadDigest: string }>;
 
-export class ReferenceClinicHost implements BookingEvidenceHost, HostEffects, KnowledgeHost, StaffLifecycleHost, OperatorAlertHost {
+export class ReferenceClinicHost implements BookingEvidenceHost, PatientProofHost, HostEffects, KnowledgeHost, StaffLifecycleHost, OperatorAlertHost {
   private readonly patients: readonly VerifiedPatient[];
   private readonly offers: readonly BookableOffer[];
   private readonly knowledge: readonly ApprovedKnowledge[];
@@ -54,6 +54,15 @@ export class ReferenceClinicHost implements BookingEvidenceHost, HostEffects, Kn
     if (Date.parse(patient.expiresAt) <= Date.parse(now)) return err({ kind: "expired", target: "patient" });
     if (Date.parse(offer.expiresAt) <= Date.parse(now)) return err({ kind: "expired", target: "offer" });
     return ok({ kind: "book", patient: structuredClone(patient), offer: structuredClone(offer) });
+  }
+
+  async verifyPatient(scope: LocationScope, verificationRef: string, now: string): Promise<Result<VerifiedPatient, HostReadFailure>> {
+    if (!Number.isFinite(Date.parse(now))) return err({ kind: "unavailable", target: "patient" });
+    const matches = this.patients.filter(item => item.verificationRef === verificationRef && sameScope(item.scope, scope));
+    if (matches.length === 0) return err({ kind: "notFound", target: "patient" });
+    if (matches.length !== 1) return err({ kind: "ambiguous", target: "patient" });
+    if (Date.parse(matches[0]!.expiresAt) <= Date.parse(now)) return err({ kind: "expired", target: "patient" });
+    return ok(structuredClone(matches[0]!));
   }
 
   async write(mutation: HostMutation, now: string): Promise<HostWriteReceipt> {

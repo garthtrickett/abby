@@ -30,6 +30,8 @@ The [PostgreSQL ledger clock](../phase-1/LEDGER_CLOCK.md) now owns admitted-call
 
 The [Cliniko availability adapter](../phase-2/CLINIKO_AVAILABILITY.md) reads scoped online-booking eligibility and available times through a bounded, read-only HTTP port. An [opt-in synthetic call journey](../phase-2/CLINIKO_CALL_READ.md) now presents fresh, local-time provisional results through durable voice notices. Returned times are not booking evidence.
 
+The [Cliniko appointment reader](../phase-2/CLINIKO_APPOINTMENT_READ.md) is an opt-in, read-only synthetic call path behind a host-issued patient proof. It projects scoped future appointment times into durable notices and redacted agent/staff receipts. A real caller verification policy and live provider conformance remain unproven.
+
 The [presentation recovery dispatcher](../phase-1/PRESENTATION_RECOVERY.md) scans durable pending speech or transfer intents after a lost wake-up. It only delivers through the exact attached session and never replays a started intent.
 
 The [in-process voice work loop](../phase-1/VOICE_WORK_LOOP.md) schedules lease expiry before pending-presentation recovery and exposes a commit notification hook. The host still supplies its session registry and commit wiring.
