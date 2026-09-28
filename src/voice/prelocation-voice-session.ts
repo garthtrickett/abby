@@ -10,9 +10,9 @@ import type { PlaybackPort } from "./voice-session.ts";
 import { TurnAssembler } from "./turn-assembler.ts";
 import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 
-type Failure = TransitionFailure | RouteFailure | TranscriptFailure |
+export type PrelocationVoiceFailure = TransitionFailure | RouteFailure | TranscriptFailure |
   Readonly<{ kind: "sessionUnknown" | "deliveryBlocked" | "playbackUnknown" | "transportUnavailable" | "locationChoiceUnclear" }>;
-type PromptResult = Readonly<{ kind: "queued" | "played" | "failed" | "unproven" | "interrupted"; playbackId: string }>;
+export type PrelocationPromptResult = Readonly<{ kind: "queued" | "played" | "failed" | "unproven" | "interrupted"; playbackId: string }>;
 
 /** Owns only the media interval before a shared-number call gains a location scope. */
 export class PrelocationVoiceSession {
@@ -58,7 +58,7 @@ export class PrelocationVoiceSession {
     this.localDeadlineMs = startedMs + Math.max(0, lease.validForMs - 2_000);
   }
 
-  async attach(): Promise<Result<PendingLocationCall, Failure>> {
+  async attach(): Promise<Result<PendingLocationCall, PrelocationVoiceFailure>> {
     if (this.attached) return err({ kind: "invalidTransition" });
     const startedMs = this.monotonicNow();
     const attached = await this.intake.attachSession(this.event, this.sessionId);
@@ -72,7 +72,7 @@ export class PrelocationVoiceSession {
     return attached;
   }
 
-  async renew(): Promise<Result<PendingLocationCall, Failure>> {
+  async renew(): Promise<Result<PendingLocationCall, PrelocationVoiceFailure>> {
     if (!this.canSend() || this.leaseVersion === undefined) return err({ kind: "leaseLost" });
     const startedMs = this.monotonicNow();
     const renewed = await this.intake.renewSession(this.event, this.sessionId, this.leaseVersion);
@@ -81,7 +81,7 @@ export class PrelocationVoiceSession {
     return renewed;
   }
 
-  async dispatchPrompt(now: string): Promise<Result<PromptResult, Failure>> {
+  async dispatchPrompt(now: string): Promise<Result<PrelocationPromptResult, PrelocationVoiceFailure>> {
     if (!this.attached || !this.pending || this.leaseVersion === undefined) return err({ kind: "sessionUnknown" });
     if (this.speechOpen) return err({ kind: "deliveryBlocked" });
     if (!this.canSend()) return err({ kind: "leaseLost" });
@@ -118,7 +118,7 @@ export class PrelocationVoiceSession {
     return ok({ kind: status, playbackId });
   }
 
-  async acceptPlaybackResult(playbackId: string, status: "played" | "failed", now: string): Promise<Result<PendingLocationCall, Failure>> {
+  async acceptPlaybackResult(playbackId: string, status: "played" | "failed", now: string): Promise<Result<PendingLocationCall, PrelocationVoiceFailure>> {
     if (!this.activePlaybackId || this.activePlaybackId !== playbackId) return err({ kind: "playbackUnknown" });
     if (!this.canSend() || this.leaseVersion === undefined) return err({ kind: "leaseLost" });
     const settled = await this.ledger.resolvePendingLocationPrompt(this.callId, playbackId, this.sessionId,
@@ -130,7 +130,7 @@ export class PrelocationVoiceSession {
     return settled;
   }
 
-  async speechStarted(now: string): Promise<Result<number, Failure>> {
+  async speechStarted(now: string): Promise<Result<number, PrelocationVoiceFailure>> {
     if (!this.attached) return err({ kind: "sessionUnknown" });
     if (this.finishing) return err({ kind: "deliveryBlocked" });
     if (!this.canSend() || this.leaseVersion === undefined) return err({ kind: "leaseLost" });
@@ -152,12 +152,12 @@ export class PrelocationVoiceSession {
     return ok(generation);
   }
 
-  acceptTranscript(event: TranscriptEvent): Result<void, Failure> {
+  acceptTranscript(event: TranscriptEvent): Result<void, PrelocationVoiceFailure> {
     if (!this.attached || !this.speechOpen) return err({ kind: "sessionUnknown" });
     return this.assembler.accept(event);
   }
 
-  async finishTurn(now: string): Promise<Result<AdmissionResult, Failure>> {
+  async finishTurn(now: string): Promise<Result<AdmissionResult, PrelocationVoiceFailure>> {
     if (!this.attached || !this.speechOpen || this.leaseVersion === undefined) return err({ kind: "sessionUnknown" });
     if (this.finishing) return err({ kind: "deliveryBlocked" });
     if (!this.canSend()) return err({ kind: "leaseLost" });
