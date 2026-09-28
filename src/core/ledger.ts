@@ -1,7 +1,8 @@
 import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "./model.ts";
-import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingPresentationRef, RecoverableEffectRef, Result, StaffQueueEntry, TransitionAction, TransitionFailure } from "./model.ts";
+import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingLocationCall, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffQueueEntry, TransitionAction, TransitionFailure } from "./model.ts";
 import { transition } from "./transition.ts";
 import { READINESS_REQUIREMENTS, unprovenReadiness } from "./readiness.ts";
+import { LOCATION_CHOICE_TIMEOUT_MS, pendingMatchesAdmission, policyMatchesPending, validPendingAdmission, validPendingRoute } from "./pending-location.ts";
 import type { AutomationReadiness } from "./readiness.ts";
 import type { InFlightWrite, WriteStopAuditEntry, WriteStopAuditPage, WriteStopFailure, WriteStopStatus } from "./write-stop.ts";
 
@@ -12,6 +13,9 @@ export interface LedgerStore {
   listWriteStopChanges(scope: LocationScope, afterVersion?: number): Promise<Result<WriteStopAuditPage, TransitionFailure>>;
   start(callId: string, policy: CallPolicy): Promise<Result<CallState, TransitionFailure>>;
   findAdmission(callId: string): Promise<Result<AdmissionReceipt | null, TransitionFailure>>;
+  findPendingLocation(callId: string): Promise<Result<PendingLocationCall | null, TransitionFailure>>;
+  reservePendingLocation(callId: string, route: PendingLocationRoute, admission: Admission): Promise<Result<PendingLocationResult, TransitionFailure>>;
+  bindPendingLocation(callId: string, policy: CallPolicy, now: string): Promise<Result<AdmissionResult, TransitionFailure>>;
   findExpiredAdmissions(now: string, scope?: LocationScope): Promise<Result<readonly AdmissionReceipt[], TransitionFailure>>;
   findExpiredSessions(now: string, scope?: LocationScope): Promise<Result<readonly ActiveSessionReceipt[], TransitionFailure>>;
   findPendingPresentations(now: string, scope?: LocationScope, afterCallId?: string): Promise<Result<readonly PendingPresentationRef[], TransitionFailure>>;
@@ -57,6 +61,7 @@ function sameScope(left: LocationScope, right: LocationScope): boolean {
 
 export class MemoryLedger implements LedgerStore {
   private readonly calls = new Map<string, CallState>();
+  private readonly pendingLocations = new Map<string, PendingLocationCall>();
   private readonly writeStops = new Map<string, Array<WriteStopAuditEntry & Readonly<{ inFlight: readonly InFlightWrite[] }>>>();
   private readonly readiness: AutomationReadiness;
 
@@ -123,7 +128,7 @@ export class MemoryLedger implements LedgerStore {
   }
 
   async start(callId: string, policy: CallPolicy): Promise<Result<CallState, TransitionFailure>> {
-    if (!callId || this.calls.has(callId)) return err({ kind: "invalidTransition" });
+    if (!callId || this.calls.has(callId) || this.pendingLocations.has(callId)) return err({ kind: "invalidTransition" });
     const state = initialState(callId, policy);
     this.calls.set(callId, state);
     return ok(structuredClone(state));
@@ -131,6 +136,48 @@ export class MemoryLedger implements LedgerStore {
 
   async findAdmission(callId: string): Promise<Result<AdmissionReceipt | null, TransitionFailure>> {
     return ok(this.calls.has(callId) ? admissionReceipt(this.calls.get(callId)!) : null);
+  }
+
+  async findPendingLocation(callId: string): Promise<Result<PendingLocationCall | null, TransitionFailure>> {
+    return ok(structuredClone(this.pendingLocations.get(callId) ?? null));
+  }
+
+  async reservePendingLocation(callId: string, route: PendingLocationRoute, admission: Admission): Promise<Result<PendingLocationResult, TransitionFailure>> {
+    if (!validPendingRoute(route) || !validPendingAdmission(callId, admission)) return err({ kind: "invalidTransition" });
+    if (this.calls.has(callId)) return err({ kind: "callConflict" });
+    const existing = this.pendingLocations.get(callId);
+    if (existing) return pendingMatchesAdmission(existing, admission)
+      ? ok({ kind: "duplicate", pending: structuredClone(existing) }) : err({ kind: "callConflict" });
+    const acceptedAt = admission.acceptedAt;
+    const pending: PendingLocationCall = { callId, route: structuredClone(route),
+      admission: { ...structuredClone(admission), deadline: new Date(Date.parse(acceptedAt) + LOCATION_CHOICE_TIMEOUT_MS).toISOString() },
+      status: "pending" };
+    this.pendingLocations.set(callId, pending);
+    return ok({ kind: "created", pending: structuredClone(pending) });
+  }
+
+  async bindPendingLocation(callId: string, policy: CallPolicy, now: string): Promise<Result<AdmissionResult, TransitionFailure>> {
+    if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
+    const pending = this.pendingLocations.get(callId);
+    if (!pending) return err({ kind: "callUnknown" });
+    const existing = this.calls.get(callId);
+    if (pending.status === "bound" && existing) return policyMatchesPending(pending, policy) &&
+      sameScope(existing.policy.scope, policy.scope)
+      ? ok({ kind: "duplicate", receipt: admissionReceipt(existing)! }) : err({ kind: "scopeMismatch" });
+    if (pending.status !== "pending" || existing) return err({ kind: "callConflict" });
+    if (Date.parse(now) >= Date.parse(pending.admission.deadline)) {
+      this.pendingLocations.set(callId, { ...pending, status: "expired" });
+      return err({ kind: "admissionExpired" });
+    }
+    if (!policyMatchesPending(pending, policy)) return err({ kind: "scopeMismatch" });
+    const admission: Admission = { ...pending.admission, acceptedAt: now,
+      deadline: new Date(Date.parse(now) + 30_000).toISOString() };
+    const state = initialState(callId, policy);
+    state.lifecycle = "starting";
+    state.admission = admission;
+    this.calls.set(callId, state);
+    this.pendingLocations.set(callId, { ...pending, status: "bound" });
+    return ok({ kind: "created", receipt: admissionReceipt(state)! });
   }
 
   async findExpiredAdmissions(now: string, scope?: LocationScope): Promise<Result<readonly AdmissionReceipt[], TransitionFailure>> {
@@ -180,6 +227,7 @@ export class MemoryLedger implements LedgerStore {
       return receipt && sameAdmission(receipt.admission, admission)
         ? ok({ kind: "duplicate", receipt }) : err({ kind: "callConflict" });
     }
+    if (this.pendingLocations.has(callId)) return err({ kind: "callConflict" });
     const state = initialState(callId, policy);
     state.lifecycle = "starting";
     state.admission = structuredClone(admission);

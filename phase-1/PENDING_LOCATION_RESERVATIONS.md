@@ -1,0 +1,9 @@
+# Durable pending location reservations
+
+A shared-number call can now reserve its authenticated provider call key before a location is chosen. `LedgerStore.reservePendingLocation` stores the tenant, clinic, route version, candidate location IDs, original dialed number, and a two-minute choice deadline under the global call ID. A matching retry returns the original record, even if the number directory has changed. A conflicting dialed number is rejected. Normal admission and pending reservation serialize on the same call ID in PostgreSQL; neither can own a key already held by the other.
+
+`bindPendingLocation` atomically creates the location-scoped call, its `callAdmitted` event, and a bound reservation after checking the selected policy's tenant, clinic, candidate location, and captured route version. It issues a fresh 30-second activation deadline. A retry returns the existing admission receipt; a different location cannot claim it. An expired choice is marked expired and cannot later become a new call under the same key. PostgreSQL uses its database clock for reservation and binding; tests inject a deterministic clock.
+
+`CallAdmissionService.begin` detects a pending reservation before consulting current routing. It returns `locationChoicePending` for a matching retry, which does not invoke independent fallback. A bound call still returns its original admission receipt. This protects the global call key while the higher-level caller-choice controller is built.
+
+The reservation methods are a storage and admission boundary, not the complete in-call flow. No caller prompt, pre-location voice-session lease, independent expiry scan, or controller that turns a final caller choice into a bound call is present yet. `E2E-055` remains open; the default shared-number admission still follows independent fallback until that controller uses this boundary.

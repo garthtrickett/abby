@@ -1,8 +1,9 @@
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import { CALL_TERMINAL_REASONS, POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "../core/model.ts";
-import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, Effect, LocationScope, PendingPresentationRef, RecoverableEffectRef, Result, StaffItem, StaffQueueEntry, TransitionAction, TransitionFailure } from "../core/model.ts";
+import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, Effect, LocationScope, PendingLocationCall, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffItem, StaffQueueEntry, TransitionAction, TransitionFailure } from "../core/model.ts";
 import { admissionReceipt, initialState, sameAdmission } from "../core/ledger.ts";
+import { LOCATION_CHOICE_TIMEOUT_MS, pendingMatchesAdmission, policyMatchesPending, validPendingAdmission, validPendingLocation, validPendingRoute } from "../core/pending-location.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { transition } from "../core/transition.ts";
 import { validKnowledgeSnapshot } from "../core/knowledge-evidence.ts";
@@ -14,6 +15,7 @@ import type { ClinicWriteStopClinicId, ClinicWriteStopTenantId } from "./generat
 import type { ClinicWriteStopInflightEffectId } from "./generated/public/ClinicWriteStopInflight.ts";
 import type { ClinicWriteStopEventsVersion } from "./generated/public/ClinicWriteStopEvents.ts";
 import type { CallsCallId } from "./generated/public/Calls.ts";
+import type { PendingLocationCallsCallId } from "./generated/public/PendingLocationCalls.ts";
 import type { CallEventsSequence } from "./generated/public/CallEvents.ts";
 import type { EffectOutboxEffectId } from "./generated/public/EffectOutbox.ts";
 import type { StaffItemsTaskKey } from "./generated/public/StaffItems.ts";
@@ -94,6 +96,10 @@ export class PostgresLedger implements LedgerStore {
     const current = result.rows[0]?.current_time;
     if (!(current instanceof Date) || !Number.isFinite(current.getTime())) throw new Error("database clock unavailable");
     return current.toISOString();
+  }
+
+  private async lockCall(db: Kysely<Database>, callId: string): Promise<void> {
+    await sql`select pg_advisory_xact_lock(hashtext(${callId}))`.execute(db);
   }
 
   private stopIds(scope: LocationScope) {
@@ -208,16 +214,22 @@ export class PostgresLedger implements LedgerStore {
     if (!callId) return err({ kind: "invalidTransition" });
     const state = initialState(callId, policy);
     try {
-      const inserted = await this.db.insertInto("calls").values({
-        call_id: callId as CallsCallId,
-        tenant_id: policy.scope.tenantId,
-        clinic_id: policy.scope.clinicId,
-        location_id: policy.scope.locationId,
-        version: 0,
-        policy_version: policy.policyVersion,
-        state,
-      }).onConflict(conflict => conflict.column("call_id").doNothing()).returning("call_id").executeTakeFirst();
-      return inserted ? ok(state) : err({ kind: "invalidTransition" });
+      return await this.db.transaction().execute(async trx => {
+        await this.lockCall(trx, callId);
+        const pending = await trx.selectFrom("pending_location_calls").select("call_id")
+          .where("call_id", "=", callId as PendingLocationCallsCallId).executeTakeFirst();
+        if (pending) return err({ kind: "invalidTransition" });
+        const inserted = await trx.insertInto("calls").values({
+          call_id: callId as CallsCallId,
+          tenant_id: policy.scope.tenantId,
+          clinic_id: policy.scope.clinicId,
+          location_id: policy.scope.locationId,
+          version: 0,
+          policy_version: policy.policyVersion,
+          state,
+        }).onConflict(conflict => conflict.column("call_id").doNothing()).returning("call_id").executeTakeFirst();
+        return inserted ? ok(state) : err({ kind: "invalidTransition" });
+      });
     } catch {
       return err({ kind: "storageFailure" });
     }
@@ -232,6 +244,94 @@ export class PostgresLedger implements LedgerStore {
     } catch {
       return err({ kind: "storageFailure" });
     }
+  }
+
+  async findPendingLocation(callId: string): Promise<Result<PendingLocationCall | null, TransitionFailure>> {
+    try {
+      const row = await this.db.selectFrom("pending_location_calls").select(["state", "status", "tenant_id", "clinic_id"])
+        .where("call_id", "=", callId as PendingLocationCallsCallId).executeTakeFirst();
+      if (!row) return ok(null);
+      if (!validPendingLocation(row.state, callId) || row.status !== row.state.status ||
+          row.tenant_id !== row.state.route.tenantId || row.clinic_id !== row.state.route.clinicId) return err({ kind: "storageCorrupt" });
+      return ok(row.state);
+    } catch { return err({ kind: "storageFailure" }); }
+  }
+
+  async reservePendingLocation(callId: string, route: PendingLocationRoute, admission: Admission): Promise<Result<PendingLocationResult, TransitionFailure>> {
+    if (!validPendingRoute(route) || !validPendingAdmission(callId, admission)) return err({ kind: "invalidTransition" });
+    try {
+      return await this.db.transaction().execute(async trx => {
+        await this.lockCall(trx, callId);
+        const call = await trx.selectFrom("calls").select("call_id").where("call_id", "=", callId as CallsCallId).executeTakeFirst();
+        if (call) return err({ kind: "callConflict" });
+        const row = await trx.selectFrom("pending_location_calls").select(["state", "status", "tenant_id", "clinic_id"])
+          .where("call_id", "=", callId as PendingLocationCallsCallId).executeTakeFirst();
+        if (row) {
+          if (!validPendingLocation(row.state, callId) || row.status !== row.state.status ||
+              row.tenant_id !== row.state.route.tenantId || row.clinic_id !== row.state.route.clinicId) return err({ kind: "storageCorrupt" });
+          return pendingMatchesAdmission(row.state, admission)
+            ? ok({ kind: "duplicate", pending: row.state }) : err({ kind: "callConflict" });
+        }
+        const acceptedAt = await this.trustedNow(trx, admission.acceptedAt);
+        const pending: PendingLocationCall = { callId, route, admission: { ...admission, acceptedAt,
+          deadline: new Date(Date.parse(acceptedAt) + LOCATION_CHOICE_TIMEOUT_MS).toISOString() }, status: "pending" };
+        await trx.insertInto("pending_location_calls").values({ call_id: callId as PendingLocationCallsCallId,
+          tenant_id: route.tenantId, clinic_id: route.clinicId, status: "pending", state: pending }).execute();
+        return ok({ kind: "created", pending });
+      });
+    } catch { return err({ kind: "storageFailure" }); }
+  }
+
+  async bindPendingLocation(callId: string, policy: CallPolicy, now: string): Promise<Result<AdmissionResult, TransitionFailure>> {
+    if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
+    try {
+      return await this.db.transaction().execute(async trx => {
+        await this.lockCall(trx, callId);
+        const row = await trx.selectFrom("pending_location_calls").select(["state", "status", "tenant_id", "clinic_id"])
+          .where("call_id", "=", callId as PendingLocationCallsCallId).forUpdate().executeTakeFirst();
+        if (!row) return err({ kind: "callUnknown" });
+        if (!validPendingLocation(row.state, callId) || row.status !== row.state.status ||
+            row.tenant_id !== row.state.route.tenantId || row.clinic_id !== row.state.route.clinicId) return err({ kind: "storageCorrupt" });
+        const pending = row.state;
+        const existing = await trx.selectFrom("calls").select("state").where("call_id", "=", callId as CallsCallId).executeTakeFirst();
+        if (pending.status === "bound") {
+          if (!existing) return err({ kind: "storageCorrupt" });
+          const decoded = decodeState(existing.state, callId);
+          if (!decoded.ok) return decoded;
+          const bound = decoded.value.policy.scope;
+          if (!policyMatchesPending(pending, policy) || bound.tenantId !== policy.scope.tenantId ||
+              bound.clinicId !== policy.scope.clinicId || bound.locationId !== policy.scope.locationId) {
+            return err({ kind: "scopeMismatch" });
+          }
+          const receipt = admissionReceipt(decoded.value);
+          return receipt ? ok({ kind: "duplicate", receipt }) : err({ kind: "storageCorrupt" });
+        }
+        if (pending.status !== "pending" || existing) return err({ kind: "callConflict" });
+        const acceptedAt = await this.trustedNow(trx, now);
+        if (Date.parse(acceptedAt) >= Date.parse(pending.admission.deadline)) {
+          const expired = { ...pending, status: "expired" as const };
+          await trx.updateTable("pending_location_calls").set({ status: "expired", state: expired })
+            .where("call_id", "=", callId as PendingLocationCallsCallId).execute();
+          return err({ kind: "admissionExpired" });
+        }
+        if (!policyMatchesPending(pending, policy)) return err({ kind: "scopeMismatch" });
+        const admission: Admission = { ...pending.admission, acceptedAt,
+          deadline: new Date(Date.parse(acceptedAt) + 30_000).toISOString() };
+        const state = initialState(callId, policy);
+        state.lifecycle = "starting";
+        state.admission = admission;
+        await trx.insertInto("calls").values({ call_id: callId as CallsCallId, tenant_id: policy.scope.tenantId,
+          clinic_id: policy.scope.clinicId, location_id: policy.scope.locationId, version: 0,
+          policy_version: policy.policyVersion, state }).execute();
+        await trx.insertInto("call_events").values({ call_id: callId as CallsCallId, tenant_id: policy.scope.tenantId,
+          sequence: 0 as CallEventsSequence, kind: "callAdmitted",
+          payload: { accountRef: admission.key.accountRef, providerCallRef: admission.key.providerCallRef,
+            dialedNumber: admission.dialedNumber, locationId: policy.scope.locationId } }).execute();
+        await trx.updateTable("pending_location_calls").set({ status: "bound", state: { ...pending, status: "bound" } })
+          .where("call_id", "=", callId as PendingLocationCallsCallId).execute();
+        return ok({ kind: "created", receipt: admissionReceipt(state)! });
+      });
+    } catch { return err({ kind: "storageFailure" }); }
   }
 
   async findExpiredAdmissions(now: string, scope?: LocationScope): Promise<Result<readonly AdmissionReceipt[], TransitionFailure>> {
@@ -343,6 +443,10 @@ export class PostgresLedger implements LedgerStore {
         !Number.isFinite(Date.parse(admission.acceptedAt)) || Date.parse(admission.deadline) <= Date.parse(admission.acceptedAt)) return err({ kind: "invalidTransition" });
     try {
       return await this.db.transaction().execute(async trx => {
+        await this.lockCall(trx, callId);
+        const pending = await trx.selectFrom("pending_location_calls").select("call_id")
+          .where("call_id", "=", callId as PendingLocationCallsCallId).executeTakeFirst();
+        if (pending) return err({ kind: "callConflict" });
         const acceptedAt = await this.trustedNow(trx, admission.acceptedAt);
         const storedAdmission: Admission = { ...admission, acceptedAt, deadline: new Date(Date.parse(acceptedAt) + 30_000).toISOString() };
         const state = initialState(callId, policy);

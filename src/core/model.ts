@@ -20,6 +20,19 @@ export type CallTerminalReason = typeof CALL_TERMINAL_REASONS[number];
 export type CallTerminal = Readonly<{ reason: CallTerminalReason; at: string }>;
 export type AdmissionReceipt = Readonly<{ callId: string; scope: LocationScope; admission: Admission; lifecycle: "starting" | "active" | "ended" }>;
 export type AdmissionResult = Readonly<{ kind: "created" | "duplicate"; receipt: AdmissionReceipt }>;
+export type PendingLocationRoute = Readonly<{
+  tenantId: string;
+  clinicId: string;
+  candidateLocationIds: readonly string[];
+  routeVersion: string;
+}>;
+export type PendingLocationCall = Readonly<{
+  callId: string;
+  route: PendingLocationRoute;
+  admission: Admission;
+  status: "pending" | "expired" | "bound";
+}>;
+export type PendingLocationResult = Readonly<{ kind: "created" | "duplicate"; pending: PendingLocationCall }>;
 export type ActiveSessionReceipt = Readonly<{ callId: string; scope: LocationScope; lease: SessionLease }>;
 export type PendingPresentationRef = Readonly<{ callId: string; scope: LocationScope; sessionId: string; presentationId: string }>;
 export const POSSIBLE_SEND_RECOVERY_DELAY_MS = 60_000;
