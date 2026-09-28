@@ -48,7 +48,7 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     if (request.method === "GET" && url.pathname === "/app.js") return asset(response, "text/javascript; charset=utf-8", bundle);
     if (request.method === "GET" && url.pathname === "/style.css") return asset(response, "text/css; charset=utf-8", stylesheet);
     if (request.method === "GET" && url.pathname === "/api/capabilities") {
-      return json(response, 200, { ok: true, value: gateway.listPermitted().filter(item => item.id !== "booking.propose.v1") });
+      return json(response, 200, { ok: true, value: gateway.listPermitted().filter(item => item.id !== "booking.propose.v2") });
     }
     let command: GatewayCommand | undefined;
     if (request.method === "GET" && url.pathname === "/api/settings") command = { kind: "settings.read.v1" };

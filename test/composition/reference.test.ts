@@ -4,7 +4,8 @@ import { sql } from "kysely";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import type { CallState, CapabilityMode, FinalCallerTurn, LocationScope, Result } from "../../src/core/model.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
-import type { GatewayReply } from "../../src/reference/command-gateway.ts";
+import type { GatewayCommand, GatewayReply, HostActor } from "../../src/reference/command-gateway.ts";
+import { matchesSchema } from "../../src/reference/schema-shapes.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { createEmbeddedTextComposition } from "../../src/reference/embedded-composition.ts";
 import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
@@ -36,9 +37,13 @@ function turn(callId: string, turnId: string, text: string): FinalCallerTurn {
   return { callId, turnId, text, quality: "clear", at: now };
 }
 
-function proposal(reply: GatewayReply): CallState {
+async function proposal(scope: LocationScope, reception: TextReception, reply: GatewayReply): Promise<CallState> {
   assert.equal(reply.kind, "bookingProposal");
-  return reply.state;
+  const state = value(await reception.read(scope, reply.progress.callId));
+  assert.equal(reply.progress.callVersion, state.version);
+  assert.equal(JSON.stringify(reply).includes("verificationRef"), false);
+  assert.equal(JSON.stringify(reply).includes("approvedText"), false);
+  return state;
 }
 
 function settings(reply: GatewayReply) {
@@ -73,16 +78,83 @@ function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = f
 }
 
 for (const kind of kinds) {
+  test(`${kind}: agent catalogue describes the accepted command and redacted result`, async () => {
+    const app = fixture(kind, `${kind}-catalogue`);
+    const booking = app.agent.listPermitted().find(item => item.id === "booking.propose.v2");
+    assert.ok(booking);
+    assert.equal(booking.scope, "boundActorLocation");
+    assert.deepEqual([booking.inputVersion, booking.outputVersion], [2, 2]);
+    assert.equal(booking.approval, "callerConfirmation");
+    assert.equal(booking.requiresCallerConfirmation, true);
+    assert.equal(booking.inputSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
+    assert.equal(booking.resultSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
+    assert.equal(app.agent.listPermitted().some(item => item.id === "settings.appointments.booking.enabled.change.v1"), false);
+    assert.equal(app.admin.listPermitted().find(item => item.id === "settings.appointments.booking.enabled.change.v1")?.authority, "clinicAdmin");
+    assert.throws(() => new CommandGateway({ actorRef: "forged-role", role: "operator", scope: app.scope } as unknown as HostActor,
+      app.policy, app.reception), /host actor identity/);
+    const command: GatewayCommand = { kind: "booking.propose.v2", turn: turn(`call-${kind}-catalogue`, "proposal", "Private caller text"),
+      verificationRef: app.patient.verificationRef, offerRef: app.offer("one").offerRef, now };
+    assert.equal(matchesSchema(booking.inputSchema, command), true);
+    const invalid = { ...command, unexpected: "untrusted" } as GatewayCommand;
+    assert.equal(matchesSchema(booking.inputSchema, invalid), false);
+    error(await app.agent.submit(invalid), "invalid");
+    const inherited = Object.create({ kind: "settings.read.v1" }) as GatewayCommand;
+    error(await app.agent.submit(inherited), "invalid");
+    const throwing = Object.defineProperty({}, "kind", { get() { throw new Error("untrusted getter"); } }) as GatewayCommand;
+    error(await app.agent.submit(throwing), "invalid");
+    const cyclic: unknown[] = [];
+    cyclic.push(cyclic);
+    error(await app.agent.submit({ kind: "knowledge.answer.v2", turn: command.turn,
+      sourceRefs: cyclic, proposedText: "An answer", now } as GatewayCommand), "invalid");
+    error(await app.agent.submit({ ...command, kind: "booking.propose.v1" } as unknown as GatewayCommand), "forbidden");
+    assert.equal(app.host.bookingEvidenceReads(), 0);
+    settings(value(await app.admin.submit({ kind: "settings.appointments.booking.enabled.change.v1", expectedVersion: "0", enabled: true })));
+    value(await app.reception.startCall(command.turn.callId, app.scope));
+    const response = value(await app.agent.submit(command));
+    assert.equal(response.kind, "bookingProposal");
+    assert.equal(matchesSchema(booking.resultSchema, { ok: true, value: response }), true);
+    assert.equal(response.progress.traceKey, "proposal");
+    assert.equal(response.progress.actions[0]?.status, "awaitingConfirmation");
+    assert.equal(JSON.stringify(response).includes(app.patient.patientRef), false);
+    assert.equal(JSON.stringify(response).includes(app.patient.verificationRef), false);
+    assert.equal(JSON.stringify(response).includes("Private caller text"), false);
+    assert.equal(app.host.bookings(app.scope).length, 0);
+    const mutable = booking.inputSchema as { properties?: Record<string, unknown> };
+    mutable.properties!.kind = { const: "tampered" };
+    assert.equal(matchesSchema(app.agent.listPermitted().find(item => item.id === "booking.propose.v2")!.inputSchema, command), true);
+    const brokenPolicy: PolicyStore = {
+      read: async () => ({ ok: true, value: { ...referenceDefaultPolicy(app.scope), capabilities: { book: "execute" } } as unknown as CallState["policy"] }),
+      changeBookingEnabled: (...args) => app.policy.changeBookingEnabled(...args),
+      listBookingChanges: (...args) => app.policy.listBookingChanges(...args),
+    };
+    const brokenGateway = new CommandGateway({ actorRef: "contract-check", role: "agent", scope: app.scope }, brokenPolicy, app.reception);
+    error(await brokenGateway.submit({ kind: "settings.read.v1" }), "responseContractViolation");
+    const lostResponsePolicy: PolicyStore = {
+      read: (...args) => app.policy.read(...args),
+      changeBookingEnabled: async (...args) => {
+        const committed = await app.policy.changeBookingEnabled(...args);
+        if (!committed.ok) return committed;
+        throw new Error("acknowledgment lost after commit");
+      },
+      listBookingChanges: (...args) => app.policy.listBookingChanges(...args),
+    };
+    const uncertainAdmin = new CommandGateway({ actorRef: "lost-response-admin", role: "clinicAdmin", scope: app.scope },
+      lostResponsePolicy, app.reception);
+    error(await uncertainAdmin.submit({ kind: "settings.appointments.booking.enabled.change.v1", expectedVersion: "1", enabled: false }), "commandOutcomeUnknown");
+    assert.equal(value(await app.policy.read(app.scope)).policyVersion, "2");
+    assert.equal(value(await app.policy.listBookingChanges(app.scope)).entries.at(-1)?.actorRef, "lost-response-admin");
+  });
+
   test(`${kind}: agent proposal requires caller delivery, affirmation, and keyed host commit`, async () => {
     const app = fixture(kind, `${kind}-booking`);
-    assert.deepEqual(app.agent.listPermitted().map(item => item.id), ["settings.read.v1", "booking.propose.v1", "knowledge.answer.v1"]);
+    assert.deepEqual(app.agent.listPermitted().map(item => item.id), ["settings.read.v1", "booking.propose.v2", "knowledge.answer.v2"]);
     assert.equal(app.admin.listPermitted().some(item => item.id === "settings.appointments.booking.enabled.change.v1"), true);
     error(await app.agent.submit({ kind: "settings.appointments.booking.enabled.change.v1", expectedVersion: "0", enabled: true }), "forbidden");
     const enabled = settings(value(await app.admin.submit({ kind: "settings.appointments.booking.enabled.change.v1", expectedVersion: "0", enabled: true })));
     assert.equal(enabled.capabilities.book, "execute");
     const callId = `call-${kind}-booking`;
     value(await app.reception.startCall(callId, app.scope));
-    const planned = proposal(value(await app.agent.submit({ kind: "booking.propose.v1", turn: turn(callId, "turn-1", "Book physio"), verificationRef: app.patient.verificationRef, offerRef: app.offer("one").offerRef, now })));
+    const planned = await proposal(app.scope, app.reception, value(await app.agent.submit({ kind: "booking.propose.v2", turn: turn(callId, "turn-1", "Book physio"), verificationRef: app.patient.verificationRef, offerRef: app.offer("one").offerRef, now })));
     const action = Object.values(planned.actions)[0];
     assert.ok(action);
     assert.equal(action.status, "awaitingConfirmation");
@@ -131,14 +203,14 @@ for (const kind of kinds) {
     assert.equal((value(await app.reception.read(app.scope, second))).policy.capabilities.book, "execute");
     assert.equal((value(await app.reception.read(app.scope, third))).policy.capabilities.book, "unavailable");
 
-    const requested = proposal(value(await app.agent.submit({ kind: "booking.propose.v1", turn: turn(first, "request-first", "Book first"), verificationRef: app.patient.verificationRef, offerRef: app.offer("one").offerRef, now })));
+    const requested = await proposal(app.scope, app.reception, value(await app.agent.submit({ kind: "booking.propose.v2", turn: turn(first, "request-first", "Book first"), verificationRef: app.patient.verificationRef, offerRef: app.offer("one").offerRef, now })));
     assert.equal(Object.keys(requested.actions).length, 0);
     assert.equal(requested.callerMessages.at(-1), "I can't complete that request here.");
     assert.equal(Object.values(requested.staffItems).length, 0);
     assert.equal(app.host.bookingEvidenceReads(), 0);
     assert.equal(app.host.bookings(app.scope).length, 0);
 
-    const executable = proposal(value(await app.agent.submit({ kind: "booking.propose.v1", turn: turn(second, "request-second", "Book second"), verificationRef: app.patient.verificationRef, offerRef: app.offer("two").offerRef, now })));
+    const executable = await proposal(app.scope, app.reception, value(await app.agent.submit({ kind: "booking.propose.v2", turn: turn(second, "request-second", "Book second"), verificationRef: app.patient.verificationRef, offerRef: app.offer("two").offerRef, now })));
     const action = Object.values(executable.actions)[0];
     assert.ok(action);
     value(await app.reception.acknowledgeTextPresentation(app.scope, second, action.presentationId));
@@ -148,7 +220,7 @@ for (const kind of kinds) {
     assert.equal(app.host.bookingEvidenceReads() > 0, true);
     const readsAfterEnabled = app.host.bookingEvidenceReads();
 
-    const restricted = proposal(value(await app.agent.submit({ kind: "booking.propose.v1", turn: turn(third, "request-third", "Book third"), verificationRef: app.patient.verificationRef, offerRef: app.offer("three").offerRef, now })));
+    const restricted = await proposal(app.scope, app.reception, value(await app.agent.submit({ kind: "booking.propose.v2", turn: turn(third, "request-third", "Book third"), verificationRef: app.patient.verificationRef, offerRef: app.offer("three").offerRef, now })));
     assert.equal(Object.keys(restricted.actions).length, 0);
     assert.equal(restricted.callerMessages.at(-1), "I can't complete that request here.");
     assert.equal(app.host.bookingEvidenceReads(), readsAfterEnabled);
@@ -192,7 +264,7 @@ for (const kind of kinds) {
     assert.equal(enabled.capabilities.book, "requestOnly");
     const callId = `call-${kind}-request-only`;
     value(await app.reception.startCall(callId, app.scope));
-    const requested = proposal(value(await app.agent.submit({ kind: "booking.propose.v1", turn: turn(callId, "request", "Book physio"), verificationRef: app.patient.verificationRef, offerRef: app.offer("one").offerRef, now })));
+    const requested = await proposal(app.scope, app.reception, value(await app.agent.submit({ kind: "booking.propose.v2", turn: turn(callId, "request", "Book physio"), verificationRef: app.patient.verificationRef, offerRef: app.offer("one").offerRef, now })));
     assert.equal(Object.keys(requested.actions).length, 0);
     assert.match(requested.callerMessages.at(-1) ?? "", /request staff follow-up/);
     const followedUp = value(await app.reception.drain(app.scope, callId, now));
@@ -206,7 +278,7 @@ for (const kind of kinds) {
     settings(value(await app.admin.submit({ kind: "settings.appointments.booking.enabled.change.v1", expectedVersion: "0", enabled: true })));
     const callId = `call-${kind}-ambiguous`;
     value(await app.reception.startCall(callId, app.scope));
-    const result = proposal(value(await app.agent.submit({ kind: "booking.propose.v1", turn: turn(callId, "ambiguous", "Book me"), verificationRef: app.patient.verificationRef, offerRef: app.offer("one").offerRef, now })));
+    const result = await proposal(app.scope, app.reception, value(await app.agent.submit({ kind: "booking.propose.v2", turn: turn(callId, "ambiguous", "Book me"), verificationRef: app.patient.verificationRef, offerRef: app.offer("one").offerRef, now })));
     assert.equal(Object.keys(result.actions).length, 0);
     assert.match(result.callerMessages.at(-1) ?? "", /can't identify the right appointment safely/);
     const fallback = value(await app.reception.drain(app.scope, callId, now));
@@ -216,30 +288,35 @@ for (const kind of kinds) {
     const foreignCall = `call-${kind}-foreign`;
     const foreignScope = { tenantId: "foreign", clinicId: "foreign", locationId: "foreign" };
     value(await app.reception.startCall(foreignCall, foreignScope));
-    error(await app.agent.submit({ kind: "booking.propose.v1", turn: turn(foreignCall, "intruder", "Book"), verificationRef: app.patient.verificationRef, offerRef: app.offer("one").offerRef, now }), "callUnknown");
+    error(await app.agent.submit({ kind: "booking.propose.v2", turn: turn(foreignCall, "intruder", "Book"), verificationRef: app.patient.verificationRef, offerRef: app.offer("one").offerRef, now }), "callUnknown");
   });
 
   test(`${kind}: agent knowledge command uses host approval and records its source`, async () => {
     const app = fixture(kind, `${kind}-knowledge-command`);
     const callId = `call-${kind}-knowledge-command`;
     value(await app.reception.startCall(callId, app.scope));
-    const response = value(await app.agent.submit({ kind: "knowledge.answer.v1", turn: turn(callId, "hours", "Hours?"),
+    const response = value(await app.agent.submit({ kind: "knowledge.answer.v2", turn: turn(callId, "hours", "Hours?"),
       sourceRefs: ["hours"], proposedText: "We open at 9 am.", now }));
     assert.equal(response.kind, "knowledgeAnswer");
-    assert.equal(response.state.callerMessages.at(-1), "We open at 9 am.");
-    assert.deepEqual(response.state.knowledgeAnswers, [{ turnId: "hours", sourceRef: "hours", version: "hours-v1", ownerRef: `owner-${kind}-knowledge-command` }]);
-    assert.equal(response.state.presentations[response.state.pendingPresentationId!]?.kind, "notice");
+    assert.deepEqual(response.progress.knowledgeSources, [{ sourceRef: "hours", version: "hours-v1", ownerRef: `owner-${kind}-knowledge-command` }]);
+    assert.equal(response.progress.pendingPresentation?.kind, "notice");
+    assert.equal(JSON.stringify(response).includes("We open at 9 am."), false);
+    const answered = value(await app.reception.read(app.scope, callId));
+    assert.equal(answered.callerMessages.at(-1), "We open at 9 am.");
+    assert.deepEqual(answered.knowledgeAnswers, [{ turnId: "hours", sourceRef: "hours", version: "hours-v1", ownerRef: `owner-${kind}-knowledge-command` }]);
 
-    const forged = value(await app.agent.submit({ kind: "knowledge.answer.v1", turn: turn(callId, "forged", "Hours?"),
+    const forged = value(await app.agent.submit({ kind: "knowledge.answer.v2", turn: turn(callId, "forged", "Hours?"),
       sourceRefs: ["hours"], proposedText: "We close at 5 pm.", now }));
     assert.equal(forged.kind, "knowledgeAnswer");
-    assert.equal(forged.state.callerMessages.at(-1), "I can't verify that information right now.");
-    assert.equal(forged.state.knowledgeAnswers.length, 1);
+    assert.deepEqual(forged.progress.knowledgeSources, []);
+    const fallback = value(await app.reception.read(app.scope, callId));
+    assert.equal(fallback.callerMessages.at(-1), "I can't verify that information right now.");
+    assert.equal(fallback.knowledgeAnswers.length, 1);
     assert.equal(app.host.bookings(app.scope).length, 0);
 
     const other = new CommandGateway({ actorRef: "other-agent", role: "agent",
       scope: { ...app.scope, tenantId: "another-tenant" } }, app.policy, app.reception);
-    error(await other.submit({ kind: "knowledge.answer.v1", turn: turn(callId, "foreign", "Hours?"),
+    error(await other.submit({ kind: "knowledge.answer.v2", turn: turn(callId, "foreign", "Hours?"),
       sourceRefs: ["hours"], proposedText: "We open at 9 am.", now }), "callUnknown");
   });
 
@@ -252,21 +329,24 @@ for (const kind of kinds) {
         observedAt: now, startsAt: ["2026-09-30T23:00:00.000Z"], reservable: false } };
     } };
     const app = fixture(kind, `${kind}-availability-command`, false, "requestOnly", availability);
-    assert.equal(app.agent.listPermitted().some(item => item.id === "availability.read.v1"), true);
+    assert.equal(app.agent.listPermitted().some(item => item.id === "availability.read.v2"), true);
     const callId = `call-${kind}-availability-command`;
     value(await app.reception.startCall(callId, app.scope));
-    const reply = value(await app.agent.submit({ kind: "availability.read.v1", turn: turn(callId, "check-times", "Check times"),
+    const reply = value(await app.agent.submit({ kind: "availability.read.v2", turn: turn(callId, "check-times", "Check times"),
       from: "2026-10-01", to: "2026-10-02", now }));
     assert.equal(reply.kind, "availabilityAnswer");
-    assert.equal(reply.state.availabilityReads[0]?.status, "shown");
-    assert.match(reply.state.callerMessages.at(-1)!, /can't reserve or confirm/);
-    assert.equal(Object.keys(reply.state.actions).length, 0);
+    assert.equal(reply.progress.availability?.status, "shown");
+    assert.equal(reply.progress.availability?.shownCount, 1);
+    assert.equal(JSON.stringify(reply).includes("2026-09-30T23:00:00.000Z"), false);
+    const state = value(await app.reception.read(app.scope, callId));
+    assert.match(state.callerMessages.at(-1)!, /can't reserve or confirm/);
+    assert.equal(Object.keys(state.actions).length, 0);
     assert.equal(app.host.bookings(app.scope).length, 0);
     assert.deepEqual(reads, [app.scope]);
 
     const other = new CommandGateway({ actorRef: "foreign-agent", role: "agent",
       scope: { ...app.scope, tenantId: "another-tenant" } }, app.policy, app.reception);
-    error(await other.submit({ kind: "availability.read.v1", turn: turn(callId, "foreign-check", "Check times"),
+    error(await other.submit({ kind: "availability.read.v2", turn: turn(callId, "foreign-check", "Check times"),
       from: "2026-10-01", to: "2026-10-02", now }), "callUnknown");
     assert.equal(reads.length, 1);
   });

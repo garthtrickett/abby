@@ -80,6 +80,21 @@ test("E2E-010: dashboard toggle persists default, enabled and disabled policy fo
   }
 });
 
+test("agent capability endpoint publishes versioned schemas without exposing internal call state", async ({ request }) => {
+  const app = await localDashboard("clinicAdmin");
+  try {
+    const response = await request.get(`${app.url}/api/capabilities`);
+    assert.equal(response.status(), 200);
+    const payload = await response.json() as { value: Array<{ id: string; inputSchema: { $schema: string }; resultSchema: { $schema: string } }> };
+    const booking = payload.value.find(item => item.id === "booking.propose.v2");
+    assert.equal(booking, undefined);
+    const setting = payload.value.find(item => item.id === "settings.appointments.booking.enabled.change.v1");
+    assert.equal(setting?.inputSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
+    assert.equal(setting?.resultSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
+    assert.equal(JSON.stringify(payload).includes("browser-tenant"), false);
+  } finally { await app.close(); }
+});
+
 test("E2E-069: view-only staff can review a call but cannot change booking settings", async ({ page, request }) => {
   const app = await localDashboard("staff");
   try {

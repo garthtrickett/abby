@@ -1,0 +1,143 @@
+import { array, bool, choice, key, object, str, uint } from "./schema-shapes.ts";
+import type { JsonSchema } from "./schema-shapes.ts";
+
+const schemaUri = "https://json-schema.org/draft/2020-12/schema";
+const root = (schema: JsonSchema): JsonSchema => ({ $schema: schemaUri, ...schema });
+const optional = (properties: Record<string, JsonSchema>, required: readonly string[]): JsonSchema => object(properties, required);
+const nonEmpty: JsonSchema = { type: "string", minLength: 1 };
+const result = (value: JsonSchema): JsonSchema => root({ oneOf: [
+  object({ ok: { const: true }, value }),
+  object({ ok: { const: false }, error: object({ kind: choice(
+    "forbidden", "invalid", "commandOutcomeUnknown", "responseContractViolation", "versionConflict", "invalidValue", "storageFailure", "storageCorrupt", "effectFailure",
+    "callUnknown", "callConflict", "invalidTransition", "scopeMismatch", "evidenceExpired", "confirmationMissing",
+    "digestChanged", "effectUnknown", "keyMismatch", "admissionExpired", "leaseLost", "staleTurn",
+  ) }) }),
+] });
+const reply = (kind: string, name: string, value: JsonSchema): JsonSchema => object({ kind: { const: kind }, [name]: value });
+const scope = object({ tenantId: nonEmpty, clinicId: nonEmpty, locationId: nonEmpty });
+const destination = { oneOf: [object({ kind: { const: "owner" }, ownerRef: nonEmpty }),
+  object({ kind: { const: "queue" }, queueRef: nonEmpty })] } satisfies JsonSchema;
+const capabilityMode = choice("execute", "requestOnly", "unavailable");
+const policy = optional({ scope, policyVersion: nonEmpty, bookingEnabled: bool,
+  capabilities: object({ book: capabilityMode, cancel: capabilityMode, reschedule: capabilityMode,
+    intake: capabilityMode, transfer: capabilityMode }), transferDestinationRef: str,
+  staffDestination: destination, operatorQueue: destination },
+["scope", "policyVersion", "bookingEnabled", "capabilities", "staffDestination", "operatorQueue"]);
+const auditEntry = { oneOf: [
+  object({ version: key, enabled: bool, provenance: { const: "recorded" }, actorRef: key,
+    previousEnabled: bool, changedAt: str }),
+  object({ version: key, enabled: bool, provenance: { const: "legacyUnattributed" } }),
+] } satisfies JsonSchema;
+const auditPage = optional({ entries: array(auditEntry), nextAfterVersion: uint }, ["entries"]);
+const actionKind = choice("book", "cancel", "reschedule", "intake");
+const actionStatus = choice("awaitingConfirmation", "ready", "dispatched", "committed", "rejected",
+  "unsupported", "uncertain", "needsReview", "canceled");
+const staffReason = choice("callerRequested", "verificationFailed", "unsupported", "uncertainAction",
+  "partialIntake", "systemFailure", "transferFailed");
+const staffStatus = choice("requested", "open", "acknowledged", "resolved", "needsReview", "failed");
+const lifecycle = choice("starting", "active", "ended");
+const source = object({ sourceRef: key, version: key, ownerRef: key });
+const availability = optional({ status: choice("shown", "empty", "failed"), sourceRef: str,
+  timeZone: str, shownCount: uint, reason: str }, ["status", "shownCount"]);
+const progress = optional({ callId: key, traceKey: key, callVersion: uint, lifecycle,
+  actions: array(object({ actionKey: key, kind: actionKind, status: actionStatus, presentationId: key })),
+  staffItems: array(object({ taskKey: key, reason: staffReason, status: staffStatus })),
+  pendingPresentation: object({ presentationId: key, kind: choice("speech", "notice", "transfer"),
+    status: choice("pending", "started", "played", "interrupted", "failed", "unproven", "superseded",
+      "possiblySent", "connected", "canceled") }),
+  knowledgeSources: array(source), availability },
+["callId", "traceKey", "callVersion", "lifecycle", "actions", "staffItems", "knowledgeSources"]);
+const terminal = object({ reason: choice("callerDisconnected", "sessionClosed", "mediaFailure", "localLeaseClosed",
+  "admissionExpired", "leaseExpired", "transferConnected", "transferUnproven"), at: str });
+const callSummary = optional({ callId: key, lifecycle, version: uint, terminal,
+  actions: array(object({ kind: actionKind, status: actionStatus })),
+  staffItems: array(object({ reason: staffReason, status: staffStatus })), knowledgeAnswers: array(source),
+  availabilityReads: array(availability) },
+["callId", "lifecycle", "version", "actions", "staffItems", "knowledgeAnswers", "availabilityReads"]);
+const outcomeRow = optional({ callId: key, lifecycle, terminalReason: terminal.properties!.reason!,
+  committedActions: uint, unresolvedActions: uint, staffRequests: uint, hostConfirmedTasks: uint,
+  staffNeedsReview: uint, systemFailure: bool },
+["callId", "lifecycle", "committedActions", "unresolvedActions", "staffRequests", "hostConfirmedTasks", "staffNeedsReview", "systemFailure"]);
+const totals = object({ calls: uint, committedActions: uint, callsWithUnresolvedActions: uint,
+  callsWithStaffRequests: uint, callsWithHostConfirmedTasks: uint, callsWithStaffNeedsReview: uint,
+  callsWithSystemFailure: uint, callsWithCallerDisconnect: uint, callsWithMediaFailure: uint,
+  callsWithLeaseExpiry: uint, callsWithTransferConnected: uint });
+const outcomePage = optional({ rows: array(outcomeRow), totals, nextAfterCallId: key }, ["rows", "totals"]);
+const alerts = optional({ overdue: choice("pending", "delivered", "uncertain", "failed", "canceled"),
+  needsReview: choice("pending", "delivered", "uncertain", "failed", "canceled") }, []);
+const staffEntry = optional({ callId: key, callVersion: uint, taskKey: key, reason: staffReason, status: staffStatus,
+  dueAt: str, destination, linkedActionKey: key, pendingChangeKey: key, reviewRequired: bool, alerts, overdue: bool },
+["callId", "callVersion", "taskKey", "reason", "status", "dueAt", "destination", "overdue"]);
+const staffPage = optional({ items: array(staffEntry), nextAfterTaskKey: key }, ["items"]);
+const staffChange = object({ kind: { const: "staffChange" }, taskKey: key, callVersion: uint,
+  status: staffStatus, pending: bool, reviewRequired: bool });
+const turn = optional({ callId: key, sessionId: key, turnId: key, text: { type: "string", minLength: 1 },
+  quality: choice("clear", "needsClarification"), at: str }, ["callId", "turnId", "text", "quality", "at"]);
+const change = { oneOf: [object({ kind: { const: "acknowledge" } }), object({ kind: { const: "resolve" } }),
+  object({ kind: { const: "reassign" }, target: choice("staff", "operator") })] } satisfies JsonSchema;
+
+export type CapabilityDescriptor = Readonly<{
+  id: string;
+  inputVersion: 1 | 2;
+  outputVersion: 1 | 2;
+  inputSchema: JsonSchema;
+  resultSchema: JsonSchema;
+  scope: "boundActorLocation";
+  preconditions: readonly CapabilityPrecondition[];
+  effect: "read" | "policyChange" | "proposalOnly" | "staffChange";
+  authority: "permittedActor" | "clinicAdmin" | "staffOrAdmin";
+  approval: "none" | "callerConfirmation";
+  requiresCallerConfirmation: boolean;
+}>;
+
+export type CapabilityPrecondition = "expectedPolicyVersion" | "activeCall" | "bookingEnabledForExecution" |
+  "hostEvidenceForExecution" | "approvedKnowledgeForAnswer" | "availabilityHostConfigured" |
+  "callReviewAvailable" | "outcomeReportAvailable" | "staffQueueAvailable" |
+  "hostConfirmedTask" | "expectedCallVersion";
+
+function entry(id: string, input: JsonSchema, success: JsonSchema, effect: CapabilityDescriptor["effect"],
+               authority: CapabilityDescriptor["authority"], approval: CapabilityDescriptor["approval"] = "none",
+               preconditions: readonly CapabilityPrecondition[] = []): CapabilityDescriptor {
+  const version = id.endsWith(".v2") ? 2 : 1;
+  return { id, inputVersion: version, outputVersion: version, inputSchema: root(input), resultSchema: result(success),
+    scope: "boundActorLocation", preconditions, effect, authority, approval,
+    requiresCallerConfirmation: approval === "callerConfirmation" };
+}
+
+export const capabilityCatalogue = {
+  "settings.read.v1": entry("settings.read.v1", object({ kind: { const: "settings.read.v1" } }),
+    reply("settings", "policy", policy), "read", "permittedActor"),
+  "settings.appointments.booking.enabled.change.v1": entry("settings.appointments.booking.enabled.change.v1",
+    object({ kind: { const: "settings.appointments.booking.enabled.change.v1" }, expectedVersion: key, enabled: bool }),
+    reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedPolicyVersion"]),
+  "settings.appointments.booking.audit.v1": entry("settings.appointments.booking.audit.v1",
+    optional({ kind: { const: "settings.appointments.booking.audit.v1" }, afterVersion: uint }, ["kind"]),
+    reply("bookingSettingAudit", "page", auditPage), "read", "clinicAdmin"),
+  "booking.propose.v2": entry("booking.propose.v2",
+    object({ kind: { const: "booking.propose.v2" }, turn, verificationRef: key, offerRef: key, now: str }),
+    reply("bookingProposal", "progress", progress), "proposalOnly", "permittedActor", "callerConfirmation", ["activeCall", "bookingEnabledForExecution", "hostEvidenceForExecution"]),
+  "knowledge.answer.v2": entry("knowledge.answer.v2",
+    object({ kind: { const: "knowledge.answer.v2" }, turn,
+      sourceRefs: { type: "array", items: key, minItems: 1, maxItems: 8, uniqueItems: true },
+      proposedText: { type: "string", minLength: 1, maxLength: 2_000 }, now: str }),
+    reply("knowledgeAnswer", "progress", progress), "proposalOnly", "permittedActor", "none", ["activeCall", "approvedKnowledgeForAnswer"]),
+  "availability.read.v2": entry("availability.read.v2",
+    object({ kind: { const: "availability.read.v2" }, turn, from: str, to: str, now: str }),
+    reply("availabilityAnswer", "progress", progress), "read", "permittedActor", "none", ["activeCall", "availabilityHostConfigured"]),
+  "calls.read.v1": entry("calls.read.v1", object({ kind: { const: "calls.read.v1" }, callId: key }),
+    reply("callSummary", "call", callSummary), "read", "permittedActor", "none", ["callReviewAvailable"]),
+  "calls.outcomes.v1": entry("calls.outcomes.v1",
+    optional({ kind: { const: "calls.outcomes.v1" }, afterCallId: key }, ["kind"]),
+    reply("callOutcomes", "page", outcomePage), "read", "permittedActor", "none", ["outcomeReportAvailable"]),
+  "staff.list.v1": entry("staff.list.v1", optional({ kind: { const: "staff.list.v1" }, afterTaskKey: key }, ["kind"]),
+    reply("staffQueue", "page", staffPage), "read", "permittedActor", "none", ["staffQueueAvailable"]),
+  "staff.change.v1": entry("staff.change.v1",
+    object({ kind: { const: "staff.change.v1" }, callId: key, taskKey: key, expectedVersion: uint, change, now: str }),
+    staffChange, "staffChange", "staffOrAdmin", "none", ["hostConfirmedTask", "expectedCallVersion"]),
+} as const;
+
+export type CapabilityId = keyof typeof capabilityCatalogue;
+
+export function capabilityDescriptor(id: CapabilityId): CapabilityDescriptor {
+  return structuredClone(capabilityCatalogue[id]);
+}

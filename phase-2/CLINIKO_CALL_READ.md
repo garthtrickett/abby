@@ -1,6 +1,6 @@
 # Cliniko provisional availability in a synthetic call, version 0.1
 
-`ClinikoAvailabilityReader` can be supplied as an `AvailabilityHost` to either text composition. The default standalone demo does not configure it. A final caller turn or authorized `availability.read.v1` agent command requests a bounded date range through the same scoped port. The adapter checks online-booking eligibility and returns a non-reservable snapshot with the business's IANA time zone and observation time.
+`ClinikoAvailabilityReader` can be supplied as an `AvailabilityHost` to either text composition. The default standalone demo does not configure it. A final caller turn or authorized `availability.read.v2` agent command requests a bounded date range through the same scoped port. The adapter checks online-booking eligibility and returns a non-reservable snapshot with the business's IANA time zone and observation time.
 
 The call transition validates scope, date range, local dates, unique timestamps, time zone, and freshness before committing a notice. It speaks at most three future times as **possible** times, explicitly says they may change, and says no appointment is reserved or confirmed. An empty result says no possible time was found for the requested dates. A disabled online-booking flag, provider fault, malformed result, stale observation, unclear speech, or absent adapter creates a fallback notice and staff work. A newer caller turn fences a late availability read. No availability result enters the booking evidence or host-write path.
 
