@@ -12,6 +12,7 @@ import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
 import { PostgresKnowledgeCatalogue } from "../../src/storage/postgres-knowledge-catalogue.ts";
 import { ReferenceConfigArchiveImporter } from "../../src/reference/config-archive-import.ts";
+import { ReferenceTenantConfigArchiveImporter } from "../../src/reference/tenant-config-archive-import.ts";
 import { createEmbeddedTextComposition } from "../../src/reference/embedded-composition.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { buildPostgresConfigArchive, buildPostgresTenantConfigArchive } from "../../src/storage/postgres-config-archive.ts";
@@ -325,6 +326,92 @@ test("one PostgreSQL snapshot exports every mapped location and refuses a partia
       location.policies.length, location.knowledge.length]).sort(), [["a", 2, 1], ["b", 2, 1]]);
     assert.equal(decoded.value.clinics[0]?.automation.length, 2);
   }
+  const importer = new ReferenceTenantConfigArchiveImporter(() => "2026-09-28T22:05:00Z");
+  const importAuthority = { authorizeAndRecord: async () => ok({ auditRef: "buyer-two-import-audit" }) };
+  const mapper = { mapRef: (kind: string, sourceRef: string) => `buyer-two:${kind}:${sourceRef}` };
+  const preflight = await importer.preflight(exported.value, "buyer-two", "buyer-admin", importAuthority, mapper);
+  assert.equal(preflight.ok, true);
+  if (preflight.ok) {
+    assert.equal(preflight.value.status, "ready");
+    assert.deepEqual(preflight.value.recordCounts, { locations: 2, settings: 6, knowledge: 2, calls: 0, staffWork: 0 });
+    assert.equal(preflight.value.sectionDigests.settings,
+      JSON.parse(Buffer.from(exported.value.manifestBytes).toString()).sections.settings.sha256);
+    assert.deepEqual(preflight.value.omittedCalls,
+      { retentionExpired: 0, consentDenied: 0, notRetained: 0, activeCall: 0 });
+    assert.equal(preflight.value.locations.length, 2);
+    assert.equal(preflight.value.mappings.filter(row => row.kind === "knowledgeOwner").length, 2);
+  }
+  const preflightOnly = new ReferenceTenantConfigArchiveImporter(() => "2026-09-28T22:05:00Z");
+  assert.equal((await preflightOnly.preflight(exported.value, "buyer-two", "buyer-admin", importAuthority, mapper)).ok, true);
+  const replacementManifest = { ...JSON.parse(Buffer.from(exported.value.manifestBytes).toString()),
+    archiveId: "different-archive-after-tenant-preflight" };
+  const afterDryRun = await preflightOnly.stage({ ...exported.value,
+    manifestBytes: Buffer.from(JSON.stringify(replacementManifest)) }, "buyer-two", "buyer-admin", importAuthority, mapper);
+  assert.equal(afterDryRun.ok, true);
+  const staged = await importer.stage(exported.value, "buyer-two", "buyer-admin", importAuthority, mapper);
+  assert.equal(staged.ok, true);
+  if (staged.ok) {
+    assert.equal(staged.value.receipt.status, "staged");
+    assert.deepEqual(staged.value.receipt.locations.map(row => row.importedPolicyVersion).sort(), ["1", "2"]);
+    for (const targetScope of request.locations.map(row => row.targetScope)) {
+      const targetPolicy = await staged.value.policy.read(targetScope);
+      assert.equal(targetPolicy.ok, true);
+      if (targetPolicy.ok) {
+        assert.equal(targetPolicy.value.bookingEnabled, false);
+        assert.equal(targetPolicy.value.automationEnabled, false);
+        assert.equal(targetPolicy.value.automationVersion, "2");
+        assert.equal(targetPolicy.value.capabilities.book, "unavailable");
+      }
+      const stopped = await staged.value.ledger.readWriteStop(targetScope);
+      assert.equal(stopped.ok && stopped.value.stopped, true);
+    }
+    const firstKnowledge = await staged.value.knowledge.readKnowledge(request.locations[1]!.targetScope, ["parking-a"]);
+    const secondKnowledge = await staged.value.knowledge.readKnowledge(request.locations[0]!.targetScope, ["parking-b"]);
+    assert.equal(firstKnowledge.ok && firstKnowledge.value.length, 1);
+    assert.equal(secondKnowledge.ok && secondKnowledge.value.length, 1);
+    const reception = createEmbeddedTextComposition(staged.value.ledger, staged.value.policy,
+      new ReferenceClinicHost([], []), undefined, undefined, undefined, staged.value.knowledge);
+    for (const [targetScope, sourceRef, answer] of [
+      [request.locations[1]!.targetScope, "parking-a", "Directions for parking-a"],
+      [request.locations[0]!.targetScope, "parking-b", "Directions for parking-b"],
+    ] as const) {
+      const callId = `tenant-import-${targetScope.locationId}`;
+      const started = await reception.startCall(callId, targetScope, "2026-09-28T22:06:00Z");
+      assert.equal(started.ok, true);
+      if (started.ok) assert.deepEqual(started.value.policy.knowledgeSnapshot, [{ sourceRef, version: "2" }]);
+      const answered = await reception.answer(targetScope,
+        { callId, turnId: `parking-${targetScope.locationId}`, text: "Where do I park?", quality: "clear", at: "2026-09-28T22:06:00Z" },
+        [sourceRef], answer, "2026-09-28T22:06:00Z");
+      assert.equal(answered.ok, true);
+      if (answered.ok) assert.equal(answered.value.callerMessages.at(-1), answer);
+    }
+    const sharedChange = await staged.value.policy.changeAutomationEnabled(request.locations[1]!.targetScope,
+      "2", false, "buyer-admin");
+    assert.equal(sharedChange.ok, true);
+    const otherLocation = await staged.value.policy.read(request.locations[0]!.targetScope);
+    assert.equal(otherLocation.ok && otherLocation.value.automationVersion, "3");
+    const replay = await importer.stage(exported.value, "buyer-two", "buyer-admin", importAuthority, mapper);
+    assert.equal(replay.ok && replay.value === staged.value, true);
+    const replayPreflight = await importer.preflight(exported.value, "buyer-two", "buyer-admin", importAuthority,
+      { mapRef: () => null });
+    assert.equal(replayPreflight.ok && replayPreflight.value.status === "alreadyStaged", true);
+    const changedManifest = { ...JSON.parse(Buffer.from(exported.value.manifestBytes).toString()),
+      createdAt: "2026-09-28T22:00:01Z" };
+    const conflict = await importer.stage({ ...exported.value, manifestBytes: Buffer.from(JSON.stringify(changedManifest)) },
+      "buyer-two", "buyer-admin", importAuthority, mapper);
+    assert.deepEqual(conflict, { ok: false, error: { kind: "archiveConflict" } });
+    const occupied = await importer.stage({ ...exported.value, manifestBytes: Buffer.from(JSON.stringify({ ...changedManifest,
+      archiveId: "other-two-location-archive" })) }, "buyer-two", "buyer-admin", importAuthority, mapper);
+    assert.deepEqual(occupied, { ok: false, error: { kind: "targetOccupied" } });
+  }
+  const mappingImporter = new ReferenceTenantConfigArchiveImporter();
+  const missingOwner = await mappingImporter.preflight(exported.value, "buyer-two",
+    "buyer-admin", importAuthority, { mapRef: (kind, sourceRef) => kind === "knowledgeOwner" ? null : `buyer-two:${kind}:${sourceRef}` });
+  assert.deepEqual(missingOwner, { ok: false, error: { kind: "unmappedRef" } });
+  const blankDestination = await mappingImporter.preflight(exported.value, "buyer-two",
+    "buyer-admin", importAuthority, { mapRef: (kind, sourceRef) => kind === "operatorQueue" ? " " : `buyer-two:${kind}:${sourceRef}` });
+  assert.deepEqual(blankDestination, { ok: false, error: { kind: "unmappedRef" } });
+  assert.equal((await mappingImporter.stage(exported.value, "buyer-two", "buyer-admin", importAuthority, mapper)).ok, true);
   const singleLocationDecoder = await decodeConfigArchive(exported.value, request.locations[0]!.targetScope);
   assert.deepEqual(singleLocationDecoder, { ok: false, error: { kind: "invalidConfigArchive", section: "locations" } });
   const wrongTargetTenant = await decodeTenantConfigArchive(exported.value, "other-buyer");
@@ -370,4 +457,15 @@ test("one PostgreSQL snapshot exports every mapped location and refuses a partia
     locations: [request.locations[0]!, { ...request.locations[1]!, timeZone: "" }] }, authority);
   assert.deepEqual(missingTimeZone, { ok: false, error: { kind: "invalidConfig" } });
   assert.equal(audited, 2);
+  const splitClinicArchive = await buildPostgresTenantConfigArchive(db, { ...request,
+    archiveId: "split-clinic-archive", locations: [
+      { ...request.locations[0]!, targetScope: { ...request.locations[0]!.targetScope, clinicId: "other-clinic" } },
+      request.locations[1]!,
+    ] }, authority);
+  assert.equal(splitClinicArchive.ok, true);
+  if (splitClinicArchive.ok) {
+    const splitImport = await new ReferenceTenantConfigArchiveImporter().preflight(splitClinicArchive.value,
+      "buyer-two", "buyer-admin", importAuthority, mapper);
+    assert.deepEqual(splitImport, { ok: false, error: { kind: "invalidMapping" } });
+  }
 });

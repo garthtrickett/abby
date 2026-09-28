@@ -7,6 +7,7 @@ import type { ArchiveEnvelope } from "../portability/archive-envelope.ts";
 import { decodeConfigArchive } from "../portability/config-archive.ts";
 import type { ConfigArchiveData, ConfigArchiveDecodeFailure } from "../portability/config-archive.ts";
 import { MemoryKnowledgeCatalogue } from "./knowledge-catalogue.ts";
+import type { KnowledgeEntry } from "./knowledge-catalogue.ts";
 import { MemoryPolicyStore, referenceDefaultPolicy } from "./policy-store.ts";
 
 export type ImportRefKind = "staffOwner" | "operatorQueue" | "transferDestination" | "knowledgeOwner" | "greetingOwner";
@@ -69,7 +70,7 @@ export type StagedReferenceConfiguration = Readonly<{
 class UnmappedRef extends Error {}
 
 function validRef(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0 && value.length <= 256 && !/[\u0000-\u001f\u007f]/.test(value);
+  return typeof value === "string" && !!value.trim() && value.length <= 256 && !/[\u0000-\u001f\u007f]/.test(value);
 }
 
 function scopeKey(scope: LocationScope): string {
@@ -121,15 +122,16 @@ function automationAudit(data: ConfigArchiveData): AutomationSettingAuditEntry[]
   });
 }
 
-type MappedConfig = Readonly<{
+export type MappedConfig = Readonly<{
   policy: CallPolicy;
   bookingHistory: readonly BookingSettingAuditEntry[];
   automationHistory: readonly AutomationSettingAuditEntry[];
   knowledge: MemoryKnowledgeCatalogue;
+  knowledgeEntries: readonly KnowledgeEntry[];
   mappings: readonly ReferenceImportMapping[];
 }>;
 
-function mapConfig(data: ConfigArchiveData, targetScope: LocationScope, mapper: ReferenceImportMapper):
+export function mapConfig(data: ConfigArchiveData, targetScope: LocationScope, mapper: ReferenceImportMapper):
   Result<MappedConfig, ReferenceImportFailure> {
   const decisions = new Map<string, ReferenceImportMapping>();
   const recordingMapper: ReferenceImportMapper = { mapRef: (kind, sourceRef, source, target) => {
@@ -148,9 +150,10 @@ function mapConfig(data: ConfigArchiveData, targetScope: LocationScope, mapper: 
     const policy = targetPolicy(sourcePolicy, recordingMapper, data.sourceScope, targetScope);
     const bookingHistory = bookingAudit(data);
     const automationHistory = automationAudit(data);
-    const knowledge = MemoryKnowledgeCatalogue.fromPublishedHistory(data.knowledge.map(entry => ({ ...entry,
-      scope: structuredClone(targetScope), ownerRef: mappedRef(recordingMapper, "knowledgeOwner", entry.ownerRef, data.sourceScope, targetScope) })));
-    return ok({ policy, bookingHistory, automationHistory, knowledge, mappings: [...decisions.values()] });
+    const knowledgeEntries = data.knowledge.map(entry => ({ ...entry,
+      scope: structuredClone(targetScope), ownerRef: mappedRef(recordingMapper, "knowledgeOwner", entry.ownerRef, data.sourceScope, targetScope) }));
+    const knowledge = MemoryKnowledgeCatalogue.fromPublishedHistory(knowledgeEntries);
+    return ok({ policy, bookingHistory, automationHistory, knowledge, knowledgeEntries, mappings: [...decisions.values()] });
   } catch (cause) {
     return err({ kind: cause instanceof UnmappedRef ? "unmappedRef" : "invalidConfigArchive" });
   }
