@@ -1,0 +1,59 @@
+# Abby portable archive contract, version 0.1
+
+**Status:** Proposed P0-08 contract. No exporter, importer, retention approval, or cutover has passed this contract yet. This defines the data boundary for the Phase 4 rehearsal and Phase 5 dry run; it is not a substitute for either executable gate.
+
+## Purpose and authority
+
+An acquiring host must be able to bring Abby-owned configuration and retained history into its monolith without adopting the standalone PostgreSQL tables or copying a PMS patient database. Export is an authorized, audited administrative operation. The source host's retention and consent policy decides which call material is eligible. The target host's identity, patient, diary, staff, notification, and number-routing systems remain authoritative after import.
+
+The archive is a **logical** contract, independent of Kysely rows and TypeScript serialization. `archiveVersion=1` is an immutable wire version. An importer rejects unknown major versions; a changed field meaning or required field creates a new version with an explicit upgrader and round-trip fixtures. Every record carries its own `recordVersion`, so adding a call or setting representation does not silently change older records. UTC instants use RFC 3339 strings; dates retain their local-date meaning and IANA time zone. IDs are opaque strings and are never parsed as provider IDs by the core.
+
+## Archive envelope and sections
+
+Export one tenant at a time from a consistent source snapshot. The manifest contains `archiveVersion`, `archiveId`, `createdAt`, `sourceSystem`, `sourceSchemaVersion`, the source tenant ID, location mappings, section names and versions, record counts, byte counts, and SHA-256 digests. An `archiveId` identifies one immutable export; rerunning the export produces a new ID. Each section is a bounded, ordered UTF-8 NDJSON stream with one record per line, a declared count, and a SHA-256 digest of its exact bytes. The manifest digest likewise covers its exact UTF-8 bytes. A missing, extra, duplicate, unsorted, or digest-mismatched record invalidates the whole archive before any import write; semantic validation is required even when digests match.
+
+| Section | Required version 1 contents | Explicit boundary |
+| --- | --- | --- |
+| `locations` | Source tenant, clinic, and location opaque IDs; local time zone; proposed target IDs and mapping provenance | Mapping is a reviewed input, not inferred from matching names or phone numbers. |
+| `settings` | Every retained location policy version and clinic automation version, setting IDs and values, actor/time/provenance audit, approved greeting, model prompt version and content digest, policy version references, current effective head, and write-stop status/history | The target re-evaluates permissions and readiness; imported `enabled=true` never grants execution by itself. |
+| `knowledge` | Approved and revoked source versions, owner, approval actor/time, effective interval, content digest, and approved text where policy permits export | Drafts are excluded from the executable knowledge set; an importer never promotes a draft or expired source. A source whose text cannot be exported is explicitly unmapped and cannot become active in the target. |
+| `calls` | Eligible retained call receipt and ordered versioned transition records, terminal outcome, captured policy/prompt/knowledge versions, opaque host refs, action keys and request digests, effect intents and typed receipts, presentation delivery evidence, and associated staff work state | Export only material permitted by the source retention/consent decision. Raw media frames, audio blobs, and transient model/provider payloads are outside this version. |
+| `staffWork` | All unresolved task and operator-review items, exact task keys, status, due time, destination mapping, linked call/action refs, and last confirmed delivery/acknowledgment evidence | If any unresolved item cannot be mapped to a target owner and review queue, preflight fails. No item is silently closed. |
+
+The manifest also declares counts for omitted call records by reason (`retentionExpired`, `consentDenied`, `notRetained`, `activeCall`) without including their content. If an omitted call has unresolved work, its minimal task/action correlation must still appear in `staffWork`; otherwise export fails. Full transcript and recording export, if ever approved, uses a separate encrypted, access-controlled extension with its own consent and deletion contract. It is not smuggled into `calls` or operational logs.
+
+The archive excludes API keys, OAuth credentials, raw provider tokens, session bearer material, telephony secrets, model prompts containing provider credentials, live media frames, patient demographic mirrors, and diary records. Opaque references may be retained only when the host policy permits them. The exporter must enumerate allowed fields rather than serialize arbitrary database rows or `CallState` objects. A schema scanner and synthetic secret-canary fixture verify the allowlist, but field allowlisting remains the authority.
+
+## Export consistency and eligibility
+
+The source first records a durable export request with tenant, actor, retention-policy version, scope, and purpose. A consistent database snapshot or equivalent host transaction reads section heads and rows. Pagination is keyed by stable IDs under that snapshot; a sequence gap, changing head, or truncated page fails the export. The exporter checks every call's consent and retention state before including content. An active call is not migrated as resumable media: it must finish or be handled by the number-routing cutover plan. An unfinished host write remains an unresolved action with its original key and reconciliation state.
+
+The export cannot be called a cutover snapshot while new call admissions, setting changes, knowledge changes, or staff-state changes can commit outside the snapshot. Phase 5 must acquire a host-owned quiescence fence, drain or explicitly route active calls, take the final snapshot, and compare its heads and counts to the frozen source. A dry run may export an ordinary consistent snapshot, but it cannot claim that no later source change exists.
+
+## Import preflight and commit
+
+The importer parses and validates the entire archive and produces a dry-run report **before** changing target state. It requires an authorized target actor, a target tenant with no conflicting live Abby route, an explicit mapping for each clinic/location and every referenced host-owned destination, compatible section and record versions, retention permission, and a target-owned callback for each opaque patient, practitioner, service, appointment, and number ref that will remain actionable. Unmapped historical refs may be retained only as inert audit strings. Preflight reports source/exported/omitted/target counts per section and location, unresolved staff work, collisions, unsupported versions, and every mapping decision.
+
+Commit is idempotent by `(targetTenant, archiveId, manifestDigest)`. The same archive and digest returns the stored import receipt; the same ID with a different digest is rejected. A different archive may advance a dry-run target only through an explicit replacement plan. The importer stages rows under the mapped target scope, then atomically publishes a location head or fails without exposing a partial live configuration. If a host cannot commit the whole tenant atomically, it stages and verifies all locations before publishing any number route. No imported outbox intent is dispatched as a fresh provider write. Uncertain actions retain their original keys and enter target reconciliation or operator review; staff delivery is not inferred from an imported status alone.
+
+Imported automation and booking modes start disabled/request-only until target permissions, provider support, notification owner, staff destination, fallback route, and media readiness pass **current** checks. Leases, active voice sessions, pending presentations, provider connection identifiers, and background job ownership are never resumed from source values. The target assigns new jobs only for reconciliation and unresolved staff work, with exact-key fencing. It records a mapping and import audit containing actor, time, source and target IDs, digest, counts, and the target schema version.
+
+## Reconciliation and rollback
+
+The import receipt lists exact counts and digests for settings versions, approved knowledge versions, eligible call/transition/action records, unresolved staff work, and omitted calls by reason, grouped by source and target location. Every source record is either imported exactly once or appears in a named omission; no broad `success` flag substitutes for this comparison. A sample of imported call and action chains is read through the target's public read ports, including an uncertain write and an unresolved staff item.
+
+Before number switch, rollback discards or deactivates the staged target head and leaves the source route authoritative. After switch, rollback follows a new, audited route change and reconciles work created on the target; it never replays the old archive over new work or runs two active receptionists for one route. Route ownership and rollback evidence are separate from archive integrity. The Phase 5 gate requires a staged switch and rollback test and confirmation that unresolved staff work remains visible.
+
+## Executable acceptance cases
+
+The implementation must run the same archive fixtures against standalone PostgreSQL export and a reference-monolith import adapter, without importing standalone row types into core or requiring an Abby server. Each case has isolated tenant, database/schema, location, clock, and archive ID so workers may run in parallel.
+
+1. Round-trip two locations with multiple setting and knowledge versions, a completed call with a committed action, an uncertain action, and unresolved staff work. Assert field-level history, counts, digests, and mapped read models.
+2. Import the same archive twice; prove one logical result and the same receipt. Change bytes under the same `archiveId`; reject before any write.
+3. Reject a wrong tenant, missing location or staff destination mapping, duplicate record, missing sequence, unsupported version, digest mismatch, and cross-scope reference before publication.
+4. Include a secret canary in excluded provider configuration and transient model/media fields. Verify it occurs nowhere in the archive, dry-run report, import audit, or test logs.
+5. Vary retention and consent outcomes. Export only eligible content, account for omitted records, and keep an unresolved task correlated even when its call content is omitted.
+6. Simulate crash after staging and before publication, a lost import response, and a source change after a dry-run snapshot. Recover by archive ID, verify counts, and block an invalid cutover claim.
+7. Verify that imported enabled settings, pending outbox rows, active leases, and started presentations do not trigger a provider write, voice send, or confirmation before target readiness and new evidence.
+
+**Current implementation gap:** The present `LedgerStore` can page call state and staff items, and the policy/knowledge stores can read their current and audited data. There is no consistent cross-store snapshot, retained-call eligibility record, versioned event export, host-native importer, or cutover fence yet. Phase 4 and Phase 5 gates remain open until the executable cases pass and product/clinic retention and destination decisions are approved.
