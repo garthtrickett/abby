@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { decodeModelProposal } from "../model/proposal.ts";
-import { validKnowledgeSource } from "./knowledge-evidence.ts";
+import { validCallKnowledgeSource } from "./knowledge-evidence.ts";
 import { err, ok } from "./model.ts";
 import type { CallState, Result, TransitionAction, TransitionFailure } from "./model.ts";
 import { addStaffTask } from "./staff-work.ts";
@@ -74,7 +74,7 @@ export function acceptModelKnowledge(state: CallState, action: Extract<Transitio
   const source = sources[0];
   const approved = action.result.ok && sources.length === 1 && !!source &&
     sourceDigest([source.sourceRef]) === effect.sourceRefsDigest &&
-    validKnowledgeSource(source, state.policy.scope, now) && action.proposedText === source.approvedText;
+    validCallKnowledgeSource(source, state.policy, now) && action.proposedText === source.approvedText;
   state.effects[effect.id] = { ...effect, status: "completed" };
   if (approved && source) {
     state.knowledgeAnswers.push({ turnId: effect.turnId, sourceRef: source.sourceRef, version: source.version, ownerRef: source.ownerRef });

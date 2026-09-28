@@ -42,6 +42,8 @@ export type CallPolicy = Readonly<{
   staffedIntervals?: readonly StaffedInterval[];
   staffDestination: StaffDestination;
   operatorQueue: StaffDestination;
+  /** Source versions captured for this call; absent only on legacy or host-owned snapshots. */
+  knowledgeSnapshot?: readonly Readonly<{ sourceRef: string; version: string }>[];
 }>;
 
 export type VerifiedPatient = Readonly<{

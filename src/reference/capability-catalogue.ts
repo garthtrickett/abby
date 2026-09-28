@@ -23,7 +23,8 @@ const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: non
   capabilities: object({ book: capabilityMode, cancel: capabilityMode, reschedule: capabilityMode,
     intake: capabilityMode, transfer: capabilityMode }), transferDestinationRef: str,
   staffedIntervals: { type: "array", items: object({ startsAt: str, endsAt: str }), maxItems: 512 },
-  staffDestination: destination, operatorQueue: destination },
+  staffDestination: destination, operatorQueue: destination,
+  knowledgeSnapshot: { type: "array", items: object({ sourceRef: key, version: key }), maxItems: 256, uniqueItems: true } },
 ["scope", "policyVersion", "automationVersion", "automationEnabled", "bookingEnabled", "capabilities", "staffDestination", "operatorQueue"]);
 const auditEntry = { oneOf: [
   object({ version: key, enabled: bool, provenance: { const: "recorded" }, actorRef: key,

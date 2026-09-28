@@ -4,7 +4,7 @@ import { availabilityPresentation } from "./availability-presentation.ts";
 import { appointmentPresentation } from "./appointment-presentation.ts";
 import { addStaffTask, planStaffChange } from "./staff-work.ts";
 import { staffedForTransfer } from "./staffed-window.ts";
-import { validKnowledgeSource } from "./knowledge-evidence.ts";
+import { validCallKnowledgeSource } from "./knowledge-evidence.ts";
 import { acceptModelKnowledge, acceptModelResult, cancelModelWork } from "./model-result.ts";
 import { redactSettledContent } from "./presentation-retention.ts";
 import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "./model.ts";
@@ -244,7 +244,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       const sources = Array.isArray(interpretation.sources) ? interpretation.sources : [];
       const source = sources[0];
       if (turn.quality !== "clear" || sources.length !== 1 ||
-          !validKnowledgeSource(source, state.policy.scope, now) || interpretation.proposedText !== source.approvedText) {
+          !validCallKnowledgeSource(source, state.policy, now) || interpretation.proposedText !== source.approvedText) {
         addStaffTask(state, "systemFailure", now);
         state.callerMessages.push("I can't verify that information right now.");
       } else {

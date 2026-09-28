@@ -5,6 +5,7 @@ import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult
 import { admissionReceipt, initialState, sameAdmission } from "../core/ledger.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { transition } from "../core/transition.ts";
+import { validKnowledgeSnapshot } from "../core/knowledge-evidence.ts";
 import { READINESS_REQUIREMENTS, unprovenReadiness } from "../core/readiness.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
 import type { WriteStopAuditPage, WriteStopFailure, WriteStopStatus } from "../core/write-stop.ts";
@@ -37,6 +38,8 @@ function decodeState(value: unknown, callId: string): Result<CallState, Transiti
   if (typeof value !== "object" || value === null || Array.isArray(value)) return err({ kind: "storageCorrupt" });
   const data = value as Record<string, unknown>;
   if (data.callId !== callId || !Number.isInteger(data.version) || !["starting", "active", "ended"].includes(String(data.lifecycle)) || typeof data.policy !== "object" || data.policy === null ||
+      ((data.policy as { knowledgeSnapshot?: unknown }).knowledgeSnapshot !== undefined &&
+        !validKnowledgeSnapshot((data.policy as { knowledgeSnapshot: unknown }).knowledgeSnapshot)) ||
       typeof data.actions !== "object" || data.actions === null || typeof data.presentations !== "object" || data.presentations === null || typeof data.effects !== "object" || data.effects === null ||
       !Array.isArray(data.processedTurnIds) || typeof data.processedTurnDigests !== "object" || data.processedTurnDigests === null || !Array.isArray(data.callerMessages) ||
       (data.knowledgeAnswers !== undefined && !Array.isArray(data.knowledgeAnswers)) ||

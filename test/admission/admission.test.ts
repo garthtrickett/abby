@@ -3,10 +3,14 @@ import test, { after } from "node:test";
 import { sql } from "kysely";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import type { LedgerStore } from "../../src/core/ledger.ts";
-import { ok } from "../../src/core/model.ts";
+import { err, ok } from "../../src/core/model.ts";
 import type { CallPolicy, Result } from "../../src/core/model.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
 import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
+import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
+import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
+import { MemoryKnowledgeCatalogue } from "../../src/reference/knowledge-catalogue.ts";
+import { TextReception } from "../../src/reference/text-reception.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
 import type { CallsCallId } from "../../src/storage/generated/public/Calls.ts";
@@ -43,6 +47,46 @@ function fixture(kind: "memory" | "postgres", suffix: string) {
 }
 
 for (const kind of kinds) {
+  test(`${kind}: failed knowledge snapshot prevents admission before any call is stored`, async () => {
+    const app = fixture(kind, `${kind}-knowledge-unavailable`);
+    const service = new CallAdmissionService(app.ledger, async () => ok(app.policy), () => now, async () => ok(true),
+      { listModelKnowledge: async () => err({ kind: "unavailable" as const }) });
+    const event = { key: { accountRef: `knowledge-unavailable-${kind}`, providerCallRef: "first" },
+      dialedNumber: "+6125550100", receivedAt: now };
+    failure(await service.begin(event), "routeUnavailable");
+    assert.equal(value(await app.ledger.findAdmission(callIdFor(event.key))), null);
+  });
+
+  test(`${kind}: admitted calls pin approved knowledge versions across an admin edit`, async () => {
+    const app = fixture(kind, `${kind}-knowledge-snapshot`);
+    const knowledge = new MemoryKnowledgeCatalogue([{ scope: app.scope, sourceRef: "hours", version: "hours-v1",
+      ownerRef: "clinic-owner", approvedText: "We open at 9 am.", approved: true,
+      effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]);
+    const service = new CallAdmissionService(app.ledger, async () => ok(app.policy), () => now, async () => ok(true), knowledge);
+    const event = { key: { accountRef: `knowledge-${kind}`, providerCallRef: "first" }, dialedNumber: "+6125550100", receivedAt: now };
+    const first = value(await service.begin(event));
+    const runtime = new CallRuntime(app.ledger, app.scope);
+    value(await runtime.activate(first.receipt.callId, "first-session", now));
+    assert.deepEqual(value(await runtime.read(first.receipt.callId)).policy.knowledgeSnapshot,
+      [{ sourceRef: "hours", version: "hours-v1" }]);
+    const saved = value(await knowledge.saveDraft(app.scope, "hours", "hours-v1", "clinic-owner", "We open at 10 am.",
+      "2026-09-01T00:00:00.000Z", "2026-10-01T00:00:00.000Z", "admin"));
+    value(await knowledge.approve(app.scope, "hours", saved.version, "admin"));
+    const reception = new TextReception(app.ledger, new MemoryPolicyStore(), new ReferenceClinicHost([], []),
+      undefined, undefined, undefined, knowledge);
+    const oldAnswer = value(await reception.answer(app.scope,
+      { callId: first.receipt.callId, sessionId: "first-session", turnId: "old-call-answer", text: "Hours?", quality: "clear", at: now },
+      ["hours"], "We open at 10 am.", now));
+    assert.equal(oldAnswer.callerMessages.at(-1), "I can't verify that information right now.");
+    const second = value(await service.begin({ ...event, key: { ...event.key, providerCallRef: "second" } }));
+    value(await runtime.activate(second.receipt.callId, "second-session", now));
+    const newAnswer = value(await reception.answer(app.scope,
+      { callId: second.receipt.callId, sessionId: "second-session", turnId: "new-call-answer", text: "Hours?", quality: "clear", at: now },
+      ["hours"], "We open at 10 am.", now));
+    assert.equal(newAnswer.callerMessages.at(-1), "We open at 10 am.");
+    assert.equal(newAnswer.knowledgeAnswers.at(-1)?.version, "3");
+  });
+
   test(`${kind}: default-off automation refuses admission`, async () => {
     const app = fixture(kind, `${kind}-default-off`);
     const service = new CallAdmissionService(app.ledger, async () => ok(referenceDefaultPolicy(app.scope)), () => now);

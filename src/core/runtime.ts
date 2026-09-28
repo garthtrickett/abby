@@ -1,5 +1,6 @@
 import type { Admission, AdmissionResult, CallPolicy, CallState, FinalCallerTurn, HostWriteReceipt, LocationScope, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffAlertReason, StaffChangeObservation, StaffChangeReceipt, StaffChangeRequest, StaffTaskObservation, StaffTaskReceipt, TransitionAction, TransitionFailure, TurnInterpretation } from "./model.ts";
 import type { LedgerStore } from "./ledger.ts";
+import { validKnowledgeSnapshot } from "./knowledge-evidence.ts";
 
 export class CallRuntime {
   private readonly ledger: LedgerStore;
@@ -14,12 +15,18 @@ export class CallRuntime {
     if (policy.scope.tenantId !== this.scope.tenantId || policy.scope.clinicId !== this.scope.clinicId || policy.scope.locationId !== this.scope.locationId) {
       return Promise.resolve({ ok: false, error: { kind: "scopeMismatch" } });
     }
+    if (policy.knowledgeSnapshot !== undefined && !validKnowledgeSnapshot(policy.knowledgeSnapshot)) {
+      return Promise.resolve({ ok: false, error: { kind: "invalidTransition" } });
+    }
     return this.ledger.start(callId, policy);
   }
 
   admit(callId: string, policy: CallPolicy, admission: Admission): Promise<Result<AdmissionResult, TransitionFailure>> {
     if (policy.scope.tenantId !== this.scope.tenantId || policy.scope.clinicId !== this.scope.clinicId || policy.scope.locationId !== this.scope.locationId) {
       return Promise.resolve({ ok: false, error: { kind: "scopeMismatch" } });
+    }
+    if (policy.knowledgeSnapshot !== undefined && !validKnowledgeSnapshot(policy.knowledgeSnapshot)) {
+      return Promise.resolve({ ok: false, error: { kind: "invalidTransition" } });
     }
     return this.ledger.admit(callId, policy, admission);
   }

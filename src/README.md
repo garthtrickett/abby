@@ -54,7 +54,7 @@ The [managed voice-session composition](../phase-1/MANAGED_VOICE_SESSION.md) reg
 
 [Trusted knowledge reads](../phase-1/TRUSTED_KNOWLEDGE_READ.md) let voice intents and agent commands name a source while the host supplies approval, current text, and scope. Accepted answers record source provenance and use the same notice playback path; untrusted or missing evidence produces staff follow-up.
 
-The [versioned clinic knowledge catalog](../phase-2/KNOWLEDGE_CATALOGUE.md) adds clinic-admin draft, approval, and revocation commands, a lit-html reference workflow, and a PostgreSQL-backed standalone port. Its effective approved text feeds the same answer checks; call-start knowledge snapshot pinning remains open.
+The [versioned clinic knowledge catalog](../phase-2/KNOWLEDGE_CATALOGUE.md) adds clinic-admin draft, approval, and revocation commands, a lit-html reference workflow, and a PostgreSQL-backed standalone port. New calls with an explicit catalog pin source versions at start; answer workers still re-read current approval so a later edit or revocation fails safely for the old call.
 
 The [standalone lit-html dashboard shell](../phase-1/LIT_HTML_DASHBOARD.md) renders the booking setting and a redacted call summary over the same typed command gateway used by agents. Its local reference server and parallel browser journeys use synthetic clinic data.
 
