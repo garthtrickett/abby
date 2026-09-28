@@ -33,9 +33,17 @@ def main() -> int:
     if status != 200 or not isinstance(data.get("patients"), list):
         print(json.dumps({"step": "patient_list", "http_status": status}))
         return 1
-    patients = [row for row in data["patients"] if str(row.get("last_name", "")).startswith("SyntheticProbe") and row.get("first_name") == "Abby"]
+    patients = [row for row in data["patients"] if str(row.get("last_name", "")).startswith(("SyntheticProbe", "SyntheticConcurrency"))
+                and row.get("first_name") == "Abby"]
     print(json.dumps({"step": "synthetic_patients", "count": len(patients), "archived_count": sum(bool(row.get("archived_at")) for row in patients)}))
     failed = not patients or any(not row.get("archived_at") for row in patients)
+
+    def slot_key(row: dict) -> tuple:
+        return (row.get("starts_at"),
+                ((row.get("business") or {}).get("links") or {}).get("self"),
+                ((row.get("practitioner") or {}).get("links") or {}).get("self"),
+                ((row.get("appointment_type") or {}).get("links") or {}).get("self"))
+
     for patient in patients:
         patient_id = str(patient["id"])
         for label, filters in (
@@ -47,17 +55,21 @@ def main() -> int:
             query = urlencode([("per_page", 100), *(("q[]", item) for item in filters)])
             appointment_status, appointments = request(base, headers, "GET", f"/individual_appointments?{query}")
             rows = appointments.get("individual_appointments")
-            matches = [row for row in rows if str(row.get("notes", "")).startswith("Abby synthetic probe ")] if isinstance(rows, list) else []
+            matches = [row for row in rows if str(row.get("notes", "")).startswith(("Abby synthetic probe ", "Abby concurrent synthetic "))] if isinstance(rows, list) else []
             print(json.dumps({
                 "step": "synthetic_appointments", "view": label, "http_status": appointment_status,
                 "count": len(matches), "cancelled_count": sum(bool(row.get("cancelled_at")) for row in matches),
                 "archived_count": sum(bool(row.get("archived_at")) for row in matches),
+                **({"same_slot": len({slot_key(row) for row in matches}) == 1 and all(slot_key(matches[0]))}
+                   if label == "all_cancellation_states" and str(patient.get("last_name", "")).startswith("SyntheticConcurrency") and matches else {}),
             }))
             failed |= appointment_status != 200
             if label == "default":
                 failed |= bool(matches)
             if label == "all_cancellation_states":
                 failed |= not matches or any(not row.get("cancelled_at") for row in matches)
+                if str(patient.get("last_name", "")).startswith("SyntheticConcurrency"):
+                    failed |= len(matches) != 2 or len({slot_key(row) for row in matches}) != 1 or not all(slot_key(matches[0]))
     return 1 if failed else 0
 
 
