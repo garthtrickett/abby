@@ -38,9 +38,11 @@ const actionStatus = choice("awaitingConfirmation", "ready", "dispatched", "comm
   "unsupported", "uncertain", "needsReview", "canceled");
 const staffReason = choice("callerRequested", "verificationFailed", "unsupported", "uncertainAction",
   "partialIntake", "systemFailure", "transferFailed", "emergencyStopped");
-const writeStop = optional({ stopped: bool, version: choice("0", "1"), actorRef: key, reason: nonEmpty,
-  stoppedAt: str, inFlight: array(object({ effectId: key, callId: key, actionKey: key,
+const writeStop = optional({ stopped: bool, version: key, actorRef: key, reason: nonEmpty,
+  changedAt: str, inFlight: array(object({ effectId: key, callId: key, actionKey: key,
     status: choice("possiblySent", "uncertain") })), nextAfterEffectId: key }, ["stopped", "version", "inFlight"]);
+const writeStopAudit = optional({ entries: array(object({ version: key, stopped: bool, actorRef: key,
+  reason: nonEmpty, changedAt: str })), nextAfterVersion: uint }, ["entries"]);
 const staffStatus = choice("requested", "open", "acknowledged", "resolved", "needsReview", "failed");
 const lifecycle = choice("starting", "active", "ended");
 const source = object({ sourceRef: key, version: key, ownerRef: key });
@@ -129,6 +131,13 @@ export const capabilityCatalogue = {
   "calls.writes.stop.read.v1": entry("calls.writes.stop.read.v1",
     optional({ kind: { const: "calls.writes.stop.read.v1" }, afterEffectId: key }, ["kind"]),
     reply("writeStop", "status", writeStop), "read", "clinicAdmin"),
+  "calls.writes.resume.v1": entry("calls.writes.resume.v1",
+    object({ kind: { const: "calls.writes.resume.v1" }, expectedVersion: key,
+      reason: { type: "string", minLength: 1, maxLength: 1000 } }),
+    reply("writeStop", "status", writeStop), "policyChange", "clinicAdmin", "none", ["readinessForEnable"]),
+  "calls.writes.stop.audit.v1": entry("calls.writes.stop.audit.v1",
+    optional({ kind: { const: "calls.writes.stop.audit.v1" }, afterVersion: uint }, ["kind"]),
+    reply("writeStopAudit", "page", writeStopAudit), "read", "clinicAdmin"),
   "settings.appointments.booking.enabled.change.v1": entry("settings.appointments.booking.enabled.change.v1",
     object({ kind: { const: "settings.appointments.booking.enabled.change.v1" }, expectedVersion: key, enabled: bool }),
     reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedPolicyVersion"]),

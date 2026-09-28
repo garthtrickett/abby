@@ -5,10 +5,13 @@ import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult
 import { admissionReceipt, initialState, sameAdmission } from "../core/ledger.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { transition } from "../core/transition.ts";
-import type { WriteStopStatus } from "../core/write-stop.ts";
+import { READINESS_REQUIREMENTS, unprovenReadiness } from "../core/readiness.ts";
+import type { AutomationReadiness } from "../core/readiness.ts";
+import type { WriteStopAuditPage, WriteStopFailure, WriteStopStatus } from "../core/write-stop.ts";
 import type Database from "./generated/Database.ts";
 import type { ClinicWriteStopClinicId, ClinicWriteStopTenantId } from "./generated/public/ClinicWriteStop.ts";
 import type { ClinicWriteStopInflightEffectId } from "./generated/public/ClinicWriteStopInflight.ts";
+import type { ClinicWriteStopEventsVersion } from "./generated/public/ClinicWriteStopEvents.ts";
 import type { CallsCallId } from "./generated/public/Calls.ts";
 import type { CallEventsSequence } from "./generated/public/CallEvents.ts";
 import type { EffectOutboxEffectId } from "./generated/public/EffectOutbox.ts";
@@ -54,10 +57,12 @@ function auditPayload(action: TransitionAction): Record<string, string> {
 export class PostgresLedger implements LedgerStore {
   private readonly db: Kysely<Database>;
   private readonly clockForTests: ((suggestedAt: string) => string) | undefined;
+  private readonly readiness: AutomationReadiness;
 
-  constructor(db: Kysely<Database>, clockForTests?: (suggestedAt: string) => string) {
+  constructor(db: Kysely<Database>, clockForTests?: (suggestedAt: string) => string, readiness: AutomationReadiness = unprovenReadiness) {
     this.db = db;
     this.clockForTests = clockForTests;
+    this.readiness = readiness;
   }
 
   private async trustedNow(db: Kysely<Database>, suggestedAt: string): Promise<string> {
@@ -74,16 +79,18 @@ export class PostgresLedger implements LedgerStore {
 
   private async stopStatus(db: Kysely<Database>, scope: LocationScope, afterEffectId?: string): Promise<Result<WriteStopStatus, TransitionFailure>> {
     const ids = this.stopIds(scope);
-    const row = await db.selectFrom("clinic_write_stop").select(["stopped", "actor_ref", "reason", "stopped_at"])
+    const row = await db.selectFrom("clinic_write_stop").select(["version", "stopped", "actor_ref", "reason", "changed_at"])
       .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).executeTakeFirst();
-    if (!row || !row.stopped) return ok({ stopped: false, version: "0", inFlight: [] });
-    if (!row.actor_ref || !row.reason || !(row.stopped_at instanceof Date) || !Number.isFinite(row.stopped_at.getTime())) return err({ kind: "storageCorrupt" });
+    if (!row || row.version === 0) return ok({ stopped: false, version: "0", inFlight: [] });
+    if (!Number.isSafeInteger(row.version) || row.version < 1 || !row.actor_ref || !row.reason ||
+        !(row.changed_at instanceof Date) || !Number.isFinite(row.changed_at.getTime())) return err({ kind: "storageCorrupt" });
     let query = db.selectFrom("clinic_write_stop_inflight").select(["effect_id", "call_id", "action_key", "status"])
-      .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id);
+      .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id)
+      .where("stop_version", "=", row.version as ClinicWriteStopEventsVersion);
     if (afterEffectId) query = query.where("effect_id", ">", afterEffectId as ClinicWriteStopInflightEffectId);
-    const rows = await query.orderBy("effect_id").limit(50).execute();
+    const rows = row.stopped ? await query.orderBy("effect_id").limit(50).execute() : [];
     if (rows.some(item => !item.effect_id || !item.call_id || !item.action_key || (item.status !== "possiblySent" && item.status !== "uncertain"))) return err({ kind: "storageCorrupt" });
-    return ok({ stopped: true, version: "1", actorRef: row.actor_ref, reason: row.reason, stoppedAt: row.stopped_at.toISOString(),
+    return ok({ stopped: row.stopped, version: String(row.version), actorRef: row.actor_ref, reason: row.reason, changedAt: row.changed_at.toISOString(),
       inFlight: rows.map(item => ({ effectId: item.effect_id, callId: item.call_id, actionKey: item.action_key,
         status: item.status as "possiblySent" | "uncertain" })),
       ...(rows.length === 50 ? { nextAfterEffectId: rows[49]!.effect_id } : {}) });
@@ -95,21 +102,40 @@ export class PostgresLedger implements LedgerStore {
     catch { return err({ kind: "storageFailure" }); }
   }
 
+  async listWriteStopChanges(scope: LocationScope, afterVersion?: number): Promise<Result<WriteStopAuditPage, TransitionFailure>> {
+    if (!scope.tenantId || !scope.clinicId || (afterVersion !== undefined && (!Number.isSafeInteger(afterVersion) || afterVersion < 0))) return err({ kind: "invalidTransition" });
+    try {
+      const ids = this.stopIds(scope);
+      const rows = await this.db.selectFrom("clinic_write_stop_events").select(["version", "stopped", "actor_ref", "reason", "changed_at"])
+        .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id)
+        .where("version", ">", (afterVersion ?? 0) as ClinicWriteStopEventsVersion)
+        .orderBy("version").limit(50).execute();
+      if (rows.some(row => !row.actor_ref || !row.reason || !(row.changed_at instanceof Date) || !Number.isFinite(row.changed_at.getTime()))) return err({ kind: "storageCorrupt" });
+      const entries = rows.map(row => ({ version: String(row.version), stopped: row.stopped, actorRef: row.actor_ref,
+        reason: row.reason, changedAt: row.changed_at.toISOString() }));
+      return ok({ entries, ...(entries.length === 50 ? { nextAfterVersion: Number(entries[49]!.version) } : {}) });
+    } catch { return err({ kind: "storageFailure" }); }
+  }
+
   async stopWrites(scope: LocationScope, actorRef: string, reason: string): Promise<Result<WriteStopStatus, TransitionFailure>> {
     if (!scope.tenantId || !scope.clinicId || !actorRef.trim() || actorRef.length > 256 || !reason.trim() || reason.length > 1_000) return err({ kind: "invalidTransition" });
     try {
       return await this.db.transaction().execute(async trx => {
         const ids = this.stopIds(scope);
-        await trx.insertInto("clinic_write_stop").values({ ...ids, stopped: false, actor_ref: null, reason: null, stopped_at: null })
+        await trx.insertInto("clinic_write_stop").values({ ...ids, version: 0, stopped: false, actor_ref: null, reason: null, changed_at: null })
           .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id"]).doNothing()).execute();
-        const current = await trx.selectFrom("clinic_write_stop").select("stopped")
+        const current = await trx.selectFrom("clinic_write_stop").select(["version", "stopped"])
           .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).forUpdate().executeTakeFirstOrThrow();
         if (!current.stopped) {
-          await trx.updateTable("clinic_write_stop").set({ stopped: true, actor_ref: actorRef, reason,
-            stopped_at: sql`clock_timestamp()` })
-            .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).execute();
-          await sql`insert into clinic_write_stop_inflight (tenant_id, clinic_id, effect_id, call_id, action_key, status)
-            select calls.tenant_id, calls.clinic_id, effect_outbox.effect_id, effect_outbox.call_id,
+          const version = current.version + 1;
+          const changed = await trx.updateTable("clinic_write_stop").set({ version, stopped: true, actor_ref: actorRef, reason,
+            changed_at: sql`clock_timestamp()` })
+            .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).returning("changed_at").executeTakeFirstOrThrow();
+          if (!(changed.changed_at instanceof Date)) throw new Error("write stop clock unavailable");
+          await trx.insertInto("clinic_write_stop_events").values({ ...ids, version: version as ClinicWriteStopEventsVersion,
+            stopped: true, actor_ref: actorRef, reason, changed_at: changed.changed_at }).execute();
+          await sql`insert into clinic_write_stop_inflight (tenant_id, clinic_id, stop_version, effect_id, call_id, action_key, status)
+            select calls.tenant_id, calls.clinic_id, ${version}, effect_outbox.effect_id, effect_outbox.call_id,
               coalesce(nullif(effect_outbox.payload->>'actionKey', ''), 'unknown'), effect_outbox.status
             from effect_outbox join calls on calls.call_id = effect_outbox.call_id
             where calls.tenant_id = ${scope.tenantId} and calls.clinic_id = ${scope.clinicId}
@@ -118,6 +144,38 @@ export class PostgresLedger implements LedgerStore {
         }
         const status = await this.stopStatus(trx, scope);
         if (!status.ok) throw new Error("write stop status corrupt");
+        return status;
+      });
+    } catch { return err({ kind: "storageFailure" }); }
+  }
+
+  async resumeWrites(scope: LocationScope, expectedVersion: string, actorRef: string, reason: string): Promise<Result<WriteStopStatus, WriteStopFailure>> {
+    if (!scope.tenantId || !scope.clinicId || !actorRef.trim() || actorRef.length > 256 || !reason.trim() || reason.length > 1_000) return err({ kind: "invalidTransition" });
+    const initial = await this.readWriteStop(scope);
+    if (!initial.ok) return initial;
+    if (initial.value.version !== expectedVersion) return err({ kind: "versionConflict" });
+    if (!initial.value.stopped) return err({ kind: "invalidTransition" });
+    try {
+      const ready = await this.readiness(scope);
+      if (!ready.ok) return ready;
+      if (ready.value !== true) return err({ kind: "readinessFailed", missing: READINESS_REQUIREMENTS });
+    } catch { return err({ kind: "readinessFailed", missing: READINESS_REQUIREMENTS }); }
+    try {
+      return await this.db.transaction().execute(async trx => {
+        const ids = this.stopIds(scope);
+        const current = await trx.selectFrom("clinic_write_stop").select(["version", "stopped"])
+          .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).forUpdate().executeTakeFirst();
+        if (!current || String(current.version) !== expectedVersion) return err({ kind: "versionConflict" });
+        if (!current.stopped) return err({ kind: "invalidTransition" });
+        const version = current.version + 1;
+        const changed = await trx.updateTable("clinic_write_stop").set({ version, stopped: false, actor_ref: actorRef, reason,
+          changed_at: sql`clock_timestamp()` })
+          .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).returning("changed_at").executeTakeFirstOrThrow();
+        if (!(changed.changed_at instanceof Date)) throw new Error("write resume clock unavailable");
+        await trx.insertInto("clinic_write_stop_events").values({ ...ids, version: version as ClinicWriteStopEventsVersion,
+          stopped: false, actor_ref: actorRef, reason, changed_at: changed.changed_at }).execute();
+        const status = await this.stopStatus(trx, scope);
+        if (!status.ok) throw new Error("write resume status corrupt");
         return status;
       });
     } catch { return err({ kind: "storageFailure" }); }
@@ -382,7 +440,7 @@ export class PostgresLedger implements LedgerStore {
         let effectiveAction = action;
         if (action.kind === "markHostPossiblySent") {
           const ids = this.stopIds(scope);
-          await trx.insertInto("clinic_write_stop").values({ ...ids, stopped: false, actor_ref: null, reason: null, stopped_at: null })
+          await trx.insertInto("clinic_write_stop").values({ ...ids, version: 0, stopped: false, actor_ref: null, reason: null, changed_at: null })
             .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id"]).doNothing()).execute();
           const stop = await trx.selectFrom("clinic_write_stop").select("stopped")
             .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).forShare().executeTakeFirstOrThrow();

@@ -1,3 +1,8 @@
+import type { TransitionFailure } from "./model.ts";
+import type { ReadinessFailure } from "./readiness.ts";
+
+export type WriteStopFailure = TransitionFailure | ReadinessFailure;
+
 export type InFlightWrite = Readonly<{
   effectId: string;
   callId: string;
@@ -7,10 +12,19 @@ export type InFlightWrite = Readonly<{
 
 export type WriteStopStatus = Readonly<{
   stopped: boolean;
-  version: "0" | "1";
+  version: string;
   actorRef?: string;
   reason?: string;
-  stoppedAt?: string;
+  changedAt?: string;
   inFlight: readonly InFlightWrite[];
   nextAfterEffectId?: string;
 }>;
+
+export type WriteStopAuditEntry = Readonly<{
+  version: string;
+  stopped: boolean;
+  actorRef: string;
+  reason: string;
+  changedAt: string;
+}>;
+export type WriteStopAuditPage = Readonly<{ entries: readonly WriteStopAuditEntry[]; nextAfterVersion?: number }>;

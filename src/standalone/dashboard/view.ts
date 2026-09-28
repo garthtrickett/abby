@@ -5,7 +5,7 @@ import type { CapabilityDescriptor } from "../../reference/command-gateway.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
 import type { AutomationSettingAuditPage, BookingSettingAuditPage } from "../../core/host.ts";
-import type { WriteStopStatus } from "../../core/write-stop.ts";
+import type { WriteStopAuditPage, WriteStopStatus } from "../../core/write-stop.ts";
 
 export type DashboardState = {
   loading: boolean;
@@ -13,6 +13,7 @@ export type DashboardState = {
   capabilities: readonly CapabilityDescriptor[];
   policy: CallPolicy | undefined;
   writeStop: WriteStopStatus | undefined;
+  writeStopAuditPage: WriteStopAuditPage | undefined;
   stopReasonInput: string;
   automationAuditPage: AutomationSettingAuditPage | undefined;
   auditPage: BookingSettingAuditPage | undefined;
@@ -27,7 +28,9 @@ export type DashboardState = {
 export type DashboardActions = Readonly<{
   setStopReason(value: string): void;
   stopWrites(): void;
+  resumeWrites(): void;
   loadMoreStoppedWrites(): void;
+  loadMoreWriteStopAudit(): void;
   toggleAutomation(): void;
   loadAutomationAudit(): void;
   loadMoreAutomationAudit(): void;
@@ -72,13 +75,21 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
         <h2 id="write-stop-title">Emergency write stop</h2>
         <p class="muted">Blocks queued appointment writes on active calls. Writes already in flight still need their receipt or review.</p>
         ${state.writeStop?.stopped ? html`<div aria-label="Emergency stop status">
-          <p class="status">Stopped by ${state.writeStop.actorRef} · ${state.writeStop.stoppedAt}</p>
+          <p class="status">Stopped by ${state.writeStop.actorRef} · ${state.writeStop.changedAt} · version ${state.writeStop.version}</p>
           <p>Reason: ${state.writeStop.reason}</p>
           <p>Writes already in flight at stop: ${state.writeStop.inFlight.length}${state.writeStop.nextAfterEffectId ? "+" : ""}</p>
           ${state.writeStop.inFlight.length ? html`<ul>${state.writeStop.inFlight.map(item => html`<li>${item.callId} · ${item.actionKey} · ${item.status}</li>`)}</ul>` : ""}
           ${state.writeStop.nextAfterEffectId ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreStoppedWrites()}>Load more in-flight writes</button>` : ""}
-        </div>` : html`<div><label>Reason for emergency stop <input aria-label="Reason for emergency stop" .value=${state.stopReasonInput} @input=${(event: Event) => actions.setStopReason((event.target as HTMLInputElement).value)}></label>
+          <label>Reason for resuming appointment writes <input aria-label="Reason for resuming appointment writes" .value=${state.stopReasonInput} @input=${(event: Event) => actions.setStopReason((event.target as HTMLInputElement).value)}></label>
+          <button type="button" ?disabled=${state.busy || !state.stopReasonInput.trim()} @click=${() => actions.resumeWrites()}>Resume appointment writes</button>
+        </div>` : html`<div>
+          ${state.writeStop && state.writeStop.version !== "0" ? html`<p class="status">Writes resumed by ${state.writeStop.actorRef} · ${state.writeStop.changedAt} · version ${state.writeStop.version}</p>` : ""}
+          <label>Reason for emergency stop <input aria-label="Reason for emergency stop" .value=${state.stopReasonInput} @input=${(event: Event) => actions.setStopReason((event.target as HTMLInputElement).value)}></label>
           <button type="button" ?disabled=${state.busy || !state.stopReasonInput.trim()} @click=${() => actions.stopWrites()}>Stop appointment writes</button></div>`}
+        ${state.writeStopAuditPage ? html`<div aria-label="Write stop audit"><h3>Write stop history</h3>
+          ${state.writeStopAuditPage.entries.length ? html`<ul>${state.writeStopAuditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.stopped ? "stopped" : "resumed"} · ${entry.actorRef} · ${entry.reason} · ${entry.changedAt}</li>`)}</ul>` : html`<p>No write-stop changes recorded.</p>`}
+          ${state.writeStopAuditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreWriteStopAudit()}>Load more write-stop history</button>` : ""}
+        </div>` : ""}
       </section>` : ""}
       <section class="card" aria-labelledby="booking-title">
         <div class="row"><div><h2 id="booking-title">Booking automation</h2>

@@ -8,7 +8,7 @@ import type { BookingSettingAuditPage } from "../../core/host.ts";
 import type { AutomationSettingAuditPage } from "../../core/host.ts";
 import { READINESS_REQUIREMENTS } from "../../core/readiness.ts";
 import type { ReadinessRequirement } from "../../core/readiness.ts";
-import type { WriteStopStatus } from "../../core/write-stop.ts";
+import type { WriteStopAuditPage, WriteStopStatus } from "../../core/write-stop.ts";
 
 function appendAudit(previous: BookingSettingAuditPage, next: BookingSettingAuditPage): BookingSettingAuditPage {
   return { entries: [...previous.entries, ...next.entries],
@@ -60,7 +60,7 @@ export class DashboardController {
   private readonly root: HTMLElement;
   private readonly port: DashboardPort;
   private readonly state: DashboardState = { loading: true, busy: false, capabilities: [], policy: undefined, writeStop: undefined, stopReasonInput: "", auditPage: undefined,
-    automationAuditPage: undefined, callIdInput: "", call: undefined, staffPage: undefined, outcomePage: undefined, notice: undefined, error: undefined };
+    writeStopAuditPage: undefined, automationAuditPage: undefined, callIdInput: "", call: undefined, staffPage: undefined, outcomePage: undefined, notice: undefined, error: undefined };
 
   constructor(root: HTMLElement, port: DashboardPort) {
     this.root = root;
@@ -72,7 +72,9 @@ export class DashboardController {
     render(dashboardView(this.state, {
       setStopReason: value => { this.state.stopReasonInput = value; this.draw(); },
       stopWrites: () => { void this.stopWrites(); },
+      resumeWrites: () => { void this.resumeWrites(); },
       loadMoreStoppedWrites: () => { void this.loadMoreStoppedWrites(); },
+      loadMoreWriteStopAudit: () => { void this.loadMoreWriteStopAudit(); },
       toggleAutomation: () => { void this.toggleAutomation(); },
       loadAutomationAudit: () => { void this.loadAutomationAudit(); },
       loadMoreAutomationAudit: () => { void this.loadMoreAutomationAudit(); },
@@ -98,6 +100,11 @@ export class DashboardController {
       const stop = await this.port.readWriteStop();
       if (stop.ok) this.state.writeStop = stop.value;
       else this.state.error = message(stop.error);
+    }
+    if (capabilities.ok && capabilities.value.some(item => item.id === "calls.writes.stop.audit.v1")) {
+      const audit = await this.port.writeStopAudit();
+      if (audit.ok) this.state.writeStopAuditPage = audit.value;
+      else this.state.error = message(audit.error);
     }
     if (capabilities.ok && capabilities.value.some(item => item.id === "settings.automation.audit.v1")) {
       const audit = await this.port.automationAudit();
@@ -157,8 +164,54 @@ export class DashboardController {
     const result = await this.port.stopWrites(reason);
     if (result.ok) {
       this.state.writeStop = result.value;
+      this.state.stopReasonInput = "";
       this.state.notice = "Appointment writes stopped for this clinic. Review any writes already in flight.";
+      const audit = await this.port.writeStopAudit();
+      if (audit.ok) this.state.writeStopAuditPage = audit.value;
+      else this.state.error = message(audit.error);
     } else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async resumeWrites(): Promise<void> {
+    const current = this.state.writeStop;
+    if (this.state.busy || !current?.stopped || !this.state.capabilities.some(item => item.id === "calls.writes.resume.v1")) return;
+    const reason = this.state.stopReasonInput.trim();
+    if (!reason) { this.state.error = "Enter a reason for resuming appointment writes."; this.draw(); return; }
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.state.notice = undefined;
+    this.draw();
+    const result = await this.port.resumeWrites(current.version, reason);
+    if (result.ok) {
+      this.state.writeStop = result.value;
+      this.state.stopReasonInput = "";
+      this.state.notice = "Appointment writes resumed for this clinic after readiness passed.";
+      const audit = await this.port.writeStopAudit();
+      if (audit.ok) this.state.writeStopAuditPage = audit.value;
+      else this.state.error = message(audit.error);
+    } else {
+      this.state.error = message(result.error);
+      if (result.error.kind === "versionConflict") {
+        const reloaded = await this.port.readWriteStop();
+        if (reloaded.ok) this.state.writeStop = reloaded.value;
+      }
+    }
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async loadMoreWriteStopAudit(): Promise<void> {
+    const previous = this.state.writeStopAuditPage;
+    if (this.state.busy || previous?.nextAfterVersion === undefined) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.writeStopAudit(previous.nextAfterVersion);
+    if (result.ok) this.state.writeStopAuditPage = { entries: [...previous.entries, ...result.value.entries],
+      ...(result.value.nextAfterVersion === undefined ? {} : { nextAfterVersion: result.value.nextAfterVersion }) } satisfies WriteStopAuditPage;
+    else this.state.error = message(result.error);
     this.state.busy = false;
     this.draw();
   }
@@ -170,8 +223,11 @@ export class DashboardController {
     this.state.error = undefined;
     this.draw();
     const result = await this.port.readWriteStop(previous.nextAfterEffectId);
-    if (result.ok) {
+    if (result.ok && result.value.version === previous.version && result.value.stopped) {
       this.state.writeStop = { ...result.value, inFlight: [...previous.inFlight, ...result.value.inFlight] } satisfies WriteStopStatus;
+    } else if (result.ok) {
+      this.state.writeStop = result.value;
+      this.state.error = "Write-stop status changed while loading. The current status was reloaded.";
     } else this.state.error = message(result.error);
     this.state.busy = false;
     this.draw();

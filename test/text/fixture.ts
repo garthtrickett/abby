@@ -8,6 +8,7 @@ import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
 import type { Kysely } from "kysely";
 import type Database from "../../src/storage/generated/Database.ts";
+import type { AutomationReadiness } from "../../src/core/readiness.ts";
 
 export const now = "2026-09-28T10:00:00.000Z";
 export const deadline = "2026-09-29T10:00:00.000Z";
@@ -50,7 +51,7 @@ export class FakeHost implements HostEffects {
 
 let postgresDb: Kysely<Database> | undefined;
 
-export async function setup(id: string, modes?: Partial<CallPolicy["capabilities"]>) {
+export async function setup(id: string, modes?: Partial<CallPolicy["capabilities"]>, readiness?: AutomationReadiness) {
   const scope = { tenantId: `tenant-${id}`, clinicId: `clinic-${id}`, locationId: `location-${id}` };
   const policy: CallPolicy = {
     scope,
@@ -68,7 +69,7 @@ export async function setup(id: string, modes?: Partial<CallPolicy["capabilities
     if (!url) throw new Error("DATABASE_URL is required for PostgreSQL text tests");
     postgresDb = connectPostgres(url);
   }
-  const ledger = process.env.ABBY_LEDGER === "postgres" ? new PostgresLedger(postgresDb!, suggestedAt => suggestedAt) : new MemoryLedger();
+  const ledger = process.env.ABBY_LEDGER === "postgres" ? new PostgresLedger(postgresDb!, suggestedAt => suggestedAt, readiness) : new MemoryLedger(readiness);
   const runtime = new CallRuntime(ledger, scope);
   const host = new FakeHost();
   const worker = new EffectWorker(runtime, host);

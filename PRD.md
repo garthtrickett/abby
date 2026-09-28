@@ -238,7 +238,7 @@ For parallel tests, create one migrated PostgreSQL template or disposable instan
 - Staff can find pending and failed actions by tenant, clinic, call, and age. Alerts and dashboards show ingestion, routing, offer, commit, reconciliation, handoff, and notification failures separately.
 - External provider failures are bounded by a call deadline. Identity lookup failure is not represented as “patient not found”; appointment-read failure is not represented as “no appointments.”
 - Tenant isolation, authorization, and clinic timezone are checked at each host interaction.
-- Each tenant has an enable/disable switch and a versioned configuration. Disabling a clinic stops new automated calls while preserving active-call and unresolved-action records for staff. A separate audited emergency-stop command blocks new automated writes on active calls and routes them to staff; ordinary setting edits remain next-call-only. Rollout and rollback operate per clinic or cohort.
+- Each tenant has an enable/disable switch and a versioned configuration. Disabling a clinic stops new automated calls while preserving active-call and unresolved-action records for staff. A separate audited emergency-stop command blocks new automated writes on active calls and routes them to staff. Resuming writes requires the current stop version, an operator reason, and fresh host-owned readiness evidence; the audit retains each stop, resume, and in-flight snapshot. Ordinary setting edits remain next-call-only. Rollout and rollback operate per clinic or cohort.
 
 ## 9. End-to-end and conformance testing
 

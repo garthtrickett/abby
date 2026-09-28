@@ -14,7 +14,7 @@ import { capabilityDescriptor } from "./capability-catalogue.ts";
 import type { CapabilityId, CapabilityDescriptor } from "./capability-catalogue.ts";
 import { matchesSchema } from "./schema-shapes.ts";
 import type { LedgerStore } from "../core/ledger.ts";
-import type { WriteStopStatus } from "../core/write-stop.ts";
+import type { WriteStopAuditPage, WriteStopStatus } from "../core/write-stop.ts";
 
 export type { CapabilityDescriptor } from "./capability-catalogue.ts";
 
@@ -30,6 +30,8 @@ export type GatewayCommand =
   | Readonly<{ kind: "settings.automation.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "calls.writes.stop.v1"; reason: string }>
   | Readonly<{ kind: "calls.writes.stop.read.v1"; afterEffectId?: string }>
+  | Readonly<{ kind: "calls.writes.resume.v1"; expectedVersion: string; reason: string }>
+  | Readonly<{ kind: "calls.writes.stop.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "settings.appointments.booking.enabled.change.v1"; expectedVersion: string; enabled: boolean }>
   | Readonly<{ kind: "settings.appointments.booking.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "booking.propose.v2"; turn: FinalCallerTurn; verificationRef: string; offerRef: string; now: string }>
@@ -49,6 +51,7 @@ export type GatewayReply =
   | Readonly<{ kind: "settings"; policy: CallPolicy }>
   | Readonly<{ kind: "automationSettingAudit"; page: AutomationSettingAuditPage }>
   | Readonly<{ kind: "writeStop"; status: WriteStopStatus }>
+  | Readonly<{ kind: "writeStopAudit"; page: WriteStopAuditPage }>
   | Readonly<{ kind: "bookingSettingAudit"; page: BookingSettingAuditPage }>
   | Readonly<{ kind: "bookingProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "knowledgeAnswer"; progress: CallCommandProgress }>
@@ -95,7 +98,8 @@ export class CommandGateway {
     if (this.actor.role === "clinicAdmin") {
       permitted.push("settings.automation.enabled.change.v1", "settings.automation.audit.v1",
         "settings.appointments.booking.enabled.change.v1", "settings.appointments.booking.audit.v1");
-      if (this.writeStopLedger) permitted.push("calls.writes.stop.v1", "calls.writes.stop.read.v1");
+      if (this.writeStopLedger) permitted.push("calls.writes.stop.v1", "calls.writes.stop.read.v1",
+        "calls.writes.resume.v1", "calls.writes.stop.audit.v1");
     }
     return permitted.map(capabilityDescriptor);
   }
@@ -139,6 +143,16 @@ export class CommandGateway {
         if (!this.writeStopLedger) return err({ kind: "forbidden" });
         const result = await this.writeStopLedger.readWriteStop(this.actor.scope, command.afterEffectId);
         return result.ok ? ok({ kind: "writeStop", status: result.value }) : result;
+      }
+      case "calls.writes.resume.v1": {
+        if (!this.writeStopLedger) return err({ kind: "forbidden" });
+        const result = await this.writeStopLedger.resumeWrites(this.actor.scope, command.expectedVersion, this.actor.actorRef, command.reason);
+        return result.ok ? ok({ kind: "writeStop", status: result.value }) : result;
+      }
+      case "calls.writes.stop.audit.v1": {
+        if (!this.writeStopLedger) return err({ kind: "forbidden" });
+        const result = await this.writeStopLedger.listWriteStopChanges(this.actor.scope, command.afterVersion);
+        return result.ok ? ok({ kind: "writeStopAudit", page: result.value }) : result;
       }
       case "settings.appointments.booking.enabled.change.v1": {
         const result = await this.policy.changeBookingEnabled(this.actor.scope, command.expectedVersion, command.enabled, this.actor.actorRef);
