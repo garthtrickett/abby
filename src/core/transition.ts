@@ -3,6 +3,7 @@ import { digestActionRequest, digestTurn } from "./digest.ts";
 import { availabilityPresentation } from "./availability-presentation.ts";
 import { appointmentPresentation } from "./appointment-presentation.ts";
 import { planStaffChange } from "./staff-work.ts";
+import { staffedForTransfer } from "./staffed-window.ts";
 import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "./model.ts";
 import type {
   ActionRequest, ActionState, CallState, CallTerminalReason, FinalCallerTurn, LocationScope,
@@ -11,6 +12,7 @@ import type {
 } from "./model.ts";
 
 const HOUR = 60 * 60 * 1000;
+const CLOSED_TRANSFER_NOTICE = "Staff aren't available for a live transfer now. I'll request follow-up, but I can't confirm they've received it yet.";
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
@@ -220,10 +222,13 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       if (turn.quality !== "clear") {
         addStaffTask(state, "verificationFailed", now);
         state.callerMessages.push("I can't confirm the transfer request safely. I'll request staff follow-up.");
-      } else if (state.policy.capabilities.transfer === "execute" && state.policy.transferDestinationRef?.trim()) {
+      } else if (state.policy.capabilities.transfer === "execute" && state.policy.transferDestinationRef?.trim() && staffedForTransfer(state.policy, now)) {
         const id = createHash("sha256").update(JSON.stringify([state.callId, turn.turnId, state.policy.transferDestinationRef])).digest("hex");
         state.presentations[id] = { kind: "transfer", id, destinationRef: state.policy.transferDestinationRef, reason: interpretation.reason, status: "pending" };
         state.pendingPresentationId = id;
+      } else if (state.policy.capabilities.transfer === "execute" && state.policy.transferDestinationRef?.trim()) {
+        addStaffTask(state, interpretation.reason, now);
+        state.callerMessages.push(CLOSED_TRANSFER_NOTICE);
       } else if (state.policy.capabilities.transfer === "requestOnly") {
         addStaffTask(state, interpretation.reason, now);
         state.callerMessages.push("I can request staff follow-up, but I can't confirm they've received it yet.");
@@ -430,6 +435,15 @@ export function transition(current: CallState, action: TransitionAction): Result
       if (state.lifecycle !== "active" || !state.admission || !state.sessionLease || state.sessionLease.sessionId !== action.sessionId || Date.parse(action.now) >= Date.parse(state.sessionLease.expiresAt)) return err({ kind: "leaseLost" });
       const presentation = state.presentations[action.presentationId];
       if (!presentation || presentation.kind !== "transfer" || presentation.status !== "started") return err({ kind: "invalidTransition" });
+      if (!staffedForTransfer(state.policy, now)) {
+        state.presentations[presentation.id] = { ...presentation, status: "canceled" };
+        addStaffTask(state, presentation.reason, now);
+        const noticeId = `${presentation.id}:closedNotice`;
+        state.presentations[noticeId] = { kind: "notice", id: noticeId, approvedText: CLOSED_TRANSFER_NOTICE, status: "pending" };
+        state.pendingPresentationId = noticeId;
+        state.callerMessages.push(CLOSED_TRANSFER_NOTICE);
+        break;
+      }
       state.presentations[presentation.id] = { ...presentation, status: "possiblySent" };
       break;
     }

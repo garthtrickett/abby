@@ -122,6 +122,19 @@ for (const kind of kinds) {
     const mutable = booking.inputSchema as { properties?: Record<string, unknown> };
     mutable.properties!.kind = { const: "tampered" };
     assert.equal(matchesSchema(app.agent.listPermitted().find(item => item.id === "booking.propose.v2")!.inputSchema, command), true);
+    const staffedPolicy: PolicyStore = {
+      read: async () => ({ ok: true, value: { ...referenceDefaultPolicy(app.scope),
+        capabilities: { ...referenceDefaultPolicy(app.scope).capabilities, transfer: "execute" },
+        transferDestinationRef: "staff-destination",
+        staffedIntervals: [{ startsAt: now, endsAt: expiresAt }] } }),
+      changeBookingEnabled: (...args) => app.policy.changeBookingEnabled(...args),
+      listBookingChanges: (...args) => app.policy.listBookingChanges(...args),
+    };
+    const staffedGateway = new CommandGateway({ actorRef: "staffed-contract", role: "agent", scope: app.scope }, staffedPolicy, app.reception);
+    const staffedReply = value(await staffedGateway.submit({ kind: "settings.read.v1" }));
+    const settingsDescriptor = staffedGateway.listPermitted().find(item => item.id === "settings.read.v1");
+    assert.ok(settingsDescriptor);
+    assert.equal(matchesSchema(settingsDescriptor.resultSchema, { ok: true, value: staffedReply }), true);
     const brokenPolicy: PolicyStore = {
       read: async () => ({ ok: true, value: { ...referenceDefaultPolicy(app.scope), capabilities: { book: "execute" } } as unknown as CallState["policy"] }),
       changeBookingEnabled: (...args) => app.policy.changeBookingEnabled(...args),

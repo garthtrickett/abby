@@ -104,7 +104,7 @@ class PresentationStartHookLedger implements LedgerStore {
   }
 }
 
-async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: boolean, transferMode: "execute" | "requestOnly" | "unavailable" = "requestOnly", transferDestinationRef?: string, clock?: { now: () => number; onPresentationStarted?: () => void; onSessionRenewed?: () => void }, options: { bookingMode?: "execute" | "requestOnly"; knowledge?: (scope: LocationScope) => readonly ApprovedKnowledge[]; availability?: (scope: LocationScope) => AvailabilityHost } = {}) {
+async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: boolean, transferMode: "execute" | "requestOnly" | "unavailable" = "requestOnly", transferDestinationRef?: string, clock?: { now: () => number; onPresentationStarted?: () => void; onSessionRenewed?: () => void }, options: { bookingMode?: "execute" | "requestOnly"; knowledge?: (scope: LocationScope) => readonly ApprovedKnowledge[]; availability?: (scope: LocationScope) => AvailabilityHost; staffedIntervals?: CallPolicy["staffedIntervals"] } = {}) {
   const scope: LocationScope = { tenantId: `voice-tenant-${id}`, clinicId: `voice-clinic-${id}`, locationId: `voice-location-${id}` };
   const patient = { scope, patientRef: `patient-${id}`, verificationRef: `proof-${id}`, expiresAt: at(86_400) };
   const offer = { scope, offerRef: `offer-${id}`, serviceRef: "physio", startsAt: at(90_000), expiresAt: at(86_400) };
@@ -131,7 +131,8 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
     const snapshot: CallPolicy = {
       ...result.value,
       capabilities: { ...result.value.capabilities, transfer: transferMode },
-      ...(transferMode === "execute" ? { transferDestinationRef: transferDestinationRef ?? `destination-${id}` } : {}),
+      ...(transferMode === "execute" ? { transferDestinationRef: transferDestinationRef ?? `destination-${id}`,
+        staffedIntervals: options.staffedIntervals ?? [{ startsAt: at(0), endsAt: at(3_600) }] } : {}),
     };
     return ok(snapshot);
   }, () => now);
@@ -587,6 +588,34 @@ for (const kind of kinds) {
     assert.equal(app.transfer.requested.length, 1);
     assert.equal(app.playback.queued.length, 1);
     assert.equal(app.host.bookings(app.scope).length, 0);
+  });
+
+  test(`${kind}: closed or holiday-excluded staffing never offers a live transfer`, async () => {
+    const app = await fixture(kind, `${kind}-closed-staffing`, false, "execute", undefined, undefined,
+      { staffedIntervals: [] });
+    const state = await transferTurn(app);
+    assert.equal(state.presentations[state.pendingPresentationId!]?.kind, "notice");
+    assert.equal(Object.values(state.presentations).filter(presentation => presentation.kind === "transfer").length, 0);
+    assert.equal(Object.values(state.staffItems)[0]?.reason, "callerRequested");
+    assert.match(state.callerMessages.at(-1)!, /aren't available for a live transfer/);
+    assert.equal(value(await app.session.dispatchPending(at(4))).kind, "queued");
+    assert.equal(app.transfer.requested.length, 0);
+    assert.equal(value(await app.session.drainEffects(at(5))).staffItems[Object.keys(state.staffItems)[0]!]?.status, "open");
+  });
+
+  test(`${kind}: a staffed window closing before transfer send cancels and requests follow-up`, async () => {
+    const app = await fixture(kind, `${kind}-closing-staffing`, false, "execute", undefined, undefined,
+      { staffedIntervals: [{ startsAt: at(0), endsAt: at(4) }] });
+    const planned = await transferTurn(app);
+    const transferId = planned.pendingPresentationId!;
+    assert.equal(planned.presentations[transferId]?.kind, "transfer");
+    assert.equal(value(await app.session.dispatchPending(at(4))).kind, "transferCanceled");
+    const closed = value(await new CallRuntime(app.ledger, app.scope).read(app.callId));
+    assert.equal(closed.presentations[transferId]?.status, "canceled");
+    assert.equal(closed.presentations[closed.pendingPresentationId!]?.kind, "notice");
+    assert.equal(Object.values(closed.staffItems)[0]?.reason, "callerRequested");
+    assert.equal(app.transfer.requested.length, 0);
+    assert.equal(value(await app.session.dispatchPending(at(5))).kind, "queued");
   });
 
   test(`${kind}: connected and unproven transfers have distinct terminal evidence`, async () => {

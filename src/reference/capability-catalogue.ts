@@ -21,6 +21,7 @@ const capabilityMode = choice("execute", "requestOnly", "unavailable");
 const policy = optional({ scope, policyVersion: nonEmpty, bookingEnabled: bool,
   capabilities: object({ book: capabilityMode, cancel: capabilityMode, reschedule: capabilityMode,
     intake: capabilityMode, transfer: capabilityMode }), transferDestinationRef: str,
+  staffedIntervals: { type: "array", items: object({ startsAt: str, endsAt: str }), maxItems: 512 },
   staffDestination: destination, operatorQueue: destination },
 ["scope", "policyVersion", "bookingEnabled", "capabilities", "staffDestination", "operatorQueue"]);
 const auditEntry = { oneOf: [

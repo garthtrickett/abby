@@ -52,4 +52,6 @@ The PostgreSQL probe also creates a separate disposable database at migration 00
 
 [Tenant ownership constraints](../phase-2/TENANT_SCOPE_CONSTRAINTS.md) now bind call events, effect intents, and staff items to the call's tenant in PostgreSQL and reject mismatched call or setting JSON scope at write time.
 
+[Staffed transfer windows](../phase-2/STAFFED_TRANSFER_WINDOWS.md) gate live transfer at the caller turn and the durable send boundary using host-expanded UTC intervals. Closed windows produce staff follow-up and a truthful notice without calling the transfer port.
+
 The default demo composition does not call Cliniko or Splose; it uses a synthetic host. A test composition explicitly wires the read-only Cliniko adapter. PostgreSQL persistence is a Phase 0 probe, and a synthetic `played` result is only test evidence for downstream confirmation logic. No production caller, agent, or API can use this harness to assert playback. Production outbox leasing, retention, media, and real voice E2E remain open work.

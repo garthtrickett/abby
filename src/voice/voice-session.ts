@@ -269,6 +269,7 @@ export class VoiceSession {
     if (!this.canSend()) return this.closeAfterLeaseLoss(now);
     const marked = await this.runtime.markTransferPossiblySent(this.callId, presentation.id, this.sessionId, now);
     if (!marked.ok) return marked;
+    if (marked.value.presentations[presentation.id]?.status === "canceled") return ok({ kind: "transferCanceled" });
     if (!this.attached || this.speechOpen || generation !== this.assembler.currentGeneration()) {
       const unresolved = await this.runtime.resolvePresentation(this.callId, presentation.id, "unproven", this.sessionId, now);
       if (unresolved.ok) this.attached = false;
