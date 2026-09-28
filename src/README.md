@@ -2,7 +2,7 @@
 
 `core/transition.ts` is a pure state transition. `core/ledger.ts` provides an asynchronous, scoped, versioned store interface and an in-memory adapter. `storage/postgres-ledger.ts` implements the same interface with a disposable Kysely/PostgreSQL schema and Kanel-generated row types. `core/runtime.ts` accepts final caller turns, presentation results, and typed effect results. `core/effect-worker.ts` runs host effects only after persisting the possibly-sent state. The worker treats a write transport error as uncertain and creates a reconciliation intent; a task transport error routes its item to operator review. `reference/text-reception.ts` and `reference/command-gateway.ts` exercise the typed host and agent seam through a synthetic reference clinic.
 
-The [scoped staff queue](../phase-2/STAFF_QUEUE.md) exposes redacted, overdue follow-up through the same agent command and standalone dashboard. Task acknowledgment and resolution still require a host-confirmed lifecycle contract.
+The [scoped staff queue](../phase-2/STAFF_QUEUE.md) exposes redacted, overdue follow-up through the same agent command and standalone dashboard. [Exact-key reconciliation](../phase-2/STAFF_TASK_RECONCILIATION.md) can prove an uncertain task opening in the reference host without repeating the create. Task acknowledgment and resolution still require a host-confirmed lifecycle contract.
 
 `voice/admission.ts` and `voice/call-liveness-monitor.ts` add replay-safe admission, activation, a session lease, and independent expiry over both ledger adapters. Their [contract and limits](../phase-1/CALL_ADMISSION.md) distinguish this no-number foundation from live transport evidence.
 

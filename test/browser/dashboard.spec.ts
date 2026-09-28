@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
+import { CallRuntime } from "../../src/core/runtime.ts";
+import { EffectWorker } from "../../src/core/effect-worker.ts";
 import type { LocationScope } from "../../src/core/model.ts";
 import type { AvailabilityHost } from "../../src/core/host.ts";
 import { CallReview } from "../../src/reference/call-review.ts";
@@ -16,9 +18,10 @@ async function localDashboard(role: "clinicAdmin" | "staff", availability?: Avai
   const scope: LocationScope = { tenantId: "browser-tenant", clinicId: "browser-clinic", locationId: "browser-location" };
   const ledger = new MemoryLedger();
   const policy = new MemoryPolicyStore();
-  const reception = new TextReception(ledger, policy, new ReferenceClinicHost([], [],
+  const host = new ReferenceClinicHost([], [],
     [{ scope, sourceRef: "hours", version: "hours-v1", ownerRef: "clinic-owner", approvedText: "We open at 9 am.", approved: true,
-      effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]), availability);
+      effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]);
+  const reception = new TextReception(ledger, policy, host, availability);
   const started = await reception.startCall("before-setting", scope);
   assert.equal(started.ok, true);
   const gateway = new CommandGateway({ actorRef: `browser-${role}`, role, scope }, policy, reception, new CallReview(ledger), new StaffQueue(ledger, () => "2026-09-30T12:00:00.000Z"));
@@ -28,7 +31,7 @@ async function localDashboard(role: "clinicAdmin" | "staff", availability?: Avai
   assert.ok(address && typeof address !== "string");
   return {
     url: `http://127.0.0.1:${address.port}`,
-    scope, ledger, policy, reception,
+    scope, ledger, policy, reception, host,
     close: () => new Promise<void>((done, reject) => {
       server.close(error => error ? reject(error) : done());
       server.closeAllConnections();
@@ -166,6 +169,34 @@ test("staff follow-up queue shows overdue fallback without patient or spoken det
     const foreign = await app.ledger.listStaffItems({ ...app.scope, tenantId: "another-tenant" });
     assert.ok(foreign.ok);
     assert.deepEqual(foreign.value, []);
+  } finally {
+    await app.close();
+  }
+});
+
+test("lost host task receipt remains in review until exact reconciliation reaches the queue", async ({ page }) => {
+  const app = await localDashboard("staff");
+  try {
+    const routed = await app.reception.answer(app.scope,
+      { callId: "before-setting", turnId: "task-reconcile", text: "Question", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
+      ["missing"], "Unapproved answer", "2026-09-28T10:00:00.000Z");
+    assert.equal(routed.ok, true);
+    const original = app.host.openTask.bind(app.host);
+    app.host.openTask = async item => { await original(item); throw new Error("response lost"); };
+    assert.equal((await app.reception.drain(app.scope, "before-setting", "2026-09-28T10:00:00.000Z")).ok, true);
+    await page.goto(app.url);
+    const queue = page.getByLabel("Staff follow-up queue");
+    await expect(queue).toContainText("needsReview");
+    const stored = await app.ledger.read("before-setting", app.scope);
+    assert.ok(stored.ok);
+    const taskKey = Object.keys(stored.value.staffItems)[0];
+    assert.ok(taskKey);
+    const worker = new EffectWorker(new CallRuntime(app.ledger, app.scope), app.host);
+    await worker.process("before-setting", `${taskKey}:open:reconcile`, "2026-09-28T10:00:00.000Z");
+    await page.getByRole("button", { name: "Refresh follow-up" }).click();
+    await expect(queue).toContainText("systemFailure · open · overdue");
+    await expect(queue).not.toContainText("needsReview");
+    assert.equal(app.host.tasks(app.scope).length, 1);
   } finally {
     await app.close();
   }

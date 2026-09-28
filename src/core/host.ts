@@ -1,4 +1,4 @@
-import type { ActionRequest, ApprovedKnowledge, AvailabilityRead, AvailabilityReadFailure, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffItem, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
+import type { ActionRequest, ApprovedKnowledge, AvailabilityRead, AvailabilityReadFailure, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
 
 export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable"; target: "patient" | "offer" }>;
 export type PolicyFailure = Readonly<{ kind: "versionConflict" | "invalidValue" | "storageFailure" }>;
@@ -20,6 +20,7 @@ export interface HostEffects {
   write(mutation: HostMutation, now: string): Promise<HostWriteReceipt>;
   reconcile(mutation: HostMutation): Promise<ReconcileObservation>;
   openTask(item: StaffItem): Promise<StaffTaskReceipt>;
+  reconcileTask(item: StaffItem): Promise<StaffTaskObservation>;
 }
 
 export interface PolicyStore {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { MemoryLedger } from "../../src/core/ledger.ts";
-import type { ActionRequest, CallPolicy, CallState, FinalCallerTurn, HostMutation, HostWriteReceipt, ReconcileObservation, Result, StaffItem, StaffTaskReceipt, TransitionFailure, TurnInterpretation } from "../../src/core/model.ts";
+import type { ActionRequest, CallPolicy, CallState, FinalCallerTurn, HostMutation, HostWriteReceipt, ReconcileObservation, Result, StaffItem, StaffTaskObservation, StaffTaskReceipt, TransitionFailure, TurnInterpretation } from "../../src/core/model.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
 import { EffectWorker } from "../../src/core/effect-worker.ts";
 import type { HostEffects } from "../../src/core/host.ts";
@@ -29,6 +29,7 @@ export class FakeHost implements HostEffects {
   writeResult: ((mutation: HostMutation) => HostWriteReceipt) = mutation => ({ kind: "committed", actionKey: mutation.actionKey, hostRef: "host-booking-1" });
   reconcileResult: ((mutation: HostMutation) => ReconcileObservation) = mutation => ({ kind: "stillUnknown", actionKey: mutation.actionKey });
   taskResult: ((item: StaffItem) => StaffTaskReceipt) = item => ({ kind: "opened", taskKey: item.key, hostTaskRef: "host-task-1", destination: item.destination });
+  taskObservation: ((item: StaffItem) => StaffTaskObservation) = item => ({ kind: "stillUnknown", taskKey: item.key });
 
   async write(mutation: HostMutation, _now: string): Promise<HostWriteReceipt> {
     this.writes.push(mutation);
@@ -41,6 +42,9 @@ export class FakeHost implements HostEffects {
   async openTask(item: StaffItem): Promise<StaffTaskReceipt> {
     this.tasks.push(item);
     return this.taskResult(item);
+  }
+  async reconcileTask(item: StaffItem): Promise<StaffTaskObservation> {
+    return this.taskObservation(item);
   }
 }
 

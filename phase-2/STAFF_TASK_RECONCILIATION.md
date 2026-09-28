@@ -1,0 +1,7 @@
+# Exact-key staff task reconciliation, version 0.1
+
+The staff-task opener durably marks an effect `possiblySent` before calling the host. An uncertain receipt or a recovered expired `possiblySent` effect now creates a separate `staffReconcile` outbox intent with the original task key, scope, destination, and item snapshot. The original task is visibly routed to operator review while the read is pending. The worker calls `HostEffects.reconcileTask` and never repeats `openTask` for that intent.
+
+The host may return `exactOpen` only when it can prove that the same keyed task exists at the same destination, with a stable host task reference. That result restores the item to `open` and closes both effects. `definitiveNonOpen` closes the effects but leaves the item in operator review. `stillUnknown` leaves the original effect uncertain and the item in operator review. An invalid key, missing reference, or different destination cannot make the item open. A read transport failure keeps the reconciliation intent pending for a later worker attempt.
+
+The reference host proves exact outcomes from its own keyed task map. Synthetic tests cover lost response after commit, process loss after possible send, unknown and absent observations, and mismatched destinations in both memory and PostgreSQL ledgers. A real host adapter must establish authoritative key lookup before it returns `exactOpen` or `definitiveNonOpen`; otherwise it returns `stillUnknown`. This does not implement staff acknowledgment, reassignment, resolution, or operator alerting.

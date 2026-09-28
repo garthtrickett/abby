@@ -1,4 +1,4 @@
-import type { Admission, AdmissionResult, CallPolicy, CallState, FinalCallerTurn, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffTaskReceipt, TransitionAction, TransitionFailure, TurnInterpretation } from "./model.ts";
+import type { Admission, AdmissionResult, CallPolicy, CallState, FinalCallerTurn, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffTaskObservation, StaffTaskReceipt, TransitionAction, TransitionFailure, TurnInterpretation } from "./model.ts";
 import type { LedgerStore } from "./ledger.ts";
 
 export class CallRuntime {
@@ -108,5 +108,9 @@ export class CallRuntime {
 
   acceptStaffResult(callId: string, effectId: string, receipt: StaffTaskReceipt): Promise<Result<CallState, TransitionFailure>> {
     return this.update(callId, { kind: "staffTaskResolved", effectId, receipt });
+  }
+
+  acceptStaffReconciliation(callId: string, effectId: string, observation: StaffTaskObservation): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "staffTaskReconciled", effectId, observation });
   }
 }

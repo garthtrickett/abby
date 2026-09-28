@@ -83,6 +83,11 @@ function addStaffTask(state: CallState, reason: StaffReason, now: string, linked
   state.effects[`${key}:open`] = { kind: "staffTask", id: `${key}:open`, taskKey: key, status: "pending" };
 }
 
+function queueStaffReconciliation(state: CallState, originalEffectId: string, item: import("./model.ts").StaffItem): void {
+  const id = `${originalEffectId}:reconcile`;
+  state.effects[id] = { kind: "staffReconcile", id, taskKey: item.key, originalEffectId, originalItem: structuredClone(item), status: "pending" };
+}
+
 function supersedeUnsent(state: CallState): void {
   if (state.pendingPresentationId) {
     const pending = state.presentations[state.pendingPresentationId];
@@ -474,6 +479,7 @@ export function transition(current: CallState, action: TransitionAction): Result
       if (effect.status !== "possiblySent" || !effect.possiblySentAt || Date.parse(now) < Date.parse(effect.possiblySentAt) + POSSIBLE_SEND_RECOVERY_DELAY) return err({ kind: "invalidTransition" });
       const item = state.staffItems[effect.taskKey];
       if (!item) return err({ kind: "invalidTransition" });
+      queueStaffReconciliation(state, effect.id, item);
       state.staffItems[item.key] = { ...item, status: "needsReview", destination: state.policy.operatorQueue };
       state.effects[effect.id] = { ...effect, status: "uncertain" };
       break;
@@ -488,9 +494,27 @@ export function transition(current: CallState, action: TransitionAction): Result
         state.staffItems[item.key] = { ...item, status: "open", hostTaskRef: action.receipt.hostTaskRef };
         state.effects[effect.id] = { ...effect, status: "completed" };
       } else {
+        if (action.receipt.kind === "uncertain") queueStaffReconciliation(state, effect.id, item);
         state.staffItems[item.key] = { ...item, status: "needsReview", destination: state.policy.operatorQueue };
         state.effects[effect.id] = { ...effect, status: action.receipt.kind === "uncertain" ? "uncertain" : "completed" };
       }
+      break;
+    }
+    case "staffTaskReconciled": {
+      const effect = state.effects[action.effectId];
+      if (!effect || effect.kind !== "staffReconcile" || effect.status !== "pending") return err({ kind: "invalidTransition" });
+      if (!["exactOpen", "definitiveNonOpen", "stillUnknown"].includes(action.observation.kind)) return err({ kind: "invalidTransition" });
+      if (effect.taskKey !== action.observation.taskKey) return err({ kind: "keyMismatch" });
+      const original = state.effects[effect.originalEffectId];
+      const item = state.staffItems[effect.taskKey];
+      if (!original || original.kind !== "staffTask" || original.status !== "uncertain" || !item || item.status !== "needsReview") return err({ kind: "invalidTransition" });
+      if (action.observation.kind === "exactOpen") {
+        if (typeof action.observation.hostTaskRef !== "string" || !action.observation.hostTaskRef.trim() ||
+            JSON.stringify(action.observation.destination) !== JSON.stringify(effect.originalItem.destination)) return err({ kind: "invalidTransition" });
+        state.staffItems[item.key] = { ...item, status: "open", destination: effect.originalItem.destination, hostTaskRef: action.observation.hostTaskRef };
+      }
+      if (action.observation.kind !== "stillUnknown") state.effects[original.id] = { ...original, status: "completed" };
+      state.effects[effect.id] = { ...effect, status: "completed" };
       break;
     }
     case "reconciliationDeadline": {

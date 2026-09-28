@@ -108,7 +108,7 @@ test("restart after possible send yields one persisted reconciliation intent", a
   assert.equal(Date.parse(deadline) < Date.parse(recovered.actions[action.key]?.reconciliationDeadline ?? ""), true);
 });
 
-test("restart after possible staff-task send keeps the key in operator review", async () => {
+test("restart after possible staff-task send keeps operator review and persists exact-key reconciliation", async () => {
   const app = await setup("pg-staff-recovery");
   await app.turn("handoff", "Ask staff to call me", { kind: "handoff", reason: "callerRequested" });
   const item = Object.values((await app.state()).staffItems)[0];
@@ -121,6 +121,11 @@ test("restart after possible staff-task send keeps the key in operator review", 
   const recovered = success(await restarted.read(app.callId));
   assert.equal(recovered.staffItems[item.key]?.status, "needsReview");
   assert.deepEqual(recovered.staffItems[item.key]?.destination, app.policy.operatorQueue);
+  assert.equal(recovered.effects[`${effectId}:reconcile`]?.kind, "staffReconcile");
+  const reconcileOutbox = await db.selectFrom("effect_outbox").select(["status", "payload"])
+    .where("effect_id", "=", `${effectId}:reconcile` as EffectOutboxEffectId).executeTakeFirstOrThrow();
+  assert.equal(reconcileOutbox.status, "pending");
+  assert.equal((reconcileOutbox.payload as { taskKey: string }).taskKey, item.key);
   const outbox = await db.selectFrom("effect_outbox").select("status")
     .where("effect_id", "=", effectId as EffectOutboxEffectId).executeTakeFirstOrThrow();
   assert.equal(outbox.status, "uncertain");
