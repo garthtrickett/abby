@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
+import { sql } from "kysely";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import type { LedgerStore } from "../../src/core/ledger.ts";
 import { err, ok } from "../../src/core/model.ts";
@@ -232,7 +233,9 @@ for (const kind of kinds) {
     assert.equal(value(await app.session.drainEffects(at(5))).actions[action.key]?.status, "awaitingConfirmation");
     failure(await app.session.acceptPlaybackResult("wrong-playback", "played", at(5)), "playbackUnknown");
     value(await app.session.acceptPlaybackResult(queued.playbackId!, "played", at(5)));
-    assert.equal(value(await new CallRuntime(app.ledger, app.scope).read(app.callId)).presentations[action.presentationId]?.status, "played");
+    const settledDetails = value(await new CallRuntime(app.ledger, app.scope).read(app.callId)).presentations[action.presentationId];
+    assert.equal(settledDetails?.status, "played");
+    assert.equal(settledDetails?.kind === "speech" ? settledDetails.approvedText : undefined, "");
 
     const nextGeneration = value(await app.session.speechStarted(at(6)));
     value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId, generation: nextGeneration, utteranceId: "affirm", text: "Yes book it", quality: "clear" }));
@@ -242,6 +245,10 @@ for (const kind of kinds) {
     const committed = value(await app.session.drainEffects(at(8)));
     assert.equal(committed.actions[action.key]?.status, "committed");
     assert.equal(app.host.bookings(app.scope).length, 1);
+    assert.equal(committed.callerMessages.at(-1), "Your booking is confirmed.");
+    const ended = value(await app.session.end(at(9), "callerDisconnected"));
+    assert.deepEqual(ended.callerMessages, []);
+    assert.equal(ended.actions[action.key]?.status, "committed");
   });
 
   test(`${kind}: disabled booking setting avoids host reads and writes`, async () => {
@@ -285,7 +292,9 @@ for (const kind of kinds) {
     value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation,
       utteranceId: "transfer-after-booking", text: "Transfer to staff", quality: "clear" }));
     const second = value(await app.session.finishTurn(at(5)));
-    assert.equal(second.presentations[firstId!]?.status, "superseded");
+    const supersededNotice = second.presentations[firstId!];
+    assert.equal(supersededNotice?.status, "superseded");
+    assert.equal(supersededNotice?.kind === "notice" ? supersededNotice.approvedText : undefined, "");
     assert.equal(second.presentations[second.pendingPresentationId!]?.kind, "notice");
     const delivery = value(await app.session.dispatchPending(at(6)));
     assert.equal(delivery.kind, "queued");
@@ -303,9 +312,19 @@ for (const kind of kinds) {
     assert.equal(delivery.kind, "queued");
     assert.deepEqual(app.playback.queuedTexts, ["We open at 9 am."]);
     const played = value(await app.session.acceptPlaybackResult(delivery.playbackId!, "played", at(5)));
-    assert.equal(played.presentations[answered.pendingPresentationId!]?.status, "played");
+    const settledNotice = played.presentations[answered.pendingPresentationId!];
+    assert.equal(settledNotice?.status, "played");
+    assert.equal(settledNotice?.kind === "notice" ? settledNotice.approvedText : undefined, "");
     assert.equal(Object.keys(played.actions).length, 0);
     assert.equal(app.host.bookings(app.scope).length, 0);
+    const ended = value(await app.session.end(at(6), "callerDisconnected"));
+    assert.deepEqual(ended.callerMessages, []);
+    assert.equal(JSON.stringify(ended).includes("We open at 9 am."), false);
+    if (kind === "postgres") {
+      assert.ok(db);
+      const stored = await sql<{ state_text: string }>`select state::text as state_text from calls where call_id = ${app.callId}`.execute(db);
+      assert.equal(stored.rows[0]?.state_text.includes("We open at 9 am."), false);
+    }
   });
 
   for (const scenario of [
@@ -481,7 +500,10 @@ for (const kind of kinds) {
     const ended = value(await app.session.end(at(5), "callerDisconnected"));
     assert.equal(ended.lifecycle, "ended");
     assert.deepEqual(ended.terminal, { reason: "callerDisconnected", at: at(5) });
-    assert.equal(ended.presentations[action.presentationId]?.status, "unproven");
+    const unprovenDetails = ended.presentations[action.presentationId];
+    assert.equal(unprovenDetails?.status, "unproven");
+    assert.equal(unprovenDetails?.kind === "speech" ? unprovenDetails.approvedText : undefined, "");
+    assert.deepEqual(ended.callerMessages, []);
     failure(await app.session.acceptPlaybackResult(queued.playbackId!, "played", at(6)), "playbackUnknown");
     assert.equal(app.host.bookings(app.scope).length, 0);
   });
