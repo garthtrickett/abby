@@ -1,0 +1,335 @@
+# Abby: acquisition-ready AI receptionist
+
+**Status:** Draft for product and engineering review
+
+**Date:** 2026-09-28
+
+**Decision owner:** Abby product leadership
+
+**Target:** A greenfield receptionist that works standalone and can run inside a Cliniko or Splose monolith
+
+**Technical design:** [TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md)
+
+## 1. Summary
+
+Abby answers clinic calls, handles approved administrative questions, and completes or safely hands off appointment tasks. It must be valuable as a standalone product while preserving the parts an acquirer would want to keep: real-time turn control, conversation behaviour, action planning, safety rules, call records, and the evaluation suite. It is agent native: conversation agents and authorized host agents use the same typed capabilities and observable action outcomes as staff-facing workflows.
+
+The acquisition scenario is **in-process integration into the buyer's application**. The buyer's patient, practitioner, service, diary, identity, notification, billing, and staff systems remain authoritative. Abby's core modules must run without an Abby-hosted application server, Abby account system, or mirrored patient database. Standalone Cliniko and Splose integrations supply the same host interface through their public APIs.
+
+Acquisition is a design objective, not a prediction. The buyer's internal language and architecture are unknown. This PRD therefore requires transferable behaviour, schemas, and conformance tests in addition to extractable source code; it does not promise unchanged source-code reuse in an unknown stack.
+
+## 2. Context and assumptions
+
+- The current receptionist product supplies useful workflow evidence, but Abby's implementation starts fresh. Existing behaviour is translated into explicit requirements and de-identified test scenarios before code is carried over. The existing product has a pre-call, during-call, and post-call voice pipeline with PMS adapters.
+- Cliniko's public API uses user-owned keys and publishes appointment and availability operations; its availability API respects online-booking settings.[^cliniko-api][^cliniko-availability] Splose's public API access is requested by an account owner for a paid workspace.[^splose-api] These facts shape the standalone adapters, not the core domain model.
+- “Monolith” means one host codebase and release, with in-process calls to host capabilities. The host may run web and worker processes from that codebase. Telephony, speech, and model providers may remain external and replaceable; no separately operated Abby application is required.
+- Version 1 targets inbound receptionist tasks. Outbound campaigns, deposits, web chat, and clinical documentation are later product decisions.
+- **Naming invariant:** Abby is the only product name in this PRD and all new implementation code. Product copy, documentation, repository/package names, identifiers, API paths, environment variables, database-owned objects, telemetry, fixtures, and tests use Abby naming. Legacy naming is not carried into the new build.
+
+## 3. Goals and non-goals
+
+### Goals
+
+1. Give callers a truthful, useful answer or a completed appointment action, with a clear staff handoff when automation cannot safely finish.
+2. Make every attempted action traceable from caller request to an action receipt, canceled state, or visible unresolved state.
+3. Keep scheduling policy and patient records in the PMS or host. Abby consumes bookable offers; it does not maintain a second calendar.
+4. Make the core modules embeddable by replacing host, voice, model, and storage adapters without editing conversation or action rules.
+5. Let a buyer expose settings and call outcomes through its own user interface and authorization system.
+6. Keep clinic-specific configuration and historical call data exportable under a documented schema, without exporting provider secrets by default.
+7. Make every supported receptionist capability discoverable and safely callable by authorized agents through the same domain commands used by the user interface.
+8. Make new behavior and settings verifiable end to end before release, including both states of each toggle.
+9. Own the real-time voice controller that turns provider audio and speech events into caller turns and delivers Abby-approved responses, so a buyer can retain it while replacing providers.
+
+### Non-goals for version 1
+
+- Diagnosis, treatment advice, clinical note generation, or autonomous clinical triage.
+- An Abby-owned patient master, appointment master, billing account, or staff directory in embedded mode.
+- Feature parity with every PMS operation. Unsupported actions remain explicit and lead to a safe handoff.
+- A generic plugin marketplace or speculative adapters for PMS products beyond Cliniko and Splose.
+- A separate Abby network service required by an acquiring monolith.
+- Building a telephone network, speech recognition model, speech synthesis model, or general-purpose voice-agent platform. Version 1 uses replaceable providers for those functions and implements only the turn, interruption, playback, and transfer control Abby needs.
+
+## 4. Users and jobs
+
+| User | Job to be done | Product outcome |
+| --- | --- | --- |
+| Caller | Ask a question, book, cancel, reschedule, or reach staff | Receives an accurate answer or a truthful action status during the call |
+| Clinic staff | Review what happened and act on exceptions | Sees the evidence, receipts, and next action without reconstructing the conversation |
+| Clinic administrator | Set voice, approved knowledge, booking preferences within host policy, and escalation | Controls what the receptionist may say and do for each clinic or location |
+| Host product team | Add the receptionist to its existing product | Reuses the core and evaluation suite while supplying native data, UI, identity, jobs, and notifications |
+
+## 5. Canonical terms
+
+| Term | Meaning |
+| --- | --- |
+| **Tenant** | The host's customer account. Every request and stored record belongs to exactly one tenant. |
+| **Clinic** | The business identity callers contact. A clinic may have several locations. |
+| **Location** | A physical or virtual place with its own timezone, contact information, and booking scope. |
+| **Caller** | The person on the phone. A caller is not automatically an identified patient. |
+| **Patient reference** | An opaque host identifier for a verified patient; Abby never interprets its internal structure. |
+| **Offer** | A host-issued, time-bound bookable combination of location, practitioner, service, and start time. The host decides eligibility. |
+| **Action plan** | Zero or more typed requested actions, each bound to evidence, target references, and a caller confirmation. |
+| **Action receipt** | The host's authoritative report for one dispatched write: committed, rejected, unsupported, or uncertain. Only a committed receipt proves completion. |
+| **Needs review** | A visible state requiring staff attention or reconciliation. It is never presented to a caller as a completed action. |
+| **Typed failure** | A named, module-owned expected failure with enough context for a caller, staff member, or job to choose a safe next step. |
+| **Capability** | A versioned, schema-defined domain command or read operation with declared scope, preconditions, and possible outcomes. |
+| **Voice session** | One call's transient audio, turn detection, speech playback, interruption, and transfer control; it does not decide appointment policy or own the durable call aggregate. |
+
+## 6. Version 1 product requirements
+
+| ID | Requirement | Acceptance criteria |
+| --- | --- | --- |
+| **FR-01** | Resolve tenant, clinic, and candidate locations from the dialled number or host call context, then bind a location for location-specific work. | Unknown or ambiguous clinic fails safely; a shared number can ask the caller to choose a location before hours, offers, or appointment actions are presented. One tenant's settings or data cannot appear in another tenant's call. |
+| **FR-02** | Greet and route the caller among new booking, existing appointment, approved questions, and staff handoff. | Anonymous caller, no patient match, multiple candidates, and lookup unavailable produce distinct routes. |
+| **FR-03** | Resolve patient identity without treating a phone match as proof of identity. | Shared-number scenarios require confirmation before appointment details are disclosed or changed. The caller can choose a different patient. |
+| **FR-04** | Answer administrative questions from clinic-approved knowledge and host facts. | Answers include an auditable source reference. Missing or conflicting evidence triggers a clarification or handoff; the assistant does not invent a policy or clinical answer. |
+| **FR-05** | Search for offers using caller preferences and host booking policy. | Only host-issued offers are presented. Clinic timezone and daylight-saving changes are covered. An expired or changed offer is revalidated before commit. |
+| **FR-06** | Book, cancel, and reschedule through one typed action flow when the host supports the operation. | Each dispatched appointment action binds an authorized patient reference, exact appointment or offer, a confirmation after completed playback of those details, idempotency key, and action receipt. Rescheduling uses a host-native or atomic operation; Abby never cancels the original appointment before knowing the replacement committed. An unsupported or unsafe operation follows FR-09. |
+| **FR-07** | Make confirmation language reflect the action result. | “Confirmed” is spoken only after a committed receipt. A timeout or uncertain write is reported as pending and reconciled or assigned to staff. |
+| **FR-08** | Handle multiple actions in one call. | Every action has its own status. Partial success is described accurately; replay cannot duplicate a successful action. |
+| **FR-09** | Transfer to staff or create a staff task when asked or required by policy, uncertainty, system failure, or a potentially urgent clinical request. | The handoff includes verified context and a concise reason; no unverified patient data is disclosed. A failed transfer falls back to a durable staff task; if that also fails, the call is visibly unresolved and the caller is not told staff received it. For urgent requests, the assistant uses only clinic-approved safety wording and does not perform clinical triage. |
+| **FR-10** | Provide clinic settings and call review through typed commands and read models. | Standalone and reference embedded user interfaces use the same commands. View-only staff cannot mutate settings. |
+| **FR-11** | Record every accepted call and action attempt durably. | The call record shows route, evidence provenance, action plan, receipts, presentation delivery outcomes, notifications, and final or needs-review status. Duplicate webhooks for the same authenticated provider account and call ID produce one logical call even if the number's clinic or tenant assignment changes; they cannot attach a second voice session, replay the greeting, or invoke a second fallback. The same call ID from a different provider account remains distinct. A conflicting dialed number under the same call key is rejected, not rerouted. A committed presentation cannot disappear between the call transition and voice delivery. A call durably accepted before its voice session becomes active has an admission deadline and an independent cleanup path. |
+| **FR-12** | Honour host notification ownership. | Exactly one configured owner is responsible for each confirmation or follow-up. Abby emits one logical notification request with a stable key, tracks delivery uncertainty, and does not duplicate a PMS's existing reminder or receipt. |
+| **FR-13** | Keep the conversation usable when the caller interrupts, changes their mind, or combines tasks. | The release corpus covers corrections to names and dates, a switch from booking to cancellation, multiple patients on one phone, multiple locations, closed days, and the caller ending before a write resolves. The assistant never loops through the same failed step indefinitely. |
+| **FR-14** | Verify setup before a clinic accepts live calls. | Readiness checks cover host permissions, selected locations, approved knowledge, bookable offers, staffed and after-hours destinations, notification ownership, a provider fallback route, and a media test call that proves final-turn intake, playback completion, interruption clearing, and transfer outcomes. Failed readiness leaves the clinic disabled with a specific remedy. |
+| **FR-15** | Report receptionist outcomes to clinic staff and product operators. | Reports distinguish completed actions, caller abandonment, staff handoffs, unresolved actions, and system failures; each aggregate can be traced to call records without exposing patient details in general analytics. |
+| **FR-16** | Expose receptionist operations as agent-native capabilities. | An authorized host agent can discover permitted settings, call review, handoff, and appointment-request capabilities, inspect their input and result schemas, invoke them through the same commands as the UI, and receive typed outcomes with trace and action keys. The agent cannot bypass caller confirmation, role policy, tenant scope, or host commit rules. |
+| **FR-17** | Make configuration changes effective and testable across the full call path. | Each setting has a stable ID, default, scope, validation rule, effective-call snapshot, and documented behavior. A newly added feature or setting has an end-to-end scenario in the same change; toggles prove enabled, disabled, and default behavior before release. |
+| **FR-18** | Handle first-time callers without creating an Abby patient master. | An automated booking requires a host-issued patient reference from an approved intake capability, with duplicate checks and required caller consent. Intake writes follow the same idempotency and reconciliation rules as appointment writes. If intake commits but booking does not, Abby records both outcomes, states that the appointment is unconfirmed, and gives staff the follow-up; it does not delete the host patient blindly. If the host cannot safely issue a reference, Abby creates a staff request instead of claiming a booking. |
+| **FR-19** | Close the loop on staff follow-up. | Every created task or needs-review item has a tenant, required owner or queue, reason, due time, status, and call/action link. An approved operator review queue is configured before automation; if a host task destination fails, the item moves to that queue instead of becoming unassigned. Staff can acknowledge, resolve, or reassign it through authorized commands. Overdue or delivery-failed items alert the configured operator; Abby never marks a handoff complete merely because it requested one. |
+| **FR-20** | Route calls correctly during staffed, closed, and degraded periods. | Location hours, holidays, timezone, and permitted transfer windows come from the host policy snapshot. After hours Abby gives approved information or takes a staff request without claiming a live transfer. If the ledger cannot durably accept a call, Abby performs no automated lookup or write and uses the configured telephony fallback; an independent operational alert identifies the outage. |
+| **FR-21** | Govern administrative knowledge as a versioned clinic asset. | Each answer source has tenant/location scope, approval status, version, effective period, and owner. Expired or conflicting knowledge is not presented as fact. Text retrieved for answering cannot grant itself tool authority or override clinic policy; changes enter the same settings and E2E path as other behavior changes. |
+| **FR-22** | Run an Abby-owned real-time voice session for each live call. | The voice session, rather than a transcription provider, decides when a caller turn is final and assigns its stable ID; provisional or low-confidence speech cannot authorize a write. A durable call starts in an admission state and becomes active only after its live session attaches; independent monitoring closes a call stranded between those steps. Each call has at most one current pending presentation and one started presentation. The runtime atomically keeps, replaces, or clears the pending presentation with its call transition, so a correction cannot leave obsolete speech waiting to play. One dispatcher for that call atomically marks the current pending presentation started before media output; different calls dispatch concurrently. Delivery settles once with a typed playback, transfer, or unproven result, which is durably resolved before confirmation. A started presentation is never blindly replayed after a crash. The voice process checks its conservatively timed session lease at the final media-send boundary and before later chunks; a stalled process cannot resume output after its lease expires. Interruption stops queued audio and invalidates an unfinished confirmation prompt. Disconnection without terminal playback or transfer evidence resolves unproven, ends media work, and leaves unresolved host actions visible. Deterministic E2E covers these paths with replaceable telephony, transcription, and synthesis adapters. |
+
+### Caller-facing result contract
+
+| Outcome | What Abby may tell the caller | Required next step |
+| --- | --- | --- |
+| Host write committed | The specified action is confirmed | Record receipt; send host-approved notification |
+| Patient intake committed, appointment unconfirmed | A patient record may exist, but no appointment is confirmed | Record both action outcomes and assign booking follow-up; do not send an appointment confirmation |
+| Host write rejected | The action was not completed | Offer another valid option or staff handoff |
+| Capability unsupported or unsafe | The receptionist cannot complete this action | Create a staff request when permitted |
+| Read unavailable or timed out | Abby cannot check the requested fact now | Retry within the deadline, then hand off; make no claim about records or availability |
+| Host write uncertain or timed out | Completion is not known | Say it is pending, reconcile by the action key, and surface needs-review if unresolved |
+
+The core never retries an uncertain write blindly. A proven before-send failure is a typed no-send result that may retry within budget; it is not a host receipt. Before a worker can send a host write, it durably marks the intent as possibly sent. A crashed or expired worker with that mark reconciles by the original action key before any further dispatch; a missing response never means the write failed. An automated write capability is enabled only when the host adapter can identify duplicate submissions or establish the exact outcome from host evidence. If the underlying API cannot do either safely, the capability stays disabled and becomes a **request for follow-up**. The same request-only path applies when the host cannot commit during the call. A committed intake receipt is never treated as an appointment receipt. An unresolved action moves from temporary *uncertain* to visible *needs review* after its reconciliation deadline; the caller never hears a false confirmation.
+
+## 7. Embedding and module requirements
+
+The product is built as a modular monolith: a small set of deep modules with explicit interfaces. The standalone application composes them in one codebase and release. A buyer composes the same modules inside its codebase and release.
+
+### Abby-owned modules
+
+1. **Voice session:** transient per-call audio intake, turn completion, playback, interruption, and transfer execution over replaceable provider adapters.
+2. **Presentation delivery:** the per-call dispatcher that atomically starts the current committed speech or transfer intent through the attached voice session, records its one terminal result, and recovers lost wake-ups without replaying started media.
+3. **Call runtime:** the one canonical call aggregate, including action and staff-item statuses, accepted caller turns, approved answers, clarification, and escalation.
+4. **Reception actions:** pure evidence-backed planning, confirmation checks, and receipt interpretation for zero, one, or several actions; it returns decisions to the runtime rather than keeping a second action status.
+5. **Call ledger:** persistence and replay of the runtime's transitions, effect and presentation intents, delivery outcomes, and read models; it does not independently decide action status.
+6. **Evaluation module:** versioned scenarios and conformance tests shared by standalone and embedded builds.
+
+Staff follow-up has distinct transition rules but its Abby-owned status lives in the call aggregate, linked by stable task and action keys; it does not duplicate the appointment outcome. The voice session controls media timing, presentation delivery owns dispatch and recovery, and the call runtime owns business decisions and approved spoken text. Provider assistant configuration is not the authoritative workflow. Model output is parsed into typed proposals and checked against host evidence before an action can commit.
+
+### SAM call loop and effect boundary
+
+Use a headless **SAM (State–Action–Model) loop** for call decisions, adapting the action-driven pattern used in Gafu.[^gafu-sam] Every completed caller turn, model result, host result, timeout, and staff intervention enters as a typed action. The call-start action captures a versioned settings and policy snapshot; an administrator's later edit applies to subsequent calls unless an explicit, audited intervention changes the active call. A deterministic acceptor checks each action against the current call model and policy, then produces the next model state and a list of effect intents. A presenter derives the next approved spoken response, staff read model, and permitted agent capabilities from that state. Model, host, and notification work runs outside the acceptor and returns through one typed effect-result path. Each transition explicitly keeps, replaces, or clears the current pending presentation. Every accepted final caller turn clears or replaces older pending speech in its own transaction, even when interpretation continues asynchronously; a replacement includes the latest truthful call state and records the superseded intent without playing it. Approved speech and transfer intents enter the same durable presentation-delivery path regardless of whether a turn, model result, host result, or earlier delivery outcome produced them.
+
+The loop must be bounded: each attempt has a deadline, retry budget, and explicit terminal or needs-review state. Persist durable actions and versioned policy/prompt references so a call can be reconstructed; do not replay an external write merely to rebuild state. Duplicate events and late results are accepted once by stable IDs. A caller correction invalidates stale offers or confirmations before another write. The write dispatch mark and correction transition serialize on the same action: if correction wins, no send permit is issued; if the mark wins, the possible write remains in flight for receipt or reconciliation and the caller hears no false cancellation claim. Model and read results from an older conversation revision remain auditable but cannot create new speech or writes; prior dispatched writes still receive their real outcomes. The same loop runs with a deterministic clock and fake effects in conformance tests and with host-owned jobs in an embedded monolith. Avoid one global state machine for unrelated calls; each call has its own state and sequential action stream. External effect intents and durable events use discriminated, versioned contracts that make a write without an action key invalid at the type and ingress boundaries.
+
+### Real-time voice control
+
+Run one Abby-owned, transient voice session per connected call. It accepts authenticated media and provider transcript hypotheses, assembles them into a caller turn, decides when that turn is complete, and assigns a stable final turn ID before calling the runtime. A provider's segment-final signal is evidence for endpointing, not a final caller turn. The voice session streams only accepted presentation text through a speech-synthesis adapter, tracks when playback actually completes, and stops queued speech when the caller interrupts. Provisional transcripts may improve turn timing but never mint caller-confirmation evidence or trigger a host write. The runtime decides whether a low-confidence final turn needs clarification or staff handoff. Silence, overlapping speech, and provider disconnects have bounded clarification, handoff, or termination paths rather than an endless loop.
+
+The voice session owns timing and audio buffers; the SAM call runtime owns the meaning of a turn and every allowed action. A confirmation token requires a completed presentation of the exact action details followed by a final, affirmative caller turn bound to that presentation. Audio merely queued or partially played does not count as delivered. If the caller interrupts the details, Abby must present the corrected details and seek a fresh confirmation. Once a host write commits, an interruption cannot erase that receipt; the next spoken status remains truthful.
+
+The first version covers listen, decide, speak, interruption, and live transfer. It does not require emotion detection, filler speech, backchannel generation, or a general-purpose assistant configuration layer. Use hosted telephony, transcription, synthesis, and model services through replaceable interfaces; provider prompts and tool rules cannot bypass the SAM loop. The telephony route owns the fallback for a call Abby cannot durably accept, so it remains available when Abby's voice session or ledger is down. Measure turn-end to first speech, interruption-to-silence, playback completion, abandoned calls, and transfer outcomes in the pilot, and declare release thresholds before live traffic.
+
+### Typed failures and recovery
+
+Follow Gafu v2's small `Result<Value, Failure>` approach for expected failures: each deep module owns a discriminated failure union; callers handle every variant where they decide retry, clarification, handoff, or presentation.[^gafu-errors] Convert unknown exceptions and provider-specific failures to typed failures at impure adapter seams. Do not pass raw exceptions, vendor strings, or an undifferentiated `failed` flag into the conversation model. Stable failure kinds are versioned as part of the embedding contract; sensitive diagnostics stay in restricted logs.
+
+The first contract must distinguish at least **not found**, **ambiguous identity**, **forbidden**, **invalid input**, **unsupported capability**, **unavailable**, **rate limited**, **deadline exceeded**, **conflict or expired offer**, **definitively rejected write**, and **uncertain write**. The last two are materially different: only a committed host receipt permits confirmation, and an uncertain write requires reconciliation under the same action key. A failure table maps every kind to caller language, staff visibility, retry policy, and deadline. Adding a failure variant requires exhaustive handling and a failure-path conformance scenario.
+
+| Example failure | Safe next step | Caller claim |
+| --- | --- | --- |
+| Patient not found or identity ambiguous | Ask for another identifier or hand off | No claim about another patient's record |
+| Lookup unavailable or rate limited | Retry within the call budget, then hand off | “I can't check that right now,” never “no appointments exist” |
+| Offer expired or conflicting | Search again and seek fresh confirmation | The old time is not booked |
+| Write definitively rejected | Offer another option or staff follow-up | The action was not completed |
+| Write uncertain after deadline | Reconcile by action key and assign needs-review | Completion is pending, never confirmed |
+
+### Agent-native capability contract
+
+The receptionist and host agents operate through a versioned capability catalogue, not direct database access or free-form model tools. Each capability declares tenant and role scope, input/output schemas, preconditions, side effects, idempotency semantics, and whether caller confirmation or staff approval is required. Read operations and dry-run validation can be exposed separately from committing commands. The host decides which capabilities an agent may see and invoke; an embedded buyer may mount them inside its existing agent platform without an Abby server.
+
+The same domain commands serve the standalone dashboard, embedded screens, and authorized agents. A host agent may inspect a call outcome, propose a follow-up, or adjust an allowed setting; it cannot fabricate a committed appointment, silently enable a clinic, reveal unverified patient details, or turn a proposal into a write without required confirmation. Every invocation records actor, authority, settings version, input reference, outcome, and trace ID. Agent-authored proposals remain untrusted until validated against host facts and policy. Conformance scenarios exercise both UI and agent invocation, including denied scope, required approval, and equivalent audit records.
+
+The core must not import a web framework, UI framework, PMS SDK, telephony SDK, model SDK, or database driver. Those are implementations behind the relevant interfaces. It must not inspect provider names to decide booking semantics.
+
+### Host interface
+
+The buyer supplies three cohesive host adapters. Each interface includes deadline behaviour and typed error outcomes, not just method names. These seams follow distinct host ownership instead of recreating one giant PMS interface.
+
+| Seam | What the core needs | Host ownership |
+| --- | --- | --- |
+| **Clinic context** | Resolve the tenant and clinic for a call; load a versioned snapshot of settings, approved knowledge, opening hours, holiday rules, routing, task destinations, operator review queue, notification ownership, and capabilities | Clinic configuration and authorization |
+| **Patient and diary** | Find patient candidates and existing appointments; issue an approved first-time patient reference where supported; search eligible offers; commit a typed action with a stable key | Patient records, intake, scheduling policy, and appointment writes |
+| **Staff outcome** | Resolve a permitted transfer or task destination; create, acknowledge, reassign, and close a task | Staff workflow and communications |
+
+An offer expires and is revalidated at commit; it is not a reservation unless the host explicitly says so. Host identifiers are opaque and carry a tenant scope. Capability discovery is explicit; an unknown provider or unsupported action never inherits another provider's behaviour. The capability snapshot includes whether first-time intake, atomic rescheduling, idempotent writes, and reliable reconciliation are available; unsafe capabilities are request-only.
+
+At call admission, clinic policy derives one effective decision per actionable capability and location from the host declaration, versioned clinic/location settings, and readiness. The decision says whether Abby may execute the action, offer a staff-request path, or treat it as unavailable, with a reason for either restricted outcome. The call runtime uses those captured decisions as its only capability authority; raw settings remain available through the versioned configuration and UI, not as competing action flags in the call snapshot. An unknown capability ID cannot default to execution.
+
+The host owns all patient, practitioner, service, price, and appointment master data. In embedded mode, the adapter calls host modules in process and may join the host's transactions. In standalone mode, Cliniko and Splose adapters may use public APIs and small adapter-local indexes where necessary. Those indexes do not become core requirements.
+
+| Capability | Standalone Abby | Embedded buyer product |
+| --- | --- | --- |
+| Patient, diary, and eligibility | PMS API adapter; minimal adapter-local index if required | Native patient and scheduling modules |
+| Login, roles, and clinic membership | Abby account and permissions | Host identity and permissions |
+| Receptionist settings and review | Standalone `lit-html` dashboard using core commands/read models | Host-native screens using those commands/read models |
+| Call ledger and jobs | Abby persistence and workers | Host persistence and workers |
+| Confirmations, reminders, and billing | Abby only where the PMS does not own them | Host policy and existing systems |
+| Voice session | Abby-owned, transient call controller over provider adapters | Retained in process with host-chosen telephony, speech, and model adapters |
+| Telephony, speech, and models | Replaceable transport, transcription, synthesis, and model adapters | Retained or replaced provider adapters |
+
+### Infrastructure interfaces
+
+- **Call transport:** supplies authenticated bidirectional call media, playback-completion and transfer outcomes, and a configured fallback route when Abby cannot accept a call. The route is independent of Abby's session and ledger so it can work during their outage.
+- **Speech recognition and synthesis:** stream partial hypotheses and segment-final text, and synthesize only Abby-approved text; provider-specific timing formats, codecs, and voice IDs stop at these adapters. The voice session consumes one canonical mono PCM16LE, 16 kHz media format after transport normalization. Abby's voice session, not the recognition provider, closes caller turns.
+- **Model execution:** runs approved conversation and extraction tasks with versioned prompts and structured results.
+- **Ledger storage and jobs:** persist call-start, end-of-call, action-request, and action-result events before acknowledging their durable receipt; execute retryable work; expose unresolved actions. Continuous audio frames and partial speech tokens are transient and are not individually committed to the ledger. The embedded implementation can use the host database and worker system.
+- **Presentation:** standalone dashboard and host screens consume the same settings commands and call read models.
+
+No interface is added solely for hypothetical variation. The Cliniko and Splose standalone adapters and the reference embedded host must exercise the seams before portability is claimed.
+
+### Standalone frontend
+
+Build Abby's standalone dashboard with **`lit-html` directly**: typed template functions produce the settings, readiness, call review, and staff exception views, and a small application controller renders them into a root element. Gafu v2's browser modules demonstrate this direct `html`/`render` pattern.[^gafu-lit-html] Use plain TypeScript state and explicit actions for UI interaction; views derive from state and core read models, while event handlers dispatch commands and render their typed results. Keep network, authorization, and retry decisions outside template functions. Do not require LitElement, a custom-element hierarchy, or a frontend state framework for version 1.
+
+The frontend consumes versioned settings commands and call read models through a narrow client adapter. It does not contain booking policy, patient matching rules, or action-commit logic. A buyer may replace the entire dashboard with its own frontend while reusing those commands, read models, capability schemas, and E2E scenarios. Browser E2E tests cover setting changes, permissions, readiness, call review, and needs-review resolution through the actual standalone interface.
+
+### Standalone database implementation
+
+Use the Gafu v1 **PostgreSQL + Kysely + Kanel** setup as the starting pattern for Abby's standalone persistence.[^gafu-database] Write forward migrations with Kysely; migrate a clean database before running Kanel with `kanel-kysely` to generate table, insert, and update types from the actual schema. Keep generated files committed and never hand-edit them. CI migrates a fresh database, regenerates types, and fails on schema/type drift. Schema changes include data migration, upgrade and recovery tests, and a versioned export contract.
+
+Kysely queries, generated row types, and PostgreSQL transactions live inside the ledger, settings, and job storage adapters. The conversation and action modules use domain contracts and never import generated database types. Construct the database connection in the standalone composition root and inject the relevant storage operations; the embedded host may supply its own database, transaction manager, and migration system. Abby's standalone schema contains receptionist-owned records only, with tenant-scoped keys and constraints for call receipts, action idempotency, settings versions, and review state. It does not mirror the PMS's patient or diary tables.
+
+For parallel tests, create one migrated PostgreSQL template or disposable instance per CI job, then give workers isolated databases or schemas with unique names. No test drops or resets a database another worker can use. The generator and migration checks run against disposable databases, never a clinic or provider database.
+
+## 8. Data, safety, and operational requirements
+
+### Data ownership and portability
+
+- Abby stores only receptionist settings and the minimum call/action data needed for operation, review, and replay. Patient records and diary entries stay in the PMS or host.
+- Call records use opaque host references. Sensitive values are redacted from operational logs and test fixtures. Transcript and recording retention, export, deletion, and access are configurable per host policy.
+- Recording and retained transcripts follow a host-configured disclosure and consent policy for the clinic and location. The call ledger records the policy version and a typed consent outcome before persistent capture can begin. Capture stays off until a location is bound and the location policy and consent conditions are durably satisfied; denial, ledger failure, or a changed location closes the retention gate. No earlier transient media is replayed into a recording. Live speech processing may still run to serve the call without retaining its audio or transcript. Staff access to retained material is role-scoped and audited.
+- A documented export includes settings, approved knowledge, prompt and policy versions, call and action history, schema versions, and tenant/location ID mappings. Credentials and raw provider tokens are excluded by default.
+- An embedded installation can operate without patient polling, a full patient mirror, Abby user accounts, Abby billing, or Abby-hosted network calls.
+- The dependency and licence inventory identifies every voice, model, UI, and runtime dependency and what a buyer would need to replace or license separately. Third-party contracts are reviewed before promising that an embedded build can retain them.
+
+### Reliability and observability
+
+- Persist a unique call receipt in a `starting` state before acknowledging an accepted durable event. Attach a live voice session and commit an `active` transition before starting greeting media. The ledger calculates session-lease expiry from its trusted clock and configured bounds; a voice process can renew only its current fenced lease, never supply an expiry. An independent ledger-backed monitor closes `starting` calls past admission or `active` calls with expired session leases in one fenced terminal transition, while a provider-level route handles a lost caller connection. A racing activation or heartbeat prevents stale monitor work from closing a live call. A lost worker or replayed event cannot silently lose or duplicate a call; a replayed call event receives a duplicate admission outcome and is acknowledged without launching another session.
+- Look up an authenticated provider account and call ID before consulting mutable number-to-clinic routing. The first accepted call's tenant and dialed number are immutable replay evidence; a routing change cannot admit a second call under the same provider key or disclose the old call to the newly mapped tenant.
+- When durable intake is unavailable, stop automated processing before patient lookup or writes, invoke the provider or host fallback route, and alert operators through a channel independent of the failed ledger. The telephony fallback's own outcome is monitored separately; Abby does not claim to have recorded a call it could not accept.
+- Persist each consequential external effect intent (host write, staff task, or notification) with its required action, task, or notification key before dispatch, and persist its typed result afterward. Accept a result only for the matching effect kind, tenant, lease, and original correlation key; a mismatched result cannot change an action. Before sending any such effect, durably mark it as possibly sent. After a crash, only intents proven unsent return to dispatch; possibly sent effects enter key-based reconciliation or operator review. Notifications, staff-task opens, and host-owned staff-item transitions use a durable outbox with stable deduplication or command keys and one designated owner; a provider retry does not create a second logical request. Staff-item commands report pending until their keyed host outcome is known. Persist the one current pending presentation atomically with the call transition; a replacement or clear resolves the old pending intent as superseded in that transaction. One dispatcher atomically selects and marks the current intent started before media output, then awaits one typed terminal result from the live voice session. A lost wake-up leaves the intent pending for a scan; a started presentation without a proven terminal acknowledgment becomes failed or expired and requires a new decision, never replay of the same prompt. Ordinary call termination atomically resolves pending and unproven started delivery with the terminal call transition, so a crash before the voice promise reports cannot strand it. An absent or ended session resolves pending delivery safely. Confirmation requires a proven completed playback outcome.
+- Capture notification ownership in the call's versioned policy and copy that owner to each durable notification intent. The worker sends only through that stored owner, even if configuration changes before dispatch; any change to active-call ownership requires a separate audited intervention.
+- Every dispatched host write has a stable key and an outcome of committed, rejected, unsupported, or uncertain. The pure action planner uses captured policy and evidence; the host adapter rechecks current authorization, location scope, capability, and offer validity before mutation, and the host enforces permission at commit. Revoked permission or capability returns a definitive keyed rejection or unsupported result without a write; an uncertain send still requires reconciliation under the original key. A host capability without commit-time permission enforcement remains request-only. Unresolved uncertainty becomes a separate needs-review workflow state. Reconciliation records what was checked and its conclusion; a proposed action canceled before dispatch is recorded as canceled, not as a failed host write.
+- Staff can find pending and failed actions by tenant, clinic, call, and age. Alerts and dashboards show ingestion, routing, offer, commit, reconciliation, handoff, and notification failures separately.
+- External provider failures are bounded by a call deadline. Identity lookup failure is not represented as “patient not found”; appointment-read failure is not represented as “no appointments.”
+- Tenant isolation, authorization, and clinic timezone are checked at each host interaction.
+- Each tenant has an enable/disable switch and a versioned configuration. Disabling a clinic stops new automated calls while preserving active-call and unresolved-action records for staff. A separate audited emergency-stop command blocks new automated writes on active calls and routes them to staff; ordinary setting edits remain next-call-only. Rollout and rollback operate per clinic or cohort.
+
+## 9. End-to-end and conformance testing
+
+**Change invariant:** every new user-visible behavior, capability, setting, or toggle lands with a new or extended end-to-end scenario in the same change. A feature is incomplete until the scenario proves its effect through the real application command and call orchestration path; a dashboard feature also proves the browser interaction. Prompt, voice, and policy changes that alter caller behavior also count. A setting that saves successfully but never changes the effective call configuration must fail the suite. Coverage is tracked in a registry mapping requirement IDs and setting/capability IDs to scenario IDs; CI rejects a registered item without a scenario.
+
+Each independently triggerable failure window or invariant has a stable scenario ID, its own isolated fixture, and an assertion of its outcome. The manifest maps a requirement to multiple IDs when needed; an integrated journey may supplement those cases but cannot replace them. CI shards the independent IDs so one flaky fault window does not hide another or force unrelated cases to run serially.
+
+For each toggle, the scenario verifies the default and both enabled and disabled behavior. For other settings, it verifies the default, a valid changed value, and an invalid or unauthorized change. Both kinds verify persistence after reload, the version and effective capability decision used by the next call, tenant/location isolation, and behavior when the clinic is disabled or the capability is unavailable. For each mutating feature, the scenario verifies the actual caller statement, host write or explicit non-write, action receipt, ledger entry, notification owner, and staff-visible outcome. Focused voice-session scenarios separately cover provider hypotheses versus Abby-final turns, playback completion versus audio merely queued, interruption during action details, speech recognition errors, silence, failed and connected transfers, and disconnect during an unresolved write. A caller correction before playback must supersede the pending prompt before it can start; caller speech closes the output gate at onset until its final turn commits a transition that clears or replaces the old pending presentation. If model work is needed, speech stays empty until its later approved result creates a new presentation. A race between correction and atomic start must either suppress the old prompt or interrupt it, including the gap between durable start and media output; a late playback acknowledgment cannot restore invalid confirmation evidence. If the turn transition commits but its acknowledgment is lost, the voice session retries the same turn ID and keeps output gated until it proves the durable result. Crash scenarios cover a committed presentation before atomic start and after start, proving one terminal outcome without duplicate speech. An immediate synthesis failure and a later provider callback must not create two delivery outcomes. Model success and typed model failure traverse the same persisted effect-result path as other effects. Failure scenarios cover typed errors, first-time intake with partial success, unsafe rescheduling, uncertain writes, duplicate events, retries, caller interruption, failed transfer and task creation, worker restart, consent denial, reconciliation, overdue staff work, holidays, expired knowledge, and ledger outage fallback. Tests assert observed outcomes and durable evidence, not internal method calls.
+
+An admission E2E kills the voice process after durable intake but before session activation and proves the independent monitor atomically closes the call and resolves its greeting without speech, while the provider fallback handles the caller. A racing activation or heartbeat must invalidate a stale expiry scan. A media E2E feeds distinct provider input codecs through their adapters and asserts that the same canonical frames produce the same Abby turn behavior. The presentation conformance suite also proves that internally superseded pending speech cannot be submitted as a second external delivery result. Transfer E2E distinguishes a request canceled before send from one that may have reached the provider.
+
+Run deterministic synthetic-call journeys with fake voice, model, clock, and host effects in pull-request CI. They must enter through the same public call and settings interfaces as production and exercise the full SAM loop; a unit test of a reducer or a mocked HTTP handler alone does not count. Run the same core scenario corpus against the Cliniko and Splose adapters and the in-process reference host. A versioned, product-approved expected-support matrix records which provider, configured test-account profile, and capability must automate and which must use the request-only path. Tests compare the adapter's declared snapshot with that matrix before applying capability-specific assertions; an adapter cannot make a regression pass by declaring less support. A support downgrade needs recorded provider evidence and an explicit product decision, followed by updated expectations and scenarios in the same change. Provider-specific contract cases cover differing permissions, pagination, rate limits, availability, and unsupported actions without multiplying every shared journey by every provider. Scheduled smoke tests use sanctioned provider test accounts and a limited real telephony path; they supplement, rather than replace, deterministic CI. Fixtures contain no live patient data.
+
+Run independent unit, contract, and end-to-end tests in parallel CI jobs and shards by default. Each scenario owns its synthetic tenant, call IDs, database or schema, queue namespace, fake clock, ports, and provider fixtures; it must pass alone, in a shard, and with a different execution order. CI distributes scenarios by stable ID and collects results into one required gate, so adding a scenario does not require hand-editing a fixed test list. Steps within one call remain ordered by the SAM loop. A test may run serially only when a real provider or scarce shared resource makes isolation impossible; document the resource and reason, keep that serial group as small as possible, and do not let it block unrelated tests from running concurrently. Parallel failures are investigated as test or product defects, never masked by retries or a lower worker count.
+
+### Model and voice evaluation
+
+Deterministic E2E tests prove orchestration and contracts; a separate versioned evaluation corpus probes the actual speech and model providers. Before releasing a prompt, model, voice-provider, or speech-provider change, run the corpus against the exact proposed configuration and record its version and results. Scenarios use synthetic or de-identified calls and cover noisy speech, interruptions, silence, corrections, shared phones, ambiguous names and dates, closed hours, urgent clinical language, unsupported requests, and attempts to turn answer text into tool instructions. Reviewers score whether Abby understood the request, used approved evidence, chose the right capability, spoke an accurate outcome, and handed off when needed.
+
+Critical failures are false confirmations, wrong-patient disclosure or action, unauthorized writes, invented clinic policy or clinical advice, and missed required escalation. Any critical failure in the pre-release corpus blocks rollout until the cause is fixed and the affected cases are rerun. Task-specific quality thresholds and the number of repeated runs are declared before the pilot from a baseline; report results by task, provider, and locale rather than hiding failures in one aggregate. Human review covers a predeclared sample and every borderline or critical case. These evaluations are parallelized within provider rate limits and never substitute for deterministic CI or the live pilot stop rules.
+
+Flaky or failing end-to-end tests block release until diagnosed and fixed. A test is not skipped, relabelled, or weakened to pass a change. A deliberate behavior change updates the scenario and its documented expected outcome in the same review. The release report lists new scenario IDs, the associated feature/setting IDs, and results for core journeys, adapter contracts, embedded-host conformance, provider smoke tests, and model/voice evaluations tied to the exact release configuration.
+
+## 10. Success measures and release gates
+
+The numbers below are proposed gates for a controlled pilot. The team should measure the baseline and confirm the targets before implementation is declared ready.
+
+| Measure | Proposed gate |
+| --- | --- |
+| Confirmed action integrity | Zero observed false confirmations, wrong-patient writes, or duplicate writes in the release corpus and a predeclared pilot sample; any occurrence pauses rollout and requires review |
+| Durable intake | 100% of accepted durable call events have a persisted receipt before acknowledgement |
+| Action accountability | 100% of dispatched host writes reach a committed, rejected, unsupported, or visible needs-review state; canceled proposals are separately recorded; none disappear on worker restart |
+| Replay safety | Replaying every webhook and job fixture at least twice leaves one logical call and no duplicate PMS mutation |
+| Tenant isolation | 100% of cross-tenant attempts in the conformance suite are denied |
+| First response | Proposed p95 at most five seconds for supported pilot conditions; report voice-provider and host latency separately |
+| Turn and interruption quality | Pilot reports turn-end to first speech and interruption-to-silence by provider and locale against thresholds declared before traffic; no write follows an unfinished confirmation presentation in the release corpus |
+| Staff visibility | Every action still uncertain at its reconciliation deadline appears in an assigned review queue with its age, evidence, due time, and next step; overdue work alerts the configured operator |
+| Acquisition portability | The complete core conformance suite passes unchanged against Cliniko, Splose, and an in-process reference host |
+| Change-driven E2E coverage | 100% of released behavior, capability, setting, and toggle changes have mapped end-to-end scenarios; all deterministic CI journeys and required adapter contracts pass |
+| Parallel test execution | Independent CI suites and E2E scenarios run concurrently with isolated resources; every serial exception is documented and scoped to its shared resource |
+| Model and voice safety | The exact release configuration has zero critical failures in the pre-release corpus; task-specific quality meets the thresholds declared before pilot traffic |
+
+Track autonomous task completion, human correction rate, handoff rate, caller abandonment, staff time saved, and cost per resolved call by task and provider. Set commercial targets after pilot baselines rather than inventing a completion percentage now. The pilot plan must state its sample size, eligible-call definition, review method, and stop conditions before traffic starts; zero observed incidents does not establish zero underlying risk.
+
+## 11. Acquisition-readiness demonstration
+
+A reference host, built independently of the standalone web application, must prove that a buyer can:
+
+1. Mount the receptionist, voice session, and call endpoints inside one host deployment, with no call to an Abby application server.
+2. Supply host identity, permissions, diary, patient, pricing, notification, database, and jobs through in-process adapters.
+3. Run the same scenario corpus and action conformance tests without editing the conversation, action, or ledger modules.
+4. Replace the standalone settings and review pages with host-native screens using the same commands and read models.
+5. Import versioned Abby settings and call records, map tenant and location references, and omit standalone credentials.
+6. Replace telephony, transcription, synthesis, or model providers through their interfaces without changing the voice-session state machine or booking and safety rules.
+7. Register the same typed capabilities in the buyer's agent platform, enforce host permissions and approvals, and recover the same audit trail as a staff action.
+
+If the buyer uses a different implementation language, the versioned schemas, decision tables, scenarios, and expected results become the porting contract. The product team must perform technical due diligence on the buyer's stack before promising source-level integration effort.
+
+## 12. Delivery plan and exit gates
+
+| Phase | Deliverable | Exit gate |
+| --- | --- | --- |
+| **0. Contract** | Canonical terms, typed failure and action-result unions, capability and host interfaces, voice-session event and playback contracts, SAM loop contract, standalone PostgreSQL/Kysely/Kanel database contract, consent and handoff policy, de-identified scenarios from current calls, model-evaluation rubric and corpus, approved provider support matrix, and requirement-to-scenario registry | Both PMS workflows and the reference host can be expressed without provider branches in the core; product owners approve caller-facing result language, critical-failure definitions, and support expectations; each planned setting and failure kind has a scenario ID |
+| **1. Core inbound and embedding proof** | Abby-owned voice session, call runtime, reception actions, ledger, agent capability catalogue, minimum production PostgreSQL/Kysely/Kanel ledger, outbox, and settings storage for the standalone slice, standalone `lit-html` dashboard shell, and a reference monolith using host-native storage, jobs, authorization, UI, and patient/diary modules | One durable vertical call/action slice and its settings/review commands pass the same conformance scenarios in standalone and embedded compositions without editing core modules; a fresh migrated standalone database generates checked-in types without drift; a simulated media call proves final-turn gating, completed playback, interruption, transfer failure, disconnect, and fallback; crash-after-send reconciliation and typed boundaries pass; the corpus grows with each later feature |
+| **2. Standalone adapters** | Extend the Phase 1 standalone storage and dashboard to the released scope; add Cliniko and Splose adapters with provider-specific rate limits, credentials, and scheduling behaviour | The shared corpus passes against both; provider contract cases pass; lost-response write tests pass for each automated mutation or that capability stays request-only; readiness blocks an incompletely configured clinic |
+| **3. Controlled pilot** | Limited clinics, staff review queue, alerting, latency and cost reporting | Safety, reliability, E2E, and model-evaluation gates in sections 9 and 10 pass on the exact release configuration; clinic staff approve observed handoff and confirmation language |
+| **4. Acquisition rehearsal** | Extend the Phase 1 reference monolith to the complete released capability set; perform versioned export/import and provider replacement | The full Section 11 demonstration and unchanged E2E corpus pass without edits to core modules or standalone services |
+| **5. Existing-clinic cutover** | Dry-run import of versioned settings and retained call records; number-routing and rollback plan for clinics moving to Abby | Reconciliation accounts for every imported clinic, location, setting, and eligible call record; a staged number switch and rollback test produce one active receptionist route and preserve unresolved staff work |
+| **6. Expansion** | Outbound and optional financial workflows | Separate PRDs establish host ownership and acceptance gates |
+
+## 13. Decisions requiring product confirmation
+
+These are defaults for the draft, not decisions attributed to Cliniko, Splose, or a future buyer.
+
+| Decision | Proposed default | Alternative and consequence |
+| --- | --- | --- |
+| Booking confirmation timing | Commit during the call; call it confirmed only with a receipt | Post-call writes remain possible, but callers must hear “request pending” and staff need a follow-up workflow |
+| Caller verification method | Phone match yields candidates; use clinic-approved checks with limited attempts before revealing or changing appointments | Staff-only verification reduces automation while preserving the same disclosure boundary |
+| First-time intake | Use a host-approved intake capability only where it meets write-safety rules | Make all first-time bookings staff requests, reducing integration scope and autonomous completion |
+| Rescheduling | Automate only through a host-native or atomic operation | Make every reschedule a staff request until the host provides one |
+| Notifications | Host chooses one sender for each event | Host always sends, simplifying embedded ownership but limiting standalone messaging |
+| Phone number ownership | Standalone mode provisions or imports numbers; embedded mode delegates routing to the host | Transferring number ownership at acquisition requires a separate migration plan |
+| Transcript retention | Configurable by tenant/host; use the minimum necessary | A fixed Abby retention period may conflict with a buyer's existing policy |
+| Initial markets | Pilot in existing clinic markets, with locale and timezone as configuration | Hardcoded geography speeds the first pilot but increases integration work for a global buyer |
+
+## Sources
+
+[^cliniko-api]: [Cliniko official API introduction](https://docs.api.cliniko.com/), accessed 2026-09-28.
+[^cliniko-availability]: [Cliniko official Available Time reference](https://docs.api.cliniko.com/openapi/available-time), accessed 2026-09-28.
+[^splose-api]: [Splose API access guide](https://support.splose.com/en/articles/15095945-how-can-i-access-and-use-the-splose-api-and-what-are-the-restrictions-during-the-trial-period), accessed 2026-09-28.
+[^gafu-errors]: Gafu v2, [`v2-impl.md`](https://github.com/garthtrickett/gafu-v2/blob/main/v2-impl.md) (small `Result`, module-owned discriminated failures, exhaustive handling at recovery boundaries) and [`src/result.ts`](https://github.com/garthtrickett/gafu-v2/blob/main/src/result.ts), inspected 2026-09-28.
+[^gafu-sam]: Gafu's [`GEMINI.md`](https://github.com/garthtrickett/gafu/blob/main/GEMINI.md) and [`ReactiveSamController`](https://github.com/garthtrickett/gafu/blob/main/src/lib/client/reactive-sam-controller.ts) show the action-driven SAM pattern. Gafu v2 supplies the typed-error approach; this PRD adapts the adjacent Gafu SAM pattern for voice calls rather than claiming that Gafu v2 currently implements it.
+[^gafu-database]: Gafu v1's [Kanel configuration](https://github.com/garthtrickett/gafu/blob/main/.kanelrc.cjs), [Kysely connection](https://github.com/garthtrickett/gafu/blob/main/src/db/kysely.ts), [migration manifest](https://github.com/garthtrickett/gafu/blob/main/src/db/migrations/migrations-manifest.ts), and [database scripts](https://github.com/garthtrickett/gafu/blob/main/package.json) show the PostgreSQL/Kysely/Kanel workflow. The pattern is the reference; Abby's schema and storage interfaces are new.
+[^gafu-lit-html]: Gafu v2's [reading browser module](https://github.com/garthtrickett/gafu-v2/blob/main/src/reading/browser.ts) and [diagnostic view](https://github.com/garthtrickett/gafu-v2/blob/main/src/diagnostic.ts) import `html` and `render` from `lit-html` and mount views directly. They are reference examples for the rendering style, not Abby UI code to copy.
