@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import type { Admission, CallPolicy, PendingLocationCall, PendingLocationRoute } from "./model.ts";
+import { err, ok } from "./model.ts";
+import type { Admission, CallPolicy, PendingLocationCall, PendingLocationPrompt, PendingLocationRoute, Result, TransitionFailure } from "./model.ts";
 
 export const LOCATION_CHOICE_TIMEOUT_MS = 120_000;
 export const PENDING_LOCATION_LEASE_MS = 30_000;
@@ -55,15 +56,60 @@ export function validPendingLocation(value: unknown, callId: string): value is P
   const pending = value as Partial<PendingLocationCall>;
   const lease = pending.sessionLease;
   const evidence = pending.choiceEvidence;
+  const prompt = pending.prompt;
   return pending.callId === callId && validPendingRoute(pending.route) &&
     validPendingAdmission(callId, pending.admission) &&
     (pending.status === "pending" || pending.status === "expired" || pending.status === "bound") &&
     (lease === undefined || (validRef(lease.sessionId) && Number.isSafeInteger(lease.version) && lease.version >= 1 &&
       typeof lease.expiresAt === "string" && Number.isFinite(Date.parse(lease.expiresAt)) &&
       typeof lease.validForMs === "number" && lease.validForMs > 0 && lease.validForMs <= PENDING_LOCATION_LEASE_MS)) &&
+    (prompt === undefined || (lease !== undefined && validRef(prompt.playbackId) && validRef(prompt.sessionId) &&
+      prompt.sessionId === lease.sessionId && prompt.leaseVersion <= lease.version &&
+      Number.isSafeInteger(prompt.leaseVersion) && prompt.leaseVersion >= 1 &&
+      ["started", "queued", "played", "failed", "unproven", "interrupted"].includes(prompt.status) &&
+      typeof prompt.startedAt === "string" && Number.isFinite(Date.parse(prompt.startedAt)) &&
+      Date.parse(prompt.startedAt) >= Date.parse(pending.admission.acceptedAt) &&
+      Date.parse(prompt.startedAt) < Date.parse(pending.admission.deadline) &&
+      (prompt.status === "started" || prompt.status === "queued"
+        ? prompt.resolvedAt === undefined
+        : typeof prompt.resolvedAt === "string" && Number.isFinite(Date.parse(prompt.resolvedAt)) &&
+          Date.parse(prompt.resolvedAt) >= Date.parse(prompt.startedAt)))) &&
     (evidence === undefined || (validRef(evidence.sessionId) && Number.isSafeInteger(evidence.leaseVersion) &&
       evidence.leaseVersion >= 1 && validRef(evidence.turnId) &&
       validRef(evidence.selectedLocationId) && typeof evidence.at === "string" && Number.isFinite(Date.parse(evidence.at))));
+}
+
+function ownsPendingSession(pending: PendingLocationCall, sessionId: string, version: number, now: string): boolean {
+  return pending.status === "pending" && pending.sessionLease?.sessionId === sessionId &&
+    pending.sessionLease.version === version && Date.parse(now) < pendingDueAt(pending);
+}
+
+export function startLocationPrompt(pending: PendingLocationCall, playbackId: string, sessionId: string,
+                                    version: number, now: string): Result<Readonly<{ pending: PendingLocationCall; newStart: boolean }>, TransitionFailure> {
+  if (!validRef(playbackId) || !validRef(sessionId) || !Number.isSafeInteger(version) || version < 1 ||
+      !Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
+  if (!ownsPendingSession(pending, sessionId, version, now)) return err({ kind: "leaseLost" });
+  const previous = pending.prompt;
+  if (previous && previous.status !== "failed") return ok({ pending, newStart: false });
+  if (previous?.playbackId === playbackId) return ok({ pending, newStart: false });
+  const prompt: PendingLocationPrompt = { playbackId, sessionId, leaseVersion: version, status: "started", startedAt: now };
+  return ok({ pending: { ...pending, prompt }, newStart: true });
+}
+
+export function resolveLocationPrompt(pending: PendingLocationCall, playbackId: string, sessionId: string,
+                                      version: number, status: PendingLocationPrompt["status"], now: string):
+  Result<PendingLocationCall, TransitionFailure> {
+  if (!validRef(playbackId) || !validRef(sessionId) || !Number.isSafeInteger(version) || version < 1 ||
+      !Number.isFinite(Date.parse(now)) || !["queued", "played", "failed", "unproven", "interrupted"].includes(status)) {
+    return err({ kind: "invalidTransition" });
+  }
+  if (!ownsPendingSession(pending, sessionId, version, now)) return err({ kind: "leaseLost" });
+  const prompt = pending.prompt;
+  if (!prompt || prompt.playbackId !== playbackId || prompt.sessionId !== sessionId) return err({ kind: "keyMismatch" });
+  if (prompt.status === status) return ok(pending);
+  if (prompt.status !== "started" && prompt.status !== "queued") return err({ kind: "keyMismatch" });
+  if (prompt.status === "queued" && status === "queued") return ok(pending);
+  return ok({ ...pending, prompt: { ...prompt, status, ...(status === "queued" ? {} : { resolvedAt: now }) } });
 }
 
 export function pendingDueAt(pending: PendingLocationCall): number {

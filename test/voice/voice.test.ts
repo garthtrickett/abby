@@ -103,6 +103,8 @@ class PresentationStartHookLedger implements LedgerStore {
   bindPendingLocation(...args: Parameters<LedgerStore["bindPendingLocation"]>) { return this.inner.bindPendingLocation(...args); }
   attachPendingLocationSession(...args: Parameters<LedgerStore["attachPendingLocationSession"]>) { return this.inner.attachPendingLocationSession(...args); }
   renewPendingLocationSession(...args: Parameters<LedgerStore["renewPendingLocationSession"]>) { return this.inner.renewPendingLocationSession(...args); }
+  startPendingLocationPrompt(...args: Parameters<LedgerStore["startPendingLocationPrompt"]>) { return this.inner.startPendingLocationPrompt(...args); }
+  resolvePendingLocationPrompt(...args: Parameters<LedgerStore["resolvePendingLocationPrompt"]>) { return this.inner.resolvePendingLocationPrompt(...args); }
   findExpiredAdmissions(...args: Parameters<LedgerStore["findExpiredAdmissions"]>) { return this.inner.findExpiredAdmissions(...args); }
   findExpiredPendingLocations(...args: Parameters<LedgerStore["findExpiredPendingLocations"]>) { return this.inner.findExpiredPendingLocations(...args); }
   expirePendingLocation(...args: Parameters<LedgerStore["expirePendingLocation"]>) { return this.inner.expirePendingLocation(...args); }

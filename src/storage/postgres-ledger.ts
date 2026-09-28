@@ -1,9 +1,9 @@
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import { CALL_TERMINAL_REASONS, POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "../core/model.ts";
-import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, Effect, LocationScope, PendingLocationCall, PendingLocationExpiryResult, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffItem, StaffQueueEntry, TransitionAction, TransitionFailure } from "../core/model.ts";
+import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, Effect, LocationScope, PendingLocationCall, PendingLocationExpiryResult, PendingLocationPrompt, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffItem, StaffQueueEntry, TransitionAction, TransitionFailure } from "../core/model.ts";
 import { admissionReceipt, initialState, sameAdmission } from "../core/ledger.ts";
-import { LOCATION_CHOICE_TIMEOUT_MS, PENDING_LOCATION_LEASE_MS, pendingDueAt, pendingMatchesAdmission, policyMatchesPending, validPendingAdmission, validPendingLocation, validPendingRoute } from "../core/pending-location.ts";
+import { LOCATION_CHOICE_TIMEOUT_MS, PENDING_LOCATION_LEASE_MS, pendingDueAt, pendingMatchesAdmission, policyMatchesPending, resolveLocationPrompt, startLocationPrompt, validPendingAdmission, validPendingLocation, validPendingRoute } from "../core/pending-location.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { transition } from "../core/transition.ts";
 import { validKnowledgeSnapshot } from "../core/knowledge-evidence.ts";
@@ -337,6 +337,46 @@ export class PostgresLedger implements LedgerStore {
         await trx.updateTable("pending_location_calls").set({ state: renewed })
           .where("call_id", "=", callId as PendingLocationCallsCallId).execute();
         return ok(renewed);
+      });
+    } catch { return err({ kind: "storageFailure" }); }
+  }
+
+  async startPendingLocationPrompt(callId: string, playbackId: string, sessionId: string, expectedVersion: number, now: string):
+    Promise<Result<Readonly<{ pending: PendingLocationCall; newStart: boolean }>, TransitionFailure>> {
+    try {
+      return await this.db.transaction().execute(async trx => {
+        await this.lockCall(trx, callId);
+        const row = await trx.selectFrom("pending_location_calls").select(["state", "status", "tenant_id", "clinic_id"])
+          .where("call_id", "=", callId as PendingLocationCallsCallId).forUpdate().executeTakeFirst();
+        if (!row) return err({ kind: "callUnknown" });
+        if (!validPendingLocation(row.state, callId) || row.status !== row.state.status ||
+            row.tenant_id !== row.state.route.tenantId || row.clinic_id !== row.state.route.clinicId) return err({ kind: "storageCorrupt" });
+        const ledgerNow = await this.trustedNow(trx, now);
+        const started = startLocationPrompt(row.state, playbackId, sessionId, expectedVersion, ledgerNow);
+        if (!started.ok) return started;
+        if (started.value.newStart) await trx.updateTable("pending_location_calls").set({ state: started.value.pending })
+          .where("call_id", "=", callId as PendingLocationCallsCallId).execute();
+        return started;
+      });
+    } catch { return err({ kind: "storageFailure" }); }
+  }
+
+  async resolvePendingLocationPrompt(callId: string, playbackId: string, sessionId: string, expectedVersion: number,
+                                     status: PendingLocationPrompt["status"], now: string): Promise<Result<PendingLocationCall, TransitionFailure>> {
+    try {
+      return await this.db.transaction().execute(async trx => {
+        await this.lockCall(trx, callId);
+        const row = await trx.selectFrom("pending_location_calls").select(["state", "status", "tenant_id", "clinic_id"])
+          .where("call_id", "=", callId as PendingLocationCallsCallId).forUpdate().executeTakeFirst();
+        if (!row) return err({ kind: "callUnknown" });
+        if (!validPendingLocation(row.state, callId) || row.status !== row.state.status ||
+            row.tenant_id !== row.state.route.tenantId || row.clinic_id !== row.state.route.clinicId) return err({ kind: "storageCorrupt" });
+        const ledgerNow = await this.trustedNow(trx, now);
+        const resolved = resolveLocationPrompt(row.state, playbackId, sessionId, expectedVersion, status, ledgerNow);
+        if (!resolved.ok) return resolved;
+        if (resolved.value !== row.state) await trx.updateTable("pending_location_calls").set({ state: resolved.value })
+          .where("call_id", "=", callId as PendingLocationCallsCallId).execute();
+        return resolved;
       });
     } catch { return err({ kind: "storageFailure" }); }
   }

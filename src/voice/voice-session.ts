@@ -19,6 +19,7 @@ export type VoiceIntent =
 export type IntentResolver = (turn: FinalCallerTurn) => Promise<Result<VoiceIntent, Readonly<{ kind: "intentUnavailable" }>>>;
 export type PlaybackPort = Readonly<{
   enqueue(playbackId: string, approvedText: string): Promise<"queued" | "notSent" | "uncertain">;
+  /** Must cancel this ID even when its enqueue is still in flight; a late enqueue may never revive it. */
   clear(playbackId: string): Promise<boolean>;
 }>;
 export type TransferOutcome = Readonly<{ kind: "connected"; providerConnectionRef: string }> | Readonly<{ kind: "failed" | "unproven" }>;

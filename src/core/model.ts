@@ -27,12 +27,21 @@ export type PendingLocationRoute = Readonly<{
   candidateNames: readonly Readonly<{ locationId: string; spokenName: string }>[];
   routeVersion: string;
 }>;
+export type PendingLocationPrompt = Readonly<{
+  playbackId: string;
+  sessionId: string;
+  leaseVersion: number;
+  status: "started" | "queued" | "played" | "failed" | "unproven" | "interrupted";
+  startedAt: string;
+  resolvedAt?: string;
+}>;
 export type PendingLocationCall = Readonly<{
   callId: string;
   route: PendingLocationRoute;
   admission: Admission;
   status: "pending" | "expired" | "bound";
   sessionLease?: SessionLease;
+  prompt?: PendingLocationPrompt;
   choiceEvidence?: Readonly<{ sessionId: string; leaseVersion: number; turnId: string; selectedLocationId: string; at: string }>;
 }>;
 export type PendingLocationResult = Readonly<{ kind: "created" | "duplicate"; pending: PendingLocationCall }>;
