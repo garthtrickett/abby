@@ -39,21 +39,23 @@ const lifecycle = choice("starting", "active", "ended");
 const source = object({ sourceRef: key, version: key, ownerRef: key });
 const availability = optional({ status: choice("shown", "empty", "failed"), sourceRef: str,
   timeZone: str, shownCount: uint, reason: str }, ["status", "shownCount"]);
+const appointments = optional({ status: choice("shown", "empty", "failed"), sourceRef: str,
+  shownCount: uint, reason: str }, ["status", "shownCount"]);
 const progress = optional({ callId: key, traceKey: key, callVersion: uint, lifecycle,
   actions: array(object({ actionKey: key, kind: actionKind, status: actionStatus, presentationId: key })),
   staffItems: array(object({ taskKey: key, reason: staffReason, status: staffStatus })),
   pendingPresentation: object({ presentationId: key, kind: choice("speech", "notice", "transfer"),
     status: choice("pending", "started", "played", "interrupted", "failed", "unproven", "superseded",
       "possiblySent", "connected", "canceled") }),
-  knowledgeSources: array(source), availability },
+  knowledgeSources: array(source), availability, appointments },
 ["callId", "traceKey", "callVersion", "lifecycle", "actions", "staffItems", "knowledgeSources"]);
 const terminal = object({ reason: choice("callerDisconnected", "sessionClosed", "mediaFailure", "localLeaseClosed",
   "admissionExpired", "leaseExpired", "transferConnected", "transferUnproven"), at: str });
 const callSummary = optional({ callId: key, lifecycle, version: uint, terminal,
   actions: array(object({ kind: actionKind, status: actionStatus })),
   staffItems: array(object({ reason: staffReason, status: staffStatus })), knowledgeAnswers: array(source),
-  availabilityReads: array(availability) },
-["callId", "lifecycle", "version", "actions", "staffItems", "knowledgeAnswers", "availabilityReads"]);
+  availabilityReads: array(availability), appointmentReads: array(appointments) },
+["callId", "lifecycle", "version", "actions", "staffItems", "knowledgeAnswers", "availabilityReads", "appointmentReads"]);
 const outcomeRow = optional({ callId: key, lifecycle, terminalReason: terminal.properties!.reason!,
   committedActions: uint, unresolvedActions: uint, staffRequests: uint, hostConfirmedTasks: uint,
   staffNeedsReview: uint, systemFailure: bool },
@@ -92,6 +94,7 @@ export type CapabilityDescriptor = Readonly<{
 
 export type CapabilityPrecondition = "expectedPolicyVersion" | "activeCall" | "bookingEnabledForExecution" |
   "hostEvidenceForExecution" | "approvedKnowledgeForAnswer" | "availabilityHostConfigured" |
+  "appointmentHostConfigured" | "hostIssuedPatientProof" |
   "callReviewAvailable" | "outcomeReportAvailable" | "staffQueueAvailable" |
   "hostConfirmedTask" | "expectedCallVersion";
 
@@ -124,6 +127,9 @@ export const capabilityCatalogue = {
   "availability.read.v2": entry("availability.read.v2",
     object({ kind: { const: "availability.read.v2" }, turn, from: str, to: str, now: str }),
     reply("availabilityAnswer", "progress", progress), "read", "permittedActor", "none", ["activeCall", "availabilityHostConfigured"]),
+  "appointments.read.v1": entry("appointments.read.v1",
+    object({ kind: { const: "appointments.read.v1" }, turn, verificationRef: key, from: str, to: str, now: str }),
+    reply("appointmentAnswer", "progress", progress), "read", "permittedActor", "none", ["activeCall", "appointmentHostConfigured", "hostIssuedPatientProof"]),
   "calls.read.v1": entry("calls.read.v1", object({ kind: { const: "calls.read.v1" }, callId: key }),
     reply("callSummary", "call", callSummary), "read", "permittedActor", "none", ["callReviewAvailable"]),
   "calls.outcomes.v1": entry("calls.outcomes.v1",

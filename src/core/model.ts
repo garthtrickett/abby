@@ -100,6 +100,22 @@ export type AvailabilityReadFailure = Readonly<{
   resetAt?: string;
 }>;
 
+export type AppointmentReadFailure = Readonly<{
+  kind: "invalidConfig" | "scopeMismatch" | "invalidProof" | "invalidRange" | "forbidden" | "rateLimited" |
+    "unavailable" | "malformed" | "tooManyResults";
+  resetAt?: string;
+}>;
+export type AppointmentRead = Readonly<{
+  scope: LocationScope;
+  sourceRef: string;
+  observedAt: string;
+  timeZone: string;
+  patientRef: string;
+  verificationRef: string;
+  proofExpiresAt: string;
+  appointments: readonly Readonly<{ appointmentRef: string; startsAt: string; endsAt: string }>[];
+}>;
+
 export type TurnInterpretation =
   | Readonly<{ kind: "requestAction"; request: ActionRequest }>
   | Readonly<{ kind: "affirm"; actionKey: string; digest: string; affirmative: boolean }>
@@ -111,6 +127,8 @@ export type TurnInterpretation =
   | Readonly<{ kind: "knowledgeFailure"; reason: "invalidQuery" | "unavailable" }>
   | Readonly<{ kind: "availability"; from: string; to: string; snapshot: AvailabilitySnapshot }>
   | Readonly<{ kind: "availabilityFailure"; reason: AvailabilityReadFailure["kind"] | "notEligible" | "notConfigured" | "unclear" }>
+  | Readonly<{ kind: "appointments"; from: string; to: string; snapshot: AppointmentRead }>
+  | Readonly<{ kind: "appointmentsFailure"; reason: AppointmentReadFailure["kind"] | "notConfigured" | "unclear" }>
   | Readonly<{ kind: "ambiguousTarget" }>;
 
 export type StaffReason =
@@ -280,6 +298,13 @@ export type CallState = {
     timeZone?: string;
     observedAt?: string;
     shownStartsAt?: readonly string[];
+    reason?: string;
+  }>>;
+  appointmentReads: Array<Readonly<{
+    turnId: string;
+    status: "shown" | "empty" | "failed";
+    sourceRef?: string;
+    shownCount?: number;
     reason?: string;
   }>>;
 };

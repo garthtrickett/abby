@@ -11,6 +11,7 @@ export type CallSummary = Readonly<{
   staffItems: readonly Readonly<{ reason: StaffItem["reason"]; status: StaffItem["status"] }>[];
   knowledgeAnswers: readonly Readonly<{ sourceRef: string; version: string; ownerRef: string }>[];
   availabilityReads: readonly Readonly<{ status: "shown" | "empty" | "failed"; sourceRef?: string; timeZone?: string; shownCount: number; reason?: string }>[];
+  appointmentReads: readonly Readonly<{ status: "shown" | "empty" | "failed"; sourceRef?: string; shownCount: number; reason?: string }>[];
 }>;
 
 const actionKinds = ["book", "cancel", "reschedule", "intake"] as const;
@@ -38,7 +39,12 @@ export function summarizeCall(call: CallState): Result<CallSummary, TransitionFa
         (item.sourceRef !== undefined && typeof item.sourceRef !== "string") ||
         (item.timeZone !== undefined && typeof item.timeZone !== "string") ||
         (item.reason !== undefined && typeof item.reason !== "string") ||
-        (item.shownStartsAt !== undefined && !Array.isArray(item.shownStartsAt)))) {
+        (item.shownStartsAt !== undefined && !Array.isArray(item.shownStartsAt))) ||
+      !Array.isArray(call.appointmentReads) || call.appointmentReads.some(item => !item ||
+        !allowed(["shown", "empty", "failed"], item.status) ||
+        (item.sourceRef !== undefined && typeof item.sourceRef !== "string") ||
+        (item.reason !== undefined && typeof item.reason !== "string") ||
+        (item.shownCount !== undefined && (!Number.isSafeInteger(item.shownCount) || item.shownCount < 0)))) {
     return err({ kind: "storageCorrupt" });
   }
   return ok({
@@ -53,6 +59,10 @@ export function summarizeCall(call: CallState): Result<CallSummary, TransitionFa
       shownCount: shownStartsAt?.length ?? 0,
       ...(sourceRef === undefined ? {} : { sourceRef }),
       ...(timeZone === undefined ? {} : { timeZone }),
+      ...(reason === undefined ? {} : { reason }) })),
+    appointmentReads: call.appointmentReads.map(({ status, sourceRef, shownCount, reason }) => ({ status,
+      shownCount: shownCount ?? 0,
+      ...(sourceRef === undefined ? {} : { sourceRef }),
       ...(reason === undefined ? {} : { reason }) })),
   });
 }

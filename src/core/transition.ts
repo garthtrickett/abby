@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { digestActionRequest, digestTurn } from "./digest.ts";
 import { availabilityPresentation } from "./availability-presentation.ts";
+import { appointmentPresentation } from "./appointment-presentation.ts";
 import { planStaffChange } from "./staff-work.ts";
 import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "./model.ts";
 import type {
@@ -280,6 +281,26 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       addStaffTask(state, "systemFailure", now);
       state.callerMessages.push("I can't check available times right now. I'll request staff follow-up.");
       state.availabilityReads.push({ turnId: turn.turnId, status: "failed", reason: interpretation.reason });
+      break;
+    case "appointments": {
+      const presentation = appointmentPresentation(interpretation.snapshot, state.policy.scope, interpretation.from, interpretation.to, now);
+      if (turn.quality !== "clear" || !presentation.ok) {
+        addStaffTask(state, "systemFailure", now);
+        state.callerMessages.push("I can't check appointments right now. I'll request staff follow-up.");
+        state.appointmentReads.push({ turnId: turn.turnId, status: "failed", reason: turn.quality !== "clear" ? "unclear" : "invalidEvidence" });
+      } else {
+        state.callerMessages.push(presentation.value.text);
+        state.appointmentReads.push({ turnId: turn.turnId, status: presentation.value.status,
+          sourceRef: presentation.value.sourceRef, shownCount: presentation.value.shownCount });
+      }
+      break;
+    }
+    case "appointmentsFailure":
+      addStaffTask(state, interpretation.reason === "invalidProof" || interpretation.reason === "unclear" ? "verificationFailed" : "systemFailure", now);
+      state.callerMessages.push(interpretation.reason === "invalidProof" || interpretation.reason === "unclear"
+        ? "I can't verify whose appointment to check. I'll request staff follow-up."
+        : "I can't check appointments right now. I'll request staff follow-up.");
+      state.appointmentReads.push({ turnId: turn.turnId, status: "failed", reason: interpretation.reason });
       break;
   }
   const newMessages = state.callerMessages.slice(messageCount);

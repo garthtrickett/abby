@@ -11,6 +11,7 @@ export type VoiceIntent =
   | Readonly<{ kind: "book"; verificationRef: string; offerRef: string }>
   | Readonly<{ kind: "answer"; sourceRefs: readonly string[]; proposedText: string }>
   | Readonly<{ kind: "availability"; from: string; to: string }>
+  | Readonly<{ kind: "appointments"; verificationRef: string; from: string; to: string }>
   | Readonly<{ kind: "affirm" }>
   | Readonly<{ kind: "handoff"; reason: StaffReason }>
   | Readonly<{ kind: "transfer"; reason: StaffReason }>;
@@ -200,6 +201,9 @@ export class VoiceSession {
       result = await this.reception.answer(this.scope, turn, this.cachedIntent.sourceRefs, this.cachedIntent.proposedText, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "availability") {
       result = await this.reception.checkAvailability(this.scope, turn, this.cachedIntent.from, this.cachedIntent.to, now, existing.value.conversationRevision);
+    } else if (this.cachedIntent.kind === "appointments") {
+      result = await this.reception.checkAppointments(this.scope, turn, this.cachedIntent.verificationRef,
+        this.cachedIntent.from, this.cachedIntent.to, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "transfer") {
       result = await this.runtime.acceptTurn(turn, { kind: "transfer", reason: this.cachedIntent.reason }, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "handoff") {

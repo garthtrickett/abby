@@ -32,6 +32,7 @@ export function initialState(callId: string, policy: CallPolicy): CallState {
     callerMessages: [],
     knowledgeAnswers: [],
     availabilityReads: [],
+    appointmentReads: [],
   };
 }
 
