@@ -3,4 +3,5 @@ dist/
 coverage/
 test-results/
 playwright-report/
+eval/results/
 __pycache__/
