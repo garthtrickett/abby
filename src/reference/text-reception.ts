@@ -228,10 +228,10 @@ export class TextReception {
   async drain(scope: LocationScope, callId: string, now: string): Promise<Result<CallState, TextReceptionFailure>> {
     const runtime = this.runtime(scope);
     try {
-      const leased = await this.effectLeases.run(callId, scope, async signal => {
+      const leased = await this.effectLeases.run(callId, scope, async (signal, guard) => {
         const read = await runtime.read(callId);
         if (!read.ok) return read;
-        const worker = new EffectWorker(runtime, this.host, this.model, this.knowledge, { signal });
+        const worker = new EffectWorker(runtime, this.host, this.model, this.knowledge, { signal, leaseGuard: guard });
         for (const effect of Object.values(read.value.effects)) {
           if (effect.status !== "pending") continue;
           try { await worker.process(callId, effect.id, now); }
@@ -255,8 +255,8 @@ export class TextReception {
     const effectId = item?.pendingChangeKey ? `${item.pendingChangeKey}:send` : undefined;
     if (!effectId) return err({ kind: "effectFailure" });
     try {
-      await this.effectLeases.run(callId, scope, signal =>
-        new EffectWorker(runtime, this.host, undefined, undefined, { signal }).process(callId, effectId, now));
+      await this.effectLeases.run(callId, scope, (signal, guard) =>
+        new EffectWorker(runtime, this.host, undefined, undefined, { signal, leaseGuard: guard }).process(callId, effectId, now));
     }
     catch { /* The persisted intent remains available to the recovery worker. */ }
     return runtime.read(callId);

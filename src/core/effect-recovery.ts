@@ -2,6 +2,7 @@ import { EffectWorker } from "./effect-worker.ts";
 import type { EffectWorkerOptions } from "./effect-worker.ts";
 import { EffectCallLeaseCoordinator } from "./effect-call-lease.ts";
 import type { EffectCallLeaseStore } from "./effect-call-lease.ts";
+import type { EffectCallLeaseGuard } from "./effect-call-lease.ts";
 import type { HostEffects, KnowledgeHost, OperatorAlertHost, StaffLifecycleHost } from "./host.ts";
 import type { LedgerStore } from "./ledger.ts";
 import { err, ok } from "./model.ts";
@@ -42,9 +43,9 @@ export class EffectRecovery {
     this.leases = new EffectCallLeaseCoordinator(ledger);
   }
 
-  private async attempt(ref: RecoverableEffectRef, now: string, signal: AbortSignal): Promise<"processed" | "recovered" | "deferred" | { effectId: string; kind: "hostUnavailable" | "effectFailure" | "recoveryFailure" }> {
+  private async attempt(ref: RecoverableEffectRef, now: string, signal: AbortSignal, guard: EffectCallLeaseGuard): Promise<"processed" | "recovered" | "deferred" | { effectId: string; kind: "hostUnavailable" | "effectFailure" | "recoveryFailure" }> {
     if (signal.aborted) return "deferred";
-    const runtime = new CallRuntime(this.ledger, ref.scope);
+    const runtime = new CallRuntime(this.ledger, ref.scope, guard);
     const current = await runtime.read(ref.callId);
     if (!current.ok) return { effectId: ref.effectId, kind: "recoveryFailure" };
     const effect = current.value.effects[ref.effectId];
@@ -72,7 +73,7 @@ export class EffectRecovery {
     catch { if (effect.kind === "modelKnowledge") return { effectId: ref.effectId, kind: "hostUnavailable" }; }
     if (effect.kind === "modelKnowledge" && this.knowledgeLookup && !knowledge) return { effectId: ref.effectId, kind: "hostUnavailable" };
     try {
-      await new EffectWorker(runtime, host, model, knowledge, { ...this.workerOptions, signal }).process(ref.callId, ref.effectId, now);
+      await new EffectWorker(runtime, host, model, knowledge, { ...this.workerOptions, signal, leaseGuard: guard }).process(ref.callId, ref.effectId, now);
       return "processed";
     } catch {
       const latest = await runtime.read(ref.callId);
@@ -107,9 +108,9 @@ export class EffectRecovery {
     for (let index = 0; index < groups.length; index += 4) {
       const batch = await Promise.all(groups.slice(index, index + 4).map(async group => {
         try {
-          const leased = await this.leases.run(group[0]!.callId, group[0]!.scope, async signal => {
+          const leased = await this.leases.run(group[0]!.callId, group[0]!.scope, async (signal, guard) => {
             const results: Awaited<ReturnType<EffectRecovery["attempt"]>>[] = [];
-            for (const ref of group) results.push(await this.attempt(ref, now, signal));
+            for (const ref of group) results.push(await this.attempt(ref, now, signal, guard));
             return results;
           });
           if (!leased.ok || leased.value.kind === "lost") {

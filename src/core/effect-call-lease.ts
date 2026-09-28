@@ -5,12 +5,14 @@ import { systemTimer } from "./timer.ts";
 import type { TimerPort } from "./timer.ts";
 
 /** Storage operations are atomic and use the storage clock in production. */
+export type EffectCallLeaseGuard = Readonly<{ owner: string; version: number }>;
+
 export interface EffectCallLeaseStore {
   claimEffectCall(callId: string, scope: LocationScope, owner: string, leaseMs: number, now: string):
+    Promise<Result<Readonly<{ version: number }> | null, TransitionFailure>>;
+  renewEffectCall(callId: string, scope: LocationScope, guard: EffectCallLeaseGuard, leaseMs: number, now: string):
     Promise<Result<boolean, TransitionFailure>>;
-  renewEffectCall(callId: string, scope: LocationScope, owner: string, leaseMs: number, now: string):
-    Promise<Result<boolean, TransitionFailure>>;
-  releaseEffectCall(callId: string, scope: LocationScope, owner: string):
+  releaseEffectCall(callId: string, scope: LocationScope, guard: EffectCallLeaseGuard):
     Promise<Result<boolean, TransitionFailure>>;
 }
 
@@ -24,7 +26,7 @@ export type LeasedEffectRun<Value> =
   | Readonly<{ kind: "busy" }>
   | Readonly<{ kind: "completed" | "lost"; value: Value }>;
 
-/** Keeps one call's recovery work owned while allowing crash expiry and stale-owner fencing. */
+/** Keeps one call's effect work owned while allowing crash expiry and stale-owner fencing. */
 export class EffectCallLeaseCoordinator {
   private readonly store: EffectCallLeaseStore;
   private readonly leaseMs: number;
@@ -54,7 +56,7 @@ export class EffectCallLeaseCoordinator {
     } catch { return err({ kind: "storageFailure" }); }
   }
 
-  async run<Value>(callId: string, scope: LocationScope, work: (signal: AbortSignal) => Promise<Value>):
+  async run<Value>(callId: string, scope: LocationScope, work: (signal: AbortSignal, guard: EffectCallLeaseGuard) => Promise<Value>):
     Promise<Result<LeasedEffectRun<Value>, TransitionFailure>> {
     const clock = this.now();
     if (!clock.ok) return clock;
@@ -64,6 +66,7 @@ export class EffectCallLeaseCoordinator {
     catch { return err({ kind: "storageFailure" }); }
     if (!claimed.ok) return claimed;
     if (!claimed.value) return ok({ kind: "busy" });
+    const guard = { owner, version: claimed.value.version };
 
     const controller = new AbortController();
     let stopped = false;
@@ -81,7 +84,7 @@ export class EffectCallLeaseCoordinator {
             const at = this.now();
             if (!at.ok) { lose(); return; }
             let renewed: Awaited<ReturnType<EffectCallLeaseStore["renewEffectCall"]>>;
-            try { renewed = await this.store.renewEffectCall(callId, scope, owner, this.leaseMs, at.value); }
+            try { renewed = await this.store.renewEffectCall(callId, scope, guard, this.leaseMs, at.value); }
             catch { lose(); return; }
             if (!renewed.ok || !renewed.value) { lose(); return; }
             schedule();
@@ -95,7 +98,7 @@ export class EffectCallLeaseCoordinator {
     let value: Value | undefined;
     let workError: unknown;
     let workFailed = false;
-    try { value = await work(controller.signal); }
+    try { value = await work(controller.signal, guard); }
     catch (error) { workError = error; workFailed = true; }
     stopped = true;
     if (handle !== undefined) {
@@ -104,7 +107,7 @@ export class EffectCallLeaseCoordinator {
     }
     if (renewal) await renewal;
     let released: Awaited<ReturnType<EffectCallLeaseStore["releaseEffectCall"]>>;
-    try { released = await this.store.releaseEffectCall(callId, scope, owner); }
+    try { released = await this.store.releaseEffectCall(callId, scope, guard); }
     catch { return err({ kind: "storageFailure" }); }
     if (!released.ok) return released;
     if (!released.value) lost = true;

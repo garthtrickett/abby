@@ -8,9 +8,11 @@ import type { ColumnType, Selectable, Insertable, Updateable } from 'kysely';
 export default interface EffectCallLeasesTable {
   call_id: ColumnType<CallsCallId, CallsCallId, CallsCallId>;
 
-  owner_token: ColumnType<string, string, string>;
+  owner_token: ColumnType<string | null, string | null, string | null>;
 
   expires_at: ColumnType<Date, Date | string, Date | string>;
+
+  lease_version: ColumnType<string, string | undefined, string>;
 }
 
 export type EffectCallLeases = Selectable<EffectCallLeasesTable>;

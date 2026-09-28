@@ -6,7 +6,7 @@ import { admissionReceipt, initialAdmittedState, initialState, sameAdmission } f
 import { validApprovedGreeting } from "../core/greeting.ts";
 import { LOCATION_CHOICE_TIMEOUT_MS, PENDING_LOCATION_LEASE_MS, closePendingLocationState, expiredPendingLocationState, pendingDueAt, pendingMatchesAdmission, policyMatchesPending, resolveLocationPrompt, startLocationPrompt, validPendingAdmission, validPendingLocation, validPendingRoute } from "../core/pending-location.ts";
 import type { LedgerStore } from "../core/ledger.ts";
-import type { EffectCallLeaseStore } from "../core/effect-call-lease.ts";
+import type { EffectCallLeaseGuard, EffectCallLeaseStore } from "../core/effect-call-lease.ts";
 import { transition } from "../core/transition.ts";
 import { validKnowledgeSnapshot } from "../core/knowledge-evidence.ts";
 import { READINESS_REQUIREMENTS, unprovenReadiness } from "../core/readiness.ts";
@@ -614,7 +614,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
     }
   }
 
-  async claimEffectCall(callId: string, scope: LocationScope, owner: string, leaseMs: number, now: string): Promise<Result<boolean, TransitionFailure>> {
+  async claimEffectCall(callId: string, scope: LocationScope, owner: string, leaseMs: number, now: string): Promise<Result<Readonly<{ version: number }> | null, TransitionFailure>> {
     if (!callId || !scope.tenantId || !scope.clinicId || !scope.locationId || !owner || owner.length > 256 ||
         !Number.isSafeInteger(leaseMs) || leaseMs < 1 || leaseMs > 300_000 || !Number.isFinite(Date.parse(now))) {
       return err({ kind: "invalidTransition" });
@@ -623,39 +623,47 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
       return await this.db.transaction().execute(async trx => {
         const ledgerNow = await this.trustedNow(trx, now);
         const expiresAt = new Date(Date.parse(ledgerNow) + leaseMs).toISOString();
-        const claimed = await sql<{ call_id: string }>`
-          insert into effect_call_leases (call_id, owner_token, expires_at)
-          select call_id, ${owner}, ${expiresAt}::timestamptz from calls
+        const claimed = await sql<{ lease_version: string }>`
+          insert into effect_call_leases (call_id, owner_token, expires_at, lease_version)
+          select call_id, ${owner}, ${expiresAt}::timestamptz, 1 from calls
           where call_id = ${callId} and tenant_id = ${scope.tenantId}
             and clinic_id = ${scope.clinicId} and location_id = ${scope.locationId}
           on conflict (call_id) do update
-            set owner_token = excluded.owner_token, expires_at = excluded.expires_at
-            where effect_call_leases.expires_at <= ${ledgerNow}::timestamptz
-          returning call_id`.execute(trx);
-        if (claimed.rows.length === 1) return ok(true);
+            set owner_token = excluded.owner_token, expires_at = excluded.expires_at,
+                lease_version = effect_call_leases.lease_version + 1
+            where effect_call_leases.owner_token is null or effect_call_leases.expires_at <= ${ledgerNow}::timestamptz
+          returning lease_version::text`.execute(trx);
+        if (claimed.rows.length === 1) {
+          const version = Number(claimed.rows[0]!.lease_version);
+          return Number.isSafeInteger(version) && version >= 1 ? ok({ version }) : err({ kind: "storageCorrupt" });
+        }
         const call = await trx.selectFrom("calls").select(["tenant_id", "clinic_id", "location_id"])
           .where("call_id", "=", callId as CallsCallId).executeTakeFirst();
         if (!call) return err({ kind: "callUnknown" });
         if (call.tenant_id !== scope.tenantId || call.clinic_id !== scope.clinicId || call.location_id !== scope.locationId) {
           return err({ kind: "scopeMismatch" });
         }
-        return ok(false);
+        return ok(null);
       });
     } catch { return err({ kind: "storageFailure" }); }
   }
 
-  async renewEffectCall(callId: string, scope: LocationScope, owner: string, leaseMs: number, now: string): Promise<Result<boolean, TransitionFailure>> {
-    if (!callId || !scope.tenantId || !scope.clinicId || !scope.locationId || !owner || owner.length > 256 ||
+  async renewEffectCall(callId: string, scope: LocationScope, guard: EffectCallLeaseGuard, leaseMs: number, now: string): Promise<Result<boolean, TransitionFailure>> {
+    if (!callId || !scope.tenantId || !scope.clinicId || !scope.locationId || !guard.owner || guard.owner.length > 256 ||
+        !Number.isSafeInteger(guard.version) || guard.version < 1 ||
         !Number.isSafeInteger(leaseMs) || leaseMs < 1 || leaseMs > 300_000 || !Number.isFinite(Date.parse(now))) {
       return err({ kind: "invalidTransition" });
     }
     try {
-      const ledgerNow = await this.trustedNow(this.db, now);
-      const expiresAt = new Date(Date.parse(ledgerNow) + leaseMs).toISOString();
+      const testNow = this.clockForTests ? await this.trustedNow(this.db, now) : undefined;
+      const current = testNow ? sql`${testNow}::timestamptz` : sql`clock_timestamp()`;
+      const expiresAt = testNow
+        ? sql`${new Date(Date.parse(testNow) + leaseMs).toISOString()}::timestamptz`
+        : sql`clock_timestamp() + ${leaseMs} * interval '1 millisecond'`;
       const renewed = await sql<{ call_id: string }>`
-        update effect_call_leases set expires_at = ${expiresAt}::timestamptz
-        where call_id = ${callId} and owner_token = ${owner}
-          and expires_at > ${ledgerNow}::timestamptz
+        update effect_call_leases set expires_at = ${expiresAt}
+        where call_id = ${callId} and owner_token = ${guard.owner} and lease_version = ${guard.version}
+          and expires_at > ${current}
           and exists (select 1 from calls where calls.call_id = effect_call_leases.call_id
             and calls.tenant_id = ${scope.tenantId} and calls.clinic_id = ${scope.clinicId}
             and calls.location_id = ${scope.locationId})
@@ -664,13 +672,15 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
     } catch { return err({ kind: "storageFailure" }); }
   }
 
-  async releaseEffectCall(callId: string, scope: LocationScope, owner: string): Promise<Result<boolean, TransitionFailure>> {
-    if (!callId || !scope.tenantId || !scope.clinicId || !scope.locationId || !owner || owner.length > 256) {
+  async releaseEffectCall(callId: string, scope: LocationScope, guard: EffectCallLeaseGuard): Promise<Result<boolean, TransitionFailure>> {
+    if (!callId || !scope.tenantId || !scope.clinicId || !scope.locationId || !guard.owner || guard.owner.length > 256 ||
+        !Number.isSafeInteger(guard.version) || guard.version < 1) {
       return err({ kind: "invalidTransition" });
     }
     try {
       const released = await sql<{ call_id: string }>`
-        delete from effect_call_leases where call_id = ${callId} and owner_token = ${owner}
+        update effect_call_leases set owner_token = null where call_id = ${callId}
+          and owner_token = ${guard.owner} and lease_version = ${guard.version}
           and exists (select 1 from calls where calls.call_id = effect_call_leases.call_id
             and calls.tenant_id = ${scope.tenantId} and calls.clinic_id = ${scope.clinicId}
             and calls.location_id = ${scope.locationId})
@@ -792,7 +802,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
     }
   }
 
-  async apply(callId: string, scope: LocationScope, expectedVersion: number, action: TransitionAction): Promise<Result<CallState, TransitionFailure>> {
+  async apply(callId: string, scope: LocationScope, expectedVersion: number, action: TransitionAction, guard?: EffectCallLeaseGuard): Promise<Result<CallState, TransitionFailure>> {
     try {
       return await this.db.transaction().execute(async trx => {
         const row = await trx.selectFrom("calls").select(["state", "version"])
@@ -802,6 +812,18 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
           .where("location_id", "=", scope.locationId)
           .forUpdate().executeTakeFirst();
         if (!row) return err({ kind: "callUnknown" });
+        if (guard) {
+          if (!guard.owner || guard.owner.length > 256 || !Number.isSafeInteger(guard.version) || guard.version < 1) {
+            return err({ kind: "leaseLost" });
+          }
+          const held = await sql<{ owner_token: string | null; lease_version: string; expires_at: Date }>`
+            select owner_token, lease_version::text, expires_at from effect_call_leases
+            where call_id = ${callId} for share`.execute(trx);
+          const lease = held.rows[0];
+          const at = await this.trustedNow(trx, new Date().toISOString());
+          if (!lease || lease.owner_token !== guard.owner || Number(lease.lease_version) !== guard.version ||
+              !(lease.expires_at instanceof Date) || lease.expires_at.getTime() <= Date.parse(at)) return err({ kind: "leaseLost" });
+        }
         if (row.version !== expectedVersion) return err({ kind: "versionConflict" });
         const decoded = decodeState(row.state, callId);
         if (!decoded.ok || decoded.value.version !== row.version) return err({ kind: "storageCorrupt" });

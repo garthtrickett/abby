@@ -10,7 +10,7 @@ import type { TimerPort } from "../../src/core/timer.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { MemoryPolicyStore, referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { TextReception } from "../../src/reference/text-reception.ts";
-import { now, setup, success } from "./fixture.ts";
+import { failure, now, setup, success } from "./fixture.ts";
 
 const afterDelay = "2026-09-28T10:01:01.000Z";
 const later = "2026-09-28T10:01:02.000Z";
@@ -139,15 +139,68 @@ test("expired call leases can be reclaimed and stale owners cannot affect the ne
   const app = await setup("recover-lease-expiry");
   const first = "worker-one";
   const second = "worker-two";
-  assert.equal(success(await app.ledger.claimEffectCall(app.callId, app.scope, first, 60_000, now)), true);
-  assert.equal(success(await app.ledger.claimEffectCall(app.callId, app.scope, second, 60_000, now)), false);
-  assert.equal(success(await app.ledger.renewEffectCall(app.callId, app.scope, first, 60_000, "2026-09-28T10:00:30.000Z")), true);
-  assert.equal(success(await app.ledger.claimEffectCall(app.callId, app.scope, second, 60_000, "2026-09-28T10:01:00.000Z")), false);
-  assert.equal(success(await app.ledger.claimEffectCall(app.callId, app.scope, second, 60_000, "2026-09-28T10:01:31.000Z")), true);
-  assert.equal(success(await app.ledger.renewEffectCall(app.callId, app.scope, first, 60_000, "2026-09-28T10:01:32.000Z")), false);
-  assert.equal(success(await app.ledger.releaseEffectCall(app.callId, app.scope, first)), false);
-  assert.equal(success(await app.ledger.claimEffectCall(app.callId, app.scope, first, 60_000, "2026-09-28T10:01:32.000Z")), false);
-  assert.equal(success(await app.ledger.releaseEffectCall(app.callId, app.scope, second)), true);
+  const firstClaim = success(await app.ledger.claimEffectCall(app.callId, app.scope, first, 60_000, now));
+  assert.ok(firstClaim);
+  const firstGuard = { owner: first, version: firstClaim.version };
+  assert.equal(success(await app.ledger.claimEffectCall(app.callId, app.scope, second, 60_000, now)), null);
+  assert.equal(success(await app.ledger.renewEffectCall(app.callId, app.scope, firstGuard, 60_000, "2026-09-28T10:00:30.000Z")), true);
+  assert.equal(success(await app.ledger.claimEffectCall(app.callId, app.scope, second, 60_000, "2026-09-28T10:01:00.000Z")), null);
+  const secondClaim = success(await app.ledger.claimEffectCall(app.callId, app.scope, second, 60_000, "2026-09-28T10:01:31.000Z"));
+  assert.ok(secondClaim);
+  assert.equal(secondClaim.version, firstGuard.version + 1);
+  const secondGuard = { owner: second, version: secondClaim.version };
+  assert.equal(success(await app.ledger.renewEffectCall(app.callId, app.scope, firstGuard, 60_000, "2026-09-28T10:01:32.000Z")), false);
+  assert.equal(success(await app.ledger.releaseEffectCall(app.callId, app.scope, firstGuard)), false);
+  assert.equal(success(await app.ledger.claimEffectCall(app.callId, app.scope, first, 60_000, "2026-09-28T10:01:32.000Z")), null);
+  assert.equal(success(await app.ledger.releaseEffectCall(app.callId, app.scope, secondGuard)), true);
+});
+
+test("wrong or reclaimed lease versions cannot settle a possibly sent staff task", async () => {
+  const app = await setup("recover-result-fence");
+  await app.turn("handoff", "Ask staff to call", { kind: "handoff", reason: "callerRequested" });
+  const item = Object.values((await app.state()).staffItems)[0];
+  assert.ok(item);
+  const effectId = `${item.key}:open`;
+  const owner = "reused-worker-name";
+  const claimed = success(await app.ledger.claimEffectCall(app.callId, app.scope, owner, 60_000, new Date().toISOString()));
+  assert.ok(claimed);
+  const original = { owner, version: claimed.version };
+  success(await app.runtime.withEffectLease(original).markStaffPossiblySent(app.callId, effectId, now));
+  const receipt = await app.host.openTask(item);
+  const afterSend = await app.state();
+  failure(await app.runtime.withEffectLease({ owner, version: original.version + 1 })
+    .acceptStaffResult(app.callId, effectId, receipt), "leaseLost");
+  assert.equal((await app.state()).version, afterSend.version);
+
+  assert.equal(success(await app.ledger.releaseEffectCall(app.callId, app.scope, original)), true);
+  const reclaimed = success(await app.ledger.claimEffectCall(app.callId, app.scope, owner, 60_000, new Date().toISOString()));
+  assert.ok(reclaimed);
+  assert.equal(reclaimed.version, original.version + 1);
+  failure(await app.runtime.withEffectLease(original).acceptStaffResult(app.callId, effectId, receipt), "leaseLost");
+  assert.equal((await app.state()).version, afterSend.version);
+  success(await app.runtime.withEffectLease({ owner, version: reclaimed.version }).acceptStaffResult(app.callId, effectId, receipt));
+  assert.equal((await app.state()).staffItems[item.key]?.status, "open");
+});
+
+test("an expired lease cannot cross the durable send barrier", async () => {
+  const app = await setup("recover-expired-send-fence");
+  await app.turn("handoff", "Ask staff to call", { kind: "handoff", reason: "callerRequested" });
+  const task = Object.values((await app.state()).staffItems)[0];
+  assert.ok(task);
+  const effectId = `${task.key}:open`;
+  const expiredAt = new Date(Date.now() - 120_000).toISOString();
+  const oldClaim = success(await app.ledger.claimEffectCall(app.callId, app.scope, "expired-worker", 60_000, expiredAt));
+  assert.ok(oldClaim);
+  const before = await app.state();
+  failure(await app.runtime.withEffectLease({ owner: "expired-worker", version: oldClaim.version })
+    .markStaffPossiblySent(app.callId, effectId, now), "leaseLost");
+  assert.equal((await app.state()).version, before.version);
+  const newClaim = success(await app.ledger.claimEffectCall(app.callId, app.scope, "replacement-worker", 60_000,
+    new Date().toISOString()));
+  assert.ok(newClaim);
+  assert.equal(newClaim.version, oldClaim.version + 1);
+  success(await app.runtime.withEffectLease({ owner: "replacement-worker", version: newClaim.version })
+    .markStaffPossiblySent(app.callId, effectId, now));
 });
 
 test("a running recovery renews its lease until work completes", async () => {
@@ -190,12 +243,12 @@ test("a running recovery renews its lease until work completes", async () => {
     callback();
     await renewalSeen;
     assert.equal(success(await app.ledger.claimEffectCall(app.callId, app.scope, "other-worker", 60_000,
-      "2026-09-28T10:01:00.000Z")), false);
+      "2026-09-28T10:01:00.000Z")), null);
   } finally { release(); }
   assert.deepEqual(success(await active), { kind: "completed", value: "done" });
   assert.equal(callbacks.size, 0);
-  assert.equal(success(await app.ledger.claimEffectCall(app.callId, app.scope, "other-worker", 60_000,
-    "2026-09-28T10:01:00.000Z")), true);
+  assert.ok(success(await app.ledger.claimEffectCall(app.callId, app.scope, "other-worker", 60_000,
+    "2026-09-28T10:01:00.000Z")));
 });
 
 test("recovery never retries a possibly sent booking write and reconciles its original key", async () => {

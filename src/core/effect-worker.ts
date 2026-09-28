@@ -6,8 +6,9 @@ import type { ModelWork } from "../model/work.ts";
 import { createHash } from "node:crypto";
 import { systemTimer } from "./timer.ts";
 import type { TimerPort } from "./timer.ts";
+import type { EffectCallLeaseGuard } from "./effect-call-lease.ts";
 
-export type EffectWorkerOptions = Readonly<{ hostDeadlineMs?: number; timer?: TimerPort; signal?: AbortSignal }>;
+export type EffectWorkerOptions = Readonly<{ hostDeadlineMs?: number; timer?: TimerPort; signal?: AbortSignal; leaseGuard?: EffectCallLeaseGuard }>;
 
 export class EffectWorker {
   private readonly runtime: CallRuntime;
@@ -22,7 +23,7 @@ export class EffectWorker {
               knowledge?: KnowledgeHost, options: EffectWorkerOptions = {}) {
     const deadline = options.hostDeadlineMs ?? 15_000;
     if (!Number.isSafeInteger(deadline) || deadline < 1 || deadline > 120_000) throw new RangeError("hostDeadlineMs must be 1..120000");
-    this.runtime = runtime;
+    this.runtime = options.leaseGuard ? runtime.withEffectLease(options.leaseGuard) : runtime;
     this.host = host;
     this.model = model;
     this.knowledge = knowledge ?? (host.readKnowledge ? host as KnowledgeHost : undefined);
