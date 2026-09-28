@@ -67,7 +67,30 @@ class FakeTransfer implements TransferPort {
   }
 }
 
-async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: boolean, transferMode: "execute" | "requestOnly" | "unavailable" = "requestOnly", transferDestinationRef?: string) {
+class PresentationStartHookLedger implements LedgerStore {
+  private readonly inner: LedgerStore;
+  private readonly onStart: () => void;
+  private readonly onRenew: (() => void) | undefined;
+  constructor(inner: LedgerStore, onStart: () => void, onRenew?: () => void) {
+    this.inner = inner;
+    this.onStart = onStart;
+    this.onRenew = onRenew;
+  }
+  start(...args: Parameters<LedgerStore["start"]>) { return this.inner.start(...args); }
+  findAdmission(...args: Parameters<LedgerStore["findAdmission"]>) { return this.inner.findAdmission(...args); }
+  findExpiredAdmissions(...args: Parameters<LedgerStore["findExpiredAdmissions"]>) { return this.inner.findExpiredAdmissions(...args); }
+  findExpiredSessions(...args: Parameters<LedgerStore["findExpiredSessions"]>) { return this.inner.findExpiredSessions(...args); }
+  admit(...args: Parameters<LedgerStore["admit"]>) { return this.inner.admit(...args); }
+  read(...args: Parameters<LedgerStore["read"]>) { return this.inner.read(...args); }
+  async apply(...args: Parameters<LedgerStore["apply"]>) {
+    const result = await this.inner.apply(...args);
+    if (result.ok && args[3].kind === "presentationStarted") this.onStart();
+    if (result.ok && args[3].kind === "sessionRenewed") this.onRenew?.();
+    return result;
+  }
+}
+
+async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: boolean, transferMode: "execute" | "requestOnly" | "unavailable" = "requestOnly", transferDestinationRef?: string, clock?: { now: () => number; onPresentationStarted?: () => void; onSessionRenewed?: () => void }) {
   const scope: LocationScope = { tenantId: `voice-tenant-${id}`, clinicId: `voice-clinic-${id}`, locationId: `voice-location-${id}` };
   const patient = { scope, patientRef: `patient-${id}`, verificationRef: `proof-${id}`, expiresAt: at(86_400) };
   const offer = { scope, offerRef: `offer-${id}`, serviceRef: "physio", startsAt: at(90_000), expiresAt: at(86_400) };
@@ -99,12 +122,14 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
   }, () => now);
   const callId = value(await admission.begin({ key: { accountRef: `account-${id}`, providerCallRef: `call-${id}` }, dialedNumber: "+6125550100", receivedAt: now })).receipt.callId;
   const sessionId = `session-${id}`;
-  const session = new VoiceSession(callId, sessionId, scope, ledger, reception, playback, async turn =>
+  const sessionLedger = clock?.onPresentationStarted || clock?.onSessionRenewed
+    ? new PresentationStartHookLedger(ledger, clock.onPresentationStarted ?? (() => {}), clock.onSessionRenewed) : ledger;
+  const session = new VoiceSession(callId, sessionId, scope, sessionLedger, reception, playback, async turn =>
     ok(turn.text.startsWith("Transfer")
       ? { kind: "transfer" as const, reason: "callerRequested" as const }
       : turn.text.startsWith("Book")
       ? { kind: "book" as const, verificationRef: patient.verificationRef, offerRef: offer.offerRef }
-      : { kind: "affirm" as const }), transfer);
+      : { kind: "affirm" as const }), transfer, clock?.now);
   value(await session.attach(at(1)));
   return { scope, patient, offer, host, ledger, policy, reception, playback, transfer, session, sessionId, callId };
 }
@@ -394,5 +419,60 @@ for (const kind of kinds) {
     assert.equal(ended.lifecycle, "ended");
     assert.equal(ended.presentations[planned.pendingPresentationId!]?.status, "unproven");
     assert.equal(Object.values(ended.staffItems)[0]?.reason, "systemFailure");
+  });
+
+  test(`${kind}: a stalled presentation cannot send speech after the local lease gate closes`, async () => {
+    let monotonicMs = 0;
+    const app = await fixture(kind, `${kind}-stalled-speech`, true, "requestOnly", undefined,
+      { now: () => monotonicMs, onPresentationStarted: () => { monotonicMs = 29_000; } });
+    const planned = await bookTurn(app);
+    failure(await app.session.dispatchPending(at(4)), "leaseLost");
+    assert.equal(app.playback.queued.length, 0);
+    const ended = value(await new CallRuntime(app.ledger, app.scope).read(app.callId));
+    assert.equal(ended.lifecycle, "ended");
+    assert.equal(ended.presentations[planned.pendingPresentationId!]?.status, "unproven");
+    assert.equal(app.host.bookings(app.scope).length, 0);
+  });
+
+  test(`${kind}: a stalled transfer cannot reach the provider after the local lease gate closes`, async () => {
+    let monotonicMs = 0;
+    const app = await fixture(kind, `${kind}-stalled-transfer`, false, "execute", undefined,
+      { now: () => monotonicMs, onPresentationStarted: () => { monotonicMs = 29_000; } });
+    const planned = await transferTurn(app);
+    failure(await app.session.dispatchPending(at(4)), "leaseLost");
+    assert.equal(app.transfer.requested.length, 0);
+    const ended = value(await new CallRuntime(app.ledger, app.scope).read(app.callId));
+    assert.equal(ended.lifecycle, "ended");
+    assert.equal(ended.presentations[planned.pendingPresentationId!]?.status, "unproven");
+    assert.equal(Object.values(ended.staffItems)[0]?.reason, "systemFailure");
+  });
+
+  test(`${kind}: a timely renewal extends the local gate, but an expired gate cannot renew`, async () => {
+    let monotonicMs = 0;
+    const app = await fixture(kind, `${kind}-lease-renewal`, true, "requestOnly", undefined, { now: () => monotonicMs });
+    await bookTurn(app);
+    monotonicMs = 15_000;
+    const renewed = value(await app.session.renew(at(16)));
+    assert.equal(renewed.sessionLease?.version, 2);
+    monotonicMs = 29_000;
+    const queued = value(await app.session.dispatchPending(at(30)));
+    assert.equal(queued.kind, "queued");
+    assert.equal(app.playback.queued.length, 1);
+    monotonicMs = 43_000;
+    failure(await app.session.renew(at(44)), "leaseLost");
+    failure(await app.session.acceptPlaybackResult(queued.playbackId!, "played", at(44)), "leaseLost");
+    const state = value(await new CallRuntime(app.ledger, app.scope).read(app.callId));
+    assert.equal(state.presentations[Object.keys(state.presentations)[0]!]?.status, "started");
+  });
+
+  test(`${kind}: a renewal response after the old local gate closes cannot reopen output`, async () => {
+    let monotonicMs = 0;
+    const app = await fixture(kind, `${kind}-renewal-stall`, true, "requestOnly", undefined,
+      { now: () => monotonicMs, onSessionRenewed: () => { monotonicMs = 29_000; } });
+    await bookTurn(app);
+    monotonicMs = 15_000;
+    failure(await app.session.renew(at(16)), "leaseLost");
+    failure(await app.session.dispatchPending(at(30)), "leaseLost");
+    assert.equal(app.playback.queued.length, 0);
   });
 }
