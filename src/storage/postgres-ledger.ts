@@ -40,9 +40,19 @@ function auditPayload(action: TransitionAction): Record<string, string> {
 
 export class PostgresLedger implements LedgerStore {
   private readonly db: Kysely<Database>;
+  private readonly clockForTests: ((suggestedAt: string) => string) | undefined;
 
-  constructor(db: Kysely<Database>) {
+  constructor(db: Kysely<Database>, clockForTests?: (suggestedAt: string) => string) {
     this.db = db;
+    this.clockForTests = clockForTests;
+  }
+
+  private async trustedNow(db: Kysely<Database>, suggestedAt: string): Promise<string> {
+    if (this.clockForTests) return this.clockForTests(suggestedAt);
+    const result = await sql<{ current_time: Date }>`select clock_timestamp() as current_time`.execute(db);
+    const current = result.rows[0]?.current_time;
+    if (!(current instanceof Date) || !Number.isFinite(current.getTime())) throw new Error("database clock unavailable");
+    return current.toISOString();
   }
 
   async start(callId: string, policy: CallPolicy): Promise<Result<CallState, TransitionFailure>> {
@@ -78,9 +88,10 @@ export class PostgresLedger implements LedgerStore {
   async findExpiredAdmissions(now: string, scope?: LocationScope): Promise<Result<readonly AdmissionReceipt[], TransitionFailure>> {
     if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
     try {
+      const ledgerNow = await this.trustedNow(this.db, now);
       let query = this.db.selectFrom("calls").select(["call_id", "state"])
         .where(sql<boolean>`state->>'lifecycle' = 'starting'`)
-        .where(sql<boolean>`(state->'admission'->>'deadline')::timestamptz <= ${now}::timestamptz`);
+        .where(sql<boolean>`(state->'admission'->>'deadline')::timestamptz <= ${ledgerNow}::timestamptz`);
       if (scope) query = query.where("tenant_id", "=", scope.tenantId).where("clinic_id", "=", scope.clinicId).where("location_id", "=", scope.locationId);
       const rows = await query.limit(100).execute();
       const receipts: AdmissionReceipt[] = [];
@@ -100,9 +111,10 @@ export class PostgresLedger implements LedgerStore {
   async findExpiredSessions(now: string, scope?: LocationScope): Promise<Result<readonly ActiveSessionReceipt[], TransitionFailure>> {
     if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
     try {
+      const ledgerNow = await this.trustedNow(this.db, now);
       let query = this.db.selectFrom("calls").select(["call_id", "state"])
         .where(sql<boolean>`state->>'lifecycle' = 'active'`)
-        .where(sql<boolean>`(state->'sessionLease'->>'expiresAt')::timestamptz <= ${now}::timestamptz`);
+        .where(sql<boolean>`(state->'sessionLease'->>'expiresAt')::timestamptz <= ${ledgerNow}::timestamptz`);
       if (scope) query = query.where("tenant_id", "=", scope.tenantId).where("clinic_id", "=", scope.clinicId).where("location_id", "=", scope.locationId);
       const rows = await query.limit(100).execute();
       const receipts: ActiveSessionReceipt[] = [];
@@ -121,11 +133,13 @@ export class PostgresLedger implements LedgerStore {
   async admit(callId: string, policy: CallPolicy, admission: Admission): Promise<Result<AdmissionResult, TransitionFailure>> {
     if (!callId || !admission.key.accountRef || !admission.key.providerCallRef || !admission.dialedNumber ||
         !Number.isFinite(Date.parse(admission.acceptedAt)) || Date.parse(admission.deadline) <= Date.parse(admission.acceptedAt)) return err({ kind: "invalidTransition" });
-    const state = initialState(callId, policy);
-    state.lifecycle = "starting";
-    state.admission = structuredClone(admission);
     try {
       return await this.db.transaction().execute(async trx => {
+        const acceptedAt = await this.trustedNow(trx, admission.acceptedAt);
+        const storedAdmission: Admission = { ...admission, acceptedAt, deadline: new Date(Date.parse(acceptedAt) + 30_000).toISOString() };
+        const state = initialState(callId, policy);
+        state.lifecycle = "starting";
+        state.admission = storedAdmission;
         const inserted = await trx.insertInto("calls").values({
           call_id: callId as CallsCallId,
           tenant_id: policy.scope.tenantId,
@@ -149,7 +163,7 @@ export class PostgresLedger implements LedgerStore {
         const decoded = decodeState(row.state, callId);
         if (!decoded.ok) return decoded;
         const receipt = admissionReceipt(decoded.value);
-        return receipt && sameAdmission(receipt.admission, admission)
+        return receipt && sameAdmission(receipt.admission, storedAdmission)
           ? ok({ kind: "duplicate", receipt }) : err({ kind: "callConflict" });
       });
     } catch {
@@ -188,7 +202,9 @@ export class PostgresLedger implements LedgerStore {
         if (row.version !== expectedVersion) return err({ kind: "versionConflict" });
         const decoded = decodeState(row.state, callId);
         if (!decoded.ok || decoded.value.version !== row.version) return err({ kind: "storageCorrupt" });
-        const result = transition(decoded.value, action);
+        const trustedAction = decoded.value.admission && "now" in action && action.now !== undefined
+          ? { ...action, now: await this.trustedNow(trx, action.now) } as TransitionAction : action;
+        const result = transition(decoded.value, trustedAction);
         if (!result.ok) return result;
         const next = result.value;
         if (next.version === row.version) return ok(structuredClone(next));
@@ -199,8 +215,8 @@ export class PostgresLedger implements LedgerStore {
           call_id: callId as CallsCallId,
           tenant_id: scope.tenantId,
           sequence: next.version as CallEventsSequence,
-          kind: action.kind,
-          payload: auditPayload(action),
+          kind: trustedAction.kind,
+          payload: auditPayload(trustedAction),
         }).execute();
 
         for (const [id, effect] of Object.entries(next.effects)) {
