@@ -16,6 +16,8 @@ The [scoped call outcome report](../phase-2/CALL_OUTCOME_REPORT.md) gives agents
 
 `voice/admission.ts` and `voice/call-liveness-monitor.ts` add replay-safe admission, activation, a session lease, and independent expiry over both ledger adapters. Their [contract and limits](../phase-1/CALL_ADMISSION.md) distinguish this no-number foundation from live transport evidence.
 
+The [account-scoped clinic number router](../phase-1/CLINIC_NUMBER_ROUTING.md) binds an authenticated provider account and dialed number to one unambiguous tenant and location before policy resolution. Unknown, ambiguous, and shared-number routes use the independent fallback until in-call location selection is implemented.
+
 `voice/admission-fallback.ts` adds an [independent synthetic fallback boundary](../phase-1/ADMISSION_FALLBACK.md) for admission failures. Duplicate calls bypass it; provider outcomes and alerts are typed and tested without a live number.
 
 The [booking setting audit](../phase-2/SETTING_COMMAND_AUDIT.md) records the host-bound actor and before/after value with each new policy version. Clinic admins can read scoped history through the same command gateway and dashboard; older setting rows remain explicitly unattributed.
