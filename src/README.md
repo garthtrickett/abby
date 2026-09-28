@@ -40,6 +40,8 @@ Standalone booking defaults to `requestOnly` even after an admin enables the boo
 
 The [Cliniko appointment reader](../phase-2/CLINIKO_APPOINTMENT_READ.md) is an opt-in, read-only synthetic call path behind a host-issued patient proof. It projects scoped future appointment times into durable notices and redacted agent/staff receipts. A controlled demo probe confirmed one positive live adapter read and cleanup; a real caller verification policy and live media conformance remain unproven.
 
+The [Cliniko patient candidate reader](../phase-2/CLINIKO_PATIENT_CANDIDATES.md) performs a bounded exact email and date-of-birth search and returns only an internal unverified candidate reference. Controlled demo probes confirmed one, none, and ambiguous results with cleanup. It is not connected to caller or agent commands until a clinic-approved verification policy is in place.
+
 The [presentation recovery dispatcher](../phase-1/PRESENTATION_RECOVERY.md) scans durable pending speech or transfer intents after a lost wake-up. It only delivers through the exact attached session and never replays a started intent.
 
 The [in-process voice work loop](../phase-1/VOICE_WORK_LOOP.md) schedules lease expiry before pending-presentation recovery and exposes a commit notification hook. The host still supplies its session registry and commit wiring.

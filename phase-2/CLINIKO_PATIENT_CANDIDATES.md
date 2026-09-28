@@ -1,0 +1,9 @@
+# Cliniko patient candidate search, version 0.1
+
+`ClinikoPatientCandidateReader` is a read-only provider adapter for a clinic-scoped, exact email and date-of-birth search. It uses the documented `GET /patients` filters, requests at most two rows, validates the returned clues, and projects only `none`, `ambiguous`, or one internal candidate reference. It does not return a name, contact details, clinical content, a verification reference, or a `VerifiedPatient`.
+
+Cliniko's published patient-list filters do not include phone number. Caller ID is therefore not used as a provider search query or as proof of identity. Email and date of birth are search clues, **not** approved verification factors. A host must separately apply clinic-approved verification with bounded attempts, fresh patient lookup, scope checks, and disclosure policy before it issues a `verificationRef` to the appointment reader or booking path. An archived, mismatched, malformed, or incomplete provider row fails closed.
+
+The adapter is not wired to a caller turn or agent command. It has no setting to enable and makes no Cliniko write. `test/cliniko/patients.test.ts` exercises the complete adapter-to-fake-HTTP path, including exact filters, one/none/multiple results, no clinical-data projection, foreign-scope and invalid-clue rejection before HTTP, provider filter drift, and typed transport and permission failures. These are provider contract tests, not full-call E2E.
+
+The [controlled demo probes](../phase-0/CLINIKO_EVIDENCE.md) now prove one exact synthetic match, a wrong-birth-date miss, two matching records returning only `ambiguous`, and verified archive cleanup (C-LIVE-08/09). A clinic-approved verification and disclosure policy remains open. Only after that decision should a call-level candidate journey and its new full-call E2E scenarios be implemented and enabled.
