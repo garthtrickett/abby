@@ -44,6 +44,8 @@ The [per-session lease renewal loop](../phase-1/VOICE_LEASE_LOOP.md) renews an a
 
 [Model voice turns](../phase-2/MODEL_VOICE_TURN.md) route Abby-final synthetic speech through the typed model effect and host-approved knowledge path. The reference port is fake; no live LLM or media provider is installed.
 
+The optional [OpenAI Responses port](../phase-2/OPENAI_MODEL_PORT.md) makes a strict structured proposal request behind the same model interface. Its HTTP contract and voice path are tested with fake responses; the demo has no provider credentials or live model configuration.
+
 The [managed voice-session composition](../phase-1/MANAGED_VOICE_SESSION.md) registers exact attached sessions, starts their renewal loops, and wakes pending delivery after successful call-state commits. It removes sessions when a call ends or a transfer connects.
 
 [Caller notice delivery](../phase-1/CALLER_NOTICE_DELIVERY.md) commits final-turn fallback responses as pending presentations, so the attached session can speak and acknowledge them. A newer turn supersedes an unsent notice.

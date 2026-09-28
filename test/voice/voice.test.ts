@@ -19,6 +19,7 @@ import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
 import { ModelIngress } from "../../src/model/proposal.ts";
 import type { RawModelPort } from "../../src/model/proposal.ts";
 import { ModelWork } from "../../src/model/work.ts";
+import { OpenAIResponsesPort } from "../../src/model/openai-responses-port.ts";
 import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
 import { CallAdmissionService } from "../../src/voice/admission.ts";
 import { CallLivenessMonitor } from "../../src/voice/call-liveness-monitor.ts";
@@ -368,6 +369,32 @@ for (const kind of kinds) {
     const played = value(await app.session.acceptPlaybackResult(delivery.playbackId!, "played", at(7)));
     assert.equal(played.presentations[approved.pendingPresentationId!]?.status, "played");
     assert.equal(Object.values(played.effects).some(effect => effect.kind === "hostWrite"), false);
+  });
+
+  test(`${kind}: mocked OpenAI Responses request reaches the approved voice playback path`, async () => {
+    let calls = 0;
+    const model = new OpenAIResponsesPort({ apiKey: "synthetic-key", model: "configured-model",
+      promptVersion: "voice-prompt-v1", instructions: "Use only supplied source references.",
+      fetch: (async () => {
+        calls += 1;
+        return Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [
+          { type: "output_text", text: JSON.stringify({ proposal: {
+            schemaVersion: 1, kind: "answer", sourceRefs: ["hours"], proposedText: "We open at 9 am.",
+          } }) },
+        ] }] });
+      }) as typeof fetch,
+    });
+    const app = await fixture(kind, `${kind}-openai-http`, false, "requestOnly", undefined, undefined,
+      { knowledge: scope => [hoursSource(scope)], model });
+    await modelTurn(app, "Ask model about opening hours");
+    value(await app.session.drainEffects(at(4)));
+    const approved = value(await app.session.drainEffects(at(5)));
+    assert.equal(approved.knowledgeAnswers.at(-1)?.sourceRef, "hours");
+    assert.equal(calls, 1);
+    const delivery = value(await app.session.dispatchPending(at(6)));
+    assert.equal(delivery.kind, "queued");
+    assert.deepEqual(app.playback.queuedTexts, ["We open at 9 am."]);
+    assert.equal(app.host.bookings(app.scope).length, 0);
   });
 
   test(`${kind}: unclear model speech asks for repetition without calling the model`, async () => {
