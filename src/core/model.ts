@@ -125,9 +125,9 @@ export type StaffItem = Readonly<{
   hostTaskRef?: string;
 }>;
 export type Effect =
-  | Readonly<{ kind: "hostWrite"; id: string; actionKey: string; mutation: HostMutation; status: "pending" | "possiblySent" | "completed" | "uncertain" | "canceled" }>
+  | Readonly<{ kind: "hostWrite"; id: string; actionKey: string; mutation: HostMutation; status: "pending" | "possiblySent" | "completed" | "uncertain" | "canceled"; possiblySentAt?: string }>
   | Readonly<{ kind: "hostReconcile"; id: string; actionKey: string; originalEffectId: string; status: "pending" | "completed" }>
-  | Readonly<{ kind: "staffTask"; id: string; taskKey: string; status: "pending" | "possiblySent" | "completed" | "uncertain" }>;
+  | Readonly<{ kind: "staffTask"; id: string; taskKey: string; status: "pending" | "possiblySent" | "completed" | "uncertain"; possiblySentAt?: string }>;
 
 export type CallState = {
   callId: string;
@@ -135,6 +135,7 @@ export type CallState = {
   version: number;
   conversationRevision: number;
   processedTurnIds: string[];
+  processedTurnDigests: Record<string, string>;
   actions: Record<string, ActionState>;
   presentations: Record<string, Presentation>;
   pendingPresentationId?: string;
@@ -144,15 +145,17 @@ export type CallState = {
 };
 
 export type TransitionFailure =
-  | Readonly<{ kind: "callUnknown" | "versionConflict" | "invalidTransition" | "scopeMismatch" | "evidenceExpired" | "confirmationMissing" | "digestChanged" | "effectUnknown" | "keyMismatch" }>;
+  | Readonly<{ kind: "callUnknown" | "versionConflict" | "invalidTransition" | "scopeMismatch" | "evidenceExpired" | "confirmationMissing" | "digestChanged" | "effectUnknown" | "keyMismatch" | "storageFailure" | "storageCorrupt" }>;
 
 export type TransitionAction =
   | Readonly<{ kind: "callerTurn"; turn: FinalCallerTurn; interpretation: TurnInterpretation; now: string }>
   | Readonly<{ kind: "presentationStarted"; presentationId: string }>
   | Readonly<{ kind: "presentationResolved"; presentationId: string; status: "played" | "interrupted" | "failed" }>
   | Readonly<{ kind: "markHostPossiblySent"; effectId: string; now: string }>
+  | Readonly<{ kind: "recoverHostPossiblySent"; effectId: string; now: string }>
   | Readonly<{ kind: "hostWriteResolved"; effectId: string; receipt: HostWriteReceipt; now: string }>
   | Readonly<{ kind: "reconciliationResolved"; effectId: string; observation: ReconcileObservation; now: string }>
-  | Readonly<{ kind: "markStaffPossiblySent"; effectId: string }>
+  | Readonly<{ kind: "markStaffPossiblySent"; effectId: string; now: string }>
+  | Readonly<{ kind: "recoverStaffPossiblySent"; effectId: string; now: string }>
   | Readonly<{ kind: "staffTaskResolved"; effectId: string; receipt: StaffTaskReceipt }>
   | Readonly<{ kind: "reconciliationDeadline"; actionKey: string; now: string }>;

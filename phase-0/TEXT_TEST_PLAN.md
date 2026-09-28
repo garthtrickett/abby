@@ -1,6 +1,6 @@
 # Text-first contract test plan
 
-**Status:** Interim Phase 0 checkpoint. TXT-01 through TXT-09 now have executable text-contract cases in `test/text/` against the first in-memory reference runtime. They are not full-call E2E tests. The [Phase 0 exit gate](../PHASE_0_EXECUTION_PLAN.md#phase-0-exit-gate) still requires media and fallback evidence.
+**Status:** Interim Phase 0 checkpoint. TXT-01 through TXT-09 now run against both in-memory and disposable PostgreSQL ledger adapters through the same text runtime. Four additional PostgreSQL cases check global call-key uniqueness, atomic state/outbox persistence, and host-write and staff-task recovery after a restart. These are not full-call E2E tests. The [Phase 0 exit gate](../PHASE_0_EXECUTION_PLAN.md#phase-0-exit-gate) still requires media and fallback evidence. See the [text storage contract](TEXT_STORAGE_CONTRACT.md).
 
 ## Test seam and evidence labels
 
@@ -20,8 +20,8 @@ Results are labelled **text contract**, **host adapter read**, or **full call E2
 | TXT-08 missing or injected knowledge | An approved answer source is missing, expired, conflicting, or contains tool instructions | No invented answer, no command invocation from source text, and a clarification or staff path. | E2E-058 to E2E-061 |
 | TXT-09 staff task failure | A non-voice handoff requires a task, but the host rejects or loses its task response | No claim that staff received it; the canonical item is assigned to operator review or remains visibly unresolved under the original task key. | E2E-038; task-rejection ID pending; voice transfer failure remains deferred |
 
-Each executable case has its own tenant, call, action keys, clock, host fixture, and in-memory ledger so files run in parallel. The harness asserts caller wording, action state, and effect intents. The in-memory ledger exercises the versioned store contract but does not establish production durability or crash recovery. A later PostgreSQL composition must rerun these same cases before the checkpoint is complete.
+Each executable case has its own tenant, call, action keys, clock, and host fixture so files run in parallel. The harness asserts caller wording, action state, and effect intents. The PostgreSQL run adds a real transaction boundary and persisted outbox rows, but the disposable adapter is not the production ledger or leased worker.
 
 ## Checkpoint result
 
-The interim checkpoint is met when the text cases relevant to the first reference-host slice run against its real call runtime and durable storage boundary, the observed receipts and staff outcomes match the expected results, and provider-specific automation remains gated by the evidence matrix. The current in-memory implementation is a contract baseline and does not meet that storage requirement. The checkpoint can guide a text-driven Phase 1 slice. It never replaces playback-completion, interruption, transfer, provider fallback, or end-to-end voice tests.
+The text runtime and disposable PostgreSQL proof now cover the current TXT-01–09 baseline. The checkpoint still needs final P0-06/07 contract review, product decisions, and an approved support matrix before it can be called complete. It can guide a text-driven Phase 1 slice. It never replaces playback-completion, interruption, transfer, provider fallback, or end-to-end voice tests.
