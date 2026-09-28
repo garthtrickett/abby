@@ -13,7 +13,7 @@ export type Admission = Readonly<{
   acceptedAt: string;
   deadline: string;
 }>;
-export type SessionLease = Readonly<{ sessionId: string; version: number; expiresAt: string }>;
+export type SessionLease = Readonly<{ sessionId: string; version: number; expiresAt: string; validForMs: number }>;
 export type AdmissionReceipt = Readonly<{ callId: string; scope: LocationScope; admission: Admission; lifecycle: "starting" | "active" | "ended" }>;
 export type AdmissionResult = Readonly<{ kind: "created" | "duplicate"; receipt: AdmissionReceipt }>;
 export type ActiveSessionReceipt = Readonly<{ callId: string; scope: LocationScope; lease: SessionLease }>;

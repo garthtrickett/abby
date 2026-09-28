@@ -256,15 +256,17 @@ export function transition(current: CallState, action: TransitionAction): Result
       if (state.lifecycle !== "starting" || !state.admission || !action.sessionId) return err({ kind: "invalidTransition" });
       if (Date.parse(action.now) >= Date.parse(state.admission.deadline)) return err({ kind: "admissionExpired" });
       state.lifecycle = "active";
-      state.sessionLease = { sessionId: action.sessionId, version: 1, expiresAt: new Date(Date.parse(action.now) + 30_000).toISOString() };
+      state.sessionLease = { sessionId: action.sessionId, version: 1, expiresAt: new Date(Date.parse(action.now) + 30_000).toISOString(), validForMs: 30_000 };
       break;
     }
     case "sessionRenewed": {
       const lease = state.sessionLease;
       if (state.lifecycle !== "active" || !lease || lease.sessionId !== action.sessionId || Date.parse(action.now) >= Date.parse(lease.expiresAt)) return err({ kind: "leaseLost" });
-      if (lease.version > 1 && action.expectedLeaseVersion === lease.version - 1) return ok(current);
+      if (lease.version > 1 && action.expectedLeaseVersion === lease.version - 1) {
+        return ok({ ...current, sessionLease: { ...lease, validForMs: Date.parse(lease.expiresAt) - Date.parse(action.now) } });
+      }
       if (lease.version !== action.expectedLeaseVersion) return err({ kind: "leaseLost" });
-      state.sessionLease = { sessionId: lease.sessionId, version: lease.version + 1, expiresAt: new Date(Date.parse(action.now) + 30_000).toISOString() };
+      state.sessionLease = { sessionId: lease.sessionId, version: lease.version + 1, expiresAt: new Date(Date.parse(action.now) + 30_000).toISOString(), validForMs: 30_000 };
       break;
     }
     case "admissionExpired": {

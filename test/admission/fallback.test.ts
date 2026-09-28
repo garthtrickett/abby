@@ -23,7 +23,7 @@ function value<T>(result: Result<T, { kind: string }>): T {
 
 function fixture(kind: "memory" | "postgres", suffix: string) {
   const scope = { tenantId: `fallback-tenant-${suffix}`, clinicId: `fallback-clinic-${suffix}`, locationId: `fallback-location-${suffix}` };
-  const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!) : new MemoryLedger();
+  const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt) : new MemoryLedger();
   let routeAvailable = true;
   const admission = new CallAdmissionService(ledger, async dialedNumber =>
     routeAvailable && dialedNumber === "+6125550100" ? ok(referenceDefaultPolicy(scope)) : err({ kind: "routeUnavailable" as const }), () => now);

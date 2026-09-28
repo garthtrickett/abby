@@ -1,0 +1,9 @@
+# PostgreSQL ledger clock authority, version 0.1
+
+The standalone PostgreSQL ledger reads `clock_timestamp()` from the database for admitted-call transitions. It records admission acceptance and its 30-second deadline from that clock, then reads it under the call row lock for activation, renewal, final turns, presentation start and resolution, transfer dispatch, and session expiry. A voice-process timestamp cannot extend a lease, force expiry, or authorize a late transition. Due-call scans use the database clock and recheck the deadline under the row lock before closing a call.
+
+Each returned session lease carries `validForMs`. A replay of the immediately previous renewal returns only the remaining duration of the already stored lease; it never grants a fresh full duration. The voice process starts its monotonic local output timer before the activation or renewal request and uses that duration, rather than subtracting its own wall clock from the database expiry. This keeps the local media-send gate conservative when process and database clocks differ.
+
+The shared memory and PostgreSQL journeys use an explicit test clock on their PostgreSQL ledger instance so the same deterministic timeline can run on both adapters. A separate PostgreSQL journey uses the real database clock: it submits forged past and future timestamps through admission, renewal, a final turn, transfer delivery transitions, and expiry, then checks that the database time remains authoritative. Run `npm test` and `npm run probe:postgres`.
+
+The in-memory ledger remains a deterministic reference adapter. The current admission service still validates its caller-supplied timestamp before entering storage, and live provider authentication and routing remain open. A production monitor schedule, streaming chunk gate, and actual transport evidence are not established by this database test.

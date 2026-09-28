@@ -71,10 +71,10 @@ export class VoiceSession {
     this.assembler = new TurnAssembler(callId, sessionId);
   }
 
-  private recordLease(state: CallState, requestedAt: string, startedMs: number): void {
+  private recordLease(state: CallState, startedMs: number): void {
     const lease = state.sessionLease;
     if (!lease || !Number.isFinite(startedMs)) return;
-    const validForMs = Date.parse(lease.expiresAt) - Date.parse(requestedAt);
+    const validForMs = lease.validForMs;
     if (!Number.isFinite(validForMs) || validForMs <= 0) return;
     this.leaseVersion = lease.version;
     this.localSendDeadlineMs = startedMs + Math.max(0, validForMs - 2_000);
@@ -101,7 +101,7 @@ export class VoiceSession {
     const result = await this.runtime.activate(this.callId, this.sessionId, now);
     if (result.ok) {
       this.attached = true;
-      this.recordLease(result.value, now, startedMs);
+      this.recordLease(result.value, startedMs);
     }
     return result;
   }
@@ -115,7 +115,7 @@ export class VoiceSession {
     try {
       const result = await this.runtime.renewSession(this.callId, this.sessionId, this.leaseVersion, now);
       if (result.ok && !this.canSend()) return err({ kind: "leaseLost" });
-      if (result.ok) this.recordLease(result.value, now, startedMs);
+      if (result.ok) this.recordLease(result.value, startedMs);
       return result;
     } finally {
       this.renewalInFlight = false;

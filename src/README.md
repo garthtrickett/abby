@@ -12,6 +12,8 @@ The [synthetic transfer contract](../phase-1/SYNTHETIC_TRANSFER.md) uses the sam
 
 The [local media-send lease gate](../phase-1/LOCAL_SEND_LEASE.md) closes output before a conservatively timed session lease expires. Synthetic stall journeys prove that speech and transfer ports are not called after that gate closes.
 
+The [PostgreSQL ledger clock](../phase-1/LEDGER_CLOCK.md) now owns admitted-call deadlines and lease transitions. A real database-clock journey checks that forged process timestamps cannot force or extend lease outcomes.
+
 Run `npm ci`, `npm test`, and `npm run probe:postgres` (Docker required for the last command). The probe migrates a fresh PostgreSQL database, regenerates Kanel types, and runs the text and storage cases. Test files run in parallel with isolated calls and host fixtures. A new feature, capability, or setting needs a text contract case that checks caller wording, state, effects, and failure behavior. Its real voice path also needs a full-call E2E case when that path exists.
 
 This composition does not call Cliniko or Splose. Its host is synthetic. PostgreSQL persistence is a Phase 0 probe, and a synthetic `played` result is only test evidence for downstream confirmation logic. No production caller, agent, or API can use this harness to assert playback. Production outbox leasing, retention, real host adapters, media, and voice E2E remain open work.

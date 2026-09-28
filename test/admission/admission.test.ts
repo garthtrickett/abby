@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
+import { sql } from "kysely";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import type { LedgerStore } from "../../src/core/ledger.ts";
 import { ok } from "../../src/core/model.ts";
@@ -30,7 +31,7 @@ function failure<T>(result: Result<T, { kind: string }>, kind: string): void {
 function fixture(kind: "memory" | "postgres", suffix: string) {
   const scope = { tenantId: `admission-tenant-${suffix}`, clinicId: `admission-clinic-${suffix}`, locationId: `admission-location-${suffix}` };
   const policy: CallPolicy = { ...referenceDefaultPolicy(scope), bookingEnabled: true, capabilities: { book: "execute", cancel: "requestOnly", reschedule: "requestOnly", intake: "requestOnly", transfer: "requestOnly" } };
-  const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!) : new MemoryLedger();
+  const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt) : new MemoryLedger();
   let routeReads = 0;
   const service = new CallAdmissionService(ledger, async dialed => {
     routeReads += 1;
@@ -89,6 +90,7 @@ for (const kind of kinds) {
     const replayedRenewal = value(await runtime.renewSession(callId, "session-1", 1, "2026-09-28T10:00:11.000Z"));
     assert.equal(replayedRenewal.version, renewed.version);
     assert.equal(replayedRenewal.sessionLease?.expiresAt, renewed.sessionLease?.expiresAt);
+    assert.equal(replayedRenewal.sessionLease?.validForMs, 29_000);
     failure(await runtime.renewSession(callId, "session-1", 0, "2026-09-28T10:00:11.000Z"), "leaseLost");
 
     const patient = { scope: app.scope, patientRef: "patient", verificationRef: "proof", expiresAt: "2026-09-29T10:00:00.000Z" };
@@ -154,4 +156,44 @@ test("postgres: admission and activation events persist as separate versions", {
   value(await runtime.activate(callId, "session-events", "2026-09-28T10:00:01.000Z"));
   const rows = await db!.selectFrom("call_events").select(["sequence", "kind"]).where("call_id", "=", callId as CallsCallId).orderBy("sequence").execute();
   assert.deepEqual(rows.map(row => [row.sequence, row.kind]), [[0, "callAdmitted"], [1, "sessionActivated"]]);
+});
+
+test("postgres: ledger clock rejects forged intake, renewal, and expiry timestamps", { skip: !db }, async () => {
+  const scope = { tenantId: "database-clock-tenant", clinicId: "database-clock-clinic", locationId: "database-clock-location" };
+  const ledger = new PostgresLedger(db!);
+  const basePolicy = referenceDefaultPolicy(scope);
+  const policy: CallPolicy = { ...basePolicy, capabilities: { ...basePolicy.capabilities, transfer: "execute" }, transferDestinationRef: "database-clock-destination" };
+  const before = await sql<{ current_time: Date }>`select clock_timestamp() as current_time`.execute(db!);
+  const service = new CallAdmissionService(ledger, async () => ok(policy), () => "2000-01-01T00:00:00.000Z");
+  const admitted = value(await service.begin({
+    key: { accountRef: "database-clock-account", providerCallRef: "database-clock-call" },
+    dialedNumber: "+6125550100", receivedAt: "2000-01-01T00:00:00.000Z",
+  }));
+  const after = await sql<{ current_time: Date }>`select clock_timestamp() as current_time`.execute(db!);
+  const acceptedAt = Date.parse(admitted.receipt.admission.acceptedAt);
+  assert.ok(acceptedAt >= before.rows[0]!.current_time.getTime());
+  assert.ok(acceptedAt <= after.rows[0]!.current_time.getTime());
+  assert.equal(Date.parse(admitted.receipt.admission.deadline) - acceptedAt, 30_000);
+  const runtime = new CallRuntime(ledger, scope);
+  const monitor = new CallLivenessMonitor(ledger, scope);
+  assert.equal(value(await monitor.expireDue("2099-01-01T00:00:00.000Z")), 0);
+  const active = value(await runtime.activate(admitted.receipt.callId, "database-clock-session", "2000-01-01T00:00:00.000Z"));
+  assert.equal(active.sessionLease?.validForMs, 30_000);
+  const renewed = value(await runtime.renewSession(admitted.receipt.callId, "database-clock-session", 1, "2099-01-01T00:00:00.000Z"));
+  assert.equal(renewed.sessionLease?.version, 2);
+  const replay = value(await runtime.renewSession(admitted.receipt.callId, "database-clock-session", 1, "2000-01-01T00:00:00.000Z"));
+  assert.equal(replay.sessionLease?.expiresAt, renewed.sessionLease?.expiresAt);
+  assert.ok(replay.sessionLease!.validForMs > 0 && replay.sessionLease!.validForMs <= 30_000);
+  const extensionMs = Date.parse(renewed.sessionLease!.expiresAt) - Date.parse(active.sessionLease!.expiresAt);
+  assert.ok(extensionMs >= 0 && extensionMs < 30_000);
+  const planned = value(await runtime.acceptTurn({ callId: admitted.receipt.callId, sessionId: "database-clock-session", turnId: "database-clock-turn", text: "Transfer me", quality: "clear", at: "2000-01-01T00:00:00.000Z" }, { kind: "transfer", reason: "callerRequested" }, "2099-01-01T00:00:00.000Z"));
+  const presentationId = planned.pendingPresentationId!;
+  assert.ok(presentationId);
+  value(await runtime.startPresentation(admitted.receipt.callId, presentationId, "database-clock-session", "2000-01-01T00:00:00.000Z"));
+  value(await runtime.markTransferPossiblySent(admitted.receipt.callId, presentationId, "database-clock-session", "2099-01-01T00:00:00.000Z"));
+  const failed = value(await runtime.resolvePresentation(admitted.receipt.callId, presentationId, "failed", "database-clock-session", "2000-01-01T00:00:00.000Z"));
+  assert.equal(failed.presentations[presentationId]?.status, "failed");
+  failure(await runtime.expireSession(admitted.receipt.callId, "database-clock-session", 2, "2099-01-01T00:00:00.000Z"), "leaseLost");
+  assert.equal(value(await monitor.expireDue("2099-01-01T00:00:00.000Z")), 0);
+  assert.equal(value(await runtime.read(admitted.receipt.callId)).lifecycle, "active");
 });
