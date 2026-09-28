@@ -36,6 +36,7 @@ test("TXT-06 uncertain booking after intake keeps patient and unresolved booking
   await app.worker.process(app.callId, `${booking.key}:write`, now);
   assert.equal(app.state().actions[intake.key]?.hostRef, "patient-created-2");
   assert.equal(app.state().actions[booking.key]?.status, "uncertain");
+  assert.equal(Object.values(app.state().staffItems)[0]?.linkedActionKey, booking.key);
   assert.equal(app.state().callerMessages.at(-1)?.includes("can't confirm"), true);
   assert.equal(app.state().callerMessages.some(message => message === "Your booking is confirmed."), false);
 });

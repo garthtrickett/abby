@@ -57,6 +57,7 @@ function evidenceFailure(state: CallState, request: ActionRequest, now: string):
 }
 
 function addStaffTask(state: CallState, reason: StaffReason, now: string, linkedActionKey?: string, request?: ActionRequest): void {
+  if (linkedActionKey && Object.values(state.staffItems).some(item => item.linkedActionKey === linkedActionKey)) return;
   const key = `${state.callId}:staff:${Object.keys(state.staffItems).length + 1}`;
   const item = {
     key,
@@ -199,6 +200,9 @@ function recordHostResult(state: CallState, effectId: string, receipt: import(".
     const reconcileId = `${effectId}:reconcile`;
     state.effects[reconcileId] = { kind: "hostReconcile", id: reconcileId, actionKey: action.key, originalEffectId: effectId, status: "pending" };
     state.callerMessages.push("I can't confirm that action yet. It is pending review.");
+    if (action.kind === "book" && Object.values(state.actions).some(item => item.kind === "intake" && item.status === "committed")) {
+      addStaffTask(state, "partialIntake", now, action.key);
+    }
   } else {
     state.actions[action.key] = { ...action, status: receipt.kind === "unsupported" ? "unsupported" : "rejected" };
     state.effects[effectId] = { ...effect, status: "completed" };
