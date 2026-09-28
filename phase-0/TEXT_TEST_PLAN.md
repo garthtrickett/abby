@@ -1,6 +1,6 @@
 # Text-first contract test plan
 
-**Status:** Interim Phase 0 checkpoint. These are planned deterministic contract cases, not passing E2E tests. The [Phase 0 exit gate](../PHASE_0_EXECUTION_PLAN.md#phase-0-exit-gate) still requires media and fallback evidence.
+**Status:** Interim Phase 0 checkpoint. TXT-01 through TXT-09 now have executable text-contract cases in `test/text/` against the first in-memory reference runtime. They are not full-call E2E tests. The [Phase 0 exit gate](../PHASE_0_EXECUTION_PLAN.md#phase-0-exit-gate) still requires media and fallback evidence.
 
 ## Test seam and evidence labels
 
@@ -20,8 +20,8 @@ Results are labelled **text contract**, **host adapter read**, or **full call E2
 | TXT-08 missing or injected knowledge | An approved answer source is missing, expired, conflicting, or contains tool instructions | No invented answer, no command invocation from source text, and a clarification or staff path. | E2E-058 to E2E-061 |
 | TXT-09 staff task failure | A non-voice handoff requires a task, but the host rejects or loses its task response | No claim that staff received it; the canonical item is assigned to operator review or remains visibly unresolved under the original task key. | E2E-038; task-rejection ID pending; voice transfer failure remains deferred |
 
-Each executable case will have its own tenant, call, action keys, clock, host fixture, and storage namespace so cases can run in parallel. The text harness must assert caller wording and durable effects, not merely reducer output. Implement each case alongside the behavior it covers; until the runtime exists, these rows are contract fixtures and their result is **not run**.
+Each executable case has its own tenant, call, action keys, clock, host fixture, and in-memory ledger so files run in parallel. The harness asserts caller wording, action state, and effect intents. The in-memory ledger exercises the versioned store contract but does not establish production durability or crash recovery. A later PostgreSQL composition must rerun these same cases before the checkpoint is complete.
 
 ## Checkpoint result
 
-The interim checkpoint is met when the text cases relevant to the first reference-host slice run against its real call runtime and storage boundary, the observed receipts and staff outcomes match the expected results, and provider-specific automation remains gated by the evidence matrix. The checkpoint can guide a text-driven Phase 1 slice. It never replaces playback-completion, interruption, transfer, provider fallback, or end-to-end voice tests.
+The interim checkpoint is met when the text cases relevant to the first reference-host slice run against its real call runtime and durable storage boundary, the observed receipts and staff outcomes match the expected results, and provider-specific automation remains gated by the evidence matrix. The current in-memory implementation is a contract baseline and does not meet that storage requirement. The checkpoint can guide a text-driven Phase 1 slice. It never replaces playback-completion, interruption, transfer, provider fallback, or end-to-end voice tests.
