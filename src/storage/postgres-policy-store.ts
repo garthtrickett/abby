@@ -30,7 +30,7 @@ export class PostgresPolicyStore implements PolicyStore {
   private readonly hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly">;
   private readonly readiness: AutomationReadiness;
 
-  constructor(db: Kysely<Database>, defaultPolicy: (scope: LocationScope) => CallPolicy, hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "execute", readiness: AutomationReadiness = unprovenReadiness) {
+  constructor(db: Kysely<Database>, defaultPolicy: (scope: LocationScope) => CallPolicy, hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "requestOnly", readiness: AutomationReadiness = unprovenReadiness) {
     this.db = db;
     this.defaultPolicy = defaultPolicy;
     this.hostBookingMode = hostBookingMode;

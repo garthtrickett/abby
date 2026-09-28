@@ -13,7 +13,7 @@ import type { AutomationReadiness } from "../core/readiness.ts";
 import type { ModelWork } from "../model/work.ts";
 import { PostgresKnowledgeCatalogue } from "../storage/postgres-knowledge-catalogue.ts";
 
-export function createStandaloneTextComposition(db: Kysely<Database>, host: TextHost, hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "execute", ledger: LedgerStore = new PostgresLedger(db), availability?: AvailabilityHost, appointments?: AppointmentHost, readiness: AutomationReadiness = unprovenReadiness, model?: ModelWork,
+export function createStandaloneTextComposition(db: Kysely<Database>, host: TextHost, hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "requestOnly", ledger: LedgerStore = new PostgresLedger(db), availability?: AvailabilityHost, appointments?: AppointmentHost, readiness: AutomationReadiness = unprovenReadiness, model?: ModelWork,
                                                 knowledge: KnowledgeHost & Partial<ModelKnowledgeContextHost> = new PostgresKnowledgeCatalogue(db)): Readonly<{ reception: TextReception; policy: PostgresPolicyStore; knowledge: KnowledgeHost & Partial<ModelKnowledgeContextHost> }> {
   const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, hostBookingMode, readiness);
   return { reception: new TextReception(ledger, policy, host, availability, appointments, model, knowledge), policy, knowledge };
