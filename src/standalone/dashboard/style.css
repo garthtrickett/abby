@@ -1,0 +1,43 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #152338;
+  background: #f5f7fb;
+}
+
+body { margin: 0; }
+main { max-width: 760px; margin: 40px auto; padding: 0 20px; }
+header { margin-bottom: 32px; }
+h1 { margin: 0 0 8px; font-size: 2rem; }
+.muted { color: #526174; }
+.card {
+  background: white;
+  border: 1px solid #d8e0eb;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 16px 0;
+  box-shadow: 0 2px 8px #1523380a;
+}
+.row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+button {
+  border: 0;
+  border-radius: 8px;
+  background: #244c9e;
+  color: white;
+  padding: 10px 16px;
+  font: inherit;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+button:disabled { opacity: .5; cursor: default; }
+input { border: 1px solid #98a7bd; border-radius: 8px; padding: 10px; font: inherit; min-width: 0; }
+.lookup { display: flex; gap: 8px; flex-wrap: wrap; }
+.status { font-weight: 600; }
+.error { color: #9b1c1c; }
+.pill { display: inline-block; border-radius: 99px; padding: 4px 10px; background: #e9eef8; }
+ul { padding-left: 22px; }
+
+@media (max-width: 600px) {
+  main { margin: 24px auto; }
+  .row { flex-direction: column; align-items: flex-start; }
+}
