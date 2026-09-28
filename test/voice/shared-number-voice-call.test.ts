@@ -19,6 +19,8 @@ import { SharedNumberVoiceCall } from "../../src/voice/shared-number-voice-call.
 import type { FullVoiceSessionFactory } from "../../src/voice/shared-number-voice-call.ts";
 import { MediaTurnController } from "../../src/voice/media-turn-controller.ts";
 import type { MediaFrame, TranscriptionPort } from "../../src/voice/media-turn-controller.ts";
+import { TransportMediaNormalizer } from "../../src/voice/transport-media-normalizer.ts";
+import type { TransportMediaEncoding } from "../../src/voice/transport-media-normalizer.ts";
 import { StreamedPlaybackPort } from "../../src/voice/streamed-playback-port.ts";
 import { VoiceSession } from "../../src/voice/voice-session.ts";
 import type { PlaybackPort } from "../../src/voice/voice-session.ts";
@@ -75,13 +77,17 @@ function fixture(kind: "memory" | "postgres", outputPort?: PlaybackPort) {
   const event = (dialedNumber: string, ref: string) =>
     ({ key: { accountRef, providerCallRef: `${id}-${ref}` }, dialedNumber, receivedAt: now });
   let wrongFactoryScope = false;
+  const resolvedTurns: string[] = [];
   const fullFactory: FullVoiceSessionFactory = (receipt, sessionId, port) => new VoiceSession(receipt.callId, sessionId,
-      wrongFactoryScope ? main : receipt.scope, ledger, reception, port, async turn => ok(
-        turn.text.startsWith("Book") ? { kind: "book" as const, verificationRef: "verified", offerRef: "offer" }
-          : { kind: "affirm" as const }));
+      wrongFactoryScope ? main : receipt.scope, ledger, reception, port, async turn => {
+        resolvedTurns.push(turn.text);
+        return ok(turn.text.startsWith("Book") ? { kind: "book" as const, verificationRef: "verified", offerRef: "offer" }
+          : turn.text.startsWith("Staff") ? { kind: "handoff" as const, reason: "callerRequested" as const }
+          : { kind: "affirm" as const });
+      });
   const call = (inbound: ReturnType<typeof event>) => new SharedNumberVoiceCall(inbound, "session", ledger, intake, playback,
     fullFactory);
-  return { main, north, ledger, policy, clinic, queued, call, event, intake, fullFactory, sharedNumber, singleNumber,
+  return { main, north, ledger, policy, clinic, queued, call, event, intake, fullFactory, sharedNumber, singleNumber, resolvedTurns,
     policyReads: () => policyReads, setWrongFactoryScope(value: boolean) { wrongFactoryScope = value; },
     setTime(value: string) { current = value; },
     holdNextPolicyRead() {
@@ -95,6 +101,59 @@ function fixture(kind: "memory" | "postgres", outputPort?: PlaybackPort) {
 }
 
 for (const kind of kinds) {
+  test(`${kind}: PCMU and PCM16 ingress produce the same canonical frames and staff decision`, async () => {
+    async function journey(encoding: TransportMediaEncoding) {
+      const app = fixture(kind);
+      value(await app.policy.changeAutomationEnabled(app.main, "0", true, "admin"));
+      const inbound = app.event(app.singleNumber, `codec-${encoding}`);
+      const call = new ConnectedVoiceCall({ event: inbound, sessionId: "session", ledger: app.ledger,
+        intake: app.intake, fullFactory: app.fullFactory,
+        transcription: {
+          async accept(_frame, generation) { return ok([{ kind: "partial" as const, sessionId: "session", generation,
+            utteranceId: "request", text: "Staff please" }]); },
+          async flush(generation) { return ok([{ kind: "segmentFinal", sessionId: "session", generation,
+            utteranceId: "request", text: "Staff please", quality: "clear" }]); },
+        },
+        synthesis: { async *stream() { yield new Uint8Array(640); } },
+        output: { async queueChunk() { return "queued"; }, async finishQueue() { return "queued"; },
+          async clear() { return true; } }, mediaOptions: { silenceMs: 100 } });
+      const started = value(await call.begin(now));
+      if (started.kind !== "admitted" || started.delivery.kind !== "queued" || !started.delivery.playbackId) {
+        throw new Error("greeting expected");
+      }
+      value(await call.acceptPlaybackCompletion({ playbackId: started.delivery.playbackId, lastSequence: 0,
+        status: "played" }, now));
+      const normalizer = new TransportMediaNormalizer(encoding);
+      const canonical: number[][] = [];
+      for (let sequence = 0; sequence < 7; sequence += 1) {
+        const voiced = sequence < 2;
+        const payload = encoding === "pcmu/8000"
+          ? new Uint8Array(160).fill(voiced ? 0x9f : 0xff) : new Uint8Array(640);
+        if (encoding === "pcm16le/16000") {
+          const view = new DataView(payload.buffer);
+          for (let offset = 0; offset < payload.length; offset += 2) view.setInt16(offset, voiced ? 8_316 : 0, true);
+        }
+        const frame = value(normalizer.normalize({ sessionId: "session", sequence,
+          capturedAt: new Date(Date.parse(now) + sequence * 20).toISOString(), payload }));
+        canonical.push([...frame.bytes]);
+        const result = value(await call.acceptMedia(frame));
+        if (sequence === 6) assert.equal(result.kind, "turnCompleted");
+      }
+      const state = value(await app.ledger.read(started.receipt.callId, app.main));
+      const outcome = { canonical, turns: app.resolvedTurns, revision: state.conversationRevision,
+        reasons: Object.values(state.staffItems).map(item => item.reason), bookings: app.clinic.bookings(app.main).length };
+      value(await call.disconnect(at(1)));
+      return outcome;
+    }
+    const pcmu = await journey("pcmu/8000");
+    const pcm = await journey("pcm16le/16000");
+    assert.deepEqual(pcmu, pcm);
+    assert.deepEqual(pcmu.turns, ["Staff please"]);
+    assert.deepEqual(pcmu.reasons, ["callerRequested"]);
+    assert.ok(pcmu.revision > 0);
+    assert.equal(pcmu.bookings, 0);
+  });
+
   test(`${kind}: connected single-location call sends only the committed greeting and records playback`, async () => {
     const app = fixture(kind);
     value(await app.policy.changeAutomationEnabled(app.main, "0", true, "admin"));
