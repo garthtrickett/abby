@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
 import { EffectWorker } from "../../src/core/effect-worker.ts";
+import { EffectRecovery } from "../../src/core/effect-recovery.ts";
 import type { LocationScope } from "../../src/core/model.ts";
 import type { AvailabilityHost } from "../../src/core/host.ts";
 import { CallReview } from "../../src/reference/call-review.ts";
@@ -12,6 +13,7 @@ import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
 import { StaffQueue } from "../../src/reference/staff-queue.ts";
+import { StaffAlertMonitor } from "../../src/reference/staff-alert-monitor.ts";
 import { TextReception } from "../../src/reference/text-reception.ts";
 import { createDashboardServer } from "../../src/standalone/dashboard/server.ts";
 
@@ -211,6 +213,30 @@ test("staff follow-up queue shows overdue fallback without patient or spoken det
   } finally {
     await app.close();
   }
+});
+
+test("overdue follow-up delivers one keyed operator alert and shows its status to staff", async ({ page }) => {
+  const app = await localDashboard("staff");
+  try {
+    const requested = await app.reception.answer(app.scope,
+      { callId: "before-setting", turnId: "alert-fallback", text: "Private caller detail", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
+      ["missing"], "Private proposed answer", "2026-09-28T10:00:00.000Z");
+    assert.ok(requested.ok);
+    assert.ok((await app.reception.drain(app.scope, "before-setting", "2026-09-28T10:00:00.000Z")).ok);
+    const scan = await new StaffAlertMonitor(app.ledger, app.scope).scan("2026-09-29T10:00:01.000Z");
+    assert.ok(scan.ok);
+    assert.equal(scan.value, 1);
+    const delivered = await new EffectRecovery(app.ledger, () => app.host, app.scope).recover("2026-09-29T10:00:01.000Z");
+    assert.ok(delivered.ok);
+    assert.deepEqual(delivered.value.failed, []);
+    assert.equal(app.host.alerts(app.scope).length, 1);
+    await page.goto(app.url);
+    const queue = page.getByLabel("Staff follow-up queue");
+    await expect(queue).toContainText("overdue alert delivered");
+    await expect(queue).not.toContainText("Private");
+    await page.reload();
+    await expect(page.getByLabel("Staff follow-up queue")).toContainText("overdue alert delivered");
+  } finally { await app.close(); }
 });
 
 test("lost host task receipt remains in review until exact reconciliation reaches the queue", async ({ page }) => {

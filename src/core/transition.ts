@@ -5,7 +5,7 @@ import { planStaffChange } from "./staff-work.ts";
 import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "./model.ts";
 import type {
   ActionRequest, ActionState, CallState, CallTerminalReason, FinalCallerTurn, LocationScope,
-  Presentation, Result, StaffReason, TransitionAction, TransitionFailure,
+  Presentation, Result, StaffAlertReason, StaffAlertState, StaffItem, StaffReason, TransitionAction, TransitionFailure,
   TurnInterpretation,
 } from "./model.ts";
 
@@ -81,6 +81,17 @@ function addStaffTask(state: CallState, reason: StaffReason, now: string, linked
   };
   state.staffItems[key] = item;
   state.effects[`${key}:open`] = { kind: "staffTask", id: `${key}:open`, taskKey: key, status: "pending" };
+}
+
+function alertable(item: StaffItem, reason: StaffAlertReason, now: string): boolean {
+  if (item.status === "resolved") return false;
+  return reason === "overdue" ? Date.parse(item.dueAt) <= Date.parse(now)
+    : item.status === "needsReview" || item.status === "failed" || item.reviewRequired === true;
+}
+
+function setAlertState(state: CallState, taskKey: string, reason: StaffAlertReason, status: StaffAlertState): void {
+  const item = state.staffItems[taskKey]!;
+  state.staffItems[taskKey] = { ...item, alerts: { ...item.alerts, [reason]: status } };
 }
 
 function queueStaffReconciliation(state: CallState, originalEffectId: string, item: import("./model.ts").StaffItem): void {
@@ -607,6 +618,73 @@ export function transition(current: CallState, action: TransitionAction): Result
         state.effects[original.id] = { ...original, status: "completed" };
       } else if (observation.kind !== "stillUnknown") return err({ kind: "invalidTransition" });
       state.effects[effect.id] = { ...effect, status: "completed" };
+      break;
+    }
+    case "staffAlertRequested": {
+      if (action.reason !== "overdue" && action.reason !== "needsReview") return err({ kind: "invalidTransition" });
+      const item = state.staffItems[action.taskKey];
+      if (!item) return err({ kind: "invalidTransition" });
+      const id = `${item.key}:alert:${action.reason}`;
+      if (!alertable(item, action.reason, now) || state.effects[id]) return ok(current);
+      const destination = state.policy.operatorQueue;
+      if (!destination || (destination.kind === "queue" ? !destination.queueRef.trim() : !destination.ownerRef.trim())) return err({ kind: "invalidTransition" });
+      state.effects[id] = { kind: "operatorAlert", id, status: "pending", alert: { alertKey: id, callId: state.callId, taskKey: item.key,
+        scope: state.policy.scope, reason: action.reason, destination, dueAt: item.dueAt } };
+      setAlertState(state, item.key, action.reason, "pending");
+      break;
+    }
+    case "markOperatorAlertPossiblySent": {
+      const effect = state.effects[action.effectId];
+      if (!effect || effect.kind !== "operatorAlert" || effect.status !== "pending") return err({ kind: "invalidTransition" });
+      const item = state.staffItems[effect.alert.taskKey];
+      if (!item || !sameScope(item.scope, effect.alert.scope)) return err({ kind: "invalidTransition" });
+      if (!alertable(item, effect.alert.reason, now)) {
+        state.effects[effect.id] = { ...effect, status: "canceled" };
+        setAlertState(state, item.key, effect.alert.reason, "canceled");
+      } else {
+        state.effects[effect.id] = { ...effect, status: "possiblySent", possiblySentAt: now };
+      }
+      break;
+    }
+    case "recoverOperatorAlertPossiblySent": {
+      const effect = state.effects[action.effectId];
+      if (!effect || effect.kind !== "operatorAlert") return err({ kind: "effectUnknown" });
+      if (effect.status === "uncertain") return ok(current);
+      if (effect.status !== "possiblySent" || !effect.possiblySentAt || Date.parse(now) < Date.parse(effect.possiblySentAt) + POSSIBLE_SEND_RECOVERY_DELAY_MS) return err({ kind: "invalidTransition" });
+      const item = state.staffItems[effect.alert.taskKey];
+      if (!item) return err({ kind: "invalidTransition" });
+      const reconcileId = `${effect.id}:reconcile`;
+      state.effects[reconcileId] = { kind: "operatorAlertReconcile", id: reconcileId, alert: effect.alert, originalEffectId: effect.id, status: "pending" };
+      state.effects[effect.id] = { ...effect, status: "uncertain" };
+      setAlertState(state, item.key, effect.alert.reason, "uncertain");
+      break;
+    }
+    case "operatorAlertResolved": {
+      const effect = state.effects[action.effectId];
+      if (!effect || effect.kind !== "operatorAlert" || effect.status !== "possiblySent") return err({ kind: "invalidTransition" });
+      if (action.receipt.alertKey !== effect.alert.alertKey || !["delivered", "failed", "uncertain"].includes(action.receipt.kind)) return err({ kind: "keyMismatch" });
+      const item = state.staffItems[effect.alert.taskKey];
+      if (!item) return err({ kind: "invalidTransition" });
+      if (action.receipt.kind === "uncertain") {
+        const reconcileId = `${effect.id}:reconcile`;
+        state.effects[reconcileId] = { kind: "operatorAlertReconcile", id: reconcileId, alert: effect.alert, originalEffectId: effect.id, status: "pending" };
+        state.effects[effect.id] = { ...effect, status: "uncertain" };
+      } else state.effects[effect.id] = { ...effect, status: "completed" };
+      setAlertState(state, item.key, effect.alert.reason, action.receipt.kind);
+      break;
+    }
+    case "operatorAlertReconciled": {
+      const effect = state.effects[action.effectId];
+      if (!effect || effect.kind !== "operatorAlertReconcile" || effect.status !== "pending") return err({ kind: "invalidTransition" });
+      const original = state.effects[effect.originalEffectId];
+      const item = state.staffItems[effect.alert.taskKey];
+      if (!original || original.kind !== "operatorAlert" || original.status !== "uncertain" || !item ||
+          action.observation.alertKey !== effect.alert.alertKey ||
+          !["exactDelivered", "definitiveNotDelivered", "stillUnknown"].includes(action.observation.kind)) return err({ kind: "keyMismatch" });
+      if (action.observation.kind !== "stillUnknown") state.effects[original.id] = { ...original, status: "completed" };
+      state.effects[effect.id] = { ...effect, status: "completed" };
+      setAlertState(state, item.key, effect.alert.reason, action.observation.kind === "exactDelivered" ? "delivered" :
+        action.observation.kind === "definitiveNotDelivered" ? "failed" : "uncertain");
       break;
     }
     case "reconciliationDeadline": {

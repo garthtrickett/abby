@@ -41,6 +41,7 @@ function auditPayload(action: TransitionAction): Record<string, string> {
     case "presentationResolved": return { presentationId: action.presentationId, status: action.status };
     case "reconciliationDeadline": return { actionKey: action.actionKey };
     case "staffChangeRequested": return { taskKey: action.taskKey, actorRef: action.actorRef, operation: action.change.kind };
+    case "staffAlertRequested": return { taskKey: action.taskKey, reason: action.reason };
     default: return { effectId: action.effectId };
   }
 }
@@ -182,9 +183,9 @@ export class PostgresLedger implements LedgerStore {
       for (const row of rows) {
         const payload = row.payload as Record<string, unknown>;
         if (!payload || typeof payload !== "object" || payload.id !== row.effect_id || payload.kind !== row.kind || payload.status !== row.status ||
-            !(["hostWrite", "hostReconcile", "staffTask", "staffReconcile", "staffChange", "staffChangeReconcile"] as readonly string[]).includes(row.kind) ||
+            !(["hostWrite", "hostReconcile", "staffTask", "staffReconcile", "staffChange", "staffChangeReconcile", "operatorAlert", "operatorAlertReconcile"] as readonly string[]).includes(row.kind) ||
             (row.status !== "pending" && row.status !== "possiblySent") ||
-            (row.status === "possiblySent" && row.kind !== "hostWrite" && row.kind !== "staffTask" && row.kind !== "staffChange") ||
+            (row.status === "possiblySent" && row.kind !== "hostWrite" && row.kind !== "staffTask" && row.kind !== "staffChange" && row.kind !== "operatorAlert") ||
             (row.status === "possiblySent" && (typeof payload.possiblySentAt !== "string" || !Number.isFinite(Date.parse(payload.possiblySentAt))))) return err({ kind: "storageCorrupt" });
         refs.push({ callId: row.call_id, scope: { tenantId: row.tenant_id, clinicId: row.clinic_id, locationId: row.location_id },
           effectId: row.effect_id, kind: row.kind as Effect["kind"], status: row.status });
@@ -296,7 +297,8 @@ export class PostgresLedger implements LedgerStore {
         entries.push({ callId: row.call_id, callVersion: row.version, taskKey: item.key, reason: item.reason, status: item.status, dueAt: item.dueAt,
           destination: structuredClone(item.destination), ...(item.linkedActionKey === undefined ? {} : { linkedActionKey: item.linkedActionKey }),
           ...(item.pendingChangeKey === undefined ? {} : { pendingChangeKey: item.pendingChangeKey }),
-          ...(item.reviewRequired === undefined ? {} : { reviewRequired: item.reviewRequired }) });
+          ...(item.reviewRequired === undefined ? {} : { reviewRequired: item.reviewRequired }),
+          ...(item.alerts === undefined ? {} : { alerts: structuredClone(item.alerts) }) });
       }
       return ok(entries);
     } catch {

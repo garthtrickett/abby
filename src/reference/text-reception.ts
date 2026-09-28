@@ -1,11 +1,11 @@
 import { EffectWorker } from "../core/effect-worker.ts";
-import type { AvailabilityHost, BookingEvidenceHost, HostEffects, KnowledgeHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
+import type { AvailabilityHost, BookingEvidenceHost, HostEffects, KnowledgeHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err } from "../core/model.ts";
 import type { CallState, FinalCallerTurn, LocationScope, Result, StaffChangeRequest, TransitionFailure, TurnInterpretation } from "../core/model.ts";
 import { CallRuntime } from "../core/runtime.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<StaffLifecycleHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<StaffLifecycleHost & OperatorAlertHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 export class TextReception {

@@ -1,7 +1,7 @@
 import { digestActionRequest, digestTurn } from "../core/digest.ts";
-import type { BookingEvidenceHost, HostEffects, HostReadFailure, KnowledgeHost, KnowledgeReadFailure, StaffLifecycleHost } from "../core/host.ts";
+import type { BookingEvidenceHost, HostEffects, HostReadFailure, KnowledgeHost, KnowledgeReadFailure, OperatorAlertHost, StaffLifecycleHost } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
-import type { ActionRequest, ApprovedKnowledge, BookableOffer, HostMutation, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "../core/model.ts";
+import type { ActionRequest, ApprovedKnowledge, BookableOffer, HostMutation, HostWriteReceipt, LocationScope, OperatorAlert, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "../core/model.ts";
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
@@ -17,7 +17,7 @@ function validDestination(value: unknown): value is StaffItem["destination"] {
 type Booking = Readonly<{ actionKey: string; hostRef: string; scope: LocationScope; patientRef: string; offerRef: string; payloadDigest: string }>;
 type Task = Readonly<{ taskKey: string; hostTaskRef: string; scope: LocationScope; destination: StaffItem["destination"]; status: "open" | "acknowledged" | "resolved"; payloadDigest: string }>;
 
-export class ReferenceClinicHost implements BookingEvidenceHost, HostEffects, KnowledgeHost, StaffLifecycleHost {
+export class ReferenceClinicHost implements BookingEvidenceHost, HostEffects, KnowledgeHost, StaffLifecycleHost, OperatorAlertHost {
   private readonly patients: readonly VerifiedPatient[];
   private readonly offers: readonly BookableOffer[];
   private readonly knowledge: readonly ApprovedKnowledge[];
@@ -25,6 +25,7 @@ export class ReferenceClinicHost implements BookingEvidenceHost, HostEffects, Kn
   private readonly bookingKeyByOffer = new Map<string, string>();
   private readonly tasksByKey = new Map<string, Task>();
   private readonly taskChangesByKey = new Map<string, Readonly<{ digest: string; receipt: Extract<StaffChangeReceipt, { kind: "applied" }> }>>();
+  private readonly alertsByKey = new Map<string, OperatorAlert>();
   private resolutionCount = 0;
 
   constructor(patients: readonly VerifiedPatient[], offers: readonly BookableOffer[], knowledge: readonly ApprovedKnowledge[] = []) {
@@ -148,5 +149,27 @@ export class ReferenceClinicHost implements BookingEvidenceHost, HostEffects, Kn
 
   tasks(scope: LocationScope): readonly Task[] {
     return [...this.tasksByKey.values()].filter(item => sameScope(item.scope, scope)).map(item => structuredClone(item));
+  }
+
+  async sendAlert(alert: OperatorAlert): Promise<OperatorAlertReceipt> {
+    const previous = this.alertsByKey.get(alert.alertKey);
+    if (previous) return digestTurn(previous) === digestTurn(alert) && sameScope(previous.scope, alert.scope)
+      ? { kind: "delivered", alertKey: alert.alertKey } : { kind: "failed", alertKey: alert.alertKey };
+    if (!alert.alertKey || !alert.callId || !alert.taskKey || !alert.scope ||
+        !validDestination(alert.destination) || !Number.isFinite(Date.parse(alert.dueAt)) ||
+        (alert.reason !== "overdue" && alert.reason !== "needsReview")) return { kind: "failed", alertKey: alert.alertKey };
+    this.alertsByKey.set(alert.alertKey, structuredClone(alert));
+    return { kind: "delivered", alertKey: alert.alertKey };
+  }
+
+  async reconcileAlert(alert: OperatorAlert): Promise<OperatorAlertObservation> {
+    const previous = this.alertsByKey.get(alert.alertKey);
+    if (!previous) return { kind: "definitiveNotDelivered", alertKey: alert.alertKey };
+    return digestTurn(previous) === digestTurn(alert) && sameScope(previous.scope, alert.scope)
+      ? { kind: "exactDelivered", alertKey: alert.alertKey } : { kind: "stillUnknown", alertKey: alert.alertKey };
+  }
+
+  alerts(scope: LocationScope): readonly OperatorAlert[] {
+    return [...this.alertsByKey.values()].filter(item => sameScope(item.scope, scope)).map(item => structuredClone(item));
   }
 }

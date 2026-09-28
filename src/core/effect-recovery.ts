@@ -1,11 +1,11 @@
 import { EffectWorker } from "./effect-worker.ts";
-import type { HostEffects, StaffLifecycleHost } from "./host.ts";
+import type { HostEffects, OperatorAlertHost, StaffLifecycleHost } from "./host.ts";
 import type { LedgerStore } from "./ledger.ts";
 import { err, ok } from "./model.ts";
 import type { LocationScope, RecoverableEffectRef, Result, TransitionFailure } from "./model.ts";
 import { CallRuntime } from "./runtime.ts";
 
-export type EffectHostLookup = (scope: LocationScope) => (HostEffects & Partial<StaffLifecycleHost>) | undefined;
+export type EffectHostLookup = (scope: LocationScope) => (HostEffects & Partial<StaffLifecycleHost & OperatorAlertHost>) | undefined;
 export type EffectRecoveryReport = Readonly<{
   scanned: number;
   processed: number;
@@ -37,13 +37,14 @@ export class EffectRecovery {
       const recovered = effect.kind === "hostWrite" ? await runtime.recoverHostPossiblySent(ref.callId, effect.id, now)
         : effect.kind === "staffTask" ? await runtime.recoverStaffPossiblySent(ref.callId, effect.id, now)
         : effect.kind === "staffChange" ? await runtime.recoverStaffChangePossiblySent(ref.callId, effect.id, now)
+        : effect.kind === "operatorAlert" ? await runtime.recoverOperatorAlertPossiblySent(ref.callId, effect.id, now)
         : err({ kind: "invalidTransition" as const });
       if (recovered.ok) return "recovered";
       const latest = await runtime.read(ref.callId);
       return latest.ok && latest.value.effects[ref.effectId]?.status !== "possiblySent" ? "deferred"
         : { effectId: ref.effectId, kind: "recoveryFailure" };
     }
-    let host: (HostEffects & Partial<StaffLifecycleHost>) | undefined;
+    let host: (HostEffects & Partial<StaffLifecycleHost & OperatorAlertHost>) | undefined;
     try { host = this.hostLookup(ref.scope); }
     catch { return { effectId: ref.effectId, kind: "hostUnavailable" }; }
     if (!host) return { effectId: ref.effectId, kind: "hostUnavailable" };
@@ -52,6 +53,10 @@ export class EffectRecovery {
       return "processed";
     } catch {
       const latest = await runtime.read(ref.callId);
+      if (latest.ok && (effect.kind === "operatorAlert" || effect.kind === "operatorAlertReconcile") &&
+          ["failed", "uncertain"].includes(latest.value.staffItems[effect.alert.taskKey]?.alerts?.[effect.alert.reason] ?? "")) {
+        return { effectId: ref.effectId, kind: "effectFailure" };
+      }
       return latest.ok && latest.value.effects[ref.effectId]?.status !== "pending" ? "deferred"
         : { effectId: ref.effectId, kind: "effectFailure" };
     }

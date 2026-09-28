@@ -138,7 +138,8 @@ export class MemoryLedger implements LedgerStore {
         entries.push({ callId: state.callId, callVersion: state.version, taskKey: item.key, reason: item.reason, status: item.status, dueAt: item.dueAt,
           destination: structuredClone(item.destination), ...(item.linkedActionKey === undefined ? {} : { linkedActionKey: item.linkedActionKey }),
           ...(item.pendingChangeKey === undefined ? {} : { pendingChangeKey: item.pendingChangeKey }),
-          ...(item.reviewRequired === undefined ? {} : { reviewRequired: item.reviewRequired }) });
+          ...(item.reviewRequired === undefined ? {} : { reviewRequired: item.reviewRequired }),
+          ...(item.alerts === undefined ? {} : { alerts: structuredClone(item.alerts) }) });
       }
     }
     return ok(entries.sort((left, right) => left.taskKey.localeCompare(right.taskKey)).slice(0, 50));

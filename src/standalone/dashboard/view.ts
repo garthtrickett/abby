@@ -71,7 +71,7 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
       ${state.capabilities.some(item => item.id === "staff.list.v1") ? html`<section class="card" aria-labelledby="staff-title">
         <div class="row"><h2 id="staff-title">Staff follow-up</h2><button type="button" ?disabled=${state.busy} @click=${() => actions.loadStaff()}>Refresh follow-up</button></div>
         ${state.staffPage ? html`<div aria-label="Staff follow-up queue">
-          ${state.staffPage.items.length ? html`<ul>${state.staffPage.items.map(item => html`<li>${item.callId} · ${item.reason} · ${item.status}${item.overdue ? " · overdue" : ""}${item.pendingChangeKey ? " · pending host change" : ""}${item.reviewRequired ? " · needs operator review" : ""} · due ${item.dueAt}
+          ${state.staffPage.items.length ? html`<ul>${state.staffPage.items.map(item => html`<li>${item.callId} · ${item.reason} · ${item.status}${item.overdue ? " · overdue" : ""}${item.pendingChangeKey ? " · pending host change" : ""}${item.reviewRequired ? " · needs operator review" : ""}${item.alerts?.overdue ? ` · overdue alert ${item.alerts.overdue}` : ""}${item.alerts?.needsReview ? ` · review alert ${item.alerts.needsReview}` : ""} · due ${item.dueAt}
             ${canChangeStaff && !item.pendingChangeKey && !item.reviewRequired && (item.status === "open" || item.status === "acknowledged") ? html`
               ${item.status === "open" ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.changeStaff(item, { kind: "acknowledge" })}>Acknowledge</button>` : ""}
               <button type="button" ?disabled=${state.busy} @click=${() => actions.changeStaff(item, { kind: "resolve" })}>Resolve</button>

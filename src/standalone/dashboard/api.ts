@@ -110,7 +110,11 @@ export class FetchDashboardPort implements DashboardPort {
       const entry = record(item);
       return entry && typeof entry.callId === "string" && Number.isSafeInteger(entry.callVersion) && typeof entry.taskKey === "string" &&
         typeof entry.reason === "string" && typeof entry.status === "string" && typeof entry.dueAt === "string" &&
-        typeof entry.overdue === "boolean";
+        typeof entry.overdue === "boolean" && (entry.alerts === undefined || (() => {
+          const alerts = record(entry.alerts);
+          return alerts && Object.keys(alerts).every(key => key === "overdue" || key === "needsReview") &&
+            Object.values(alerts).every(status => ["pending", "delivered", "uncertain", "failed", "canceled"].includes(String(status)));
+        })());
     }) && (page.nextAfterTaskKey === undefined || typeof page.nextAfterTaskKey === "string")
       ? ok(page as StaffQueuePage) : err({ kind: "malformed" });
   }
