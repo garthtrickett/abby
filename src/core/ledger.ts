@@ -11,6 +11,7 @@ export interface LedgerStore {
   findRecoverableEffects(now: string, scope?: LocationScope, afterEffectId?: string): Promise<Result<readonly RecoverableEffectRef[], TransitionFailure>>;
   admit(callId: string, policy: CallPolicy, admission: Admission): Promise<Result<AdmissionResult, TransitionFailure>>;
   read(callId: string, scope: LocationScope): Promise<Result<CallState, TransitionFailure>>;
+  listCalls(scope: LocationScope, afterCallId?: string): Promise<Result<readonly CallState[], TransitionFailure>>;
   listStaffItems(scope: LocationScope, afterTaskKey?: string): Promise<Result<readonly StaffQueueEntry[], TransitionFailure>>;
   apply(callId: string, scope: LocationScope, expectedVersion: number, action: TransitionAction): Promise<Result<CallState, TransitionFailure>>;
 }
@@ -117,6 +118,14 @@ export class MemoryLedger implements LedgerStore {
   async read(callId: string, scope: LocationScope): Promise<Result<CallState, TransitionFailure>> {
     const state = this.calls.get(callId);
     return state && sameScope(state.policy.scope, scope) ? ok(structuredClone(state)) : err({ kind: "callUnknown" });
+  }
+
+  async listCalls(scope: LocationScope, afterCallId?: string): Promise<Result<readonly CallState[], TransitionFailure>> {
+    if (afterCallId !== undefined && (!afterCallId || afterCallId.length > 256)) return err({ kind: "invalidTransition" });
+    return ok([...this.calls.values()]
+      .filter(state => sameScope(state.policy.scope, scope) && (!afterCallId || state.callId > afterCallId))
+      .sort((left, right) => left.callId < right.callId ? -1 : left.callId > right.callId ? 1 : 0)
+      .slice(0, 100).map(state => structuredClone(state)));
   }
 
   async listStaffItems(scope: LocationScope, afterTaskKey?: string): Promise<Result<readonly StaffQueueEntry[], TransitionFailure>> {

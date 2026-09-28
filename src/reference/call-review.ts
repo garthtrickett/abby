@@ -21,6 +21,38 @@ function allowed(values: readonly string[], value: unknown): boolean {
   return typeof value === "string" && values.includes(value);
 }
 
+/** Redacted projection shared by exact-call review and scoped reporting. */
+export function summarizeCall(call: CallState): Result<CallSummary, TransitionFailure> {
+  const actions = Object.values(call.actions);
+  const staffItems = Object.values(call.staffItems);
+  if (actions.some(item => !item || !allowed(actionKinds, item.kind) || !allowed(actionStatuses, item.status)) ||
+      staffItems.some(item => !item || !allowed(staffReasons, item.reason) || !allowed(staffStatuses, item.status)) ||
+      !Array.isArray(call.knowledgeAnswers) || call.knowledgeAnswers.some(item => !item ||
+        typeof item.sourceRef !== "string" || !item.sourceRef || typeof item.version !== "string" || !item.version ||
+        typeof item.ownerRef !== "string" || !item.ownerRef) ||
+      !Array.isArray(call.availabilityReads) || call.availabilityReads.some(item => !item ||
+        !allowed(["shown", "empty", "failed"], item.status) ||
+        (item.sourceRef !== undefined && typeof item.sourceRef !== "string") ||
+        (item.timeZone !== undefined && typeof item.timeZone !== "string") ||
+        (item.reason !== undefined && typeof item.reason !== "string") ||
+        (item.shownStartsAt !== undefined && !Array.isArray(item.shownStartsAt)))) {
+    return err({ kind: "storageCorrupt" });
+  }
+  return ok({
+    callId: call.callId,
+    lifecycle: call.lifecycle,
+    version: call.version,
+    actions: actions.map(({ kind, status }) => ({ kind, status })),
+    staffItems: staffItems.map(({ reason, status }) => ({ reason, status })),
+    knowledgeAnswers: call.knowledgeAnswers.map(({ sourceRef, version, ownerRef }) => ({ sourceRef, version, ownerRef })),
+    availabilityReads: call.availabilityReads.map(({ status, sourceRef, timeZone, shownStartsAt, reason }) => ({ status,
+      shownCount: shownStartsAt?.length ?? 0,
+      ...(sourceRef === undefined ? {} : { sourceRef }),
+      ...(timeZone === undefined ? {} : { timeZone }),
+      ...(reason === undefined ? {} : { reason }) })),
+  });
+}
+
 /** Scoped, redacted projection for staff and agents; no patient refs or spoken text leave this boundary. */
 export class CallReview {
   private readonly ledger: LedgerStore;
@@ -29,35 +61,6 @@ export class CallReview {
 
   async read(callId: string, scope: LocationScope): Promise<Result<CallSummary, TransitionFailure>> {
     const result = await this.ledger.read(callId, scope);
-    if (!result.ok) return result;
-    const call = result.value;
-    const actions = Object.values(call.actions);
-    const staffItems = Object.values(call.staffItems);
-    if (actions.some(item => !item || !allowed(actionKinds, item.kind) || !allowed(actionStatuses, item.status)) ||
-        staffItems.some(item => !item || !allowed(staffReasons, item.reason) || !allowed(staffStatuses, item.status)) ||
-        !Array.isArray(call.knowledgeAnswers) || call.knowledgeAnswers.some(item => !item ||
-          typeof item.sourceRef !== "string" || !item.sourceRef || typeof item.version !== "string" || !item.version ||
-          typeof item.ownerRef !== "string" || !item.ownerRef) ||
-        !Array.isArray(call.availabilityReads) || call.availabilityReads.some(item => !item ||
-          !allowed(["shown", "empty", "failed"], item.status) ||
-          (item.sourceRef !== undefined && typeof item.sourceRef !== "string") ||
-          (item.timeZone !== undefined && typeof item.timeZone !== "string") ||
-          (item.reason !== undefined && typeof item.reason !== "string") ||
-          (item.shownStartsAt !== undefined && !Array.isArray(item.shownStartsAt)))) {
-      return err({ kind: "storageCorrupt" });
-    }
-    return ok({
-      callId: call.callId,
-      lifecycle: call.lifecycle,
-      version: call.version,
-      actions: actions.map(({ kind, status }) => ({ kind, status })),
-      staffItems: staffItems.map(({ reason, status }) => ({ reason, status })),
-      knowledgeAnswers: call.knowledgeAnswers.map(({ sourceRef, version, ownerRef }) => ({ sourceRef, version, ownerRef })),
-      availabilityReads: call.availabilityReads.map(({ status, sourceRef, timeZone, shownStartsAt, reason }) => ({ status,
-        shownCount: shownStartsAt?.length ?? 0,
-        ...(sourceRef === undefined ? {} : { sourceRef }),
-        ...(timeZone === undefined ? {} : { timeZone }),
-        ...(reason === undefined ? {} : { reason }) })),
-    });
+    return result.ok ? summarizeCall(result.value) : result;
   }
 }

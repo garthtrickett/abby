@@ -14,6 +14,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn("state", "jsonb", column => column.notNull())
     .addColumn("created_at", "timestamptz", column => column.notNull().defaultTo(sql`clock_timestamp()`))
     .execute();
+  await db.schema.createIndex("calls_scope_report_idx").on("calls").columns(["tenant_id", "clinic_id", "location_id", "call_id"]).execute();
 
   await db.schema.createTable("call_events")
     .addColumn("call_id", "text", column => column.notNull().references("calls.call_id").onDelete("cascade"))

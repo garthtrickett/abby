@@ -3,6 +3,7 @@ import type { CallPolicy, StaffChangeRequest, StaffQueueEntry } from "../../core
 import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor } from "../../reference/command-gateway.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
+import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
 
 export type DashboardState = {
   loading: boolean;
@@ -12,6 +13,7 @@ export type DashboardState = {
   callIdInput: string;
   call: CallSummary | undefined;
   staffPage: StaffQueuePage | undefined;
+  outcomePage: CallOutcomePage | undefined;
   notice: string | undefined;
   error: string | undefined;
 };
@@ -22,6 +24,8 @@ export type DashboardActions = Readonly<{
   loadCall(): void;
   loadStaff(): void;
   loadMoreStaff(): void;
+  loadOutcomes(): void;
+  loadMoreOutcomes(): void;
   changeStaff(item: StaffQueueEntry, change: StaffChangeRequest): void;
 }>;
 
@@ -52,6 +56,16 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
           ${state.call.availabilityReads.length ? html`<h3>Availability reads</h3><ul>${state.call.availabilityReads.map(item => html`<li>${item.status}${item.sourceRef ? ` · ${item.sourceRef}` : ""}${item.timeZone ? ` · ${item.timeZone}` : ""} · ${item.shownCount} time(s)${item.reason ? ` · ${item.reason}` : ""}</li>`)}</ul>` : ""}
         </div>` : ""}
       </section>
+      ${state.capabilities.some(item => item.id === "calls.outcomes.v1") ? html`<section class="card" aria-labelledby="outcomes-title">
+        <div class="row"><div><h2 id="outcomes-title">Call outcomes</h2><p class="muted">Counts cover loaded calls in this clinic.</p></div>
+          <button type="button" ?disabled=${state.busy} @click=${() => actions.loadOutcomes()}>Refresh outcomes</button></div>
+        ${state.outcomePage ? html`<div aria-label="Call outcome report">
+          <p>${state.outcomePage.totals.calls} call(s) loaded · ${state.outcomePage.totals.committedActions} completed action(s) · ${state.outcomePage.totals.callsWithUnresolvedActions} call(s) with unresolved actions.</p>
+          <p>${state.outcomePage.totals.callsWithStaffRequests} call(s) requested staff follow-up · ${state.outcomePage.totals.callsWithHostConfirmedTasks} call(s) have a host-confirmed task · ${state.outcomePage.totals.callsWithStaffNeedsReview} call(s) need staff review · ${state.outcomePage.totals.callsWithSystemFailure} call(s) recorded a system-failure task.</p>
+          ${state.outcomePage.rows.length ? html`<ul>${state.outcomePage.rows.map(row => html`<li>${row.callId} · ${row.lifecycle} · ${row.committedActions} completed · ${row.unresolvedActions} unresolved · ${row.staffRequests} staff request(s)${row.staffNeedsReview ? " · needs review" : ""}</li>`)}</ul>` : html`<p>No calls in this clinic.</p>`}
+          ${state.outcomePage.nextAfterCallId ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreOutcomes()}>Load more outcomes</button>` : ""}
+        </div>` : html`<p class="muted">Outcome report unavailable.</p>`}
+      </section>` : ""}
       ${state.capabilities.some(item => item.id === "staff.list.v1") ? html`<section class="card" aria-labelledby="staff-title">
         <div class="row"><h2 id="staff-title">Staff follow-up</h2><button type="button" ?disabled=${state.busy} @click=${() => actions.loadStaff()}>Refresh follow-up</button></div>
         ${state.staffPage ? html`<div aria-label="Staff follow-up queue">
