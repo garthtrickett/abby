@@ -43,7 +43,7 @@ export class PrelocationVoiceSession {
     this.playback = playback;
     this.monotonicNow = monotonicNow;
     this.callId = callIdFor(event.key);
-    this.assembler = new TurnAssembler(this.callId, sessionId);
+    this.assembler = new TurnAssembler(this.callId, sessionId, "prelocation");
   }
 
   private canSend(): boolean {

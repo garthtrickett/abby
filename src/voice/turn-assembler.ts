@@ -11,13 +11,15 @@ export type TranscriptFailure = Readonly<{ kind: "staleGeneration" | "keyMismatc
 export class TurnAssembler {
   private readonly callId: string;
   private readonly sessionId: string;
+  private readonly namespace: string;
   private generation = 0;
   private segments = new Map<string, Extract<TranscriptEvent, { kind: "segmentFinal" }>>();
   private completed: FinalCallerTurn | undefined;
 
-  constructor(callId: string, sessionId: string) {
+  constructor(callId: string, sessionId: string, namespace = "call") {
     this.callId = callId;
     this.sessionId = sessionId;
+    this.namespace = namespace;
   }
 
   beginSpeech(): number {
@@ -45,7 +47,8 @@ export class TurnAssembler {
     const segments = [...this.segments.values()];
     if (!segments.length) return err({ kind: "noFinalSpeech" });
     const text = segments.map(segment => segment.text.trim()).join(" ");
-    const turnId = createHash("sha256").update(JSON.stringify([this.callId, this.sessionId, this.generation, segments.map(segment => segment.utteranceId)])).digest("hex");
+    const turnId = createHash("sha256").update(JSON.stringify([this.callId, this.sessionId, this.namespace,
+      this.generation, segments.map(segment => segment.utteranceId)])).digest("hex");
     this.completed = {
       callId: this.callId,
       sessionId: this.sessionId,
