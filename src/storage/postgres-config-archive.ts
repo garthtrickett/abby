@@ -116,7 +116,7 @@ function sectionBytes(records: readonly RecordData[]): Buffer {
   return bytes;
 }
 
-function validRequest(request: ConfigArchiveRequest): boolean {
+export function validConfigArchiveRequest(request: ConfigArchiveRequest): boolean {
   const source = request?.scope;
   const target = request?.targetScope;
   if (!source || !target || ![source.tenantId, source.clinicId, source.locationId,
@@ -131,7 +131,7 @@ function validRequest(request: ConfigArchiveRequest): boolean {
 /** Source adapter for an unused one-location tenant. It fails closed if any call history exists. */
 export async function buildPostgresConfigArchive(db: Kysely<Database>, request: ConfigArchiveRequest, authority: ConfigArchiveAuthority):
   Promise<Result<ArchiveEnvelope, ConfigArchiveFailure>> {
-  if (!validRequest(request) || !authority || typeof authority.authorizeAndRecord !== "function") return err({ kind: "invalidConfig" });
+  if (!validConfigArchiveRequest(request) || !authority || typeof authority.authorizeAndRecord !== "function") return err({ kind: "invalidConfig" });
   let authorization: Awaited<ReturnType<ConfigArchiveAuthority["authorizeAndRecord"]>>;
   try { authorization = await authority.authorizeAndRecord(request); }
   catch { return err({ kind: "auditFailure" }); }

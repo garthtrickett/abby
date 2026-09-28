@@ -14,6 +14,7 @@ import { ReferenceConfigArchiveImporter } from "../../src/reference/config-archi
 import { createEmbeddedTextComposition } from "../../src/reference/embedded-composition.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { buildPostgresConfigArchive } from "../../src/storage/postgres-config-archive.ts";
+import { comparePostgresConfigArchiveSource } from "../../src/storage/postgres-config-archive-drift.ts";
 import type { ConfigArchiveAuthority, ConfigArchiveRequest } from "../../src/storage/postgres-config-archive.ts";
 
 const url = process.env.DATABASE_URL;
@@ -240,4 +241,49 @@ test("config archive refuses to omit another location in the source tenant", asy
     archiveId: "partial-archive", actorRef: "archive-admin", createdAt: "2026-09-28T22:00:00Z" };
   const result = await buildPostgresConfigArchive(db, request, { authorizeAndRecord: async () => ok({ requestRef: "audited-partial" }) });
   assert.deepEqual(result, { ok: false, error: { kind: "scopeIncomplete" } });
+});
+
+test("configuration snapshot comparison detects setting and knowledge drift before cutover", async () => {
+  const scope = { tenantId: "archive-drift-tenant", clinicId: "clinic", locationId: "location" };
+  const targetScope = { tenantId: "archive-drift-buyer", clinicId: "clinic", locationId: "location" };
+  const request: ConfigArchiveRequest = { scope, targetScope, timeZone: "UTC", mappingProvenance: "reviewed-drift-map",
+    archiveId: "drift-baseline", actorRef: "archive-admin", createdAt: "2026-09-28T22:00:00Z" };
+  let audited = 0;
+  const authority: ConfigArchiveAuthority = { authorizeAndRecord: async () => ok({ requestRef: `drift-audit-${++audited}` }) };
+  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly");
+  assert.equal((await policy.changeBookingEnabled(scope, "0", true, "archive-admin")).ok, true);
+  const baseline = await buildPostgresConfigArchive(db, request, authority);
+  assert.equal(baseline.ok, true);
+  if (!baseline.ok) return;
+  const comparison = { ...request, archiveId: "drift-check-1", createdAt: "2026-09-28T22:05:00Z" };
+  const unchanged = await comparePostgresConfigArchiveSource(db, baseline.value, comparison, authority);
+  assert.equal(unchanged.ok, true);
+  if (unchanged.ok) {
+    assert.equal(unchanged.value.kind, "unchanged");
+    assert.deepEqual(unchanged.value.changed, []);
+    assert.notEqual(unchanged.value.baselineManifestDigest, unchanged.value.comparisonManifestDigest);
+  }
+  assert.equal(audited, 2);
+  const reused = await comparePostgresConfigArchiveSource(db, baseline.value, request, authority);
+  assert.deepEqual(reused, { ok: false, error: { kind: "archiveIdReused" } });
+  const mismatched = await comparePostgresConfigArchiveSource(db, baseline.value,
+    { ...comparison, archiveId: "drift-check-wrong-map", mappingProvenance: "unreviewed" }, authority);
+  assert.deepEqual(mismatched, { ok: false, error: { kind: "baselineMismatch" } });
+  assert.equal((await policy.changeBookingEnabled(scope, "1", false, "archive-admin")).ok, true);
+  const changedSettings = await comparePostgresConfigArchiveSource(db, baseline.value,
+    { ...comparison, archiveId: "drift-check-2" }, authority);
+  assert.equal(changedSettings.ok, true);
+  if (changedSettings.ok) assert.deepEqual(changedSettings.value.changed, ["settings"]);
+  const catalogue = new PostgresKnowledgeCatalogue(db);
+  assert.equal((await catalogue.saveDraft(scope, "arrival", "0", "clinic-owner", "Please arrive early.",
+    "2026-09-01T00:00:00Z", "2026-10-01T00:00:00Z", "archive-admin")).ok, true);
+  assert.equal((await catalogue.approve(scope, "arrival", "1", "archive-admin")).ok, true);
+  const changedBoth = await comparePostgresConfigArchiveSource(db, baseline.value,
+    { ...comparison, archiveId: "drift-check-3" }, authority);
+  assert.equal(changedBoth.ok, true);
+  if (changedBoth.ok) assert.deepEqual(changedBoth.value.changed, ["settings", "knowledge"]);
+  assert.equal((await new PostgresLedger(db).start("archive-drift-call", referenceDefaultPolicy(scope))).ok, true);
+  const ineligible = await comparePostgresConfigArchiveSource(db, baseline.value,
+    { ...comparison, archiveId: "drift-check-4" }, authority);
+  assert.deepEqual(ineligible, { ok: false, error: { kind: "callsRequireRetention" } });
 });
