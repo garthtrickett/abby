@@ -136,11 +136,6 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
   const session = new VoiceSession(callId, sessionId, scope, sessionLedger, reception, playback, async turn =>
     ok(turn.text.startsWith("Transfer")
       ? { kind: "transfer" as const, reason: "callerRequested" as const }
-      : turn.text.toLowerCase().includes("hours?")
-      ? { kind: "answer" as const, proposedText: "We open at 9 am.", sources: turn.text.startsWith("Hours")
-          ? [{ scope, sourceRef: "hours", approvedText: "We open at 9 am.", approved: true,
-              effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]
-          : [] }
       : turn.text.startsWith("Book")
       ? { kind: "book" as const, verificationRef: patient.verificationRef, offerRef: offer.offerRef }
       : { kind: "affirm" as const }), transfer, clock?.now);
@@ -159,13 +154,6 @@ async function transferTurn(app: Awaited<ReturnType<typeof fixture>>, quality: "
   const generation = value(await app.session.speechStarted(at(2)));
   value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation, utteranceId: "transfer-request", text: "Transfer to staff", quality }));
   return value(await app.session.finishTurn(at(3)));
-}
-
-async function answerTurn(app: Awaited<ReturnType<typeof fixture>>, text: string, seconds = 2) {
-  const generation = value(await app.session.speechStarted(at(seconds)));
-  value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation,
-    utteranceId: `question-${seconds}`, text, quality: "clear" }));
-  return value(await app.session.finishTurn(at(seconds + 1)));
 }
 
 for (const kind of kinds) {
@@ -230,23 +218,21 @@ for (const kind of kinds) {
     assert.equal(app.host.bookings(app.scope).length, 0);
   });
 
-  test(`${kind}: approved knowledge reaches playback and a newer turn replaces its pending notice`, async () => {
-    const app = await fixture(kind, `${kind}-answer-notice`, false);
-    const approved = await answerTurn(app, "Hours?");
-    const oldId = approved.pendingPresentationId;
-    assert.equal(approved.presentations[oldId!]?.kind, "notice");
-    assert.equal(approved.callerMessages.at(-1), "We open at 9 am.");
-    const corrected = await answerTurn(app, "Unknown hours?", 4);
-    assert.equal(corrected.presentations[oldId!]?.status, "superseded");
-    assert.equal(corrected.callerMessages.at(-1), "I can't verify that information right now.");
+  test(`${kind}: a newer caller turn supersedes an unsent fallback notice`, async () => {
+    const app = await fixture(kind, `${kind}-notice-superseded`, false);
+    const first = await bookTurn(app);
+    const firstId = first.pendingPresentationId;
+    assert.equal(first.presentations[firstId!]?.kind, "notice");
+    const generation = value(await app.session.speechStarted(at(4)));
+    value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation,
+      utteranceId: "transfer-after-booking", text: "Transfer to staff", quality: "clear" }));
+    const second = value(await app.session.finishTurn(at(5)));
+    assert.equal(second.presentations[firstId!]?.status, "superseded");
+    assert.equal(second.presentations[second.pendingPresentationId!]?.kind, "notice");
     const delivery = value(await app.session.dispatchPending(at(6)));
     assert.equal(delivery.kind, "queued");
-    assert.deepEqual(app.playback.queuedTexts, ["I can't verify that information right now."]);
-    const played = value(await app.session.acceptPlaybackResult(delivery.playbackId!, "played", at(7)));
-    assert.equal(played.presentations[corrected.pendingPresentationId!]?.status, "played");
+    assert.deepEqual(app.playback.queuedTexts, ["I can request staff follow-up, but I can't confirm they've received it yet."]);
     assert.equal(app.host.bookings(app.scope).length, 0);
-    assert.equal(Object.keys(played.actions).length, 0);
-    assert.equal(Object.values(played.staffItems)[0]?.reason, "systemFailure");
   });
 
   test(`${kind}: interruption and late playback ack cannot confirm booking`, async () => {

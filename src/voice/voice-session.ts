@@ -1,6 +1,6 @@
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
-import type { ApprovedKnowledge, CallState, FinalCallerTurn, LocationScope, PendingPresentationRef, Presentation, Result, StaffReason, TransitionFailure } from "../core/model.ts";
+import type { CallState, FinalCallerTurn, LocationScope, PendingPresentationRef, Presentation, Result, StaffReason, TransitionFailure } from "../core/model.ts";
 import { CallRuntime } from "../core/runtime.ts";
 import type { TextReceptionFailure } from "../reference/text-reception.ts";
 import { TextReception } from "../reference/text-reception.ts";
@@ -9,7 +9,6 @@ import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 
 export type VoiceIntent =
   | Readonly<{ kind: "book"; verificationRef: string; offerRef: string }>
-  | Readonly<{ kind: "answer"; sources: readonly ApprovedKnowledge[]; proposedText: string }>
   | Readonly<{ kind: "affirm" }>
   | Readonly<{ kind: "handoff"; reason: StaffReason }>
   | Readonly<{ kind: "transfer"; reason: StaffReason }>;
@@ -195,8 +194,6 @@ export class VoiceSession {
     let result: Result<CallState, VoiceSessionFailure>;
     if (this.cachedIntent.kind === "book") {
       result = await this.reception.proposeBooking(this.scope, turn, this.cachedIntent.verificationRef, this.cachedIntent.offerRef, now, existing.value.conversationRevision);
-    } else if (this.cachedIntent.kind === "answer") {
-      result = await this.runtime.acceptTurn(turn, { kind: "answer", sources: this.cachedIntent.sources, proposedText: this.cachedIntent.proposedText }, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "transfer") {
       result = await this.runtime.acceptTurn(turn, { kind: "transfer", reason: this.cachedIntent.reason }, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "handoff") {
