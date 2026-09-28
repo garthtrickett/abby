@@ -4,6 +4,10 @@ import type { ActionRequest, CallPolicy, CallState, FinalCallerTurn, HostMutatio
 import { CallRuntime } from "../../src/core/runtime.ts";
 import { ReferenceEffectWorker } from "../../src/reference/effect-worker.ts";
 import type { ReferenceHost } from "../../src/reference/effect-worker.ts";
+import { connectPostgres } from "../../src/storage/connect.ts";
+import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
+import type { Kysely } from "kysely";
+import type Database from "../../src/storage/generated/Database.ts";
 
 export const now = "2026-09-28T10:00:00.000Z";
 export const deadline = "2026-09-29T10:00:00.000Z";
@@ -40,7 +44,9 @@ export class FakeHost implements ReferenceHost {
   }
 }
 
-export function setup(id: string, modes?: Partial<CallPolicy["capabilities"]>) {
+let postgresDb: Kysely<Database> | undefined;
+
+export async function setup(id: string, modes?: Partial<CallPolicy["capabilities"]>) {
   const scope = { tenantId: `tenant-${id}`, clinicId: `clinic-${id}`, locationId: `location-${id}` };
   const policy: CallPolicy = {
     scope,
@@ -50,29 +56,35 @@ export function setup(id: string, modes?: Partial<CallPolicy["capabilities"]>) {
     operatorQueue: { kind: "queue", queueRef: `operator-${id}` },
   };
   const callId = `call-${id}`;
-  const runtime = new CallRuntime(new MemoryLedger());
+  if (process.env.ABBY_LEDGER === "postgres" && !postgresDb) {
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new Error("DATABASE_URL is required for PostgreSQL text tests");
+    postgresDb = connectPostgres(url);
+  }
+  const ledger = process.env.ABBY_LEDGER === "postgres" ? new PostgresLedger(postgresDb!) : new MemoryLedger();
+  const runtime = new CallRuntime(ledger, scope);
   const host = new FakeHost();
   const worker = new ReferenceEffectWorker(runtime, host);
-  success(runtime.start(callId, policy));
+  success(await runtime.start(callId, policy));
   const patient = { scope, patientRef: `patient-${id}`, verificationRef: `verified-${id}`, expiresAt: deadline };
   const offer = (serviceRef = "physio", offerRef = "offer-1") => ({ scope, offerRef, serviceRef, startsAt: "2026-09-29T11:00:00.000Z", expiresAt: deadline });
   const book = (serviceRef = "physio", offerRef = "offer-1"): ActionRequest => ({ kind: "book", patient, offer: offer(serviceRef, offerRef) });
   const intake: ActionRequest = { kind: "intake", scope, approvedDraftRef: "draft-1", consentRef: "consent-1", duplicateCheckRef: "check-1" };
-  function turn(turnId: string, text: string, interpretation: TurnInterpretation, at = now): CallState {
+  async function turn(turnId: string, text: string, interpretation: TurnInterpretation, at = now): Promise<CallState> {
     const message: FinalCallerTurn = { callId, turnId, text, quality: "clear", at };
-    return success(runtime.acceptTurn(message, interpretation, at));
+    return success(await runtime.acceptTurn(message, interpretation, at));
   }
-  function state(): CallState { return success(runtime.read(callId)); }
-  function pendingAction(): CallState["actions"][string] {
-    const item = Object.values(state().actions).find(action => action.status === "awaitingConfirmation");
+  async function state(): Promise<CallState> { return success(await runtime.read(callId)); }
+  async function pendingAction(): Promise<CallState["actions"][string]> {
+    const item = Object.values((await state()).actions).find(action => action.status === "awaitingConfirmation");
     assert.ok(item);
     return item;
   }
-  function confirm(actionKey: string, turnId = "affirm-1"): CallState {
-    const action = state().actions[actionKey];
+  async function confirm(actionKey: string, turnId = "affirm-1"): Promise<CallState> {
+    const action = (await state()).actions[actionKey];
     assert.ok(action);
-    success(runtime.startPresentation(callId, action.presentationId));
-    success(runtime.resolvePresentation(callId, action.presentationId, "played"));
+    success(await runtime.startPresentation(callId, action.presentationId));
+    success(await runtime.resolvePresentation(callId, action.presentationId, "played"));
     return turn(turnId, "Yes, confirm those details", { kind: "affirm", actionKey, digest: action.digest, affirmative: true });
   }
   return { callId, scope, policy, patient, offer, book, intake, runtime, host, worker, turn, state, pendingAction, confirm };

@@ -17,13 +17,13 @@ export class ReferenceEffectWorker {
   }
 
   async process(callId: string, effectId: string, now: string): Promise<void> {
-    const read = this.runtime.read(callId);
+    const read = await this.runtime.read(callId);
     if (!read.ok) throw new Error(read.error.kind);
     const effect = read.value.effects[effectId];
     if (!effect) throw new Error("effectUnknown");
     if (effect.kind === "hostWrite") {
       if (effect.status !== "pending") throw new Error("invalidTransition");
-      const marked = this.runtime.markHostPossiblySent(callId, effectId, now);
+      const marked = await this.runtime.markHostPossiblySent(callId, effectId, now);
       if (!marked.ok) throw new Error(marked.error.kind);
       let receipt: HostWriteReceipt;
       try {
@@ -36,7 +36,7 @@ export class ReferenceEffectWorker {
           deadline: new Date(Date.parse(now) + 24 * 60 * 60 * 1000).toISOString(),
         };
       }
-      const resolved = this.runtime.acceptHostResult(callId, effectId, receipt, now);
+      const resolved = await this.runtime.acceptHostResult(callId, effectId, receipt, now);
       if (!resolved.ok) throw new Error(resolved.error.kind);
       return;
     }
@@ -45,14 +45,14 @@ export class ReferenceEffectWorker {
       const original = read.value.effects[effect.originalEffectId];
       if (!original || original.kind !== "hostWrite") throw new Error("effectUnknown");
       const observation = await this.host.reconcile(original.mutation);
-      const resolved = this.runtime.acceptReconciliation(callId, effectId, observation, now);
+      const resolved = await this.runtime.acceptReconciliation(callId, effectId, observation, now);
       if (!resolved.ok) throw new Error(resolved.error.kind);
       return;
     }
     if (effect.status !== "pending") throw new Error("invalidTransition");
     const item = read.value.staffItems[effect.taskKey];
     if (!item) throw new Error("effectUnknown");
-    const marked = this.runtime.markStaffPossiblySent(callId, effectId);
+    const marked = await this.runtime.markStaffPossiblySent(callId, effectId, now);
     if (!marked.ok) throw new Error(marked.error.kind);
     let receipt: StaffTaskReceipt;
     try {
@@ -60,7 +60,7 @@ export class ReferenceEffectWorker {
     } catch {
       receipt = { kind: "uncertain", taskKey: item.key };
     }
-    const resolved = this.runtime.acceptStaffResult(callId, effectId, receipt);
+    const resolved = await this.runtime.acceptStaffResult(callId, effectId, receipt);
     if (!resolved.ok) throw new Error(resolved.error.kind);
   }
 }

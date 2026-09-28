@@ -7,6 +7,7 @@ import type {
 } from "./model.ts";
 
 const HOUR = 60 * 60 * 1000;
+const POSSIBLE_SEND_RECOVERY_DELAY = 60 * 1000;
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
@@ -22,6 +23,10 @@ function canonical(value: unknown): unknown {
 
 function digestFor(request: ActionRequest): string {
   return createHash("sha256").update(JSON.stringify(canonical(request))).digest("hex");
+}
+
+function turnDigest(turn: FinalCallerTurn, interpretation: TurnInterpretation): string {
+  return createHash("sha256").update(JSON.stringify(canonical({ turn, interpretation }))).digest("hex");
 }
 
 function describe(request: ActionRequest): string {
@@ -176,6 +181,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
     }
   }
   state.processedTurnIds.push(turn.turnId);
+  state.processedTurnDigests[turn.turnId] = turnDigest(turn, interpretation);
   return ok(undefined);
 }
 
@@ -215,13 +221,17 @@ function recordHostResult(state: CallState, effectId: string, receipt: import(".
 }
 
 export function transition(current: CallState, action: TransitionAction): Result<CallState, TransitionFailure> {
+  if ("now" in action && !Number.isFinite(Date.parse(action.now))) return err({ kind: "invalidTransition" });
   const state = structuredClone(current);
-  const now = action.kind === "callerTurn" || action.kind === "markHostPossiblySent" || action.kind === "reconciliationDeadline" || action.kind === "hostWriteResolved" || action.kind === "reconciliationResolved"
+  const now = action.kind === "callerTurn" || action.kind === "markHostPossiblySent" || action.kind === "recoverHostPossiblySent" || action.kind === "markStaffPossiblySent" || action.kind === "recoverStaffPossiblySent" || action.kind === "reconciliationDeadline" || action.kind === "hostWriteResolved" || action.kind === "reconciliationResolved"
     ? action.now : new Date(0).toISOString();
 
   switch (action.kind) {
     case "callerTurn": {
-      if (current.processedTurnIds.includes(action.turn.turnId)) return ok(current);
+      if (current.processedTurnIds.includes(action.turn.turnId)) {
+        return current.processedTurnDigests[action.turn.turnId] === turnDigest(action.turn, action.interpretation)
+          ? ok(current) : err({ kind: "keyMismatch" });
+      }
       const result = handleTurn(state, action.turn, action.interpretation, now);
       if (!result.ok) return result;
       break;
@@ -246,8 +256,22 @@ export function transition(current: CallState, action: TransitionAction): Result
       if (effect.status !== "pending" || pendingAction?.status !== "ready" || pendingAction.digest !== effect.mutation.payloadDigest) return err({ kind: "invalidTransition" });
       const evidence = evidenceFailure(state, effect.mutation.request, now);
       if (evidence) return err(evidence);
-      state.effects[effect.id] = { ...effect, status: "possiblySent" };
+      state.effects[effect.id] = { ...effect, status: "possiblySent", possiblySentAt: now };
       state.actions[pendingAction.key] = { ...pendingAction, status: "dispatched" };
+      break;
+    }
+    case "recoverHostPossiblySent": {
+      const effect = state.effects[action.effectId];
+      if (!effect || effect.kind !== "hostWrite") return err({ kind: "effectUnknown" });
+      if (effect.status === "uncertain") return ok(current);
+      if (effect.status !== "possiblySent" || !effect.possiblySentAt || Date.parse(now) < Date.parse(effect.possiblySentAt) + POSSIBLE_SEND_RECOVERY_DELAY) return err({ kind: "invalidTransition" });
+      const result = recordHostResult(state, effect.id, {
+        kind: "uncertain",
+        actionKey: effect.actionKey,
+        reconcileAfter: now,
+        deadline: new Date(Date.parse(now) + 24 * HOUR).toISOString(),
+      }, now);
+      if (!result.ok) return result;
       break;
     }
     case "hostWriteResolved": {
@@ -283,7 +307,18 @@ export function transition(current: CallState, action: TransitionAction): Result
     case "markStaffPossiblySent": {
       const effect = state.effects[action.effectId];
       if (!effect || effect.kind !== "staffTask" || effect.status !== "pending") return err({ kind: "invalidTransition" });
-      state.effects[effect.id] = { ...effect, status: "possiblySent" };
+      state.effects[effect.id] = { ...effect, status: "possiblySent", possiblySentAt: now };
+      break;
+    }
+    case "recoverStaffPossiblySent": {
+      const effect = state.effects[action.effectId];
+      if (!effect || effect.kind !== "staffTask") return err({ kind: "effectUnknown" });
+      if (effect.status === "uncertain") return ok(current);
+      if (effect.status !== "possiblySent" || !effect.possiblySentAt || Date.parse(now) < Date.parse(effect.possiblySentAt) + POSSIBLE_SEND_RECOVERY_DELAY) return err({ kind: "invalidTransition" });
+      const item = state.staffItems[effect.taskKey];
+      if (!item) return err({ kind: "invalidTransition" });
+      state.staffItems[item.key] = { ...item, status: "needsReview", destination: state.policy.operatorQueue };
+      state.effects[effect.id] = { ...effect, status: "uncertain" };
       break;
     }
     case "staffTaskResolved": {
