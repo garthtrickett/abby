@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import type { LocationScope } from "../../src/core/model.ts";
+import type { AvailabilityHost } from "../../src/core/host.ts";
 import { CallReview } from "../../src/reference/call-review.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
@@ -10,13 +11,13 @@ import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
 import { TextReception } from "../../src/reference/text-reception.ts";
 import { createDashboardServer } from "../../src/standalone/dashboard/server.ts";
 
-async function localDashboard(role: "clinicAdmin" | "staff") {
+async function localDashboard(role: "clinicAdmin" | "staff", availability?: AvailabilityHost) {
   const scope: LocationScope = { tenantId: "browser-tenant", clinicId: "browser-clinic", locationId: "browser-location" };
   const ledger = new MemoryLedger();
   const policy = new MemoryPolicyStore();
   const reception = new TextReception(ledger, policy, new ReferenceClinicHost([], [],
     [{ scope, sourceRef: "hours", version: "hours-v1", ownerRef: "clinic-owner", approvedText: "We open at 9 am.", approved: true,
-      effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]));
+      effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]), availability);
   const started = await reception.startCall("before-setting", scope);
   assert.equal(started.ok, true);
   const gateway = new CommandGateway({ actorRef: `browser-${role}`, role, scope }, policy, reception, new CallReview(ledger));
@@ -99,6 +100,27 @@ test("E2E-004: staff can review the approved answer source without seeing spoken
     await expect(page.getByLabel("Call summary")).toContainText("1 sourced answer(s)");
     await expect(page.getByLabel("Call summary")).toContainText("hours · version hours-v1");
     await expect(page.getByLabel("Call summary")).not.toContainText("We open at 9 am.");
+  } finally {
+    await app.close();
+  }
+});
+
+test("availability read review shows source and status without exposing exact times", async ({ page }) => {
+  const availability: AvailabilityHost = { list: async scope => ({ ok: true, value: { kind: "times", scope,
+    sourceRef: "cliniko:11:22:33", timeZone: "Australia/Sydney", observedAt: "2026-09-28T10:00:00.000Z",
+    startsAt: ["2026-09-30T23:00:00.000Z"], reservable: false } }) };
+  const app = await localDashboard("staff", availability);
+  try {
+    const read = await app.reception.checkAvailability(app.scope,
+      { callId: "before-setting", turnId: "availability-review", text: "Check times", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
+      "2026-10-01", "2026-10-02", "2026-09-28T10:00:00.000Z");
+    assert.equal(read.ok, true);
+    await page.goto(app.url);
+    await page.getByRole("textbox", { name: "Call ID" }).fill("before-setting");
+    await page.getByRole("button", { name: "Load call" }).click();
+    await expect(page.getByLabel("Call summary")).toContainText("1 availability read(s)");
+    await expect(page.getByLabel("Call summary")).toContainText("shown · cliniko:11:22:33 · Australia/Sydney · 1 time(s)");
+    await expect(page.getByLabel("Call summary")).not.toContainText("2026-09-30T23:00:00.000Z");
   } finally {
     await app.close();
   }

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { digestActionRequest, digestTurn } from "./digest.ts";
+import { availabilityPresentation } from "./availability-presentation.ts";
 import { err, ok } from "./model.ts";
 import type {
   ActionRequest, ActionState, CallState, FinalCallerTurn, LocationScope,
@@ -225,6 +226,24 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
     case "knowledgeFailure":
       addStaffTask(state, "systemFailure", now);
       state.callerMessages.push("I can't verify that information right now.");
+      break;
+    case "availability": {
+      const presentation = availabilityPresentation(interpretation.snapshot, state.policy.scope, interpretation.from, interpretation.to, now);
+      if (turn.quality !== "clear" || !presentation.ok) {
+        addStaffTask(state, "systemFailure", now);
+        state.callerMessages.push("I can't check available times right now. I'll request staff follow-up.");
+        state.availabilityReads.push({ turnId: turn.turnId, status: "failed", reason: turn.quality !== "clear" ? "unclear" : "invalidEvidence" });
+      } else {
+        state.callerMessages.push(presentation.value.text);
+        state.availabilityReads.push({ turnId: turn.turnId, status: presentation.value.status, sourceRef: presentation.value.sourceRef,
+          timeZone: presentation.value.timeZone, observedAt: presentation.value.observedAt, shownStartsAt: presentation.value.shownStartsAt });
+      }
+      break;
+    }
+    case "availabilityFailure":
+      addStaffTask(state, "systemFailure", now);
+      state.callerMessages.push("I can't check available times right now. I'll request staff follow-up.");
+      state.availabilityReads.push({ turnId: turn.turnId, status: "failed", reason: interpretation.reason });
       break;
   }
   const newMessages = state.callerMessages.slice(messageCount);

@@ -32,13 +32,17 @@ test("call review strips patient refs and approved speech from the projection", 
   const state = initialState("private-call", referenceDefaultPolicy(scope));
   state.callerMessages.push("Private patient detail");
   state.knowledgeAnswers.push({ turnId: "private-turn", sourceRef: "hours", version: "hours-v1", ownerRef: "clinic-owner" });
+  state.availabilityReads.push({ turnId: "private-availability", status: "shown", sourceRef: "cliniko:1:2:3", timeZone: "Australia/Sydney",
+    observedAt: "2026-09-28T10:00:00.000Z", shownStartsAt: ["2026-10-01T10:00:00.000Z"] });
   state.presentations["private-presentation"] = { kind: "notice", id: "private-presentation", approvedText: "Private patient detail", status: "played" };
   const ledger = { read: async () => ok(state) } as unknown as LedgerStore;
   const result = await new CallReview(ledger).read("private-call", scope);
   assert.ok(result.ok);
   assert.equal(JSON.stringify(result.value).includes("Private patient detail"), false);
   assert.deepEqual(result.value.knowledgeAnswers, [{ sourceRef: "hours", version: "hours-v1", ownerRef: "clinic-owner" }]);
-  assert.deepEqual(Object.keys(result.value).sort(), ["actions", "callId", "knowledgeAnswers", "lifecycle", "staffItems", "version"]);
+  assert.deepEqual(result.value.availabilityReads, [{ status: "shown", sourceRef: "cliniko:1:2:3", timeZone: "Australia/Sydney", shownCount: 1 }]);
+  assert.equal(JSON.stringify(result.value).includes("2026-10-01T10:00:00.000Z"), false);
+  assert.deepEqual(Object.keys(result.value).sort(), ["actions", "availabilityReads", "callId", "knowledgeAnswers", "lifecycle", "staffItems", "version"]);
   state.actions["corrupt"] = { kind: "book", status: "Private patient detail" } as unknown as ActionState;
   const corrupt = await new CallReview(ledger).read("private-call", scope);
   assert.equal(corrupt.ok, false);

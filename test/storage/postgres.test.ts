@@ -23,18 +23,21 @@ test("global call key and tenant scope are enforced by the database adapter", as
   assert.equal((await app.state()).version, 0);
 });
 
-test("calls written before knowledge provenance existed remain readable and upgrade on the next transition", async () => {
+test("calls written before read provenance existed remain readable and upgrade on the next transition", async () => {
   const app = await setup("pg-legacy-knowledge");
   const stored = await db.selectFrom("calls").select("state").where("call_id", "=", app.callId as CallsCallId).executeTakeFirstOrThrow();
   const legacy = { ...(stored.state as Record<string, unknown>) };
   delete legacy.knowledgeAnswers;
+  delete legacy.availabilityReads;
   await db.updateTable("calls").set({ state: legacy }).where("call_id", "=", app.callId as CallsCallId).execute();
   const restarted = new CallRuntime(new PostgresLedger(db), app.scope);
   assert.deepEqual(success(await restarted.read(app.callId)).knowledgeAnswers, []);
+  assert.deepEqual(success(await restarted.read(app.callId)).availabilityReads, []);
   success(await restarted.acceptTurn({ callId: app.callId, turnId: "legacy-next-turn", text: "Please help", quality: "clear", at: now },
     { kind: "handoff", reason: "callerRequested" }, now));
   const upgraded = await db.selectFrom("calls").select("state").where("call_id", "=", app.callId as CallsCallId).executeTakeFirstOrThrow();
   assert.deepEqual((upgraded.state as { knowledgeAnswers?: unknown }).knowledgeAnswers, []);
+  assert.deepEqual((upgraded.state as { availabilityReads?: unknown }).availabilityReads, []);
 });
 
 test("one transition atomically advances call state, event, and outbox", async () => {

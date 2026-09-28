@@ -28,6 +28,7 @@ export function initialState(callId: string, policy: CallPolicy): CallState {
     staffItems: {},
     callerMessages: [],
     knowledgeAnswers: [],
+    availabilityReads: [],
   };
 }
 

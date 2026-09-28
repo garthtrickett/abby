@@ -32,6 +32,7 @@ function fakeProvider(options: {
   starts?: readonly string[];
   changingTotal?: boolean;
   oversized?: boolean;
+  invalidTimeZone?: boolean;
 } = {}) {
   const requests: RequestRecord[] = [];
   const starts = options.starts ?? ["2026-10-01T09:00:00Z", "2026-10-01T10:00:00Z"];
@@ -41,7 +42,8 @@ function fakeProvider(options: {
     if (options.status) return json({}, options.status, options.status === 429 ? { "X-RateLimit-Reset": "1893456000" } : undefined);
     if (options.oversized) return json({ padding: "x".repeat(1_000_001) });
     const path = url.pathname;
-    if (path === "/v1/businesses/11") return json({ id: options.malformed ? "99" : "11", show_in_online_bookings: options.disabled !== "business" });
+    if (path === "/v1/businesses/11") return json({ id: options.malformed ? "99" : "11", show_in_online_bookings: options.disabled !== "business",
+      time_zone_identifier: options.invalidTimeZone ? "invalid/timezone" : "Australia/Sydney" });
     if (path === "/v1/practitioners/22") return json({ id: "22", show_in_online_bookings: options.disabled !== "practitioner" });
     if (path === "/v1/appointment_types/33") return json({ id: "33", show_in_online_bookings: options.disabled !== "appointmentType" });
     if (path.endsWith("/available_times")) {
@@ -66,6 +68,9 @@ test("Cliniko availability reads the bound shard and all pages without creating 
   assert.deepEqual(result.scope, scope);
   assert.deepEqual(result.startsAt, starts);
   assert.equal(result.businessRef, "11");
+  assert.equal(result.timeZone, "Australia/Sydney");
+  assert.equal(result.sourceRef, "cliniko:11:22:33");
+  assert.equal(Number.isFinite(Date.parse(result.observedAt)), true);
   assert.equal(fake.requests.length, 5);
   assert.deepEqual(fake.requests.filter(request => request.url.pathname.endsWith("/available_times")).map(request => request.url.searchParams.get("page")), ["1", "2"]);
   for (const request of fake.requests) {
@@ -112,6 +117,7 @@ test("Cliniko provider faults stay typed and never become an empty availability 
 test("Cliniko malformed, oversized, and changing responses cannot produce an offer", async () => {
   for (const [options, expected] of [
     [{ malformed: true }, "malformed"],
+    [{ invalidTimeZone: true }, "malformed"],
     [{ oversized: true }, "tooManyResults"],
     [{ starts: Array.from({ length: 101 }, (_, index) => new Date(Date.parse("2026-10-01T00:00:00Z") + index * 3_600_000).toISOString()), changingTotal: true }, "unavailable"],
   ] as const) {

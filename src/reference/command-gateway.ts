@@ -13,7 +13,7 @@ export type HostActor = Readonly<{
 }>;
 
 export type CapabilityDescriptor = Readonly<{
-  id: "settings.read.v1" | "settings.appointments.booking.enabled.change.v1" | "booking.propose.v1" | "knowledge.answer.v1" | "calls.read.v1";
+  id: "settings.read.v1" | "settings.appointments.booking.enabled.change.v1" | "booking.propose.v1" | "knowledge.answer.v1" | "availability.read.v1" | "calls.read.v1";
   inputVersion: 1;
   outputVersion: 1;
   effect: "read" | "policyChange" | "proposalOnly";
@@ -25,12 +25,14 @@ export type GatewayCommand =
   | Readonly<{ kind: "settings.appointments.booking.enabled.change.v1"; expectedVersion: string; enabled: boolean }>
   | Readonly<{ kind: "booking.propose.v1"; turn: FinalCallerTurn; verificationRef: string; offerRef: string; now: string }>
   | Readonly<{ kind: "knowledge.answer.v1"; turn: FinalCallerTurn; sourceRefs: readonly string[]; proposedText: string; now: string }>
+  | Readonly<{ kind: "availability.read.v1"; turn: FinalCallerTurn; from: string; to: string; now: string }>
   | Readonly<{ kind: "calls.read.v1"; callId: string }>;
 
 export type GatewayReply =
   | Readonly<{ kind: "settings"; policy: CallPolicy }>
   | Readonly<{ kind: "bookingProposal"; state: CallState }>
   | Readonly<{ kind: "knowledgeAnswer"; state: CallState }>
+  | Readonly<{ kind: "availabilityAnswer"; state: CallState }>
   | Readonly<{ kind: "callSummary"; call: CallSummary }>;
 
 export type GatewayFailure = PolicyFailure | TextReceptionFailure | TransitionFailure | Readonly<{ kind: "forbidden" | "invalid" }>;
@@ -55,6 +57,7 @@ export class CommandGateway {
       { id: "booking.propose.v1", inputVersion: 1, outputVersion: 1, effect: "proposalOnly", requiresCallerConfirmation: true },
       { id: "knowledge.answer.v1", inputVersion: 1, outputVersion: 1, effect: "proposalOnly", requiresCallerConfirmation: false },
     ];
+    if (this.reception.availabilityEnabled()) common.push({ id: "availability.read.v1", inputVersion: 1, outputVersion: 1, effect: "read", requiresCallerConfirmation: false });
     if (this.review) common.push({ id: "calls.read.v1", inputVersion: 1, outputVersion: 1, effect: "read", requiresCallerConfirmation: false });
     if (this.actor.role === "clinicAdmin") common.push({ id: "settings.appointments.booking.enabled.change.v1", inputVersion: 1, outputVersion: 1, effect: "policyChange", requiresCallerConfirmation: false });
     return common;
@@ -83,6 +86,13 @@ export class CommandGateway {
             typeof command.proposedText !== "string") return err({ kind: "invalid" });
         const result = await this.reception.answer(this.actor.scope, command.turn, command.sourceRefs, command.proposedText, command.now);
         return result.ok ? ok({ kind: "knowledgeAnswer", state: result.value }) : result;
+      }
+      case "availability.read.v1": {
+        if (!command.turn || !command.turn.turnId || !command.turn.callId || !command.turn.text ||
+            typeof command.from !== "string" || typeof command.to !== "string" ||
+            typeof command.now !== "string" || !Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
+        const result = await this.reception.checkAvailability(this.actor.scope, command.turn, command.from, command.to, command.now);
+        return result.ok ? ok({ kind: "availabilityAnswer", state: result.value }) : result;
       }
       case "calls.read.v1": {
         if (!this.review || !command.callId || command.callId.length > 256) return err({ kind: "invalid" });

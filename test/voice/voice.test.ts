@@ -3,7 +3,9 @@ import test, { after } from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import type { LedgerStore } from "../../src/core/ledger.ts";
 import { err, ok } from "../../src/core/model.ts";
-import type { ApprovedKnowledge, CallPolicy, LocationScope, Result } from "../../src/core/model.ts";
+import type { ApprovedKnowledge, AvailabilityRead, AvailabilityReadFailure, CallPolicy, LocationScope, Result } from "../../src/core/model.ts";
+import type { AvailabilityHost } from "../../src/core/host.ts";
+import { ClinikoAvailabilityReader } from "../../src/cliniko/availability.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { createEmbeddedTextComposition } from "../../src/reference/embedded-composition.ts";
@@ -99,22 +101,23 @@ class PresentationStartHookLedger implements LedgerStore {
   }
 }
 
-async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: boolean, transferMode: "execute" | "requestOnly" | "unavailable" = "requestOnly", transferDestinationRef?: string, clock?: { now: () => number; onPresentationStarted?: () => void; onSessionRenewed?: () => void }, options: { bookingMode?: "execute" | "requestOnly"; knowledge?: (scope: LocationScope) => readonly ApprovedKnowledge[] } = {}) {
+async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: boolean, transferMode: "execute" | "requestOnly" | "unavailable" = "requestOnly", transferDestinationRef?: string, clock?: { now: () => number; onPresentationStarted?: () => void; onSessionRenewed?: () => void }, options: { bookingMode?: "execute" | "requestOnly"; knowledge?: (scope: LocationScope) => readonly ApprovedKnowledge[]; availability?: (scope: LocationScope) => AvailabilityHost } = {}) {
   const scope: LocationScope = { tenantId: `voice-tenant-${id}`, clinicId: `voice-clinic-${id}`, locationId: `voice-location-${id}` };
   const patient = { scope, patientRef: `patient-${id}`, verificationRef: `proof-${id}`, expiresAt: at(86_400) };
   const offer = { scope, offerRef: `offer-${id}`, serviceRef: "physio", startsAt: at(90_000), expiresAt: at(86_400) };
   const host = new ReferenceClinicHost([patient], [offer], options.knowledge?.(scope));
+  const availability = options.availability?.(scope);
   let ledger: LedgerStore;
   let policy: PolicyStore;
   let reception: TextReception;
   if (kind === "postgres") {
     assert.ok(db);
     ledger = new PostgresLedger(db, suggestedAt => suggestedAt);
-    ({ policy, reception } = createStandaloneTextComposition(db, host, options.bookingMode, ledger));
+    ({ policy, reception } = createStandaloneTextComposition(db, host, options.bookingMode, ledger, availability));
   } else {
     ledger = new MemoryLedger();
     policy = new MemoryPolicyStore(options.bookingMode);
-    reception = createEmbeddedTextComposition(ledger, policy, host);
+    reception = createEmbeddedTextComposition(ledger, policy, host, availability);
   }
   if (bookingEnabled) value(await policy.changeBookingEnabled(scope, "0", true));
   const playback = new FakePlayback();
@@ -138,6 +141,9 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
       ? { kind: "transfer" as const, reason: "callerRequested" as const }
       : turn.text.toLowerCase().includes("hours?")
       ? { kind: "answer" as const, sourceRefs: ["hours"], proposedText: turn.text.startsWith("Wrong") ? "We open at 10 am." : "We open at 9 am." }
+      : turn.text.startsWith("Check times")
+      ? { kind: "availability" as const, from: turn.text.includes("DST") ? "2026-10-04" : "2026-10-01",
+          to: turn.text.includes("DST") ? "2026-10-05" : "2026-10-02" }
       : turn.text.startsWith("Book")
       ? { kind: "book" as const, verificationRef: patient.verificationRef, offerRef: offer.offerRef }
       : { kind: "affirm" as const }), transfer, clock?.now);
@@ -163,6 +169,34 @@ async function answerTurn(app: Awaited<ReturnType<typeof fixture>>, text = "Hour
   value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation,
     utteranceId: `question-${seconds}`, text, quality: "clear" }));
   return value(await app.session.finishTurn(at(seconds + 1)));
+}
+
+async function availabilityTurn(app: Awaited<ReturnType<typeof fixture>>, seconds = 2, text = "Check times", quality: "clear" | "needsClarification" = "clear") {
+  const generation = value(await app.session.speechStarted(at(seconds)));
+  value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation,
+    utteranceId: `availability-${seconds}`, text, quality }));
+  return value(await app.session.finishTurn(at(seconds + 1)));
+}
+
+function fakeClinikoReader(scope: LocationScope, requests: URL[], options: { businessOnline?: boolean; starts?: readonly string[]; status?: number; timeZone?: string; observedAt?: string } = {}): AvailabilityHost {
+  const fetchPort = (async (input: RequestInfo | URL) => {
+    const url = new URL(String(input));
+    requests.push(url);
+    if (options.status) return new Response("{}", { status: options.status });
+    const path = url.pathname;
+    let body: unknown;
+    if (path === "/v1/businesses/11") body = { id: "11", show_in_online_bookings: options.businessOnline !== false,
+      time_zone_identifier: options.timeZone ?? "Australia/Sydney" };
+    else if (path === "/v1/practitioners/22") body = { id: "22", show_in_online_bookings: true };
+    else if (path === "/v1/appointment_types/33") body = { id: "33", show_in_online_bookings: true };
+    else if (path.endsWith("/available_times")) {
+      const starts = options.starts ?? ["2026-09-30T23:00:00.000Z", "2026-10-01T00:00:00.000Z"];
+      body = { total_entries: starts.length, available_times: starts.map(appointment_start => ({ appointment_start })) };
+    } else return new Response("{}", { status: 404 });
+    return new Response(JSON.stringify(body), { status: 200 });
+  }) as typeof fetch;
+  return value(ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5", contactEmail: "dev@example.test",
+    businessId: "11", practitionerId: "22", appointmentTypeId: "33" }, fetchPort, () => options.observedAt ?? at(3)));
 }
 
 function hoursSource(scope: LocationScope): ApprovedKnowledge {
@@ -286,6 +320,130 @@ for (const kind of kinds) {
       assert.equal(app.host.bookings(app.scope).length, 0);
     });
   }
+
+  test(`${kind}: Cliniko availability reaches one provisional spoken notice without a booking write`, async () => {
+    const requests: URL[] = [];
+    const app = await fixture(kind, `${kind}-cliniko-times`, true, "requestOnly", undefined, undefined,
+      { bookingMode: "requestOnly", availability: scope => fakeClinikoReader(scope, requests) });
+    const state = await availabilityTurn(app);
+    assert.equal(state.policy.capabilities.book, "requestOnly");
+    assert.equal(state.availabilityReads[0]?.status, "shown");
+    assert.equal(state.availabilityReads[0]?.sourceRef, "cliniko:11:22:33");
+    assert.equal(state.availabilityReads[0]?.timeZone, "Australia/Sydney");
+    assert.equal(state.availabilityReads[0]?.observedAt, at(3));
+    assert.deepEqual(state.availabilityReads[0]?.shownStartsAt, ["2026-09-30T23:00:00.000Z", "2026-10-01T00:00:00.000Z"]);
+    assert.equal(state.presentations[state.pendingPresentationId!]?.kind, "notice");
+    assert.match(state.callerMessages.at(-1)!, /possible times.*Australia\/Sydney/);
+    assert.match(state.callerMessages.at(-1)!, /can't reserve or confirm/);
+    assert.equal(requests.length, 4);
+    assert.equal(requests.every(request => request.hostname === "api.au5.cliniko.com"), true);
+    const delivery = value(await app.session.dispatchPending(at(4)));
+    assert.equal(delivery.kind, "queued");
+    assert.deepEqual(app.playback.queuedTexts, [state.callerMessages.at(-1)]);
+    value(await app.session.acceptPlaybackResult(delivery.playbackId!, "played", at(5)));
+    assert.deepEqual(value(await new CallRuntime(app.ledger, app.scope).read(app.callId)).availabilityReads, state.availabilityReads);
+    assert.equal(Object.keys(state.actions).length, 0);
+    assert.equal(Object.values(state.effects).some(effect => effect.kind === "hostWrite"), false);
+    assert.equal(app.host.bookings(app.scope).length, 0);
+  });
+
+  test(`${kind}: empty Cliniko availability speaks no slot claim and creates no booking`, async () => {
+    const requests: URL[] = [];
+    const app = await fixture(kind, `${kind}-cliniko-empty`, false, "requestOnly", undefined, undefined,
+      { availability: scope => fakeClinikoReader(scope, requests, { starts: [] }) });
+    const state = await availabilityTurn(app);
+    assert.equal(state.availabilityReads[0]?.status, "empty");
+    assert.match(state.callerMessages.at(-1)!, /couldn't find a possible appointment time/);
+    assert.equal(Object.keys(state.actions).length, 0);
+    assert.equal(app.host.bookings(app.scope).length, 0);
+  });
+
+  test(`${kind}: Cliniko time after daylight-saving change is spoken on the correct local date`, async () => {
+    const requests: URL[] = [];
+    const app = await fixture(kind, `${kind}-cliniko-dst`, false, "requestOnly", undefined, undefined,
+      { availability: scope => fakeClinikoReader(scope, requests, { starts: ["2026-10-03T22:00:00.000Z"] }) });
+    const state = await availabilityTurn(app, 2, "Check times DST");
+    assert.equal(state.availabilityReads[0]?.status, "shown");
+    assert.match(state.callerMessages.at(-1)!, /Sunday,? 4 October.*9:00 am/);
+    assert.equal(state.availabilityReads[0]?.shownStartsAt?.[0], "2026-10-03T22:00:00.000Z");
+    assert.equal(app.host.bookings(app.scope).length, 0);
+  });
+
+  for (const scenario of [
+    { name: "online booking disabled", options: { businessOnline: false }, reason: "notEligible", requestCount: 1 },
+    { name: "rate limited", options: { status: 429 }, reason: "rateLimited", requestCount: 1 },
+    { name: "invalid business timezone", options: { timeZone: "invalid/timezone" }, reason: "malformed", requestCount: 1 },
+    { name: "out of requested range", options: { starts: ["2026-10-03T23:00:00.000Z"] }, reason: "invalidEvidence", requestCount: 4 },
+    { name: "stale observation", options: { observedAt: at(-60) }, reason: "invalidEvidence", requestCount: 4 },
+  ]) {
+    test(`${kind}: Cliniko ${scenario.name} fails to a spoken staff route without a write`, async () => {
+      const requests: URL[] = [];
+      const app = await fixture(kind, `${kind}-cliniko-${scenario.name.replaceAll(" ", "-")}`, false, "requestOnly", undefined, undefined,
+        { availability: scope => fakeClinikoReader(scope, requests, scenario.options) });
+      const state = await availabilityTurn(app);
+      assert.equal(state.availabilityReads[0]?.status, "failed");
+      assert.equal(state.availabilityReads[0]?.reason, scenario.reason);
+      assert.equal(state.callerMessages.at(-1), "I can't check available times right now. I'll request staff follow-up.");
+      assert.equal(Object.values(state.staffItems)[0]?.reason, "systemFailure");
+      assert.equal(requests.length, scenario.requestCount);
+      const delivery = value(await app.session.dispatchPending(at(4)));
+      assert.equal(delivery.kind, "queued");
+      assert.deepEqual(app.playback.queuedTexts, ["I can't check available times right now. I'll request staff follow-up."]);
+      assert.equal(Object.values(state.effects).some(effect => effect.kind === "hostWrite"), false);
+      assert.equal(app.host.bookings(app.scope).length, 0);
+    });
+  }
+
+  test(`${kind}: an unconfigured availability route never reaches Cliniko or invents times`, async () => {
+    const app = await fixture(kind, `${kind}-cliniko-unconfigured`, false);
+    const state = await availabilityTurn(app);
+    assert.equal(state.availabilityReads[0]?.reason, "notConfigured");
+    assert.equal(state.callerMessages.at(-1), "I can't check available times right now. I'll request staff follow-up.");
+    assert.equal(Object.keys(state.actions).length, 0);
+  });
+
+  test(`${kind}: a provider claiming a reservable time cannot bypass the availability evidence boundary`, async () => {
+    const app = await fixture(kind, `${kind}-cliniko-false-reservation`, false, "requestOnly", undefined, undefined,
+      { availability: scope => ({ list: async () => ok({ kind: "times", scope, sourceRef: "untrusted-reservation",
+        timeZone: "Australia/Sydney", observedAt: at(3), startsAt: ["2026-09-30T23:00:00.000Z"], reservable: true } as unknown as AvailabilityRead) }) });
+    const state = await availabilityTurn(app);
+    assert.equal(state.availabilityReads[0]?.reason, "invalidEvidence");
+    assert.equal(state.callerMessages.at(-1), "I can't check available times right now. I'll request staff follow-up.");
+    assert.equal(Object.keys(state.actions).length, 0);
+    assert.equal(Object.values(state.effects).some(effect => effect.kind === "hostWrite"), false);
+  });
+
+  test(`${kind}: unclear availability speech never queries the provider`, async () => {
+    const requests: URL[] = [];
+    const app = await fixture(kind, `${kind}-cliniko-unclear`, false, "requestOnly", undefined, undefined,
+      { availability: scope => fakeClinikoReader(scope, requests) });
+    const state = await availabilityTurn(app, 2, "Check times", "needsClarification");
+    assert.equal(state.availabilityReads[0]?.reason, "unclear");
+    assert.equal(requests.length, 0);
+    assert.equal(state.callerMessages.at(-1), "I can't check available times right now. I'll request staff follow-up.");
+  });
+
+  test(`${kind}: a late availability read cannot speak after a newer caller turn`, async () => {
+    let completeRead!: (value: Result<AvailabilityRead, AvailabilityReadFailure>) => void;
+    let enteredRead!: () => void;
+    const entered = new Promise<void>(resolve => { enteredRead = resolve; });
+    const pending = new Promise<Result<AvailabilityRead, AvailabilityReadFailure>>(resolve => { completeRead = resolve; });
+    const app = await fixture(kind, `${kind}-cliniko-stale-turn`, false, "requestOnly", undefined, undefined,
+      { availability: () => ({ list: async () => { enteredRead(); return pending; } }) });
+    const generation = value(await app.session.speechStarted(at(2)));
+    value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation,
+      utteranceId: "availability-stale", text: "Check times", quality: "clear" }));
+    const first = app.session.finishTurn(at(3));
+    await entered;
+    value(await app.session.speechStarted(at(4)));
+    completeRead(ok({ kind: "times", scope: app.scope, sourceRef: "late-read", timeZone: "Australia/Sydney",
+      observedAt: at(3), startsAt: ["2026-09-30T23:00:00.000Z"], reservable: false }));
+    failure(await first, "staleTurn");
+    const state = value(await new CallRuntime(app.ledger, app.scope).read(app.callId));
+    assert.deepEqual(state.availabilityReads, []);
+    assert.equal(state.pendingPresentationId, undefined);
+    assert.deepEqual(app.playback.queuedTexts, []);
+  });
 
   test(`${kind}: interruption and late playback ack cannot confirm booking`, async () => {
     const app = await fixture(kind, `${kind}-interrupt`, true);
