@@ -67,6 +67,18 @@ export class CallRuntime {
     return this.update(turn.callId, { kind: "callerTurn", turn, interpretation, now, ...(expectedConversationRevision === undefined ? {} : { expectedConversationRevision }) });
   }
 
+  acceptModelResult(callId: string, effectId: string,
+                    result: Extract<TransitionAction, { kind: "modelResolved" }>["result"], now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "modelResolved", effectId, result, now });
+  }
+
+  acceptModelKnowledge(callId: string, effectId: string,
+                       result: Extract<TransitionAction, { kind: "modelKnowledgeResolved" }>["result"], now: string,
+                       proposedText?: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "modelKnowledgeResolved", effectId, result, now,
+      ...(proposedText === undefined ? {} : { proposedText }) });
+  }
+
   startPresentation(callId: string, presentationId: string, sessionId?: string, now?: string): Promise<Result<CallState, TransitionFailure>> {
     return this.update(callId, { kind: "presentationStarted", presentationId, ...(sessionId === undefined ? {} : { sessionId }), ...(now === undefined ? {} : { now }) });
   }

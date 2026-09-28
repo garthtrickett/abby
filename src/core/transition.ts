@@ -2,12 +2,14 @@ import { createHash } from "node:crypto";
 import { digestActionRequest, digestTurn } from "./digest.ts";
 import { availabilityPresentation } from "./availability-presentation.ts";
 import { appointmentPresentation } from "./appointment-presentation.ts";
-import { planStaffChange } from "./staff-work.ts";
+import { addStaffTask, planStaffChange } from "./staff-work.ts";
 import { staffedForTransfer } from "./staffed-window.ts";
+import { validKnowledgeSource } from "./knowledge-evidence.ts";
+import { acceptModelKnowledge, acceptModelResult, cancelModelWork } from "./model-result.ts";
 import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "./model.ts";
 import type {
   ActionRequest, ActionState, CallState, CallTerminalReason, FinalCallerTurn, LocationScope,
-  Presentation, Result, StaffAlertReason, StaffAlertState, StaffItem, StaffReason, TransitionAction, TransitionFailure,
+  Presentation, Result, StaffAlertReason, StaffAlertState, StaffItem, TransitionAction, TransitionFailure,
   TurnInterpretation,
 } from "./model.ts";
 
@@ -16,21 +18,6 @@ const CLOSED_TRANSFER_NOTICE = "Staff aren't available for a live transfer now. 
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
-}
-
-function validKnowledgeSource(value: unknown, scope: LocationScope, now: string): value is import("./model.ts").ApprovedKnowledge {
-  if (!value || typeof value !== "object") return false;
-  const source = value as Record<string, unknown>;
-  if (!source.scope || typeof source.scope !== "object") return false;
-  const bound = source.scope as Record<string, unknown>;
-  return bound.tenantId === scope.tenantId && bound.clinicId === scope.clinicId && bound.locationId === scope.locationId &&
-    typeof source.sourceRef === "string" && !!source.sourceRef.trim() && source.sourceRef.length <= 256 &&
-    typeof source.version === "string" && !!source.version.trim() && source.version.length <= 128 &&
-    typeof source.ownerRef === "string" && !!source.ownerRef.trim() && source.ownerRef.length <= 256 &&
-    typeof source.approvedText === "string" && !!source.approvedText.trim() && source.approvedText.length <= 2_000 &&
-    source.approved === true && typeof source.effectiveFrom === "string" && typeof source.effectiveUntil === "string" &&
-    Number.isFinite(Date.parse(source.effectiveFrom)) && Number.isFinite(Date.parse(source.effectiveUntil)) &&
-    Date.parse(source.effectiveFrom) <= Date.parse(now) && Date.parse(now) < Date.parse(source.effectiveUntil);
 }
 
 function turnDigest(turn: FinalCallerTurn, interpretation: TurnInterpretation): string {
@@ -67,23 +54,6 @@ function evidenceFailure(state: CallState, request: ActionRequest, now: string):
     }
   }
   return undefined;
-}
-
-function addStaffTask(state: CallState, reason: StaffReason, now: string, linkedActionKey?: string, request?: ActionRequest): void {
-  if (linkedActionKey && Object.values(state.staffItems).some(item => item.linkedActionKey === linkedActionKey)) return;
-  const key = `${state.callId}:staff:${Object.keys(state.staffItems).length + 1}`;
-  const item = {
-    key,
-    scope: state.policy.scope,
-    reason,
-    destination: state.policy.staffDestination,
-    dueAt: new Date(Date.parse(now) + 24 * HOUR).toISOString(),
-    status: "requested" as const,
-    ...(linkedActionKey === undefined ? {} : { linkedActionKey }),
-    ...(request === undefined ? {} : { request }),
-  };
-  state.staffItems[key] = item;
-  state.effects[`${key}:open`] = { kind: "staffTask", id: `${key}:open`, taskKey: key, status: "pending" };
 }
 
 function alertable(item: StaffItem, reason: StaffAlertReason, now: string): boolean {
@@ -147,6 +117,7 @@ function supersedeUnsent(state: CallState): void {
 function endMedia(state: CallState, now: string, reason: CallTerminalReason): void {
   state.lifecycle = "ended";
   state.terminal = { reason, at: now };
+  cancelModelWork(state);
   let unresolvedTransfer = false;
   for (const [id, presentation] of Object.entries(state.presentations)) {
     if (presentation.status === "pending") state.presentations[id] = { ...presentation, status: "superseded" };
@@ -192,10 +163,26 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   if (state.processedTurnIds.includes(turn.turnId)) return ok(undefined);
   if (Object.values(state.presentations).some(presentation => presentation.kind === "transfer" && (presentation.status === "started" || presentation.status === "possiblySent"))) return err({ kind: "invalidTransition" });
   if (interpretation.kind !== "affirm") supersedeUnsent(state);
+  cancelModelWork(state);
   state.conversationRevision += 1;
   const messageCount = state.callerMessages.length;
 
   switch (interpretation.kind) {
+    case "modelPending": {
+      if (!state.policy.automationEnabled || turn.quality !== "clear" || turn.turnId.length > 256 ||
+          !/^[a-f0-9]{64}$/.test(interpretation.taskRef)) return err({ kind: "invalidTransition" });
+      const id = `model:${interpretation.taskRef}`;
+      state.effects[id] = { kind: "model", schemaVersion: 1, id, taskRef: interpretation.taskRef, turnId: turn.turnId,
+        conversationRevision: state.conversationRevision, status: "pending" };
+      break;
+    }
+    case "clarify":
+      state.callerMessages.push("Could you repeat that for me?");
+      break;
+    case "modelFallback":
+      addStaffTask(state, "systemFailure", now);
+      state.callerMessages.push("I can request staff follow-up, but I can't confirm they have received it yet.");
+      break;
     case "requestAction": {
       const result = handleRequest(state, turn, interpretation.request, now);
       if (!result.ok) return result;
@@ -409,6 +396,7 @@ export function transition(current: CallState, action: TransitionAction): Result
         }
       }
       state.conversationRevision += 1;
+      cancelModelWork(state);
       break;
     }
     case "callerTurn": {
@@ -419,6 +407,18 @@ export function transition(current: CallState, action: TransitionAction): Result
       if (action.expectedConversationRevision !== undefined && action.expectedConversationRevision !== current.conversationRevision) return err({ kind: "staleTurn" });
       const result = handleTurn(state, action.turn, action.interpretation, now);
       if (!result.ok) return result;
+      break;
+    }
+    case "modelResolved": {
+      const result = acceptModelResult(state, action, now);
+      if (!result.ok) return result;
+      if (!result.value) return ok(current);
+      break;
+    }
+    case "modelKnowledgeResolved": {
+      const result = acceptModelKnowledge(state, action, now);
+      if (!result.ok) return result;
+      if (!result.value) return ok(current);
       break;
     }
     case "presentationStarted": {

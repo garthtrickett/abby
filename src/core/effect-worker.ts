@@ -1,14 +1,19 @@
 import type { HostWriteReceipt, OperatorAlertReceipt, StaffChangeReceipt, StaffTaskReceipt } from "./model.ts";
-import type { HostEffects, OperatorAlertHost, StaffLifecycleHost } from "./host.ts";
+import type { HostEffects, KnowledgeHost, OperatorAlertHost, StaffLifecycleHost } from "./host.ts";
 import { CallRuntime } from "./runtime.ts";
+import { err } from "./model.ts";
+import type { ModelWork } from "../model/work.ts";
+import { createHash } from "node:crypto";
 
 export class EffectWorker {
   private readonly runtime: CallRuntime;
-  private readonly host: HostEffects & Partial<StaffLifecycleHost & OperatorAlertHost>;
+  private readonly host: HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost>;
+  private readonly model: ModelWork | undefined;
 
-  constructor(runtime: CallRuntime, host: HostEffects & Partial<StaffLifecycleHost & OperatorAlertHost>) {
+  constructor(runtime: CallRuntime, host: HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost>, model?: ModelWork) {
     this.runtime = runtime;
     this.host = host;
+    this.model = model;
   }
 
   async process(callId: string, effectId: string, now: string): Promise<void> {
@@ -16,6 +21,36 @@ export class EffectWorker {
     if (!read.ok) throw new Error(read.error.kind);
     const effect = read.value.effects[effectId];
     if (!effect) throw new Error("effectUnknown");
+    if (effect.kind === "model") {
+      if (effect.status !== "pending") throw new Error("invalidTransition");
+      const input = this.model?.input(effect.taskRef);
+      const valid = input && input.turn.callId === callId && input.turn.turnId === effect.turnId &&
+        input.conversationRevision === effect.conversationRevision && input.policyVersion === read.value.policy.policyVersion &&
+        input.scope.tenantId === read.value.policy.scope.tenantId && input.scope.clinicId === read.value.policy.scope.clinicId &&
+        input.scope.locationId === read.value.policy.scope.locationId;
+      const result = valid && this.model
+        ? await this.model.ingress.propose(input, this.model.deadlineMs)
+        : err({ kind: "unavailable" as const });
+      if (result.ok && result.value.kind === "answer") this.model?.rememberAnswer(effect.taskRef, result.value);
+      const resolved = await this.runtime.acceptModelResult(callId, effectId, result, now);
+      if (!resolved.ok) throw new Error(resolved.error.kind);
+      if (resolved.value.effects[`${effectId}:knowledge`]?.status !== "pending") this.model?.forget(effect.taskRef);
+      return;
+    }
+    if (effect.kind === "modelKnowledge") {
+      if (effect.status !== "pending") throw new Error("invalidTransition");
+      const answer = this.model?.answer(effect.taskRef);
+      const valid = answer && createHash("sha256").update(JSON.stringify(answer.sourceRefs)).digest("hex") === effect.sourceRefsDigest;
+      let result: Awaited<ReturnType<KnowledgeHost["readKnowledge"]>> = err({ kind: "unavailable" });
+      if (valid && this.host.readKnowledge) {
+        try { result = await this.host.readKnowledge(read.value.policy.scope, answer.sourceRefs); }
+        catch { result = err({ kind: "unavailable" }); }
+      }
+      const resolved = await this.runtime.acceptModelKnowledge(callId, effectId, result, now, valid ? answer.proposedText : undefined);
+      if (!resolved.ok) throw new Error(resolved.error.kind);
+      this.model?.forget(effect.taskRef);
+      return;
+    }
     if (effect.kind === "hostWrite") {
       if (effect.status !== "pending") throw new Error("invalidTransition");
       const marked = await this.runtime.markHostPossiblySent(callId, effectId, now);

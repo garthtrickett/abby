@@ -1,7 +1,25 @@
 import { err, ok } from "./model.ts";
-import type { CallState, Effect, Result, StaffChangeRequest, StaffItem, TransitionFailure } from "./model.ts";
+import type { ActionRequest, CallState, Effect, Result, StaffChangeRequest, StaffItem, StaffReason, TransitionFailure } from "./model.ts";
 
 export type StaffPlan = Readonly<{ item: StaffItem; effect: Extract<Effect, { kind: "staffChange" }> }>;
+
+/** Stage one staff request and its host effect in the same call transition. */
+export function addStaffTask(state: CallState, reason: StaffReason, now: string, linkedActionKey?: string, request?: ActionRequest): void {
+  if (linkedActionKey && Object.values(state.staffItems).some(item => item.linkedActionKey === linkedActionKey)) return;
+  const key = `${state.callId}:staff:${Object.keys(state.staffItems).length + 1}`;
+  const item = {
+    key,
+    scope: state.policy.scope,
+    reason,
+    destination: state.policy.staffDestination,
+    dueAt: new Date(Date.parse(now) + 24 * 60 * 60 * 1000).toISOString(),
+    status: "requested" as const,
+    ...(linkedActionKey === undefined ? {} : { linkedActionKey }),
+    ...(request === undefined ? {} : { request }),
+  };
+  state.staffItems[key] = item;
+  state.effects[`${key}:open`] = { kind: "staffTask", id: `${key}:open`, taskKey: key, status: "pending" };
+}
 
 /** Pure T2 decision. Host work remains an outbox intent until a matching result is committed. */
 export function planStaffChange(state: CallState, taskKey: string, actorRef: string, request: StaffChangeRequest): Result<StaffPlan, TransitionFailure> {

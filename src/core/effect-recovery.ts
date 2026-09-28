@@ -1,11 +1,13 @@
 import { EffectWorker } from "./effect-worker.ts";
-import type { HostEffects, OperatorAlertHost, StaffLifecycleHost } from "./host.ts";
+import type { HostEffects, KnowledgeHost, OperatorAlertHost, StaffLifecycleHost } from "./host.ts";
 import type { LedgerStore } from "./ledger.ts";
 import { err, ok } from "./model.ts";
 import type { LocationScope, RecoverableEffectRef, Result, TransitionFailure } from "./model.ts";
 import { CallRuntime } from "./runtime.ts";
+import type { ModelWork } from "../model/work.ts";
 
-export type EffectHostLookup = (scope: LocationScope) => (HostEffects & Partial<StaffLifecycleHost & OperatorAlertHost>) | undefined;
+export type EffectHostLookup = (scope: LocationScope) => (HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost>) | undefined;
+export type ModelWorkLookup = (scope: LocationScope) => ModelWork | undefined;
 export type EffectRecoveryReport = Readonly<{
   scanned: number;
   processed: number;
@@ -19,12 +21,14 @@ export class EffectRecovery {
   private readonly ledger: LedgerStore;
   private readonly hostLookup: EffectHostLookup;
   private readonly scope: LocationScope | undefined;
+  private readonly modelLookup: ModelWorkLookup | undefined;
   private scanCursor: string | undefined;
 
-  constructor(ledger: LedgerStore, hostLookup: EffectHostLookup, scope?: LocationScope) {
+  constructor(ledger: LedgerStore, hostLookup: EffectHostLookup, scope?: LocationScope, modelLookup?: ModelWorkLookup) {
     this.ledger = ledger;
     this.hostLookup = hostLookup;
     this.scope = scope;
+    this.modelLookup = modelLookup;
   }
 
   private async attempt(ref: RecoverableEffectRef, now: string): Promise<"processed" | "recovered" | "deferred" | { effectId: string; kind: "hostUnavailable" | "effectFailure" | "recoveryFailure" }> {
@@ -44,12 +48,15 @@ export class EffectRecovery {
       return latest.ok && latest.value.effects[ref.effectId]?.status !== "possiblySent" ? "deferred"
         : { effectId: ref.effectId, kind: "recoveryFailure" };
     }
-    let host: (HostEffects & Partial<StaffLifecycleHost & OperatorAlertHost>) | undefined;
+    let host: (HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost>) | undefined;
     try { host = this.hostLookup(ref.scope); }
     catch { return { effectId: ref.effectId, kind: "hostUnavailable" }; }
     if (!host) return { effectId: ref.effectId, kind: "hostUnavailable" };
+    let model: ModelWork | undefined;
+    try { model = this.modelLookup?.(ref.scope); }
+    catch { model = undefined; }
     try {
-      await new EffectWorker(runtime, host).process(ref.callId, ref.effectId, now);
+      await new EffectWorker(runtime, host, model).process(ref.callId, ref.effectId, now);
       return "processed";
     } catch {
       const latest = await runtime.read(ref.callId);

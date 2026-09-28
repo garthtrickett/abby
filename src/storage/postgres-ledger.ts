@@ -17,6 +17,22 @@ import type { CallEventsSequence } from "./generated/public/CallEvents.ts";
 import type { EffectOutboxEffectId } from "./generated/public/EffectOutbox.ts";
 import type { StaffItemsTaskKey } from "./generated/public/StaffItems.ts";
 
+function validModelEffect(value: unknown, effectId: string): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const effect = value as Record<string, unknown>;
+  if (effect.kind !== "model" && effect.kind !== "modelKnowledge") return false;
+  const fields = effect.kind === "model"
+    ? ["kind", "schemaVersion", "id", "taskRef", "turnId", "conversationRevision", "status"]
+    : ["kind", "schemaVersion", "id", "taskRef", "turnId", "conversationRevision", "sourceRefsDigest", "status"];
+  return Object.keys(effect).length === fields.length && fields.every(field => Object.hasOwn(effect, field)) &&
+    effect.schemaVersion === 1 && effect.id === effectId && typeof effect.taskRef === "string" &&
+    /^[a-f0-9]{64}$/.test(effect.taskRef) && typeof effect.turnId === "string" &&
+    effect.turnId.length > 0 && effect.turnId.length <= 256 &&
+    Number.isSafeInteger(effect.conversationRevision) && Number(effect.conversationRevision) >= 1 &&
+    ["pending", "completed", "canceled"].includes(effect.status as string) &&
+    (effect.kind === "model" || (typeof effect.sourceRefsDigest === "string" && /^[a-f0-9]{64}$/.test(effect.sourceRefsDigest)));
+}
+
 function decodeState(value: unknown, callId: string): Result<CallState, TransitionFailure> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return err({ kind: "storageCorrupt" });
   const data = value as Record<string, unknown>;
@@ -29,7 +45,11 @@ function decodeState(value: unknown, callId: string): Result<CallState, Transiti
       (data.terminal !== undefined && (data.lifecycle !== "ended" || typeof data.terminal !== "object" || data.terminal === null ||
         !CALL_TERMINAL_REASONS.includes((data.terminal as { reason: typeof CALL_TERMINAL_REASONS[number] }).reason) ||
         typeof (data.terminal as { at?: unknown }).at !== "string" || !Number.isFinite(Date.parse((data.terminal as { at: string }).at)))) ||
-      (data.lifecycle === "starting" && (typeof data.admission !== "object" || data.admission === null))) return err({ kind: "storageCorrupt" });
+      (data.lifecycle === "starting" && (typeof data.admission !== "object" || data.admission === null)) ||
+      Object.entries(data.effects as Record<string, unknown>).some(([id, effect]) => {
+        const kind = effect && typeof effect === "object" ? (effect as { kind?: unknown }).kind : undefined;
+        return (kind === "model" || kind === "modelKnowledge") && !validModelEffect(effect, id);
+      })) return err({ kind: "storageCorrupt" });
   return ok({ ...(value as CallState), knowledgeAnswers: Array.isArray(data.knowledgeAnswers) ? data.knowledgeAnswers as CallState["knowledgeAnswers"] : [],
     availabilityReads: Array.isArray(data.availabilityReads) ? data.availabilityReads as CallState["availabilityReads"] : [],
     appointmentReads: Array.isArray(data.appointmentReads) ? data.appointmentReads as CallState["appointmentReads"] : [] });
@@ -301,10 +321,11 @@ export class PostgresLedger implements LedgerStore {
       for (const row of rows) {
         const payload = row.payload as Record<string, unknown>;
         if (!payload || typeof payload !== "object" || payload.id !== row.effect_id || payload.kind !== row.kind || payload.status !== row.status ||
-            !(["hostWrite", "hostReconcile", "staffTask", "staffReconcile", "staffChange", "staffChangeReconcile", "operatorAlert", "operatorAlertReconcile"] as readonly string[]).includes(row.kind) ||
+            !(["model", "modelKnowledge", "hostWrite", "hostReconcile", "staffTask", "staffReconcile", "staffChange", "staffChangeReconcile", "operatorAlert", "operatorAlertReconcile"] as readonly string[]).includes(row.kind) ||
             (row.status !== "pending" && row.status !== "possiblySent") ||
             (row.status === "possiblySent" && row.kind !== "hostWrite" && row.kind !== "staffTask" && row.kind !== "staffChange" && row.kind !== "operatorAlert") ||
             (row.status === "possiblySent" && (typeof payload.possiblySentAt !== "string" || !Number.isFinite(Date.parse(payload.possiblySentAt))))) return err({ kind: "storageCorrupt" });
+        if ((row.kind === "model" || row.kind === "modelKnowledge") && !validModelEffect(payload, row.effect_id)) return err({ kind: "storageCorrupt" });
         refs.push({ callId: row.call_id, scope: { tenantId: row.tenant_id, clinicId: row.clinic_id, locationId: row.location_id },
           effectId: row.effect_id, kind: row.kind as Effect["kind"], status: row.status });
       }
