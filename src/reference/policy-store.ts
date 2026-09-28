@@ -42,6 +42,33 @@ export class MemoryPolicyStore implements PolicyStore {
     this.readiness = readiness;
   }
 
+  /** Builds a disabled, request-only target policy from a validated historical import. */
+  static fromImported(scope: LocationScope, sourceHead: CallPolicy, bookingHistory: readonly BookingSettingAuditEntry[],
+                      automationHistory: readonly AutomationSettingAuditEntry[], sourceAutomationVersion: number,
+                      sourceAutomationEnabled: boolean, importActorRef: string, importedAt: string): MemoryPolicyStore {
+    const store = new MemoryPolicyStore("requestOnly");
+    const policy = structuredClone(sourceHead);
+    const changes = structuredClone([...bookingHistory]);
+    if (policy.bookingEnabled) {
+      const version = String(Number(policy.policyVersion) + 1);
+      changes.push({ version, enabled: false, previousEnabled: true, actorRef: importActorRef, changedAt: importedAt, provenance: "recorded" });
+      store.policies.set(scopeKey(scope), { ...policy, policyVersion: version, bookingEnabled: false,
+        capabilities: { ...policy.capabilities, book: "unavailable" } });
+    } else {
+      store.policies.set(scopeKey(scope), { ...policy, capabilities: { ...policy.capabilities, book: "unavailable" } });
+    }
+    store.bookingChanges.set(scopeKey(scope), changes);
+    const automation = structuredClone([...automationHistory]);
+    let version = sourceAutomationVersion;
+    if (sourceAutomationEnabled) {
+      version += 1;
+      automation.push({ version: String(version), enabled: false, previousEnabled: true, actorRef: importActorRef, changedAt: importedAt });
+    }
+    store.clinicAutomation.set(clinicKey(scope), { version, enabled: false });
+    store.automationChanges.set(clinicKey(scope), automation);
+    return store;
+  }
+
   private effective(policy: CallPolicy): CallPolicy {
     const automation = this.clinicAutomation.get(clinicKey(policy.scope));
     return { ...policy, automationVersion: String(automation?.version ?? 0), automationEnabled: automation?.enabled ?? false,

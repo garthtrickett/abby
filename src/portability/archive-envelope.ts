@@ -30,13 +30,19 @@ export type ArchiveEnvelope = Readonly<{
 
 export type ArchiveEnvelopeFailure = Readonly<{
   kind: "invalidManifest" | "unsupportedVersion" | "invalidSection" | "digestMismatch" |
-    "countMismatch" | "scopeMismatch" | "duplicateOrUnsorted" | "readFailure";
+    "countMismatch" | "scopeMismatch" | "duplicateOrUnsorted" | "readFailure" | "tooLarge";
   section?: ArchiveSection;
 }>;
 
 export type VerifiedArchiveEnvelope = Readonly<{
   manifest: ArchiveManifestV1;
   manifestDigest: string;
+}>;
+
+export type MaterializedArchiveEnvelope = Readonly<{
+  verified: VerifiedArchiveEnvelope;
+  manifestBytes: Uint8Array;
+  sections: Readonly<Record<ArchiveSection, Uint8Array>>;
 }>;
 
 const sha256 = /^[a-f0-9]{64}$/;
@@ -133,8 +139,9 @@ export async function verifyArchiveEnvelope(input: ArchiveEnvelope): Promise<Res
       ARCHIVE_SECTIONS.some(name => typeof input.sections[name] !== "function")) {
     return err({ kind: "invalidManifest" });
   }
+  const manifestBytes = Uint8Array.from(input.manifestBytes);
   let parsed: unknown;
-  try { parsed = JSON.parse(decoder.decode(input.manifestBytes)); }
+  try { parsed = JSON.parse(decoder.decode(manifestBytes)); }
   catch { return err({ kind: "invalidManifest" }); }
   const manifest = validManifest(parsed);
   if (!manifest.ok) return manifest;
@@ -142,5 +149,32 @@ export async function verifyArchiveEnvelope(input: ArchiveEnvelope): Promise<Res
     const checked = await verifySection(name, manifest.value.sections[name], manifest.value.sourceTenantId, input.sections[name]);
     if (!checked.ok) return checked;
   }
-  return ok({ manifest: manifest.value, manifestDigest: createHash("sha256").update(input.manifestBytes).digest("hex") });
+  return ok({ manifest: manifest.value, manifestDigest: createHash("sha256").update(manifestBytes).digest("hex") });
+}
+
+/** Retains precisely the bytes verified, so semantic import cannot read a changed stream on a second open. */
+export async function materializeVerifiedArchive(input: ArchiveEnvelope): Promise<Result<MaterializedArchiveEnvelope, ArchiveEnvelopeFailure>> {
+  if (!(input?.manifestBytes instanceof Uint8Array) || input.manifestBytes.byteLength > maxManifestBytes) return err({ kind: "invalidManifest" });
+  const manifestBytes = Uint8Array.from(input.manifestBytes);
+  const captured = Object.fromEntries(ARCHIVE_SECTIONS.map(name => [name, [] as Uint8Array[]])) as Record<ArchiveSection, Uint8Array[]>;
+  let totalBytes = 0;
+  let exceeded = false;
+  const wrap = (name: ArchiveSection) => async function* () {
+    for await (const chunk of input.sections[name]()) {
+      if (chunk instanceof Uint8Array) {
+        totalBytes += chunk.byteLength;
+        if (totalBytes > 256 * 1024 * 1024) { exceeded = true; throw new Error("archive too large"); }
+        captured[name].push(Uint8Array.from(chunk));
+      }
+      yield chunk;
+    }
+  };
+  const wrapped = { locations: wrap("locations"), settings: wrap("settings"), knowledge: wrap("knowledge"),
+    calls: wrap("calls"), staffWork: wrap("staffWork") };
+  const verified = await verifyArchiveEnvelope({ manifestBytes, sections: wrapped });
+  if (exceeded) return err({ kind: "tooLarge" });
+  if (!verified.ok) return verified;
+  const sections = { locations: Buffer.concat(captured.locations), settings: Buffer.concat(captured.settings),
+    knowledge: Buffer.concat(captured.knowledge), calls: Buffer.concat(captured.calls), staffWork: Buffer.concat(captured.staffWork) };
+  return ok({ verified: verified.value, manifestBytes, sections });
 }
