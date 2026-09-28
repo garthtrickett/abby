@@ -14,7 +14,8 @@ export type AuthenticatedInboundCall = Readonly<{
   receivedAt: string;
 }>;
 
-export type RouteFailure = Readonly<{ kind: "routeUnavailable" | "unknownNumber" | "ambiguousClinic" | "locationChoiceRequired" | "automationDisabled" | "readinessFailed" }>;
+export type RouteFailure = Readonly<{ kind: "routeUnavailable" | "unknownNumber" | "ambiguousClinic" | "locationChoiceRequired" |
+  "invalidLocationChoice" | "staleLocationChoice" | "automationDisabled" | "readinessFailed" }>;
 export type PolicyResolver = (dialedNumber: string, accountRef: string) => Promise<Result<CallPolicy, RouteFailure>>;
 
 export function callIdFor(key: ProviderCallKey): string {

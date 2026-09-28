@@ -1,7 +1,7 @@
 import type { PolicyStore } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
-import type { LocationScope, Result } from "../core/model.ts";
-import type { PolicyResolver } from "../voice/admission.ts";
+import type { CallPolicy, LocationScope, Result } from "../core/model.ts";
+import type { PolicyResolver, RouteFailure } from "../voice/admission.ts";
 
 export type ClinicIdentity = Readonly<{
   accountRef: string;
@@ -13,6 +13,7 @@ export type ClinicIdentity = Readonly<{
 }>;
 
 export type ClinicIdentityFailure = Readonly<{ kind: "unknownNumber" | "ambiguousClinic" | "unavailable" }>;
+export type LocationChoice = Readonly<{ tenantId: string; clinicId: string; locationId: string; routeVersion: string }>;
 
 /** Host-owned lookup independent of mutable clinic automation and patient records. */
 export interface ClinicNumberRoutingHost {
@@ -23,12 +24,14 @@ function validRef(value: unknown): value is string {
   return typeof value === "string" && !!value.trim() && value.length <= 256;
 }
 
-function validIdentity(identity: ClinicIdentity, accountRef: string, dialedNumber: string): boolean {
-  return identity.accountRef === accountRef && identity.dialedNumber === dialedNumber &&
-    validRef(identity.tenantId) && validRef(identity.clinicId) && validRef(identity.routeVersion) &&
-    Array.isArray(identity.candidateLocationIds) && identity.candidateLocationIds.length >= 1 &&
-    identity.candidateLocationIds.length <= 32 && identity.candidateLocationIds.every(validRef) &&
-    new Set(identity.candidateLocationIds).size === identity.candidateLocationIds.length;
+function validIdentity(identity: unknown, accountRef: string, dialedNumber: string): identity is ClinicIdentity {
+  if (!identity || typeof identity !== "object") return false;
+  const value = identity as Partial<ClinicIdentity>;
+  return value.accountRef === accountRef && value.dialedNumber === dialedNumber &&
+    validRef(value.tenantId) && validRef(value.clinicId) && validRef(value.routeVersion) &&
+    Array.isArray(value.candidateLocationIds) && value.candidateLocationIds.length >= 1 &&
+    value.candidateLocationIds.length <= 32 && value.candidateLocationIds.every(validRef) &&
+    new Set(value.candidateLocationIds).size === value.candidateLocationIds.length;
 }
 
 /** Resolves only an unambiguous location; a shared-number choice needs its own call transition. */
@@ -41,17 +44,23 @@ export class ClinicPolicyRouter {
     this.policy = policy;
   }
 
-  readonly resolve: PolicyResolver = async (dialedNumber, accountRef) => {
+  async identify(accountRef: string, dialedNumber: string): Promise<Result<ClinicIdentity, RouteFailure>> {
     if (!validRef(accountRef) || !validRef(dialedNumber)) return err({ kind: "routeUnavailable" });
     let identified: Awaited<ReturnType<ClinicNumberRoutingHost["identifyCall"]>>;
     try { identified = await this.host.identifyCall(accountRef, dialedNumber); }
     catch { return err({ kind: "routeUnavailable" }); }
-    if (!identified.ok) return err({ kind: identified.error.kind === "unavailable" ? "routeUnavailable" : identified.error.kind });
+    if (!identified || typeof identified !== "object" || typeof identified.ok !== "boolean") return err({ kind: "routeUnavailable" });
+    if (!identified.ok) {
+      const kind = identified.error?.kind;
+      return err({ kind: kind === "unknownNumber" || kind === "ambiguousClinic" ? kind : "routeUnavailable" });
+    }
     const identity = identified.value;
     if (!validIdentity(identity, accountRef, dialedNumber)) return err({ kind: "routeUnavailable" });
-    if (identity.candidateLocationIds.length !== 1) return err({ kind: "locationChoiceRequired" });
-    const scope: LocationScope = { tenantId: identity.tenantId, clinicId: identity.clinicId,
-      locationId: identity.candidateLocationIds[0]! };
+    return ok(identity);
+  }
+
+  private async loadPolicy(identity: ClinicIdentity, locationId: string): Promise<Result<CallPolicy, RouteFailure>> {
+    const scope: LocationScope = { tenantId: identity.tenantId, clinicId: identity.clinicId, locationId };
     try {
       const loaded = await this.policy.read(scope);
       if (!loaded.ok) return err({ kind: "routeUnavailable" });
@@ -61,7 +70,30 @@ export class ClinicPolicyRouter {
       }
       return ok({ ...loaded.value, numberRouteVersion: identity.routeVersion });
     } catch { return err({ kind: "routeUnavailable" }); }
+  }
+
+  readonly resolve: PolicyResolver = async (dialedNumber, accountRef) => {
+    const identified = await this.identify(accountRef, dialedNumber);
+    if (!identified.ok) return identified;
+    const identity = identified.value;
+    if (identity.candidateLocationIds.length !== 1) return err({ kind: "locationChoiceRequired" });
+    return this.loadPolicy(identity, identity.candidateLocationIds[0]!);
   };
+
+  /** Rechecks the host identity after a caller choice; no policy read precedes that check. */
+  async resolveSelected(accountRef: string, dialedNumber: string, choice: LocationChoice): Promise<Result<CallPolicy, RouteFailure>> {
+    if (!choice || ![choice.tenantId, choice.clinicId, choice.locationId, choice.routeVersion].every(validRef)) {
+      return err({ kind: "invalidLocationChoice" });
+    }
+    const identified = await this.identify(accountRef, dialedNumber);
+    if (!identified.ok) return identified;
+    const identity = identified.value;
+    if (identity.tenantId !== choice.tenantId || identity.clinicId !== choice.clinicId || identity.routeVersion !== choice.routeVersion) {
+      return err({ kind: "staleLocationChoice" });
+    }
+    if (!identity.candidateLocationIds.includes(choice.locationId)) return err({ kind: "invalidLocationChoice" });
+    return this.loadPolicy(identity, choice.locationId);
+  }
 }
 
 export type ReferenceNumberAssignment = Readonly<{
