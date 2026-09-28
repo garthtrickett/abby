@@ -172,31 +172,59 @@ export type StaffTaskObservation =
   | Readonly<{ kind: "exactOpen"; taskKey: string; hostTaskRef: string; destination: StaffDestination }>
   | Readonly<{ kind: "definitiveNonOpen"; taskKey: string }>
   | Readonly<{ kind: "stillUnknown"; taskKey: string }>;
+export type StaffChangeOperation = "acknowledge" | "resolve" | "reassign";
+export type StaffChangeRequest =
+  | Readonly<{ kind: "acknowledge" | "resolve" }>
+  | Readonly<{ kind: "reassign"; target: "staff" | "operator" }>;
+export type StaffChange = Readonly<{
+  commandKey: string;
+  taskKey: string;
+  scope: LocationScope;
+  hostTaskRef: string;
+  actorRef: string;
+  operation: StaffChangeOperation;
+  fromStatus: "open" | "acknowledged";
+  fromDestination: StaffDestination;
+  toDestination: StaffDestination;
+}>;
+export type StaffChangeReceipt =
+  | Readonly<{ kind: "applied"; commandKey: string; taskKey: string; hostTaskRef: string; status: "open" | "acknowledged" | "resolved"; destination: StaffDestination }>
+  | Readonly<{ kind: "rejected" | "uncertain"; commandKey: string; taskKey: string }>;
+export type StaffChangeObservation =
+  | Readonly<{ kind: "exactApplied"; commandKey: string; taskKey: string; hostTaskRef: string; status: "open" | "acknowledged" | "resolved"; destination: StaffDestination }>
+  | Readonly<{ kind: "definitiveNonApplied" | "stillUnknown"; commandKey: string; taskKey: string }>;
 export type StaffItem = Readonly<{
   key: string;
   scope: LocationScope;
   reason: StaffReason;
   destination: StaffDestination;
   dueAt: string;
-  status: "requested" | "open" | "needsReview" | "failed";
+  status: "requested" | "open" | "acknowledged" | "resolved" | "needsReview" | "failed";
   linkedActionKey?: string;
   request?: ActionRequest;
   hostTaskRef?: string;
+  pendingChangeKey?: string;
+  reviewRequired?: boolean;
 }>;
 export type StaffQueueEntry = Readonly<{
   callId: string;
+  callVersion: number;
   taskKey: string;
   reason: StaffReason;
   status: StaffItem["status"];
   dueAt: string;
   destination: StaffDestination;
   linkedActionKey?: string;
+  pendingChangeKey?: string;
+  reviewRequired?: boolean;
 }>;
 export type Effect =
   | Readonly<{ kind: "hostWrite"; id: string; actionKey: string; mutation: HostMutation; status: "pending" | "possiblySent" | "completed" | "uncertain" | "canceled"; possiblySentAt?: string }>
   | Readonly<{ kind: "hostReconcile"; id: string; actionKey: string; originalEffectId: string; status: "pending" | "completed" }>
   | Readonly<{ kind: "staffTask"; id: string; taskKey: string; status: "pending" | "possiblySent" | "completed" | "uncertain"; possiblySentAt?: string }>
-  | Readonly<{ kind: "staffReconcile"; id: string; taskKey: string; originalEffectId: string; originalItem: StaffItem; status: "pending" | "completed" }>;
+  | Readonly<{ kind: "staffReconcile"; id: string; taskKey: string; originalEffectId: string; originalItem: StaffItem; status: "pending" | "completed" }>
+  | Readonly<{ kind: "staffChange"; id: string; taskKey: string; change: StaffChange; status: "pending" | "possiblySent" | "completed" | "uncertain"; possiblySentAt?: string }>
+  | Readonly<{ kind: "staffChangeReconcile"; id: string; taskKey: string; originalEffectId: string; change: StaffChange; status: "pending" | "completed" }>;
 
 export type CallState = {
   callId: string;
@@ -248,4 +276,9 @@ export type TransitionAction =
   | Readonly<{ kind: "recoverStaffPossiblySent"; effectId: string; now: string }>
   | Readonly<{ kind: "staffTaskResolved"; effectId: string; receipt: StaffTaskReceipt }>
   | Readonly<{ kind: "staffTaskReconciled"; effectId: string; observation: StaffTaskObservation }>
+  | Readonly<{ kind: "staffChangeRequested"; taskKey: string; actorRef: string; change: StaffChangeRequest }>
+  | Readonly<{ kind: "markStaffChangePossiblySent"; effectId: string; now: string }>
+  | Readonly<{ kind: "recoverStaffChangePossiblySent"; effectId: string; now: string }>
+  | Readonly<{ kind: "staffChangeResolved"; effectId: string; receipt: StaffChangeReceipt }>
+  | Readonly<{ kind: "staffChangeReconciled"; effectId: string; observation: StaffChangeObservation }>
   | Readonly<{ kind: "reconciliationDeadline"; actionKey: string; now: string }>;

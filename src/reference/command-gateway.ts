@@ -1,6 +1,6 @@
 import type { PolicyFailure, PolicyStore } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
-import type { CallPolicy, CallState, FinalCallerTurn, LocationScope, Result, TransitionFailure } from "../core/model.ts";
+import type { CallPolicy, CallState, FinalCallerTurn, LocationScope, Result, StaffChangeRequest, StaffItem, TransitionFailure } from "../core/model.ts";
 import { TextReception } from "./text-reception.ts";
 import type { TextReceptionFailure } from "./text-reception.ts";
 import type { CallSummary } from "./call-review.ts";
@@ -15,10 +15,10 @@ export type HostActor = Readonly<{
 }>;
 
 export type CapabilityDescriptor = Readonly<{
-  id: "settings.read.v1" | "settings.appointments.booking.enabled.change.v1" | "booking.propose.v1" | "knowledge.answer.v1" | "availability.read.v1" | "calls.read.v1" | "staff.list.v1";
+  id: "settings.read.v1" | "settings.appointments.booking.enabled.change.v1" | "booking.propose.v1" | "knowledge.answer.v1" | "availability.read.v1" | "calls.read.v1" | "staff.list.v1" | "staff.change.v1";
   inputVersion: 1;
   outputVersion: 1;
-  effect: "read" | "policyChange" | "proposalOnly";
+  effect: "read" | "policyChange" | "proposalOnly" | "staffChange";
   requiresCallerConfirmation: boolean;
 }>;
 
@@ -29,7 +29,8 @@ export type GatewayCommand =
   | Readonly<{ kind: "knowledge.answer.v1"; turn: FinalCallerTurn; sourceRefs: readonly string[]; proposedText: string; now: string }>
   | Readonly<{ kind: "availability.read.v1"; turn: FinalCallerTurn; from: string; to: string; now: string }>
   | Readonly<{ kind: "calls.read.v1"; callId: string }>
-  | Readonly<{ kind: "staff.list.v1"; afterTaskKey?: string }>;
+  | Readonly<{ kind: "staff.list.v1"; afterTaskKey?: string }>
+  | Readonly<{ kind: "staff.change.v1"; callId: string; taskKey: string; expectedVersion: number; change: StaffChangeRequest; now: string }>;
 
 export type GatewayReply =
   | Readonly<{ kind: "settings"; policy: CallPolicy }>
@@ -37,7 +38,8 @@ export type GatewayReply =
   | Readonly<{ kind: "knowledgeAnswer"; state: CallState }>
   | Readonly<{ kind: "availabilityAnswer"; state: CallState }>
   | Readonly<{ kind: "callSummary"; call: CallSummary }>
-  | Readonly<{ kind: "staffQueue"; page: StaffQueuePage }>;
+  | Readonly<{ kind: "staffQueue"; page: StaffQueuePage }>
+  | Readonly<{ kind: "staffChange"; taskKey: string; callVersion: number; status: StaffItem["status"]; pending: boolean; reviewRequired: boolean }>;
 
 export type GatewayFailure = PolicyFailure | TextReceptionFailure | TransitionFailure | Readonly<{ kind: "forbidden" | "invalid" }>;
 
@@ -66,6 +68,7 @@ export class CommandGateway {
     if (this.reception.availabilityEnabled()) common.push({ id: "availability.read.v1", inputVersion: 1, outputVersion: 1, effect: "read", requiresCallerConfirmation: false });
     if (this.review) common.push({ id: "calls.read.v1", inputVersion: 1, outputVersion: 1, effect: "read", requiresCallerConfirmation: false });
     if (this.staffQueue) common.push({ id: "staff.list.v1", inputVersion: 1, outputVersion: 1, effect: "read", requiresCallerConfirmation: false });
+    if (this.actor.role !== "agent" && this.reception.staffLifecycleEnabled()) common.push({ id: "staff.change.v1", inputVersion: 1, outputVersion: 1, effect: "staffChange", requiresCallerConfirmation: false });
     if (this.actor.role === "clinicAdmin") common.push({ id: "settings.appointments.booking.enabled.change.v1", inputVersion: 1, outputVersion: 1, effect: "policyChange", requiresCallerConfirmation: false });
     return common;
   }
@@ -111,6 +114,20 @@ export class CommandGateway {
             (typeof command.afterTaskKey !== "string" || !command.afterTaskKey || command.afterTaskKey.length > 256))) return err({ kind: "invalid" });
         const result = await this.staffQueue.list(this.actor.scope, command.afterTaskKey);
         return result.ok ? ok({ kind: "staffQueue", page: result.value }) : result;
+      }
+      case "staff.change.v1": {
+        if (!command.callId || command.callId.length > 256 || !command.taskKey || command.taskKey.length > 256 ||
+            !Number.isSafeInteger(command.expectedVersion) || command.expectedVersion < 0 ||
+            !command.change || !["acknowledge", "resolve", "reassign"].includes(command.change.kind) ||
+            (command.change.kind === "reassign" && !["staff", "operator"].includes(command.change.target)) ||
+            typeof command.now !== "string" || !Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
+        const result = await this.reception.changeStaff(this.actor.scope, command.callId, command.expectedVersion,
+          command.taskKey, this.actor.actorRef, command.change, command.now);
+        if (!result.ok) return result;
+        const item = result.value.staffItems[command.taskKey];
+        return item ? ok({ kind: "staffChange", taskKey: item.key, callVersion: result.value.version,
+          status: item.status, pending: !!item.pendingChangeKey, reviewRequired: !!item.reviewRequired })
+          : err({ kind: "storageCorrupt" });
       }
     }
   }

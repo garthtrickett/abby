@@ -1,22 +1,30 @@
 import { digestActionRequest, digestTurn } from "../core/digest.ts";
-import type { BookingEvidenceHost, HostEffects, HostReadFailure, KnowledgeHost, KnowledgeReadFailure } from "../core/host.ts";
+import type { BookingEvidenceHost, HostEffects, HostReadFailure, KnowledgeHost, KnowledgeReadFailure, StaffLifecycleHost } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
-import type { ActionRequest, ApprovedKnowledge, BookableOffer, HostMutation, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "../core/model.ts";
+import type { ActionRequest, ApprovedKnowledge, BookableOffer, HostMutation, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "../core/model.ts";
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
 }
 
-type Booking = Readonly<{ actionKey: string; hostRef: string; scope: LocationScope; patientRef: string; offerRef: string; payloadDigest: string }>;
-type Task = Readonly<{ taskKey: string; hostTaskRef: string; scope: LocationScope; destination: StaffItem["destination"]; payloadDigest: string }>;
+function validDestination(value: unknown): value is StaffItem["destination"] {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
+  return candidate.kind === "owner" ? typeof candidate.ownerRef === "string" && !!candidate.ownerRef.trim()
+    : candidate.kind === "queue" && typeof candidate.queueRef === "string" && !!candidate.queueRef.trim();
+}
 
-export class ReferenceClinicHost implements BookingEvidenceHost, HostEffects, KnowledgeHost {
+type Booking = Readonly<{ actionKey: string; hostRef: string; scope: LocationScope; patientRef: string; offerRef: string; payloadDigest: string }>;
+type Task = Readonly<{ taskKey: string; hostTaskRef: string; scope: LocationScope; destination: StaffItem["destination"]; status: "open" | "acknowledged" | "resolved"; payloadDigest: string }>;
+
+export class ReferenceClinicHost implements BookingEvidenceHost, HostEffects, KnowledgeHost, StaffLifecycleHost {
   private readonly patients: readonly VerifiedPatient[];
   private readonly offers: readonly BookableOffer[];
   private readonly knowledge: readonly ApprovedKnowledge[];
   private readonly bookingsByAction = new Map<string, Booking>();
   private readonly bookingKeyByOffer = new Map<string, string>();
   private readonly tasksByKey = new Map<string, Task>();
+  private readonly taskChangesByKey = new Map<string, Readonly<{ digest: string; receipt: Extract<StaffChangeReceipt, { kind: "applied" }> }>>();
   private resolutionCount = 0;
 
   constructor(patients: readonly VerifiedPatient[], offers: readonly BookableOffer[], knowledge: readonly ApprovedKnowledge[] = []) {
@@ -86,7 +94,7 @@ export class ReferenceClinicHost implements BookingEvidenceHost, HostEffects, Kn
         : { kind: "rejected", taskKey: item.key };
     }
     const hostTaskRef = `reference-task:${item.key}`;
-    this.tasksByKey.set(item.key, { taskKey: item.key, hostTaskRef, scope: item.scope, destination: item.destination, payloadDigest: digestTurn(item) });
+    this.tasksByKey.set(item.key, { taskKey: item.key, hostTaskRef, scope: item.scope, destination: item.destination, status: "open", payloadDigest: digestTurn(item) });
     return { kind: "opened", taskKey: item.key, hostTaskRef, destination: item.destination };
   }
 
@@ -96,6 +104,38 @@ export class ReferenceClinicHost implements BookingEvidenceHost, HostEffects, Kn
     return sameScope(existing.scope, item.scope) && existing.payloadDigest === digestTurn(item)
       ? { kind: "exactOpen", taskKey: item.key, hostTaskRef: existing.hostTaskRef, destination: existing.destination }
       : { kind: "stillUnknown", taskKey: item.key };
+  }
+
+  async advanceTask(change: StaffChange): Promise<StaffChangeReceipt> {
+    const previous = this.taskChangesByKey.get(change.commandKey);
+    const digest = digestTurn(change);
+    if (previous) return previous.digest === digest ? previous.receipt : { kind: "rejected", commandKey: change.commandKey, taskKey: change.taskKey };
+    const task = this.tasksByKey.get(change.taskKey);
+    if (!task || typeof change.commandKey !== "string" || !change.commandKey.trim() ||
+        typeof change.actorRef !== "string" || !change.actorRef.trim() || !change.scope ||
+        !sameScope(task.scope, change.scope) || task.hostTaskRef !== change.hostTaskRef ||
+        task.status !== change.fromStatus || JSON.stringify(task.destination) !== JSON.stringify(change.fromDestination) ||
+        !["acknowledge", "resolve", "reassign"].includes(change.operation) ||
+        (change.operation === "acknowledge" && task.status !== "open") ||
+        (change.operation === "reassign" && JSON.stringify(change.toDestination) === JSON.stringify(task.destination)) ||
+        (change.operation !== "reassign" && JSON.stringify(change.toDestination) !== JSON.stringify(task.destination)) ||
+        !validDestination(change.toDestination)) {
+      return { kind: "rejected", commandKey: change.commandKey, taskKey: change.taskKey };
+    }
+    const status: Task["status"] = change.operation === "acknowledge" ? "acknowledged" : change.operation === "resolve" ? "resolved" : "open";
+    const receipt = { kind: "applied" as const, commandKey: change.commandKey, taskKey: change.taskKey,
+      hostTaskRef: task.hostTaskRef, status, destination: change.toDestination };
+    this.tasksByKey.set(task.taskKey, { ...task, status, destination: change.toDestination });
+    this.taskChangesByKey.set(change.commandKey, { digest, receipt });
+    return receipt;
+  }
+
+  async reconcileTaskChange(change: StaffChange): Promise<StaffChangeObservation> {
+    const previous = this.taskChangesByKey.get(change.commandKey);
+    if (!previous) return { kind: "definitiveNonApplied", commandKey: change.commandKey, taskKey: change.taskKey };
+    return previous.digest === digestTurn(change)
+      ? { ...previous.receipt, kind: "exactApplied" }
+      : { kind: "stillUnknown", commandKey: change.commandKey, taskKey: change.taskKey };
   }
 
   bookings(scope: LocationScope): readonly Booking[] {

@@ -8,16 +8,19 @@ export type StaffQueuePage = Readonly<{
 }>;
 
 const reasons = ["callerRequested", "verificationFailed", "unsupported", "uncertainAction", "partialIntake", "systemFailure", "transferFailed"];
-const statuses = ["requested", "open", "needsReview", "failed"];
+const statuses = ["requested", "open", "acknowledged", "resolved", "needsReview", "failed"];
 
 function valid(entry: StaffQueueEntry): boolean {
-  return typeof entry.callId === "string" && !!entry.callId && typeof entry.taskKey === "string" && !!entry.taskKey &&
+  return typeof entry.callId === "string" && !!entry.callId && Number.isSafeInteger(entry.callVersion) && entry.callVersion >= 0 &&
+    typeof entry.taskKey === "string" && !!entry.taskKey &&
     reasons.includes(entry.reason) && statuses.includes(entry.status) &&
     typeof entry.dueAt === "string" && Number.isFinite(Date.parse(entry.dueAt)) &&
     !!entry.destination && (entry.destination.kind === "owner" ?
       typeof entry.destination.ownerRef === "string" && !!entry.destination.ownerRef :
       entry.destination.kind === "queue" && typeof entry.destination.queueRef === "string" && !!entry.destination.queueRef) &&
     (entry.linkedActionKey === undefined || typeof entry.linkedActionKey === "string") &&
+    (entry.pendingChangeKey === undefined || typeof entry.pendingChangeKey === "string") &&
+    (entry.reviewRequired === undefined || typeof entry.reviewRequired === "boolean") &&
     entry.taskKey.length <= 256 && entry.callId.length <= 256;
 }
 
@@ -40,7 +43,7 @@ export class StaffQueue {
     if (found.value.length > 50 || found.value.some((entry, index) => !valid(entry) ||
         (afterTaskKey !== undefined && entry.taskKey <= afterTaskKey) ||
         (index > 0 && entry.taskKey <= found.value[index - 1]!.taskKey))) return err({ kind: "storageCorrupt" });
-    const items = found.value.map(entry => ({ ...entry, overdue: Date.parse(entry.dueAt) <= Date.parse(now) }));
+    const items = found.value.map(entry => ({ ...entry, overdue: entry.status !== "resolved" && Date.parse(entry.dueAt) <= Date.parse(now) }));
     return ok({ items, ...(items.length === 50 ? { nextAfterTaskKey: items[49]!.taskKey } : {}) });
   }
 }

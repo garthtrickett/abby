@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { digestActionRequest, digestTurn } from "./digest.ts";
 import { availabilityPresentation } from "./availability-presentation.ts";
+import { planStaffChange } from "./staff-work.ts";
 import { err, ok } from "./model.ts";
 import type {
   ActionRequest, ActionState, CallState, FinalCallerTurn, LocationScope,
@@ -86,6 +87,25 @@ function addStaffTask(state: CallState, reason: StaffReason, now: string, linked
 function queueStaffReconciliation(state: CallState, originalEffectId: string, item: import("./model.ts").StaffItem): void {
   const id = `${originalEffectId}:reconcile`;
   state.effects[id] = { kind: "staffReconcile", id, taskKey: item.key, originalEffectId, originalItem: structuredClone(item), status: "pending" };
+}
+
+function queueStaffChangeReconciliation(state: CallState, original: Extract<import("./model.ts").Effect, { kind: "staffChange" }>): void {
+  const id = `${original.id}:reconcile`;
+  state.effects[id] = { kind: "staffChangeReconcile", id, taskKey: original.taskKey, originalEffectId: original.id,
+    change: structuredClone(original.change), status: "pending" };
+}
+
+function applyStaffChange(state: CallState, item: import("./model.ts").StaffItem,
+                          change: import("./model.ts").StaffChange,
+                          result: Extract<import("./model.ts").StaffChangeReceipt, { kind: "applied" }> |
+                            Extract<import("./model.ts").StaffChangeObservation, { kind: "exactApplied" }>): boolean {
+  const expectedStatus = change.operation === "acknowledge" ? "acknowledged" : change.operation === "resolve" ? "resolved" : "open";
+  if (result.commandKey !== change.commandKey || result.taskKey !== change.taskKey ||
+      result.hostTaskRef !== change.hostTaskRef || result.status !== expectedStatus ||
+      JSON.stringify(result.destination) !== JSON.stringify(change.toDestination)) return false;
+  const { pendingChangeKey: _pending, reviewRequired: _review, ...previous } = item;
+  state.staffItems[item.key] = { ...previous, status: expectedStatus, destination: change.toDestination };
+  return true;
 }
 
 function supersedeUnsent(state: CallState): void {
@@ -514,6 +534,76 @@ export function transition(current: CallState, action: TransitionAction): Result
         state.staffItems[item.key] = { ...item, status: "open", destination: effect.originalItem.destination, hostTaskRef: action.observation.hostTaskRef };
       }
       if (action.observation.kind !== "stillUnknown") state.effects[original.id] = { ...original, status: "completed" };
+      state.effects[effect.id] = { ...effect, status: "completed" };
+      break;
+    }
+    case "staffChangeRequested": {
+      const planned = planStaffChange(state, action.taskKey, action.actorRef, action.change);
+      if (!planned.ok) return planned;
+      state.staffItems[action.taskKey] = planned.value.item;
+      state.effects[planned.value.effect.id] = planned.value.effect;
+      break;
+    }
+    case "markStaffChangePossiblySent": {
+      const effect = state.effects[action.effectId];
+      if (!effect || effect.kind !== "staffChange" || effect.status !== "pending") return err({ kind: "invalidTransition" });
+      const item = state.staffItems[effect.taskKey];
+      if (!item || item.pendingChangeKey !== effect.change.commandKey || item.status !== effect.change.fromStatus ||
+          JSON.stringify(item.destination) !== JSON.stringify(effect.change.fromDestination)) return err({ kind: "invalidTransition" });
+      state.effects[effect.id] = { ...effect, status: "possiblySent", possiblySentAt: now };
+      break;
+    }
+    case "recoverStaffChangePossiblySent": {
+      const effect = state.effects[action.effectId];
+      if (!effect || effect.kind !== "staffChange") return err({ kind: "effectUnknown" });
+      if (effect.status === "uncertain") return ok(current);
+      if (effect.status !== "possiblySent" || !effect.possiblySentAt ||
+          Date.parse(now) < Date.parse(effect.possiblySentAt) + POSSIBLE_SEND_RECOVERY_DELAY) return err({ kind: "invalidTransition" });
+      const item = state.staffItems[effect.taskKey];
+      if (!item || item.pendingChangeKey !== effect.change.commandKey) return err({ kind: "invalidTransition" });
+      queueStaffChangeReconciliation(state, effect);
+      state.staffItems[item.key] = { ...item, reviewRequired: true };
+      state.effects[effect.id] = { ...effect, status: "uncertain" };
+      break;
+    }
+    case "staffChangeResolved": {
+      const effect = state.effects[action.effectId];
+      if (!effect || effect.kind !== "staffChange" || effect.status !== "possiblySent") return err({ kind: "invalidTransition" });
+      const item = state.staffItems[effect.taskKey];
+      const receipt = action.receipt;
+      if (!item || item.pendingChangeKey !== effect.change.commandKey ||
+          receipt.commandKey !== effect.change.commandKey || receipt.taskKey !== effect.taskKey) return err({ kind: "keyMismatch" });
+      if (receipt.kind === "applied") {
+        if (!applyStaffChange(state, item, effect.change, receipt)) return err({ kind: "invalidTransition" });
+        state.effects[effect.id] = { ...effect, status: "completed" };
+      } else if (receipt.kind === "rejected") {
+        const { pendingChangeKey: _pending, ...previous } = item;
+        state.staffItems[item.key] = { ...previous, reviewRequired: true };
+        state.effects[effect.id] = { ...effect, status: "completed" };
+      } else if (receipt.kind === "uncertain") {
+        queueStaffChangeReconciliation(state, effect);
+        state.staffItems[item.key] = { ...item, reviewRequired: true };
+        state.effects[effect.id] = { ...effect, status: "uncertain" };
+      } else return err({ kind: "invalidTransition" });
+      break;
+    }
+    case "staffChangeReconciled": {
+      const effect = state.effects[action.effectId];
+      if (!effect || effect.kind !== "staffChangeReconcile" || effect.status !== "pending") return err({ kind: "invalidTransition" });
+      const original = state.effects[effect.originalEffectId];
+      const item = state.staffItems[effect.taskKey];
+      const observation = action.observation;
+      if (!original || original.kind !== "staffChange" || original.status !== "uncertain" || !item ||
+          item.pendingChangeKey !== effect.change.commandKey || observation.commandKey !== effect.change.commandKey ||
+          observation.taskKey !== effect.taskKey) return err({ kind: "keyMismatch" });
+      if (observation.kind === "exactApplied") {
+        if (!applyStaffChange(state, item, effect.change, observation)) return err({ kind: "invalidTransition" });
+        state.effects[original.id] = { ...original, status: "completed" };
+      } else if (observation.kind === "definitiveNonApplied") {
+        const { pendingChangeKey: _pending, ...previous } = item;
+        state.staffItems[item.key] = { ...previous, reviewRequired: true };
+        state.effects[original.id] = { ...original, status: "completed" };
+      } else if (observation.kind !== "stillUnknown") return err({ kind: "invalidTransition" });
       state.effects[effect.id] = { ...effect, status: "completed" };
       break;
     }

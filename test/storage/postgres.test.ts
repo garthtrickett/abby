@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { CallRuntime } from "../../src/core/runtime.ts";
+import { EffectWorker } from "../../src/core/effect-worker.ts";
+import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
 import { StaffQueue } from "../../src/reference/staff-queue.ts";
 import type { CallsCallId } from "../../src/storage/generated/public/Calls.ts";
 import type { EffectOutboxEffectId } from "../../src/storage/generated/public/EffectOutbox.ts";
+import type { StaffItemsTaskKey } from "../../src/storage/generated/public/StaffItems.ts";
 import { deadline, failure, now, setup, success } from "../text/fixture.ts";
 
 const url = process.env.DATABASE_URL;
@@ -35,6 +38,39 @@ test("PostgreSQL staff queue reads the indexed task projection within one clinic
     { callId: app.callId, reason: "callerRequested", status: "requested", overdue: true });
   assert.equal(JSON.stringify(result).includes("Need staff"), false);
   assert.deepEqual(success(await queue.list({ ...app.scope, locationId: "other-location" })).items, []);
+});
+
+test("host-confirmed staff resolution commits call, outbox, and queue projection together", async () => {
+  const app = await setup("pg-staff-lifecycle-atomic");
+  success(await app.runtime.acceptTurn({ callId: app.callId, turnId: "staff-request", text: "Need staff", quality: "clear", at: now },
+    { kind: "handoff", reason: "callerRequested" }, now));
+  const item = Object.values((await app.state()).staffItems)[0];
+  assert.ok(item);
+  const host = new ReferenceClinicHost([], []);
+  const worker = new EffectWorker(app.runtime, host);
+  await worker.process(app.callId, `${item.key}:open`, now);
+  const requested = success(await app.runtime.requestStaffChange(app.callId, (await app.state()).version, item.key,
+    "staff-actor", { kind: "resolve" }));
+  const commandKey = requested.staffItems[item.key]?.pendingChangeKey;
+  assert.ok(commandKey);
+  const pending = await db.selectFrom("staff_items").select(["status", "payload"])
+    .where("task_key", "=", item.key as StaffItemsTaskKey).executeTakeFirstOrThrow();
+  assert.equal(pending.status, "open");
+  assert.equal((pending.payload as { pendingChangeKey?: string }).pendingChangeKey, commandKey);
+  await worker.process(app.callId, `${commandKey}:send`, now);
+  const state = await app.state();
+  const task = await db.selectFrom("staff_items").select(["status", "payload"])
+    .where("task_key", "=", item.key as StaffItemsTaskKey).executeTakeFirstOrThrow();
+  const effect = await db.selectFrom("effect_outbox").select("status")
+    .where("effect_id", "=", `${commandKey}:send` as EffectOutboxEffectId).executeTakeFirstOrThrow();
+  const queue = success(await new StaffQueue(new PostgresLedger(db), () => "2026-09-30T10:00:00.000Z").list(app.scope));
+  assert.equal(state.staffItems[item.key]?.status, "resolved");
+  assert.equal(task.status, "resolved");
+  assert.equal((task.payload as { pendingChangeKey?: string }).pendingChangeKey, undefined);
+  assert.equal(effect.status, "completed");
+  assert.equal(queue.items[0]?.status, "resolved");
+  assert.equal(queue.items[0]?.overdue, false);
+  assert.equal(host.tasks(app.scope)[0]?.status, "resolved");
 });
 
 test("calls written before read provenance existed remain readable and upgrade on the next transition", async () => {

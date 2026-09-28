@@ -1,12 +1,12 @@
-import type { HostWriteReceipt, StaffTaskReceipt } from "./model.ts";
-import type { HostEffects } from "./host.ts";
+import type { HostWriteReceipt, StaffChangeReceipt, StaffTaskReceipt } from "./model.ts";
+import type { HostEffects, StaffLifecycleHost } from "./host.ts";
 import { CallRuntime } from "./runtime.ts";
 
 export class EffectWorker {
   private readonly runtime: CallRuntime;
-  private readonly host: HostEffects;
+  private readonly host: HostEffects & Partial<StaffLifecycleHost>;
 
-  constructor(runtime: CallRuntime, host: HostEffects) {
+  constructor(runtime: CallRuntime, host: HostEffects & Partial<StaffLifecycleHost>) {
     this.runtime = runtime;
     this.host = host;
   }
@@ -50,6 +50,33 @@ export class EffectWorker {
       if (!original || original.kind !== "staffTask" || original.status !== "uncertain") throw new Error("effectUnknown");
       const observation = await this.host.reconcileTask(effect.originalItem);
       const resolved = await this.runtime.acceptStaffReconciliation(callId, effectId, observation);
+      if (!resolved.ok) throw new Error(resolved.error.kind);
+      return;
+    }
+    if (effect.kind === "staffChange") {
+      if (effect.status !== "pending") throw new Error("invalidTransition");
+      const marked = await this.runtime.markStaffChangePossiblySent(callId, effectId, now);
+      if (!marked.ok) throw new Error(marked.error.kind);
+      let receipt: StaffChangeReceipt;
+      try {
+        receipt = this.host.advanceTask
+          ? await this.host.advanceTask(effect.change)
+          : { kind: "rejected", commandKey: effect.change.commandKey, taskKey: effect.taskKey };
+      } catch {
+        receipt = { kind: "uncertain", commandKey: effect.change.commandKey, taskKey: effect.taskKey };
+      }
+      const resolved = await this.runtime.acceptStaffChangeResult(callId, effectId, receipt);
+      if (!resolved.ok) throw new Error(resolved.error.kind);
+      return;
+    }
+    if (effect.kind === "staffChangeReconcile") {
+      if (effect.status !== "pending") throw new Error("invalidTransition");
+      const original = read.value.effects[effect.originalEffectId];
+      if (!original || original.kind !== "staffChange" || original.status !== "uncertain") throw new Error("effectUnknown");
+      const observation = this.host.reconcileTaskChange
+        ? await this.host.reconcileTaskChange(effect.change)
+        : { kind: "stillUnknown" as const, commandKey: effect.change.commandKey, taskKey: effect.taskKey };
+      const resolved = await this.runtime.acceptStaffChangeReconciliation(callId, effectId, observation);
       if (!resolved.ok) throw new Error(resolved.error.kind);
       return;
     }

@@ -1,4 +1,4 @@
-import type { Admission, AdmissionResult, CallPolicy, CallState, FinalCallerTurn, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffTaskObservation, StaffTaskReceipt, TransitionAction, TransitionFailure, TurnInterpretation } from "./model.ts";
+import type { Admission, AdmissionResult, CallPolicy, CallState, FinalCallerTurn, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffChangeObservation, StaffChangeReceipt, StaffChangeRequest, StaffTaskObservation, StaffTaskReceipt, TransitionAction, TransitionFailure, TurnInterpretation } from "./model.ts";
 import type { LedgerStore } from "./ledger.ts";
 
 export class CallRuntime {
@@ -112,5 +112,25 @@ export class CallRuntime {
 
   acceptStaffReconciliation(callId: string, effectId: string, observation: StaffTaskObservation): Promise<Result<CallState, TransitionFailure>> {
     return this.update(callId, { kind: "staffTaskReconciled", effectId, observation });
+  }
+
+  requestStaffChange(callId: string, expectedVersion: number, taskKey: string, actorRef: string, change: StaffChangeRequest): Promise<Result<CallState, TransitionFailure>> {
+    return this.apply(callId, expectedVersion, { kind: "staffChangeRequested", taskKey, actorRef, change });
+  }
+
+  markStaffChangePossiblySent(callId: string, effectId: string, now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "markStaffChangePossiblySent", effectId, now });
+  }
+
+  recoverStaffChangePossiblySent(callId: string, effectId: string, now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "recoverStaffChangePossiblySent", effectId, now });
+  }
+
+  acceptStaffChangeResult(callId: string, effectId: string, receipt: StaffChangeReceipt): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "staffChangeResolved", effectId, receipt });
+  }
+
+  acceptStaffChangeReconciliation(callId: string, effectId: string, observation: StaffChangeObservation): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "staffChangeReconciled", effectId, observation });
   }
 }

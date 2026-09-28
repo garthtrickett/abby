@@ -1,5 +1,5 @@
 import { err, ok } from "../../core/model.ts";
-import type { CallPolicy, Result } from "../../core/model.ts";
+import type { CallPolicy, Result, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor, GatewayFailure } from "../../reference/command-gateway.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
@@ -11,6 +11,7 @@ export type DashboardPort = Readonly<{
   changeBookingEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   callSummary(callId: string): Promise<Result<CallSummary, DashboardFailure>>;
   staffQueue(afterTaskKey?: string): Promise<Result<StaffQueuePage, DashboardFailure>>;
+  changeStaff(item: StaffQueueEntry, change: StaffChangeRequest): Promise<Result<void, DashboardFailure>>;
 }>;
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -79,10 +80,20 @@ export class FetchDashboardPort implements DashboardPort {
     const page = record(reply?.page);
     return reply?.kind === "staffQueue" && page && Array.isArray(page.items) && page.items.every(item => {
       const entry = record(item);
-      return entry && typeof entry.callId === "string" && typeof entry.taskKey === "string" &&
+      return entry && typeof entry.callId === "string" && Number.isSafeInteger(entry.callVersion) && typeof entry.taskKey === "string" &&
         typeof entry.reason === "string" && typeof entry.status === "string" && typeof entry.dueAt === "string" &&
         typeof entry.overdue === "boolean";
     }) && (page.nextAfterTaskKey === undefined || typeof page.nextAfterTaskKey === "string")
       ? ok(page as StaffQueuePage) : err({ kind: "malformed" });
+  }
+
+  async changeStaff(item: StaffQueueEntry, change: StaffChangeRequest): Promise<Result<void, DashboardFailure>> {
+    const result = await request("/api/staff/change", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callId: item.callId, taskKey: item.taskKey, expectedVersion: item.callVersion, change }) });
+    if (!result.ok) return result;
+    const reply = record(result.value);
+    return reply?.kind === "staffChange" && reply.taskKey === item.taskKey && Number.isSafeInteger(reply.callVersion) &&
+      typeof reply.status === "string" && typeof reply.pending === "boolean" && typeof reply.reviewRequired === "boolean"
+      ? ok(undefined) : err({ kind: "malformed" });
   }
 }

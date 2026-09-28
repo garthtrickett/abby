@@ -15,7 +15,7 @@ export type CallSummary = Readonly<{
 const actionKinds = ["book", "cancel", "reschedule", "intake"] as const;
 const actionStatuses = ["awaitingConfirmation", "ready", "dispatched", "committed", "rejected", "unsupported", "uncertain", "needsReview", "canceled"] as const;
 const staffReasons = ["callerRequested", "verificationFailed", "unsupported", "uncertainAction", "partialIntake", "systemFailure", "transferFailed"] as const;
-const staffStatuses = ["requested", "open", "needsReview", "failed"] as const;
+const staffStatuses = ["requested", "open", "acknowledged", "resolved", "needsReview", "failed"] as const;
 
 function allowed(values: readonly string[], value: unknown): boolean {
   return typeof value === "string" && values.includes(value);

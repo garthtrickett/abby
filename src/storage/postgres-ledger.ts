@@ -37,6 +37,7 @@ function auditPayload(action: TransitionAction): Record<string, string> {
     case "transferPossiblySent":
     case "presentationResolved": return { presentationId: action.presentationId };
     case "reconciliationDeadline": return { actionKey: action.actionKey };
+    case "staffChangeRequested": return { taskKey: action.taskKey, actorRef: action.actorRef, operation: action.change.kind };
     default: return { effectId: action.effectId };
   }
 }
@@ -223,7 +224,7 @@ export class PostgresLedger implements LedgerStore {
     if (afterTaskKey !== undefined && (!afterTaskKey || afterTaskKey.length > 256)) return err({ kind: "invalidTransition" });
     try {
       let query = this.db.selectFrom("staff_items").innerJoin("calls", "calls.call_id", "staff_items.call_id")
-        .select(["staff_items.task_key", "staff_items.call_id", "staff_items.status", "staff_items.payload"])
+        .select(["staff_items.task_key", "staff_items.call_id", "staff_items.status", "staff_items.payload", "calls.version"])
         .where("staff_items.tenant_id", "=", scope.tenantId)
         .where("calls.tenant_id", "=", scope.tenantId)
         .where("calls.clinic_id", "=", scope.clinicId)
@@ -237,8 +238,10 @@ export class PostgresLedger implements LedgerStore {
             item.scope.tenantId !== scope.tenantId || item.scope.clinicId !== scope.clinicId || item.scope.locationId !== scope.locationId ||
             typeof item.dueAt !== "string" || !Number.isFinite(Date.parse(item.dueAt)) || !item.destination ||
             typeof item.reason !== "string") return err({ kind: "storageCorrupt" });
-        entries.push({ callId: row.call_id, taskKey: item.key, reason: item.reason, status: item.status, dueAt: item.dueAt,
-          destination: structuredClone(item.destination), ...(item.linkedActionKey === undefined ? {} : { linkedActionKey: item.linkedActionKey }) });
+        entries.push({ callId: row.call_id, callVersion: row.version, taskKey: item.key, reason: item.reason, status: item.status, dueAt: item.dueAt,
+          destination: structuredClone(item.destination), ...(item.linkedActionKey === undefined ? {} : { linkedActionKey: item.linkedActionKey }),
+          ...(item.pendingChangeKey === undefined ? {} : { pendingChangeKey: item.pendingChangeKey }),
+          ...(item.reviewRequired === undefined ? {} : { reviewRequired: item.reviewRequired }) });
       }
       return ok(entries);
     } catch {
