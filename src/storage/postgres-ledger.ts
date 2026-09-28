@@ -3,7 +3,7 @@ import type { Kysely } from "kysely";
 import { CALL_TERMINAL_REASONS, POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "../core/model.ts";
 import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, Effect, LocationScope, PendingLocationCall, PendingLocationExpiryResult, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffItem, StaffQueueEntry, TransitionAction, TransitionFailure } from "../core/model.ts";
 import { admissionReceipt, initialState, sameAdmission } from "../core/ledger.ts";
-import { LOCATION_CHOICE_TIMEOUT_MS, pendingMatchesAdmission, policyMatchesPending, validPendingAdmission, validPendingLocation, validPendingRoute } from "../core/pending-location.ts";
+import { LOCATION_CHOICE_TIMEOUT_MS, PENDING_LOCATION_LEASE_MS, pendingDueAt, pendingMatchesAdmission, policyMatchesPending, validPendingAdmission, validPendingLocation, validPendingRoute } from "../core/pending-location.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { transition } from "../core/transition.ts";
 import { validKnowledgeSnapshot } from "../core/knowledge-evidence.ts";
@@ -282,8 +282,68 @@ export class PostgresLedger implements LedgerStore {
     } catch { return err({ kind: "storageFailure" }); }
   }
 
-  async bindPendingLocation(callId: string, policy: CallPolicy, now: string): Promise<Result<AdmissionResult, TransitionFailure>> {
-    if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
+  async attachPendingLocationSession(callId: string, sessionId: string, now: string): Promise<Result<PendingLocationCall, TransitionFailure>> {
+    if (!sessionId?.trim() || sessionId.length > 256 || !Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
+    try {
+      return await this.db.transaction().execute(async trx => {
+        await this.lockCall(trx, callId);
+        const row = await trx.selectFrom("pending_location_calls").select(["state", "status", "tenant_id", "clinic_id"])
+          .where("call_id", "=", callId as PendingLocationCallsCallId).forUpdate().executeTakeFirst();
+        if (!row) return err({ kind: "callUnknown" });
+        if (!validPendingLocation(row.state, callId) || row.status !== row.state.status ||
+            row.tenant_id !== row.state.route.tenantId || row.clinic_id !== row.state.route.clinicId) return err({ kind: "storageCorrupt" });
+        const pending = row.state;
+        if (pending.status === "expired") return err({ kind: "admissionExpired" });
+        if (pending.status !== "pending") return err({ kind: "callConflict" });
+        const ledgerNow = await this.trustedNow(trx, now);
+        if (Date.parse(ledgerNow) >= Date.parse(pending.admission.deadline)) return err({ kind: "admissionExpired" });
+        const lease = pending.sessionLease;
+        if (lease) {
+          if (lease.sessionId !== sessionId || Date.parse(ledgerNow) >= Date.parse(lease.expiresAt)) return err({ kind: "leaseLost" });
+          return ok({ ...pending, sessionLease: { ...lease, validForMs: Date.parse(lease.expiresAt) - Date.parse(ledgerNow) } });
+        }
+        const validForMs = Math.min(PENDING_LOCATION_LEASE_MS, Date.parse(pending.admission.deadline) - Date.parse(ledgerNow));
+        const attached: PendingLocationCall = { ...pending, sessionLease: { sessionId, version: 1,
+          expiresAt: new Date(Date.parse(ledgerNow) + validForMs).toISOString(), validForMs } };
+        await trx.updateTable("pending_location_calls").set({ state: attached })
+          .where("call_id", "=", callId as PendingLocationCallsCallId).execute();
+        return ok(attached);
+      });
+    } catch { return err({ kind: "storageFailure" }); }
+  }
+
+  async renewPendingLocationSession(callId: string, sessionId: string, expectedVersion: number, now: string): Promise<Result<PendingLocationCall, TransitionFailure>> {
+    if (!sessionId?.trim() || !Number.isSafeInteger(expectedVersion) || !Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
+    try {
+      return await this.db.transaction().execute(async trx => {
+        await this.lockCall(trx, callId);
+        const row = await trx.selectFrom("pending_location_calls").select(["state", "status", "tenant_id", "clinic_id"])
+          .where("call_id", "=", callId as PendingLocationCallsCallId).forUpdate().executeTakeFirst();
+        if (!row) return err({ kind: "callUnknown" });
+        if (!validPendingLocation(row.state, callId) || row.status !== row.state.status ||
+            row.tenant_id !== row.state.route.tenantId || row.clinic_id !== row.state.route.clinicId) return err({ kind: "storageCorrupt" });
+        const pending = row.state;
+        const lease = pending.sessionLease;
+        const ledgerNow = await this.trustedNow(trx, now);
+        if (pending.status !== "pending" || !lease || lease.sessionId !== sessionId ||
+            Date.parse(ledgerNow) >= pendingDueAt(pending)) return err({ kind: "leaseLost" });
+        if (lease.version > 1 && expectedVersion === lease.version - 1) {
+          return ok({ ...pending, sessionLease: { ...lease, validForMs: Date.parse(lease.expiresAt) - Date.parse(ledgerNow) } });
+        }
+        if (lease.version !== expectedVersion) return err({ kind: "leaseLost" });
+        const validForMs = Math.min(PENDING_LOCATION_LEASE_MS, Date.parse(pending.admission.deadline) - Date.parse(ledgerNow));
+        const renewed: PendingLocationCall = { ...pending, sessionLease: { sessionId, version: lease.version + 1,
+          expiresAt: new Date(Date.parse(ledgerNow) + validForMs).toISOString(), validForMs } };
+        await trx.updateTable("pending_location_calls").set({ state: renewed })
+          .where("call_id", "=", callId as PendingLocationCallsCallId).execute();
+        return ok(renewed);
+      });
+    } catch { return err({ kind: "storageFailure" }); }
+  }
+
+  async bindPendingLocation(callId: string, policy: CallPolicy, sessionId: string, expectedLeaseVersion: number, turnId: string, now: string): Promise<Result<AdmissionResult, TransitionFailure>> {
+    if (!sessionId?.trim() || sessionId.length > 256 || !turnId?.trim() || turnId.length > 256 ||
+        !Number.isSafeInteger(expectedLeaseVersion) || !Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
     try {
       return await this.db.transaction().execute(async trx => {
         await this.lockCall(trx, callId);
@@ -300,7 +360,9 @@ export class PostgresLedger implements LedgerStore {
           if (!decoded.ok) return decoded;
           const bound = decoded.value.policy.scope;
           if (!policyMatchesPending(pending, policy) || bound.tenantId !== policy.scope.tenantId ||
-              bound.clinicId !== policy.scope.clinicId || bound.locationId !== policy.scope.locationId) {
+              bound.clinicId !== policy.scope.clinicId || bound.locationId !== policy.scope.locationId ||
+              pending.choiceEvidence?.sessionId !== sessionId || pending.choiceEvidence.leaseVersion !== expectedLeaseVersion ||
+              pending.choiceEvidence.turnId !== turnId) {
             return err({ kind: "scopeMismatch" });
           }
           const receipt = admissionReceipt(decoded.value);
@@ -308,12 +370,14 @@ export class PostgresLedger implements LedgerStore {
         }
         if (pending.status !== "pending" || existing) return err({ kind: "callConflict" });
         const acceptedAt = await this.trustedNow(trx, now);
-        if (Date.parse(acceptedAt) >= Date.parse(pending.admission.deadline)) {
+        if (Date.parse(acceptedAt) >= pendingDueAt(pending)) {
           const expired = { ...pending, status: "expired" as const };
           await trx.updateTable("pending_location_calls").set({ status: "expired", state: expired })
             .where("call_id", "=", callId as PendingLocationCallsCallId).execute();
           return err({ kind: "admissionExpired" });
         }
+        if (!pending.sessionLease || pending.sessionLease.sessionId !== sessionId ||
+            pending.sessionLease.version !== expectedLeaseVersion) return err({ kind: "leaseLost" });
         if (!policyMatchesPending(pending, policy)) return err({ kind: "scopeMismatch" });
         const admission: Admission = { ...pending.admission, acceptedAt,
           deadline: new Date(Date.parse(acceptedAt) + 30_000).toISOString() };
@@ -327,7 +391,9 @@ export class PostgresLedger implements LedgerStore {
           sequence: 0 as CallEventsSequence, kind: "callAdmitted",
           payload: { accountRef: admission.key.accountRef, providerCallRef: admission.key.providerCallRef,
             dialedNumber: admission.dialedNumber, locationId: policy.scope.locationId } }).execute();
-        await trx.updateTable("pending_location_calls").set({ status: "bound", state: { ...pending, status: "bound" } })
+        await trx.updateTable("pending_location_calls").set({ status: "bound", state: { ...pending, status: "bound",
+          choiceEvidence: { sessionId, leaseVersion: expectedLeaseVersion, turnId,
+            selectedLocationId: policy.scope.locationId, at: acceptedAt } } })
           .where("call_id", "=", callId as PendingLocationCallsCallId).execute();
         return ok({ kind: "created", receipt: admissionReceipt(state)! });
       });
@@ -341,7 +407,9 @@ export class PostgresLedger implements LedgerStore {
       let query = this.db.selectFrom("pending_location_calls")
         .select(["call_id", "state", "status", "tenant_id", "clinic_id"])
         .where("status", "=", "pending")
-        .where(sql<boolean>`(state->'admission'->>'deadline')::timestamptz <= ${ledgerNow}::timestamptz`);
+        .where(sql<boolean>`least((state->'admission'->>'deadline')::timestamptz,
+          coalesce((state->'sessionLease'->>'expiresAt')::timestamptz,
+            (state->'admission'->>'deadline')::timestamptz)) <= ${ledgerNow}::timestamptz`);
       if (clinic) query = query.where("tenant_id", "=", clinic.tenantId).where("clinic_id", "=", clinic.clinicId);
       const rows = await query.orderBy("call_id").limit(100).execute();
       const pending: PendingLocationCall[] = [];
@@ -371,7 +439,7 @@ export class PostgresLedger implements LedgerStore {
         }
         if (pending.status === "expired") return ok({ kind: "alreadyExpired", pending });
         const ledgerNow = await this.trustedNow(trx, now);
-        if (Date.parse(ledgerNow) < Date.parse(pending.admission.deadline)) return err({ kind: "invalidTransition" });
+        if (Date.parse(ledgerNow) < pendingDueAt(pending)) return err({ kind: "invalidTransition" });
         const expired: PendingLocationCall = { ...pending, status: "expired" };
         await trx.updateTable("pending_location_calls").set({ status: "expired", state: expired })
           .where("call_id", "=", callId as PendingLocationCallsCallId).execute();

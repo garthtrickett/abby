@@ -63,25 +63,26 @@ for (const kind of kinds) {
   test(`${kind}: chosen location binds once and preserves the global call key`, async () => {
     const app = fixture(kind);
     value(await app.ledger.reservePendingLocation(app.callId, app.route, app.admission));
+    value(await app.ledger.attachPendingLocationSession(app.callId, "session", now));
     const wrongVersion = await app.ledger.bindPendingLocation(app.callId,
-      { ...app.policy, numberRouteVersion: "route-v2" }, now);
+      { ...app.policy, numberRouteVersion: "route-v2" }, "session", 1, "choice", now);
     assert.ok(!wrongVersion.ok);
     assert.equal(wrongVersion.error.kind, "scopeMismatch");
     const wrongLocation = await app.ledger.bindPendingLocation(app.callId,
-      { ...app.policy, scope: { ...app.scope, locationId: "foreign" } }, now);
+      { ...app.policy, scope: { ...app.scope, locationId: "foreign" } }, "session", 1, "choice", now);
     assert.ok(!wrongLocation.ok);
     assert.equal(wrongLocation.error.kind, "scopeMismatch");
     assert.equal(value(await app.ledger.findAdmission(app.callId)), null);
 
-    const bound = value(await app.ledger.bindPendingLocation(app.callId, app.policy, now));
+    const bound = value(await app.ledger.bindPendingLocation(app.callId, app.policy, "session", 1, "choice", now));
     assert.equal(bound.kind, "created");
     assert.deepEqual(bound.receipt.scope, app.scope);
     assert.equal(value(await app.ledger.findPendingLocation(app.callId))?.status, "bound");
-    const repeated = value(await app.ledger.bindPendingLocation(app.callId, app.policy, now));
+    const repeated = value(await app.ledger.bindPendingLocation(app.callId, app.policy, "session", 1, "choice", now));
     assert.equal(repeated.kind, "duplicate");
     assert.deepEqual(repeated.receipt, bound.receipt);
     const wrongReplay = await app.ledger.bindPendingLocation(app.callId,
-      { ...app.policy, scope: { ...app.scope, locationId: "other" } }, now);
+      { ...app.policy, scope: { ...app.scope, locationId: "other" } }, "session", 1, "choice", now);
     assert.ok(!wrongReplay.ok);
     assert.equal(wrongReplay.error.kind, "scopeMismatch");
     const service = new CallAdmissionService(app.ledger, async () => { throw new Error("must not reroute"); });
@@ -93,7 +94,7 @@ for (const kind of kinds) {
     const app = fixture(kind);
     value(await app.ledger.reservePendingLocation(app.callId, app.route, app.admission));
     const late = new Date(Date.parse(now) + 120_000).toISOString();
-    const outcome = await app.ledger.bindPendingLocation(app.callId, app.policy, late);
+    const outcome = await app.ledger.bindPendingLocation(app.callId, app.policy, "session", 1, "choice", late);
     assert.ok(!outcome.ok);
     assert.equal(outcome.error.kind, "admissionExpired");
     assert.equal(value(await app.ledger.findPendingLocation(app.callId))?.status, "expired");
@@ -157,8 +158,10 @@ for (const kind of kinds) {
     value(await app.ledger.reservePendingLocation(app.callId, app.route, app.admission));
     const before = new Date(Date.parse(now) + 119_999).toISOString();
     const deadline = new Date(Date.parse(now) + 120_000).toISOString();
+    value(await app.ledger.attachPendingLocationSession(app.callId, "session",
+      new Date(Date.parse(now) + 110_000).toISOString()));
     const [bound, expired] = await Promise.all([
-      app.ledger.bindPendingLocation(app.callId, app.policy, before),
+      app.ledger.bindPendingLocation(app.callId, app.policy, "session", 1, "choice", before),
       new CallLivenessMonitor(app.ledger, app.scope).expireDue(deadline),
     ]);
     assert.ok(expired.ok);
@@ -175,5 +178,59 @@ for (const kind of kinds) {
       assert.equal(pending?.status, "expired");
       assert.equal(admitted, null);
     }
+  });
+
+  test(`${kind}: one pre-location session owns a replay-safe renewable lease and choice evidence`, async () => {
+    const app = fixture(kind);
+    const at = (seconds: number) => new Date(Date.parse(now) + seconds * 1000).toISOString();
+    value(await app.ledger.reservePendingLocation(app.callId, app.route, app.admission));
+    const noSession = await app.ledger.bindPendingLocation(app.callId, app.policy, "session", 1, "turn", now);
+    assert.ok(!noSession.ok);
+    assert.equal(noSession.error.kind, "leaseLost");
+    const attached = value(await app.ledger.attachPendingLocationSession(app.callId, "session", now));
+    assert.equal(attached.sessionLease?.version, 1);
+    assert.equal(attached.sessionLease?.validForMs, 30_000);
+    const repeated = value(await app.ledger.attachPendingLocationSession(app.callId, "session", at(5)));
+    assert.equal(repeated.sessionLease?.version, 1);
+    assert.equal(repeated.sessionLease?.validForMs, 25_000);
+    const foreign = await app.ledger.attachPendingLocationSession(app.callId, "other-session", at(5));
+    assert.ok(!foreign.ok);
+    assert.equal(foreign.error.kind, "leaseLost");
+
+    const renewed = value(await app.ledger.renewPendingLocationSession(app.callId, "session", 1, at(10)));
+    assert.equal(renewed.sessionLease?.version, 2);
+    assert.equal(renewed.sessionLease?.expiresAt, at(40));
+    const replay = value(await app.ledger.renewPendingLocationSession(app.callId, "session", 1, at(15)));
+    assert.equal(replay.sessionLease?.version, 2);
+    assert.equal(replay.sessionLease?.expiresAt, at(40));
+    assert.equal(replay.sessionLease?.validForMs, 25_000);
+    const stale = await app.ledger.renewPendingLocationSession(app.callId, "session", 0, at(15));
+    assert.ok(!stale.ok);
+    assert.equal(stale.error.kind, "leaseLost");
+    const wrongOwner = await app.ledger.bindPendingLocation(app.callId, app.policy, "other-session", 2, "turn", at(15));
+    assert.ok(!wrongOwner.ok);
+    assert.equal(wrongOwner.error.kind, "leaseLost");
+    const wrongVersion = await app.ledger.bindPendingLocation(app.callId, app.policy, "session", 1, "turn", at(15));
+    assert.ok(!wrongVersion.ok);
+    assert.equal(wrongVersion.error.kind, "leaseLost");
+    const bound = value(await app.ledger.bindPendingLocation(app.callId, app.policy, "session", 2, "turn", at(15)));
+    assert.equal(bound.kind, "created");
+    assert.deepEqual(value(await app.ledger.findPendingLocation(app.callId))?.choiceEvidence,
+      { sessionId: "session", leaseVersion: 2, turnId: "turn", selectedLocationId: app.scope.locationId, at: at(15) });
+  });
+
+  test(`${kind}: expired pre-location lease ends the choice before its two-minute deadline`, async () => {
+    const app = fixture(kind);
+    value(await app.ledger.reservePendingLocation(app.callId, app.route, app.admission));
+    value(await app.ledger.attachPendingLocationSession(app.callId, "session", now));
+    const leaseDeadline = new Date(Date.parse(now) + 30_000).toISOString();
+    const monitor = new CallLivenessMonitor(app.ledger, app.scope);
+    assert.equal(value(await monitor.expireDue(new Date(Date.parse(leaseDeadline) - 1).toISOString())), 0);
+    assert.equal(value(await monitor.expireDue(leaseDeadline)), 1);
+    assert.equal(value(await app.ledger.findPendingLocation(app.callId))?.status, "expired");
+    const renewed = await app.ledger.renewPendingLocationSession(app.callId, "session", 1, leaseDeadline);
+    assert.ok(!renewed.ok);
+    assert.equal(renewed.error.kind, "leaseLost");
+    assert.equal(value(await app.ledger.findAdmission(app.callId)), null);
   });
 }

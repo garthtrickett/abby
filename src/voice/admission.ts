@@ -70,18 +70,28 @@ export class CallAdmissionService {
     return ok({ policy: callPolicy, acceptedAt });
   }
 
+  private async selectedReplay(receipt: AdmissionReceipt, event: AuthenticatedInboundCall, policy: CallPolicy,
+                               sessionId: string, expectedLeaseVersion: number, turnId: string): Promise<Result<AdmissionResult, TransitionFailure | RouteFailure>> {
+    const replay = duplicateOrConflict(receipt, event);
+    if (!replay.ok) return replay;
+    if (!sameScope(receipt.scope, policy.scope)) return err({ kind: "invalidLocationChoice" });
+    const pending = await this.ledger.findPendingLocation(receipt.callId);
+    if (!pending.ok) return pending;
+    return pending.value?.choiceEvidence?.sessionId === sessionId && pending.value.choiceEvidence.leaseVersion === expectedLeaseVersion &&
+      pending.value.choiceEvidence.turnId === turnId
+      ? replay : err({ kind: "keyMismatch" });
+  }
+
   /** Completes a previously reserved shared-number call after trusted location selection. */
-  async bindSelected(event: AuthenticatedInboundCall, policy: CallPolicy): Promise<Result<AdmissionResult, TransitionFailure | RouteFailure>> {
+  async bindSelected(event: AuthenticatedInboundCall, policy: CallPolicy, sessionId: string,
+                     expectedLeaseVersion: number, turnId: string): Promise<Result<AdmissionResult, TransitionFailure | RouteFailure>> {
     if (!event.key.accountRef || !event.key.providerCallRef || !event.dialedNumber || !Number.isFinite(Date.parse(event.receivedAt))) {
       return err({ kind: "invalidTransition" });
     }
     const callId = callIdFor(event.key);
     const existing = await this.ledger.findAdmission(callId);
     if (!existing.ok) return existing;
-    if (existing.value) {
-      const replay = duplicateOrConflict(existing.value, event);
-      return replay.ok && !sameScope(existing.value.scope, policy.scope) ? err({ kind: "invalidLocationChoice" }) : replay;
-    }
+    if (existing.value) return this.selectedReplay(existing.value, event, policy, sessionId, expectedLeaseVersion, turnId);
     const pending = await this.ledger.findPendingLocation(callId);
     if (!pending.ok) return pending;
     if (!pending.value) return err({ kind: "callUnknown" });
@@ -91,15 +101,16 @@ export class CallAdmissionService {
     if (pending.value.status === "expired") return err({ kind: "admissionExpired" });
     if (pending.value.status !== "pending") return err({ kind: "storageCorrupt" });
     if (!policyMatchesPending(pending.value, policy)) return err({ kind: "scopeMismatch" });
+    if (!pending.value.sessionLease || pending.value.sessionLease.sessionId !== sessionId ||
+        pending.value.sessionLease.version !== expectedLeaseVersion) return err({ kind: "leaseLost" });
     const prepared = await this.preparePolicy(policy);
     if (!prepared.ok) {
       const raced = await this.ledger.findAdmission(callId);
       if (!raced.ok) return raced;
       if (!raced.value) return prepared;
-      const replay = duplicateOrConflict(raced.value, event);
-      return replay.ok && !sameScope(raced.value.scope, policy.scope) ? err({ kind: "invalidLocationChoice" }) : replay;
+      return this.selectedReplay(raced.value, event, policy, sessionId, expectedLeaseVersion, turnId);
     }
-    return this.ledger.bindPendingLocation(callId, prepared.value.policy, prepared.value.acceptedAt);
+    return this.ledger.bindPendingLocation(callId, prepared.value.policy, sessionId, expectedLeaseVersion, turnId, prepared.value.acceptedAt);
   }
 
   async begin(event: AuthenticatedInboundCall): Promise<Result<AdmissionResult, TransitionFailure | RouteFailure>> {

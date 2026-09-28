@@ -1,6 +1,6 @@
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
-import type { Admission, AdmissionReceipt, AdmissionResult, PendingLocationCall, Result, TransitionFailure } from "../core/model.ts";
+import type { Admission, AdmissionReceipt, AdmissionResult, FinalCallerTurn, PendingLocationCall, Result, TransitionFailure } from "../core/model.ts";
 import type { ClinicPolicyRouter } from "../reference/clinic-number-routing.ts";
 import { CallAdmissionService, callIdFor } from "./admission.ts";
 import type { AuthenticatedInboundCall, RouteFailure } from "./admission.ts";
@@ -84,25 +84,63 @@ export class SharedNumberIntakeService {
     return reservation;
   }
 
-  async choose(event: AuthenticatedInboundCall, selectedLocationId: string): Promise<Result<AdmissionResult, TransitionFailure | RouteFailure>> {
+  async attachSession(event: AuthenticatedInboundCall, sessionId: string): Promise<Result<PendingLocationCall, TransitionFailure>> {
+    if (!validEvent(event)) return err({ kind: "invalidTransition" });
+    const callId = callIdFor(event.key);
+    const pending = await this.ledger.findPendingLocation(callId);
+    if (!pending.ok) return pending;
+    if (!pending.value) return err({ kind: "callUnknown" });
+    if (!matchesEvent(pending.value.admission, event)) return err({ kind: "callConflict" });
+    return this.ledger.attachPendingLocationSession(callId, sessionId, this.now());
+  }
+
+  async renewSession(event: AuthenticatedInboundCall, sessionId: string, expectedVersion: number): Promise<Result<PendingLocationCall, TransitionFailure>> {
+    if (!validEvent(event)) return err({ kind: "invalidTransition" });
+    const callId = callIdFor(event.key);
+    const pending = await this.ledger.findPendingLocation(callId);
+    if (!pending.ok) return pending;
+    if (!pending.value) return err({ kind: "callUnknown" });
+    if (!matchesEvent(pending.value.admission, event)) return err({ kind: "callConflict" });
+    return this.ledger.renewPendingLocationSession(callId, sessionId, expectedVersion, this.now());
+  }
+
+  async choose(event: AuthenticatedInboundCall, turn: FinalCallerTurn, selectedLocationId: string,
+               expectedLeaseVersion: number): Promise<Result<AdmissionResult, TransitionFailure | RouteFailure>> {
     if (!validEvent(event)) return err({ kind: "invalidTransition" });
     if (!selectedLocationId || !selectedLocationId.trim() || selectedLocationId.length > 256) return err({ kind: "invalidLocationChoice" });
     const callId = callIdFor(event.key);
+    if (!turn || turn.callId !== callId || !turn.sessionId?.trim() || !turn.turnId?.trim() || turn.turnId.length > 256 ||
+        !turn.text?.trim() || turn.quality !== "clear" || !Number.isFinite(Date.parse(turn.at)) ||
+        !Number.isSafeInteger(expectedLeaseVersion) || expectedLeaseVersion < 1) return err({ kind: "invalidTransition" });
     const existing = await this.ledger.findAdmission(callId);
     if (!existing.ok) return existing;
-    if (existing.value) return existingChoice(existing.value, event, selectedLocationId);
+    if (existing.value) {
+      const pending = await this.ledger.findPendingLocation(callId);
+      if (!pending.ok) return pending;
+      if (!pending.value || pending.value.status !== "bound" ||
+          pending.value.choiceEvidence?.sessionId !== turn.sessionId || pending.value.choiceEvidence.leaseVersion !== expectedLeaseVersion ||
+          pending.value.choiceEvidence.turnId !== turn.turnId ||
+          pending.value.choiceEvidence.selectedLocationId !== selectedLocationId) return err({ kind: "keyMismatch" });
+      return existingChoice(existing.value, event, selectedLocationId);
+    }
     const pending = await this.ledger.findPendingLocation(callId);
     if (!pending.ok) return pending;
     if (!pending.value) return err({ kind: "callUnknown" });
     if (!matchesEvent(pending.value.admission, event)) return err({ kind: "callConflict" });
     if (pending.value.status === "expired") return err({ kind: "admissionExpired" });
     if (pending.value.status !== "pending") return err({ kind: "storageCorrupt" });
+    const current = this.now();
+    if (!Number.isFinite(Date.parse(current)) || Date.parse(turn.at) < Date.parse(pending.value.admission.acceptedAt) ||
+        Date.parse(turn.at) > Date.parse(current)) return err({ kind: "invalidTransition" });
+    if (!pending.value.sessionLease || pending.value.sessionLease.sessionId !== turn.sessionId ||
+        pending.value.sessionLease.version !== expectedLeaseVersion ||
+        Date.parse(current) >= Date.parse(pending.value.sessionLease.expiresAt)) return err({ kind: "leaseLost" });
     if (!pending.value.route.candidateLocationIds.includes(selectedLocationId)) return err({ kind: "invalidLocationChoice" });
     const chosen = await this.router.resolveSelected(event.key.accountRef, event.dialedNumber, {
       tenantId: pending.value.route.tenantId, clinicId: pending.value.route.clinicId,
       locationId: selectedLocationId, routeVersion: pending.value.route.routeVersion,
     });
     if (!chosen.ok) return chosen;
-    return this.admission.bindSelected(event, chosen.value);
+    return this.admission.bindSelected(event, chosen.value, turn.sessionId, expectedLeaseVersion, turn.turnId);
   }
 }
