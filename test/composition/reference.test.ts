@@ -74,7 +74,7 @@ function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = f
   const ledger = suppliedLedger ?? (kind === "standalone" ? new PostgresLedger(db!, undefined, readiness) : new MemoryLedger(readiness));
   if (kind === "standalone") {
     assert.ok(db);
-    ({ reception, policy } = createStandaloneTextComposition(db, host, hostBookingMode, ledger, availability, undefined, readiness));
+    ({ reception, policy } = createStandaloneTextComposition(db, host, hostBookingMode, ledger, availability, undefined, readiness, undefined, host));
   } else {
     policy = new MemoryPolicyStore(hostBookingMode, undefined, readiness);
     reception = createEmbeddedTextComposition(ledger, policy, host, availability);

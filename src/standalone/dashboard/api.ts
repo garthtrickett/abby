@@ -6,11 +6,16 @@ import type { CapabilityDescriptor, GatewayFailure } from "../../reference/comma
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
 import type { WriteStopAuditPage, WriteStopStatus } from "../../core/write-stop.ts";
+import type { KnowledgeEntry } from "../../reference/knowledge-catalogue.ts";
 
 export type DashboardFailure = GatewayFailure | Readonly<{ kind: "transportUnavailable" | "malformed" }>;
 export type DashboardPort = Readonly<{
   capabilities(): Promise<Result<readonly CapabilityDescriptor[], DashboardFailure>>;
   settings(): Promise<Result<CallPolicy, DashboardFailure>>;
+  knowledge(): Promise<Result<readonly KnowledgeEntry[], DashboardFailure>>;
+  saveKnowledgeDraft(input: Pick<KnowledgeEntry, "sourceRef" | "ownerRef" | "text" | "effectiveFrom" | "effectiveUntil"> & { expectedVersion: string }): Promise<Result<KnowledgeEntry, DashboardFailure>>;
+  approveKnowledge(sourceRef: string, expectedVersion: string): Promise<Result<KnowledgeEntry, DashboardFailure>>;
+  revokeKnowledge(sourceRef: string, expectedVersion: string): Promise<Result<KnowledgeEntry, DashboardFailure>>;
   automationAudit(afterVersion?: number): Promise<Result<AutomationSettingAuditPage, DashboardFailure>>;
   changeAutomationEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   readWriteStop(afterEffectId?: string): Promise<Result<WriteStopStatus, DashboardFailure>>;
@@ -27,6 +32,24 @@ export type DashboardPort = Readonly<{
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function validKnowledgeEntry(value: unknown): boolean {
+  const entry = record(value);
+  const scope = record(entry?.scope);
+  return !!entry && !!scope && [scope.tenantId, scope.clinicId, scope.locationId, entry.sourceRef, entry.version,
+    entry.ownerRef, entry.text, entry.actorRef, entry.changedAt].every(item => typeof item === "string" && !!item) &&
+    ["draft", "approved", "revoked"].includes(String(entry.status)) &&
+    typeof entry.effectiveFrom === "string" && typeof entry.effectiveUntil === "string" &&
+    Number.isFinite(Date.parse(entry.effectiveFrom)) && Number.isFinite(Date.parse(entry.effectiveUntil));
+}
+
+async function knowledgeChange(path: string, input: object): Promise<Result<KnowledgeEntry, DashboardFailure>> {
+  const result = await request(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+  if (!result.ok) return result;
+  const reply = record(result.value);
+  return reply?.kind === "knowledgeEntry" && validKnowledgeEntry(reply.entry)
+    ? ok(reply.entry as KnowledgeEntry) : err({ kind: "malformed" });
 }
 
 async function request(path: string, init?: RequestInit): Promise<Result<unknown, DashboardFailure>> {
@@ -69,6 +92,27 @@ function writeStop(value: unknown): Result<WriteStopStatus, DashboardFailure> {
 }
 
 export class FetchDashboardPort implements DashboardPort {
+  async knowledge(): Promise<Result<readonly KnowledgeEntry[], DashboardFailure>> {
+    const result = await request("/api/knowledge");
+    if (!result.ok) return result;
+    const reply = record(result.value);
+    if (reply?.kind !== "knowledgeList" || !Array.isArray(reply.entries) ||
+        !reply.entries.every(entry => validKnowledgeEntry(entry))) return err({ kind: "malformed" });
+    return ok(reply.entries as readonly KnowledgeEntry[]);
+  }
+
+  async saveKnowledgeDraft(input: Pick<KnowledgeEntry, "sourceRef" | "ownerRef" | "text" | "effectiveFrom" | "effectiveUntil"> & { expectedVersion: string }): Promise<Result<KnowledgeEntry, DashboardFailure>> {
+    return knowledgeChange("/api/knowledge/draft", input);
+  }
+
+  async approveKnowledge(sourceRef: string, expectedVersion: string): Promise<Result<KnowledgeEntry, DashboardFailure>> {
+    return knowledgeChange("/api/knowledge/approve", { sourceRef, expectedVersion });
+  }
+
+  async revokeKnowledge(sourceRef: string, expectedVersion: string): Promise<Result<KnowledgeEntry, DashboardFailure>> {
+    return knowledgeChange("/api/knowledge/revoke", { sourceRef, expectedVersion });
+  }
+
   async capabilities(): Promise<Result<readonly CapabilityDescriptor[], DashboardFailure>> {
     const result = await request("/api/capabilities");
     if (!result.ok) return result;

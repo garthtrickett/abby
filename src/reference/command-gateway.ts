@@ -15,6 +15,7 @@ import type { CapabilityId, CapabilityDescriptor } from "./capability-catalogue.
 import { matchesSchema } from "./schema-shapes.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import type { WriteStopAuditPage, WriteStopStatus } from "../core/write-stop.ts";
+import type { KnowledgeCatalogue, KnowledgeEntry, KnowledgeFailure } from "./knowledge-catalogue.ts";
 
 export type { CapabilityDescriptor } from "./capability-catalogue.ts";
 
@@ -37,6 +38,10 @@ export type GatewayCommand =
   | Readonly<{ kind: "booking.propose.v2"; turn: FinalCallerTurn; verificationRef: string; offerRef: string; now: string }>
   | Readonly<{ kind: "calls.turn.model.v1"; turn: FinalCallerTurn; now: string }>
   | Readonly<{ kind: "knowledge.answer.v2"; turn: FinalCallerTurn; sourceRefs: readonly string[]; proposedText: string; now: string }>
+  | Readonly<{ kind: "knowledge.list.v1" }>
+  | Readonly<{ kind: "knowledge.draft.save.v1"; sourceRef: string; expectedVersion: string; ownerRef: string; text: string; effectiveFrom: string; effectiveUntil: string }>
+  | Readonly<{ kind: "knowledge.approve.v1"; sourceRef: string; expectedVersion: string }>
+  | Readonly<{ kind: "knowledge.revoke.v1"; sourceRef: string; expectedVersion: string }>
   | Readonly<{ kind: "availability.read.v2"; turn: FinalCallerTurn; from: string; to: string; now: string }>
   | Readonly<{ kind: "appointments.read.v1"; turn: FinalCallerTurn; verificationRef: string; from: string; to: string; now: string }>
   | Readonly<{ kind: "calls.read.v1"; callId: string }>
@@ -57,6 +62,8 @@ export type GatewayReply =
   | Readonly<{ kind: "bookingProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "modelTurn"; progress: CallCommandProgress }>
   | Readonly<{ kind: "knowledgeAnswer"; progress: CallCommandProgress }>
+  | Readonly<{ kind: "knowledgeList"; entries: readonly KnowledgeEntry[] }>
+  | Readonly<{ kind: "knowledgeEntry"; entry: KnowledgeEntry }>
   | Readonly<{ kind: "availabilityAnswer"; progress: CallCommandProgress }>
   | Readonly<{ kind: "appointmentAnswer"; progress: CallCommandProgress }>
   | Readonly<{ kind: "callSummary"; call: CallSummary }>
@@ -64,7 +71,7 @@ export type GatewayReply =
   | Readonly<{ kind: "staffQueue"; page: StaffQueuePage }>
   | Readonly<{ kind: "staffChange"; taskKey: string; callVersion: number; status: StaffItem["status"]; pending: boolean; reviewRequired: boolean }>;
 
-export type GatewayFailure = PolicyFailure | TextReceptionFailure | TransitionFailure | Readonly<{ kind: "forbidden" | "invalid" | "commandOutcomeUnknown" | "responseContractViolation" }>;
+export type GatewayFailure = PolicyFailure | TextReceptionFailure | TransitionFailure | KnowledgeFailure | Readonly<{ kind: "forbidden" | "invalid" | "commandOutcomeUnknown" | "responseContractViolation" }>;
 
 export class CommandGateway {
   private readonly actor: HostActor;
@@ -74,8 +81,10 @@ export class CommandGateway {
   private readonly staffQueue: StaffQueue | undefined;
   private readonly outcomeReport: CallOutcomeReport | undefined;
   private readonly writeStopLedger: LedgerStore | undefined;
+  private readonly knowledgeCatalogue: KnowledgeCatalogue | undefined;
 
-  constructor(actor: HostActor, policy: PolicyStore, reception: TextReception, review?: CallReview, staffQueue?: StaffQueue, outcomeReport?: CallOutcomeReport, writeStopLedger?: LedgerStore) {
+  constructor(actor: HostActor, policy: PolicyStore, reception: TextReception, review?: CallReview, staffQueue?: StaffQueue, outcomeReport?: CallOutcomeReport, writeStopLedger?: LedgerStore,
+              knowledgeCatalogue?: KnowledgeCatalogue) {
     if (!actor || typeof actor.actorRef !== "string" || !actor.actorRef.trim() || actor.actorRef.length > 256 ||
         !["clinicAdmin", "staff", "agent"].includes(actor.role) || !actor.scope ||
         [actor.scope.tenantId, actor.scope.clinicId, actor.scope.locationId]
@@ -87,6 +96,7 @@ export class CommandGateway {
     this.staffQueue = staffQueue;
     this.outcomeReport = outcomeReport;
     this.writeStopLedger = writeStopLedger;
+    this.knowledgeCatalogue = knowledgeCatalogue;
   }
 
   listPermitted(): readonly CapabilityDescriptor[] {
@@ -99,6 +109,7 @@ export class CommandGateway {
     if (this.staffQueue) permitted.push("staff.list.v1");
     if (this.actor.role !== "agent" && this.reception.staffLifecycleEnabled()) permitted.push("staff.change.v1");
     if (this.actor.role === "clinicAdmin") {
+      if (this.knowledgeCatalogue) permitted.push("knowledge.list.v1", "knowledge.draft.save.v1", "knowledge.approve.v1", "knowledge.revoke.v1");
       permitted.push("settings.automation.enabled.change.v1", "settings.automation.audit.v1",
         "settings.appointments.booking.enabled.change.v1", "settings.appointments.booking.audit.v1");
       if (this.writeStopLedger) permitted.push("calls.writes.stop.v1", "calls.writes.stop.read.v1",
@@ -184,6 +195,27 @@ export class CommandGateway {
             typeof command.proposedText !== "string") return err({ kind: "invalid" });
         const result = await this.reception.answer(this.actor.scope, command.turn, command.sourceRefs, command.proposedText, command.now);
         return result.ok ? ok({ kind: "knowledgeAnswer", progress: commandProgress(result.value, command.turn.turnId) }) : result;
+      }
+      case "knowledge.list.v1": {
+        if (!this.knowledgeCatalogue) return err({ kind: "forbidden" });
+        const result = await this.knowledgeCatalogue.list(this.actor.scope);
+        return result.ok ? ok({ kind: "knowledgeList", entries: result.value }) : result;
+      }
+      case "knowledge.draft.save.v1": {
+        if (!this.knowledgeCatalogue) return err({ kind: "forbidden" });
+        const result = await this.knowledgeCatalogue.saveDraft(this.actor.scope, command.sourceRef, command.expectedVersion,
+          command.ownerRef, command.text, command.effectiveFrom, command.effectiveUntil, this.actor.actorRef);
+        return result.ok ? ok({ kind: "knowledgeEntry", entry: result.value }) : result;
+      }
+      case "knowledge.approve.v1": {
+        if (!this.knowledgeCatalogue) return err({ kind: "forbidden" });
+        const result = await this.knowledgeCatalogue.approve(this.actor.scope, command.sourceRef, command.expectedVersion, this.actor.actorRef);
+        return result.ok ? ok({ kind: "knowledgeEntry", entry: result.value }) : result;
+      }
+      case "knowledge.revoke.v1": {
+        if (!this.knowledgeCatalogue) return err({ kind: "forbidden" });
+        const result = await this.knowledgeCatalogue.revoke(this.actor.scope, command.sourceRef, command.expectedVersion, this.actor.actorRef);
+        return result.ok ? ok({ kind: "knowledgeEntry", entry: result.value }) : result;
       }
       case "availability.read.v2": {
         if (!command.turn || !command.turn.turnId || !command.turn.callId || !command.turn.text ||

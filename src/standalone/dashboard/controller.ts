@@ -9,6 +9,7 @@ import type { AutomationSettingAuditPage } from "../../core/host.ts";
 import { READINESS_REQUIREMENTS } from "../../core/readiness.ts";
 import type { ReadinessRequirement } from "../../core/readiness.ts";
 import type { WriteStopAuditPage, WriteStopStatus } from "../../core/write-stop.ts";
+import type { KnowledgeEntry } from "../../reference/knowledge-catalogue.ts";
 
 function appendAudit(previous: BookingSettingAuditPage, next: BookingSettingAuditPage): BookingSettingAuditPage {
   return { entries: [...previous.entries, ...next.entries],
@@ -59,7 +60,10 @@ function message(failure: DashboardFailure): string {
 export class DashboardController {
   private readonly root: HTMLElement;
   private readonly port: DashboardPort;
-  private readonly state: DashboardState = { loading: true, busy: false, capabilities: [], policy: undefined, writeStop: undefined, stopReasonInput: "", auditPage: undefined,
+  private readonly state: DashboardState = { loading: true, busy: false, capabilities: [], policy: undefined,
+    knowledge: undefined, knowledgeSourceRef: "", knowledgeOwnerRef: "", knowledgeText: "",
+    knowledgeFrom: new Date().toISOString(), knowledgeUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+    writeStop: undefined, stopReasonInput: "", auditPage: undefined,
     writeStopAuditPage: undefined, automationAuditPage: undefined, callIdInput: "", call: undefined, staffPage: undefined, outcomePage: undefined, notice: undefined, error: undefined };
 
   constructor(root: HTMLElement, port: DashboardPort) {
@@ -70,6 +74,10 @@ export class DashboardController {
 
   private draw(): void {
     render(dashboardView(this.state, {
+      setKnowledgeField: (field, value) => { this.state[field] = value; },
+      saveKnowledgeDraft: () => { void this.saveKnowledgeDraft(); },
+      approveKnowledge: entry => { void this.changeKnowledgeApproval(entry, "approve"); },
+      revokeKnowledge: entry => { void this.changeKnowledgeApproval(entry, "revoke"); },
       setStopReason: value => { this.state.stopReasonInput = value; this.draw(); },
       stopWrites: () => { void this.stopWrites(); },
       resumeWrites: () => { void this.resumeWrites(); },
@@ -96,6 +104,11 @@ export class DashboardController {
     if (capabilities.ok) this.state.capabilities = capabilities.value;
     if (settings.ok) this.state.policy = settings.value;
     this.state.error = !settings.ok ? message(settings.error) : !capabilities.ok ? message(capabilities.error) : undefined;
+    if (capabilities.ok && capabilities.value.some(item => item.id === "knowledge.list.v1")) {
+      const knowledge = await this.port.knowledge();
+      if (knowledge.ok) this.state.knowledge = knowledge.value;
+      else this.state.error = message(knowledge.error);
+    }
     if (capabilities.ok && capabilities.value.some(item => item.id === "calls.writes.stop.read.v1")) {
       const stop = await this.port.readWriteStop();
       if (stop.ok) this.state.writeStop = stop.value;
@@ -127,6 +140,46 @@ export class DashboardController {
       else this.state.error = message(outcomes.error);
     }
     this.state.loading = false;
+    this.draw();
+  }
+
+  private async refreshKnowledge(): Promise<void> {
+    const result = await this.port.knowledge();
+    if (result.ok) this.state.knowledge = result.value;
+    else this.state.error = message(result.error);
+  }
+
+  private async saveKnowledgeDraft(): Promise<void> {
+    if (this.state.busy || !this.state.capabilities.some(item => item.id === "knowledge.draft.save.v1")) return;
+    const sourceRef = this.state.knowledgeSourceRef.trim();
+    const latest = this.state.knowledge?.filter(entry => entry.sourceRef === sourceRef).at(-1);
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.state.notice = undefined;
+    this.draw();
+    const result = await this.port.saveKnowledgeDraft({ sourceRef, expectedVersion: latest?.version ?? "0",
+      ownerRef: this.state.knowledgeOwnerRef.trim(), text: this.state.knowledgeText.trim(),
+      effectiveFrom: this.state.knowledgeFrom.trim(), effectiveUntil: this.state.knowledgeUntil.trim() });
+    if (result.ok) this.state.notice = `Draft ${result.value.sourceRef} saved as version ${result.value.version}. Approval is required.`;
+    else this.state.error = result.error.kind === "versionConflict" ? "Knowledge changed elsewhere. The list was refreshed." : message(result.error);
+    await this.refreshKnowledge();
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async changeKnowledgeApproval(entry: KnowledgeEntry, action: "approve" | "revoke"): Promise<void> {
+    if (this.state.busy || !this.state.capabilities.some(item => item.id === `knowledge.${action}.v1`)) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.state.notice = undefined;
+    this.draw();
+    const result = action === "approve"
+      ? await this.port.approveKnowledge(entry.sourceRef, entry.version)
+      : await this.port.revokeKnowledge(entry.sourceRef, entry.version);
+    if (result.ok) this.state.notice = `${entry.sourceRef} ${action === "approve" ? "approved" : "revoked"}.`;
+    else this.state.error = result.error.kind === "versionConflict" ? "Knowledge changed elsewhere. The list was refreshed." : message(result.error);
+    await this.refreshKnowledge();
+    this.state.busy = false;
     this.draw();
   }
 

@@ -9,11 +9,14 @@ export class EffectWorker {
   private readonly runtime: CallRuntime;
   private readonly host: HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost>;
   private readonly model: ModelWork | undefined;
+  private readonly knowledge: KnowledgeHost | undefined;
 
-  constructor(runtime: CallRuntime, host: HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost>, model?: ModelWork) {
+  constructor(runtime: CallRuntime, host: HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost>, model?: ModelWork,
+              knowledge?: KnowledgeHost) {
     this.runtime = runtime;
     this.host = host;
     this.model = model;
+    this.knowledge = knowledge ?? (host.readKnowledge ? host as KnowledgeHost : undefined);
   }
 
   async process(callId: string, effectId: string, now: string): Promise<void> {
@@ -42,8 +45,8 @@ export class EffectWorker {
       const answer = this.model?.answer(effect.taskRef);
       const valid = answer && createHash("sha256").update(JSON.stringify(answer.sourceRefs)).digest("hex") === effect.sourceRefsDigest;
       let result: Awaited<ReturnType<KnowledgeHost["readKnowledge"]>> = err({ kind: "unavailable" });
-      if (valid && this.host.readKnowledge) {
-        try { result = await this.host.readKnowledge(read.value.policy.scope, answer.sourceRefs); }
+      if (valid && this.knowledge) {
+        try { result = await this.knowledge.readKnowledge(read.value.policy.scope, answer.sourceRefs); }
         catch { result = err({ kind: "unavailable" }); }
       }
       const resolved = await this.runtime.acceptModelKnowledge(callId, effectId, result, now, valid ? answer.proposedText : undefined);

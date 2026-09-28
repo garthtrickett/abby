@@ -15,14 +15,17 @@ export class TextReception {
   private readonly ledger: LedgerStore;
   private readonly policy: PolicyStore;
   private readonly host: TextHost;
+  private readonly knowledge: KnowledgeHost & Partial<ModelKnowledgeContextHost>;
   private readonly availability: AvailabilityHost | undefined;
   private readonly appointments: AppointmentHost | undefined;
   private readonly model: ModelWork | undefined;
 
-  constructor(ledger: LedgerStore, policy: PolicyStore, host: TextHost, availability?: AvailabilityHost, appointments?: AppointmentHost, model?: ModelWork) {
+  constructor(ledger: LedgerStore, policy: PolicyStore, host: TextHost, availability?: AvailabilityHost, appointments?: AppointmentHost, model?: ModelWork,
+              knowledge?: KnowledgeHost & Partial<ModelKnowledgeContextHost>) {
     this.ledger = ledger;
     this.policy = policy;
     this.host = host;
+    this.knowledge = knowledge ?? host;
     this.availability = availability;
     this.appointments = appointments;
     this.model = model;
@@ -64,9 +67,9 @@ export class TextReception {
         ? runtime.acceptTurn(turn, { kind: "modelFallback" }, now) : prior;
     }
     let knowledge: readonly { sourceRef: string; approvedText: string }[] = [];
-    if (this.host.listModelKnowledge) {
+    if (this.knowledge.listModelKnowledge) {
       try {
-        const listed = await this.host.listModelKnowledge(scope, now);
+        const listed = await this.knowledge.listModelKnowledge(scope, now);
         if (!listed.ok || !Array.isArray(listed.value) || listed.value.length > 8 ||
             listed.value.some(source => !validKnowledgeSource(source, scope, now)) ||
             new Set(listed.value.map(source => source.sourceRef)).size !== listed.value.length) {
@@ -139,7 +142,7 @@ export class TextReception {
       interpretation = { kind: "knowledgeFailure", reason: "invalidQuery" };
     } else {
       try {
-        const read = await this.host.readKnowledge(scope, sourceRefs);
+        const read = await this.knowledge.readKnowledge(scope, sourceRefs);
         interpretation = read.ok
           ? { kind: "answer", sources: read.value, proposedText }
           : { kind: "knowledgeFailure", reason: read.error.kind };
@@ -210,7 +213,7 @@ export class TextReception {
     const runtime = this.runtime(scope);
     const read = await runtime.read(callId);
     if (!read.ok) return read;
-    const worker = new EffectWorker(runtime, this.host, this.model);
+    const worker = new EffectWorker(runtime, this.host, this.model, this.knowledge);
     for (const effect of Object.values(read.value.effects)) {
       if (effect.status !== "pending") continue;
       try {
