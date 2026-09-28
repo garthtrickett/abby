@@ -6,6 +6,7 @@ import { admissionReceipt, initialAdmittedState, initialState, sameAdmission } f
 import { validApprovedGreeting } from "../core/greeting.ts";
 import { LOCATION_CHOICE_TIMEOUT_MS, PENDING_LOCATION_LEASE_MS, closePendingLocationState, expiredPendingLocationState, pendingDueAt, pendingMatchesAdmission, policyMatchesPending, resolveLocationPrompt, startLocationPrompt, validPendingAdmission, validPendingLocation, validPendingRoute } from "../core/pending-location.ts";
 import type { LedgerStore } from "../core/ledger.ts";
+import type { EffectCallLeaseStore } from "../core/effect-call-lease.ts";
 import { transition } from "../core/transition.ts";
 import { validKnowledgeSnapshot } from "../core/knowledge-evidence.ts";
 import { READINESS_REQUIREMENTS, unprovenReadiness } from "../core/readiness.ts";
@@ -80,7 +81,7 @@ function auditPayload(action: TransitionAction): Record<string, string> {
   }
 }
 
-export class PostgresLedger implements LedgerStore {
+export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   private readonly db: Kysely<Database>;
   private readonly clockForTests: ((suggestedAt: string) => string) | undefined;
   private readonly readiness: AutomationReadiness;
@@ -611,6 +612,71 @@ export class PostgresLedger implements LedgerStore {
     } catch {
       return err({ kind: "storageFailure" });
     }
+  }
+
+  async claimEffectCall(callId: string, scope: LocationScope, owner: string, leaseMs: number, now: string): Promise<Result<boolean, TransitionFailure>> {
+    if (!callId || !scope.tenantId || !scope.clinicId || !scope.locationId || !owner || owner.length > 256 ||
+        !Number.isSafeInteger(leaseMs) || leaseMs < 1 || leaseMs > 300_000 || !Number.isFinite(Date.parse(now))) {
+      return err({ kind: "invalidTransition" });
+    }
+    try {
+      return await this.db.transaction().execute(async trx => {
+        const ledgerNow = await this.trustedNow(trx, now);
+        const expiresAt = new Date(Date.parse(ledgerNow) + leaseMs).toISOString();
+        const claimed = await sql<{ call_id: string }>`
+          insert into effect_call_leases (call_id, owner_token, expires_at)
+          select call_id, ${owner}, ${expiresAt}::timestamptz from calls
+          where call_id = ${callId} and tenant_id = ${scope.tenantId}
+            and clinic_id = ${scope.clinicId} and location_id = ${scope.locationId}
+          on conflict (call_id) do update
+            set owner_token = excluded.owner_token, expires_at = excluded.expires_at
+            where effect_call_leases.expires_at <= ${ledgerNow}::timestamptz
+          returning call_id`.execute(trx);
+        if (claimed.rows.length === 1) return ok(true);
+        const call = await trx.selectFrom("calls").select(["tenant_id", "clinic_id", "location_id"])
+          .where("call_id", "=", callId as CallsCallId).executeTakeFirst();
+        if (!call) return err({ kind: "callUnknown" });
+        if (call.tenant_id !== scope.tenantId || call.clinic_id !== scope.clinicId || call.location_id !== scope.locationId) {
+          return err({ kind: "scopeMismatch" });
+        }
+        return ok(false);
+      });
+    } catch { return err({ kind: "storageFailure" }); }
+  }
+
+  async renewEffectCall(callId: string, scope: LocationScope, owner: string, leaseMs: number, now: string): Promise<Result<boolean, TransitionFailure>> {
+    if (!callId || !scope.tenantId || !scope.clinicId || !scope.locationId || !owner || owner.length > 256 ||
+        !Number.isSafeInteger(leaseMs) || leaseMs < 1 || leaseMs > 300_000 || !Number.isFinite(Date.parse(now))) {
+      return err({ kind: "invalidTransition" });
+    }
+    try {
+      const ledgerNow = await this.trustedNow(this.db, now);
+      const expiresAt = new Date(Date.parse(ledgerNow) + leaseMs).toISOString();
+      const renewed = await sql<{ call_id: string }>`
+        update effect_call_leases set expires_at = ${expiresAt}::timestamptz
+        where call_id = ${callId} and owner_token = ${owner}
+          and expires_at > ${ledgerNow}::timestamptz
+          and exists (select 1 from calls where calls.call_id = effect_call_leases.call_id
+            and calls.tenant_id = ${scope.tenantId} and calls.clinic_id = ${scope.clinicId}
+            and calls.location_id = ${scope.locationId})
+        returning call_id`.execute(this.db);
+      return ok(renewed.rows.length === 1);
+    } catch { return err({ kind: "storageFailure" }); }
+  }
+
+  async releaseEffectCall(callId: string, scope: LocationScope, owner: string): Promise<Result<boolean, TransitionFailure>> {
+    if (!callId || !scope.tenantId || !scope.clinicId || !scope.locationId || !owner || owner.length > 256) {
+      return err({ kind: "invalidTransition" });
+    }
+    try {
+      const released = await sql<{ call_id: string }>`
+        delete from effect_call_leases where call_id = ${callId} and owner_token = ${owner}
+          and exists (select 1 from calls where calls.call_id = effect_call_leases.call_id
+            and calls.tenant_id = ${scope.tenantId} and calls.clinic_id = ${scope.clinicId}
+            and calls.location_id = ${scope.locationId})
+        returning call_id`.execute(this.db);
+      return ok(released.rows.length === 1);
+    } catch { return err({ kind: "storageFailure" }); }
   }
 
   async admit(callId: string, policy: CallPolicy, admission: Admission): Promise<Result<AdmissionResult, TransitionFailure>> {

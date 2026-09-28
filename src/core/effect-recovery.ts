@@ -1,5 +1,7 @@
 import { EffectWorker } from "./effect-worker.ts";
 import type { EffectWorkerOptions } from "./effect-worker.ts";
+import { EffectCallLeaseCoordinator } from "./effect-call-lease.ts";
+import type { EffectCallLeaseStore } from "./effect-call-lease.ts";
 import type { HostEffects, KnowledgeHost, OperatorAlertHost, StaffLifecycleHost } from "./host.ts";
 import type { LedgerStore } from "./ledger.ts";
 import { err, ok } from "./model.ts";
@@ -26,9 +28,10 @@ export class EffectRecovery {
   private readonly modelLookup: ModelWorkLookup | undefined;
   private readonly knowledgeLookup: KnowledgeLookup | undefined;
   private readonly workerOptions: EffectWorkerOptions;
+  private readonly leases: EffectCallLeaseCoordinator;
   private scanCursor: string | undefined;
 
-  constructor(ledger: LedgerStore, hostLookup: EffectHostLookup, scope?: LocationScope, modelLookup?: ModelWorkLookup,
+  constructor(ledger: LedgerStore & EffectCallLeaseStore, hostLookup: EffectHostLookup, scope?: LocationScope, modelLookup?: ModelWorkLookup,
               knowledgeLookup?: KnowledgeLookup, workerOptions: EffectWorkerOptions = {}) {
     this.ledger = ledger;
     this.hostLookup = hostLookup;
@@ -36,9 +39,11 @@ export class EffectRecovery {
     this.modelLookup = modelLookup;
     this.knowledgeLookup = knowledgeLookup;
     this.workerOptions = workerOptions;
+    this.leases = new EffectCallLeaseCoordinator(ledger);
   }
 
-  private async attempt(ref: RecoverableEffectRef, now: string): Promise<"processed" | "recovered" | "deferred" | { effectId: string; kind: "hostUnavailable" | "effectFailure" | "recoveryFailure" }> {
+  private async attempt(ref: RecoverableEffectRef, now: string, signal: AbortSignal): Promise<"processed" | "recovered" | "deferred" | { effectId: string; kind: "hostUnavailable" | "effectFailure" | "recoveryFailure" }> {
+    if (signal.aborted) return "deferred";
     const runtime = new CallRuntime(this.ledger, ref.scope);
     const current = await runtime.read(ref.callId);
     if (!current.ok) return { effectId: ref.effectId, kind: "recoveryFailure" };
@@ -67,7 +72,7 @@ export class EffectRecovery {
     catch { if (effect.kind === "modelKnowledge") return { effectId: ref.effectId, kind: "hostUnavailable" }; }
     if (effect.kind === "modelKnowledge" && this.knowledgeLookup && !knowledge) return { effectId: ref.effectId, kind: "hostUnavailable" };
     try {
-      await new EffectWorker(runtime, host, model, knowledge, this.workerOptions).process(ref.callId, ref.effectId, now);
+      await new EffectWorker(runtime, host, model, knowledge, { ...this.workerOptions, signal }).process(ref.callId, ref.effectId, now);
       return "processed";
     } catch {
       const latest = await runtime.read(ref.callId);
@@ -101,9 +106,17 @@ export class EffectRecovery {
     const groups = [...byCall.values()];
     for (let index = 0; index < groups.length; index += 4) {
       const batch = await Promise.all(groups.slice(index, index + 4).map(async group => {
-        const results: Awaited<ReturnType<EffectRecovery["attempt"]>>[] = [];
-        for (const ref of group) results.push(await this.attempt(ref, now));
-        return results;
+        try {
+          const leased = await this.leases.run(group[0]!.callId, group[0]!.scope, async signal => {
+            const results: Awaited<ReturnType<EffectRecovery["attempt"]>>[] = [];
+            for (const ref of group) results.push(await this.attempt(ref, now, signal));
+            return results;
+          });
+          if (!leased.ok || leased.value.kind === "lost") {
+            return group.map(ref => ({ effectId: ref.effectId, kind: "recoveryFailure" as const }));
+          }
+          return leased.value.kind === "busy" ? group.map(() => "deferred" as const) : leased.value.value;
+        } catch { return group.map(ref => ({ effectId: ref.effectId, kind: "recoveryFailure" as const })); }
       }));
       for (const result of batch) outcomes.push(...result);
     }
