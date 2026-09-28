@@ -31,6 +31,8 @@ export type PendingLocationCall = Readonly<{
   route: PendingLocationRoute;
   admission: Admission;
   status: "pending" | "expired" | "bound";
+  sessionLease?: SessionLease;
+  choiceEvidence?: Readonly<{ sessionId: string; leaseVersion: number; turnId: string; selectedLocationId: string; at: string }>;
 }>;
 export type PendingLocationResult = Readonly<{ kind: "created" | "duplicate"; pending: PendingLocationCall }>;
 export type PendingLocationExpiryResult = Readonly<{ kind: "expired" | "alreadyExpired" | "bound"; pending: PendingLocationCall }>;

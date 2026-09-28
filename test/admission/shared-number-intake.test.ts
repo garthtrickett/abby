@@ -52,7 +52,9 @@ function fixture(kind: "memory" | "postgres") {
   const intake = new SharedNumberIntakeService(ledger, router, admission, () => now);
   const event = (ref: string, dialedNumber = sharedNumber) =>
     ({ key: { accountRef: account, providerCallRef: `${id}-${ref}` }, dialedNumber, receivedAt: now });
-  return { main, other, foreign, ledger, policy, router, intake, event, account, sharedNumber, singleNumber,
+  const turn = (inbound: ReturnType<typeof event>, turnId = "choice") =>
+    ({ callId: callIdFor(inbound.key), sessionId: "session", turnId, text: "The other location", quality: "clear" as const, at: now });
+  return { main, other, foreign, ledger, policy, router, intake, event, turn, account, sharedNumber, singleNumber,
     identityReads: () => identityReads, policyReads: () => policyReads,
     replaceHost(host: ReferenceNumberRoutingHost) { routeHost = host; } };
 }
@@ -83,18 +85,30 @@ for (const kind of kinds) {
     const app = fixture(kind);
     const event = app.event("chosen");
     value(await app.intake.begin(event));
+    const unowned = await app.intake.choose(event, app.turn(event), app.other.locationId, 1);
+    assert.ok(!unowned.ok);
+    assert.equal(unowned.error.kind, "leaseLost");
+    assert.equal(app.policyReads(), 0);
+    value(await app.intake.attachSession(event, "session"));
+    const wrongSession = await app.intake.choose(event, { ...app.turn(event), sessionId: "other-session" }, app.other.locationId, 1);
+    assert.ok(!wrongSession.ok);
+    assert.equal(wrongSession.error.kind, "leaseLost");
+    const unclear = await app.intake.choose(event, { ...app.turn(event), quality: "needsClarification" }, app.other.locationId, 1);
+    assert.ok(!unclear.ok);
+    assert.equal(unclear.error.kind, "invalidTransition");
     assert.equal((await new CallRuntime(app.ledger, app.main).read(callIdFor(event.key))).ok, false);
     assert.equal((await new CallRuntime(app.ledger, app.other).read(callIdFor(event.key))).ok, false);
-    const invalid = await app.intake.choose(event, app.foreign.locationId);
+    const invalid = await app.intake.choose(event, app.turn(event), app.foreign.locationId, 1);
     assert.ok(!invalid.ok);
     assert.equal(invalid.error.kind, "invalidLocationChoice");
     assert.equal(app.policyReads(), 0);
     value(await app.policy.changeAutomationEnabled(app.other, "0", true, "clinic-admin"));
     value(await app.policy.changeBookingEnabled(app.other, "0", true, "clinic-admin"));
-    const chosen = value(await app.intake.choose(event, app.other.locationId));
+    const chosen = value(await app.intake.choose(event, app.turn(event), app.other.locationId, 1));
     assert.equal(chosen.kind, "created");
     assert.deepEqual(chosen.receipt.scope, app.other);
     assert.equal(value(await new CallRuntime(app.ledger, app.other).read(chosen.receipt.callId)).policy.numberRouteVersion, "route-v1");
+    assert.equal(value(await app.ledger.findPendingLocation(chosen.receipt.callId))?.choiceEvidence?.turnId, "choice");
     assert.equal((await new CallRuntime(app.ledger, app.main).read(chosen.receipt.callId)).ok, false);
     assert.equal((await new CallRuntime(app.ledger, app.foreign).read(chosen.receipt.callId)).ok, false);
     const runtime = new CallRuntime(app.ledger, app.other);
@@ -114,22 +128,26 @@ for (const kind of kinds) {
     const retry = value(await app.intake.begin(event));
     assert.equal(retry.kind, "admitted");
     assert.equal(retry.admission.kind, "duplicate");
-    const repeatedChoice = value(await app.intake.choose(event, app.other.locationId));
+    const repeatedChoice = value(await app.intake.choose(event, app.turn(event), app.other.locationId, 1));
     assert.equal(repeatedChoice.kind, "duplicate");
-    const changedChoice = await app.intake.choose(event, app.main.locationId);
+    const changedLease = await app.intake.choose(event, app.turn(event), app.other.locationId, 2);
+    assert.ok(!changedLease.ok);
+    assert.equal(changedLease.error.kind, "keyMismatch");
+    const changedChoice = await app.intake.choose(event, app.turn(event), app.main.locationId, 1);
     assert.ok(!changedChoice.ok);
-    assert.equal(changedChoice.error.kind, "invalidLocationChoice");
+    assert.equal(changedChoice.error.kind, "keyMismatch");
   });
 
   test(`${kind}: a changed host route prevents stale shared-number choice`, async () => {
     const app = fixture(kind);
     const event = app.event("stale");
     value(await app.intake.begin(event));
+    value(await app.intake.attachSession(event, "session"));
     app.replaceHost(new ReferenceNumberRoutingHost([
       { accountRef: app.account, dialedNumber: app.sharedNumber, ...app.main, routeVersion: "route-v2" },
       { accountRef: app.account, dialedNumber: app.sharedNumber, ...app.other, routeVersion: "route-v2" },
     ]));
-    const choice = await app.intake.choose(event, app.main.locationId);
+    const choice = await app.intake.choose(event, app.turn(event), app.main.locationId, 1);
     assert.ok(!choice.ok);
     assert.equal(choice.error.kind, "staleLocationChoice");
     assert.equal(app.policyReads(), 0);
@@ -140,14 +158,36 @@ for (const kind of kinds) {
     const app = fixture(kind);
     const event = app.event("disabled");
     value(await app.intake.begin(event));
-    const disabled = await app.intake.choose(event, app.other.locationId);
+    value(await app.intake.attachSession(event, "session"));
+    const disabled = await app.intake.choose(event, app.turn(event), app.other.locationId, 1);
     assert.ok(!disabled.ok);
     assert.equal(disabled.error.kind, "automationDisabled");
     assert.equal(value(await app.ledger.findAdmission(callIdFor(event.key))), null);
     value(await app.policy.changeAutomationEnabled(app.other, "0", true, "clinic-admin"));
-    const admitted = value(await app.intake.choose(event, app.other.locationId));
+    const admitted = value(await app.intake.choose(event, app.turn(event), app.other.locationId, 1));
     assert.equal(admitted.kind, "created");
     assert.deepEqual(admitted.receipt.scope, app.other);
+  });
+
+  test(`${kind}: renewed pre-location lease fences the final choice turn`, async () => {
+    const app = fixture(kind);
+    const event = app.event("renewed-choice");
+    value(await app.intake.begin(event));
+    const wrongNumber = await app.intake.attachSession({ ...event, dialedNumber: "+6125550199" }, "session");
+    assert.ok(!wrongNumber.ok);
+    assert.equal(wrongNumber.error.kind, "callConflict");
+    const attached = value(await app.intake.attachSession(event, "session"));
+    assert.equal(attached.sessionLease?.version, 1);
+    const renewed = value(await app.intake.renewSession(event, "session", 1));
+    assert.equal(renewed.sessionLease?.version, 2);
+    const staleTurn = await app.intake.choose(event, app.turn(event), app.main.locationId, 1);
+    assert.ok(!staleTurn.ok);
+    assert.equal(staleTurn.error.kind, "leaseLost");
+    assert.equal(app.policyReads(), 0);
+    value(await app.policy.changeAutomationEnabled(app.main, "0", true, "clinic-admin"));
+    const chosen = value(await app.intake.choose(event, app.turn(event), app.main.locationId, 2));
+    assert.equal(chosen.kind, "created");
+    assert.deepEqual(chosen.receipt.scope, app.main);
   });
 
   test(`${kind}: concurrent different choices create only one scoped call`, async () => {
@@ -155,13 +195,15 @@ for (const kind of kinds) {
     value(await app.policy.changeAutomationEnabled(app.main, "0", true, "clinic-admin"));
     const event = app.event("race");
     value(await app.intake.begin(event));
+    value(await app.intake.attachSession(event, "session"));
     const [first, second] = await Promise.all([
-      app.intake.choose(event, app.main.locationId), app.intake.choose(event, app.other.locationId),
+      app.intake.choose(event, app.turn(event, "first"), app.main.locationId, 1),
+      app.intake.choose(event, app.turn(event, "second"), app.other.locationId, 1),
     ]);
     assert.equal(Number(first.ok) + Number(second.ok), 1);
     const rejected = first.ok ? second : first;
     assert.ok(!rejected.ok);
-    assert.ok(rejected.error.kind === "scopeMismatch" || rejected.error.kind === "invalidLocationChoice");
+    assert.ok(rejected.error.kind === "scopeMismatch" || rejected.error.kind === "invalidLocationChoice" || rejected.error.kind === "keyMismatch");
     const receipt = value(await app.ledger.findAdmission(callIdFor(event.key)));
     assert.ok(receipt);
     assert.ok(receipt.scope.locationId === "main" || receipt.scope.locationId === "other");
