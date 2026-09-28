@@ -3,15 +3,27 @@ import type { Kysely } from "kysely";
 import { up as up001, down as down001 } from "./migrations/001_text_probe.ts";
 import { up as up002, down as down002 } from "./migrations/002_booking_setting_audit.ts";
 
-export async function migrate(db: Kysely<unknown>, direction: "up" | "down" = "up"): Promise<void> {
-  const migrator = new Migrator({
+function createMigrator<DB>(db: Kysely<DB>): Migrator {
+  return new Migrator({
     db,
     provider: { getMigrations: async () => ({
       "001_text_probe": { up: up001, down: down001 },
       "002_booking_setting_audit": { up: up002, down: down002 },
     }) },
   });
-  const outcome = direction === "up" ? await migrator.migrateToLatest() : await migrator.migrateDown();
+}
+
+function assertMigration(outcome: Awaited<ReturnType<Migrator["migrateToLatest"]>>): void {
   if (outcome.error) throw outcome.error;
   if (outcome.results?.some(result => result.status !== "Success")) throw new Error("migration failed");
+}
+
+export async function migrate<DB>(db: Kysely<DB>, direction: "up" | "down" = "up"): Promise<void> {
+  const migrator = createMigrator(db);
+  assertMigration(direction === "up" ? await migrator.migrateToLatest() : await migrator.migrateDown());
+}
+
+/** Used by the upgrade probe to boot an actual older schema before seeding data. */
+export async function migrateTo<DB>(db: Kysely<DB>, target: "001_text_probe" | "002_booking_setting_audit"): Promise<void> {
+  assertMigration(await createMigrator(db).migrateTo(target));
 }

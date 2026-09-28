@@ -23,4 +23,5 @@ if [[ "$ready" != true ]]; then
 fi
 
 export DATABASE_URL="postgresql://postgres@127.0.0.1:$port/postgres"
+export ABBY_ISOLATED_POSTGRES_PROBE=1
 "$@"
