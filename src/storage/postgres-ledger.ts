@@ -1,7 +1,8 @@
+import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import { err, ok } from "../core/model.ts";
-import type { CallPolicy, CallState, LocationScope, Result, TransitionAction, TransitionFailure } from "../core/model.ts";
-import { initialState } from "../core/ledger.ts";
+import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, Result, TransitionAction, TransitionFailure } from "../core/model.ts";
+import { admissionReceipt, initialState, sameAdmission } from "../core/ledger.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { transition } from "../core/transition.ts";
 import type Database from "./generated/Database.ts";
@@ -13,14 +14,20 @@ import type { StaffItemsTaskKey } from "./generated/public/StaffItems.ts";
 function decodeState(value: unknown, callId: string): Result<CallState, TransitionFailure> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return err({ kind: "storageCorrupt" });
   const data = value as Record<string, unknown>;
-  if (data.callId !== callId || !Number.isInteger(data.version) || typeof data.policy !== "object" || data.policy === null ||
+  if (data.callId !== callId || !Number.isInteger(data.version) || !["starting", "active", "ended"].includes(String(data.lifecycle)) || typeof data.policy !== "object" || data.policy === null ||
       typeof data.actions !== "object" || data.actions === null || typeof data.effects !== "object" || data.effects === null ||
-      !Array.isArray(data.processedTurnIds) || typeof data.processedTurnDigests !== "object" || data.processedTurnDigests === null || !Array.isArray(data.callerMessages)) return err({ kind: "storageCorrupt" });
+      !Array.isArray(data.processedTurnIds) || typeof data.processedTurnDigests !== "object" || data.processedTurnDigests === null || !Array.isArray(data.callerMessages) ||
+      (data.lifecycle === "starting" && (typeof data.admission !== "object" || data.admission === null))) return err({ kind: "storageCorrupt" });
   return ok(value as CallState);
 }
 
 function auditPayload(action: TransitionAction): Record<string, string> {
   switch (action.kind) {
+    case "sessionActivated":
+    case "sessionRenewed":
+    case "sessionExpired":
+    case "callEnded": return { sessionId: action.sessionId };
+    case "admissionExpired": return {};
     case "callerTurn": return { turnId: action.turn.turnId, interpretation: action.interpretation.kind };
     case "presentationStarted":
     case "presentationResolved": return { presentationId: action.presentationId };
@@ -50,6 +57,99 @@ export class PostgresLedger implements LedgerStore {
         state,
       }).onConflict(conflict => conflict.column("call_id").doNothing()).returning("call_id").executeTakeFirst();
       return inserted ? ok(state) : err({ kind: "invalidTransition" });
+    } catch {
+      return err({ kind: "storageFailure" });
+    }
+  }
+
+  async findAdmission(callId: string): Promise<Result<AdmissionReceipt | null, TransitionFailure>> {
+    try {
+      const row = await this.db.selectFrom("calls").select("state").where("call_id", "=", callId as CallsCallId).executeTakeFirst();
+      if (!row) return ok(null);
+      const decoded = decodeState(row.state, callId);
+      return decoded.ok ? ok(admissionReceipt(decoded.value)) : decoded;
+    } catch {
+      return err({ kind: "storageFailure" });
+    }
+  }
+
+  async findExpiredAdmissions(now: string, scope?: LocationScope): Promise<Result<readonly AdmissionReceipt[], TransitionFailure>> {
+    if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
+    try {
+      let query = this.db.selectFrom("calls").select(["call_id", "state"])
+        .where(sql<boolean>`state->>'lifecycle' = 'starting'`)
+        .where(sql<boolean>`(state->'admission'->>'deadline')::timestamptz <= ${now}::timestamptz`);
+      if (scope) query = query.where("tenant_id", "=", scope.tenantId).where("clinic_id", "=", scope.clinicId).where("location_id", "=", scope.locationId);
+      const rows = await query.limit(100).execute();
+      const receipts: AdmissionReceipt[] = [];
+      for (const row of rows) {
+        const decoded = decodeState(row.state, row.call_id);
+        if (!decoded.ok) return decoded;
+        const receipt = admissionReceipt(decoded.value);
+        if (!receipt) return err({ kind: "storageCorrupt" });
+        receipts.push(receipt);
+      }
+      return ok(receipts);
+    } catch {
+      return err({ kind: "storageFailure" });
+    }
+  }
+
+  async findExpiredSessions(now: string, scope?: LocationScope): Promise<Result<readonly ActiveSessionReceipt[], TransitionFailure>> {
+    if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
+    try {
+      let query = this.db.selectFrom("calls").select(["call_id", "state"])
+        .where(sql<boolean>`state->>'lifecycle' = 'active'`)
+        .where(sql<boolean>`(state->'sessionLease'->>'expiresAt')::timestamptz <= ${now}::timestamptz`);
+      if (scope) query = query.where("tenant_id", "=", scope.tenantId).where("clinic_id", "=", scope.clinicId).where("location_id", "=", scope.locationId);
+      const rows = await query.limit(100).execute();
+      const receipts: ActiveSessionReceipt[] = [];
+      for (const row of rows) {
+        const decoded = decodeState(row.state, row.call_id);
+        if (!decoded.ok) return decoded;
+        if (!decoded.value.sessionLease) return err({ kind: "storageCorrupt" });
+        receipts.push({ callId: row.call_id, scope: decoded.value.policy.scope, lease: decoded.value.sessionLease });
+      }
+      return ok(receipts);
+    } catch {
+      return err({ kind: "storageFailure" });
+    }
+  }
+
+  async admit(callId: string, policy: CallPolicy, admission: Admission): Promise<Result<AdmissionResult, TransitionFailure>> {
+    if (!callId || !admission.key.accountRef || !admission.key.providerCallRef || !admission.dialedNumber ||
+        !Number.isFinite(Date.parse(admission.acceptedAt)) || Date.parse(admission.deadline) <= Date.parse(admission.acceptedAt)) return err({ kind: "invalidTransition" });
+    const state = initialState(callId, policy);
+    state.lifecycle = "starting";
+    state.admission = structuredClone(admission);
+    try {
+      return await this.db.transaction().execute(async trx => {
+        const inserted = await trx.insertInto("calls").values({
+          call_id: callId as CallsCallId,
+          tenant_id: policy.scope.tenantId,
+          clinic_id: policy.scope.clinicId,
+          location_id: policy.scope.locationId,
+          version: 0,
+          policy_version: policy.policyVersion,
+          state,
+        }).onConflict(conflict => conflict.column("call_id").doNothing()).returning("call_id").executeTakeFirst();
+        if (inserted) {
+          await trx.insertInto("call_events").values({
+            call_id: callId as CallsCallId,
+            tenant_id: policy.scope.tenantId,
+            sequence: 0 as CallEventsSequence,
+            kind: "callAdmitted",
+            payload: { accountRef: admission.key.accountRef, providerCallRef: admission.key.providerCallRef, dialedNumber: admission.dialedNumber },
+          }).execute();
+          return ok({ kind: "created", receipt: admissionReceipt(state)! });
+        }
+        const row = await trx.selectFrom("calls").select("state").where("call_id", "=", callId as CallsCallId).executeTakeFirstOrThrow();
+        const decoded = decodeState(row.state, callId);
+        if (!decoded.ok) return decoded;
+        const receipt = admissionReceipt(decoded.value);
+        return receipt && sameAdmission(receipt.admission, admission)
+          ? ok({ kind: "duplicate", receipt }) : err({ kind: "callConflict" });
+      });
     } catch {
       return err({ kind: "storageFailure" });
     }
