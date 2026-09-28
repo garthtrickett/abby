@@ -8,13 +8,32 @@ function validRef(value: unknown): value is string {
   return typeof value === "string" && !!value.trim() && value.length <= 256;
 }
 
+export function normalizedSpokenName(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length > 80 || /[\p{Cc}\p{Cf}]/u.test(value)) return undefined;
+  const normalized = value.trim().replace(/\s+/gu, " ").toLocaleLowerCase("en-AU");
+  return normalized && /^[\p{L}\p{N}](?:[\p{L}\p{N} .,'&-]*[\p{L}\p{N}])?$/u.test(normalized) ? normalized : undefined;
+}
+
+export function validCandidateNames(ids: readonly string[], names: unknown): boolean {
+  if (!Array.isArray(names) || names.length !== ids.length) return false;
+  const normalized = new Set<string>();
+  return names.every((item, index) => {
+    const name = item && typeof item === "object" ? item as { locationId?: unknown; spokenName?: unknown } : undefined;
+    const key = normalizedSpokenName(name?.spokenName);
+    if (name?.locationId !== ids[index] || !key || normalized.has(key)) return false;
+    normalized.add(key);
+    return true;
+  });
+}
+
 export function validPendingRoute(route: unknown): route is PendingLocationRoute {
   if (!route || typeof route !== "object") return false;
   const value = route as Partial<PendingLocationRoute>;
   return validRef(value.tenantId) && validRef(value.clinicId) && validRef(value.routeVersion) &&
     Array.isArray(value.candidateLocationIds) && value.candidateLocationIds.length >= 2 &&
     value.candidateLocationIds.length <= 32 && value.candidateLocationIds.every(validRef) &&
-    new Set(value.candidateLocationIds).size === value.candidateLocationIds.length;
+    new Set(value.candidateLocationIds).size === value.candidateLocationIds.length &&
+    validCandidateNames(value.candidateLocationIds, value.candidateNames);
 }
 
 export function pendingCallId(key: Admission["key"]): string {

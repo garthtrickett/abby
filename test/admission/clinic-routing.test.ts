@@ -39,8 +39,8 @@ function fixture(kind: "memory" | "postgres") {
   const ambiguousNumber = "+6125550102";
   const assignments = [
     { accountRef: account, dialedNumber: number, ...main, routeVersion: "route-v1" },
-    { accountRef: account, dialedNumber: sharedNumber, ...main, routeVersion: "route-v1" },
-    { accountRef: account, dialedNumber: sharedNumber, ...otherLocation, routeVersion: "route-v1" },
+    { accountRef: account, dialedNumber: sharedNumber, ...main, spokenName: "Main Street", routeVersion: "route-v1" },
+    { accountRef: account, dialedNumber: sharedNumber, ...otherLocation, spokenName: "Northside", routeVersion: "route-v1" },
     { accountRef: account, dialedNumber: ambiguousNumber, ...main, routeVersion: "route-v1" },
     { accountRef: account, dialedNumber: ambiguousNumber, ...foreign, routeVersion: "route-v1" },
     { accountRef: `other-${account}`, dialedNumber: number, ...foreign, routeVersion: "foreign-route-v1" },
@@ -190,8 +190,8 @@ for (const kind of kinds) {
     const choice = { tenantId: identity.tenantId, clinicId: identity.clinicId,
       locationId: app.main.locationId, routeVersion: identity.routeVersion };
     app.replaceHost(new ReferenceNumberRoutingHost([
-      { accountRef: app.account, dialedNumber: app.sharedNumber, ...app.main, routeVersion: "route-v2" },
-      { accountRef: app.account, dialedNumber: app.sharedNumber, ...app.otherLocation, routeVersion: "route-v2" },
+      { accountRef: app.account, dialedNumber: app.sharedNumber, ...app.main, spokenName: "Main Street", routeVersion: "route-v2" },
+      { accountRef: app.account, dialedNumber: app.sharedNumber, ...app.otherLocation, spokenName: "Northside", routeVersion: "route-v2" },
     ]));
     const event = app.event("stale-choice", app.sharedNumber);
     const selected = new CallAdmissionService(app.ledger,

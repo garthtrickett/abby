@@ -2,6 +2,7 @@ import type { PolicyStore } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { CallPolicy, LocationScope, Result } from "../core/model.ts";
 import type { PolicyResolver, RouteFailure } from "../voice/admission.ts";
+import { validCandidateNames } from "../core/pending-location.ts";
 
 export type ClinicIdentity = Readonly<{
   accountRef: string;
@@ -9,6 +10,7 @@ export type ClinicIdentity = Readonly<{
   tenantId: string;
   clinicId: string;
   candidateLocationIds: readonly string[];
+  candidateNames?: readonly Readonly<{ locationId: string; spokenName: string }>[];
   routeVersion: string;
 }>;
 
@@ -31,7 +33,8 @@ function validIdentity(identity: unknown, accountRef: string, dialedNumber: stri
     validRef(value.tenantId) && validRef(value.clinicId) && validRef(value.routeVersion) &&
     Array.isArray(value.candidateLocationIds) && value.candidateLocationIds.length >= 1 &&
     value.candidateLocationIds.length <= 32 && value.candidateLocationIds.every(validRef) &&
-    new Set(value.candidateLocationIds).size === value.candidateLocationIds.length;
+    new Set(value.candidateLocationIds).size === value.candidateLocationIds.length &&
+    (value.candidateLocationIds.length === 1 || validCandidateNames(value.candidateLocationIds, value.candidateNames));
 }
 
 /** Resolves only an unambiguous location; a shared-number choice needs its own call transition. */
@@ -102,6 +105,7 @@ export type ReferenceNumberAssignment = Readonly<{
   tenantId: string;
   clinicId: string;
   locationId: string;
+  spokenName?: string;
   routeVersion: string;
 }>;
 
@@ -127,7 +131,13 @@ export class ReferenceNumberRoutingHost implements ClinicNumberRoutingHost {
     if (versions.size !== 1) return err({ kind: "unavailable" });
     const candidateLocationIds = [...new Set(rows.map(row => row.locationId))].sort();
     if (candidateLocationIds.length > 32) return err({ kind: "unavailable" });
+    const candidateNames = candidateLocationIds.map(locationId => {
+      const names = [...new Set(rows.filter(row => row.locationId === locationId).map(row => row.spokenName))];
+      return { locationId, spokenName: names.length === 1 ? names[0] : undefined };
+    });
+    if (candidateLocationIds.length > 1 && !validCandidateNames(candidateLocationIds, candidateNames)) return err({ kind: "unavailable" });
     return ok({ accountRef, dialedNumber, tenantId: rows[0]!.tenantId, clinicId: rows[0]!.clinicId,
-      candidateLocationIds, routeVersion: rows[0]!.routeVersion });
+      candidateLocationIds, ...(candidateLocationIds.length > 1 ? { candidateNames: candidateNames as { locationId: string; spokenName: string }[] } : {}),
+      routeVersion: rows[0]!.routeVersion });
   }
 }

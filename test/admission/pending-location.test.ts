@@ -24,7 +24,9 @@ function fixture(kind: "memory" | "postgres") {
   const id = `${kind}-pending-${++sequence}`;
   const scope: LocationScope = { tenantId: `tenant-${id}`, clinicId: `clinic-${id}`, locationId: "main" };
   const route: PendingLocationRoute = { tenantId: scope.tenantId, clinicId: scope.clinicId,
-    candidateLocationIds: ["main", "other"], routeVersion: "route-v1" };
+    candidateLocationIds: ["main", "other"], candidateNames: [
+      { locationId: "main", spokenName: "Main Street" }, { locationId: "other", spokenName: "Northside" },
+    ], routeVersion: "route-v1" };
   const key = { accountRef: `account-${id}`, providerCallRef: `call-${id}` };
   const callId = callIdFor(key);
   const admission: Admission = { key, dialedNumber: "+6125550101", acceptedAt: now,
