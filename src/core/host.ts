@@ -2,6 +2,15 @@ import type { ActionRequest, ApprovedKnowledge, AvailabilityRead, AvailabilityRe
 
 export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable"; target: "patient" | "offer" }>;
 export type PolicyFailure = Readonly<{ kind: "versionConflict" | "invalidValue" | "storageFailure" }>;
+export type BookingSettingAuditEntry = Readonly<{
+  version: string;
+  enabled: boolean;
+  provenance: "recorded" | "legacyUnattributed";
+  actorRef?: string;
+  previousEnabled?: boolean;
+  changedAt?: string;
+}>;
+export type BookingSettingAuditPage = Readonly<{ entries: readonly BookingSettingAuditEntry[]; nextAfterVersion?: number }>;
 export type KnowledgeReadFailure = Readonly<{ kind: "invalidQuery" | "unavailable" }>;
 
 export interface KnowledgeHost {
@@ -35,5 +44,6 @@ export interface OperatorAlertHost {
 
 export interface PolicyStore {
   read(scope: LocationScope): Promise<Result<CallPolicy, PolicyFailure>>;
-  changeBookingEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, PolicyFailure>>;
+  changeBookingEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
+  listBookingChanges(scope: LocationScope, afterVersion?: number): Promise<Result<BookingSettingAuditPage, PolicyFailure>>;
 }

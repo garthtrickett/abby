@@ -26,6 +26,12 @@ export default interface ClinicSettingsTable {
   version: ColumnType<ClinicSettingsVersion, ClinicSettingsVersion, ClinicSettingsVersion>;
 
   policy: ColumnType<unknown, unknown, unknown>;
+
+  changed_by: ColumnType<string | null, string | null, string | null>;
+
+  previous_booking_enabled: ColumnType<boolean | null, boolean | null, boolean | null>;
+
+  changed_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
 }
 
 export type ClinicSettings = Selectable<ClinicSettingsTable>;

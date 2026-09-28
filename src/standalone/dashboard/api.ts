@@ -1,5 +1,6 @@
 import { CALL_TERMINAL_REASONS, err, ok } from "../../core/model.ts";
 import type { CallPolicy, Result, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
+import type { BookingSettingAuditPage } from "../../core/host.ts";
 import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor, GatewayFailure } from "../../reference/command-gateway.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
@@ -9,6 +10,7 @@ export type DashboardFailure = GatewayFailure | Readonly<{ kind: "transportUnava
 export type DashboardPort = Readonly<{
   capabilities(): Promise<Result<readonly CapabilityDescriptor[], DashboardFailure>>;
   settings(): Promise<Result<CallPolicy, DashboardFailure>>;
+  bookingAudit(afterVersion?: number): Promise<Result<BookingSettingAuditPage, DashboardFailure>>;
   changeBookingEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   callSummary(callId: string): Promise<Result<CallSummary, DashboardFailure>>;
   callOutcomes(afterCallId?: string): Promise<Result<CallOutcomePage, DashboardFailure>>;
@@ -53,6 +55,25 @@ export class FetchDashboardPort implements DashboardPort {
   async settings(): Promise<Result<CallPolicy, DashboardFailure>> {
     const result = await request("/api/settings");
     return result.ok ? policy(result.value) : result;
+  }
+
+  async bookingAudit(afterVersion?: number): Promise<Result<BookingSettingAuditPage, DashboardFailure>> {
+    const result = await request(`/api/settings/booking-audit${afterVersion === undefined ? "" : `?after=${afterVersion}`}`);
+    if (!result.ok) return result;
+    const reply = record(result.value);
+    const page = record(reply?.page);
+    if (reply?.kind !== "bookingSettingAudit" || !page || !Array.isArray(page.entries) ||
+        (page.nextAfterVersion !== undefined && (!Number.isSafeInteger(page.nextAfterVersion) || Number(page.nextAfterVersion) < 0)) ||
+        !page.entries.every(value => {
+          const entry = record(value);
+          return entry && typeof entry.version === "string" && /^(0|[1-9][0-9]*)$/.test(entry.version) &&
+            typeof entry.enabled === "boolean" && (entry.provenance === "recorded"
+              ? typeof entry.actorRef === "string" && !!entry.actorRef && typeof entry.previousEnabled === "boolean" &&
+                typeof entry.changedAt === "string" && Number.isFinite(Date.parse(entry.changedAt))
+              : entry.provenance === "legacyUnattributed" && entry.actorRef === undefined &&
+                entry.previousEnabled === undefined && entry.changedAt === undefined);
+        })) return err({ kind: "malformed" });
+    return ok(page as BookingSettingAuditPage);
   }
 
   async changeBookingEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>> {

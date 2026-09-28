@@ -1,5 +1,6 @@
+import { sql } from "kysely";
 import type { Kysely } from "kysely";
-import type { PolicyFailure, PolicyStore } from "../core/host.ts";
+import type { BookingSettingAuditEntry, BookingSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
 import type Database from "./generated/Database.ts";
@@ -45,8 +46,8 @@ export class PostgresPolicyStore implements PolicyStore {
     }
   }
 
-  async changeBookingEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, PolicyFailure>> {
-    if (typeof enabled !== "boolean") return err({ kind: "invalidValue" });
+  async changeBookingEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+    if (typeof enabled !== "boolean" || typeof actorRef !== "string" || !actorRef.trim() || actorRef.length > 256) return err({ kind: "invalidValue" });
     try {
       return await this.db.transaction().execute(async trx => {
         const ids = {
@@ -71,9 +72,40 @@ export class PostgresPolicyStore implements PolicyStore {
           bookingEnabled: enabled,
           capabilities: { ...decoded.value.capabilities, book: enabled ? this.hostBookingMode : "unavailable" },
         };
-        await trx.insertInto("clinic_settings").values({ ...ids, version: latest.version + 1 as ClinicSettingsVersion, policy: next }).execute();
+        await trx.insertInto("clinic_settings").values({ ...ids, version: latest.version + 1 as ClinicSettingsVersion, policy: next,
+          changed_by: actorRef, previous_booking_enabled: decoded.value.bookingEnabled, changed_at: sql`clock_timestamp()` }).execute();
         return ok(structuredClone(next));
       });
+    } catch {
+      return err({ kind: "storageFailure" });
+    }
+  }
+
+  async listBookingChanges(scope: LocationScope, afterVersion?: number): Promise<Result<BookingSettingAuditPage, PolicyFailure>> {
+    if (afterVersion !== undefined && (!Number.isSafeInteger(afterVersion) || afterVersion < 0)) return err({ kind: "invalidValue" });
+    try {
+      const rows = await this.db.selectFrom("clinic_settings")
+        .select(["version", "policy", "changed_by", "previous_booking_enabled", "changed_at"])
+        .where("tenant_id", "=", scope.tenantId as ClinicSettingsTenantId)
+        .where("clinic_id", "=", scope.clinicId as ClinicSettingsClinicId)
+        .where("location_id", "=", scope.locationId as ClinicSettingsLocationId)
+        .where("version", ">", (afterVersion ?? 0) as ClinicSettingsVersion)
+        .orderBy("version", "asc").limit(50).execute();
+      const entries: BookingSettingAuditEntry[] = [];
+      for (const row of rows) {
+        const decoded = decodePolicy(row.policy, scope, row.version);
+        if (!decoded.ok) return decoded;
+        const metadata = [row.changed_by, row.previous_booking_enabled, row.changed_at];
+        if (metadata.every(value => value === null)) {
+          entries.push({ version: String(row.version), enabled: decoded.value.bookingEnabled, provenance: "legacyUnattributed" });
+          continue;
+        }
+        if (typeof row.changed_by !== "string" || !row.changed_by.trim() || typeof row.previous_booking_enabled !== "boolean" ||
+            !(row.changed_at instanceof Date) || !Number.isFinite(row.changed_at.getTime())) return err({ kind: "storageFailure" });
+        entries.push({ version: String(row.version), enabled: decoded.value.bookingEnabled, provenance: "recorded",
+          actorRef: row.changed_by, previousEnabled: row.previous_booking_enabled, changedAt: row.changed_at.toISOString() });
+      }
+      return ok({ entries, ...(entries.length === 50 ? { nextAfterVersion: Number(entries[49]!.version) } : {}) });
     } catch {
       return err({ kind: "storageFailure" });
     }

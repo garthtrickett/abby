@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
+import { sql } from "kysely";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import type { CallState, CapabilityMode, FinalCallerTurn, LocationScope, Result } from "../../src/core/model.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
@@ -43,6 +44,11 @@ function proposal(reply: GatewayReply): CallState {
 function settings(reply: GatewayReply) {
   assert.equal(reply.kind, "settings");
   return reply.policy;
+}
+
+function bookingAudit(reply: GatewayReply) {
+  assert.equal(reply.kind, "bookingSettingAudit");
+  return reply.page;
 }
 
 function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = false, hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "execute", availability?: AvailabilityHost) {
@@ -154,6 +160,29 @@ for (const kind of kinds) {
     const otherScope = { tenantId: `${app.scope.tenantId}-other`, clinicId: app.scope.clinicId, locationId: app.scope.locationId };
     assert.equal(value(await reloaded.read(otherScope)).capabilities.book, "unavailable");
     error(await app.reception.read(otherScope, first), "callUnknown");
+  });
+
+  test(`${kind}: admin setting changes keep an attributed, scoped audit across reload`, async () => {
+    const app = fixture(kind, `${kind}-setting-audit`);
+    assert.deepEqual(bookingAudit(value(await app.admin.submit({ kind: "settings.appointments.booking.audit.v1" }))).entries, []);
+    error(await app.agent.submit({ kind: "settings.appointments.booking.audit.v1" }), "forbidden");
+    settings(value(await app.admin.submit({ kind: "settings.appointments.booking.enabled.change.v1", expectedVersion: "0", enabled: true })));
+    settings(value(await app.admin.submit({ kind: "settings.appointments.booking.enabled.change.v1", expectedVersion: "1", enabled: false })));
+    error(await app.admin.submit({ kind: "settings.appointments.booking.enabled.change.v1", expectedVersion: "1", enabled: true }), "versionConflict");
+    const history = bookingAudit(value(await app.admin.submit({ kind: "settings.appointments.booking.audit.v1" })));
+    assert.deepEqual(history.entries.map(entry => [entry.version, entry.previousEnabled, entry.enabled, entry.provenance, entry.actorRef]), [
+      ["1", false, true, "recorded", `admin-${kind}-setting-audit`],
+      ["2", true, false, "recorded", `admin-${kind}-setting-audit`],
+    ]);
+    assert.equal(history.entries.every(entry => !!entry.changedAt && Number.isFinite(Date.parse(entry.changedAt))), true);
+    assert.deepEqual(bookingAudit(value(await app.admin.submit({ kind: "settings.appointments.booking.audit.v1", afterVersion: 1 }))).entries.map(entry => entry.version), ["2"]);
+    error(await app.admin.submit({ kind: "settings.appointments.booking.audit.v1", afterVersion: -1 }), "invalid");
+    const reopened: PolicyStore = kind === "standalone" ? new PostgresPolicyStore(db!, referenceDefaultPolicy) : app.policy;
+    const persisted = value(await reopened.listBookingChanges(app.scope));
+    assert.deepEqual(persisted.entries, history.entries);
+    const otherScope = { ...app.scope, tenantId: `${app.scope.tenantId}-other` };
+    assert.deepEqual(value(await reopened.listBookingChanges(otherScope)).entries, []);
+    assert.equal(JSON.stringify(history).includes(app.patient.patientRef), false);
   });
 
   test(`${kind}: enabled setting with request-only host support opens staff work`, async () => {
@@ -269,3 +298,14 @@ for (const kind of kinds) {
       change: { kind: "acknowledge" }, now }), "versionConflict");
   });
 }
+
+test("postgres: pre-audit policy versions stay readable without invented attribution", { skip: !db }, async () => {
+  const scope = { tenantId: "audit-legacy-tenant", clinicId: "audit-legacy-clinic", locationId: "audit-legacy-location" };
+  const policy = { ...referenceDefaultPolicy(scope), policyVersion: "1", bookingEnabled: true };
+  await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy)
+    values (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, 1, ${JSON.stringify(policy)}::jsonb)`.execute(db!);
+  const store = new PostgresPolicyStore(db!, referenceDefaultPolicy);
+  const history = value(await store.listBookingChanges(scope));
+  assert.deepEqual(history.entries, [{ version: "1", enabled: true, provenance: "legacyUnattributed" }]);
+  assert.equal(value(await store.read(scope)).policyVersion, "1");
+});

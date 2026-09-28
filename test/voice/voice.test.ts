@@ -122,7 +122,7 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
     policy = new MemoryPolicyStore(options.bookingMode);
     reception = createEmbeddedTextComposition(ledger, policy, host, availability);
   }
-  if (bookingEnabled) value(await policy.changeBookingEnabled(scope, "0", true));
+  if (bookingEnabled) value(await policy.changeBookingEnabled(scope, "0", true, "voice-test-admin"));
   const playback = new FakePlayback();
   const transfer = new FakeTransfer();
   const admission = new CallAdmissionService(ledger, async () => {

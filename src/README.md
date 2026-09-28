@@ -16,6 +16,8 @@ The [scoped call outcome report](../phase-2/CALL_OUTCOME_REPORT.md) gives agents
 
 `voice/admission-fallback.ts` adds an [independent synthetic fallback boundary](../phase-1/ADMISSION_FALLBACK.md) for admission failures. Duplicate calls bypass it; provider outcomes and alerts are typed and tested without a live number.
 
+The [booking setting audit](../phase-2/SETTING_COMMAND_AUDIT.md) records the host-bound actor and before/after value with each new policy version. Clinic admins can read scoped history through the same command gateway and dashboard; older setting rows remain explicitly unattributed.
+
 `voice/turn-assembler.ts` and `voice/voice-session.ts` add a [synthetic voice session contract](../phase-1/SYNTHETIC_VOICE_CONTRACT.md): final caller turns and exact playback completion gate the same reference booking path. Both ledger adapters run its journeys. It has no live media or transport evidence.
 
 The [synthetic transfer contract](../phase-1/SYNTHETIC_TRANSFER.md) uses the same durable presentation slot. It distinguishes unsent cancellation, possible provider send, connected, failed, and unproven outcomes, with staff work after failed or unresolved attempts.
