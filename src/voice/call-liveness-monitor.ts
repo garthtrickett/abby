@@ -13,9 +13,16 @@ export class CallLivenessMonitor {
   }
 
   async expireDue(now: string): Promise<Result<number, TransitionFailure>> {
+    const pending = await this.ledger.findExpiredPendingLocations(now, this.scope);
+    if (!pending.ok) return pending;
+    let expired = 0;
+    for (const choice of pending.value) {
+      const result = await this.ledger.expirePendingLocation(choice.callId, now);
+      if (!result.ok) return result;
+      if (result.value.kind === "expired") expired += 1;
+    }
     const admissions = await this.ledger.findExpiredAdmissions(now, this.scope);
     if (!admissions.ok) return admissions;
-    let expired = 0;
     for (const receipt of admissions.value) {
       const result = await new CallRuntime(this.ledger, receipt.scope).expireAdmission(receipt.callId, now);
       if (result.ok) {
