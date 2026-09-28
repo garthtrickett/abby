@@ -44,6 +44,15 @@ export class EffectWorker {
       if (!resolved.ok) throw new Error(resolved.error.kind);
       return;
     }
+    if (effect.kind === "staffReconcile") {
+      if (effect.status !== "pending") throw new Error("invalidTransition");
+      const original = read.value.effects[effect.originalEffectId];
+      if (!original || original.kind !== "staffTask" || original.status !== "uncertain") throw new Error("effectUnknown");
+      const observation = await this.host.reconcileTask(effect.originalItem);
+      const resolved = await this.runtime.acceptStaffReconciliation(callId, effectId, observation);
+      if (!resolved.ok) throw new Error(resolved.error.kind);
+      return;
+    }
     if (effect.status !== "pending") throw new Error("invalidTransition");
     const item = read.value.staffItems[effect.taskKey];
     if (!item) throw new Error("effectUnknown");

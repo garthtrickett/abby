@@ -1,7 +1,7 @@
 import { digestActionRequest, digestTurn } from "../core/digest.ts";
 import type { BookingEvidenceHost, HostEffects, HostReadFailure, KnowledgeHost, KnowledgeReadFailure } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
-import type { ActionRequest, ApprovedKnowledge, BookableOffer, HostMutation, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffItem, StaffTaskReceipt, VerifiedPatient } from "../core/model.ts";
+import type { ActionRequest, ApprovedKnowledge, BookableOffer, HostMutation, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "../core/model.ts";
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
@@ -88,6 +88,14 @@ export class ReferenceClinicHost implements BookingEvidenceHost, HostEffects, Kn
     const hostTaskRef = `reference-task:${item.key}`;
     this.tasksByKey.set(item.key, { taskKey: item.key, hostTaskRef, scope: item.scope, destination: item.destination, payloadDigest: digestTurn(item) });
     return { kind: "opened", taskKey: item.key, hostTaskRef, destination: item.destination };
+  }
+
+  async reconcileTask(item: StaffItem): Promise<StaffTaskObservation> {
+    const existing = this.tasksByKey.get(item.key);
+    if (!existing) return { kind: "definitiveNonOpen", taskKey: item.key };
+    return sameScope(existing.scope, item.scope) && existing.payloadDigest === digestTurn(item)
+      ? { kind: "exactOpen", taskKey: item.key, hostTaskRef: existing.hostTaskRef, destination: existing.destination }
+      : { kind: "stillUnknown", taskKey: item.key };
   }
 
   bookings(scope: LocationScope): readonly Booking[] {

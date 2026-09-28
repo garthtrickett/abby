@@ -168,6 +168,10 @@ export type StaffTaskReceipt =
   | Readonly<{ kind: "opened"; taskKey: string; hostTaskRef: string; destination: StaffDestination }>
   | Readonly<{ kind: "rejected"; taskKey: string }>
   | Readonly<{ kind: "uncertain"; taskKey: string }>;
+export type StaffTaskObservation =
+  | Readonly<{ kind: "exactOpen"; taskKey: string; hostTaskRef: string; destination: StaffDestination }>
+  | Readonly<{ kind: "definitiveNonOpen"; taskKey: string }>
+  | Readonly<{ kind: "stillUnknown"; taskKey: string }>;
 export type StaffItem = Readonly<{
   key: string;
   scope: LocationScope;
@@ -191,7 +195,8 @@ export type StaffQueueEntry = Readonly<{
 export type Effect =
   | Readonly<{ kind: "hostWrite"; id: string; actionKey: string; mutation: HostMutation; status: "pending" | "possiblySent" | "completed" | "uncertain" | "canceled"; possiblySentAt?: string }>
   | Readonly<{ kind: "hostReconcile"; id: string; actionKey: string; originalEffectId: string; status: "pending" | "completed" }>
-  | Readonly<{ kind: "staffTask"; id: string; taskKey: string; status: "pending" | "possiblySent" | "completed" | "uncertain"; possiblySentAt?: string }>;
+  | Readonly<{ kind: "staffTask"; id: string; taskKey: string; status: "pending" | "possiblySent" | "completed" | "uncertain"; possiblySentAt?: string }>
+  | Readonly<{ kind: "staffReconcile"; id: string; taskKey: string; originalEffectId: string; originalItem: StaffItem; status: "pending" | "completed" }>;
 
 export type CallState = {
   callId: string;
@@ -242,4 +247,5 @@ export type TransitionAction =
   | Readonly<{ kind: "markStaffPossiblySent"; effectId: string; now: string }>
   | Readonly<{ kind: "recoverStaffPossiblySent"; effectId: string; now: string }>
   | Readonly<{ kind: "staffTaskResolved"; effectId: string; receipt: StaffTaskReceipt }>
+  | Readonly<{ kind: "staffTaskReconciled"; effectId: string; observation: StaffTaskObservation }>
   | Readonly<{ kind: "reconciliationDeadline"; actionKey: string; now: string }>;
