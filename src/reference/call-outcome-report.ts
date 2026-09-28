@@ -1,11 +1,12 @@
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
-import type { LocationScope, Result, TransitionFailure } from "../core/model.ts";
+import type { CallTerminalReason, LocationScope, Result, TransitionFailure } from "../core/model.ts";
 import { summarizeCall } from "./call-review.ts";
 
 export type CallOutcomeRow = Readonly<{
   callId: string;
   lifecycle: "starting" | "active" | "ended";
+  terminalReason?: CallTerminalReason;
   committedActions: number;
   unresolvedActions: number;
   staffRequests: number;
@@ -24,6 +25,10 @@ export type CallOutcomePage = Readonly<{
     callsWithHostConfirmedTasks: number;
     callsWithStaffNeedsReview: number;
     callsWithSystemFailure: number;
+    callsWithCallerDisconnect: number;
+    callsWithMediaFailure: number;
+    callsWithLeaseExpiry: number;
+    callsWithTransferConnected: number;
   }>;
   nextAfterCallId?: string;
 }>;
@@ -55,6 +60,7 @@ export class CallOutcomeReport {
       const actions = summary.value.actions;
       const items = summary.value.staffItems;
       rows.push({ callId: summary.value.callId, lifecycle: summary.value.lifecycle,
+        ...(summary.value.terminal ? { terminalReason: summary.value.terminal.reason } : {}),
         committedActions: actions.filter(item => item.status === "committed").length,
         unresolvedActions: actions.filter(item => item.status === "uncertain" || item.status === "needsReview").length,
         staffRequests: items.length,
@@ -70,6 +76,10 @@ export class CallOutcomeReport {
       callsWithHostConfirmedTasks: rows.filter(row => row.hostConfirmedTasks > 0).length,
       callsWithStaffNeedsReview: rows.filter(row => row.staffNeedsReview > 0).length,
       callsWithSystemFailure: rows.filter(row => row.systemFailure).length,
+      callsWithCallerDisconnect: rows.filter(row => row.terminalReason === "callerDisconnected").length,
+      callsWithMediaFailure: rows.filter(row => row.terminalReason === "mediaFailure").length,
+      callsWithLeaseExpiry: rows.filter(row => row.terminalReason === "leaseExpired" || row.terminalReason === "localLeaseClosed").length,
+      callsWithTransferConnected: rows.filter(row => row.terminalReason === "transferConnected").length,
     }, ...(rows.length === 100 ? { nextAfterCallId: rows[99]!.callId } : {}) });
   }
 }

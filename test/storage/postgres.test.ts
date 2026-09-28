@@ -90,6 +90,26 @@ test("calls written before read provenance existed remain readable and upgrade o
   assert.deepEqual((upgraded.state as { availabilityReads?: unknown }).availabilityReads, []);
 });
 
+test("older ended calls without terminal evidence remain readable while new endings record an audit reason", async () => {
+  const app = await setup("pg-terminal-legacy");
+  const callId = "pg-terminal-legacy-admitted";
+  success(await app.runtime.admit(callId, app.policy, { key: { accountRef: "terminal-account", providerCallRef: "terminal-call" },
+    dialedNumber: "+6125550100", acceptedAt: now, deadline: "2026-09-28T10:00:30.000Z" }));
+  success(await app.runtime.activate(callId, "terminal-session", "2026-09-28T10:00:01.000Z"));
+  const ended = success(await app.runtime.endCall(callId, "terminal-session", "2026-09-28T10:00:02.000Z", "callerDisconnected"));
+  assert.equal(ended.terminal?.reason, "callerDisconnected");
+  const event = await db.selectFrom("call_events").select(["kind", "payload"]).where("call_id", "=", callId as CallsCallId)
+    .orderBy("sequence", "desc").executeTakeFirstOrThrow();
+  assert.equal(event.kind, "callEnded");
+  assert.equal((event.payload as { reason?: string }).reason, "callerDisconnected");
+  const legacy = { ...ended };
+  delete legacy.terminal;
+  await db.updateTable("calls").set({ state: legacy }).where("call_id", "=", callId as CallsCallId).execute();
+  const read = success(await new CallRuntime(new PostgresLedger(db), app.scope).read(callId));
+  assert.equal(read.lifecycle, "ended");
+  assert.equal(read.terminal, undefined);
+});
+
 test("one transition atomically advances call state, event, and outbox", async () => {
   const app = await setup("pg-atomic");
   await app.turn("request", "Book", { kind: "requestAction", request: app.book() });

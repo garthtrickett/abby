@@ -471,8 +471,9 @@ for (const kind of kinds) {
     const action = Object.values(planned.actions)[0];
     assert.ok(action);
     const queued = value(await app.session.dispatchPending(at(4)));
-    const ended = value(await app.session.end(at(5)));
+    const ended = value(await app.session.end(at(5), "callerDisconnected"));
     assert.equal(ended.lifecycle, "ended");
+    assert.deepEqual(ended.terminal, { reason: "callerDisconnected", at: at(5) });
     assert.equal(ended.presentations[action.presentationId]?.status, "unproven");
     failure(await app.session.acceptPlaybackResult(queued.playbackId!, "played", at(6)), "playbackUnknown");
     assert.equal(app.host.bookings(app.scope).length, 0);
@@ -497,6 +498,7 @@ for (const kind of kinds) {
     failure(await blocked.session.speechStarted(at(5)), "transportUnavailable");
     const ended = value(await new CallRuntime(blocked.ledger, blocked.scope).read(blocked.callId));
     assert.equal(ended.lifecycle, "ended");
+    assert.equal(ended.terminal?.reason, "mediaFailure");
     assert.equal(ended.presentations[blockedAction.presentationId]?.status, "unproven");
     failure(await blocked.session.acceptPlaybackResult(queued.playbackId!, "played", at(6)), "playbackUnknown");
     assert.equal(blocked.host.bookings(blocked.scope).length, 0);
@@ -594,6 +596,7 @@ for (const kind of kinds) {
     assert.equal(value(await connected.session.dispatchPending(at(4))).kind, "transferConnected");
     const done = value(await new CallRuntime(connected.ledger, connected.scope).read(connected.callId));
     assert.equal(done.lifecycle, "ended");
+    assert.equal(done.terminal?.reason, "transferConnected");
     const completedTransfer = done.presentations[plan.pendingPresentationId!];
     assert.ok(completedTransfer?.kind === "transfer");
     assert.equal(completedTransfer.status, "connected");
@@ -606,6 +609,7 @@ for (const kind of kinds) {
     assert.equal(value(await unproven.session.dispatchPending(at(4))).kind, "transferUnproven");
     const unresolved = value(await new CallRuntime(unproven.ledger, unproven.scope).read(unproven.callId));
     assert.equal(unresolved.lifecycle, "ended");
+    assert.equal(unresolved.terminal?.reason, "transferUnproven");
     assert.equal(unresolved.presentations[uncertainPlan.pendingPresentationId!]?.status, "unproven");
     assert.equal(Object.values(unresolved.staffItems)[0]?.reason, "systemFailure");
     assert.equal(unresolved.pendingPresentationId, undefined);
@@ -673,11 +677,12 @@ for (const kind of kinds) {
     app.transfer.onRequest = signal;
     const dispatch = app.session.dispatchPending(at(4));
     await requested;
-    value(await app.session.end(at(5)));
+    value(await app.session.end(at(5), "callerDisconnected"));
     release({ kind: "connected", providerConnectionRef: "late-provider-result" });
     assert.equal(value(await dispatch).kind, "transferUnproven");
     const ended = value(await new CallRuntime(app.ledger, app.scope).read(app.callId));
     assert.equal(ended.lifecycle, "ended");
+    assert.equal(ended.terminal?.reason, "callerDisconnected");
     assert.equal(ended.presentations[planned.pendingPresentationId!]?.status, "unproven");
     assert.equal(Object.values(ended.staffItems)[0]?.reason, "systemFailure");
   });
@@ -691,6 +696,7 @@ for (const kind of kinds) {
     assert.equal(app.playback.queued.length, 0);
     const ended = value(await new CallRuntime(app.ledger, app.scope).read(app.callId));
     assert.equal(ended.lifecycle, "ended");
+    assert.equal(ended.terminal?.reason, "localLeaseClosed");
     assert.equal(ended.presentations[planned.pendingPresentationId!]?.status, "unproven");
     assert.equal(app.host.bookings(app.scope).length, 0);
   });

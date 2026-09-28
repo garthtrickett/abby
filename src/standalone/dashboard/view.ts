@@ -49,6 +49,7 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
         <div class="lookup"><input aria-label="Call ID" .value=${state.callIdInput} @input=${(event: Event) => actions.setCallId((event.target as HTMLInputElement).value)} placeholder="Enter a call ID">
           <button type="button" ?disabled=${state.busy} @click=${() => actions.loadCall()}>Load call</button></div>
         ${state.call ? html`<div aria-label="Call summary"><p><strong>${state.call.callId}</strong> · ${state.call.lifecycle}</p>
+          ${state.call.terminal ? html`<p>End reason: ${state.call.terminal.reason}</p>` : ""}
           <p>${state.call.actions.length} appointment action(s); ${state.call.staffItems.length} staff follow-up item(s); ${state.call.knowledgeAnswers.length} sourced answer(s); ${state.call.availabilityReads.length} availability read(s).</p>
           ${state.call.actions.length ? html`<ul>${state.call.actions.map(action => html`<li>${action.kind}: ${action.status}</li>`)}</ul>` : ""}
           ${state.call.staffItems.length ? html`<ul>${state.call.staffItems.map(item => html`<li>Staff follow-up: ${item.reason} (${item.status})</li>`)}</ul>` : ""}
@@ -62,7 +63,8 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
         ${state.outcomePage ? html`<div aria-label="Call outcome report">
           <p>${state.outcomePage.totals.calls} call(s) loaded · ${state.outcomePage.totals.committedActions} completed action(s) · ${state.outcomePage.totals.callsWithUnresolvedActions} call(s) with unresolved actions.</p>
           <p>${state.outcomePage.totals.callsWithStaffRequests} call(s) requested staff follow-up · ${state.outcomePage.totals.callsWithHostConfirmedTasks} call(s) have a host-confirmed task · ${state.outcomePage.totals.callsWithStaffNeedsReview} call(s) need staff review · ${state.outcomePage.totals.callsWithSystemFailure} call(s) recorded a system-failure task.</p>
-          ${state.outcomePage.rows.length ? html`<ul>${state.outcomePage.rows.map(row => html`<li>${row.callId} · ${row.lifecycle} · ${row.committedActions} completed · ${row.unresolvedActions} unresolved · ${row.staffRequests} staff request(s)${row.staffNeedsReview ? " · needs review" : ""}</li>`)}</ul>` : html`<p>No calls in this clinic.</p>`}
+          <p>${state.outcomePage.totals.callsWithCallerDisconnect} caller disconnect(s) · ${state.outcomePage.totals.callsWithMediaFailure} media failure(s) · ${state.outcomePage.totals.callsWithLeaseExpiry} lease closure(s) · ${state.outcomePage.totals.callsWithTransferConnected} connected transfer(s).</p>
+          ${state.outcomePage.rows.length ? html`<ul>${state.outcomePage.rows.map(row => html`<li>${row.callId} · ${row.lifecycle}${row.terminalReason ? ` (${row.terminalReason})` : ""} · ${row.committedActions} completed · ${row.unresolvedActions} unresolved · ${row.staffRequests} staff request(s)${row.staffNeedsReview ? " · needs review" : ""}</li>`)}</ul>` : html`<p>No calls in this clinic.</p>`}
           ${state.outcomePage.nextAfterCallId ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreOutcomes()}>Load more outcomes</button>` : ""}
         </div>` : html`<p class="muted">Outcome report unavailable.</p>`}
       </section>` : ""}

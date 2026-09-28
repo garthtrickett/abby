@@ -27,6 +27,11 @@ test("scoped agent outcome report counts proven actions and staff states without
   success(await app.runtime.start(failedCall, app.policy));
   success(await app.runtime.acceptTurn({ callId: failedCall, turnId: "failure", text: "Private request", quality: "clear", at: now },
     { kind: "readFailure", target: "patient", failure: "unavailable" }, now));
+  const disconnectedCall = "outcome-disconnected";
+  success(await app.runtime.admit(disconnectedCall, app.policy, { key: { accountRef: "report-account", providerCallRef: "report-call" },
+    dialedNumber: "+6125550100", acceptedAt: now, deadline: "2026-09-28T10:00:30.000Z" }));
+  success(await app.runtime.activate(disconnectedCall, "report-session", "2026-09-28T10:00:01.000Z"));
+  success(await app.runtime.endCall(disconnectedCall, "report-session", "2026-09-28T10:00:02.000Z", "callerDisconnected"));
 
   const report = new CallOutcomeReport(app.ledger);
   const policy = new MemoryPolicyStore();
@@ -36,9 +41,11 @@ test("scoped agent outcome report counts proven actions and staff states without
   assert.equal(agent.listPermitted().some(item => item.id === "calls.outcomes.v1"), true);
   const result = await agent.submit({ kind: "calls.outcomes.v1" });
   assert.ok(result.ok && result.value.kind === "callOutcomes");
-  assert.deepEqual(result.value.page.totals, { calls: 3, committedActions: 1, callsWithUnresolvedActions: 0,
-    callsWithStaffRequests: 2, callsWithHostConfirmedTasks: 1, callsWithStaffNeedsReview: 0, callsWithSystemFailure: 1 });
+  assert.deepEqual(result.value.page.totals, { calls: 4, committedActions: 1, callsWithUnresolvedActions: 0,
+    callsWithStaffRequests: 2, callsWithHostConfirmedTasks: 1, callsWithStaffNeedsReview: 0, callsWithSystemFailure: 1,
+    callsWithCallerDisconnect: 1, callsWithMediaFailure: 0, callsWithLeaseExpiry: 0, callsWithTransferConnected: 0 });
   assert.equal(result.value.page.rows.find(row => row.callId === followUpCall)?.hostConfirmedTasks, 1);
+  assert.equal(result.value.page.rows.find(row => row.callId === disconnectedCall)?.terminalReason, "callerDisconnected");
   assert.equal(JSON.stringify(result.value).includes("Private"), false);
   assert.equal(JSON.stringify(result.value).includes(app.patient.patientRef), false);
   const foreign = new CommandGateway({ actorRef: "other-agent", role: "agent", scope: { ...app.scope, tenantId: "other" } },

@@ -40,8 +40,9 @@ export class CallRuntime {
     return this.update(callId, { kind: "sessionExpired", sessionId, expectedLeaseVersion, now });
   }
 
-  endCall(callId: string, sessionId: string, now: string): Promise<Result<CallState, TransitionFailure>> {
-    return this.update(callId, { kind: "callEnded", sessionId, now });
+  endCall(callId: string, sessionId: string, now: string,
+          reason: "callerDisconnected" | "sessionClosed" | "mediaFailure" | "localLeaseClosed" = "sessionClosed"): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "callEnded", sessionId, reason, now });
   }
 
   beginSpeech(callId: string, sessionId: string, now: string): Promise<Result<CallState, TransitionFailure>> {

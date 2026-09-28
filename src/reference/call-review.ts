@@ -1,11 +1,12 @@
-import { err, ok } from "../core/model.ts";
-import type { ActionState, CallState, LocationScope, Result, StaffItem, TransitionFailure } from "../core/model.ts";
+import { CALL_TERMINAL_REASONS, err, ok } from "../core/model.ts";
+import type { ActionState, CallState, CallTerminal, LocationScope, Result, StaffItem, TransitionFailure } from "../core/model.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 
 export type CallSummary = Readonly<{
   callId: string;
   lifecycle: CallState["lifecycle"];
   version: number;
+  terminal?: CallTerminal;
   actions: readonly Readonly<{ kind: ActionState["kind"]; status: ActionState["status"] }>[];
   staffItems: readonly Readonly<{ reason: StaffItem["reason"]; status: StaffItem["status"] }>[];
   knowledgeAnswers: readonly Readonly<{ sourceRef: string; version: string; ownerRef: string }>[];
@@ -26,6 +27,8 @@ export function summarizeCall(call: CallState): Result<CallSummary, TransitionFa
   const actions = Object.values(call.actions);
   const staffItems = Object.values(call.staffItems);
   if (actions.some(item => !item || !allowed(actionKinds, item.kind) || !allowed(actionStatuses, item.status)) ||
+      (call.terminal !== undefined && (!call.terminal || call.lifecycle !== "ended" || !CALL_TERMINAL_REASONS.includes(call.terminal.reason) ||
+        typeof call.terminal.at !== "string" || !Number.isFinite(Date.parse(call.terminal.at)))) ||
       staffItems.some(item => !item || !allowed(staffReasons, item.reason) || !allowed(staffStatuses, item.status)) ||
       !Array.isArray(call.knowledgeAnswers) || call.knowledgeAnswers.some(item => !item ||
         typeof item.sourceRef !== "string" || !item.sourceRef || typeof item.version !== "string" || !item.version ||
@@ -42,6 +45,7 @@ export function summarizeCall(call: CallState): Result<CallSummary, TransitionFa
     callId: call.callId,
     lifecycle: call.lifecycle,
     version: call.version,
+    ...(call.terminal === undefined ? {} : { terminal: { reason: call.terminal.reason, at: call.terminal.at } }),
     actions: actions.map(({ kind, status }) => ({ kind, status })),
     staffItems: staffItems.map(({ reason, status }) => ({ reason, status })),
     knowledgeAnswers: call.knowledgeAnswers.map(({ sourceRef, version, ownerRef }) => ({ sourceRef, version, ownerRef })),
