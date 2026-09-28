@@ -109,8 +109,10 @@ export class MemoryLedger implements LedgerStore {
       if (!sameScope(state.policy.scope, scope)) continue;
       for (const item of Object.values(state.staffItems)) {
         if (afterTaskKey && item.key <= afterTaskKey) continue;
-        entries.push({ callId: state.callId, taskKey: item.key, reason: item.reason, status: item.status, dueAt: item.dueAt,
-          destination: structuredClone(item.destination), ...(item.linkedActionKey === undefined ? {} : { linkedActionKey: item.linkedActionKey }) });
+        entries.push({ callId: state.callId, callVersion: state.version, taskKey: item.key, reason: item.reason, status: item.status, dueAt: item.dueAt,
+          destination: structuredClone(item.destination), ...(item.linkedActionKey === undefined ? {} : { linkedActionKey: item.linkedActionKey }),
+          ...(item.pendingChangeKey === undefined ? {} : { pendingChangeKey: item.pendingChangeKey }),
+          ...(item.reviewRequired === undefined ? {} : { reviewRequired: item.reviewRequired }) });
       }
     }
     return ok(entries.sort((left, right) => left.taskKey.localeCompare(right.taskKey)).slice(0, 50));

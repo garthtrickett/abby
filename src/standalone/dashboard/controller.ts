@@ -2,6 +2,7 @@ import { render } from "lit-html";
 import type { DashboardFailure, DashboardPort } from "./api.ts";
 import { dashboardView } from "./view.ts";
 import type { DashboardState } from "./view.ts";
+import type { StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 
 function message(failure: DashboardFailure): string {
   switch (failure.kind) {
@@ -31,6 +32,7 @@ export class DashboardController {
       loadCall: () => { void this.loadCall(); },
       loadStaff: () => { void this.loadStaff(); },
       loadMoreStaff: () => { void this.loadMoreStaff(); },
+      changeStaff: (item, change) => { void this.changeStaff(item, change); },
     }), this.root);
   }
 
@@ -70,6 +72,23 @@ export class DashboardController {
     if (result.ok) this.state.staffPage = { items: [...previous.items, ...result.value.items],
       ...(result.value.nextAfterTaskKey === undefined ? {} : { nextAfterTaskKey: result.value.nextAfterTaskKey }) };
     else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async changeStaff(item: StaffQueueEntry, change: StaffChangeRequest): Promise<void> {
+    if (this.state.busy || !this.state.capabilities.some(capability => capability.id === "staff.change.v1")) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.state.notice = undefined;
+    this.draw();
+    const result = await this.port.changeStaff(item, change);
+    if (!result.ok) this.state.error = result.error.kind === "versionConflict"
+      ? "Follow-up changed elsewhere. The queue was refreshed." : message(result.error);
+    else this.state.notice = "Follow-up command recorded. Check its queue status.";
+    const refreshed = await this.port.staffQueue();
+    if (refreshed.ok) this.state.staffPage = refreshed.value;
+    else this.state.error = message(refreshed.error);
     this.state.busy = false;
     this.draw();
   }

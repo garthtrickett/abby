@@ -1,11 +1,11 @@
 import { EffectWorker } from "../core/effect-worker.ts";
-import type { AvailabilityHost, BookingEvidenceHost, HostEffects, KnowledgeHost, PolicyFailure, PolicyStore } from "../core/host.ts";
+import type { AvailabilityHost, BookingEvidenceHost, HostEffects, KnowledgeHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err } from "../core/model.ts";
-import type { CallState, FinalCallerTurn, LocationScope, Result, TransitionFailure, TurnInterpretation } from "../core/model.ts";
+import type { CallState, FinalCallerTurn, LocationScope, Result, StaffChangeRequest, TransitionFailure, TurnInterpretation } from "../core/model.ts";
 import { CallRuntime } from "../core/runtime.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<StaffLifecycleHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 export class TextReception {
@@ -22,6 +22,7 @@ export class TextReception {
   }
 
   availabilityEnabled(): boolean { return this.availability !== undefined; }
+  staffLifecycleEnabled(): boolean { return !!this.host.advanceTask && !!this.host.reconcileTaskChange; }
 
   private runtime(scope: LocationScope): CallRuntime {
     return new CallRuntime(this.ledger, scope);
@@ -124,6 +125,20 @@ export class TextReception {
         return err({ kind: "effectFailure" });
       }
     }
+    return runtime.read(callId);
+  }
+
+  async changeStaff(scope: LocationScope, callId: string, expectedVersion: number, taskKey: string, actorRef: string,
+                    change: StaffChangeRequest, now: string): Promise<Result<CallState, TextReceptionFailure>> {
+    if (!this.staffLifecycleEnabled() || !Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
+    const runtime = this.runtime(scope);
+    const requested = await runtime.requestStaffChange(callId, expectedVersion, taskKey, actorRef, change);
+    if (!requested.ok) return requested;
+    const item = requested.value.staffItems[taskKey];
+    const effectId = item?.pendingChangeKey ? `${item.pendingChangeKey}:send` : undefined;
+    if (!effectId) return err({ kind: "effectFailure" });
+    try { await new EffectWorker(runtime, this.host).process(callId, effectId, now); }
+    catch { /* The persisted intent remains available to the recovery worker. */ }
     return runtime.read(callId);
   }
 

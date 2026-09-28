@@ -201,3 +201,43 @@ test("lost host task receipt remains in review until exact reconciliation reache
     await app.close();
   }
 });
+
+test("staff dashboard acknowledges, reassigns, and resolves only host-confirmed follow-up", async ({ page, request }) => {
+  const app = await localDashboard("staff");
+  try {
+    assert.equal((await app.reception.answer(app.scope,
+      { callId: "before-setting", turnId: "staff-lifecycle", text: "Need help", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
+      ["missing"], "Unapproved", "2026-09-28T10:00:00.000Z")).ok, true);
+    assert.equal((await app.reception.drain(app.scope, "before-setting", "2026-09-28T10:00:00.000Z")).ok, true);
+    const initial = await app.ledger.read("before-setting", app.scope);
+    assert.ok(initial.ok);
+    const taskKey = Object.keys(initial.value.staffItems)[0];
+    assert.ok(taskKey);
+    await page.goto(app.url);
+    const queue = page.getByLabel("Staff follow-up queue");
+    await expect(queue).toContainText("systemFailure · open");
+    await page.getByRole("button", { name: "Acknowledge" }).click();
+    await expect(queue).toContainText("systemFailure · acknowledged");
+    assert.equal(app.host.tasks(app.scope)[0]?.status, "acknowledged");
+    const stale = await request.post(`${app.url}/api/staff/change`, { data: { callId: "before-setting", taskKey,
+      expectedVersion: initial.value.version, change: { kind: "resolve" } } });
+    assert.equal(stale.status(), 409);
+    await page.getByRole("button", { name: "Assign to operator" }).click();
+    await expect(queue).toContainText("systemFailure · open");
+    const policy = await app.policy.read(app.scope);
+    assert.ok(policy.ok);
+    assert.deepEqual(app.host.tasks(app.scope)[0]?.destination, policy.value.operatorQueue);
+    await page.getByRole("button", { name: "Resolve" }).click();
+    await expect(queue).toContainText("systemFailure · resolved");
+    await expect(queue).not.toContainText("resolved · overdue");
+    await expect(page.getByRole("button", { name: "Resolve" })).toHaveCount(0);
+    assert.equal(app.host.tasks(app.scope)[0]?.status, "resolved");
+    const foreign = new CommandGateway({ actorRef: "foreign-agent", role: "agent", scope: app.scope }, app.policy, app.reception);
+    const forbidden = await foreign.submit({ kind: "staff.change.v1", callId: "before-setting", taskKey,
+      expectedVersion: initial.value.version, change: { kind: "resolve" }, now: "2026-09-28T10:00:00.000Z" });
+    assert.equal(forbidden.ok, false);
+    if (!forbidden.ok) assert.equal(forbidden.error.kind, "forbidden");
+  } finally {
+    await app.close();
+  }
+});

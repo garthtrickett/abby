@@ -1,5 +1,5 @@
 import { html } from "lit-html";
-import type { CallPolicy } from "../../core/model.ts";
+import type { CallPolicy, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor } from "../../reference/command-gateway.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
@@ -22,11 +22,13 @@ export type DashboardActions = Readonly<{
   loadCall(): void;
   loadStaff(): void;
   loadMoreStaff(): void;
+  changeStaff(item: StaffQueueEntry, change: StaffChangeRequest): void;
 }>;
 
 export function dashboardView(state: DashboardState, actions: DashboardActions) {
   const canChange = state.capabilities.some(item => item.id === "settings.appointments.booking.enabled.change.v1");
   const enabled = state.policy?.bookingEnabled ?? false;
+  const canChangeStaff = state.capabilities.some(item => item.id === "staff.change.v1");
   return html`
     <header><h1>Abby</h1><p class="muted">Clinic reception settings and call review</p></header>
     ${state.loading ? html`<p role="status">Loading clinic settings…</p>` : html`
@@ -53,7 +55,14 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
       ${state.capabilities.some(item => item.id === "staff.list.v1") ? html`<section class="card" aria-labelledby="staff-title">
         <div class="row"><h2 id="staff-title">Staff follow-up</h2><button type="button" ?disabled=${state.busy} @click=${() => actions.loadStaff()}>Refresh follow-up</button></div>
         ${state.staffPage ? html`<div aria-label="Staff follow-up queue">
-          ${state.staffPage.items.length ? html`<ul>${state.staffPage.items.map(item => html`<li>${item.callId} · ${item.reason} · ${item.status}${item.overdue ? " · overdue" : ""} · due ${item.dueAt}</li>`)}</ul>` : html`<p>No follow-up items in this clinic.</p>`}
+          ${state.staffPage.items.length ? html`<ul>${state.staffPage.items.map(item => html`<li>${item.callId} · ${item.reason} · ${item.status}${item.overdue ? " · overdue" : ""}${item.pendingChangeKey ? " · pending host change" : ""}${item.reviewRequired ? " · needs operator review" : ""} · due ${item.dueAt}
+            ${canChangeStaff && !item.pendingChangeKey && !item.reviewRequired && (item.status === "open" || item.status === "acknowledged") ? html`
+              ${item.status === "open" ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.changeStaff(item, { kind: "acknowledge" })}>Acknowledge</button>` : ""}
+              <button type="button" ?disabled=${state.busy} @click=${() => actions.changeStaff(item, { kind: "resolve" })}>Resolve</button>
+              ${state.policy && JSON.stringify(item.destination) !== JSON.stringify(state.policy.staffDestination) ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.changeStaff(item, { kind: "reassign", target: "staff" })}>Assign to staff</button>` : ""}
+              ${state.policy && JSON.stringify(item.destination) !== JSON.stringify(state.policy.operatorQueue) ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.changeStaff(item, { kind: "reassign", target: "operator" })}>Assign to operator</button>` : ""}
+            ` : ""}
+          </li>`)}</ul>` : html`<p>No follow-up items in this clinic.</p>`}
           ${state.staffPage.nextAfterTaskKey ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreStaff()}>Load more follow-up</button>` : ""}
         </div>` : html`<p class="muted">Follow-up queue unavailable.</p>`}
       </section>` : ""}

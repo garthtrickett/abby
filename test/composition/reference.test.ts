@@ -241,4 +241,31 @@ for (const kind of kinds) {
       from: "2026-10-01", to: "2026-10-02", now }), "callUnknown");
     assert.equal(reads.length, 1);
   });
+
+  test(`${kind}: staff task commands are scoped, host-confirmed, and unavailable to agents`, async () => {
+    const app = fixture(kind, `${kind}-staff-command`);
+    const callId = `call-${kind}-staff-command`;
+    value(await app.reception.startCall(callId, app.scope));
+    value(await app.reception.answer(app.scope, turn(callId, "staff-request", "Please help"), ["missing"], "Unapproved", now));
+    const opened = value(await app.reception.drain(app.scope, callId, now));
+    const item = Object.values(opened.staffItems)[0];
+    assert.ok(item);
+    assert.equal(item.status, "open");
+    assert.equal(app.admin.listPermitted().some(capability => capability.id === "staff.change.v1"), true);
+    assert.equal(app.agent.listPermitted().some(capability => capability.id === "staff.change.v1"), false);
+    error(await app.agent.submit({ kind: "staff.change.v1", callId, taskKey: item.key, expectedVersion: opened.version,
+      change: { kind: "resolve" }, now }), "forbidden");
+    const foreign = new CommandGateway({ actorRef: "foreign-staff", role: "staff",
+      scope: { ...app.scope, tenantId: "foreign-tenant" } }, app.policy, app.reception);
+    error(await foreign.submit({ kind: "staff.change.v1", callId, taskKey: item.key, expectedVersion: opened.version,
+      change: { kind: "resolve" }, now }), "callUnknown");
+    const reply = value(await app.admin.submit({ kind: "staff.change.v1", callId, taskKey: item.key,
+      expectedVersion: opened.version, change: { kind: "resolve" }, now }));
+    assert.equal(reply.kind, "staffChange");
+    assert.equal(reply.status, "resolved");
+    assert.equal(reply.pending, false);
+    assert.equal(app.host.tasks(app.scope)[0]?.status, "resolved");
+    error(await app.admin.submit({ kind: "staff.change.v1", callId, taskKey: item.key, expectedVersion: opened.version,
+      change: { kind: "acknowledge" }, now }), "versionConflict");
+  });
 }
