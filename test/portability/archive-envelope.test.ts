@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { ARCHIVE_SECTIONS, verifyArchiveEnvelope } from "../../src/portability/archive-envelope.ts";
+import { ARCHIVE_SECTIONS, materializeVerifiedArchive, verifyArchiveEnvelope } from "../../src/portability/archive-envelope.ts";
 import type { ArchiveEnvelope, ArchiveManifestV1, ArchiveSection } from "../../src/portability/archive-envelope.ts";
 
 function archive(records: Partial<Record<ArchiveSection, readonly Record<string, unknown>[]>> = {}): ArchiveEnvelope {
@@ -87,4 +87,18 @@ test("archive envelope rejects a matching digest with a false record count or re
     { recordVersion: 2, recordId: "a", sourceTenantId: "tenant-1" },
   ] }));
   assert.deepEqual(future, { ok: false, error: { kind: "unsupportedVersion", section: "settings" } });
+});
+
+test("materialization preserves the bytes verified even if a section opener would change on replay", async () => {
+  const input = archive();
+  const original = input.sections.calls;
+  let opens = 0;
+  const volatile = { ...input, sections: { ...input.sections, calls: () => {
+    opens += 1;
+    return opens === 1 ? original() : (async function* () { yield Buffer.from("changed\n"); })();
+  } } };
+  const result = await materializeVerifiedArchive(volatile);
+  assert.equal(result.ok, true);
+  assert.equal(opens, 1);
+  if (result.ok) assert.match(Buffer.from(result.value.sections.calls).toString(), /"recordId":"a"/);
 });

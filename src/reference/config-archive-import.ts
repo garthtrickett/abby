@@ -1,0 +1,172 @@
+import { createHash } from "node:crypto";
+import { MemoryLedger } from "../core/ledger.ts";
+import { err, ok } from "../core/model.ts";
+import type { CallPolicy, LocationScope, Result, StaffDestination } from "../core/model.ts";
+import type { AutomationSettingAuditEntry, BookingSettingAuditEntry } from "../core/host.ts";
+import type { ArchiveEnvelope } from "../portability/archive-envelope.ts";
+import { decodeConfigArchive } from "../portability/config-archive.ts";
+import type { ConfigArchiveData, ConfigArchiveDecodeFailure } from "../portability/config-archive.ts";
+import { MemoryKnowledgeCatalogue } from "./knowledge-catalogue.ts";
+import { MemoryPolicyStore, referenceDefaultPolicy } from "./policy-store.ts";
+
+export type ImportRefKind = "staffOwner" | "operatorQueue" | "transferDestination" | "knowledgeOwner" | "greetingOwner";
+export type ReferenceImportMapper = Readonly<{
+  mapRef(kind: ImportRefKind, sourceRef: string, sourceScope: LocationScope, targetScope: LocationScope): string | null;
+}>;
+
+export type ReferenceImportAuthority = Readonly<{
+  /** The embedding host decides who may inspect and stage this archive, then records the attempt. */
+  authorizeAndRecord(actorRef: string, targetScope: LocationScope): Promise<Result<Readonly<{ auditRef: string }>, Readonly<{ kind: "denied" | "auditFailure" }>>>;
+}>;
+
+export type ReferenceImportFailure = ConfigArchiveDecodeFailure | Readonly<{
+  kind: "invalidRequest" | "denied" | "auditFailure" | "unmappedRef" | "targetOccupied" | "archiveConflict" | "invalidConfigArchive";
+}>;
+
+export type ReferenceImportReceipt = Readonly<{
+  archiveId: string;
+  manifestDigest: string;
+  auditRef: string;
+  sourceScope: LocationScope;
+  targetScope: LocationScope;
+  sourceSchemaVersion: string;
+  policyVersions: number;
+  automationVersions: number;
+  writeStopVersions: number;
+  publishedKnowledgeVersions: number;
+  importedPolicyVersion: string;
+  automationEnabled: false;
+  bookingEnabled: false;
+  writesStopped: true;
+}>;
+
+export type StagedReferenceConfiguration = Readonly<{
+  receipt: ReferenceImportReceipt;
+  sourceHistory: ConfigArchiveData;
+  policy: MemoryPolicyStore;
+  knowledge: MemoryKnowledgeCatalogue;
+  ledger: MemoryLedger;
+}>;
+
+class UnmappedRef extends Error {}
+
+function validRef(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 256 && !/[\u0000-\u001f\u007f]/.test(value);
+}
+
+function scopeKey(scope: LocationScope): string {
+  return JSON.stringify([scope.tenantId, scope.clinicId, scope.locationId]);
+}
+
+function mappedRef(mapper: ReferenceImportMapper, kind: ImportRefKind, sourceRef: string, source: LocationScope, target: LocationScope): string {
+  const mapped = mapper.mapRef(kind, sourceRef, source, target);
+  if (!validRef(mapped)) throw new UnmappedRef();
+  return mapped;
+}
+
+function mappedDestination(mapper: ReferenceImportMapper, source: StaffDestination, sourceScope: LocationScope, targetScope: LocationScope,
+                           role: "staffOwner" | "operatorQueue"): StaffDestination {
+  if (source.kind === "owner") return { kind: "owner", ownerRef: mappedRef(mapper, role, source.ownerRef, sourceScope, targetScope) };
+  return { kind: "queue", queueRef: mappedRef(mapper, role, source.queueRef, sourceScope, targetScope) };
+}
+
+function targetPolicy(source: CallPolicy, mapper: ReferenceImportMapper, sourceScope: LocationScope, targetScope: LocationScope): CallPolicy {
+  const restricted = (mode: CallPolicy["capabilities"]["book"]) => mode === "unavailable" ? "unavailable" as const : "requestOnly" as const;
+  return { ...structuredClone(source), scope: structuredClone(targetScope), automationEnabled: false,
+    capabilities: { book: "unavailable", cancel: restricted(source.capabilities.cancel),
+      reschedule: restricted(source.capabilities.reschedule), intake: restricted(source.capabilities.intake),
+      transfer: restricted(source.capabilities.transfer) },
+    staffDestination: mappedDestination(mapper, source.staffDestination, sourceScope, targetScope, "staffOwner"),
+    operatorQueue: mappedDestination(mapper, source.operatorQueue, sourceScope, targetScope, "operatorQueue"),
+    ...(source.transferDestinationRef === undefined ? {} : { transferDestinationRef:
+      mappedRef(mapper, "transferDestination", source.transferDestinationRef, sourceScope, targetScope) }),
+    ...(source.greeting === undefined ? {} : { greeting: { ...source.greeting, scope: structuredClone(targetScope),
+      ownerRef: mappedRef(mapper, "greetingOwner", source.greeting.ownerRef, sourceScope, targetScope) } }),
+  };
+}
+
+function bookingAudit(data: ConfigArchiveData): BookingSettingAuditEntry[] {
+  return data.policies.filter(row => row.version > 0).map(row => {
+    const metadata = [row.changedBy, row.previousBookingEnabled, row.changedAt];
+    if (metadata.every(value => value === null)) return { version: String(row.version), enabled: row.policy.bookingEnabled, provenance: "legacyUnattributed" };
+    if (!row.changedBy || row.previousBookingEnabled === null || !row.changedAt) throw new Error("invalid booking audit");
+    return { version: String(row.version), enabled: row.policy.bookingEnabled, provenance: "recorded",
+      actorRef: row.changedBy, previousEnabled: row.previousBookingEnabled, changedAt: row.changedAt };
+  });
+}
+
+function automationAudit(data: ConfigArchiveData): AutomationSettingAuditEntry[] {
+  return data.automation.filter(row => row.version > 0).map(row => {
+    if (!row.changedBy || row.previousEnabled === null || !row.changedAt) throw new Error("invalid automation audit");
+    return { version: String(row.version), enabled: row.enabled, previousEnabled: row.previousEnabled,
+      actorRef: row.changedBy, changedAt: row.changedAt };
+  });
+}
+
+/** Stages a source configuration in native reference stores; it does not publish a phone route. */
+export class ReferenceConfigArchiveImporter {
+  private readonly byArchive = new Map<string, Readonly<{ digest: string; staged: StagedReferenceConfiguration }>>();
+  private readonly byTarget = new Map<string, string>();
+  private readonly clock: () => string;
+
+  constructor(clock: () => string = () => new Date().toISOString()) { this.clock = clock; }
+
+  async stage(input: ArchiveEnvelope, targetScope: LocationScope, actorRef: string,
+              authority: ReferenceImportAuthority, mapper: ReferenceImportMapper):
+    Promise<Result<StagedReferenceConfiguration, ReferenceImportFailure>> {
+    if (!validRef(actorRef) || !targetScope || ![targetScope.tenantId, targetScope.clinicId, targetScope.locationId].every(validRef) ||
+        !authority || typeof authority.authorizeAndRecord !== "function" || !mapper || typeof mapper.mapRef !== "function") {
+      return err({ kind: "invalidRequest" });
+    }
+    let authorized: Awaited<ReturnType<ReferenceImportAuthority["authorizeAndRecord"]>>;
+    try { authorized = await authority.authorizeAndRecord(actorRef, targetScope); }
+    catch { return err({ kind: "auditFailure" }); }
+    if (!authorized.ok) return err({ kind: authorized.error.kind });
+    if (!validRef(authorized.value.auditRef)) return err({ kind: "auditFailure" });
+    const decoded = await decodeConfigArchive(input, targetScope);
+    if (!decoded.ok) return decoded;
+    const data = decoded.value;
+    const key = JSON.stringify([targetScope.tenantId, data.archiveId]);
+    const existing = this.byArchive.get(key);
+    if (existing) return existing.digest === data.manifestDigest ? ok(existing.staged) : err({ kind: "archiveConflict" });
+    if (this.byTarget.has(scopeKey(targetScope))) return err({ kind: "targetOccupied" });
+    let importedAt: string;
+    try { importedAt = this.clock(); }
+    catch { return err({ kind: "invalidRequest" }); }
+    if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$/.test(importedAt) || !Number.isFinite(Date.parse(importedAt))) {
+      return err({ kind: "invalidRequest" });
+    }
+    const importActorRef = `import:${createHash("sha256").update(data.archiveId).digest("hex").slice(0, 32)}`;
+    let policy: MemoryPolicyStore;
+    let knowledge: MemoryKnowledgeCatalogue;
+    try {
+      const sourcePolicy = data.policies.find(row => row.isHead)?.policy ?? referenceDefaultPolicy(data.sourceScope);
+      const mappedPolicy = targetPolicy(sourcePolicy, mapper, data.sourceScope, targetScope);
+      const automationHead = data.automation.find(row => row.isHead);
+      policy = MemoryPolicyStore.fromImported(targetScope, mappedPolicy, bookingAudit(data), automationAudit(data),
+        automationHead?.version ?? 0, automationHead?.enabled ?? false, importActorRef, importedAt);
+      knowledge = MemoryKnowledgeCatalogue.fromPublishedHistory(data.knowledge.map(entry => ({ ...entry,
+        scope: structuredClone(targetScope), ownerRef: mappedRef(mapper, "knowledgeOwner", entry.ownerRef, data.sourceScope, targetScope) })));
+    } catch (cause) {
+      return err({ kind: cause instanceof UnmappedRef ? "unmappedRef" : "invalidConfigArchive" });
+    }
+    const ledger = new MemoryLedger();
+    const stop = await ledger.stopWrites(targetScope, importActorRef, "Imported configuration awaiting target readiness");
+    if (!stop.ok || !stop.value.stopped) return err({ kind: "invalidConfigArchive" });
+    const effective = await policy.read(targetScope);
+    if (!effective.ok || effective.value.bookingEnabled || effective.value.automationEnabled) return err({ kind: "invalidConfigArchive" });
+    const receipt: ReferenceImportReceipt = { archiveId: data.archiveId, manifestDigest: data.manifestDigest,
+      auditRef: authorized.value.auditRef, sourceScope: data.sourceScope, targetScope: structuredClone(targetScope),
+      sourceSchemaVersion: data.sourceSchemaVersion, policyVersions: data.policies.length,
+      automationVersions: data.automation.length, writeStopVersions: data.writeStops.length,
+      publishedKnowledgeVersions: data.knowledge.length, importedPolicyVersion: effective.value.policyVersion,
+      automationEnabled: false, bookingEnabled: false, writesStopped: true };
+    const staged = { receipt, sourceHistory: data, policy, knowledge, ledger };
+    const concurrent = this.byArchive.get(key);
+    if (concurrent) return concurrent.digest === data.manifestDigest ? ok(concurrent.staged) : err({ kind: "archiveConflict" });
+    if (this.byTarget.has(scopeKey(targetScope))) return err({ kind: "targetOccupied" });
+    this.byArchive.set(key, { digest: data.manifestDigest, staged });
+    this.byTarget.set(scopeKey(targetScope), key);
+    return ok(staged);
+  }
+}

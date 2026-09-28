@@ -44,7 +44,8 @@ function validPeriod(from: string, until: string): boolean {
 
 function nextVersion(history: readonly KnowledgeEntry[]): string {
   const used = new Set(history.map(entry => entry.version));
-  let next = history.length + 1;
+  let next = Math.max(history.length + 1,
+    history.reduce((max, entry) => Number.isSafeInteger(Number(entry.version)) ? Math.max(max, Number(entry.version)) : max, 0) + 1);
   while (used.has(String(next))) next += 1;
   return String(next);
 }
@@ -64,6 +65,21 @@ export class MemoryKnowledgeCatalogue implements KnowledgeCatalogue {
         status: "approved", ownerRef: source.ownerRef, text: source.approvedText, effectiveFrom: source.effectiveFrom,
         effectiveUntil: source.effectiveUntil, actorRef: source.ownerRef, changedAt: source.effectiveFrom }]);
     }
+  }
+
+  /** Seeds published history without treating imported source versions as new approvals. */
+  static fromPublishedHistory(entries: readonly KnowledgeEntry[]): MemoryKnowledgeCatalogue {
+    const catalogue = new MemoryKnowledgeCatalogue();
+    for (const entry of entries) {
+      if (entry.status !== "approved" && entry.status !== "revoked") throw new Error("invalid published knowledge status");
+      const sourceKey = key(entry.scope, entry.sourceRef);
+      const history = catalogue.entries.get(sourceKey) ?? [];
+      if (history.some(previous => previous.version === entry.version)) throw new Error("duplicate published knowledge version");
+      history.push(structuredClone(entry));
+      history.sort((a, b) => Number(a.version) - Number(b.version));
+      catalogue.entries.set(sourceKey, history);
+    }
+    return catalogue;
   }
 
   async list(scope: LocationScope): Promise<Result<readonly KnowledgeEntry[], KnowledgeFailure>> {
