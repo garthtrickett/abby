@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import type { LedgerStore } from "../core/ledger.ts";
+import { pendingCallId } from "../core/pending-location.ts";
 import type { ModelKnowledgeContextHost } from "../core/host.ts";
 import { captureKnowledgeSnapshot, validKnowledgeSnapshot } from "../core/knowledge-evidence.ts";
 import { err, ok } from "../core/model.ts";
@@ -15,11 +15,11 @@ export type AuthenticatedInboundCall = Readonly<{
 }>;
 
 export type RouteFailure = Readonly<{ kind: "routeUnavailable" | "unknownNumber" | "ambiguousClinic" | "locationChoiceRequired" |
-  "invalidLocationChoice" | "staleLocationChoice" | "automationDisabled" | "readinessFailed" }>;
+  "locationChoicePending" | "invalidLocationChoice" | "staleLocationChoice" | "automationDisabled" | "readinessFailed" }>;
 export type PolicyResolver = (dialedNumber: string, accountRef: string) => Promise<Result<CallPolicy, RouteFailure>>;
 
 export function callIdFor(key: ProviderCallKey): string {
-  return createHash("sha256").update(JSON.stringify([key.accountRef, key.providerCallRef])).digest("hex");
+  return pendingCallId(key);
 }
 
 function duplicateOrConflict(receipt: AdmissionReceipt, event: AuthenticatedInboundCall): Result<AdmissionResult, TransitionFailure> {
@@ -50,6 +50,11 @@ export class CallAdmissionService {
     const existing = await this.ledger.findAdmission(callId);
     if (!existing.ok) return existing;
     if (existing.value) return duplicateOrConflict(existing.value, event);
+    const pending = await this.ledger.findPendingLocation(callId);
+    if (!pending.ok) return pending;
+    if (pending.value) return pending.value.admission.key.accountRef === event.key.accountRef &&
+      pending.value.admission.key.providerCallRef === event.key.providerCallRef && pending.value.admission.dialedNumber === event.dialedNumber
+      ? err({ kind: pending.value.status === "expired" ? "admissionExpired" : "locationChoicePending" }) : err({ kind: "callConflict" });
     let policy: Result<CallPolicy, RouteFailure>;
     try {
       policy = await this.resolvePolicy(event.dialedNumber, event.key.accountRef);

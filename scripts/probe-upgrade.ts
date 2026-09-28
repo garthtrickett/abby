@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { sql } from "kysely";
 import type { Result } from "../src/core/model.ts";
+import { initialState } from "../src/core/ledger.ts";
 import { CallRuntime } from "../src/core/runtime.ts";
 import { EffectWorker } from "../src/core/effect-worker.ts";
 import { ReferenceClinicHost } from "../src/reference/clinic-host.ts";
@@ -42,7 +43,11 @@ try {
     const callId = "upgrade-call";
     const now = "2026-09-28T10:00:00.000Z";
     const runtime = new CallRuntime(new PostgresLedger(db), scope);
-    value(await runtime.start(callId, policy));
+    // Seed through the historical schema: the current ledger intentionally requires
+    // the pending-location table, which did not exist at version 001.
+    await sql`insert into calls (call_id, tenant_id, clinic_id, location_id, version, policy_version, state)
+      values (${callId}, ${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, 0,
+        ${policy.policyVersion}, ${JSON.stringify(initialState(callId, policy))}::jsonb)`.execute(db);
     const before = value(await runtime.acceptTurn({ callId, turnId: "request-staff", text: "Please call me", quality: "clear", at: now },
       { kind: "handoff", reason: "callerRequested" }, now));
     const item = Object.values(before.staffItems)[0];
