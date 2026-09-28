@@ -21,6 +21,9 @@ function valid(entry: StaffQueueEntry): boolean {
     (entry.linkedActionKey === undefined || typeof entry.linkedActionKey === "string") &&
     (entry.pendingChangeKey === undefined || typeof entry.pendingChangeKey === "string") &&
     (entry.reviewRequired === undefined || typeof entry.reviewRequired === "boolean") &&
+    (entry.alerts === undefined || (typeof entry.alerts === "object" && entry.alerts !== null &&
+      Object.keys(entry.alerts).every(key => key === "overdue" || key === "needsReview") &&
+      Object.values(entry.alerts).every(status => ["pending", "delivered", "uncertain", "failed", "canceled"].includes(status)))) &&
     entry.taskKey.length <= 256 && entry.callId.length <= 256;
 }
 

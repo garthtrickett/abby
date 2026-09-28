@@ -4,7 +4,7 @@ import type { Result, TransitionFailure } from "./model.ts";
 import { systemTimer } from "./timer.ts";
 import type { TimerPort } from "./timer.ts";
 
-export type EffectWorkFailure = TransitionFailure | Readonly<{ kind: "workerUnavailable"; stage: "clock" | "recovery" }>;
+export type EffectWorkFailure = TransitionFailure | Readonly<{ kind: "workerUnavailable"; stage: "clock" | "prepare" | "recovery" }>;
 
 /** Host-started periodic recovery; it continues running when no voice session is attached. */
 export class EffectWorkLoop {
@@ -13,13 +13,15 @@ export class EffectWorkLoop {
   private readonly clock: () => string;
   private readonly intervalMs: number;
   private readonly timer: TimerPort;
+  private readonly prepare: ((now: string) => Promise<Result<number, TransitionFailure>>) | undefined;
   private running = false;
   private scheduled: unknown;
   private inFlight: Promise<Result<EffectRecoveryReport, EffectWorkFailure>> | undefined;
   private tickInFlight: Promise<void> | undefined;
 
   constructor(recovery: Pick<EffectRecovery, "recover">, onTick: (result: Result<EffectRecoveryReport, EffectWorkFailure>) => void,
-              options: Readonly<{ intervalMs?: number; clock?: () => string; timer?: TimerPort }> = {}) {
+              options: Readonly<{ intervalMs?: number; clock?: () => string; timer?: TimerPort;
+                prepare?: (now: string) => Promise<Result<number, TransitionFailure>> }> = {}) {
     const interval = options.intervalMs ?? 5_000;
     if (!Number.isSafeInteger(interval) || interval < 250 || interval > 60_000) throw new RangeError("intervalMs must be 250..60000");
     this.recovery = recovery;
@@ -27,6 +29,7 @@ export class EffectWorkLoop {
     this.intervalMs = interval;
     this.clock = options.clock ?? (() => new Date().toISOString());
     this.timer = options.timer ?? systemTimer;
+    this.prepare = options.prepare;
   }
 
   runOnce(): Promise<Result<EffectRecoveryReport, EffectWorkFailure>> {
@@ -36,6 +39,12 @@ export class EffectWorkLoop {
       try { now = this.clock(); }
       catch { return err({ kind: "workerUnavailable", stage: "clock" }); }
       if (!Number.isFinite(Date.parse(now))) return err({ kind: "workerUnavailable", stage: "clock" });
+      if (this.prepare) {
+        try {
+          const prepared = await this.prepare(now);
+          if (!prepared.ok) return prepared;
+        } catch { return err({ kind: "workerUnavailable", stage: "prepare" }); }
+      }
       try { return await this.recovery.recover(now); }
       catch { return err({ kind: "workerUnavailable", stage: "recovery" }); }
     })();

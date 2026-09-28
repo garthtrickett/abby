@@ -1,4 +1,4 @@
-import type { Admission, AdmissionResult, CallPolicy, CallState, FinalCallerTurn, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffChangeObservation, StaffChangeReceipt, StaffChangeRequest, StaffTaskObservation, StaffTaskReceipt, TransitionAction, TransitionFailure, TurnInterpretation } from "./model.ts";
+import type { Admission, AdmissionResult, CallPolicy, CallState, FinalCallerTurn, HostWriteReceipt, LocationScope, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffAlertReason, StaffChangeObservation, StaffChangeReceipt, StaffChangeRequest, StaffTaskObservation, StaffTaskReceipt, TransitionAction, TransitionFailure, TurnInterpretation } from "./model.ts";
 import type { LedgerStore } from "./ledger.ts";
 
 export class CallRuntime {
@@ -133,5 +133,25 @@ export class CallRuntime {
 
   acceptStaffChangeReconciliation(callId: string, effectId: string, observation: StaffChangeObservation): Promise<Result<CallState, TransitionFailure>> {
     return this.update(callId, { kind: "staffChangeReconciled", effectId, observation });
+  }
+
+  requestStaffAlert(callId: string, taskKey: string, reason: StaffAlertReason, now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "staffAlertRequested", taskKey, reason, now });
+  }
+
+  markOperatorAlertPossiblySent(callId: string, effectId: string, now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "markOperatorAlertPossiblySent", effectId, now });
+  }
+
+  recoverOperatorAlertPossiblySent(callId: string, effectId: string, now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "recoverOperatorAlertPossiblySent", effectId, now });
+  }
+
+  acceptOperatorAlertResult(callId: string, effectId: string, receipt: OperatorAlertReceipt, now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "operatorAlertResolved", effectId, receipt, now });
+  }
+
+  acceptOperatorAlertReconciliation(callId: string, effectId: string, observation: OperatorAlertObservation, now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "operatorAlertReconciled", effectId, observation, now });
   }
 }

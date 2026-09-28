@@ -198,6 +198,19 @@ export type StaffChangeReceipt =
 export type StaffChangeObservation =
   | Readonly<{ kind: "exactApplied"; commandKey: string; taskKey: string; hostTaskRef: string; status: "open" | "acknowledged" | "resolved"; destination: StaffDestination }>
   | Readonly<{ kind: "definitiveNonApplied" | "stillUnknown"; commandKey: string; taskKey: string }>;
+export type StaffAlertReason = "overdue" | "needsReview";
+export type StaffAlertState = "pending" | "delivered" | "uncertain" | "failed" | "canceled";
+export type OperatorAlert = Readonly<{
+  alertKey: string;
+  callId: string;
+  taskKey: string;
+  scope: LocationScope;
+  reason: StaffAlertReason;
+  destination: StaffDestination;
+  dueAt: string;
+}>;
+export type OperatorAlertReceipt = Readonly<{ kind: "delivered" | "failed" | "uncertain"; alertKey: string }>;
+export type OperatorAlertObservation = Readonly<{ kind: "exactDelivered" | "definitiveNotDelivered" | "stillUnknown"; alertKey: string }>;
 export type StaffItem = Readonly<{
   key: string;
   scope: LocationScope;
@@ -210,6 +223,7 @@ export type StaffItem = Readonly<{
   hostTaskRef?: string;
   pendingChangeKey?: string;
   reviewRequired?: boolean;
+  alerts?: Partial<Record<StaffAlertReason, StaffAlertState>>;
 }>;
 export type StaffQueueEntry = Readonly<{
   callId: string;
@@ -222,6 +236,7 @@ export type StaffQueueEntry = Readonly<{
   linkedActionKey?: string;
   pendingChangeKey?: string;
   reviewRequired?: boolean;
+  alerts?: Partial<Record<StaffAlertReason, StaffAlertState>>;
 }>;
 export type Effect =
   | Readonly<{ kind: "hostWrite"; id: string; actionKey: string; mutation: HostMutation; status: "pending" | "possiblySent" | "completed" | "uncertain" | "canceled"; possiblySentAt?: string }>
@@ -229,7 +244,9 @@ export type Effect =
   | Readonly<{ kind: "staffTask"; id: string; taskKey: string; status: "pending" | "possiblySent" | "completed" | "uncertain"; possiblySentAt?: string }>
   | Readonly<{ kind: "staffReconcile"; id: string; taskKey: string; originalEffectId: string; originalItem: StaffItem; status: "pending" | "completed" }>
   | Readonly<{ kind: "staffChange"; id: string; taskKey: string; change: StaffChange; status: "pending" | "possiblySent" | "completed" | "uncertain"; possiblySentAt?: string }>
-  | Readonly<{ kind: "staffChangeReconcile"; id: string; taskKey: string; originalEffectId: string; change: StaffChange; status: "pending" | "completed" }>;
+  | Readonly<{ kind: "staffChangeReconcile"; id: string; taskKey: string; originalEffectId: string; change: StaffChange; status: "pending" | "completed" }>
+  | Readonly<{ kind: "operatorAlert"; id: string; alert: OperatorAlert; status: "pending" | "possiblySent" | "completed" | "uncertain" | "canceled"; possiblySentAt?: string }>
+  | Readonly<{ kind: "operatorAlertReconcile"; id: string; alert: OperatorAlert; originalEffectId: string; status: "pending" | "completed" }>;
 export type RecoverableEffectRef = Readonly<{
   callId: string;
   scope: LocationScope;
@@ -294,4 +311,9 @@ export type TransitionAction =
   | Readonly<{ kind: "recoverStaffChangePossiblySent"; effectId: string; now: string }>
   | Readonly<{ kind: "staffChangeResolved"; effectId: string; receipt: StaffChangeReceipt }>
   | Readonly<{ kind: "staffChangeReconciled"; effectId: string; observation: StaffChangeObservation }>
+  | Readonly<{ kind: "staffAlertRequested"; taskKey: string; reason: StaffAlertReason; now: string }>
+  | Readonly<{ kind: "markOperatorAlertPossiblySent"; effectId: string; now: string }>
+  | Readonly<{ kind: "recoverOperatorAlertPossiblySent"; effectId: string; now: string }>
+  | Readonly<{ kind: "operatorAlertResolved"; effectId: string; receipt: OperatorAlertReceipt; now: string }>
+  | Readonly<{ kind: "operatorAlertReconciled"; effectId: string; observation: OperatorAlertObservation; now: string }>
   | Readonly<{ kind: "reconciliationDeadline"; actionKey: string; now: string }>;

@@ -1,12 +1,12 @@
-import type { HostWriteReceipt, StaffChangeReceipt, StaffTaskReceipt } from "./model.ts";
-import type { HostEffects, StaffLifecycleHost } from "./host.ts";
+import type { HostWriteReceipt, OperatorAlertReceipt, StaffChangeReceipt, StaffTaskReceipt } from "./model.ts";
+import type { HostEffects, OperatorAlertHost, StaffLifecycleHost } from "./host.ts";
 import { CallRuntime } from "./runtime.ts";
 
 export class EffectWorker {
   private readonly runtime: CallRuntime;
-  private readonly host: HostEffects & Partial<StaffLifecycleHost>;
+  private readonly host: HostEffects & Partial<StaffLifecycleHost & OperatorAlertHost>;
 
-  constructor(runtime: CallRuntime, host: HostEffects & Partial<StaffLifecycleHost>) {
+  constructor(runtime: CallRuntime, host: HostEffects & Partial<StaffLifecycleHost & OperatorAlertHost>) {
     this.runtime = runtime;
     this.host = host;
   }
@@ -78,6 +78,27 @@ export class EffectWorker {
         : { kind: "stillUnknown" as const, commandKey: effect.change.commandKey, taskKey: effect.taskKey };
       const resolved = await this.runtime.acceptStaffChangeReconciliation(callId, effectId, observation);
       if (!resolved.ok) throw new Error(resolved.error.kind);
+      return;
+    }
+    if (effect.kind === "operatorAlert") {
+      if (effect.status !== "pending" || !this.host.sendAlert) throw new Error("alertUnavailable");
+      const marked = await this.runtime.markOperatorAlertPossiblySent(callId, effectId, now);
+      if (!marked.ok) throw new Error(marked.error.kind);
+      if (marked.value.effects[effectId]?.status === "canceled") return;
+      let receipt: OperatorAlertReceipt;
+      try { receipt = await this.host.sendAlert(effect.alert); }
+      catch { receipt = { kind: "uncertain", alertKey: effect.alert.alertKey }; }
+      const resolved = await this.runtime.acceptOperatorAlertResult(callId, effectId, receipt, now);
+      if (!resolved.ok) throw new Error(resolved.error.kind);
+      if (receipt.kind === "failed") throw new Error("alertDeliveryFailed");
+      return;
+    }
+    if (effect.kind === "operatorAlertReconcile") {
+      if (effect.status !== "pending" || !this.host.reconcileAlert) throw new Error("alertUnavailable");
+      const observation = await this.host.reconcileAlert(effect.alert);
+      const resolved = await this.runtime.acceptOperatorAlertReconciliation(callId, effectId, observation, now);
+      if (!resolved.ok) throw new Error(resolved.error.kind);
+      if (observation.kind !== "exactDelivered") throw new Error("alertDeliveryUnproven");
       return;
     }
     if (effect.status !== "pending") throw new Error("invalidTransition");

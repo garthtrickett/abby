@@ -3,6 +3,10 @@ import test from "node:test";
 import { EffectWorkLoop } from "../../src/core/effect-work-loop.ts";
 import { ok } from "../../src/core/model.ts";
 import type { TimerPort } from "../../src/core/timer.ts";
+import { EffectRecovery } from "../../src/core/effect-recovery.ts";
+import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
+import { StaffAlertMonitor } from "../../src/reference/staff-alert-monitor.ts";
+import { setup } from "./fixture.ts";
 
 test("effect recovery starts immediately, coalesces overlap, and stops without another tick", async () => {
   const scheduled = new Map<number, () => void>();
@@ -41,4 +45,22 @@ test("effect recovery starts immediately, coalesces overlap, and stops without a
   assert.equal(scheduled.size, 1);
   await loop.stop();
   assert.equal(scheduled.size, 0);
+});
+
+test("work loop stages an overdue alert before draining its durable effect", async () => {
+  const app = await setup("alert-work-loop");
+  await app.turn("handoff", "Need staff", { kind: "handoff", reason: "callerRequested" });
+  const host = new ReferenceClinicHost([], []);
+  const monitor = new StaffAlertMonitor(app.ledger, app.scope);
+  const loop = new EffectWorkLoop(new EffectRecovery(app.ledger, () => host, app.scope), () => {},
+    { clock: () => "2026-09-29T10:00:01.000Z", prepare: time => monitor.scan(time) });
+  const first = await loop.runOnce();
+  if (!first.ok) throw new Error(first.error.kind);
+  assert.equal(first.value.failed.length, 0);
+  assert.equal(host.alerts(app.scope).length, 1);
+  const second = await loop.runOnce();
+  if (!second.ok) throw new Error(second.error.kind);
+  assert.equal(second.value.processed, 0);
+  assert.equal(host.alerts(app.scope).length, 1);
+  assert.equal((await app.state()).lifecycle, "active");
 });
