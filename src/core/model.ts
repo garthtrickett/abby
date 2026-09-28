@@ -163,7 +163,7 @@ export type CallState = {
 };
 
 export type TransitionFailure =
-  | Readonly<{ kind: "callUnknown" | "callConflict" | "versionConflict" | "invalidTransition" | "scopeMismatch" | "evidenceExpired" | "confirmationMissing" | "digestChanged" | "effectUnknown" | "keyMismatch" | "storageFailure" | "storageCorrupt" | "admissionExpired" | "leaseLost" }>;
+  | Readonly<{ kind: "callUnknown" | "callConflict" | "versionConflict" | "invalidTransition" | "scopeMismatch" | "evidenceExpired" | "confirmationMissing" | "digestChanged" | "effectUnknown" | "keyMismatch" | "storageFailure" | "storageCorrupt" | "admissionExpired" | "leaseLost" | "staleTurn" }>;
 
 export type TransitionAction =
   | Readonly<{ kind: "sessionActivated"; sessionId: string; now: string }>
@@ -171,7 +171,8 @@ export type TransitionAction =
   | Readonly<{ kind: "admissionExpired"; now: string }>
   | Readonly<{ kind: "sessionExpired"; sessionId: string; expectedLeaseVersion: number; now: string }>
   | Readonly<{ kind: "callEnded"; sessionId: string; now: string }>
-  | Readonly<{ kind: "callerTurn"; turn: FinalCallerTurn; interpretation: TurnInterpretation; now: string }>
+  | Readonly<{ kind: "speechBegan"; sessionId: string; now: string }>
+  | Readonly<{ kind: "callerTurn"; turn: FinalCallerTurn; interpretation: TurnInterpretation; now: string; expectedConversationRevision?: number }>
   | Readonly<{ kind: "presentationStarted"; presentationId: string; sessionId?: string; now?: string }>
   | Readonly<{ kind: "presentationResolved"; presentationId: string; status: "played" | "interrupted" | "failed" | "unproven"; sessionId?: string; now?: string }>
   | Readonly<{ kind: "markHostPossiblySent"; effectId: string; now: string }>

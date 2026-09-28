@@ -64,10 +64,22 @@ export class VoiceSession {
     this.cachedIntent = undefined;
     this.speechOpen = true;
     const active = this.activePlayback;
-    if (!active) return ok(generation);
-    this.activePlayback = undefined;
+    if (active) this.activePlayback = undefined;
     let cleared = false;
-    try { cleared = await this.playback.clear(active.id); } catch { /* no terminal transport evidence */ }
+    let clear: Promise<void> = Promise.resolve();
+    if (active) {
+      try {
+        clear = this.playback.clear(active.id).then(result => { cleared = result; }, () => { /* no terminal transport evidence */ });
+      } catch { /* no terminal transport evidence */ }
+    }
+    const began = await this.runtime.beginSpeech(this.callId, this.sessionId, now);
+    await clear;
+    if (!began.ok) {
+      this.attached = false;
+      this.speechOpen = false;
+      return began;
+    }
+    if (!active) return ok(generation);
     const result = await this.runtime.resolvePresentation(this.callId, active.presentationId, cleared ? "interrupted" : "unproven", this.sessionId, now);
     if (!cleared) {
       const ended = await this.runtime.endCall(this.callId, this.sessionId, now);
@@ -86,11 +98,13 @@ export class VoiceSession {
 
   async finishTurn(now: string): Promise<Result<CallState, VoiceSessionFailure>> {
     if (!this.attached || !this.speechOpen) return err({ kind: "sessionUnknown" });
+    const generation = this.assembler.currentGeneration();
     const final = this.assembler.finish(now);
     if (!final.ok) return final;
     const turn = final.value;
     const existing = await this.runtime.read(this.callId);
     if (!existing.ok) return existing;
+    if (generation !== this.assembler.currentGeneration()) return err({ kind: "staleTurn" });
     if (existing.value.processedTurnIds.includes(turn.turnId)) {
       this.speechOpen = false;
       return existing;
@@ -99,20 +113,21 @@ export class VoiceSession {
       let intent: Result<VoiceIntent, Readonly<{ kind: "intentUnavailable" }>>;
       try { intent = await this.resolveIntent(turn); } catch { return err({ kind: "intentUnavailable" }); }
       if (!intent.ok) return intent;
+      if (generation !== this.assembler.currentGeneration()) return err({ kind: "staleTurn" });
       this.cachedIntent = intent.value;
     }
     let result: Result<CallState, VoiceSessionFailure>;
     if (this.cachedIntent.kind === "book") {
-      result = await this.reception.proposeBooking(this.scope, turn, this.cachedIntent.verificationRef, this.cachedIntent.offerRef, now);
+      result = await this.reception.proposeBooking(this.scope, turn, this.cachedIntent.verificationRef, this.cachedIntent.offerRef, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "handoff") {
-      result = await this.runtime.acceptTurn(turn, { kind: "handoff", reason: this.cachedIntent.reason }, now);
+      result = await this.runtime.acceptTurn(turn, { kind: "handoff", reason: this.cachedIntent.reason }, now, existing.value.conversationRevision);
     } else {
       if (turn.quality !== "clear" || !clearAffirmation(turn.text)) return err({ kind: "confirmationMissing" });
       const candidates = Object.values(existing.value.actions).filter(action => action.status === "awaitingConfirmation" && existing.value.presentations[action.presentationId]?.status === "played");
       if (candidates.length !== 1) return err({ kind: "confirmationMissing" });
-      result = await this.reception.affirm(this.scope, turn, candidates[0]!.key, candidates[0]!.digest, now);
+      result = await this.reception.affirm(this.scope, turn, candidates[0]!.key, candidates[0]!.digest, now, existing.value.conversationRevision);
     }
-    if (result.ok) this.speechOpen = false;
+    if (result.ok && generation === this.assembler.currentGeneration()) this.speechOpen = false;
     return result;
   }
 

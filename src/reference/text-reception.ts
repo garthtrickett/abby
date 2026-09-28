@@ -29,12 +29,12 @@ export class TextReception {
     return this.runtime(scope).start(callId, policy.value);
   }
 
-  async proposeBooking(scope: LocationScope, turn: FinalCallerTurn, verificationRef: string, offerRef: string, now: string): Promise<Result<CallState, TextReceptionFailure>> {
+  async proposeBooking(scope: LocationScope, turn: FinalCallerTurn, verificationRef: string, offerRef: string, now: string, expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
     const runtime = this.runtime(scope);
     const current = await runtime.read(turn.callId);
     if (!current.ok) return current;
     if (current.value.policy.capabilities.book === "unavailable") {
-      return runtime.acceptTurn(turn, { kind: "unavailableAction", actionKind: "book" }, now);
+      return runtime.acceptTurn(turn, { kind: "unavailableAction", actionKind: "book" }, now, expectedConversationRevision);
     }
     let interpretation: TurnInterpretation;
     if (turn.quality !== "clear") {
@@ -49,7 +49,7 @@ export class TextReception {
         interpretation = { kind: "readFailure", target: evidence.error.target, failure: evidence.error.kind === "unavailable" ? "unavailable" : "notFound" };
       }
     }
-    return runtime.acceptTurn(turn, interpretation, now);
+    return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);
   }
 
   async acknowledgeTextPresentation(scope: LocationScope, callId: string, presentationId: string): Promise<Result<CallState, TransitionFailure>> {
@@ -59,8 +59,8 @@ export class TextReception {
     return runtime.resolvePresentation(callId, presentationId, "played");
   }
 
-  affirm(scope: LocationScope, turn: FinalCallerTurn, actionKey: string, digest: string, now: string): Promise<Result<CallState, TransitionFailure>> {
-    return this.runtime(scope).acceptTurn(turn, { kind: "affirm", actionKey, digest, affirmative: true }, now);
+  affirm(scope: LocationScope, turn: FinalCallerTurn, actionKey: string, digest: string, now: string, expectedConversationRevision?: number): Promise<Result<CallState, TransitionFailure>> {
+    return this.runtime(scope).acceptTurn(turn, { kind: "affirm", actionKey, digest, affirmative: true }, now, expectedConversationRevision);
   }
 
   async drain(scope: LocationScope, callId: string, now: string): Promise<Result<CallState, TextReceptionFailure>> {
