@@ -13,9 +13,9 @@ import { PostgresKnowledgeCatalogue } from "../../src/storage/postgres-knowledge
 import { ReferenceConfigArchiveImporter } from "../../src/reference/config-archive-import.ts";
 import { createEmbeddedTextComposition } from "../../src/reference/embedded-composition.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
-import { buildPostgresConfigArchive } from "../../src/storage/postgres-config-archive.ts";
+import { buildPostgresConfigArchive, buildPostgresTenantConfigArchive } from "../../src/storage/postgres-config-archive.ts";
 import { comparePostgresConfigArchiveSource } from "../../src/storage/postgres-config-archive-drift.ts";
-import type { ConfigArchiveAuthority, ConfigArchiveRequest } from "../../src/storage/postgres-config-archive.ts";
+import type { ConfigArchiveAuthority, ConfigArchiveRequest, TenantConfigArchiveRequest } from "../../src/storage/postgres-config-archive.ts";
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
@@ -286,4 +286,56 @@ test("configuration snapshot comparison detects setting and knowledge drift befo
   const ineligible = await comparePostgresConfigArchiveSource(db, baseline.value,
     { ...comparison, archiveId: "drift-check-4" }, authority);
   assert.deepEqual(ineligible, { ok: false, error: { kind: "callsRequireRetention" } });
+});
+
+test("one PostgreSQL snapshot exports every mapped location and refuses a partial tenant", async () => {
+  const tenantId = "archive-two-locations-tenant";
+  const first = { tenantId, clinicId: "clinic", locationId: "a" };
+  const second = { tenantId, clinicId: "clinic", locationId: "b" };
+  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly", async () => ok(true));
+  assert.equal((await policy.changeBookingEnabled(first, "0", true, "archive-admin")).ok, true);
+  assert.equal((await policy.changeBookingEnabled(second, "0", false, "archive-admin")).ok, true);
+  assert.equal((await policy.changeAutomationEnabled(first, "0", true, "archive-admin")).ok, true);
+  const knowledge = new PostgresKnowledgeCatalogue(db);
+  for (const [scope, sourceRef] of [[first, "parking-a"], [second, "parking-b"]] as const) {
+    assert.equal((await knowledge.saveDraft(scope, sourceRef, "0", "clinic-owner", `Directions for ${sourceRef}`,
+      "2026-09-01T00:00:00Z", "2026-10-01T00:00:00Z", "archive-admin")).ok, true);
+    assert.equal((await knowledge.approve(scope, sourceRef, "1", "archive-admin")).ok, true);
+  }
+  const request: TenantConfigArchiveRequest = { sourceTenantId: tenantId, archiveId: "two-location-archive",
+    actorRef: "archive-admin", createdAt: "2026-09-28T22:00:00Z", locations: [
+      { sourceScope: second, targetScope: { tenantId: "buyer-two", clinicId: "clinic", locationId: "b" },
+        timeZone: "Australia/Melbourne", mappingProvenance: "reviewed-b" },
+      { sourceScope: first, targetScope: { tenantId: "buyer-two", clinicId: "clinic", locationId: "a" },
+        timeZone: "Australia/Sydney", mappingProvenance: "reviewed-a" },
+    ] };
+  let audited = 0;
+  const authority = { authorizeAndRecord: async () => { audited += 1; return ok({ requestRef: `two-location-audit-${audited}` }); } };
+  const exported = await buildPostgresTenantConfigArchive(db, request, authority);
+  assert.equal(exported.ok, true);
+  if (!exported.ok) return;
+  assert.equal((await verifyArchiveEnvelope(exported.value)).ok, true);
+  const locations = await records(exported.value, "locations");
+  const settings = await records(exported.value, "settings");
+  const published = await records(exported.value, "knowledge");
+  assert.deepEqual(locations.map(row => row.sourceLocationId), ["a", "b"]);
+  assert.deepEqual(settings.filter(row => row.kind === "locationPolicy" && row.isHead)
+    .map(row => row.sourceLocationId).sort(), ["a", "b"]);
+  assert.equal(settings.filter(row => row.kind === "clinicAutomation" && row.isHead).length, 1);
+  assert.deepEqual(published.map(row => row.sourceLocationId).sort(), ["a", "b"]);
+  const manifest = JSON.parse(Buffer.from(exported.value.manifestBytes).toString());
+  assert.deepEqual(manifest.locationMappings.map((row: { sourceScope: { locationId: string } }) => row.sourceScope.locationId), ["a", "b"]);
+  const partial = await buildPostgresTenantConfigArchive(db, { ...request, archiveId: "partial-two-location-archive",
+    locations: request.locations.slice(0, 1) }, authority);
+  assert.deepEqual(partial, { ok: false, error: { kind: "scopeIncomplete" } });
+  const duplicateTarget = await buildPostgresTenantConfigArchive(db, { ...request, archiveId: "duplicate-target-archive",
+    locations: [request.locations[0]!, { ...request.locations[1]!, targetScope: request.locations[0]!.targetScope }] }, authority);
+  assert.deepEqual(duplicateTarget, { ok: false, error: { kind: "invalidConfig" } });
+  const splitTargetTenant = await buildPostgresTenantConfigArchive(db, { ...request, archiveId: "split-target-archive",
+    locations: [request.locations[0]!, { ...request.locations[1]!, targetScope: { ...request.locations[1]!.targetScope, tenantId: "other-buyer" } }] }, authority);
+  assert.deepEqual(splitTargetTenant, { ok: false, error: { kind: "invalidConfig" } });
+  const missingTimeZone = await buildPostgresTenantConfigArchive(db, { ...request, archiveId: "missing-zone-archive",
+    locations: [request.locations[0]!, { ...request.locations[1]!, timeZone: "" }] }, authority);
+  assert.deepEqual(missingTimeZone, { ok: false, error: { kind: "invalidConfig" } });
+  assert.equal(audited, 2);
 });
