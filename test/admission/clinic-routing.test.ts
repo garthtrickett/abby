@@ -61,7 +61,7 @@ function fixture(kind: "memory" | "postgres") {
   } }, { async notify(alert) { alerts.push(alert.reason); } });
   const event = (providerCallRef: string, dialedNumber = number, accountRef = account) =>
     ({ key: { accountRef, providerCallRef }, dialedNumber, receivedAt: now });
-  return { main, foreign, ledger, policy, account, number, sharedNumber, ambiguousNumber, coordinator, admission,
+  return { main, otherLocation, foreign, ledger, policy, router, account, number, sharedNumber, ambiguousNumber, coordinator, admission,
     event, fallbackRequests, alerts, identityReads: () => identityReads, policyReads: () => policyReads,
     replaceHost(host: ReferenceNumberRoutingHost) { routeHost = host; } };
 }
@@ -153,5 +153,53 @@ for (const kind of kinds) {
     assert.ok(!rejectedPolicy.ok);
     assert.equal(rejectedPolicy.error.kind, "routeUnavailable");
     assert.equal(value(await app.ledger.findAdmission(callIdFor(rejectedPolicyEvent.key))), null);
+  });
+
+  test(`${kind}: selected shared-number location binds policy and rejects other scopes`, async () => {
+    const app = fixture(kind);
+    const identity = value(await app.router.identify(app.account, app.sharedNumber));
+    assert.deepEqual(identity.candidateLocationIds, ["main", "other"]);
+    assert.equal(app.policyReads(), 0);
+    const choice = { tenantId: identity.tenantId, clinicId: identity.clinicId,
+      locationId: app.otherLocation.locationId, routeVersion: identity.routeVersion };
+    const invalid = await app.router.resolveSelected(app.account, app.sharedNumber, { ...choice, locationId: "foreign" });
+    assert.ok(!invalid.ok);
+    assert.equal(invalid.error.kind, "invalidLocationChoice");
+    assert.equal(app.policyReads(), 0);
+    const stale = await app.router.resolveSelected(app.account, app.sharedNumber, { ...choice, tenantId: app.foreign.tenantId });
+    assert.ok(!stale.ok);
+    assert.equal(stale.error.kind, "staleLocationChoice");
+    assert.equal(app.policyReads(), 0);
+
+    value(await app.policy.changeAutomationEnabled(app.otherLocation, "0", true, "clinic-admin"));
+    const event = app.event("chosen-location", app.sharedNumber);
+    const chosenAdmission = new CallAdmissionService(app.ledger,
+      (dialedNumber, accountRef) => app.router.resolveSelected(accountRef, dialedNumber, choice), () => now, async () => ok(true));
+    const admitted = value(await chosenAdmission.begin(event));
+    assert.equal(admitted.kind, "created");
+    assert.deepEqual(admitted.receipt.scope, app.otherLocation);
+    assert.equal(value(await new CallRuntime(app.ledger, app.otherLocation).read(admitted.receipt.callId)).policy.numberRouteVersion,
+      choice.routeVersion);
+    assert.equal((await new CallRuntime(app.ledger, app.main).read(admitted.receipt.callId)).ok, false);
+    assert.equal((await new CallRuntime(app.ledger, app.foreign).read(admitted.receipt.callId)).ok, false);
+  });
+
+  test(`${kind}: changed shared-number route invalidates a pending choice`, async () => {
+    const app = fixture(kind);
+    const identity = value(await app.router.identify(app.account, app.sharedNumber));
+    const choice = { tenantId: identity.tenantId, clinicId: identity.clinicId,
+      locationId: app.main.locationId, routeVersion: identity.routeVersion };
+    app.replaceHost(new ReferenceNumberRoutingHost([
+      { accountRef: app.account, dialedNumber: app.sharedNumber, ...app.main, routeVersion: "route-v2" },
+      { accountRef: app.account, dialedNumber: app.sharedNumber, ...app.otherLocation, routeVersion: "route-v2" },
+    ]));
+    const event = app.event("stale-choice", app.sharedNumber);
+    const selected = new CallAdmissionService(app.ledger,
+      (dialedNumber, accountRef) => app.router.resolveSelected(accountRef, dialedNumber, choice), () => now, async () => ok(true));
+    const outcome = await selected.begin(event);
+    assert.ok(!outcome.ok);
+    assert.equal(outcome.error.kind, "staleLocationChoice");
+    assert.equal(app.policyReads(), 0);
+    assert.equal(value(await app.ledger.findAdmission(callIdFor(event.key))), null);
   });
 }
