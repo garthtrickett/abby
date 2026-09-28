@@ -1,0 +1,7 @@
+# Staffed transfer windows
+
+The host supplies `CallPolicy.staffedIntervals` when it enables executable live transfer. Each interval has canonical UTC `startsAt` and `endsAt` instants, with an inclusive start and exclusive end. Before admitting a call, the host expands the location's time zone, opening hours, holidays, and allowed transfer windows into those intervals. The call retains that versioned policy snapshot. Missing, empty, malformed, or oversized interval lists close live transfer; the reference policy has no live transfer destination or staffed intervals.
+
+A clear transfer request inside a staffed interval creates a pending transfer. A request outside one creates a durable staff task and caller notice without claiming a live connection. The reducer checks the interval again when it marks a started transfer possibly sent. If the window closed meanwhile, that same ledger transition cancels the unsent transfer, requests staff follow-up, and queues a truthful notice. The transport port is not called. A transfer already marked possibly sent keeps its existing evidence rules: it cannot be called canceled just because the window later closes.
+
+Synthetic full-call E2E exercises open, closed, and boundary-crossing windows through `VoiceSession` with both memory and PostgreSQL ledgers. A holiday exclusion is represented by the host omitting that day's staffed interval. This does not implement the host's recurring schedule expansion or prove live telephony. Those need separate conformance tests before caller traffic.

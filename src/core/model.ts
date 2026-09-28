@@ -29,6 +29,7 @@ export type StaffDestination =
 export type ActionKind = "book" | "cancel" | "reschedule" | "intake";
 export type CapabilityId = ActionKind | "transfer";
 export type CapabilityMode = "execute" | "requestOnly" | "unavailable";
+export type StaffedInterval = Readonly<{ startsAt: string; endsAt: string }>;
 
 export type CallPolicy = Readonly<{
   scope: LocationScope;
@@ -36,6 +37,7 @@ export type CallPolicy = Readonly<{
   bookingEnabled: boolean;
   capabilities: Readonly<Record<CapabilityId, CapabilityMode>>;
   transferDestinationRef?: string;
+  staffedIntervals?: readonly StaffedInterval[];
   staffDestination: StaffDestination;
   operatorQueue: StaffDestination;
 }>;
