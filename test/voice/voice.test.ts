@@ -10,6 +10,7 @@ import { CallRuntime } from "../../src/core/runtime.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { createEmbeddedTextComposition } from "../../src/reference/embedded-composition.ts";
 import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
+import { expandStaffSchedule } from "../../src/reference/staff-schedule.ts";
 import type { TextReception } from "../../src/reference/text-reception.ts";
 import type { PolicyStore } from "../../src/core/host.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
@@ -601,6 +602,30 @@ for (const kind of kinds) {
     assert.equal(value(await app.session.dispatchPending(at(4))).kind, "queued");
     assert.equal(app.transfer.requested.length, 0);
     assert.equal(value(await app.session.drainEffects(at(5))).staffItems[Object.keys(state.staffItems)[0]!]?.status, "open");
+  });
+
+  test(`${kind}: host local hours and holiday expansion control the full transfer path`, async () => {
+    const weekly = [{ weekday: 1, startMinute: 19 * 60, endMinute: 21 * 60 }];
+    const openIntervals = value(expandStaffSchedule({ timeZone: "Australia/Sydney", weekly, closedDates: [] }, at(0), at(3_600)));
+    assert.equal(openIntervals.length, 1);
+    const open = await fixture(kind, `${kind}-local-hours`, false, "execute", undefined, undefined,
+      { staffedIntervals: openIntervals });
+    const planned = await transferTurn(open);
+    assert.equal(planned.presentations[planned.pendingPresentationId!]?.kind, "transfer");
+    open.transfer.outcome = { kind: "connected", providerConnectionRef: "local-hours-connection" };
+    assert.equal(value(await open.session.dispatchPending(at(4))).kind, "transferConnected");
+    assert.equal(open.transfer.requested.length, 1);
+
+    const closedIntervals = value(expandStaffSchedule({ timeZone: "Australia/Sydney", weekly,
+      closedDates: ["2026-09-28"] }, at(0), at(3_600)));
+    assert.deepEqual(closedIntervals, []);
+    const closed = await fixture(kind, `${kind}-local-holiday`, false, "execute", undefined, undefined,
+      { staffedIntervals: closedIntervals });
+    const routed = await transferTurn(closed);
+    assert.equal(routed.presentations[routed.pendingPresentationId!]?.kind, "notice");
+    assert.equal(Object.values(routed.staffItems)[0]?.reason, "callerRequested");
+    assert.equal(closed.transfer.requested.length, 0);
+    assert.equal(value(await closed.session.dispatchPending(at(4))).kind, "queued");
   });
 
   test(`${kind}: a staffed window closing before transfer send cancels and requests follow-up`, async () => {
