@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""Exercise one synthetic appointment in the demo account, then archive all fixtures."""
+
+import base64
+import getpass
+import json
+import re
+import sys
+import uuid
+from datetime import datetime, timedelta, timezone
+from urllib.error import URLError
+from urllib.parse import quote, urlencode
+
+from cliniko_availability_probe import ProbeError, request, rows
+
+
+def exact_appointment(base: str, headers: dict[str, str], patient_id: str, marker: str) -> tuple[str | None, int]:
+    query = urlencode({"per_page": 100, "q[]": f"patient_id:={patient_id}"})
+    status, data = request(base, headers, "GET", f"/individual_appointments?{query}")
+    if status != 200 or not isinstance(data.get("individual_appointments"), list):
+        raise ProbeError(f"reconcile_read_{status}")
+    matches = [row for row in data["individual_appointments"] if row.get("notes") == marker]
+    return (str(matches[0]["id"]) if len(matches) == 1 else None), len(matches)
+
+
+def exact_patient(base: str, headers: dict[str, str], reference_id: str) -> tuple[str | None, int]:
+    query = urlencode({"per_page": 100, "q[]": f"old_reference_id:={reference_id}"})
+    status, data = request(base, headers, "GET", f"/patients?{query}")
+    if status != 200 or not isinstance(data.get("patients"), list):
+        raise ProbeError(f"patient_reconcile_read_{status}")
+    matches = [row for row in data["patients"] if row.get("old_reference_id") == reference_id]
+    return (str(matches[0]["id"]) if len(matches) == 1 else None), len(matches)
+
+
+def main() -> int:
+    if not sys.stdin.isatty():
+        print("Run in a terminal so the API key is hidden.", file=sys.stderr)
+        return 2
+    contact = input("Cliniko API contact email: ").strip()
+    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", contact):
+        print("Invalid contact email.", file=sys.stderr)
+        return 2
+    key = getpass.getpass("Cliniko API key (hidden): ").strip()
+    shard = key.rpartition("-")[2]
+    if not re.fullmatch(r"[a-z]{2}[0-9]+", shard):
+        print("Invalid key shard suffix.", file=sys.stderr)
+        return 2
+    base = f"https://api.{shard}.cliniko.com/v1"
+    headers = {
+        "Accept": "application/json",
+        "Authorization": "Basic " + base64.b64encode(f"{key}:".encode()).decode(),
+        "Content-Type": "application/json",
+        "User-Agent": f"Abby Phase 0 ({contact})",
+    }
+    reference_id = uuid.uuid4().hex
+    marker = "Abby synthetic probe " + reference_id
+    business_path = None
+    original_flag = None
+    changed_business = False
+    patient_id = None
+    appointment_id = None
+    cancelled_ok = False
+    failed = False
+    cleanup_failed = False
+    try:
+        businesses = rows(base, headers, "businesses")
+        practitioners = rows(base, headers, "practitioners")
+        types = rows(base, headers, "appointment_types")
+        if len(businesses) != 1 or len(practitioners) != 1 or not types:
+            raise ProbeError("expected_one_demo_business_and_practitioner")
+        business = businesses[0]
+        original_flag = business.get("show_in_online_bookings")
+        if original_flag not in (True, False):
+            raise ProbeError("business_flag_not_boolean")
+        business_id = str(business["id"])
+        practitioner_id = str(practitioners[0]["id"])
+        business_path = f"/businesses/{quote(business_id, safe='')}"
+        print(json.dumps({"probe": "cliniko_write_v1", "shard": shard, "business_flag_before": original_flag}))
+        if not original_flag:
+            changed_business = True
+            status, data = request(base, headers, "PATCH", business_path, {"show_in_online_bookings": True})
+            if status != 200 or data.get("show_in_online_bookings") is not True:
+                raise ProbeError(f"enable_online_booking_{status}")
+            print(json.dumps({"step": "enable_online_booking", "http_status": status}))
+
+        target_date = (datetime.now(timezone.utc).date() + timedelta(days=2)).isoformat()
+        offer_type = None
+        offers = []
+        for item in types:
+            type_id = str(item["id"])
+            path = (f"/businesses/{quote(business_id, safe='')}/practitioners/{quote(practitioner_id, safe='')}"
+                    f"/appointment_types/{quote(type_id, safe='')}/available_times?"
+                    + urlencode({"from": target_date, "to": target_date, "per_page": 10}))
+            status, data = request(base, headers, "GET", path)
+            if status == 200 and isinstance(data.get("available_times"), list) and data["available_times"]:
+                offer_type = type_id
+                offers = data["available_times"]
+                break
+        if offer_type is None:
+            raise ProbeError("no_bookable_offer")
+        starts_at = offers[0].get("appointment_start")
+        if not isinstance(starts_at, str):
+            raise ProbeError("invalid_offer_shape")
+        print(json.dumps({"step": "offer", "http_status": 200, "offer_count_in_page": len(offers)}))
+
+        patient_body = {"first_name": "Abby", "last_name": "SyntheticProbe" + reference_id, "old_reference_id": reference_id}
+        status, patient = request(base, headers, "POST", "/patients", patient_body)
+        if status != 201 or not patient.get("id"):
+            raise ProbeError(f"create_patient_{status}")
+        patient_id = str(patient["id"])
+        print(json.dumps({"step": "create_synthetic_patient", "http_status": status}))
+
+        appointment_body = {
+            "business_id": business_id, "practitioner_id": practitioner_id,
+            "appointment_type_id": offer_type, "patient_id": patient_id,
+            "starts_at": starts_at, "notes": marker,
+        }
+        status, appointment = request(base, headers, "POST", "/individual_appointments", appointment_body)
+        if status != 201 or not appointment.get("id"):
+            raise ProbeError(f"create_appointment_{status}")
+        appointment_id = str(appointment["id"])
+        print(json.dumps({"step": "create_appointment", "http_status": status}))
+
+        reconciled_id, count = exact_appointment(base, headers, patient_id, marker)
+        print(json.dumps({"step": "reconcile_without_post_response", "exact_matches": count, "same_appointment": reconciled_id == appointment_id}))
+        if reconciled_id != appointment_id:
+            raise ProbeError("exact_reconciliation_unproven")
+
+        if len(offers) > 1 and isinstance(offers[1].get("appointment_start"), str):
+            second_start = offers[1]["appointment_start"]
+            status, moved = request(base, headers, "PATCH", f"/individual_appointments/{quote(appointment_id, safe='')}", {"starts_at": second_start, "ends_at": None})
+            read_status, current = request(base, headers, "GET", f"/individual_appointments/{quote(appointment_id, safe='')}")
+            moved_ok = status == 200 and read_status == 200 and moved.get("starts_at") == second_start and current.get("starts_at") == second_start
+            print(json.dumps({"step": "reschedule", "patch_status": status, "read_status": read_status, "verified": moved_ok}))
+            if not moved_ok:
+                failed = True
+
+        status, _ = request(base, headers, "PATCH", f"/individual_appointments/{quote(appointment_id, safe='')}/cancel", {
+            "cancellation_reason": 50, "cancellation_note": "Abby synthetic probe cleanup", "apply_to_repeats": False,
+        })
+        cancelled_path = f"/individual_appointments/{quote(appointment_id, safe='')}?" + urlencode({"q[]": "cancelled_at:*"})
+        read_status, cancelled = request(base, headers, "GET", cancelled_path)
+        cancelled_ok = status == 204 and read_status == 200 and bool(cancelled.get("cancelled_at"))
+        print(json.dumps({"step": "cancel_appointment", "patch_status": status, "read_status": read_status, "verified": cancelled_ok}))
+        if not cancelled_ok:
+            failed = True
+    except (ProbeError, URLError, TimeoutError, ValueError, KeyError) as error:
+        failed = True
+        label = str(error) if isinstance(error, ProbeError) else type(error).__name__
+        print(json.dumps({"error": label}), file=sys.stderr)
+    finally:
+        if not patient_id:
+            try:
+                patient_id, count = exact_patient(base, headers, reference_id)
+                if count > 1:
+                    cleanup_failed = True
+                    print(json.dumps({"step": "locate_patient_for_cleanup", "exact_matches": count}))
+            except (ProbeError, URLError, TimeoutError, ValueError, KeyError):
+                cleanup_failed = True
+                print(json.dumps({"step": "locate_patient_for_cleanup", "verified": False}))
+        if patient_id and not appointment_id:
+            try:
+                appointment_id, count = exact_appointment(base, headers, patient_id, marker)
+                if count > 1:
+                    cleanup_failed = True
+                    print(json.dumps({"step": "locate_appointment_for_cleanup", "exact_matches": count}))
+            except (ProbeError, URLError, TimeoutError, ValueError, KeyError):
+                cleanup_failed = True
+                print(json.dumps({"step": "locate_appointment_for_cleanup", "verified": False}))
+        if appointment_id and not cancelled_ok:
+            try:
+                status, _ = request(base, headers, "POST", f"/individual_appointments/{quote(appointment_id, safe='')}/archive")
+                print(json.dumps({"step": "archive_appointment", "http_status": status}))
+                cleanup_failed |= status != 204
+            except (URLError, TimeoutError, ValueError):
+                cleanup_failed = True
+                print(json.dumps({"step": "archive_appointment", "verified": False}))
+        if patient_id:
+            try:
+                status, _ = request(base, headers, "POST", f"/patients/{quote(patient_id, safe='')}/archive")
+                print(json.dumps({"step": "archive_patient", "http_status": status}))
+                cleanup_failed |= status != 204
+            except (URLError, TimeoutError, ValueError):
+                cleanup_failed = True
+                print(json.dumps({"step": "archive_patient", "verified": False}))
+        if changed_business and business_path is not None:
+            try:
+                status, _ = request(base, headers, "PATCH", business_path, {"show_in_online_bookings": original_flag})
+                verify_status, business = request(base, headers, "GET", business_path)
+                restored = status == 200 and verify_status == 200 and business.get("show_in_online_bookings") is original_flag
+                print(json.dumps({"step": "restore_online_booking", "patch_status": status, "verify_status": verify_status, "restored": restored}))
+                cleanup_failed |= not restored
+            except (URLError, TimeoutError, ValueError):
+                cleanup_failed = True
+                print(json.dumps({"step": "restore_online_booking", "restored": False}))
+        if cleanup_failed:
+            print("Cleanup uncertain: inspect this demo account before another write probe.", file=sys.stderr)
+    return 2 if cleanup_failed else 1 if failed else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

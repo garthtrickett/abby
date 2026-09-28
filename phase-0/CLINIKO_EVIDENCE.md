@@ -1,8 +1,8 @@
 # Phase 0 Cliniko evidence
 
-**Status:** Discovery in progress. Documentation evidence is separate from account-probe evidence. No write has been attempted.
+**Status:** Discovery in progress. Documentation evidence is separate from account-probe evidence. Synthetic demo writes have been exercised; no live capability is yet classified executable.
 
-**Account profile:** User-supplied demo account; API key and login credentials are excluded from this repository. The read-only probe records only a shard, HTTP status, and aggregate count. An account permission or safe-write conclusion requires its own evidence.
+**Account profile:** User-supplied demo account; API key and login credentials are excluded from this repository. Probes print only the shard, HTTP statuses, aggregate counts, and synthetic cleanup outcomes. A safe-write conclusion requires more than a successful account mutation.
 
 | Evidence ID | Claim supported by current evidence | Source and observation | Limit |
 | --- | --- | --- | --- |
@@ -12,19 +12,21 @@
 | C-DOC-04 | Available times are host-calculated and respect online-booking settings. The endpoint requires business, practitioner, appointment type, and a bounded date range. | [Official Available Time reference](https://docs.api.cliniko.com/openapi/available-time) | Does not establish this account's eligible combinations or whether a returned time remains available at write time. |
 | C-DOC-05 | Individual appointments have list, create, read, update, and cancel operations; list filtering includes patient, business, practitioner, start time, and creation time. | [Official Individual Appointment reference](https://docs.api.cliniko.com/openapi/individual-appointment) | The documented operations alone do not prove a stable idempotency key, exact lost-response reconciliation, or atomic rescheduling. |
 | C-LIVE-01 | The demo API key can read business, appointment-type, practitioner, and individual-appointment list metadata. | 2026-09-28, `cliniko_readonly_v1`, shard `au5`: all four GET requests returned 200; aggregate counts were 1, 2, 1, and 0 respectively. | These reads do not establish patient access or write permission. No response record or identifier was retained. |
-| C-LIVE-02 | The demo business is not currently exposed in online bookings, and this probe cannot fetch offers. | 2026-09-28: business `show_in_online_bookings=false`; both listed appointment types and the practitioner reported `true`; the two available-time GET requests each returned 404. | The business flag is consistent with the [documented online-booking gate](https://docs.api.cliniko.com/openapi/available-time), but the exact cause of 404 has not been isolated. No offer or booking support is proven. |
+| C-LIVE-02 | The demo business was not exposed in online bookings, and the initial probe could not fetch offers. | 2026-09-28: business `show_in_online_bookings=false`; both listed appointment types and the practitioner reported `true`; the two available-time GET requests each returned 404. | This result alone did not isolate the cause or prove offer support; C-LIVE-03 later tested the flag directly. |
+| C-LIVE-03 | The business flag caused the demo offer 404s. | 2026-09-28, `cliniko_availability_v1`: one demo business was temporarily changed to `show_in_online_bookings=true`; both appointment types then returned HTTP 200 with two available times each. PATCH and GET verified the original `false` flag was restored. | This proves offer reads for that eligible combination at that time. It does not prove a held slot or a stable offer at commit. |
+| C-LIVE-04 | The demo API key can create a synthetic patient and appointment, find that appointment by exact marker after discarding the POST response, move it with a single PATCH, and cancel it. | 2026-09-28, `cliniko_write_v1`: patient POST 201; appointment POST 201; patient-scoped query found one exact marker and the same appointment; PATCH of `starts_at` with `ends_at=null` returned 200 and GET confirmed the new start; cancel PATCH 204 and GET with `q[]=cancelled_at:*` confirmed cancellation. The business flag was restored. A separate read found two archived synthetic patients, two cancelled synthetic appointments, and no active synthetic appointment after two controlled runs. | This is a synthetic happy-path observation, not a lost network response, concurrency test, provider idempotency guarantee, approved caller verification, or proof of safe automated rescheduling. The first run's move PATCH without `ends_at=null` returned 422; the second succeeded after asking Cliniko to recalculate the end. |
 
 ## Current capability classification
 
 | Capability | Phase 0 state | Reason and next proof |
 | --- | --- | --- |
 | Clinic context and appointment-type reads | Observed metadata access | Verify the exact fields needed by `ClinicContext` without storing patient data or promoting write permissions. |
-| Available-time search | Not ready in this demo configuration | The business online-booking flag is false and both bounded reads returned 404. Determine the account setting and retest a known eligible combination before classifying support. |
-| Patient lookup and verification | Unverified | Specify clinic-approved verification before any patient-record probe or disclosure. |
-| Booking | Request-only until proven safe | Confirm account write permission, offer revalidation, current authorization at commit, and exact outcome after a lost response using synthetic records. |
-| Cancellation | Request-only until proven safe | Prove target binding, definitive cancel outcome, and exact lost-response recovery on a synthetic appointment. |
-| Rescheduling | Request-only until proven safe | Demonstrate a host-native atomic update and exact recovery; never implement cancel-then-book. |
-| First-time intake | Request-only until proven safe | Demonstrate approved consent, duplicate checking, a stable patient reference, and exact recovery. |
+| Available-time search | Observed when business online booking is enabled | This demo business normally has the flag disabled. Retest from the live policy snapshot, bind business/practitioner/type, and expire offers before use. |
+| Patient lookup and verification | Verification unverified | A synthetic patient could be created and read, but no clinic-approved caller proof or disclosure rule has been demonstrated. |
+| Booking | Request-only until proven safe | The demo key can create one synthetic appointment and query its exact marker. Prove commit-time policy and offer revalidation, concurrent behavior, and safe lost-response reconciliation before automation. |
+| Cancellation | Request-only until proven safe | The synthetic appointment was cancelled and found through the cancelled-record filter. Prove authorized target binding and lost-response behavior before automation. |
+| Rescheduling | Request-only until proven safe | A single PATCH moved the synthetic appointment when `ends_at=null`; atomicity under conflict and exact recovery remain unproven. Never implement cancel-then-book. |
+| First-time intake | Request-only until proven safe | A synthetic patient create succeeded. Approved consent, duplicate checking, and exact lost-response recovery remain unproven. |
 
 The approved support matrix is a later Phase 0 output. A documented endpoint or successful GET does not promote any mutation to executable support. No mutation probe runs until its synthetic fixture, expected after-state, and cleanup/reconciliation method are written down.
 
@@ -32,4 +34,8 @@ The approved support matrix is a later Phase 0 output. A documented endpoint or 
 
 Run `python3 phase-0/probes/cliniko_readonly.py` in an interactive terminal. The script prompts for a contact email and hidden API key, makes four allowlisted metadata GET requests and up to two bounded available-time GET requests, and prints only HTTP status, aggregate counts, and online-booking booleans. It does not read from an environment file, persist credentials, or print API response records. A 404 offer probe makes its process exit nonzero while preserving the successful metadata results.
 
-**Result:** C-LIVE-01 and C-LIVE-02 above. Next account probe requires a known online-booking-eligible business, practitioner, and appointment type. Do not infer safe writes from these results.
+**Result:** C-LIVE-01 and C-LIVE-02 above. The later controlled probes C-LIVE-03 and C-LIVE-04 established the effect of the business setting and basic synthetic write permissions. Do not infer safe automated mutation from these results.
+
+## Controlled synthetic probes
+
+Run `python3 phase-0/probes/cliniko_availability_probe.py` to temporarily enable online booking, read available times, and restore the original business flag. Run `python3 phase-0/probes/cliniko_write_probe.py` for one synthetic patient and appointment, exact marker lookup, a direct time update, cancellation, patient archive, and business-flag restore. Both prompt for the key without echo and print statuses and counts, not response records. The write probe does **not** retry an uncertain POST. If a cleanup result is uncertain, stop writes and run `python3 phase-0/probes/cliniko_cleanup_verify.py`; that read-only script includes cancelled and archived views. A cancelled appointment remains in Cliniko's audit history and is absent from the ordinary appointment view.
