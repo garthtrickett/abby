@@ -4,6 +4,8 @@
 
 `voice/admission.ts` and `voice/call-liveness-monitor.ts` add replay-safe admission, activation, a session lease, and independent expiry over both ledger adapters. Their [contract and limits](../phase-1/CALL_ADMISSION.md) distinguish this no-number foundation from live transport evidence.
 
+`voice/admission-fallback.ts` adds an [independent synthetic fallback boundary](../phase-1/ADMISSION_FALLBACK.md) for admission failures. Duplicate calls bypass it; provider outcomes and alerts are typed and tested without a live number.
+
 `voice/turn-assembler.ts` and `voice/voice-session.ts` add a [synthetic voice session contract](../phase-1/SYNTHETIC_VOICE_CONTRACT.md): final caller turns and exact playback completion gate the same reference booking path. Both ledger adapters run its journeys. It has no live media or transport evidence.
 
 Run `npm ci`, `npm test`, and `npm run probe:postgres` (Docker required for the last command). The probe migrates a fresh PostgreSQL database, regenerates Kanel types, and runs the text and storage cases. Test files run in parallel with isolated calls and host fixtures. A new feature, capability, or setting needs a text contract case that checks caller wording, state, effects, and failure behavior. Its real voice path also needs a full-call E2E case when that path exists.
