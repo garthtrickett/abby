@@ -173,7 +173,7 @@ export type TransitionAction =
   | Readonly<{ kind: "callEnded"; sessionId: string; now: string }>
   | Readonly<{ kind: "callerTurn"; turn: FinalCallerTurn; interpretation: TurnInterpretation; now: string }>
   | Readonly<{ kind: "presentationStarted"; presentationId: string; sessionId?: string; now?: string }>
-  | Readonly<{ kind: "presentationResolved"; presentationId: string; status: "played" | "interrupted" | "failed"; sessionId?: string; now?: string }>
+  | Readonly<{ kind: "presentationResolved"; presentationId: string; status: "played" | "interrupted" | "failed" | "unproven"; sessionId?: string; now?: string }>
   | Readonly<{ kind: "markHostPossiblySent"; effectId: string; now: string }>
   | Readonly<{ kind: "recoverHostPossiblySent"; effectId: string; now: string }>
   | Readonly<{ kind: "hostWriteResolved"; effectId: string; receipt: HostWriteReceipt; now: string }>

@@ -66,7 +66,7 @@ export class CallRuntime {
     return this.update(callId, { kind: "presentationStarted", presentationId, ...(sessionId === undefined ? {} : { sessionId }), ...(now === undefined ? {} : { now }) });
   }
 
-  resolvePresentation(callId: string, presentationId: string, status: "played" | "interrupted" | "failed", sessionId?: string, now?: string): Promise<Result<CallState, TransitionFailure>> {
+  resolvePresentation(callId: string, presentationId: string, status: "played" | "interrupted" | "failed" | "unproven", sessionId?: string, now?: string): Promise<Result<CallState, TransitionFailure>> {
     return this.update(callId, { kind: "presentationResolved", presentationId, status, ...(sessionId === undefined ? {} : { sessionId }), ...(now === undefined ? {} : { now }) });
   }
 
