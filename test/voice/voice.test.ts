@@ -16,6 +16,7 @@ import { createStandaloneTextComposition } from "../../src/standalone/text-compo
 import { CallAdmissionService } from "../../src/voice/admission.ts";
 import { CallLivenessMonitor } from "../../src/voice/call-liveness-monitor.ts";
 import { PresentationDispatcher } from "../../src/voice/presentation-dispatcher.ts";
+import { VoiceWorkLoop } from "../../src/voice/voice-work-loop.ts";
 import { VoiceSession } from "../../src/voice/voice-session.ts";
 import type { PlaybackPort, TransferOutcome, TransferPort } from "../../src/voice/voice-session.ts";
 
@@ -558,5 +559,56 @@ for (const kind of kinds) {
     const unavailable = new PresentationDispatcher(intended.ledger, () => { throw new Error("registry offline"); }, intended.scope);
     failure(await unavailable.recover(at(4)), "sessionRegistryUnavailable");
     assert.equal(intended.playback.queued.length, 0);
+  });
+
+  test(`${kind}: worker recovery delivers a missed presentation and preserves booking confirmation`, async () => {
+    const app = await fixture(kind, `${kind}-worker-recovery`, true);
+    const planned = await bookTurn(app);
+    const worker = new VoiceWorkLoop(
+      new CallLivenessMonitor(app.ledger, app.scope),
+      new PresentationDispatcher(app.ledger, () => app.session, app.scope),
+      () => {}, { clock: () => at(4) },
+    );
+    const report = value(await worker.runOnce());
+    assert.equal(report.expired, 0);
+    assert.deepEqual(report.recovery, { scanned: 1, dispatched: 1, deferred: 0 });
+    assert.equal(app.playback.queued.length, 1);
+    value(await app.session.acceptPlaybackResult(app.playback.queued[0]!, "played", at(5)));
+    const generation = value(await app.session.speechStarted(at(6)));
+    value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation, utteranceId: "worker-affirm", text: "Yes", quality: "clear" }));
+    value(await app.session.finishTurn(at(7)));
+    value(await app.session.drainEffects(at(8)));
+    assert.equal(app.host.bookings(app.scope).length, 1);
+    assert.equal(value(await new CallRuntime(app.ledger, app.scope).read(app.callId)).presentations[planned.pendingPresentationId!]?.status, "played");
+  });
+
+  test(`${kind}: worker expires a stale lease before attempting pending delivery`, async () => {
+    const app = await fixture(kind, `${kind}-worker-expiry`, true);
+    const planned = await bookTurn(app);
+    const worker = new VoiceWorkLoop(
+      new CallLivenessMonitor(app.ledger, app.scope),
+      new PresentationDispatcher(app.ledger, () => app.session, app.scope),
+      () => {}, { clock: () => at(31) },
+    );
+    const report = value(await worker.runOnce());
+    assert.equal(report.expired, 1);
+    assert.equal(report.recovery.dispatched, 0);
+    assert.equal(app.playback.queued.length, 0);
+    const state = value(await new CallRuntime(app.ledger, app.scope).read(app.callId));
+    assert.equal(state.presentations[planned.pendingPresentationId!]?.status, "superseded");
+  });
+
+  test(`${kind}: a commit notification wakes the exact pending call`, async () => {
+    const app = await fixture(kind, `${kind}-worker-notify`, true);
+    await bookTurn(app);
+    const worker = new VoiceWorkLoop(
+      new CallLivenessMonitor(app.ledger, app.scope),
+      new PresentationDispatcher(app.ledger, () => app.session, app.scope),
+      () => {}, { clock: () => at(4) },
+    );
+    assert.equal(value(await worker.notifyCommitted(app.callId, app.scope)).kind, "dispatched");
+    assert.equal(app.playback.queued.length, 1);
+    assert.equal(value(await worker.notifyCommitted(app.callId, app.scope)).kind, "none");
+    assert.equal(app.playback.queued.length, 1);
   });
 }
