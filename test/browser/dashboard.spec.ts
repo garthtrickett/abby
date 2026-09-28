@@ -8,6 +8,7 @@ import { CallReview } from "../../src/reference/call-review.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
+import { StaffQueue } from "../../src/reference/staff-queue.ts";
 import { TextReception } from "../../src/reference/text-reception.ts";
 import { createDashboardServer } from "../../src/standalone/dashboard/server.ts";
 
@@ -20,7 +21,7 @@ async function localDashboard(role: "clinicAdmin" | "staff", availability?: Avai
       effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]), availability);
   const started = await reception.startCall("before-setting", scope);
   assert.equal(started.ok, true);
-  const gateway = new CommandGateway({ actorRef: `browser-${role}`, role, scope }, policy, reception, new CallReview(ledger));
+  const gateway = new CommandGateway({ actorRef: `browser-${role}`, role, scope }, policy, reception, new CallReview(ledger), new StaffQueue(ledger, () => "2026-09-30T12:00:00.000Z"));
   const server = await createDashboardServer(gateway, resolve("dist/dashboard/app.js"));
   await new Promise<void>(done => server.listen(0, "127.0.0.1", done));
   const address = server.address();
@@ -142,6 +143,30 @@ test("stale settings tab reloads the winning policy version", async ({ context }
     await expect(stale.getByRole("button", { name: "Disable booking" })).toBeVisible();
   } finally {
     await Promise.all([first.close(), stale.close()]);
+    await app.close();
+  }
+});
+
+test("staff follow-up queue shows overdue fallback without patient or spoken details", async ({ page, request }) => {
+  const app = await localDashboard("staff");
+  try {
+    const routed = await app.reception.answer(app.scope,
+      { callId: "before-setting", turnId: "missing-answer", text: "Private patient question", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
+      ["missing-source"], "Private proposed answer", "2026-09-28T10:00:00.000Z");
+    assert.equal(routed.ok, true);
+    const delivered = await app.reception.drain(app.scope, "before-setting", "2026-09-28T10:00:00.000Z");
+    assert.equal(delivered.ok, true);
+    await page.goto(app.url);
+    const queue = page.getByLabel("Staff follow-up queue");
+    await expect(queue).toContainText("before-setting · systemFailure · open · overdue");
+    await expect(queue).not.toContainText("Private patient question");
+    await expect(queue).not.toContainText("Private proposed answer");
+    const response = await request.get(`${app.url}/api/staff?after=`);
+    assert.equal(response.status(), 400);
+    const foreign = await app.ledger.listStaffItems({ ...app.scope, tenantId: "another-tenant" });
+    assert.ok(foreign.ok);
+    assert.deepEqual(foreign.value, []);
+  } finally {
     await app.close();
   }
 });

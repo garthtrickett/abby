@@ -16,7 +16,7 @@ function message(failure: DashboardFailure): string {
 export class DashboardController {
   private readonly root: HTMLElement;
   private readonly port: DashboardPort;
-  private readonly state: DashboardState = { loading: true, busy: false, capabilities: [], policy: undefined, callIdInput: "", call: undefined, notice: undefined, error: undefined };
+  private readonly state: DashboardState = { loading: true, busy: false, capabilities: [], policy: undefined, callIdInput: "", call: undefined, staffPage: undefined, notice: undefined, error: undefined };
 
   constructor(root: HTMLElement, port: DashboardPort) {
     this.root = root;
@@ -29,6 +29,8 @@ export class DashboardController {
       toggleBooking: () => { void this.toggleBooking(); },
       setCallId: value => { this.state.callIdInput = value; },
       loadCall: () => { void this.loadCall(); },
+      loadStaff: () => { void this.loadStaff(); },
+      loadMoreStaff: () => { void this.loadMoreStaff(); },
     }), this.root);
   }
 
@@ -37,7 +39,38 @@ export class DashboardController {
     if (capabilities.ok) this.state.capabilities = capabilities.value;
     if (settings.ok) this.state.policy = settings.value;
     this.state.error = !settings.ok ? message(settings.error) : !capabilities.ok ? message(capabilities.error) : undefined;
+    if (capabilities.ok && capabilities.value.some(item => item.id === "staff.list.v1")) {
+      const queue = await this.port.staffQueue();
+      if (queue.ok) this.state.staffPage = queue.value;
+      else this.state.error = message(queue.error);
+    }
     this.state.loading = false;
+    this.draw();
+  }
+
+  private async loadStaff(): Promise<void> {
+    if (this.state.busy) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.staffQueue();
+    if (result.ok) this.state.staffPage = result.value;
+    else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async loadMoreStaff(): Promise<void> {
+    const previous = this.state.staffPage;
+    if (this.state.busy || !previous?.nextAfterTaskKey) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.staffQueue(previous.nextAfterTaskKey);
+    if (result.ok) this.state.staffPage = { items: [...previous.items, ...result.value.items],
+      ...(result.value.nextAfterTaskKey === undefined ? {} : { nextAfterTaskKey: result.value.nextAfterTaskKey }) };
+    else this.state.error = message(result.error);
+    this.state.busy = false;
     this.draw();
   }
 

@@ -1,5 +1,5 @@
 import { err, ok } from "./model.ts";
-import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingPresentationRef, Result, TransitionAction, TransitionFailure } from "./model.ts";
+import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingPresentationRef, Result, StaffQueueEntry, TransitionAction, TransitionFailure } from "./model.ts";
 import { transition } from "./transition.ts";
 
 export interface LedgerStore {
@@ -10,6 +10,7 @@ export interface LedgerStore {
   findPendingPresentations(now: string, scope?: LocationScope, afterCallId?: string): Promise<Result<readonly PendingPresentationRef[], TransitionFailure>>;
   admit(callId: string, policy: CallPolicy, admission: Admission): Promise<Result<AdmissionResult, TransitionFailure>>;
   read(callId: string, scope: LocationScope): Promise<Result<CallState, TransitionFailure>>;
+  listStaffItems(scope: LocationScope, afterTaskKey?: string): Promise<Result<readonly StaffQueueEntry[], TransitionFailure>>;
   apply(callId: string, scope: LocationScope, expectedVersion: number, action: TransitionAction): Promise<Result<CallState, TransitionFailure>>;
 }
 
@@ -99,6 +100,20 @@ export class MemoryLedger implements LedgerStore {
   async read(callId: string, scope: LocationScope): Promise<Result<CallState, TransitionFailure>> {
     const state = this.calls.get(callId);
     return state && sameScope(state.policy.scope, scope) ? ok(structuredClone(state)) : err({ kind: "callUnknown" });
+  }
+
+  async listStaffItems(scope: LocationScope, afterTaskKey?: string): Promise<Result<readonly StaffQueueEntry[], TransitionFailure>> {
+    if (afterTaskKey !== undefined && (!afterTaskKey || afterTaskKey.length > 256)) return err({ kind: "invalidTransition" });
+    const entries: StaffQueueEntry[] = [];
+    for (const state of this.calls.values()) {
+      if (!sameScope(state.policy.scope, scope)) continue;
+      for (const item of Object.values(state.staffItems)) {
+        if (afterTaskKey && item.key <= afterTaskKey) continue;
+        entries.push({ callId: state.callId, taskKey: item.key, reason: item.reason, status: item.status, dueAt: item.dueAt,
+          destination: structuredClone(item.destination), ...(item.linkedActionKey === undefined ? {} : { linkedActionKey: item.linkedActionKey }) });
+      }
+    }
+    return ok(entries.sort((left, right) => left.taskKey.localeCompare(right.taskKey)).slice(0, 50));
   }
 
   async apply(callId: string, scope: LocationScope, expectedVersion: number, action: TransitionAction): Promise<Result<CallState, TransitionFailure>> {

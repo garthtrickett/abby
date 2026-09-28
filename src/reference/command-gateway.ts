@@ -5,6 +5,8 @@ import { TextReception } from "./text-reception.ts";
 import type { TextReceptionFailure } from "./text-reception.ts";
 import type { CallSummary } from "./call-review.ts";
 import { CallReview } from "./call-review.ts";
+import type { StaffQueue } from "./staff-queue.ts";
+import type { StaffQueuePage } from "./staff-queue.ts";
 
 export type HostActor = Readonly<{
   actorRef: string;
@@ -13,7 +15,7 @@ export type HostActor = Readonly<{
 }>;
 
 export type CapabilityDescriptor = Readonly<{
-  id: "settings.read.v1" | "settings.appointments.booking.enabled.change.v1" | "booking.propose.v1" | "knowledge.answer.v1" | "availability.read.v1" | "calls.read.v1";
+  id: "settings.read.v1" | "settings.appointments.booking.enabled.change.v1" | "booking.propose.v1" | "knowledge.answer.v1" | "availability.read.v1" | "calls.read.v1" | "staff.list.v1";
   inputVersion: 1;
   outputVersion: 1;
   effect: "read" | "policyChange" | "proposalOnly";
@@ -26,14 +28,16 @@ export type GatewayCommand =
   | Readonly<{ kind: "booking.propose.v1"; turn: FinalCallerTurn; verificationRef: string; offerRef: string; now: string }>
   | Readonly<{ kind: "knowledge.answer.v1"; turn: FinalCallerTurn; sourceRefs: readonly string[]; proposedText: string; now: string }>
   | Readonly<{ kind: "availability.read.v1"; turn: FinalCallerTurn; from: string; to: string; now: string }>
-  | Readonly<{ kind: "calls.read.v1"; callId: string }>;
+  | Readonly<{ kind: "calls.read.v1"; callId: string }>
+  | Readonly<{ kind: "staff.list.v1"; afterTaskKey?: string }>;
 
 export type GatewayReply =
   | Readonly<{ kind: "settings"; policy: CallPolicy }>
   | Readonly<{ kind: "bookingProposal"; state: CallState }>
   | Readonly<{ kind: "knowledgeAnswer"; state: CallState }>
   | Readonly<{ kind: "availabilityAnswer"; state: CallState }>
-  | Readonly<{ kind: "callSummary"; call: CallSummary }>;
+  | Readonly<{ kind: "callSummary"; call: CallSummary }>
+  | Readonly<{ kind: "staffQueue"; page: StaffQueuePage }>;
 
 export type GatewayFailure = PolicyFailure | TextReceptionFailure | TransitionFailure | Readonly<{ kind: "forbidden" | "invalid" }>;
 
@@ -42,13 +46,15 @@ export class CommandGateway {
   private readonly policy: PolicyStore;
   private readonly reception: TextReception;
   private readonly review: CallReview | undefined;
+  private readonly staffQueue: StaffQueue | undefined;
 
-  constructor(actor: HostActor, policy: PolicyStore, reception: TextReception, review?: CallReview) {
+  constructor(actor: HostActor, policy: PolicyStore, reception: TextReception, review?: CallReview, staffQueue?: StaffQueue) {
     if (!actor.actorRef || !actor.scope.tenantId || !actor.scope.clinicId || !actor.scope.locationId) throw new Error("host actor identity is required");
     this.actor = structuredClone(actor);
     this.policy = policy;
     this.reception = reception;
     this.review = review;
+    this.staffQueue = staffQueue;
   }
 
   listPermitted(): readonly CapabilityDescriptor[] {
@@ -59,6 +65,7 @@ export class CommandGateway {
     ];
     if (this.reception.availabilityEnabled()) common.push({ id: "availability.read.v1", inputVersion: 1, outputVersion: 1, effect: "read", requiresCallerConfirmation: false });
     if (this.review) common.push({ id: "calls.read.v1", inputVersion: 1, outputVersion: 1, effect: "read", requiresCallerConfirmation: false });
+    if (this.staffQueue) common.push({ id: "staff.list.v1", inputVersion: 1, outputVersion: 1, effect: "read", requiresCallerConfirmation: false });
     if (this.actor.role === "clinicAdmin") common.push({ id: "settings.appointments.booking.enabled.change.v1", inputVersion: 1, outputVersion: 1, effect: "policyChange", requiresCallerConfirmation: false });
     return common;
   }
@@ -98,6 +105,12 @@ export class CommandGateway {
         if (!this.review || !command.callId || command.callId.length > 256) return err({ kind: "invalid" });
         const result = await this.review.read(command.callId, this.actor.scope);
         return result.ok ? ok({ kind: "callSummary", call: result.value }) : result;
+      }
+      case "staff.list.v1": {
+        if (!this.staffQueue || (command.afterTaskKey !== undefined &&
+            (typeof command.afterTaskKey !== "string" || !command.afterTaskKey || command.afterTaskKey.length > 256))) return err({ kind: "invalid" });
+        const result = await this.staffQueue.list(this.actor.scope, command.afterTaskKey);
+        return result.ok ? ok({ kind: "staffQueue", page: result.value }) : result;
       }
     }
   }
