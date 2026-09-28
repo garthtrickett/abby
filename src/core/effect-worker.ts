@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { systemTimer } from "./timer.ts";
 import type { TimerPort } from "./timer.ts";
 
-export type EffectWorkerOptions = Readonly<{ hostDeadlineMs?: number; timer?: TimerPort }>;
+export type EffectWorkerOptions = Readonly<{ hostDeadlineMs?: number; timer?: TimerPort; signal?: AbortSignal }>;
 
 export class EffectWorker {
   private readonly runtime: CallRuntime;
@@ -16,6 +16,7 @@ export class EffectWorker {
   private readonly knowledge: KnowledgeHost | undefined;
   private readonly hostDeadlineMs: number;
   private readonly timer: TimerPort;
+  private readonly signal: AbortSignal | undefined;
 
   constructor(runtime: CallRuntime, host: HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost>, model?: ModelWork,
               knowledge?: KnowledgeHost, options: EffectWorkerOptions = {}) {
@@ -27,9 +28,11 @@ export class EffectWorker {
     this.knowledge = knowledge ?? (host.readKnowledge ? host as KnowledgeHost : undefined);
     this.hostDeadlineMs = deadline;
     this.timer = options.timer ?? systemTimer;
+    this.signal = options.signal;
   }
 
   private async hostCall<Value>(work: (signal: AbortSignal) => Promise<Value>): Promise<Value> {
+    if (this.signal?.aborted) throw new Error("effectLeaseLost");
     let handle: unknown;
     const controller = new AbortController();
     const timeout = new Promise<never>((_, reject) => {
@@ -38,11 +41,21 @@ export class EffectWorker {
         reject(new Error("hostDeadlineExceeded"));
       }, this.hostDeadlineMs);
     });
-    try { return await Promise.race([Promise.resolve().then(() => work(controller.signal)), timeout]); }
-    finally { this.timer.cancel(handle); }
+    let onLeaseAbort: (() => void) | undefined;
+    const leaseLost = new Promise<never>((_, reject) => {
+      if (!this.signal) return;
+      onLeaseAbort = () => { controller.abort(); reject(new Error("effectLeaseLost")); };
+      this.signal.addEventListener("abort", onLeaseAbort, { once: true });
+    });
+    try { return await Promise.race([Promise.resolve().then(() => work(controller.signal)), timeout, leaseLost]); }
+    finally {
+      this.timer.cancel(handle);
+      if (this.signal && onLeaseAbort) this.signal.removeEventListener("abort", onLeaseAbort);
+    }
   }
 
   async process(callId: string, effectId: string, now: string): Promise<void> {
+    if (this.signal?.aborted) throw new Error("effectLeaseLost");
     const read = await this.runtime.read(callId);
     if (!read.ok) throw new Error(read.error.kind);
     const effect = read.value.effects[effectId];

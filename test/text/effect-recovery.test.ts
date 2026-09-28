@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { EffectCallLeaseCoordinator } from "../../src/core/effect-call-lease.ts";
+import type { EffectCallLeaseStore } from "../../src/core/effect-call-lease.ts";
 import { EffectRecovery } from "../../src/core/effect-recovery.ts";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
+import type { TimerPort } from "../../src/core/timer.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { now, setup, success } from "./fixture.ts";
@@ -25,6 +28,96 @@ test("recovery scans pending host work and leaves another tenant untouched", asy
   assert.equal((await app.state()).staffItems[item.key]?.status, "open");
   assert.equal(app.host.tasks.length, 1);
   assert.equal(success(await recovery.recover(now)).processed, 0);
+});
+
+test("two recovery workers cannot open the same call's task concurrently", async () => {
+  const app = await setup("recover-concurrent-call");
+  await app.turn("handoff", "Ask staff to call", { kind: "handoff", reason: "callerRequested" });
+  let started!: () => void;
+  let release!: () => void;
+  const opening = new Promise<void>(resolve => { started = resolve; });
+  const hold = new Promise<void>(resolve => { release = resolve; });
+  let sends = 0;
+  app.host.openTask = async item => {
+    sends += 1;
+    started();
+    await hold;
+    return { kind: "opened", taskKey: item.key, hostTaskRef: "single-task", destination: item.destination };
+  };
+  const first = new EffectRecovery(app.ledger, () => app.host, app.scope).recover(now);
+  await opening;
+  try {
+    const second = success(await new EffectRecovery(app.ledger, () => app.host, app.scope).recover(afterDelay));
+    assert.deepEqual({ scanned: second.scanned, deferred: second.deferred, failed: second.failed },
+      { scanned: 1, deferred: 1, failed: [] });
+    assert.equal(sends, 1);
+  } finally { release(); }
+  assert.equal(success(await first).processed, 1);
+  assert.equal((await app.state()).staffItems[Object.keys((await app.state()).staffItems)[0]!]!.status, "open");
+  assert.equal(sends, 1);
+});
+
+test("expired call leases can be reclaimed and stale owners cannot affect the new owner", async () => {
+  const app = await setup("recover-lease-expiry");
+  const first = "worker-one";
+  const second = "worker-two";
+  assert.equal(success(await app.ledger.claimEffectCall(app.callId, app.scope, first, 60_000, now)), true);
+  assert.equal(success(await app.ledger.claimEffectCall(app.callId, app.scope, second, 60_000, now)), false);
+  assert.equal(success(await app.ledger.renewEffectCall(app.callId, app.scope, first, 60_000, "2026-09-28T10:00:30.000Z")), true);
+  assert.equal(success(await app.ledger.claimEffectCall(app.callId, app.scope, second, 60_000, "2026-09-28T10:01:00.000Z")), false);
+  assert.equal(success(await app.ledger.claimEffectCall(app.callId, app.scope, second, 60_000, "2026-09-28T10:01:31.000Z")), true);
+  assert.equal(success(await app.ledger.renewEffectCall(app.callId, app.scope, first, 60_000, "2026-09-28T10:01:32.000Z")), false);
+  assert.equal(success(await app.ledger.releaseEffectCall(app.callId, app.scope, first)), false);
+  assert.equal(success(await app.ledger.claimEffectCall(app.callId, app.scope, first, 60_000, "2026-09-28T10:01:32.000Z")), false);
+  assert.equal(success(await app.ledger.releaseEffectCall(app.callId, app.scope, second)), true);
+});
+
+test("a running recovery renews its lease until work completes", async () => {
+  const app = await setup("recover-lease-renewal");
+  const callbacks = new Map<number, () => void>();
+  let nextHandle = 0;
+  const timer: TimerPort = {
+    schedule(callback) { const handle = ++nextHandle; callbacks.set(handle, callback); return handle; },
+    cancel(handle) { callbacks.delete(handle as number); },
+  };
+  let currentTime = now;
+  let entered!: () => void;
+  let release!: () => void;
+  let renewed!: () => void;
+  const workStarted = new Promise<void>(resolve => { entered = resolve; });
+  const hold = new Promise<void>(resolve => { release = resolve; });
+  const renewalSeen = new Promise<void>(resolve => { renewed = resolve; });
+  const store: EffectCallLeaseStore = {
+    claimEffectCall: (...args) => app.ledger.claimEffectCall(...args),
+    renewEffectCall: async (...args) => {
+      const result = await app.ledger.renewEffectCall(...args);
+      renewed();
+      return result;
+    },
+    releaseEffectCall: (...args) => app.ledger.releaseEffectCall(...args),
+  };
+  const coordinator = new EffectCallLeaseCoordinator(store, { timer, clock: () => currentTime });
+  const active = coordinator.run(app.callId, app.scope, async signal => {
+    assert.equal(signal.aborted, false);
+    entered();
+    await hold;
+    return "done";
+  });
+  await workStarted;
+  try {
+    currentTime = "2026-09-28T10:00:15.000Z";
+    assert.equal(callbacks.size, 1);
+    const [handle, callback] = callbacks.entries().next().value!;
+    callbacks.delete(handle);
+    callback();
+    await renewalSeen;
+    assert.equal(success(await app.ledger.claimEffectCall(app.callId, app.scope, "other-worker", 60_000,
+      "2026-09-28T10:01:00.000Z")), false);
+  } finally { release(); }
+  assert.deepEqual(success(await active), { kind: "completed", value: "done" });
+  assert.equal(callbacks.size, 0);
+  assert.equal(success(await app.ledger.claimEffectCall(app.callId, app.scope, "other-worker", 60_000,
+    "2026-09-28T10:01:00.000Z")), true);
 });
 
 test("recovery never retries a possibly sent booking write and reconciles its original key", async () => {

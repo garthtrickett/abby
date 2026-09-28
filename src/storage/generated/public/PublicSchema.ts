@@ -6,6 +6,7 @@ import type { default as PendingLocationCallsTable } from './PendingLocationCall
 import type { default as ClinicWriteStopTable } from './ClinicWriteStop.js';
 import type { default as ClinicKnowledgeHeadsTable } from './ClinicKnowledgeHeads.js';
 import type { default as ClinicWriteStopInflightTable } from './ClinicWriteStopInflight.js';
+import type { default as EffectCallLeasesTable } from './EffectCallLeases.js';
 import type { default as ClinicAutomationTable } from './ClinicAutomation.js';
 import type { default as StaffItemsTable } from './StaffItems.js';
 import type { default as ClinicKnowledgeEventsTable } from './ClinicKnowledgeEvents.js';
@@ -24,6 +25,8 @@ export default interface PublicSchema {
   clinic_knowledge_heads: ClinicKnowledgeHeadsTable;
 
   clinic_write_stop_inflight: ClinicWriteStopInflightTable;
+
+  effect_call_leases: EffectCallLeasesTable;
 
   clinic_automation: ClinicAutomationTable;
 

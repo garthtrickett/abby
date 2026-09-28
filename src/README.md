@@ -8,7 +8,7 @@ The [scoped staff queue](../phase-2/STAFF_QUEUE.md) exposes redacted, overdue fo
 
 [Durable operator alerts](../phase-2/OPERATOR_ALERTS.md) now stage keyed overdue or review-required intents and show delivery, failure, or uncertainty in the staff queue. The reference host provides synthetic keyed delivery; a clinic still needs an approved external destination and independent failure escalation.
 
-The [effect recovery loop](../phase-2/EFFECT_RECOVERY.md) scans pending and aged possibly-sent outbox intents independently of voice sessions. It pages and runs different calls concurrently while preserving per-call order. The local demo starts the loop; a deploying host supplies its own process lifecycle and host lookup.
+The [effect recovery loop](../phase-2/EFFECT_RECOVERY.md) scans pending and aged possibly-sent outbox intents independently of voice sessions. It pages and runs different calls concurrently while preserving per-call order. Recovery workers use scoped, renewable call leases across processes. The local demo starts the loop; a deploying host supplies its own process lifecycle and host lookup.
 
 Effect workers bound host calls to a configurable deadline and pass an abort signal. Timed-out consequential sends enter their existing uncertain/reconciliation path; stalled read-only reconciliations leave pending work for the next tick.
 
@@ -78,4 +78,4 @@ The PostgreSQL probe also creates a separate disposable database at migration 00
 
 [Emergency write stop](../phase-2/EMERGENCY_WRITE_STOP.md) lets a clinic admin latch a durable clinic-wide barrier for appointment writes on active calls. A pending write is blocked in the ledger's send-mark transaction and becomes staff follow-up; writes already possibly sent remain visible for receipt or reconciliation. A versioned, audited recovery command reopens dispatch only after fresh host readiness passes. The browser and both ledger adapters cover stop, denied recovery, successful recovery, and a later stop.
 
-The default demo composition does not call Cliniko or Splose; it uses a synthetic host. A test composition explicitly wires the read-only Cliniko adapter. PostgreSQL persistence is a Phase 0 probe, and a synthetic `played` result is only test evidence for downstream confirmation logic. No production caller, agent, or API can use this harness to assert playback. Production outbox leasing, retention, media, and real voice E2E remain open work.
+The default demo composition does not call Cliniko or Splose; it uses a synthetic host. A test composition explicitly wires the read-only Cliniko adapter. PostgreSQL persistence is a Phase 0 probe, and a synthetic `played` result is only test evidence for downstream confirmation logic. No production caller, agent, or API can use this harness to assert playback. Coordinating foreground effect drains with recovery leases, retention, media, and real voice E2E remain open work.
