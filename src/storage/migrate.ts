@@ -9,6 +9,7 @@ import { up as up006, down as down006 } from "./migrations/006_write_stop_recove
 import { up as up007, down as down007 } from "./migrations/007_clinic_knowledge.ts";
 import { up as up008, down as down008 } from "./migrations/008_pending_location_calls.ts";
 import { up as up009, down as down009 } from "./migrations/009_effect_call_leases.ts";
+import { up as up010, down as down010 } from "./migrations/010_effect_call_lease_versions.ts";
 
 function createMigrator<DB>(db: Kysely<DB>): Migrator {
   return new Migrator({
@@ -23,6 +24,7 @@ function createMigrator<DB>(db: Kysely<DB>): Migrator {
       "007_clinic_knowledge": { up: up007, down: down007 },
       "008_pending_location_calls": { up: up008, down: down008 },
       "009_effect_call_leases": { up: up009, down: down009 },
+      "010_effect_call_lease_versions": { up: up010, down: down010 },
     }) },
   });
 }
@@ -38,6 +40,6 @@ export async function migrate<DB>(db: Kysely<DB>, direction: "up" | "down" = "up
 }
 
 /** Used by the upgrade probe to boot an actual older schema before seeding data. */
-export async function migrateTo<DB>(db: Kysely<DB>, target: "001_text_probe" | "002_booking_setting_audit" | "003_tenant_scope_constraints" | "004_automation_setting_audit" | "005_clinic_write_stop" | "006_write_stop_recovery" | "007_clinic_knowledge" | "008_pending_location_calls" | "009_effect_call_leases"): Promise<void> {
+export async function migrateTo<DB>(db: Kysely<DB>, target: "001_text_probe" | "002_booking_setting_audit" | "003_tenant_scope_constraints" | "004_automation_setting_audit" | "005_clinic_write_stop" | "006_write_stop_recovery" | "007_clinic_knowledge" | "008_pending_location_calls" | "009_effect_call_leases" | "010_effect_call_lease_versions"): Promise<void> {
   assertMigration(await createMigrator(db).migrateTo(target));
 }

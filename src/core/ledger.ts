@@ -5,7 +5,7 @@ import { validApprovedGreeting } from "./greeting.ts";
 import { READINESS_REQUIREMENTS, unprovenReadiness } from "./readiness.ts";
 import { LOCATION_CHOICE_TIMEOUT_MS, PENDING_LOCATION_LEASE_MS, closePendingLocationState, expiredPendingLocationState, pendingDueAt, pendingMatchesAdmission, policyMatchesPending, resolveLocationPrompt, startLocationPrompt, validPendingAdmission, validPendingRoute } from "./pending-location.ts";
 import type { AutomationReadiness } from "./readiness.ts";
-import type { EffectCallLeaseStore } from "./effect-call-lease.ts";
+import type { EffectCallLeaseGuard, EffectCallLeaseStore } from "./effect-call-lease.ts";
 import type { InFlightWrite, WriteStopAuditEntry, WriteStopAuditPage, WriteStopFailure, WriteStopStatus } from "./write-stop.ts";
 
 export interface LedgerStore {
@@ -37,7 +37,7 @@ export interface LedgerStore {
   read(callId: string, scope: LocationScope): Promise<Result<CallState, TransitionFailure>>;
   listCalls(scope: LocationScope, afterCallId?: string): Promise<Result<readonly CallState[], TransitionFailure>>;
   listStaffItems(scope: LocationScope, afterTaskKey?: string): Promise<Result<readonly StaffQueueEntry[], TransitionFailure>>;
-  apply(callId: string, scope: LocationScope, expectedVersion: number, action: TransitionAction): Promise<Result<CallState, TransitionFailure>>;
+  apply(callId: string, scope: LocationScope, expectedVersion: number, action: TransitionAction, guard?: EffectCallLeaseGuard): Promise<Result<CallState, TransitionFailure>>;
 }
 
 export function initialState(callId: string, policy: CallPolicy): CallState {
@@ -86,13 +86,15 @@ function sameScope(left: LocationScope, right: LocationScope): boolean {
 
 export class MemoryLedger implements LedgerStore, EffectCallLeaseStore {
   private readonly calls = new Map<string, CallState>();
-  private readonly effectCallLeases = new Map<string, Readonly<{ owner: string; expiresAt: number }>>();
+  private readonly effectCallLeases = new Map<string, Readonly<{ owner: string | null; version: number; expiresAt: number }>>();
   private readonly pendingLocations = new Map<string, PendingLocationCall>();
   private readonly writeStops = new Map<string, Array<WriteStopAuditEntry & Readonly<{ inFlight: readonly InFlightWrite[] }>>>();
   private readonly readiness: AutomationReadiness;
+  private readonly leaseClock: () => number;
 
-  constructor(readiness: AutomationReadiness = unprovenReadiness) {
+  constructor(readiness: AutomationReadiness = unprovenReadiness, leaseClock: () => number = Date.now) {
     this.readiness = readiness;
+    this.leaseClock = leaseClock;
   }
 
   private stopKey(scope: LocationScope): string {
@@ -337,7 +339,7 @@ export class MemoryLedger implements LedgerStore, EffectCallLeaseStore {
     return ok(refs.sort((left, right) => left.effectId < right.effectId ? -1 : left.effectId > right.effectId ? 1 : 0).slice(0, 100));
   }
 
-  async claimEffectCall(callId: string, scope: LocationScope, owner: string, leaseMs: number, now: string): Promise<Result<boolean, TransitionFailure>> {
+  async claimEffectCall(callId: string, scope: LocationScope, owner: string, leaseMs: number, now: string): Promise<Result<Readonly<{ version: number }> | null, TransitionFailure>> {
     const state = this.calls.get(callId);
     if (!state) return err({ kind: "callUnknown" });
     if (!sameScope(state.policy.scope, scope)) return err({ kind: "scopeMismatch" });
@@ -346,32 +348,36 @@ export class MemoryLedger implements LedgerStore, EffectCallLeaseStore {
       return err({ kind: "invalidTransition" });
     }
     const existing = this.effectCallLeases.get(callId);
-    if (existing && existing.expiresAt > time) return ok(false);
-    this.effectCallLeases.set(callId, { owner, expiresAt: time + leaseMs });
-    return ok(true);
+    if (existing && existing.owner !== null && existing.expiresAt > time) return ok(null);
+    const version = (existing?.version ?? 0) + 1;
+    if (!Number.isSafeInteger(version)) return err({ kind: "storageCorrupt" });
+    this.effectCallLeases.set(callId, { owner, version, expiresAt: time + leaseMs });
+    return ok({ version });
   }
 
-  async renewEffectCall(callId: string, scope: LocationScope, owner: string, leaseMs: number, now: string): Promise<Result<boolean, TransitionFailure>> {
+  async renewEffectCall(callId: string, scope: LocationScope, guard: EffectCallLeaseGuard, leaseMs: number, now: string): Promise<Result<boolean, TransitionFailure>> {
     const state = this.calls.get(callId);
     if (!state) return err({ kind: "callUnknown" });
     if (!sameScope(state.policy.scope, scope)) return err({ kind: "scopeMismatch" });
     const time = Date.parse(now);
-    if (!owner || owner.length > 256 || !Number.isFinite(time) || !Number.isSafeInteger(leaseMs) || leaseMs < 1 || leaseMs > 300_000) {
+    if (!guard.owner || guard.owner.length > 256 || !Number.isSafeInteger(guard.version) || guard.version < 1 ||
+        !Number.isFinite(time) || !Number.isSafeInteger(leaseMs) || leaseMs < 1 || leaseMs > 300_000) {
       return err({ kind: "invalidTransition" });
     }
     const existing = this.effectCallLeases.get(callId);
-    if (!existing || existing.owner !== owner || existing.expiresAt <= time) return ok(false);
-    this.effectCallLeases.set(callId, { owner, expiresAt: time + leaseMs });
+    if (!existing || existing.owner !== guard.owner || existing.version !== guard.version || existing.expiresAt <= time) return ok(false);
+    this.effectCallLeases.set(callId, { ...existing, expiresAt: time + leaseMs });
     return ok(true);
   }
 
-  async releaseEffectCall(callId: string, scope: LocationScope, owner: string): Promise<Result<boolean, TransitionFailure>> {
+  async releaseEffectCall(callId: string, scope: LocationScope, guard: EffectCallLeaseGuard): Promise<Result<boolean, TransitionFailure>> {
     const state = this.calls.get(callId);
     if (!state) return err({ kind: "callUnknown" });
     if (!sameScope(state.policy.scope, scope)) return err({ kind: "scopeMismatch" });
-    if (!owner || owner.length > 256) return err({ kind: "invalidTransition" });
-    if (this.effectCallLeases.get(callId)?.owner !== owner) return ok(false);
-    this.effectCallLeases.delete(callId);
+    if (!guard.owner || guard.owner.length > 256 || !Number.isSafeInteger(guard.version) || guard.version < 1) return err({ kind: "invalidTransition" });
+    const existing = this.effectCallLeases.get(callId);
+    if (!existing || existing.owner !== guard.owner || existing.version !== guard.version) return ok(false);
+    this.effectCallLeases.set(callId, { ...existing, owner: null });
     return ok(true);
   }
 
@@ -421,9 +427,19 @@ export class MemoryLedger implements LedgerStore, EffectCallLeaseStore {
     return ok(entries.sort((left, right) => left.taskKey.localeCompare(right.taskKey)).slice(0, 50));
   }
 
-  async apply(callId: string, scope: LocationScope, expectedVersion: number, action: TransitionAction): Promise<Result<CallState, TransitionFailure>> {
+  async apply(callId: string, scope: LocationScope, expectedVersion: number, action: TransitionAction, guard?: EffectCallLeaseGuard): Promise<Result<CallState, TransitionFailure>> {
     const current = this.calls.get(callId);
     if (!current || !sameScope(current.policy.scope, scope)) return err({ kind: "callUnknown" });
+    if (guard) {
+      const lease = this.effectCallLeases.get(callId);
+      let leaseNow: number;
+      try { leaseNow = this.leaseClock(); }
+      catch { return err({ kind: "storageFailure" }); }
+      if (!Number.isFinite(leaseNow)) return err({ kind: "storageFailure" });
+      if (!lease || lease.owner !== guard.owner || lease.version !== guard.version || lease.expiresAt <= leaseNow) {
+        return err({ kind: "leaseLost" });
+      }
+    }
     if (current.version !== expectedVersion) return err({ kind: "versionConflict" });
     const effectiveAction = action.kind === "markHostPossiblySent" && this.writeStops.get(this.stopKey(scope))?.at(-1)?.stopped
       ? { kind: "hostWriteBlocked" as const, effectId: action.effectId, now: action.now } : action;

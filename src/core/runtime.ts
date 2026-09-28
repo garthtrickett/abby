@@ -1,14 +1,21 @@
 import type { Admission, AdmissionResult, CallPolicy, CallState, FinalCallerTurn, HostWriteReceipt, LocationScope, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffAlertReason, StaffChangeObservation, StaffChangeReceipt, StaffChangeRequest, StaffTaskObservation, StaffTaskReceipt, TransitionAction, TransitionFailure, TurnInterpretation } from "./model.ts";
 import type { LedgerStore } from "./ledger.ts";
+import type { EffectCallLeaseGuard } from "./effect-call-lease.ts";
 import { validKnowledgeSnapshot } from "./knowledge-evidence.ts";
 
 export class CallRuntime {
   private readonly ledger: LedgerStore;
   private readonly scope: LocationScope;
+  private readonly effectLease: EffectCallLeaseGuard | undefined;
 
-  constructor(ledger: LedgerStore, scope: LocationScope) {
+  constructor(ledger: LedgerStore, scope: LocationScope, effectLease?: EffectCallLeaseGuard) {
     this.ledger = ledger;
     this.scope = scope;
+    this.effectLease = effectLease;
+  }
+
+  withEffectLease(guard: EffectCallLeaseGuard): CallRuntime {
+    return new CallRuntime(this.ledger, this.scope, guard);
   }
 
   start(callId: string, policy: CallPolicy): Promise<Result<CallState, TransitionFailure>> {
@@ -61,13 +68,13 @@ export class CallRuntime {
   }
 
   apply(callId: string, expectedVersion: number, action: TransitionAction): Promise<Result<CallState, TransitionFailure>> {
-    return this.ledger.apply(callId, this.scope, expectedVersion, action);
+    return this.ledger.apply(callId, this.scope, expectedVersion, action, this.effectLease);
   }
 
   private async update(callId: string, action: TransitionAction): Promise<Result<CallState, TransitionFailure>> {
     const current = await this.ledger.read(callId, this.scope);
     if (!current.ok) return current;
-    return this.ledger.apply(callId, this.scope, current.value.version, action);
+    return this.ledger.apply(callId, this.scope, current.value.version, action, this.effectLease);
   }
 
   acceptTurn(turn: FinalCallerTurn, interpretation: TurnInterpretation, now: string, expectedConversationRevision?: number): Promise<Result<CallState, TransitionFailure>> {
