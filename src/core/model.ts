@@ -18,6 +18,7 @@ export type AdmissionReceipt = Readonly<{ callId: string; scope: LocationScope; 
 export type AdmissionResult = Readonly<{ kind: "created" | "duplicate"; receipt: AdmissionReceipt }>;
 export type ActiveSessionReceipt = Readonly<{ callId: string; scope: LocationScope; lease: SessionLease }>;
 export type PendingPresentationRef = Readonly<{ callId: string; scope: LocationScope; sessionId: string; presentationId: string }>;
+export const POSSIBLE_SEND_RECOVERY_DELAY_MS = 60_000;
 export type StaffDestination =
   | Readonly<{ kind: "owner"; ownerRef: string }>
   | Readonly<{ kind: "queue"; queueRef: string }>;
@@ -225,6 +226,13 @@ export type Effect =
   | Readonly<{ kind: "staffReconcile"; id: string; taskKey: string; originalEffectId: string; originalItem: StaffItem; status: "pending" | "completed" }>
   | Readonly<{ kind: "staffChange"; id: string; taskKey: string; change: StaffChange; status: "pending" | "possiblySent" | "completed" | "uncertain"; possiblySentAt?: string }>
   | Readonly<{ kind: "staffChangeReconcile"; id: string; taskKey: string; originalEffectId: string; change: StaffChange; status: "pending" | "completed" }>;
+export type RecoverableEffectRef = Readonly<{
+  callId: string;
+  scope: LocationScope;
+  effectId: string;
+  kind: Effect["kind"];
+  status: "pending" | "possiblySent";
+}>;
 
 export type CallState = {
   callId: string;

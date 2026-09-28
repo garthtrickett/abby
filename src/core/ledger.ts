@@ -1,5 +1,5 @@
-import { err, ok } from "./model.ts";
-import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingPresentationRef, Result, StaffQueueEntry, TransitionAction, TransitionFailure } from "./model.ts";
+import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "./model.ts";
+import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingPresentationRef, RecoverableEffectRef, Result, StaffQueueEntry, TransitionAction, TransitionFailure } from "./model.ts";
 import { transition } from "./transition.ts";
 
 export interface LedgerStore {
@@ -8,6 +8,7 @@ export interface LedgerStore {
   findExpiredAdmissions(now: string, scope?: LocationScope): Promise<Result<readonly AdmissionReceipt[], TransitionFailure>>;
   findExpiredSessions(now: string, scope?: LocationScope): Promise<Result<readonly ActiveSessionReceipt[], TransitionFailure>>;
   findPendingPresentations(now: string, scope?: LocationScope, afterCallId?: string): Promise<Result<readonly PendingPresentationRef[], TransitionFailure>>;
+  findRecoverableEffects(now: string, scope?: LocationScope, afterEffectId?: string): Promise<Result<readonly RecoverableEffectRef[], TransitionFailure>>;
   admit(callId: string, policy: CallPolicy, admission: Admission): Promise<Result<AdmissionResult, TransitionFailure>>;
   read(callId: string, scope: LocationScope): Promise<Result<CallState, TransitionFailure>>;
   listStaffItems(scope: LocationScope, afterTaskKey?: string): Promise<Result<readonly StaffQueueEntry[], TransitionFailure>>;
@@ -79,6 +80,22 @@ export class MemoryLedger implements LedgerStore {
       .sort((left, right) => left.callId < right.callId ? -1 : left.callId > right.callId ? 1 : 0).slice(0, 100);
     return ok(refs.map(state => ({ callId: state.callId, scope: structuredClone(state.policy.scope), sessionId: state.sessionLease!.sessionId,
       presentationId: state.pendingPresentationId! })));
+  }
+
+  async findRecoverableEffects(now: string, scope?: LocationScope, afterEffectId?: string): Promise<Result<readonly RecoverableEffectRef[], TransitionFailure>> {
+    if (!Number.isFinite(Date.parse(now)) || (afterEffectId !== undefined && (!afterEffectId || afterEffectId.length > 512))) return err({ kind: "invalidTransition" });
+    const refs: RecoverableEffectRef[] = [];
+    for (const state of this.calls.values()) {
+      if (scope && !sameScope(state.policy.scope, scope)) continue;
+      for (const effect of Object.values(state.effects)) {
+        if (afterEffectId && effect.id <= afterEffectId) continue;
+        if (effect.status !== "pending" && (effect.status !== "possiblySent" || !effect.possiblySentAt ||
+            Date.parse(effect.possiblySentAt) + POSSIBLE_SEND_RECOVERY_DELAY_MS > Date.parse(now))) continue;
+        refs.push({ callId: state.callId, scope: structuredClone(state.policy.scope), effectId: effect.id,
+          kind: effect.kind, status: effect.status });
+      }
+    }
+    return ok(refs.sort((left, right) => left.effectId < right.effectId ? -1 : left.effectId > right.effectId ? 1 : 0).slice(0, 100));
   }
 
   async admit(callId: string, policy: CallPolicy, admission: Admission): Promise<Result<AdmissionResult, TransitionFailure>> {

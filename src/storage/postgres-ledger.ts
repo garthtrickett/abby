@@ -1,7 +1,7 @@
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
-import { err, ok } from "../core/model.ts";
-import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingPresentationRef, Result, StaffItem, StaffQueueEntry, TransitionAction, TransitionFailure } from "../core/model.ts";
+import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "../core/model.ts";
+import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, Effect, LocationScope, PendingPresentationRef, RecoverableEffectRef, Result, StaffItem, StaffQueueEntry, TransitionAction, TransitionFailure } from "../core/model.ts";
 import { admissionReceipt, initialState, sameAdmission } from "../core/ledger.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { transition } from "../core/transition.ts";
@@ -154,6 +154,37 @@ export class PostgresLedger implements LedgerStore {
         const presentationId = state.pendingPresentationId;
         if (!state.admission || !state.sessionLease || !presentationId || state.presentations[presentationId]?.status !== "pending") return err({ kind: "storageCorrupt" });
         refs.push({ callId: state.callId, scope: structuredClone(state.policy.scope), sessionId: state.sessionLease.sessionId, presentationId });
+      }
+      return ok(refs);
+    } catch {
+      return err({ kind: "storageFailure" });
+    }
+  }
+
+  async findRecoverableEffects(now: string, scope?: LocationScope, afterEffectId?: string): Promise<Result<readonly RecoverableEffectRef[], TransitionFailure>> {
+    if (!Number.isFinite(Date.parse(now)) || (afterEffectId !== undefined && (!afterEffectId || afterEffectId.length > 512))) return err({ kind: "invalidTransition" });
+    try {
+      const ledgerNow = await this.trustedNow(this.db, now);
+      const dueBefore = new Date(Date.parse(ledgerNow) - POSSIBLE_SEND_RECOVERY_DELAY_MS).toISOString();
+      let query = this.db.selectFrom("effect_outbox").innerJoin("calls", "calls.call_id", "effect_outbox.call_id")
+        .select(["effect_outbox.effect_id", "effect_outbox.call_id", "effect_outbox.kind", "effect_outbox.status", "effect_outbox.payload",
+          "calls.tenant_id", "calls.clinic_id", "calls.location_id"])
+        .whereRef("effect_outbox.tenant_id", "=", "calls.tenant_id")
+        .where(sql<boolean>`(effect_outbox.status = 'pending' or
+          (effect_outbox.status = 'possiblySent' and (effect_outbox.payload->>'possiblySentAt')::timestamptz <= ${dueBefore}::timestamptz))`);
+      if (scope) query = query.where("calls.tenant_id", "=", scope.tenantId).where("calls.clinic_id", "=", scope.clinicId).where("calls.location_id", "=", scope.locationId);
+      if (afterEffectId) query = query.where("effect_outbox.effect_id", ">", afterEffectId as EffectOutboxEffectId);
+      const rows = await query.orderBy("effect_outbox.effect_id").limit(100).execute();
+      const refs: RecoverableEffectRef[] = [];
+      for (const row of rows) {
+        const payload = row.payload as Record<string, unknown>;
+        if (!payload || typeof payload !== "object" || payload.id !== row.effect_id || payload.kind !== row.kind || payload.status !== row.status ||
+            !(["hostWrite", "hostReconcile", "staffTask", "staffReconcile", "staffChange", "staffChangeReconcile"] as readonly string[]).includes(row.kind) ||
+            (row.status !== "pending" && row.status !== "possiblySent") ||
+            (row.status === "possiblySent" && row.kind !== "hostWrite" && row.kind !== "staffTask" && row.kind !== "staffChange") ||
+            (row.status === "possiblySent" && (typeof payload.possiblySentAt !== "string" || !Number.isFinite(Date.parse(payload.possiblySentAt))))) return err({ kind: "storageCorrupt" });
+        refs.push({ callId: row.call_id, scope: { tenantId: row.tenant_id, clinicId: row.clinic_id, locationId: row.location_id },
+          effectId: row.effect_id, kind: row.kind as Effect["kind"], status: row.status });
       }
       return ok(refs);
     } catch {
