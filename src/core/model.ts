@@ -137,7 +137,7 @@ export type TurnInterpretation =
 
 export type StaffReason =
   | "callerRequested" | "verificationFailed" | "unsupported" | "uncertainAction"
-  | "partialIntake" | "systemFailure" | "transferFailed";
+  | "partialIntake" | "systemFailure" | "transferFailed" | "emergencyStopped";
 export type ActionStatus =
   | "awaitingConfirmation" | "ready" | "dispatched" | "committed"
   | "rejected" | "unsupported" | "uncertain" | "needsReview" | "canceled";
@@ -328,6 +328,7 @@ export type TransitionAction =
   | Readonly<{ kind: "transferPossiblySent"; presentationId: string; sessionId: string; now: string }>
   | Readonly<{ kind: "presentationResolved"; presentationId: string; status: "played" | "interrupted" | "failed" | "unproven" | "connected" | "canceled"; providerConnectionRef?: string; sessionId?: string; now?: string }>
   | Readonly<{ kind: "markHostPossiblySent"; effectId: string; now: string }>
+  | Readonly<{ kind: "hostWriteBlocked"; effectId: string; now: string }>
   | Readonly<{ kind: "recoverHostPossiblySent"; effectId: string; now: string }>
   | Readonly<{ kind: "hostWriteResolved"; effectId: string; receipt: HostWriteReceipt; now: string }>
   | Readonly<{ kind: "reconciliationResolved"; effectId: string; observation: ReconcileObservation; now: string }>

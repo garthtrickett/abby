@@ -5,12 +5,15 @@ import type { CapabilityDescriptor } from "../../reference/command-gateway.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
 import type { AutomationSettingAuditPage, BookingSettingAuditPage } from "../../core/host.ts";
+import type { WriteStopStatus } from "../../core/write-stop.ts";
 
 export type DashboardState = {
   loading: boolean;
   busy: boolean;
   capabilities: readonly CapabilityDescriptor[];
   policy: CallPolicy | undefined;
+  writeStop: WriteStopStatus | undefined;
+  stopReasonInput: string;
   automationAuditPage: AutomationSettingAuditPage | undefined;
   auditPage: BookingSettingAuditPage | undefined;
   callIdInput: string;
@@ -22,6 +25,9 @@ export type DashboardState = {
 };
 
 export type DashboardActions = Readonly<{
+  setStopReason(value: string): void;
+  stopWrites(): void;
+  loadMoreStoppedWrites(): void;
   toggleAutomation(): void;
   loadAutomationAudit(): void;
   loadMoreAutomationAudit(): void;
@@ -61,6 +67,18 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
           ${state.automationAuditPage.entries.length ? html`<ul>${state.automationAuditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.enabled ? "enabled" : "disabled"} · ${entry.actorRef} · ${entry.changedAt}</li>`)}</ul>` : html`<p>No reception setting changes recorded.</p>`}
           ${state.automationAuditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreAutomationAudit()}>Load more reception history</button>` : ""}
         </div>` : html`<p class="muted">Setting history unavailable.</p>`}
+      </section>` : ""}
+      ${state.capabilities.some(item => item.id === "calls.writes.stop.read.v1") ? html`<section class="card" aria-labelledby="write-stop-title">
+        <h2 id="write-stop-title">Emergency write stop</h2>
+        <p class="muted">Blocks queued appointment writes on active calls. Writes already in flight still need their receipt or review.</p>
+        ${state.writeStop?.stopped ? html`<div aria-label="Emergency stop status">
+          <p class="status">Stopped by ${state.writeStop.actorRef} · ${state.writeStop.stoppedAt}</p>
+          <p>Reason: ${state.writeStop.reason}</p>
+          <p>Writes already in flight at stop: ${state.writeStop.inFlight.length}${state.writeStop.nextAfterEffectId ? "+" : ""}</p>
+          ${state.writeStop.inFlight.length ? html`<ul>${state.writeStop.inFlight.map(item => html`<li>${item.callId} · ${item.actionKey} · ${item.status}</li>`)}</ul>` : ""}
+          ${state.writeStop.nextAfterEffectId ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreStoppedWrites()}>Load more in-flight writes</button>` : ""}
+        </div>` : html`<div><label>Reason for emergency stop <input aria-label="Reason for emergency stop" .value=${state.stopReasonInput} @input=${(event: Event) => actions.setStopReason((event.target as HTMLInputElement).value)}></label>
+          <button type="button" ?disabled=${state.busy || !state.stopReasonInput.trim()} @click=${() => actions.stopWrites()}>Stop appointment writes</button></div>`}
       </section>` : ""}
       <section class="card" aria-labelledby="booking-title">
         <div class="row"><div><h2 id="booking-title">Booking automation</h2>

@@ -79,8 +79,10 @@ function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = f
     policy = new MemoryPolicyStore(hostBookingMode, undefined, readiness);
     reception = createEmbeddedTextComposition(ledger, policy, host, availability);
   }
-  const admin = new CommandGateway({ actorRef: `admin-${id}`, role: "clinicAdmin", scope }, policy, reception);
-  const agent = new CommandGateway({ actorRef: `agent-${id}`, role: "agent", scope }, policy, reception);
+  const admin = new CommandGateway({ actorRef: `admin-${id}`, role: "clinicAdmin", scope }, policy, reception,
+    undefined, undefined, undefined, ledger);
+  const agent = new CommandGateway({ actorRef: `agent-${id}`, role: "agent", scope }, policy, reception,
+    undefined, undefined, undefined, ledger);
   return { scope, patient, offer, host, ledger, reception, policy, admin, agent };
 }
 
@@ -334,6 +336,37 @@ for (const kind of kinds) {
     const reloaded: PolicyStore = kind === "standalone" ? new PostgresPolicyStore(db!, referenceDefaultPolicy) : app.policy;
     assert.equal(value(await reloaded.read(app.scope)).automationVersion, "2");
     assert.deepEqual(value(await reloaded.listAutomationChanges(app.scope)).entries, history.entries);
+  });
+
+  test(`${kind}: admin emergency stop blocks a confirmed queued booking and preserves staff work`, async () => {
+    const app = fixture(kind, `${kind}-write-stop`);
+    error(await app.agent.submit({ kind: "calls.writes.stop.v1", reason: "Forged agent stop" }), "forbidden");
+    const initial = value(await app.admin.submit({ kind: "calls.writes.stop.read.v1" }));
+    assert.equal(initial.kind, "writeStop");
+    assert.equal(initial.status.stopped, false);
+    settings(value(await app.admin.submit({ kind: "settings.appointments.booking.enabled.change.v1", expectedVersion: "0", enabled: true })));
+    const callId = `call-${kind}-write-stop`;
+    value(await app.reception.startCall(callId, app.scope));
+    const proposed = value(await app.reception.proposeBooking(app.scope, turn(callId, "request", "Book physio"),
+      app.patient.verificationRef, app.offer("one").offerRef, now));
+    const action = Object.values(proposed.actions)[0];
+    assert.ok(action);
+    value(await app.reception.acknowledgeTextPresentation(app.scope, callId, action.presentationId));
+    value(await app.reception.affirm(app.scope, turn(callId, "affirm", "Yes"), action.key, action.digest, now));
+    const stopped = value(await app.admin.submit({ kind: "calls.writes.stop.v1", reason: "Clinic incident" }));
+    assert.equal(stopped.kind, "writeStop");
+    assert.equal(stopped.status.stopped, true);
+    assert.equal(stopped.status.reason, "Clinic incident");
+    assert.deepEqual(stopped.status.inFlight, []);
+    assert.equal(value(await app.ledger.readWriteStop({ ...app.scope, clinicId: "other-clinic" })).stopped, false);
+    const result = value(await app.reception.drain(app.scope, callId, now));
+    assert.equal(result.actions[action.key]?.status, "unsupported");
+    assert.equal(result.effects[`${action.key}:write`]?.status, "canceled");
+    assert.equal(Object.values(result.staffItems)[0]?.reason, "emergencyStopped");
+    assert.equal(app.host.bookings(app.scope).length, 0);
+    const repeated = value(await app.admin.submit({ kind: "calls.writes.stop.v1", reason: "Second operator" }));
+    assert.deepEqual(repeated, stopped);
+    if (kind === "standalone") assert.deepEqual(value(await new PostgresLedger(db!).readWriteStop(app.scope)), stopped.status);
   });
 
   test(`${kind}: enabled setting with request-only host support opens staff work`, async () => {

@@ -31,7 +31,7 @@ async function localDashboard(role: "clinicAdmin" | "staff", availability?: Avai
   const started = await reception.startCall("before-setting", scope);
   assert.equal(started.ok, true);
   const gateway = new CommandGateway({ actorRef: `browser-${role}`, role, scope }, policy, reception,
-    new CallReview(ledger), new StaffQueue(ledger, () => "2026-09-30T12:00:00.000Z"), new CallOutcomeReport(ledger));
+    new CallReview(ledger), new StaffQueue(ledger, () => "2026-09-30T12:00:00.000Z"), new CallOutcomeReport(ledger), ledger);
   const server = await createDashboardServer(gateway, resolve("dist/dashboard/app.js"));
   await new Promise<void>(done => server.listen(0, "127.0.0.1", done));
   const address = server.address();
@@ -86,6 +86,45 @@ test("SET-001: browser reception switch needs readiness and gates the next call"
     await expect(page.getByLabel("Automation setting audit")).toContainText("Version 2 · disabled");
     const invalid = await request.post(`${app.url}/api/settings/automation-enabled`, { data: { expectedVersion: "2", enabled: "yes" } });
     assert.equal(invalid.status(), 400);
+  } finally { await app.close(); }
+});
+
+test("emergency stop in the browser blocks a queued active-call write and survives reload", async ({ page, request }) => {
+  const app = await localDashboard("clinicAdmin");
+  try {
+    const enabled = await app.policy.changeBookingEnabled(app.scope, "0", true, "browser-clinicAdmin");
+    assert.ok(enabled.ok);
+    const callId = "browser-emergency-write";
+    const runtime = new CallRuntime(app.ledger, app.scope);
+    assert.equal((await runtime.start(callId, enabled.value)).ok, true);
+    const at = "2026-09-28T10:00:00.000Z";
+    const requestAction = { kind: "book" as const,
+      patient: { scope: app.scope, patientRef: "synthetic-patient", verificationRef: "synthetic-proof", expiresAt: "2026-09-29T10:00:00.000Z" },
+      offer: { scope: app.scope, offerRef: "synthetic-offer", serviceRef: "physio", startsAt: "2026-09-29T11:00:00.000Z", expiresAt: "2026-09-29T10:00:00.000Z" } };
+    const proposed = await runtime.acceptTurn({ callId, turnId: "request", text: "Book", quality: "clear", at },
+      { kind: "requestAction", request: requestAction }, at);
+    assert.ok(proposed.ok);
+    const action = Object.values(proposed.value.actions)[0];
+    assert.ok(action);
+    assert.equal((await runtime.startPresentation(callId, action.presentationId)).ok, true);
+    assert.equal((await runtime.resolvePresentation(callId, action.presentationId, "played")).ok, true);
+    assert.equal((await runtime.acceptTurn({ callId, turnId: "confirm", text: "Yes", quality: "clear", at },
+      { kind: "affirm", actionKey: action.key, digest: action.digest, affirmative: true }, at)).ok, true);
+
+    await page.goto(app.url);
+    await expect(page.getByRole("heading", { name: "Emergency write stop" })).toBeVisible();
+    await page.getByRole("textbox", { name: "Reason for emergency stop" }).fill("Clinic incident");
+    await page.getByRole("button", { name: "Stop appointment writes" }).click();
+    await expect(page.getByLabel("Emergency stop status")).toContainText("Clinic incident");
+    await new EffectWorker(runtime, app.host).process(callId, `${action.key}:write`, at);
+    const blocked = await runtime.read(callId);
+    assert.ok(blocked.ok);
+    assert.equal(blocked.value.actions[action.key]?.status, "unsupported");
+    assert.equal(Object.values(blocked.value.staffItems)[0]?.reason, "emergencyStopped");
+    assert.equal(app.host.bookings(app.scope).length, 0);
+    await page.reload();
+    await expect(page.getByLabel("Emergency stop status")).toContainText("Clinic incident");
+    assert.equal((await request.post(`${app.url}/api/writes/stop`, { data: { reason: "" } })).status(), 400);
   } finally { await app.close(); }
 });
 
@@ -148,6 +187,7 @@ test("E2E-069: view-only staff can review a call but cannot change booking setti
     await expect(page.getByText("View only")).toBeVisible();
     await expect(page.getByRole("button", { name: "Enable booking" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Enable reception" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Emergency write stop" })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Booking setting history" })).toHaveCount(0);
     await page.getByRole("textbox", { name: "Call ID" }).fill("before-setting");
     await page.getByRole("button", { name: "Load call" }).click();
@@ -156,6 +196,8 @@ test("E2E-069: view-only staff can review a call but cannot change booking setti
     assert.equal(forbidden.status(), 403);
     const automationForbidden = await request.post(`${app.url}/api/settings/automation-enabled`, { data: { expectedVersion: "0", enabled: true } });
     assert.equal(automationForbidden.status(), 403);
+    assert.equal((await request.post(`${app.url}/api/writes/stop`, { data: { reason: "Forged staff stop" } })).status(), 403);
+    assert.equal((await request.get(`${app.url}/api/writes/stop`)).status(), 403);
     const auditForbidden = await request.get(`${app.url}/api/settings/booking-audit`);
     assert.equal(auditForbidden.status(), 403);
     const policy = await app.policy.read(app.scope);

@@ -52,6 +52,11 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     }
     let command: GatewayCommand | undefined;
     if (request.method === "GET" && url.pathname === "/api/settings") command = { kind: "settings.read.v1" };
+    if (request.method === "GET" && url.pathname === "/api/writes/stop") {
+      const afterEffectId = url.searchParams.get("after");
+      if (afterEffectId !== null && (!afterEffectId || afterEffectId.length > 512)) return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      command = { kind: "calls.writes.stop.read.v1", ...(afterEffectId === null ? {} : { afterEffectId }) };
+    }
     if (request.method === "GET" && url.pathname === "/api/settings/automation-audit") {
       const cursor = url.searchParams.get("after");
       if (cursor !== null && (!/^(0|[1-9][0-9]*)$/.test(cursor) || !Number.isSafeInteger(Number(cursor)))) return json(response, 400, { ok: false, error: { kind: "invalid" } });
@@ -96,6 +101,16 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
         return json(response, 400, { ok: false, error: { kind: "invalid" } });
       }
       command = { kind: "settings.automation.enabled.change.v1", expectedVersion: input.expectedVersion, enabled: input.enabled };
+    }
+    if (request.method === "POST" && url.pathname === "/api/writes/stop") {
+      const origin = request.headers.origin;
+      if (origin && origin !== `http://${request.headers.host}`) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+      if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
+      const input = record(await body(request));
+      if (!input || typeof input.reason !== "string" || !input.reason.trim() || input.reason.length > 1_000) {
+        return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      }
+      command = { kind: "calls.writes.stop.v1", reason: input.reason };
     }
     if (request.method === "POST" && url.pathname === "/api/staff/change") {
       const origin = request.headers.origin;

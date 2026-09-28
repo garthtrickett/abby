@@ -1,0 +1,9 @@
+# Emergency stop for appointment writes
+
+`calls.writes.stop.v1` is a clinic-admin command bound to the actor's tenant and clinic. It records the first operator, reason, and database time. Repeated requests return the original stop receipt. `calls.writes.stop.read.v1` returns the persisted status and pages through a snapshot of host writes that were `possiblySent` or `uncertain` when the stop took effect. Those writes may already have reached the host, so their receipts and reconciliation continue. The stop is clinic-wide across locations and does not change the captured call policy or the new-call automation switch.
+
+If an in-flight outbox row has lost its action key, the stop still latches and the snapshot labels that key `unknown`; corrupt audit metadata cannot leave dispatch open.
+
+The memory and PostgreSQL ledgers enforce the stop in the same atomic step that would mark a pending host write `possiblySent`. PostgreSQL locks a clinic barrier row for the send mark and the operator stop, so one operation wins before the other. If the stop wins, the host adapter receives no send permit: the effect is canceled, the action becomes unsupported, and a linked staff request is staged. The call records a truthful caller message and stages it for speech when its presentation slot is free. Staff tasks and reconciliation are not blocked. The reference dashboard exposes the stop and its in-flight snapshot; the browser and both ledgers exercise a pending write through this path.
+
+The stop remains latched. Restoring automated writes requires a separately designed, audited recovery command with fresh host-readiness evidence. This slice has no live telephony or Cliniko write adapter; synthetic tests cannot establish provider behavior. A production host must authorize the clinic-admin identity, start the effect worker, and monitor staff follow-up.

@@ -47,6 +47,20 @@ test("database constraints reject cross-tenant child rows and mismatched JSON sc
   assert.equal(success(await app.runtime.read(app.callId)).policy.scope.tenantId, app.scope.tenantId);
 });
 
+test("emergency stop latches even when an in-flight outbox row has lost its action key", async () => {
+  const app = await setup("pg-stop-corrupt-snapshot");
+  await app.turn("request", "Book", { kind: "requestAction", request: app.book() });
+  const action = await app.pendingAction();
+  await app.confirm(action.key);
+  success(await app.runtime.markHostPossiblySent(app.callId, `${action.key}:write`, now));
+  await sql`update effect_outbox set payload = payload - 'actionKey'
+    where effect_id = ${`${action.key}:write`}`.execute(db);
+  const stop = success(await app.ledger.stopWrites(app.scope, "clinic-admin", "Provider incident"));
+  assert.equal(stop.stopped, true);
+  assert.deepEqual(stop.inFlight.map(item => [item.callId, item.actionKey]), [[app.callId, "unknown"]]);
+  assert.equal(success(await new PostgresLedger(db).readWriteStop(app.scope)).stopped, true);
+});
+
 test("PostgreSQL staff queue reads the indexed task projection within one clinic", async () => {
   const app = await setup("pg-staff-queue");
   success(await app.runtime.acceptTurn({ callId: app.callId, turnId: "staff-request", text: "Need staff", quality: "clear", at: now },

@@ -20,6 +20,7 @@ export class EffectWorker {
       if (effect.status !== "pending") throw new Error("invalidTransition");
       const marked = await this.runtime.markHostPossiblySent(callId, effectId, now);
       if (!marked.ok) throw new Error(marked.error.kind);
+      if (marked.value.effects[effectId]?.status === "canceled") return;
       let receipt: HostWriteReceipt;
       try {
         receipt = await this.host.write(effect.mutation, now);

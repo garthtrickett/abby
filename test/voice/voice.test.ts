@@ -88,6 +88,8 @@ class PresentationStartHookLedger implements LedgerStore {
     this.onRenew = onRenew;
   }
   start(...args: Parameters<LedgerStore["start"]>) { return this.inner.start(...args); }
+  stopWrites(...args: Parameters<LedgerStore["stopWrites"]>) { return this.inner.stopWrites(...args); }
+  readWriteStop(...args: Parameters<LedgerStore["readWriteStop"]>) { return this.inner.readWriteStop(...args); }
   findAdmission(...args: Parameters<LedgerStore["findAdmission"]>) { return this.inner.findAdmission(...args); }
   findExpiredAdmissions(...args: Parameters<LedgerStore["findExpiredAdmissions"]>) { return this.inner.findExpiredAdmissions(...args); }
   findExpiredSessions(...args: Parameters<LedgerStore["findExpiredSessions"]>) { return this.inner.findExpiredSessions(...args); }

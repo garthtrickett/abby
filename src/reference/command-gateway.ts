@@ -13,6 +13,8 @@ import type { CallCommandProgress } from "./command-progress.ts";
 import { capabilityDescriptor } from "./capability-catalogue.ts";
 import type { CapabilityId, CapabilityDescriptor } from "./capability-catalogue.ts";
 import { matchesSchema } from "./schema-shapes.ts";
+import type { LedgerStore } from "../core/ledger.ts";
+import type { WriteStopStatus } from "../core/write-stop.ts";
 
 export type { CapabilityDescriptor } from "./capability-catalogue.ts";
 
@@ -26,6 +28,8 @@ export type GatewayCommand =
   | Readonly<{ kind: "settings.read.v1" }>
   | Readonly<{ kind: "settings.automation.enabled.change.v1"; expectedVersion: string; enabled: boolean }>
   | Readonly<{ kind: "settings.automation.audit.v1"; afterVersion?: number }>
+  | Readonly<{ kind: "calls.writes.stop.v1"; reason: string }>
+  | Readonly<{ kind: "calls.writes.stop.read.v1"; afterEffectId?: string }>
   | Readonly<{ kind: "settings.appointments.booking.enabled.change.v1"; expectedVersion: string; enabled: boolean }>
   | Readonly<{ kind: "settings.appointments.booking.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "booking.propose.v2"; turn: FinalCallerTurn; verificationRef: string; offerRef: string; now: string }>
@@ -44,6 +48,7 @@ type CommandMissingCatalogue = AssertNever<Exclude<CapabilityId, GatewayCommand[
 export type GatewayReply =
   | Readonly<{ kind: "settings"; policy: CallPolicy }>
   | Readonly<{ kind: "automationSettingAudit"; page: AutomationSettingAuditPage }>
+  | Readonly<{ kind: "writeStop"; status: WriteStopStatus }>
   | Readonly<{ kind: "bookingSettingAudit"; page: BookingSettingAuditPage }>
   | Readonly<{ kind: "bookingProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "knowledgeAnswer"; progress: CallCommandProgress }>
@@ -63,8 +68,9 @@ export class CommandGateway {
   private readonly review: CallReview | undefined;
   private readonly staffQueue: StaffQueue | undefined;
   private readonly outcomeReport: CallOutcomeReport | undefined;
+  private readonly writeStopLedger: LedgerStore | undefined;
 
-  constructor(actor: HostActor, policy: PolicyStore, reception: TextReception, review?: CallReview, staffQueue?: StaffQueue, outcomeReport?: CallOutcomeReport) {
+  constructor(actor: HostActor, policy: PolicyStore, reception: TextReception, review?: CallReview, staffQueue?: StaffQueue, outcomeReport?: CallOutcomeReport, writeStopLedger?: LedgerStore) {
     if (!actor || typeof actor.actorRef !== "string" || !actor.actorRef.trim() || actor.actorRef.length > 256 ||
         !["clinicAdmin", "staff", "agent"].includes(actor.role) || !actor.scope ||
         [actor.scope.tenantId, actor.scope.clinicId, actor.scope.locationId]
@@ -75,6 +81,7 @@ export class CommandGateway {
     this.review = review;
     this.staffQueue = staffQueue;
     this.outcomeReport = outcomeReport;
+    this.writeStopLedger = writeStopLedger;
   }
 
   listPermitted(): readonly CapabilityDescriptor[] {
@@ -88,6 +95,7 @@ export class CommandGateway {
     if (this.actor.role === "clinicAdmin") {
       permitted.push("settings.automation.enabled.change.v1", "settings.automation.audit.v1",
         "settings.appointments.booking.enabled.change.v1", "settings.appointments.booking.audit.v1");
+      if (this.writeStopLedger) permitted.push("calls.writes.stop.v1", "calls.writes.stop.read.v1");
     }
     return permitted.map(capabilityDescriptor);
   }
@@ -121,6 +129,16 @@ export class CommandGateway {
         if (command.afterVersion !== undefined && (!Number.isSafeInteger(command.afterVersion) || command.afterVersion < 0)) return err({ kind: "invalid" });
         const result = await this.policy.listAutomationChanges(this.actor.scope, command.afterVersion);
         return result.ok ? ok({ kind: "automationSettingAudit", page: result.value }) : result;
+      }
+      case "calls.writes.stop.v1": {
+        if (!this.writeStopLedger) return err({ kind: "forbidden" });
+        const result = await this.writeStopLedger.stopWrites(this.actor.scope, this.actor.actorRef, command.reason);
+        return result.ok ? ok({ kind: "writeStop", status: result.value }) : result;
+      }
+      case "calls.writes.stop.read.v1": {
+        if (!this.writeStopLedger) return err({ kind: "forbidden" });
+        const result = await this.writeStopLedger.readWriteStop(this.actor.scope, command.afterEffectId);
+        return result.ok ? ok({ kind: "writeStop", status: result.value }) : result;
       }
       case "settings.appointments.booking.enabled.change.v1": {
         const result = await this.policy.changeBookingEnabled(this.actor.scope, command.expectedVersion, command.enabled, this.actor.actorRef);

@@ -490,6 +490,23 @@ export function transition(current: CallState, action: TransitionAction): Result
       state.actions[pendingAction.key] = { ...pendingAction, status: "dispatched" };
       break;
     }
+    case "hostWriteBlocked": {
+      const effect = state.effects[action.effectId];
+      if (!effect || effect.kind !== "hostWrite") return err({ kind: "effectUnknown" });
+      const pendingAction = state.actions[effect.actionKey];
+      if (effect.status !== "pending" || pendingAction?.status !== "ready" || pendingAction.digest !== effect.mutation.payloadDigest) return err({ kind: "invalidTransition" });
+      state.effects[effect.id] = { ...effect, status: "canceled" };
+      state.actions[pendingAction.key] = { ...pendingAction, status: "unsupported" };
+      addStaffTask(state, "emergencyStopped", action.now, pendingAction.key, effect.mutation.request);
+      const approvedText = "I can't complete that action now. I'll request staff follow-up, but I can't confirm they've received it yet.";
+      state.callerMessages.push(approvedText);
+      if (state.lifecycle === "active" && !state.pendingPresentationId) {
+        const id = `${effect.id}:stoppedNotice`;
+        state.presentations[id] = { kind: "notice", id, approvedText, status: "pending" };
+        state.pendingPresentationId = id;
+      }
+      break;
+    }
     case "recoverHostPossiblySent": {
       const effect = state.effects[action.effectId];
       if (!effect || effect.kind !== "hostWrite") return err({ kind: "effectUnknown" });
