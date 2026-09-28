@@ -1,0 +1,7 @@
+# Shared-number voice call handoff
+
+`SharedNumberVoiceCall` is the synthetic transport-facing coordinator for one authenticated inbound call and one session ID. `begin` uses `SharedNumberIntakeService`: a single-location number immediately attaches the ordinary `VoiceSession`, while a shared number attaches `PrelocationVoiceSession` and sends its captured location prompt. No location-scoped session is constructed before a choice commits.
+
+The coordinator routes playback results, speech starts, and transcript segments to the active session. A clear location turn durably binds the selected location before the coordinator constructs and attaches the ordinary voice session with the same call ID, session ID, and playback port. It checks that the host-supplied full session matches the bound scope. If constructing or attaching that session fails, the bound receipt remains durable and `resumeBound` can retry attachment without a second location decision. Late location-prompt callbacks cannot become ordinary call playback evidence.
+
+Memory and PostgreSQL journeys enter through this coordinator. They prove prompt delivery, location choice, scoped booking details, played confirmation, and a committed host booking only in the chosen location; they also cover the single-location path and wrong-scope factory retry. Live provider authentication, audio/transcription ingress, transfer, failure routing, and disconnect wiring remain to be built. This is a no-number proof of the handoff, not a live `E2E-055` result.
