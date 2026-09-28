@@ -2,19 +2,13 @@ import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result, TransitionFailure } from "../core/model.ts";
 import type { CallLivenessMonitor } from "./call-liveness-monitor.ts";
 import type { DeliveryAttempt, DeliveryFailure, PresentationDispatcher, RecoveryReport } from "./presentation-dispatcher.ts";
+import { systemTimer } from "./timer.ts";
+import type { TimerPort } from "./timer.ts";
 
 export type WorkFailure = TransitionFailure | DeliveryFailure |
   Readonly<{ kind: "workerUnavailable"; stage: "clock" | "expiry" | "recovery" | "wake" }>;
 export type WorkReport = Readonly<{ expired: number; recovery: RecoveryReport }>;
-export type WorkTimer = Readonly<{
-  schedule(callback: () => void, delayMs: number): unknown;
-  cancel(handle: unknown): void;
-}>;
-
-const systemTimer: WorkTimer = {
-  schedule: (callback, delayMs) => setTimeout(callback, delayMs),
-  cancel: handle => clearTimeout(handle as ReturnType<typeof setTimeout>),
-};
+export type WorkTimer = TimerPort;
 
 /** Schedules bounded recovery work. The host owns the process lifecycle and call registry. */
 export class VoiceWorkLoop {

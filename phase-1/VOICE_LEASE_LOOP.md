@@ -1,0 +1,7 @@
+# Attached voice-session lease renewal, version 0.1
+
+`VoiceLeaseLoop` schedules one renewal at a time for an attached `VoiceSession`. The host starts it only after activation succeeds and stops it on disconnect or shutdown. Its default first and subsequent renewal interval is ten seconds, leaving room inside the 30-second ledger lease and the local two-second send margin. An expected failure retries after two seconds. `leaseLost` and `sessionUnknown` stop the loop and are reported to the host; they cannot revive the local send gate. A process stall can still miss the deadline, in which case `VoiceSession.renew` refuses to reopen output and the independent ledger monitor closes the call.
+
+The loop injects its clock and timer for deterministic tests and reports every attempt through a typed result callback. Memory and disposable PostgreSQL call journeys renew twice, then prove that a pending presentation can still be delivered after the initial lease would have expired. Separate timer tests cover a clock fault, retry, terminal lease loss, and shutdown during an in-flight renewal. Run `npm test` and `npm run probe:postgres`.
+
+The production host must supply session lifecycle wiring, handle a terminal renewal report by ending or rerouting live media, and keep the number-level fallback available. This loop does not authenticate transport events or prove provider audio, playback, or transfer evidence.

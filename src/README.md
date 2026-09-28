@@ -18,7 +18,9 @@ The [Cliniko availability adapter](../phase-2/CLINIKO_AVAILABILITY.md) reads sco
 
 The [presentation recovery dispatcher](../phase-1/PRESENTATION_RECOVERY.md) scans durable pending speech or transfer intents after a lost wake-up. It only delivers through the exact attached session and never replays a started intent.
 
-The [in-process voice work loop](../phase-1/VOICE_WORK_LOOP.md) schedules lease expiry before pending-presentation recovery and exposes a commit notification hook. The host still supplies its session registry, commit wiring, and lease renewals.
+The [in-process voice work loop](../phase-1/VOICE_WORK_LOOP.md) schedules lease expiry before pending-presentation recovery and exposes a commit notification hook. The host still supplies its session registry and commit wiring.
+
+The [per-session lease renewal loop](../phase-1/VOICE_LEASE_LOOP.md) renews an attached call before its local send deadline, retries transient failures, and stops on lease loss. The host starts and stops it with the media session.
 
 Run `npm ci`, `npm test`, and `npm run probe:postgres` (Docker required for the last command). The probe migrates a fresh PostgreSQL database, regenerates Kanel types, and runs the text and storage cases. Test files run in parallel with isolated calls and host fixtures. A new feature, capability, or setting needs a text contract case that checks caller wording, state, effects, and failure behavior. Its real voice path also needs a full-call E2E case when that path exists.
 

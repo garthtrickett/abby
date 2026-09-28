@@ -16,6 +16,8 @@ import { createStandaloneTextComposition } from "../../src/standalone/text-compo
 import { CallAdmissionService } from "../../src/voice/admission.ts";
 import { CallLivenessMonitor } from "../../src/voice/call-liveness-monitor.ts";
 import { PresentationDispatcher } from "../../src/voice/presentation-dispatcher.ts";
+import type { TimerPort } from "../../src/voice/timer.ts";
+import { VoiceLeaseLoop } from "../../src/voice/voice-lease-loop.ts";
 import { VoiceWorkLoop } from "../../src/voice/voice-work-loop.ts";
 import { VoiceSession } from "../../src/voice/voice-session.ts";
 import type { PlaybackPort, TransferOutcome, TransferPort } from "../../src/voice/voice-session.ts";
@@ -610,5 +612,42 @@ for (const kind of kinds) {
     assert.equal(app.playback.queued.length, 1);
     assert.equal(value(await worker.notifyCommitted(app.callId, app.scope)).kind, "none");
     assert.equal(app.playback.queued.length, 1);
+  });
+
+  test(`${kind}: scheduled renewals keep an attached call able to deliver after the original lease`, async () => {
+    let monotonicMs = 0;
+    const app = await fixture(kind, `${kind}-scheduled-renewal`, true, "requestOnly", undefined, { now: () => monotonicMs });
+    await bookTurn(app);
+    const callbacks = new Map<number, () => void>();
+    let nextHandle = 0;
+    const timer: TimerPort = {
+      schedule(callback) { const handle = ++nextHandle; callbacks.set(handle, callback); return handle; },
+      cancel(handle) { callbacks.delete(handle as number); },
+    };
+    let wallTime = at(11);
+    let completed!: () => void;
+    const renewals: number[] = [];
+    const loop = new VoiceLeaseLoop(app.session, result => {
+      renewals.push(value(result).sessionLease!.version);
+      completed();
+    }, { timer, clock: () => wallTime });
+    loop.start();
+    loop.start();
+    assert.equal(callbacks.size, 1);
+    for (const step of [10, 20]) {
+      monotonicMs = step * 1_000;
+      wallTime = at(step + 1);
+      const finished = new Promise<void>(resolve => { completed = resolve; });
+      const [handle, callback] = callbacks.entries().next().value!;
+      callbacks.delete(handle);
+      callback();
+      await finished;
+    }
+    assert.deepEqual(renewals, [2, 3]);
+    monotonicMs = 30_000;
+    assert.equal(value(await app.session.dispatchPending(at(31))).kind, "queued");
+    assert.equal(app.playback.queued.length, 1);
+    await loop.stop();
+    assert.equal(callbacks.size, 0);
   });
 }
