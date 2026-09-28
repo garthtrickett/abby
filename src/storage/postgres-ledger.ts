@@ -1,7 +1,7 @@
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import { err, ok } from "../core/model.ts";
-import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, Result, TransitionAction, TransitionFailure } from "../core/model.ts";
+import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingPresentationRef, Result, TransitionAction, TransitionFailure } from "../core/model.ts";
 import { admissionReceipt, initialState, sameAdmission } from "../core/ledger.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { transition } from "../core/transition.ts";
@@ -15,7 +15,7 @@ function decodeState(value: unknown, callId: string): Result<CallState, Transiti
   if (typeof value !== "object" || value === null || Array.isArray(value)) return err({ kind: "storageCorrupt" });
   const data = value as Record<string, unknown>;
   if (data.callId !== callId || !Number.isInteger(data.version) || !["starting", "active", "ended"].includes(String(data.lifecycle)) || typeof data.policy !== "object" || data.policy === null ||
-      typeof data.actions !== "object" || data.actions === null || typeof data.effects !== "object" || data.effects === null ||
+      typeof data.actions !== "object" || data.actions === null || typeof data.presentations !== "object" || data.presentations === null || typeof data.effects !== "object" || data.effects === null ||
       !Array.isArray(data.processedTurnIds) || typeof data.processedTurnDigests !== "object" || data.processedTurnDigests === null || !Array.isArray(data.callerMessages) ||
       (data.lifecycle === "starting" && (typeof data.admission !== "object" || data.admission === null))) return err({ kind: "storageCorrupt" });
   return ok(value as CallState);
@@ -125,6 +125,33 @@ export class PostgresLedger implements LedgerStore {
         receipts.push({ callId: row.call_id, scope: decoded.value.policy.scope, lease: decoded.value.sessionLease });
       }
       return ok(receipts);
+    } catch {
+      return err({ kind: "storageFailure" });
+    }
+  }
+
+  async findPendingPresentations(now: string, scope?: LocationScope, afterCallId?: string): Promise<Result<readonly PendingPresentationRef[], TransitionFailure>> {
+    if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
+    try {
+      const ledgerNow = await this.trustedNow(this.db, now);
+      let query = this.db.selectFrom("calls").select(["call_id", "state"])
+        .where(sql<boolean>`state->>'lifecycle' = 'active'`)
+        .where(sql<boolean>`state->'admission' is not null`)
+        .where(sql<boolean>`state->>'pendingPresentationId' is not null`)
+        .where(sql<boolean>`(state->'sessionLease'->>'expiresAt')::timestamptz > ${ledgerNow}::timestamptz`);
+      if (scope) query = query.where("tenant_id", "=", scope.tenantId).where("clinic_id", "=", scope.clinicId).where("location_id", "=", scope.locationId);
+      if (afterCallId) query = query.where("call_id", ">", afterCallId as CallsCallId);
+      const rows = await query.orderBy("call_id").limit(100).execute();
+      const refs: PendingPresentationRef[] = [];
+      for (const row of rows) {
+        const decoded = decodeState(row.state, row.call_id);
+        if (!decoded.ok) return decoded;
+        const state = decoded.value;
+        const presentationId = state.pendingPresentationId;
+        if (!state.admission || !state.sessionLease || !presentationId || state.presentations[presentationId]?.status !== "pending") return err({ kind: "storageCorrupt" });
+        refs.push({ callId: state.callId, scope: structuredClone(state.policy.scope), sessionId: state.sessionLease.sessionId, presentationId });
+      }
+      return ok(refs);
     } catch {
       return err({ kind: "storageFailure" });
     }

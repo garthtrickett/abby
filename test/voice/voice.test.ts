@@ -14,6 +14,8 @@ import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
 import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
 import { CallAdmissionService } from "../../src/voice/admission.ts";
+import { CallLivenessMonitor } from "../../src/voice/call-liveness-monitor.ts";
+import { PresentationDispatcher } from "../../src/voice/presentation-dispatcher.ts";
 import { VoiceSession } from "../../src/voice/voice-session.ts";
 import type { PlaybackPort, TransferOutcome, TransferPort } from "../../src/voice/voice-session.ts";
 
@@ -80,6 +82,7 @@ class PresentationStartHookLedger implements LedgerStore {
   findAdmission(...args: Parameters<LedgerStore["findAdmission"]>) { return this.inner.findAdmission(...args); }
   findExpiredAdmissions(...args: Parameters<LedgerStore["findExpiredAdmissions"]>) { return this.inner.findExpiredAdmissions(...args); }
   findExpiredSessions(...args: Parameters<LedgerStore["findExpiredSessions"]>) { return this.inner.findExpiredSessions(...args); }
+  findPendingPresentations(...args: Parameters<LedgerStore["findPendingPresentations"]>) { return this.inner.findPendingPresentations(...args); }
   admit(...args: Parameters<LedgerStore["admit"]>) { return this.inner.admit(...args); }
   read(...args: Parameters<LedgerStore["read"]>) { return this.inner.read(...args); }
   async apply(...args: Parameters<LedgerStore["apply"]>) {
@@ -474,5 +477,86 @@ for (const kind of kinds) {
     failure(await app.session.renew(at(16)), "leaseLost");
     failure(await app.session.dispatchPending(at(30)), "leaseLost");
     assert.equal(app.playback.queued.length, 0);
+  });
+
+  test(`${kind}: a lost delivery wake-up is recovered once from durable pending state`, async () => {
+    const app = await fixture(kind, `${kind}-lost-wakeup`, true);
+    const planned = await bookTurn(app);
+    const textOnlyCallId = `text-only-${kind}-lost-wakeup`;
+    value(await app.reception.startCall(textOnlyCallId, app.scope));
+    value(await app.reception.proposeBooking(app.scope,
+      { callId: textOnlyCallId, turnId: "text-only-request", text: "Book physio", quality: "clear", at: at(3) },
+      app.patient.verificationRef, app.offer.offerRef, at(3)));
+    assert.equal(app.playback.queued.length, 0);
+    const dispatcher = new PresentationDispatcher(app.ledger, ref => ref.callId === app.callId && ref.sessionId === app.sessionId ? app.session : undefined, app.scope);
+    assert.deepEqual(value(await dispatcher.recover(at(4))), { scanned: 1, dispatched: 1, deferred: 0 });
+    const started = value(await new CallRuntime(app.ledger, app.scope).read(app.callId));
+    assert.equal(started.presentations[planned.pendingPresentationId!]?.status, "started");
+    assert.equal(app.playback.queued.length, 1);
+    assert.deepEqual(value(await dispatcher.recover(at(5))), { scanned: 0, dispatched: 0, deferred: 0 });
+    assert.equal(app.playback.queued.length, 1);
+    value(await app.session.acceptPlaybackResult(app.playback.queued[0]!, "played", at(6)));
+    const generation = value(await app.session.speechStarted(at(7)));
+    value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation, utteranceId: "affirm-after-recovery", text: "Yes", quality: "clear" }));
+    value(await app.session.finishTurn(at(8)));
+    value(await app.session.drainEffects(at(9)));
+    assert.equal(app.host.bookings(app.scope).length, 1);
+  });
+
+  test(`${kind}: a missing session defers pending delivery until lease expiry`, async () => {
+    const app = await fixture(kind, `${kind}-missing-dispatch-session`, true);
+    const planned = await bookTurn(app);
+    const dispatcher = new PresentationDispatcher(app.ledger, () => undefined, app.scope);
+    assert.deepEqual(value(await dispatcher.recover(at(4))), { scanned: 1, dispatched: 0, deferred: 1 });
+    assert.equal(app.playback.queued.length, 0);
+    assert.equal(value(await new CallRuntime(app.ledger, app.scope).read(app.callId)).presentations[planned.pendingPresentationId!]?.status, "pending");
+    assert.equal(value(await new CallLivenessMonitor(app.ledger, app.scope).expireDue(at(31))), 1);
+    assert.deepEqual(value(await dispatcher.recover(at(32))), { scanned: 0, dispatched: 0, deferred: 0 });
+    const ended = value(await new CallRuntime(app.ledger, app.scope).read(app.callId));
+    assert.equal(ended.presentations[planned.pendingPresentationId!]?.status, "superseded");
+    assert.equal(app.playback.queued.length, 0);
+  });
+
+  test(`${kind}: a lost wake-up recovers a transfer without replay`, async () => {
+    const app = await fixture(kind, `${kind}-lost-transfer-wakeup`, false, "execute");
+    const planned = await transferTurn(app);
+    app.transfer.outcome = { kind: "connected", providerConnectionRef: "recovered-connection" };
+    const dispatcher = new PresentationDispatcher(app.ledger, () => app.session, app.scope);
+    assert.deepEqual(value(await dispatcher.recover(at(4))), { scanned: 1, dispatched: 1, deferred: 0 });
+    assert.equal(app.transfer.requested.length, 1);
+    const state = value(await new CallRuntime(app.ledger, app.scope).read(app.callId));
+    assert.equal(state.presentations[planned.pendingPresentationId!]?.status, "connected");
+    assert.equal(state.lifecycle, "ended");
+    assert.deepEqual(value(await dispatcher.recover(at(5))), { scanned: 0, dispatched: 0, deferred: 0 });
+    assert.equal(app.transfer.requested.length, 1);
+  });
+
+  test(`${kind}: concurrent wake and recovery cannot send the same presentation twice`, async () => {
+    const app = await fixture(kind, `${kind}-dispatch-race`, true);
+    await bookTurn(app);
+    const dispatcher = new PresentationDispatcher(app.ledger, () => app.session, app.scope);
+    const [wake, recovery] = await Promise.all([
+      dispatcher.wake(app.callId, app.scope, at(4)), dispatcher.recover(at(4)),
+    ]);
+    value(wake);
+    value(recovery);
+    assert.equal(app.playback.queued.length, 1);
+    const state = value(await new CallRuntime(app.ledger, app.scope).read(app.callId));
+    assert.equal(Object.values(state.presentations).filter(presentation => presentation.status === "started").length, 1);
+  });
+
+  test(`${kind}: dispatcher rejects a session registry entry for another call`, async () => {
+    const intended = await fixture(kind, `${kind}-registry-intended`, true);
+    const other = await fixture(kind, `${kind}-registry-other`, true);
+    await bookTurn(intended);
+    await bookTurn(other);
+    const dispatcher = new PresentationDispatcher(intended.ledger, () => other.session, intended.scope);
+    failure(await dispatcher.wake(intended.callId, intended.scope, at(4)), "sessionUnknown");
+    assert.equal(intended.playback.queued.length, 0);
+    assert.equal(other.playback.queued.length, 0);
+    assert.equal(value(await new CallRuntime(intended.ledger, intended.scope).read(intended.callId)).pendingPresentationId !== undefined, true);
+    const unavailable = new PresentationDispatcher(intended.ledger, () => { throw new Error("registry offline"); }, intended.scope);
+    failure(await unavailable.recover(at(4)), "sessionRegistryUnavailable");
+    assert.equal(intended.playback.queued.length, 0);
   });
 }

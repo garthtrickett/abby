@@ -1,5 +1,5 @@
 import { err, ok } from "./model.ts";
-import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, Result, TransitionAction, TransitionFailure } from "./model.ts";
+import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingPresentationRef, Result, TransitionAction, TransitionFailure } from "./model.ts";
 import { transition } from "./transition.ts";
 
 export interface LedgerStore {
@@ -7,6 +7,7 @@ export interface LedgerStore {
   findAdmission(callId: string): Promise<Result<AdmissionReceipt | null, TransitionFailure>>;
   findExpiredAdmissions(now: string, scope?: LocationScope): Promise<Result<readonly AdmissionReceipt[], TransitionFailure>>;
   findExpiredSessions(now: string, scope?: LocationScope): Promise<Result<readonly ActiveSessionReceipt[], TransitionFailure>>;
+  findPendingPresentations(now: string, scope?: LocationScope, afterCallId?: string): Promise<Result<readonly PendingPresentationRef[], TransitionFailure>>;
   admit(callId: string, policy: CallPolicy, admission: Admission): Promise<Result<AdmissionResult, TransitionFailure>>;
   read(callId: string, scope: LocationScope): Promise<Result<CallState, TransitionFailure>>;
   apply(callId: string, scope: LocationScope, expectedVersion: number, action: TransitionAction): Promise<Result<CallState, TransitionFailure>>;
@@ -65,6 +66,16 @@ export class MemoryLedger implements LedgerStore {
     if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
     return ok([...this.calls.values()].filter(state => (!scope || sameScope(state.policy.scope, scope)) && state.lifecycle === "active" && state.sessionLease && Date.parse(state.sessionLease.expiresAt) <= Date.parse(now))
       .slice(0, 100).map(state => ({ callId: state.callId, scope: structuredClone(state.policy.scope), lease: structuredClone(state.sessionLease!) })));
+  }
+
+  async findPendingPresentations(now: string, scope?: LocationScope, afterCallId?: string): Promise<Result<readonly PendingPresentationRef[], TransitionFailure>> {
+    if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
+    const refs = [...this.calls.values()]
+      .filter(state => (!scope || sameScope(state.policy.scope, scope)) && (!afterCallId || state.callId > afterCallId) &&
+        state.lifecycle === "active" && state.admission && state.sessionLease && Date.parse(state.sessionLease.expiresAt) > Date.parse(now) && state.pendingPresentationId)
+      .sort((left, right) => left.callId < right.callId ? -1 : left.callId > right.callId ? 1 : 0).slice(0, 100);
+    return ok(refs.map(state => ({ callId: state.callId, scope: structuredClone(state.policy.scope), sessionId: state.sessionLease!.sessionId,
+      presentationId: state.pendingPresentationId! })));
   }
 
   async admit(callId: string, policy: CallPolicy, admission: Admission): Promise<Result<AdmissionResult, TransitionFailure>> {
