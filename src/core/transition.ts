@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { digestActionRequest, digestTurn } from "./digest.ts";
 import { err, ok } from "./model.ts";
 import type {
   ActionRequest, ActionState, CallState, FinalCallerTurn, LocationScope,
@@ -13,20 +14,8 @@ function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
 }
 
-function canonical(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (value !== null && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)]));
-  }
-  return value;
-}
-
-function digestFor(request: ActionRequest): string {
-  return createHash("sha256").update(JSON.stringify(canonical(request))).digest("hex");
-}
-
 function turnDigest(turn: FinalCallerTurn, interpretation: TurnInterpretation): string {
-  return createHash("sha256").update(JSON.stringify(canonical({ turn, interpretation }))).digest("hex");
+  return digestTurn({ turn, interpretation });
 }
 
 function describe(request: ActionRequest): string {
@@ -66,6 +55,7 @@ function addStaffTask(state: CallState, reason: StaffReason, now: string, linked
   const key = `${state.callId}:staff:${Object.keys(state.staffItems).length + 1}`;
   const item = {
     key,
+    scope: state.policy.scope,
     reason,
     destination: state.policy.staffDestination,
     dueAt: new Date(Date.parse(now) + 24 * HOUR).toISOString(),
@@ -114,7 +104,7 @@ function handleRequest(state: CallState, turn: FinalCallerTurn, request: ActionR
     return ok(undefined);
   }
 
-  const digest = digestFor(request);
+  const digest = digestActionRequest(request);
   const key = createHash("sha256").update(`${state.policy.scope.tenantId}:${state.callId}:${turn.turnId}:${digest}`).digest("hex");
   const presentationId = `${key}:details`;
   const mutation = { kind: request.kind, scope: state.policy.scope, actionKey: key, payloadDigest: digest, policyVersion: state.policy.policyVersion, request };
@@ -166,6 +156,9 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
         addStaffTask(state, "systemFailure", now);
         state.callerMessages.push(interpretation.target === "patient" ? "I can't check patient records right now." : "I can't check available times right now.");
       }
+      break;
+    case "unavailableAction":
+      state.callerMessages.push("I can't complete that request here.");
       break;
     case "answer": {
       const sources = interpretation.sources.filter(source =>

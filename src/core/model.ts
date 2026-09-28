@@ -15,6 +15,7 @@ export type CapabilityMode = "execute" | "requestOnly" | "unavailable";
 export type CallPolicy = Readonly<{
   scope: LocationScope;
   policyVersion: string;
+  bookingEnabled: boolean;
   capabilities: Readonly<Record<ActionKind, CapabilityMode>>;
   staffDestination: StaffDestination;
   operatorQueue: StaffDestination;
@@ -67,6 +68,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "affirm"; actionKey: string; digest: string; affirmative: boolean }>
   | Readonly<{ kind: "handoff"; reason: StaffReason }>
   | Readonly<{ kind: "readFailure"; target: "patient" | "offer"; failure: "unavailable" | "notFound" }>
+  | Readonly<{ kind: "unavailableAction"; actionKind: ActionKind }>
   | Readonly<{ kind: "answer"; sources: readonly ApprovedKnowledge[]; proposedText: string }>
   | Readonly<{ kind: "ambiguousTarget" }>;
 
@@ -116,6 +118,7 @@ export type StaffTaskReceipt =
   | Readonly<{ kind: "uncertain"; taskKey: string }>;
 export type StaffItem = Readonly<{
   key: string;
+  scope: LocationScope;
   reason: StaffReason;
   destination: StaffDestination;
   dueAt: string;

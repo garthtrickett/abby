@@ -1,0 +1,85 @@
+import { EffectWorker } from "../core/effect-worker.ts";
+import type { BookingEvidenceHost, HostEffects, PolicyFailure, PolicyStore } from "../core/host.ts";
+import type { LedgerStore } from "../core/ledger.ts";
+import { err } from "../core/model.ts";
+import type { CallState, FinalCallerTurn, LocationScope, Result, TransitionFailure, TurnInterpretation } from "../core/model.ts";
+import { CallRuntime } from "../core/runtime.ts";
+
+export type TextHost = BookingEvidenceHost & HostEffects;
+export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
+
+export class TextReception {
+  private readonly ledger: LedgerStore;
+  private readonly policy: PolicyStore;
+  private readonly host: TextHost;
+
+  constructor(ledger: LedgerStore, policy: PolicyStore, host: TextHost) {
+    this.ledger = ledger;
+    this.policy = policy;
+    this.host = host;
+  }
+
+  private runtime(scope: LocationScope): CallRuntime {
+    return new CallRuntime(this.ledger, scope);
+  }
+
+  async startCall(callId: string, scope: LocationScope): Promise<Result<CallState, TextReceptionFailure>> {
+    const policy = await this.policy.read(scope);
+    if (!policy.ok) return policy;
+    return this.runtime(scope).start(callId, policy.value);
+  }
+
+  async proposeBooking(scope: LocationScope, turn: FinalCallerTurn, verificationRef: string, offerRef: string, now: string): Promise<Result<CallState, TextReceptionFailure>> {
+    const runtime = this.runtime(scope);
+    const current = await runtime.read(turn.callId);
+    if (!current.ok) return current;
+    if (current.value.policy.capabilities.book === "unavailable") {
+      return runtime.acceptTurn(turn, { kind: "unavailableAction", actionKind: "book" }, now);
+    }
+    let interpretation: TurnInterpretation;
+    if (turn.quality !== "clear") {
+      interpretation = { kind: "ambiguousTarget" };
+    } else {
+      const evidence = await this.host.resolveBooking(scope, verificationRef, offerRef, now);
+      if (evidence.ok) {
+        interpretation = { kind: "requestAction", request: evidence.value };
+      } else if (evidence.error.kind === "ambiguous" || evidence.error.kind === "expired") {
+        interpretation = { kind: "ambiguousTarget" };
+      } else {
+        interpretation = { kind: "readFailure", target: evidence.error.target, failure: evidence.error.kind === "unavailable" ? "unavailable" : "notFound" };
+      }
+    }
+    return runtime.acceptTurn(turn, interpretation, now);
+  }
+
+  async acknowledgeTextPresentation(scope: LocationScope, callId: string, presentationId: string): Promise<Result<CallState, TransitionFailure>> {
+    const runtime = this.runtime(scope);
+    const started = await runtime.startPresentation(callId, presentationId);
+    if (!started.ok) return started;
+    return runtime.resolvePresentation(callId, presentationId, "played");
+  }
+
+  affirm(scope: LocationScope, turn: FinalCallerTurn, actionKey: string, digest: string, now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.runtime(scope).acceptTurn(turn, { kind: "affirm", actionKey, digest, affirmative: true }, now);
+  }
+
+  async drain(scope: LocationScope, callId: string, now: string): Promise<Result<CallState, TextReceptionFailure>> {
+    const runtime = this.runtime(scope);
+    const read = await runtime.read(callId);
+    if (!read.ok) return read;
+    const worker = new EffectWorker(runtime, this.host);
+    for (const effect of Object.values(read.value.effects)) {
+      if (effect.status !== "pending") continue;
+      try {
+        await worker.process(callId, effect.id, now);
+      } catch {
+        return err({ kind: "effectFailure" });
+      }
+    }
+    return runtime.read(callId);
+  }
+
+  read(scope: LocationScope, callId: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.runtime(scope).read(callId);
+  }
+}

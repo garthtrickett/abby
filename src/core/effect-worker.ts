@@ -1,17 +1,12 @@
-import type { HostMutation, HostWriteReceipt, ReconcileObservation, StaffItem, StaffTaskReceipt } from "../core/model.ts";
-import { CallRuntime } from "../core/runtime.ts";
+import type { HostWriteReceipt, StaffTaskReceipt } from "./model.ts";
+import type { HostEffects } from "./host.ts";
+import { CallRuntime } from "./runtime.ts";
 
-export interface ReferenceHost {
-  write(mutation: HostMutation): Promise<HostWriteReceipt>;
-  reconcile(mutation: HostMutation): Promise<ReconcileObservation>;
-  openTask(item: StaffItem): Promise<StaffTaskReceipt>;
-}
-
-export class ReferenceEffectWorker {
+export class EffectWorker {
   private readonly runtime: CallRuntime;
-  private readonly host: ReferenceHost;
+  private readonly host: HostEffects;
 
-  constructor(runtime: CallRuntime, host: ReferenceHost) {
+  constructor(runtime: CallRuntime, host: HostEffects) {
     this.runtime = runtime;
     this.host = host;
   }
@@ -27,7 +22,7 @@ export class ReferenceEffectWorker {
       if (!marked.ok) throw new Error(marked.error.kind);
       let receipt: HostWriteReceipt;
       try {
-        receipt = await this.host.write(effect.mutation);
+        receipt = await this.host.write(effect.mutation, now);
       } catch {
         receipt = {
           kind: "uncertain",

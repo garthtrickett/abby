@@ -2,11 +2,13 @@
 
 **Status:** Interim Phase 0 checkpoint. TXT-01 through TXT-09 now run against both in-memory and disposable PostgreSQL ledger adapters through the same text runtime. Four additional PostgreSQL cases check global call-key uniqueness, atomic state/outbox persistence, and host-write and staff-task recovery after a restart. These are not full-call E2E tests. The [Phase 0 exit gate](../PHASE_0_EXECUTION_PLAN.md#phase-0-exit-gate) still requires media and fallback evidence. See the [text storage contract](TEXT_STORAGE_CONTRACT.md).
 
+The [reference host composition](REFERENCE_HOST_CONTRACT.md) adds four journeys that run in both embedded-memory and standalone-PostgreSQL compositions. The `appointments.booking.enabled` toggle is tested for default, enabled, disabled, version conflict, persistence, tenant isolation, and captured next-call behavior. A separate case proves request-only host support does not become executable when that toggle is enabled.
+
 ## Test seam and evidence labels
 
 The harness supplies synthetic final caller turns directly to the test composition's call runtime, plus deterministic model proposals, host results, clocks, and staff results. It observes the canonical call/action state, effect intents, caller-facing text intent, and staff read model. It uses the same typed actions and host contracts that the later voice session will call. A synthetic `played` result may test what the runtime does *after* accepted delivery; it is not evidence that a provider played audio. The harness cannot mint caller-confirmation evidence through an agent command or bypass the action digest and later affirmative turn.
 
-Results are labelled **text contract**, **host adapter read**, or **full call E2E**. Only tests entering through the actual voice session may receive the full-call label required by PRD Section 9. An unavailable host capability uses the request-only path; a text fixture cannot promote it to executable support.
+Results are labelled **text contract**, **host adapter read**, or **full call E2E**. Only tests entering through the actual voice session may receive the full-call label required by PRD Section 9. A request-only host capability creates staff follow-up; a disabled booking setting is unavailable and makes no booking evidence read. A text fixture cannot promote either state to executable support.
 
 | Case | Synthetic text and injected host state | Expected observable result | Later full-call scenario |
 | --- | --- | --- | --- |
