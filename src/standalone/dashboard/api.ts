@@ -3,6 +3,7 @@ import type { CallPolicy, Result, StaffChangeRequest, StaffQueueEntry } from "..
 import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor, GatewayFailure } from "../../reference/command-gateway.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
+import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
 
 export type DashboardFailure = GatewayFailure | Readonly<{ kind: "transportUnavailable" | "malformed" }>;
 export type DashboardPort = Readonly<{
@@ -10,6 +11,7 @@ export type DashboardPort = Readonly<{
   settings(): Promise<Result<CallPolicy, DashboardFailure>>;
   changeBookingEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   callSummary(callId: string): Promise<Result<CallSummary, DashboardFailure>>;
+  callOutcomes(afterCallId?: string): Promise<Result<CallOutcomePage, DashboardFailure>>;
   staffQueue(afterTaskKey?: string): Promise<Result<StaffQueuePage, DashboardFailure>>;
   changeStaff(item: StaffQueueEntry, change: StaffChangeRequest): Promise<Result<void, DashboardFailure>>;
 }>;
@@ -71,6 +73,26 @@ export class FetchDashboardPort implements DashboardPort {
       (call.lifecycle === "starting" || call.lifecycle === "active" || call.lifecycle === "ended") &&
       Array.isArray(call.actions) && Array.isArray(call.staffItems)
       ? ok(call as CallSummary) : err({ kind: "malformed" });
+  }
+
+  async callOutcomes(afterCallId?: string): Promise<Result<CallOutcomePage, DashboardFailure>> {
+    const result = await request(`/api/call-outcomes${afterCallId === undefined ? "" : `?after=${encodeURIComponent(afterCallId)}`}`);
+    if (!result.ok) return result;
+    const reply = record(result.value);
+    const page = record(reply?.page);
+    const totals = record(page?.totals);
+    const keys = ["calls", "committedActions", "callsWithUnresolvedActions", "callsWithStaffRequests",
+      "callsWithHostConfirmedTasks", "callsWithStaffNeedsReview", "callsWithSystemFailure"];
+    if (reply?.kind !== "callOutcomes" || !page || !totals || !Array.isArray(page.rows) ||
+        !keys.every(key => Number.isSafeInteger(totals[key]) && Number(totals[key]) >= 0) ||
+        (page.nextAfterCallId !== undefined && typeof page.nextAfterCallId !== "string") ||
+        !page.rows.every(value => {
+          const row = record(value);
+          return row && typeof row.callId === "string" && ["starting", "active", "ended"].includes(String(row.lifecycle)) &&
+            ["committedActions", "unresolvedActions", "staffRequests", "hostConfirmedTasks", "staffNeedsReview"]
+              .every(key => Number.isSafeInteger(row[key]) && Number(row[key]) >= 0) && typeof row.systemFailure === "boolean";
+        })) return err({ kind: "malformed" });
+    return ok(page as CallOutcomePage);
   }
 
   async staffQueue(afterTaskKey?: string): Promise<Result<StaffQueuePage, DashboardFailure>> {

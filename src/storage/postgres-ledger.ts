@@ -251,6 +251,27 @@ export class PostgresLedger implements LedgerStore {
     }
   }
 
+  async listCalls(scope: LocationScope, afterCallId?: string): Promise<Result<readonly CallState[], TransitionFailure>> {
+    if (afterCallId !== undefined && (!afterCallId || afterCallId.length > 256)) return err({ kind: "invalidTransition" });
+    try {
+      let query = this.db.selectFrom("calls").select(["call_id", "version", "state"])
+        .where("tenant_id", "=", scope.tenantId).where("clinic_id", "=", scope.clinicId).where("location_id", "=", scope.locationId);
+      if (afterCallId) query = query.where("call_id", ">", afterCallId as CallsCallId);
+      const rows = await query.orderBy("call_id").limit(100).execute();
+      const calls: CallState[] = [];
+      for (const row of rows) {
+        const decoded = decodeState(row.state, row.call_id);
+        if (!decoded.ok || decoded.value.version !== row.version || !decoded.value.policy?.scope ||
+            decoded.value.policy.scope.tenantId !== scope.tenantId || decoded.value.policy.scope.clinicId !== scope.clinicId ||
+            decoded.value.policy.scope.locationId !== scope.locationId) return err({ kind: "storageCorrupt" });
+        calls.push(decoded.value);
+      }
+      return ok(calls);
+    } catch {
+      return err({ kind: "storageFailure" });
+    }
+  }
+
   async listStaffItems(scope: LocationScope, afterTaskKey?: string): Promise<Result<readonly StaffQueueEntry[], TransitionFailure>> {
     if (afterTaskKey !== undefined && (!afterTaskKey || afterTaskKey.length > 256)) return err({ kind: "invalidTransition" });
     try {

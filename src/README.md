@@ -6,6 +6,8 @@ The [scoped staff queue](../phase-2/STAFF_QUEUE.md) exposes redacted, overdue fo
 
 The [effect recovery loop](../phase-2/EFFECT_RECOVERY.md) scans pending and aged possibly-sent outbox intents independently of voice sessions. It pages and runs different calls concurrently while preserving per-call order. The local demo starts the loop; a deploying host supplies its own process lifecycle and host lookup.
 
+The [scoped call outcome report](../phase-2/CALL_OUTCOME_REPORT.md) gives agents and the direct dashboard bounded, redacted counts for committed actions, unresolved actions, staff requests, confirmed tasks, and system failures. It does not infer caller abandonment from an ended call.
+
 `voice/admission.ts` and `voice/call-liveness-monitor.ts` add replay-safe admission, activation, a session lease, and independent expiry over both ledger adapters. Their [contract and limits](../phase-1/CALL_ADMISSION.md) distinguish this no-number foundation from live transport evidence.
 
 `voice/admission-fallback.ts` adds an [independent synthetic fallback boundary](../phase-1/ADMISSION_FALLBACK.md) for admission failures. Duplicate calls bypass it; provider outcomes and alerts are typed and tested without a live number.

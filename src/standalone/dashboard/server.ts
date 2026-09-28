@@ -57,6 +57,11 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       if (afterTaskKey !== null && (!afterTaskKey || afterTaskKey.length > 256)) return json(response, 400, { ok: false, error: { kind: "invalid" } });
       command = { kind: "staff.list.v1", ...(afterTaskKey === null ? {} : { afterTaskKey }) };
     }
+    if (request.method === "GET" && url.pathname === "/api/call-outcomes") {
+      const afterCallId = url.searchParams.get("after");
+      if (afterCallId !== null && (!afterCallId || afterCallId.length > 256)) return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      command = { kind: "calls.outcomes.v1", ...(afterCallId === null ? {} : { afterCallId }) };
+    }
     if (request.method === "GET" && url.pathname.startsWith("/api/calls/")) {
       const callId = decodeURIComponent(url.pathname.slice("/api/calls/".length));
       if (!callId || callId.length > 256 || callId.includes("/")) return json(response, 400, { ok: false, error: { kind: "invalid" } });

@@ -7,6 +7,7 @@ import { EffectWorker } from "../../src/core/effect-worker.ts";
 import type { LocationScope } from "../../src/core/model.ts";
 import type { AvailabilityHost } from "../../src/core/host.ts";
 import { CallReview } from "../../src/reference/call-review.ts";
+import { CallOutcomeReport } from "../../src/reference/call-outcome-report.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
@@ -24,7 +25,8 @@ async function localDashboard(role: "clinicAdmin" | "staff", availability?: Avai
   const reception = new TextReception(ledger, policy, host, availability);
   const started = await reception.startCall("before-setting", scope);
   assert.equal(started.ok, true);
-  const gateway = new CommandGateway({ actorRef: `browser-${role}`, role, scope }, policy, reception, new CallReview(ledger), new StaffQueue(ledger, () => "2026-09-30T12:00:00.000Z"));
+  const gateway = new CommandGateway({ actorRef: `browser-${role}`, role, scope }, policy, reception,
+    new CallReview(ledger), new StaffQueue(ledger, () => "2026-09-30T12:00:00.000Z"), new CallOutcomeReport(ledger));
   const server = await createDashboardServer(gateway, resolve("dist/dashboard/app.js"));
   await new Promise<void>(done => server.listen(0, "127.0.0.1", done));
   const address = server.address();
@@ -86,6 +88,35 @@ test("E2E-069: view-only staff can review a call but cannot change booking setti
     const policy = await app.policy.read(app.scope);
     assert.ok(policy.ok);
     assert.equal(policy.value.bookingEnabled, false);
+  } finally {
+    await app.close();
+  }
+});
+
+test("staff dashboard and agent endpoint report scoped outcomes without spoken or patient content", async ({ page, request }) => {
+  const app = await localDashboard("staff");
+  try {
+    const followUp = await app.reception.answer(app.scope,
+      { callId: "before-setting", turnId: "report-fallback", text: "Private patient detail", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
+      ["missing-source"], "Private proposed answer", "2026-09-28T10:00:00.000Z");
+    assert.ok(followUp.ok);
+    const delivered = await app.reception.drain(app.scope, "before-setting", "2026-09-28T10:00:00.000Z");
+    assert.ok(delivered.ok);
+    const other = await app.reception.startCall("another-call", { ...app.scope, tenantId: "other-tenant" });
+    assert.ok(other.ok);
+    await page.goto(app.url);
+    const report = page.getByLabel("Call outcome report");
+    await expect(report).toContainText("1 call(s) loaded");
+    await expect(report).toContainText("1 call(s) have a host-confirmed task");
+    await expect(report).not.toContainText("another-call");
+    await expect(report).not.toContainText("Private");
+    const response = await request.get(`${app.url}/api/call-outcomes`);
+    assert.equal(response.status(), 200);
+    const payload = await response.text();
+    assert.equal(payload.includes("another-call"), false);
+    assert.equal(payload.includes("Private"), false);
+    await page.getByRole("button", { name: "Refresh outcomes" }).click();
+    await expect(report).toContainText("before-setting");
   } finally {
     await app.close();
   }

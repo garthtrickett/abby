@@ -3,6 +3,19 @@ import type { DashboardFailure, DashboardPort } from "./api.ts";
 import { dashboardView } from "./view.ts";
 import type { DashboardState } from "./view.ts";
 import type { StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
+import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
+
+function appendOutcomes(previous: CallOutcomePage, next: CallOutcomePage): CallOutcomePage {
+  return { rows: [...previous.rows, ...next.rows], totals: {
+    calls: previous.totals.calls + next.totals.calls,
+    committedActions: previous.totals.committedActions + next.totals.committedActions,
+    callsWithUnresolvedActions: previous.totals.callsWithUnresolvedActions + next.totals.callsWithUnresolvedActions,
+    callsWithStaffRequests: previous.totals.callsWithStaffRequests + next.totals.callsWithStaffRequests,
+    callsWithHostConfirmedTasks: previous.totals.callsWithHostConfirmedTasks + next.totals.callsWithHostConfirmedTasks,
+    callsWithStaffNeedsReview: previous.totals.callsWithStaffNeedsReview + next.totals.callsWithStaffNeedsReview,
+    callsWithSystemFailure: previous.totals.callsWithSystemFailure + next.totals.callsWithSystemFailure,
+  }, ...(next.nextAfterCallId === undefined ? {} : { nextAfterCallId: next.nextAfterCallId }) };
+}
 
 function message(failure: DashboardFailure): string {
   switch (failure.kind) {
@@ -17,7 +30,7 @@ function message(failure: DashboardFailure): string {
 export class DashboardController {
   private readonly root: HTMLElement;
   private readonly port: DashboardPort;
-  private readonly state: DashboardState = { loading: true, busy: false, capabilities: [], policy: undefined, callIdInput: "", call: undefined, staffPage: undefined, notice: undefined, error: undefined };
+  private readonly state: DashboardState = { loading: true, busy: false, capabilities: [], policy: undefined, callIdInput: "", call: undefined, staffPage: undefined, outcomePage: undefined, notice: undefined, error: undefined };
 
   constructor(root: HTMLElement, port: DashboardPort) {
     this.root = root;
@@ -32,6 +45,8 @@ export class DashboardController {
       loadCall: () => { void this.loadCall(); },
       loadStaff: () => { void this.loadStaff(); },
       loadMoreStaff: () => { void this.loadMoreStaff(); },
+      loadOutcomes: () => { void this.loadOutcomes(); },
+      loadMoreOutcomes: () => { void this.loadMoreOutcomes(); },
       changeStaff: (item, change) => { void this.changeStaff(item, change); },
     }), this.root);
   }
@@ -46,7 +61,37 @@ export class DashboardController {
       if (queue.ok) this.state.staffPage = queue.value;
       else this.state.error = message(queue.error);
     }
+    if (capabilities.ok && capabilities.value.some(item => item.id === "calls.outcomes.v1")) {
+      const outcomes = await this.port.callOutcomes();
+      if (outcomes.ok) this.state.outcomePage = outcomes.value;
+      else this.state.error = message(outcomes.error);
+    }
     this.state.loading = false;
+    this.draw();
+  }
+
+  private async loadOutcomes(): Promise<void> {
+    if (this.state.busy) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.callOutcomes();
+    if (result.ok) this.state.outcomePage = result.value;
+    else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async loadMoreOutcomes(): Promise<void> {
+    const previous = this.state.outcomePage;
+    if (this.state.busy || !previous?.nextAfterCallId) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.callOutcomes(previous.nextAfterCallId);
+    if (result.ok) this.state.outcomePage = appendOutcomes(previous, result.value);
+    else this.state.error = message(result.error);
+    this.state.busy = false;
     this.draw();
   }
 

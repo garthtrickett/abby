@@ -1,0 +1,7 @@
+# Scoped call outcome report, version 0.1
+
+`CallOutcomeReport` reads bounded pages of call aggregates through `LedgerStore.listCalls` and returns only call IDs, lifecycle, and outcome counts. The PostgreSQL adapter queries a clinic-scoped index; the reference ledger uses the same cursor contract. Pages contain at most 100 calls and are ordered by call ID. The agent-native `calls.outcomes.v1` command and direct `lit-html` dashboard use the same report. The host actor's location scope is applied before any row is returned.
+
+Counts distinguish committed actions from unresolved actions, staff requests from host-confirmed tasks, and failed or review-required staff work. A system-failure count requires an actual `systemFailure` staff item. A requested task is not described as delivered. Rows omit patient references, spoken text, appointment details, and host payloads. The dashboard labels totals as **loaded calls** because pages can change while the clinic is active; they are not an audited all-time snapshot.
+
+Memory and PostgreSQL journeys cover action and task outcomes, a system-failure fallback, tenant isolation, redaction, and pagination. A browser scenario exercises the staff view and its HTTP command boundary. The current call state does not store a terminal reason that distinguishes caller abandonment from a normal completed informational call. Abandonment reporting, date-windowed stable snapshots, and release-grade latency/cost analytics remain open parts of FR-15.
