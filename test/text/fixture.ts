@@ -66,7 +66,7 @@ export async function setup(id: string, modes?: Partial<CallPolicy["capabilities
     if (!url) throw new Error("DATABASE_URL is required for PostgreSQL text tests");
     postgresDb = connectPostgres(url);
   }
-  const ledger = process.env.ABBY_LEDGER === "postgres" ? new PostgresLedger(postgresDb!) : new MemoryLedger();
+  const ledger = process.env.ABBY_LEDGER === "postgres" ? new PostgresLedger(postgresDb!, suggestedAt => suggestedAt) : new MemoryLedger();
   const runtime = new CallRuntime(ledger, scope);
   const host = new FakeHost();
   const worker = new EffectWorker(runtime, host);
@@ -92,5 +92,5 @@ export async function setup(id: string, modes?: Partial<CallPolicy["capabilities
     success(await runtime.resolvePresentation(callId, action.presentationId, "played"));
     return turn(turnId, "Yes, confirm those details", { kind: "affirm", actionKey, digest: action.digest, affirmative: true });
   }
-  return { callId, scope, policy, patient, offer, book, intake, runtime, host, worker, turn, state, pendingAction, confirm };
+  return { callId, scope, policy, patient, offer, book, intake, ledger, runtime, host, worker, turn, state, pendingAction, confirm };
 }

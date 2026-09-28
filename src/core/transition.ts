@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { digestActionRequest, digestTurn } from "./digest.ts";
 import { availabilityPresentation } from "./availability-presentation.ts";
 import { planStaffChange } from "./staff-work.ts";
-import { err, ok } from "./model.ts";
+import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "./model.ts";
 import type {
   ActionRequest, ActionState, CallState, FinalCallerTurn, LocationScope,
   Presentation, Result, StaffReason, TransitionAction, TransitionFailure,
@@ -10,7 +10,6 @@ import type {
 } from "./model.ts";
 
 const HOUR = 60 * 60 * 1000;
-const POSSIBLE_SEND_RECOVERY_DELAY = 60 * 1000;
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
@@ -446,7 +445,7 @@ export function transition(current: CallState, action: TransitionAction): Result
       const effect = state.effects[action.effectId];
       if (!effect || effect.kind !== "hostWrite") return err({ kind: "effectUnknown" });
       if (effect.status === "uncertain") return ok(current);
-      if (effect.status !== "possiblySent" || !effect.possiblySentAt || Date.parse(now) < Date.parse(effect.possiblySentAt) + POSSIBLE_SEND_RECOVERY_DELAY) return err({ kind: "invalidTransition" });
+      if (effect.status !== "possiblySent" || !effect.possiblySentAt || Date.parse(now) < Date.parse(effect.possiblySentAt) + POSSIBLE_SEND_RECOVERY_DELAY_MS) return err({ kind: "invalidTransition" });
       const result = recordHostResult(state, effect.id, {
         kind: "uncertain",
         actionKey: effect.actionKey,
@@ -496,7 +495,7 @@ export function transition(current: CallState, action: TransitionAction): Result
       const effect = state.effects[action.effectId];
       if (!effect || effect.kind !== "staffTask") return err({ kind: "effectUnknown" });
       if (effect.status === "uncertain") return ok(current);
-      if (effect.status !== "possiblySent" || !effect.possiblySentAt || Date.parse(now) < Date.parse(effect.possiblySentAt) + POSSIBLE_SEND_RECOVERY_DELAY) return err({ kind: "invalidTransition" });
+      if (effect.status !== "possiblySent" || !effect.possiblySentAt || Date.parse(now) < Date.parse(effect.possiblySentAt) + POSSIBLE_SEND_RECOVERY_DELAY_MS) return err({ kind: "invalidTransition" });
       const item = state.staffItems[effect.taskKey];
       if (!item) return err({ kind: "invalidTransition" });
       queueStaffReconciliation(state, effect.id, item);
@@ -558,7 +557,7 @@ export function transition(current: CallState, action: TransitionAction): Result
       if (!effect || effect.kind !== "staffChange") return err({ kind: "effectUnknown" });
       if (effect.status === "uncertain") return ok(current);
       if (effect.status !== "possiblySent" || !effect.possiblySentAt ||
-          Date.parse(now) < Date.parse(effect.possiblySentAt) + POSSIBLE_SEND_RECOVERY_DELAY) return err({ kind: "invalidTransition" });
+          Date.parse(now) < Date.parse(effect.possiblySentAt) + POSSIBLE_SEND_RECOVERY_DELAY_MS) return err({ kind: "invalidTransition" });
       const item = state.staffItems[effect.taskKey];
       if (!item || item.pendingChangeKey !== effect.change.commandKey) return err({ kind: "invalidTransition" });
       queueStaffChangeReconciliation(state, effect);

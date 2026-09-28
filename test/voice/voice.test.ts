@@ -91,6 +91,7 @@ class PresentationStartHookLedger implements LedgerStore {
   findExpiredAdmissions(...args: Parameters<LedgerStore["findExpiredAdmissions"]>) { return this.inner.findExpiredAdmissions(...args); }
   findExpiredSessions(...args: Parameters<LedgerStore["findExpiredSessions"]>) { return this.inner.findExpiredSessions(...args); }
   findPendingPresentations(...args: Parameters<LedgerStore["findPendingPresentations"]>) { return this.inner.findPendingPresentations(...args); }
+  findRecoverableEffects(...args: Parameters<LedgerStore["findRecoverableEffects"]>) { return this.inner.findRecoverableEffects(...args); }
   admit(...args: Parameters<LedgerStore["admit"]>) { return this.inner.admit(...args); }
   read(...args: Parameters<LedgerStore["read"]>) { return this.inner.read(...args); }
   listStaffItems(...args: Parameters<LedgerStore["listStaffItems"]>) { return this.inner.listStaffItems(...args); }

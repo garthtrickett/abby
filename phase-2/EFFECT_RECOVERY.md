@@ -1,0 +1,9 @@
+# Durable effect recovery, version 0.1
+
+The ledger exposes a bounded, scoped `findRecoverableEffects` scan. It returns pending outbox effects and possibly-sent effects only after the 60-second recovery delay. PostgreSQL reads the indexed outbox joined to its owning call and uses database time; the embedded memory ledger implements the same contract. Pages contain at most 100 effect IDs. `EffectRecovery` scans from a cursor and wraps after the end, processes effects for one call in order, and processes up to four different calls concurrently.
+
+A pending effect goes through the normal `EffectWorker` and its durable possible-send barrier. An aged possibly-sent booking write, staff-task opening, or staff change goes through its matching recovery transition. That transition creates a separate exact-key reconciliation intent; recovery never calls the original mutation again. The next scan performs the host read and applies a typed result. Host lookup failures leave pending work intact and appear in the recovery report. Concurrent scanners rely on the ledger compare-and-swap mark to prevent two sends.
+
+`EffectWorkLoop` runs the scan immediately on host startup, then periodically without a live voice session. It coalesces overlapping ticks and stops cleanly. The local dashboard demo starts it with the reference host; an embedded monolith or standalone deployment must start the loop with its own scoped host lookup and operational reporting. This is a recovery mechanism, not evidence that Cliniko supports exact write reconciliation or staff tasks. Those mutations remain request-only until provider-specific proofs exist.
+
+Memory and PostgreSQL journeys cover pending work, tenant isolation, a possibly-sent booking write, crashed staff-task opening and resolution, unavailable host lookup, bounded pagination, and no mutation replay. A timer test covers startup, overlap, and shutdown. The existing browser suite still checks the staff-facing results.
