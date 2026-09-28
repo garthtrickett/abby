@@ -31,6 +31,7 @@ function auditPayload(action: TransitionAction): Record<string, string> {
     case "admissionExpired": return {};
     case "callerTurn": return { turnId: action.turn.turnId, interpretation: action.interpretation.kind };
     case "presentationStarted":
+    case "transferPossiblySent":
     case "presentationResolved": return { presentationId: action.presentationId };
     case "reconciliationDeadline": return { actionKey: action.actionKey };
     default: return { effectId: action.effectId };

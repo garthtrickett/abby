@@ -1,0 +1,9 @@
+# Synthetic transfer contract, version 0.1
+
+An admitted call's capability snapshot contains a `transfer` mode and, for `execute`, a separate opaque destination reference. A clear final caller turn interpreted as `transfer` creates a transfer presentation in the same durable pending slot used by spoken details. `requestOnly` opens staff work without calling the provider; an unclear turn never requests a transfer. A missing destination cannot execute.
+
+The voice session durably starts the transfer presentation before trying the provider. It can cancel only while the request is proven unsent. It then records `transferPossiblySent` before calling the provider port; a later cancellation is rejected by the call reducer. A process or session loss after this barrier marks the transfer `unproven` and opens operator-visible staff work. A provider `connected` result requires a nonempty opaque connection reference and ends Abby's media role. A proven `failed` result opens a staff task and creates an approved spoken notice for playback. An uncertain or malformed result ends the call as `unproven` and opens staff review, without claiming the transfer failed or connected.
+
+The synthetic journeys run against memory and disposable PostgreSQL. They cover failed transfer and spoken notice, connected and uncertain outcomes, request-only and unclear turns, the durable send barrier, and disconnect with a late connected result. The fixture uses a fake transfer port; it does not assert telephony behavior. Run `npm test` and `npm run probe:postgres`.
+
+Live transfer still requires an authenticated provider adapter, preprovisioned destinations, staffed-window policy, real connected and failed evidence, request-key replay behavior, and a tested number-level failure route. The synthetic test does not satisfy the live media or fallback exit gate.

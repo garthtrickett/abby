@@ -8,6 +8,8 @@
 
 `voice/turn-assembler.ts` and `voice/voice-session.ts` add a [synthetic voice session contract](../phase-1/SYNTHETIC_VOICE_CONTRACT.md): final caller turns and exact playback completion gate the same reference booking path. Both ledger adapters run its journeys. It has no live media or transport evidence.
 
+The [synthetic transfer contract](../phase-1/SYNTHETIC_TRANSFER.md) uses the same durable presentation slot. It distinguishes unsent cancellation, possible provider send, connected, failed, and unproven outcomes, with staff work after failed or unresolved attempts.
+
 Run `npm ci`, `npm test`, and `npm run probe:postgres` (Docker required for the last command). The probe migrates a fresh PostgreSQL database, regenerates Kanel types, and runs the text and storage cases. Test files run in parallel with isolated calls and host fixtures. A new feature, capability, or setting needs a text contract case that checks caller wording, state, effects, and failure behavior. Its real voice path also needs a full-call E2E case when that path exists.
 
 This composition does not call Cliniko or Splose. Its host is synthetic. PostgreSQL persistence is a Phase 0 probe, and a synthetic `played` result is only test evidence for downstream confirmation logic. No production caller, agent, or API can use this harness to assert playback. Production outbox leasing, retention, real host adapters, media, and voice E2E remain open work.

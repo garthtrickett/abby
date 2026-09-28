@@ -29,7 +29,7 @@ function failure<T>(result: Result<T, { kind: string }>, kind: string): void {
 
 function fixture(kind: "memory" | "postgres", suffix: string) {
   const scope = { tenantId: `admission-tenant-${suffix}`, clinicId: `admission-clinic-${suffix}`, locationId: `admission-location-${suffix}` };
-  const policy: CallPolicy = { ...referenceDefaultPolicy(scope), bookingEnabled: true, capabilities: { book: "execute", cancel: "requestOnly", reschedule: "requestOnly", intake: "requestOnly" } };
+  const policy: CallPolicy = { ...referenceDefaultPolicy(scope), bookingEnabled: true, capabilities: { book: "execute", cancel: "requestOnly", reschedule: "requestOnly", intake: "requestOnly", transfer: "requestOnly" } };
   const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!) : new MemoryLedger();
   let routeReads = 0;
   const service = new CallAdmissionService(ledger, async dialed => {

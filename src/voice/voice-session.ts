@@ -1,6 +1,6 @@
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
-import type { CallState, FinalCallerTurn, LocationScope, Result, StaffReason, TransitionFailure } from "../core/model.ts";
+import type { CallState, FinalCallerTurn, LocationScope, Presentation, Result, StaffReason, TransitionFailure } from "../core/model.ts";
 import { CallRuntime } from "../core/runtime.ts";
 import type { TextReceptionFailure } from "../reference/text-reception.ts";
 import { TextReception } from "../reference/text-reception.ts";
@@ -10,20 +10,33 @@ import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 export type VoiceIntent =
   | Readonly<{ kind: "book"; verificationRef: string; offerRef: string }>
   | Readonly<{ kind: "affirm" }>
-  | Readonly<{ kind: "handoff"; reason: StaffReason }>;
+  | Readonly<{ kind: "handoff"; reason: StaffReason }>
+  | Readonly<{ kind: "transfer"; reason: StaffReason }>;
 export type IntentResolver = (turn: FinalCallerTurn) => Promise<Result<VoiceIntent, Readonly<{ kind: "intentUnavailable" }>>>;
 export type PlaybackPort = Readonly<{
   enqueue(playbackId: string, approvedText: string): Promise<"queued" | "notSent" | "uncertain">;
   clear(playbackId: string): Promise<boolean>;
 }>;
+export type TransferOutcome = Readonly<{ kind: "connected"; providerConnectionRef: string }> | Readonly<{ kind: "failed" | "unproven" }>;
+export type TransferPort = Readonly<{ request(transferId: string, destinationRef: string): Promise<TransferOutcome> }>;
 export type VoiceSessionFailure = TransitionFailure | TextReceptionFailure | TranscriptFailure |
   Readonly<{ kind: "sessionUnknown" | "deliveryBlocked" | "playbackUnknown" | "transportUnavailable" | "intentUnavailable" }>;
-export type DispatchResult = Readonly<{ kind: "none" | "queued" | "played" | "failed" | "unproven" | "interrupted"; playbackId?: string }>;
+export type DispatchResult = Readonly<{ kind: "none" | "queued" | "played" | "failed" | "unproven" | "interrupted" | "transferConnected" | "transferFailed" | "transferUnproven" | "transferCanceled"; playbackId?: string }>;
 
 type ActivePlayback = { id: string; presentationId: string; generation: number };
 
 function clearAffirmation(text: string): boolean {
   return /^(yes|yes, book it|yes book it|yes, please|yes please)[.!]?$/i.test(text.trim());
+}
+
+function decodeTransferOutcome(value: unknown): TransferOutcome {
+  if (typeof value !== "object" || value === null) return { kind: "unproven" };
+  const outcome = value as Record<string, unknown>;
+  if (outcome.kind === "connected" && typeof outcome.providerConnectionRef === "string" && outcome.providerConnectionRef.trim()) {
+    return { kind: "connected", providerConnectionRef: outcome.providerConnectionRef };
+  }
+  if (outcome.kind === "failed") return { kind: "failed" };
+  return { kind: "unproven" };
 }
 
 export class VoiceSession {
@@ -33,6 +46,7 @@ export class VoiceSession {
   private readonly runtime: CallRuntime;
   private readonly reception: TextReception;
   private readonly playback: PlaybackPort;
+  private readonly transfer: TransferPort | undefined;
   private readonly resolveIntent: IntentResolver;
   private readonly assembler: TurnAssembler;
   private attached = false;
@@ -40,13 +54,14 @@ export class VoiceSession {
   private activePlayback: ActivePlayback | undefined;
   private cachedIntent: VoiceIntent | undefined;
 
-  constructor(callId: string, sessionId: string, scope: LocationScope, ledger: LedgerStore, reception: TextReception, playback: PlaybackPort, resolveIntent: IntentResolver) {
+  constructor(callId: string, sessionId: string, scope: LocationScope, ledger: LedgerStore, reception: TextReception, playback: PlaybackPort, resolveIntent: IntentResolver, transfer?: TransferPort) {
     this.callId = callId;
     this.sessionId = sessionId;
     this.scope = scope;
     this.runtime = new CallRuntime(ledger, scope);
     this.reception = reception;
     this.playback = playback;
+    this.transfer = transfer;
     this.resolveIntent = resolveIntent;
     this.assembler = new TurnAssembler(callId, sessionId);
   }
@@ -119,6 +134,8 @@ export class VoiceSession {
     let result: Result<CallState, VoiceSessionFailure>;
     if (this.cachedIntent.kind === "book") {
       result = await this.reception.proposeBooking(this.scope, turn, this.cachedIntent.verificationRef, this.cachedIntent.offerRef, now, existing.value.conversationRevision);
+    } else if (this.cachedIntent.kind === "transfer") {
+      result = await this.runtime.acceptTurn(turn, { kind: "transfer", reason: this.cachedIntent.reason }, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "handoff") {
       result = await this.runtime.acceptTurn(turn, { kind: "handoff", reason: this.cachedIntent.reason }, now, existing.value.conversationRevision);
     } else {
@@ -140,6 +157,7 @@ export class VoiceSession {
     if (!presentationId) return ok({ kind: "none" });
     const presentation = read.value.presentations[presentationId];
     if (!presentation) return err({ kind: "invalidTransition" });
+    if (presentation.kind === "transfer") return this.dispatchTransfer(presentation, now);
     const generation = this.assembler.currentGeneration();
     const started = await this.runtime.startPresentation(this.callId, presentationId, this.sessionId, now);
     if (!started.ok) return started;
@@ -165,6 +183,37 @@ export class VoiceSession {
     const status = send === "notSent" ? "failed" : "unproven";
     const resolved = await this.runtime.resolvePresentation(this.callId, presentationId, status, this.sessionId, now);
     return resolved.ok ? ok({ kind: status }) : resolved;
+  }
+
+  private async dispatchTransfer(presentation: Extract<Presentation, { kind: "transfer" }>, now: string): Promise<Result<DispatchResult, VoiceSessionFailure>> {
+    if (!this.transfer) return err({ kind: "transportUnavailable" });
+    const generation = this.assembler.currentGeneration();
+    const started = await this.runtime.startPresentation(this.callId, presentation.id, this.sessionId, now);
+    if (!started.ok) return started;
+    if (!this.attached || this.speechOpen || generation !== this.assembler.currentGeneration()) {
+      const canceled = await this.runtime.resolvePresentation(this.callId, presentation.id, "canceled", this.sessionId, now);
+      return canceled.ok ? ok({ kind: "transferCanceled" }) : canceled;
+    }
+    const marked = await this.runtime.markTransferPossiblySent(this.callId, presentation.id, this.sessionId, now);
+    if (!marked.ok) return marked;
+    if (!this.attached || this.speechOpen || generation !== this.assembler.currentGeneration()) {
+      const unresolved = await this.runtime.resolvePresentation(this.callId, presentation.id, "unproven", this.sessionId, now);
+      if (unresolved.ok) this.attached = false;
+      return unresolved.ok ? ok({ kind: "transferUnproven" }) : unresolved;
+    }
+    let outcome: TransferOutcome;
+    try { outcome = decodeTransferOutcome(await this.transfer.request(`${presentation.id}:transfer`, presentation.destinationRef)); }
+    catch { outcome = { kind: "unproven" }; }
+    const status = outcome.kind === "connected" ? "connected" : outcome.kind === "failed" ? "failed" : "unproven";
+    const resolved = await this.runtime.resolvePresentation(this.callId, presentation.id, status, this.sessionId, now,
+      outcome.kind === "connected" ? outcome.providerConnectionRef : undefined);
+    if (!resolved.ok) {
+      const latest = await this.runtime.read(this.callId);
+      if (latest.ok && latest.value.presentations[presentation.id]?.status === "unproven") return ok({ kind: "transferUnproven" });
+      return resolved;
+    }
+    if (status === "connected" || status === "unproven") this.attached = false;
+    return ok({ kind: status === "connected" ? "transferConnected" : status === "failed" ? "transferFailed" : "transferUnproven" });
   }
 
   async acceptPlaybackResult(playbackId: string, status: "played" | "failed", now: string): Promise<Result<CallState, VoiceSessionFailure>> {

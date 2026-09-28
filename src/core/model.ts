@@ -21,13 +21,15 @@ export type StaffDestination =
   | Readonly<{ kind: "owner"; ownerRef: string }>
   | Readonly<{ kind: "queue"; queueRef: string }>;
 export type ActionKind = "book" | "cancel" | "reschedule" | "intake";
+export type CapabilityId = ActionKind | "transfer";
 export type CapabilityMode = "execute" | "requestOnly" | "unavailable";
 
 export type CallPolicy = Readonly<{
   scope: LocationScope;
   policyVersion: string;
   bookingEnabled: boolean;
-  capabilities: Readonly<Record<ActionKind, CapabilityMode>>;
+  capabilities: Readonly<Record<CapabilityId, CapabilityMode>>;
+  transferDestinationRef?: string;
   staffDestination: StaffDestination;
   operatorQueue: StaffDestination;
 }>;
@@ -79,6 +81,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "requestAction"; request: ActionRequest }>
   | Readonly<{ kind: "affirm"; actionKey: string; digest: string; affirmative: boolean }>
   | Readonly<{ kind: "handoff"; reason: StaffReason }>
+  | Readonly<{ kind: "transfer"; reason: StaffReason }>
   | Readonly<{ kind: "readFailure"; target: "patient" | "offer"; failure: "unavailable" | "notFound" }>
   | Readonly<{ kind: "unavailableAction"; actionKind: ActionKind }>
   | Readonly<{ kind: "answer"; sources: readonly ApprovedKnowledge[]; proposedText: string }>
@@ -86,7 +89,7 @@ export type TurnInterpretation =
 
 export type StaffReason =
   | "callerRequested" | "verificationFailed" | "unsupported" | "uncertainAction"
-  | "partialIntake" | "systemFailure";
+  | "partialIntake" | "systemFailure" | "transferFailed";
 export type ActionStatus =
   | "awaitingConfirmation" | "ready" | "dispatched" | "committed"
   | "rejected" | "unsupported" | "uncertain" | "needsReview" | "canceled";
@@ -108,13 +111,29 @@ export type ActionState = Readonly<{
   hostRef?: string;
   reconciliationDeadline?: string;
 }>;
-export type Presentation = Readonly<{
-  id: string;
-  actionKey: string;
-  digest: string;
-  approvedText: string;
-  status: "pending" | "started" | "played" | "interrupted" | "failed" | "unproven" | "superseded";
-}>;
+export type Presentation =
+  | Readonly<{
+    kind: "speech";
+    id: string;
+    actionKey: string;
+    digest: string;
+    approvedText: string;
+    status: "pending" | "started" | "played" | "interrupted" | "failed" | "unproven" | "superseded";
+  }>
+  | Readonly<{
+    kind: "notice";
+    id: string;
+    approvedText: string;
+    status: "pending" | "started" | "played" | "interrupted" | "failed" | "unproven" | "superseded";
+  }>
+  | Readonly<{
+    kind: "transfer";
+    id: string;
+    destinationRef: string;
+    reason: StaffReason;
+    status: "pending" | "started" | "possiblySent" | "connected" | "failed" | "unproven" | "canceled" | "superseded";
+    providerConnectionRef?: string;
+  }>;
 export type HostWriteReceipt =
   | Readonly<{ kind: "committed"; actionKey: string; hostRef: string }>
   | Readonly<{ kind: "rejected"; actionKey: string; reason: "conflict" | "invalid" | "forbidden" | "expiredOffer" }>
@@ -174,7 +193,8 @@ export type TransitionAction =
   | Readonly<{ kind: "speechBegan"; sessionId: string; now: string }>
   | Readonly<{ kind: "callerTurn"; turn: FinalCallerTurn; interpretation: TurnInterpretation; now: string; expectedConversationRevision?: number }>
   | Readonly<{ kind: "presentationStarted"; presentationId: string; sessionId?: string; now?: string }>
-  | Readonly<{ kind: "presentationResolved"; presentationId: string; status: "played" | "interrupted" | "failed" | "unproven"; sessionId?: string; now?: string }>
+  | Readonly<{ kind: "transferPossiblySent"; presentationId: string; sessionId: string; now: string }>
+  | Readonly<{ kind: "presentationResolved"; presentationId: string; status: "played" | "interrupted" | "failed" | "unproven" | "connected" | "canceled"; providerConnectionRef?: string; sessionId?: string; now?: string }>
   | Readonly<{ kind: "markHostPossiblySent"; effectId: string; now: string }>
   | Readonly<{ kind: "recoverHostPossiblySent"; effectId: string; now: string }>
   | Readonly<{ kind: "hostWriteResolved"; effectId: string; receipt: HostWriteReceipt; now: string }>

@@ -7,7 +7,7 @@ export function referenceDefaultPolicy(scope: LocationScope): CallPolicy {
     scope: structuredClone(scope),
     policyVersion: "0",
     bookingEnabled: false,
-    capabilities: { book: "unavailable", cancel: "requestOnly", reschedule: "requestOnly", intake: "requestOnly" },
+    capabilities: { book: "unavailable", cancel: "requestOnly", reschedule: "requestOnly", intake: "requestOnly", transfer: "requestOnly" },
     staffDestination: { kind: "owner", ownerRef: `reference-staff:${scope.tenantId}:${scope.clinicId}` },
     operatorQueue: { kind: "queue", queueRef: `reference-review:${scope.tenantId}:${scope.clinicId}` },
   };

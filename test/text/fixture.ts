@@ -52,7 +52,7 @@ export async function setup(id: string, modes?: Partial<CallPolicy["capabilities
     scope,
     policyVersion: "policy-1",
     bookingEnabled: true,
-    capabilities: { book: "execute", cancel: "requestOnly", reschedule: "requestOnly", intake: "execute", ...modes },
+    capabilities: { book: "execute", cancel: "requestOnly", reschedule: "requestOnly", intake: "execute", transfer: "requestOnly", ...modes },
     staffDestination: { kind: "owner", ownerRef: `staff-${id}` },
     operatorQueue: { kind: "queue", queueRef: `operator-${id}` },
   };

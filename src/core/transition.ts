@@ -90,13 +90,18 @@ function supersedeUnsent(state: CallState): void {
   }
 }
 
-function endMedia(state: CallState): void {
+function endMedia(state: CallState, now: string): void {
   state.lifecycle = "ended";
+  let unresolvedTransfer = false;
   for (const [id, presentation] of Object.entries(state.presentations)) {
     if (presentation.status === "pending") state.presentations[id] = { ...presentation, status: "superseded" };
-    if (presentation.status === "started") state.presentations[id] = { ...presentation, status: "unproven" };
+    if (presentation.status === "started" || presentation.status === "possiblySent") {
+      state.presentations[id] = { ...presentation, status: "unproven" };
+      unresolvedTransfer ||= presentation.kind === "transfer";
+    }
   }
   delete state.pendingPresentationId;
+  if (unresolvedTransfer) addStaffTask(state, "systemFailure", now);
 }
 
 function handleRequest(state: CallState, turn: FinalCallerTurn, request: ActionRequest, now: string): Result<void, TransitionFailure> {
@@ -118,7 +123,7 @@ function handleRequest(state: CallState, turn: FinalCallerTurn, request: ActionR
   const presentationId = `${key}:details`;
   const mutation = { kind: request.kind, scope: state.policy.scope, actionKey: key, payloadDigest: digest, policyVersion: state.policy.policyVersion, request };
   const action: ActionState = { key, kind: request.kind, status: "awaitingConfirmation", digest, mutation, presentationId };
-  const presentation: Presentation = { id: presentationId, actionKey: key, digest, approvedText: describe(request), status: "pending" };
+  const presentation: Presentation = { kind: "speech", id: presentationId, actionKey: key, digest, approvedText: describe(request), status: "pending" };
   state.actions[key] = action;
   state.presentations[presentationId] = presentation;
   state.pendingPresentationId = presentationId;
@@ -130,6 +135,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   if (state.admission && (!state.sessionLease || turn.sessionId !== state.sessionLease.sessionId || Date.parse(now) >= Date.parse(state.sessionLease.expiresAt))) return err({ kind: "leaseLost" });
   if (turn.callId !== state.callId || !turn.turnId || !turn.text || !Number.isFinite(Date.parse(turn.at))) return err({ kind: "invalidTransition" });
   if (state.processedTurnIds.includes(turn.turnId)) return ok(undefined);
+  if (Object.values(state.presentations).some(presentation => presentation.kind === "transfer" && (presentation.status === "started" || presentation.status === "possiblySent"))) return err({ kind: "invalidTransition" });
   if (interpretation.kind !== "affirm") supersedeUnsent(state);
   state.conversationRevision += 1;
 
@@ -156,6 +162,22 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       addStaffTask(state, interpretation.reason, now);
       state.callerMessages.push("I can request staff follow-up, but I can't confirm they have received it yet.");
       break;
+    case "transfer": {
+      if (turn.quality !== "clear") {
+        addStaffTask(state, "verificationFailed", now);
+        state.callerMessages.push("I can't confirm the transfer request safely. I'll request staff follow-up.");
+      } else if (state.policy.capabilities.transfer === "execute" && state.policy.transferDestinationRef?.trim()) {
+        const id = createHash("sha256").update(JSON.stringify([state.callId, turn.turnId, state.policy.transferDestinationRef])).digest("hex");
+        state.presentations[id] = { kind: "transfer", id, destinationRef: state.policy.transferDestinationRef, reason: interpretation.reason, status: "pending" };
+        state.pendingPresentationId = id;
+      } else if (state.policy.capabilities.transfer === "requestOnly") {
+        addStaffTask(state, interpretation.reason, now);
+        state.callerMessages.push("I can request staff follow-up, but I can't confirm they've received it yet.");
+      } else {
+        state.callerMessages.push("I can't connect you to staff from this call.");
+      }
+      break;
+    }
     case "ambiguousTarget":
       addStaffTask(state, "verificationFailed", now);
       state.callerMessages.push("I can't identify the right appointment safely. I'll request staff follow-up.");
@@ -253,12 +275,12 @@ export function transition(current: CallState, action: TransitionAction): Result
     case "sessionExpired": {
       const lease = state.sessionLease;
       if (state.lifecycle !== "active" || !lease || lease.sessionId !== action.sessionId || lease.version !== action.expectedLeaseVersion || Date.parse(action.now) < Date.parse(lease.expiresAt)) return err({ kind: "leaseLost" });
-      endMedia(state);
+      endMedia(state, now);
       break;
     }
     case "callEnded": {
       if (state.lifecycle !== "active" || state.sessionLease?.sessionId !== action.sessionId) return err({ kind: "leaseLost" });
-      endMedia(state);
+      endMedia(state, now);
       break;
     }
     case "speechBegan": {
@@ -292,16 +314,48 @@ export function transition(current: CallState, action: TransitionAction): Result
       if (state.admission && (!state.sessionLease || action.sessionId !== state.sessionLease.sessionId || !action.now || Date.parse(action.now) >= Date.parse(state.sessionLease.expiresAt))) return err({ kind: "leaseLost" });
       const presentation = state.presentations[action.presentationId];
       if (!presentation || presentation.status !== "pending" || state.pendingPresentationId !== presentation.id) return err({ kind: "invalidTransition" });
+      if (Object.values(state.presentations).some(other => other.id !== presentation.id && (other.status === "started" || other.status === "possiblySent"))) return err({ kind: "invalidTransition" });
       state.presentations[presentation.id] = { ...presentation, status: "started" };
       delete state.pendingPresentationId;
+      break;
+    }
+    case "transferPossiblySent": {
+      if (state.lifecycle !== "active" || !state.admission || !state.sessionLease || state.sessionLease.sessionId !== action.sessionId || Date.parse(action.now) >= Date.parse(state.sessionLease.expiresAt)) return err({ kind: "leaseLost" });
+      const presentation = state.presentations[action.presentationId];
+      if (!presentation || presentation.kind !== "transfer" || presentation.status !== "started") return err({ kind: "invalidTransition" });
+      state.presentations[presentation.id] = { ...presentation, status: "possiblySent" };
       break;
     }
     case "presentationResolved": {
       if (state.lifecycle !== "active") return err({ kind: "invalidTransition" });
       if (state.admission && (!state.sessionLease || action.sessionId !== state.sessionLease.sessionId || !action.now || Date.parse(action.now) >= Date.parse(state.sessionLease.expiresAt))) return err({ kind: "leaseLost" });
       const presentation = state.presentations[action.presentationId];
-      if (!presentation || presentation.status !== "started") return err({ kind: "invalidTransition" });
-      state.presentations[presentation.id] = { ...presentation, status: action.status };
+      if (!presentation || (presentation.status !== "started" && presentation.status !== "possiblySent")) return err({ kind: "invalidTransition" });
+      if (presentation.kind === "transfer") {
+        if (action.status !== "connected" && action.status !== "failed" && action.status !== "unproven" && action.status !== "canceled") return err({ kind: "invalidTransition" });
+        if (action.status === "canceled" ? presentation.status !== "started" : presentation.status !== "possiblySent") return err({ kind: "invalidTransition" });
+        if (action.status === "connected") {
+          if (!action.providerConnectionRef?.trim()) return err({ kind: "invalidTransition" });
+          state.presentations[presentation.id] = { ...presentation, status: "connected", providerConnectionRef: action.providerConnectionRef };
+          endMedia(state, now);
+        } else {
+          state.presentations[presentation.id] = { ...presentation, status: action.status };
+          if (action.status === "failed") {
+            addStaffTask(state, "transferFailed", now);
+            const noticeId = `${presentation.id}:failureNotice`;
+            const approvedText = "I couldn't connect you. I'll request staff follow-up, but I can't confirm they've received it yet.";
+            state.presentations[noticeId] = { kind: "notice", id: noticeId, approvedText, status: "pending" };
+            state.pendingPresentationId = noticeId;
+            state.callerMessages.push(approvedText);
+          } else if (action.status === "unproven") {
+            addStaffTask(state, "systemFailure", now);
+            endMedia(state, now);
+          }
+        }
+      } else {
+        if (action.status !== "played" && action.status !== "interrupted" && action.status !== "failed" && action.status !== "unproven") return err({ kind: "invalidTransition" });
+        state.presentations[presentation.id] = { ...presentation, status: action.status };
+      }
       break;
     }
     case "markHostPossiblySent": {
