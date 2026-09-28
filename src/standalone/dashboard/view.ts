@@ -4,13 +4,14 @@ import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor } from "../../reference/command-gateway.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
-import type { BookingSettingAuditPage } from "../../core/host.ts";
+import type { AutomationSettingAuditPage, BookingSettingAuditPage } from "../../core/host.ts";
 
 export type DashboardState = {
   loading: boolean;
   busy: boolean;
   capabilities: readonly CapabilityDescriptor[];
   policy: CallPolicy | undefined;
+  automationAuditPage: AutomationSettingAuditPage | undefined;
   auditPage: BookingSettingAuditPage | undefined;
   callIdInput: string;
   call: CallSummary | undefined;
@@ -21,6 +22,9 @@ export type DashboardState = {
 };
 
 export type DashboardActions = Readonly<{
+  toggleAutomation(): void;
+  loadAutomationAudit(): void;
+  loadMoreAutomationAudit(): void;
   toggleBooking(): void;
   loadAudit(): void;
   loadMoreAudit(): void;
@@ -35,11 +39,29 @@ export type DashboardActions = Readonly<{
 
 export function dashboardView(state: DashboardState, actions: DashboardActions) {
   const canChange = state.capabilities.some(item => item.id === "settings.appointments.booking.enabled.change.v1");
+  const canChangeAutomation = state.capabilities.some(item => item.id === "settings.automation.enabled.change.v1");
   const enabled = state.policy?.bookingEnabled ?? false;
+  const automationEnabled = state.policy?.automationEnabled ?? false;
   const canChangeStaff = state.capabilities.some(item => item.id === "staff.change.v1");
   return html`
     <header><h1>Abby</h1><p class="muted">Clinic reception settings and call review</p></header>
     ${state.loading ? html`<p role="status">Loading clinic settings…</p>` : html`
+      <section class="card" aria-labelledby="automation-title">
+        <div class="row"><div><h2 id="automation-title">Reception automation</h2>
+          <p class="status">${state.policy ? automationEnabled ? "Enabled" : "Disabled" : "Unavailable"}</p>
+          <p class="muted">Changes apply to new calls. Enabling requires a passed clinic readiness check.</p></div>
+          ${canChangeAutomation && state.policy ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.toggleAutomation()}>${automationEnabled ? "Disable reception" : "Enable reception"}</button>` : html`<span class="pill">Admin only</span>`}
+        </div>
+        ${state.policy ? html`<p class="muted">Automation version ${state.policy.automationVersion}</p>` : ""}
+      </section>
+      ${state.capabilities.some(item => item.id === "settings.automation.audit.v1") ? html`<section class="card" aria-labelledby="automation-audit-title">
+        <div class="row"><h2 id="automation-audit-title">Reception setting history</h2>
+          <button type="button" ?disabled=${state.busy} @click=${() => actions.loadAutomationAudit()}>Refresh reception history</button></div>
+        ${state.automationAuditPage ? html`<div aria-label="Automation setting audit">
+          ${state.automationAuditPage.entries.length ? html`<ul>${state.automationAuditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.enabled ? "enabled" : "disabled"} · ${entry.actorRef} · ${entry.changedAt}</li>`)}</ul>` : html`<p>No reception setting changes recorded.</p>`}
+          ${state.automationAuditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreAutomationAudit()}>Load more reception history</button>` : ""}
+        </div>` : html`<p class="muted">Setting history unavailable.</p>`}
+      </section>` : ""}
       <section class="card" aria-labelledby="booking-title">
         <div class="row"><div><h2 id="booking-title">Booking automation</h2>
           <p class="status">${state.policy ? enabled ? "Enabled" : "Disabled" : "Unavailable"}</p>

@@ -26,8 +26,10 @@ function fixture(kind: "memory" | "postgres", suffix: string) {
   const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt) : new MemoryLedger();
   let routeAvailable = true;
   let automationEnabled = true;
+  let ready = true;
   const admission = new CallAdmissionService(ledger, async dialedNumber =>
-    routeAvailable && dialedNumber === "+6125550100" ? ok({ ...referenceDefaultPolicy(scope), automationEnabled }) : err({ kind: "routeUnavailable" as const }), () => now);
+    routeAvailable && dialedNumber === "+6125550100" ? ok({ ...referenceDefaultPolicy(scope), automationEnabled }) : err({ kind: "routeUnavailable" as const }), () => now,
+  async () => ready ? ok(true) : err({ kind: "readinessFailed", missing: ["mediaTestCall"] }));
   const attempts: FallbackRequest[] = [];
   const alerts: AdmissionFailureAlert[] = [];
   let fallbackOutcome: FallbackOutcome = { kind: "connected", providerConnectionRef: `connection-${suffix}` };
@@ -49,6 +51,7 @@ function fixture(kind: "memory" | "postgres", suffix: string) {
     ledger, coordinator, attempts, alerts,
     setRouteAvailable(value: boolean) { routeAvailable = value; },
     setAutomationEnabled(value: boolean) { automationEnabled = value; },
+    setReady(value: boolean) { ready = value; },
     setFallbackOutcome(value: FallbackOutcome) { fallbackOutcome = value; },
     setFallbackThrows(value: boolean) { fallbackThrows = value; },
     setAlertThrows(value: boolean) { alertThrows = value; },
@@ -64,6 +67,17 @@ for (const kind of kinds) {
     assert.equal(routed.kind, "fallback");
     assert.equal(app.attempts.length, 1);
     assert.equal(app.alerts[0]?.reason, "automationDisabled");
+    assert.equal(value(await app.ledger.findAdmission(callIdFor(event.key))), null);
+  });
+
+  test(`${kind}: lapsed readiness uses fallback without accepting a new call`, async () => {
+    const app = fixture(kind, `${kind}-readiness-lapsed`);
+    app.setReady(false);
+    const event = { key: { accountRef: `account-${kind}`, providerCallRef: "not-ready" }, dialedNumber: "+6125550100", receivedAt: now };
+    const routed = value(await app.coordinator.begin(event));
+    assert.equal(routed.kind, "fallback");
+    assert.equal(app.attempts.length, 1);
+    assert.equal(app.alerts[0]?.reason, "readinessFailed");
     assert.equal(value(await app.ledger.findAdmission(callIdFor(event.key))), null);
   });
 

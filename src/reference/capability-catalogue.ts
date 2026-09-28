@@ -1,5 +1,6 @@
 import { array, bool, choice, key, object, str, uint } from "./schema-shapes.ts";
 import type { JsonSchema } from "./schema-shapes.ts";
+import { READINESS_REQUIREMENTS } from "../core/readiness.ts";
 
 const schemaUri = "https://json-schema.org/draft/2020-12/schema";
 const root = (schema: JsonSchema): JsonSchema => ({ $schema: schemaUri, ...schema });
@@ -7,29 +8,31 @@ const optional = (properties: Record<string, JsonSchema>, required: readonly str
 const nonEmpty: JsonSchema = { type: "string", minLength: 1 };
 const result = (value: JsonSchema): JsonSchema => root({ oneOf: [
   object({ ok: { const: true }, value }),
-  object({ ok: { const: false }, error: object({ kind: choice(
+  object({ ok: { const: false }, error: { oneOf: [object({ kind: choice(
     "forbidden", "invalid", "commandOutcomeUnknown", "responseContractViolation", "versionConflict", "invalidValue", "storageFailure", "storageCorrupt", "effectFailure",
     "callUnknown", "callConflict", "invalidTransition", "scopeMismatch", "evidenceExpired", "confirmationMissing",
     "digestChanged", "effectUnknown", "keyMismatch", "admissionExpired", "leaseLost", "staleTurn",
-  ) }) }),
+  ) }), object({ kind: { const: "readinessFailed" }, missing: { type: "array", items: choice(...READINESS_REQUIREMENTS), minItems: 1, uniqueItems: true } })] } }),
 ] });
 const reply = (kind: string, name: string, value: JsonSchema): JsonSchema => object({ kind: { const: kind }, [name]: value });
 const scope = object({ tenantId: nonEmpty, clinicId: nonEmpty, locationId: nonEmpty });
 const destination = { oneOf: [object({ kind: { const: "owner" }, ownerRef: nonEmpty }),
   object({ kind: { const: "queue" }, queueRef: nonEmpty })] } satisfies JsonSchema;
 const capabilityMode = choice("execute", "requestOnly", "unavailable");
-const policy = optional({ scope, policyVersion: nonEmpty, automationEnabled: bool, bookingEnabled: bool,
+const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: nonEmpty, automationEnabled: bool, bookingEnabled: bool,
   capabilities: object({ book: capabilityMode, cancel: capabilityMode, reschedule: capabilityMode,
     intake: capabilityMode, transfer: capabilityMode }), transferDestinationRef: str,
   staffedIntervals: { type: "array", items: object({ startsAt: str, endsAt: str }), maxItems: 512 },
   staffDestination: destination, operatorQueue: destination },
-["scope", "policyVersion", "automationEnabled", "bookingEnabled", "capabilities", "staffDestination", "operatorQueue"]);
+["scope", "policyVersion", "automationVersion", "automationEnabled", "bookingEnabled", "capabilities", "staffDestination", "operatorQueue"]);
 const auditEntry = { oneOf: [
   object({ version: key, enabled: bool, provenance: { const: "recorded" }, actorRef: key,
     previousEnabled: bool, changedAt: str }),
   object({ version: key, enabled: bool, provenance: { const: "legacyUnattributed" } }),
 ] } satisfies JsonSchema;
 const auditPage = optional({ entries: array(auditEntry), nextAfterVersion: uint }, ["entries"]);
+const automationAuditPage = optional({ entries: array(object({ version: key, enabled: bool, previousEnabled: bool,
+  actorRef: key, changedAt: str })), nextAfterVersion: uint }, ["entries"]);
 const actionKind = choice("book", "cancel", "reschedule", "intake");
 const actionStatus = choice("awaitingConfirmation", "ready", "dispatched", "committed", "rejected",
   "unsupported", "uncertain", "needsReview", "canceled");
@@ -93,7 +96,7 @@ export type CapabilityDescriptor = Readonly<{
   requiresCallerConfirmation: boolean;
 }>;
 
-export type CapabilityPrecondition = "expectedPolicyVersion" | "activeCall" | "bookingEnabledForExecution" |
+export type CapabilityPrecondition = "expectedPolicyVersion" | "expectedAutomationVersion" | "readinessForEnable" | "activeCall" | "bookingEnabledForExecution" |
   "hostEvidenceForExecution" | "approvedKnowledgeForAnswer" | "availabilityHostConfigured" |
   "appointmentHostConfigured" | "hostIssuedPatientProof" |
   "callReviewAvailable" | "outcomeReportAvailable" | "staffQueueAvailable" |
@@ -111,6 +114,12 @@ function entry(id: string, input: JsonSchema, success: JsonSchema, effect: Capab
 export const capabilityCatalogue = {
   "settings.read.v1": entry("settings.read.v1", object({ kind: { const: "settings.read.v1" } }),
     reply("settings", "policy", policy), "read", "permittedActor"),
+  "settings.automation.enabled.change.v1": entry("settings.automation.enabled.change.v1",
+    object({ kind: { const: "settings.automation.enabled.change.v1" }, expectedVersion: key, enabled: bool }),
+    reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedAutomationVersion", "readinessForEnable"]),
+  "settings.automation.audit.v1": entry("settings.automation.audit.v1",
+    optional({ kind: { const: "settings.automation.audit.v1" }, afterVersion: uint }, ["kind"]),
+    reply("automationSettingAudit", "page", automationAuditPage), "read", "clinicAdmin"),
   "settings.appointments.booking.enabled.change.v1": entry("settings.appointments.booking.enabled.change.v1",
     object({ kind: { const: "settings.appointments.booking.enabled.change.v1" }, expectedVersion: key, enabled: bool }),
     reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedPolicyVersion"]),

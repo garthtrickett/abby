@@ -5,8 +5,16 @@ import type { DashboardState } from "./view.ts";
 import type { StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
 import type { BookingSettingAuditPage } from "../../core/host.ts";
+import type { AutomationSettingAuditPage } from "../../core/host.ts";
+import { READINESS_REQUIREMENTS } from "../../core/readiness.ts";
+import type { ReadinessRequirement } from "../../core/readiness.ts";
 
 function appendAudit(previous: BookingSettingAuditPage, next: BookingSettingAuditPage): BookingSettingAuditPage {
+  return { entries: [...previous.entries, ...next.entries],
+    ...(next.nextAfterVersion === undefined ? {} : { nextAfterVersion: next.nextAfterVersion }) };
+}
+
+function appendAutomationAudit(previous: AutomationSettingAuditPage, next: AutomationSettingAuditPage): AutomationSettingAuditPage {
   return { entries: [...previous.entries, ...next.entries],
     ...(next.nextAfterVersion === undefined ? {} : { nextAfterVersion: next.nextAfterVersion }) };
 }
@@ -33,6 +41,16 @@ function message(failure: DashboardFailure): string {
     case "versionConflict": return "Settings changed elsewhere. The current value has been reloaded.";
     case "callUnknown": return "Call not found for this clinic.";
     case "scopeMismatch": return "This call belongs to another clinic.";
+    case "readinessFailed": {
+      const labels: Record<typeof READINESS_REQUIREMENTS[number], string> = {
+        hostPermissions: "host permissions", selectedLocation: "a selected location", approvedKnowledge: "approved clinic information",
+        bookableOffers: "booking setup", staffDestination: "staff destination", afterHoursDestination: "after-hours destination",
+        notificationOwner: "notification owner", fallbackRoute: "tested fallback route", mediaTestCall: "passed media test call",
+      };
+      const missing = Array.isArray(failure.missing) ? failure.missing.filter((item): item is ReadinessRequirement =>
+        READINESS_REQUIREMENTS.includes(item as ReadinessRequirement)) : [];
+      return `Clinic setup incomplete: ${missing.map(item => labels[item]).join(", ") || "readiness evidence"}.`;
+    }
     default: return "The request could not be completed. Please try again.";
   }
 }
@@ -40,7 +58,8 @@ function message(failure: DashboardFailure): string {
 export class DashboardController {
   private readonly root: HTMLElement;
   private readonly port: DashboardPort;
-  private readonly state: DashboardState = { loading: true, busy: false, capabilities: [], policy: undefined, auditPage: undefined, callIdInput: "", call: undefined, staffPage: undefined, outcomePage: undefined, notice: undefined, error: undefined };
+  private readonly state: DashboardState = { loading: true, busy: false, capabilities: [], policy: undefined, auditPage: undefined,
+    automationAuditPage: undefined, callIdInput: "", call: undefined, staffPage: undefined, outcomePage: undefined, notice: undefined, error: undefined };
 
   constructor(root: HTMLElement, port: DashboardPort) {
     this.root = root;
@@ -50,6 +69,9 @@ export class DashboardController {
 
   private draw(): void {
     render(dashboardView(this.state, {
+      toggleAutomation: () => { void this.toggleAutomation(); },
+      loadAutomationAudit: () => { void this.loadAutomationAudit(); },
+      loadMoreAutomationAudit: () => { void this.loadMoreAutomationAudit(); },
       toggleBooking: () => { void this.toggleBooking(); },
       loadAudit: () => { void this.loadAudit(); },
       loadMoreAudit: () => { void this.loadMoreAudit(); },
@@ -68,6 +90,11 @@ export class DashboardController {
     if (capabilities.ok) this.state.capabilities = capabilities.value;
     if (settings.ok) this.state.policy = settings.value;
     this.state.error = !settings.ok ? message(settings.error) : !capabilities.ok ? message(capabilities.error) : undefined;
+    if (capabilities.ok && capabilities.value.some(item => item.id === "settings.automation.audit.v1")) {
+      const audit = await this.port.automationAudit();
+      if (audit.ok) this.state.automationAuditPage = audit.value;
+      else this.state.error = message(audit.error);
+    }
     if (capabilities.ok && capabilities.value.some(item => item.id === "settings.appointments.booking.audit.v1")) {
       const audit = await this.port.bookingAudit();
       if (audit.ok) this.state.auditPage = audit.value;
@@ -94,6 +121,31 @@ export class DashboardController {
     this.draw();
     const result = await this.port.bookingAudit();
     if (result.ok) this.state.auditPage = result.value;
+    else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async loadAutomationAudit(): Promise<void> {
+    if (this.state.busy) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.automationAudit();
+    if (result.ok) this.state.automationAuditPage = result.value;
+    else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async loadMoreAutomationAudit(): Promise<void> {
+    const previous = this.state.automationAuditPage;
+    if (this.state.busy || previous?.nextAfterVersion === undefined) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.automationAudit(previous.nextAfterVersion);
+    if (result.ok) this.state.automationAuditPage = appendAutomationAudit(previous, result.value);
     else this.state.error = message(result.error);
     this.state.busy = false;
     this.draw();
@@ -193,6 +245,31 @@ export class DashboardController {
       this.state.notice = result.value.bookingEnabled ? "Booking enabled for new calls." : "Booking disabled for new calls.";
       const audit = await this.port.bookingAudit();
       if (audit.ok) this.state.auditPage = audit.value;
+      else this.state.error = message(audit.error);
+    } else {
+      this.state.error = message(result.error);
+      if (result.error.kind === "versionConflict") {
+        const reloaded = await this.port.settings();
+        if (reloaded.ok) this.state.policy = reloaded.value;
+      }
+    }
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async toggleAutomation(): Promise<void> {
+    const current = this.state.policy;
+    if (this.state.busy || !current || !this.state.capabilities.some(item => item.id === "settings.automation.enabled.change.v1")) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.state.notice = undefined;
+    this.draw();
+    const result = await this.port.changeAutomationEnabled(current.automationVersion, !current.automationEnabled);
+    if (result.ok) {
+      this.state.policy = result.value;
+      this.state.notice = result.value.automationEnabled ? "Reception automation enabled for new calls." : "Reception automation disabled for new calls.";
+      const audit = await this.port.automationAudit();
+      if (audit.ok) this.state.automationAuditPage = audit.value;
       else this.state.error = message(audit.error);
     } else {
       this.state.error = message(result.error);
