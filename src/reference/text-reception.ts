@@ -1,4 +1,6 @@
 import { EffectWorker } from "../core/effect-worker.ts";
+import { EffectCallLeaseCoordinator } from "../core/effect-call-lease.ts";
+import type { EffectCallLeaseStore } from "../core/effect-call-lease.ts";
 import type { AppointmentHost, AvailabilityHost, BookingEvidenceHost, HostEffects, KnowledgeHost, ModelKnowledgeContextHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
 import { captureKnowledgeSnapshot, validCallKnowledgeSource, validKnowledgeSource } from "../core/knowledge-evidence.ts";
 import type { LedgerStore } from "../core/ledger.ts";
@@ -20,10 +22,12 @@ export class TextReception {
   private readonly availability: AvailabilityHost | undefined;
   private readonly appointments: AppointmentHost | undefined;
   private readonly model: ModelWork | undefined;
+  private readonly effectLeases: EffectCallLeaseCoordinator;
 
-  constructor(ledger: LedgerStore, policy: PolicyStore, host: TextHost, availability?: AvailabilityHost, appointments?: AppointmentHost, model?: ModelWork,
+  constructor(ledger: LedgerStore & EffectCallLeaseStore, policy: PolicyStore, host: TextHost, availability?: AvailabilityHost, appointments?: AppointmentHost, model?: ModelWork,
               knowledge?: KnowledgeHost & Partial<ModelKnowledgeContextHost>) {
     this.ledger = ledger;
+    this.effectLeases = new EffectCallLeaseCoordinator(ledger);
     this.policy = policy;
     this.host = host;
     this.knowledge = knowledge ?? host;
@@ -223,18 +227,22 @@ export class TextReception {
 
   async drain(scope: LocationScope, callId: string, now: string): Promise<Result<CallState, TextReceptionFailure>> {
     const runtime = this.runtime(scope);
-    const read = await runtime.read(callId);
-    if (!read.ok) return read;
-    const worker = new EffectWorker(runtime, this.host, this.model, this.knowledge);
-    for (const effect of Object.values(read.value.effects)) {
-      if (effect.status !== "pending") continue;
-      try {
-        await worker.process(callId, effect.id, now);
-      } catch {
-        return err({ kind: "effectFailure" });
-      }
-    }
-    return runtime.read(callId);
+    try {
+      const leased = await this.effectLeases.run(callId, scope, async signal => {
+        const read = await runtime.read(callId);
+        if (!read.ok) return read;
+        const worker = new EffectWorker(runtime, this.host, this.model, this.knowledge, { signal });
+        for (const effect of Object.values(read.value.effects)) {
+          if (effect.status !== "pending") continue;
+          try { await worker.process(callId, effect.id, now); }
+          catch { return err({ kind: "effectFailure" as const }); }
+        }
+        return runtime.read(callId);
+      });
+      if (!leased.ok) return leased;
+      if (leased.value.kind === "busy") return runtime.read(callId);
+      return leased.value.kind === "lost" ? err({ kind: "effectFailure" }) : leased.value.value;
+    } catch { return err({ kind: "effectFailure" }); }
   }
 
   async changeStaff(scope: LocationScope, callId: string, expectedVersion: number, taskKey: string, actorRef: string,
@@ -246,7 +254,10 @@ export class TextReception {
     const item = requested.value.staffItems[taskKey];
     const effectId = item?.pendingChangeKey ? `${item.pendingChangeKey}:send` : undefined;
     if (!effectId) return err({ kind: "effectFailure" });
-    try { await new EffectWorker(runtime, this.host).process(callId, effectId, now); }
+    try {
+      await this.effectLeases.run(callId, scope, signal =>
+        new EffectWorker(runtime, this.host, undefined, undefined, { signal }).process(callId, effectId, now));
+    }
     catch { /* The persisted intent remains available to the recovery worker. */ }
     return runtime.read(callId);
   }

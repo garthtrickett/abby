@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import type { LedgerStore } from "../../src/core/ledger.ts";
+import type { EffectCallLeaseStore } from "../../src/core/effect-call-lease.ts";
 import { err, ok } from "../../src/core/model.ts";
 import type { Result } from "../../src/core/model.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
@@ -50,7 +51,7 @@ function fixture(kind: "memory" | "postgres", outputPort?: PlaybackPort) {
     { accountRef, dialedNumber: sharedNumber, ...north, spokenName: "Northside", routeVersion: "v1" },
     { accountRef, dialedNumber: singleNumber, ...main, routeVersion: "v1" },
   ]);
-  const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggested => suggested) : new MemoryLedger();
+  const ledger: LedgerStore & EffectCallLeaseStore = kind === "postgres" ? new PostgresLedger(db!, suggested => suggested) : new MemoryLedger();
   const policy = kind === "postgres"
     ? new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true))
     : new MemoryPolicyStore("execute", () => current, async () => ok(true));
