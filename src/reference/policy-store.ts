@@ -27,6 +27,19 @@ function clinicKey(scope: LocationScope): string {
   return JSON.stringify([scope.tenantId, scope.clinicId]);
 }
 
+export type ImportedReferenceLocationPolicy = Readonly<{
+  scope: LocationScope;
+  policy: CallPolicy;
+  bookingHistory: readonly BookingSettingAuditEntry[];
+}>;
+
+export type ImportedReferenceClinicAutomation = Readonly<{
+  scope: LocationScope;
+  history: readonly AutomationSettingAuditEntry[];
+  sourceVersion: number;
+  sourceEnabled: boolean;
+}>;
+
 export class MemoryPolicyStore implements PolicyStore {
   private readonly policies = new Map<string, CallPolicy>();
   private readonly clinicAutomation = new Map<string, Readonly<{ version: number; enabled: boolean }>>();
@@ -46,26 +59,44 @@ export class MemoryPolicyStore implements PolicyStore {
   static fromImported(scope: LocationScope, sourceHead: CallPolicy, bookingHistory: readonly BookingSettingAuditEntry[],
                       automationHistory: readonly AutomationSettingAuditEntry[], sourceAutomationVersion: number,
                       sourceAutomationEnabled: boolean, importActorRef: string, importedAt: string): MemoryPolicyStore {
+    return MemoryPolicyStore.fromImportedMany(
+      [{ scope, policy: sourceHead, bookingHistory }],
+      [{ scope, history: automationHistory, sourceVersion: sourceAutomationVersion, sourceEnabled: sourceAutomationEnabled }],
+      importActorRef, importedAt);
+  }
+
+  /** One reference policy store keeps clinic automation shared across imported locations. */
+  static fromImportedMany(locations: readonly ImportedReferenceLocationPolicy[], clinics: readonly ImportedReferenceClinicAutomation[],
+                          importActorRef: string, importedAt: string): MemoryPolicyStore {
     const store = new MemoryPolicyStore("requestOnly");
-    const policy = structuredClone(sourceHead);
-    const changes = structuredClone([...bookingHistory]);
-    if (policy.bookingEnabled) {
-      const version = String(Number(policy.policyVersion) + 1);
-      changes.push({ version, enabled: false, previousEnabled: true, actorRef: importActorRef, changedAt: importedAt, provenance: "recorded" });
-      store.policies.set(scopeKey(scope), { ...policy, policyVersion: version, bookingEnabled: false,
-        capabilities: { ...policy.capabilities, book: "unavailable" } });
-    } else {
-      store.policies.set(scopeKey(scope), { ...policy, capabilities: { ...policy.capabilities, book: "unavailable" } });
+    for (const location of locations) {
+      const key = scopeKey(location.scope);
+      if (store.policies.has(key) || scopeKey(location.policy.scope) !== key) throw new Error("duplicate or mismatched imported location");
+      const policy = structuredClone(location.policy);
+      const changes = structuredClone([...location.bookingHistory]);
+      if (policy.bookingEnabled) {
+        const version = String(Number(policy.policyVersion) + 1);
+        changes.push({ version, enabled: false, previousEnabled: true, actorRef: importActorRef, changedAt: importedAt, provenance: "recorded" });
+        store.policies.set(key, { ...policy, policyVersion: version, bookingEnabled: false,
+          capabilities: { ...policy.capabilities, book: "unavailable" } });
+      } else {
+        store.policies.set(key, { ...policy, capabilities: { ...policy.capabilities, book: "unavailable" } });
+      }
+      store.bookingChanges.set(key, changes);
     }
-    store.bookingChanges.set(scopeKey(scope), changes);
-    const automation = structuredClone([...automationHistory]);
-    let version = sourceAutomationVersion;
-    if (sourceAutomationEnabled) {
-      version += 1;
-      automation.push({ version: String(version), enabled: false, previousEnabled: true, actorRef: importActorRef, changedAt: importedAt });
+    for (const clinic of clinics) {
+      const key = clinicKey(clinic.scope);
+      if (store.clinicAutomation.has(key)) throw new Error("duplicate imported clinic");
+      const automation = structuredClone([...clinic.history]);
+      let version = clinic.sourceVersion;
+      if (clinic.sourceEnabled) {
+        version += 1;
+        automation.push({ version: String(version), enabled: false, previousEnabled: true,
+          actorRef: importActorRef, changedAt: importedAt });
+      }
+      store.clinicAutomation.set(key, { version, enabled: false });
+      store.automationChanges.set(key, automation);
     }
-    store.clinicAutomation.set(clinicKey(scope), { version, enabled: false });
-    store.automationChanges.set(clinicKey(scope), automation);
     return store;
   }
 
