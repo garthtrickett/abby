@@ -27,6 +27,7 @@ export class PrelocationVoiceSession {
   private attached = false;
   private speechOpen = false;
   private finishing = false;
+  private ending = false;
   private leaseVersion: number | undefined;
   private localDeadlineMs: number | undefined;
   private activePlaybackId: string | undefined;
@@ -47,7 +48,7 @@ export class PrelocationVoiceSession {
 
   private canSend(): boolean {
     const now = this.monotonicNow();
-    return this.attached && this.localDeadlineMs !== undefined && Number.isFinite(now) && now < this.localDeadlineMs;
+    return this.attached && !this.ending && this.localDeadlineMs !== undefined && Number.isFinite(now) && now < this.localDeadlineMs;
   }
 
   private recordLease(pending: PendingLocationCall, startedMs: number): void {
@@ -73,6 +74,7 @@ export class PrelocationVoiceSession {
   }
 
   async renew(): Promise<Result<PendingLocationCall, PrelocationVoiceFailure>> {
+    if (this.ending) return err({ kind: "deliveryBlocked" });
     if (!this.canSend() || this.leaseVersion === undefined) return err({ kind: "leaseLost" });
     const startedMs = this.monotonicNow();
     const renewed = await this.intake.renewSession(this.event, this.sessionId, this.leaseVersion);
@@ -82,6 +84,7 @@ export class PrelocationVoiceSession {
   }
 
   async dispatchPrompt(now: string): Promise<Result<PrelocationPromptResult, PrelocationVoiceFailure>> {
+    if (this.ending) return err({ kind: "deliveryBlocked" });
     if (!this.attached || !this.pending || this.leaseVersion === undefined) return err({ kind: "sessionUnknown" });
     if (this.speechOpen) return err({ kind: "deliveryBlocked" });
     if (!this.canSend()) return err({ kind: "leaseLost" });
@@ -131,6 +134,7 @@ export class PrelocationVoiceSession {
   }
 
   async speechStarted(now: string): Promise<Result<number, PrelocationVoiceFailure>> {
+    if (this.ending) return err({ kind: "deliveryBlocked" });
     if (!this.attached) return err({ kind: "sessionUnknown" });
     if (this.finishing) return err({ kind: "deliveryBlocked" });
     if (!this.canSend() || this.leaseVersion === undefined) return err({ kind: "leaseLost" });
@@ -153,11 +157,13 @@ export class PrelocationVoiceSession {
   }
 
   acceptTranscript(event: TranscriptEvent): Result<void, PrelocationVoiceFailure> {
+    if (this.ending) return err({ kind: "deliveryBlocked" });
     if (!this.attached || !this.speechOpen) return err({ kind: "sessionUnknown" });
     return this.assembler.accept(event);
   }
 
   async finishTurn(now: string): Promise<Result<AdmissionResult, PrelocationVoiceFailure>> {
+    if (this.ending) return err({ kind: "deliveryBlocked" });
     if (!this.attached || !this.speechOpen || this.leaseVersion === undefined) return err({ kind: "sessionUnknown" });
     if (this.finishing) return err({ kind: "deliveryBlocked" });
     if (!this.canSend()) return err({ kind: "leaseLost" });
@@ -170,5 +176,30 @@ export class PrelocationVoiceSession {
       if (result.ok) this.attached = false;
       return result;
     } finally { this.finishing = false; }
+  }
+
+  async end(now: string, reason: "callerDisconnected" | "sessionClosed" | "mediaFailure" = "sessionClosed"):
+    Promise<Result<PendingLocationCall, PrelocationVoiceFailure>> {
+    if (!this.attached || this.leaseVersion === undefined) return err({ kind: "sessionUnknown" });
+    if (this.finishing || this.ending) return err({ kind: "deliveryBlocked" });
+    this.ending = true;
+    try {
+      const version = this.leaseVersion;
+      const playbackId = this.activePlaybackId;
+      this.activePlaybackId = undefined;
+      if (playbackId) {
+        let cleared = false;
+        try { cleared = await this.playback.clear(playbackId); } catch { /* possibly sent audio remains unproven */ }
+        await this.ledger.resolvePendingLocationPrompt(this.callId, playbackId, this.sessionId, version,
+          cleared ? "interrupted" : "unproven", now);
+      }
+      const closed = await this.ledger.closePendingLocationSession(this.callId, this.sessionId, version, reason, now);
+      if (closed.ok) {
+        this.attached = false;
+        this.speechOpen = false;
+        this.localDeadlineMs = undefined;
+      }
+      return closed;
+    } finally { this.ending = false; }
   }
 }

@@ -57,6 +57,7 @@ export function validPendingLocation(value: unknown, callId: string): value is P
   const lease = pending.sessionLease;
   const evidence = pending.choiceEvidence;
   const prompt = pending.prompt;
+  const close = pending.closeEvidence;
   return pending.callId === callId && validPendingRoute(pending.route) &&
     validPendingAdmission(callId, pending.admission) &&
     (pending.status === "pending" || pending.status === "expired" || pending.status === "bound") &&
@@ -74,9 +75,37 @@ export function validPendingLocation(value: unknown, callId: string): value is P
         ? prompt.resolvedAt === undefined
         : typeof prompt.resolvedAt === "string" && Number.isFinite(Date.parse(prompt.resolvedAt)) &&
           Date.parse(prompt.resolvedAt) >= Date.parse(prompt.startedAt)))) &&
+    (close === undefined || (pending.status === "expired" && lease !== undefined &&
+      validRef(close.sessionId) && close.sessionId === lease.sessionId &&
+      Number.isSafeInteger(close.leaseVersion) && close.leaseVersion === lease.version &&
+      ["callerDisconnected", "sessionClosed", "mediaFailure"].includes(close.reason) &&
+      typeof close.at === "string" && Number.isFinite(Date.parse(close.at)))) &&
     (evidence === undefined || (validRef(evidence.sessionId) && Number.isSafeInteger(evidence.leaseVersion) &&
       evidence.leaseVersion >= 1 && validRef(evidence.turnId) &&
       validRef(evidence.selectedLocationId) && typeof evidence.at === "string" && Number.isFinite(Date.parse(evidence.at))));
+}
+
+export function expiredPendingLocationState(pending: PendingLocationCall, now: string,
+                                            closeEvidence?: PendingLocationCall["closeEvidence"]): PendingLocationCall {
+  const prompt = pending.prompt;
+  return { ...pending, status: "expired", ...(closeEvidence ? { closeEvidence } : {}),
+    ...(prompt && (prompt.status === "started" || prompt.status === "queued")
+      ? { prompt: { ...prompt, status: "unproven" as const, resolvedAt: now } } : {}) };
+}
+
+export function closePendingLocationState(pending: PendingLocationCall, sessionId: string, version: number,
+                                          reason: NonNullable<PendingLocationCall["closeEvidence"]>["reason"], now: string):
+  Result<PendingLocationCall, TransitionFailure> {
+  if (!validRef(sessionId) || !Number.isSafeInteger(version) || version < 1 ||
+      !["callerDisconnected", "sessionClosed", "mediaFailure"].includes(reason) ||
+      !Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
+  if (pending.status === "expired" && pending.closeEvidence?.sessionId === sessionId &&
+      pending.closeEvidence.leaseVersion === version && pending.closeEvidence.reason === reason) return ok(pending);
+  if (pending.status === "expired") return err({ kind: "admissionExpired" });
+  if (pending.status !== "pending") return err({ kind: "callConflict" });
+  if (!pending.sessionLease || pending.sessionLease.sessionId !== sessionId ||
+      pending.sessionLease.version !== version) return err({ kind: "leaseLost" });
+  return ok(expiredPendingLocationState(pending, now, { sessionId, leaseVersion: version, reason, at: now }));
 }
 
 function ownsPendingSession(pending: PendingLocationCall, sessionId: string, version: number, now: string): boolean {

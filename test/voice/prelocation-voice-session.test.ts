@@ -167,4 +167,55 @@ for (const kind of kinds) {
     assert.equal(value(await app.ledger.findPendingLocation(callIdFor(app.event.key)))?.prompt?.status, "unproven");
     assert.equal(app.policyReads(), 0);
   });
+
+  test(`${kind}: disconnect closes a pending choice and records interrupted prompt evidence`, async () => {
+    const app = fixture(kind);
+    value(await app.intake.begin(app.event));
+    const session = app.session();
+    value(await session.attach());
+    const prompt = value(await session.dispatchPrompt(now));
+    const foreign = await app.ledger.closePendingLocationSession(callIdFor(app.event.key), "foreign-session", 1,
+      "callerDisconnected", now);
+    assert.ok(!foreign.ok);
+    assert.equal(foreign.error.kind, "leaseLost");
+    const closed = value(await session.end(now, "callerDisconnected"));
+    assert.equal(closed.status, "expired");
+    assert.equal(closed.closeEvidence?.reason, "callerDisconnected");
+    assert.equal(closed.prompt?.status, "interrupted");
+    assert.deepEqual(app.cleared, [prompt.playbackId]);
+    assert.equal(value(await app.ledger.findAdmission(callIdFor(app.event.key))), null);
+    const late = await session.acceptPlaybackResult(prompt.playbackId, "played", now);
+    assert.ok(!late.ok);
+    assert.equal(late.error.kind, "playbackUnknown");
+    const retry = await app.intake.begin(app.event);
+    assert.ok(!retry.ok);
+    assert.equal(retry.error.kind, "admissionExpired");
+    assert.equal(app.policyReads(), 0);
+    const replay = value(await app.ledger.closePendingLocationSession(callIdFor(app.event.key), "session", 1,
+      "callerDisconnected", now));
+    assert.deepEqual(replay, closed);
+  });
+
+  test(`${kind}: unproven clear and liveness expiry never count a prompt as played`, async () => {
+    const app = fixture(kind);
+    value(await app.intake.begin(app.event));
+    const session = app.session();
+    value(await session.attach());
+    value(await session.dispatchPrompt(now));
+    app.setClear(false);
+    const closed = value(await session.end(now, "callerDisconnected"));
+    assert.equal(closed.prompt?.status, "unproven");
+    assert.equal(closed.status, "expired");
+
+    const another = fixture(kind);
+    value(await another.intake.begin(another.event));
+    const attached = value(await another.intake.attachSession(another.event, "session"));
+    value(await another.ledger.startPendingLocationPrompt(callIdFor(another.event.key), "prompt", "session",
+      attached.sessionLease!.version, now));
+    const expired = value(await another.ledger.expirePendingLocation(callIdFor(another.event.key),
+      new Date(Date.parse(now) + 31_000).toISOString()));
+    assert.equal(expired.kind, "expired");
+    assert.equal(expired.pending.prompt?.status, "unproven");
+    assert.equal(expired.pending.closeEvidence, undefined);
+  });
 }

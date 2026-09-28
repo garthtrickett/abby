@@ -3,7 +3,7 @@ import type { Kysely } from "kysely";
 import { CALL_TERMINAL_REASONS, POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "../core/model.ts";
 import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, Effect, LocationScope, PendingLocationCall, PendingLocationExpiryResult, PendingLocationPrompt, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffItem, StaffQueueEntry, TransitionAction, TransitionFailure } from "../core/model.ts";
 import { admissionReceipt, initialState, sameAdmission } from "../core/ledger.ts";
-import { LOCATION_CHOICE_TIMEOUT_MS, PENDING_LOCATION_LEASE_MS, pendingDueAt, pendingMatchesAdmission, policyMatchesPending, resolveLocationPrompt, startLocationPrompt, validPendingAdmission, validPendingLocation, validPendingRoute } from "../core/pending-location.ts";
+import { LOCATION_CHOICE_TIMEOUT_MS, PENDING_LOCATION_LEASE_MS, closePendingLocationState, expiredPendingLocationState, pendingDueAt, pendingMatchesAdmission, policyMatchesPending, resolveLocationPrompt, startLocationPrompt, validPendingAdmission, validPendingLocation, validPendingRoute } from "../core/pending-location.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { transition } from "../core/transition.ts";
 import { validKnowledgeSnapshot } from "../core/knowledge-evidence.ts";
@@ -381,6 +381,27 @@ export class PostgresLedger implements LedgerStore {
     } catch { return err({ kind: "storageFailure" }); }
   }
 
+  async closePendingLocationSession(callId: string, sessionId: string, expectedVersion: number,
+                                    reason: NonNullable<PendingLocationCall["closeEvidence"]>["reason"], now: string):
+    Promise<Result<PendingLocationCall, TransitionFailure>> {
+    try {
+      return await this.db.transaction().execute(async trx => {
+        await this.lockCall(trx, callId);
+        const row = await trx.selectFrom("pending_location_calls").select(["state", "status", "tenant_id", "clinic_id"])
+          .where("call_id", "=", callId as PendingLocationCallsCallId).forUpdate().executeTakeFirst();
+        if (!row) return err({ kind: "callUnknown" });
+        if (!validPendingLocation(row.state, callId) || row.status !== row.state.status ||
+            row.tenant_id !== row.state.route.tenantId || row.clinic_id !== row.state.route.clinicId) return err({ kind: "storageCorrupt" });
+        const ledgerNow = await this.trustedNow(trx, now);
+        const closed = closePendingLocationState(row.state, sessionId, expectedVersion, reason, ledgerNow);
+        if (!closed.ok) return closed;
+        if (closed.value !== row.state) await trx.updateTable("pending_location_calls")
+          .set({ status: "expired", state: closed.value }).where("call_id", "=", callId as PendingLocationCallsCallId).execute();
+        return closed;
+      });
+    } catch { return err({ kind: "storageFailure" }); }
+  }
+
   async bindPendingLocation(callId: string, policy: CallPolicy, sessionId: string, expectedLeaseVersion: number, turnId: string, now: string): Promise<Result<AdmissionResult, TransitionFailure>> {
     if (!sessionId?.trim() || sessionId.length > 256 || !turnId?.trim() || turnId.length > 256 ||
         !Number.isSafeInteger(expectedLeaseVersion) || !Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
@@ -411,7 +432,7 @@ export class PostgresLedger implements LedgerStore {
         if (pending.status !== "pending" || existing) return err({ kind: "callConflict" });
         const acceptedAt = await this.trustedNow(trx, now);
         if (Date.parse(acceptedAt) >= pendingDueAt(pending)) {
-          const expired = { ...pending, status: "expired" as const };
+          const expired = expiredPendingLocationState(pending, acceptedAt);
           await trx.updateTable("pending_location_calls").set({ status: "expired", state: expired })
             .where("call_id", "=", callId as PendingLocationCallsCallId).execute();
           return err({ kind: "admissionExpired" });
@@ -480,7 +501,7 @@ export class PostgresLedger implements LedgerStore {
         if (pending.status === "expired") return ok({ kind: "alreadyExpired", pending });
         const ledgerNow = await this.trustedNow(trx, now);
         if (Date.parse(ledgerNow) < pendingDueAt(pending)) return err({ kind: "invalidTransition" });
-        const expired: PendingLocationCall = { ...pending, status: "expired" };
+        const expired = expiredPendingLocationState(pending, ledgerNow);
         await trx.updateTable("pending_location_calls").set({ status: "expired", state: expired })
           .where("call_id", "=", callId as PendingLocationCallsCallId).execute();
         return ok({ kind: "expired", pending: expired });
