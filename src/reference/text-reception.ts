@@ -1,5 +1,6 @@
 import { EffectWorker } from "../core/effect-worker.ts";
-import type { AppointmentHost, AvailabilityHost, BookingEvidenceHost, HostEffects, KnowledgeHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
+import type { AppointmentHost, AvailabilityHost, BookingEvidenceHost, HostEffects, KnowledgeHost, ModelKnowledgeContextHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
+import { validKnowledgeSource } from "../core/knowledge-evidence.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err } from "../core/model.ts";
 import type { CallState, FinalCallerTurn, LocationScope, Result, StaffChangeRequest, TransitionFailure, TurnInterpretation } from "../core/model.ts";
@@ -7,7 +8,7 @@ import { CallRuntime } from "../core/runtime.ts";
 import { modelTaskRef } from "../model/work.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<StaffLifecycleHost & OperatorAlertHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 export class TextReception {
@@ -62,7 +63,25 @@ export class TextReception {
       return !prior.ok && prior.error.kind === "keyMismatch"
         ? runtime.acceptTurn(turn, { kind: "modelFallback" }, now) : prior;
     }
-    const input = { scope, turn, conversationRevision: current.value.conversationRevision + 1,
+    let knowledge: readonly { sourceRef: string; approvedText: string }[] = [];
+    if (this.host.listModelKnowledge) {
+      try {
+        const listed = await this.host.listModelKnowledge(scope, now);
+        if (!listed.ok || !Array.isArray(listed.value) || listed.value.length > 8 ||
+            listed.value.some(source => !validKnowledgeSource(source, scope, now)) ||
+            new Set(listed.value.map(source => source.sourceRef)).size !== listed.value.length) {
+          const fallback = await runtime.acceptTurn(turn, { kind: "modelFallback" }, now, current.value.conversationRevision);
+          if (fallback.ok) this.forgetCanceledModelWork(current.value, fallback.value);
+          return fallback;
+        }
+        knowledge = listed.value.map(source => ({ sourceRef: source.sourceRef, approvedText: source.approvedText }));
+      } catch {
+        const fallback = await runtime.acceptTurn(turn, { kind: "modelFallback" }, now, current.value.conversationRevision);
+        if (fallback.ok) this.forgetCanceledModelWork(current.value, fallback.value);
+        return fallback;
+      }
+    }
+    const input = { scope, turn, knowledge, conversationRevision: current.value.conversationRevision + 1,
       policyVersion: current.value.policy.policyVersion, promptVersion: this.model.promptVersion };
     const prepared = this.model.prepare(input);
     if (!prepared.ok) {

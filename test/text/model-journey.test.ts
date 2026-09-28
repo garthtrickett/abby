@@ -6,7 +6,7 @@ import { EffectRecovery } from "../../src/core/effect-recovery.ts";
 import { EffectWorker } from "../../src/core/effect-worker.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
 import type { LedgerStore } from "../../src/core/ledger.ts";
-import type { CallState, FinalCallerTurn, LocationScope, Result } from "../../src/core/model.ts";
+import type { ApprovedKnowledge, CallState, FinalCallerTurn, LocationScope, Result } from "../../src/core/model.ts";
 import { ok } from "../../src/core/model.ts";
 import { ModelIngress } from "../../src/model/proposal.ts";
 import type { RawModelPort } from "../../src/model/proposal.ts";
@@ -29,13 +29,15 @@ function value<T>(result: Result<T, { kind: string }>): T {
 }
 
 let sequence = 0;
-function fixture(kind: "memory" | "postgres", raw: unknown | ((turn: FinalCallerTurn) => unknown), maxTasks = 1_000) {
+function fixture(kind: "memory" | "postgres", raw: unknown | ((turn: FinalCallerTurn) => unknown), maxTasks = 1_000,
+                 configureHost?: (host: ReferenceClinicHost, scope: LocationScope) => void) {
   const id = `model-${kind}-${++sequence}`;
   const scope: LocationScope = { tenantId: `tenant-${id}`, clinicId: `clinic-${id}`, locationId: `location-${id}` };
   const callId = `call-${id}`;
   const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt) : new MemoryLedger();
   const host = new ReferenceClinicHost([], [], [{ scope, sourceRef: "hours", version: "hours-v1", ownerRef: "owner-1",
     approvedText: "We open at 9 am.", approved: true, effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]);
+  configureHost?.(host, scope);
   const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
   let calls = 0;
   const port: RawModelPort = { async propose(input) {
@@ -58,6 +60,44 @@ async function start(app: ReturnType<typeof fixture>): Promise<void> {
 }
 
 for (const kind of kinds) {
+  test(`${kind}: invalid model knowledge context falls back before inference`, async () => {
+    const app = fixture(kind, { schemaVersion: 1, kind: "answer", sourceRefs: ["hours"], proposedText: "We open at 9 am." },
+      1_000, (host, scope) => {
+        host.listModelKnowledge = async () => ok([{ scope: { ...scope, tenantId: "foreign" }, sourceRef: "hours",
+          version: "hours-v1", ownerRef: "owner-1", approvedText: "We open at 9 am.", approved: true,
+          effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]);
+      });
+    await start(app);
+    const turn = app.turn("turn-invalid-context", "Private clinic question");
+    value(await app.submit(turn));
+    const state = await app.state();
+    assert.equal(app.calls(), 0);
+    assert.equal(Object.values(state.effects).some(effect => effect.kind === "model"), false);
+    assert.equal(Object.values(state.staffItems).some(item => item.reason === "systemFailure"), true);
+    assert.equal(JSON.stringify(state).includes(turn.text), false);
+  });
+
+  test(`${kind}: a changed source after model inference cannot become an answer`, async () => {
+    const app = fixture(kind, { schemaVersion: 1, kind: "answer", sourceRefs: ["hours"], proposedText: "We open at 9 am." },
+      1_000, host => {
+        const original = host.readKnowledge.bind(host);
+        host.readKnowledge = async (scope, refs) => {
+          const read = await original(scope, refs);
+          return read.ok ? ok(read.value.map((source: ApprovedKnowledge) => ({ ...source, version: "hours-v2",
+            approvedText: "We open at 10 am." }))) : read;
+        };
+      });
+    await start(app);
+    value(await app.submit(app.turn("turn-changed-source", "What time do you open?")));
+    value(await app.reception.drain(app.scope, app.callId, now));
+    value(await app.reception.drain(app.scope, app.callId, now));
+    const state = await app.state();
+    assert.equal(app.calls(), 1);
+    assert.deepEqual(state.knowledgeAnswers, []);
+    assert.equal(state.callerMessages.includes("We open at 9 am."), false);
+    assert.equal(Object.values(state.staffItems).some(item => item.reason === "systemFailure"), true);
+  });
+
   test(`${kind}: default-off automation refuses a model turn without sending caller words`, async () => {
     const app = fixture(kind, { schemaVersion: 1, kind: "handoff", reason: "callerRequested" });
     value(await app.reception.startCall(app.callId, app.scope));

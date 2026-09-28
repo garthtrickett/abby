@@ -18,6 +18,7 @@ export type ModelFailure = Readonly<{ kind: "malformed" | "unavailable" | "deadl
 export type ModelInput = Readonly<{
   scope: LocationScope;
   turn: FinalCallerTurn;
+  knowledge: readonly Readonly<{ sourceRef: string; approvedText: string }>[];
   conversationRevision: number;
   policyVersion: string;
   promptVersion: string;

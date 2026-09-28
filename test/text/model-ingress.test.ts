@@ -7,6 +7,7 @@ const input: ModelInput = {
   scope: { tenantId: "tenant-model", clinicId: "clinic-model", locationId: "location-model" },
   turn: { callId: "call-model", turnId: "turn-1", text: "Can I book an appointment?", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
   conversationRevision: 1,
+  knowledge: [],
   policyVersion: "policy-1",
   promptVersion: "prompt-1",
 };
