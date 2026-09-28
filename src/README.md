@@ -42,6 +42,8 @@ The [per-session lease renewal loop](../phase-1/VOICE_LEASE_LOOP.md) renews an a
 
 [Settled content redaction](../phase-2/SETTLED_CONTENT_REDACTION.md) clears speech and notice text after terminal delivery evidence and clears caller messages when a call ends. It does not yet implement consent or full retention policy.
 
+[Model voice turns](../phase-2/MODEL_VOICE_TURN.md) route Abby-final synthetic speech through the typed model effect and host-approved knowledge path. The reference port is fake; no live LLM or media provider is installed.
+
 The [managed voice-session composition](../phase-1/MANAGED_VOICE_SESSION.md) registers exact attached sessions, starts their renewal loops, and wakes pending delivery after successful call-state commits. It removes sessions when a call ends or a transfer connects.
 
 [Caller notice delivery](../phase-1/CALLER_NOTICE_DELIVERY.md) commits final-turn fallback responses as pending presentations, so the attached session can speak and acknowledge them. A newer turn supersedes an unsent notice.

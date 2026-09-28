@@ -16,6 +16,9 @@ import type { TextReception } from "../../src/reference/text-reception.ts";
 import type { PolicyStore } from "../../src/core/host.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
+import { ModelIngress } from "../../src/model/proposal.ts";
+import type { RawModelPort } from "../../src/model/proposal.ts";
+import { ModelWork } from "../../src/model/work.ts";
 import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
 import { CallAdmissionService } from "../../src/voice/admission.ts";
 import { CallLivenessMonitor } from "../../src/voice/call-liveness-monitor.ts";
@@ -110,23 +113,24 @@ class PresentationStartHookLedger implements LedgerStore {
   }
 }
 
-async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: boolean, transferMode: "execute" | "requestOnly" | "unavailable" = "requestOnly", transferDestinationRef?: string, clock?: { now: () => number; onPresentationStarted?: () => void; onSessionRenewed?: () => void }, options: { bookingMode?: "execute" | "requestOnly"; knowledge?: (scope: LocationScope) => readonly ApprovedKnowledge[]; availability?: (scope: LocationScope) => AvailabilityHost; staffedIntervals?: CallPolicy["staffedIntervals"] } = {}) {
+async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: boolean, transferMode: "execute" | "requestOnly" | "unavailable" = "requestOnly", transferDestinationRef?: string, clock?: { now: () => number; onPresentationStarted?: () => void; onSessionRenewed?: () => void }, options: { bookingMode?: "execute" | "requestOnly"; knowledge?: (scope: LocationScope) => readonly ApprovedKnowledge[]; availability?: (scope: LocationScope) => AvailabilityHost; staffedIntervals?: CallPolicy["staffedIntervals"]; model?: RawModelPort; modelDeadlineMs?: number } = {}) {
   const scope: LocationScope = { tenantId: `voice-tenant-${id}`, clinicId: `voice-clinic-${id}`, locationId: `voice-location-${id}` };
   const patient = { scope, patientRef: `patient-${id}`, verificationRef: `proof-${id}`, expiresAt: at(86_400) };
   const offer = { scope, offerRef: `offer-${id}`, serviceRef: "physio", startsAt: at(90_000), expiresAt: at(86_400) };
   const host = new ReferenceClinicHost([patient], [offer], options.knowledge?.(scope));
   const availability = options.availability?.(scope);
+  const model = options.model ? new ModelWork(new ModelIngress(options.model), "voice-prompt-v1", options.modelDeadlineMs ?? 5_000) : undefined;
   let ledger: LedgerStore;
   let policy: PolicyStore;
   let reception: TextReception;
   if (kind === "postgres") {
     assert.ok(db);
     ledger = new PostgresLedger(db, suggestedAt => suggestedAt);
-    ({ policy, reception } = createStandaloneTextComposition(db, host, options.bookingMode, ledger, availability));
+    ({ policy, reception } = createStandaloneTextComposition(db, host, options.bookingMode, ledger, availability, undefined, undefined, model));
   } else {
     ledger = new MemoryLedger();
     policy = new MemoryPolicyStore(options.bookingMode);
-    reception = createEmbeddedTextComposition(ledger, policy, host, availability);
+    reception = createEmbeddedTextComposition(ledger, policy, host, availability, undefined, model);
   }
   if (bookingEnabled) value(await policy.changeBookingEnabled(scope, "0", true, "voice-test-admin"));
   const playback = new FakePlayback();
@@ -150,6 +154,8 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
   const session = new VoiceSession(callId, sessionId, scope, sessionLedger, reception, playback, async turn =>
     ok(turn.text.startsWith("Transfer")
       ? { kind: "transfer" as const, reason: "callerRequested" as const }
+      : turn.text.startsWith("Ask model")
+      ? { kind: "model" as const }
       : turn.text.toLowerCase().includes("hours?")
       ? { kind: "answer" as const, sourceRefs: ["hours"], proposedText: turn.text.startsWith("Wrong") ? "We open at 10 am." : "We open at 9 am." }
       : turn.text.startsWith("Check times")
@@ -159,7 +165,7 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
       ? { kind: "book" as const, verificationRef: patient.verificationRef, offerRef: offer.offerRef }
       : { kind: "affirm" as const }), transfer, clock?.now);
   value(await session.attach(at(1)));
-  return { scope, patient, offer, host, ledger, policy, reception, playback, transfer, session, sessionId, callId };
+  return { scope, patient, offer, host, ledger, policy, reception, playback, transfer, session, sessionId, callId, model };
 }
 
 async function bookTurn(app: Awaited<ReturnType<typeof fixture>>, text = "Book physio") {
@@ -179,6 +185,14 @@ async function answerTurn(app: Awaited<ReturnType<typeof fixture>>, text = "Hour
   const generation = value(await app.session.speechStarted(at(seconds)));
   value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation,
     utteranceId: `question-${seconds}`, text, quality: "clear" }));
+  return value(await app.session.finishTurn(at(seconds + 1)));
+}
+
+async function modelTurn(app: Awaited<ReturnType<typeof fixture>>, text: string, seconds = 2,
+                         quality: "clear" | "needsClarification" = "clear") {
+  const generation = value(await app.session.speechStarted(at(seconds)));
+  value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation,
+    utteranceId: `model-${seconds}`, text, quality }));
   return value(await app.session.finishTurn(at(seconds + 1)));
 }
 
@@ -325,6 +339,116 @@ for (const kind of kinds) {
       const stored = await sql<{ state_text: string }>`select state::text as state_text from calls where call_id = ${app.callId}`.execute(db);
       assert.equal(stored.rows[0]?.state_text.includes("We open at 9 am."), false);
     }
+  });
+
+  test(`${kind}: a final voice turn reaches the model effect and speaks only host-approved knowledge`, async () => {
+    let modelCalls = 0;
+    const app = await fixture(kind, `${kind}-model-answer`, false, "requestOnly", undefined, undefined, {
+      knowledge: scope => [hoursSource(scope)],
+      model: { async propose(input) {
+        modelCalls += 1;
+        assert.equal(input.turn.text, "Ask model about opening hours");
+        return { schemaVersion: 1, kind: "answer", sourceRefs: ["hours"], proposedText: "We open at 9 am." };
+      } },
+    });
+    const accepted = await modelTurn(app, "Ask model about opening hours");
+    assert.equal(Object.values(accepted.effects).filter(effect => effect.kind === "model" && effect.status === "pending").length, 1);
+    assert.equal(JSON.stringify(accepted).includes("Ask model about opening hours"), false);
+    assert.equal(accepted.pendingPresentationId, undefined);
+    const proposed = value(await app.session.drainEffects(at(4)));
+    assert.equal(Object.values(proposed.effects).filter(effect => effect.kind === "modelKnowledge" && effect.status === "pending").length, 1);
+    assert.equal(proposed.pendingPresentationId, undefined);
+    const approved = value(await app.session.drainEffects(at(5)));
+    assert.equal(approved.knowledgeAnswers.at(-1)?.sourceRef, "hours");
+    assert.equal(approved.presentations[approved.pendingPresentationId!]?.kind, "notice");
+    assert.equal(modelCalls, 1);
+    const delivery = value(await app.session.dispatchPending(at(6)));
+    assert.equal(delivery.kind, "queued");
+    assert.deepEqual(app.playback.queuedTexts, ["We open at 9 am."]);
+    const played = value(await app.session.acceptPlaybackResult(delivery.playbackId!, "played", at(7)));
+    assert.equal(played.presentations[approved.pendingPresentationId!]?.status, "played");
+    assert.equal(Object.values(played.effects).some(effect => effect.kind === "hostWrite"), false);
+  });
+
+  test(`${kind}: unclear model speech asks for repetition without calling the model`, async () => {
+    let modelCalls = 0;
+    const app = await fixture(kind, `${kind}-model-unclear`, false, "requestOnly", undefined, undefined, {
+      model: { async propose() { modelCalls += 1; return { schemaVersion: 1, kind: "handoff", reason: "callerRequested" }; } },
+    });
+    const state = await modelTurn(app, "Ask model about opening hours", 2, "needsClarification");
+    assert.equal(modelCalls, 0);
+    assert.equal(Object.values(state.effects).some(effect => effect.kind === "model"), false);
+    const delivery = value(await app.session.dispatchPending(at(4)));
+    assert.equal(delivery.kind, "queued");
+    assert.deepEqual(app.playback.queuedTexts, ["Could you repeat that for me?"]);
+  });
+
+  test(`${kind}: missing model adapter speaks a staff fallback without storing caller words`, async () => {
+    const app = await fixture(kind, `${kind}-model-absent`, false);
+    const state = await modelTurn(app, "Ask model about a private appointment");
+    assert.equal(Object.values(state.effects).some(effect => effect.kind === "model"), false);
+    assert.equal(Object.values(state.staffItems).some(item => item.reason === "systemFailure"), true);
+    assert.equal(JSON.stringify(state).includes("Ask model about a private appointment"), false);
+    const delivery = value(await app.session.dispatchPending(at(4)));
+    assert.equal(delivery.kind, "queued");
+    assert.match(app.playback.queuedTexts.at(-1) ?? "", /staff follow-up/);
+  });
+
+  test(`${kind}: a model action proposal routes to staff without a host write`, async () => {
+    const app = await fixture(kind, `${kind}-model-action`, true, "requestOnly", undefined, undefined, {
+      model: { async propose() { return { schemaVersion: 1, kind: "action", operation: "book", requestedService: "physio" }; } },
+    });
+    await modelTurn(app, "Ask model to book physio");
+    const result = value(await app.session.drainEffects(at(4)));
+    assert.equal(Object.values(result.staffItems).some(item => item.reason === "unsupported"), true);
+    assert.equal(Object.values(result.effects).some(effect => effect.kind === "hostWrite"), false);
+    const delivery = value(await app.session.dispatchPending(at(5)));
+    assert.equal(delivery.kind, "queued");
+    assert.match(app.playback.queuedTexts.at(-1) ?? "", /can't complete that request automatically/);
+    assert.equal(app.host.bookings(app.scope).length, 0);
+  });
+
+  const modelFailures: readonly { id: string; name: string; port: RawModelPort }[] = [
+    { id: "E2E-076", name: "malformed", port: { async propose() {
+      return { schemaVersion: 1, kind: "answer", sourceRefs: ["hours"], proposedText: "We are open all night", extra: true };
+    } } },
+    { id: "E2E-077", name: "unavailable", port: { async propose() { throw new Error("provider unavailable"); } } },
+    { id: "E2E-078", name: "timed out", port: { propose() { return new Promise<unknown>(() => {}); } } },
+  ];
+  for (const scenario of modelFailures) {
+    test(`${kind}: ${scenario.id} ${scenario.name} voice model result becomes a spoken staff fallback`, async () => {
+      const app = await fixture(kind, `${kind}-${scenario.id}`, false, "requestOnly", undefined, undefined,
+        { model: scenario.port, modelDeadlineMs: 20 });
+      await modelTurn(app, "Ask model about an appointment");
+      const failed = value(await app.session.drainEffects(at(4)));
+      assert.equal(Object.values(failed.staffItems).some(item => item.reason === "systemFailure"), true);
+      assert.equal(Object.values(failed.effects).some(effect => effect.kind === "hostWrite"), false);
+      const delivery = value(await app.session.dispatchPending(at(5)));
+      assert.equal(delivery.kind, "queued");
+      assert.deepEqual(app.playback.queuedTexts, ["I couldn't understand that safely. I'll request staff follow-up."]);
+      assert.equal(app.host.bookings(app.scope).length, 0);
+    });
+  }
+
+  test(`${kind}: a caller correction cancels older model work before it can speak`, async () => {
+    let modelCalls = 0;
+    const app = await fixture(kind, `${kind}-model-correction`, false, "requestOnly", undefined, undefined, {
+      knowledge: scope => [hoursSource(scope)],
+      model: { async propose() {
+        modelCalls += 1;
+        return { schemaVersion: 1, kind: "answer", sourceRefs: ["hours"], proposedText: "We open at 9 am." };
+      } },
+    });
+    const first = await modelTurn(app, "Ask model about hours", 2);
+    const old = Object.values(first.effects).find(effect => effect.kind === "model");
+    assert.ok(old);
+    const corrected = await modelTurn(app, "Ask model for another answer", 4);
+    assert.equal(corrected.effects[old.id]?.status, "canceled");
+    value(await app.session.drainEffects(at(6)));
+    const approved = value(await app.session.drainEffects(at(7)));
+    assert.equal(modelCalls, 1);
+    assert.equal(approved.knowledgeAnswers.length, 1);
+    assert.equal(Object.values(approved.presentations).filter(presentation => presentation.status === "pending").length, 1);
   });
 
   for (const scenario of [

@@ -91,6 +91,21 @@ for (const kind of kinds) {
     assert.equal(Object.values((await app.state()).effects).length, 0);
   });
 
+  test(`${kind}: a voice turn with an older conversation revision cannot queue model work`, async () => {
+    const app = fixture(kind, { schemaVersion: 1, kind: "handoff", reason: "callerRequested" });
+    await start(app);
+    value(await app.submit(app.turn("turn-current", "Current request")));
+    const before = await app.state();
+    const stale = await app.reception.interpretModelTurn(app.scope, app.turn("turn-stale", "Stale voice request"), now, 0);
+    assert.equal(stale.ok, false);
+    assert.equal(stale.error.kind, "staleTurn");
+    const after = await app.state();
+    assert.equal(after.version, before.version);
+    assert.equal(after.processedTurnIds.includes("turn-stale"), false);
+    assert.equal(JSON.stringify(after).includes("Stale voice request"), false);
+    assert.equal(app.calls(), 0);
+  });
+
   test(`${kind}: full transient model queue accepts the turn as staff fallback and replays it once`, async () => {
     const app = fixture(kind, { schemaVersion: 1, kind: "handoff", reason: "callerRequested" }, 1);
     await start(app);
