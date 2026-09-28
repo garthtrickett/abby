@@ -10,6 +10,8 @@ The [scoped staff queue](../phase-2/STAFF_QUEUE.md) exposes redacted, overdue fo
 
 The [effect recovery loop](../phase-2/EFFECT_RECOVERY.md) scans pending and aged possibly-sent outbox intents independently of voice sessions. It pages and runs different calls concurrently while preserving per-call order. The local demo starts the loop; a deploying host supplies its own process lifecycle and host lookup.
 
+Effect workers bound host calls to a configurable deadline and pass an abort signal. Timed-out consequential sends enter their existing uncertain/reconciliation path; stalled read-only reconciliations leave pending work for the next tick.
+
 The [scoped call outcome report](../phase-2/CALL_OUTCOME_REPORT.md) gives agents and the direct dashboard bounded, redacted counts for committed actions, unresolved actions, staff requests, confirmed tasks, and system failures. It does not infer caller abandonment from an ended call.
 
 [Call terminal evidence](../phase-2/CALL_TERMINAL_EVIDENCE.md) records a typed end reason with each new terminal transition. The report distinguishes a transport-verified caller disconnect from expiry, media failure, and transfer completion; older records without a reason remain readable.

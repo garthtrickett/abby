@@ -23,7 +23,7 @@ export type BookingSettingAuditPage = Readonly<{ entries: readonly BookingSettin
 export type KnowledgeReadFailure = Readonly<{ kind: "invalidQuery" | "unavailable" }>;
 
 export interface KnowledgeHost {
-  readKnowledge(scope: LocationScope, sourceRefs: readonly string[]): Promise<Result<readonly ApprovedKnowledge[], KnowledgeReadFailure>>;
+  readKnowledge(scope: LocationScope, sourceRefs: readonly string[], signal?: AbortSignal): Promise<Result<readonly ApprovedKnowledge[], KnowledgeReadFailure>>;
 }
 
 /** Candidate facts for a transient model request; every answer is read again through KnowledgeHost. */
@@ -49,20 +49,20 @@ export interface PatientProofHost {
 }
 
 export interface HostEffects {
-  write(mutation: HostMutation, now: string): Promise<HostWriteReceipt>;
-  reconcile(mutation: HostMutation): Promise<ReconcileObservation>;
-  openTask(item: StaffItem): Promise<StaffTaskReceipt>;
-  reconcileTask(item: StaffItem): Promise<StaffTaskObservation>;
+  write(mutation: HostMutation, now: string, signal?: AbortSignal): Promise<HostWriteReceipt>;
+  reconcile(mutation: HostMutation, signal?: AbortSignal): Promise<ReconcileObservation>;
+  openTask(item: StaffItem, signal?: AbortSignal): Promise<StaffTaskReceipt>;
+  reconcileTask(item: StaffItem, signal?: AbortSignal): Promise<StaffTaskObservation>;
 }
 
 export interface StaffLifecycleHost {
-  advanceTask(change: StaffChange): Promise<StaffChangeReceipt>;
-  reconcileTaskChange(change: StaffChange): Promise<StaffChangeObservation>;
+  advanceTask(change: StaffChange, signal?: AbortSignal): Promise<StaffChangeReceipt>;
+  reconcileTaskChange(change: StaffChange, signal?: AbortSignal): Promise<StaffChangeObservation>;
 }
 
 export interface OperatorAlertHost {
-  sendAlert(alert: OperatorAlert): Promise<OperatorAlertReceipt>;
-  reconcileAlert(alert: OperatorAlert): Promise<OperatorAlertObservation>;
+  sendAlert(alert: OperatorAlert, signal?: AbortSignal): Promise<OperatorAlertReceipt>;
+  reconcileAlert(alert: OperatorAlert, signal?: AbortSignal): Promise<OperatorAlertObservation>;
 }
 
 export interface PolicyStore {

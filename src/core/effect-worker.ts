@@ -4,19 +4,42 @@ import { CallRuntime } from "./runtime.ts";
 import { err } from "./model.ts";
 import type { ModelWork } from "../model/work.ts";
 import { createHash } from "node:crypto";
+import { systemTimer } from "./timer.ts";
+import type { TimerPort } from "./timer.ts";
+
+export type EffectWorkerOptions = Readonly<{ hostDeadlineMs?: number; timer?: TimerPort }>;
 
 export class EffectWorker {
   private readonly runtime: CallRuntime;
   private readonly host: HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost>;
   private readonly model: ModelWork | undefined;
   private readonly knowledge: KnowledgeHost | undefined;
+  private readonly hostDeadlineMs: number;
+  private readonly timer: TimerPort;
 
   constructor(runtime: CallRuntime, host: HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost>, model?: ModelWork,
-              knowledge?: KnowledgeHost) {
+              knowledge?: KnowledgeHost, options: EffectWorkerOptions = {}) {
+    const deadline = options.hostDeadlineMs ?? 15_000;
+    if (!Number.isSafeInteger(deadline) || deadline < 1 || deadline > 120_000) throw new RangeError("hostDeadlineMs must be 1..120000");
     this.runtime = runtime;
     this.host = host;
     this.model = model;
     this.knowledge = knowledge ?? (host.readKnowledge ? host as KnowledgeHost : undefined);
+    this.hostDeadlineMs = deadline;
+    this.timer = options.timer ?? systemTimer;
+  }
+
+  private async hostCall<Value>(work: (signal: AbortSignal) => Promise<Value>): Promise<Value> {
+    let handle: unknown;
+    const controller = new AbortController();
+    const timeout = new Promise<never>((_, reject) => {
+      handle = this.timer.schedule(() => {
+        controller.abort();
+        reject(new Error("hostDeadlineExceeded"));
+      }, this.hostDeadlineMs);
+    });
+    try { return await Promise.race([Promise.resolve().then(() => work(controller.signal)), timeout]); }
+    finally { this.timer.cancel(handle); }
   }
 
   async process(callId: string, effectId: string, now: string): Promise<void> {
@@ -46,7 +69,7 @@ export class EffectWorker {
       const valid = answer && createHash("sha256").update(JSON.stringify(answer.sourceRefs)).digest("hex") === effect.sourceRefsDigest;
       let result: Awaited<ReturnType<KnowledgeHost["readKnowledge"]>> = err({ kind: "unavailable" });
       if (valid && this.knowledge) {
-        try { result = await this.knowledge.readKnowledge(read.value.policy.scope, answer.sourceRefs); }
+        try { result = await this.hostCall(signal => this.knowledge!.readKnowledge(read.value.policy.scope, answer.sourceRefs, signal)); }
         catch { result = err({ kind: "unavailable" }); }
       }
       const resolved = await this.runtime.acceptModelKnowledge(callId, effectId, result, now, valid ? answer.proposedText : undefined);
@@ -61,7 +84,7 @@ export class EffectWorker {
       if (marked.value.effects[effectId]?.status === "canceled") return;
       let receipt: HostWriteReceipt;
       try {
-        receipt = await this.host.write(effect.mutation, now);
+        receipt = await this.hostCall(signal => this.host.write(effect.mutation, now, signal));
       } catch {
         receipt = {
           kind: "uncertain",
@@ -78,7 +101,7 @@ export class EffectWorker {
       if (effect.status !== "pending") throw new Error("invalidTransition");
       const original = read.value.effects[effect.originalEffectId];
       if (!original || original.kind !== "hostWrite") throw new Error("effectUnknown");
-      const observation = await this.host.reconcile(original.mutation);
+      const observation = await this.hostCall(signal => this.host.reconcile(original.mutation, signal));
       const resolved = await this.runtime.acceptReconciliation(callId, effectId, observation, now);
       if (!resolved.ok) throw new Error(resolved.error.kind);
       return;
@@ -87,7 +110,7 @@ export class EffectWorker {
       if (effect.status !== "pending") throw new Error("invalidTransition");
       const original = read.value.effects[effect.originalEffectId];
       if (!original || original.kind !== "staffTask" || original.status !== "uncertain") throw new Error("effectUnknown");
-      const observation = await this.host.reconcileTask(effect.originalItem);
+      const observation = await this.hostCall(signal => this.host.reconcileTask(effect.originalItem, signal));
       const resolved = await this.runtime.acceptStaffReconciliation(callId, effectId, observation);
       if (!resolved.ok) throw new Error(resolved.error.kind);
       return;
@@ -99,7 +122,7 @@ export class EffectWorker {
       let receipt: StaffChangeReceipt;
       try {
         receipt = this.host.advanceTask
-          ? await this.host.advanceTask(effect.change)
+          ? await this.hostCall(signal => this.host.advanceTask!(effect.change, signal))
           : { kind: "rejected", commandKey: effect.change.commandKey, taskKey: effect.taskKey };
       } catch {
         receipt = { kind: "uncertain", commandKey: effect.change.commandKey, taskKey: effect.taskKey };
@@ -113,7 +136,7 @@ export class EffectWorker {
       const original = read.value.effects[effect.originalEffectId];
       if (!original || original.kind !== "staffChange" || original.status !== "uncertain") throw new Error("effectUnknown");
       const observation = this.host.reconcileTaskChange
-        ? await this.host.reconcileTaskChange(effect.change)
+        ? await this.hostCall(signal => this.host.reconcileTaskChange!(effect.change, signal))
         : { kind: "stillUnknown" as const, commandKey: effect.change.commandKey, taskKey: effect.taskKey };
       const resolved = await this.runtime.acceptStaffChangeReconciliation(callId, effectId, observation);
       if (!resolved.ok) throw new Error(resolved.error.kind);
@@ -125,7 +148,7 @@ export class EffectWorker {
       if (!marked.ok) throw new Error(marked.error.kind);
       if (marked.value.effects[effectId]?.status === "canceled") return;
       let receipt: OperatorAlertReceipt;
-      try { receipt = await this.host.sendAlert(effect.alert); }
+      try { receipt = await this.hostCall(signal => this.host.sendAlert!(effect.alert, signal)); }
       catch { receipt = { kind: "uncertain", alertKey: effect.alert.alertKey }; }
       const resolved = await this.runtime.acceptOperatorAlertResult(callId, effectId, receipt, now);
       if (!resolved.ok) throw new Error(resolved.error.kind);
@@ -134,7 +157,7 @@ export class EffectWorker {
     }
     if (effect.kind === "operatorAlertReconcile") {
       if (effect.status !== "pending" || !this.host.reconcileAlert) throw new Error("alertUnavailable");
-      const observation = await this.host.reconcileAlert(effect.alert);
+      const observation = await this.hostCall(signal => this.host.reconcileAlert!(effect.alert, signal));
       const resolved = await this.runtime.acceptOperatorAlertReconciliation(callId, effectId, observation, now);
       if (!resolved.ok) throw new Error(resolved.error.kind);
       if (observation.kind !== "exactDelivered") throw new Error("alertDeliveryUnproven");
@@ -147,7 +170,7 @@ export class EffectWorker {
     if (!marked.ok) throw new Error(marked.error.kind);
     let receipt: StaffTaskReceipt;
     try {
-      receipt = await this.host.openTask(item);
+      receipt = await this.hostCall(signal => this.host.openTask(item, signal));
     } catch {
       receipt = { kind: "uncertain", taskKey: item.key };
     }
