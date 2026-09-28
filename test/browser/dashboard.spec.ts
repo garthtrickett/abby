@@ -22,7 +22,7 @@ import { CallAdmissionService } from "../../src/voice/admission.ts";
 
 async function localDashboard(role: "clinicAdmin" | "staff", availability?: AvailabilityHost, readiness?: AutomationReadiness) {
   const scope: LocationScope = { tenantId: "browser-tenant", clinicId: "browser-clinic", locationId: "browser-location" };
-  const ledger = new MemoryLedger();
+  const ledger = new MemoryLedger(readiness);
   const policy = new MemoryPolicyStore("execute", undefined, readiness);
   const host = new ReferenceClinicHost([], [],
     [{ scope, sourceRef: "hours", version: "hours-v1", ownerRef: "clinic-owner", approvedText: "We open at 9 am.", approved: true,
@@ -90,7 +90,9 @@ test("SET-001: browser reception switch needs readiness and gates the next call"
 });
 
 test("emergency stop in the browser blocks a queued active-call write and survives reload", async ({ page, request }) => {
-  const app = await localDashboard("clinicAdmin");
+  let ready = false;
+  const readiness: AutomationReadiness = async () => ready ? ok(true) : err({ kind: "readinessFailed", missing: ["mediaTestCall"] });
+  const app = await localDashboard("clinicAdmin", undefined, readiness);
   try {
     const enabled = await app.policy.changeBookingEnabled(app.scope, "0", true, "browser-clinicAdmin");
     assert.ok(enabled.ok);
@@ -124,6 +126,19 @@ test("emergency stop in the browser blocks a queued active-call write and surviv
     assert.equal(app.host.bookings(app.scope).length, 0);
     await page.reload();
     await expect(page.getByLabel("Emergency stop status")).toContainText("Clinic incident");
+    await page.getByRole("textbox", { name: "Reason for resuming appointment writes" }).fill("Provider recovered");
+    await page.getByRole("button", { name: "Resume appointment writes" }).click();
+    await expect(page.getByRole("alert")).toContainText("passed media test call");
+    ready = true;
+    await page.getByRole("button", { name: "Resume appointment writes" }).click();
+    await expect(page.getByText("Writes resumed by browser-clinicAdmin")).toBeVisible();
+    await expect(page.getByLabel("Write stop audit")).toContainText("Version 2 · resumed · browser-clinicAdmin · Provider recovered");
+    const stale = await request.post(`${app.url}/api/writes/resume`, { data: { expectedVersion: "1", reason: "Stale tab" } });
+    assert.equal(stale.status(), 409);
+    await page.getByRole("textbox", { name: "Reason for emergency stop" }).fill("Second incident");
+    await page.getByRole("button", { name: "Stop appointment writes" }).click();
+    await expect(page.getByLabel("Emergency stop status")).toContainText("Second incident");
+    await expect(page.getByLabel("Write stop audit")).toContainText("Version 3 · stopped · browser-clinicAdmin · Second incident");
     assert.equal((await request.post(`${app.url}/api/writes/stop`, { data: { reason: "" } })).status(), 400);
   } finally { await app.close(); }
 });
@@ -198,6 +213,8 @@ test("E2E-069: view-only staff can review a call but cannot change booking setti
     assert.equal(automationForbidden.status(), 403);
     assert.equal((await request.post(`${app.url}/api/writes/stop`, { data: { reason: "Forged staff stop" } })).status(), 403);
     assert.equal((await request.get(`${app.url}/api/writes/stop`)).status(), 403);
+    assert.equal((await request.post(`${app.url}/api/writes/resume`, { data: { expectedVersion: "1", reason: "Forged staff resume" } })).status(), 403);
+    assert.equal((await request.get(`${app.url}/api/writes/stop-audit`)).status(), 403);
     const auditForbidden = await request.get(`${app.url}/api/settings/booking-audit`);
     assert.equal(auditForbidden.status(), 403);
     const policy = await app.policy.read(app.scope);

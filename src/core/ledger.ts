@@ -1,11 +1,15 @@
 import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "./model.ts";
 import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingPresentationRef, RecoverableEffectRef, Result, StaffQueueEntry, TransitionAction, TransitionFailure } from "./model.ts";
 import { transition } from "./transition.ts";
-import type { InFlightWrite, WriteStopStatus } from "./write-stop.ts";
+import { READINESS_REQUIREMENTS, unprovenReadiness } from "./readiness.ts";
+import type { AutomationReadiness } from "./readiness.ts";
+import type { InFlightWrite, WriteStopAuditEntry, WriteStopAuditPage, WriteStopFailure, WriteStopStatus } from "./write-stop.ts";
 
 export interface LedgerStore {
   stopWrites(scope: LocationScope, actorRef: string, reason: string): Promise<Result<WriteStopStatus, TransitionFailure>>;
   readWriteStop(scope: LocationScope, afterEffectId?: string): Promise<Result<WriteStopStatus, TransitionFailure>>;
+  resumeWrites(scope: LocationScope, expectedVersion: string, actorRef: string, reason: string): Promise<Result<WriteStopStatus, WriteStopFailure>>;
+  listWriteStopChanges(scope: LocationScope, afterVersion?: number): Promise<Result<WriteStopAuditPage, TransitionFailure>>;
   start(callId: string, policy: CallPolicy): Promise<Result<CallState, TransitionFailure>>;
   findAdmission(callId: string): Promise<Result<AdmissionReceipt | null, TransitionFailure>>;
   findExpiredAdmissions(now: string, scope?: LocationScope): Promise<Result<readonly AdmissionReceipt[], TransitionFailure>>;
@@ -53,7 +57,12 @@ function sameScope(left: LocationScope, right: LocationScope): boolean {
 
 export class MemoryLedger implements LedgerStore {
   private readonly calls = new Map<string, CallState>();
-  private readonly writeStops = new Map<string, Readonly<{ actorRef: string; reason: string; stoppedAt: string; inFlight: readonly InFlightWrite[] }>>();
+  private readonly writeStops = new Map<string, Array<WriteStopAuditEntry & Readonly<{ inFlight: readonly InFlightWrite[] }>>>();
+  private readonly readiness: AutomationReadiness;
+
+  constructor(readiness: AutomationReadiness = unprovenReadiness) {
+    this.readiness = readiness;
+  }
 
   private stopKey(scope: LocationScope): string {
     return JSON.stringify([scope.tenantId, scope.clinicId]);
@@ -62,7 +71,8 @@ export class MemoryLedger implements LedgerStore {
   async stopWrites(scope: LocationScope, actorRef: string, reason: string): Promise<Result<WriteStopStatus, TransitionFailure>> {
     if (!actorRef.trim() || actorRef.length > 256 || !reason.trim() || reason.length > 1_000) return err({ kind: "invalidTransition" });
     const key = this.stopKey(scope);
-    if (!this.writeStops.has(key)) {
+    const events = this.writeStops.get(key) ?? [];
+    if (!events.at(-1)?.stopped) {
       const inFlight: InFlightWrite[] = [];
       for (const state of this.calls.values()) {
         if (this.stopKey(state.policy.scope) !== key) continue;
@@ -73,18 +83,43 @@ export class MemoryLedger implements LedgerStore {
         }
       }
       inFlight.sort((left, right) => left.effectId.localeCompare(right.effectId));
-      this.writeStops.set(key, { actorRef, reason, stoppedAt: new Date().toISOString(), inFlight });
+      events.push({ version: String(events.length + 1), stopped: true, actorRef, reason, changedAt: new Date().toISOString(), inFlight });
+      this.writeStops.set(key, events);
     }
+    return this.readWriteStop(scope);
+  }
+
+  async resumeWrites(scope: LocationScope, expectedVersion: string, actorRef: string, reason: string): Promise<Result<WriteStopStatus, WriteStopFailure>> {
+    if (!actorRef.trim() || actorRef.length > 256 || !reason.trim() || reason.length > 1_000) return err({ kind: "invalidTransition" });
+    const key = this.stopKey(scope);
+    const current = this.writeStops.get(key)?.at(-1);
+    if (String(current?.version ?? 0) !== expectedVersion) return err({ kind: "versionConflict" });
+    if (!current?.stopped) return err({ kind: "invalidTransition" });
+    try {
+      const ready = await this.readiness(scope);
+      if (!ready.ok) return ready;
+      if (ready.value !== true) return err({ kind: "readinessFailed", missing: READINESS_REQUIREMENTS });
+    } catch { return err({ kind: "readinessFailed", missing: READINESS_REQUIREMENTS }); }
+    const events = this.writeStops.get(key)!;
+    if (events.at(-1)?.version !== current.version) return err({ kind: "versionConflict" });
+    events.push({ version: String(events.length + 1), stopped: false, actorRef, reason, changedAt: new Date().toISOString(), inFlight: [] });
     return this.readWriteStop(scope);
   }
 
   async readWriteStop(scope: LocationScope, afterEffectId?: string): Promise<Result<WriteStopStatus, TransitionFailure>> {
     if (afterEffectId !== undefined && (!afterEffectId || afterEffectId.length > 512)) return err({ kind: "invalidTransition" });
-    const stop = this.writeStops.get(this.stopKey(scope));
+    const stop = this.writeStops.get(this.stopKey(scope))?.at(-1);
     if (!stop) return ok({ stopped: false, version: "0", inFlight: [] });
-    const inFlight = stop.inFlight.filter(item => !afterEffectId || item.effectId > afterEffectId).slice(0, 50);
-    return ok({ stopped: true, version: "1", actorRef: stop.actorRef, reason: stop.reason, stoppedAt: stop.stoppedAt,
+    const inFlight = stop.stopped ? stop.inFlight.filter(item => !afterEffectId || item.effectId > afterEffectId).slice(0, 50) : [];
+    return ok({ stopped: stop.stopped, version: stop.version, actorRef: stop.actorRef, reason: stop.reason, changedAt: stop.changedAt,
       inFlight: structuredClone(inFlight), ...(inFlight.length === 50 ? { nextAfterEffectId: inFlight[49]!.effectId } : {}) });
+  }
+
+  async listWriteStopChanges(scope: LocationScope, afterVersion?: number): Promise<Result<WriteStopAuditPage, TransitionFailure>> {
+    if (afterVersion !== undefined && (!Number.isSafeInteger(afterVersion) || afterVersion < 0)) return err({ kind: "invalidTransition" });
+    const entries = (this.writeStops.get(this.stopKey(scope)) ?? []).filter(item => Number(item.version) > (afterVersion ?? 0)).slice(0, 50)
+      .map(({ inFlight: _inFlight, ...entry }) => entry);
+    return ok({ entries: structuredClone(entries), ...(entries.length === 50 ? { nextAfterVersion: Number(entries[49]!.version) } : {}) });
   }
 
   async start(callId: string, policy: CallPolicy): Promise<Result<CallState, TransitionFailure>> {
@@ -186,7 +221,7 @@ export class MemoryLedger implements LedgerStore {
     const current = this.calls.get(callId);
     if (!current || !sameScope(current.policy.scope, scope)) return err({ kind: "callUnknown" });
     if (current.version !== expectedVersion) return err({ kind: "versionConflict" });
-    const effectiveAction = action.kind === "markHostPossiblySent" && this.writeStops.has(this.stopKey(scope))
+    const effectiveAction = action.kind === "markHostPossiblySent" && this.writeStops.get(this.stopKey(scope))?.at(-1)?.stopped
       ? { kind: "hostWriteBlocked" as const, effectId: action.effectId, now: action.now } : action;
     const result = transition(current, effectiveAction);
     if (!result.ok) return result;

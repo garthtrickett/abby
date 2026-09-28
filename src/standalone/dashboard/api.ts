@@ -5,7 +5,7 @@ import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor, GatewayFailure } from "../../reference/command-gateway.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
-import type { WriteStopStatus } from "../../core/write-stop.ts";
+import type { WriteStopAuditPage, WriteStopStatus } from "../../core/write-stop.ts";
 
 export type DashboardFailure = GatewayFailure | Readonly<{ kind: "transportUnavailable" | "malformed" }>;
 export type DashboardPort = Readonly<{
@@ -15,6 +15,8 @@ export type DashboardPort = Readonly<{
   changeAutomationEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   readWriteStop(afterEffectId?: string): Promise<Result<WriteStopStatus, DashboardFailure>>;
   stopWrites(reason: string): Promise<Result<WriteStopStatus, DashboardFailure>>;
+  resumeWrites(expectedVersion: string, reason: string): Promise<Result<WriteStopStatus, DashboardFailure>>;
+  writeStopAudit(afterVersion?: number): Promise<Result<WriteStopAuditPage, DashboardFailure>>;
   bookingAudit(afterVersion?: number): Promise<Result<BookingSettingAuditPage, DashboardFailure>>;
   changeBookingEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   callSummary(callId: string): Promise<Result<CallSummary, DashboardFailure>>;
@@ -53,16 +55,16 @@ function writeStop(value: unknown): Result<WriteStopStatus, DashboardFailure> {
   const reply = record(value);
   const status = record(reply?.status);
   if (reply?.kind !== "writeStop" || !status || typeof status.stopped !== "boolean" ||
-      !["0", "1"].includes(String(status.version)) || !Array.isArray(status.inFlight) ||
+      typeof status.version !== "string" || !/^(0|[1-9][0-9]*)$/.test(status.version) || !Array.isArray(status.inFlight) ||
       (status.nextAfterEffectId !== undefined && (typeof status.nextAfterEffectId !== "string" || !status.nextAfterEffectId)) ||
       !status.inFlight.every(item => {
         const row = record(item);
         return row && typeof row.effectId === "string" && !!row.effectId && typeof row.callId === "string" && !!row.callId &&
           typeof row.actionKey === "string" && !!row.actionKey && ["possiblySent", "uncertain"].includes(String(row.status));
       })) return err({ kind: "malformed" });
-  if (status.stopped ? status.version !== "1" || typeof status.actorRef !== "string" || !status.actorRef ||
-      typeof status.reason !== "string" || !status.reason || typeof status.stoppedAt !== "string" || !Number.isFinite(Date.parse(status.stoppedAt))
-    : status.version !== "0" || status.inFlight.length > 0) return err({ kind: "malformed" });
+  if (status.version === "0" ? status.stopped || status.inFlight.length > 0 || status.actorRef !== undefined || status.reason !== undefined || status.changedAt !== undefined
+    : typeof status.actorRef !== "string" || !status.actorRef || typeof status.reason !== "string" || !status.reason ||
+      typeof status.changedAt !== "string" || !Number.isFinite(Date.parse(status.changedAt)) || (!status.stopped && status.inFlight.length > 0)) return err({ kind: "malformed" });
   return ok(status as WriteStopStatus);
 }
 
@@ -113,6 +115,28 @@ export class FetchDashboardPort implements DashboardPort {
     const result = await request("/api/writes/stop", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reason }) });
     return result.ok ? writeStop(result.value) : result;
+  }
+
+  async resumeWrites(expectedVersion: string, reason: string): Promise<Result<WriteStopStatus, DashboardFailure>> {
+    const result = await request("/api/writes/resume", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expectedVersion, reason }) });
+    return result.ok ? writeStop(result.value) : result;
+  }
+
+  async writeStopAudit(afterVersion?: number): Promise<Result<WriteStopAuditPage, DashboardFailure>> {
+    const result = await request(`/api/writes/stop-audit${afterVersion === undefined ? "" : `?after=${afterVersion}`}`);
+    if (!result.ok) return result;
+    const reply = record(result.value);
+    const page = record(reply?.page);
+    if (reply?.kind !== "writeStopAudit" || !page || !Array.isArray(page.entries) ||
+        (page.nextAfterVersion !== undefined && (!Number.isSafeInteger(page.nextAfterVersion) || Number(page.nextAfterVersion) < 0)) ||
+        !page.entries.every(value => {
+          const entry = record(value);
+          return entry && typeof entry.version === "string" && /^[1-9][0-9]*$/.test(entry.version) &&
+            typeof entry.stopped === "boolean" && typeof entry.actorRef === "string" && !!entry.actorRef &&
+            typeof entry.reason === "string" && !!entry.reason && typeof entry.changedAt === "string" && Number.isFinite(Date.parse(entry.changedAt));
+        })) return err({ kind: "malformed" });
+    return ok(page as WriteStopAuditPage);
   }
 
   async bookingAudit(afterVersion?: number): Promise<Result<BookingSettingAuditPage, DashboardFailure>> {

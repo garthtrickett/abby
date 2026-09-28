@@ -21,7 +21,9 @@ export default interface ClinicWriteStopTable {
 
   reason: ColumnType<string | null, string | null, string | null>;
 
-  stopped_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
+  changed_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
+
+  version: ColumnType<number, number | undefined, number>;
 }
 
 export type ClinicWriteStop = Selectable<ClinicWriteStopTable>;

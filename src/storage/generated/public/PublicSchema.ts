@@ -7,6 +7,7 @@ import type { default as ClinicWriteStopInflightTable } from './ClinicWriteStopI
 import type { default as ClinicAutomationTable } from './ClinicAutomation.js';
 import type { default as StaffItemsTable } from './StaffItems.js';
 import type { default as CallsTable } from './Calls.js';
+import type { default as ClinicWriteStopEventsTable } from './ClinicWriteStopEvents.js';
 import type { default as CallEventsTable } from './CallEvents.js';
 import type { default as EffectOutboxTable } from './EffectOutbox.js';
 
@@ -22,6 +23,8 @@ export default interface PublicSchema {
   staff_items: StaffItemsTable;
 
   calls: CallsTable;
+
+  clinic_write_stop_events: ClinicWriteStopEventsTable;
 
   call_events: CallEventsTable;
 

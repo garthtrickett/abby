@@ -71,7 +71,7 @@ function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = f
       effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: expiresAt }]);
   let reception: TextReception;
   let policy: PolicyStore;
-  const ledger = suppliedLedger ?? (kind === "standalone" ? new PostgresLedger(db!) : new MemoryLedger());
+  const ledger = suppliedLedger ?? (kind === "standalone" ? new PostgresLedger(db!, undefined, readiness) : new MemoryLedger(readiness));
   if (kind === "standalone") {
     assert.ok(db);
     ({ reception, policy } = createStandaloneTextComposition(db, host, hostBookingMode, ledger, availability, undefined, readiness));
@@ -339,7 +339,9 @@ for (const kind of kinds) {
   });
 
   test(`${kind}: admin emergency stop blocks a confirmed queued booking and preserves staff work`, async () => {
-    const app = fixture(kind, `${kind}-write-stop`);
+    let ready = false;
+    const readiness: AutomationReadiness = async () => ready ? ok(true) : err({ kind: "readinessFailed", missing: ["mediaTestCall"] });
+    const app = fixture(kind, `${kind}-write-stop`, false, "execute", undefined, readiness);
     error(await app.agent.submit({ kind: "calls.writes.stop.v1", reason: "Forged agent stop" }), "forbidden");
     const initial = value(await app.admin.submit({ kind: "calls.writes.stop.read.v1" }));
     assert.equal(initial.kind, "writeStop");
@@ -366,7 +368,31 @@ for (const kind of kinds) {
     assert.equal(app.host.bookings(app.scope).length, 0);
     const repeated = value(await app.admin.submit({ kind: "calls.writes.stop.v1", reason: "Second operator" }));
     assert.deepEqual(repeated, stopped);
-    if (kind === "standalone") assert.deepEqual(value(await new PostgresLedger(db!).readWriteStop(app.scope)), stopped.status);
+    error(await app.admin.submit({ kind: "calls.writes.resume.v1", expectedVersion: "1", reason: "Provider recovered" }), "readinessFailed");
+    assert.equal(value(await app.ledger.readWriteStop(app.scope)).stopped, true);
+    ready = true;
+    const resumed = value(await app.admin.submit({ kind: "calls.writes.resume.v1", expectedVersion: "1", reason: "Provider recovered" }));
+    assert.equal(resumed.kind, "writeStop");
+    assert.equal(resumed.status.stopped, false);
+    assert.equal(resumed.status.version, "2");
+    error(await app.admin.submit({ kind: "calls.writes.resume.v1", expectedVersion: "1", reason: "Stale tab" }), "versionConflict");
+    const nextCallId = `call-${kind}-after-resume`;
+    value(await app.reception.startCall(nextCallId, app.scope));
+    const next = value(await app.reception.proposeBooking(app.scope, turn(nextCallId, "request", "Book physio"),
+      app.patient.verificationRef, app.offer("one").offerRef, now));
+    const nextAction = Object.values(next.actions)[0];
+    assert.ok(nextAction);
+    value(await app.reception.acknowledgeTextPresentation(app.scope, nextCallId, nextAction.presentationId));
+    value(await app.reception.affirm(app.scope, turn(nextCallId, "affirm", "Yes"), nextAction.key, nextAction.digest, now));
+    assert.equal(value(await app.reception.drain(app.scope, nextCallId, now)).actions[nextAction.key]?.status, "committed");
+    assert.equal(app.host.bookings(app.scope).length, 1);
+    const secondStop = value(await app.admin.submit({ kind: "calls.writes.stop.v1", reason: "Second incident" }));
+    assert.equal(secondStop.kind, "writeStop");
+    assert.equal(secondStop.status.version, "3");
+    const history = value(await app.admin.submit({ kind: "calls.writes.stop.audit.v1" }));
+    assert.equal(history.kind, "writeStopAudit");
+    assert.deepEqual(history.page.entries.map(entry => [entry.version, entry.stopped]), [["1", true], ["2", false], ["3", true]]);
+    if (kind === "standalone") assert.deepEqual(value(await new PostgresLedger(db!).readWriteStop(app.scope)), secondStop.status);
   });
 
   test(`${kind}: enabled setting with request-only host support opens staff work`, async () => {
