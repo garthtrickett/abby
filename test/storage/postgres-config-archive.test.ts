@@ -6,6 +6,7 @@ import { ok } from "../../src/core/model.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
 import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { verifyArchiveEnvelope } from "../../src/portability/archive-envelope.ts";
+import { decodeConfigArchive, decodeTenantConfigArchive } from "../../src/portability/config-archive.ts";
 import type { ArchiveEnvelope, ArchiveSection } from "../../src/portability/archive-envelope.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
@@ -315,6 +316,19 @@ test("one PostgreSQL snapshot exports every mapped location and refuses a partia
   assert.equal(exported.ok, true);
   if (!exported.ok) return;
   assert.equal((await verifyArchiveEnvelope(exported.value)).ok, true);
+  const decoded = await decodeTenantConfigArchive(exported.value, "buyer-two");
+  assert.equal(decoded.ok, true);
+  if (decoded.ok) {
+    assert.equal(decoded.value.locations.length, 2);
+    assert.equal(decoded.value.clinics.length, 1);
+    assert.deepEqual(decoded.value.locations.map(location => [location.sourceScope.locationId,
+      location.policies.length, location.knowledge.length]).sort(), [["a", 2, 1], ["b", 2, 1]]);
+    assert.equal(decoded.value.clinics[0]?.automation.length, 2);
+  }
+  const singleLocationDecoder = await decodeConfigArchive(exported.value, request.locations[0]!.targetScope);
+  assert.deepEqual(singleLocationDecoder, { ok: false, error: { kind: "invalidConfigArchive", section: "locations" } });
+  const wrongTargetTenant = await decodeTenantConfigArchive(exported.value, "other-buyer");
+  assert.deepEqual(wrongTargetTenant, { ok: false, error: { kind: "invalidConfigArchive", section: "locations" } });
   const locations = await records(exported.value, "locations");
   const settings = await records(exported.value, "settings");
   const published = await records(exported.value, "knowledge");
@@ -325,6 +339,24 @@ test("one PostgreSQL snapshot exports every mapped location and refuses a partia
   assert.deepEqual(published.map(row => row.sourceLocationId).sort(), ["a", "b"]);
   const manifest = JSON.parse(Buffer.from(exported.value.manifestBytes).toString());
   assert.deepEqual(manifest.locationMappings.map((row: { sourceScope: { locationId: string } }) => row.sourceScope.locationId), ["a", "b"]);
+  const missingMapping = { ...manifest, locationMappings: manifest.locationMappings.slice(0, 1) };
+  const missingMappingResult = await decodeTenantConfigArchive({ ...exported.value,
+    manifestBytes: Buffer.from(JSON.stringify(missingMapping)) }, "buyer-two");
+  assert.deepEqual(missingMappingResult, { ok: false, error: { kind: "invalidConfigArchive", section: "locations" } });
+  const alteredRows = settings.map(row => ({ ...row }));
+  const crossed = alteredRows.find(row => row.kind === "locationPolicy" && row.sourceLocationId === "b");
+  assert.ok(crossed);
+  crossed.sourceLocationId = "unmapped";
+  const alteredSettings = Buffer.from(alteredRows.map(row => `${JSON.stringify(row)}\n`).join(""));
+  const alteredManifest = JSON.parse(Buffer.from(exported.value.manifestBytes).toString());
+  alteredManifest.sections.settings.byteCount = alteredSettings.byteLength;
+  alteredManifest.sections.settings.sha256 = createHash("sha256").update(alteredSettings).digest("hex");
+  const crossedArchive = { manifestBytes: Buffer.from(JSON.stringify(alteredManifest)), sections: {
+    ...exported.value.sections, settings: async function* () { yield alteredSettings; },
+  } };
+  assert.equal((await verifyArchiveEnvelope(crossedArchive)).ok, true);
+  assert.deepEqual(await decodeTenantConfigArchive(crossedArchive, "buyer-two"),
+    { ok: false, error: { kind: "invalidConfigArchive", section: "settings" } });
   const partial = await buildPostgresTenantConfigArchive(db, { ...request, archiveId: "partial-two-location-archive",
     locations: request.locations.slice(0, 1) }, authority);
   assert.deepEqual(partial, { ok: false, error: { kind: "scopeIncomplete" } });

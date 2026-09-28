@@ -23,6 +23,29 @@ export type ConfigArchiveData = Readonly<{
   knowledge: readonly PortablePublishedKnowledge[];
 }>;
 
+export type TenantConfigArchiveData = Readonly<{
+  archiveId: string;
+  manifestDigest: string;
+  createdAt: string;
+  sourceSchemaVersion: string;
+  sectionManifests: Readonly<Record<ArchiveSection, ArchiveSectionManifest>>;
+  sourceTenantId: string;
+  targetTenantId: string;
+  locations: readonly Readonly<{
+    sourceScope: LocationScope;
+    targetScope: LocationScope;
+    timeZone: string;
+    mappingProvenance: string;
+    policies: ConfigArchiveData["policies"];
+    knowledge: readonly PortablePublishedKnowledge[];
+  }>[];
+  clinics: readonly Readonly<{
+    sourceClinicId: string;
+    automation: ConfigArchiveData["automation"];
+    writeStops: ConfigArchiveData["writeStops"];
+  }>[];
+}>;
+
 export type PortablePublishedKnowledge = Readonly<{
   scope: LocationScope;
   sourceRef: string;
@@ -156,9 +179,32 @@ function assertHeads<T extends { version: number; isHead: boolean }>(records: re
   }
 }
 
-/** Semantic preflight for the current configuration-only source format. */
-export async function decodeConfigArchive(input: ArchiveEnvelope, expectedTargetScope: LocationScope):
-  Promise<Result<ConfigArchiveData, ConfigArchiveDecodeFailure>> {
+type MutableLocation = {
+  sourceScope: LocationScope;
+  targetScope: LocationScope;
+  timeZone: string;
+  mappingProvenance: string;
+  policies: ConfigArchiveData["policies"][number][];
+  knowledge: PortablePublishedKnowledge[];
+};
+
+type MutableClinic = {
+  sourceClinicId: string;
+  automation: ConfigArchiveData["automation"][number][];
+  writeStops: ConfigArchiveData["writeStops"][number][];
+};
+
+function locationKey(scope: LocationScope): string {
+  return JSON.stringify([scope.clinicId, scope.locationId]);
+}
+
+/** Verifies one tenant archive and validates every configuration record before import. */
+export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expectedTargetTenantId: string):
+  Promise<Result<TenantConfigArchiveData, ConfigArchiveDecodeFailure>> {
+  if (typeof expectedTargetTenantId !== "string" || !expectedTargetTenantId.trim() ||
+      expectedTargetTenantId.length > 256 || /[\u0000-\u001f\u007f]/.test(expectedTargetTenantId)) {
+    return err({ kind: "invalidConfigArchive", section: "locations" });
+  }
   const materialized = await materializeVerifiedArchive(input);
   if (!materialized.ok) return materialized;
   const { verified, sections, manifestBytes } = materialized.value;
@@ -166,93 +212,149 @@ export async function decodeConfigArchive(input: ArchiveEnvelope, expectedTarget
     if (verified.manifest.sourceSystem !== "abby-postgres" || verified.manifest.sections.calls.recordCount !== 0 ||
         verified.manifest.sections.staffWork.recordCount !== 0) throw new InvalidConfigArchive();
     const metadata = object(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(manifestBytes)), "locations");
-    if (ref(metadata.exportRequestRef, "locations").length === 0) throw new InvalidConfigArchive("locations");
+    ref(metadata.exportRequestRef, "locations");
     const omissions = object(metadata.omittedCalls, "calls");
-    if (["retentionExpired", "consentDenied", "notRetained", "activeCall"].some(name => omissions[name] !== 0)) throw new InvalidConfigArchive("calls");
-    const locationRows = lines(sections.locations, "locations");
-    if (locationRows.length !== 1) throw new InvalidConfigArchive("locations");
-    const location = locationRows[0]!;
-    const sourceScope = { tenantId: verified.manifest.sourceTenantId,
-      clinicId: ref(location.sourceClinicId, "locations"), locationId: ref(location.sourceLocationId, "locations") };
-    const targetScope = scope(location.targetScope, "locations");
-    if (!sameScope(targetScope, expectedTargetScope) || location.recordId !== expectedId("location", JSON.stringify([sourceScope.clinicId, sourceScope.locationId]), 1)) {
-      throw new InvalidConfigArchive("locations");
+    if (["retentionExpired", "consentDenied", "notRetained", "activeCall"].some(name => omissions[name] !== 0)) {
+      throw new InvalidConfigArchive("calls");
     }
-    const timeZone = ref(location.timeZone, "locations");
-    try { new Intl.DateTimeFormat("en", { timeZone }); }
-    catch { throw new InvalidConfigArchive("locations"); }
-    const mappingProvenance = ref(location.mappingProvenance, "locations");
-    const mappings = metadata.locationMappings;
-    if (!Array.isArray(mappings) || mappings.length !== 1 ||
-        !sameScope(scope(object(mappings[0], "locations").sourceScope, "locations"), sourceScope) ||
-        !sameScope(scope(object(mappings[0], "locations").targetScope, "locations"), targetScope) ||
-        object(mappings[0], "locations").provenance !== mappingProvenance) throw new InvalidConfigArchive("locations");
+    const locationRows = lines(sections.locations, "locations");
+    if (locationRows.length < 1 || locationRows.length > 16) throw new InvalidConfigArchive("locations");
+    const declared = metadata.locationMappings;
+    if (!Array.isArray(declared) || declared.length !== locationRows.length) throw new InvalidConfigArchive("locations");
+    const declaredMappings = new Map<string, Readonly<{ source: LocationScope; target: LocationScope; provenance: string }>>();
+    for (const candidate of declared) {
+      const row = object(candidate, "locations");
+      const source = scope(row.sourceScope, "locations");
+      const target = scope(row.targetScope, "locations");
+      const provenance = ref(row.provenance, "locations");
+      const key = locationKey(source);
+      if (source.tenantId !== verified.manifest.sourceTenantId || target.tenantId !== expectedTargetTenantId ||
+          declaredMappings.has(key)) throw new InvalidConfigArchive("locations");
+      declaredMappings.set(key, { source, target, provenance });
+    }
+    const locations = new Map<string, MutableLocation>();
+    const targetScopes = new Set<string>();
+    const clinics = new Map<string, MutableClinic>();
+    for (const row of locationRows) {
+      const sourceScope = { tenantId: verified.manifest.sourceTenantId,
+        clinicId: ref(row.sourceClinicId, "locations"), locationId: ref(row.sourceLocationId, "locations") };
+      const key = locationKey(sourceScope);
+      const targetScope = scope(row.targetScope, "locations");
+      const timeZone = ref(row.timeZone, "locations");
+      try { new Intl.DateTimeFormat("en", { timeZone }); }
+      catch { throw new InvalidConfigArchive("locations"); }
+      const mappingProvenance = ref(row.mappingProvenance, "locations");
+      const declaredMapping = declaredMappings.get(key);
+      const targetKey = JSON.stringify([targetScope.tenantId, targetScope.clinicId, targetScope.locationId]);
+      if (locations.has(key) || targetScopes.has(targetKey) || targetScope.tenantId !== expectedTargetTenantId ||
+          row.recordId !== expectedId("location", key, 1) || !declaredMapping ||
+          !sameScope(declaredMapping.source, sourceScope) || !sameScope(declaredMapping.target, targetScope) ||
+          declaredMapping.provenance !== mappingProvenance) throw new InvalidConfigArchive("locations");
+      locations.set(key, { sourceScope, targetScope, timeZone, mappingProvenance, policies: [], knowledge: [] });
+      targetScopes.add(targetKey);
+      if (!clinics.has(sourceScope.clinicId)) clinics.set(sourceScope.clinicId,
+        { sourceClinicId: sourceScope.clinicId, automation: [], writeStops: [] });
+    }
+    if (locations.size !== declaredMappings.size) throw new InvalidConfigArchive("locations");
 
-    const settings = lines(sections.settings, "settings");
-    const policies: ConfigArchiveData["policies"][number][] = [];
-    const automation: ConfigArchiveData["automation"][number][] = [];
-    const writeStops: ConfigArchiveData["writeStops"][number][] = [];
-    for (const row of settings) {
+    for (const row of lines(sections.settings, "settings")) {
       const version = integer(row.version, "settings", row.kind === "writeStop" ? 1 : 0);
       const sourceClinicId = ref(row.sourceClinicId, "settings");
-      if (sourceClinicId !== sourceScope.clinicId) throw new InvalidConfigArchive("settings");
+      const clinic = clinics.get(sourceClinicId);
+      if (!clinic) throw new InvalidConfigArchive("settings");
       const isHead = flag(row.isHead, "settings");
       if (row.kind === "locationPolicy") {
-        if (row.sourceLocationId !== sourceScope.locationId ||
-            row.recordId !== expectedId("policy", JSON.stringify([sourceScope.clinicId, sourceScope.locationId]), version)) throw new InvalidConfigArchive("settings");
-        policies.push({ version, isHead, policy: policy(row.policy, sourceScope, version),
-          changedBy: optionalRef(row.changedBy, "settings"), previousBookingEnabled: row.previousBookingEnabled === null ? null : flag(row.previousBookingEnabled, "settings"),
+        const sourceLocationId = ref(row.sourceLocationId, "settings");
+        const location = locations.get(JSON.stringify([sourceClinicId, sourceLocationId]));
+        if (!location || row.recordId !== expectedId("policy", locationKey(location.sourceScope), version)) {
+          throw new InvalidConfigArchive("settings");
+        }
+        location.policies.push({ version, isHead, policy: policy(row.policy, location.sourceScope, version),
+          changedBy: optionalRef(row.changedBy, "settings"),
+          previousBookingEnabled: row.previousBookingEnabled === null ? null : flag(row.previousBookingEnabled, "settings"),
           changedAt: optionalInstant(row.changedAt, "settings") });
       } else if (row.kind === "clinicAutomation") {
-        if (row.recordId !== expectedId("automation", sourceScope.clinicId, version)) throw new InvalidConfigArchive("settings");
-        automation.push({ version, isHead, enabled: flag(row.enabled, "settings"),
-          changedBy: optionalRef(row.changedBy, "settings"), previousEnabled: row.previousEnabled === null ? null : flag(row.previousEnabled, "settings"),
+        if (row.recordId !== expectedId("automation", sourceClinicId, version)) throw new InvalidConfigArchive("settings");
+        clinic.automation.push({ version, isHead, enabled: flag(row.enabled, "settings"),
+          changedBy: optionalRef(row.changedBy, "settings"),
+          previousEnabled: row.previousEnabled === null ? null : flag(row.previousEnabled, "settings"),
           changedAt: optionalInstant(row.changedAt, "settings") });
       } else if (row.kind === "writeStop") {
-        if (row.recordId !== expectedId("writeStop", sourceScope.clinicId, version) ||
-            typeof row.reasonDigest !== "string" || !/^[a-f0-9]{64}$/.test(row.reasonDigest)) throw new InvalidConfigArchive("settings");
-        writeStops.push({ version, isHead, stopped: flag(row.stopped, "settings"), actorRef: ref(row.actorRef, "settings"),
-          reasonDigest: row.reasonDigest, changedAt: instant(row.changedAt, "settings") });
+        if (row.recordId !== expectedId("writeStop", sourceClinicId, version) ||
+            typeof row.reasonDigest !== "string" || !/^[a-f0-9]{64}$/.test(row.reasonDigest)) {
+          throw new InvalidConfigArchive("settings");
+        }
+        clinic.writeStops.push({ version, isHead, stopped: flag(row.stopped, "settings"),
+          actorRef: ref(row.actorRef, "settings"), reasonDigest: row.reasonDigest,
+          changedAt: instant(row.changedAt, "settings") });
       } else throw new InvalidConfigArchive("settings");
     }
-    assertHeads(policies, "settings", 0);
-    assertHeads(automation, "settings", 0);
-    assertHeads(writeStops, "settings", 1);
+    for (const location of locations.values()) assertHeads(location.policies, "settings", 0);
+    for (const clinic of clinics.values()) {
+      assertHeads(clinic.automation, "settings", 0);
+      assertHeads(clinic.writeStops, "settings", 1);
+    }
 
-    const knowledge: PortablePublishedKnowledge[] = [];
     const publishedHeads = new Map<string, number>();
     const sourceVersions = new Map<string, Set<number>>();
     for (const row of lines(sections.knowledge, "knowledge")) {
+      const sourceClinicId = ref(row.sourceClinicId, "knowledge");
+      const sourceLocationId = ref(row.sourceLocationId, "knowledge");
+      const location = locations.get(JSON.stringify([sourceClinicId, sourceLocationId]));
       const sourceRef = ref(row.sourceRef, "knowledge");
       const version = integer(row.version, "knowledge", 1);
-      if (row.sourceClinicId !== sourceScope.clinicId || row.sourceLocationId !== sourceScope.locationId ||
-          row.recordId !== expectedId("knowledge", JSON.stringify([sourceScope.clinicId, sourceScope.locationId, sourceRef]), version) ||
+      const sourceKey = JSON.stringify([sourceClinicId, sourceLocationId, sourceRef]);
+      if (!location || row.recordId !== expectedId("knowledge", sourceKey, version) ||
           (row.status !== "approved" && row.status !== "revoked") || typeof row.approvedText !== "string" ||
           !row.approvedText.trim() || row.approvedText.length > 2_000 ||
-          row.contentDigest !== createHash("sha256").update(row.approvedText).digest("hex")) throw new InvalidConfigArchive("knowledge");
-      const used = sourceVersions.get(sourceRef) ?? new Set<number>();
+          row.contentDigest !== createHash("sha256").update(row.approvedText).digest("hex")) {
+        throw new InvalidConfigArchive("knowledge");
+      }
+      const used = sourceVersions.get(sourceKey) ?? new Set<number>();
       if (used.has(version)) throw new InvalidConfigArchive("knowledge");
       used.add(version);
-      sourceVersions.set(sourceRef, used);
+      sourceVersions.set(sourceKey, used);
       if (flag(row.isPublishedHead, "knowledge")) {
-        if (publishedHeads.has(sourceRef)) throw new InvalidConfigArchive("knowledge");
-        publishedHeads.set(sourceRef, version);
+        if (publishedHeads.has(sourceKey)) throw new InvalidConfigArchive("knowledge");
+        publishedHeads.set(sourceKey, version);
       }
       const effectiveFrom = instant(row.effectiveFrom, "knowledge");
       const effectiveUntil = instant(row.effectiveUntil, "knowledge");
       if (Date.parse(effectiveUntil) <= Date.parse(effectiveFrom)) throw new InvalidConfigArchive("knowledge");
-      knowledge.push({ scope: sourceScope, sourceRef, version: String(version), status: row.status,
+      location.knowledge.push({ scope: location.sourceScope, sourceRef, version: String(version), status: row.status,
         ownerRef: ref(row.ownerRef, "knowledge"), text: row.approvedText, actorRef: ref(row.actorRef, "knowledge"),
         effectiveFrom, effectiveUntil, changedAt: instant(row.changedAt, "knowledge") });
     }
-    for (const [sourceRef, versions] of sourceVersions) {
-      if (publishedHeads.get(sourceRef) !== [...versions].reduce((max, version) => Math.max(max, version), 0)) throw new InvalidConfigArchive("knowledge");
+    for (const [sourceKey, versions] of sourceVersions) {
+      if (publishedHeads.get(sourceKey) !== [...versions].reduce((max, version) => Math.max(max, version), 0)) {
+        throw new InvalidConfigArchive("knowledge");
+      }
     }
     return ok({ archiveId: verified.manifest.archiveId, manifestDigest: verified.manifestDigest,
       createdAt: verified.manifest.createdAt, sourceSchemaVersion: verified.manifest.sourceSchemaVersion,
-      sectionManifests: verified.manifest.sections,
-      sourceScope, targetScope, timeZone, mappingProvenance, policies, automation, writeStops, knowledge });
+      sectionManifests: verified.manifest.sections, sourceTenantId: verified.manifest.sourceTenantId,
+      targetTenantId: expectedTargetTenantId, locations: [...locations.values()], clinics: [...clinics.values()] });
   } catch (cause) {
     return err({ kind: "invalidConfigArchive", ...(cause instanceof InvalidConfigArchive && cause.section ? { section: cause.section } : {}) });
   }
+}
+
+/** The one-location importer retains its original typed view and rejects tenant-wide archives. */
+export async function decodeConfigArchive(input: ArchiveEnvelope, expectedTargetScope: LocationScope):
+  Promise<Result<ConfigArchiveData, ConfigArchiveDecodeFailure>> {
+  if (!expectedTargetScope || typeof expectedTargetScope !== "object") {
+    return err({ kind: "invalidConfigArchive", section: "locations" });
+  }
+  const decoded = await decodeTenantConfigArchive(input, expectedTargetScope.tenantId);
+  if (!decoded.ok) return decoded;
+  const data = decoded.value;
+  const location = data.locations[0];
+  if (data.locations.length !== 1 || data.clinics.length !== 1 || !location ||
+      !sameScope(location.targetScope, expectedTargetScope)) return err({ kind: "invalidConfigArchive", section: "locations" });
+  const clinic = data.clinics[0]!;
+  return ok({ archiveId: data.archiveId, manifestDigest: data.manifestDigest, createdAt: data.createdAt,
+    sourceSchemaVersion: data.sourceSchemaVersion, sectionManifests: data.sectionManifests,
+    sourceScope: location.sourceScope, targetScope: location.targetScope, timeZone: location.timeZone,
+    mappingProvenance: location.mappingProvenance, policies: location.policies, automation: clinic.automation,
+    writeStops: clinic.writeStops, knowledge: location.knowledge });
 }
