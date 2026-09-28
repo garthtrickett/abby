@@ -1,7 +1,7 @@
 import { digestActionRequest, digestTurn } from "../core/digest.ts";
-import type { BookingEvidenceHost, HostEffects, HostReadFailure } from "../core/host.ts";
+import type { BookingEvidenceHost, HostEffects, HostReadFailure, KnowledgeHost, KnowledgeReadFailure } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
-import type { ActionRequest, BookableOffer, HostMutation, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffItem, StaffTaskReceipt, VerifiedPatient } from "../core/model.ts";
+import type { ActionRequest, ApprovedKnowledge, BookableOffer, HostMutation, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffItem, StaffTaskReceipt, VerifiedPatient } from "../core/model.ts";
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
@@ -10,17 +10,25 @@ function sameScope(left: LocationScope, right: LocationScope): boolean {
 type Booking = Readonly<{ actionKey: string; hostRef: string; scope: LocationScope; patientRef: string; offerRef: string; payloadDigest: string }>;
 type Task = Readonly<{ taskKey: string; hostTaskRef: string; scope: LocationScope; destination: StaffItem["destination"]; payloadDigest: string }>;
 
-export class ReferenceClinicHost implements BookingEvidenceHost, HostEffects {
+export class ReferenceClinicHost implements BookingEvidenceHost, HostEffects, KnowledgeHost {
   private readonly patients: readonly VerifiedPatient[];
   private readonly offers: readonly BookableOffer[];
+  private readonly knowledge: readonly ApprovedKnowledge[];
   private readonly bookingsByAction = new Map<string, Booking>();
   private readonly bookingKeyByOffer = new Map<string, string>();
   private readonly tasksByKey = new Map<string, Task>();
   private resolutionCount = 0;
 
-  constructor(patients: readonly VerifiedPatient[], offers: readonly BookableOffer[]) {
+  constructor(patients: readonly VerifiedPatient[], offers: readonly BookableOffer[], knowledge: readonly ApprovedKnowledge[] = []) {
     this.patients = structuredClone(patients);
     this.offers = structuredClone(offers);
+    this.knowledge = structuredClone(knowledge);
+  }
+
+  async readKnowledge(scope: LocationScope, sourceRefs: readonly string[]): Promise<Result<readonly ApprovedKnowledge[], KnowledgeReadFailure>> {
+    if (!Array.isArray(sourceRefs) || sourceRefs.length < 1 || sourceRefs.length > 8 || sourceRefs.some(ref => typeof ref !== "string" || !ref.trim() || ref.length > 256) ||
+        new Set(sourceRefs).size !== sourceRefs.length) return err({ kind: "invalidQuery" });
+    return ok(structuredClone(this.knowledge.filter(source => sameScope(source.scope, scope) && sourceRefs.includes(source.sourceRef))));
   }
 
   async resolveBooking(scope: LocationScope, verificationRef: string, offerRef: string, now: string): Promise<Result<Extract<ActionRequest, { kind: "book" }>, HostReadFailure>> {

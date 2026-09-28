@@ -17,8 +17,9 @@ function decodeState(value: unknown, callId: string): Result<CallState, Transiti
   if (data.callId !== callId || !Number.isInteger(data.version) || !["starting", "active", "ended"].includes(String(data.lifecycle)) || typeof data.policy !== "object" || data.policy === null ||
       typeof data.actions !== "object" || data.actions === null || typeof data.presentations !== "object" || data.presentations === null || typeof data.effects !== "object" || data.effects === null ||
       !Array.isArray(data.processedTurnIds) || typeof data.processedTurnDigests !== "object" || data.processedTurnDigests === null || !Array.isArray(data.callerMessages) ||
+      (data.knowledgeAnswers !== undefined && !Array.isArray(data.knowledgeAnswers)) ||
       (data.lifecycle === "starting" && (typeof data.admission !== "object" || data.admission === null))) return err({ kind: "storageCorrupt" });
-  return ok(value as CallState);
+  return ok({ ...(value as CallState), knowledgeAnswers: Array.isArray(data.knowledgeAnswers) ? data.knowledgeAnswers as CallState["knowledgeAnswers"] : [] });
 }
 
 function auditPayload(action: TransitionAction): Record<string, string> {

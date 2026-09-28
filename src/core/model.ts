@@ -72,6 +72,8 @@ export type FinalCallerTurn = Readonly<{
 export type ApprovedKnowledge = Readonly<{
   scope: LocationScope;
   sourceRef: string;
+  version: string;
+  ownerRef: string;
   approvedText: string;
   approved: boolean;
   effectiveFrom: string;
@@ -86,6 +88,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "readFailure"; target: "patient" | "offer"; failure: "unavailable" | "notFound" }>
   | Readonly<{ kind: "unavailableAction"; actionKind: ActionKind }>
   | Readonly<{ kind: "answer"; sources: readonly ApprovedKnowledge[]; proposedText: string }>
+  | Readonly<{ kind: "knowledgeFailure"; reason: "invalidQuery" | "unavailable" }>
   | Readonly<{ kind: "ambiguousTarget" }>;
 
 export type StaffReason =
@@ -180,6 +183,7 @@ export type CallState = {
   effects: Record<string, Effect>;
   staffItems: Record<string, StaffItem>;
   callerMessages: string[];
+  knowledgeAnswers: Array<Readonly<{ turnId: string; sourceRef: string; version: string; ownerRef: string }>>;
 };
 
 export type TransitionFailure =
