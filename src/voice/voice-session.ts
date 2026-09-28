@@ -18,7 +18,8 @@ export type VoiceIntent =
   | Readonly<{ kind: "transfer"; reason: StaffReason }>;
 export type IntentResolver = (turn: FinalCallerTurn) => Promise<Result<VoiceIntent, Readonly<{ kind: "intentUnavailable" }>>>;
 export type PlaybackPort = Readonly<{
-  enqueue(playbackId: string, approvedText: string): Promise<"queued" | "notSent" | "uncertain">;
+  /** Check this gate immediately before each media chunk and the final queue marker. */
+  enqueue(playbackId: string, approvedText: string, canSend: () => boolean): Promise<"queued" | "notSent" | "uncertain">;
   /** Must cancel this ID even when its enqueue is still in flight; a late enqueue may never revive it. */
   clear(playbackId: string): Promise<boolean>;
 }>;
@@ -100,9 +101,19 @@ export class VoiceSession {
   }
 
   private async closeAfterLeaseLoss(now: string): Promise<Result<DispatchResult, VoiceSessionFailure>> {
+    const active = this.activePlayback;
     this.attached = false;
     this.localSendDeadlineMs = undefined;
     this.activePlayback = undefined;
+    if (active) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          Promise.resolve().then(() => this.playback.clear(active.id)).catch(() => false),
+          new Promise<boolean>(resolve => { timer = setTimeout(() => resolve(false), 2_000); }),
+        ]);
+      } finally { if (timer) clearTimeout(timer); }
+    }
     const ended = await this.runtime.endCall(this.callId, this.sessionId, now, "localLeaseClosed");
     if (ended.ok) return err({ kind: "leaseLost" });
     const latest = await this.runtime.read(this.callId);
@@ -247,7 +258,10 @@ export class VoiceSession {
     }
     if (!this.canSend()) return this.closeAfterLeaseLoss(now);
     let send: "queued" | "notSent" | "uncertain";
-    try { send = await this.playback.enqueue(playbackId, presentation.approvedText); } catch { send = "uncertain"; }
+    try { send = await this.playback.enqueue(playbackId, presentation.approvedText,
+      () => this.activePlayback?.id === playbackId && !this.speechOpen &&
+        generation === this.assembler.currentGeneration() && this.canSend()); }
+    catch { send = "uncertain"; }
     if (this.activePlayback?.id !== playbackId) {
       const settled = await this.runtime.read(this.callId);
       if (!settled.ok) return settled;
@@ -256,6 +270,7 @@ export class VoiceSession {
       if (status === "played") return ok({ kind: "played", playbackId });
       return ok({ kind: "unproven" });
     }
+    if (!this.canSend()) return this.closeAfterLeaseLoss(now);
     if (send === "queued") return ok({ kind: "queued", playbackId });
     this.activePlayback = undefined;
     const status = send === "notSent" ? "failed" : "unproven";

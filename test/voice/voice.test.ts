@@ -28,6 +28,7 @@ import { PresentationDispatcher } from "../../src/voice/presentation-dispatcher.
 import type { TimerPort } from "../../src/voice/timer.ts";
 import { VoiceLeaseLoop } from "../../src/voice/voice-lease-loop.ts";
 import { VoiceWorkLoop } from "../../src/voice/voice-work-loop.ts";
+import { StreamedPlaybackPort } from "../../src/voice/streamed-playback-port.ts";
 import { VoiceSession } from "../../src/voice/voice-session.ts";
 import type { PlaybackPort, TransferOutcome, TransferPort } from "../../src/voice/voice-session.ts";
 
@@ -124,7 +125,7 @@ class PresentationStartHookLedger implements LedgerStore {
   }
 }
 
-async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: boolean, transferMode: "execute" | "requestOnly" | "unavailable" = "requestOnly", transferDestinationRef?: string, clock?: { now: () => number; onPresentationStarted?: () => void; onSessionRenewed?: () => void }, options: { bookingMode?: "execute" | "requestOnly"; knowledge?: (scope: LocationScope) => readonly ApprovedKnowledge[]; availability?: (scope: LocationScope) => AvailabilityHost; staffedIntervals?: CallPolicy["staffedIntervals"]; model?: RawModelPort; modelDeadlineMs?: number } = {}) {
+async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: boolean, transferMode: "execute" | "requestOnly" | "unavailable" = "requestOnly", transferDestinationRef?: string, clock?: { now: () => number; onPresentationStarted?: () => void; onSessionRenewed?: () => void }, options: { bookingMode?: "execute" | "requestOnly"; knowledge?: (scope: LocationScope) => readonly ApprovedKnowledge[]; availability?: (scope: LocationScope) => AvailabilityHost; staffedIntervals?: CallPolicy["staffedIntervals"]; model?: RawModelPort; modelDeadlineMs?: number; streamedPlayback?: PlaybackPort } = {}) {
   const scope: LocationScope = { tenantId: `voice-tenant-${id}`, clinicId: `voice-clinic-${id}`, locationId: `voice-location-${id}` };
   const patient = { scope, patientRef: `patient-${id}`, verificationRef: `proof-${id}`, expiresAt: at(86_400) };
   const offer = { scope, offerRef: `offer-${id}`, serviceRef: "physio", startsAt: at(90_000), expiresAt: at(86_400) };
@@ -162,7 +163,7 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
   const sessionId = `session-${id}`;
   const sessionLedger = clock?.onPresentationStarted || clock?.onSessionRenewed
     ? new PresentationStartHookLedger(ledger, clock.onPresentationStarted ?? (() => {}), clock.onSessionRenewed) : ledger;
-  const session = new VoiceSession(callId, sessionId, scope, sessionLedger, reception, playback, async turn =>
+  const session = new VoiceSession(callId, sessionId, scope, sessionLedger, reception, options.streamedPlayback ?? playback, async turn =>
     ok(turn.text.startsWith("Transfer")
       ? { kind: "transfer" as const, reason: "callerRequested" as const }
       : turn.text.startsWith("Ask model")
@@ -942,6 +943,32 @@ for (const kind of kinds) {
     const planned = await bookTurn(app);
     failure(await app.session.dispatchPending(at(4)), "leaseLost");
     assert.equal(app.playback.queued.length, 0);
+    assert.equal(app.playback.cleared.length, 1);
+    const ended = value(await new CallRuntime(app.ledger, app.scope).read(app.callId));
+    assert.equal(ended.lifecycle, "ended");
+    assert.equal(ended.terminal?.reason, "localLeaseClosed");
+    assert.equal(ended.presentations[planned.pendingPresentationId!]?.status, "unproven");
+    assert.equal(app.host.bookings(app.scope).length, 0);
+  });
+
+  test(`${kind}: lease expiry between synthesized chunks stops output and leaves playback unproven`, async () => {
+    let monotonicMs = 0;
+    const sent: number[] = [];
+    const cleared: string[] = [];
+    const streamedPlayback = new StreamedPlaybackPort({ async *stream() {
+      yield new Uint8Array(640);
+      yield new Uint8Array(640);
+    } }, {
+      async queueChunk(id, sequence) { sent.push(sequence); monotonicMs = 29_000; return "queued"; },
+      async finishQueue() { throw new Error("expired lease must prevent final marker"); },
+      async clear(id) { cleared.push(id); return true; },
+    });
+    const app = await fixture(kind, `${kind}-streamed-lease`, true, "requestOnly", undefined,
+      { now: () => monotonicMs }, { streamedPlayback });
+    const planned = await bookTurn(app);
+    failure(await app.session.dispatchPending(at(4)), "leaseLost");
+    assert.deepEqual(sent, [0]);
+    assert.ok(cleared.length >= 1);
     const ended = value(await new CallRuntime(app.ledger, app.scope).read(app.callId));
     assert.equal(ended.lifecycle, "ended");
     assert.equal(ended.terminal?.reason, "localLeaseClosed");
