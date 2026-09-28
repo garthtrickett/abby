@@ -8,6 +8,7 @@ import type { ModelWork } from "../model/work.ts";
 
 export type EffectHostLookup = (scope: LocationScope) => (HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost>) | undefined;
 export type ModelWorkLookup = (scope: LocationScope) => ModelWork | undefined;
+export type KnowledgeLookup = (scope: LocationScope) => KnowledgeHost | undefined;
 export type EffectRecoveryReport = Readonly<{
   scanned: number;
   processed: number;
@@ -22,13 +23,16 @@ export class EffectRecovery {
   private readonly hostLookup: EffectHostLookup;
   private readonly scope: LocationScope | undefined;
   private readonly modelLookup: ModelWorkLookup | undefined;
+  private readonly knowledgeLookup: KnowledgeLookup | undefined;
   private scanCursor: string | undefined;
 
-  constructor(ledger: LedgerStore, hostLookup: EffectHostLookup, scope?: LocationScope, modelLookup?: ModelWorkLookup) {
+  constructor(ledger: LedgerStore, hostLookup: EffectHostLookup, scope?: LocationScope, modelLookup?: ModelWorkLookup,
+              knowledgeLookup?: KnowledgeLookup) {
     this.ledger = ledger;
     this.hostLookup = hostLookup;
     this.scope = scope;
     this.modelLookup = modelLookup;
+    this.knowledgeLookup = knowledgeLookup;
   }
 
   private async attempt(ref: RecoverableEffectRef, now: string): Promise<"processed" | "recovered" | "deferred" | { effectId: string; kind: "hostUnavailable" | "effectFailure" | "recoveryFailure" }> {
@@ -55,8 +59,12 @@ export class EffectRecovery {
     let model: ModelWork | undefined;
     try { model = this.modelLookup?.(ref.scope); }
     catch { model = undefined; }
+    let knowledge: KnowledgeHost | undefined;
+    try { knowledge = this.knowledgeLookup?.(ref.scope); }
+    catch { if (effect.kind === "modelKnowledge") return { effectId: ref.effectId, kind: "hostUnavailable" }; }
+    if (effect.kind === "modelKnowledge" && this.knowledgeLookup && !knowledge) return { effectId: ref.effectId, kind: "hostUnavailable" };
     try {
-      await new EffectWorker(runtime, host, model).process(ref.callId, ref.effectId, now);
+      await new EffectWorker(runtime, host, model, knowledge).process(ref.callId, ref.effectId, now);
       return "processed";
     } catch {
       const latest = await runtime.read(ref.callId);

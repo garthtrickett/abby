@@ -46,6 +46,9 @@ const writeStopAudit = optional({ entries: array(object({ version: key, stopped:
 const staffStatus = choice("requested", "open", "acknowledged", "resolved", "needsReview", "failed");
 const lifecycle = choice("starting", "active", "ended");
 const source = object({ sourceRef: key, version: key, ownerRef: key });
+const knowledgeEntry = object({ scope, sourceRef: key, version: key, status: choice("draft", "approved", "revoked"),
+  ownerRef: key, text: { type: "string", minLength: 1, maxLength: 2_000 }, effectiveFrom: str, effectiveUntil: str,
+  actorRef: key, changedAt: str });
 const availability = optional({ status: choice("shown", "empty", "failed"), sourceRef: str,
   timeZone: str, shownCount: uint, reason: str }, ["status", "shownCount"]);
 const appointments = optional({ status: choice("shown", "empty", "failed"), sourceRef: str,
@@ -155,6 +158,18 @@ export const capabilityCatalogue = {
       sourceRefs: { type: "array", items: key, minItems: 1, maxItems: 8, uniqueItems: true },
       proposedText: { type: "string", minLength: 1, maxLength: 2_000 }, now: str }),
     reply("knowledgeAnswer", "progress", progress), "proposalOnly", "permittedActor", "none", ["activeCall", "approvedKnowledgeForAnswer"]),
+  "knowledge.list.v1": entry("knowledge.list.v1", object({ kind: { const: "knowledge.list.v1" } }),
+    reply("knowledgeList", "entries", array(knowledgeEntry)), "read", "clinicAdmin"),
+  "knowledge.draft.save.v1": entry("knowledge.draft.save.v1",
+    object({ kind: { const: "knowledge.draft.save.v1" }, sourceRef: key, expectedVersion: key, ownerRef: key,
+      text: { type: "string", minLength: 1, maxLength: 2_000 }, effectiveFrom: str, effectiveUntil: str }),
+    reply("knowledgeEntry", "entry", knowledgeEntry), "policyChange", "clinicAdmin"),
+  "knowledge.approve.v1": entry("knowledge.approve.v1",
+    object({ kind: { const: "knowledge.approve.v1" }, sourceRef: key, expectedVersion: key }),
+    reply("knowledgeEntry", "entry", knowledgeEntry), "policyChange", "clinicAdmin"),
+  "knowledge.revoke.v1": entry("knowledge.revoke.v1",
+    object({ kind: { const: "knowledge.revoke.v1" }, sourceRef: key, expectedVersion: key }),
+    reply("knowledgeEntry", "entry", knowledgeEntry), "policyChange", "clinicAdmin"),
   "availability.read.v2": entry("availability.read.v2",
     object({ kind: { const: "availability.read.v2" }, turn, from: str, to: str, now: str }),
     reply("availabilityAnswer", "progress", progress), "read", "permittedActor", "none", ["activeCall", "availabilityHostConfigured"]),

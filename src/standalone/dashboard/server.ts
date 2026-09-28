@@ -51,6 +51,7 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       return json(response, 200, { ok: true, value: gateway.listPermitted().filter(item => item.id !== "booking.propose.v2") });
     }
     let command: GatewayCommand | undefined;
+    if (request.method === "GET" && url.pathname === "/api/knowledge") command = { kind: "knowledge.list.v1" };
     if (request.method === "GET" && url.pathname === "/api/settings") command = { kind: "settings.read.v1" };
     if (request.method === "GET" && url.pathname === "/api/writes/stop") {
       const afterEffectId = url.searchParams.get("after");
@@ -96,6 +97,20 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
         return json(response, 400, { ok: false, error: { kind: "invalid" } });
       }
       command = { kind: "settings.appointments.booking.enabled.change.v1", expectedVersion: input.expectedVersion, enabled: input.enabled };
+    }
+    if (request.method === "POST" && ["/api/knowledge/draft", "/api/knowledge/approve", "/api/knowledge/revoke"].includes(url.pathname)) {
+      const origin = request.headers.origin;
+      if (origin && origin !== `http://${request.headers.host}`) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+      if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
+      const input = record(await body(request));
+      if (!input || typeof input.sourceRef !== "string" || typeof input.expectedVersion !== "string") return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      if (url.pathname === "/api/knowledge/draft") {
+        if (typeof input.ownerRef !== "string" || typeof input.text !== "string" ||
+            typeof input.effectiveFrom !== "string" || typeof input.effectiveUntil !== "string") return json(response, 400, { ok: false, error: { kind: "invalid" } });
+        command = { kind: "knowledge.draft.save.v1", sourceRef: input.sourceRef, expectedVersion: input.expectedVersion,
+          ownerRef: input.ownerRef, text: input.text, effectiveFrom: input.effectiveFrom, effectiveUntil: input.effectiveUntil };
+      } else command = { kind: url.pathname === "/api/knowledge/approve" ? "knowledge.approve.v1" : "knowledge.revoke.v1",
+        sourceRef: input.sourceRef, expectedVersion: input.expectedVersion };
     }
     if (request.method === "POST" && url.pathname === "/api/settings/automation-enabled") {
       const origin = request.headers.origin;

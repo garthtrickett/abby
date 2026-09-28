@@ -127,7 +127,7 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
   if (kind === "postgres") {
     assert.ok(db);
     ledger = new PostgresLedger(db, suggestedAt => suggestedAt);
-    ({ policy, reception } = createStandaloneTextComposition(db, host, options.bookingMode, ledger, availability, undefined, undefined, model));
+    ({ policy, reception } = createStandaloneTextComposition(db, host, options.bookingMode, ledger, availability, undefined, undefined, model, host));
   } else {
     ledger = new MemoryLedger();
     policy = new MemoryPolicyStore(options.bookingMode);

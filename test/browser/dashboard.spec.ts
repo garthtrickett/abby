@@ -17,6 +17,7 @@ import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
 import { StaffQueue } from "../../src/reference/staff-queue.ts";
 import { StaffAlertMonitor } from "../../src/reference/staff-alert-monitor.ts";
 import { TextReception } from "../../src/reference/text-reception.ts";
+import { MemoryKnowledgeCatalogue } from "../../src/reference/knowledge-catalogue.ts";
 import { createDashboardServer } from "../../src/standalone/dashboard/server.ts";
 import { CallAdmissionService } from "../../src/voice/admission.ts";
 
@@ -27,18 +28,20 @@ async function localDashboard(role: "clinicAdmin" | "staff", availability?: Avai
   const host = new ReferenceClinicHost([], [],
     [{ scope, sourceRef: "hours", version: "hours-v1", ownerRef: "clinic-owner", approvedText: "We open at 9 am.", approved: true,
       effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]);
-  const reception = new TextReception(ledger, policy, host, availability);
+  const knowledge = new MemoryKnowledgeCatalogue([{ scope, sourceRef: "hours", version: "hours-v1", ownerRef: "clinic-owner",
+    approvedText: "We open at 9 am.", approved: true, effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]);
+  const reception = new TextReception(ledger, policy, host, availability, undefined, undefined, knowledge);
   const started = await reception.startCall("before-setting", scope);
   assert.equal(started.ok, true);
   const gateway = new CommandGateway({ actorRef: `browser-${role}`, role, scope }, policy, reception,
-    new CallReview(ledger), new StaffQueue(ledger, () => "2026-09-30T12:00:00.000Z"), new CallOutcomeReport(ledger), ledger);
+    new CallReview(ledger), new StaffQueue(ledger, () => "2026-09-30T12:00:00.000Z"), new CallOutcomeReport(ledger), ledger, knowledge);
   const server = await createDashboardServer(gateway, resolve("dist/dashboard/app.js"));
   await new Promise<void>(done => server.listen(0, "127.0.0.1", done));
   const address = server.address();
   assert.ok(address && typeof address !== "string");
   return {
     url: `http://127.0.0.1:${address.port}`,
-    scope, ledger, policy, reception, host,
+    scope, ledger, policy, reception, host, knowledge,
     close: () => new Promise<void>((done, reject) => {
       server.close(error => error ? reject(error) : done());
       server.closeAllConnections();
@@ -278,6 +281,65 @@ test("E2E-004: staff can review the approved answer source without seeing spoken
   } finally {
     await app.close();
   }
+});
+
+test("FR-21: clinic admin drafts, approves and revokes a scoped answer", async ({ page, request }) => {
+  const app = await localDashboard("clinicAdmin");
+  try {
+    await page.goto(app.url);
+    await expect(page.getByRole("heading", { name: "Approved clinic information" })).toBeVisible();
+    await page.getByRole("textbox", { name: "Knowledge source reference" }).fill("parking");
+    await page.getByRole("textbox", { name: "Knowledge owner reference" }).fill("practice-manager");
+    await page.getByRole("textbox", { name: "Knowledge answer text" }).fill("Parking is behind the clinic.");
+    await page.getByRole("textbox", { name: "Knowledge effective from" }).fill("2026-09-01T00:00:00.000Z");
+    await page.getByRole("textbox", { name: "Knowledge effective until" }).fill("2026-10-01T00:00:00.000Z");
+    await page.getByRole("button", { name: "Save knowledge draft" }).click();
+    await expect(page.getByLabel("Knowledge sources")).toContainText("parking · version 1 · draft");
+    const before = await app.reception.answer(app.scope,
+      { callId: "before-setting", turnId: "parking-draft", text: "Parking?", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
+      ["parking"], "Parking is behind the clinic.", "2026-09-28T10:00:00.000Z");
+    assert.ok(before.ok);
+    assert.equal(before.value.knowledgeAnswers.length, 0);
+    assert.equal(before.value.callerMessages.at(-1), "I can't verify that information right now.");
+    assert.equal((await request.post(`${app.url}/api/knowledge/approve`, { data: { sourceRef: "parking", expectedVersion: "0" } })).status(), 409);
+    await page.getByRole("button", { name: "Approve parking" }).click();
+    await expect(page.getByLabel("Knowledge sources")).toContainText("parking · version 2 · approved");
+    await page.reload();
+    await expect(page.getByLabel("Knowledge sources")).toContainText("parking · version 2 · approved");
+    const approved = await app.reception.answer(app.scope,
+      { callId: "before-setting", turnId: "parking-approved", text: "Parking?", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
+      ["parking"], "Parking is behind the clinic.", "2026-09-28T10:00:00.000Z");
+    assert.ok(approved.ok);
+    assert.equal(approved.value.callerMessages.at(-1), "Parking is behind the clinic.");
+    assert.equal(approved.value.knowledgeAnswers.at(-1)?.version, "2");
+    await page.getByRole("button", { name: "Revoke parking" }).click();
+    await expect(page.getByLabel("Knowledge sources")).toContainText("parking · version 3 · revoked");
+    const revoked = await app.reception.answer(app.scope,
+      { callId: "before-setting", turnId: "parking-revoked", text: "Parking?", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
+      ["parking"], "Parking is behind the clinic.", "2026-09-28T10:00:00.000Z");
+    assert.ok(revoked.ok);
+    assert.equal(revoked.value.knowledgeAnswers.length, 1);
+    assert.equal(revoked.value.callerMessages.at(-1), "I can't verify that information right now.");
+    await page.getByRole("textbox", { name: "Knowledge source reference" }).fill("parking");
+    await page.getByRole("textbox", { name: "Knowledge owner reference" }).fill("practice-manager");
+    await page.getByRole("textbox", { name: "Knowledge answer text" }).fill("Parking is across the road.");
+    await page.getByRole("textbox", { name: "Knowledge effective from" }).fill("2026-09-01T00:00:00.000Z");
+    await page.getByRole("textbox", { name: "Knowledge effective until" }).fill("2026-10-01T00:00:00.000Z");
+    await page.getByRole("button", { name: "Save knowledge draft" }).click();
+    await expect(page.getByLabel("Knowledge sources")).toContainText("parking · version 4 · draft");
+    const afterRevokedDraft = await app.knowledge.readKnowledge(app.scope, ["parking"]);
+    assert.ok(afterRevokedDraft.ok);
+    assert.equal(afterRevokedDraft.value.length, 0);
+  } finally { await app.close(); }
+
+  const staff = await localDashboard("staff");
+  try {
+    await page.goto(staff.url);
+    await expect(page.getByRole("heading", { name: "Approved clinic information" })).toHaveCount(0);
+    assert.equal((await request.get(`${staff.url}/api/knowledge`)).status(), 403);
+    assert.equal((await request.post(`${staff.url}/api/knowledge/draft`, { data: { sourceRef: "x", expectedVersion: "0",
+      ownerRef: "owner", text: "Text", effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" } })).status(), 403);
+  } finally { await staff.close(); }
 });
 
 test("availability read review shows source and status without exposing exact times", async ({ page }) => {

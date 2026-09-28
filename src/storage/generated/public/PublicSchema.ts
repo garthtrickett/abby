@@ -3,9 +3,11 @@
 
 import type { default as ClinicSettingsTable } from './ClinicSettings.js';
 import type { default as ClinicWriteStopTable } from './ClinicWriteStop.js';
+import type { default as ClinicKnowledgeHeadsTable } from './ClinicKnowledgeHeads.js';
 import type { default as ClinicWriteStopInflightTable } from './ClinicWriteStopInflight.js';
 import type { default as ClinicAutomationTable } from './ClinicAutomation.js';
 import type { default as StaffItemsTable } from './StaffItems.js';
+import type { default as ClinicKnowledgeEventsTable } from './ClinicKnowledgeEvents.js';
 import type { default as CallsTable } from './Calls.js';
 import type { default as ClinicWriteStopEventsTable } from './ClinicWriteStopEvents.js';
 import type { default as CallEventsTable } from './CallEvents.js';
@@ -16,11 +18,15 @@ export default interface PublicSchema {
 
   clinic_write_stop: ClinicWriteStopTable;
 
+  clinic_knowledge_heads: ClinicKnowledgeHeadsTable;
+
   clinic_write_stop_inflight: ClinicWriteStopInflightTable;
 
   clinic_automation: ClinicAutomationTable;
 
   staff_items: StaffItemsTable;
+
+  clinic_knowledge_events: ClinicKnowledgeEventsTable;
 
   calls: CallsTable;
 

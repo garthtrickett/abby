@@ -6,12 +6,19 @@ import type { StaffQueuePage } from "../../reference/staff-queue.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
 import type { AutomationSettingAuditPage, BookingSettingAuditPage } from "../../core/host.ts";
 import type { WriteStopAuditPage, WriteStopStatus } from "../../core/write-stop.ts";
+import type { KnowledgeEntry } from "../../reference/knowledge-catalogue.ts";
 
 export type DashboardState = {
   loading: boolean;
   busy: boolean;
   capabilities: readonly CapabilityDescriptor[];
   policy: CallPolicy | undefined;
+  knowledge: readonly KnowledgeEntry[] | undefined;
+  knowledgeSourceRef: string;
+  knowledgeOwnerRef: string;
+  knowledgeText: string;
+  knowledgeFrom: string;
+  knowledgeUntil: string;
   writeStop: WriteStopStatus | undefined;
   writeStopAuditPage: WriteStopAuditPage | undefined;
   stopReasonInput: string;
@@ -26,6 +33,10 @@ export type DashboardState = {
 };
 
 export type DashboardActions = Readonly<{
+  setKnowledgeField(field: "knowledgeSourceRef" | "knowledgeOwnerRef" | "knowledgeText" | "knowledgeFrom" | "knowledgeUntil", value: string): void;
+  saveKnowledgeDraft(): void;
+  approveKnowledge(entry: KnowledgeEntry): void;
+  revokeKnowledge(entry: KnowledgeEntry): void;
   setStopReason(value: string): void;
   stopWrites(): void;
   resumeWrites(): void;
@@ -47,6 +58,7 @@ export type DashboardActions = Readonly<{
 }>;
 
 export function dashboardView(state: DashboardState, actions: DashboardActions) {
+  const knowledgeCurrent = state.knowledge?.filter((entry, index, rows) => !rows.slice(index + 1).some(row => row.sourceRef === entry.sourceRef)) ?? [];
   const canChange = state.capabilities.some(item => item.id === "settings.appointments.booking.enabled.change.v1");
   const canChangeAutomation = state.capabilities.some(item => item.id === "settings.automation.enabled.change.v1");
   const enabled = state.policy?.bookingEnabled ?? false;
@@ -99,6 +111,27 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
         </div>
         ${state.policy ? html`<p class="muted">Policy version ${state.policy.policyVersion} · Booking capability: ${state.policy.capabilities.book}</p>` : ""}
       </section>
+      ${state.capabilities.some(item => item.id === "knowledge.list.v1") ? html`<section class="card" aria-labelledby="knowledge-title">
+        <h2 id="knowledge-title">Approved clinic information</h2>
+        <p class="muted">Save a draft, then approve it before Abby can use the text. Revocation blocks future answers immediately.</p>
+        <label>Source reference <input aria-label="Knowledge source reference" .value=${state.knowledgeSourceRef}
+          @input=${(event: Event) => actions.setKnowledgeField("knowledgeSourceRef", (event.target as HTMLInputElement).value)}></label>
+        <label>Owner reference <input aria-label="Knowledge owner reference" .value=${state.knowledgeOwnerRef}
+          @input=${(event: Event) => actions.setKnowledgeField("knowledgeOwnerRef", (event.target as HTMLInputElement).value)}></label>
+        <label>Approved answer text <textarea aria-label="Knowledge answer text" .value=${state.knowledgeText}
+          @input=${(event: Event) => actions.setKnowledgeField("knowledgeText", (event.target as HTMLTextAreaElement).value)}></textarea></label>
+        <label>Effective from (UTC) <input aria-label="Knowledge effective from" .value=${state.knowledgeFrom}
+          @input=${(event: Event) => actions.setKnowledgeField("knowledgeFrom", (event.target as HTMLInputElement).value)}></label>
+        <label>Effective until (UTC) <input aria-label="Knowledge effective until" .value=${state.knowledgeUntil}
+          @input=${(event: Event) => actions.setKnowledgeField("knowledgeUntil", (event.target as HTMLInputElement).value)}></label>
+        <button type="button" ?disabled=${state.busy} @click=${() => actions.saveKnowledgeDraft()}>Save knowledge draft</button>
+        <div aria-label="Knowledge sources">${knowledgeCurrent.length ? html`<ul>${knowledgeCurrent.map(entry => html`<li>
+          <strong>${entry.sourceRef}</strong> · version ${entry.version} · ${entry.status} · ${entry.ownerRef}
+          ${entry.status === "draft" ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.approveKnowledge(entry)}>Approve ${entry.sourceRef}</button>` : ""}
+          ${entry.status !== "revoked" && state.knowledge?.some(row => row.sourceRef === entry.sourceRef && row.status === "approved") ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.revokeKnowledge(entry)}>Revoke ${entry.sourceRef}</button>` : ""}
+        </li>`)}</ul>` : html`<p>No clinic information recorded.</p>`}</div>
+        <details><summary>Knowledge history</summary><ul>${state.knowledge?.map(entry => html`<li>${entry.sourceRef} · version ${entry.version} · ${entry.status} · ${entry.actorRef} · ${entry.changedAt}</li>`)}</ul></details>
+      </section>` : ""}
       ${state.capabilities.some(item => item.id === "settings.appointments.booking.audit.v1") ? html`<section class="card" aria-labelledby="booking-audit-title">
         <div class="row"><h2 id="booking-audit-title">Booking setting history</h2>
           <button type="button" ?disabled=${state.busy} @click=${() => actions.loadAudit()}>Refresh history</button></div>
