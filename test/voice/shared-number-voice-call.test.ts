@@ -15,6 +15,8 @@ import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts"
 import { CallAdmissionService } from "../../src/voice/admission.ts";
 import { SharedNumberIntakeService } from "../../src/voice/shared-number-intake.ts";
 import { SharedNumberVoiceCall } from "../../src/voice/shared-number-voice-call.ts";
+import { MediaTurnController } from "../../src/voice/media-turn-controller.ts";
+import type { MediaFrame, TranscriptionPort } from "../../src/voice/media-turn-controller.ts";
 import { VoiceSession } from "../../src/voice/voice-session.ts";
 import type { PlaybackPort } from "../../src/voice/voice-session.ts";
 
@@ -212,5 +214,76 @@ for (const kind of kinds) {
     assert.equal(terminal.lifecycle, "ended");
     assert.equal(terminal.terminal?.reason, "callerDisconnected");
     assert.deepEqual(terminal.policy.scope, app.north);
+  });
+
+  test(`${kind}: synthetic PCM frames close location, booking, and affirmation turns without direct turn calls`, async () => {
+    const app = fixture(kind);
+    const inbound = app.event(app.sharedNumber, "media-journey");
+    const call = app.call(inbound);
+    const started = value(await call.begin(now));
+    if (started.kind !== "locationChoice") throw new Error("choice prompt expected");
+    value(await call.acceptPlaybackResult(started.prompt.playbackId, "played", now));
+    value(await app.policy.changeAutomationEnabled(app.north, "0", true, "admin"));
+    value(await app.policy.changeBookingEnabled(app.north, "0", true, "admin"));
+    const utterances = ["Northside", "Book physio", "Yes"];
+    let finalCount = 0;
+    const transcription: TranscriptionPort = {
+      async accept(_frame, generation) {
+        return ok([{ kind: "partial", sessionId: "session", generation,
+          utteranceId: "provider-utterance", text: utterances[finalCount]! }]);
+      },
+      async flush(generation) {
+        return ok([{ kind: "segmentFinal", sessionId: "session", generation,
+          utteranceId: "provider-utterance", text: utterances[finalCount++]!, quality: "clear" }]);
+      },
+    };
+    const media = new MediaTurnController("session", call, transcription, { silenceMs: 100 });
+    let sequence = 0;
+    let offsetMs = 0;
+    async function send(amplitude: number) {
+      const bytes = new Uint8Array(640);
+      const view = new DataView(bytes.buffer);
+      for (let offset = 0; offset < bytes.length; offset += 2) view.setInt16(offset, amplitude, true);
+      const frame: MediaFrame = { sessionId: "session", sequence,
+        capturedAt: new Date(Date.parse(now) + offsetMs + sequence * 20).toISOString(), bytes };
+      sequence += 1;
+      app.setTime(frame.capturedAt);
+      return value(await media.acceptMedia(frame));
+    }
+    async function speak() {
+      await send(2_000);
+      await send(2_000);
+      for (let i = 0; i < 4; i += 1) await send(0);
+      const completed = await send(0);
+      assert.equal(completed.kind, "turnCompleted");
+      if (completed.kind !== "turnCompleted") throw new Error("final turn expected");
+      return completed.value;
+    }
+    const bound = await speak();
+    assert.equal(bound.kind, "locationBound");
+    if (bound.kind !== "locationBound") throw new Error("bound call expected");
+    assert.deepEqual(bound.receipt.scope, app.north);
+    const choice = value(await app.ledger.findPendingLocation(bound.receipt.callId));
+    const booked = await speak();
+    assert.equal(booked.kind, "callerTurn");
+    if (booked.kind !== "callerTurn") throw new Error("booking turn expected");
+    assert.notEqual(choice?.choiceEvidence?.turnId, booked.state.processedTurnIds[0]);
+    const action = Object.values(booked.state.actions)[0];
+    assert.ok(action);
+    assert.equal(action.status, "awaitingConfirmation");
+    const details = value(await call.dispatchPending(at(2)));
+    assert.equal(details.kind, "queued");
+    value(await call.acceptPlaybackResult(details.playbackId!, "played", at(2)));
+    offsetMs = 2_000;
+    const affirmed = await speak();
+    assert.equal(affirmed.kind, "callerTurn");
+    if (affirmed.kind !== "callerTurn") throw new Error("affirmation turn expected");
+    assert.equal(affirmed.state.actions[action.key]?.status, "ready");
+    value(await call.drainEffects(at(3)));
+    assert.equal(app.clinic.bookings(app.north).length, 1);
+    assert.deepEqual(app.clinic.bookings(app.main), []);
+    await media.stop();
+    const ended = value(await call.end(at(4), "callerDisconnected"));
+    assert.equal("lifecycle" in ended ? ended.lifecycle : "pending", "ended");
   });
 }

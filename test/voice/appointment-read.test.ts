@@ -85,7 +85,8 @@ for (const kind of kinds) {
     assert.equal(dispatched.kind, "queued");
     assert.deepEqual(app.queued, [state.callerMessages.at(-1)]);
     assert.equal(JSON.stringify(app.queued).includes("Private Patient"), false);
-    assert.equal(JSON.stringify(state.appointmentReads).includes("22"), false);
+    // A turn ID is an opaque digest and may contain these digits by chance.
+    assert.equal(JSON.stringify(state.appointmentReads.map(({ turnId: _turnId, ...read }) => read)).includes("22"), false);
     value(await app.session.acceptPlaybackResult(dispatched.playbackId!, "played", at(5)));
     const review = value(await new CallReview(app.ledger).read(app.callId, app.scope));
     assert.deepEqual(review.appointmentReads, [{ status: "shown", sourceRef: "cliniko:business:11:appointments", shownCount: 1 }]);
