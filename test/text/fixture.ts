@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import type { ActionRequest, CallPolicy, CallState, FinalCallerTurn, HostMutation, HostWriteReceipt, ReconcileObservation, Result, StaffItem, StaffTaskReceipt, TransitionFailure, TurnInterpretation } from "../../src/core/model.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
-import { ReferenceEffectWorker } from "../../src/reference/effect-worker.ts";
-import type { ReferenceHost } from "../../src/reference/effect-worker.ts";
+import { EffectWorker } from "../../src/core/effect-worker.ts";
+import type { HostEffects } from "../../src/core/host.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
 import type { Kysely } from "kysely";
@@ -22,7 +22,7 @@ export function failure<T>(result: Result<T, TransitionFailure>, kind: Transitio
   assert.equal(result.error.kind, kind);
 }
 
-export class FakeHost implements ReferenceHost {
+export class FakeHost implements HostEffects {
   readonly writes: HostMutation[] = [];
   readonly reconciliations: HostMutation[] = [];
   readonly tasks: StaffItem[] = [];
@@ -30,7 +30,7 @@ export class FakeHost implements ReferenceHost {
   reconcileResult: ((mutation: HostMutation) => ReconcileObservation) = mutation => ({ kind: "stillUnknown", actionKey: mutation.actionKey });
   taskResult: ((item: StaffItem) => StaffTaskReceipt) = item => ({ kind: "opened", taskKey: item.key, hostTaskRef: "host-task-1", destination: item.destination });
 
-  async write(mutation: HostMutation): Promise<HostWriteReceipt> {
+  async write(mutation: HostMutation, _now: string): Promise<HostWriteReceipt> {
     this.writes.push(mutation);
     return this.writeResult(mutation);
   }
@@ -51,6 +51,7 @@ export async function setup(id: string, modes?: Partial<CallPolicy["capabilities
   const policy: CallPolicy = {
     scope,
     policyVersion: "policy-1",
+    bookingEnabled: true,
     capabilities: { book: "execute", cancel: "requestOnly", reschedule: "requestOnly", intake: "execute", ...modes },
     staffDestination: { kind: "owner", ownerRef: `staff-${id}` },
     operatorQueue: { kind: "queue", queueRef: `operator-${id}` },
@@ -64,7 +65,7 @@ export async function setup(id: string, modes?: Partial<CallPolicy["capabilities
   const ledger = process.env.ABBY_LEDGER === "postgres" ? new PostgresLedger(postgresDb!) : new MemoryLedger();
   const runtime = new CallRuntime(ledger, scope);
   const host = new FakeHost();
-  const worker = new ReferenceEffectWorker(runtime, host);
+  const worker = new EffectWorker(runtime, host);
   success(await runtime.start(callId, policy));
   const patient = { scope, patientRef: `patient-${id}`, verificationRef: `verified-${id}`, expiresAt: deadline };
   const offer = (serviceRef = "physio", offerRef = "offer-1") => ({ scope, offerRef, serviceRef, startsAt: "2026-09-29T11:00:00.000Z", expiresAt: deadline });
