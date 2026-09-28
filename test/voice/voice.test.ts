@@ -41,14 +41,16 @@ function failure<T>(result: Result<T, { kind: string }>, kind: string): void {
 
 class FakePlayback implements PlaybackPort {
   readonly queued: string[] = [];
+  readonly queuedTexts: string[] = [];
   readonly cleared: string[] = [];
   sendResult: "queued" | "notSent" | "uncertain" = "queued";
   sendPromise?: Promise<"queued" | "notSent" | "uncertain">;
   enqueueStarted?: () => void;
   clearResult = true;
 
-  async enqueue(id: string, _text: string): Promise<"queued" | "notSent" | "uncertain"> {
+  async enqueue(id: string, text: string): Promise<"queued" | "notSent" | "uncertain"> {
     this.queued.push(id);
+    this.queuedTexts.push(text);
     this.enqueueStarted?.();
     if (this.sendPromise) return this.sendPromise;
     return this.sendResult;
@@ -97,7 +99,7 @@ class PresentationStartHookLedger implements LedgerStore {
   }
 }
 
-async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: boolean, transferMode: "execute" | "requestOnly" | "unavailable" = "requestOnly", transferDestinationRef?: string, clock?: { now: () => number; onPresentationStarted?: () => void; onSessionRenewed?: () => void }) {
+async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: boolean, transferMode: "execute" | "requestOnly" | "unavailable" = "requestOnly", transferDestinationRef?: string, clock?: { now: () => number; onPresentationStarted?: () => void; onSessionRenewed?: () => void }, options: { bookingMode?: "execute" | "requestOnly" } = {}) {
   const scope: LocationScope = { tenantId: `voice-tenant-${id}`, clinicId: `voice-clinic-${id}`, locationId: `voice-location-${id}` };
   const patient = { scope, patientRef: `patient-${id}`, verificationRef: `proof-${id}`, expiresAt: at(86_400) };
   const offer = { scope, offerRef: `offer-${id}`, serviceRef: "physio", startsAt: at(90_000), expiresAt: at(86_400) };
@@ -108,10 +110,10 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
   if (kind === "postgres") {
     assert.ok(db);
     ledger = new PostgresLedger(db, suggestedAt => suggestedAt);
-    ({ policy, reception } = createStandaloneTextComposition(db, host, "execute", ledger));
+    ({ policy, reception } = createStandaloneTextComposition(db, host, options.bookingMode, ledger));
   } else {
     ledger = new MemoryLedger();
-    policy = new MemoryPolicyStore();
+    policy = new MemoryPolicyStore(options.bookingMode);
     reception = createEmbeddedTextComposition(ledger, policy, host);
   }
   if (bookingEnabled) value(await policy.changeBookingEnabled(scope, "0", true));
@@ -134,6 +136,11 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
   const session = new VoiceSession(callId, sessionId, scope, sessionLedger, reception, playback, async turn =>
     ok(turn.text.startsWith("Transfer")
       ? { kind: "transfer" as const, reason: "callerRequested" as const }
+      : turn.text.toLowerCase().includes("hours?")
+      ? { kind: "answer" as const, proposedText: "We open at 9 am.", sources: turn.text.startsWith("Hours")
+          ? [{ scope, sourceRef: "hours", approvedText: "We open at 9 am.", approved: true,
+              effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]
+          : [] }
       : turn.text.startsWith("Book")
       ? { kind: "book" as const, verificationRef: patient.verificationRef, offerRef: offer.offerRef }
       : { kind: "affirm" as const }), transfer, clock?.now);
@@ -152,6 +159,13 @@ async function transferTurn(app: Awaited<ReturnType<typeof fixture>>, quality: "
   const generation = value(await app.session.speechStarted(at(2)));
   value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation, utteranceId: "transfer-request", text: "Transfer to staff", quality }));
   return value(await app.session.finishTurn(at(3)));
+}
+
+async function answerTurn(app: Awaited<ReturnType<typeof fixture>>, text: string, seconds = 2) {
+  const generation = value(await app.session.speechStarted(at(seconds)));
+  value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation,
+    utteranceId: `question-${seconds}`, text, quality: "clear" }));
+  return value(await app.session.finishTurn(at(seconds + 1)));
 }
 
 for (const kind of kinds) {
@@ -191,8 +205,48 @@ for (const kind of kinds) {
     assert.equal(state.callerMessages.at(-1), "I can't complete that request here.");
     assert.equal(Object.keys(state.actions).length, 0);
     assert.equal(app.host.bookingEvidenceReads(), 0);
-    assert.equal(value(await app.session.dispatchPending(at(4))).kind, "none");
+    const noticeId = state.pendingPresentationId;
+    assert.equal(state.presentations[noticeId!]?.kind, "notice");
+    const delivery = value(await app.session.dispatchPending(at(4)));
+    assert.equal(delivery.kind, "queued");
+    assert.deepEqual(app.playback.queuedTexts, ["I can't complete that request here."]);
+    assert.equal(value(await app.session.acceptPlaybackResult(delivery.playbackId!, "played", at(5))).presentations[noticeId!]?.status, "played");
     assert.equal(app.host.bookings(app.scope).length, 0);
+  });
+
+  test(`${kind}: request-only booking speaks follow-up and never dispatches an appointment write`, async () => {
+    const app = await fixture(kind, `${kind}-booking-request-only`, true, "requestOnly", undefined, undefined, { bookingMode: "requestOnly" });
+    const state = await bookTurn(app);
+    assert.equal(state.policy.capabilities.book, "requestOnly");
+    assert.equal(Object.keys(state.actions).length, 0);
+    assert.equal(Object.values(state.staffItems)[0]?.reason, "unsupported");
+    assert.equal(Object.values(state.effects).some(effect => effect.kind === "hostWrite"), false);
+    const delivery = value(await app.session.dispatchPending(at(4)));
+    assert.equal(delivery.kind, "queued");
+    assert.deepEqual(app.playback.queuedTexts, ["I can request staff follow-up, but I can't confirm they have received it yet."]);
+    value(await app.session.acceptPlaybackResult(delivery.playbackId!, "played", at(5)));
+    const drained = value(await app.session.drainEffects(at(6)));
+    assert.equal(Object.values(drained.staffItems)[0]?.status, "open");
+    assert.equal(app.host.bookings(app.scope).length, 0);
+  });
+
+  test(`${kind}: approved knowledge reaches playback and a newer turn replaces its pending notice`, async () => {
+    const app = await fixture(kind, `${kind}-answer-notice`, false);
+    const approved = await answerTurn(app, "Hours?");
+    const oldId = approved.pendingPresentationId;
+    assert.equal(approved.presentations[oldId!]?.kind, "notice");
+    assert.equal(approved.callerMessages.at(-1), "We open at 9 am.");
+    const corrected = await answerTurn(app, "Unknown hours?", 4);
+    assert.equal(corrected.presentations[oldId!]?.status, "superseded");
+    assert.equal(corrected.callerMessages.at(-1), "I can't verify that information right now.");
+    const delivery = value(await app.session.dispatchPending(at(6)));
+    assert.equal(delivery.kind, "queued");
+    assert.deepEqual(app.playback.queuedTexts, ["I can't verify that information right now."]);
+    const played = value(await app.session.acceptPlaybackResult(delivery.playbackId!, "played", at(7)));
+    assert.equal(played.presentations[corrected.pendingPresentationId!]?.status, "played");
+    assert.equal(app.host.bookings(app.scope).length, 0);
+    assert.equal(Object.keys(played.actions).length, 0);
+    assert.equal(Object.values(played.staffItems)[0]?.reason, "systemFailure");
   });
 
   test(`${kind}: interruption and late playback ack cannot confirm booking`, async () => {
@@ -361,26 +415,27 @@ for (const kind of kinds) {
   test(`${kind}: request-only or unclear transfer never reaches provider`, async () => {
     const requestOnly = await fixture(kind, `${kind}-transfer-request-only`, false);
     const routed = await transferTurn(requestOnly);
-    assert.equal(routed.pendingPresentationId, undefined);
+    assert.equal(routed.presentations[routed.pendingPresentationId!]?.kind, "notice");
     assert.equal(Object.values(routed.staffItems)[0]?.reason, "callerRequested");
     assert.equal(requestOnly.transfer.requested.length, 0);
-    assert.equal(value(await requestOnly.session.dispatchPending(at(4))).kind, "none");
+    assert.equal(value(await requestOnly.session.dispatchPending(at(4))).kind, "queued");
+    assert.deepEqual(requestOnly.playback.queuedTexts, ["I can request staff follow-up, but I can't confirm they've received it yet."]);
 
     const unclear = await fixture(kind, `${kind}-transfer-unclear`, false, "execute");
     const state = await transferTurn(unclear, "needsClarification");
-    assert.equal(state.pendingPresentationId, undefined);
+    assert.equal(state.presentations[state.pendingPresentationId!]?.kind, "notice");
     assert.equal(Object.values(state.staffItems)[0]?.reason, "verificationFailed");
     assert.equal(unclear.transfer.requested.length, 0);
 
     const unavailable = await fixture(kind, `${kind}-transfer-unavailable`, false, "unavailable");
     const unavailableState = await transferTurn(unavailable);
-    assert.equal(unavailableState.pendingPresentationId, undefined);
+    assert.equal(unavailableState.presentations[unavailableState.pendingPresentationId!]?.kind, "notice");
     assert.equal(unavailable.transfer.requested.length, 0);
     assert.match(unavailableState.callerMessages.at(-1)!, /can't connect/);
 
     const missingDestination = await fixture(kind, `${kind}-transfer-no-destination`, false, "execute", " ");
     const missingState = await transferTurn(missingDestination);
-    assert.equal(missingState.pendingPresentationId, undefined);
+    assert.equal(missingState.presentations[missingState.pendingPresentationId!]?.kind, "notice");
     assert.equal(missingDestination.transfer.requested.length, 0);
   });
 
