@@ -14,8 +14,8 @@ export type AuthenticatedInboundCall = Readonly<{
   receivedAt: string;
 }>;
 
-export type RouteFailure = Readonly<{ kind: "routeUnavailable" | "automationDisabled" | "readinessFailed" }>;
-export type PolicyResolver = (dialedNumber: string) => Promise<Result<CallPolicy, RouteFailure>>;
+export type RouteFailure = Readonly<{ kind: "routeUnavailable" | "unknownNumber" | "ambiguousClinic" | "locationChoiceRequired" | "automationDisabled" | "readinessFailed" }>;
+export type PolicyResolver = (dialedNumber: string, accountRef: string) => Promise<Result<CallPolicy, RouteFailure>>;
 
 export function callIdFor(key: ProviderCallKey): string {
   return createHash("sha256").update(JSON.stringify([key.accountRef, key.providerCallRef])).digest("hex");
@@ -51,7 +51,7 @@ export class CallAdmissionService {
     if (existing.value) return duplicateOrConflict(existing.value, event);
     let policy: Result<CallPolicy, RouteFailure>;
     try {
-      policy = await this.resolvePolicy(event.dialedNumber);
+      policy = await this.resolvePolicy(event.dialedNumber, event.key.accountRef);
     } catch {
       policy = err({ kind: "routeUnavailable" });
     }
