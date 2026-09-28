@@ -543,3 +543,22 @@ test("postgres: corrupt location policy cannot commit an automation change", { s
     where tenant_id = ${scope.tenantId} and clinic_id = ${scope.clinicId}`.execute(db!);
   assert.equal(count.rows[0]?.count, "0");
 });
+
+test("standalone booking defaults to staff request after an admin enables the setting", { skip: !db }, async () => {
+  const scope = { tenantId: "safe-default-tenant", clinicId: "safe-default-clinic", locationId: "safe-default-location" };
+  const patient = { scope, patientRef: "safe-default-patient", verificationRef: "safe-default-proof", expiresAt };
+  const offer = { scope, offerRef: "safe-default-offer", serviceRef: "physio", startsAt: "2026-09-29T11:00:00.000Z", expiresAt };
+  const host = new ReferenceClinicHost([patient], [offer]);
+  const { reception, policy } = createStandaloneTextComposition(db!, host);
+  assert.equal(value(await policy.read(scope)).capabilities.book, "unavailable");
+  const enabled = value(await policy.changeBookingEnabled(scope, "0", true, "clinic-admin"));
+  assert.equal(enabled.capabilities.book, "requestOnly");
+  const callId = "safe-default-call";
+  value(await reception.startCall(callId, scope));
+  const requested = value(await reception.proposeBooking(scope, turn(callId, "request", "Book physio"), patient.verificationRef, offer.offerRef, now));
+  assert.equal(Object.keys(requested.actions).length, 0);
+  assert.match(requested.callerMessages.at(-1) ?? "", /request staff follow-up/);
+  value(await reception.drain(scope, callId, now));
+  assert.equal(host.bookings(scope).length, 0);
+  assert.equal(host.tasks(scope).length, 1);
+});
