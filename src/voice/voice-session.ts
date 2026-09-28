@@ -48,13 +48,17 @@ export class VoiceSession {
   private readonly playback: PlaybackPort;
   private readonly transfer: TransferPort | undefined;
   private readonly resolveIntent: IntentResolver;
+  private readonly monotonicNow: () => number;
   private readonly assembler: TurnAssembler;
   private attached = false;
+  private localSendDeadlineMs: number | undefined;
+  private leaseVersion: number | undefined;
+  private renewalInFlight = false;
   private speechOpen = false;
   private activePlayback: ActivePlayback | undefined;
   private cachedIntent: VoiceIntent | undefined;
 
-  constructor(callId: string, sessionId: string, scope: LocationScope, ledger: LedgerStore, reception: TextReception, playback: PlaybackPort, resolveIntent: IntentResolver, transfer?: TransferPort) {
+  constructor(callId: string, sessionId: string, scope: LocationScope, ledger: LedgerStore, reception: TextReception, playback: PlaybackPort, resolveIntent: IntentResolver, transfer?: TransferPort, monotonicNow: () => number = () => performance.now()) {
     this.callId = callId;
     this.sessionId = sessionId;
     this.scope = scope;
@@ -63,18 +67,64 @@ export class VoiceSession {
     this.playback = playback;
     this.transfer = transfer;
     this.resolveIntent = resolveIntent;
+    this.monotonicNow = monotonicNow;
     this.assembler = new TurnAssembler(callId, sessionId);
+  }
+
+  private recordLease(state: CallState, requestedAt: string, startedMs: number): void {
+    const lease = state.sessionLease;
+    if (!lease || !Number.isFinite(startedMs)) return;
+    const validForMs = Date.parse(lease.expiresAt) - Date.parse(requestedAt);
+    if (!Number.isFinite(validForMs) || validForMs <= 0) return;
+    this.leaseVersion = lease.version;
+    this.localSendDeadlineMs = startedMs + Math.max(0, validForMs - 2_000);
+  }
+
+  private canSend(): boolean {
+    const currentMs = this.monotonicNow();
+    return this.attached && this.localSendDeadlineMs !== undefined && Number.isFinite(currentMs) && currentMs < this.localSendDeadlineMs;
+  }
+
+  private async closeAfterLeaseLoss(now: string): Promise<Result<DispatchResult, VoiceSessionFailure>> {
+    this.attached = false;
+    this.localSendDeadlineMs = undefined;
+    this.activePlayback = undefined;
+    const ended = await this.runtime.endCall(this.callId, this.sessionId, now);
+    if (ended.ok) return err({ kind: "leaseLost" });
+    const latest = await this.runtime.read(this.callId);
+    return latest.ok && latest.value.lifecycle === "ended" ? err({ kind: "leaseLost" }) : ended;
   }
 
   async attach(now: string): Promise<Result<CallState, VoiceSessionFailure>> {
     if (this.attached) return err({ kind: "invalidTransition" });
+    const startedMs = this.monotonicNow();
     const result = await this.runtime.activate(this.callId, this.sessionId, now);
-    if (result.ok) this.attached = true;
+    if (result.ok) {
+      this.attached = true;
+      this.recordLease(result.value, now, startedMs);
+    }
     return result;
+  }
+
+  async renew(now: string): Promise<Result<CallState, VoiceSessionFailure>> {
+    if (!this.attached || this.leaseVersion === undefined) return err({ kind: "sessionUnknown" });
+    if (!this.canSend()) return err({ kind: "leaseLost" });
+    if (this.renewalInFlight) return err({ kind: "invalidTransition" });
+    this.renewalInFlight = true;
+    const startedMs = this.monotonicNow();
+    try {
+      const result = await this.runtime.renewSession(this.callId, this.sessionId, this.leaseVersion, now);
+      if (result.ok && !this.canSend()) return err({ kind: "leaseLost" });
+      if (result.ok) this.recordLease(result.value, now, startedMs);
+      return result;
+    } finally {
+      this.renewalInFlight = false;
+    }
   }
 
   async speechStarted(now: string): Promise<Result<number, VoiceSessionFailure>> {
     if (!this.attached) return err({ kind: "sessionUnknown" });
+    if (!this.canSend()) return err({ kind: "leaseLost" });
     const generation = this.assembler.beginSpeech();
     this.cachedIntent = undefined;
     this.speechOpen = true;
@@ -113,6 +163,7 @@ export class VoiceSession {
 
   async finishTurn(now: string): Promise<Result<CallState, VoiceSessionFailure>> {
     if (!this.attached || !this.speechOpen) return err({ kind: "sessionUnknown" });
+    if (!this.canSend()) return err({ kind: "leaseLost" });
     const generation = this.assembler.currentGeneration();
     const final = this.assembler.finish(now);
     if (!final.ok) return final;
@@ -151,6 +202,7 @@ export class VoiceSession {
   async dispatchPending(now: string): Promise<Result<DispatchResult, VoiceSessionFailure>> {
     if (!this.attached) return err({ kind: "sessionUnknown" });
     if (this.speechOpen || this.activePlayback) return err({ kind: "deliveryBlocked" });
+    if (!this.canSend()) return err({ kind: "leaseLost" });
     const read = await this.runtime.read(this.callId);
     if (!read.ok) return read;
     const presentationId = read.value.pendingPresentationId;
@@ -168,6 +220,7 @@ export class VoiceSession {
       const resolved = await this.runtime.resolvePresentation(this.callId, presentationId, "interrupted", this.sessionId, now);
       return resolved.ok ? ok({ kind: "interrupted" }) : resolved;
     }
+    if (!this.canSend()) return this.closeAfterLeaseLoss(now);
     let send: "queued" | "notSent" | "uncertain";
     try { send = await this.playback.enqueue(playbackId, presentation.approvedText); } catch { send = "uncertain"; }
     if (this.activePlayback?.id !== playbackId) {
@@ -194,6 +247,7 @@ export class VoiceSession {
       const canceled = await this.runtime.resolvePresentation(this.callId, presentation.id, "canceled", this.sessionId, now);
       return canceled.ok ? ok({ kind: "transferCanceled" }) : canceled;
     }
+    if (!this.canSend()) return this.closeAfterLeaseLoss(now);
     const marked = await this.runtime.markTransferPossiblySent(this.callId, presentation.id, this.sessionId, now);
     if (!marked.ok) return marked;
     if (!this.attached || this.speechOpen || generation !== this.assembler.currentGeneration()) {
@@ -201,6 +255,7 @@ export class VoiceSession {
       if (unresolved.ok) this.attached = false;
       return unresolved.ok ? ok({ kind: "transferUnproven" }) : unresolved;
     }
+    if (!this.canSend()) return this.closeAfterLeaseLoss(now);
     let outcome: TransferOutcome;
     try { outcome = decodeTransferOutcome(await this.transfer.request(`${presentation.id}:transfer`, presentation.destinationRef)); }
     catch { outcome = { kind: "unproven" }; }
@@ -219,6 +274,7 @@ export class VoiceSession {
   async acceptPlaybackResult(playbackId: string, status: "played" | "failed", now: string): Promise<Result<CallState, VoiceSessionFailure>> {
     const active = this.activePlayback;
     if (!active || active.id !== playbackId) return err({ kind: "playbackUnknown" });
+    if (!this.canSend()) return err({ kind: "leaseLost" });
     const result = await this.runtime.resolvePresentation(this.callId, active.presentationId, status, this.sessionId, now);
     if (result.ok) this.activePlayback = undefined;
     return result;
@@ -236,6 +292,7 @@ export class VoiceSession {
     const ended = await this.runtime.endCall(this.callId, this.sessionId, now);
     if (!ended.ok) return ended;
     this.attached = false;
+    this.localSendDeadlineMs = undefined;
     if (active) {
       try { await this.playback.clear(active.id); } catch { /* durable status is unproven */ }
     }
