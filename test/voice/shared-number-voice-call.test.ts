@@ -17,6 +17,7 @@ import { SharedNumberIntakeService } from "../../src/voice/shared-number-intake.
 import { SharedNumberVoiceCall } from "../../src/voice/shared-number-voice-call.ts";
 import { MediaTurnController } from "../../src/voice/media-turn-controller.ts";
 import type { MediaFrame, TranscriptionPort } from "../../src/voice/media-turn-controller.ts";
+import { StreamedPlaybackPort } from "../../src/voice/streamed-playback-port.ts";
 import { VoiceSession } from "../../src/voice/voice-session.ts";
 import type { PlaybackPort } from "../../src/voice/voice-session.ts";
 
@@ -32,7 +33,7 @@ function value<T>(result: Result<T, { kind: string }>): T {
 }
 
 let sequence = 0;
-function fixture(kind: "memory" | "postgres") {
+function fixture(kind: "memory" | "postgres", outputPort?: PlaybackPort) {
   const id = `${kind}-voice-handoff-${++sequence}`;
   const main = { tenantId: `tenant-${id}`, clinicId: `clinic-${id}`, locationId: "main" };
   const north = { ...main, locationId: "north" };
@@ -65,7 +66,7 @@ function fixture(kind: "memory" | "postgres") {
   const clinic = new ReferenceClinicHost([patient], [offer]);
   const reception = new TextReception(ledger, policy, clinic);
   const queued: Array<{ id: string; text: string }> = [];
-  const playback: PlaybackPort = {
+  const playback: PlaybackPort = outputPort ?? {
     async enqueue(id, text) { queued.push({ id, text }); return "queued"; },
     async clear() { return true; },
   };
@@ -91,6 +92,73 @@ function fixture(kind: "memory" | "postgres") {
 }
 
 for (const kind of kinds) {
+  test(`${kind}: synthesized chunk playback needs exact completion before a booking affirmation`, async () => {
+    const sent: Array<{ id: string; sequence: number }> = [];
+    const finished: Array<{ id: string; sequence: number }> = [];
+    const playback = new StreamedPlaybackPort({ async *stream() {
+      yield new Uint8Array(640);
+      yield new Uint8Array(640);
+    } }, {
+      async queueChunk(id, sequence) { sent.push({ id, sequence }); return "queued"; },
+      async finishQueue(id, sequence) { finished.push({ id, sequence }); return "queued"; },
+      async clear() { return true; },
+    });
+    const app = fixture(kind, playback);
+    const call = app.call(app.event(app.sharedNumber, "streamed-playback"));
+    const started = value(await call.begin(now));
+    if (started.kind !== "locationChoice") throw new Error("choice expected");
+    assert.deepEqual(sent.filter(item => item.id === started.prompt.playbackId).map(item => item.sequence), [0, 1]);
+    const provePlayed = async (id: string, time: string) => value(await playback.acceptCompletion(
+      { playbackId: id, lastSequence: 1, status: "played" },
+      async event => (await call.acceptPlaybackResult(event.playbackId, event.status, time)).ok));
+    await provePlayed(started.prompt.playbackId, at(1));
+    value(await app.policy.changeAutomationEnabled(app.north, "0", true, "admin"));
+    value(await app.policy.changeBookingEnabled(app.north, "0", true, "admin"));
+    const choiceGeneration = value(await call.speechStarted(at(2)));
+    value(call.acceptTranscript({ kind: "segmentFinal", sessionId: "session", generation: choiceGeneration,
+      utteranceId: "choice", text: "Northside", quality: "clear" }));
+    app.setTime(at(3));
+    const bound = value(await call.finishTurn(at(3)));
+    if (bound.kind !== "locationBound") throw new Error("location not bound");
+    const bookingGeneration = value(await call.speechStarted(at(4)));
+    value(call.acceptTranscript({ kind: "segmentFinal", sessionId: "session", generation: bookingGeneration,
+      utteranceId: "booking", text: "Book physio", quality: "clear" }));
+    const planned = value(await call.finishTurn(at(5)));
+    if (planned.kind !== "callerTurn") throw new Error("booking turn expected");
+    const action = Object.values(planned.state.actions)[0];
+    assert.ok(action);
+    const details = value(await call.dispatchPending(at(6)));
+    assert.equal(details.kind, "queued");
+    assert.ok(details.playbackId);
+    assert.deepEqual(finished.find(item => item.id === details.playbackId),
+      { id: details.playbackId, sequence: 1 });
+    assert.equal(app.clinic.bookings(app.north).length, 0);
+    const premature = await playback.acceptCompletion(
+      { playbackId: details.playbackId, lastSequence: 0, status: "played" }, async () => true);
+    assert.ok(!premature.ok);
+    assert.equal(premature.error.kind, "invalidPlaybackEvidence");
+    const completion = { playbackId: details.playbackId, lastSequence: 1, status: "played" as const };
+    const lostAcknowledgment = await playback.acceptCompletion(completion, async event => {
+      value(await call.acceptPlaybackResult(event.playbackId, event.status, at(7)));
+      return false;
+    });
+    assert.ok(!lostAcknowledgment.ok);
+    assert.equal(lostAcknowledgment.error.kind, "settlementUnavailable");
+    value(await playback.acceptCompletion(completion, async () => {
+      const stored = value(await app.ledger.read(bound.receipt.callId, app.north));
+      return stored.presentations[action.presentationId]?.status === "played";
+    }));
+    const affirmGeneration = value(await call.speechStarted(at(8)));
+    value(call.acceptTranscript({ kind: "segmentFinal", sessionId: "session", generation: affirmGeneration,
+      utteranceId: "affirm", text: "Yes", quality: "clear" }));
+    const ready = value(await call.finishTurn(at(9)));
+    if (ready.kind !== "callerTurn") throw new Error("affirmation turn expected");
+    assert.equal(ready.state.actions[action.key]?.status, "ready");
+    value(await call.drainEffects(at(10)));
+    assert.equal(app.clinic.bookings(app.north).length, 1);
+    assert.deepEqual(app.clinic.bookings(app.main), []);
+  });
+
   test(`${kind}: shared-number voice call binds a location before booking and keeps one session`, async () => {
     const app = fixture(kind);
     const call = app.call(app.event(app.sharedNumber, "booking"));

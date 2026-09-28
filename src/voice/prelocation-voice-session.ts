@@ -105,7 +105,9 @@ export class PrelocationVoiceSession {
       return settled.ok ? this.speechOpen ? ok({ kind: "interrupted", playbackId }) : err({ kind: "leaseLost" }) : settled;
     }
     let outcome: "queued" | "notSent" | "uncertain";
-    try { outcome = await this.playback.enqueue(playbackId, text); } catch { outcome = "uncertain"; }
+    try { outcome = await this.playback.enqueue(playbackId, text,
+      () => this.activePlaybackId === playbackId && !this.speechOpen && this.canSend()); }
+    catch { outcome = "uncertain"; }
     if (this.activePlaybackId !== playbackId) {
       const latest = await this.ledger.findPendingLocation(this.callId);
       if (!latest.ok) return latest;
