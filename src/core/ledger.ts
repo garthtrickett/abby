@@ -1,8 +1,8 @@
 import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "./model.ts";
-import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingLocationCall, PendingLocationExpiryResult, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffQueueEntry, TransitionAction, TransitionFailure } from "./model.ts";
+import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingLocationCall, PendingLocationExpiryResult, PendingLocationPrompt, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffQueueEntry, TransitionAction, TransitionFailure } from "./model.ts";
 import { transition } from "./transition.ts";
 import { READINESS_REQUIREMENTS, unprovenReadiness } from "./readiness.ts";
-import { LOCATION_CHOICE_TIMEOUT_MS, PENDING_LOCATION_LEASE_MS, pendingDueAt, pendingMatchesAdmission, policyMatchesPending, validPendingAdmission, validPendingRoute } from "./pending-location.ts";
+import { LOCATION_CHOICE_TIMEOUT_MS, PENDING_LOCATION_LEASE_MS, pendingDueAt, pendingMatchesAdmission, policyMatchesPending, resolveLocationPrompt, startLocationPrompt, validPendingAdmission, validPendingRoute } from "./pending-location.ts";
 import type { AutomationReadiness } from "./readiness.ts";
 import type { InFlightWrite, WriteStopAuditEntry, WriteStopAuditPage, WriteStopFailure, WriteStopStatus } from "./write-stop.ts";
 
@@ -17,6 +17,10 @@ export interface LedgerStore {
   reservePendingLocation(callId: string, route: PendingLocationRoute, admission: Admission): Promise<Result<PendingLocationResult, TransitionFailure>>;
   attachPendingLocationSession(callId: string, sessionId: string, now: string): Promise<Result<PendingLocationCall, TransitionFailure>>;
   renewPendingLocationSession(callId: string, sessionId: string, expectedVersion: number, now: string): Promise<Result<PendingLocationCall, TransitionFailure>>;
+  startPendingLocationPrompt(callId: string, playbackId: string, sessionId: string, expectedVersion: number, now: string):
+    Promise<Result<Readonly<{ pending: PendingLocationCall; newStart: boolean }>, TransitionFailure>>;
+  resolvePendingLocationPrompt(callId: string, playbackId: string, sessionId: string, expectedVersion: number,
+                               status: PendingLocationPrompt["status"], now: string): Promise<Result<PendingLocationCall, TransitionFailure>>;
   bindPendingLocation(callId: string, policy: CallPolicy, sessionId: string, expectedLeaseVersion: number, turnId: string, now: string): Promise<Result<AdmissionResult, TransitionFailure>>;
   findExpiredPendingLocations(now: string, clinic?: Pick<LocationScope, "tenantId" | "clinicId">): Promise<Result<readonly PendingLocationCall[], TransitionFailure>>;
   expirePendingLocation(callId: string, now: string): Promise<Result<PendingLocationExpiryResult, TransitionFailure>>;
@@ -195,6 +199,26 @@ export class MemoryLedger implements LedgerStore {
       expiresAt: new Date(Date.parse(now) + validForMs).toISOString(), validForMs } };
     this.pendingLocations.set(callId, renewed);
     return ok(structuredClone(renewed));
+  }
+
+  async startPendingLocationPrompt(callId: string, playbackId: string, sessionId: string, expectedVersion: number, now: string):
+    Promise<Result<Readonly<{ pending: PendingLocationCall; newStart: boolean }>, TransitionFailure>> {
+    const pending = this.pendingLocations.get(callId);
+    if (!pending) return err({ kind: "callUnknown" });
+    const started = startLocationPrompt(pending, playbackId, sessionId, expectedVersion, now);
+    if (!started.ok) return started;
+    if (started.value.newStart) this.pendingLocations.set(callId, started.value.pending);
+    return ok(structuredClone(started.value));
+  }
+
+  async resolvePendingLocationPrompt(callId: string, playbackId: string, sessionId: string, expectedVersion: number,
+                                     status: PendingLocationPrompt["status"], now: string): Promise<Result<PendingLocationCall, TransitionFailure>> {
+    const pending = this.pendingLocations.get(callId);
+    if (!pending) return err({ kind: "callUnknown" });
+    const resolved = resolveLocationPrompt(pending, playbackId, sessionId, expectedVersion, status, now);
+    if (!resolved.ok) return resolved;
+    this.pendingLocations.set(callId, resolved.value);
+    return ok(structuredClone(resolved.value));
   }
 
   async bindPendingLocation(callId: string, policy: CallPolicy, sessionId: string, expectedLeaseVersion: number, turnId: string, now: string): Promise<Result<AdmissionResult, TransitionFailure>> {
