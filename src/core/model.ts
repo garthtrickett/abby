@@ -34,6 +34,7 @@ export type StaffedInterval = Readonly<{ startsAt: string; endsAt: string }>;
 export type CallPolicy = Readonly<{
   scope: LocationScope;
   policyVersion: string;
+  automationEnabled: boolean;
   bookingEnabled: boolean;
   capabilities: Readonly<Record<CapabilityId, CapabilityMode>>;
   transferDestinationRef?: string;

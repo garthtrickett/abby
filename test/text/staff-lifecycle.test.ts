@@ -53,7 +53,7 @@ test("staff can acknowledge, reassign, and resolve an opened task", async () => 
 
 test("staff can resolve follow-up after the admitted voice call has ended", async () => {
   const scope = { tenantId: "ended-staff-tenant", clinicId: "ended-staff-clinic", locationId: "ended-staff-location" };
-  const policy = { scope, policyVersion: "1", bookingEnabled: false,
+  const policy = { scope, policyVersion: "1", automationEnabled: true, bookingEnabled: false,
     capabilities: { book: "unavailable" as const, cancel: "requestOnly" as const, reschedule: "requestOnly" as const,
       intake: "requestOnly" as const, transfer: "requestOnly" as const },
     staffDestination: { kind: "owner" as const, ownerRef: "ended-staff-owner" },

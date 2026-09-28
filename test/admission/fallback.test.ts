@@ -25,8 +25,9 @@ function fixture(kind: "memory" | "postgres", suffix: string) {
   const scope = { tenantId: `fallback-tenant-${suffix}`, clinicId: `fallback-clinic-${suffix}`, locationId: `fallback-location-${suffix}` };
   const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt) : new MemoryLedger();
   let routeAvailable = true;
+  let automationEnabled = true;
   const admission = new CallAdmissionService(ledger, async dialedNumber =>
-    routeAvailable && dialedNumber === "+6125550100" ? ok(referenceDefaultPolicy(scope)) : err({ kind: "routeUnavailable" as const }), () => now);
+    routeAvailable && dialedNumber === "+6125550100" ? ok({ ...referenceDefaultPolicy(scope), automationEnabled }) : err({ kind: "routeUnavailable" as const }), () => now);
   const attempts: FallbackRequest[] = [];
   const alerts: AdmissionFailureAlert[] = [];
   let fallbackOutcome: FallbackOutcome = { kind: "connected", providerConnectionRef: `connection-${suffix}` };
@@ -47,6 +48,7 @@ function fixture(kind: "memory" | "postgres", suffix: string) {
   return {
     ledger, coordinator, attempts, alerts,
     setRouteAvailable(value: boolean) { routeAvailable = value; },
+    setAutomationEnabled(value: boolean) { automationEnabled = value; },
     setFallbackOutcome(value: FallbackOutcome) { fallbackOutcome = value; },
     setFallbackThrows(value: boolean) { fallbackThrows = value; },
     setAlertThrows(value: boolean) { alertThrows = value; },
@@ -54,6 +56,17 @@ function fixture(kind: "memory" | "postgres", suffix: string) {
 }
 
 for (const kind of kinds) {
+  test(`${kind}: disabled automation uses the configured number fallback and records no new call`, async () => {
+    const app = fixture(kind, `${kind}-automation-disabled`);
+    app.setAutomationEnabled(false);
+    const event = { key: { accountRef: `account-${kind}`, providerCallRef: "disabled" }, dialedNumber: "+6125550100", receivedAt: now };
+    const routed = value(await app.coordinator.begin(event));
+    assert.equal(routed.kind, "fallback");
+    assert.equal(app.attempts.length, 1);
+    assert.equal(app.alerts[0]?.reason, "automationDisabled");
+    assert.equal(value(await app.ledger.findAdmission(callIdFor(event.key))), null);
+  });
+
   test(`${kind}: admitted call and replay never invoke provider fallback`, async () => {
     const app = fixture(kind, `${kind}-admitted`);
     const event = { key: { accountRef: `account-${kind}`, providerCallRef: "normal" }, dialedNumber: "+6125550100", receivedAt: now };

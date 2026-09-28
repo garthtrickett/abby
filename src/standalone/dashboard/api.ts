@@ -40,7 +40,7 @@ async function request(path: string, init?: RequestInit): Promise<Result<unknown
 function policy(value: unknown): Result<CallPolicy, DashboardFailure> {
   const reply = record(value);
   const current = record(reply?.policy);
-  return reply?.kind === "settings" && current && typeof current.policyVersion === "string" && typeof current.bookingEnabled === "boolean" && record(current.capabilities)
+  return reply?.kind === "settings" && current && typeof current.policyVersion === "string" && typeof current.automationEnabled === "boolean" && typeof current.bookingEnabled === "boolean" && record(current.capabilities)
     ? ok(current as CallPolicy) : err({ kind: "malformed" });
 }
 

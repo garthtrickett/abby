@@ -30,17 +30,45 @@ function failure<T>(result: Result<T, { kind: string }>, kind: string): void {
 
 function fixture(kind: "memory" | "postgres", suffix: string) {
   const scope = { tenantId: `admission-tenant-${suffix}`, clinicId: `admission-clinic-${suffix}`, locationId: `admission-location-${suffix}` };
-  const policy: CallPolicy = { ...referenceDefaultPolicy(scope), bookingEnabled: true, capabilities: { book: "execute", cancel: "requestOnly", reschedule: "requestOnly", intake: "requestOnly", transfer: "requestOnly" } };
+  const policy: CallPolicy = { ...referenceDefaultPolicy(scope), automationEnabled: true, bookingEnabled: true, capabilities: { book: "execute", cancel: "requestOnly", reschedule: "requestOnly", intake: "requestOnly", transfer: "requestOnly" } };
   const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt) : new MemoryLedger();
   let routeReads = 0;
+  let automationEnabled = true;
   const service = new CallAdmissionService(ledger, async dialed => {
     routeReads += 1;
-    return dialed === "+6125550100" ? ok(policy) : { ok: false as const, error: { kind: "routeUnavailable" as const } };
+    return dialed === "+6125550100" ? ok({ ...policy, automationEnabled }) : { ok: false as const, error: { kind: "routeUnavailable" as const } };
   }, () => now);
-  return { scope, policy, ledger, service, routeReads: () => routeReads };
+  return { scope, policy, ledger, service, routeReads: () => routeReads,
+    setAutomationEnabled(value: boolean) { automationEnabled = value; } };
 }
 
 for (const kind of kinds) {
+  test(`${kind}: default-off automation refuses admission`, async () => {
+    const app = fixture(kind, `${kind}-default-off`);
+    const service = new CallAdmissionService(app.ledger, async () => ok(referenceDefaultPolicy(app.scope)), () => now);
+    const event = { key: { accountRef: `account-${kind}`, providerCallRef: "default-off" }, dialedNumber: "+6125550100", receivedAt: now };
+    failure(await service.begin(event), "automationDisabled");
+    assert.equal(value(await app.ledger.findAdmission(callIdFor(event.key))), null);
+  });
+
+  test(`${kind}: disabling automation blocks new calls but preserves an admitted call and duplicate replay`, async () => {
+    const app = fixture(kind, `${kind}-automation-switch`);
+    const key = { accountRef: `account-${kind}`, providerCallRef: "admitted-before-disable" };
+    const event = { key, dialedNumber: "+6125550100", receivedAt: now };
+    const created = value(await app.service.begin(event));
+    assert.equal(created.kind, "created");
+    const runtime = new CallRuntime(app.ledger, app.scope);
+    value(await runtime.activate(created.receipt.callId, "ongoing-session", "2026-09-28T10:00:01.000Z"));
+    app.setAutomationEnabled(false);
+    assert.equal(value(await app.service.begin(event)).kind, "duplicate");
+    failure(await app.service.begin({ ...event, key: { ...key, providerCallRef: "new-after-disable" } }), "automationDisabled");
+    const ongoing = value(await runtime.acceptTurn({ callId: created.receipt.callId, sessionId: "ongoing-session",
+      turnId: "handoff-after-disable", text: "Staff please", quality: "clear", at: "2026-09-28T10:00:02.000Z" },
+    { kind: "handoff", reason: "callerRequested" }, "2026-09-28T10:00:02.000Z"));
+    assert.equal(ongoing.policy.automationEnabled, true);
+    assert.equal(Object.values(ongoing.staffItems)[0]?.reason, "callerRequested");
+  });
+
   test(`${kind}: concurrent admission creates one call`, async () => {
     const app = fixture(kind, `${kind}-concurrent`);
     const event = { key: { accountRef: `account-${kind}`, providerCallRef: "concurrent-call" }, dialedNumber: "+6125550100", receivedAt: now };
@@ -165,7 +193,7 @@ test("postgres: ledger clock rejects forged intake, renewal, and expiry timestam
   const scope = { tenantId: "database-clock-tenant", clinicId: "database-clock-clinic", locationId: "database-clock-location" };
   const ledger = new PostgresLedger(db!);
   const basePolicy = referenceDefaultPolicy(scope);
-  const policy: CallPolicy = { ...basePolicy, capabilities: { ...basePolicy.capabilities, transfer: "execute" },
+  const policy: CallPolicy = { ...basePolicy, automationEnabled: true, capabilities: { ...basePolicy.capabilities, transfer: "execute" },
     transferDestinationRef: "database-clock-destination",
     staffedIntervals: [{ startsAt: new Date(Date.now() - 60_000).toISOString(), endsAt: new Date(Date.now() + 60_000).toISOString() }] };
   const before = await sql<{ current_time: Date }>`select clock_timestamp() as current_time`.execute(db!);

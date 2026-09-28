@@ -18,12 +18,12 @@ const scope = object({ tenantId: nonEmpty, clinicId: nonEmpty, locationId: nonEm
 const destination = { oneOf: [object({ kind: { const: "owner" }, ownerRef: nonEmpty }),
   object({ kind: { const: "queue" }, queueRef: nonEmpty })] } satisfies JsonSchema;
 const capabilityMode = choice("execute", "requestOnly", "unavailable");
-const policy = optional({ scope, policyVersion: nonEmpty, bookingEnabled: bool,
+const policy = optional({ scope, policyVersion: nonEmpty, automationEnabled: bool, bookingEnabled: bool,
   capabilities: object({ book: capabilityMode, cancel: capabilityMode, reschedule: capabilityMode,
     intake: capabilityMode, transfer: capabilityMode }), transferDestinationRef: str,
   staffedIntervals: { type: "array", items: object({ startsAt: str, endsAt: str }), maxItems: 512 },
   staffDestination: destination, operatorQueue: destination },
-["scope", "policyVersion", "bookingEnabled", "capabilities", "staffDestination", "operatorQueue"]);
+["scope", "policyVersion", "automationEnabled", "bookingEnabled", "capabilities", "staffDestination", "operatorQueue"]);
 const auditEntry = { oneOf: [
   object({ version: key, enabled: bool, provenance: { const: "recorded" }, actorRef: key,
     previousEnabled: bool, changedAt: str }),

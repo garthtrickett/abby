@@ -55,6 +55,7 @@ export async function setup(id: string, modes?: Partial<CallPolicy["capabilities
   const policy: CallPolicy = {
     scope,
     policyVersion: "policy-1",
+    automationEnabled: true,
     bookingEnabled: true,
     capabilities: { book: "execute", cancel: "requestOnly", reschedule: "requestOnly", intake: "execute", transfer: "requestOnly", ...modes },
     staffDestination: { kind: "owner", ownerRef: `staff-${id}` },
