@@ -14,6 +14,21 @@ function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
 }
 
+function validKnowledgeSource(value: unknown, scope: LocationScope, now: string): value is import("./model.ts").ApprovedKnowledge {
+  if (!value || typeof value !== "object") return false;
+  const source = value as Record<string, unknown>;
+  if (!source.scope || typeof source.scope !== "object") return false;
+  const bound = source.scope as Record<string, unknown>;
+  return bound.tenantId === scope.tenantId && bound.clinicId === scope.clinicId && bound.locationId === scope.locationId &&
+    typeof source.sourceRef === "string" && !!source.sourceRef.trim() && source.sourceRef.length <= 256 &&
+    typeof source.version === "string" && !!source.version.trim() && source.version.length <= 128 &&
+    typeof source.ownerRef === "string" && !!source.ownerRef.trim() && source.ownerRef.length <= 256 &&
+    typeof source.approvedText === "string" && !!source.approvedText.trim() && source.approvedText.length <= 2_000 &&
+    source.approved === true && typeof source.effectiveFrom === "string" && typeof source.effectiveUntil === "string" &&
+    Number.isFinite(Date.parse(source.effectiveFrom)) && Number.isFinite(Date.parse(source.effectiveUntil)) &&
+    Date.parse(source.effectiveFrom) <= Date.parse(now) && Date.parse(now) < Date.parse(source.effectiveUntil);
+}
+
 function turnDigest(turn: FinalCallerTurn, interpretation: TurnInterpretation): string {
   return digestTurn({ turn, interpretation });
 }
@@ -195,17 +210,22 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       state.callerMessages.push("I can't complete that request here.");
       break;
     case "answer": {
-      const sources = interpretation.sources.filter(source =>
-        sameScope(source.scope, state.policy.scope) && source.approved &&
-        Date.parse(source.effectiveFrom) <= Date.parse(now) && Date.parse(now) < Date.parse(source.effectiveUntil));
-      if (sources.length !== 1 || interpretation.proposedText !== sources[0]?.approvedText) {
+      const sources = Array.isArray(interpretation.sources) ? interpretation.sources : [];
+      const source = sources[0];
+      if (turn.quality !== "clear" || sources.length !== 1 ||
+          !validKnowledgeSource(source, state.policy.scope, now) || interpretation.proposedText !== source.approvedText) {
         addStaffTask(state, "systemFailure", now);
         state.callerMessages.push("I can't verify that information right now.");
       } else {
-        state.callerMessages.push(sources[0].approvedText);
+        state.callerMessages.push(source.approvedText);
+        state.knowledgeAnswers.push({ turnId: turn.turnId, sourceRef: source.sourceRef, version: source.version, ownerRef: source.ownerRef });
       }
       break;
     }
+    case "knowledgeFailure":
+      addStaffTask(state, "systemFailure", now);
+      state.callerMessages.push("I can't verify that information right now.");
+      break;
   }
   const newMessages = state.callerMessages.slice(messageCount);
   if (newMessages.length > 0 && !state.pendingPresentationId) {

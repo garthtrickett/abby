@@ -26,6 +26,8 @@ The [managed voice-session composition](../phase-1/MANAGED_VOICE_SESSION.md) reg
 
 [Caller notice delivery](../phase-1/CALLER_NOTICE_DELIVERY.md) commits final-turn fallback responses as pending presentations, so the attached session can speak and acknowledge them. A newer turn supersedes an unsent notice.
 
+[Trusted knowledge reads](../phase-1/TRUSTED_KNOWLEDGE_READ.md) let voice intents and agent commands name a source while the host supplies approval, current text, and scope. Accepted answers record source provenance and use the same notice playback path; untrusted or missing evidence produces staff follow-up.
+
 The [standalone lit-html dashboard shell](../phase-1/LIT_HTML_DASHBOARD.md) renders the booking setting and a redacted call summary over the same typed command gateway used by agents. Its local reference server and parallel browser journeys use synthetic clinic data.
 
 Run `npm ci`, `npm test`, and `npm run probe:postgres` (Docker required for the last command). The probe migrates a fresh PostgreSQL database, regenerates Kanel types, and runs the text and storage cases. Test files run in parallel with isolated calls and host fixtures. A new feature, capability, or setting needs a text contract case that checks caller wording, state, effects, and failure behavior. Its real voice path also needs a full-call E2E case when that path exists.

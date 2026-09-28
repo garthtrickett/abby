@@ -1,11 +1,11 @@
 import { EffectWorker } from "../core/effect-worker.ts";
-import type { BookingEvidenceHost, HostEffects, PolicyFailure, PolicyStore } from "../core/host.ts";
+import type { BookingEvidenceHost, HostEffects, KnowledgeHost, PolicyFailure, PolicyStore } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err } from "../core/model.ts";
 import type { CallState, FinalCallerTurn, LocationScope, Result, TransitionFailure, TurnInterpretation } from "../core/model.ts";
 import { CallRuntime } from "../core/runtime.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 export class TextReception {
@@ -47,6 +47,28 @@ export class TextReception {
         interpretation = { kind: "ambiguousTarget" };
       } else {
         interpretation = { kind: "readFailure", target: evidence.error.target, failure: evidence.error.kind === "unavailable" ? "unavailable" : "notFound" };
+      }
+    }
+    return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);
+  }
+
+  async answer(scope: LocationScope, turn: FinalCallerTurn, sourceRefs: readonly string[], proposedText: string, now: string, expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
+    const runtime = this.runtime(scope);
+    const current = await runtime.read(turn.callId);
+    if (!current.ok) return current;
+    let interpretation: TurnInterpretation;
+    if (turn.quality !== "clear" || !Array.isArray(sourceRefs) || sourceRefs.length < 1 || sourceRefs.length > 8 ||
+        sourceRefs.some(ref => typeof ref !== "string" || !ref.trim() || ref.length > 256) || new Set(sourceRefs).size !== sourceRefs.length ||
+        typeof proposedText !== "string" || !proposedText.trim() || proposedText.length > 2_000) {
+      interpretation = { kind: "knowledgeFailure", reason: "invalidQuery" };
+    } else {
+      try {
+        const read = await this.host.readKnowledge(scope, sourceRefs);
+        interpretation = read.ok
+          ? { kind: "answer", sources: read.value, proposedText }
+          : { kind: "knowledgeFailure", reason: read.error.kind };
+      } catch {
+        interpretation = { kind: "knowledgeFailure", reason: "unavailable" };
       }
     }
     return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);

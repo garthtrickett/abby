@@ -49,7 +49,9 @@ function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = f
   const scope: LocationScope = { tenantId: `tenant-${id}`, clinicId: `clinic-${id}`, locationId: `location-${id}` };
   const patient = { scope, patientRef: `patient-${id}`, verificationRef: `proof-${id}`, expiresAt };
   const offer = (suffix: string) => ({ scope, offerRef: `offer-${id}-${suffix}`, serviceRef: "physio", startsAt: "2026-09-29T11:00:00.000Z", expiresAt });
-  const host = new ReferenceClinicHost(duplicateProof ? [patient, { ...patient, patientRef: `other-patient-${id}` }] : [patient], [offer("one"), offer("two"), offer("three")]);
+  const host = new ReferenceClinicHost(duplicateProof ? [patient, { ...patient, patientRef: `other-patient-${id}` }] : [patient], [offer("one"), offer("two"), offer("three")],
+    [{ scope, sourceRef: "hours", version: "hours-v1", ownerRef: `owner-${id}`, approvedText: "We open at 9 am.", approved: true,
+      effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: expiresAt }]);
   let reception: TextReception;
   let policy: PolicyStore;
   if (kind === "standalone") {
@@ -67,7 +69,7 @@ function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = f
 for (const kind of kinds) {
   test(`${kind}: agent proposal requires caller delivery, affirmation, and keyed host commit`, async () => {
     const app = fixture(kind, `${kind}-booking`);
-    assert.deepEqual(app.agent.listPermitted().map(item => item.id), ["settings.read.v1", "booking.propose.v1"]);
+    assert.deepEqual(app.agent.listPermitted().map(item => item.id), ["settings.read.v1", "booking.propose.v1", "knowledge.answer.v1"]);
     assert.equal(app.admin.listPermitted().some(item => item.id === "settings.appointments.booking.enabled.change.v1"), true);
     error(await app.agent.submit({ kind: "settings.appointments.booking.enabled.change.v1", expectedVersion: "0", enabled: true }), "forbidden");
     const enabled = settings(value(await app.admin.submit({ kind: "settings.appointments.booking.enabled.change.v1", expectedVersion: "0", enabled: true })));
@@ -186,5 +188,29 @@ for (const kind of kinds) {
     const foreignScope = { tenantId: "foreign", clinicId: "foreign", locationId: "foreign" };
     value(await app.reception.startCall(foreignCall, foreignScope));
     error(await app.agent.submit({ kind: "booking.propose.v1", turn: turn(foreignCall, "intruder", "Book"), verificationRef: app.patient.verificationRef, offerRef: app.offer("one").offerRef, now }), "callUnknown");
+  });
+
+  test(`${kind}: agent knowledge command uses host approval and records its source`, async () => {
+    const app = fixture(kind, `${kind}-knowledge-command`);
+    const callId = `call-${kind}-knowledge-command`;
+    value(await app.reception.startCall(callId, app.scope));
+    const response = value(await app.agent.submit({ kind: "knowledge.answer.v1", turn: turn(callId, "hours", "Hours?"),
+      sourceRefs: ["hours"], proposedText: "We open at 9 am.", now }));
+    assert.equal(response.kind, "knowledgeAnswer");
+    assert.equal(response.state.callerMessages.at(-1), "We open at 9 am.");
+    assert.deepEqual(response.state.knowledgeAnswers, [{ turnId: "hours", sourceRef: "hours", version: "hours-v1", ownerRef: `owner-${kind}-knowledge-command` }]);
+    assert.equal(response.state.presentations[response.state.pendingPresentationId!]?.kind, "notice");
+
+    const forged = value(await app.agent.submit({ kind: "knowledge.answer.v1", turn: turn(callId, "forged", "Hours?"),
+      sourceRefs: ["hours"], proposedText: "We close at 5 pm.", now }));
+    assert.equal(forged.kind, "knowledgeAnswer");
+    assert.equal(forged.state.callerMessages.at(-1), "I can't verify that information right now.");
+    assert.equal(forged.state.knowledgeAnswers.length, 1);
+    assert.equal(app.host.bookings(app.scope).length, 0);
+
+    const other = new CommandGateway({ actorRef: "other-agent", role: "agent",
+      scope: { ...app.scope, tenantId: "another-tenant" } }, app.policy, app.reception);
+    error(await other.submit({ kind: "knowledge.answer.v1", turn: turn(callId, "foreign", "Hours?"),
+      sourceRefs: ["hours"], proposedText: "We open at 9 am.", now }), "callUnknown");
   });
 }

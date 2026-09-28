@@ -14,7 +14,9 @@ async function localDashboard(role: "clinicAdmin" | "staff") {
   const scope: LocationScope = { tenantId: "browser-tenant", clinicId: "browser-clinic", locationId: "browser-location" };
   const ledger = new MemoryLedger();
   const policy = new MemoryPolicyStore();
-  const reception = new TextReception(ledger, policy, new ReferenceClinicHost([], []));
+  const reception = new TextReception(ledger, policy, new ReferenceClinicHost([], [],
+    [{ scope, sourceRef: "hours", version: "hours-v1", ownerRef: "clinic-owner", approvedText: "We open at 9 am.", approved: true,
+      effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]));
   const started = await reception.startCall("before-setting", scope);
   assert.equal(started.ok, true);
   const gateway = new CommandGateway({ actorRef: `browser-${role}`, role, scope }, policy, reception, new CallReview(ledger));
@@ -79,6 +81,24 @@ test("E2E-069: view-only staff can review a call but cannot change booking setti
     const policy = await app.policy.read(app.scope);
     assert.ok(policy.ok);
     assert.equal(policy.value.bookingEnabled, false);
+  } finally {
+    await app.close();
+  }
+});
+
+test("E2E-004: staff can review the approved answer source without seeing spoken text", async ({ page }) => {
+  const app = await localDashboard("staff");
+  try {
+    const answered = await app.reception.answer(app.scope,
+      { callId: "before-setting", turnId: "hours-answer", text: "Hours?", quality: "clear", at: "2026-09-28T10:00:00.000Z" },
+      ["hours"], "We open at 9 am.", "2026-09-28T10:00:00.000Z");
+    assert.equal(answered.ok, true);
+    await page.goto(app.url);
+    await page.getByRole("textbox", { name: "Call ID" }).fill("before-setting");
+    await page.getByRole("button", { name: "Load call" }).click();
+    await expect(page.getByLabel("Call summary")).toContainText("1 sourced answer(s)");
+    await expect(page.getByLabel("Call summary")).toContainText("hours · version hours-v1");
+    await expect(page.getByLabel("Call summary")).not.toContainText("We open at 9 am.");
   } finally {
     await app.close();
   }

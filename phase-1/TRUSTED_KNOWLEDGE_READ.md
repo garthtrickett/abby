@@ -1,0 +1,7 @@
+# Trusted administrative knowledge read, version 0.1
+
+The voice intent and `knowledge.answer.v1` agent command carry source references and proposed wording. They cannot supply approval flags or source text. `TextReception` asks the host for scoped knowledge, then the call transition accepts exactly one approved, current source whose text matches the proposal. The source reference, version, and owner are recorded in the call state and a redacted call summary. A missing, expired, conflicting, cross-tenant, unapproved, malformed, or mismatched source produces a durable fallback notice and staff work. Invalid command input and read failures stay typed; neither can create an appointment write.
+
+The in-process reference host supplies immutable knowledge records for test compositions. The same synthetic final-turn and playback journeys run with memory and PostgreSQL ledgers. Agent-command journeys run through embedded and standalone compositions. Existing PostgreSQL call state without a `knowledgeAnswers` field is read as an empty provenance list and gains the field on its next transition.
+
+This is the trusted read seam and call behavior, not the full knowledge-management feature. Approval and edit commands, standalone knowledge persistence, immutable version history, clinic policy snapshots, model execution, and live media remain open. The reference host's constructor data is synthetic and does not grant a model authority to approve knowledge.

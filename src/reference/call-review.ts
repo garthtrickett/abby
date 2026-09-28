@@ -8,6 +8,7 @@ export type CallSummary = Readonly<{
   version: number;
   actions: readonly Readonly<{ kind: ActionState["kind"]; status: ActionState["status"] }>[];
   staffItems: readonly Readonly<{ reason: StaffItem["reason"]; status: StaffItem["status"] }>[];
+  knowledgeAnswers: readonly Readonly<{ sourceRef: string; version: string; ownerRef: string }>[];
 }>;
 
 const actionKinds = ["book", "cancel", "reschedule", "intake"] as const;
@@ -32,7 +33,10 @@ export class CallReview {
     const actions = Object.values(call.actions);
     const staffItems = Object.values(call.staffItems);
     if (actions.some(item => !item || !allowed(actionKinds, item.kind) || !allowed(actionStatuses, item.status)) ||
-        staffItems.some(item => !item || !allowed(staffReasons, item.reason) || !allowed(staffStatuses, item.status))) {
+        staffItems.some(item => !item || !allowed(staffReasons, item.reason) || !allowed(staffStatuses, item.status)) ||
+        !Array.isArray(call.knowledgeAnswers) || call.knowledgeAnswers.some(item => !item ||
+          typeof item.sourceRef !== "string" || !item.sourceRef || typeof item.version !== "string" || !item.version ||
+          typeof item.ownerRef !== "string" || !item.ownerRef)) {
       return err({ kind: "storageCorrupt" });
     }
     return ok({
@@ -41,6 +45,7 @@ export class CallReview {
       version: call.version,
       actions: actions.map(({ kind, status }) => ({ kind, status })),
       staffItems: staffItems.map(({ reason, status }) => ({ reason, status })),
+      knowledgeAnswers: call.knowledgeAnswers.map(({ sourceRef, version, ownerRef }) => ({ sourceRef, version, ownerRef })),
     });
   }
 }
