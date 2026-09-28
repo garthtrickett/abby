@@ -7,6 +7,7 @@ import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
 import { CallAdmissionService, callIdFor } from "../../src/voice/admission.ts";
+import { CallLivenessMonitor } from "../../src/voice/call-liveness-monitor.ts";
 
 const now = "2026-09-28T10:00:00.000Z";
 const kinds = process.env.ABBY_LEDGER === "postgres" ? ["memory", "postgres"] as const : ["memory"] as const;
@@ -114,5 +115,65 @@ for (const kind of kinds) {
     const full = value(await app.ledger.findAdmission(app.callId));
     const pending = value(await app.ledger.findPendingLocation(app.callId));
     assert.equal(Number(full !== null) + Number(pending !== null), 1);
+  });
+
+  test(`${kind}: liveness expires an abandoned choice without a caller retry`, async () => {
+    const app = fixture(kind);
+    value(await app.ledger.reservePendingLocation(app.callId, app.route, app.admission));
+    const deadline = new Date(Date.parse(now) + 120_000).toISOString();
+    const monitor = new CallLivenessMonitor(app.ledger, app.scope);
+    assert.equal(value(await monitor.expireDue(new Date(Date.parse(deadline) - 1).toISOString())), 0);
+    assert.equal(value(await monitor.expireDue(deadline)), 1);
+    assert.equal(value(await app.ledger.findPendingLocation(app.callId))?.status, "expired");
+    assert.equal(value(await monitor.expireDue(deadline)), 0);
+    const service = new CallAdmissionService(app.ledger, async () => { throw new Error("must not reroute"); });
+    const replay = await service.begin({ key: app.admission.key, dialedNumber: app.admission.dialedNumber, receivedAt: now });
+    assert.ok(!replay.ok);
+    assert.equal(replay.error.kind, "admissionExpired");
+    assert.equal(value(await app.ledger.findAdmission(app.callId)), null);
+  });
+
+  test(`${kind}: pending-choice scan is scoped and drains a hundred records per pass`, async () => {
+    const app = fixture(kind);
+    for (let index = 0; index < 101; index += 1) {
+      const key = { ...app.admission.key, providerCallRef: `${app.admission.key.providerCallRef}-${index}` };
+      value(await app.ledger.reservePendingLocation(callIdFor(key), app.route, { ...app.admission, key }));
+    }
+    const foreignKey = { ...app.admission.key, providerCallRef: `${app.admission.key.providerCallRef}-foreign` };
+    const foreignRoute = { ...app.route, clinicId: `other-${app.route.clinicId}` };
+    value(await app.ledger.reservePendingLocation(callIdFor(foreignKey), foreignRoute, { ...app.admission, key: foreignKey }));
+    const late = new Date(Date.parse(now) + 120_000).toISOString();
+    const monitor = new CallLivenessMonitor(app.ledger, app.scope);
+    assert.equal(value(await monitor.expireDue(late)), 100);
+    assert.equal(value(await monitor.expireDue(late)), 1);
+    assert.equal(value(await monitor.expireDue(late)), 0);
+    assert.equal(value(await app.ledger.findPendingLocation(callIdFor(foreignKey)))?.status, "pending");
+    assert.equal(value(await new CallLivenessMonitor(app.ledger,
+      { tenantId: foreignRoute.tenantId, clinicId: foreignRoute.clinicId, locationId: "foreign" }).expireDue(late)), 1);
+  });
+
+  test(`${kind}: expiry and location binding settle to one durable outcome`, async () => {
+    const app = fixture(kind);
+    value(await app.ledger.reservePendingLocation(app.callId, app.route, app.admission));
+    const before = new Date(Date.parse(now) + 119_999).toISOString();
+    const deadline = new Date(Date.parse(now) + 120_000).toISOString();
+    const [bound, expired] = await Promise.all([
+      app.ledger.bindPendingLocation(app.callId, app.policy, before),
+      new CallLivenessMonitor(app.ledger, app.scope).expireDue(deadline),
+    ]);
+    assert.ok(expired.ok);
+    const pending = value(await app.ledger.findPendingLocation(app.callId));
+    const admitted = value(await app.ledger.findAdmission(app.callId));
+    if (bound.ok) {
+      assert.equal(bound.value.kind, "created");
+      assert.equal(expired.value, 0);
+      assert.equal(pending?.status, "bound");
+      assert.ok(admitted);
+    } else {
+      assert.equal(bound.error.kind, "callConflict");
+      assert.equal(expired.value, 1);
+      assert.equal(pending?.status, "expired");
+      assert.equal(admitted, null);
+    }
   });
 }

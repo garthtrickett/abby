@@ -1,5 +1,5 @@
 import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "./model.ts";
-import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingLocationCall, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffQueueEntry, TransitionAction, TransitionFailure } from "./model.ts";
+import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingLocationCall, PendingLocationExpiryResult, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffQueueEntry, TransitionAction, TransitionFailure } from "./model.ts";
 import { transition } from "./transition.ts";
 import { READINESS_REQUIREMENTS, unprovenReadiness } from "./readiness.ts";
 import { LOCATION_CHOICE_TIMEOUT_MS, pendingMatchesAdmission, policyMatchesPending, validPendingAdmission, validPendingRoute } from "./pending-location.ts";
@@ -16,6 +16,8 @@ export interface LedgerStore {
   findPendingLocation(callId: string): Promise<Result<PendingLocationCall | null, TransitionFailure>>;
   reservePendingLocation(callId: string, route: PendingLocationRoute, admission: Admission): Promise<Result<PendingLocationResult, TransitionFailure>>;
   bindPendingLocation(callId: string, policy: CallPolicy, now: string): Promise<Result<AdmissionResult, TransitionFailure>>;
+  findExpiredPendingLocations(now: string, clinic?: Pick<LocationScope, "tenantId" | "clinicId">): Promise<Result<readonly PendingLocationCall[], TransitionFailure>>;
+  expirePendingLocation(callId: string, now: string): Promise<Result<PendingLocationExpiryResult, TransitionFailure>>;
   findExpiredAdmissions(now: string, scope?: LocationScope): Promise<Result<readonly AdmissionReceipt[], TransitionFailure>>;
   findExpiredSessions(now: string, scope?: LocationScope): Promise<Result<readonly ActiveSessionReceipt[], TransitionFailure>>;
   findPendingPresentations(now: string, scope?: LocationScope, afterCallId?: string): Promise<Result<readonly PendingPresentationRef[], TransitionFailure>>;
@@ -178,6 +180,27 @@ export class MemoryLedger implements LedgerStore {
     this.calls.set(callId, state);
     this.pendingLocations.set(callId, { ...pending, status: "bound" });
     return ok({ kind: "created", receipt: admissionReceipt(state)! });
+  }
+
+  async findExpiredPendingLocations(now: string, clinic?: Pick<LocationScope, "tenantId" | "clinicId">): Promise<Result<readonly PendingLocationCall[], TransitionFailure>> {
+    if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
+    return ok([...this.pendingLocations.values()].filter(pending => pending.status === "pending" &&
+      Date.parse(pending.admission.deadline) <= Date.parse(now) &&
+      (!clinic || (pending.route.tenantId === clinic.tenantId && pending.route.clinicId === clinic.clinicId)))
+      .sort((left, right) => left.callId.localeCompare(right.callId)).slice(0, 100).map(pending => structuredClone(pending)));
+  }
+
+  async expirePendingLocation(callId: string, now: string): Promise<Result<PendingLocationExpiryResult, TransitionFailure>> {
+    if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
+    const pending = this.pendingLocations.get(callId);
+    if (!pending) return err({ kind: "callUnknown" });
+    if (pending.status === "bound") return this.calls.has(callId)
+      ? ok({ kind: "bound", pending: structuredClone(pending) }) : err({ kind: "storageCorrupt" });
+    if (pending.status === "expired") return ok({ kind: "alreadyExpired", pending: structuredClone(pending) });
+    if (Date.parse(now) < Date.parse(pending.admission.deadline)) return err({ kind: "invalidTransition" });
+    const expired: PendingLocationCall = { ...pending, status: "expired" };
+    this.pendingLocations.set(callId, expired);
+    return ok({ kind: "expired", pending: structuredClone(expired) });
   }
 
   async findExpiredAdmissions(now: string, scope?: LocationScope): Promise<Result<readonly AdmissionReceipt[], TransitionFailure>> {

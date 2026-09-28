@@ -1,7 +1,7 @@
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import { CALL_TERMINAL_REASONS, POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "../core/model.ts";
-import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, Effect, LocationScope, PendingLocationCall, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffItem, StaffQueueEntry, TransitionAction, TransitionFailure } from "../core/model.ts";
+import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, Effect, LocationScope, PendingLocationCall, PendingLocationExpiryResult, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffItem, StaffQueueEntry, TransitionAction, TransitionFailure } from "../core/model.ts";
 import { admissionReceipt, initialState, sameAdmission } from "../core/ledger.ts";
 import { LOCATION_CHOICE_TIMEOUT_MS, pendingMatchesAdmission, policyMatchesPending, validPendingAdmission, validPendingLocation, validPendingRoute } from "../core/pending-location.ts";
 import type { LedgerStore } from "../core/ledger.ts";
@@ -330,6 +330,52 @@ export class PostgresLedger implements LedgerStore {
         await trx.updateTable("pending_location_calls").set({ status: "bound", state: { ...pending, status: "bound" } })
           .where("call_id", "=", callId as PendingLocationCallsCallId).execute();
         return ok({ kind: "created", receipt: admissionReceipt(state)! });
+      });
+    } catch { return err({ kind: "storageFailure" }); }
+  }
+
+  async findExpiredPendingLocations(now: string, clinic?: Pick<LocationScope, "tenantId" | "clinicId">): Promise<Result<readonly PendingLocationCall[], TransitionFailure>> {
+    if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
+    try {
+      const ledgerNow = await this.trustedNow(this.db, now);
+      let query = this.db.selectFrom("pending_location_calls")
+        .select(["call_id", "state", "status", "tenant_id", "clinic_id"])
+        .where("status", "=", "pending")
+        .where(sql<boolean>`(state->'admission'->>'deadline')::timestamptz <= ${ledgerNow}::timestamptz`);
+      if (clinic) query = query.where("tenant_id", "=", clinic.tenantId).where("clinic_id", "=", clinic.clinicId);
+      const rows = await query.orderBy("call_id").limit(100).execute();
+      const pending: PendingLocationCall[] = [];
+      for (const row of rows) {
+        if (!validPendingLocation(row.state, row.call_id) || row.status !== row.state.status ||
+            row.tenant_id !== row.state.route.tenantId || row.clinic_id !== row.state.route.clinicId) return err({ kind: "storageCorrupt" });
+        pending.push(row.state);
+      }
+      return ok(pending);
+    } catch { return err({ kind: "storageFailure" }); }
+  }
+
+  async expirePendingLocation(callId: string, now: string): Promise<Result<PendingLocationExpiryResult, TransitionFailure>> {
+    if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
+    try {
+      return await this.db.transaction().execute(async trx => {
+        await this.lockCall(trx, callId);
+        const row = await trx.selectFrom("pending_location_calls").select(["state", "status", "tenant_id", "clinic_id"])
+          .where("call_id", "=", callId as PendingLocationCallsCallId).forUpdate().executeTakeFirst();
+        if (!row) return err({ kind: "callUnknown" });
+        if (!validPendingLocation(row.state, callId) || row.status !== row.state.status ||
+            row.tenant_id !== row.state.route.tenantId || row.clinic_id !== row.state.route.clinicId) return err({ kind: "storageCorrupt" });
+        const pending = row.state;
+        if (pending.status === "bound") {
+          const call = await trx.selectFrom("calls").select("call_id").where("call_id", "=", callId as CallsCallId).executeTakeFirst();
+          return call ? ok({ kind: "bound", pending }) : err({ kind: "storageCorrupt" });
+        }
+        if (pending.status === "expired") return ok({ kind: "alreadyExpired", pending });
+        const ledgerNow = await this.trustedNow(trx, now);
+        if (Date.parse(ledgerNow) < Date.parse(pending.admission.deadline)) return err({ kind: "invalidTransition" });
+        const expired: PendingLocationCall = { ...pending, status: "expired" };
+        await trx.updateTable("pending_location_calls").set({ status: "expired", state: expired })
+          .where("call_id", "=", callId as PendingLocationCallsCallId).execute();
+        return ok({ kind: "expired", pending: expired });
       });
     } catch { return err({ kind: "storageFailure" }); }
   }
