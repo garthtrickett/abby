@@ -5,7 +5,10 @@ import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult
 import { admissionReceipt, initialState, sameAdmission } from "../core/ledger.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { transition } from "../core/transition.ts";
+import type { WriteStopStatus } from "../core/write-stop.ts";
 import type Database from "./generated/Database.ts";
+import type { ClinicWriteStopClinicId, ClinicWriteStopTenantId } from "./generated/public/ClinicWriteStop.ts";
+import type { ClinicWriteStopInflightEffectId } from "./generated/public/ClinicWriteStopInflight.ts";
 import type { CallsCallId } from "./generated/public/Calls.ts";
 import type { CallEventsSequence } from "./generated/public/CallEvents.ts";
 import type { EffectOutboxEffectId } from "./generated/public/EffectOutbox.ts";
@@ -63,6 +66,61 @@ export class PostgresLedger implements LedgerStore {
     const current = result.rows[0]?.current_time;
     if (!(current instanceof Date) || !Number.isFinite(current.getTime())) throw new Error("database clock unavailable");
     return current.toISOString();
+  }
+
+  private stopIds(scope: LocationScope) {
+    return { tenant_id: scope.tenantId as ClinicWriteStopTenantId, clinic_id: scope.clinicId as ClinicWriteStopClinicId };
+  }
+
+  private async stopStatus(db: Kysely<Database>, scope: LocationScope, afterEffectId?: string): Promise<Result<WriteStopStatus, TransitionFailure>> {
+    const ids = this.stopIds(scope);
+    const row = await db.selectFrom("clinic_write_stop").select(["stopped", "actor_ref", "reason", "stopped_at"])
+      .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).executeTakeFirst();
+    if (!row || !row.stopped) return ok({ stopped: false, version: "0", inFlight: [] });
+    if (!row.actor_ref || !row.reason || !(row.stopped_at instanceof Date) || !Number.isFinite(row.stopped_at.getTime())) return err({ kind: "storageCorrupt" });
+    let query = db.selectFrom("clinic_write_stop_inflight").select(["effect_id", "call_id", "action_key", "status"])
+      .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id);
+    if (afterEffectId) query = query.where("effect_id", ">", afterEffectId as ClinicWriteStopInflightEffectId);
+    const rows = await query.orderBy("effect_id").limit(50).execute();
+    if (rows.some(item => !item.effect_id || !item.call_id || !item.action_key || (item.status !== "possiblySent" && item.status !== "uncertain"))) return err({ kind: "storageCorrupt" });
+    return ok({ stopped: true, version: "1", actorRef: row.actor_ref, reason: row.reason, stoppedAt: row.stopped_at.toISOString(),
+      inFlight: rows.map(item => ({ effectId: item.effect_id, callId: item.call_id, actionKey: item.action_key,
+        status: item.status as "possiblySent" | "uncertain" })),
+      ...(rows.length === 50 ? { nextAfterEffectId: rows[49]!.effect_id } : {}) });
+  }
+
+  async readWriteStop(scope: LocationScope, afterEffectId?: string): Promise<Result<WriteStopStatus, TransitionFailure>> {
+    if (!scope.tenantId || !scope.clinicId || (afterEffectId !== undefined && (!afterEffectId || afterEffectId.length > 512))) return err({ kind: "invalidTransition" });
+    try { return await this.stopStatus(this.db, scope, afterEffectId); }
+    catch { return err({ kind: "storageFailure" }); }
+  }
+
+  async stopWrites(scope: LocationScope, actorRef: string, reason: string): Promise<Result<WriteStopStatus, TransitionFailure>> {
+    if (!scope.tenantId || !scope.clinicId || !actorRef.trim() || actorRef.length > 256 || !reason.trim() || reason.length > 1_000) return err({ kind: "invalidTransition" });
+    try {
+      return await this.db.transaction().execute(async trx => {
+        const ids = this.stopIds(scope);
+        await trx.insertInto("clinic_write_stop").values({ ...ids, stopped: false, actor_ref: null, reason: null, stopped_at: null })
+          .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id"]).doNothing()).execute();
+        const current = await trx.selectFrom("clinic_write_stop").select("stopped")
+          .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).forUpdate().executeTakeFirstOrThrow();
+        if (!current.stopped) {
+          await trx.updateTable("clinic_write_stop").set({ stopped: true, actor_ref: actorRef, reason,
+            stopped_at: sql`clock_timestamp()` })
+            .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).execute();
+          await sql`insert into clinic_write_stop_inflight (tenant_id, clinic_id, effect_id, call_id, action_key, status)
+            select calls.tenant_id, calls.clinic_id, effect_outbox.effect_id, effect_outbox.call_id,
+              coalesce(nullif(effect_outbox.payload->>'actionKey', ''), 'unknown'), effect_outbox.status
+            from effect_outbox join calls on calls.call_id = effect_outbox.call_id
+            where calls.tenant_id = ${scope.tenantId} and calls.clinic_id = ${scope.clinicId}
+              and effect_outbox.tenant_id = calls.tenant_id and effect_outbox.kind = 'hostWrite'
+              and effect_outbox.status in ('possiblySent', 'uncertain')`.execute(trx);
+        }
+        const status = await this.stopStatus(trx, scope);
+        if (!status.ok) throw new Error("write stop status corrupt");
+        return status;
+      });
+    } catch { return err({ kind: "storageFailure" }); }
   }
 
   async start(callId: string, policy: CallPolicy): Promise<Result<CallState, TransitionFailure>> {
@@ -321,8 +379,17 @@ export class PostgresLedger implements LedgerStore {
         if (row.version !== expectedVersion) return err({ kind: "versionConflict" });
         const decoded = decodeState(row.state, callId);
         if (!decoded.ok || decoded.value.version !== row.version) return err({ kind: "storageCorrupt" });
-        const trustedAction = decoded.value.admission && "now" in action && action.now !== undefined
-          ? { ...action, now: await this.trustedNow(trx, action.now) } as TransitionAction : action;
+        let effectiveAction = action;
+        if (action.kind === "markHostPossiblySent") {
+          const ids = this.stopIds(scope);
+          await trx.insertInto("clinic_write_stop").values({ ...ids, stopped: false, actor_ref: null, reason: null, stopped_at: null })
+            .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id"]).doNothing()).execute();
+          const stop = await trx.selectFrom("clinic_write_stop").select("stopped")
+            .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).forShare().executeTakeFirstOrThrow();
+          if (stop.stopped) effectiveAction = { kind: "hostWriteBlocked", effectId: action.effectId, now: action.now };
+        }
+        const trustedAction = decoded.value.admission && "now" in effectiveAction && effectiveAction.now !== undefined
+          ? { ...effectiveAction, now: await this.trustedNow(trx, effectiveAction.now) } as TransitionAction : effectiveAction;
         const result = transition(decoded.value, trustedAction);
         if (!result.ok) return result;
         const next = result.value;

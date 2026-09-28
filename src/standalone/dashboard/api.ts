@@ -5,6 +5,7 @@ import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor, GatewayFailure } from "../../reference/command-gateway.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
+import type { WriteStopStatus } from "../../core/write-stop.ts";
 
 export type DashboardFailure = GatewayFailure | Readonly<{ kind: "transportUnavailable" | "malformed" }>;
 export type DashboardPort = Readonly<{
@@ -12,6 +13,8 @@ export type DashboardPort = Readonly<{
   settings(): Promise<Result<CallPolicy, DashboardFailure>>;
   automationAudit(afterVersion?: number): Promise<Result<AutomationSettingAuditPage, DashboardFailure>>;
   changeAutomationEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
+  readWriteStop(afterEffectId?: string): Promise<Result<WriteStopStatus, DashboardFailure>>;
+  stopWrites(reason: string): Promise<Result<WriteStopStatus, DashboardFailure>>;
   bookingAudit(afterVersion?: number): Promise<Result<BookingSettingAuditPage, DashboardFailure>>;
   changeBookingEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   callSummary(callId: string): Promise<Result<CallSummary, DashboardFailure>>;
@@ -44,6 +47,23 @@ function policy(value: unknown): Result<CallPolicy, DashboardFailure> {
   const current = record(reply?.policy);
   return reply?.kind === "settings" && current && typeof current.policyVersion === "string" && typeof current.automationVersion === "string" && typeof current.automationEnabled === "boolean" && typeof current.bookingEnabled === "boolean" && record(current.capabilities)
     ? ok(current as CallPolicy) : err({ kind: "malformed" });
+}
+
+function writeStop(value: unknown): Result<WriteStopStatus, DashboardFailure> {
+  const reply = record(value);
+  const status = record(reply?.status);
+  if (reply?.kind !== "writeStop" || !status || typeof status.stopped !== "boolean" ||
+      !["0", "1"].includes(String(status.version)) || !Array.isArray(status.inFlight) ||
+      (status.nextAfterEffectId !== undefined && (typeof status.nextAfterEffectId !== "string" || !status.nextAfterEffectId)) ||
+      !status.inFlight.every(item => {
+        const row = record(item);
+        return row && typeof row.effectId === "string" && !!row.effectId && typeof row.callId === "string" && !!row.callId &&
+          typeof row.actionKey === "string" && !!row.actionKey && ["possiblySent", "uncertain"].includes(String(row.status));
+      })) return err({ kind: "malformed" });
+  if (status.stopped ? status.version !== "1" || typeof status.actorRef !== "string" || !status.actorRef ||
+      typeof status.reason !== "string" || !status.reason || typeof status.stoppedAt !== "string" || !Number.isFinite(Date.parse(status.stoppedAt))
+    : status.version !== "0" || status.inFlight.length > 0) return err({ kind: "malformed" });
+  return ok(status as WriteStopStatus);
 }
 
 export class FetchDashboardPort implements DashboardPort {
@@ -82,6 +102,17 @@ export class FetchDashboardPort implements DashboardPort {
       body: JSON.stringify({ expectedVersion, enabled }),
     });
     return result.ok ? policy(result.value) : result;
+  }
+
+  async readWriteStop(afterEffectId?: string): Promise<Result<WriteStopStatus, DashboardFailure>> {
+    const result = await request(`/api/writes/stop${afterEffectId === undefined ? "" : `?after=${encodeURIComponent(afterEffectId)}`}`);
+    return result.ok ? writeStop(result.value) : result;
+  }
+
+  async stopWrites(reason: string): Promise<Result<WriteStopStatus, DashboardFailure>> {
+    const result = await request("/api/writes/stop", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }) });
+    return result.ok ? writeStop(result.value) : result;
   }
 
   async bookingAudit(afterVersion?: number): Promise<Result<BookingSettingAuditPage, DashboardFailure>> {

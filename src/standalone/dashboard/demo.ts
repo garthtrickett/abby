@@ -21,7 +21,7 @@ const reception = new TextReception(ledger, policy, host);
 const started = await reception.startCall("demo-call", scope);
 if (!started.ok) throw new Error(`demo call failed: ${started.error.kind}`);
 const gateway = new CommandGateway({ actorRef: "demo-admin", role: "clinicAdmin", scope }, policy, reception,
-  new CallReview(ledger), new StaffQueue(ledger), new CallOutcomeReport(ledger));
+  new CallReview(ledger), new StaffQueue(ledger), new CallOutcomeReport(ledger), ledger);
 const server = await createDashboardServer(gateway, resolve("dist/dashboard/app.js"));
 const alerts = new StaffAlertMonitor(ledger, scope);
 const effects = new EffectWorkLoop(new EffectRecovery(ledger, () => host, scope), result => {

@@ -8,6 +8,7 @@ import type { BookingSettingAuditPage } from "../../core/host.ts";
 import type { AutomationSettingAuditPage } from "../../core/host.ts";
 import { READINESS_REQUIREMENTS } from "../../core/readiness.ts";
 import type { ReadinessRequirement } from "../../core/readiness.ts";
+import type { WriteStopStatus } from "../../core/write-stop.ts";
 
 function appendAudit(previous: BookingSettingAuditPage, next: BookingSettingAuditPage): BookingSettingAuditPage {
   return { entries: [...previous.entries, ...next.entries],
@@ -58,7 +59,7 @@ function message(failure: DashboardFailure): string {
 export class DashboardController {
   private readonly root: HTMLElement;
   private readonly port: DashboardPort;
-  private readonly state: DashboardState = { loading: true, busy: false, capabilities: [], policy: undefined, auditPage: undefined,
+  private readonly state: DashboardState = { loading: true, busy: false, capabilities: [], policy: undefined, writeStop: undefined, stopReasonInput: "", auditPage: undefined,
     automationAuditPage: undefined, callIdInput: "", call: undefined, staffPage: undefined, outcomePage: undefined, notice: undefined, error: undefined };
 
   constructor(root: HTMLElement, port: DashboardPort) {
@@ -69,6 +70,9 @@ export class DashboardController {
 
   private draw(): void {
     render(dashboardView(this.state, {
+      setStopReason: value => { this.state.stopReasonInput = value; this.draw(); },
+      stopWrites: () => { void this.stopWrites(); },
+      loadMoreStoppedWrites: () => { void this.loadMoreStoppedWrites(); },
       toggleAutomation: () => { void this.toggleAutomation(); },
       loadAutomationAudit: () => { void this.loadAutomationAudit(); },
       loadMoreAutomationAudit: () => { void this.loadMoreAutomationAudit(); },
@@ -90,6 +94,11 @@ export class DashboardController {
     if (capabilities.ok) this.state.capabilities = capabilities.value;
     if (settings.ok) this.state.policy = settings.value;
     this.state.error = !settings.ok ? message(settings.error) : !capabilities.ok ? message(capabilities.error) : undefined;
+    if (capabilities.ok && capabilities.value.some(item => item.id === "calls.writes.stop.read.v1")) {
+      const stop = await this.port.readWriteStop();
+      if (stop.ok) this.state.writeStop = stop.value;
+      else this.state.error = message(stop.error);
+    }
     if (capabilities.ok && capabilities.value.some(item => item.id === "settings.automation.audit.v1")) {
       const audit = await this.port.automationAudit();
       if (audit.ok) this.state.automationAuditPage = audit.value;
@@ -134,6 +143,36 @@ export class DashboardController {
     const result = await this.port.automationAudit();
     if (result.ok) this.state.automationAuditPage = result.value;
     else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async stopWrites(): Promise<void> {
+    if (this.state.busy || this.state.writeStop?.stopped || !this.state.capabilities.some(item => item.id === "calls.writes.stop.v1")) return;
+    const reason = this.state.stopReasonInput.trim();
+    if (!reason) { this.state.error = "Enter a reason for the emergency stop."; this.draw(); return; }
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.stopWrites(reason);
+    if (result.ok) {
+      this.state.writeStop = result.value;
+      this.state.notice = "Appointment writes stopped for this clinic. Review any writes already in flight.";
+    } else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async loadMoreStoppedWrites(): Promise<void> {
+    const previous = this.state.writeStop;
+    if (this.state.busy || !previous?.nextAfterEffectId) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.readWriteStop(previous.nextAfterEffectId);
+    if (result.ok) {
+      this.state.writeStop = { ...result.value, inFlight: [...previous.inFlight, ...result.value.inFlight] } satisfies WriteStopStatus;
+    } else this.state.error = message(result.error);
     this.state.busy = false;
     this.draw();
   }

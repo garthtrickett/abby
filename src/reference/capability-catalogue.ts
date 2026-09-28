@@ -37,7 +37,10 @@ const actionKind = choice("book", "cancel", "reschedule", "intake");
 const actionStatus = choice("awaitingConfirmation", "ready", "dispatched", "committed", "rejected",
   "unsupported", "uncertain", "needsReview", "canceled");
 const staffReason = choice("callerRequested", "verificationFailed", "unsupported", "uncertainAction",
-  "partialIntake", "systemFailure", "transferFailed");
+  "partialIntake", "systemFailure", "transferFailed", "emergencyStopped");
+const writeStop = optional({ stopped: bool, version: choice("0", "1"), actorRef: key, reason: nonEmpty,
+  stoppedAt: str, inFlight: array(object({ effectId: key, callId: key, actionKey: key,
+    status: choice("possiblySent", "uncertain") })), nextAfterEffectId: key }, ["stopped", "version", "inFlight"]);
 const staffStatus = choice("requested", "open", "acknowledged", "resolved", "needsReview", "failed");
 const lifecycle = choice("starting", "active", "ended");
 const source = object({ sourceRef: key, version: key, ownerRef: key });
@@ -120,6 +123,12 @@ export const capabilityCatalogue = {
   "settings.automation.audit.v1": entry("settings.automation.audit.v1",
     optional({ kind: { const: "settings.automation.audit.v1" }, afterVersion: uint }, ["kind"]),
     reply("automationSettingAudit", "page", automationAuditPage), "read", "clinicAdmin"),
+  "calls.writes.stop.v1": entry("calls.writes.stop.v1",
+    object({ kind: { const: "calls.writes.stop.v1" }, reason: { type: "string", minLength: 1, maxLength: 1000 } }),
+    reply("writeStop", "status", writeStop), "policyChange", "clinicAdmin"),
+  "calls.writes.stop.read.v1": entry("calls.writes.stop.read.v1",
+    optional({ kind: { const: "calls.writes.stop.read.v1" }, afterEffectId: key }, ["kind"]),
+    reply("writeStop", "status", writeStop), "read", "clinicAdmin"),
   "settings.appointments.booking.enabled.change.v1": entry("settings.appointments.booking.enabled.change.v1",
     object({ kind: { const: "settings.appointments.booking.enabled.change.v1" }, expectedVersion: key, enabled: bool }),
     reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedPolicyVersion"]),

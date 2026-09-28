@@ -1,8 +1,11 @@
 import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "./model.ts";
 import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingPresentationRef, RecoverableEffectRef, Result, StaffQueueEntry, TransitionAction, TransitionFailure } from "./model.ts";
 import { transition } from "./transition.ts";
+import type { InFlightWrite, WriteStopStatus } from "./write-stop.ts";
 
 export interface LedgerStore {
+  stopWrites(scope: LocationScope, actorRef: string, reason: string): Promise<Result<WriteStopStatus, TransitionFailure>>;
+  readWriteStop(scope: LocationScope, afterEffectId?: string): Promise<Result<WriteStopStatus, TransitionFailure>>;
   start(callId: string, policy: CallPolicy): Promise<Result<CallState, TransitionFailure>>;
   findAdmission(callId: string): Promise<Result<AdmissionReceipt | null, TransitionFailure>>;
   findExpiredAdmissions(now: string, scope?: LocationScope): Promise<Result<readonly AdmissionReceipt[], TransitionFailure>>;
@@ -50,6 +53,39 @@ function sameScope(left: LocationScope, right: LocationScope): boolean {
 
 export class MemoryLedger implements LedgerStore {
   private readonly calls = new Map<string, CallState>();
+  private readonly writeStops = new Map<string, Readonly<{ actorRef: string; reason: string; stoppedAt: string; inFlight: readonly InFlightWrite[] }>>();
+
+  private stopKey(scope: LocationScope): string {
+    return JSON.stringify([scope.tenantId, scope.clinicId]);
+  }
+
+  async stopWrites(scope: LocationScope, actorRef: string, reason: string): Promise<Result<WriteStopStatus, TransitionFailure>> {
+    if (!actorRef.trim() || actorRef.length > 256 || !reason.trim() || reason.length > 1_000) return err({ kind: "invalidTransition" });
+    const key = this.stopKey(scope);
+    if (!this.writeStops.has(key)) {
+      const inFlight: InFlightWrite[] = [];
+      for (const state of this.calls.values()) {
+        if (this.stopKey(state.policy.scope) !== key) continue;
+        for (const effect of Object.values(state.effects)) {
+          if (effect.kind === "hostWrite" && (effect.status === "possiblySent" || effect.status === "uncertain")) {
+            inFlight.push({ effectId: effect.id, callId: state.callId, actionKey: effect.actionKey, status: effect.status });
+          }
+        }
+      }
+      inFlight.sort((left, right) => left.effectId.localeCompare(right.effectId));
+      this.writeStops.set(key, { actorRef, reason, stoppedAt: new Date().toISOString(), inFlight });
+    }
+    return this.readWriteStop(scope);
+  }
+
+  async readWriteStop(scope: LocationScope, afterEffectId?: string): Promise<Result<WriteStopStatus, TransitionFailure>> {
+    if (afterEffectId !== undefined && (!afterEffectId || afterEffectId.length > 512)) return err({ kind: "invalidTransition" });
+    const stop = this.writeStops.get(this.stopKey(scope));
+    if (!stop) return ok({ stopped: false, version: "0", inFlight: [] });
+    const inFlight = stop.inFlight.filter(item => !afterEffectId || item.effectId > afterEffectId).slice(0, 50);
+    return ok({ stopped: true, version: "1", actorRef: stop.actorRef, reason: stop.reason, stoppedAt: stop.stoppedAt,
+      inFlight: structuredClone(inFlight), ...(inFlight.length === 50 ? { nextAfterEffectId: inFlight[49]!.effectId } : {}) });
+  }
 
   async start(callId: string, policy: CallPolicy): Promise<Result<CallState, TransitionFailure>> {
     if (!callId || this.calls.has(callId)) return err({ kind: "invalidTransition" });
@@ -150,7 +186,9 @@ export class MemoryLedger implements LedgerStore {
     const current = this.calls.get(callId);
     if (!current || !sameScope(current.policy.scope, scope)) return err({ kind: "callUnknown" });
     if (current.version !== expectedVersion) return err({ kind: "versionConflict" });
-    const result = transition(current, action);
+    const effectiveAction = action.kind === "markHostPossiblySent" && this.writeStops.has(this.stopKey(scope))
+      ? { kind: "hostWriteBlocked" as const, effectId: action.effectId, now: action.now } : action;
+    const result = transition(current, effectiveAction);
     if (!result.ok) return result;
     this.calls.set(callId, structuredClone(result.value));
     return ok(structuredClone(result.value));
