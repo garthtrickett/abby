@@ -37,7 +37,7 @@ function fixture(kind: "memory" | "postgres", suffix: string) {
   const service = new CallAdmissionService(ledger, async dialed => {
     routeReads += 1;
     return dialed === "+6125550100" ? ok({ ...policy, automationEnabled }) : { ok: false as const, error: { kind: "routeUnavailable" as const } };
-  }, () => now);
+  }, () => now, async () => ok(true));
   return { scope, policy, ledger, service, routeReads: () => routeReads,
     setAutomationEnabled(value: boolean) { automationEnabled = value; } };
 }
@@ -197,7 +197,7 @@ test("postgres: ledger clock rejects forged intake, renewal, and expiry timestam
     transferDestinationRef: "database-clock-destination",
     staffedIntervals: [{ startsAt: new Date(Date.now() - 60_000).toISOString(), endsAt: new Date(Date.now() + 60_000).toISOString() }] };
   const before = await sql<{ current_time: Date }>`select clock_timestamp() as current_time`.execute(db!);
-  const service = new CallAdmissionService(ledger, async () => ok(policy), () => "2000-01-01T00:00:00.000Z");
+  const service = new CallAdmissionService(ledger, async () => ok(policy), () => "2000-01-01T00:00:00.000Z", async () => ok(true));
   const admitted = value(await service.begin({
     key: { accountRef: "database-clock-account", providerCallRef: "database-clock-call" },
     dialedNumber: "+6125550100", receivedAt: "2000-01-01T00:00:00.000Z",

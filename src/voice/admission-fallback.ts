@@ -29,7 +29,7 @@ export type AdmissionRoutingResult =
   | Readonly<{ kind: "fallback"; callId: string; outcome: FallbackOutcome; alerted: boolean }>;
 
 function eligibleForFallback(kind: TransitionFailure["kind"] | RouteFailure["kind"]): boolean {
-  return kind === "routeUnavailable" || kind === "automationDisabled" || kind === "storageFailure" || kind === "storageCorrupt";
+  return kind === "routeUnavailable" || kind === "automationDisabled" || kind === "readinessFailed" || kind === "storageFailure" || kind === "storageCorrupt";
 }
 
 function decodeFallbackOutcome(value: unknown): FallbackOutcome {

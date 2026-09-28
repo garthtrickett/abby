@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { sql } from "kysely";
 import { MemoryLedger } from "../../src/core/ledger.ts";
+import type { LedgerStore } from "../../src/core/ledger.ts";
+import { CallRuntime } from "../../src/core/runtime.ts";
+import { err, ok } from "../../src/core/model.ts";
+import type { AutomationReadiness } from "../../src/core/readiness.ts";
 import type { CallState, CapabilityMode, FinalCallerTurn, LocationScope, Result } from "../../src/core/model.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import type { GatewayCommand, GatewayReply, HostActor } from "../../src/reference/command-gateway.ts";
@@ -13,6 +17,8 @@ import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
+import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
+import { CallAdmissionService } from "../../src/voice/admission.ts";
 import type { AvailabilityHost, PolicyStore } from "../../src/core/host.ts";
 import type { TextReception } from "../../src/reference/text-reception.ts";
 
@@ -56,7 +62,7 @@ function bookingAudit(reply: GatewayReply) {
   return reply.page;
 }
 
-function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = false, hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "execute", availability?: AvailabilityHost) {
+function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = false, hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "execute", availability?: AvailabilityHost, readiness?: AutomationReadiness, suppliedLedger?: LedgerStore) {
   const scope: LocationScope = { tenantId: `tenant-${id}`, clinicId: `clinic-${id}`, locationId: `location-${id}` };
   const patient = { scope, patientRef: `patient-${id}`, verificationRef: `proof-${id}`, expiresAt };
   const offer = (suffix: string) => ({ scope, offerRef: `offer-${id}-${suffix}`, serviceRef: "physio", startsAt: "2026-09-29T11:00:00.000Z", expiresAt });
@@ -65,16 +71,17 @@ function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = f
       effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: expiresAt }]);
   let reception: TextReception;
   let policy: PolicyStore;
+  const ledger = suppliedLedger ?? (kind === "standalone" ? new PostgresLedger(db!) : new MemoryLedger());
   if (kind === "standalone") {
     assert.ok(db);
-    ({ reception, policy } = createStandaloneTextComposition(db, host, hostBookingMode, undefined, availability));
+    ({ reception, policy } = createStandaloneTextComposition(db, host, hostBookingMode, ledger, availability, undefined, readiness));
   } else {
-    policy = new MemoryPolicyStore(hostBookingMode);
-    reception = createEmbeddedTextComposition(new MemoryLedger(), policy, host, availability);
+    policy = new MemoryPolicyStore(hostBookingMode, undefined, readiness);
+    reception = createEmbeddedTextComposition(ledger, policy, host, availability);
   }
   const admin = new CommandGateway({ actorRef: `admin-${id}`, role: "clinicAdmin", scope }, policy, reception);
   const agent = new CommandGateway({ actorRef: `agent-${id}`, role: "agent", scope }, policy, reception);
-  return { scope, patient, offer, host, reception, policy, admin, agent };
+  return { scope, patient, offer, host, ledger, reception, policy, admin, agent };
 }
 
 for (const kind of kinds) {
@@ -129,6 +136,8 @@ for (const kind of kinds) {
         staffedIntervals: [{ startsAt: now, endsAt: expiresAt }] } }),
       changeBookingEnabled: (...args) => app.policy.changeBookingEnabled(...args),
       listBookingChanges: (...args) => app.policy.listBookingChanges(...args),
+      changeAutomationEnabled: (...args) => app.policy.changeAutomationEnabled(...args),
+      listAutomationChanges: (...args) => app.policy.listAutomationChanges(...args),
     };
     const staffedGateway = new CommandGateway({ actorRef: "staffed-contract", role: "agent", scope: app.scope }, staffedPolicy, app.reception);
     const staffedReply = value(await staffedGateway.submit({ kind: "settings.read.v1" }));
@@ -139,11 +148,15 @@ for (const kind of kinds) {
       read: async () => ({ ok: true, value: { ...referenceDefaultPolicy(app.scope), capabilities: { book: "execute" } } as unknown as CallState["policy"] }),
       changeBookingEnabled: (...args) => app.policy.changeBookingEnabled(...args),
       listBookingChanges: (...args) => app.policy.listBookingChanges(...args),
+      changeAutomationEnabled: (...args) => app.policy.changeAutomationEnabled(...args),
+      listAutomationChanges: (...args) => app.policy.listAutomationChanges(...args),
     };
     const brokenGateway = new CommandGateway({ actorRef: "contract-check", role: "agent", scope: app.scope }, brokenPolicy, app.reception);
     error(await brokenGateway.submit({ kind: "settings.read.v1" }), "responseContractViolation");
     const lostResponsePolicy: PolicyStore = {
       read: (...args) => app.policy.read(...args),
+      changeAutomationEnabled: (...args) => app.policy.changeAutomationEnabled(...args),
+      listAutomationChanges: (...args) => app.policy.listAutomationChanges(...args),
       changeBookingEnabled: async (...args) => {
         const committed = await app.policy.changeBookingEnabled(...args);
         if (!committed.ok) return committed;
@@ -268,6 +281,59 @@ for (const kind of kinds) {
     const otherScope = { ...app.scope, tenantId: `${app.scope.tenantId}-other` };
     assert.deepEqual(value(await reopened.listBookingChanges(otherScope)).entries, []);
     assert.equal(JSON.stringify(history).includes(app.patient.patientRef), false);
+  });
+
+  test(`${kind}: clinic-wide automation command gates new calls and preserves admitted calls`, async () => {
+    let ready = false;
+    const readiness: AutomationReadiness = async () => ready ? ok(true) : err({ kind: "readinessFailed", missing: ["mediaTestCall"] });
+    const ledger = kind === "standalone" ? new PostgresLedger(db!, suggestedAt => suggestedAt) : new MemoryLedger();
+    const app = fixture(kind, `${kind}-automation-setting`, false, "execute", undefined, readiness, ledger);
+    const admission = new CallAdmissionService(ledger, async () => {
+      const result = await app.policy.read(app.scope);
+      return result.ok ? ok(result.value) : err({ kind: "routeUnavailable" as const });
+    }, () => now, readiness);
+    const key = { accountRef: `account-${kind}-automation`, providerCallRef: "enabled-call" };
+    const event = { key, dialedNumber: "+6125550100", receivedAt: now };
+    error(await admission.begin(event), "automationDisabled");
+    const defaultPolicy = value(await app.policy.read(app.scope));
+    assert.equal(defaultPolicy.automationEnabled, false);
+    assert.equal(defaultPolicy.automationVersion, "0");
+    error(await app.agent.submit({ kind: "settings.automation.enabled.change.v1", expectedVersion: "0", enabled: true }), "forbidden");
+    error(await app.admin.submit({ kind: "settings.automation.enabled.change.v1", expectedVersion: "0", enabled: true }), "readinessFailed");
+    assert.deepEqual(value(await app.policy.listAutomationChanges(app.scope)).entries, []);
+    ready = true;
+    const enabled = settings(value(await app.admin.submit({ kind: "settings.automation.enabled.change.v1", expectedVersion: "0", enabled: true })));
+    assert.equal(enabled.automationEnabled, true);
+    assert.equal(enabled.automationVersion, "1");
+    assert.equal(enabled.policyVersion, "0");
+    assert.equal(value(await app.policy.read({ ...app.scope, locationId: "another-location" })).automationEnabled, true);
+    assert.equal(value(await app.policy.read({ ...app.scope, tenantId: "another-tenant" })).automationEnabled, false);
+    const created = value(await admission.begin(event));
+    assert.equal(created.kind, "created");
+    ready = false;
+    error(await admission.begin({ ...event, key: { ...key, providerCallRef: "not-ready-next" } }), "readinessFailed");
+    ready = true;
+    const runtime = new CallRuntime(ledger, app.scope);
+    value(await runtime.activate(created.receipt.callId, "automation-session", "2026-09-28T10:00:01.000Z"));
+    const disabled = settings(value(await app.admin.submit({ kind: "settings.automation.enabled.change.v1", expectedVersion: "1", enabled: false })));
+    assert.equal(disabled.automationVersion, "2");
+    assert.equal(disabled.automationEnabled, false);
+    error(await admission.begin({ ...event, key: { ...key, providerCallRef: "new-after-disable" } }), "automationDisabled");
+    assert.equal(value(await admission.begin(event)).kind, "duplicate");
+    const ongoing = value(await runtime.acceptTurn({ callId: created.receipt.callId, sessionId: "automation-session",
+      turnId: "staff-after-disable", text: "Staff please", quality: "clear", at: "2026-09-28T10:00:02.000Z" },
+    { kind: "handoff", reason: "callerRequested" }, "2026-09-28T10:00:02.000Z"));
+    assert.equal(ongoing.policy.automationEnabled, true);
+    assert.equal(Object.values(ongoing.staffItems)[0]?.reason, "callerRequested");
+    const history = value(await app.policy.listAutomationChanges(app.scope));
+    assert.deepEqual(history.entries.map(entry => [entry.version, entry.previousEnabled, entry.enabled, entry.actorRef]), [
+      ["1", false, true, `admin-${kind}-automation-setting`], ["2", true, false, `admin-${kind}-automation-setting`],
+    ]);
+    error(await app.admin.submit({ kind: "settings.automation.enabled.change.v1", expectedVersion: "1", enabled: true }), "versionConflict");
+    error(await app.admin.submit({ kind: "settings.automation.enabled.change.v1", expectedVersion: "2", enabled: "yes" } as unknown as GatewayCommand), "invalid");
+    const reloaded: PolicyStore = kind === "standalone" ? new PostgresPolicyStore(db!, referenceDefaultPolicy) : app.policy;
+    assert.equal(value(await reloaded.read(app.scope)).automationVersion, "2");
+    assert.deepEqual(value(await reloaded.listAutomationChanges(app.scope)).entries, history.entries);
   });
 
   test(`${kind}: enabled setting with request-only host support opens staff work`, async () => {
@@ -404,4 +470,17 @@ test("postgres: pre-audit policy versions stay readable without invented attribu
   const restored = value(await store.read(scope));
   assert.equal(restored.policyVersion, "1");
   assert.equal(restored.automationEnabled, false);
+});
+
+test("postgres: corrupt location policy cannot commit an automation change", { skip: !db }, async () => {
+  const scope = { tenantId: "corrupt-policy-tenant", clinicId: "corrupt-policy-clinic", locationId: "corrupt-policy-location" };
+  const malformed = { scope, policyVersion: "0" };
+  await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy)
+    values (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, 0, ${JSON.stringify(malformed)}::jsonb)`.execute(db!);
+  const store = new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true));
+  error(await store.changeAutomationEnabled(scope, "0", true, "corrupt-policy-admin"), "storageFailure");
+  assert.deepEqual(value(await store.listAutomationChanges(scope)).entries, []);
+  const count = await sql<{ count: string }>`select count(*)::text as count from clinic_automation
+    where tenant_id = ${scope.tenantId} and clinic_id = ${scope.clinicId}`.execute(db!);
+  assert.equal(count.rows[0]?.count, "0");
 });

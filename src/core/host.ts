@@ -1,7 +1,16 @@
 import type { ActionRequest, ApprovedKnowledge, AppointmentRead, AppointmentReadFailure, AvailabilityRead, AvailabilityReadFailure, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, OperatorAlert, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
+import type { ReadinessFailure } from "./readiness.ts";
 
 export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable"; target: "patient" | "offer" }>;
-export type PolicyFailure = Readonly<{ kind: "versionConflict" | "invalidValue" | "storageFailure" }>;
+export type PolicyFailure = Readonly<{ kind: "versionConflict" | "invalidValue" | "storageFailure" }> | ReadinessFailure;
+export type AutomationSettingAuditEntry = Readonly<{
+  version: string;
+  enabled: boolean;
+  previousEnabled: boolean;
+  actorRef: string;
+  changedAt: string;
+}>;
+export type AutomationSettingAuditPage = Readonly<{ entries: readonly AutomationSettingAuditEntry[]; nextAfterVersion?: number }>;
 export type BookingSettingAuditEntry = Readonly<{
   version: string;
   enabled: boolean;
@@ -53,6 +62,8 @@ export interface OperatorAlertHost {
 
 export interface PolicyStore {
   read(scope: LocationScope): Promise<Result<CallPolicy, PolicyFailure>>;
+  changeAutomationEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
+  listAutomationChanges(scope: LocationScope, afterVersion?: number): Promise<Result<AutomationSettingAuditPage, PolicyFailure>>;
   changeBookingEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
   listBookingChanges(scope: LocationScope, afterVersion?: number): Promise<Result<BookingSettingAuditPage, PolicyFailure>>;
 }

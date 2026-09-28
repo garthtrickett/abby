@@ -1,4 +1,4 @@
-import type { BookingSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
+import type { AutomationSettingAuditPage, BookingSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { CallPolicy, FinalCallerTurn, LocationScope, Result, StaffChangeRequest, StaffItem, TransitionFailure } from "../core/model.ts";
 import { TextReception } from "./text-reception.ts";
@@ -24,6 +24,8 @@ export type HostActor = Readonly<{
 
 export type GatewayCommand =
   | Readonly<{ kind: "settings.read.v1" }>
+  | Readonly<{ kind: "settings.automation.enabled.change.v1"; expectedVersion: string; enabled: boolean }>
+  | Readonly<{ kind: "settings.automation.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "settings.appointments.booking.enabled.change.v1"; expectedVersion: string; enabled: boolean }>
   | Readonly<{ kind: "settings.appointments.booking.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "booking.propose.v2"; turn: FinalCallerTurn; verificationRef: string; offerRef: string; now: string }>
@@ -41,6 +43,7 @@ type CommandMissingCatalogue = AssertNever<Exclude<CapabilityId, GatewayCommand[
 
 export type GatewayReply =
   | Readonly<{ kind: "settings"; policy: CallPolicy }>
+  | Readonly<{ kind: "automationSettingAudit"; page: AutomationSettingAuditPage }>
   | Readonly<{ kind: "bookingSettingAudit"; page: BookingSettingAuditPage }>
   | Readonly<{ kind: "bookingProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "knowledgeAnswer"; progress: CallCommandProgress }>
@@ -83,7 +86,8 @@ export class CommandGateway {
     if (this.staffQueue) permitted.push("staff.list.v1");
     if (this.actor.role !== "agent" && this.reception.staffLifecycleEnabled()) permitted.push("staff.change.v1");
     if (this.actor.role === "clinicAdmin") {
-      permitted.push("settings.appointments.booking.enabled.change.v1", "settings.appointments.booking.audit.v1");
+      permitted.push("settings.automation.enabled.change.v1", "settings.automation.audit.v1",
+        "settings.appointments.booking.enabled.change.v1", "settings.appointments.booking.audit.v1");
     }
     return permitted.map(capabilityDescriptor);
   }
@@ -108,6 +112,15 @@ export class CommandGateway {
       case "settings.read.v1": {
         const result = await this.policy.read(this.actor.scope);
         return result.ok ? ok({ kind: "settings", policy: result.value }) : result;
+      }
+      case "settings.automation.enabled.change.v1": {
+        const result = await this.policy.changeAutomationEnabled(this.actor.scope, command.expectedVersion, command.enabled, this.actor.actorRef);
+        return result.ok ? ok({ kind: "settings", policy: result.value }) : result;
+      }
+      case "settings.automation.audit.v1": {
+        if (command.afterVersion !== undefined && (!Number.isSafeInteger(command.afterVersion) || command.afterVersion < 0)) return err({ kind: "invalid" });
+        const result = await this.policy.listAutomationChanges(this.actor.scope, command.afterVersion);
+        return result.ok ? ok({ kind: "automationSettingAudit", page: result.value }) : result;
       }
       case "settings.appointments.booking.enabled.change.v1": {
         const result = await this.policy.changeBookingEnabled(this.actor.scope, command.expectedVersion, command.enabled, this.actor.actorRef);

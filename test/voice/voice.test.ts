@@ -137,7 +137,7 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
         staffedIntervals: options.staffedIntervals ?? [{ startsAt: at(0), endsAt: at(3_600) }] } : {}),
     };
     return ok(snapshot);
-  }, () => now);
+  }, () => now, async () => ok(true));
   const callId = value(await admission.begin({ key: { accountRef: `account-${id}`, providerCallRef: `call-${id}` }, dialedNumber: "+6125550100", receivedAt: now })).receipt.callId;
   const sessionId = `session-${id}`;
   const sessionLedger = clock?.onPresentationStarted || clock?.onSessionRenewed

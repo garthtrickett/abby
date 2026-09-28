@@ -1,6 +1,6 @@
 import { CALL_TERMINAL_REASONS, err, ok } from "../../core/model.ts";
 import type { CallPolicy, Result, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
-import type { BookingSettingAuditPage } from "../../core/host.ts";
+import type { AutomationSettingAuditPage, BookingSettingAuditPage } from "../../core/host.ts";
 import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor, GatewayFailure } from "../../reference/command-gateway.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
@@ -10,6 +10,8 @@ export type DashboardFailure = GatewayFailure | Readonly<{ kind: "transportUnava
 export type DashboardPort = Readonly<{
   capabilities(): Promise<Result<readonly CapabilityDescriptor[], DashboardFailure>>;
   settings(): Promise<Result<CallPolicy, DashboardFailure>>;
+  automationAudit(afterVersion?: number): Promise<Result<AutomationSettingAuditPage, DashboardFailure>>;
+  changeAutomationEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   bookingAudit(afterVersion?: number): Promise<Result<BookingSettingAuditPage, DashboardFailure>>;
   changeBookingEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   callSummary(callId: string): Promise<Result<CallSummary, DashboardFailure>>;
@@ -40,7 +42,7 @@ async function request(path: string, init?: RequestInit): Promise<Result<unknown
 function policy(value: unknown): Result<CallPolicy, DashboardFailure> {
   const reply = record(value);
   const current = record(reply?.policy);
-  return reply?.kind === "settings" && current && typeof current.policyVersion === "string" && typeof current.automationEnabled === "boolean" && typeof current.bookingEnabled === "boolean" && record(current.capabilities)
+  return reply?.kind === "settings" && current && typeof current.policyVersion === "string" && typeof current.automationVersion === "string" && typeof current.automationEnabled === "boolean" && typeof current.bookingEnabled === "boolean" && record(current.capabilities)
     ? ok(current as CallPolicy) : err({ kind: "malformed" });
 }
 
@@ -54,6 +56,31 @@ export class FetchDashboardPort implements DashboardPort {
 
   async settings(): Promise<Result<CallPolicy, DashboardFailure>> {
     const result = await request("/api/settings");
+    return result.ok ? policy(result.value) : result;
+  }
+
+  async automationAudit(afterVersion?: number): Promise<Result<AutomationSettingAuditPage, DashboardFailure>> {
+    const result = await request(`/api/settings/automation-audit${afterVersion === undefined ? "" : `?after=${afterVersion}`}`);
+    if (!result.ok) return result;
+    const reply = record(result.value);
+    const page = record(reply?.page);
+    if (reply?.kind !== "automationSettingAudit" || !page || !Array.isArray(page.entries) ||
+        (page.nextAfterVersion !== undefined && (!Number.isSafeInteger(page.nextAfterVersion) || Number(page.nextAfterVersion) < 0)) ||
+        !page.entries.every(value => {
+          const entry = record(value);
+          return entry && typeof entry.version === "string" && /^(0|[1-9][0-9]*)$/.test(entry.version) &&
+            typeof entry.enabled === "boolean" && typeof entry.previousEnabled === "boolean" &&
+            typeof entry.actorRef === "string" && !!entry.actorRef &&
+            typeof entry.changedAt === "string" && Number.isFinite(Date.parse(entry.changedAt));
+        })) return err({ kind: "malformed" });
+    return ok(page as AutomationSettingAuditPage);
+  }
+
+  async changeAutomationEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>> {
+    const result = await request("/api/settings/automation-enabled", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expectedVersion, enabled }),
+    });
     return result.ok ? policy(result.value) : result;
   }
 

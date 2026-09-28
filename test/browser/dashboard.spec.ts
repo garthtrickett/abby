@@ -6,6 +6,8 @@ import { CallRuntime } from "../../src/core/runtime.ts";
 import { EffectWorker } from "../../src/core/effect-worker.ts";
 import { EffectRecovery } from "../../src/core/effect-recovery.ts";
 import type { LocationScope } from "../../src/core/model.ts";
+import { err, ok } from "../../src/core/model.ts";
+import type { AutomationReadiness } from "../../src/core/readiness.ts";
 import type { AvailabilityHost } from "../../src/core/host.ts";
 import { CallReview } from "../../src/reference/call-review.ts";
 import { CallOutcomeReport } from "../../src/reference/call-outcome-report.ts";
@@ -16,11 +18,12 @@ import { StaffQueue } from "../../src/reference/staff-queue.ts";
 import { StaffAlertMonitor } from "../../src/reference/staff-alert-monitor.ts";
 import { TextReception } from "../../src/reference/text-reception.ts";
 import { createDashboardServer } from "../../src/standalone/dashboard/server.ts";
+import { CallAdmissionService } from "../../src/voice/admission.ts";
 
-async function localDashboard(role: "clinicAdmin" | "staff", availability?: AvailabilityHost) {
+async function localDashboard(role: "clinicAdmin" | "staff", availability?: AvailabilityHost, readiness?: AutomationReadiness) {
   const scope: LocationScope = { tenantId: "browser-tenant", clinicId: "browser-clinic", locationId: "browser-location" };
   const ledger = new MemoryLedger();
-  const policy = new MemoryPolicyStore();
+  const policy = new MemoryPolicyStore("execute", undefined, readiness);
   const host = new ReferenceClinicHost([], [],
     [{ scope, sourceRef: "hours", version: "hours-v1", ownerRef: "clinic-owner", approvedText: "We open at 9 am.", approved: true,
       effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]);
@@ -42,6 +45,49 @@ async function localDashboard(role: "clinicAdmin" | "staff", availability?: Avai
     }),
   };
 }
+
+test("SET-001: browser reception switch needs readiness and gates the next call", async ({ page, request }) => {
+  let ready = false;
+  const readiness: AutomationReadiness = async () => ready ? ok(true) : err({ kind: "readinessFailed", missing: ["mediaTestCall"] });
+  const app = await localDashboard("clinicAdmin", undefined, readiness);
+  try {
+    await page.goto(app.url);
+    await expect(page.getByRole("heading", { name: "Reception automation" })).toBeVisible();
+    await expect(page.getByText("Automation version 0")).toBeVisible();
+    await page.getByRole("button", { name: "Enable reception" }).click();
+    await expect(page.getByRole("alert")).toContainText("passed media test call");
+    assert.equal((await app.policy.read(app.scope)).ok, true);
+    ready = true;
+    await page.getByRole("button", { name: "Enable reception" }).click();
+    await expect(page.getByText("Reception automation enabled for new calls.")).toBeVisible();
+    await expect(page.getByText("Automation version 1")).toBeVisible();
+    const admission = new CallAdmissionService(app.ledger, async () => {
+      const result = await app.policy.read(app.scope);
+      return result.ok ? ok(result.value) : err({ kind: "routeUnavailable" as const });
+    }, () => "2026-09-28T10:00:00.000Z", readiness);
+    const event = { key: { accountRef: "browser-account", providerCallRef: "browser-automation" },
+      dialedNumber: "+6125550100", receivedAt: "2026-09-28T10:00:00.000Z" };
+    const created = await admission.begin(event);
+    assert.equal(created.ok, true);
+    await page.getByRole("button", { name: "Disable reception" }).click();
+    await expect(page.getByText("Reception automation disabled for new calls.")).toBeVisible();
+    await expect(page.getByText("Automation version 2")).toBeVisible();
+    const next = await admission.begin({ ...event, key: { ...event.key, providerCallRef: "next-call" } });
+    assert.equal(next.ok, false);
+    if (!next.ok) assert.equal(next.error.kind, "automationDisabled");
+    const replay = await admission.begin(event);
+    assert.equal(replay.ok, true);
+    if (replay.ok) assert.equal(replay.value.kind, "duplicate");
+    const audit = page.getByLabel("Automation setting audit");
+    await expect(audit).toContainText("Version 1 · enabled · browser-clinicAdmin");
+    await expect(audit).toContainText("Version 2 · disabled · browser-clinicAdmin");
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Enable reception" })).toBeVisible();
+    await expect(page.getByLabel("Automation setting audit")).toContainText("Version 2 · disabled");
+    const invalid = await request.post(`${app.url}/api/settings/automation-enabled`, { data: { expectedVersion: "2", enabled: "yes" } });
+    assert.equal(invalid.status(), 400);
+  } finally { await app.close(); }
+});
 
 test("E2E-010: dashboard toggle persists default, enabled and disabled policy for new calls", async ({ page }) => {
   const app = await localDashboard("clinicAdmin");
@@ -101,12 +147,15 @@ test("E2E-069: view-only staff can review a call but cannot change booking setti
     await page.goto(app.url);
     await expect(page.getByText("View only")).toBeVisible();
     await expect(page.getByRole("button", { name: "Enable booking" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Enable reception" })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Booking setting history" })).toHaveCount(0);
     await page.getByRole("textbox", { name: "Call ID" }).fill("before-setting");
     await page.getByRole("button", { name: "Load call" }).click();
     await expect(page.getByLabel("Call summary")).toContainText("before-setting · active");
     const forbidden = await request.post(`${app.url}/api/settings/booking-enabled`, { data: { expectedVersion: "0", enabled: true } });
     assert.equal(forbidden.status(), 403);
+    const automationForbidden = await request.post(`${app.url}/api/settings/automation-enabled`, { data: { expectedVersion: "0", enabled: true } });
+    assert.equal(automationForbidden.status(), 403);
     const auditForbidden = await request.get(`${app.url}/api/settings/booking-audit`);
     assert.equal(auditForbidden.status(), 403);
     const policy = await app.policy.read(app.scope);

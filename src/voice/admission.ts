@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
 import type { Admission, AdmissionReceipt, AdmissionResult, CallPolicy, ProviderCallKey, Result, TransitionFailure } from "../core/model.ts";
+import { unprovenReadiness } from "../core/readiness.ts";
+import type { AutomationReadiness } from "../core/readiness.ts";
 
 // The transport adapter authenticates the provider account before constructing this event.
 export type AuthenticatedInboundCall = Readonly<{
@@ -10,7 +12,7 @@ export type AuthenticatedInboundCall = Readonly<{
   receivedAt: string;
 }>;
 
-export type RouteFailure = Readonly<{ kind: "routeUnavailable" | "automationDisabled" }>;
+export type RouteFailure = Readonly<{ kind: "routeUnavailable" | "automationDisabled" | "readinessFailed" }>;
 export type PolicyResolver = (dialedNumber: string) => Promise<Result<CallPolicy, RouteFailure>>;
 
 export function callIdFor(key: ProviderCallKey): string {
@@ -27,11 +29,13 @@ export class CallAdmissionService {
   private readonly ledger: LedgerStore;
   private readonly resolvePolicy: PolicyResolver;
   private readonly now: () => string;
+  private readonly readiness: AutomationReadiness;
 
-  constructor(ledger: LedgerStore, resolvePolicy: PolicyResolver, now: () => string = () => new Date().toISOString()) {
+  constructor(ledger: LedgerStore, resolvePolicy: PolicyResolver, now: () => string = () => new Date().toISOString(), readiness: AutomationReadiness = unprovenReadiness) {
     this.ledger = ledger;
     this.resolvePolicy = resolvePolicy;
     this.now = now;
+    this.readiness = readiness;
   }
 
   async begin(event: AuthenticatedInboundCall): Promise<Result<AdmissionResult, TransitionFailure | RouteFailure>> {
@@ -55,6 +59,17 @@ export class CallAdmissionService {
       const raced = await this.ledger.findAdmission(callId);
       if (!raced.ok) return raced;
       return raced.value ? duplicateOrConflict(raced.value, event) : err({ kind: "automationDisabled" });
+    }
+    let ready = false;
+    try {
+      const checked = await this.readiness(policy.value.scope);
+      ready = checked.ok && checked.value === true;
+    }
+    catch { ready = false; }
+    if (!ready) {
+      const raced = await this.ledger.findAdmission(callId);
+      if (!raced.ok) return raced;
+      return raced.value ? duplicateOrConflict(raced.value, event) : err({ kind: "readinessFailed" });
     }
     const acceptedAt = this.now();
     if (!Number.isFinite(Date.parse(acceptedAt))) return err({ kind: "invalidTransition" });

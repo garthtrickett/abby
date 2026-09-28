@@ -73,6 +73,7 @@ try {
     assert.equal(restored.effects[effectId]?.status, "pending");
     const settings = new PostgresPolicyStore(db, referenceDefaultPolicy);
     assert.equal(value(await settings.read(scope)).policyVersion, "1");
+    assert.equal(value(await settings.read(scope)).automationEnabled, false);
     assert.deepEqual(value(await settings.listBookingChanges(scope)).entries,
       [{ version: "1", enabled: true, provenance: "legacyUnattributed" }]);
 
@@ -84,9 +85,9 @@ try {
     assert.equal(value(await settings.listBookingChanges(scope)).entries[1]?.provenance, "recorded");
     console.log("v1 -> latest upgrade retained call, audit, outbox, staff work, and settings; resumed commands passed");
 
-    // Roll back only the latest constraint migration inside this disposable
-    // database, then prove its forward path rejects pre-existing tenant drift.
-    await migrate(db, "down");
+    // Roll back to the version before tenant constraints inside this disposable
+    // database, then prove the constraint's forward path rejects old tenant drift.
+    await migrateTo(db, "002_booking_setting_audit");
     await sql`insert into call_events (call_id, tenant_id, sequence, kind, payload)
       values (${callId}, 'wrong-tenant', 100, 'forged', '{}'::jsonb)`.execute(db);
     await assert.rejects(migrate(db), (error: unknown) =>
