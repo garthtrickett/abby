@@ -1,4 +1,4 @@
-import type { ActionRequest, ApprovedKnowledge, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffItem, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
+import type { ActionRequest, ApprovedKnowledge, AvailabilityRead, AvailabilityReadFailure, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffItem, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
 
 export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable"; target: "patient" | "offer" }>;
 export type PolicyFailure = Readonly<{ kind: "versionConflict" | "invalidValue" | "storageFailure" }>;
@@ -6,6 +6,10 @@ export type KnowledgeReadFailure = Readonly<{ kind: "invalidQuery" | "unavailabl
 
 export interface KnowledgeHost {
   readKnowledge(scope: LocationScope, sourceRefs: readonly string[]): Promise<Result<readonly ApprovedKnowledge[], KnowledgeReadFailure>>;
+}
+
+export interface AvailabilityHost {
+  list(scope: LocationScope, from: string, to: string): Promise<Result<AvailabilityRead, AvailabilityReadFailure>>;
 }
 
 export interface BookingEvidenceHost {

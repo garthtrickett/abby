@@ -1,5 +1,5 @@
 import { EffectWorker } from "../core/effect-worker.ts";
-import type { BookingEvidenceHost, HostEffects, KnowledgeHost, PolicyFailure, PolicyStore } from "../core/host.ts";
+import type { AvailabilityHost, BookingEvidenceHost, HostEffects, KnowledgeHost, PolicyFailure, PolicyStore } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err } from "../core/model.ts";
 import type { CallState, FinalCallerTurn, LocationScope, Result, TransitionFailure, TurnInterpretation } from "../core/model.ts";
@@ -12,12 +12,16 @@ export class TextReception {
   private readonly ledger: LedgerStore;
   private readonly policy: PolicyStore;
   private readonly host: TextHost;
+  private readonly availability: AvailabilityHost | undefined;
 
-  constructor(ledger: LedgerStore, policy: PolicyStore, host: TextHost) {
+  constructor(ledger: LedgerStore, policy: PolicyStore, host: TextHost, availability?: AvailabilityHost) {
     this.ledger = ledger;
     this.policy = policy;
     this.host = host;
+    this.availability = availability;
   }
+
+  availabilityEnabled(): boolean { return this.availability !== undefined; }
 
   private runtime(scope: LocationScope): CallRuntime {
     return new CallRuntime(this.ledger, scope);
@@ -69,6 +73,28 @@ export class TextReception {
           : { kind: "knowledgeFailure", reason: read.error.kind };
       } catch {
         interpretation = { kind: "knowledgeFailure", reason: "unavailable" };
+      }
+    }
+    return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);
+  }
+
+  async checkAvailability(scope: LocationScope, turn: FinalCallerTurn, from: string, to: string, now: string, expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
+    const runtime = this.runtime(scope);
+    const current = await runtime.read(turn.callId);
+    if (!current.ok) return current;
+    let interpretation: TurnInterpretation;
+    if (turn.quality !== "clear") {
+      interpretation = { kind: "availabilityFailure", reason: "unclear" };
+    } else if (typeof from !== "string" || typeof to !== "string" || !this.availability) {
+      interpretation = { kind: "availabilityFailure", reason: this.availability ? "invalidRange" : "notConfigured" };
+    } else {
+      try {
+        const read = await this.availability.list(scope, from, to);
+        if (!read.ok) interpretation = { kind: "availabilityFailure", reason: read.error.kind };
+        else if (read.value.kind === "times") interpretation = { kind: "availability", from, to, snapshot: read.value };
+        else interpretation = { kind: "availabilityFailure", reason: "notEligible" };
+      } catch {
+        interpretation = { kind: "availabilityFailure", reason: "unavailable" };
       }
     }
     return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);

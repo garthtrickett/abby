@@ -1,5 +1,5 @@
 import { err, ok } from "../core/model.ts";
-import type { LocationScope, Result } from "../core/model.ts";
+import type { AvailabilityRead, AvailabilityReadFailure, LocationScope, Result } from "../core/model.ts";
 
 export type ClinikoAvailabilityConfig = Readonly<{
   scope: LocationScope;
@@ -10,22 +10,15 @@ export type ClinikoAvailabilityConfig = Readonly<{
   appointmentTypeId: string;
 }>;
 
-export type ClinikoAvailabilityFailure = Readonly<{
-  kind: "invalidConfig" | "scopeMismatch" | "invalidRange" | "forbidden" | "notFound" | "rateLimited" | "unavailable" | "malformed" | "tooManyResults";
-  resetAt?: string;
-}>;
+export type ClinikoAvailabilityFailure = AvailabilityReadFailure;
 
 export type ClinikoAvailability =
-  | Readonly<{ kind: "notEligible"; reason: "business" | "practitioner" | "appointmentType" }>
-  | Readonly<{
-    kind: "times";
-    scope: LocationScope;
+  | Extract<AvailabilityRead, { kind: "notEligible" }>
+  | (Extract<AvailabilityRead, { kind: "times" }> & Readonly<{
     businessRef: string;
     practitionerRef: string;
     appointmentTypeRef: string;
-    startsAt: readonly string[];
-    reservable: false;
-  }>;
+  }>);
 
 const maxBodyBytes = 1_000_000;
 const perPage = 100;
@@ -85,8 +78,9 @@ export class ClinikoAvailabilityReader {
   private readonly authorization: string;
   private readonly userAgent: string;
   private readonly fetchPort: typeof fetch;
+  private readonly observedClock: () => string;
 
-  private constructor(config: ClinikoAvailabilityConfig, shard: string, fetchPort: typeof fetch) {
+  private constructor(config: ClinikoAvailabilityConfig, shard: string, fetchPort: typeof fetch, observedClock: () => string) {
     this.scope = structuredClone(config.scope);
     this.businessId = config.businessId;
     this.practitionerId = config.practitionerId;
@@ -95,14 +89,15 @@ export class ClinikoAvailabilityReader {
     this.authorization = `Basic ${Buffer.from(`${config.apiKey}:`).toString("base64")}`;
     this.userAgent = `Abby (${config.contactEmail})`;
     this.fetchPort = fetchPort;
+    this.observedClock = observedClock;
   }
 
-  static create(config: ClinikoAvailabilityConfig, fetchPort: typeof fetch = fetch): Result<ClinikoAvailabilityReader, ClinikoAvailabilityFailure> {
+  static create(config: ClinikoAvailabilityConfig, fetchPort: typeof fetch = fetch, observedClock: () => string = () => new Date().toISOString()): Result<ClinikoAvailabilityReader, ClinikoAvailabilityFailure> {
     const shard = config.apiKey.match(/-([a-z]{2}[0-9]{1,2})$/)?.[1];
     if (!shard || !config.apiKey.slice(0, -(shard.length + 1)) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.contactEmail) ||
         !config.scope.tenantId || !config.scope.clinicId || !config.scope.locationId ||
         !validId(config.businessId) || !validId(config.practitionerId) || !validId(config.appointmentTypeId)) return err({ kind: "invalidConfig" });
-    return ok(new ClinikoAvailabilityReader(config, shard, fetchPort));
+    return ok(new ClinikoAvailabilityReader(config, shard, fetchPort, observedClock));
   }
 
   private async get(path: string): Promise<Result<unknown, ClinikoAvailabilityFailure>> {
@@ -140,13 +135,29 @@ export class ClinikoAvailabilityReader {
     return ok(body.show_in_online_bookings);
   }
 
+  private async business(): Promise<Result<Readonly<{ eligible: false }> | Readonly<{ eligible: true; timeZone: string }>, ClinikoAvailabilityFailure>> {
+    const fetched = await this.get(`/businesses/${this.businessId}`);
+    if (!fetched.ok) return fetched;
+    const body = record(fetched.value);
+    if (!body || String(body.id) !== this.businessId || typeof body.show_in_online_bookings !== "boolean") return err({ kind: "malformed" });
+    if ((body.archived_at !== undefined && body.archived_at !== null) || !body.show_in_online_bookings) return ok({ eligible: false });
+    if (typeof body.time_zone_identifier !== "string" || !body.time_zone_identifier.trim()) return err({ kind: "malformed" });
+    try { new Intl.DateTimeFormat("en-AU", { timeZone: body.time_zone_identifier }); }
+    catch { return err({ kind: "malformed" }); }
+    return ok({ eligible: true, timeZone: body.time_zone_identifier });
+  }
+
   async list(scope: LocationScope, from: string, to: string): Promise<Result<ClinikoAvailability, ClinikoAvailabilityFailure>> {
     if (!sameScope(this.scope, scope)) return err({ kind: "scopeMismatch" });
     if (!validDate(from) || !validDate(to) || Date.parse(`${to}T00:00:00Z`) < Date.parse(`${from}T00:00:00Z`) ||
         Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`) > 7 * 86_400_000) return err({ kind: "invalidRange" });
 
+    const business = await this.business();
+    if (!business.ok) return business;
+    if (!business.value.eligible) return ok({ kind: "notEligible", reason: "business" });
+    const timeZone = business.value.timeZone;
+
     const resources = [
-      ["business", this.businessId, `/businesses/${this.businessId}`],
       ["practitioner", this.practitionerId, `/practitioners/${this.practitionerId}`],
       ["appointmentType", this.appointmentTypeId, `/appointment_types/${this.appointmentTypeId}`],
     ] as const;
@@ -178,7 +189,12 @@ export class ClinikoAvailabilityReader {
       if (body.available_times.length === 0) return err({ kind: "unavailable" });
     }
     if (startsAt.length !== totalEntries || new Set(startsAt).size !== startsAt.length) return err({ kind: "unavailable" });
-    return ok({ kind: "times", scope: structuredClone(this.scope), businessRef: this.businessId, practitionerRef: this.practitionerId,
+    let observedAt: string;
+    try { observedAt = this.observedClock(); }
+    catch { return err({ kind: "unavailable" }); }
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(observedAt) || !Number.isFinite(Date.parse(observedAt))) return err({ kind: "unavailable" });
+    return ok({ kind: "times", scope: structuredClone(this.scope), sourceRef: `cliniko:${this.businessId}:${this.practitionerId}:${this.appointmentTypeId}`,
+      timeZone, observedAt, businessRef: this.businessId, practitionerRef: this.practitionerId,
       appointmentTypeRef: this.appointmentTypeId, startsAt, reservable: false });
   }
 }

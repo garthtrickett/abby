@@ -9,6 +9,7 @@ export type CallSummary = Readonly<{
   actions: readonly Readonly<{ kind: ActionState["kind"]; status: ActionState["status"] }>[];
   staffItems: readonly Readonly<{ reason: StaffItem["reason"]; status: StaffItem["status"] }>[];
   knowledgeAnswers: readonly Readonly<{ sourceRef: string; version: string; ownerRef: string }>[];
+  availabilityReads: readonly Readonly<{ status: "shown" | "empty" | "failed"; sourceRef?: string; timeZone?: string; shownCount: number; reason?: string }>[];
 }>;
 
 const actionKinds = ["book", "cancel", "reschedule", "intake"] as const;
@@ -36,7 +37,13 @@ export class CallReview {
         staffItems.some(item => !item || !allowed(staffReasons, item.reason) || !allowed(staffStatuses, item.status)) ||
         !Array.isArray(call.knowledgeAnswers) || call.knowledgeAnswers.some(item => !item ||
           typeof item.sourceRef !== "string" || !item.sourceRef || typeof item.version !== "string" || !item.version ||
-          typeof item.ownerRef !== "string" || !item.ownerRef)) {
+          typeof item.ownerRef !== "string" || !item.ownerRef) ||
+        !Array.isArray(call.availabilityReads) || call.availabilityReads.some(item => !item ||
+          !allowed(["shown", "empty", "failed"], item.status) ||
+          (item.sourceRef !== undefined && typeof item.sourceRef !== "string") ||
+          (item.timeZone !== undefined && typeof item.timeZone !== "string") ||
+          (item.reason !== undefined && typeof item.reason !== "string") ||
+          (item.shownStartsAt !== undefined && !Array.isArray(item.shownStartsAt)))) {
       return err({ kind: "storageCorrupt" });
     }
     return ok({
@@ -46,6 +53,11 @@ export class CallReview {
       actions: actions.map(({ kind, status }) => ({ kind, status })),
       staffItems: staffItems.map(({ reason, status }) => ({ reason, status })),
       knowledgeAnswers: call.knowledgeAnswers.map(({ sourceRef, version, ownerRef }) => ({ sourceRef, version, ownerRef })),
+      availabilityReads: call.availabilityReads.map(({ status, sourceRef, timeZone, shownStartsAt, reason }) => ({ status,
+        shownCount: shownStartsAt?.length ?? 0,
+        ...(sourceRef === undefined ? {} : { sourceRef }),
+        ...(timeZone === undefined ? {} : { timeZone }),
+        ...(reason === undefined ? {} : { reason }) })),
     });
   }
 }

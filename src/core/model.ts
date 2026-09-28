@@ -80,6 +80,21 @@ export type ApprovedKnowledge = Readonly<{
   effectiveUntil: string;
 }>;
 
+export type AvailabilitySnapshot = Readonly<{
+  kind: "times";
+  scope: LocationScope;
+  sourceRef: string;
+  timeZone: string;
+  observedAt: string;
+  startsAt: readonly string[];
+  reservable: false;
+}>;
+export type AvailabilityRead = AvailabilitySnapshot | Readonly<{ kind: "notEligible"; reason: "business" | "practitioner" | "appointmentType" }>;
+export type AvailabilityReadFailure = Readonly<{
+  kind: "invalidConfig" | "scopeMismatch" | "invalidRange" | "forbidden" | "notFound" | "rateLimited" | "unavailable" | "malformed" | "tooManyResults";
+  resetAt?: string;
+}>;
+
 export type TurnInterpretation =
   | Readonly<{ kind: "requestAction"; request: ActionRequest }>
   | Readonly<{ kind: "affirm"; actionKey: string; digest: string; affirmative: boolean }>
@@ -89,6 +104,8 @@ export type TurnInterpretation =
   | Readonly<{ kind: "unavailableAction"; actionKind: ActionKind }>
   | Readonly<{ kind: "answer"; sources: readonly ApprovedKnowledge[]; proposedText: string }>
   | Readonly<{ kind: "knowledgeFailure"; reason: "invalidQuery" | "unavailable" }>
+  | Readonly<{ kind: "availability"; from: string; to: string; snapshot: AvailabilitySnapshot }>
+  | Readonly<{ kind: "availabilityFailure"; reason: AvailabilityReadFailure["kind"] | "notEligible" | "notConfigured" | "unclear" }>
   | Readonly<{ kind: "ambiguousTarget" }>;
 
 export type StaffReason =
@@ -184,6 +201,15 @@ export type CallState = {
   staffItems: Record<string, StaffItem>;
   callerMessages: string[];
   knowledgeAnswers: Array<Readonly<{ turnId: string; sourceRef: string; version: string; ownerRef: string }>>;
+  availabilityReads: Array<Readonly<{
+    turnId: string;
+    status: "shown" | "empty" | "failed";
+    sourceRef?: string;
+    timeZone?: string;
+    observedAt?: string;
+    shownStartsAt?: readonly string[];
+    reason?: string;
+  }>>;
 };
 
 export type TransitionFailure =

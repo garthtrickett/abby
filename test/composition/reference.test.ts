@@ -11,7 +11,7 @@ import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
-import type { PolicyStore } from "../../src/core/host.ts";
+import type { AvailabilityHost, PolicyStore } from "../../src/core/host.ts";
 import type { TextReception } from "../../src/reference/text-reception.ts";
 
 const now = "2026-09-28T10:00:00.000Z";
@@ -45,7 +45,7 @@ function settings(reply: GatewayReply) {
   return reply.policy;
 }
 
-function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = false, hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "execute") {
+function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = false, hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "execute", availability?: AvailabilityHost) {
   const scope: LocationScope = { tenantId: `tenant-${id}`, clinicId: `clinic-${id}`, locationId: `location-${id}` };
   const patient = { scope, patientRef: `patient-${id}`, verificationRef: `proof-${id}`, expiresAt };
   const offer = (suffix: string) => ({ scope, offerRef: `offer-${id}-${suffix}`, serviceRef: "physio", startsAt: "2026-09-29T11:00:00.000Z", expiresAt });
@@ -56,10 +56,10 @@ function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = f
   let policy: PolicyStore;
   if (kind === "standalone") {
     assert.ok(db);
-    ({ reception, policy } = createStandaloneTextComposition(db, host, hostBookingMode));
+    ({ reception, policy } = createStandaloneTextComposition(db, host, hostBookingMode, undefined, availability));
   } else {
     policy = new MemoryPolicyStore(hostBookingMode);
-    reception = createEmbeddedTextComposition(new MemoryLedger(), policy, host);
+    reception = createEmbeddedTextComposition(new MemoryLedger(), policy, host, availability);
   }
   const admin = new CommandGateway({ actorRef: `admin-${id}`, role: "clinicAdmin", scope }, policy, reception);
   const agent = new CommandGateway({ actorRef: `agent-${id}`, role: "agent", scope }, policy, reception);
@@ -212,5 +212,33 @@ for (const kind of kinds) {
       scope: { ...app.scope, tenantId: "another-tenant" } }, app.policy, app.reception);
     error(await other.submit({ kind: "knowledge.answer.v1", turn: turn(callId, "foreign", "Hours?"),
       sourceRefs: ["hours"], proposedText: "We open at 9 am.", now }), "callUnknown");
+  });
+
+  test(`${kind}: agent availability command uses the configured scoped read and never creates booking evidence`, async () => {
+    const reads: LocationScope[] = [];
+    const availability: AvailabilityHost = { list: async (scope, from, to) => {
+      reads.push(scope);
+      assert.deepEqual([from, to], ["2026-10-01", "2026-10-02"]);
+      return { ok: true, value: { kind: "times", scope, sourceRef: "reference-availability", timeZone: "Australia/Sydney",
+        observedAt: now, startsAt: ["2026-09-30T23:00:00.000Z"], reservable: false } };
+    } };
+    const app = fixture(kind, `${kind}-availability-command`, false, "requestOnly", availability);
+    assert.equal(app.agent.listPermitted().some(item => item.id === "availability.read.v1"), true);
+    const callId = `call-${kind}-availability-command`;
+    value(await app.reception.startCall(callId, app.scope));
+    const reply = value(await app.agent.submit({ kind: "availability.read.v1", turn: turn(callId, "check-times", "Check times"),
+      from: "2026-10-01", to: "2026-10-02", now }));
+    assert.equal(reply.kind, "availabilityAnswer");
+    assert.equal(reply.state.availabilityReads[0]?.status, "shown");
+    assert.match(reply.state.callerMessages.at(-1)!, /can't reserve or confirm/);
+    assert.equal(Object.keys(reply.state.actions).length, 0);
+    assert.equal(app.host.bookings(app.scope).length, 0);
+    assert.deepEqual(reads, [app.scope]);
+
+    const other = new CommandGateway({ actorRef: "foreign-agent", role: "agent",
+      scope: { ...app.scope, tenantId: "another-tenant" } }, app.policy, app.reception);
+    error(await other.submit({ kind: "availability.read.v1", turn: turn(callId, "foreign-check", "Check times"),
+      from: "2026-10-01", to: "2026-10-02", now }), "callUnknown");
+    assert.equal(reads.length, 1);
   });
 }
