@@ -2,13 +2,14 @@ import { createHash } from "node:crypto";
 import { err, ok } from "../core/model.ts";
 import type { CallPolicy, LocationScope, Result, StaffDestination, StaffedInterval } from "../core/model.ts";
 import { materializeVerifiedArchive } from "./archive-envelope.ts";
-import type { ArchiveEnvelope, ArchiveEnvelopeFailure, ArchiveSection } from "./archive-envelope.ts";
+import type { ArchiveEnvelope, ArchiveEnvelopeFailure, ArchiveSection, ArchiveSectionManifest } from "./archive-envelope.ts";
 
 export type ConfigArchiveData = Readonly<{
   archiveId: string;
   manifestDigest: string;
   createdAt: string;
   sourceSchemaVersion: string;
+  sectionManifests: Readonly<Record<ArchiveSection, ArchiveSectionManifest>>;
   sourceScope: LocationScope;
   targetScope: LocationScope;
   timeZone: string;
@@ -249,6 +250,7 @@ export async function decodeConfigArchive(input: ArchiveEnvelope, expectedTarget
     }
     return ok({ archiveId: verified.manifest.archiveId, manifestDigest: verified.manifestDigest,
       createdAt: verified.manifest.createdAt, sourceSchemaVersion: verified.manifest.sourceSchemaVersion,
+      sectionManifests: verified.manifest.sections,
       sourceScope, targetScope, timeZone, mappingProvenance, policies, automation, writeStops, knowledge });
   } catch (cause) {
     return err({ kind: "invalidConfigArchive", ...(cause instanceof InvalidConfigArchive && cause.section ? { section: cause.section } : {}) });
