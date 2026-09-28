@@ -131,6 +131,7 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
     if (!result.ok) return err({ kind: "routeUnavailable" as const });
     const snapshot: CallPolicy = {
       ...result.value,
+      automationEnabled: true,
       capabilities: { ...result.value.capabilities, transfer: transferMode },
       ...(transferMode === "execute" ? { transferDestinationRef: transferDestinationRef ?? `destination-${id}`,
         staffedIntervals: options.staffedIntervals ?? [{ startsAt: at(0), endsAt: at(3_600) }] } : {}),

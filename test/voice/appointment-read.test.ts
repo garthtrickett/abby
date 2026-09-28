@@ -55,7 +55,7 @@ async function fixture(kind: "memory" | "postgres", suffix: string, verified = t
   assert.ok(reception);
   const admission = new CallAdmissionService(ledger, async () => {
     const result = await policy.read(scope);
-    return result.ok ? ok(result.value) : err({ kind: "routeUnavailable" as const });
+    return result.ok ? ok({ ...result.value, automationEnabled: true }) : err({ kind: "routeUnavailable" as const });
   }, () => now);
   const callId = value(await admission.begin({ key: { accountRef: `account-${suffix}`, providerCallRef: `call-${suffix}` },
     dialedNumber: "+6125550100", receivedAt: now })).receipt.callId;

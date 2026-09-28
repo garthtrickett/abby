@@ -395,10 +395,13 @@ for (const kind of kinds) {
 test("postgres: pre-audit policy versions stay readable without invented attribution", { skip: !db }, async () => {
   const scope = { tenantId: "audit-legacy-tenant", clinicId: "audit-legacy-clinic", locationId: "audit-legacy-location" };
   const policy = { ...referenceDefaultPolicy(scope), policyVersion: "1", bookingEnabled: true };
+  const legacyPolicy = Object.fromEntries(Object.entries(policy).filter(([field]) => field !== "automationEnabled"));
   await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy)
-    values (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, 1, ${JSON.stringify(policy)}::jsonb)`.execute(db!);
+    values (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, 1, ${JSON.stringify(legacyPolicy)}::jsonb)`.execute(db!);
   const store = new PostgresPolicyStore(db!, referenceDefaultPolicy);
   const history = value(await store.listBookingChanges(scope));
   assert.deepEqual(history.entries, [{ version: "1", enabled: true, provenance: "legacyUnattributed" }]);
-  assert.equal(value(await store.read(scope)).policyVersion, "1");
+  const restored = value(await store.read(scope));
+  assert.equal(restored.policyVersion, "1");
+  assert.equal(restored.automationEnabled, false);
 });

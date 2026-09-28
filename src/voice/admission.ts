@@ -10,7 +10,7 @@ export type AuthenticatedInboundCall = Readonly<{
   receivedAt: string;
 }>;
 
-export type RouteFailure = Readonly<{ kind: "routeUnavailable" }>;
+export type RouteFailure = Readonly<{ kind: "routeUnavailable" | "automationDisabled" }>;
 export type PolicyResolver = (dialedNumber: string) => Promise<Result<CallPolicy, RouteFailure>>;
 
 export function callIdFor(key: ProviderCallKey): string {
@@ -50,6 +50,11 @@ export class CallAdmissionService {
       const raced = await this.ledger.findAdmission(callId);
       if (!raced.ok) return raced;
       return raced.value ? duplicateOrConflict(raced.value, event) : policy;
+    }
+    if (policy.value.automationEnabled !== true) {
+      const raced = await this.ledger.findAdmission(callId);
+      if (!raced.ok) return raced;
+      return raced.value ? duplicateOrConflict(raced.value, event) : err({ kind: "automationDisabled" });
     }
     const acceptedAt = this.now();
     if (!Number.isFinite(Date.parse(acceptedAt))) return err({ kind: "invalidTransition" });

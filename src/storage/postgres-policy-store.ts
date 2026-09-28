@@ -13,8 +13,12 @@ function sameScope(left: LocationScope, right: LocationScope): boolean {
 function decodePolicy(value: unknown, scope: LocationScope, version: number): Result<CallPolicy, PolicyFailure> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return err({ kind: "storageFailure" });
   const policy = value as CallPolicy;
-  if (!policy.scope || !sameScope(policy.scope, scope) || policy.policyVersion !== String(version) || typeof policy.bookingEnabled !== "boolean" || !policy.capabilities || !["execute", "requestOnly", "unavailable"].includes(policy.capabilities.transfer) || !policy.staffDestination || !policy.operatorQueue) return err({ kind: "storageFailure" });
-  return ok(structuredClone(policy));
+  if (!policy.scope || !sameScope(policy.scope, scope) || policy.policyVersion !== String(version) ||
+      (policy.automationEnabled !== undefined && typeof policy.automationEnabled !== "boolean") ||
+      typeof policy.bookingEnabled !== "boolean" || !policy.capabilities ||
+      !["execute", "requestOnly", "unavailable"].includes(policy.capabilities.transfer) ||
+      !policy.staffDestination || !policy.operatorQueue) return err({ kind: "storageFailure" });
+  return ok(structuredClone({ ...policy, automationEnabled: policy.automationEnabled === true }));
 }
 
 export class PostgresPolicyStore implements PolicyStore {
