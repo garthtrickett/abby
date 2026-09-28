@@ -2,6 +2,7 @@ import { err, ok } from "../../core/model.ts";
 import type { CallPolicy, Result } from "../../core/model.ts";
 import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor, GatewayFailure } from "../../reference/command-gateway.ts";
+import type { StaffQueuePage } from "../../reference/staff-queue.ts";
 
 export type DashboardFailure = GatewayFailure | Readonly<{ kind: "transportUnavailable" | "malformed" }>;
 export type DashboardPort = Readonly<{
@@ -9,6 +10,7 @@ export type DashboardPort = Readonly<{
   settings(): Promise<Result<CallPolicy, DashboardFailure>>;
   changeBookingEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   callSummary(callId: string): Promise<Result<CallSummary, DashboardFailure>>;
+  staffQueue(afterTaskKey?: string): Promise<Result<StaffQueuePage, DashboardFailure>>;
 }>;
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -68,5 +70,19 @@ export class FetchDashboardPort implements DashboardPort {
       (call.lifecycle === "starting" || call.lifecycle === "active" || call.lifecycle === "ended") &&
       Array.isArray(call.actions) && Array.isArray(call.staffItems)
       ? ok(call as CallSummary) : err({ kind: "malformed" });
+  }
+
+  async staffQueue(afterTaskKey?: string): Promise<Result<StaffQueuePage, DashboardFailure>> {
+    const result = await request(`/api/staff${afterTaskKey === undefined ? "" : `?after=${encodeURIComponent(afterTaskKey)}`}`);
+    if (!result.ok) return result;
+    const reply = record(result.value);
+    const page = record(reply?.page);
+    return reply?.kind === "staffQueue" && page && Array.isArray(page.items) && page.items.every(item => {
+      const entry = record(item);
+      return entry && typeof entry.callId === "string" && typeof entry.taskKey === "string" &&
+        typeof entry.reason === "string" && typeof entry.status === "string" && typeof entry.dueAt === "string" &&
+        typeof entry.overdue === "boolean";
+    }) && (page.nextAfterTaskKey === undefined || typeof page.nextAfterTaskKey === "string")
+      ? ok(page as StaffQueuePage) : err({ kind: "malformed" });
   }
 }

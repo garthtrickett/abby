@@ -5,6 +5,7 @@ import { CallReview } from "../../reference/call-review.ts";
 import { ReferenceClinicHost } from "../../reference/clinic-host.ts";
 import { CommandGateway } from "../../reference/command-gateway.ts";
 import { MemoryPolicyStore } from "../../reference/policy-store.ts";
+import { StaffQueue } from "../../reference/staff-queue.ts";
 import { TextReception } from "../../reference/text-reception.ts";
 import { createDashboardServer } from "./server.ts";
 
@@ -14,7 +15,7 @@ const policy = new MemoryPolicyStore();
 const reception = new TextReception(ledger, policy, new ReferenceClinicHost([], []));
 const started = await reception.startCall("demo-call", scope);
 if (!started.ok) throw new Error(`demo call failed: ${started.error.kind}`);
-const gateway = new CommandGateway({ actorRef: "demo-admin", role: "clinicAdmin", scope }, policy, reception, new CallReview(ledger));
+const gateway = new CommandGateway({ actorRef: "demo-admin", role: "clinicAdmin", scope }, policy, reception, new CallReview(ledger), new StaffQueue(ledger));
 const server = await createDashboardServer(gateway, resolve("dist/dashboard/app.js"));
 const port = Number(process.env.ABBY_DASHBOARD_PORT ?? "3400");
 if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) throw new Error("invalid ABBY_DASHBOARD_PORT");

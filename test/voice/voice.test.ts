@@ -93,6 +93,7 @@ class PresentationStartHookLedger implements LedgerStore {
   findPendingPresentations(...args: Parameters<LedgerStore["findPendingPresentations"]>) { return this.inner.findPendingPresentations(...args); }
   admit(...args: Parameters<LedgerStore["admit"]>) { return this.inner.admit(...args); }
   read(...args: Parameters<LedgerStore["read"]>) { return this.inner.read(...args); }
+  listStaffItems(...args: Parameters<LedgerStore["listStaffItems"]>) { return this.inner.listStaffItems(...args); }
   async apply(...args: Parameters<LedgerStore["apply"]>) {
     const result = await this.inner.apply(...args);
     if (result.ok && args[3].kind === "presentationStarted") this.onStart();

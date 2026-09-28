@@ -1,7 +1,7 @@
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import { err, ok } from "../core/model.ts";
-import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingPresentationRef, Result, TransitionAction, TransitionFailure } from "../core/model.ts";
+import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingPresentationRef, Result, StaffItem, StaffQueueEntry, TransitionAction, TransitionFailure } from "../core/model.ts";
 import { admissionReceipt, initialState, sameAdmission } from "../core/ledger.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { transition } from "../core/transition.ts";
@@ -214,6 +214,33 @@ export class PostgresLedger implements LedgerStore {
       if (!decoded.ok) return decoded;
       if (decoded.value.version !== row.version) return err({ kind: "storageCorrupt" });
       return ok(structuredClone(decoded.value));
+    } catch {
+      return err({ kind: "storageFailure" });
+    }
+  }
+
+  async listStaffItems(scope: LocationScope, afterTaskKey?: string): Promise<Result<readonly StaffQueueEntry[], TransitionFailure>> {
+    if (afterTaskKey !== undefined && (!afterTaskKey || afterTaskKey.length > 256)) return err({ kind: "invalidTransition" });
+    try {
+      let query = this.db.selectFrom("staff_items").innerJoin("calls", "calls.call_id", "staff_items.call_id")
+        .select(["staff_items.task_key", "staff_items.call_id", "staff_items.status", "staff_items.payload"])
+        .where("staff_items.tenant_id", "=", scope.tenantId)
+        .where("calls.tenant_id", "=", scope.tenantId)
+        .where("calls.clinic_id", "=", scope.clinicId)
+        .where("calls.location_id", "=", scope.locationId);
+      if (afterTaskKey) query = query.where("staff_items.task_key", ">", afterTaskKey as StaffItemsTaskKey);
+      const rows = await query.orderBy("staff_items.task_key").limit(50).execute();
+      const entries: StaffQueueEntry[] = [];
+      for (const row of rows) {
+        const item = row.payload as StaffItem;
+        if (!item || item.key !== row.task_key || item.status !== row.status || !item.scope ||
+            item.scope.tenantId !== scope.tenantId || item.scope.clinicId !== scope.clinicId || item.scope.locationId !== scope.locationId ||
+            typeof item.dueAt !== "string" || !Number.isFinite(Date.parse(item.dueAt)) || !item.destination ||
+            typeof item.reason !== "string") return err({ kind: "storageCorrupt" });
+        entries.push({ callId: row.call_id, taskKey: item.key, reason: item.reason, status: item.status, dueAt: item.dueAt,
+          destination: structuredClone(item.destination), ...(item.linkedActionKey === undefined ? {} : { linkedActionKey: item.linkedActionKey }) });
+      }
+      return ok(entries);
     } catch {
       return err({ kind: "storageFailure" });
     }

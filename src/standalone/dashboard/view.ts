@@ -2,6 +2,7 @@ import { html } from "lit-html";
 import type { CallPolicy } from "../../core/model.ts";
 import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor } from "../../reference/command-gateway.ts";
+import type { StaffQueuePage } from "../../reference/staff-queue.ts";
 
 export type DashboardState = {
   loading: boolean;
@@ -10,6 +11,7 @@ export type DashboardState = {
   policy: CallPolicy | undefined;
   callIdInput: string;
   call: CallSummary | undefined;
+  staffPage: StaffQueuePage | undefined;
   notice: string | undefined;
   error: string | undefined;
 };
@@ -18,6 +20,8 @@ export type DashboardActions = Readonly<{
   toggleBooking(): void;
   setCallId(value: string): void;
   loadCall(): void;
+  loadStaff(): void;
+  loadMoreStaff(): void;
 }>;
 
 export function dashboardView(state: DashboardState, actions: DashboardActions) {
@@ -46,6 +50,13 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
           ${state.call.availabilityReads.length ? html`<h3>Availability reads</h3><ul>${state.call.availabilityReads.map(item => html`<li>${item.status}${item.sourceRef ? ` · ${item.sourceRef}` : ""}${item.timeZone ? ` · ${item.timeZone}` : ""} · ${item.shownCount} time(s)${item.reason ? ` · ${item.reason}` : ""}</li>`)}</ul>` : ""}
         </div>` : ""}
       </section>
+      ${state.capabilities.some(item => item.id === "staff.list.v1") ? html`<section class="card" aria-labelledby="staff-title">
+        <div class="row"><h2 id="staff-title">Staff follow-up</h2><button type="button" ?disabled=${state.busy} @click=${() => actions.loadStaff()}>Refresh follow-up</button></div>
+        ${state.staffPage ? html`<div aria-label="Staff follow-up queue">
+          ${state.staffPage.items.length ? html`<ul>${state.staffPage.items.map(item => html`<li>${item.callId} · ${item.reason} · ${item.status}${item.overdue ? " · overdue" : ""} · due ${item.dueAt}</li>`)}</ul>` : html`<p>No follow-up items in this clinic.</p>`}
+          ${state.staffPage.nextAfterTaskKey ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreStaff()}>Load more follow-up</button>` : ""}
+        </div>` : html`<p class="muted">Follow-up queue unavailable.</p>`}
+      </section>` : ""}
       ${state.notice ? html`<p role="status">${state.notice}</p>` : ""}
       ${state.error ? html`<p role="alert" class="error">${state.error}</p>` : ""}
     `}

@@ -3,6 +3,7 @@ import test, { after } from "node:test";
 import { CallRuntime } from "../../src/core/runtime.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
+import { StaffQueue } from "../../src/reference/staff-queue.ts";
 import type { CallsCallId } from "../../src/storage/generated/public/Calls.ts";
 import type { EffectOutboxEffectId } from "../../src/storage/generated/public/EffectOutbox.ts";
 import { deadline, failure, now, setup, success } from "../text/fixture.ts";
@@ -21,6 +22,19 @@ test("global call key and tenant scope are enforced by the database adapter", as
   failure(await other.read(app.callId), "callUnknown");
   failure(await other.apply(app.callId, 0, { kind: "callerTurn", turn: { callId: app.callId, turnId: "intruder", text: "book", quality: "clear", at: now }, interpretation: { kind: "requestAction", request: app.book() }, now }), "callUnknown");
   assert.equal((await app.state()).version, 0);
+});
+
+test("PostgreSQL staff queue reads the indexed task projection within one clinic", async () => {
+  const app = await setup("pg-staff-queue");
+  success(await app.runtime.acceptTurn({ callId: app.callId, turnId: "staff-request", text: "Need staff", quality: "clear", at: now },
+    { kind: "handoff", reason: "callerRequested" }, now));
+  const queue = new StaffQueue(new PostgresLedger(db), () => "2026-09-30T10:00:00.000Z");
+  const result = success(await queue.list(app.scope));
+  assert.equal(result.items.length, 1);
+  assert.deepEqual({ callId: result.items[0]?.callId, reason: result.items[0]?.reason, status: result.items[0]?.status, overdue: result.items[0]?.overdue },
+    { callId: app.callId, reason: "callerRequested", status: "requested", overdue: true });
+  assert.equal(JSON.stringify(result).includes("Need staff"), false);
+  assert.deepEqual(success(await queue.list({ ...app.scope, locationId: "other-location" })).items, []);
 });
 
 test("calls written before read provenance existed remain readable and upgrade on the next transition", async () => {

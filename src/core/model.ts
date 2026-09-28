@@ -179,6 +179,15 @@ export type StaffItem = Readonly<{
   request?: ActionRequest;
   hostTaskRef?: string;
 }>;
+export type StaffQueueEntry = Readonly<{
+  callId: string;
+  taskKey: string;
+  reason: StaffReason;
+  status: StaffItem["status"];
+  dueAt: string;
+  destination: StaffDestination;
+  linkedActionKey?: string;
+}>;
 export type Effect =
   | Readonly<{ kind: "hostWrite"; id: string; actionKey: string; mutation: HostMutation; status: "pending" | "possiblySent" | "completed" | "uncertain" | "canceled"; possiblySentAt?: string }>
   | Readonly<{ kind: "hostReconcile"; id: string; actionKey: string; originalEffectId: string; status: "pending" | "completed" }>

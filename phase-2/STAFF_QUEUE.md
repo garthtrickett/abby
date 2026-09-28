@@ -1,0 +1,7 @@
+# Scoped staff follow-up queue, version 0.1
+
+Every fallback already creates a durable `StaffItem` with a reason, destination, due time, and call link. `LedgerStore.listStaffItems` now provides a bounded, tenant-and-location-scoped page from that state. The PostgreSQL implementation reads its indexed `staff_items` projection joined to the owning call; the embedded host can implement the same interface with native storage. The shared `StaffQueue` validates entries, computes overdue status, and removes patient, appointment, and spoken content from the result.
+
+Authorized staff and agents discover `staff.list.v1` only when a queue port is configured. The direct `lit-html` dashboard shows and pages through the same command. Cursor pages contain at most 50 items. A browser scenario follows a failed knowledge answer through the call, task opening, and redacted overdue queue; memory and PostgreSQL tests cover isolation and the storage projection.
+
+This read surface is **not** task closure. The current host contract can confirm opening a task but has no typed acknowledgment, reassignment, or resolution result. The UI therefore does not claim a task was handled. Those lifecycle commands need host-confirmed outcomes, a scoped actor audit, optimistic concurrency, and an operator alert for overdue or failed delivery before FR-19 can pass. The standalone demo remains a local reference UI with an actor bound by the server caller; deployment must supply authentication.
