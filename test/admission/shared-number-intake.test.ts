@@ -12,6 +12,8 @@ import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
 import { CallAdmissionService, callIdFor } from "../../src/voice/admission.ts";
 import { SharedNumberIntakeService } from "../../src/voice/shared-number-intake.ts";
+import { locationChoicePrompt } from "../../src/voice/location-choice.ts";
+import { TurnAssembler } from "../../src/voice/turn-assembler.ts";
 
 const now = "2026-09-28T10:00:00.000Z";
 const kinds = process.env.ABBY_LEDGER === "postgres" ? ["memory", "postgres"] as const : ["memory"] as const;
@@ -33,8 +35,8 @@ function fixture(kind: "memory" | "postgres") {
   const sharedNumber = "+6125550101";
   const singleNumber = "+6125550102";
   const assignments = [
-    { accountRef: account, dialedNumber: sharedNumber, ...main, routeVersion: "route-v1" },
-    { accountRef: account, dialedNumber: sharedNumber, ...other, routeVersion: "route-v1" },
+    { accountRef: account, dialedNumber: sharedNumber, ...main, spokenName: "Main Street", routeVersion: "route-v1" },
+    { accountRef: account, dialedNumber: sharedNumber, ...other, spokenName: "Northside", routeVersion: "route-v1" },
     { accountRef: account, dialedNumber: singleNumber, ...main, routeVersion: "route-v1" },
   ];
   let routeHost = new ReferenceNumberRoutingHost(assignments);
@@ -79,6 +81,56 @@ for (const kind of kinds) {
     const changedNumber = await app.intake.begin({ ...event, dialedNumber: "+6125550199" });
     assert.ok(!changedNumber.ok);
     assert.equal(changedNumber.error.kind, "callConflict");
+  });
+
+  test(`${kind}: captured spoken names guide a final transcript to exactly one location`, async () => {
+    const app = fixture(kind);
+    const event = app.event("spoken-choice");
+    const first = value(await app.intake.begin(event));
+    assert.equal(first.kind, "locationChoice");
+    assert.equal(locationChoicePrompt(first.pending.route),
+      "Which location would you like? Please say Main Street or Northside.");
+    assert.equal(app.policyReads(), 0);
+    const attached = value(await app.intake.attachSession(event, "session"));
+    const assembler = new TurnAssembler(callIdFor(event.key), "session");
+    let generation = assembler.beginSpeech();
+    value(assembler.accept({ kind: "segmentFinal", sessionId: "session", generation, utteranceId: "unclear",
+      text: "Not Northside", quality: "clear" }));
+    const unclear = await app.intake.chooseFromTurn(event, value(assembler.finish(now)), attached.sessionLease!.version);
+    assert.ok(!unclear.ok);
+    assert.equal(unclear.error.kind, "locationChoiceUnclear");
+    assert.equal(app.policyReads(), 0);
+    generation = assembler.beginSpeech();
+    value(assembler.accept({ kind: "segmentFinal", sessionId: "session", generation, utteranceId: "choice",
+      text: "The Northside location.", quality: "clear" }));
+    value(await app.policy.changeAutomationEnabled(app.other, "0", true, "clinic-admin"));
+    const finalTurn = value(assembler.finish(now));
+    const admitted = value(await app.intake.chooseFromTurn(event, finalTurn, attached.sessionLease!.version));
+    assert.deepEqual(admitted.receipt.scope, app.other);
+    assert.equal(value(await app.intake.chooseFromTurn(event, finalTurn, attached.sessionLease!.version)).kind, "duplicate");
+    const pending = value(await app.ledger.findPendingLocation(admitted.receipt.callId));
+    assert.equal(pending?.choiceEvidence?.turnId, finalTurn.turnId);
+  });
+
+  test(`${kind}: missing or duplicate spoken names reject shared routing before reservation`, async () => {
+    const app = fixture(kind);
+    app.replaceHost(new ReferenceNumberRoutingHost([
+      { accountRef: app.account, dialedNumber: app.sharedNumber, ...app.main, routeVersion: "route-v1" },
+      { accountRef: app.account, dialedNumber: app.sharedNumber, ...app.other, routeVersion: "route-v1" },
+    ]));
+    const missing = app.event("missing-names");
+    const result = await app.intake.begin(missing);
+    assert.ok(!result.ok);
+    assert.equal(result.error.kind, "routeUnavailable");
+    assert.equal(value(await app.ledger.findPendingLocation(callIdFor(missing.key))), null);
+    app.replaceHost(new ReferenceNumberRoutingHost([
+      { accountRef: app.account, dialedNumber: app.sharedNumber, ...app.main, spokenName: "Main", routeVersion: "route-v1" },
+      { accountRef: app.account, dialedNumber: app.sharedNumber, ...app.other, spokenName: " main ", routeVersion: "route-v1" },
+    ]));
+    const duplicate = await app.intake.begin(app.event("duplicate-names"));
+    assert.ok(!duplicate.ok);
+    assert.equal(duplicate.error.kind, "routeUnavailable");
+    assert.equal(app.policyReads(), 0);
   });
 
   test(`${kind}: chosen shared-number location binds before scoped call work`, async () => {
@@ -144,8 +196,8 @@ for (const kind of kinds) {
     value(await app.intake.begin(event));
     value(await app.intake.attachSession(event, "session"));
     app.replaceHost(new ReferenceNumberRoutingHost([
-      { accountRef: app.account, dialedNumber: app.sharedNumber, ...app.main, routeVersion: "route-v2" },
-      { accountRef: app.account, dialedNumber: app.sharedNumber, ...app.other, routeVersion: "route-v2" },
+      { accountRef: app.account, dialedNumber: app.sharedNumber, ...app.main, spokenName: "Main Street", routeVersion: "route-v2" },
+      { accountRef: app.account, dialedNumber: app.sharedNumber, ...app.other, spokenName: "Northside", routeVersion: "route-v2" },
     ]));
     const choice = await app.intake.choose(event, app.turn(event), app.main.locationId, 1);
     assert.ok(!choice.ok);

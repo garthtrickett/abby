@@ -4,6 +4,7 @@ import type { Admission, AdmissionReceipt, AdmissionResult, FinalCallerTurn, Pen
 import type { ClinicPolicyRouter } from "../reference/clinic-number-routing.ts";
 import { CallAdmissionService, callIdFor } from "./admission.ts";
 import type { AuthenticatedInboundCall, RouteFailure } from "./admission.ts";
+import { resolveLocationChoice } from "./location-choice.ts";
 
 export type SharedNumberIntakeResult =
   | Readonly<{ kind: "admitted"; admission: AdmissionResult }>
@@ -64,11 +65,13 @@ export class SharedNumberIntakeService {
       const admitted = await this.admission.begin(event);
       return admitted.ok ? ok({ kind: "admitted", admission: admitted.value }) : admitted;
     }
+    if (!identified.value.candidateNames) return err({ kind: "routeUnavailable" });
     const acceptedAt = this.now();
     if (!Number.isFinite(Date.parse(acceptedAt))) return err({ kind: "invalidTransition" });
     const reservation = await this.ledger.reservePendingLocation(callId, {
       tenantId: identified.value.tenantId, clinicId: identified.value.clinicId,
-      candidateLocationIds: identified.value.candidateLocationIds, routeVersion: identified.value.routeVersion,
+      candidateLocationIds: identified.value.candidateLocationIds, candidateNames: identified.value.candidateNames,
+      routeVersion: identified.value.routeVersion,
     }, { key: event.key, dialedNumber: event.dialedNumber, acceptedAt,
       deadline: new Date(Date.parse(acceptedAt) + 120_000).toISOString() });
     if (reservation.ok) return reservation.value.pending.status === "pending"
@@ -142,5 +145,19 @@ export class SharedNumberIntakeService {
     });
     if (!chosen.ok) return chosen;
     return this.admission.bindSelected(event, chosen.value, turn.sessionId, expectedLeaseVersion, turn.turnId);
+  }
+
+  /** Media adapters use this entry: no separately supplied location ID can disagree with the caller's final words. */
+  async chooseFromTurn(event: AuthenticatedInboundCall, turn: FinalCallerTurn, expectedLeaseVersion: number):
+    Promise<Result<AdmissionResult, TransitionFailure | RouteFailure | Readonly<{ kind: "locationChoiceUnclear" }>>> {
+    if (!validEvent(event)) return err({ kind: "invalidTransition" });
+    const pending = await this.ledger.findPendingLocation(callIdFor(event.key));
+    if (!pending.ok) return pending;
+    if (!pending.value) return err({ kind: "callUnknown" });
+    if (!matchesEvent(pending.value.admission, event)) return err({ kind: "callConflict" });
+    if (pending.value.status === "expired") return err({ kind: "admissionExpired" });
+    const selected = resolveLocationChoice(pending.value.route, turn);
+    if (!selected) return err({ kind: "locationChoiceUnclear" });
+    return this.choose(event, turn, selected, expectedLeaseVersion);
   }
 }

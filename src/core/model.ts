@@ -24,6 +24,7 @@ export type PendingLocationRoute = Readonly<{
   tenantId: string;
   clinicId: string;
   candidateLocationIds: readonly string[];
+  candidateNames: readonly Readonly<{ locationId: string; spokenName: string }>[];
   routeVersion: string;
 }>;
 export type PendingLocationCall = Readonly<{
