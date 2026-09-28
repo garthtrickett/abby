@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import type { LedgerStore } from "../../src/core/ledger.ts";
-import { ok } from "../../src/core/model.ts";
+import { err, ok } from "../../src/core/model.ts";
 import type { Result } from "../../src/core/model.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
@@ -12,9 +12,11 @@ import { TextReception } from "../../src/reference/text-reception.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
-import { CallAdmissionService } from "../../src/voice/admission.ts";
+import { CallAdmissionService, callIdFor } from "../../src/voice/admission.ts";
+import { ConnectedVoiceCall } from "../../src/voice/connected-voice-call.ts";
 import { SharedNumberIntakeService } from "../../src/voice/shared-number-intake.ts";
 import { SharedNumberVoiceCall } from "../../src/voice/shared-number-voice-call.ts";
+import type { FullVoiceSessionFactory } from "../../src/voice/shared-number-voice-call.ts";
 import { MediaTurnController } from "../../src/voice/media-turn-controller.ts";
 import type { MediaFrame, TranscriptionPort } from "../../src/voice/media-turn-controller.ts";
 import { StreamedPlaybackPort } from "../../src/voice/streamed-playback-port.ts";
@@ -73,12 +75,13 @@ function fixture(kind: "memory" | "postgres", outputPort?: PlaybackPort) {
   const event = (dialedNumber: string, ref: string) =>
     ({ key: { accountRef, providerCallRef: `${id}-${ref}` }, dialedNumber, receivedAt: now });
   let wrongFactoryScope = false;
-  const call = (inbound: ReturnType<typeof event>) => new SharedNumberVoiceCall(inbound, "session", ledger, intake, playback,
-    (receipt, sessionId, port) => new VoiceSession(receipt.callId, sessionId,
+  const fullFactory: FullVoiceSessionFactory = (receipt, sessionId, port) => new VoiceSession(receipt.callId, sessionId,
       wrongFactoryScope ? main : receipt.scope, ledger, reception, port, async turn => ok(
         turn.text.startsWith("Book") ? { kind: "book" as const, verificationRef: "verified", offerRef: "offer" }
-          : { kind: "affirm" as const })));
-  return { main, north, ledger, policy, clinic, queued, call, event, sharedNumber, singleNumber,
+          : { kind: "affirm" as const }));
+  const call = (inbound: ReturnType<typeof event>) => new SharedNumberVoiceCall(inbound, "session", ledger, intake, playback,
+    fullFactory);
+  return { main, north, ledger, policy, clinic, queued, call, event, intake, fullFactory, sharedNumber, singleNumber,
     policyReads: () => policyReads, setWrongFactoryScope(value: boolean) { wrongFactoryScope = value; },
     setTime(value: string) { current = value; },
     holdNextPolicyRead() {
@@ -92,6 +95,222 @@ function fixture(kind: "memory" | "postgres", outputPort?: PlaybackPort) {
 }
 
 for (const kind of kinds) {
+  test(`${kind}: connected single-location call reports no uncommitted greeting output`, async () => {
+    const app = fixture(kind);
+    value(await app.policy.changeAutomationEnabled(app.main, "0", true, "admin"));
+    const queued: string[] = [];
+    const call = new ConnectedVoiceCall({ event: app.event(app.singleNumber, "connected-single"),
+      sessionId: "session", ledger: app.ledger, intake: app.intake, fullFactory: app.fullFactory,
+      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
+      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      output: {
+        async queueChunk(id) { queued.push(id); return "queued"; },
+        async finishQueue() { return "queued"; },
+        async clear() { return true; },
+      } });
+    const started = value(await call.begin(now));
+    if (started.kind !== "admitted") throw new Error("admission expected");
+    assert.deepEqual(started.receipt.scope, app.main);
+    assert.equal(started.delivery.kind, "none");
+    assert.deepEqual(queued, []);
+    const invented = await call.acceptPlaybackCompletion({ playbackId: "uncommitted-greeting",
+      lastSequence: 0, status: "played" }, at(1));
+    assert.ok(!invented.ok);
+    assert.equal(invented.error.kind, "playbackUnknown");
+    const ended = value(await call.disconnect(at(2)));
+    if (!("lifecycle" in ended)) throw new Error("scoped terminal expected");
+    assert.equal(ended.lifecycle, "ended");
+  });
+
+  test(`${kind}: disconnect racing connected admission fences later output`, async () => {
+    const app = fixture(kind);
+    value(await app.policy.changeAutomationEnabled(app.main, "0", true, "admin"));
+    const sent: string[] = [];
+    const call = new ConnectedVoiceCall({ event: app.event(app.singleNumber, "connected-start-race"),
+      sessionId: "session", ledger: app.ledger, intake: app.intake, fullFactory: app.fullFactory,
+      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
+      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      output: {
+        async queueChunk(id) { sent.push(id); return "queued"; },
+        async finishQueue() { return "queued"; },
+        async clear() { return true; },
+      } });
+    const gate = app.holdNextPolicyRead();
+    const beginning = call.begin(now);
+    await gate.entered;
+    const closing = call.disconnect(at(1));
+    gate.release();
+    const startResult = await beginning;
+    assert.ok(!startResult.ok);
+    assert.equal(startResult.error.kind, "disconnected");
+    const ended = value(await closing);
+    if (!("lifecycle" in ended)) throw new Error("scoped terminal expected");
+    assert.equal(ended.lifecycle, "ended");
+    assert.deepEqual(sent, []);
+  });
+
+  test(`${kind}: disconnect during a streamed location prompt fences its next chunk`, async () => {
+    const app = fixture(kind);
+    const inbound = app.event(app.sharedNumber, "connected-output-race");
+    let firstSent!: () => void;
+    const firstChunk = new Promise<void>(resolve => { firstSent = resolve; });
+    let release!: () => void;
+    const nextChunk = new Promise<void>(resolve => { release = resolve; });
+    const sent: number[] = [];
+    const cleared: string[] = [];
+    const call = new ConnectedVoiceCall({ event: inbound, sessionId: "session", ledger: app.ledger,
+      intake: app.intake, fullFactory: app.fullFactory,
+      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
+      synthesis: { async *stream() { yield new Uint8Array(640); await nextChunk; yield new Uint8Array(640); } },
+      output: {
+        async queueChunk(_id, sequence) { sent.push(sequence); firstSent(); return "queued"; },
+        async finishQueue() { throw new Error("disconnected prompt must not finish"); },
+        async clear(id) { cleared.push(id); return true; },
+      } });
+    const beginning = call.begin(now);
+    await firstChunk;
+    const closing = call.disconnect(at(1));
+    release();
+    const began = await beginning;
+    assert.ok(!began.ok);
+    assert.equal(began.error.kind, "disconnected");
+    const ended = value(await closing);
+    if (!("status" in ended)) throw new Error("pending terminal expected");
+    assert.equal(ended.status, "expired");
+    assert.deepEqual(sent, [0]);
+    assert.ok(cleared.length >= 1);
+  });
+
+  test(`${kind}: connected synthetic call owns media, output evidence, host effect, and disconnect`, async () => {
+    const app = fixture(kind);
+    const inbound = app.event(app.sharedNumber, "connected-loop");
+    const utterances = ["Northside", "Book physio", "Yes"];
+    let utterance = 0;
+    const transcription: TranscriptionPort = {
+      async accept(_frame, generation) { return ok([{ kind: "partial", sessionId: "session", generation,
+        utteranceId: "provider-utterance", text: utterances[utterance]! }]); },
+      async flush(generation) { return ok([{ kind: "segmentFinal", sessionId: "session", generation,
+        utteranceId: "provider-utterance", text: utterances[utterance++]!, quality: "clear" }]); },
+    };
+    const queued: Array<{ id: string; sequence: number }> = [];
+    const call = new ConnectedVoiceCall({ event: inbound, sessionId: "session", ledger: app.ledger,
+      intake: app.intake, fullFactory: app.fullFactory, transcription,
+      synthesis: { async *stream() { yield new Uint8Array(640); yield new Uint8Array(640); } },
+      output: {
+        async queueChunk(id, sequence) { queued.push({ id, sequence }); return "queued"; },
+        async finishQueue() { return "queued"; },
+        async clear() { return true; },
+      }, mediaOptions: { silenceMs: 100 } });
+    const started = value(await call.begin(now));
+    if (started.kind !== "locationChoice") throw new Error("choice expected");
+    assert.deepEqual(queued.filter(item => item.id === started.prompt.playbackId).map(item => item.sequence), [0, 1]);
+    value(await call.acceptPlaybackCompletion({ playbackId: started.prompt.playbackId, lastSequence: 1,
+      status: "played" }, now));
+    value(await app.policy.changeAutomationEnabled(app.north, "0", true, "admin"));
+    value(await app.policy.changeBookingEnabled(app.north, "0", true, "admin"));
+    let sequence = 0;
+    let timeOffsetMs = 0;
+    async function send(amplitude: number) {
+      const bytes = new Uint8Array(640);
+      const view = new DataView(bytes.buffer);
+      for (let offset = 0; offset < bytes.length; offset += 2) view.setInt16(offset, amplitude, true);
+      const frame: MediaFrame = { sessionId: "session", sequence,
+        capturedAt: new Date(Date.parse(now) + timeOffsetMs + sequence * 20).toISOString(), bytes };
+      sequence += 1;
+      app.setTime(frame.capturedAt);
+      return value(await call.acceptMedia(frame));
+    }
+    async function speak() {
+      await send(2_000);
+      await send(2_000);
+      for (let i = 0; i < 4; i += 1) await send(0);
+      const completed = await send(0);
+      if (completed.kind !== "turnCompleted") throw new Error("final turn expected");
+      return completed;
+    }
+    const bound = await speak();
+    if (bound.turn.kind !== "locationBound") throw new Error("location not bound");
+    assert.deepEqual(bound.turn.receipt.scope, app.north);
+    const planned = await speak();
+    assert.equal(planned.turn.kind, "callerTurn");
+    assert.equal(planned.delivery.kind, "queued");
+    if (planned.delivery.kind !== "queued" || !planned.delivery.playbackId) throw new Error("details not queued");
+    assert.equal(app.clinic.bookings(app.north).length, 0);
+    const tooEarly = await call.acceptPlaybackCompletion({ playbackId: planned.delivery.playbackId,
+      lastSequence: 0, status: "played" }, at(1));
+    assert.ok(!tooEarly.ok);
+    assert.equal(tooEarly.error.kind, "invalidPlaybackEvidence");
+    value(await call.acceptPlaybackCompletion({ playbackId: planned.delivery.playbackId,
+      lastSequence: 1, status: "played" }, at(1)));
+    timeOffsetMs = 2_000;
+    const affirmed = await speak();
+    assert.equal(affirmed.turn.kind, "callerTurn");
+    assert.equal(app.clinic.bookings(app.north).length, 1);
+    assert.deepEqual(app.clinic.bookings(app.main), []);
+    const ended = value(await call.disconnect(at(4)));
+    if (!("lifecycle" in ended)) throw new Error("scoped terminal expected");
+    assert.equal(ended.lifecycle, "ended");
+    assert.deepEqual(value(await call.disconnect(at(5))), ended);
+    const late = await call.acceptMedia({ sessionId: "session", sequence, capturedAt: at(5), bytes: new Uint8Array(640) });
+    assert.ok(!late.ok);
+    assert.equal(late.error.kind, "disconnected");
+  });
+
+  test(`${kind}: connected call closes its pending location on transcription failure`, async () => {
+    const app = fixture(kind);
+    const inbound = app.event(app.sharedNumber, "connected-stt-failure");
+    const call = new ConnectedVoiceCall({ event: inbound, sessionId: "session", ledger: app.ledger,
+      intake: app.intake, fullFactory: app.fullFactory,
+      transcription: {
+        async accept() { return err({ kind: "transcriptionUnavailable" as const }); },
+        async flush() { return ok([]); },
+      },
+      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      output: {
+        async queueChunk() { return "queued"; },
+        async finishQueue() { return "queued"; },
+        async clear() { return true; },
+      }, mediaOptions: { speechStartMs: 20 } });
+    value(await call.begin(now));
+    const bytes = new Uint8Array(640);
+    const view = new DataView(bytes.buffer);
+    for (let offset = 0; offset < bytes.length; offset += 2) view.setInt16(offset, 2_000, true);
+    const rejected = await call.acceptMedia({ sessionId: "session", sequence: 0, capturedAt: at(1), bytes });
+    assert.ok(!rejected.ok);
+    assert.equal(rejected.error.kind, "transcriptionUnavailable");
+    const pending = value(await app.ledger.findPendingLocation(callIdFor(inbound.key)));
+    assert.equal(pending?.status, "expired");
+    assert.equal(pending?.closeEvidence?.reason, "sessionClosed");
+    assert.equal(value(await app.ledger.findAdmission(callIdFor(inbound.key))), null);
+  });
+
+  test(`${kind}: connected startup failure closes its attached pending session`, async () => {
+    const app = fixture(kind);
+    const inbound = app.event(app.sharedNumber, "connected-start-failure");
+    const failingLedger: LedgerStore = new Proxy(app.ledger, { get(target, property) {
+      if (property === "startPendingLocationPrompt") return async () => err({ kind: "storageFailure" as const });
+      const member = Reflect.get(target, property) as unknown;
+      return typeof member === "function" ? member.bind(target) : member;
+    } });
+    const call = new ConnectedVoiceCall({ event: inbound, sessionId: "session", ledger: failingLedger,
+      intake: app.intake, fullFactory: app.fullFactory,
+      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
+      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      output: {
+        async queueChunk() { throw new Error("prompt cannot reach output"); },
+        async finishQueue() { throw new Error("prompt cannot finish"); },
+        async clear() { return true; },
+      } });
+    const failed = await call.begin(now);
+    assert.ok(!failed.ok);
+    assert.equal(failed.error.kind, "storageFailure");
+    const pending = value(await app.ledger.findPendingLocation(callIdFor(inbound.key)));
+    assert.equal(pending?.status, "expired");
+    const retry = await call.begin(at(1));
+    assert.ok(!retry.ok);
+    assert.equal(retry.error.kind, "disconnected");
+  });
+
   test(`${kind}: synthesized chunk playback needs exact completion before a booking affirmation`, async () => {
     const sent: Array<{ id: string; sequence: number }> = [];
     const finished: Array<{ id: string; sequence: number }> = [];
