@@ -82,7 +82,19 @@ try {
     assert.equal(host.tasks(scope).length, 1);
     assert.equal(value(await settings.changeBookingEnabled(scope, "1", false, "upgrade-probe")).policyVersion, "2");
     assert.equal(value(await settings.listBookingChanges(scope)).entries[1]?.provenance, "recorded");
-    console.log("v1 -> v2 upgrade retained call, audit, outbox, staff work, and settings; resumed commands passed");
+    console.log("v1 -> latest upgrade retained call, audit, outbox, staff work, and settings; resumed commands passed");
+
+    // Roll back only the latest constraint migration inside this disposable
+    // database, then prove its forward path rejects pre-existing tenant drift.
+    await migrate(db, "down");
+    await sql`insert into call_events (call_id, tenant_id, sequence, kind, payload)
+      values (${callId}, 'wrong-tenant', 100, 'forged', '{}'::jsonb)`.execute(db);
+    await assert.rejects(migrate(db), (error: unknown) =>
+      typeof error === "object" && error !== null && "code" in error && error.code === "23503");
+    const mismatched = await sql<{ count: string }>`select count(*)::text as count from call_events
+      where call_id = ${callId} and tenant_id = 'wrong-tenant'`.execute(db);
+    assert.equal(mismatched.rows[0]?.count, "1");
+    console.log("constraint migration rejected a pre-existing cross-tenant event without rewriting it");
   } finally {
     await db.destroy();
   }

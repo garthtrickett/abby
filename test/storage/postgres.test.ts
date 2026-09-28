@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
+import { sql } from "kysely";
 import { CallRuntime } from "../../src/core/runtime.ts";
 import { EffectWorker } from "../../src/core/effect-worker.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
@@ -25,6 +26,25 @@ test("global call key and tenant scope are enforced by the database adapter", as
   failure(await other.read(app.callId), "callUnknown");
   failure(await other.apply(app.callId, 0, { kind: "callerTurn", turn: { callId: app.callId, turnId: "intruder", text: "book", quality: "clear", at: now }, interpretation: { kind: "requestAction", request: app.book() }, now }), "callUnknown");
   assert.equal((await app.state()).version, 0);
+});
+
+test("database constraints reject cross-tenant child rows and mismatched JSON scope", async () => {
+  const app = await setup("pg-tenant-constraints");
+  const wrongTenant = "wrong-tenant";
+  const foreignKey = (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "23503";
+  const check = (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "23514";
+  await assert.rejects(sql`insert into call_events (call_id, tenant_id, sequence, kind, payload)
+    values (${app.callId}, ${wrongTenant}, 100, 'forged', '{}'::jsonb)`.execute(db), foreignKey);
+  await assert.rejects(sql`insert into effect_outbox (effect_id, call_id, tenant_id, kind, status, payload)
+    values (${'forged-effect-pg-tenant-constraints'}, ${app.callId}, ${wrongTenant}, 'staffTask', 'pending', '{}'::jsonb)`.execute(db), foreignKey);
+  await assert.rejects(sql`insert into staff_items (task_key, call_id, tenant_id, status, payload)
+    values (${'forged-task-pg-tenant-constraints'}, ${app.callId}, ${wrongTenant}, 'requested', '{}'::jsonb)`.execute(db), foreignKey);
+  await assert.rejects(sql`update calls set state = jsonb_set(state, '{policy,scope,tenantId}', to_jsonb(${wrongTenant}::text))
+    where call_id = ${app.callId}`.execute(db), check);
+  const mismatchedPolicy = { ...app.policy, scope: { ...app.scope, tenantId: wrongTenant }, policyVersion: "0" };
+  await assert.rejects(sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy)
+    values (${app.scope.tenantId}, ${app.scope.clinicId}, ${app.scope.locationId}, 0, ${JSON.stringify(mismatchedPolicy)}::jsonb)`.execute(db), check);
+  assert.equal(success(await app.runtime.read(app.callId)).policy.scope.tenantId, app.scope.tenantId);
 });
 
 test("PostgreSQL staff queue reads the indexed task projection within one clinic", async () => {

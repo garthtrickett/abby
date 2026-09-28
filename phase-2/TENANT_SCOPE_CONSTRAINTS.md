@@ -1,0 +1,7 @@
+# PostgreSQL tenant ownership constraints
+
+Migration `003_tenant_scope_constraints` makes the standalone database reject a child record whose tenant differs from its call. `call_events`, `effect_outbox`, and `staff_items` now each have a composite foreign key from `(call_id, tenant_id)` to `calls`. The global `call_id` remains unique. The migration also checks that call JSON repeats the row's call ID, version, policy version, tenant, clinic, and location, and that setting JSON repeats its row's version and scope.
+
+The migration validates existing rows. It fails if any prior row disagrees and never changes that row's tenant or JSON to obtain a pass. The isolated upgrade probe starts at migration 001 with a call, event, pending effect, staff item, and setting; it migrates forward, proves all still work, then deliberately inserts a cross-tenant event on the older schema and verifies the constraint migration rejects it. PostgreSQL tests also attempt cross-tenant child inserts and JSON scope tampering against the migrated schema.
+
+These checks protect the storage boundary even if a future adapter or import writes the wrong tenant ID. They do not replace application-level authorization, a production migration rollout plan, retention, outbox leasing, or the complete Phase 1 ledger gate. A host embedding Abby can enforce the equivalent invariants in its own database rather than adopting this schema.
