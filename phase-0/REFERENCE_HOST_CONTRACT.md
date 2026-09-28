@@ -13,7 +13,7 @@ The reference clinic host accepts only its seeded synthetic proof and offer reco
 | Composition | Call and policy storage | Host methods and effect worker |
 | --- | --- | --- |
 | Standalone reference | PostgreSQL `PostgresLedger` and versioned `PostgresPolicyStore` via Kysely/Kanel | `ReferenceClinicHost` and the shared `EffectWorker` |
-| Embedded reference | Host-supplied `LedgerStore` and `PolicyStore`; the fixture supplies in-memory adapters | The same `ReferenceClinicHost`, `TextReception`, and `EffectWorker` |
+| Embedded reference | Host-supplied `LedgerStore`, `EffectCallLeaseStore`, and `PolicyStore`; the fixture supplies in-memory adapters | The same `ReferenceClinicHost`, `TextReception`, and `EffectWorker` |
 
 The embedded composition imports no standalone storage or generated database type. The proposed default for `appointments.booking.enabled` is `false`, which makes booking unavailable without a patient or offer read. When enabled, the effective mode is the host declaration: executable for the safe reference host or request-only for a restricted reference profile. A later change affects new calls while existing calls keep their captured policy. This text fixture assumes the separate clinic-wide `automation.enabled` gate is already on. SET-001 has an admin command, audit, and fail-closed readiness port; its reference host has no live readiness proof. The reference owner and operator destinations are synthetic, not clinic-approved defaults.
 

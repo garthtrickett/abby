@@ -3,6 +3,7 @@ import test, { after } from "node:test";
 import { sql } from "kysely";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import type { LedgerStore } from "../../src/core/ledger.ts";
+import type { EffectCallLeaseStore } from "../../src/core/effect-call-lease.ts";
 import { err, ok } from "../../src/core/model.ts";
 import type { CallPolicy, Result } from "../../src/core/model.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
@@ -35,7 +36,7 @@ function failure<T>(result: Result<T, { kind: string }>, kind: string): void {
 function fixture(kind: "memory" | "postgres", suffix: string) {
   const scope = { tenantId: `admission-tenant-${suffix}`, clinicId: `admission-clinic-${suffix}`, locationId: `admission-location-${suffix}` };
   const policy: CallPolicy = { ...referenceDefaultPolicy(scope), automationEnabled: true, bookingEnabled: true, capabilities: { book: "execute", cancel: "requestOnly", reschedule: "requestOnly", intake: "requestOnly", transfer: "requestOnly" } };
-  const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt) : new MemoryLedger();
+  const ledger: LedgerStore & EffectCallLeaseStore = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt) : new MemoryLedger();
   let routeReads = 0;
   let automationEnabled = true;
   const service = new CallAdmissionService(ledger, async dialed => {

@@ -3,6 +3,7 @@ import test, { after } from "node:test";
 import { sql } from "kysely";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import type { LedgerStore } from "../../src/core/ledger.ts";
+import type { EffectCallLeaseStore } from "../../src/core/effect-call-lease.ts";
 import { err, ok } from "../../src/core/model.ts";
 import type { ApprovedKnowledge, AvailabilityRead, AvailabilityReadFailure, CallPolicy, LocationScope, Result } from "../../src/core/model.ts";
 import type { AvailabilityHost } from "../../src/core/host.ts";
@@ -132,7 +133,7 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
   const host = new ReferenceClinicHost([patient], [offer], options.knowledge?.(scope));
   const availability = options.availability?.(scope);
   const model = options.model ? new ModelWork(new ModelIngress(options.model), "voice-prompt-v1", options.modelDeadlineMs ?? 5_000) : undefined;
-  let ledger: LedgerStore;
+  let ledger: LedgerStore & EffectCallLeaseStore;
   let policy: PolicyStore;
   let reception: TextReception;
   if (kind === "postgres") {

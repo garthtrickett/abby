@@ -4,14 +4,21 @@ import { EffectCallLeaseCoordinator } from "../../src/core/effect-call-lease.ts"
 import type { EffectCallLeaseStore } from "../../src/core/effect-call-lease.ts";
 import { EffectRecovery } from "../../src/core/effect-recovery.ts";
 import { MemoryLedger } from "../../src/core/ledger.ts";
+import type { Result } from "../../src/core/model.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
 import type { TimerPort } from "../../src/core/timer.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
-import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
+import { MemoryPolicyStore, referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
+import { TextReception } from "../../src/reference/text-reception.ts";
 import { now, setup, success } from "./fixture.ts";
 
 const afterDelay = "2026-09-28T10:01:01.000Z";
 const later = "2026-09-28T10:01:02.000Z";
+
+function value<T>(result: Result<T, { kind: string }>): T {
+  assert.equal(result.ok, true, result.ok ? "" : result.error.kind);
+  return result.value;
+}
 
 test("recovery scans pending host work and leaves another tenant untouched", async () => {
   const app = await setup("recover-pending-task");
@@ -54,6 +61,77 @@ test("two recovery workers cannot open the same call's task concurrently", async
   } finally { release(); }
   assert.equal(success(await first).processed, 1);
   assert.equal((await app.state()).staffItems[Object.keys((await app.state()).staffItems)[0]!]!.status, "open");
+  assert.equal(sends, 1);
+});
+
+for (const firstOwner of ["foreground", "recovery"] as const) {
+  test(`${firstOwner} effect dispatch holds the call lease against the other path`, async () => {
+    const app = await setup(`recover-cross-path-${firstOwner}`);
+    await app.turn("handoff", "Ask staff to call", { kind: "handoff", reason: "callerRequested" });
+    const host = new ReferenceClinicHost([], []);
+    const originalOpen = host.openTask.bind(host);
+    let entered!: () => void;
+    let release!: () => void;
+    const opening = new Promise<void>(resolve => { entered = resolve; });
+    const hold = new Promise<void>(resolve => { release = resolve; });
+    let sends = 0;
+    host.openTask = async item => {
+      sends += 1;
+      entered();
+      await hold;
+      return originalOpen(item);
+    };
+    const reception = new TextReception(app.ledger, new MemoryPolicyStore(), host);
+    const recovery = new EffectRecovery(app.ledger, () => host, app.scope);
+    const first = firstOwner === "foreground"
+      ? reception.drain(app.scope, app.callId, now) : recovery.recover(now);
+    await opening;
+    try {
+      if (firstOwner === "foreground") {
+        const second = success(await recovery.recover(afterDelay));
+        assert.deepEqual([second.scanned, second.deferred, second.failed.length], [1, 1, 0]);
+      } else {
+        const second = value(await reception.drain(app.scope, app.callId, afterDelay));
+        assert.equal(Object.values(second.staffItems)[0]?.status, "requested");
+      }
+      assert.equal(sends, 1);
+    } finally { release(); }
+    const completed = await first;
+    assert.equal(completed.ok, true);
+    assert.equal(Object.values((await app.state()).staffItems)[0]?.status, "open");
+    assert.equal(sends, 1);
+  });
+}
+
+test("an immediate staff change holds the same call lease as recovery", async () => {
+  const app = await setup("recover-staff-change-cross-path");
+  await app.turn("handoff", "Ask staff to call", { kind: "handoff", reason: "callerRequested" });
+  const host = new ReferenceClinicHost([], []);
+  const reception = new TextReception(app.ledger, new MemoryPolicyStore(), host);
+  value(await reception.drain(app.scope, app.callId, now));
+  const before = await app.state();
+  const task = Object.values(before.staffItems)[0];
+  assert.ok(task);
+  let entered!: () => void;
+  let release!: () => void;
+  const sending = new Promise<void>(resolve => { entered = resolve; });
+  const hold = new Promise<void>(resolve => { release = resolve; });
+  const originalAdvance = host.advanceTask.bind(host);
+  let sends = 0;
+  host.advanceTask = async change => {
+    sends += 1;
+    entered();
+    await hold;
+    return originalAdvance(change);
+  };
+  const changing = reception.changeStaff(app.scope, app.callId, before.version, task.key, "staff-actor", { kind: "resolve" }, now);
+  await sending;
+  try {
+    const competing = success(await new EffectRecovery(app.ledger, () => host, app.scope).recover(afterDelay));
+    assert.deepEqual([competing.scanned, competing.deferred, competing.failed.length], [1, 1, 0]);
+    assert.equal(sends, 1);
+  } finally { release(); }
+  assert.equal(value(await changing).staffItems[task.key]?.status, "resolved");
   assert.equal(sends, 1);
 });
 

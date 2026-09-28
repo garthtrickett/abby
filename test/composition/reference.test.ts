@@ -3,6 +3,7 @@ import test, { after } from "node:test";
 import { sql } from "kysely";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import type { LedgerStore } from "../../src/core/ledger.ts";
+import type { EffectCallLeaseStore } from "../../src/core/effect-call-lease.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
 import { err, ok } from "../../src/core/model.ts";
 import type { AutomationReadiness } from "../../src/core/readiness.ts";
@@ -62,7 +63,7 @@ function bookingAudit(reply: GatewayReply) {
   return reply.page;
 }
 
-function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = false, hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "execute", availability?: AvailabilityHost, readiness?: AutomationReadiness, suppliedLedger?: LedgerStore) {
+function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = false, hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "execute", availability?: AvailabilityHost, readiness?: AutomationReadiness, suppliedLedger?: LedgerStore & EffectCallLeaseStore) {
   const scope: LocationScope = { tenantId: `tenant-${id}`, clinicId: `clinic-${id}`, locationId: `location-${id}` };
   const patient = { scope, patientRef: `patient-${id}`, verificationRef: `proof-${id}`, expiresAt };
   const offer = (suffix: string) => ({ scope, offerRef: `offer-${id}-${suffix}`, serviceRef: "physio", startsAt: "2026-09-29T11:00:00.000Z", expiresAt });
