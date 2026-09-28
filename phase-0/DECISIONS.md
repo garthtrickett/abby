@@ -4,7 +4,7 @@
 
 | Decision ID | Question | Proposed default pending approval | Owner and deadline |
 | --- | --- | --- | --- |
-| D-01 | How is an existing caller verified before appointment details or changes? | Phone match produces candidates only; use clinic-approved proof with a bounded attempt count, then staff handoff. | Product and clinic owner; before patient lookup automation. |
+| D-01 | How is an existing caller verified before appointment details or changes? | Use bounded host-supported clues for candidates; phone match is available only where the host supports it and is never proof. The Cliniko adapter has observed exact email/date-of-birth candidate search, but those clues are not verification. Use clinic-approved proof with a bounded attempt count, then staff handoff. | Product and clinic owner; before patient lookup automation. |
 | D-02 | Which action result may Abby describe as confirmed? | Only an exact committed host receipt; uncertain writes are called pending and assigned reconciliation or staff work. | Product; before the first action E2E. |
 | D-03 | What may a first-time caller complete automatically? | Staff request until approved intake consent, duplicate check, stable patient ref, and safe write recovery are proven. | Product and clinic owner; before intake automation. |
 | D-04 | Can Abby reschedule an appointment? | Staff request until a host-native or atomic operation and exact recovery are proven. | Product; before rescheduling automation. |

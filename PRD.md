@@ -316,7 +316,7 @@ These are defaults for the draft, not decisions attributed to Cliniko, Splose, o
 | Decision | Proposed default | Alternative and consequence |
 | --- | --- | --- |
 | Booking confirmation timing | Commit during the call; call it confirmed only with a receipt | Post-call writes remain possible, but callers must hear “request pending” and staff need a follow-up workflow |
-| Caller verification method | Phone match yields candidates; use clinic-approved checks with limited attempts before revealing or changing appointments | Staff-only verification reduces automation while preserving the same disclosure boundary |
+| Caller verification method | Use only host-supported, bounded clues to find candidates; a phone match, when available, is never proof. Use clinic-approved checks with limited attempts before revealing or changing appointments. Cliniko's documented patient filters support exact email and date of birth, but not phone number. | Staff-only verification reduces automation while preserving the same disclosure boundary |
 | First-time intake | Use a host-approved intake capability only where it meets write-safety rules | Make all first-time bookings staff requests, reducing integration scope and autonomous completion |
 | Rescheduling | Automate only through a host-native or atomic operation | Make every reschedule a staff request until the host provides one |
 | Notifications | Host chooses one sender for each event | Host always sends, simplifying embedded ownership but limiting standalone messaging |

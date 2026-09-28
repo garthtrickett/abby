@@ -270,7 +270,7 @@ type ModelFailure =
 
 type PatientCandidate = Readonly<{ scope: ClinicScope; candidateRef: string; verificationChallengeRef: string }>;
 type VerifiedPatient = Readonly<{ scope: ClinicScope; patientRef: string; verificationRef: string; expiresAt: string }>;
-type PatientClues = Readonly<{ statedName?: string; statedPhone?: string; statedDateOfBirth?: string }>;
+type PatientClues = Readonly<{ statedName?: string; statedPhone?: string; statedEmail?: string; statedDateOfBirth?: string }>;
 type VerificationProof = Readonly<{ challengeRef: string; responseRef: string }>;
 type AppointmentSummary = Readonly<{ appointmentRef: string; scope: LocationScope; serviceRef: string; startsAt: string }>;
 type OfferPreferences = Readonly<{ serviceRef?: string; practitionerRef?: string; earliestAt?: string; latestAt?: string }>;
@@ -721,7 +721,7 @@ The telephony adapter verifies the provider event before the voice session passe
 ### Existing-patient booking
 
 1. The caller states a request. The voice session sends one final turn to the runtime, which records it and schedules a model proposal or deterministic route. Provisional transcripts affect timing only. The proposal can request patient lookup; it cannot assert identity.
-2. The patient and diary interface returns candidates or a typed read failure. The caller completes host-approved verification. A shared phone number never exposes another patient's appointment details.
+2. The patient and diary interface returns candidates or a typed read failure from bounded, host-supported search clues. A provider adapter never scans patients to simulate an unsupported phone filter. The caller completes host-approved verification. A shared phone number never exposes another patient's appointment details.
 3. The host returns eligible, time-bound offers. Abby reads them as opaque offer references. Clinic timezone and daylight-saving rules come from the bound location.
 4. The action module prepares the exact patient, service, location, practitioner where relevant, time, and cost if the host provides one. The runtime emits a `confirmAction` presentation. Only after the voice session reports full playback may a later final affirmative caller turn bind those details and the policy version to one action digest. Interrupted or failed playback requires fresh details and confirmation.
 5. The pure action module checks the offer expiry, confirmation digest, captured policy, and deadline before the ledger records a keyed host-write intent. The ledger dispatch barrier checks current action state and emergency stop before issuing a send permit. `PatientDiary.commit` then rechecks live host authorization, capability, location scope, and offer validity at the adapter/host mutation boundary. A revoked permission or capability produces a definitive typed rejection without a write; if a request might have reached the host, the result is uncertain and reconciled. Routine settings edits remain next-call-only. An adapter may automate a mutation only when the host can enforce current authorization at commit; otherwise that capability uses the request-only path.
