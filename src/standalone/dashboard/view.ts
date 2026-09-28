@@ -4,12 +4,14 @@ import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor } from "../../reference/command-gateway.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
+import type { BookingSettingAuditPage } from "../../core/host.ts";
 
 export type DashboardState = {
   loading: boolean;
   busy: boolean;
   capabilities: readonly CapabilityDescriptor[];
   policy: CallPolicy | undefined;
+  auditPage: BookingSettingAuditPage | undefined;
   callIdInput: string;
   call: CallSummary | undefined;
   staffPage: StaffQueuePage | undefined;
@@ -20,6 +22,8 @@ export type DashboardState = {
 
 export type DashboardActions = Readonly<{
   toggleBooking(): void;
+  loadAudit(): void;
+  loadMoreAudit(): void;
   setCallId(value: string): void;
   loadCall(): void;
   loadStaff(): void;
@@ -44,6 +48,14 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
         </div>
         ${state.policy ? html`<p class="muted">Policy version ${state.policy.policyVersion} · Booking capability: ${state.policy.capabilities.book}</p>` : ""}
       </section>
+      ${state.capabilities.some(item => item.id === "settings.appointments.booking.audit.v1") ? html`<section class="card" aria-labelledby="booking-audit-title">
+        <div class="row"><h2 id="booking-audit-title">Booking setting history</h2>
+          <button type="button" ?disabled=${state.busy} @click=${() => actions.loadAudit()}>Refresh history</button></div>
+        ${state.auditPage ? html`<div aria-label="Booking setting audit">
+          ${state.auditPage.entries.length ? html`<ul>${state.auditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.enabled ? "enabled" : "disabled"} · ${entry.provenance === "recorded" ? html`${entry.actorRef} · ${entry.changedAt}` : "Earlier change; actor unavailable"}</li>`)}</ul>` : html`<p>No booking setting changes recorded.</p>`}
+          ${state.auditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreAudit()}>Load more history</button>` : ""}
+        </div>` : html`<p class="muted">Setting history unavailable.</p>`}
+      </section>` : ""}
       <section class="card" aria-labelledby="review-title">
         <h2 id="review-title">Call review</h2>
         <div class="lookup"><input aria-label="Call ID" .value=${state.callIdInput} @input=${(event: Event) => actions.setCallId((event.target as HTMLInputElement).value)} placeholder="Enter a call ID">

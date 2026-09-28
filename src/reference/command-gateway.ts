@@ -1,4 +1,4 @@
-import type { PolicyFailure, PolicyStore } from "../core/host.ts";
+import type { BookingSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { CallPolicy, CallState, FinalCallerTurn, LocationScope, Result, StaffChangeRequest, StaffItem, TransitionFailure } from "../core/model.ts";
 import { TextReception } from "./text-reception.ts";
@@ -16,7 +16,7 @@ export type HostActor = Readonly<{
 }>;
 
 export type CapabilityDescriptor = Readonly<{
-  id: "settings.read.v1" | "settings.appointments.booking.enabled.change.v1" | "booking.propose.v1" | "knowledge.answer.v1" | "availability.read.v1" | "calls.read.v1" | "calls.outcomes.v1" | "staff.list.v1" | "staff.change.v1";
+  id: "settings.read.v1" | "settings.appointments.booking.enabled.change.v1" | "settings.appointments.booking.audit.v1" | "booking.propose.v1" | "knowledge.answer.v1" | "availability.read.v1" | "calls.read.v1" | "calls.outcomes.v1" | "staff.list.v1" | "staff.change.v1";
   inputVersion: 1;
   outputVersion: 1;
   effect: "read" | "policyChange" | "proposalOnly" | "staffChange";
@@ -26,6 +26,7 @@ export type CapabilityDescriptor = Readonly<{
 export type GatewayCommand =
   | Readonly<{ kind: "settings.read.v1" }>
   | Readonly<{ kind: "settings.appointments.booking.enabled.change.v1"; expectedVersion: string; enabled: boolean }>
+  | Readonly<{ kind: "settings.appointments.booking.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "booking.propose.v1"; turn: FinalCallerTurn; verificationRef: string; offerRef: string; now: string }>
   | Readonly<{ kind: "knowledge.answer.v1"; turn: FinalCallerTurn; sourceRefs: readonly string[]; proposedText: string; now: string }>
   | Readonly<{ kind: "availability.read.v1"; turn: FinalCallerTurn; from: string; to: string; now: string }>
@@ -36,6 +37,7 @@ export type GatewayCommand =
 
 export type GatewayReply =
   | Readonly<{ kind: "settings"; policy: CallPolicy }>
+  | Readonly<{ kind: "bookingSettingAudit"; page: BookingSettingAuditPage }>
   | Readonly<{ kind: "bookingProposal"; state: CallState }>
   | Readonly<{ kind: "knowledgeAnswer"; state: CallState }>
   | Readonly<{ kind: "availabilityAnswer"; state: CallState }>
@@ -75,7 +77,10 @@ export class CommandGateway {
     if (this.outcomeReport) common.push({ id: "calls.outcomes.v1", inputVersion: 1, outputVersion: 1, effect: "read", requiresCallerConfirmation: false });
     if (this.staffQueue) common.push({ id: "staff.list.v1", inputVersion: 1, outputVersion: 1, effect: "read", requiresCallerConfirmation: false });
     if (this.actor.role !== "agent" && this.reception.staffLifecycleEnabled()) common.push({ id: "staff.change.v1", inputVersion: 1, outputVersion: 1, effect: "staffChange", requiresCallerConfirmation: false });
-    if (this.actor.role === "clinicAdmin") common.push({ id: "settings.appointments.booking.enabled.change.v1", inputVersion: 1, outputVersion: 1, effect: "policyChange", requiresCallerConfirmation: false });
+    if (this.actor.role === "clinicAdmin") {
+      common.push({ id: "settings.appointments.booking.enabled.change.v1", inputVersion: 1, outputVersion: 1, effect: "policyChange", requiresCallerConfirmation: false });
+      common.push({ id: "settings.appointments.booking.audit.v1", inputVersion: 1, outputVersion: 1, effect: "read", requiresCallerConfirmation: false });
+    }
     return common;
   }
 
@@ -87,8 +92,13 @@ export class CommandGateway {
         return result.ok ? ok({ kind: "settings", policy: result.value }) : result;
       }
       case "settings.appointments.booking.enabled.change.v1": {
-        const result = await this.policy.changeBookingEnabled(this.actor.scope, command.expectedVersion, command.enabled);
+        const result = await this.policy.changeBookingEnabled(this.actor.scope, command.expectedVersion, command.enabled, this.actor.actorRef);
         return result.ok ? ok({ kind: "settings", policy: result.value }) : result;
+      }
+      case "settings.appointments.booking.audit.v1": {
+        if (command.afterVersion !== undefined && (!Number.isSafeInteger(command.afterVersion) || command.afterVersion < 0)) return err({ kind: "invalid" });
+        const result = await this.policy.listBookingChanges(this.actor.scope, command.afterVersion);
+        return result.ok ? ok({ kind: "bookingSettingAudit", page: result.value }) : result;
       }
       case "booking.propose.v1": {
         if (!command.turn.turnId || !command.turn.callId || !command.turn.text || !command.verificationRef || !command.offerRef) return err({ kind: "invalid" });

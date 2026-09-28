@@ -57,9 +57,13 @@ test("E2E-010: dashboard toggle persists default, enabled and disabled policy fo
     await page.getByRole("button", { name: "Disable booking" }).click();
     await expect(page.getByText("Booking disabled for new calls.")).toBeVisible();
     await expect(page.getByText("Policy version 2")).toBeVisible();
+    const audit = page.getByLabel("Booking setting audit");
+    await expect(audit).toContainText("Version 1 · enabled · browser-clinicAdmin");
+    await expect(audit).toContainText("Version 2 · disabled · browser-clinicAdmin");
     assert.equal((await app.reception.startCall("disabled-setting", app.scope)).ok, true);
     await page.reload();
     await expect(page.getByRole("button", { name: "Enable booking" })).toBeVisible();
+    await expect(page.getByLabel("Booking setting audit")).toContainText("Version 2 · disabled · browser-clinicAdmin");
     const before = await app.ledger.read("before-setting", app.scope);
     const enabled = await app.ledger.read("enabled-setting", app.scope);
     const disabled = await app.ledger.read("disabled-setting", app.scope);
@@ -82,11 +86,14 @@ test("E2E-069: view-only staff can review a call but cannot change booking setti
     await page.goto(app.url);
     await expect(page.getByText("View only")).toBeVisible();
     await expect(page.getByRole("button", { name: "Enable booking" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Booking setting history" })).toHaveCount(0);
     await page.getByRole("textbox", { name: "Call ID" }).fill("before-setting");
     await page.getByRole("button", { name: "Load call" }).click();
     await expect(page.getByLabel("Call summary")).toContainText("before-setting · active");
     const forbidden = await request.post(`${app.url}/api/settings/booking-enabled`, { data: { expectedVersion: "0", enabled: true } });
     assert.equal(forbidden.status(), 403);
+    const auditForbidden = await request.get(`${app.url}/api/settings/booking-audit`);
+    assert.equal(auditForbidden.status(), 403);
     const policy = await app.policy.read(app.scope);
     assert.ok(policy.ok);
     assert.equal(policy.value.bookingEnabled, false);

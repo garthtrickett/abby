@@ -4,6 +4,12 @@ import { dashboardView } from "./view.ts";
 import type { DashboardState } from "./view.ts";
 import type { StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
+import type { BookingSettingAuditPage } from "../../core/host.ts";
+
+function appendAudit(previous: BookingSettingAuditPage, next: BookingSettingAuditPage): BookingSettingAuditPage {
+  return { entries: [...previous.entries, ...next.entries],
+    ...(next.nextAfterVersion === undefined ? {} : { nextAfterVersion: next.nextAfterVersion }) };
+}
 
 function appendOutcomes(previous: CallOutcomePage, next: CallOutcomePage): CallOutcomePage {
   return { rows: [...previous.rows, ...next.rows], totals: {
@@ -34,7 +40,7 @@ function message(failure: DashboardFailure): string {
 export class DashboardController {
   private readonly root: HTMLElement;
   private readonly port: DashboardPort;
-  private readonly state: DashboardState = { loading: true, busy: false, capabilities: [], policy: undefined, callIdInput: "", call: undefined, staffPage: undefined, outcomePage: undefined, notice: undefined, error: undefined };
+  private readonly state: DashboardState = { loading: true, busy: false, capabilities: [], policy: undefined, auditPage: undefined, callIdInput: "", call: undefined, staffPage: undefined, outcomePage: undefined, notice: undefined, error: undefined };
 
   constructor(root: HTMLElement, port: DashboardPort) {
     this.root = root;
@@ -45,6 +51,8 @@ export class DashboardController {
   private draw(): void {
     render(dashboardView(this.state, {
       toggleBooking: () => { void this.toggleBooking(); },
+      loadAudit: () => { void this.loadAudit(); },
+      loadMoreAudit: () => { void this.loadMoreAudit(); },
       setCallId: value => { this.state.callIdInput = value; },
       loadCall: () => { void this.loadCall(); },
       loadStaff: () => { void this.loadStaff(); },
@@ -60,6 +68,11 @@ export class DashboardController {
     if (capabilities.ok) this.state.capabilities = capabilities.value;
     if (settings.ok) this.state.policy = settings.value;
     this.state.error = !settings.ok ? message(settings.error) : !capabilities.ok ? message(capabilities.error) : undefined;
+    if (capabilities.ok && capabilities.value.some(item => item.id === "settings.appointments.booking.audit.v1")) {
+      const audit = await this.port.bookingAudit();
+      if (audit.ok) this.state.auditPage = audit.value;
+      else this.state.error = message(audit.error);
+    }
     if (capabilities.ok && capabilities.value.some(item => item.id === "staff.list.v1")) {
       const queue = await this.port.staffQueue();
       if (queue.ok) this.state.staffPage = queue.value;
@@ -71,6 +84,31 @@ export class DashboardController {
       else this.state.error = message(outcomes.error);
     }
     this.state.loading = false;
+    this.draw();
+  }
+
+  private async loadAudit(): Promise<void> {
+    if (this.state.busy) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.bookingAudit();
+    if (result.ok) this.state.auditPage = result.value;
+    else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async loadMoreAudit(): Promise<void> {
+    const previous = this.state.auditPage;
+    if (this.state.busy || previous?.nextAfterVersion === undefined) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.bookingAudit(previous.nextAfterVersion);
+    if (result.ok) this.state.auditPage = appendAudit(previous, result.value);
+    else this.state.error = message(result.error);
+    this.state.busy = false;
     this.draw();
   }
 
@@ -153,6 +191,9 @@ export class DashboardController {
     if (result.ok) {
       this.state.policy = result.value;
       this.state.notice = result.value.bookingEnabled ? "Booking enabled for new calls." : "Booking disabled for new calls.";
+      const audit = await this.port.bookingAudit();
+      if (audit.ok) this.state.auditPage = audit.value;
+      else this.state.error = message(audit.error);
     } else {
       this.state.error = message(result.error);
       if (result.error.kind === "versionConflict") {

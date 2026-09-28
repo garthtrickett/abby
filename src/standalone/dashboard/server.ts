@@ -52,6 +52,11 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     }
     let command: GatewayCommand | undefined;
     if (request.method === "GET" && url.pathname === "/api/settings") command = { kind: "settings.read.v1" };
+    if (request.method === "GET" && url.pathname === "/api/settings/booking-audit") {
+      const cursor = url.searchParams.get("after");
+      if (cursor !== null && (!/^(0|[1-9][0-9]*)$/.test(cursor) || !Number.isSafeInteger(Number(cursor)))) return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      command = { kind: "settings.appointments.booking.audit.v1", ...(cursor === null ? {} : { afterVersion: Number(cursor) }) };
+    }
     if (request.method === "GET" && url.pathname === "/api/staff") {
       const afterTaskKey = url.searchParams.get("after");
       if (afterTaskKey !== null && (!afterTaskKey || afterTaskKey.length > 256)) return json(response, 400, { ok: false, error: { kind: "invalid" } });
