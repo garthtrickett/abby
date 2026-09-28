@@ -15,6 +15,7 @@ import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
 import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
 import { CallAdmissionService } from "../../src/voice/admission.ts";
 import { CallLivenessMonitor } from "../../src/voice/call-liveness-monitor.ts";
+import { AttachedVoiceSessions } from "../../src/voice/managed-voice-session.ts";
 import { PresentationDispatcher } from "../../src/voice/presentation-dispatcher.ts";
 import type { TimerPort } from "../../src/voice/timer.ts";
 import { VoiceLeaseLoop } from "../../src/voice/voice-lease-loop.ts";
@@ -649,5 +650,118 @@ for (const kind of kinds) {
     assert.equal(app.playback.queued.length, 1);
     await loop.stop();
     assert.equal(callbacks.size, 0);
+  });
+
+  test(`${kind}: managed session wakes committed speech and cleans up its lease on disconnect`, async () => {
+    const app = await fixture(kind, `${kind}-managed-call`, true);
+    const registry = new AttachedVoiceSessions();
+    let wallTime = at(4);
+    const work = new VoiceWorkLoop(
+      new CallLivenessMonitor(app.ledger, app.scope),
+      new PresentationDispatcher(app.ledger, registry.lookup, app.scope),
+      () => {}, { clock: () => wallTime },
+    );
+    const pendingTimers = new Map<number, () => void>();
+    let nextTimer = 0;
+    const timer: TimerPort = {
+      schedule(callback) { const id = ++nextTimer; pendingTimers.set(id, callback); return id; },
+      cancel(handle) { pendingTimers.delete(handle as number); },
+    };
+    const wrongScope = { ...app.scope, tenantId: "another-tenant" };
+    failure(registry.register(app.callId, app.sessionId, wrongScope, app.session, work, () => {}, { timer }), "sessionUnknown");
+    const managed = value(registry.register(app.callId, app.sessionId, app.scope, app.session, work, () => {}, { timer }));
+    failure(registry.register(app.callId, app.sessionId, app.scope, app.session, work, () => {}, { timer }), "sessionAlreadyAttached");
+    assert.equal(pendingTimers.size, 1);
+    const generation = value(await managed.speechStarted(at(2)));
+    value(managed.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation, utteranceId: "managed-book", text: "Book physio", quality: "clear" }));
+    const planned = value(await managed.finishTurn(at(3)));
+    assert.equal(planned.wake.ok && planned.wake.value.kind, "dispatched");
+    assert.equal(app.playback.queued.length, 1);
+    wallTime = at(5);
+    value(await managed.acceptPlaybackResult(app.playback.queued[0]!, "played", at(5)));
+    const affirmGeneration = value(await managed.speechStarted(at(6)));
+    value(managed.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation: affirmGeneration, utteranceId: "managed-affirm", text: "Yes", quality: "clear" }));
+    wallTime = at(7);
+    value(await managed.finishTurn(at(7)));
+    wallTime = at(8);
+    value(await managed.drainEffects(at(8)));
+    assert.equal(app.host.bookings(app.scope).length, 1);
+    value(await managed.end(at(9)));
+    assert.equal(registry.lookup({ callId: app.callId, sessionId: app.sessionId, scope: app.scope, presentationId: "anything" }), undefined);
+    assert.equal(pendingTimers.size, 0);
+  });
+
+  test(`${kind}: a connected managed transfer releases its registry entry and renewal timer`, async () => {
+    const app = await fixture(kind, `${kind}-managed-transfer`, false, "execute");
+    const registry = new AttachedVoiceSessions();
+    const work = new VoiceWorkLoop(
+      new CallLivenessMonitor(app.ledger, app.scope),
+      new PresentationDispatcher(app.ledger, registry.lookup, app.scope),
+      () => {}, { clock: () => at(4) },
+    );
+    const pendingTimers = new Map<number, () => void>();
+    const timer: TimerPort = {
+      schedule(callback) { pendingTimers.set(1, callback); return 1; },
+      cancel(handle) { pendingTimers.delete(handle as number); },
+    };
+    const managed = value(registry.register(app.callId, app.sessionId, app.scope, app.session, work, () => {}, { timer }));
+    app.transfer.outcome = { kind: "connected", providerConnectionRef: "managed-connection" };
+    const generation = value(await managed.speechStarted(at(2)));
+    value(managed.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation, utteranceId: "managed-transfer", text: "Transfer to staff", quality: "clear" }));
+    const committed = value(await managed.finishTurn(at(3)));
+    assert.equal(committed.wake.ok && committed.wake.value.kind, "dispatched");
+    assert.equal(app.transfer.requested.length, 1);
+    assert.equal(value(await new CallRuntime(app.ledger, app.scope).read(app.callId)).lifecycle, "ended");
+    assert.equal(registry.lookup({ callId: app.callId, sessionId: app.sessionId, scope: app.scope, presentationId: "anything" }), undefined);
+    assert.equal(pendingTimers.size, 0);
+  });
+
+  test(`${kind}: a failed playback clear removes the managed session immediately`, async () => {
+    const app = await fixture(kind, `${kind}-managed-clear-failure`, true);
+    const registry = new AttachedVoiceSessions();
+    const work = new VoiceWorkLoop(
+      new CallLivenessMonitor(app.ledger, app.scope),
+      new PresentationDispatcher(app.ledger, registry.lookup, app.scope),
+      () => {}, { clock: () => at(4) },
+    );
+    const pendingTimers = new Map<number, () => void>();
+    const timer: TimerPort = {
+      schedule(callback) { pendingTimers.set(1, callback); return 1; },
+      cancel(handle) { pendingTimers.delete(handle as number); },
+    };
+    const managed = value(registry.register(app.callId, app.sessionId, app.scope, app.session, work, () => {}, { timer }));
+    const generation = value(await managed.speechStarted(at(2)));
+    value(managed.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation, utteranceId: "managed-clear", text: "Book physio", quality: "clear" }));
+    value(await managed.finishTurn(at(3)));
+    assert.equal(app.playback.queued.length, 1);
+    app.playback.clearResult = false;
+    failure(await managed.speechStarted(at(5)), "transportUnavailable");
+    assert.equal(registry.lookup({ callId: app.callId, sessionId: app.sessionId, scope: app.scope, presentationId: "anything" }), undefined);
+    assert.equal(pendingTimers.size, 0);
+    assert.equal(value(await new CallRuntime(app.ledger, app.scope).read(app.callId)).lifecycle, "ended");
+  });
+
+  test(`${kind}: a failed commit wake remains durable for managed-session recovery`, async () => {
+    const app = await fixture(kind, `${kind}-managed-lost-wake`, true);
+    const registry = new AttachedVoiceSessions();
+    let wallTime = "invalid";
+    const work = new VoiceWorkLoop(
+      new CallLivenessMonitor(app.ledger, app.scope),
+      new PresentationDispatcher(app.ledger, registry.lookup, app.scope),
+      () => {}, { clock: () => wallTime },
+    );
+    const timer: TimerPort = { schedule: () => 1, cancel: () => {} };
+    const managed = value(registry.register(app.callId, app.sessionId, app.scope, app.session, work, () => {}, { timer }));
+    const generation = value(await managed.speechStarted(at(2)));
+    value(managed.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation, utteranceId: "managed-recover", text: "Book physio", quality: "clear" }));
+    const committed = value(await managed.finishTurn(at(3)));
+    failure(committed.wake, "workerUnavailable");
+    assert.equal(app.playback.queued.length, 0);
+    assert.ok(committed.state.pendingPresentationId);
+    wallTime = at(4);
+    assert.equal(value(await work.runOnce()).recovery.dispatched, 1);
+    assert.equal(app.playback.queued.length, 1);
+    assert.equal(value(await work.runOnce()).recovery.dispatched, 0);
+    await managed.end(at(5));
   });
 }
