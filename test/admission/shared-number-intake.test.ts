@@ -255,7 +255,8 @@ for (const kind of kinds) {
     assert.equal(Number(first.ok) + Number(second.ok), 1);
     const rejected = first.ok ? second : first;
     assert.ok(!rejected.ok);
-    assert.ok(rejected.error.kind === "scopeMismatch" || rejected.error.kind === "invalidLocationChoice" || rejected.error.kind === "keyMismatch");
+    assert.ok(rejected.error.kind === "scopeMismatch" || rejected.error.kind === "invalidLocationChoice" || rejected.error.kind === "keyMismatch",
+      `unexpected rejected choice: ${rejected.error.kind}`);
     const receipt = value(await app.ledger.findAdmission(callIdFor(event.key)));
     assert.ok(receipt);
     assert.ok(receipt.scope.locationId === "main" || receipt.scope.locationId === "other");

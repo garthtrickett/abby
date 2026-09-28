@@ -42,6 +42,7 @@ export type PendingLocationCall = Readonly<{
   status: "pending" | "expired" | "bound";
   sessionLease?: SessionLease;
   prompt?: PendingLocationPrompt;
+  closeEvidence?: Readonly<{ sessionId: string; leaseVersion: number; reason: "callerDisconnected" | "sessionClosed" | "mediaFailure"; at: string }>;
   choiceEvidence?: Readonly<{ sessionId: string; leaseVersion: number; turnId: string; selectedLocationId: string; at: string }>;
 }>;
 export type PendingLocationResult = Readonly<{ kind: "created" | "duplicate"; pending: PendingLocationCall }>;

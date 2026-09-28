@@ -48,7 +48,14 @@ function fixture(kind: "memory" | "postgres") {
     ? new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true))
     : new MemoryPolicyStore("execute", () => current, async () => ok(true));
   let policyReads = 0;
-  const router = new ClinicPolicyRouter(host, { read(scope) { policyReads += 1; return policy.read(scope); } });
+  let policyGate: Readonly<{ entered: () => void; release: Promise<void> }> | undefined;
+  const router = new ClinicPolicyRouter(host, { async read(scope) {
+    policyReads += 1;
+    const gate = policyGate;
+    policyGate = undefined;
+    if (gate) { gate.entered(); await gate.release; }
+    return policy.read(scope);
+  } });
   const admission = new CallAdmissionService(ledger, router.resolve, () => current, async () => ok(true));
   const intake = new SharedNumberIntakeService(ledger, router, admission, () => current);
   const patient = { scope: north, patientRef: "patient", verificationRef: "verified", expiresAt: at(3_600) };
@@ -70,7 +77,15 @@ function fixture(kind: "memory" | "postgres") {
           : { kind: "affirm" as const })));
   return { main, north, ledger, policy, clinic, queued, call, event, sharedNumber, singleNumber,
     policyReads: () => policyReads, setWrongFactoryScope(value: boolean) { wrongFactoryScope = value; },
-    setTime(value: string) { current = value; } };
+    setTime(value: string) { current = value; },
+    holdNextPolicyRead() {
+      let entered!: () => void;
+      let release!: () => void;
+      const enteredPromise = new Promise<void>(resolve => { entered = resolve; });
+      const releasePromise = new Promise<void>(resolve => { release = resolve; });
+      policyGate = { entered, release: releasePromise };
+      return { entered: enteredPromise, release };
+    } };
 }
 
 for (const kind of kinds) {
@@ -155,5 +170,47 @@ for (const kind of kinds) {
     const active = value(await call.resumeBound(at(3)));
     assert.equal(active.lifecycle, "active");
     assert.deepEqual(active.policy.scope, app.north);
+  });
+
+  test(`${kind}: disconnect during location choice closes the reservation and fences media`, async () => {
+    const app = fixture(kind);
+    const inbound = app.event(app.sharedNumber, "disconnect");
+    const call = app.call(inbound);
+    value(await call.begin(now));
+    const ended = value(await call.end(at(1), "callerDisconnected"));
+    if (!("status" in ended)) throw new Error("pending choice expected");
+    assert.equal(ended.status, "expired");
+    assert.equal(ended.closeEvidence?.reason, "callerDisconnected");
+    assert.deepEqual(value(await call.end(at(2), "callerDisconnected")), ended);
+    const later = await call.speechStarted(at(2));
+    assert.ok(!later.ok);
+    assert.equal(later.error.kind, "disconnected");
+    assert.equal(value(await app.ledger.findAdmission(ended.callId)), null);
+  });
+
+  test(`${kind}: disconnect waits for a choice already binding and then ends the scoped call`, async () => {
+    const app = fixture(kind);
+    const call = app.call(app.event(app.sharedNumber, "choice-race"));
+    value(await call.begin(now));
+    value(await app.policy.changeAutomationEnabled(app.north, "0", true, "admin"));
+    const generation = value(await call.speechStarted(at(1)));
+    value(call.acceptTranscript({ kind: "segmentFinal", sessionId: "session", generation,
+      utteranceId: "location", text: "Northside", quality: "clear" }));
+    app.setTime(at(2));
+    const gate = app.holdNextPolicyRead();
+    const finishing = call.finishTurn(at(2));
+    await gate.entered;
+    let ended = false;
+    const ending = call.end(at(3), "callerDisconnected").then(result => { ended = true; return result; });
+    await Promise.resolve();
+    assert.equal(ended, false);
+    gate.release();
+    const bound = value(await finishing);
+    assert.equal(bound.kind, "locationBound");
+    const terminal = value(await ending);
+    if (!("lifecycle" in terminal)) throw new Error("scoped call expected");
+    assert.equal(terminal.lifecycle, "ended");
+    assert.equal(terminal.terminal?.reason, "callerDisconnected");
+    assert.deepEqual(terminal.policy.scope, app.north);
   });
 }

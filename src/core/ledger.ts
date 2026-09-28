@@ -2,7 +2,7 @@ import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "./model.ts";
 import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingLocationCall, PendingLocationExpiryResult, PendingLocationPrompt, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffQueueEntry, TransitionAction, TransitionFailure } from "./model.ts";
 import { transition } from "./transition.ts";
 import { READINESS_REQUIREMENTS, unprovenReadiness } from "./readiness.ts";
-import { LOCATION_CHOICE_TIMEOUT_MS, PENDING_LOCATION_LEASE_MS, pendingDueAt, pendingMatchesAdmission, policyMatchesPending, resolveLocationPrompt, startLocationPrompt, validPendingAdmission, validPendingRoute } from "./pending-location.ts";
+import { LOCATION_CHOICE_TIMEOUT_MS, PENDING_LOCATION_LEASE_MS, closePendingLocationState, expiredPendingLocationState, pendingDueAt, pendingMatchesAdmission, policyMatchesPending, resolveLocationPrompt, startLocationPrompt, validPendingAdmission, validPendingRoute } from "./pending-location.ts";
 import type { AutomationReadiness } from "./readiness.ts";
 import type { InFlightWrite, WriteStopAuditEntry, WriteStopAuditPage, WriteStopFailure, WriteStopStatus } from "./write-stop.ts";
 
@@ -21,6 +21,9 @@ export interface LedgerStore {
     Promise<Result<Readonly<{ pending: PendingLocationCall; newStart: boolean }>, TransitionFailure>>;
   resolvePendingLocationPrompt(callId: string, playbackId: string, sessionId: string, expectedVersion: number,
                                status: PendingLocationPrompt["status"], now: string): Promise<Result<PendingLocationCall, TransitionFailure>>;
+  closePendingLocationSession(callId: string, sessionId: string, expectedVersion: number,
+                              reason: NonNullable<PendingLocationCall["closeEvidence"]>["reason"], now: string):
+    Promise<Result<PendingLocationCall, TransitionFailure>>;
   bindPendingLocation(callId: string, policy: CallPolicy, sessionId: string, expectedLeaseVersion: number, turnId: string, now: string): Promise<Result<AdmissionResult, TransitionFailure>>;
   findExpiredPendingLocations(now: string, clinic?: Pick<LocationScope, "tenantId" | "clinicId">): Promise<Result<readonly PendingLocationCall[], TransitionFailure>>;
   expirePendingLocation(callId: string, now: string): Promise<Result<PendingLocationExpiryResult, TransitionFailure>>;
@@ -221,6 +224,17 @@ export class MemoryLedger implements LedgerStore {
     return ok(structuredClone(resolved.value));
   }
 
+  async closePendingLocationSession(callId: string, sessionId: string, expectedVersion: number,
+                                    reason: NonNullable<PendingLocationCall["closeEvidence"]>["reason"], now: string):
+    Promise<Result<PendingLocationCall, TransitionFailure>> {
+    const pending = this.pendingLocations.get(callId);
+    if (!pending) return err({ kind: "callUnknown" });
+    const closed = closePendingLocationState(pending, sessionId, expectedVersion, reason, now);
+    if (!closed.ok) return closed;
+    this.pendingLocations.set(callId, closed.value);
+    return ok(structuredClone(closed.value));
+  }
+
   async bindPendingLocation(callId: string, policy: CallPolicy, sessionId: string, expectedLeaseVersion: number, turnId: string, now: string): Promise<Result<AdmissionResult, TransitionFailure>> {
     if (!sessionId?.trim() || sessionId.length > 256 || !turnId?.trim() || turnId.length > 256 ||
         !Number.isSafeInteger(expectedLeaseVersion) || !Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
@@ -233,7 +247,7 @@ export class MemoryLedger implements LedgerStore {
       ? ok({ kind: "duplicate", receipt: admissionReceipt(existing)! }) : err({ kind: "scopeMismatch" });
     if (pending.status !== "pending" || existing) return err({ kind: "callConflict" });
     if (Date.parse(now) >= pendingDueAt(pending)) {
-      this.pendingLocations.set(callId, { ...pending, status: "expired" });
+      this.pendingLocations.set(callId, expiredPendingLocationState(pending, now));
       return err({ kind: "admissionExpired" });
     }
     if (!pending.sessionLease || pending.sessionLease.sessionId !== sessionId ||
@@ -266,7 +280,7 @@ export class MemoryLedger implements LedgerStore {
       ? ok({ kind: "bound", pending: structuredClone(pending) }) : err({ kind: "storageCorrupt" });
     if (pending.status === "expired") return ok({ kind: "alreadyExpired", pending: structuredClone(pending) });
     if (Date.parse(now) < pendingDueAt(pending)) return err({ kind: "invalidTransition" });
-    const expired: PendingLocationCall = { ...pending, status: "expired" };
+    const expired = expiredPendingLocationState(pending, now);
     this.pendingLocations.set(callId, expired);
     return ok({ kind: "expired", pending: structuredClone(expired) });
   }
