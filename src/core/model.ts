@@ -17,6 +17,7 @@ export type SessionLease = Readonly<{ sessionId: string; version: number; expire
 export type AdmissionReceipt = Readonly<{ callId: string; scope: LocationScope; admission: Admission; lifecycle: "starting" | "active" | "ended" }>;
 export type AdmissionResult = Readonly<{ kind: "created" | "duplicate"; receipt: AdmissionReceipt }>;
 export type ActiveSessionReceipt = Readonly<{ callId: string; scope: LocationScope; lease: SessionLease }>;
+export type PendingPresentationRef = Readonly<{ callId: string; scope: LocationScope; sessionId: string; presentationId: string }>;
 export type StaffDestination =
   | Readonly<{ kind: "owner"; ownerRef: string }>
   | Readonly<{ kind: "queue"; queueRef: string }>;

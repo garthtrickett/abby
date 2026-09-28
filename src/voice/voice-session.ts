@@ -1,6 +1,6 @@
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
-import type { CallState, FinalCallerTurn, LocationScope, Presentation, Result, StaffReason, TransitionFailure } from "../core/model.ts";
+import type { CallState, FinalCallerTurn, LocationScope, PendingPresentationRef, Presentation, Result, StaffReason, TransitionFailure } from "../core/model.ts";
 import { CallRuntime } from "../core/runtime.ts";
 import type { TextReceptionFailure } from "../reference/text-reception.ts";
 import { TextReception } from "../reference/text-reception.ts";
@@ -69,6 +69,11 @@ export class VoiceSession {
     this.resolveIntent = resolveIntent;
     this.monotonicNow = monotonicNow;
     this.assembler = new TurnAssembler(callId, sessionId);
+  }
+
+  matches(ref: PendingPresentationRef): boolean {
+    return this.callId === ref.callId && this.sessionId === ref.sessionId &&
+      this.scope.tenantId === ref.scope.tenantId && this.scope.clinicId === ref.scope.clinicId && this.scope.locationId === ref.scope.locationId;
   }
 
   private recordLease(state: CallState, startedMs: number): void {
