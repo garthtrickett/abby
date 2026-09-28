@@ -1,6 +1,7 @@
 import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "./model.ts";
-import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, LocationScope, PendingLocationCall, PendingLocationExpiryResult, PendingLocationPrompt, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffQueueEntry, TransitionAction, TransitionFailure } from "./model.ts";
+import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, ApprovedGreeting, CallPolicy, CallState, LocationScope, PendingLocationCall, PendingLocationExpiryResult, PendingLocationPrompt, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffQueueEntry, TransitionAction, TransitionFailure } from "./model.ts";
 import { transition } from "./transition.ts";
+import { validApprovedGreeting } from "./greeting.ts";
 import { READINESS_REQUIREMENTS, unprovenReadiness } from "./readiness.ts";
 import { LOCATION_CHOICE_TIMEOUT_MS, PENDING_LOCATION_LEASE_MS, closePendingLocationState, expiredPendingLocationState, pendingDueAt, pendingMatchesAdmission, policyMatchesPending, resolveLocationPrompt, startLocationPrompt, validPendingAdmission, validPendingRoute } from "./pending-location.ts";
 import type { AutomationReadiness } from "./readiness.ts";
@@ -56,6 +57,18 @@ export function initialState(callId: string, policy: CallPolicy): CallState {
     availabilityReads: [],
     appointmentReads: [],
   };
+}
+
+/** One durable greeting intent is committed with a voice admission, before any media is sent. */
+export function initialAdmittedState(callId: string, policy: CallPolicy & { greeting: ApprovedGreeting }, admission: Admission): CallState {
+  const state = initialState(callId, policy);
+  const presentationId = `${callId}:greeting`;
+  state.lifecycle = "starting";
+  state.admission = structuredClone(admission);
+  state.presentations[presentationId] = { kind: "notice", id: presentationId,
+    approvedText: policy.greeting.approvedText, status: "pending" };
+  state.pendingPresentationId = presentationId;
+  return state;
 }
 
 export function admissionReceipt(state: CallState): AdmissionReceipt | null {
@@ -255,9 +268,8 @@ export class MemoryLedger implements LedgerStore {
     if (!policyMatchesPending(pending, policy)) return err({ kind: "scopeMismatch" });
     const admission: Admission = { ...pending.admission, acceptedAt: now,
       deadline: new Date(Date.parse(now) + 30_000).toISOString() };
-    const state = initialState(callId, policy);
-    state.lifecycle = "starting";
-    state.admission = admission;
+    if (!validApprovedGreeting(policy)) return err({ kind: "invalidTransition" });
+    const state = initialAdmittedState(callId, policy, admission);
     this.calls.set(callId, state);
     this.pendingLocations.set(callId, { ...pending, status: "bound", choiceEvidence: { sessionId, leaseVersion: expectedLeaseVersion, turnId,
       selectedLocationId: policy.scope.locationId, at: now } });
@@ -333,9 +345,8 @@ export class MemoryLedger implements LedgerStore {
         ? ok({ kind: "duplicate", receipt }) : err({ kind: "callConflict" });
     }
     if (this.pendingLocations.has(callId)) return err({ kind: "callConflict" });
-    const state = initialState(callId, policy);
-    state.lifecycle = "starting";
-    state.admission = structuredClone(admission);
+    if (!validApprovedGreeting(policy)) return err({ kind: "invalidTransition" });
+    const state = initialAdmittedState(callId, policy, admission);
     this.calls.set(callId, state);
     return ok({ kind: "created", receipt: admissionReceipt(state)! });
   }

@@ -1004,7 +1004,7 @@ for (const kind of kinds) {
     failure(await app.session.renew(at(44)), "leaseLost");
     failure(await app.session.acceptPlaybackResult(queued.playbackId!, "played", at(44)), "leaseLost");
     const state = value(await new CallRuntime(app.ledger, app.scope).read(app.callId));
-    assert.equal(state.presentations[Object.keys(state.presentations)[0]!]?.status, "started");
+    assert.equal(state.presentations[queued.playbackId!.replace(/:playback$/, "")]?.status, "started");
   });
 
   test(`${kind}: a renewal response after the old local gate closes cannot reopen output`, async () => {

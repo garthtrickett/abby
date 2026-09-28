@@ -46,6 +46,7 @@ function message(failure: DashboardFailure): string {
     case "readinessFailed": {
       const labels: Record<typeof READINESS_REQUIREMENTS[number], string> = {
         hostPermissions: "host permissions", selectedLocation: "a selected location", approvedKnowledge: "approved clinic information",
+        approvedGreeting: "an approved greeting",
         bookableOffers: "booking setup", staffDestination: "staff destination", afterHoursDestination: "after-hours destination",
         notificationOwner: "notification owner", fallbackRoute: "tested fallback route", mediaTestCall: "passed media test call",
       };

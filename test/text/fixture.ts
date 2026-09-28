@@ -62,6 +62,8 @@ export async function setup(id: string, modes?: Partial<CallPolicy["capabilities
     capabilities: { book: "execute", cancel: "requestOnly", reschedule: "requestOnly", intake: "execute", transfer: "requestOnly", ...modes },
     staffDestination: { kind: "owner", ownerRef: `staff-${id}` },
     operatorQueue: { kind: "queue", queueRef: `operator-${id}` },
+    greeting: { scope, version: "test-greeting-v1", ownerRef: "test-clinic-owner",
+      approvedText: "Hello. How can I help you?", approved: true },
   };
   const callId = `call-${id}`;
   if (process.env.ABBY_LEDGER === "postgres" && !postgresDb) {

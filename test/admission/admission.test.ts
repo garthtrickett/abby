@@ -47,6 +47,20 @@ function fixture(kind: "memory" | "postgres", suffix: string) {
 }
 
 for (const kind of kinds) {
+  test(`${kind}: admission requires an approved greeting for the selected location`, async () => {
+    const app = fixture(kind, `${kind}-greeting-readiness`);
+    const event = { key: { accountRef: `greeting-${kind}`, providerCallRef: "missing" },
+      dialedNumber: "+6125550100", receivedAt: now };
+    for (const greeting of [undefined, { ...app.policy.greeting!, approved: false },
+      { ...app.policy.greeting!, scope: { ...app.scope, locationId: "other" } },
+      { ...app.policy.greeting!, approvedText: "   " }]) {
+      const policy = { ...app.policy, greeting } as CallPolicy;
+      const service = new CallAdmissionService(app.ledger, async () => ok(policy), () => now, async () => ok(true));
+      failure(await service.begin(event), "readinessFailed");
+      assert.equal(value(await app.ledger.findAdmission(callIdFor(event.key))), null);
+    }
+  });
+
   test(`${kind}: failed knowledge snapshot prevents admission before any call is stored`, async () => {
     const app = fixture(kind, `${kind}-knowledge-unavailable`);
     const service = new CallAdmissionService(app.ledger, async () => ok(app.policy), () => now, async () => ok(true),
@@ -130,10 +144,16 @@ for (const kind of kinds) {
     assert.equal(created.receipt.callId, callIdFor(event.key));
     assert.equal(created.receipt.admission.acceptedAt, now);
     assert.equal(created.receipt.admission.deadline, "2026-09-28T10:00:30.000Z");
+    const starting = value(await app.ledger.read(created.receipt.callId, app.scope));
+    assert.equal(starting.pendingPresentationId, `${created.receipt.callId}:greeting`);
+    assert.deepEqual(starting.presentations[starting.pendingPresentationId!], {
+      kind: "notice", id: starting.pendingPresentationId, approvedText: app.policy.greeting?.approvedText, status: "pending",
+    });
     assert.equal(app.routeReads(), 1);
     const replay = value(await app.service.begin({ ...event, receivedAt: "2026-09-28T10:00:03.000Z" }));
     assert.equal(replay.kind, "duplicate");
     assert.equal(app.routeReads(), 1);
+    assert.deepEqual(value(await app.ledger.read(created.receipt.callId, app.scope)).presentations, starting.presentations);
     failure(await app.service.begin({ ...event, dialedNumber: "+6125550199" }), "callConflict");
     assert.equal(app.routeReads(), 1);
     failure(await app.ledger.read(created.receipt.callId, { ...app.scope, tenantId: "foreign" }), "callUnknown");
@@ -171,7 +191,7 @@ for (const kind of kinds) {
     const request = { callId, sessionId: "session-1", turnId: "request", text: "Book physio", quality: "clear" as const, at: requestAt };
     failure(await runtime.acceptTurn({ ...request, sessionId: "session-2" }, { kind: "requestAction", request: { kind: "book", patient, offer } }, requestAt), "leaseLost");
     const planned = value(await runtime.acceptTurn(request, { kind: "requestAction", request: { kind: "book", patient, offer } }, requestAt));
-    const presentationId = Object.keys(planned.presentations)[0];
+    const presentationId = planned.pendingPresentationId;
     assert.ok(presentationId);
     failure(await runtime.startPresentation(callId, presentationId), "leaseLost");
     value(await runtime.startPresentation(callId, presentationId, "session-1", requestAt));
@@ -188,6 +208,9 @@ for (const kind of kinds) {
     const app = fixture(kind, `${kind}-expiry`);
     const event = { key: { accountRef: `account-${kind}`, providerCallRef: "provider-call-3" }, dialedNumber: "+6125550100", receivedAt: now };
     const callId = value(await app.service.begin(event)).receipt.callId;
+    const starting = value(await app.ledger.read(callId, app.scope));
+    const greetingId = starting.pendingPresentationId!;
+    assert.equal(starting.presentations[greetingId]?.status, "pending");
     const runtime = new CallRuntime(app.ledger, app.scope);
     const monitor = new CallLivenessMonitor(app.ledger, app.scope);
     assert.equal(value(await monitor.expireDue("2026-09-28T10:00:29.000Z")), 0);
@@ -196,6 +219,8 @@ for (const kind of kinds) {
     const ended = value(await runtime.read(callId));
     assert.equal(ended.lifecycle, "ended");
     assert.equal(ended.terminal?.reason, "admissionExpired");
+    assert.equal(ended.pendingPresentationId, undefined);
+    assert.equal(ended.presentations[greetingId]?.status, "superseded");
     failure(await runtime.activate(callId, "session-too-late", "2026-09-28T10:00:31.000Z"), "invalidTransition");
   });
 
