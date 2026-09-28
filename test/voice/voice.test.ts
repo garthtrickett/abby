@@ -349,6 +349,7 @@ for (const kind of kinds) {
       model: { async propose(input) {
         modelCalls += 1;
         assert.equal(input.turn.text, "Ask model about opening hours");
+        assert.deepEqual(input.knowledge, [{ sourceRef: "hours", approvedText: "We open at 9 am." }]);
         return { schemaVersion: 1, kind: "answer", sourceRefs: ["hours"], proposedText: "We open at 9 am." };
       } },
     });
@@ -375,8 +376,13 @@ for (const kind of kinds) {
     let calls = 0;
     const model = new OpenAIResponsesPort({ apiKey: "synthetic-key", model: "configured-model",
       promptVersion: "voice-prompt-v1", instructions: "Use only supplied source references.",
-      fetch: (async () => {
+      fetch: (async (_url, init) => {
         calls += 1;
+        const body = JSON.parse(String(init?.body));
+        assert.deepEqual(JSON.parse(body.input[1].content), { callerText: "Ask model about opening hours",
+          approvedKnowledge: [{ sourceRef: "hours", approvedText: "We open at 9 am." }] });
+        for (const secret of ["voice-tenant", "voice-clinic", "voice-location", "clinic-owner"])
+          assert.equal(String(init?.body).includes(secret), false);
         return Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [
           { type: "output_text", text: JSON.stringify({ proposal: {
             schemaVersion: 1, kind: "answer", sourceRefs: ["hours"], proposedText: "We open at 9 am.",

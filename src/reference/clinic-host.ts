@@ -1,5 +1,6 @@
 import { digestActionRequest, digestTurn } from "../core/digest.ts";
-import type { BookingEvidenceHost, HostEffects, HostReadFailure, KnowledgeHost, KnowledgeReadFailure, OperatorAlertHost, PatientProofHost, StaffLifecycleHost } from "../core/host.ts";
+import type { BookingEvidenceHost, HostEffects, HostReadFailure, KnowledgeHost, KnowledgeReadFailure, ModelKnowledgeContextHost, OperatorAlertHost, PatientProofHost, StaffLifecycleHost } from "../core/host.ts";
+import { validKnowledgeSource } from "../core/knowledge-evidence.ts";
 import { err, ok } from "../core/model.ts";
 import type { ActionRequest, ApprovedKnowledge, BookableOffer, HostMutation, HostWriteReceipt, LocationScope, OperatorAlert, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "../core/model.ts";
 
@@ -17,7 +18,7 @@ function validDestination(value: unknown): value is StaffItem["destination"] {
 type Booking = Readonly<{ actionKey: string; hostRef: string; scope: LocationScope; patientRef: string; offerRef: string; payloadDigest: string }>;
 type Task = Readonly<{ taskKey: string; hostTaskRef: string; scope: LocationScope; destination: StaffItem["destination"]; status: "open" | "acknowledged" | "resolved"; payloadDigest: string }>;
 
-export class ReferenceClinicHost implements BookingEvidenceHost, PatientProofHost, HostEffects, KnowledgeHost, StaffLifecycleHost, OperatorAlertHost {
+export class ReferenceClinicHost implements BookingEvidenceHost, PatientProofHost, HostEffects, KnowledgeHost, ModelKnowledgeContextHost, StaffLifecycleHost, OperatorAlertHost {
   private readonly patients: readonly VerifiedPatient[];
   private readonly offers: readonly BookableOffer[];
   private readonly knowledge: readonly ApprovedKnowledge[];
@@ -38,6 +39,11 @@ export class ReferenceClinicHost implements BookingEvidenceHost, PatientProofHos
     if (!Array.isArray(sourceRefs) || sourceRefs.length < 1 || sourceRefs.length > 8 || sourceRefs.some(ref => typeof ref !== "string" || !ref.trim() || ref.length > 256) ||
         new Set(sourceRefs).size !== sourceRefs.length) return err({ kind: "invalidQuery" });
     return ok(structuredClone(this.knowledge.filter(source => sameScope(source.scope, scope) && sourceRefs.includes(source.sourceRef))));
+  }
+
+  async listModelKnowledge(scope: LocationScope, now: string): Promise<Result<readonly ApprovedKnowledge[], KnowledgeReadFailure>> {
+    if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidQuery" });
+    return ok(structuredClone(this.knowledge.filter(source => validKnowledgeSource(source, scope, now))));
   }
 
   async resolveBooking(scope: LocationScope, verificationRef: string, offerRef: string, now: string): Promise<Result<Extract<ActionRequest, { kind: "book" }>, HostReadFailure>> {

@@ -26,6 +26,11 @@ export interface KnowledgeHost {
   readKnowledge(scope: LocationScope, sourceRefs: readonly string[]): Promise<Result<readonly ApprovedKnowledge[], KnowledgeReadFailure>>;
 }
 
+/** Candidate facts for a transient model request; every answer is read again through KnowledgeHost. */
+export interface ModelKnowledgeContextHost {
+  listModelKnowledge(scope: LocationScope, now: string): Promise<Result<readonly ApprovedKnowledge[], KnowledgeReadFailure>>;
+}
+
 export interface AvailabilityHost {
   list(scope: LocationScope, from: string, to: string): Promise<Result<AvailabilityRead, AvailabilityReadFailure>>;
 }

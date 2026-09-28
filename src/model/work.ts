@@ -45,6 +45,11 @@ export class ModelWork {
     if (!input.turn.turnId || input.turn.turnId.length > 256 || typeof input.turn.text !== "string" ||
         !input.turn.text.trim()) return err({ kind: "invalidInput" });
     if (input.turn.text.length > MAX_MODEL_TURN_CHARS) return err({ kind: "tooLong" });
+    if (!Array.isArray(input.knowledge) || input.knowledge.length > 8 ||
+        input.knowledge.some(source => typeof source?.sourceRef !== "string" || !source.sourceRef.trim() ||
+          source.sourceRef.length > 256 || typeof source.approvedText !== "string" ||
+          !source.approvedText.trim() || source.approvedText.length > 2_000) ||
+        new Set(input.knowledge.map(source => source.sourceRef)).size !== input.knowledge.length) return err({ kind: "invalidInput" });
     const taskRef = modelTaskRef(input);
     const fingerprint = createHash("sha256").update(JSON.stringify(input)).digest("hex");
     const existing = this.current(taskRef);
