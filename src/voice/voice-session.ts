@@ -76,6 +76,10 @@ export class VoiceSession {
       this.scope.tenantId === ref.scope.tenantId && this.scope.clinicId === ref.scope.clinicId && this.scope.locationId === ref.scope.locationId;
   }
 
+  activeForDelivery(): boolean {
+    return this.canSend();
+  }
+
   private recordLease(state: CallState, startedMs: number): void {
     const lease = state.sessionLease;
     if (!lease || !Number.isFinite(startedMs)) return;

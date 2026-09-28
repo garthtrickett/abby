@@ -57,13 +57,12 @@ export class VoiceLeaseLoop {
       try { outcome = await this.session.renew(now); }
       catch { outcome = err({ kind: "renewalUnavailable", stage: "session" }); }
     }
-    this.onAttempt(outcome);
-    if (!this.running) return;
-    if (!outcome.ok && (outcome.error.kind === "leaseLost" || outcome.error.kind === "sessionUnknown")) {
+    if (this.running && !outcome.ok && (outcome.error.kind === "leaseLost" || outcome.error.kind === "sessionUnknown")) {
       this.running = false;
-      return;
+    } else if (this.running) {
+      this.schedule(outcome.ok ? this.intervalMs : this.retryMs);
     }
-    this.schedule(outcome.ok ? this.intervalMs : this.retryMs);
+    this.onAttempt(outcome);
   }
 
   start(): void {

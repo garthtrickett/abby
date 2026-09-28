@@ -22,6 +22,8 @@ The [in-process voice work loop](../phase-1/VOICE_WORK_LOOP.md) schedules lease 
 
 The [per-session lease renewal loop](../phase-1/VOICE_LEASE_LOOP.md) renews an attached call before its local send deadline, retries transient failures, and stops on lease loss. The host starts and stops it with the media session.
 
+The [managed voice-session composition](../phase-1/MANAGED_VOICE_SESSION.md) registers exact attached sessions, starts their renewal loops, and wakes pending delivery after successful call-state commits. It removes sessions when a call ends or a transfer connects.
+
 Run `npm ci`, `npm test`, and `npm run probe:postgres` (Docker required for the last command). The probe migrates a fresh PostgreSQL database, regenerates Kanel types, and runs the text and storage cases. Test files run in parallel with isolated calls and host fixtures. A new feature, capability, or setting needs a text contract case that checks caller wording, state, effects, and failure behavior. Its real voice path also needs a full-call E2E case when that path exists.
 
 This composition does not call Cliniko or Splose. Its host is synthetic. PostgreSQL persistence is a Phase 0 probe, and a synthetic `played` result is only test evidence for downstream confirmation logic. No production caller, agent, or API can use this harness to assert playback. Production outbox leasing, retention, real host adapters, media, and voice E2E remain open work.
