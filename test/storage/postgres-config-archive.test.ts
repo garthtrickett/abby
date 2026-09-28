@@ -77,6 +77,21 @@ test("PostgreSQL config archive takes a consistent scoped snapshot with an allow
   const importer = new ReferenceConfigArchiveImporter(() => "2026-09-28T22:05:00Z");
   const importAuthority = { authorizeAndRecord: async () => ok({ auditRef: "buyer-audit-1" }) };
   const mapper = { mapRef: (kind: string, sourceRef: string) => `buyer:${kind}:${sourceRef}` };
+  const preflight = await importer.preflight(result.value, request.targetScope, "buyer-admin", importAuthority, mapper);
+  assert.equal(preflight.ok, true);
+  if (!preflight.ok) return;
+  assert.equal(preflight.value.status, "ready");
+  assert.deepEqual(preflight.value.recordCounts, { locations: 1, settings: 6, knowledge: 2, calls: 0, staffWork: 0 });
+  assert.equal(preflight.value.mappings.some(row => row.kind === "knowledgeOwner" && row.sourceRef === "clinic-owner" &&
+    row.targetRef === "buyer:knowledgeOwner:clinic-owner"), true);
+  assert.equal(preflight.value.plannedBookingEnabled, false);
+  assert.equal(JSON.stringify(preflight.value).includes("secret-canary-never-export"), false);
+  const preflightOnly = new ReferenceConfigArchiveImporter(() => "2026-09-28T22:05:00Z");
+  assert.equal((await preflightOnly.preflight(result.value, request.targetScope, "buyer-admin", importAuthority, mapper)).ok, true);
+  const alternateManifest = { ...JSON.parse(Buffer.from(result.value.manifestBytes).toString()), archiveId: "config-archive-after-preflight" };
+  const afterDryRun = await preflightOnly.stage({ ...result.value, manifestBytes: Buffer.from(JSON.stringify(alternateManifest)) },
+    request.targetScope, "buyer-admin", importAuthority, mapper);
+  assert.equal(afterDryRun.ok, true);
   const staged = await importer.stage(result.value, request.targetScope, "buyer-admin", importAuthority, mapper);
   assert.equal(staged.ok, true);
   if (!staged.ok) return;
@@ -111,7 +126,14 @@ test("PostgreSQL config archive takes a consistent scoped snapshot with an allow
   if (answer.ok) assert.equal(answer.value.callerMessages.at(-1), "Parking is near the entrance.");
   const replay = await importer.stage(result.value, request.targetScope, "buyer-admin", importAuthority, mapper);
   assert.equal(replay.ok && replay.value === staged.value, true);
+  const replayPreflight = await importer.preflight(result.value, request.targetScope, "buyer-admin", importAuthority,
+    { mapRef: () => null });
+  assert.equal(replayPreflight.ok && replayPreflight.value.status === "alreadyStaged", true);
+  if (replayPreflight.ok) assert.deepEqual(replayPreflight.value.mappings, staged.value.receipt.mappings);
   const mappingImporter = new ReferenceConfigArchiveImporter(() => "2026-09-28T22:05:00Z");
+  const failedPreflight = await mappingImporter.preflight(result.value, request.targetScope, "buyer-admin", importAuthority,
+    { mapRef: (kind: string, sourceRef: string) => kind === "operatorQueue" ? null : `buyer:${kind}:${sourceRef}` });
+  assert.deepEqual(failedPreflight, { ok: false, error: { kind: "unmappedRef" } });
   const unmapped = await mappingImporter.stage(result.value, request.targetScope, "buyer-admin", importAuthority,
     { mapRef: (kind: string, sourceRef: string) => kind === "operatorQueue" ? null : `buyer:${kind}:${sourceRef}` });
   assert.deepEqual(unmapped, { ok: false, error: { kind: "unmappedRef" } });

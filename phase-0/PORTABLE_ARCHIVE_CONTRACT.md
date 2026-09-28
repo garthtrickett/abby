@@ -1,6 +1,6 @@
 # Abby portable archive contract, version 0.1
 
-**Status:** Proposed P0-08 contract. No exporter, importer, retention approval, or cutover has passed this contract yet. This defines the data boundary for the Phase 4 rehearsal and Phase 5 dry run; it is not a substitute for either executable gate.
+**Status:** Proposed P0-08 contract. A configuration-only exporter, dry-run preflight, and reference importer now pass a limited rehearsal; retained-call eligibility, durable buyer import, and cutover remain open. This defines the data boundary for the Phase 4 rehearsal and Phase 5 dry run; it is not a substitute for either executable gate.
 
 ## Purpose and authority
 
