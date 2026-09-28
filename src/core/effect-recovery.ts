@@ -1,4 +1,5 @@
 import { EffectWorker } from "./effect-worker.ts";
+import type { EffectWorkerOptions } from "./effect-worker.ts";
 import type { HostEffects, KnowledgeHost, OperatorAlertHost, StaffLifecycleHost } from "./host.ts";
 import type { LedgerStore } from "./ledger.ts";
 import { err, ok } from "./model.ts";
@@ -24,15 +25,17 @@ export class EffectRecovery {
   private readonly scope: LocationScope | undefined;
   private readonly modelLookup: ModelWorkLookup | undefined;
   private readonly knowledgeLookup: KnowledgeLookup | undefined;
+  private readonly workerOptions: EffectWorkerOptions;
   private scanCursor: string | undefined;
 
   constructor(ledger: LedgerStore, hostLookup: EffectHostLookup, scope?: LocationScope, modelLookup?: ModelWorkLookup,
-              knowledgeLookup?: KnowledgeLookup) {
+              knowledgeLookup?: KnowledgeLookup, workerOptions: EffectWorkerOptions = {}) {
     this.ledger = ledger;
     this.hostLookup = hostLookup;
     this.scope = scope;
     this.modelLookup = modelLookup;
     this.knowledgeLookup = knowledgeLookup;
+    this.workerOptions = workerOptions;
   }
 
   private async attempt(ref: RecoverableEffectRef, now: string): Promise<"processed" | "recovered" | "deferred" | { effectId: string; kind: "hostUnavailable" | "effectFailure" | "recoveryFailure" }> {
@@ -64,7 +67,7 @@ export class EffectRecovery {
     catch { if (effect.kind === "modelKnowledge") return { effectId: ref.effectId, kind: "hostUnavailable" }; }
     if (effect.kind === "modelKnowledge" && this.knowledgeLookup && !knowledge) return { effectId: ref.effectId, kind: "hostUnavailable" };
     try {
-      await new EffectWorker(runtime, host, model, knowledge).process(ref.callId, ref.effectId, now);
+      await new EffectWorker(runtime, host, model, knowledge, this.workerOptions).process(ref.callId, ref.effectId, now);
       return "processed";
     } catch {
       const latest = await runtime.read(ref.callId);
