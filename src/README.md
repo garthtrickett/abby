@@ -16,9 +16,9 @@ The [scoped call outcome report](../phase-2/CALL_OUTCOME_REPORT.md) gives agents
 
 `voice/admission.ts` and `voice/call-liveness-monitor.ts` add replay-safe admission, activation, a session lease, and independent expiry over both ledger adapters. Their [contract and limits](../phase-1/CALL_ADMISSION.md) distinguish this no-number foundation from live transport evidence.
 
-The [account-scoped clinic number router](../phase-1/CLINIC_NUMBER_ROUTING.md) binds an authenticated provider account and dialed number to one unambiguous tenant and location before policy resolution. It can validate a caller's selected candidate after rechecking the host route, while the default shared-number path still uses independent fallback until a caller-choice controller is implemented.
+The [account-scoped clinic number router](../phase-1/CLINIC_NUMBER_ROUTING.md) binds an authenticated provider account and dialed number to one unambiguous tenant and location before policy resolution. It can validate a selected candidate after rechecking the host route. Ordinary admission still uses independent fallback for shared numbers; the shared-number intake controller provides the choice path.
 
-The [pending-location reservation](../phase-1/PENDING_LOCATION_RESERVATIONS.md) durably owns a shared-number call key before a caller chooses a location and atomically converts it to a location-scoped admission. The caller-choice controller and prompt remain to be built.
+The [pending-location reservation](../phase-1/PENDING_LOCATION_RESERVATIONS.md) durably owns a shared-number call key before a caller chooses a location and atomically converts it to a location-scoped admission. The [synthetic intake controller](../phase-1/SHARED_NUMBER_INTAKE.md) now accepts a trusted choice; the caller-facing voice prompt and pre-location session lease remain to be built.
 
 `voice/admission-fallback.ts` adds an [independent synthetic fallback boundary](../phase-1/ADMISSION_FALLBACK.md) for admission failures. Duplicate calls bypass it; provider outcomes and alerts are typed and tested without a live number.
 
