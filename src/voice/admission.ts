@@ -1,5 +1,5 @@
 import type { LedgerStore } from "../core/ledger.ts";
-import { pendingCallId } from "../core/pending-location.ts";
+import { pendingCallId, policyMatchesPending } from "../core/pending-location.ts";
 import type { ModelKnowledgeContextHost } from "../core/host.ts";
 import { captureKnowledgeSnapshot, validKnowledgeSnapshot } from "../core/knowledge-evidence.ts";
 import { err, ok } from "../core/model.ts";
@@ -28,6 +28,10 @@ function duplicateOrConflict(receipt: AdmissionReceipt, event: AuthenticatedInbo
     ? ok({ kind: "duplicate", receipt }) : err({ kind: "callConflict" });
 }
 
+function sameScope(left: CallPolicy["scope"], right: CallPolicy["scope"]): boolean {
+  return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
+}
+
 export class CallAdmissionService {
   private readonly ledger: LedgerStore;
   private readonly resolvePolicy: PolicyResolver;
@@ -42,6 +46,60 @@ export class CallAdmissionService {
     this.now = now;
     this.readiness = readiness;
     this.knowledge = knowledge;
+  }
+
+  private async preparePolicy(policy: CallPolicy): Promise<Result<Readonly<{ policy: CallPolicy; acceptedAt: string }>, RouteFailure | TransitionFailure>> {
+    if (policy.automationEnabled !== true) return err({ kind: "automationDisabled" });
+    let ready = false;
+    try {
+      const checked = await this.readiness(policy.scope);
+      ready = checked.ok && checked.value === true;
+    } catch { ready = false; }
+    if (!ready) return err({ kind: "readinessFailed" });
+    const acceptedAt = this.now();
+    if (!Number.isFinite(Date.parse(acceptedAt))) return err({ kind: "invalidTransition" });
+    let callPolicy = policy;
+    if (this.knowledge) {
+      const captured = await captureKnowledgeSnapshot(this.knowledge, callPolicy.scope, acceptedAt);
+      if (!captured.ok) return err({ kind: "routeUnavailable" });
+      callPolicy = { ...callPolicy, knowledgeSnapshot: captured.value };
+    }
+    if (callPolicy.knowledgeSnapshot !== undefined && !validKnowledgeSnapshot(callPolicy.knowledgeSnapshot)) {
+      return err({ kind: "routeUnavailable" });
+    }
+    return ok({ policy: callPolicy, acceptedAt });
+  }
+
+  /** Completes a previously reserved shared-number call after trusted location selection. */
+  async bindSelected(event: AuthenticatedInboundCall, policy: CallPolicy): Promise<Result<AdmissionResult, TransitionFailure | RouteFailure>> {
+    if (!event.key.accountRef || !event.key.providerCallRef || !event.dialedNumber || !Number.isFinite(Date.parse(event.receivedAt))) {
+      return err({ kind: "invalidTransition" });
+    }
+    const callId = callIdFor(event.key);
+    const existing = await this.ledger.findAdmission(callId);
+    if (!existing.ok) return existing;
+    if (existing.value) {
+      const replay = duplicateOrConflict(existing.value, event);
+      return replay.ok && !sameScope(existing.value.scope, policy.scope) ? err({ kind: "invalidLocationChoice" }) : replay;
+    }
+    const pending = await this.ledger.findPendingLocation(callId);
+    if (!pending.ok) return pending;
+    if (!pending.value) return err({ kind: "callUnknown" });
+    const original = pending.value.admission;
+    if (original.key.accountRef !== event.key.accountRef || original.key.providerCallRef !== event.key.providerCallRef ||
+        original.dialedNumber !== event.dialedNumber) return err({ kind: "callConflict" });
+    if (pending.value.status === "expired") return err({ kind: "admissionExpired" });
+    if (pending.value.status !== "pending") return err({ kind: "storageCorrupt" });
+    if (!policyMatchesPending(pending.value, policy)) return err({ kind: "scopeMismatch" });
+    const prepared = await this.preparePolicy(policy);
+    if (!prepared.ok) {
+      const raced = await this.ledger.findAdmission(callId);
+      if (!raced.ok) return raced;
+      if (!raced.value) return prepared;
+      const replay = duplicateOrConflict(raced.value, event);
+      return replay.ok && !sameScope(raced.value.scope, policy.scope) ? err({ kind: "invalidLocationChoice" }) : replay;
+    }
+    return this.ledger.bindPendingLocation(callId, prepared.value.policy, prepared.value.acceptedAt);
   }
 
   async begin(event: AuthenticatedInboundCall): Promise<Result<AdmissionResult, TransitionFailure | RouteFailure>> {
@@ -66,45 +124,18 @@ export class CallAdmissionService {
       if (!raced.ok) return raced;
       return raced.value ? duplicateOrConflict(raced.value, event) : policy;
     }
-    if (policy.value.automationEnabled !== true) {
+    const prepared = await this.preparePolicy(policy.value);
+    if (!prepared.ok) {
       const raced = await this.ledger.findAdmission(callId);
       if (!raced.ok) return raced;
-      return raced.value ? duplicateOrConflict(raced.value, event) : err({ kind: "automationDisabled" });
-    }
-    let ready = false;
-    try {
-      const checked = await this.readiness(policy.value.scope);
-      ready = checked.ok && checked.value === true;
-    }
-    catch { ready = false; }
-    if (!ready) {
-      const raced = await this.ledger.findAdmission(callId);
-      if (!raced.ok) return raced;
-      return raced.value ? duplicateOrConflict(raced.value, event) : err({ kind: "readinessFailed" });
-    }
-    const acceptedAt = this.now();
-    if (!Number.isFinite(Date.parse(acceptedAt))) return err({ kind: "invalidTransition" });
-    let callPolicy = policy.value;
-    if (this.knowledge) {
-      const captured = await captureKnowledgeSnapshot(this.knowledge, callPolicy.scope, acceptedAt);
-      if (!captured.ok) {
-        const raced = await this.ledger.findAdmission(callId);
-        if (!raced.ok) return raced;
-        return raced.value ? duplicateOrConflict(raced.value, event) : err({ kind: "routeUnavailable" });
-      }
-      callPolicy = { ...callPolicy, knowledgeSnapshot: captured.value };
-    }
-    if (callPolicy.knowledgeSnapshot !== undefined && !validKnowledgeSnapshot(callPolicy.knowledgeSnapshot)) {
-      const raced = await this.ledger.findAdmission(callId);
-      if (!raced.ok) return raced;
-      return raced.value ? duplicateOrConflict(raced.value, event) : err({ kind: "routeUnavailable" });
+      return raced.value ? duplicateOrConflict(raced.value, event) : prepared;
     }
     const admission: Admission = {
       key: event.key,
       dialedNumber: event.dialedNumber,
-      acceptedAt,
-      deadline: new Date(Date.parse(acceptedAt) + 30_000).toISOString(),
+      acceptedAt: prepared.value.acceptedAt,
+      deadline: new Date(Date.parse(prepared.value.acceptedAt) + 30_000).toISOString(),
     };
-    return this.ledger.admit(callId, callPolicy, admission);
+    return this.ledger.admit(callId, prepared.value.policy, admission);
   }
 }
