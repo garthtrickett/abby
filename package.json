@@ -7,13 +7,13 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test:text": "node --test --test-concurrency=4 test/text/*.test.ts test/composition/*.test.ts test/admission/*.test.ts test/voice/*.test.ts test/cliniko/*.test.ts",
+    "test:text": "node --test --test-concurrency=4 test/text/*.test.ts test/composition/*.test.ts test/admission/*.test.ts test/voice/*.test.ts test/cliniko/*.test.ts test/portability/*.test.ts",
     "db:migrate": "node scripts/migrate.ts",
     "db:generate": "kanel --config .kanelrc.cjs",
     "build:dashboard": "esbuild src/standalone/dashboard/main.ts --bundle --format=esm --platform=browser --outfile=dist/dashboard/app.js",
     "demo:dashboard": "npm run build:dashboard && node src/standalone/dashboard/demo.ts",
     "test:browser": "npm run build:dashboard && playwright test",
-    "test:postgres": "node --test --test-concurrency=4 test/text/*.test.ts test/storage/*.test.ts test/composition/*.test.ts test/admission/*.test.ts test/voice/*.test.ts test/cliniko/*.test.ts",
+    "test:postgres": "node --test --test-concurrency=4 test/text/*.test.ts test/storage/*.test.ts test/composition/*.test.ts test/admission/*.test.ts test/voice/*.test.ts test/cliniko/*.test.ts test/portability/*.test.ts",
     "eval:model": "node scripts/evaluate-model.ts",
     "probe:postgres": "bash scripts/with-postgres.sh bash scripts/probe-postgres.sh",
     "test": "npm run typecheck && npm run test:text"
