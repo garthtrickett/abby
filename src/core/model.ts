@@ -6,6 +6,17 @@ export const ok = <Value>(value: Value): Result<Value, never> => ({ ok: true, va
 export const err = <Failure>(error: Failure): Result<never, Failure> => ({ ok: false, error });
 
 export type LocationScope = Readonly<{ tenantId: string; clinicId: string; locationId: string }>;
+export type ProviderCallKey = Readonly<{ accountRef: string; providerCallRef: string }>;
+export type Admission = Readonly<{
+  key: ProviderCallKey;
+  dialedNumber: string;
+  acceptedAt: string;
+  deadline: string;
+}>;
+export type SessionLease = Readonly<{ sessionId: string; version: number; expiresAt: string }>;
+export type AdmissionReceipt = Readonly<{ callId: string; scope: LocationScope; admission: Admission; lifecycle: "starting" | "active" | "ended" }>;
+export type AdmissionResult = Readonly<{ kind: "created" | "duplicate"; receipt: AdmissionReceipt }>;
+export type ActiveSessionReceipt = Readonly<{ callId: string; scope: LocationScope; lease: SessionLease }>;
 export type StaffDestination =
   | Readonly<{ kind: "owner"; ownerRef: string }>
   | Readonly<{ kind: "queue"; queueRef: string }>;
@@ -48,6 +59,7 @@ export type ActionRequest =
 
 export type FinalCallerTurn = Readonly<{
   callId: string;
+  sessionId?: string;
   turnId: string;
   text: string;
   quality: "clear" | "needsClarification";
@@ -101,7 +113,7 @@ export type Presentation = Readonly<{
   actionKey: string;
   digest: string;
   approvedText: string;
-  status: "pending" | "started" | "played" | "interrupted" | "failed" | "superseded";
+  status: "pending" | "started" | "played" | "interrupted" | "failed" | "unproven" | "superseded";
 }>;
 export type HostWriteReceipt =
   | Readonly<{ kind: "committed"; actionKey: string; hostRef: string }>
@@ -135,6 +147,9 @@ export type Effect =
 export type CallState = {
   callId: string;
   policy: CallPolicy;
+  lifecycle: "starting" | "active" | "ended";
+  admission?: Admission;
+  sessionLease?: SessionLease;
   version: number;
   conversationRevision: number;
   processedTurnIds: string[];
@@ -148,12 +163,17 @@ export type CallState = {
 };
 
 export type TransitionFailure =
-  | Readonly<{ kind: "callUnknown" | "versionConflict" | "invalidTransition" | "scopeMismatch" | "evidenceExpired" | "confirmationMissing" | "digestChanged" | "effectUnknown" | "keyMismatch" | "storageFailure" | "storageCorrupt" }>;
+  | Readonly<{ kind: "callUnknown" | "callConflict" | "versionConflict" | "invalidTransition" | "scopeMismatch" | "evidenceExpired" | "confirmationMissing" | "digestChanged" | "effectUnknown" | "keyMismatch" | "storageFailure" | "storageCorrupt" | "admissionExpired" | "leaseLost" }>;
 
 export type TransitionAction =
+  | Readonly<{ kind: "sessionActivated"; sessionId: string; now: string }>
+  | Readonly<{ kind: "sessionRenewed"; sessionId: string; expectedLeaseVersion: number; now: string }>
+  | Readonly<{ kind: "admissionExpired"; now: string }>
+  | Readonly<{ kind: "sessionExpired"; sessionId: string; expectedLeaseVersion: number; now: string }>
+  | Readonly<{ kind: "callEnded"; sessionId: string; now: string }>
   | Readonly<{ kind: "callerTurn"; turn: FinalCallerTurn; interpretation: TurnInterpretation; now: string }>
-  | Readonly<{ kind: "presentationStarted"; presentationId: string }>
-  | Readonly<{ kind: "presentationResolved"; presentationId: string; status: "played" | "interrupted" | "failed" }>
+  | Readonly<{ kind: "presentationStarted"; presentationId: string; sessionId?: string; now?: string }>
+  | Readonly<{ kind: "presentationResolved"; presentationId: string; status: "played" | "interrupted" | "failed"; sessionId?: string; now?: string }>
   | Readonly<{ kind: "markHostPossiblySent"; effectId: string; now: string }>
   | Readonly<{ kind: "recoverHostPossiblySent"; effectId: string; now: string }>
   | Readonly<{ kind: "hostWriteResolved"; effectId: string; receipt: HostWriteReceipt; now: string }>

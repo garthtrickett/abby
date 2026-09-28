@@ -90,6 +90,15 @@ function supersedeUnsent(state: CallState): void {
   }
 }
 
+function endMedia(state: CallState): void {
+  state.lifecycle = "ended";
+  for (const [id, presentation] of Object.entries(state.presentations)) {
+    if (presentation.status === "pending") state.presentations[id] = { ...presentation, status: "superseded" };
+    if (presentation.status === "started") state.presentations[id] = { ...presentation, status: "unproven" };
+  }
+  delete state.pendingPresentationId;
+}
+
 function handleRequest(state: CallState, turn: FinalCallerTurn, request: ActionRequest, now: string): Result<void, TransitionFailure> {
   const failure = evidenceFailure(state, request, now);
   if (failure) return err(failure);
@@ -117,6 +126,8 @@ function handleRequest(state: CallState, turn: FinalCallerTurn, request: ActionR
 }
 
 function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: TurnInterpretation, now: string): Result<void, TransitionFailure> {
+  if (state.lifecycle !== "active") return err({ kind: "invalidTransition" });
+  if (state.admission && (!state.sessionLease || turn.sessionId !== state.sessionLease.sessionId || Date.parse(now) >= Date.parse(state.sessionLease.expiresAt))) return err({ kind: "leaseLost" });
   if (turn.callId !== state.callId || !turn.turnId || !turn.text || !Number.isFinite(Date.parse(turn.at))) return err({ kind: "invalidTransition" });
   if (state.processedTurnIds.includes(turn.turnId)) return ok(undefined);
   if (interpretation.kind !== "affirm") supersedeUnsent(state);
@@ -214,12 +225,42 @@ function recordHostResult(state: CallState, effectId: string, receipt: import(".
 }
 
 export function transition(current: CallState, action: TransitionAction): Result<CallState, TransitionFailure> {
-  if ("now" in action && !Number.isFinite(Date.parse(action.now))) return err({ kind: "invalidTransition" });
+  if ("now" in action && action.now !== undefined && !Number.isFinite(Date.parse(action.now))) return err({ kind: "invalidTransition" });
   const state = structuredClone(current);
-  const now = action.kind === "callerTurn" || action.kind === "markHostPossiblySent" || action.kind === "recoverHostPossiblySent" || action.kind === "markStaffPossiblySent" || action.kind === "recoverStaffPossiblySent" || action.kind === "reconciliationDeadline" || action.kind === "hostWriteResolved" || action.kind === "reconciliationResolved"
-    ? action.now : new Date(0).toISOString();
+  const now = "now" in action && action.now !== undefined ? action.now : new Date(0).toISOString();
 
   switch (action.kind) {
+    case "sessionActivated": {
+      if (state.lifecycle !== "starting" || !state.admission || !action.sessionId) return err({ kind: "invalidTransition" });
+      if (Date.parse(action.now) >= Date.parse(state.admission.deadline)) return err({ kind: "admissionExpired" });
+      state.lifecycle = "active";
+      state.sessionLease = { sessionId: action.sessionId, version: 1, expiresAt: new Date(Date.parse(action.now) + 30_000).toISOString() };
+      break;
+    }
+    case "sessionRenewed": {
+      const lease = state.sessionLease;
+      if (state.lifecycle !== "active" || !lease || lease.sessionId !== action.sessionId || Date.parse(action.now) >= Date.parse(lease.expiresAt)) return err({ kind: "leaseLost" });
+      if (lease.version > 1 && action.expectedLeaseVersion === lease.version - 1) return ok(current);
+      if (lease.version !== action.expectedLeaseVersion) return err({ kind: "leaseLost" });
+      state.sessionLease = { sessionId: lease.sessionId, version: lease.version + 1, expiresAt: new Date(Date.parse(action.now) + 30_000).toISOString() };
+      break;
+    }
+    case "admissionExpired": {
+      if (state.lifecycle !== "starting" || !state.admission || Date.parse(action.now) < Date.parse(state.admission.deadline)) return err({ kind: "invalidTransition" });
+      state.lifecycle = "ended";
+      break;
+    }
+    case "sessionExpired": {
+      const lease = state.sessionLease;
+      if (state.lifecycle !== "active" || !lease || lease.sessionId !== action.sessionId || lease.version !== action.expectedLeaseVersion || Date.parse(action.now) < Date.parse(lease.expiresAt)) return err({ kind: "leaseLost" });
+      endMedia(state);
+      break;
+    }
+    case "callEnded": {
+      if (state.lifecycle !== "active" || state.sessionLease?.sessionId !== action.sessionId) return err({ kind: "leaseLost" });
+      endMedia(state);
+      break;
+    }
     case "callerTurn": {
       if (current.processedTurnIds.includes(action.turn.turnId)) {
         return current.processedTurnDigests[action.turn.turnId] === turnDigest(action.turn, action.interpretation)
@@ -230,6 +271,8 @@ export function transition(current: CallState, action: TransitionAction): Result
       break;
     }
     case "presentationStarted": {
+      if (state.lifecycle !== "active") return err({ kind: "invalidTransition" });
+      if (state.admission && (!state.sessionLease || action.sessionId !== state.sessionLease.sessionId || !action.now || Date.parse(action.now) >= Date.parse(state.sessionLease.expiresAt))) return err({ kind: "leaseLost" });
       const presentation = state.presentations[action.presentationId];
       if (!presentation || presentation.status !== "pending" || state.pendingPresentationId !== presentation.id) return err({ kind: "invalidTransition" });
       state.presentations[presentation.id] = { ...presentation, status: "started" };
@@ -237,6 +280,8 @@ export function transition(current: CallState, action: TransitionAction): Result
       break;
     }
     case "presentationResolved": {
+      if (state.lifecycle !== "active") return err({ kind: "invalidTransition" });
+      if (state.admission && (!state.sessionLease || action.sessionId !== state.sessionLease.sessionId || !action.now || Date.parse(action.now) >= Date.parse(state.sessionLease.expiresAt))) return err({ kind: "leaseLost" });
       const presentation = state.presentations[action.presentationId];
       if (!presentation || presentation.status !== "started") return err({ kind: "invalidTransition" });
       state.presentations[presentation.id] = { ...presentation, status: action.status };

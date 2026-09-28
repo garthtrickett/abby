@@ -1,4 +1,4 @@
-import type { CallPolicy, CallState, FinalCallerTurn, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffTaskReceipt, TransitionAction, TransitionFailure, TurnInterpretation } from "./model.ts";
+import type { Admission, AdmissionResult, CallPolicy, CallState, FinalCallerTurn, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffTaskReceipt, TransitionAction, TransitionFailure, TurnInterpretation } from "./model.ts";
 import type { LedgerStore } from "./ledger.ts";
 
 export class CallRuntime {
@@ -15,6 +15,33 @@ export class CallRuntime {
       return Promise.resolve({ ok: false, error: { kind: "scopeMismatch" } });
     }
     return this.ledger.start(callId, policy);
+  }
+
+  admit(callId: string, policy: CallPolicy, admission: Admission): Promise<Result<AdmissionResult, TransitionFailure>> {
+    if (policy.scope.tenantId !== this.scope.tenantId || policy.scope.clinicId !== this.scope.clinicId || policy.scope.locationId !== this.scope.locationId) {
+      return Promise.resolve({ ok: false, error: { kind: "scopeMismatch" } });
+    }
+    return this.ledger.admit(callId, policy, admission);
+  }
+
+  activate(callId: string, sessionId: string, now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "sessionActivated", sessionId, now });
+  }
+
+  renewSession(callId: string, sessionId: string, expectedLeaseVersion: number, now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "sessionRenewed", sessionId, expectedLeaseVersion, now });
+  }
+
+  expireAdmission(callId: string, now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "admissionExpired", now });
+  }
+
+  expireSession(callId: string, sessionId: string, expectedLeaseVersion: number, now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "sessionExpired", sessionId, expectedLeaseVersion, now });
+  }
+
+  endCall(callId: string, sessionId: string, now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "callEnded", sessionId, now });
   }
 
   read(callId: string): Promise<Result<CallState, TransitionFailure>> {
@@ -35,12 +62,12 @@ export class CallRuntime {
     return this.update(turn.callId, { kind: "callerTurn", turn, interpretation, now });
   }
 
-  startPresentation(callId: string, presentationId: string): Promise<Result<CallState, TransitionFailure>> {
-    return this.update(callId, { kind: "presentationStarted", presentationId });
+  startPresentation(callId: string, presentationId: string, sessionId?: string, now?: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "presentationStarted", presentationId, ...(sessionId === undefined ? {} : { sessionId }), ...(now === undefined ? {} : { now }) });
   }
 
-  resolvePresentation(callId: string, presentationId: string, status: "played" | "interrupted" | "failed"): Promise<Result<CallState, TransitionFailure>> {
-    return this.update(callId, { kind: "presentationResolved", presentationId, status });
+  resolvePresentation(callId: string, presentationId: string, status: "played" | "interrupted" | "failed", sessionId?: string, now?: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "presentationResolved", presentationId, status, ...(sessionId === undefined ? {} : { sessionId }), ...(now === undefined ? {} : { now }) });
   }
 
   markHostPossiblySent(callId: string, effectId: string, now: string): Promise<Result<CallState, TransitionFailure>> {
