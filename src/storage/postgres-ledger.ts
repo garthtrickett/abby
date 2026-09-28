@@ -2,7 +2,8 @@ import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import { CALL_TERMINAL_REASONS, POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "../core/model.ts";
 import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, Effect, LocationScope, PendingLocationCall, PendingLocationExpiryResult, PendingLocationPrompt, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffItem, StaffQueueEntry, TransitionAction, TransitionFailure } from "../core/model.ts";
-import { admissionReceipt, initialState, sameAdmission } from "../core/ledger.ts";
+import { admissionReceipt, initialAdmittedState, initialState, sameAdmission } from "../core/ledger.ts";
+import { validApprovedGreeting } from "../core/greeting.ts";
 import { LOCATION_CHOICE_TIMEOUT_MS, PENDING_LOCATION_LEASE_MS, closePendingLocationState, expiredPendingLocationState, pendingDueAt, pendingMatchesAdmission, policyMatchesPending, resolveLocationPrompt, startLocationPrompt, validPendingAdmission, validPendingLocation, validPendingRoute } from "../core/pending-location.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { transition } from "../core/transition.ts";
@@ -442,9 +443,8 @@ export class PostgresLedger implements LedgerStore {
         if (!policyMatchesPending(pending, policy)) return err({ kind: "scopeMismatch" });
         const admission: Admission = { ...pending.admission, acceptedAt,
           deadline: new Date(Date.parse(acceptedAt) + 30_000).toISOString() };
-        const state = initialState(callId, policy);
-        state.lifecycle = "starting";
-        state.admission = admission;
+        if (!validApprovedGreeting(policy)) return err({ kind: "invalidTransition" });
+        const state = initialAdmittedState(callId, policy, admission);
         await trx.insertInto("calls").values({ call_id: callId as CallsCallId, tenant_id: policy.scope.tenantId,
           clinic_id: policy.scope.clinicId, location_id: policy.scope.locationId, version: 0,
           policy_version: policy.policyVersion, state }).execute();
@@ -624,9 +624,8 @@ export class PostgresLedger implements LedgerStore {
         if (pending) return err({ kind: "callConflict" });
         const acceptedAt = await this.trustedNow(trx, admission.acceptedAt);
         const storedAdmission: Admission = { ...admission, acceptedAt, deadline: new Date(Date.parse(acceptedAt) + 30_000).toISOString() };
-        const state = initialState(callId, policy);
-        state.lifecycle = "starting";
-        state.admission = storedAdmission;
+        if (!validApprovedGreeting(policy)) return err({ kind: "invalidTransition" });
+        const state = initialAdmittedState(callId, policy, storedAdmission);
         const inserted = await trx.insertInto("calls").values({
           call_id: callId as CallsCallId,
           tenant_id: policy.scope.tenantId,

@@ -57,7 +57,9 @@ test("staff can resolve follow-up after the admitted voice call has ended", asyn
     capabilities: { book: "unavailable" as const, cancel: "requestOnly" as const, reschedule: "requestOnly" as const,
       intake: "requestOnly" as const, transfer: "requestOnly" as const },
     staffDestination: { kind: "owner" as const, ownerRef: "ended-staff-owner" },
-    operatorQueue: { kind: "queue" as const, queueRef: "ended-staff-operator" } };
+    operatorQueue: { kind: "queue" as const, queueRef: "ended-staff-operator" },
+    greeting: { scope, version: "test-greeting-v1", ownerRef: "test-clinic-owner",
+      approvedText: "Hello. How can I help you?", approved: true as const } };
   const callId = "ended-staff-call";
   const runtime = new CallRuntime(new MemoryLedger(), scope);
   const host = new ReferenceClinicHost([], []);

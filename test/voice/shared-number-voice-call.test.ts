@@ -95,14 +95,15 @@ function fixture(kind: "memory" | "postgres", outputPort?: PlaybackPort) {
 }
 
 for (const kind of kinds) {
-  test(`${kind}: connected single-location call reports no uncommitted greeting output`, async () => {
+  test(`${kind}: connected single-location call sends only the committed greeting and records playback`, async () => {
     const app = fixture(kind);
     value(await app.policy.changeAutomationEnabled(app.main, "0", true, "admin"));
     const queued: string[] = [];
+    const synthesized: string[] = [];
     const call = new ConnectedVoiceCall({ event: app.event(app.singleNumber, "connected-single"),
       sessionId: "session", ledger: app.ledger, intake: app.intake, fullFactory: app.fullFactory,
       transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
-      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      synthesis: { async *stream(text) { synthesized.push(text); yield new Uint8Array(640); } },
       output: {
         async queueChunk(id) { queued.push(id); return "queued"; },
         async finishQueue() { return "queued"; },
@@ -111,12 +112,22 @@ for (const kind of kinds) {
     const started = value(await call.begin(now));
     if (started.kind !== "admitted") throw new Error("admission expected");
     assert.deepEqual(started.receipt.scope, app.main);
-    assert.equal(started.delivery.kind, "none");
-    assert.deepEqual(queued, []);
+    assert.equal(started.delivery.kind, "queued");
+    if (started.delivery.kind !== "queued" || !started.delivery.playbackId) throw new Error("greeting was not queued");
+    assert.deepEqual(synthesized, ["Hello. How can I help you?"]);
+    assert.deepEqual(queued, [started.delivery.playbackId]);
+    const stored = value(await app.ledger.read(started.receipt.callId, app.main));
+    const greetingId = started.delivery.playbackId.replace(/:playback$/, "");
+    assert.equal(stored.presentations[greetingId]?.status, "started");
     const invented = await call.acceptPlaybackCompletion({ playbackId: "uncommitted-greeting",
       lastSequence: 0, status: "played" }, at(1));
     assert.ok(!invented.ok);
     assert.equal(invented.error.kind, "playbackUnknown");
+    const played = value(await call.acceptPlaybackCompletion({ playbackId: started.delivery.playbackId,
+      lastSequence: 0, status: "played" }, at(1)));
+    if (!("presentations" in played)) throw new Error("scoped call expected");
+    assert.equal(played.presentations[greetingId]?.status, "played");
+    assert.equal(played.pendingPresentationId, undefined);
     const ended = value(await call.disconnect(at(2)));
     if (!("lifecycle" in ended)) throw new Error("scoped terminal expected");
     assert.equal(ended.lifecycle, "ended");

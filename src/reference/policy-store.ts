@@ -14,6 +14,8 @@ export function referenceDefaultPolicy(scope: LocationScope): CallPolicy {
     capabilities: { book: "unavailable", cancel: "requestOnly", reschedule: "requestOnly", intake: "requestOnly", transfer: "requestOnly" },
     staffDestination: { kind: "owner", ownerRef: `reference-staff:${scope.tenantId}:${scope.clinicId}` },
     operatorQueue: { kind: "queue", queueRef: `reference-review:${scope.tenantId}:${scope.clinicId}` },
+    greeting: { scope: structuredClone(scope), version: "reference-greeting-v1", ownerRef: "reference-fixture",
+      approvedText: "Hello. How can I help you?", approved: true },
   };
 }
 

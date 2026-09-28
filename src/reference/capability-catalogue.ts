@@ -24,6 +24,8 @@ const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: non
     intake: capabilityMode, transfer: capabilityMode }), transferDestinationRef: str,
   staffedIntervals: { type: "array", items: object({ startsAt: str, endsAt: str }), maxItems: 512 },
   staffDestination: destination, operatorQueue: destination, numberRouteVersion: key,
+  greeting: object({ scope, version: key, ownerRef: key, approvedText: { type: "string", minLength: 1, maxLength: 2_000 },
+    approved: { const: true } }),
   knowledgeSnapshot: { type: "array", items: object({ sourceRef: key, version: key }), maxItems: 256, uniqueItems: true } },
 ["scope", "policyVersion", "automationVersion", "automationEnabled", "bookingEnabled", "capabilities", "staffDestination", "operatorQueue"]);
 const auditEntry = { oneOf: [

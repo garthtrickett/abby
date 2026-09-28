@@ -367,8 +367,7 @@ export function transition(current: CallState, action: TransitionAction): Result
     }
     case "admissionExpired": {
       if (state.lifecycle !== "starting" || !state.admission || Date.parse(action.now) < Date.parse(state.admission.deadline)) return err({ kind: "invalidTransition" });
-      state.lifecycle = "ended";
-      state.terminal = { reason: "admissionExpired", at: action.now };
+      endMedia(state, now, "admissionExpired");
       break;
     }
     case "sessionExpired": {

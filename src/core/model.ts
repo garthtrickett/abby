@@ -57,6 +57,13 @@ export type ActionKind = "book" | "cancel" | "reschedule" | "intake";
 export type CapabilityId = ActionKind | "transfer";
 export type CapabilityMode = "execute" | "requestOnly" | "unavailable";
 export type StaffedInterval = Readonly<{ startsAt: string; endsAt: string }>;
+export type ApprovedGreeting = Readonly<{
+  scope: LocationScope;
+  version: string;
+  ownerRef: string;
+  approvedText: string;
+  approved: true;
+}>;
 
 export type CallPolicy = Readonly<{
   scope: LocationScope;
@@ -69,6 +76,8 @@ export type CallPolicy = Readonly<{
   staffedIntervals?: readonly StaffedInterval[];
   staffDestination: StaffDestination;
   operatorQueue: StaffDestination;
+  /** Required for voice admission; optional for legacy and text-only snapshots. */
+  greeting?: ApprovedGreeting;
   numberRouteVersion?: string;
   /** Source versions captured for this call; absent only on legacy or host-owned snapshots. */
   knowledgeSnapshot?: readonly Readonly<{ sourceRef: string; version: string }>[];

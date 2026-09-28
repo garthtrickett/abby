@@ -1,7 +1,7 @@
 import { err } from "./model.ts";
 import type { LocationScope, Result } from "./model.ts";
 
-export const READINESS_REQUIREMENTS = ["hostPermissions", "selectedLocation", "approvedKnowledge", "bookableOffers",
+export const READINESS_REQUIREMENTS = ["hostPermissions", "selectedLocation", "approvedKnowledge", "approvedGreeting", "bookableOffers",
   "staffDestination", "afterHoursDestination", "notificationOwner", "fallbackRoute", "mediaTestCall"] as const;
 export type ReadinessRequirement = typeof READINESS_REQUIREMENTS[number];
 export type ReadinessFailure = Readonly<{ kind: "readinessFailed"; missing: readonly ReadinessRequirement[] }>;

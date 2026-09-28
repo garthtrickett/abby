@@ -5,6 +5,7 @@ import { captureKnowledgeSnapshot, validKnowledgeSnapshot } from "../core/knowle
 import { err, ok } from "../core/model.ts";
 import type { Admission, AdmissionReceipt, AdmissionResult, CallPolicy, ProviderCallKey, Result, TransitionFailure } from "../core/model.ts";
 import { unprovenReadiness } from "../core/readiness.ts";
+import { validApprovedGreeting } from "../core/greeting.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
 
 // The transport adapter authenticates the provider account before constructing this event.
@@ -50,6 +51,7 @@ export class CallAdmissionService {
 
   private async preparePolicy(policy: CallPolicy): Promise<Result<Readonly<{ policy: CallPolicy; acceptedAt: string }>, RouteFailure | TransitionFailure>> {
     if (policy.automationEnabled !== true) return err({ kind: "automationDisabled" });
+    if (!validApprovedGreeting(policy)) return err({ kind: "readinessFailed" });
     let ready = false;
     try {
       const checked = await this.readiness(policy.scope);

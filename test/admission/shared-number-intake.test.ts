@@ -159,7 +159,13 @@ for (const kind of kinds) {
     const chosen = value(await app.intake.choose(event, app.turn(event), app.other.locationId, 1));
     assert.equal(chosen.kind, "created");
     assert.deepEqual(chosen.receipt.scope, app.other);
-    assert.equal(value(await new CallRuntime(app.ledger, app.other).read(chosen.receipt.callId)).policy.numberRouteVersion, "route-v1");
+    const bound = value(await new CallRuntime(app.ledger, app.other).read(chosen.receipt.callId));
+    assert.equal(bound.policy.numberRouteVersion, "route-v1");
+    const greeting = bound.presentations[bound.pendingPresentationId!];
+    assert.equal(greeting?.kind, "notice");
+    if (greeting?.kind !== "notice") throw new Error("scoped greeting expected");
+    assert.equal(greeting.approvedText, value(await app.policy.read(app.other)).greeting?.approvedText);
+    assert.equal(greeting.status, "pending");
     assert.equal(value(await app.ledger.findPendingLocation(chosen.receipt.callId))?.choiceEvidence?.turnId, "choice");
     assert.equal((await new CallRuntime(app.ledger, app.main).read(chosen.receipt.callId)).ok, false);
     assert.equal((await new CallRuntime(app.ledger, app.foreign).read(chosen.receipt.callId)).ok, false);

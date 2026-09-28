@@ -13,5 +13,6 @@
 | D-07 | Where does failed or overdue staff work go? | A required operator review queue is configured before automation; failed task delivery never counts as handoff. | Product and clinic owner; before staff-task implementation. |
 | D-08 | Which market, locale, and quality thresholds govern the first pilot? | Use existing clinic markets; declare sample size, critical failures, latency and language thresholds before pilot traffic. | Product; before pilot design approval. |
 | D-09 | Which telephony route handles failed intake or voice startup? | A provider-owned number fallback, tested while Abby is unavailable; block live-call readiness until proven. | Product and voice engineering; before live routing. |
+| D-10 | What may Abby say first at each location? | Require a location-scoped greeting with recorded clinic approval and owner; block voice admission if absent, and never send it before session activation. The reference greeting is only a synthetic fixture. | Clinic owner; before live routing. |
 
 An engineering proposal remains a proposal until its owner records the decision and evidence. A changed answer updates the PRD, technical contract, scenario expectation, and support matrix where affected.
