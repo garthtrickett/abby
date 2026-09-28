@@ -10,19 +10,25 @@
     "test:text": "node --test --test-concurrency=4 test/text/*.test.ts test/composition/*.test.ts test/admission/*.test.ts test/voice/*.test.ts test/cliniko/*.test.ts",
     "db:migrate": "node scripts/migrate.ts",
     "db:generate": "kanel --config .kanelrc.cjs",
+    "build:dashboard": "esbuild src/standalone/dashboard/main.ts --bundle --format=esm --platform=browser --outfile=dist/dashboard/app.js",
+    "demo:dashboard": "npm run build:dashboard && node src/standalone/dashboard/demo.ts",
+    "test:browser": "npm run build:dashboard && playwright test",
     "test:postgres": "node --test --test-concurrency=4 test/text/*.test.ts test/storage/*.test.ts test/composition/*.test.ts test/admission/*.test.ts test/voice/*.test.ts test/cliniko/*.test.ts",
     "probe:postgres": "bash scripts/with-postgres.sh bash scripts/probe-postgres.sh",
     "test": "npm run typecheck && npm run test:text"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^22.0.0",
     "@types/pg": "8.20.0",
+    "esbuild": "^0.28.2",
     "kanel": "3.16.1",
     "kanel-kysely": "0.7.1",
     "typescript": "^5.9.3"
   },
   "dependencies": {
     "kysely": "0.28.17",
+    "lit-html": "^3.3.3",
     "pg": "8.21.0"
   }
 }

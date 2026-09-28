@@ -1,0 +1,9 @@
+# Standalone lit-html dashboard shell, version 0.1
+
+The standalone browser uses direct `lit-html` `html` and `render` calls. A small controller reads permitted capabilities, displays the current booking setting, submits versioned changes, and reads a scoped call summary by exact call ID. Templates receive typed UI state and event handlers; they contain no booking or provider rules. The browser fetch adapter handles transport faults and malformed replies as typed failures. The server calls the same `CommandGateway` that agents and an embedded host use.
+
+`CallReview` projects a call into lifecycle, version, action kinds/statuses, and staff follow-up reasons/statuses. It omits patient references, approved speech, provider payloads, and full call state. The gateway binds the actor's location scope before reading. A clinic administrator may change the booking setting; staff can view settings and call summaries but cannot submit the change command. Ordinary setting changes affect new calls through their captured policy snapshot.
+
+Run `npm run demo:dashboard` to start the loopback-only reference dashboard at `http://127.0.0.1:3400` with an in-memory clinic and a synthetic call ID `demo-call`. Run `npx playwright install chromium` once, then `npm run test:browser` for parallel Chromium journeys. The browser journeys cover default, enabled, disabled, page reload, next-call capability, tenant isolation, stale-version refresh, scoped call review, and view-only denial through the HTTP command path. `npm test` and `npm run probe:postgres` cover the typed command and ledger paths separately. Browser E2E runs as its own parallel CI job.
+
+The demo binds a fixed local actor and has no production authentication. A deploying host must bind authenticated actors, provide durable storage, and implement the broader call-review and staff-work screens before clinic use. This shell uses no live Cliniko data or media.
