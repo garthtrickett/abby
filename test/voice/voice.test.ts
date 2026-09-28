@@ -210,4 +210,46 @@ for (const kind of kinds) {
     assert.equal(ended.presentations[action.presentationId]?.status, "unproven");
     assert.equal(app.host.bookings(app.scope).length, 0);
   });
+
+  test(`${kind}: newer speech fences a prior turn waiting on host evidence`, async () => {
+    const app = await fixture(kind, `${kind}-stale-host-read`, true);
+    let signalRead!: () => void;
+    const readStarted = new Promise<void>(resolve => { signalRead = resolve; });
+    let releaseRead!: () => void;
+    const readGate = new Promise<void>(resolve => { releaseRead = resolve; });
+    const original = app.host.resolveBooking.bind(app.host);
+    app.host.resolveBooking = async (...args) => {
+      signalRead();
+      await readGate;
+      return original(...args);
+    };
+    const first = value(await app.session.speechStarted(at(2)));
+    value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation: first, utteranceId: "first", text: "Book physio", quality: "clear" }));
+    const staleFinish = app.session.finishTurn(at(3));
+    await readStarted;
+    const second = value(await app.session.speechStarted(at(4)));
+    releaseRead();
+    failure(await staleFinish, "staleTurn");
+    const afterStale = value(await new CallRuntime(app.ledger, app.scope).read(app.callId));
+    assert.equal(Object.keys(afterStale.actions).length, 0);
+    assert.equal(afterStale.processedTurnIds.length, 0);
+    value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation: second, utteranceId: "second", text: "Book physio", quality: "clear" }));
+    const fresh = value(await app.session.finishTurn(at(5)));
+    assert.equal(Object.values(fresh.actions)[0]?.status, "awaitingConfirmation");
+  });
+
+  test(`${kind}: speech onset supersedes unsent details before any playback`, async () => {
+    const app = await fixture(kind, `${kind}-onset-pending`, true);
+    const planned = await bookTurn(app);
+    const action = Object.values(planned.actions)[0];
+    assert.ok(action);
+    value(await app.session.speechStarted(at(4)));
+    const state = value(await new CallRuntime(app.ledger, app.scope).read(app.callId));
+    assert.equal(state.presentations[action.presentationId]?.status, "superseded");
+    assert.equal(state.actions[action.key]?.status, "canceled");
+    assert.equal(state.pendingPresentationId, undefined);
+    failure(await app.session.dispatchPending(at(5)), "deliveryBlocked");
+    assert.equal(app.playback.queued.length, 0);
+    assert.equal(app.host.bookings(app.scope).length, 0);
+  });
 }

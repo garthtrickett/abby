@@ -26,7 +26,8 @@ function auditPayload(action: TransitionAction): Record<string, string> {
     case "sessionActivated":
     case "sessionRenewed":
     case "sessionExpired":
-    case "callEnded": return { sessionId: action.sessionId };
+    case "callEnded":
+    case "speechBegan": return { sessionId: action.sessionId };
     case "admissionExpired": return {};
     case "callerTurn": return { turnId: action.turn.turnId, interpretation: action.interpretation.kind };
     case "presentationStarted":

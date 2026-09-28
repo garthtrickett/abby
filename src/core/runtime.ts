@@ -44,6 +44,10 @@ export class CallRuntime {
     return this.update(callId, { kind: "callEnded", sessionId, now });
   }
 
+  beginSpeech(callId: string, sessionId: string, now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "speechBegan", sessionId, now });
+  }
+
   read(callId: string): Promise<Result<CallState, TransitionFailure>> {
     return this.ledger.read(callId, this.scope);
   }
@@ -58,8 +62,8 @@ export class CallRuntime {
     return this.ledger.apply(callId, this.scope, current.value.version, action);
   }
 
-  acceptTurn(turn: FinalCallerTurn, interpretation: TurnInterpretation, now: string): Promise<Result<CallState, TransitionFailure>> {
-    return this.update(turn.callId, { kind: "callerTurn", turn, interpretation, now });
+  acceptTurn(turn: FinalCallerTurn, interpretation: TurnInterpretation, now: string, expectedConversationRevision?: number): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(turn.callId, { kind: "callerTurn", turn, interpretation, now, ...(expectedConversationRevision === undefined ? {} : { expectedConversationRevision }) });
   }
 
   startPresentation(callId: string, presentationId: string, sessionId?: string, now?: string): Promise<Result<CallState, TransitionFailure>> {

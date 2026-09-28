@@ -261,11 +261,28 @@ export function transition(current: CallState, action: TransitionAction): Result
       endMedia(state);
       break;
     }
+    case "speechBegan": {
+      if (state.lifecycle !== "active" || !state.admission || !state.sessionLease || state.sessionLease.sessionId !== action.sessionId || Date.parse(action.now) >= Date.parse(state.sessionLease.expiresAt)) return err({ kind: "leaseLost" });
+      const pendingId = state.pendingPresentationId;
+      if (pendingId && state.presentations[pendingId]?.status === "pending") {
+        state.presentations[pendingId] = { ...state.presentations[pendingId]!, status: "superseded" };
+        delete state.pendingPresentationId;
+      }
+      for (const [key, candidate] of Object.entries(state.actions)) {
+        const presentation = state.presentations[candidate.presentationId];
+        if (candidate.status === "awaitingConfirmation" && presentation && (presentation.status === "started" || presentation.status === "superseded")) {
+          state.actions[key] = { ...candidate, status: "canceled" };
+        }
+      }
+      state.conversationRevision += 1;
+      break;
+    }
     case "callerTurn": {
       if (current.processedTurnIds.includes(action.turn.turnId)) {
         return current.processedTurnDigests[action.turn.turnId] === turnDigest(action.turn, action.interpretation)
           ? ok(current) : err({ kind: "keyMismatch" });
       }
+      if (action.expectedConversationRevision !== undefined && action.expectedConversationRevision !== current.conversationRevision) return err({ kind: "staleTurn" });
       const result = handleTurn(state, action.turn, action.interpretation, now);
       if (!result.ok) return result;
       break;
