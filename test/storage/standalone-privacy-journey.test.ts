@@ -7,6 +7,7 @@ import { ok } from "../../src/core/model.ts";
 import type { Result } from "../../src/core/model.ts";
 import { ARCHIVE_SECTIONS } from "../../src/portability/archive-envelope.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
+import { StandaloneAvailabilityTextRunner } from "../../src/standalone/availability-text-runner.ts";
 import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
 import { ClinikoPhoneLookup } from "../../src/standalone/cliniko-phone-lookup.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
@@ -200,5 +201,52 @@ test("standalone agent reads provisional Cliniko times without retaining appoint
   assert.deepEqual(await scanPatientDataCanaries(db, [
     { label: "patient_name", value: privateName }, { label: "appointment_id", value: appointmentId },
     { label: "appointment_time", value: startsAt }, { label: "caller_text", value: callerText },
+  ]), { ok: true, value: [] });
+});
+
+test("standalone text ingress presents availability and persists no patient-specific input or result", async () => {
+  const suffix = randomUUID().slice(0, 8);
+  const scope = { tenantId: `availability-entry-${suffix}`, clinicId: "clinic", locationId: "frontdesk" };
+  const now = "2026-10-01T00:00:00Z";
+  const startsAt = "2026-10-02T00:00:00.000Z";
+  const callerText = `caller-entry-${suffix}`;
+  const patientName = `patient-entry-${suffix}`;
+  const appointmentId = `appointment-entry-${suffix}`;
+  const fetchPort: typeof fetch = async input => {
+    const path = new URL(String(input)).pathname;
+    if (path === "/v1/businesses/11") return Response.json({ id: "11", show_in_online_bookings: true,
+      time_zone_identifier: "Australia/Sydney", patient_name: patientName });
+    if (path === "/v1/practitioners/22") return Response.json({ id: "22", active: true, show_in_online_bookings: true });
+    if (path === "/v1/appointment_types/33") return Response.json({ id: "33", show_in_online_bookings: true });
+    if (path === "/v1/businesses/11/practitioners") return Response.json({ total_entries: 1, practitioners: [{ id: "22" }] });
+    if (path === "/v1/practitioners/22/appointment_types") return Response.json({ total_entries: 1, appointment_types: [{ id: "33" }] });
+    if (path.endsWith("/available_times")) return Response.json({ total_entries: 1,
+      available_times: [{ appointment_start: startsAt, appointment_id: appointmentId }] });
+    throw new Error("unexpected Cliniko request");
+  };
+  const reader = value(ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5",
+    contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
+  fetchPort, () => now));
+  const runner = new StandaloneAvailabilityTextRunner(db, scope, reader, () => now);
+  const invalid = await runner.prepare({ text: callerText, from: "2026-10-03", to: "2026-10-02" });
+  assert.deepEqual(invalid, { ok: false, error: { kind: "invalidInput" } });
+  assert.equal((await db.selectFrom("calls").select("call_id")
+    .where("tenant_id", "=", scope.tenantId as never).execute()).length, 0);
+
+  const prepared = value(await runner.prepare({ text: callerText, from: "2026-10-02", to: "2026-10-02" }));
+  assert.match(prepared.callId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.equal(prepared.status, "shown");
+  assert.match(prepared.message, /possible times/);
+  assert.match(prepared.message, /can't reserve or confirm/);
+  assert.deepEqual(await runner.confirmWritten(prepared), { ok: true, value: true });
+  const stored = value(await createStandaloneTextComposition(db, reader).reception.read(scope, prepared.callId));
+  assert.deepEqual(stored.callerMessages, []);
+  assert.deepEqual(stored.availabilityReads, []);
+  assert.deepEqual(stored.staffItems, {});
+  assert.deepEqual(stored.actions, {});
+  assert.equal(stored.presentations[prepared.presentationId]?.status, "played");
+  assert.deepEqual(await scanPatientDataCanaries(db, [
+    { label: "caller_text", value: callerText }, { label: "patient_name", value: patientName },
+    { label: "appointment_id", value: appointmentId }, { label: "appointment_time", value: startsAt },
   ]), { ok: true, value: [] });
 });

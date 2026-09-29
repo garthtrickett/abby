@@ -11,6 +11,7 @@
     "db:migrate": "node scripts/migrate.ts",
     "db:generate": "kanel --config .kanelrc.cjs",
     "phone-index:refresh": "node scripts/refresh-cliniko-phone-index.ts",
+    "text:availability": "node scripts/ask-cliniko-availability.ts",
     "build:dashboard": "esbuild src/standalone/dashboard/main.ts --bundle --format=esm --platform=browser --outfile=dist/dashboard/app.js",
     "demo:dashboard": "npm run build:dashboard && node src/standalone/dashboard/demo.ts",
     "test:browser": "npm run build:dashboard && playwright test",
