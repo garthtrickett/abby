@@ -155,7 +155,7 @@ test("E2E-134 and E2E-137 standalone signed voice keeps the model decision and l
     const refused = await createStandaloneTransientVoiceCall({ db,
       routingHost: new ReferenceNumberRoutingHost([]), stream: authenticated.value,
       send() { throw new Error("must not send media"); },
-      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
+      transcriptionFactory() { throw new Error("privacy preflight must precede provider session creation"); },
       synthesis: { async *stream() { yield new Uint8Array(640); } },
       resolveIntent: async () => ok({ kind: "model" }), readiness });
     assert.deepEqual(refused, { ok: false, error: { kind: "unsafeExistingData", areas: ["settings"] } });

@@ -26,12 +26,15 @@ import type { ClinicNumberRoutingHost } from "../reference/clinic-number-routing
 import { ClinicPolicyRouter } from "../reference/clinic-number-routing.ts";
 import { DisabledStandaloneHost } from "./disabled-host.ts";
 
+type TranscriptionSource =
+  | Readonly<{ transcription: TranscriptionPort; transcriptionFactory?: never }>
+  | Readonly<{ transcription?: never; transcriptionFactory: (sessionId: string) => TranscriptionPort }>;
+
 export type TransientVoiceConfig = Readonly<{
   db: Kysely<Database>;
   routingHost: ClinicNumberRoutingHost;
   stream: AuthenticatedTwilioStream;
   send: (json: string) => "queued" | "notSent" | "uncertain";
-  transcription: TranscriptionPort;
   synthesis: SpeechSynthesisPort;
   resolveIntent: IntentResolver;
   readiness?: AutomationReadiness;
@@ -41,7 +44,7 @@ export type TransientVoiceConfig = Readonly<{
   playbackOptions?: StreamedPlaybackOptions;
   now?: () => string;
   monotonicNow?: () => number;
-}>;
+}> & TranscriptionSource;
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
@@ -55,6 +58,10 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
   if (config.availability && !(config.availability instanceof ClinikoAvailabilityReader)) {
     throw new TypeError("standalone availability requires a Cliniko reader");
   }
+  const sessionId = randomUUID();
+  const transcription = config.transcriptionFactory
+    ? config.transcriptionFactory(sessionId) : config.transcription;
+  if (!transcription) throw new TypeError("standalone transcription unavailable");
   const readiness = config.readiness ?? unprovenReadiness;
   const now = config.now ?? (() => new Date().toISOString());
   const ledger = new MemoryLedger(readiness);
@@ -71,7 +78,7 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
   const reception = new TextReception(ledger, policy, host, config.availability, undefined, undefined, host);
   let call: TwilioConnectedCall | undefined = new TwilioConnectedCall({
     event: config.stream.event, streamStartedAt: config.stream.streamStartedAt,
-    sessionId: randomUUID(), ledger, intake, transcription: config.transcription,
+    sessionId, ledger, intake, transcription,
     synthesis: config.synthesis, send: config.send, now,
     ...(config.callerCandidateLookup ? { callerCandidateLookup: config.callerCandidateLookup } : {}),
     ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}),
