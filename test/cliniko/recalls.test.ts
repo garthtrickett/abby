@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ClinikoRecallReader } from "../../src/cliniko/recalls.ts";
+import { ClinikoRecallWriter } from "../../src/cliniko/recall-write.ts";
 import { ClinikoReadBudget } from "../../src/cliniko/read-budget.ts";
 import type { ClinikoRecallFailure, ClinikoRecallMatch } from "../../src/cliniko/recalls.ts";
 import type { Result } from "../../src/core/model.ts";
@@ -55,6 +56,79 @@ test("exact patient and random-marker lookup returns only a transient recall ref
   assert.equal(requests[0]!.searchParams.get("sort"), "id:asc");
 });
 
+test("Cliniko owns request details while one-attempt create and observe expose only a recall reference", async () => {
+  const summary = "Patient asks staff to discuss a booking";
+  const notes = `Abby request ${marker}\n${summary}`;
+  let writes = 0;
+  const fetchPort: typeof fetch = async (input, init) => {
+    const path = new URL(String(input)).pathname;
+    if (path === "/v1/recalls" && init?.method === "POST") {
+      writes += 1;
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      assert.deepEqual(body, { patient_id: "42", recall_type_id: "7", recall_at: "2026-10-01",
+        notes, recalled: false });
+      assert.equal(init.redirect, "error");
+      return Response.json({ id: "91", notes, recall_at: "2026-10-01", recalled: false, archived_at: null,
+        patient: { links: { self: "https://api.au5.cliniko.com/v1/patients/42" } },
+        recall_type: { links: { self: "https://api.au5.cliniko.com/v1/recall_types/7" } } }, { status: 201 });
+    }
+    assert.equal(init?.method, "GET");
+    return Response.json({ total_entries: 1, recalls: [recall("91", notes)] });
+  };
+  const created = ClinikoRecallWriter.create(config, fetchPort);
+  assert.ok(created.ok);
+  const request = { scope, patientId: "42", recallTypeId: "7", recallAt: "2026-10-01", marker, summary };
+  const sent = await created.value.openOnce(request);
+  assert.deepEqual(sent, { ok: true, value: { kind: "accepted", recallRef: "cliniko:recall:91" } });
+  assert.equal(JSON.stringify(sent).includes(summary), false);
+  const observed = value(await created.value.observe(request));
+  assert.equal(observed.kind, "one");
+  assert.equal(JSON.stringify(observed).includes(summary), false);
+  assert.deepEqual(observed, { kind: "one", scope, recallRef: "cliniko:recall:91", recalled: false,
+    archived: false, observedAt: observed.observedAt });
+  assert.equal(value(await created.value.observe({ ...request, summary: "Different request" })).kind, "mismatch");
+  failure(await created.value.openOnce(request), "invalidQuery");
+  assert.equal(writes, 1);
+});
+
+test("a lost or malformed create response stays uncertain and cannot send the marker again", async () => {
+  for (const responseKind of ["lost", "malformed", "rateLimited"] as const) {
+    let writes = 0;
+    const fetchPort: typeof fetch = async (_input, init) => {
+      if (init?.method === "POST") {
+        writes += 1;
+        if (responseKind === "lost") throw new Error("response lost after send");
+        if (responseKind === "rateLimited") return new Response(null, { status: 429 });
+        return Response.json({ id: "91", notes: "unexpected" }, { status: 201 });
+      }
+      return Response.json({ total_entries: 0, recalls: [] });
+    };
+    const created = ClinikoRecallWriter.create(config, fetchPort);
+    assert.ok(created.ok);
+    const request = { scope, patientId: "42", recallTypeId: "7", recallAt: "2026-10-01", marker,
+      summary: "Please contact the patient" };
+    assert.deepEqual(await created.value.openOnce(request), { ok: true, value: { kind: "uncertain" } });
+    assert.equal(value(await created.value.observe(request)).kind, "none");
+    failure(await created.value.openOnce(request), "invalidQuery");
+    assert.equal(writes, 1);
+  }
+});
+
+test("invalid recall scope and fields fail before a provider write", async () => {
+  let writes = 0;
+  const created = ClinikoRecallWriter.create(config, async () => { writes += 1; throw new Error("unexpected send"); });
+  assert.ok(created.ok);
+  const request = { scope, patientId: "42", recallTypeId: "7", recallAt: "2026-10-01", marker,
+    summary: "Please contact the patient" };
+  failure(await created.value.openOnce({ ...request, scope: { ...scope, clinicId: "other" } }), "scopeMismatch");
+  failure(await created.value.openOnce({ ...request, patientId: "patient name" }), "invalidQuery");
+  failure(await created.value.openOnce({ ...request, patientId: 42 as unknown as string }), "invalidQuery");
+  failure(await created.value.openOnce({ ...request, recallAt: "2026-02-30" }), "invalidQuery");
+  failure(await created.value.openOnce({ ...request, marker: "patient name" }), "invalidQuery");
+  failure(await created.value.openOnce({ ...request, summary: "" }), "invalidQuery");
+  assert.equal(writes, 0);
+});
+
 test("lookup scans all pages before declaring a miss or unique match", async () => {
   const pages: number[] = [];
   const fetchPort: typeof fetch = async input => {
@@ -75,6 +149,9 @@ test("lookup scans all pages before declaring a miss or unique match", async () 
 test("duplicate exact markers are ambiguous and archived reads use an explicit filter", async () => {
   const duplicate = reader(async () => Response.json({ total_entries: 2, recalls: [recall("1"), recall("2")] }));
   assert.equal(value(await duplicate.findByMarker(scope, "42", marker)).kind, "ambiguous");
+  const mixed = reader(async () => Response.json({ total_entries: 2,
+    recalls: [recall("1"), recall("2", `Abby request ${marker}\nDifferent request`)] }));
+  assert.equal(value(await mixed.findByMarker(scope, "42", marker)).kind, "ambiguous");
   const archivedReader = reader(async input => {
     assert.deepEqual(new URL(String(input)).searchParams.getAll("q[]"), ["patient_id:=42", "archived_at:*"]);
     return Response.json({ total_entries: 1, recalls: [recall("2", marker, "42", observedAt)] });

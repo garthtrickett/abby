@@ -2,6 +2,7 @@ import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import { ClinikoReadBudget } from "./read-budget.ts";
 import type { ClinikoClinicScope } from "./patients.ts";
+import { matchesRecallMarker, validRecallMarker } from "./recall-note.ts";
 
 export type ClinikoRecallFailure = Readonly<{
   kind: "invalidConfig" | "scopeMismatch" | "invalidQuery" | "forbidden" | "rateLimited" |
@@ -9,7 +10,7 @@ export type ClinikoRecallFailure = Readonly<{
   resetAt?: string;
 }>;
 export type ClinikoRecallMatch = Readonly<{ scope: ClinikoClinicScope; observedAt: string }> & (
-  | Readonly<{ kind: "none" | "ambiguous" }>
+  | Readonly<{ kind: "none" | "ambiguous" | "mismatch" }>
   | Readonly<{ kind: "one"; recallRef: string; recalled: boolean; archived: boolean }>
 );
 export type ClinikoRecallConfig = Readonly<{
@@ -20,7 +21,6 @@ export type ClinikoRecallConfig = Readonly<{
 }>;
 
 const idPattern = /^[1-9][0-9]*$/;
-const markerPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const emailPattern = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
 const pageSize = 100;
 const maxPages = 5;
@@ -36,7 +36,7 @@ function validScope(value: unknown): value is ClinikoClinicScope {
     .every(part => typeof part === "string" && !!part.trim() && part.length <= 256);
 }
 
-async function boundedJson(response: Response): Promise<Result<unknown, ClinikoRecallFailure>> {
+export async function boundedRecallJson(response: Response): Promise<Result<unknown, ClinikoRecallFailure>> {
   if (!response.body) return err({ kind: "malformed" });
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -94,13 +94,16 @@ export class ClinikoRecallReader {
   }
 
   /** Reads one patient's active or archived recalls and matches an exact random marker in notes. */
-  async findByMarker(scope: ClinikoClinicScope, patientId: string, marker: string, archived = false):
+  async findByMarker(scope: ClinikoClinicScope, patientId: string, marker: string, archived = false,
+                     expectedNotes?: string):
     Promise<Result<ClinikoRecallMatch, ClinikoRecallFailure>> {
     if (!validScope(scope) || scope.tenantId !== this.scope.tenantId || scope.clinicId !== this.scope.clinicId) {
       return err({ kind: "scopeMismatch" });
     }
     if (typeof patientId !== "string" || !idPattern.test(patientId) ||
-        typeof marker !== "string" || !markerPattern.test(marker) || typeof archived !== "boolean") {
+        !validRecallMarker(marker) || typeof archived !== "boolean" ||
+        (expectedNotes !== undefined && (typeof expectedNotes !== "string" ||
+          !expectedNotes.startsWith(`Abby request ${marker}\n`)))) {
       return err({ kind: "invalidQuery" });
     }
     let observedAt: string;
@@ -109,7 +112,7 @@ export class ClinikoRecallReader {
     if (typeof observedAt !== "string" || !Number.isFinite(Date.parse(observedAt))) return err({ kind: "unavailable" });
 
     const seen = new Set<string>();
-    const matches: Array<{ id: string; recalled: boolean; archived: boolean }> = [];
+    const matches: Array<{ id: string; notes: string | null; recalled: boolean; archived: boolean }> = [];
     let totalEntries: number | undefined;
     let lastId = 0n;
     for (let page = 1; page <= maxPages; page += 1) {
@@ -129,7 +132,7 @@ export class ClinikoRecallReader {
       if (response.status === 429) return err(this.rateBudget.observe429(response.headers.get("X-RateLimit-Reset")));
       if (response.status >= 500 || response.status === 404) return err({ kind: "unavailable" });
       if (response.status !== 200) return err({ kind: "malformed" });
-      const parsed = await boundedJson(response);
+      const parsed = await boundedRecallJson(response);
       if (!parsed.ok) return parsed;
       const body = record(parsed.value);
       if (!body || !Number.isSafeInteger(body.total_entries) || Number(body.total_entries) < 0 ||
@@ -155,7 +158,8 @@ export class ClinikoRecallReader {
         if (numericId <= lastId) return err({ kind: "malformed" });
         lastId = numericId;
         seen.add(recall.id);
-        if (recall.notes === marker) matches.push({ id: recall.id, recalled: recall.recalled === true, archived });
+        if (matchesRecallMarker(recall.notes as string | null, marker)) matches.push({ id: recall.id,
+          notes: recall.notes as string | null, recalled: recall.recalled === true, archived });
       }
       if (seen.size === totalEntries) break;
     }
@@ -163,6 +167,7 @@ export class ClinikoRecallReader {
     const base = { scope: structuredClone(this.scope), observedAt };
     if (matches.length === 0) return ok({ ...base, kind: "none" });
     if (matches.length > 1) return ok({ ...base, kind: "ambiguous" });
+    if (expectedNotes !== undefined && matches[0]!.notes !== expectedNotes) return ok({ ...base, kind: "mismatch" });
     return ok({ ...base, kind: "one", recallRef: `cliniko:recall:${matches[0]!.id}`,
       recalled: matches[0]!.recalled, archived: matches[0]!.archived });
   }
