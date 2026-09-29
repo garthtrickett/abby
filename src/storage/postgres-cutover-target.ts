@@ -29,6 +29,8 @@ type AutomationRow = { version: number; enabled: boolean; changed_by: string | n
 type KnowledgeRow = { source_ref: string; version: number; status: string; owner_ref: string;
   answer_text: string; effective_from: Date; effective_until: Date; actor_ref: string; changed_at: Date };
 type KnowledgeHead = { source_ref: string; version: number; effective_version: number | null };
+type TargetTotals = { policies: string; automation: string; knowledgeEvents: string;
+  knowledgeHeads: string; writeStops: string };
 
 function sameInstant(actual: Date | null, expected: string | null): boolean {
   return expected === null ? actual === null : actual instanceof Date && actual.toISOString() === expected;
@@ -52,6 +54,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       sameScope(item.sourceScope, sourceScope) && sameScope(item.targetScope, targetScope));
     return decisions.length === 1 ? decisions[0]!.targetRef : null;
   } };
+  const expectedTotals = { policies: 0, automation: 0, knowledgeEvents: 0, knowledgeHeads: 0, writeStops: 0 };
   for (const location of data.locations) {
     const clinic = data.clinics.find(item => item.sourceClinicId === location.sourceScope.clinicId);
     if (!clinic) return false;
@@ -66,6 +69,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       and location_id = ${location.targetScope.locationId} order by version`.execute(trx)).rows;
     const head = expectedRows.find(row => row.isHead)!;
     if (actualPolicies.length !== expectedRows.length + Number(head.policy.bookingEnabled)) return false;
+    expectedTotals.policies += actualPolicies.length;
     for (const [index, expected] of expectedRows.entries()) {
       const actual = actualPolicies[index];
       if (!actual || actual.version !== expected.version || !isDeepStrictEqual(actual.policy, expected.policy) ||
@@ -88,6 +92,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
     const expectedKnowledge = new Map(mapped.value.knowledgeEntries.map(entry =>
       [JSON.stringify([entry.sourceRef, Number(entry.version)]), entry] as const));
     if (actualKnowledge.length !== expectedKnowledge.size) return false;
+    expectedTotals.knowledgeEvents += actualKnowledge.length;
     for (const actual of actualKnowledge) {
       const expected = expectedKnowledge.get(JSON.stringify([actual.source_ref, actual.version]));
       if (!expected ||
@@ -106,6 +111,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       if (!current || Number(entry.version) > Number(current.version)) sourceHeads.set(entry.sourceRef, entry);
     }
     if (heads.length !== sourceHeads.size) return false;
+    expectedTotals.knowledgeHeads += heads.length;
     for (const actual of heads) {
       const latest = sourceHeads.get(actual.source_ref);
       if (!latest || actual.version !== Number(latest.version) ||
@@ -122,6 +128,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       from clinic_automation where tenant_id = ${data.targetTenantId} and clinic_id = ${location.targetScope.clinicId}
       order by version`.execute(trx)).rows;
     if (actualRows.length !== expectedRows.length + Number(head.enabled)) return false;
+    expectedTotals.automation += actualRows.length;
     for (const [index, expected] of expectedRows.entries()) {
       const actual = actualRows[index];
       if (!actual || actual.version !== expected.version || actual.enabled !== expected.enabled ||
@@ -136,6 +143,16 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
     const stop = (await sql<{ version: number; stopped: boolean; actor_ref: string }>`select version, stopped, actor_ref
       from clinic_write_stop where tenant_id = ${data.targetTenantId} and clinic_id = ${location.targetScope.clinicId}`.execute(trx)).rows[0];
     if (!stop || stop.version !== 1 || !stop.stopped || stop.actor_ref !== actor) return false;
+    expectedTotals.writeStops += 1;
   }
-  return true;
+  // Scope-level checks above cannot see rows added under an unlisted target clinic or location.
+  // Count the entire tenant before number publication so those rows cannot escape reconciliation.
+  const totals = (await sql<TargetTotals>`select
+    (select count(*)::text from clinic_settings where tenant_id = ${data.targetTenantId}) as policies,
+    (select count(*)::text from clinic_automation where tenant_id = ${data.targetTenantId}) as automation,
+    (select count(*)::text from clinic_knowledge_events where tenant_id = ${data.targetTenantId}) as "knowledgeEvents",
+    (select count(*)::text from clinic_knowledge_heads where tenant_id = ${data.targetTenantId}) as "knowledgeHeads",
+    (select count(*)::text from clinic_write_stop where tenant_id = ${data.targetTenantId}) as "writeStops"`.execute(trx)).rows[0];
+  return !!totals && (Object.keys(expectedTotals) as (keyof TargetTotals)[]).every(key =>
+    totals[key] === String(expectedTotals[key]));
 }
