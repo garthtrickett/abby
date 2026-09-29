@@ -19,6 +19,7 @@ import { up as up016, down as down016 } from "./migrations/016_patient_phone_sca
 import { up as up017, down as down017 } from "./migrations/017_phone_normalization_plan.ts";
 import { up as up018, down as down018 } from "./migrations/018_phone_index_connection.ts";
 import { up as up019, down as down019 } from "./migrations/019_phone_scan_verification_index.ts";
+import { up as up020, down as down020 } from "./migrations/020_cliniko_request_budget.ts";
 
 function createMigrator<DB>(db: Kysely<DB>): Migrator {
   return new Migrator({
@@ -43,6 +44,7 @@ function createMigrator<DB>(db: Kysely<DB>): Migrator {
       "017_phone_normalization_plan": { up: up017, down: down017 },
       "018_phone_index_connection": { up: up018, down: down018 },
       "019_phone_scan_verification_index": { up: up019, down: down019 },
+      "020_cliniko_request_budget": { up: up020, down: down020 },
     }) },
   });
 }
@@ -58,6 +60,6 @@ export async function migrate<DB>(db: Kysely<DB>, direction: "up" | "down" = "up
 }
 
 /** Used by the upgrade probe to boot an actual older schema before seeding data. */
-export async function migrateTo<DB>(db: Kysely<DB>, target: "001_text_probe" | "002_booking_setting_audit" | "003_tenant_scope_constraints" | "004_automation_setting_audit" | "005_clinic_write_stop" | "006_write_stop_recovery" | "007_clinic_knowledge" | "008_pending_location_calls" | "009_effect_call_leases" | "010_effect_call_lease_versions" | "011_portability_fence" | "012_config_import_registry" | "013_number_cutover" | "014_patient_phone_index" | "015_remove_turn_digests" | "016_patient_phone_scan" | "017_phone_normalization_plan" | "018_phone_index_connection" | "019_phone_scan_verification_index"): Promise<void> {
+export async function migrateTo<DB>(db: Kysely<DB>, target: "001_text_probe" | "002_booking_setting_audit" | "003_tenant_scope_constraints" | "004_automation_setting_audit" | "005_clinic_write_stop" | "006_write_stop_recovery" | "007_clinic_knowledge" | "008_pending_location_calls" | "009_effect_call_leases" | "010_effect_call_lease_versions" | "011_portability_fence" | "012_config_import_registry" | "013_number_cutover" | "014_patient_phone_index" | "015_remove_turn_digests" | "016_patient_phone_scan" | "017_phone_normalization_plan" | "018_phone_index_connection" | "019_phone_scan_verification_index" | "020_cliniko_request_budget"): Promise<void> {
   assertMigration(await createMigrator(db).migrateTo(target));
 }

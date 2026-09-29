@@ -1,6 +1,7 @@
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
-import { ClinikoReadBudget } from "./read-budget.ts";
+import { claimClinikoBudget, ClinikoReadBudget, isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
+import type { ClinikoRequestBudget } from "./read-budget.ts";
 import { normalizePatientPhone } from "./phone-number.ts";
 
 export type ClinikoClinicScope = Pick<LocationScope, "tenantId" | "clinicId">;
@@ -8,7 +9,7 @@ export type ClinikoPatientConfig = Readonly<{
   scope: ClinikoClinicScope;
   apiKey: string;
   contactEmail: string;
-  rateBudget?: ClinikoReadBudget;
+  rateBudget?: ClinikoRequestBudget;
 }>;
 
 /** A candidate is never a verification proof or permission to disclose a record. */
@@ -92,7 +93,7 @@ export class ClinikoPatientCandidateReader {
   private readonly userAgent: string;
   private readonly fetchPort: typeof fetch;
   private readonly clock: () => string;
-  private readonly rateBudget: ClinikoReadBudget;
+  private readonly rateBudget: ClinikoRequestBudget;
 
   private constructor(config: ClinikoPatientConfig, shard: string, fetchPort: typeof fetch, clock: () => string) {
     this.scope = { tenantId: config.scope.tenantId, clinicId: config.scope.clinicId };
@@ -109,7 +110,7 @@ export class ClinikoPatientCandidateReader {
     const shard = typeof config?.apiKey === "string" ? config.apiKey.match(/-([a-z]{2}[0-9]{1,2})$/)?.[1] : undefined;
     if (!shard || !config.apiKey.slice(0, -(shard.length + 1)) || /[\u0000-\u001f\u007f]/.test(config.apiKey) || !validScope(config.scope) ||
         !validEmail(config.contactEmail) || typeof fetchPort !== "function" || typeof clock !== "function" ||
-        (config.rateBudget !== undefined && !(config.rateBudget instanceof ClinikoReadBudget))) {
+        (config.rateBudget !== undefined && !isClinikoRequestBudget(config.rateBudget))) {
       return err({ kind: "invalidConfig" });
     }
     return ok(new ClinikoPatientCandidateReader(config, shard, fetchPort, clock));
@@ -131,7 +132,7 @@ export class ClinikoPatientCandidateReader {
     const query = new URLSearchParams({ page: "1", per_page: "2" });
     query.append("q[]", `email:=${email}`);
     query.append("q[]", `date_of_birth:=${dateOfBirth}`);
-    const limited = this.rateBudget.claim();
+    const limited = await claimClinikoBudget(this.rateBudget);
     if (limited) return err(limited);
     let response: Response;
     try {
@@ -142,7 +143,7 @@ export class ClinikoPatientCandidateReader {
       });
     } catch { return err({ kind: "unavailable" }); }
     if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
-    if (response.status === 429) return err(this.rateBudget.observe429(response.headers.get("X-RateLimit-Reset")));
+    if (response.status === 429) return err(await observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset")));
     if (response.status >= 500 || response.status === 404) return err({ kind: "unavailable" });
     if (response.status !== 200) return err({ kind: "malformed" });
     const parsed = await boundedJson(response);
@@ -187,9 +188,9 @@ export class ClinikoPatientCandidateReader {
       catch { return false; }
     };
     for (let page = startPage; ;) {
-      const limited = this.rateBudget.claim();
+      const limited = await claimClinikoBudget(this.rateBudget);
       if (limited) {
-        if (await pause(limited.resetAt)) continue;
+        if (limited.kind === "rateLimited" && await pause(limited.resetAt)) continue;
         yield err(limited); return;
       }
       const query = new URLSearchParams({ page: String(page), per_page: "100", sort: "id:asc" });
@@ -202,7 +203,7 @@ export class ClinikoPatientCandidateReader {
       } catch { yield err({ kind: "unavailable" }); return; }
       if (response.status === 401 || response.status === 403) { yield err({ kind: "forbidden" }); return; }
       if (response.status === 429) {
-        const limited = this.rateBudget.observe429(response.headers.get("X-RateLimit-Reset"));
+        const limited = await observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset"));
         if (await pause(limited.resetAt)) continue;
         yield err(limited); return;
       }
@@ -290,7 +291,7 @@ export class ClinikoPatientCandidateReader {
     }
     if (!patientIdPattern.test(patientId) || !/^\+[1-9][0-9]{7,14}$/.test(normalizedPhone) ||
         !/^[1-9][0-9]{0,2}$/.test(countryCallingCode)) return err({ kind: "invalidQuery" });
-    const limited = this.rateBudget.claim();
+    const limited = await claimClinikoBudget(this.rateBudget);
     if (limited) return err(limited);
     let response: Response;
     try {
@@ -301,7 +302,7 @@ export class ClinikoPatientCandidateReader {
     } catch { return err({ kind: "unavailable" }); }
     if (response.status === 404) return ok(false);
     if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
-    if (response.status === 429) return err(this.rateBudget.observe429(response.headers.get("X-RateLimit-Reset")));
+    if (response.status === 429) return err(await observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset")));
     if (response.status >= 500) return err({ kind: "unavailable" });
     if (response.status !== 200) return err({ kind: "malformed" });
     const parsed = await boundedJson(response);

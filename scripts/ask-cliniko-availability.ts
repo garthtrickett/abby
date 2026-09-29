@@ -1,6 +1,7 @@
 import { ClinikoAvailabilityReader } from "../src/cliniko/availability.ts";
 import { StandaloneAvailabilityTextRunner } from "../src/standalone/availability-text-runner.ts";
 import { connectPostgres } from "../src/storage/connect.ts";
+import { PostgresClinikoRequestBudget } from "../src/storage/postgres-cliniko-request-budget.ts";
 import { checkStandaloneTextDatabase } from "../src/storage/standalone-privacy-preflight.ts";
 
 function required(name: string): string {
@@ -33,15 +34,19 @@ let responseWritten = false;
 async function main(): Promise<void> {
   const scope = { tenantId: required("ABBY_TENANT_ID"), clinicId: required("ABBY_CLINIC_ID"),
     locationId: required("ABBY_LOCATION_ID") };
-  const reader = ClinikoAvailabilityReader.create({ scope,
-    apiKey: required("ABBY_CLINIKO_API_KEY"), contactEmail: required("ABBY_CLINIKO_CONTACT_EMAIL"),
-    businessId: required("ABBY_CLINIKO_BUSINESS_ID"), practitionerId: required("ABBY_CLINIKO_PRACTITIONER_ID"),
-    appointmentTypeId: required("ABBY_CLINIKO_APPOINTMENT_TYPE_ID") });
-  if (!reader.ok) { await write({ ok: false, error: reader.error }); process.exitCode = 1; return; }
+  const apiKey = required("ABBY_CLINIKO_API_KEY");
   const db = connectPostgres(required("DATABASE_URL"));
   try {
     const safe = await checkStandaloneTextDatabase(db);
     if (!safe.ok) { await write(safe); process.exitCode = 1; return; }
+    const rateBudget = new PostgresClinikoRequestBudget(db, { apiKey,
+      ...(process.env.ABBY_CLINIKO_BUDGET_USER_REF
+        ? { sharedUserRef: process.env.ABBY_CLINIKO_BUDGET_USER_REF } : {}) });
+    const reader = ClinikoAvailabilityReader.create({ scope, apiKey, rateBudget,
+      contactEmail: required("ABBY_CLINIKO_CONTACT_EMAIL"),
+      businessId: required("ABBY_CLINIKO_BUSINESS_ID"), practitionerId: required("ABBY_CLINIKO_PRACTITIONER_ID"),
+      appointmentTypeId: required("ABBY_CLINIKO_APPOINTMENT_TYPE_ID") });
+    if (!reader.ok) { await write({ ok: false, error: reader.error }); process.exitCode = 1; return; }
     const request = await input();
     const runner = new StandaloneAvailabilityTextRunner(db, scope, reader.value);
     const prepared = await runner.prepare(request as Parameters<typeof runner.prepare>[0]);

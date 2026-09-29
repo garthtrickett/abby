@@ -1,6 +1,7 @@
 import { err, ok } from "../core/model.ts";
 import type { AvailabilityRead, AvailabilityReadFailure, LocationScope, Result } from "../core/model.ts";
-import { ClinikoReadBudget } from "./read-budget.ts";
+import { claimClinikoBudget, ClinikoReadBudget, isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
+import type { ClinikoRequestBudget } from "./read-budget.ts";
 
 export type ClinikoAvailabilityConfig = Readonly<{
   scope: LocationScope;
@@ -9,7 +10,7 @@ export type ClinikoAvailabilityConfig = Readonly<{
   businessId: string;
   practitionerId: string;
   appointmentTypeId: string;
-  rateBudget?: ClinikoReadBudget;
+  rateBudget?: ClinikoRequestBudget;
 }>;
 
 export type ClinikoAvailabilityFailure = AvailabilityReadFailure;
@@ -81,7 +82,7 @@ export class ClinikoAvailabilityReader {
   private readonly userAgent: string;
   private readonly fetchPort: typeof fetch;
   private readonly observedClock: () => string;
-  private readonly rateBudget: ClinikoReadBudget;
+  private readonly rateBudget: ClinikoRequestBudget;
 
   private constructor(config: ClinikoAvailabilityConfig, shard: string, fetchPort: typeof fetch, observedClock: () => string) {
     this.scope = structuredClone(config.scope);
@@ -101,7 +102,7 @@ export class ClinikoAvailabilityReader {
     if (!shard || !config.apiKey.slice(0, -(shard.length + 1)) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.contactEmail) ||
         !config.scope.tenantId || !config.scope.clinicId || !config.scope.locationId ||
         !validId(config.businessId) || !validId(config.practitionerId) || !validId(config.appointmentTypeId) ||
-        (config.rateBudget !== undefined && !(config.rateBudget instanceof ClinikoReadBudget))) return err({ kind: "invalidConfig" });
+        (config.rateBudget !== undefined && !isClinikoRequestBudget(config.rateBudget))) return err({ kind: "invalidConfig" });
     return ok(new ClinikoAvailabilityReader(config, shard, fetchPort, observedClock));
   }
 
@@ -111,7 +112,7 @@ export class ClinikoAvailabilityReader {
   }
 
   private async get(path: string): Promise<Result<unknown, ClinikoAvailabilityFailure>> {
-    const limited = this.rateBudget.claim();
+    const limited = await claimClinikoBudget(this.rateBudget);
     if (limited) return err(limited);
     let response: Response;
     try {
@@ -126,7 +127,7 @@ export class ClinikoAvailabilityReader {
     }
     if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
     if (response.status === 404) return err({ kind: "notFound" });
-    if (response.status === 429) return err(this.rateBudget.observe429(response.headers.get("X-RateLimit-Reset")));
+    if (response.status === 429) return err(await observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset")));
     if (response.status === 422) return err({ kind: "invalidRange" });
     if (response.status >= 500) return err({ kind: "unavailable" });
     if (response.status !== 200) return err({ kind: "malformed" });
