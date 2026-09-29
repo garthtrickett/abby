@@ -48,7 +48,6 @@ export function initialState(callId: string, policy: CallPolicy): CallState {
     version: 0,
     conversationRevision: 0,
     processedTurnIds: [],
-    processedTurnDigests: {},
     actions: {},
     presentations: {},
     effects: {},

@@ -332,7 +332,6 @@ export type CallState = {
   version: number;
   conversationRevision: number;
   processedTurnIds: string[];
-  processedTurnDigests: Record<string, string>;
   actions: Record<string, ActionState>;
   presentations: Record<string, Presentation>;
   pendingPresentationId?: string;

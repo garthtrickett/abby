@@ -45,7 +45,7 @@ function decodeState(value: unknown, callId: string): Result<CallState, Transiti
       ((data.policy as { knowledgeSnapshot?: unknown }).knowledgeSnapshot !== undefined &&
         !validKnowledgeSnapshot((data.policy as { knowledgeSnapshot: unknown }).knowledgeSnapshot)) ||
       typeof data.actions !== "object" || data.actions === null || typeof data.presentations !== "object" || data.presentations === null || typeof data.effects !== "object" || data.effects === null ||
-      !Array.isArray(data.processedTurnIds) || typeof data.processedTurnDigests !== "object" || data.processedTurnDigests === null || !Array.isArray(data.callerMessages) ||
+      !Array.isArray(data.processedTurnIds) || !Array.isArray(data.callerMessages) ||
       (data.knowledgeAnswers !== undefined && !Array.isArray(data.knowledgeAnswers)) ||
       (data.availabilityReads !== undefined && !Array.isArray(data.availabilityReads)) ||
       (data.appointmentReads !== undefined && !Array.isArray(data.appointmentReads)) ||
@@ -57,7 +57,8 @@ function decodeState(value: unknown, callId: string): Result<CallState, Transiti
         const kind = effect && typeof effect === "object" ? (effect as { kind?: unknown }).kind : undefined;
         return (kind === "model" || kind === "modelKnowledge") && !validModelEffect(effect, id);
       })) return err({ kind: "storageCorrupt" });
-  return ok({ ...(value as CallState), knowledgeAnswers: Array.isArray(data.knowledgeAnswers) ? data.knowledgeAnswers as CallState["knowledgeAnswers"] : [],
+  const { processedTurnDigests: _legacyDigests, ...withoutTurnDigests } = value as CallState & { processedTurnDigests?: unknown };
+  return ok({ ...withoutTurnDigests, knowledgeAnswers: Array.isArray(data.knowledgeAnswers) ? data.knowledgeAnswers as CallState["knowledgeAnswers"] : [],
     availabilityReads: Array.isArray(data.availabilityReads) ? data.availabilityReads as CallState["availabilityReads"] : [],
     appointmentReads: Array.isArray(data.appointmentReads) ? data.appointmentReads as CallState["appointmentReads"] : [] });
 }
