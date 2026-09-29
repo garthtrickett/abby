@@ -21,6 +21,7 @@
     "eval:model": "node scripts/evaluate-model.ts",
     "eval:availability-intent": "node scripts/evaluate-availability-intent.ts",
     "eval:transcription": "node scripts/evaluate-transcription.ts",
+    "eval:file-transcription": "node scripts/evaluate-file-transcription.ts",
     "eval:speech-loop": "node scripts/evaluate-speech-loop.ts",
     "eval:speech-fallback": "node scripts/evaluate-first-chunk-fallback.ts",
     "probe:postgres": "bash scripts/with-postgres.sh bash scripts/probe-postgres.sh",
