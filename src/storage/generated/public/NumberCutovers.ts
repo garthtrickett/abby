@@ -33,6 +33,10 @@ export default interface NumberCutoversTable {
   state: ColumnType<string, string, string>;
 
   updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
+
+  phone_index_country_calling_code: ColumnType<string | null, string | null, string | null>;
+
+  phone_index_max_age_ms: ColumnType<number | null, number | null, number | null>;
 }
 
 export type NumberCutovers = Selectable<NumberCutoversTable>;
