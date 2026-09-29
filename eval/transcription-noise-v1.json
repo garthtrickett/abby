@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "version": "transcription-noise-v1",
+  "audioFormat": "mono-pcm16le-16000",
+  "cases": [
+    {
+      "id": "NS-001", "category": "availability-date-kal-noise",
+      "file": "availability-thursday-kal-white-10db-pcmu-8k.pcm", "sha256": "4c0f89cf66ad975b340162747bca58162569a8d496f01cdb71c4dbb20cf0c5e9",
+      "expectedText": "Are there appointments available on Thursday?", "criticalTerms": ["Thursday"]
+    },
+    {
+      "id": "NS-002", "category": "booking-request-kal-noise",
+      "file": "book-friday-kal-white-10db-pcmu-8k.pcm", "sha256": "ede31b5da32bb6222b982dfafdc17134d01d2a5e35bb6b7ec7c05455af7f610e",
+      "expectedText": "Please book the first appointment on Friday.", "criticalTerms": ["book", "Friday"]
+    },
+    {
+      "id": "NS-003", "category": "urgent-language-kal-noise",
+      "file": "urgent-monday-kal-white-10db-pcmu-8k.pcm", "sha256": "185a21430c72e911d092ea578f0748ad6ca35d7289b764f0c97fac3f2d2f0495",
+      "expectedText": "I have chest pain. Should I wait until Monday?", "criticalTerms": ["chest", "pain"]
+    },
+    {
+      "id": "NS-004", "category": "availability-date-slt-noise",
+      "file": "availability-thursday-slt-white-10db-pcmu-8k.pcm", "sha256": "476b330c032d23f0acb2ea1d88d0d00b447d2ade928d405afe5de1a0e13cce08",
+      "expectedText": "Are there appointments available on Thursday?", "criticalTerms": ["Thursday"]
+    },
+    {
+      "id": "NS-005", "category": "booking-request-slt-noise",
+      "file": "book-friday-slt-white-10db-pcmu-8k.pcm", "sha256": "9aae18f17d26c003055c5726ba9e28d9226e3ab2b5a394dc933dc632a3c4d6df",
+      "expectedText": "Please book the first appointment on Friday.", "criticalTerms": ["book", "Friday"]
+    },
+    {
+      "id": "NS-006", "category": "urgent-language-slt-noise",
+      "file": "urgent-monday-slt-white-10db-pcmu-8k.pcm", "sha256": "5f8dee408c6a256936a02b6db29bdea788c41161fb277d4970ab8217c20ebb10",
+      "expectedText": "I have chest pain. Should I wait until Monday?", "criticalTerms": ["chest", "pain"]
+    }
+  ]
+}

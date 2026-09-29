@@ -67,3 +67,17 @@ The fixed patient-free `speech-loop-v1` phrases were run through the real Speech
 | Larger repeat | 40 | 4 | 40 | 32 / 8 | 765 / 2,778 / 3,401 ms | 3,816 / 4,269 ms |
 
 Neither run had a failed queue, uncertain output, or a first queued chunk over 5,000 ms. The owner-only reports are `eval/results/2026-09-29-first-chunk-fallback-v1.json` and `eval/results/2026-09-29-first-chunk-fallback-40-v1.json`; both pin corpus SHA-256 `b02fc915affa082502d417bf3eaaecb4435c14c00947c40ecda3e57ee7578857` and source SHA-256 `730c0d3078f86859b537ec6ef7e426446452f0180ae8d9efd1a1322b39d1b06c`. These are two small, same-day synthetic sets against the same account, and the reported p95 excludes failed queues if any occur in a future run. First queued audio is not first audible speech. This does not establish pilot tail latency, quality, real playback, or a release gate; every report says `releaseGate: unverified`.
+
+## Noisy two-speaker transcription stress
+
+`transcription-noise-v1` mixes seeded white noise into six patient-free Flite clips at a nominal 10 dB signal-to-noise ratio, then encodes them through G.711 mu-law and Abby's media normalizer. The `slt` clean sources exactly match the earlier clean corpus; the `kal` voice adds a second synthetic speaker. The normalized `slt` output measured about 13 dB against its clean telephone-band counterpart, with no clipped samples. These are controlled synthetic signals, not clinic recordings or a realistic noise distribution.
+
+The real `gpt-live-transcribe` adapter ran two repeats per case with two concurrent sessions. The owner-only report is `eval/results/2026-09-29-noisy-transcription-v1.json`; it pins corpus SHA-256 `ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2` and adapter SHA-256 `2e9098ff4867825e409ec4b5e9d2e097f15958b61b8faac3846ac04dfee4656d`.
+
+| Synthetic voice | Runs | Exact match | Wording mismatch | Missing critical term | Provider failure |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `kal` | 6 | 2 | 2 | 2 | 0 |
+| `slt` | 6 | 0 | 0 | 6 | 0 |
+| **Total** | **12** | **2** | **2** | **8** | **0** |
+
+The `kal` booking request lost the word “book” in both repeats. The noisy `slt` clips lost the required date, booking, or urgent-language terms. Earlier clean and telephone-band `slt` fixtures matched 9 of 9 repeated transcripts in each corpus; this small stress run exposes sensitivity to the added white noise without quantifying real-caller error rates. Every final remained `needsClarification`. Natural-language availability and patient actions stay disabled, and the report retains `humanReviewStatus: pending`, `liveCallStatus: notRun`, and `releaseGate: unverified`.
