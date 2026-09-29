@@ -46,7 +46,7 @@ test("final archive and durable import receipt bind the exact frozen source vers
   const fenceAuthority = { authorizeAndRecord: async (action: string) =>
     ok({ requestRef: action === "freeze" ? "fenced-final-freeze" : "fenced-final-release" }) };
   const frozen = await fence.freeze({ tenantId: source.tenantId, actorRef: "source-admin",
-    reason: "Final archive snapshot" }, fenceAuthority);
+    reason: "cutoverFreeze" }, fenceAuthority);
   assert.equal(frozen.ok && frozen.value.version === 1 && frozen.value.frozen, true);
   const wrongVersion = await buildPostgresFencedTenantConfigArchive(db,
     { ...request, expectedFenceVersion: 2 }, exportAuthority);
@@ -77,7 +77,7 @@ test("final archive and durable import receipt bind the exact frozen source vers
   assert.equal((await policy.changeBookingEnabled(source, "1", false, "source-admin")).ok, false);
 
   const released = await fence.release({ tenantId: source.tenantId, actorRef: "source-admin",
-    reason: "Cancel synthetic rehearsal", expectedVersion: 1 }, fenceAuthority);
+    reason: "cutoverRelease", expectedVersion: 1 }, fenceAuthority);
   assert.equal(released.ok && released.value.version === 2 && !released.value.frozen, true);
   const stale = await buildPostgresFencedTenantConfigArchive(db,
     { ...request, archiveId: "fenced-stale-archive" }, exportAuthority);
@@ -107,7 +107,7 @@ test("a digest-valid archive with a forged fence number fails the fresh source-c
   if (!old.ok) return;
   assert.equal((await policy.changeBookingEnabled(source, "1", false, "source-admin")).ok, true);
   const frozen = await new PostgresPortabilityFence(db).freeze({ tenantId: source.tenantId,
-    actorRef: "source-admin", reason: "Freeze after changed settings" },
+    actorRef: "source-admin", reason: "cutoverFreeze" },
   { authorizeAndRecord: async () => ok({ requestRef: "forged-freeze-audit" }) });
   assert.equal(frozen.ok && frozen.value.version, 1);
   const forged = { ...old.value, manifestBytes: Buffer.from(JSON.stringify({

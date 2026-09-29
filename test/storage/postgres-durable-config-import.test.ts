@@ -142,7 +142,7 @@ test("concurrent stage is one durable import and pre-existing target data blocks
     where tenant_id = ${target.tenantId}`.execute(db);
   assert.equal(rows.rows[0]?.count, "2");
   const frozen = await new PostgresPortabilityFence(db).freeze({ tenantId: target.tenantId,
-    actorRef: "buyer-admin", reason: "Protect imported target" },
+    actorRef: "buyer-admin", reason: "cutoverFreeze" },
   { authorizeAndRecord: async () => ok({ requestRef: "durable-import-freeze-audit" }) });
   assert.equal(frozen.ok && frozen.value.frozen, true);
   await assert.rejects(sql`update tenant_config_imports set archive_id = 'tampered'

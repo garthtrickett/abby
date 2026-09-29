@@ -3,6 +3,7 @@ import type { Kysely } from "kysely";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import type Database from "./generated/Database.ts";
+import { validPortabilityFenceReason } from "./operational-reasons.ts";
 
 export type PortabilityFenceAction = "freeze" | "release";
 export type PortabilityFenceRequest = Readonly<{
@@ -38,7 +39,7 @@ function validRef(value: unknown): value is string {
 function validRequest(action: PortabilityFenceAction, request: PortabilityFenceRequest): boolean {
   return !!request && validRef(request.tenantId) && validRef(request.actorRef) &&
     typeof request.reason === "string" && !!request.reason.trim() && request.reason.length <= 1000 &&
-    !/[\u0000-\u001f\u007f]/.test(request.reason) &&
+    !/[\u0000-\u001f\u007f]/.test(request.reason) && validPortabilityFenceReason(action, request.reason) &&
     (action === "freeze" ? request.expectedVersion === undefined :
       Number.isSafeInteger(request.expectedVersion) && Number(request.expectedVersion) >= 1);
 }

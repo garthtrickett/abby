@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import test, { after } from "node:test";
 import { sql } from "kysely";
 import { err, ok } from "../../src/core/model.ts";
@@ -6,6 +7,7 @@ import { pendingCallId } from "../../src/core/pending-location.ts";
 import { decodeConfigArchive, decodeTenantConfigArchive } from "../../src/portability/config-archive.ts";
 import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
+import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { buildPostgresConfigArchive, buildPostgresTenantConfigArchive } from "../../src/storage/postgres-config-archive.ts";
 import { comparePostgresConfigArchiveSource } from "../../src/storage/postgres-config-archive-drift.ts";
 import { PostgresKnowledgeCatalogue } from "../../src/storage/postgres-knowledge-catalogue.ts";
@@ -23,10 +25,37 @@ function authority(requestRef: string): PortabilityFenceAuthority {
   return { authorizeAndRecord: async () => ok({ requestRef }) };
 }
 
+test("portability fence rejects patient text before the authority audit or database write", async () => {
+  const tenantId = `fence-reason-${randomUUID()}`;
+  const privateReason = `patient-private-fence-${randomUUID()}`;
+  const fence = new PostgresPortabilityFence(db);
+  let auditCalls = 0;
+  const audited: PortabilityFenceAuthority = { authorizeAndRecord: async () => {
+    auditCalls += 1;
+    return ok({ requestRef: `fence-reason-audit-${auditCalls}` });
+  } };
+  assert.deepEqual(await fence.freeze({ tenantId, actorRef: "operator", reason: privateReason }, audited),
+    { ok: false, error: { kind: "invalidRequest" } });
+  assert.equal(auditCalls, 0);
+  const frozen = await fence.freeze({ tenantId, actorRef: "operator", reason: "cutoverFreeze" }, audited);
+  assert.equal(frozen.ok && frozen.value.frozen, true);
+  assert.deepEqual(await fence.release({ tenantId, actorRef: "operator", reason: privateReason,
+    expectedVersion: 1 }, audited), { ok: false, error: { kind: "invalidRequest" } });
+  assert.equal(auditCalls, 1);
+  const released = await fence.release({ tenantId, actorRef: "operator", reason: "cutoverRelease",
+    expectedVersion: 1 }, audited);
+  assert.equal(released.ok && !released.value.frozen, true);
+  const events = await sql<{ reason: string }>`select reason from tenant_portability_fence_events
+    where tenant_id = ${tenantId} order by version`.execute(db);
+  assert.deepEqual(events.rows.map(row => row.reason), ["cutoverFreeze", "cutoverRelease"]);
+  assert.deepEqual(await scanPatientDataCanaries(db, [{ label: "reason", value: privateReason }]),
+    { ok: true, value: [] });
+});
+
 test("a denied freeze leaves no tenant fence row", async () => {
   const tenantId = "fence-denied-tenant";
   const fence = new PostgresPortabilityFence(db);
-  const request = { tenantId, actorRef: "unauthorized", reason: "Attempted cutover" };
+  const request = { tenantId, actorRef: "unauthorized", reason: "cutoverFreeze" };
   assert.deepEqual(await fence.freeze(request, { authorizeAndRecord: async () => err({ kind: "denied" }) }),
     { ok: false, error: { kind: "denied" } });
   const rows = await sql<{ found: number }>`select 1 as found from tenant_portability_fences
@@ -48,7 +77,7 @@ test("an application role without fence-table writes is still guarded", async ()
   });
   await insertAsWriter("before");
   assert.equal((await new PostgresPortabilityFence(db).freeze({ tenantId, actorRef: "export-admin",
-    reason: "Role rehearsal" }, authority("role-freeze"))).ok, true);
+    reason: "cutoverFreeze" }, authority("role-freeze"))).ok, true);
   await assert.rejects(() => insertAsWriter("after"), (cause: unknown) =>
     !!cause && typeof cause === "object" && "code" in cause && cause.code === "P0001");
 });
@@ -61,7 +90,7 @@ test("one tenant fence covers every mapped location in a two-location archive", 
   assert.equal((await policy.changeBookingEnabled(north, "0", true, "clinic-admin")).ok, true);
   assert.equal((await policy.changeBookingEnabled(south, "0", true, "clinic-admin")).ok, true);
   assert.equal((await new PostgresPortabilityFence(db).freeze({ tenantId, actorRef: "export-admin",
-    reason: "Two-location cutover" }, authority("two-location-freeze"))).ok, true);
+    reason: "cutoverFreeze" }, authority("two-location-freeze"))).ok, true);
   assert.equal((await policy.changeBookingEnabled(north, "1", false, "clinic-admin")).ok, false);
   assert.equal((await policy.changeBookingEnabled(south, "1", false, "clinic-admin")).ok, false);
   const exported = await buildPostgresTenantConfigArchive(db, { sourceTenantId: tenantId,
@@ -96,7 +125,7 @@ test("a durable fence keeps a configuration-only archive unchanged until an audi
   assert.equal(before.ok, true);
   if (!before.ok) return;
 
-  const freezeRequest = { tenantId: scope.tenantId, actorRef: "export-admin", reason: "Configuration cutover rehearsal" };
+  const freezeRequest = { tenantId: scope.tenantId, actorRef: "export-admin", reason: "cutoverFreeze" };
   const frozen = await fence.freeze(freezeRequest, authority("freeze-audit-1"));
   assert.deepEqual(frozen, { ok: true, value: { tenantId: scope.tenantId, version: 1, frozen: true,
     lastRequestRef: "freeze-audit-1" } });
@@ -135,12 +164,12 @@ test("a durable fence keeps a configuration-only archive unchanged until an audi
   const otherScope = { tenantId: "fence-other-tenant", clinicId: "clinic", locationId: "location" };
   assert.equal((await policy.changeBookingEnabled(otherScope, "0", true, "other-admin")).ok, true);
 
-  assert.deepEqual(await fence.release({ ...freezeRequest, expectedVersion: 2 }, authority("release-stale")),
+  assert.deepEqual(await fence.release({ ...freezeRequest, reason: "cutoverRelease", expectedVersion: 2 }, authority("release-stale")),
     { ok: false, error: { kind: "versionConflict" } });
-  const released = await fence.release({ ...freezeRequest, expectedVersion: 1 }, authority("release-audit-1"));
+  const released = await fence.release({ ...freezeRequest, reason: "cutoverRelease", expectedVersion: 1 }, authority("release-audit-1"));
   assert.deepEqual(released, { ok: true, value: { tenantId: scope.tenantId, version: 2, frozen: false,
     lastRequestRef: "release-audit-1" } });
-  assert.deepEqual(await fence.release({ ...freezeRequest, expectedVersion: 1 }, authority("release-audit-1")), released);
+  assert.deepEqual(await fence.release({ ...freezeRequest, reason: "cutoverRelease", expectedVersion: 1 }, authority("release-audit-1")), released);
   assert.deepEqual(await fence.freeze(freezeRequest, authority("freeze-audit-1")),
     { ok: false, error: { kind: "staleRequest" } });
   assert.equal((await policy.changeBookingEnabled(scope, "1", false, "clinic-admin")).ok, true);
@@ -161,7 +190,7 @@ test("call history makes a freeze fail before any fence state is changed", async
   const ledger = new PostgresLedger(db, undefined, undefined, "unsafeReference");
   assert.equal((await ledger.start("fence-existing-call", referenceDefaultPolicy(scope))).ok, true);
   const fence = new PostgresPortabilityFence(db);
-  const result = await fence.freeze({ tenantId: scope.tenantId, actorRef: "export-admin", reason: "Archive rehearsal" },
+  const result = await fence.freeze({ tenantId: scope.tenantId, actorRef: "export-admin", reason: "cutoverFreeze" },
     authority("blocked-freeze"));
   assert.deepEqual(result, { ok: false, error: { kind: "callsRequireRetention" } });
   assert.deepEqual(await fence.read(scope.tenantId), { ok: true, value: { tenantId: scope.tenantId, version: 0,
@@ -181,7 +210,7 @@ test("a pending shared-number route blocks freeze before location binding", asyn
   }, { key, dialedNumber: "+6125550100", acceptedAt: "2026-09-29T00:00:00Z", deadline: "2026-09-29T00:00:30Z" });
   assert.equal(reserved.ok, true);
   const result = await new PostgresPortabilityFence(db).freeze({ tenantId, actorRef: "export-admin",
-    reason: "Archive rehearsal" }, authority("pending-freeze"));
+    reason: "cutoverFreeze" }, authority("pending-freeze"));
   assert.deepEqual(result, { ok: false, error: { kind: "callsRequireRetention" } });
 });
 
@@ -193,7 +222,7 @@ test("orphaned in-flight write evidence also blocks a configuration-only freeze"
     action_key, status) values (${scope.tenantId}, ${scope.clinicId}, 1, 'orphan-effect', 'missing-call',
     'orphan-action', 'uncertain')`.execute(db);
   const result = await new PostgresPortabilityFence(db).freeze({ tenantId: scope.tenantId,
-    actorRef: "export-admin", reason: "Archive rehearsal" }, authority("inflight-freeze"));
+    actorRef: "export-admin", reason: "cutoverFreeze" }, authority("inflight-freeze"));
   assert.deepEqual(result, { ok: false, error: { kind: "unresolvedWork" } });
   const exported = await buildPostgresConfigArchive(db, { scope, targetScope: { ...scope, tenantId: "buyer-inflight" },
     timeZone: "UTC", mappingProvenance: "reviewed-map", archiveId: "inflight-archive", actorRef: "export-admin",
@@ -218,7 +247,7 @@ test("freeze waits for an earlier tenant write and archives the committed settin
   await Promise.race([ready, writer.then(() => { throw new Error("writer ended before signaling"); })]);
   let authorized!: () => void;
   const started = new Promise<void>(resolve => { authorized = resolve; });
-  const freezing = fence.freeze({ tenantId: scope.tenantId, actorRef: "export-admin", reason: "Race rehearsal" },
+  const freezing = fence.freeze({ tenantId: scope.tenantId, actorRef: "export-admin", reason: "cutoverFreeze" },
     { authorizeAndRecord: async () => { authorized(); return ok({ requestRef: "race-freeze" }); } });
   await started;
   try {
@@ -258,7 +287,7 @@ test("a repeatable-read writer with a pre-freeze snapshot cannot evade a new fen
   });
   await Promise.race([ready, writer.then(() => { throw new Error("writer ended before signaling"); })]);
   try {
-    const frozen = await fence.freeze({ tenantId: scope.tenantId, actorRef: "export-admin", reason: "Old snapshot rehearsal" },
+    const frozen = await fence.freeze({ tenantId: scope.tenantId, actorRef: "export-admin", reason: "cutoverFreeze" },
       authority("old-snapshot-freeze"));
     assert.equal(frozen.ok, true);
   } finally { releaseWriter(); }
