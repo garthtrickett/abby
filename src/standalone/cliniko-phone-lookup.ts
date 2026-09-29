@@ -25,9 +25,18 @@ export class ClinikoPhoneLookup {
   }
 
   async refresh(scope: ClinikoClinicScope): Promise<Result<number, ClinikoPatientFailure | PhoneIndexFailure>> {
+    const head = await this.index.head(scope);
+    if (!head.ok) return head;
+    const generation = head.value?.generation ?? null;
     const snapshot = await this.reader.readPhoneSnapshot(scope, this.countryCallingCode);
-    if (!snapshot.ok) return snapshot;
-    return this.index.publish(scope, snapshot.value.links);
+    if (!snapshot.ok) {
+      const stale = await this.index.markStale(scope, generation);
+      return stale.ok ? snapshot : stale;
+    }
+    const published = await this.index.publish(scope, snapshot.value.links, generation);
+    if (published.ok || published.error.kind === "generationChanged") return published;
+    const stale = await this.index.markStale(scope, generation);
+    return stale.ok ? published : stale;
   }
 
   async candidates(scope: ClinikoClinicScope, presentedCallerNumber: string):
