@@ -1,11 +1,13 @@
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
+import { ClinikoReadBudget } from "./read-budget.ts";
 
 export type ClinikoClinicScope = Pick<LocationScope, "tenantId" | "clinicId">;
 export type ClinikoPatientConfig = Readonly<{
   scope: ClinikoClinicScope;
   apiKey: string;
   contactEmail: string;
+  rateBudget?: ClinikoReadBudget;
 }>;
 
 /** A candidate is never a verification proof or permission to disclose a record. */
@@ -77,6 +79,7 @@ export class ClinikoPatientCandidateReader {
   private readonly userAgent: string;
   private readonly fetchPort: typeof fetch;
   private readonly clock: () => string;
+  private readonly rateBudget: ClinikoReadBudget;
 
   private constructor(config: ClinikoPatientConfig, shard: string, fetchPort: typeof fetch, clock: () => string) {
     this.scope = { tenantId: config.scope.tenantId, clinicId: config.scope.clinicId };
@@ -85,13 +88,15 @@ export class ClinikoPatientCandidateReader {
     this.userAgent = `Abby (${config.contactEmail})`;
     this.fetchPort = fetchPort;
     this.clock = clock;
+    this.rateBudget = config.rateBudget ?? new ClinikoReadBudget();
   }
 
   static create(config: ClinikoPatientConfig, fetchPort: typeof fetch = fetch,
                 clock: () => string = () => new Date().toISOString()): Result<ClinikoPatientCandidateReader, ClinikoPatientFailure> {
     const shard = typeof config?.apiKey === "string" ? config.apiKey.match(/-([a-z]{2}[0-9]{1,2})$/)?.[1] : undefined;
     if (!shard || !config.apiKey.slice(0, -(shard.length + 1)) || /[\u0000-\u001f\u007f]/.test(config.apiKey) || !validScope(config.scope) ||
-        !validEmail(config.contactEmail) || typeof fetchPort !== "function" || typeof clock !== "function") {
+        !validEmail(config.contactEmail) || typeof fetchPort !== "function" || typeof clock !== "function" ||
+        (config.rateBudget !== undefined && !(config.rateBudget instanceof ClinikoReadBudget))) {
       return err({ kind: "invalidConfig" });
     }
     return ok(new ClinikoPatientCandidateReader(config, shard, fetchPort, clock));
@@ -113,6 +118,8 @@ export class ClinikoPatientCandidateReader {
     const query = new URLSearchParams({ page: "1", per_page: "2" });
     query.append("q[]", `email:=${email}`);
     query.append("q[]", `date_of_birth:=${dateOfBirth}`);
+    const limited = this.rateBudget.claim();
+    if (limited) return err(limited);
     let response: Response;
     try {
       response = await this.fetchPort(`${this.baseUrl}/patients?${query}`, {
@@ -122,12 +129,7 @@ export class ClinikoPatientCandidateReader {
       });
     } catch { return err({ kind: "unavailable" }); }
     if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
-    if (response.status === 429) {
-      const reset = response.headers.get("X-RateLimit-Reset");
-      const seconds = reset && /^[0-9]+$/.test(reset) ? Number(reset) : NaN;
-      return err(Number.isSafeInteger(seconds) && seconds >= 0 && seconds <= 8_640_000_000_000
-        ? { kind: "rateLimited", resetAt: new Date(seconds * 1000).toISOString() } : { kind: "rateLimited" });
-    }
+    if (response.status === 429) return err(this.rateBudget.observe429(response.headers.get("X-RateLimit-Reset")));
     if (response.status >= 500 || response.status === 404) return err({ kind: "unavailable" });
     if (response.status !== 200) return err({ kind: "malformed" });
     const parsed = await boundedJson(response);
