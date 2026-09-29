@@ -7,6 +7,7 @@ import type { PhoneRefreshGuardResult } from "../storage/postgres-phone-refresh-
 export type PhoneIndexRefreshTarget = Readonly<{
   scope: ClinikoClinicScope;
   lookup: Pick<ClinikoPhoneLookup, "refresh">;
+  countryCallingCode: string;
   refreshEveryMs: number;
 }>;
 export type PhoneIndexRefreshResult = Readonly<{
@@ -33,6 +34,7 @@ export class PhoneIndexRefreshWorker {
       const { tenantId, clinicId } = target.scope;
       const key = JSON.stringify([tenantId, clinicId]);
       if (!tenantId || !clinicId || tenantId.length > 256 || clinicId.length > 256 || keys.has(key) ||
+          !/^[1-9][0-9]{0,2}$/.test(target.countryCallingCode) ||
           !Number.isSafeInteger(target.refreshEveryMs) || target.refreshEveryMs < 60_000 ||
           typeof target.lookup?.refresh !== "function") throw new Error("invalid phone-index refresh target");
       keys.add(key);
@@ -47,7 +49,7 @@ export class PhoneIndexRefreshWorker {
     const failed = { scope: target.scope, kind: "failed" } as const;
     try {
       const attempt = async (): Promise<PhoneIndexRefreshResult> => {
-        const completed = await this.index.completedAt(target.scope);
+        const completed = await this.index.completedAt(target.scope, target.countryCallingCode);
         if (!completed.ok) return failed;
         if (completed.value && now.getTime() >= completed.value.getTime() &&
             now.getTime() - completed.value.getTime() < target.refreshEveryMs) {
@@ -57,7 +59,7 @@ export class PhoneIndexRefreshWorker {
         return refreshed.ok ? { scope: target.scope, kind: "refreshed" } : failed;
       };
       if (!this.guard) return attempt();
-      const initial = await this.index.completedAt(target.scope);
+      const initial = await this.index.completedAt(target.scope, target.countryCallingCode);
       if (!initial.ok) return failed;
       if (initial.value && now.getTime() >= initial.value.getTime() &&
           now.getTime() - initial.value.getTime() < target.refreshEveryMs) return { scope: target.scope, kind: "fresh" };

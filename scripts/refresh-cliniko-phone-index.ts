@@ -13,6 +13,7 @@ function required(name: string): string {
 }
 
 const scope = { tenantId: required("ABBY_TENANT_ID"), clinicId: required("ABBY_CLINIC_ID") };
+const countryCallingCode = required("ABBY_COUNTRY_CALLING_CODE");
 const refreshEveryMs = Number(process.env.ABBY_PHONE_REFRESH_EVERY_MS ?? 900_000);
 const pollEveryMs = Number(process.env.ABBY_PHONE_REFRESH_POLL_MS ?? 60_000);
 const reader = ClinikoPatientCandidateReader.create({ scope, apiKey: required("ABBY_CLINIKO_API_KEY"),
@@ -25,9 +26,9 @@ process.once("SIGINT", () => stop.abort());
 process.once("SIGTERM", () => stop.abort());
 try {
   const index = new PostgresPatientPhoneIndex(db);
-  const lookup = new ClinikoPhoneLookup(reader.value, index, required("ABBY_COUNTRY_CALLING_CODE"),
+  const lookup = new ClinikoPhoneLookup(reader.value, index, countryCallingCode,
     refreshEveryMs * 2, undefined, new PostgresPatientPhoneScan(db));
-  const worker = new PhoneIndexRefreshWorker(index, [{ scope, lookup, refreshEveryMs }],
+  const worker = new PhoneIndexRefreshWorker(index, [{ scope, lookup, countryCallingCode, refreshEveryMs }],
     undefined, new PostgresPhoneRefreshGuard(connectionString));
   await worker.runLoop(stop.signal, pollEveryMs, results => {
     for (const result of results) process.stdout.write(`phone-index refresh: ${result.kind}\n`);

@@ -3,6 +3,7 @@ import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
+import { PHONE_NORMALIZATION_VERSION } from "../cliniko/phone-number.ts";
 import type Database from "./generated/Database.ts";
 import type { PatientPhoneScanClinicId, PatientPhoneScanTenantId } from "./generated/public/PatientPhoneScan.ts";
 import type { PatientPhoneScanLinksNormalizedPhone, PatientPhoneScanLinksPatientId,
@@ -68,6 +69,7 @@ export class PostgresPatientPhoneScan {
         const existing = await trx.selectFrom("patient_phone_scan").selectAll()
           .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).executeTakeFirst();
         if (existing && existing.country_calling_code === countryCallingCode &&
+            existing.normalization_version === PHONE_NORMALIZATION_VERSION &&
             existing.expected_generation === (head?.generation ?? null) &&
             existing.started_at instanceof Date && Date.now() - existing.started_at.getTime() < 86_400_000) {
           return ok(cursor(existing));
@@ -80,7 +82,7 @@ export class PostgresPatientPhoneScan {
         await trx.insertInto("patient_phone_scan").values({ ...ids,
           scan_ref: fresh.scanRef, country_calling_code: countryCallingCode,
           expected_generation: fresh.expectedGeneration, next_page: 1, total_entries: null,
-          seen_count: 0, link_count: 0 }).execute();
+          seen_count: 0, link_count: 0, normalization_version: PHONE_NORMALIZATION_VERSION }).execute();
         return ok(fresh);
       });
     } catch { return err({ kind: "storageFailure" }); }
@@ -156,7 +158,8 @@ export class PostgresPatientPhoneScan {
           .where("tenant_id", "=", scope.tenantId as PatientPhoneScanTenantId)
           .where("clinic_id", "=", scope.clinicId as PatientPhoneScanClinicId).forUpdate().executeTakeFirst();
         if (!row || row.scan_ref !== scanRef) return err({ kind: "staleScan" });
-        if (row.total_entries === null || row.seen_count !== row.total_entries ||
+        if (row.normalization_version !== PHONE_NORMALIZATION_VERSION ||
+            row.total_entries === null || row.seen_count !== row.total_entries ||
             row.next_page !== Math.max(1, Math.ceil(row.total_entries / 100)) + 1) return err({ kind: "sourceChanged" });
         const head = await trx.selectFrom("patient_phone_sync").select("generation")
           .where("tenant_id", "=", scope.tenantId as PatientPhoneSyncTenantId)
@@ -170,9 +173,12 @@ export class PostgresPatientPhoneScan {
           select tenant_id, clinic_id, normalized_phone, patient_id from patient_phone_scan_links
           where tenant_id = ${scope.tenantId} and clinic_id = ${scope.clinicId} and scan_ref = ${scanRef}::uuid`.execute(trx);
         await trx.insertInto("patient_phone_sync").values({ tenant_id: scope.tenantId as PatientPhoneSyncTenantId,
-          clinic_id: scope.clinicId as PatientPhoneSyncClinicId, generation, completed_at: new Date() })
+          clinic_id: scope.clinicId as PatientPhoneSyncClinicId, generation, completed_at: new Date(),
+          country_calling_code: row.country_calling_code,
+          normalization_version: row.normalization_version })
           .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id"])
-            .doUpdateSet({ generation, completed_at: new Date() })).execute();
+            .doUpdateSet({ generation, completed_at: new Date(), country_calling_code: row.country_calling_code,
+              normalization_version: row.normalization_version })).execute();
         await trx.deleteFrom("patient_phone_scan")
           .where("tenant_id", "=", scope.tenantId as PatientPhoneScanTenantId)
           .where("clinic_id", "=", scope.clinicId as PatientPhoneScanClinicId).execute();
