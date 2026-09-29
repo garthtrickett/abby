@@ -11,9 +11,10 @@ import type { PatientPhoneScanLinksNormalizedPhone, PatientPhoneScanLinksPatient
 import type { PatientPhoneScanSeenPatientId, PatientPhoneScanSeenScanRef } from "./generated/public/PatientPhoneScanSeen.ts";
 import type { PatientPhoneIndexClinicId, PatientPhoneIndexTenantId } from "./generated/public/PatientPhoneIndex.ts";
 import type { PatientPhoneSyncClinicId, PatientPhoneSyncTenantId } from "./generated/public/PatientPhoneSync.ts";
+import type { PatientPhoneClinicStatusClinicId, PatientPhoneClinicStatusTenantId } from "./generated/public/PatientPhoneClinicStatus.ts";
 import type { PatientPhoneClinicScope, PatientPhoneLink } from "./postgres-patient-phone-index.ts";
 
-export type PhoneScanFailure = Readonly<{ kind: "invalidInput" | "storageFailure" | "staleScan" | "sourceChanged" | "tooManyResults" }>;
+export type PhoneScanFailure = Readonly<{ kind: "invalidInput" | "storageFailure" | "staleScan" | "sourceChanged" | "tooManyResults" | "clinicDisconnected" }>;
 export type PhoneScanCursor = Readonly<{
   scanRef: string;
   countryCallingCode: string;
@@ -61,6 +62,10 @@ export class PostgresPatientPhoneScan {
     try {
       return await this.db.transaction().execute(async trx => {
         await sql`select pg_advisory_xact_lock(hashtext(${scope.tenantId}), hashtext(${scope.clinicId}))`.execute(trx);
+        const connection = await trx.selectFrom("patient_phone_clinic_status").select("enabled")
+          .where("tenant_id", "=", scope.tenantId as PatientPhoneClinicStatusTenantId)
+          .where("clinic_id", "=", scope.clinicId as PatientPhoneClinicStatusClinicId).executeTakeFirst();
+        if (connection?.enabled === false) return err({ kind: "clinicDisconnected" });
         const ids = { tenant_id: scope.tenantId as PatientPhoneScanTenantId,
           clinic_id: scope.clinicId as PatientPhoneScanClinicId };
         const head = await trx.selectFrom("patient_phone_sync").select("generation")
