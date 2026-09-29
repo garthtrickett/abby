@@ -23,6 +23,7 @@ import { SharedNumberIntakeService } from "../../src/voice/shared-number-intake.
 import { SharedNumberVoiceCall } from "../../src/voice/shared-number-voice-call.ts";
 import type { FullVoiceSessionFactory } from "../../src/voice/shared-number-voice-call.ts";
 import { MediaTurnController } from "../../src/voice/media-turn-controller.ts";
+import { OpenAISpeechSynthesis } from "../../src/voice/openai-speech-synthesis.ts";
 import type { MediaFrame, TranscriptionPort } from "../../src/voice/media-turn-controller.ts";
 import { TransportMediaNormalizer } from "../../src/voice/transport-media-normalizer.ts";
 import type { TransportMediaEncoding } from "../../src/voice/transport-media-normalizer.ts";
@@ -282,6 +283,57 @@ for (const kind of kinds) {
     const ended = value(await call.disconnect(at(2)));
     if (!("lifecycle" in ended)) throw new Error("scoped terminal expected");
     assert.equal(ended.lifecycle, "ended");
+  });
+
+  test(`E2E-128 synthetic voice ${kind}: streamed speech settles a connected call only after output evidence`, async () => {
+    const app = fixture(kind);
+    value(await app.policy.changeAutomationEnabled(app.main, "0", true, "admin"));
+    const source = new Uint8Array(960);
+    const inputView = new DataView(source.buffer);
+    for (let index = 0; index < 480; index += 1) inputView.setInt16(index * 2, 1_000, true);
+    const requests: string[] = [];
+    const synthesis = new OpenAISpeechSynthesis({ apiKey: "synthetic-key", fetchPort: async (_url, init) => {
+      const body = JSON.parse(String(init?.body)) as { input: string };
+      requests.push(body.input);
+      return new Response(new ReadableStream<Uint8Array>({ start(controller) {
+        controller.enqueue(source.slice(0, 1));
+        controller.enqueue(source.slice(1));
+        controller.close();
+      } }), { status: 200, headers: { "Content-Type": "audio/pcm" } });
+    } });
+    const chunks: Uint8Array[] = [];
+    let finished = -1;
+    const call = new ConnectedVoiceCall({ event: app.event(app.singleNumber, "openai-speech"),
+      sessionId: "session", ledger: app.ledger, intake: app.intake, fullFactory: app.fullFactory,
+      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
+      synthesis, output: {
+        async queueChunk(_id, sequence, bytes) {
+          assert.equal(sequence, chunks.length);
+          chunks.push(new Uint8Array(bytes));
+          return "queued";
+        },
+        async finishQueue(_id, sequence) { finished = sequence; return "queued"; },
+        async clear() { return true; },
+      } });
+    const started = value(await call.begin(now));
+    if (started.kind !== "admitted" || started.delivery.kind !== "queued" || !started.delivery.playbackId) {
+      throw new Error("greeting was not queued");
+    }
+    assert.deepEqual(requests, ["Hello. How can I help you?"]);
+    assert.equal(chunks.length, 1);
+    assert.equal(chunks[0]!.byteLength, 640);
+    assert.equal(new DataView(chunks[0]!.buffer).getInt16(0, true), 1_000);
+    assert.equal(finished, 0);
+    const presentationId = started.delivery.playbackId.replace(/:playback$/, "");
+    assert.equal(value(await app.ledger.read(started.receipt.callId, app.main))
+      .presentations[presentationId]?.status, "started");
+    const played = value(await call.acceptPlaybackCompletion({ playbackId: started.delivery.playbackId,
+      lastSequence: 0, status: "played" }, at(1)));
+    if (!("presentations" in played)) throw new Error("scoped call expected");
+    assert.equal(played.presentations[presentationId]?.status, "played");
+    assert.equal(value(await app.ledger.read(started.receipt.callId, app.main))
+      .presentations[presentationId]?.status, "played");
+    value(await call.disconnect(at(2)));
   });
 
   test(`${kind}: disconnect racing connected admission fences later output`, async () => {
