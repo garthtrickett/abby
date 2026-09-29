@@ -186,6 +186,8 @@ export class ClinikoAvailabilityReader {
     if (!business.ok) return business;
     if (!business.value.eligible) return ok({ kind: "notEligible", reason: "business" });
     const timeZone = business.value.timeZone;
+    const clinicDate = new Intl.DateTimeFormat("en-US", { timeZone, calendar: "gregory", numberingSystem: "latn",
+      year: "numeric", month: "2-digit", day: "2-digit" });
 
     const practitioner = await this.onlineFlag(this.practitionerId, `/practitioners/${this.practitionerId}`, true);
     if (!practitioner.ok) return practitioner;
@@ -217,8 +219,15 @@ export class ClinikoAvailabilityReader {
       totalEntries = count;
       for (const candidate of body.available_times) {
         const row = record(candidate);
-        if (!row || typeof row.appointment_start !== "string" || !Number.isFinite(Date.parse(row.appointment_start))) return err({ kind: "malformed" });
-        startsAt.push(new Date(row.appointment_start).toISOString());
+        if (!row || typeof row.appointment_start !== "string" ||
+            !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(row.appointment_start) ||
+            !Number.isFinite(Date.parse(row.appointment_start))) return err({ kind: "malformed" });
+        const start = new Date(row.appointment_start);
+        const parts = clinicDate.formatToParts(start);
+        const field = (name: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === name)?.value;
+        const localDate = `${field("year")}-${field("month")}-${field("day")}`;
+        if (localDate < from || localDate > to) return err({ kind: "malformed" });
+        startsAt.push(start.toISOString());
       }
       if (startsAt.length >= count) break;
       if (body.available_times.length === 0) return err({ kind: "unavailable" });
