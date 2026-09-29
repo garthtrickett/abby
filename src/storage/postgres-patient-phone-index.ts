@@ -6,6 +6,7 @@ import type Database from "./generated/Database.ts";
 import type { PatientPhoneIndexClinicId, PatientPhoneIndexNormalizedPhone, PatientPhoneIndexPatientId,
   PatientPhoneIndexTenantId } from "./generated/public/PatientPhoneIndex.ts";
 import type { PatientPhoneSyncClinicId, PatientPhoneSyncTenantId } from "./generated/public/PatientPhoneSync.ts";
+import type { PatientPhoneScanClinicId, PatientPhoneScanTenantId } from "./generated/public/PatientPhoneScan.ts";
 
 export type PatientPhoneLink = Readonly<{ normalizedPhone: string; patientId: string }>;
 export type PatientPhoneClinicScope = Pick<LocationScope, "tenantId" | "clinicId">;
@@ -109,6 +110,9 @@ export class PostgresPatientPhoneIndex {
     try {
       await this.db.transaction().execute(async trx => {
         await sql`select pg_advisory_xact_lock(hashtext(${scope.tenantId}), hashtext(${scope.clinicId}))`.execute(trx);
+        await trx.deleteFrom("patient_phone_scan")
+          .where("tenant_id", "=", scope.tenantId as PatientPhoneScanTenantId)
+          .where("clinic_id", "=", scope.clinicId as PatientPhoneScanClinicId).execute();
         await trx.deleteFrom("patient_phone_index")
           .where("tenant_id", "=", scope.tenantId as PatientPhoneIndexTenantId)
           .where("clinic_id", "=", scope.clinicId as PatientPhoneIndexClinicId).execute();

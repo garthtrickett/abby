@@ -6,6 +6,8 @@ import type { ClinikoClinicScope, ClinikoPatientFailure } from "../cliniko/patie
 import { ClinikoPatientCandidateReader } from "../cliniko/patients.ts";
 import type { PhoneIndexFailure } from "../storage/postgres-patient-phone-index.ts";
 import { PostgresPatientPhoneIndex } from "../storage/postgres-patient-phone-index.ts";
+import type { PhoneScanFailure, PhoneScanCursor } from "../storage/postgres-patient-phone-scan.ts";
+import { PostgresPatientPhoneScan } from "../storage/postgres-patient-phone-scan.ts";
 import type { CallerCandidates } from "../voice/caller-candidates.ts";
 
 export type PhoneLookupResult = CallerCandidates;
@@ -17,6 +19,7 @@ export class ClinikoPhoneLookup {
   private readonly countryCallingCode: string;
   private readonly maxIndexAgeMs: number;
   private readonly waitUntil: (resetAt: string) => Promise<void>;
+  private readonly scan: PostgresPatientPhoneScan | undefined;
 
   constructor(reader: ClinikoPatientCandidateReader, index: PostgresPatientPhoneIndex,
               countryCallingCode: string, maxIndexAgeMs: number,
@@ -24,15 +27,17 @@ export class ClinikoPhoneLookup {
                 const delay = Date.parse(resetAt) - Date.now();
                 if (!Number.isFinite(delay) || delay > 120_000) throw new Error("rate reset outside scan budget");
                 if (delay > 0) await wait(delay);
-              }) {
+              }, scan?: PostgresPatientPhoneScan) {
     this.reader = reader;
     this.index = index;
     this.countryCallingCode = countryCallingCode;
     this.maxIndexAgeMs = maxIndexAgeMs;
     this.waitUntil = waitUntil;
+    this.scan = scan;
   }
 
-  async refresh(scope: ClinikoClinicScope): Promise<Result<number, ClinikoPatientFailure | PhoneIndexFailure>> {
+  async refresh(scope: ClinikoClinicScope): Promise<Result<number, ClinikoPatientFailure | PhoneIndexFailure | PhoneScanFailure>> {
+    if (this.scan) return this.refreshStaged(scope, this.scan);
     const head = await this.index.head(scope);
     if (!head.ok) return head;
     const generation = head.value?.generation ?? null;
@@ -45,6 +50,46 @@ export class ClinikoPhoneLookup {
     if (published.ok || published.error.kind === "generationChanged") return published;
     const stale = await this.index.markStale(scope, generation);
     return stale.ok ? published : stale;
+  }
+
+  private async refreshStaged(scope: ClinikoClinicScope, scan: PostgresPatientPhoneScan):
+    Promise<Result<number, ClinikoPatientFailure | PhoneIndexFailure | PhoneScanFailure>> {
+    const started = await scan.begin(scope, this.countryCallingCode);
+    if (!started.ok) return started;
+    let cursor: PhoneScanCursor = started.value;
+    if (cursor.totalEntries === null || cursor.seenCount < cursor.totalEntries) {
+      for await (const page of this.reader.phonePages(scope, this.countryCallingCode, cursor.nextPage, 100_000, this.waitUntil)) {
+        if (!page.ok) {
+          if (page.error.kind === "malformed" || page.error.kind === "tooManyResults" ||
+              page.error.kind === "invalidQuery" || page.error.kind === "scopeMismatch") {
+            const discarded = await scan.discard(scope, cursor.scanRef);
+            if (!discarded.ok) return discarded;
+          }
+          const stale = await this.index.markStale(scope, cursor.expectedGeneration);
+          return stale.ok ? page : stale;
+        }
+        const staged = await scan.append(scope, cursor.scanRef, page.value);
+        if (!staged.ok) {
+          if (staged.error.kind === "sourceChanged" || staged.error.kind === "tooManyResults" ||
+              staged.error.kind === "invalidInput") {
+            const discarded = await scan.discard(scope, cursor.scanRef);
+            if (!discarded.ok) return discarded;
+          }
+          if (staged.error.kind === "staleScan") return staged;
+          const stale = await this.index.markStale(scope, cursor.expectedGeneration);
+          return stale.ok ? staged : stale;
+        }
+        cursor = staged.value;
+      }
+    }
+    const finished = await scan.finish(scope, cursor.scanRef);
+    if (finished.ok || finished.error.kind === "staleScan") return finished;
+    if (finished.error.kind === "sourceChanged") {
+      const discarded = await scan.discard(scope, cursor.scanRef);
+      if (!discarded.ok) return discarded;
+    }
+    const stale = await this.index.markStale(scope, cursor.expectedGeneration);
+    return stale.ok ? finished : stale;
   }
 
   async candidates(scope: ClinikoClinicScope, presentedCallerNumber: string):
