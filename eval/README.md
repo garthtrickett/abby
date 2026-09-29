@@ -57,6 +57,16 @@ work wait "Abby signed local live speech evaluation"
 
 The test is excluded from `npm test` because it makes paid provider calls. A locally returned mark is only synthetic transport evidence; this run does not prove that a real caller heard either response, that Twilio accepted the media, or that the pilot latency and voice-quality gates pass. A separate transcription quality gate is required before natural-language availability can use the Realtime final text.
 
+## First-chunk speech fallback timing
+
+`eval:speech-fallback` sends the two fixed patient-free phrases from `speech-loop-v1.json` through the real OpenAI synthesis models and Abby's `FirstChunkFallbackSpeech` plus `StreamedPlaybackPort`. It uses a 1.5-second primary selection bound, a 5-second combined first-chunk bound, and the usual 2-second later-step bound. The output port counts chunks and captures the time of the first queued chunk without saving audio. Run with `ABBY_OPENAI_API_KEY` available:
+
+```sh
+npm run eval:speech-fallback -- --out eval/results/speech-fallback-candidate.json
+```
+
+The default is eight repeats per phrase with two concurrent jobs; `--repeats` accepts 1–20 and `--concurrency` accepts 1–4. The owner-only report records the selected source, queue outcome, first-chunk time, complete-utterance time, and source and corpus hashes for every job. Its p95 is computed only among queued outputs and must be read alongside failed jobs. The process exits nonzero if any utterance fails to queue or misses the first-chunk bound. This is provider and in-memory output evidence, not a caller's first audible speech or playback acknowledgment. Human review and a real call remain separate gates.
+
 ## Speech loopback smoke evaluation
 
 `speech-loop-v1.json` pins two patient-free messages: the AI disclosure and a provisional availability notice. The opt-in runner uses Abby's production `gpt-4o-mini-tts`/`coral` speech adapter, keeps its 16 kHz PCM output in memory, then replays it through Abby's production `gpt-live-transcribe` adapter. It rejects silent or malformed audio and flags missing safety words in the final transcript. Run with the key available in the process environment:

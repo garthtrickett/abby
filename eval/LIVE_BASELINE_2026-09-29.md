@@ -54,3 +54,14 @@ The opt-in signed local standalone evaluation then used the real Speech API with
 An extended run on the same signed local composition sent 195 patient-free inbound G.711 frames through the actual Realtime transcription adapter after the greeting mark. A second spoken response and local mark followed. The trace recorded two primary speech-model attempts and one `tts-1` fallback attempt across the greeting and clarification, with zero intent-model requests and zero Cliniko reads. This confirms the intended conservative route for an untrusted Realtime final: one clarification, no natural-language availability read. It does not prove the transcript's accuracy, real caller playback, or a usable quality gate. The test completed in 12.0 seconds including isolated database setup; the voice subtest took 10.8 seconds.
 
 A repeat after tightening the assertions also passed: 143 greeting media messages and 128 clarification media messages, two primary speech-model attempts, two returned local marks, and again zero intent-model requests or Cliniko reads. The repeat used no fallback model. Both outcomes leave the release gate unverified.
+
+## Repeated first-chunk fallback timing
+
+The fixed patient-free `speech-loop-v1` phrases were run through the real Speech API, `FirstChunkFallbackSpeech`, and `StreamedPlaybackPort` using `gpt-4o-mini-tts` primary, `tts-1` fallback, and `coral` voice. Abby allowed 1,500 ms for the primary's first chunk, 5,000 ms for the combined first chunk, 2,000 ms for later steps, and 20,000 ms for the whole synthetic utterance. The output port counted chunks and timed the first queue without saving audio.
+
+| Run | Jobs | Concurrency | Queued | Primary / fallback selections | First queued chunk p50 / p95 / max | Whole utterance p95 / max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Initial | 16 | 2 | 16 | 9 / 7 | 1,158 / 3,368 / 3,368 ms | 4,043 / 4,043 ms |
+| Larger repeat | 40 | 4 | 40 | 32 / 8 | 765 / 2,778 / 3,401 ms | 3,816 / 4,269 ms |
+
+Neither run had a failed queue, uncertain output, or a first queued chunk over 5,000 ms. The owner-only reports are `eval/results/2026-09-29-first-chunk-fallback-v1.json` and `eval/results/2026-09-29-first-chunk-fallback-40-v1.json`; both pin corpus SHA-256 `b02fc915affa082502d417bf3eaaecb4435c14c00947c40ecda3e57ee7578857` and source SHA-256 `730c0d3078f86859b537ec6ef7e426446452f0180ae8d9efd1a1322b39d1b06c`. These are two small, same-day synthetic sets against the same account, and the reported p95 excludes failed queues if any occur in a future run. First queued audio is not first audible speech. This does not establish pilot tail latency, quality, real playback, or a release gate; every report says `releaseGate: unverified`.
