@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
 import { normalizePatientPhone } from "../../src/cliniko/phone-number.ts";
+import { ClinikoReadBudget } from "../../src/cliniko/read-budget.ts";
 import { ClinikoPhoneLookup } from "../../src/standalone/cliniko-phone-lookup.ts";
 import { PhoneIndexRefreshWorker } from "../../src/standalone/phone-index-refresh-worker.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
@@ -203,4 +204,60 @@ test("refresh worker scans outside calls, skips fresh generations, and shares co
     .where("tenant_id", "=", scope.tenantId as never).execute();
   assert.equal(JSON.stringify(rows).includes("private-worker-canary"), false);
   assert.deepEqual(rows.map(row => String(row.patient_id)), ["301"]);
+});
+
+test("large Cliniko phone scan resumes its current page after the local rate budget resets", async () => {
+  const scope = { tenantId: "phone-rate-tenant", clinicId: "phone-rate-clinic" };
+  let clock = Date.parse("2026-09-29T00:00:00.000Z");
+  const pages: number[] = [];
+  const waits: string[] = [];
+  const fetchPort: typeof fetch = async input => {
+    const page = Number(new URL(String(input)).searchParams.get("page"));
+    pages.push(page);
+    const ids = page === 1 ? Array.from({ length: 100 }, (_, index) => String(index + 1)) : ["101"];
+    return Response.json({ total_entries: 101, patients: ids.map(id => ({ id, archived_at: null,
+      patient_phone_numbers: [{ number: "0400 111 222", phone_type: "Mobile" }] })) });
+  };
+  const created = ClinikoPatientCandidateReader.create({ scope, apiKey: "synthetic-au5",
+    contactEmail: "test@example.com", rateBudget: new ClinikoReadBudget(1, () => clock) },
+  fetchPort, () => new Date(clock).toISOString());
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  const index = new PostgresPatientPhoneIndex(db);
+  const lookup = new ClinikoPhoneLookup(created.value, index, "61", 60_000, async resetAt => {
+    waits.push(resetAt);
+    clock = Date.parse(resetAt);
+  });
+  assert.equal((await lookup.refresh(scope)).ok, true);
+  assert.deepEqual(pages, [1, 2]);
+  assert.deepEqual(waits, ["2026-09-29T00:01:00.000Z"]);
+  const rows = await db.selectFrom("patient_phone_index").selectAll()
+    .where("tenant_id", "=", scope.tenantId as never).execute();
+  assert.equal(rows.length, 101);
+});
+
+test("full phone scan accepts more than ten thousand patients", async () => {
+  const scope = { tenantId: "phone-large-tenant", clinicId: "phone-large-clinic" };
+  const pages: number[] = [];
+  const fetchPort: typeof fetch = async input => {
+    const page = Number(new URL(String(input)).searchParams.get("page"));
+    pages.push(page);
+    const first = (page - 1) * 100 + 1;
+    const last = Math.min(first + 99, 10_001);
+    return Response.json({ total_entries: 10_001, patients: Array.from({ length: last - first + 1 }, (_, index) => ({
+      id: String(first + index), archived_at: null,
+      patient_phone_numbers: [{ number: "+61400111222", phone_type: "Mobile" }],
+    })) });
+  };
+  const created = ClinikoPatientCandidateReader.create({ scope, apiKey: "synthetic-au5",
+    contactEmail: "test@example.com" }, fetchPort);
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  const index = new PostgresPatientPhoneIndex(db);
+  const lookup = new ClinikoPhoneLookup(created.value, index, "61", 60_000);
+  assert.deepEqual(await lookup.refresh(scope), { ok: true, value: 1 });
+  assert.equal(pages.length, 101);
+  const count = await db.selectFrom("patient_phone_index").select(db.fn.countAll<string>().as("count"))
+    .where("tenant_id", "=", scope.tenantId as never).executeTakeFirstOrThrow();
+  assert.equal(Number(count.count), 10_001);
 });
