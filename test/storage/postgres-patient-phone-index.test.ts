@@ -355,7 +355,7 @@ test("interrupted phone scan resumes at the next page without publishing partial
   const restarted = new ClinikoPhoneLookup(reader(), new PostgresPatientPhoneIndex(db), "61", 60_000,
     undefined, new PostgresPatientPhoneScan(db));
   assert.deepEqual(await restarted.refresh(scope), { ok: true, value: 2 });
-  assert.deepEqual(pages, [1, 2, 2]);
+  assert.deepEqual(pages, [1, 2, 2, 1, 2]);
   const published = await db.selectFrom("patient_phone_index").select("patient_id")
     .where("tenant_id", "=", scope.tenantId as never).execute();
   assert.equal(published.length, 101);
@@ -370,6 +370,86 @@ test("interrupted phone scan resumes at the next page without publishing partial
   if (!pending.ok) return;
   assert.deepEqual(await index.clear(scope), { ok: true, value: true });
   assert.deepEqual(await scan.finish(scope, pending.value.scanRef), { ok: false, error: { kind: "staleScan" } });
+});
+
+for (const change of ["phone", "membership"] as const) {
+  test(`multi-page phone refresh rejects ${change} drift before publishing a generation`, async () => {
+    const scope = { tenantId: `phone-drift-${change}`, clinicId: "clinic" };
+    const index = new PostgresPatientPhoneIndex(db);
+    const scan = new PostgresPatientPhoneScan(db);
+    assert.deepEqual(await index.publish(scope, [{ normalizedPhone: "+61400999999", patientId: "900" }], "61"),
+      { ok: true, value: 1 });
+    let reads = 0;
+    let stable = false;
+    const fetchPort: typeof fetch = async input => {
+      const page = Number(new URL(String(input)).searchParams.get("page"));
+      reads += 1;
+      const changed = stable || reads > 2;
+      const ids = page === 1 ? Array.from({ length: 100 }, (_, offset) => String(offset + 1)) :
+        [change === "membership" && changed ? "102" : "101"];
+      return Response.json({ total_entries: 101, patients: ids.map(id => ({
+        id, first_name: "private-drift-canary", archived_at: null,
+        patient_phone_numbers: [{ number: change === "phone" && changed && page === 2
+          ? "0400 222 222" : "0400 111 111", phone_type: "Mobile" }],
+      })) });
+    };
+    const reader = ClinikoPatientCandidateReader.create({ scope, apiKey: "synthetic-au5",
+      contactEmail: "test@example.com" }, fetchPort);
+    assert.equal(reader.ok, true);
+    if (!reader.ok) return;
+    const lookup = new ClinikoPhoneLookup(reader.value, index, "61", 60_000, undefined, scan);
+    assert.deepEqual(await lookup.refresh(scope), { ok: false, error: { kind: "sourceChanged" } });
+    assert.equal(reads, 4);
+    assert.equal((await db.selectFrom("patient_phone_scan").select("scan_ref")
+      .where("tenant_id", "=", scope.tenantId as never).execute()).length, 0);
+    const retained = await db.selectFrom("patient_phone_index").select("patient_id")
+      .where("tenant_id", "=", scope.tenantId as never).execute();
+    assert.deepEqual(retained.map(row => String(row.patient_id)), ["900"]);
+    assert.deepEqual(await index.find(scope, "+61400999999", 60_000, "61"),
+      { ok: true, value: { kind: "stale", patientIds: [] } });
+
+    stable = true;
+    assert.deepEqual(await lookup.refresh(scope), { ok: true, value: 2 });
+    const published = await db.selectFrom("patient_phone_index").select(["patient_id", "normalized_phone"])
+      .where("tenant_id", "=", scope.tenantId as never).execute();
+    assert.equal(published.length, 101);
+    assert.equal(published.some(row => String(row.patient_id) === "900"), false);
+    assert.equal(published.some(row => String(row.patient_id) === (change === "membership" ? "102" : "101")), true);
+    assert.equal(JSON.stringify(published).includes("private-drift-canary"), false);
+    if (change === "phone") assert.equal(published.some(row => String(row.normalized_phone) === "+61400222222"), true);
+  });
+}
+
+test("temporary failure in the verification pass keeps a complete checkpoint for retry", async () => {
+  const scope = { tenantId: "phone-verify-retry", clinicId: "clinic" };
+  const index = new PostgresPatientPhoneIndex(db);
+  const scan = new PostgresPatientPhoneScan(db);
+  const pages: number[] = [];
+  let fail = true;
+  const fetchPort: typeof fetch = async input => {
+    const page = Number(new URL(String(input)).searchParams.get("page"));
+    pages.push(page);
+    if (fail && pages.length === 4) return new Response(null, { status: 503 });
+    const ids = page === 1 ? Array.from({ length: 100 }, (_, offset) => String(offset + 1)) : ["101"];
+    return Response.json({ total_entries: 101, patients: ids.map(id => ({ id, archived_at: null,
+      patient_phone_numbers: [{ number: "0400 111 111", phone_type: "Mobile" }] })) });
+  };
+  const reader = ClinikoPatientCandidateReader.create({ scope, apiKey: "synthetic-au5",
+    contactEmail: "test@example.com" }, fetchPort);
+  assert.equal(reader.ok, true);
+  if (!reader.ok) return;
+  const lookup = new ClinikoPhoneLookup(reader.value, index, "61", 60_000, undefined, scan);
+  assert.deepEqual(await lookup.refresh(scope), { ok: false, error: { kind: "unavailable" } });
+  const checkpoint = await db.selectFrom("patient_phone_scan").select(["next_page", "seen_count"])
+    .where("tenant_id", "=", scope.tenantId as never).executeTakeFirstOrThrow();
+  assert.deepEqual([checkpoint.next_page, checkpoint.seen_count], [3, 101]);
+  assert.deepEqual(await index.find(scope, "+61400111111", 60_000, "61"),
+    { ok: true, value: { kind: "stale", patientIds: [] } });
+  fail = false;
+  assert.deepEqual(await lookup.refresh(scope), { ok: true, value: 1 });
+  assert.deepEqual(pages, [1, 2, 1, 2, 1, 2]);
+  assert.equal((await db.selectFrom("patient_phone_scan").select("scan_ref")
+    .where("tenant_id", "=", scope.tenantId as never).execute()).length, 0);
 });
 
 test("two worker processes coordinate one clinic scan and the losing worker retries after publication", async () => {
