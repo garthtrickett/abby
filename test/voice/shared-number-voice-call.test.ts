@@ -55,7 +55,7 @@ function fixture(kind: "memory" | "postgres", outputPort?: PlaybackPort) {
     { accountRef, dialedNumber: sharedNumber, ...north, spokenName: "Northside", routeVersion: "v1" },
     { accountRef, dialedNumber: singleNumber, ...main, routeVersion: "v1" },
   ]);
-  const ledger: LedgerStore & EffectCallLeaseStore = kind === "postgres" ? new PostgresLedger(db!, suggested => suggested) : new MemoryLedger();
+  const ledger: LedgerStore & EffectCallLeaseStore = kind === "postgres" ? new PostgresLedger(db!, suggested => suggested, undefined, "unsafeReference") : new MemoryLedger();
   const policy = kind === "postgres"
     ? new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true))
     : new MemoryPolicyStore("execute", () => current, async () => ok(true));

@@ -109,7 +109,7 @@ test("shared-number cutover stages, publishes once, and rolls back without losin
       { tenantId: targetA.tenantId, clinicId: targetA.clinicId, locationId: "alpha", routeVersion: "2" });
     assert.equal(selected.ok && selected.value.bookingEnabled, false);
     if (selected.ok) {
-      const ledger = new PostgresLedger(db);
+      const ledger = new PostgresLedger(db, undefined, undefined, "unsafeReference");
       assert.equal((await ledger.start("route-cutover-target-call", selected.value)).ok, true);
       const staff: StaffItem = { key: "route-cutover-staff-item", scope: targetA, reason: "callerRequested",
         destination: selected.value.staffDestination, dueAt: "2026-09-29T00:30:00Z", status: "requested" };
@@ -141,7 +141,7 @@ test("shared-number cutover stages, publishes once, and rolls back without losin
   const restored = await routeHost.identifyCall(accountRef, dialedNumber);
   assert.equal(restored.ok && restored.value.tenantId, sourceA.tenantId);
   assert.equal(restored.ok && restored.value.routeVersion, "3");
-  const retainedWork = await new PostgresLedger(db).listStaffItems(targetA);
+  const retainedWork = await new PostgresLedger(db, undefined, undefined, "unsafeReference").listStaffItems(targetA);
   assert.equal(retainedWork.ok && retainedWork.value[0]?.taskKey, "route-cutover-staff-item");
   const events = await sql<{ kind: string }>`select kind from number_route_events
     where account_ref = ${accountRef} and dialed_number = ${dialedNumber} order by event_id`.execute(db);

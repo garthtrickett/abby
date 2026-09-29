@@ -68,7 +68,7 @@ test("configuration archive persists native target state, source history, and re
         assert.equal(current.value.staffDestination.ownerRef.startsWith("buyer:staffOwner:"), true);
       }
     }
-    const stop = await new PostgresLedger(db).readWriteStop(scope);
+    const stop = await new PostgresLedger(db, undefined, undefined, "unsafeReference").readWriteStop(scope);
     assert.equal(stop.ok && stop.value.stopped, true);
   }
   const bookingHistory = await policy.listBookingChanges(target);
@@ -81,7 +81,7 @@ test("configuration archive persists native target state, source history, and re
     [["1", true], ["2", false]]);
   const importedKnowledge = await knowledge.readKnowledge(target, ["parking-a"]);
   assert.equal(importedKnowledge.ok && importedKnowledge.value[0]?.approvedText, "Directions for parking-a");
-  const reception = createEmbeddedTextComposition(new PostgresLedger(db), policy,
+  const reception = createEmbeddedTextComposition(new PostgresLedger(db, undefined, undefined, "unsafeReference"), policy,
     new ReferenceClinicHost([], []), undefined, undefined, undefined, knowledge);
   const started = await reception.startCall("durable-import-call", target, "2026-09-28T22:06:00Z");
   assert.equal(started.ok, true);

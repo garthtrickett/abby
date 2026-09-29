@@ -35,7 +35,7 @@ function fixture(kind: "memory" | "postgres", raw: unknown | ((turn: FinalCaller
   const id = `model-${kind}-${++sequence}`;
   const scope: LocationScope = { tenantId: `tenant-${id}`, clinicId: `clinic-${id}`, locationId: `location-${id}` };
   const callId = `call-${id}`;
-  const ledger: LedgerStore & EffectCallLeaseStore = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt) : new MemoryLedger();
+  const ledger: LedgerStore & EffectCallLeaseStore = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt, undefined, "unsafeReference") : new MemoryLedger();
   const host = new ReferenceClinicHost([], [], [{ scope, sourceRef: "hours", version: "hours-v1", ownerRef: "owner-1",
     approvedText: "We open at 9 am.", approved: true, effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]);
   configureHost?.(host, scope);

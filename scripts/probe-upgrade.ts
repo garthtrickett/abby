@@ -42,7 +42,7 @@ try {
       capabilities: { ...referenceDefaultPolicy(scope).capabilities, book: "execute" as const } };
     const callId = "upgrade-call";
     const now = "2026-09-28T10:00:00.000Z";
-    const runtime = new CallRuntime(new PostgresLedger(db), scope);
+    const runtime = new CallRuntime(new PostgresLedger(db, undefined, undefined, "unsafeReference"), scope);
     // Seed through the historical schema: the current ledger intentionally requires
     // the pending-location table, which did not exist at version 001.
     await sql`insert into calls (call_id, tenant_id, clinic_id, location_id, version, policy_version, state)
@@ -72,7 +72,7 @@ try {
              (select count(*) from staff_items)::text as staff,
              (select count(*) from clinic_settings)::text as settings`.execute(db);
     assert.deepEqual(afterRows.rows[0], beforeRows.rows[0]);
-    const restarted = new CallRuntime(new PostgresLedger(db), scope);
+    const restarted = new CallRuntime(new PostgresLedger(db, undefined, undefined, "unsafeReference"), scope);
     const restored = value(await restarted.read(callId));
     assert.equal(restored.version, before.version);
     assert.deepEqual(restored.staffItems[item.key], item);

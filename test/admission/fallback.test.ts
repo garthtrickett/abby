@@ -23,7 +23,7 @@ function value<T>(result: Result<T, { kind: string }>): T {
 
 function fixture(kind: "memory" | "postgres", suffix: string) {
   const scope = { tenantId: `fallback-tenant-${suffix}`, clinicId: `fallback-clinic-${suffix}`, locationId: `fallback-location-${suffix}` };
-  const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt) : new MemoryLedger();
+  const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt, undefined, "unsafeReference") : new MemoryLedger();
   let routeAvailable = true;
   let automationEnabled = true;
   let ready = true;

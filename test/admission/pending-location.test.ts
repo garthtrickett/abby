@@ -31,7 +31,7 @@ function fixture(kind: "memory" | "postgres") {
   const callId = callIdFor(key);
   const admission: Admission = { key, dialedNumber: "+6125550101", acceptedAt: now,
     deadline: new Date(Date.parse(now) + 30_000).toISOString() };
-  const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggested => suggested) : new MemoryLedger();
+  const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggested => suggested, undefined, "unsafeReference") : new MemoryLedger();
   const policy = { ...referenceDefaultPolicy(scope), numberRouteVersion: route.routeVersion };
   return { ledger, route, key, callId, admission, scope, policy };
 }

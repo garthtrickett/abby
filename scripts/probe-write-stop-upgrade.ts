@@ -34,7 +34,7 @@ try {
     await sql`insert into clinic_write_stop_inflight (tenant_id, clinic_id, effect_id, call_id, action_key, status)
       values (${scope.tenantId}, ${scope.clinicId}, 'first-effect', 'first-call', 'first-action', 'possiblySent')`.execute(db);
     await migrate(db);
-    const ledger = new PostgresLedger(db, undefined, async () => ok(true));
+    const ledger = new PostgresLedger(db, undefined, async () => ok(true), "unsafeReference");
     const preserved = value(await ledger.readWriteStop(scope));
     assert.equal(preserved.version, "1");
     assert.equal(preserved.stopped, true);

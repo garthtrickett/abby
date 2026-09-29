@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import test, { after } from "node:test";
 import { sql } from "kysely";
 import { MemoryLedger } from "../../src/core/ledger.ts";
@@ -74,7 +75,7 @@ function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = f
       effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: expiresAt }]);
   let reception: TextReception;
   let policy: PolicyStore;
-  const ledger = suppliedLedger ?? (kind === "standalone" ? new PostgresLedger(db!, undefined, readiness) : new MemoryLedger(readiness));
+  const ledger = suppliedLedger ?? (kind === "standalone" ? new PostgresLedger(db!, undefined, readiness, "unsafeReference") : new MemoryLedger(readiness));
   if (kind === "standalone") {
     assert.ok(db);
     ({ reception, policy } = createReferenceStandaloneTextComposition(db, host, hostBookingMode, ledger, availability, undefined, readiness, undefined, host));
@@ -291,7 +292,7 @@ for (const kind of kinds) {
   test(`${kind}: clinic-wide automation command gates new calls and preserves admitted calls`, async () => {
     let ready = false;
     const readiness: AutomationReadiness = async () => ready ? ok(true) : err({ kind: "readinessFailed", missing: ["mediaTestCall"] });
-    const ledger = kind === "standalone" ? new PostgresLedger(db!, suggestedAt => suggestedAt) : new MemoryLedger();
+    const ledger = kind === "standalone" ? new PostgresLedger(db!, suggestedAt => suggestedAt, undefined, "unsafeReference") : new MemoryLedger();
     const app = fixture(kind, `${kind}-automation-setting`, false, "execute", undefined, readiness, ledger);
     const admission = new CallAdmissionService(ledger, async () => {
       const result = await app.policy.read(app.scope);
@@ -395,7 +396,7 @@ for (const kind of kinds) {
     const history = value(await app.admin.submit({ kind: "calls.writes.stop.audit.v1" }));
     assert.equal(history.kind, "writeStopAudit");
     assert.deepEqual(history.page.entries.map(entry => [entry.version, entry.stopped]), [["1", true], ["2", false], ["3", true]]);
-    if (kind === "standalone") assert.deepEqual(value(await new PostgresLedger(db!).readWriteStop(app.scope)), secondStop.status);
+    if (kind === "standalone") assert.deepEqual(value(await new PostgresLedger(db!, undefined, undefined, "unsafeReference").readWriteStop(app.scope)), secondStop.status);
   });
 
   test(`${kind}: enabled setting with request-only host support opens staff work`, async () => {
@@ -561,41 +562,51 @@ test("standalone patient actions stay unavailable without durable host work", { 
   assert.deepEqual({ book: enabled.capabilities.book, cancel: enabled.capabilities.cancel,
     reschedule: enabled.capabilities.reschedule, intake: enabled.capabilities.intake },
   { book: "unavailable", cancel: "unavailable", reschedule: "unavailable", intake: "unavailable" });
-  const callId = "safe-default-call";
+  const callId = randomUUID();
   value(await reception.startCall(callId, scope));
-  const requested = value(await reception.proposeBooking(scope, turn(callId, "request", "Book physio"), patient.verificationRef, offer.offerRef, now));
+  const requested = value(await reception.proposeBooking(scope, turn(callId, randomUUID(), "Book physio"), patient.verificationRef, offer.offerRef, now));
   assert.equal(Object.keys(requested.actions).length, 0);
   assert.match(requested.callerMessages.at(-1) ?? "", /can't complete that request here/);
+  const callerReadText = "private-caller-read-canary-6734";
+  const availability = value(await reception.checkAvailability(scope, turn(callId, randomUUID(), callerReadText),
+    now, "2026-09-29T18:00:00.000Z", now));
+  assert.match(availability.callerMessages.at(-1) ?? "", /contact the clinic directly/);
+  const appointments = value(await reception.checkAppointments(scope, turn(callId, randomUUID(), "What is booked?"),
+    patient.verificationRef, now, "2026-09-29T18:00:00.000Z", now));
+  assert.match(appointments.callerMessages.at(-1) ?? "", /contact the clinic directly/);
   const appointmentRef = "private-appointment-canary-3825";
   const draftRef = "private-intake-canary-4163";
-  const runtime = new CallRuntime(new PostgresLedger(db!), scope);
-  const cancel = value(await runtime.acceptTurn(turn(callId, "cancel", "Cancel my appointment"), {
+  const runtime = new CallRuntime(new PostgresLedger(db!, undefined, undefined, "standaloneText"), scope);
+  const cancel = value(await runtime.acceptTurn(turn(callId, randomUUID(), "Cancel my appointment"), {
     kind: "requestAction", request: { kind: "cancel", patient,
       target: { scope, patientRef: patient.patientRef, appointmentRef } },
   }, now));
   assert.deepEqual(Object.keys(cancel.staffItems), []);
-  const reschedule = value(await runtime.acceptTurn(turn(callId, "reschedule", "Move my appointment"), {
+  const reschedule = value(await runtime.acceptTurn(turn(callId, randomUUID(), "Move my appointment"), {
     kind: "requestAction", request: { kind: "reschedule", patient,
       target: { scope, patientRef: patient.patientRef, appointmentRef }, offer },
   }, now));
   assert.deepEqual(Object.keys(reschedule.actions), []);
-  const intake = value(await runtime.acceptTurn(turn(callId, "intake", "I am a new patient"), {
+  const intake = value(await runtime.acceptTurn(turn(callId, randomUUID(), "I am a new patient"), {
     kind: "requestAction", request: { kind: "intake", scope, approvedDraftRef: draftRef,
       consentRef: "private-consent-canary-6625", duplicateCheckRef: "private-duplicate-canary-5016" },
   }, now));
   assert.deepEqual(Object.keys(intake.staffItems), []);
-  const handoff = value(await runtime.acceptTurn(turn(callId, "handoff", "Please ask staff to call me"),
+  const handoff = value(await runtime.acceptTurn(turn(callId, randomUUID(), "Please ask staff to call me"),
     { kind: "handoff", reason: "callerRequested" }, now));
   assert.deepEqual(Object.keys(handoff.staffItems), []);
   assert.match(handoff.callerMessages.at(-1) ?? "", /contact the clinic directly/);
-  const transfer = value(await runtime.acceptTurn(turn(callId, "transfer", "Please transfer me"),
+  const transfer = value(await runtime.acceptTurn(turn(callId, randomUUID(), "Please transfer me"),
     { kind: "transfer", reason: "callerRequested" }, now));
   assert.deepEqual(Object.keys(transfer.staffItems), []);
   assert.equal(transfer.policy.capabilities.transfer, "unavailable");
-  const ambiguous = value(await runtime.acceptTurn(turn(callId, "ambiguous", "Which appointment is mine?"),
+  const ambiguous = value(await runtime.acceptTurn(turn(callId, randomUUID(), "Which appointment is mine?"),
     { kind: "ambiguousTarget" }, now));
   assert.deepEqual(Object.keys(ambiguous.staffItems), []);
   assert.match(ambiguous.callerMessages.at(-1) ?? "", /contact the clinic directly/);
+  const persisted = value(await runtime.read(callId));
+  assert.deepEqual(persisted.availabilityReads, []);
+  assert.deepEqual(persisted.appointmentReads, []);
   value(await reception.drain(scope, callId, now));
   assert.equal(host.bookings(scope).length, 0);
   assert.equal(host.tasks(scope).length, 0);
@@ -603,6 +614,7 @@ test("standalone patient actions stay unavailable without durable host work", { 
     { label: "default_offer", value: offer.offerRef },
     { label: "appointment", value: appointmentRef },
     { label: "intake", value: draftRef },
+    { label: "caller_read", value: callerReadText },
   ]);
   assert.deepEqual(scan, { ok: true, value: [] });
 });
