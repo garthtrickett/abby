@@ -77,7 +77,7 @@ try {
     assert.equal(restored.version, before.version);
     assert.deepEqual(restored.staffItems[item.key], item);
     assert.equal(restored.effects[effectId]?.status, "pending");
-    const settings = new PostgresPolicyStore(db, referenceDefaultPolicy);
+    const settings = new PostgresPolicyStore(db, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference");
     assert.equal(value(await settings.read(scope)).policyVersion, "1");
     assert.equal(value(await settings.read(scope)).automationEnabled, false);
     assert.deepEqual(value(await settings.listBookingChanges(scope)).entries,

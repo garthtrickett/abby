@@ -32,7 +32,7 @@ test("shared-number cutover stages, publishes once, and rolls back without losin
   await sql`insert into number_routes (account_ref, dialed_number, version, assignment)
     values (${accountRef}, ${dialedNumber}, 1, ${JSON.stringify(original)}::jsonb)`.execute(db);
   const routeHost = new PostgresNumberRoutingHost(db);
-  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly", async () => ok(true));
+  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly", async () => ok(true), true, "unsafeReference");
   const router = new ClinicPolicyRouter(routeHost, policy);
   const initial = await router.identify(accountRef, dialedNumber);
   assert.equal(initial.ok && initial.value.tenantId, sourceA.tenantId);
@@ -157,7 +157,7 @@ test("release after stage prevents publication while the source route remains au
   await sql`insert into number_routes (account_ref, dialed_number, version, assignment)
     values (${accountRef}, ${dialedNumber}, 1,
       ${JSON.stringify({ tenantId: source.tenantId, clinicId: source.clinicId, candidateLocationIds: ["location"] })}::jsonb)`.execute(db);
-  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy);
+  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference");
   assert.equal((await policy.changeBookingEnabled(source, "0", false, "source-admin")).ok, true);
   let fenceAudits = 0;
   const fenceAuthority = { authorizeAndRecord: async () => ok({ requestRef: `route-stale-fence-${++fenceAudits}` }) };

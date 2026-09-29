@@ -39,7 +39,7 @@ function fixture(kind: "memory" | "postgres") {
   let policyReads = 0;
   const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggested => suggested, undefined, "unsafeReference") : new MemoryLedger();
   const policy = kind === "postgres"
-    ? new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true))
+    ? new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true), true, "unsafeReference")
     : new MemoryPolicyStore("execute", () => now, async () => ok(true));
   const router = new ClinicPolicyRouter(host, { read(scope) { policyReads += 1; return policy.read(scope); } });
   const admission = new CallAdmissionService(ledger, router.resolve, () => now, async () => ok(true));

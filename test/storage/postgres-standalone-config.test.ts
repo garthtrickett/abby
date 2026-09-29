@@ -3,9 +3,11 @@ import { randomUUID } from "node:crypto";
 import test, { after } from "node:test";
 import { sql } from "kysely";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
+import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
+import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
 import type { Result } from "../../src/core/model.ts";
 
 const url = process.env.DATABASE_URL;
@@ -17,6 +19,35 @@ function value<T, E>(result: Result<T, E>): T {
   assert.ok(result.ok, result.ok ? "" : JSON.stringify(result.error));
   return result.value;
 }
+
+test("default PostgreSQL policy store uses minimal rows and rejects legacy rich rows", async () => {
+  const scope = { tenantId: `default-policy-${randomUUID()}`, clinicId: "clinic", locationId: "location" };
+  const canary = `patient-private-policy-${randomUUID()}`;
+  const defaultPolicy = (target: typeof scope) => ({ ...referenceDefaultPolicy(target),
+    greeting: { scope: target, version: "test", ownerRef: "synthetic", approvedText: canary, approved: true as const } });
+  const policy = new PostgresPolicyStore(db, defaultPolicy);
+  const changed = value(await policy.changeBookingEnabled(scope, "0", true, "clinic-admin"));
+  assert.equal(changed.bookingEnabled, true);
+  assert.equal(changed.staffWorkEnabled, false);
+  assert.deepEqual(Object.values(changed.capabilities), Array(5).fill("unavailable"));
+  const rows = await sql<{ version: number; policy: unknown }>`select version, policy from clinic_settings
+    where tenant_id = ${scope.tenantId} order by version`.execute(db);
+  assert.deepEqual(rows.rows, [
+    { version: 0, policy: { scope, policyVersion: "0", bookingEnabled: false } },
+    { version: 1, policy: { scope, policyVersion: "1", bookingEnabled: true } },
+  ]);
+  assert.equal(value(await new PostgresPolicyStore(db, defaultPolicy).read(scope)).policyVersion, "1");
+  assert.deepEqual(await scanPatientDataCanaries(db, [{ label: "default_policy", value: canary }]),
+    { ok: true, value: [] });
+
+  const richScope = { ...scope, locationId: "legacy-rich" };
+  await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy)
+    values (${richScope.tenantId}, ${richScope.clinicId}, ${richScope.locationId}, 0,
+      ${JSON.stringify(referenceDefaultPolicy(richScope))}::jsonb)`.execute(db);
+  const legacy = await new PostgresPolicyStore(db, defaultPolicy).read(richScope);
+  assert.equal(legacy.ok, false);
+  if (!legacy.ok) assert.equal(legacy.error.kind, "storageFailure");
+});
 
 test("standalone setting toggle stores only structured policy while knowledge stays transient and unavailable", async () => {
   const scope = { tenantId: "standalone-config-tenant", clinicId: "standalone-config-clinic", locationId: "location-a" };

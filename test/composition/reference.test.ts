@@ -259,7 +259,7 @@ for (const kind of kinds) {
     assert.equal(app.host.bookings(app.scope).length, 1);
     assert.equal(app.host.tasks(app.scope).length, 0);
 
-    const reloaded = kind === "standalone" ? new PostgresPolicyStore(db!, referenceDefaultPolicy) : app.policy;
+    const reloaded = kind === "standalone" ? new PostgresPolicyStore(db!, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference") : app.policy;
     assert.equal(value(await reloaded.read(app.scope)).policyVersion, "2");
     const otherScope = { tenantId: `${app.scope.tenantId}-other`, clinicId: app.scope.clinicId, locationId: app.scope.locationId };
     assert.equal(value(await reloaded.read(otherScope)).capabilities.book, "unavailable");
@@ -281,7 +281,7 @@ for (const kind of kinds) {
     assert.equal(history.entries.every(entry => !!entry.changedAt && Number.isFinite(Date.parse(entry.changedAt))), true);
     assert.deepEqual(bookingAudit(value(await app.admin.submit({ kind: "settings.appointments.booking.audit.v1", afterVersion: 1 }))).entries.map(entry => entry.version), ["2"]);
     error(await app.admin.submit({ kind: "settings.appointments.booking.audit.v1", afterVersion: -1 }), "invalid");
-    const reopened: PolicyStore = kind === "standalone" ? new PostgresPolicyStore(db!, referenceDefaultPolicy) : app.policy;
+    const reopened: PolicyStore = kind === "standalone" ? new PostgresPolicyStore(db!, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference") : app.policy;
     const persisted = value(await reopened.listBookingChanges(app.scope));
     assert.deepEqual(persisted.entries, history.entries);
     const otherScope = { ...app.scope, tenantId: `${app.scope.tenantId}-other` };
@@ -337,7 +337,7 @@ for (const kind of kinds) {
     ]);
     error(await app.admin.submit({ kind: "settings.automation.enabled.change.v1", expectedVersion: "1", enabled: true }), "versionConflict");
     error(await app.admin.submit({ kind: "settings.automation.enabled.change.v1", expectedVersion: "2", enabled: "yes" } as unknown as GatewayCommand), "invalid");
-    const reloaded: PolicyStore = kind === "standalone" ? new PostgresPolicyStore(db!, referenceDefaultPolicy) : app.policy;
+    const reloaded: PolicyStore = kind === "standalone" ? new PostgresPolicyStore(db!, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference") : app.policy;
     assert.equal(value(await reloaded.read(app.scope)).automationVersion, "2");
     assert.deepEqual(value(await reloaded.listAutomationChanges(app.scope)).entries, history.entries);
   });
@@ -527,7 +527,7 @@ test("postgres: pre-audit policy versions stay readable without invented attribu
   const legacyPolicy = Object.fromEntries(Object.entries(policy).filter(([field]) => field !== "automationEnabled"));
   await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy)
     values (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, 1, ${JSON.stringify(legacyPolicy)}::jsonb)`.execute(db!);
-  const store = new PostgresPolicyStore(db!, referenceDefaultPolicy);
+  const store = new PostgresPolicyStore(db!, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference");
   const history = value(await store.listBookingChanges(scope));
   assert.deepEqual(history.entries, [{ version: "1", enabled: true, provenance: "legacyUnattributed" }]);
   const restored = value(await store.read(scope));
@@ -540,7 +540,7 @@ test("postgres: corrupt location policy cannot commit an automation change", { s
   const malformed = { scope, policyVersion: "0" };
   await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy)
     values (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, 0, ${JSON.stringify(malformed)}::jsonb)`.execute(db!);
-  const store = new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true));
+  const store = new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true), true, "unsafeReference");
   error(await store.changeAutomationEnabled(scope, "0", true, "corrupt-policy-admin"), "storageFailure");
   assert.deepEqual(value(await store.listAutomationChanges(scope)).entries, []);
   const count = await sql<{ count: string }>`select count(*)::text as count from clinic_automation

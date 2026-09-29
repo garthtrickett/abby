@@ -37,7 +37,7 @@ test("PostgreSQL config archive takes a consistent scoped snapshot with an allow
     timeZone: "Australia/Sydney", mappingProvenance: "buyer-reviewed-map-1", archiveId: "config-archive-1",
     actorRef: "archive-admin", createdAt: "2026-09-28T22:00:00Z" };
   const authority: ConfigArchiveAuthority = { authorizeAndRecord: async () => ok({ requestRef: "audited-request-1" }) };
-  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly", async () => ok(true));
+  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly", async () => ok(true), true, "unsafeReference");
   assert.equal((await policy.changeBookingEnabled(scope, "0", true, "archive-admin")).ok, true);
   assert.equal((await policy.changeBookingEnabled(scope, "1", false, "archive-admin")).ok, true);
   assert.equal((await policy.changeBookingEnabled(scope, "2", true, "archive-admin")).ok, true);
@@ -239,7 +239,7 @@ test("a pristine PostgreSQL source stages a disabled standalone default with wri
 
 test("config archive refuses to omit another location in the source tenant", async () => {
   const scope = { tenantId: "archive-multilocation-tenant", clinicId: "clinic", locationId: "location-a" };
-  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly");
+  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly", undefined, true, "unsafeReference");
   assert.equal((await policy.changeBookingEnabled(scope, "0", true, "archive-admin")).ok, true);
   assert.equal((await policy.changeBookingEnabled({ ...scope, locationId: "location-b" }, "0", true, "archive-admin")).ok, true);
   const request: ConfigArchiveRequest = { scope, targetScope: scope, timeZone: "UTC", mappingProvenance: "map",
@@ -256,7 +256,7 @@ test("configuration snapshot comparison detects setting and knowledge drift befo
     archiveId: "drift-baseline", actorRef: "archive-admin", createdAt: "2026-09-28T22:00:00Z" };
   let audited = 0;
   const authority: ConfigArchiveAuthority = { authorizeAndRecord: async () => ok({ requestRef: `drift-audit-${++audited}` }) };
-  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly");
+  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly", undefined, true, "unsafeReference");
   assert.equal((await policy.changeBookingEnabled(scope, "0", true, "archive-admin")).ok, true);
   const baseline = await buildPostgresConfigArchive(db, request, authority);
   assert.equal(baseline.ok, true);
@@ -298,7 +298,7 @@ test("one PostgreSQL snapshot exports every mapped location and refuses a partia
   const tenantId = "archive-two-locations-tenant";
   const first = { tenantId, clinicId: "clinic", locationId: "a" };
   const second = { tenantId, clinicId: "clinic", locationId: "b" };
-  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly", async () => ok(true));
+  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly", async () => ok(true), true, "unsafeReference");
   assert.equal((await policy.changeBookingEnabled(first, "0", true, "archive-admin")).ok, true);
   assert.equal((await policy.changeBookingEnabled(second, "0", false, "archive-admin")).ok, true);
   assert.equal((await policy.changeAutomationEnabled(first, "0", true, "archive-admin")).ok, true);

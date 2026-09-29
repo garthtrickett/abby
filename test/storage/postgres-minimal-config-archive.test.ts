@@ -57,7 +57,7 @@ test("standalone minimal settings export and stage without granting buyer capabi
 test("default archive rejects rich policy and any standalone knowledge draft", async () => {
   const richScope = { tenantId: "minimal-export-rich", clinicId: "clinic", locationId: "location" };
   const targetScope = { ...richScope, tenantId: "buyer-rich" };
-  const rich = new PostgresPolicyStore(db, referenceDefaultPolicy);
+  const rich = new PostgresPolicyStore(db, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference");
   assert.equal((await rich.changeBookingEnabled(richScope, "0", true, "clinic-admin")).ok, true);
   const request = { scope: richScope, targetScope, timeZone: "UTC", mappingProvenance: "reviewed-map",
     archiveId: "rich-rejected", actorRef: "clinic-admin", createdAt: "2026-09-29T04:00:00Z" };
