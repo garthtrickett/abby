@@ -12,6 +12,8 @@ import type { AutomationReadiness } from "../core/readiness.ts";
 export type AuthenticatedInboundCall = Readonly<{
   key: ProviderCallKey;
   dialedNumber: string;
+  /** Untrusted caller-ID clue. It is never copied into the durable Admission. */
+  presentedCallerNumber?: string;
   receivedAt: string;
 }>;
 

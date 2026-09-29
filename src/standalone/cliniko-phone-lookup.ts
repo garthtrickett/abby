@@ -5,11 +5,9 @@ import type { ClinikoClinicScope, ClinikoPatientFailure } from "../cliniko/patie
 import { ClinikoPatientCandidateReader } from "../cliniko/patients.ts";
 import type { PhoneIndexFailure } from "../storage/postgres-patient-phone-index.ts";
 import { PostgresPatientPhoneIndex } from "../storage/postgres-patient-phone-index.ts";
+import type { CallerCandidates } from "../voice/caller-candidates.ts";
 
-export type PhoneLookupResult = Readonly<{
-  kind: "noNumber" | "indexStale" | "none" | "one" | "multiple" | "tooMany";
-  candidateIds: readonly string[];
-}>;
+export type PhoneLookupResult = CallerCandidates;
 
 /** Standalone composition: phone gives candidates, never identity proof. */
 export class ClinikoPhoneLookup {
