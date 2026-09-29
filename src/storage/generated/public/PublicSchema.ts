@@ -5,6 +5,7 @@ import type { default as ClinicSettingsTable } from './ClinicSettings.js';
 import type { default as PendingLocationCallsTable } from './PendingLocationCalls.js';
 import type { default as ClinicWriteStopTable } from './ClinicWriteStop.js';
 import type { default as ClinicKnowledgeHeadsTable } from './ClinicKnowledgeHeads.js';
+import type { default as TenantPortabilityFencesTable } from './TenantPortabilityFences.js';
 import type { default as ClinicWriteStopInflightTable } from './ClinicWriteStopInflight.js';
 import type { default as EffectCallLeasesTable } from './EffectCallLeases.js';
 import type { default as ClinicAutomationTable } from './ClinicAutomation.js';
@@ -14,6 +15,7 @@ import type { default as CallsTable } from './Calls.js';
 import type { default as ClinicWriteStopEventsTable } from './ClinicWriteStopEvents.js';
 import type { default as CallEventsTable } from './CallEvents.js';
 import type { default as EffectOutboxTable } from './EffectOutbox.js';
+import type { default as TenantPortabilityFenceEventsTable } from './TenantPortabilityFenceEvents.js';
 
 export default interface PublicSchema {
   clinic_settings: ClinicSettingsTable;
@@ -23,6 +25,8 @@ export default interface PublicSchema {
   clinic_write_stop: ClinicWriteStopTable;
 
   clinic_knowledge_heads: ClinicKnowledgeHeadsTable;
+
+  tenant_portability_fences: TenantPortabilityFencesTable;
 
   clinic_write_stop_inflight: ClinicWriteStopInflightTable;
 
@@ -41,4 +45,6 @@ export default interface PublicSchema {
   call_events: CallEventsTable;
 
   effect_outbox: EffectOutboxTable;
+
+  tenant_portability_fence_events: TenantPortabilityFenceEventsTable;
 }

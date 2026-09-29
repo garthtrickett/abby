@@ -43,7 +43,7 @@ export type ConfigArchiveAuthority = Readonly<{
 
 export type ConfigArchiveFailure = Readonly<{
   kind: "invalidConfig" | "denied" | "auditFailure" | "scopeIncomplete" | "callsRequireRetention" |
-    "storageCorrupt" | "storageFailure" | "tooLarge";
+    "unresolvedWork" | "storageCorrupt" | "storageFailure" | "tooLarge";
 }>;
 
 type SettingRow = { clinic_id: string; location_id: string; version: number; policy: unknown; changed_by: string | null; previous_booking_enabled: boolean | null; changed_at: Date | null };
@@ -187,7 +187,10 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
       if (!validRef(schemaVersion)) throw new ExportAbort("storageCorrupt");
       const calls = await sql<{ found: number }>`select 1 as found from calls where tenant_id = ${sourceTenantId} limit 1`.execute(trx);
       const pending = await sql<{ found: number }>`select 1 as found from pending_location_calls where tenant_id = ${sourceTenantId} limit 1`.execute(trx);
+      const inflight = await sql<{ found: number }>`select 1 as found from clinic_write_stop_inflight
+        where tenant_id = ${sourceTenantId} limit 1`.execute(trx);
       if (calls.rows.length || pending.rows.length) throw new ExportAbort("callsRequireRetention");
+      if (inflight.rows.length) throw new ExportAbort("unresolvedWork");
       const observedLocations = await sql<{ clinic_id: string; location_id: string }>`select clinic_id, location_id from clinic_settings
         where tenant_id = ${sourceTenantId} union select clinic_id, location_id from clinic_knowledge_events
         where tenant_id = ${sourceTenantId}`.execute(trx);
