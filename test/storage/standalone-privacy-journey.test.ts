@@ -15,6 +15,7 @@ import { buildPostgresConfigArchive } from "../../src/storage/postgres-config-ar
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { PostgresPatientPhoneIndex } from "../../src/storage/postgres-patient-phone-index.ts";
 import { PostgresPatientPhoneScan } from "../../src/storage/postgres-patient-phone-scan.ts";
+import { scanDisposableBackupCanaries } from "./backup-canary-scan.ts";
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
@@ -114,6 +115,7 @@ test("standalone phone, setting, export, and text journey retains only patient p
   const canaries = [privateName, privateNote, appointmentId, appointmentTime, callerText,
     answerText, verificationRef, offerRef].map((canary, index) => ({ label: `private_${index}`, value: canary }));
   assert.deepEqual(await scanPatientDataCanaries(db, canaries), { ok: true, value: [] });
+  assert.deepEqual(await scanDisposableBackupCanaries(url, canaries), []);
   const serializedArchive = Buffer.concat(archiveBytes).toString("utf8");
   assert.equal(canaries.some(canary => serializedArchive.includes(canary.value)), false,
     "configuration export contained a patient-data canary");
@@ -202,6 +204,10 @@ test("standalone agent reads provisional Cliniko times without retaining appoint
     { label: "patient_name", value: privateName }, { label: "appointment_id", value: appointmentId },
     { label: "appointment_time", value: startsAt }, { label: "caller_text", value: callerText },
   ]), { ok: true, value: [] });
+  assert.deepEqual(await scanDisposableBackupCanaries(url, [
+    { label: "patient_name", value: privateName }, { label: "appointment_id", value: appointmentId },
+    { label: "caller_text", value: callerText },
+  ]), []);
 });
 
 test("standalone text ingress presents availability and persists no patient-specific input or result", async () => {
@@ -249,4 +255,8 @@ test("standalone text ingress presents availability and persists no patient-spec
     { label: "caller_text", value: callerText }, { label: "patient_name", value: patientName },
     { label: "appointment_id", value: appointmentId }, { label: "appointment_time", value: startsAt },
   ]), { ok: true, value: [] });
+  assert.deepEqual(await scanDisposableBackupCanaries(url, [
+    { label: "caller_text", value: callerText }, { label: "patient_name", value: patientName },
+    { label: "appointment_id", value: appointmentId },
+  ]), []);
 });
