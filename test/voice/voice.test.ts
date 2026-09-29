@@ -654,7 +654,7 @@ for (const kind of kinds) {
     { name: "appointment type outside practitioner", options: { unrelated: "appointmentType" as const }, reason: "notEligible", requestCount: 5 },
     { name: "rate limited", options: { status: 429 }, reason: "rateLimited", requestCount: 1 },
     { name: "invalid business timezone", options: { timeZone: "invalid/timezone" }, reason: "malformed", requestCount: 1 },
-    { name: "out of requested range", options: { starts: ["2026-10-03T23:00:00.000Z"] }, reason: "invalidEvidence", requestCount: 6 },
+    { name: "out of requested range", options: { starts: ["2026-10-03T23:00:00.000Z"] }, reason: "malformed", requestCount: 6 },
     { name: "stale observation", options: { observedAt: at(-60) }, reason: "invalidEvidence", requestCount: 6 },
   ]) {
     test(`${kind}: Cliniko ${scenario.name} fails to a spoken staff route without a write`, async () => {

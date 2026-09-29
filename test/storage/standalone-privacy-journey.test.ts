@@ -276,6 +276,39 @@ test("E2E-125 text: standalone ingress presents provisional availability without
   ]), []);
 });
 
+test("E2E-147 text: wrong clinic-day slot becomes a failed answer and never reaches caller or storage", async () => {
+  const suffix = randomUUID().slice(0, 8);
+  const scope = { tenantId: `availability-wrong-day-${suffix}`, clinicId: "clinic", locationId: "frontdesk" };
+  const wrongTime = `2026-10-03T00:00:00.${String(parseInt(suffix.slice(0, 3), 16) % 1000).padStart(3, "0")}Z`;
+  const fetchPort: typeof fetch = async input => {
+    const path = new URL(String(input)).pathname;
+    if (path === "/v1/businesses/11") return Response.json({ id: "11", show_in_online_bookings: true,
+      time_zone_identifier: "Australia/Sydney" });
+    if (path === "/v1/practitioners/22") return Response.json({ id: "22", active: true, show_in_online_bookings: true });
+    if (path === "/v1/appointment_types/33") return Response.json({ id: "33", show_in_online_bookings: true });
+    if (path === "/v1/businesses/11/practitioners") return Response.json({ total_entries: 1, practitioners: [{ id: "22" }] });
+    if (path === "/v1/practitioners/22/appointment_types") return Response.json({ total_entries: 1, appointment_types: [{ id: "33" }] });
+    if (path.endsWith("/available_times")) return Response.json({ total_entries: 1,
+      available_times: [{ appointment_start: wrongTime }] });
+    throw new Error("unexpected Cliniko request");
+  };
+  const reader = value(ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5",
+    contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" }, fetchPort));
+  const runner = new StandaloneAvailabilityTextRunner(db, scope, reader, () => "2026-10-01T00:00:00Z");
+  const prepared = value(await runner.prepare({ text: `wrong-day-question-${suffix}`,
+    from: "2026-10-02", to: "2026-10-02" }));
+  assert.equal(prepared.status, "failed");
+  assert.match(prepared.message, /Please contact the clinic directly/);
+  assert.equal(prepared.message.includes(wrongTime), false);
+  assert.deepEqual(await runner.confirmWritten(prepared), { ok: true, value: true });
+  const stored = value(await createStandaloneTextComposition(db, reader).reception.read(scope, prepared.callId));
+  assert.equal(stored.lifecycle, "ended");
+  assert.deepEqual(stored.availabilityReads, []);
+  assert.deepEqual(stored.callerMessages, []);
+  assert.deepEqual(await scanPatientDataCanaries(db, [{ label: "wrong_appointment_time", value: wrongTime }]),
+    { ok: true, value: [] });
+});
+
 test("E2E-125/E2E-127 text: HTTP availability completes and exports no caller or Cliniko details", async () => {
   const suffix = randomUUID().slice(0, 8);
   const scope = { tenantId: `availability-http-${suffix}`, clinicId: "clinic", locationId: "frontdesk" };

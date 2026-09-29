@@ -169,3 +169,16 @@ test("Cliniko malformed, oversized, and changing responses cannot produce an off
     failure(await reader.list(scope, "2026-10-01", "2026-10-07"), expected);
   }
 });
+
+test("Cliniko rejects a slot outside the requested clinic-local date, including across UTC midnight", async () => {
+  const outside = fakeProvider({ starts: ["2026-09-30T13:59:00Z", "2026-10-01T14:01:00Z"] });
+  const reader = value(ClinikoAvailabilityReader.create(config, outside.port));
+  failure(await reader.list(scope, "2026-10-01", "2026-10-01"), "malformed");
+
+  const boundary = fakeProvider({ starts: ["2026-09-30T14:00:00Z", "2026-10-01T12:59:00Z"] });
+  const accepted = value(await value(ClinikoAvailabilityReader.create(config, boundary.port))
+    .list(scope, "2026-10-01", "2026-10-01"));
+  assert.equal(accepted.kind, "times");
+  if (accepted.kind === "times") assert.deepEqual(accepted.startsAt,
+    ["2026-09-30T14:00:00.000Z", "2026-10-01T12:59:00.000Z"]);
+});
