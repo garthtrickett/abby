@@ -4,7 +4,7 @@ import { ConnectedVoiceCall } from "./connected-voice-call.ts";
 import type { ConnectedVoiceCallConfig, ConnectedVoiceFailure, ConnectedVoiceProgress,
   ConnectedVoiceStart } from "./connected-voice-call.ts";
 import { TwilioMediaStream } from "./twilio-media-stream.ts";
-import type { TwilioStreamConfig, TwilioStreamFailure } from "./twilio-media-stream.ts";
+import type { TwilioStreamConfig, TwilioStreamEvent, TwilioStreamFailure } from "./twilio-media-stream.ts";
 import { VoiceLeaseLoop } from "./voice-lease-loop.ts";
 import type { TimerPort } from "./timer.ts";
 
@@ -82,9 +82,9 @@ export class TwilioConnectedCall {
     if (this.begun) await this.call.disconnect(this.now());
   }
 
-  private async handle(raw: string | Uint8Array): Promise<Result<TwilioConnectedProgress, TwilioConnectedFailure>> {
+  private async handle(received: Result<TwilioStreamEvent, TwilioStreamFailure>):
+    Promise<Result<TwilioConnectedProgress, TwilioConnectedFailure>> {
     if (this.closed) return err({ kind: "streamClosed" });
-    const received = this.stream.receive(raw);
     if (!received.ok) {
       await this.failSession();
       return received;
@@ -132,6 +132,10 @@ export class TwilioConnectedCall {
 
   receive(raw: string | Uint8Array): Promise<Result<TwilioConnectedProgress, TwilioConnectedFailure>> {
     if (this.closed) return Promise.resolve(err({ kind: "streamClosed" }));
+    // Decode wire order immediately. A clear fence must be acknowledged while an earlier
+    // media turn is awaiting that same fence; semantic call transitions stay serialized.
+    const received = this.stream.receive(raw);
+    if (received.ok && received.value.kind === "ignoredMark") return Promise.resolve(ok({ kind: "ignored" }));
     if (this.outstanding >= 64) {
       this.closed = true;
       this.stream.close();
@@ -141,7 +145,7 @@ export class TwilioConnectedCall {
       });
     }
     this.outstanding += 1;
-    const handled = this.tail.then(() => this.handle(raw)).catch(async () => {
+    const handled = this.tail.then(() => this.handle(received)).catch(async () => {
       try { await this.failSession(); } catch { /* original failure remains authoritative */ }
       return err<TwilioConnectedFailure>({ kind: "streamUnavailable" });
     });

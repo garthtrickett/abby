@@ -160,3 +160,91 @@ test("E2E-132 and E2E-141 signed call renews beyond its first lease and closes t
     await once(server, "close");
   }
 });
+
+test("E2E-142 caller speech clears a signed socket greeting without deadlocking its fence", { timeout: 10_000 },
+  async () => {
+  const ledger = new MemoryLedger();
+  const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+  assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "admin")).ok);
+  const router = new ClinicPolicyRouter(new ReferenceNumberRoutingHost([
+    { accountRef: accountSid, dialedNumber: number, ...scope, routeVersion: "v1" },
+  ]), policy);
+  const admission = new CallAdmissionService(ledger, router.resolve, () => now, async () => ok(true));
+  const intake = new SharedNumberIntakeService(ledger, router, admission, () => now);
+  const reception = new TextReception(ledger, policy, new ReferenceClinicHost([], []));
+  const ingress = new TwilioSignedIngress({ accountSid, authToken, publicWebhookUrl: webhookUrl,
+    publicStreamUrl: streamUrl, fallbackNumbers: { [number]: "+6125550188" },
+    bindingKey: Buffer.alloc(32, 0x35), now: () => new Date(now) });
+  let speakingResolve!: () => void;
+  const speaking = new Promise<void>(resolve => { speakingResolve = resolve; });
+  const server = createTwilioIngressServer({ ingress, async createCall(stream, send, close) {
+    const call = new TwilioConnectedCall({ event: stream.event, sessionId: "session", ledger, intake,
+      fullFactory: (receipt, sessionId, playback) => new VoiceSession(receipt.callId, sessionId, receipt.scope,
+        ledger, reception, playback, async () => ok({ kind: "handoff", reason: "callerRequested" })),
+      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
+      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      streamStartedAt: stream.streamStartedAt, now: () => now, send, closeTransport: close,
+    });
+    return { async receive(raw: string) {
+      const result = await call.receive(raw);
+      if (result.ok && result.value.kind === "media" && result.value.value.kind === "speaking") speakingResolve();
+      return result;
+    }, disconnect: () => call.disconnect() };
+  } });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  let socket: WebSocket | undefined;
+  try {
+    const form = { AccountSid: accountSid, CallSid: callSid, To: number, From: "+6145550101" };
+    const response = await fetch(`http://127.0.0.1:${address.port}/twilio/inbound`, { method: "POST", headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, webhookUrl, form),
+    }, body: new URLSearchParams(form).toString() });
+    assert.equal(response.status, 200);
+    const binding = (await response.text()).match(/<Parameter name="abbyBinding" value="([^"]+)"\/>/)?.[1];
+    assert.ok(binding);
+    socket = new WebSocket(`ws://127.0.0.1:${address.port}/twilio/media/`, { headers: {
+      "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, streamUrl, {}),
+    } });
+    await once(socket, "open");
+    const sent: Record<string, unknown>[] = [];
+    let greetingResolve!: () => void;
+    let fenceResolve!: () => void;
+    const greeting = new Promise<void>(resolve => { greetingResolve = resolve; });
+    const fence = new Promise<void>(resolve => { fenceResolve = resolve; });
+    socket.on("message", data => {
+      sent.push(JSON.parse(data.toString()) as Record<string, unknown>);
+      if (sent.length === 2) greetingResolve();
+      if (sent.some(message => message.event === "clear")) fenceResolve();
+    });
+    socket.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
+    socket.send(JSON.stringify({ event: "start", sequenceNumber: "1", streamSid,
+      start: { accountSid, callSid, streamSid, tracks: ["inbound"],
+        mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 },
+        customParameters: { abbyBinding: binding } } }));
+    await greeting;
+    assert.deepEqual(sent.map(message => message.event), ["media", "mark"]);
+    for (let index = 0; index < 2; index += 1) socket.send(JSON.stringify({ event: "media",
+      sequenceNumber: String(index + 2), streamSid, media: { track: "inbound", chunk: String(index + 1),
+        timestamp: String(index * 20), payload: Buffer.alloc(160, 0x9f).toString("base64") } }));
+    await fence;
+    assert.deepEqual(sent.map(message => message.event), ["media", "mark", "mark", "clear"]);
+    const completionName = (sent[1]?.mark as { name: string }).name;
+    const fenceName = (sent[2]?.mark as { name: string }).name;
+    socket.send(JSON.stringify({ event: "mark", sequenceNumber: "4", streamSid,
+      mark: { name: completionName } }));
+    socket.send(JSON.stringify({ event: "mark", sequenceNumber: "5", streamSid,
+      mark: { name: fenceName } }));
+    await speaking;
+    const state = await ledger.read(callIdFor({ accountRef: accountSid, providerCallRef: callSid }), scope);
+    assert.ok(state.ok);
+    assert.equal(Object.values(state.value.presentations)[0]?.status, "interrupted");
+    assert.equal(socket.readyState, WebSocket.OPEN);
+  } finally {
+    socket?.terminate();
+    server.close();
+    await once(server, "close");
+  }
+});
