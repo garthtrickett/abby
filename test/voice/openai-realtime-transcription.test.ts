@@ -82,6 +82,54 @@ test("E2E-129 synthetic voice: streamed PCM commits at Abby's turn boundary and 
   assert.equal(socket.terminateCount, 1);
 });
 
+test("E2E-146 synthetic voice: an early final waits for its committed item ID and is bounded", async () => {
+  const socket = new FakeSocket();
+  const transcription = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+    socketFactory: () => socket as unknown as WebSocket });
+  const assembler = new TurnAssembler("call", "session");
+  const media = new MediaTurnController("session", {
+    async speechStarted() { return ok(assembler.beginSpeech()); },
+    acceptTranscript: assembler.accept.bind(assembler),
+    async finishTurn(now) { return assembler.finish(now); },
+  }, transcription, { silenceMs: 100 });
+  configured(socket);
+  for (let sequence = 0; sequence < 6; sequence += 1) {
+    assert.ok((await media.acceptMedia(frame(sequence, sequence < 2 ? 2_000 : 0))).ok);
+  }
+  const pending = media.acceptMedia(frame(6, 0));
+  await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal(socket.sent.filter(item => item.type === "input_audio_buffer.commit").length, 1);
+  socket.receive({ type: "conversation.item.input_audio_transcription.completed", item_id: "foreign",
+    transcript: "Wrong patient" });
+  socket.receive({ type: "conversation.item.input_audio_transcription.completed", item_id: "provider-item",
+    transcript: "Do you have possible times tomorrow?" });
+  let settled = false;
+  void pending.then(() => { settled = true; });
+  await Promise.resolve();
+  assert.equal(settled, false);
+  socket.receive({ type: "input_audio_buffer.committed", item_id: "provider-item" });
+  const result = await pending;
+  assert.ok(result.ok);
+  assert.equal(result.value.kind, "turnCompleted");
+  if (result.value.kind !== "turnCompleted") return;
+  assert.equal(result.value.value.text, "Do you have possible times tomorrow?");
+  assert.equal(result.value.value.quality, "needsClarification");
+  await media.stop();
+
+  const floodedSocket = new FakeSocket();
+  const flooded = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+    socketFactory: () => floodedSocket as unknown as WebSocket });
+  configured(floodedSocket);
+  assert.ok((await flooded.accept(frame(0, 2_000), 1, new AbortController().signal)).ok);
+  const waiting = flooded.flush(1, new AbortController().signal);
+  await new Promise<void>(resolve => setImmediate(resolve));
+  for (let index = 0; index < 9; index += 1) floodedSocket.receive({
+    type: "conversation.item.input_audio_transcription.completed", item_id: `foreign-${index}`,
+    transcript: "Unrelated", });
+  assert.deepEqual(await waiting, { ok: false, error: { kind: "transcriptionUnavailable" } });
+  assert.equal(floodedSocket.terminateCount, 1);
+});
+
 test("E2E-129 synthetic voice: rejected session, malformed completion and caller stop fail closed", async () => {
   const rejectedSocket = new FakeSocket();
   const rejected = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
