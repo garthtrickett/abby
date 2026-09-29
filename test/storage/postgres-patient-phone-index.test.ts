@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
+import { sql } from "kysely";
 import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
 import { normalizePatientPhone } from "../../src/cliniko/phone-number.ts";
 import { ClinikoReadBudget } from "../../src/cliniko/read-budget.ts";
@@ -470,13 +471,13 @@ test("two worker processes coordinate one clinic scan and the losing worker retr
   });
   assert.equal(reader.ok, true);
   if (!reader.ok) return;
-  const lookup = new ClinikoPhoneLookup(reader.value, index, "61", 60_000,
-    undefined, new PostgresPatientPhoneScan(db));
   const firstGuard = new PostgresPhoneRefreshGuard(url);
   const secondGuard = new PostgresPhoneRefreshGuard(url);
-  const first = new PhoneIndexRefreshWorker(index, [{ scope, lookup, countryCallingCode: "61", refreshEveryMs: 60_000 }],
+  const lookupForSession = (session: typeof db) => new ClinikoPhoneLookup(reader.value,
+    new PostgresPatientPhoneIndex(session), "61", 60_000, undefined, new PostgresPatientPhoneScan(session));
+  const first = new PhoneIndexRefreshWorker(index, [{ scope, lookupForSession, countryCallingCode: "61", refreshEveryMs: 60_000 }],
     undefined, firstGuard);
-  const second = new PhoneIndexRefreshWorker(index, [{ scope, lookup, countryCallingCode: "61", refreshEveryMs: 60_000 }],
+  const second = new PhoneIndexRefreshWorker(index, [{ scope, lookupForSession, countryCallingCode: "61", refreshEveryMs: 60_000 }],
     undefined, secondGuard);
   const pending = first.runOnce();
   await started;
@@ -491,6 +492,47 @@ test("two worker processes coordinate one clinic scan and the losing worker retr
     { ok: false, error: { kind: "storageFailure" } });
   assert.deepEqual(await secondGuard.run(scope, async () => "next owner"),
     { ok: true, value: { kind: "ran", value: "next owner" } });
+});
+
+test("a dead refresh-owner session cannot publish after an in-flight provider read", { timeout: 30_000 }, async () => {
+  const scope = { tenantId: "phone-dead-owner", clinicId: "clinic" };
+  const index = new PostgresPatientPhoneIndex(db);
+  const oldPhone = "+61400111111";
+  const newPhone = "+61400222222";
+  assert.deepEqual(await index.publish(scope, [{ normalizedPhone: oldPhone, patientId: "701" }], "61"),
+    { ok: true, value: 1 });
+  let reportPid!: (pid: number) => void;
+  const ownerPid = new Promise<number>(done => { reportPid = done; });
+  let releaseRead!: () => void;
+  const heldRead = new Promise<void>(done => { releaseRead = done; });
+  const lookupForSession = (session: typeof db) => ({
+    async refresh() {
+      const pid = await sql<{ pid: number }>`select pg_backend_pid() as pid`.execute(session);
+      reportPid(pid.rows[0]!.pid);
+      await heldRead;
+      return new PostgresPatientPhoneIndex(session).publish(scope,
+        [{ normalizedPhone: newPhone, patientId: "702" }], "61", 1);
+    },
+  });
+  const target = { scope, lookupForSession, countryCallingCode: "61", refreshEveryMs: 60_000 };
+  const clock = () => new Date(Date.now() + 60_001);
+  const first = new PhoneIndexRefreshWorker(index, [target], clock, new PostgresPhoneRefreshGuard(url));
+  const pending = first.runOnce();
+  const pid = await ownerPid;
+  const terminated = await sql<{ stopped: boolean }>`select pg_terminate_backend(${pid}) as stopped`.execute(db);
+  assert.equal(terminated.rows[0]?.stopped, true);
+  releaseRead();
+  assert.deepEqual(await pending, [{ scope, kind: "failed" }]);
+  const rows = await db.selectFrom("patient_phone_index").select(["normalized_phone", "patient_id"])
+    .where("tenant_id", "=", scope.tenantId as never).execute();
+  assert.deepEqual(rows.map(row => [String(row.normalized_phone), String(row.patient_id)]), [[oldPhone, "701"]]);
+  assert.deepEqual(await index.find(scope, oldPhone, 60_000, "61"),
+    { ok: true, value: { kind: "stale", patientIds: [] } });
+  const second = new PhoneIndexRefreshWorker(index, [target], clock, new PostgresPhoneRefreshGuard(url));
+  assert.deepEqual(await second.runOnce(), [{ scope, kind: "refreshed" }]);
+  const refreshed = await db.selectFrom("patient_phone_index").select(["normalized_phone", "patient_id"])
+    .where("tenant_id", "=", scope.tenantId as never).execute();
+  assert.deepEqual(refreshed.map(row => [String(row.normalized_phone), String(row.patient_id)]), [[newPhone, "702"]]);
 });
 
 test("changing a clinic normalization plan blocks lookup until the index is rebuilt", async () => {

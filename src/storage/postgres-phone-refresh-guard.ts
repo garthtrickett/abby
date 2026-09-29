@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
-import { Client } from "pg";
+import { Kysely, PostgresDialect, sql } from "kysely";
+import type { PoolClient } from "pg";
+import { Pool } from "pg";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
+import type Database from "./generated/Database.ts";
 import type { PatientPhoneClinicScope } from "./postgres-patient-phone-index.ts";
 
 export type PhoneRefreshGuardFailure = Readonly<{ kind: "invalidInput" | "storageFailure" }>;
@@ -14,37 +17,40 @@ function lockKey(scope: PatientPhoneClinicScope): string {
   return digest.readBigInt64BE(0).toString();
 }
 
-/** One PostgreSQL session owns a clinic refresh. The session is held outside the ledger pool. */
+/** The lock and every guarded write use one pinned PostgreSQL session. */
 export class PostgresPhoneRefreshGuard {
   private readonly connectionString: string;
 
   constructor(connectionString: string) { this.connectionString = connectionString; }
 
-  async run<T>(scope: PatientPhoneClinicScope, task: () => Promise<T>):
+  async run<T>(scope: PatientPhoneClinicScope, task: (db: Kysely<Database>) => Promise<T>):
     Promise<Result<PhoneRefreshGuardResult<T>, PhoneRefreshGuardFailure>> {
     if (!scope || [scope.tenantId, scope.clinicId].some(value =>
       typeof value !== "string" || !value.trim() || value.length > 256) || typeof task !== "function") {
       return err({ kind: "invalidInput" });
     }
-    const client = new Client({ connectionString: this.connectionString });
-    // pg emits an error event when a held session dies while the task is awaiting Cliniko.
-    client.on("error", () => {});
+    const pool = new Pool({ connectionString: this.connectionString, max: 1, allowExitOnIdle: true });
+    // A checked-out pg client can emit an error while a Cliniko read is pending.
+    pool.on("acquire", (client: PoolClient) => { client.on("error", () => {}); });
+    pool.on("error", () => {});
+    const db = new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
     const key = lockKey(scope);
     try {
-      await client.connect();
-      const claimed = await client.query<{ acquired: boolean }>("select pg_try_advisory_lock($1::bigint) as acquired", [key]);
-      if (claimed.rows[0]?.acquired !== true) return ok({ kind: "busy" });
-      try {
-        const value = await task();
-        return ok({ kind: "ran", value });
-      } finally {
-        const released = await client.query<{ released: boolean }>("select pg_advisory_unlock($1::bigint) as released", [key]);
-        if (released.rows[0]?.released !== true) throw new Error("phone refresh lock lost");
-      }
+      return await db.connection().execute(async owner => {
+        const claimed = await sql<{ acquired: boolean }>`select pg_try_advisory_lock(${key}::bigint) as acquired`.execute(owner);
+        if (claimed.rows[0]?.acquired !== true) return ok({ kind: "busy" });
+        try {
+          const value = await task(owner);
+          return ok({ kind: "ran", value });
+        } finally {
+          const released = await sql<{ released: boolean }>`select pg_advisory_unlock(${key}::bigint) as released`.execute(owner);
+          if (released.rows[0]?.released !== true) throw new Error("phone refresh lock lost");
+        }
+      });
     } catch {
       return err({ kind: "storageFailure" });
     } finally {
-      try { await client.end(); } catch { /* a dead session releases its lock server-side */ }
+      try { await db.destroy(); } catch { /* a dead session releases its lock server-side */ }
     }
   }
 }
