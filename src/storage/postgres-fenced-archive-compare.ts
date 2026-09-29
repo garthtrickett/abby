@@ -19,7 +19,7 @@ export type FencedArchiveComparison = Readonly<{
   comparisonArchiveId: string;
   comparisonManifestDigest: string;
   sourceFenceVersion: number;
-  changed: readonly (ArchiveSection | "sourceSchema")[];
+  changed: readonly (ArchiveSection | "sourceSchema" | "omittedCalls")[];
 }>;
 
 function sameMappings(baseline: TenantConfigArchiveData, request: TenantConfigArchiveRequest): boolean {
@@ -58,8 +58,9 @@ export async function comparePostgresFencedTenantArchiveSource(db: Kysely<Databa
   if (!fresh.ok) return fresh;
   const current = await decodeTenantConfigArchive(fresh.value, targetTenantId);
   if (!current.ok) return current;
-  const changed: (ArchiveSection | "sourceSchema")[] = [];
+  const changed: (ArchiveSection | "sourceSchema" | "omittedCalls")[] = [];
   if (previous.value.sourceSchemaVersion !== current.value.sourceSchemaVersion) changed.push("sourceSchema");
+  if (previous.value.omittedCalls.notRetained !== current.value.omittedCalls.notRetained) changed.push("omittedCalls");
   for (const section of ["locations", "settings", "knowledge", "calls", "staffWork"] as const) {
     const before = previous.value.sectionManifests[section];
     const after = current.value.sectionManifests[section];

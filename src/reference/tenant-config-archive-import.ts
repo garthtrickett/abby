@@ -41,7 +41,7 @@ export type ReferenceTenantImportReport = Readonly<{
   sourceFenceVersion?: number;
   recordCounts: Readonly<Record<ArchiveSection, number>>;
   sectionDigests: Readonly<Record<ArchiveSection, string>>;
-  omittedCalls: Readonly<{ retentionExpired: 0; consentDenied: 0; notRetained: 0; activeCall: 0 }>;
+  omittedCalls: TenantConfigArchiveData["omittedCalls"];
   locations: readonly TenantImportLocation[];
   mappings: readonly TenantImportMapping[];
   status: "ready" | "alreadyStaged" | "staged";
@@ -96,7 +96,8 @@ function prepare(data: TenantConfigArchiveData, mapper: ReferenceImportMapper):
     if (!clinic) return err({ kind: "invalidConfigArchive" });
     const scoped: ConfigArchiveData = { archiveId: data.archiveId, manifestDigest: data.manifestDigest,
       createdAt: data.createdAt, sourceSchemaVersion: data.sourceSchemaVersion,
-      sectionManifests: data.sectionManifests, sourceScope: location.sourceScope, targetScope: location.targetScope,
+      sectionManifests: data.sectionManifests, omittedCalls: data.omittedCalls,
+      sourceScope: location.sourceScope, targetScope: location.targetScope,
       timeZone: location.timeZone, mappingProvenance: location.mappingProvenance,
       policies: location.policies, automation: clinic.automation, writeStops: clinic.writeStops,
       knowledge: location.knowledge };
@@ -130,7 +131,7 @@ function report(data: TenantConfigArchiveData, auditRef: string, prepared: Prepa
     sectionDigests: { locations: data.sectionManifests.locations.sha256,
       settings: data.sectionManifests.settings.sha256, knowledge: data.sectionManifests.knowledge.sha256,
       calls: data.sectionManifests.calls.sha256, staffWork: data.sectionManifests.staffWork.sha256 },
-    omittedCalls: { retentionExpired: 0, consentDenied: 0, notRetained: 0, activeCall: 0 },
+    omittedCalls: data.omittedCalls,
     locations: prepared.locations.map(location => ({ sourceScope: location.sourceScope,
       targetScope: location.targetScope, policyVersions: location.source.policies.length,
       publishedKnowledgeVersions: location.source.knowledge.length,

@@ -18,7 +18,7 @@ export type ConfigArchiveDriftReport = Readonly<{
   baselineManifestDigest: string;
   comparisonArchiveId: string;
   comparisonManifestDigest: string;
-  changed: readonly (ArchiveSection | "sourceSchema")[];
+  changed: readonly (ArchiveSection | "sourceSchema" | "omittedCalls")[];
 }>;
 
 function sameScope(left: ConfigArchiveRequest["scope"], right: ConfigArchiveRequest["scope"]): boolean {
@@ -48,8 +48,9 @@ export async function comparePostgresConfigArchiveSource(db: Kysely<Database>, b
   if (!currentArchive.ok) return currentArchive;
   const current = await decodeConfigArchive(currentArchive.value, comparison.targetScope);
   if (!current.ok) return current;
-  const changed: (ArchiveSection | "sourceSchema")[] = [];
+  const changed: (ArchiveSection | "sourceSchema" | "omittedCalls")[] = [];
   if (previous.value.sourceSchemaVersion !== current.value.sourceSchemaVersion) changed.push("sourceSchema");
+  if (previous.value.omittedCalls.notRetained !== current.value.omittedCalls.notRetained) changed.push("omittedCalls");
   for (const section of ["locations", "settings", "knowledge", "calls", "staffWork"] as const) {
     const before = previous.value.sectionManifests[section];
     const after = current.value.sectionManifests[section];
