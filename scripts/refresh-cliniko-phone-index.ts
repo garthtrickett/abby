@@ -26,9 +26,10 @@ process.once("SIGINT", () => stop.abort());
 process.once("SIGTERM", () => stop.abort());
 try {
   const index = new PostgresPatientPhoneIndex(db);
-  const lookup = new ClinikoPhoneLookup(reader.value, index, countryCallingCode,
-    refreshEveryMs * 2, undefined, new PostgresPatientPhoneScan(db));
-  const worker = new PhoneIndexRefreshWorker(index, [{ scope, lookup, countryCallingCode, refreshEveryMs }],
+  const lookupForSession = (session: typeof db) => new ClinikoPhoneLookup(reader.value,
+    new PostgresPatientPhoneIndex(session), countryCallingCode, refreshEveryMs * 2,
+    undefined, new PostgresPatientPhoneScan(session));
+  const worker = new PhoneIndexRefreshWorker(index, [{ scope, lookupForSession, countryCallingCode, refreshEveryMs }],
     undefined, new PostgresPhoneRefreshGuard(connectionString));
   await worker.runLoop(stop.signal, pollEveryMs, results => {
     for (const result of results) process.stdout.write(`phone-index refresh: ${result.kind}\n`);

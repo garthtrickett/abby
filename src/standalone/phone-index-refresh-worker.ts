@@ -1,12 +1,15 @@
 import { setTimeout as wait } from "node:timers/promises";
+import type { Kysely } from "kysely";
 import type { ClinikoClinicScope } from "../cliniko/patients.ts";
 import type { ClinikoPhoneLookup } from "./cliniko-phone-lookup.ts";
+import type Database from "../storage/generated/Database.ts";
 import { PostgresPatientPhoneIndex } from "../storage/postgres-patient-phone-index.ts";
 import type { PhoneRefreshGuardResult } from "../storage/postgres-phone-refresh-guard.ts";
 
 export type PhoneIndexRefreshTarget = Readonly<{
   scope: ClinikoClinicScope;
-  lookup: Pick<ClinikoPhoneLookup, "refresh">;
+  lookup?: Pick<ClinikoPhoneLookup, "refresh">;
+  lookupForSession?: (db: Kysely<Database>) => Pick<ClinikoPhoneLookup, "refresh">;
   countryCallingCode: string;
   refreshEveryMs: number;
 }>;
@@ -15,7 +18,7 @@ export type PhoneIndexRefreshResult = Readonly<{
   kind: "fresh" | "refreshed" | "busy" | "disabled" | "failed";
 }>;
 export type PhoneRefreshGuard = Readonly<{
-  run<T>(scope: ClinikoClinicScope, task: () => Promise<T>):
+  run<T>(scope: ClinikoClinicScope, task: (db: Kysely<Database>) => Promise<T>):
     Promise<{ ok: true; value: PhoneRefreshGuardResult<T> } | { ok: false; error: { kind: string } }>;
 }>;
 
@@ -36,7 +39,9 @@ export class PhoneIndexRefreshWorker {
       if (!tenantId || !clinicId || tenantId.length > 256 || clinicId.length > 256 || keys.has(key) ||
           !/^[1-9][0-9]{0,2}$/.test(target.countryCallingCode) ||
           !Number.isSafeInteger(target.refreshEveryMs) || target.refreshEveryMs < 60_000 ||
-          typeof target.lookup?.refresh !== "function") throw new Error("invalid phone-index refresh target");
+          (guard ? typeof target.lookupForSession !== "function" : typeof target.lookup?.refresh !== "function")) {
+        throw new Error("invalid phone-index refresh target");
+      }
       keys.add(key);
     }
     this.index = index;
@@ -48,14 +53,17 @@ export class PhoneIndexRefreshWorker {
   private async refreshIfDue(target: PhoneIndexRefreshTarget, now: Date): Promise<PhoneIndexRefreshResult> {
     const failed = { scope: target.scope, kind: "failed" } as const;
     try {
-      const attempt = async (): Promise<PhoneIndexRefreshResult> => {
-        const completed = await this.index.completedAt(target.scope, target.countryCallingCode);
+      const attempt = async (session?: Kysely<Database>): Promise<PhoneIndexRefreshResult> => {
+        const index = session ? new PostgresPatientPhoneIndex(session) : this.index;
+        const lookup = session ? target.lookupForSession?.(session) : target.lookup;
+        if (!lookup || typeof lookup.refresh !== "function") return failed;
+        const completed = await index.completedAt(target.scope, target.countryCallingCode);
         if (!completed.ok) return failed;
         if (completed.value && now.getTime() >= completed.value.getTime() &&
             now.getTime() - completed.value.getTime() < target.refreshEveryMs) {
           return { scope: target.scope, kind: "fresh" };
         }
-        const refreshed = await target.lookup.refresh(target.scope);
+        const refreshed = await lookup.refresh(target.scope);
         return refreshed.ok ? { scope: target.scope, kind: "refreshed" } :
           refreshed.error.kind === "clinicDisconnected" ? { scope: target.scope, kind: "disabled" } : failed;
       };
@@ -64,8 +72,13 @@ export class PhoneIndexRefreshWorker {
       if (!initial.ok) return failed;
       if (initial.value && now.getTime() >= initial.value.getTime() &&
           now.getTime() - initial.value.getTime() < target.refreshEveryMs) return { scope: target.scope, kind: "fresh" };
+      const prior = await this.index.head(target.scope);
+      if (!prior.ok) return failed;
       const guarded = await this.guard.run(target.scope, attempt);
-      if (!guarded.ok) return failed;
+      if (!guarded.ok || (guarded.value.kind === "ran" && guarded.value.value.kind === "failed")) {
+        await this.index.markStale(target.scope, prior.value?.generation ?? null);
+        return failed;
+      }
       return guarded.value.kind === "busy" ? { scope: target.scope, kind: "busy" } : guarded.value.value;
     } catch { return failed; }
   }
