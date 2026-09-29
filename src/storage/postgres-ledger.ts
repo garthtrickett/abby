@@ -265,6 +265,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   }
 
   async findPendingLocation(callId: string): Promise<Result<PendingLocationCall | null, TransitionFailure>> {
+    if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
     try {
       const row = await this.db.selectFrom("pending_location_calls").select(["state", "status", "tenant_id", "clinic_id"])
         .where("call_id", "=", callId as PendingLocationCallsCallId).executeTakeFirst();
@@ -302,6 +303,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   }
 
   async attachPendingLocationSession(callId: string, sessionId: string, now: string): Promise<Result<PendingLocationCall, TransitionFailure>> {
+    if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
     if (!sessionId?.trim() || sessionId.length > 256 || !Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
     try {
       return await this.db.transaction().execute(async trx => {
@@ -332,6 +334,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   }
 
   async renewPendingLocationSession(callId: string, sessionId: string, expectedVersion: number, now: string): Promise<Result<PendingLocationCall, TransitionFailure>> {
+    if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
     if (!sessionId?.trim() || !Number.isSafeInteger(expectedVersion) || !Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
     try {
       return await this.db.transaction().execute(async trx => {
@@ -362,6 +365,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
 
   async startPendingLocationPrompt(callId: string, playbackId: string, sessionId: string, expectedVersion: number, now: string):
     Promise<Result<Readonly<{ pending: PendingLocationCall; newStart: boolean }>, TransitionFailure>> {
+    if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
     try {
       return await this.db.transaction().execute(async trx => {
         await this.lockCall(trx, callId);
@@ -382,6 +386,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
 
   async resolvePendingLocationPrompt(callId: string, playbackId: string, sessionId: string, expectedVersion: number,
                                      status: PendingLocationPrompt["status"], now: string): Promise<Result<PendingLocationCall, TransitionFailure>> {
+    if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
     try {
       return await this.db.transaction().execute(async trx => {
         await this.lockCall(trx, callId);
@@ -403,6 +408,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   async closePendingLocationSession(callId: string, sessionId: string, expectedVersion: number,
                                     reason: NonNullable<PendingLocationCall["closeEvidence"]>["reason"], now: string):
     Promise<Result<PendingLocationCall, TransitionFailure>> {
+    if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
     try {
       return await this.db.transaction().execute(async trx => {
         await this.lockCall(trx, callId);
@@ -481,6 +487,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   }
 
   async findExpiredPendingLocations(now: string, clinic?: Pick<LocationScope, "tenantId" | "clinicId">): Promise<Result<readonly PendingLocationCall[], TransitionFailure>> {
+    if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
     if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
     try {
       const ledgerNow = await this.trustedNow(this.db, now);
@@ -503,6 +510,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   }
 
   async expirePendingLocation(callId: string, now: string): Promise<Result<PendingLocationExpiryResult, TransitionFailure>> {
+    if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
     if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
     try {
       return await this.db.transaction().execute(async trx => {
@@ -529,6 +537,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   }
 
   async findExpiredAdmissions(now: string, scope?: LocationScope): Promise<Result<readonly AdmissionReceipt[], TransitionFailure>> {
+    if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
     if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
     try {
       const ledgerNow = await this.trustedNow(this.db, now);
@@ -552,6 +561,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   }
 
   async findExpiredSessions(now: string, scope?: LocationScope): Promise<Result<readonly ActiveSessionReceipt[], TransitionFailure>> {
+    if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
     if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
     try {
       const ledgerNow = await this.trustedNow(this.db, now);
@@ -574,6 +584,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   }
 
   async findPendingPresentations(now: string, scope?: LocationScope, afterCallId?: string): Promise<Result<readonly PendingPresentationRef[], TransitionFailure>> {
+    if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
     if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
     try {
       const ledgerNow = await this.trustedNow(this.db, now);
@@ -601,6 +612,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   }
 
   async findRecoverableEffects(now: string, scope?: LocationScope, afterEffectId?: string): Promise<Result<readonly RecoverableEffectRef[], TransitionFailure>> {
+    if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
     if (!Number.isFinite(Date.parse(now)) || (afterEffectId !== undefined && (!afterEffectId || afterEffectId.length > 512))) return err({ kind: "invalidTransition" });
     try {
       const ledgerNow = await this.trustedNow(this.db, now);
@@ -794,6 +806,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   }
 
   async listStaffItems(scope: LocationScope, afterTaskKey?: string): Promise<Result<readonly StaffQueueEntry[], TransitionFailure>> {
+    if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
     if (afterTaskKey !== undefined && (!afterTaskKey || afterTaskKey.length > 256)) return err({ kind: "invalidTransition" });
     try {
       let query = this.db.selectFrom("staff_items").innerJoin("calls", "calls.call_id", "staff_items.call_id")
