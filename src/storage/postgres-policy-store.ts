@@ -57,10 +57,11 @@ export class PostgresPolicyStore implements PolicyStore {
   private readonly hostBookingMode: CapabilityMode;
   private readonly readiness: AutomationReadiness;
   private readonly staffWorkEnabled: boolean;
-  private readonly storageMode: "reference" | "standaloneMinimal";
+  private readonly storageMode: "unsafeReference" | "standaloneMinimal";
 
+  /** Rich policy storage is synthetic-only and requires the explicit unsafeReference mode. */
   constructor(db: Kysely<Database>, defaultPolicy: (scope: LocationScope) => CallPolicy, hostBookingMode: CapabilityMode = "unavailable", readiness: AutomationReadiness = unprovenReadiness,
-              staffWorkEnabled = true, storageMode: "reference" | "standaloneMinimal" = "reference") {
+              staffWorkEnabled = false, storageMode: "unsafeReference" | "standaloneMinimal" = "standaloneMinimal") {
     this.db = db;
     this.defaultPolicy = defaultPolicy;
     this.hostBookingMode = hostBookingMode;

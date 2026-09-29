@@ -57,7 +57,7 @@ function fixture(kind: "memory" | "postgres", outputPort?: PlaybackPort) {
   ]);
   const ledger: LedgerStore & EffectCallLeaseStore = kind === "postgres" ? new PostgresLedger(db!, suggested => suggested, undefined, "unsafeReference") : new MemoryLedger();
   const policy = kind === "postgres"
-    ? new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true))
+    ? new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true), true, "unsafeReference")
     : new MemoryPolicyStore("execute", () => current, async () => ok(true));
   let policyReads = 0;
   let policyGate: Readonly<{ entered: () => void; release: Promise<void> }> | undefined;

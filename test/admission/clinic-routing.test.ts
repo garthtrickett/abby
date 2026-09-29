@@ -31,7 +31,7 @@ function fixture(kind: "memory" | "postgres") {
   const foreign: LocationScope = { tenantId: `foreign-tenant-${id}`, clinicId: `foreign-clinic-${id}`, locationId: "foreign" };
   const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggested => suggested, undefined, "unsafeReference") : new MemoryLedger();
   const policy = kind === "postgres"
-    ? new PostgresPolicyStore(db!, referenceDefaultPolicy, "requestOnly", async () => ok(true))
+    ? new PostgresPolicyStore(db!, referenceDefaultPolicy, "requestOnly", async () => ok(true), true, "unsafeReference")
     : new MemoryPolicyStore("requestOnly", () => now, async () => ok(true));
   const account = `account-${id}`;
   const number = "+6125550100";

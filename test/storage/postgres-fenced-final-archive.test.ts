@@ -20,7 +20,7 @@ after(async () => { await db.destroy(); });
 test("final archive and durable import receipt bind the exact frozen source version", async () => {
   const source = { tenantId: "fenced-final-source", clinicId: "clinic", locationId: "location" };
   const target = { tenantId: "fenced-final-target", clinicId: "buyer", locationId: "location" };
-  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly");
+  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly", undefined, true, "unsafeReference");
   assert.equal((await policy.changeBookingEnabled(source, "0", true, "source-admin")).ok, true);
   const request = { sourceTenantId: source.tenantId, archiveId: "fenced-final-archive",
     archiveMode: "unsafeReference" as const,
@@ -94,7 +94,7 @@ test("final archive and durable import receipt bind the exact frozen source vers
 test("a digest-valid archive with a forged fence number fails the fresh source-content comparison", async () => {
   const source = { tenantId: "forged-fence-source", clinicId: "clinic", locationId: "location" };
   const target = { tenantId: "forged-fence-target", clinicId: "buyer", locationId: "location" };
-  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly");
+  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly", undefined, true, "unsafeReference");
   assert.equal((await policy.changeBookingEnabled(source, "0", true, "source-admin")).ok, true);
   const request = { sourceTenantId: source.tenantId, archiveId: "forged-baseline",
     archiveMode: "unsafeReference" as const,

@@ -23,7 +23,7 @@ test("configuration archive persists native target state, source history, and re
   const sourceB = { ...source, locationId: "b" };
   const target = { tenantId: "durable-import-target", clinicId: "buyer-clinic", locationId: "a" };
   const targetB = { ...target, locationId: "b" };
-  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly", async () => ok(true));
+  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly", async () => ok(true), true, "unsafeReference");
   assert.equal((await policy.changeBookingEnabled(source, "0", true, "source-admin")).ok, true);
   assert.equal((await policy.changeBookingEnabled(sourceB, "0", false, "source-admin")).ok, true);
   assert.equal((await policy.changeAutomationEnabled(source, "0", true, "source-admin")).ok, true);
@@ -116,7 +116,7 @@ test("configuration archive persists native target state, source history, and re
 test("concurrent stage is one durable import and pre-existing target data blocks a second archive", async () => {
   const source = { tenantId: "durable-race-source", clinicId: "clinic", locationId: "location" };
   const target = { tenantId: "durable-race-target", clinicId: "buyer", locationId: "location" };
-  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy);
+  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference");
   assert.equal((await policy.changeBookingEnabled(source, "0", false, "source-admin")).ok, true);
   const request = { sourceTenantId: source.tenantId, archiveId: "durable-race-archive", actorRef: "source-admin",
     archiveMode: "unsafeReference" as const,

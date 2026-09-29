@@ -21,6 +21,6 @@ export function createReferenceStandaloneTextComposition(db: Kysely<Database>, h
                                                          model?: ModelWork,
                                                          knowledge: KnowledgeHost & Partial<ModelKnowledgeContextHost> = new PostgresKnowledgeCatalogue(db)):
   Readonly<{ reception: TextReception; policy: PostgresPolicyStore; knowledge: KnowledgeHost & Partial<ModelKnowledgeContextHost> }> {
-  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, hostBookingMode, readiness);
+  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, hostBookingMode, readiness, true, "unsafeReference");
   return { reception: new TextReception(ledger, policy, host, availability, appointments, model, knowledge), policy, knowledge };
 }
