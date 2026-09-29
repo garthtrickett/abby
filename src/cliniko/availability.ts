@@ -105,6 +105,11 @@ export class ClinikoAvailabilityReader {
     return ok(new ClinikoAvailabilityReader(config, shard, fetchPort, observedClock));
   }
 
+  /** Route validation can prove clinic ownership before opening a call listener. */
+  matchesScope(scope: LocationScope): boolean {
+    return sameScope(this.scope, scope);
+  }
+
   private async get(path: string): Promise<Result<unknown, ClinikoAvailabilityFailure>> {
     const limited = this.rateBudget.claim();
     if (limited) return err(limited);
