@@ -546,7 +546,7 @@ test("postgres: corrupt location policy cannot commit an automation change", { s
   assert.equal(count.rows[0]?.count, "0");
 });
 
-test("standalone booking stays unavailable after a setting edit without a durable host command", { skip: !db }, async () => {
+test("standalone patient actions stay unavailable without durable host work", { skip: !db }, async () => {
   const scope = { tenantId: "safe-default-tenant", clinicId: "safe-default-clinic", locationId: "safe-default-location" };
   const patient = { scope, patientRef: "safe-default-patient", verificationRef: "safe-default-proof", expiresAt };
   const offer = { scope, offerRef: "safe-default-offer-canary-8792", serviceRef: "physio", startsAt: "2026-09-29T11:00:00.000Z", expiresAt };
@@ -554,15 +554,39 @@ test("standalone booking stays unavailable after a setting edit without a durabl
   const { reception, policy } = createStandaloneTextComposition(db!, host);
   assert.equal(value(await policy.read(scope)).capabilities.book, "unavailable");
   const enabled = value(await policy.changeBookingEnabled(scope, "0", true, "clinic-admin"));
-  assert.equal(enabled.capabilities.book, "unavailable");
+  assert.deepEqual({ book: enabled.capabilities.book, cancel: enabled.capabilities.cancel,
+    reschedule: enabled.capabilities.reschedule, intake: enabled.capabilities.intake },
+  { book: "unavailable", cancel: "unavailable", reschedule: "unavailable", intake: "unavailable" });
   const callId = "safe-default-call";
   value(await reception.startCall(callId, scope));
   const requested = value(await reception.proposeBooking(scope, turn(callId, "request", "Book physio"), patient.verificationRef, offer.offerRef, now));
   assert.equal(Object.keys(requested.actions).length, 0);
   assert.match(requested.callerMessages.at(-1) ?? "", /can't complete that request here/);
+  const appointmentRef = "private-appointment-canary-3825";
+  const draftRef = "private-intake-canary-4163";
+  const runtime = new CallRuntime(new PostgresLedger(db!), scope);
+  const cancel = value(await runtime.acceptTurn(turn(callId, "cancel", "Cancel my appointment"), {
+    kind: "requestAction", request: { kind: "cancel", patient,
+      target: { scope, patientRef: patient.patientRef, appointmentRef } },
+  }, now));
+  assert.deepEqual(Object.keys(cancel.staffItems), []);
+  const reschedule = value(await runtime.acceptTurn(turn(callId, "reschedule", "Move my appointment"), {
+    kind: "requestAction", request: { kind: "reschedule", patient,
+      target: { scope, patientRef: patient.patientRef, appointmentRef }, offer },
+  }, now));
+  assert.deepEqual(Object.keys(reschedule.actions), []);
+  const intake = value(await runtime.acceptTurn(turn(callId, "intake", "I am a new patient"), {
+    kind: "requestAction", request: { kind: "intake", scope, approvedDraftRef: draftRef,
+      consentRef: "private-consent-canary-6625", duplicateCheckRef: "private-duplicate-canary-5016" },
+  }, now));
+  assert.deepEqual(Object.keys(intake.staffItems), []);
   value(await reception.drain(scope, callId, now));
   assert.equal(host.bookings(scope).length, 0);
   assert.equal(host.tasks(scope).length, 0);
-  const scan = await scanPatientDataCanaries(db!, [{ label: "default_offer", value: offer.offerRef }]);
+  const scan = await scanPatientDataCanaries(db!, [
+    { label: "default_offer", value: offer.offerRef },
+    { label: "appointment", value: appointmentRef },
+    { label: "intake", value: draftRef },
+  ]);
   assert.deepEqual(scan, { ok: true, value: [] });
 });

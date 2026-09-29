@@ -38,8 +38,11 @@ export class PostgresPolicyStore implements PolicyStore {
   }
 
   private effective(policy: CallPolicy, automation?: Readonly<{ version: number; enabled: boolean }>): CallPolicy {
+    const patientModes = this.hostBookingMode === "unavailable"
+      ? { cancel: "unavailable", reschedule: "unavailable", intake: "unavailable" } as const : {};
     return { ...policy, automationVersion: String(automation?.version ?? 0), automationEnabled: automation?.enabled ?? false,
-      capabilities: { ...policy.capabilities, book: policy.bookingEnabled ? this.hostBookingMode : "unavailable" } };
+      capabilities: { ...policy.capabilities, ...patientModes,
+        book: policy.bookingEnabled ? this.hostBookingMode : "unavailable" } };
   }
 
   async read(scope: LocationScope): Promise<Result<CallPolicy, PolicyFailure>> {
