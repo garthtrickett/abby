@@ -26,6 +26,12 @@ export type ClinikoPhoneSnapshot = Readonly<{
   observedAt: string;
   links: readonly Readonly<{ normalizedPhone: string; patientId: string }>[];
 }>;
+export type ClinikoPhonePage = Readonly<{
+  page: number;
+  totalEntries: number;
+  patientIds: readonly string[];
+  links: ClinikoPhoneSnapshot["links"];
+}>;
 
 const maxBodyBytes = 1_000_000;
 const emailPattern = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
@@ -160,18 +166,18 @@ export class ClinikoPatientCandidateReader {
     return ok({ ...base, kind: "one", candidateRef: `cliniko:patient:${body.patients[0].id}` });
   }
 
-  /** Full bounded scan for the local phone-to-ID index; no other patient fields escape this method. */
-  async readPhoneSnapshot(scope: ClinikoClinicScope, countryCallingCode: string, maxPatients = 100_000,
-                          waitUntil?: (resetAt: string) => Promise<void>):
-    Promise<Result<ClinikoPhoneSnapshot, ClinikoPatientFailure>> {
+  /** Yields one fully validated page at a time so the index can checkpoint before fetching the next page. */
+  async *phonePages(scope: ClinikoClinicScope, countryCallingCode: string, startPage = 1,
+                    maxPatients = 100_000, waitUntil?: (resetAt: string) => Promise<void>):
+    AsyncGenerator<Result<ClinikoPhonePage, ClinikoPatientFailure>> {
     if (!validScope(scope) || scope.tenantId !== this.scope.tenantId || scope.clinicId !== this.scope.clinicId) {
-      return err({ kind: "scopeMismatch" });
+      yield err({ kind: "scopeMismatch" }); return;
     }
     if (!/^[1-9][0-9]{0,2}$/.test(countryCallingCode) || !Number.isSafeInteger(maxPatients) ||
-        maxPatients < 1 || maxPatients > 100_000) return err({ kind: "invalidQuery" });
-    const links: Array<{ normalizedPhone: string; patientId: string }> = [];
-    const seenIds = new Set<string>();
-    const seenLinks = new Set<string>();
+        maxPatients < 1 || maxPatients > 100_000 || !Number.isSafeInteger(startPage) ||
+        startPage < 1 || startPage > Math.ceil(maxPatients / 100)) {
+      yield err({ kind: "invalidQuery" }); return;
+    }
     let totalEntries: number | undefined;
     let rateWaits = 0;
     const pause = async (resetAt: string | undefined): Promise<boolean> => {
@@ -180,11 +186,11 @@ export class ClinikoPatientCandidateReader {
       try { await waitUntil(resetAt); return true; }
       catch { return false; }
     };
-    for (let page = 1; ;) {
+    for (let page = startPage; ;) {
       const limited = this.rateBudget.claim();
       if (limited) {
         if (await pause(limited.resetAt)) continue;
-        return err(limited);
+        yield err(limited); return;
       }
       const query = new URLSearchParams({ page: String(page), per_page: "100", sort: "id:asc" });
       let response: Response;
@@ -193,40 +199,47 @@ export class ClinikoPatientCandidateReader {
           method: "GET", headers: { Accept: "application/json", Authorization: this.authorization,
             "User-Agent": this.userAgent }, redirect: "error", signal: AbortSignal.timeout(15_000),
         });
-      } catch { return err({ kind: "unavailable" }); }
-      if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
+      } catch { yield err({ kind: "unavailable" }); return; }
+      if (response.status === 401 || response.status === 403) { yield err({ kind: "forbidden" }); return; }
       if (response.status === 429) {
         const limited = this.rateBudget.observe429(response.headers.get("X-RateLimit-Reset"));
         if (await pause(limited.resetAt)) continue;
-        return err(limited);
+        yield err(limited); return;
       }
-      if (response.status >= 500 || response.status === 404) return err({ kind: "unavailable" });
-      if (response.status !== 200) return err({ kind: "malformed" });
+      if (response.status >= 500 || response.status === 404) { yield err({ kind: "unavailable" }); return; }
+      if (response.status !== 200) { yield err({ kind: "malformed" }); return; }
       const parsed = await boundedJson(response);
-      if (!parsed.ok) return parsed;
+      if (!parsed.ok) { yield parsed; return; }
       const body = record(parsed.value);
       if (!body || !Number.isSafeInteger(body.total_entries) || Number(body.total_entries) < 0 ||
           Number(body.total_entries) > maxPatients || !Array.isArray(body.patients) || body.patients.length > 100 ||
-          (totalEntries !== undefined && totalEntries !== body.total_entries)) return err({ kind: "tooManyResults" });
+          (totalEntries !== undefined && totalEntries !== body.total_entries)) {
+        yield err({ kind: "tooManyResults" }); return;
+      }
       totalEntries = Number(body.total_entries);
       const expected = Math.min(100, Math.max(0, totalEntries - (page - 1) * 100));
-      if (body.patients.length !== expected) return err({ kind: "malformed" });
+      if (body.patients.length !== expected) { yield err({ kind: "malformed" }); return; }
+      const patientIds: string[] = [];
+      const links: Array<{ normalizedPhone: string; patientId: string }> = [];
+      const seenIds = new Set<string>();
+      const seenLinks = new Set<string>();
       for (const candidate of body.patients) {
         const patient = record(candidate);
         if (!patient || typeof patient.id !== "string" || !patientIdPattern.test(patient.id) ||
             seenIds.has(patient.id) || (patient.archived_at !== null && patient.archived_at !== undefined &&
               typeof patient.archived_at !== "string") ||
             (patient.patient_phone_numbers !== null && !Array.isArray(patient.patient_phone_numbers))) {
-          return err({ kind: "malformed" });
+          yield err({ kind: "malformed" }); return;
         }
         seenIds.add(patient.id);
+        patientIds.push(patient.id);
         if (patient.archived_at !== null && patient.archived_at !== undefined) continue;
         const phones = Array.isArray(patient.patient_phone_numbers) ? patient.patient_phone_numbers : [];
         for (const value of phones) {
           const phone = record(value);
           if (!phone || (phone.number !== null && typeof phone.number !== "string") ||
               (phone.phone_type !== null && phone.phone_type !== undefined && typeof phone.phone_type !== "string")) {
-            return err({ kind: "malformed" });
+            yield err({ kind: "malformed" }); return;
           }
           if (typeof phone.phone_type === "string" && phone.phone_type.toLowerCase() === "fax") continue;
           const normalizedPhone = normalizePatientPhone(String(phone.number ?? ""), countryCallingCode);
@@ -235,14 +248,32 @@ export class ClinikoPatientCandidateReader {
             if (!seenLinks.has(key)) {
               seenLinks.add(key);
               links.push({ normalizedPhone, patientId: patient.id });
-              if (links.length > 100_000) return err({ kind: "tooManyResults" });
+              if (links.length > 100_000) { yield err({ kind: "tooManyResults" }); return; }
             }
           }
         }
       }
-      if (seenIds.size === totalEntries) break;
-      if (page * 100 >= maxPatients || expected < 100) return err({ kind: "malformed" });
+      yield ok({ page, totalEntries, patientIds, links });
+      if (page * 100 >= totalEntries) return;
+      if (page * 100 >= maxPatients || expected < 100) { yield err({ kind: "malformed" }); return; }
       page += 1;
+    }
+  }
+
+  /** Legacy bounded collector used by direct synthetic callers. */
+  async readPhoneSnapshot(scope: ClinikoClinicScope, countryCallingCode: string, maxPatients = 100_000,
+                          waitUntil?: (resetAt: string) => Promise<void>):
+    Promise<Result<ClinikoPhoneSnapshot, ClinikoPatientFailure>> {
+    const links: Array<{ normalizedPhone: string; patientId: string }> = [];
+    const seenIds = new Set<string>();
+    for await (const page of this.phonePages(scope, countryCallingCode, 1, maxPatients, waitUntil)) {
+      if (!page.ok) return page;
+      for (const id of page.value.patientIds) {
+        if (seenIds.has(id)) return err({ kind: "malformed" });
+        seenIds.add(id);
+      }
+      links.push(...page.value.links);
+      if (links.length > 100_000) return err({ kind: "tooManyResults" });
     }
     let observedAt: string;
     try { observedAt = this.clock(); }

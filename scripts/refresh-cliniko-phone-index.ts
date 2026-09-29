@@ -3,6 +3,7 @@ import { ClinikoPhoneLookup } from "../src/standalone/cliniko-phone-lookup.ts";
 import { PhoneIndexRefreshWorker } from "../src/standalone/phone-index-refresh-worker.ts";
 import { connectPostgres } from "../src/storage/connect.ts";
 import { PostgresPatientPhoneIndex } from "../src/storage/postgres-patient-phone-index.ts";
+import { PostgresPatientPhoneScan } from "../src/storage/postgres-patient-phone-scan.ts";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -22,7 +23,8 @@ process.once("SIGINT", () => stop.abort());
 process.once("SIGTERM", () => stop.abort());
 try {
   const index = new PostgresPatientPhoneIndex(db);
-  const lookup = new ClinikoPhoneLookup(reader.value, index, required("ABBY_COUNTRY_CALLING_CODE"), refreshEveryMs * 2);
+  const lookup = new ClinikoPhoneLookup(reader.value, index, required("ABBY_COUNTRY_CALLING_CODE"),
+    refreshEveryMs * 2, undefined, new PostgresPatientPhoneScan(db));
   const worker = new PhoneIndexRefreshWorker(index, [{ scope, lookup, refreshEveryMs }]);
   await worker.runLoop(stop.signal, pollEveryMs, results => {
     for (const result of results) process.stdout.write(`phone-index refresh: ${result.kind}\n`);

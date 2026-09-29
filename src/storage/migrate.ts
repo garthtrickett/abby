@@ -15,6 +15,7 @@ import { up as up012, down as down012 } from "./migrations/012_config_import_reg
 import { up as up013, down as down013 } from "./migrations/013_number_cutover.ts";
 import { up as up014, down as down014 } from "./migrations/014_patient_phone_index.ts";
 import { up as up015, down as down015 } from "./migrations/015_remove_turn_digests.ts";
+import { up as up016, down as down016 } from "./migrations/016_patient_phone_scan.ts";
 
 function createMigrator<DB>(db: Kysely<DB>): Migrator {
   return new Migrator({
@@ -35,6 +36,7 @@ function createMigrator<DB>(db: Kysely<DB>): Migrator {
       "013_number_cutover": { up: up013, down: down013 },
       "014_patient_phone_index": { up: up014, down: down014 },
       "015_remove_turn_digests": { up: up015, down: down015 },
+      "016_patient_phone_scan": { up: up016, down: down016 },
     }) },
   });
 }
@@ -50,6 +52,6 @@ export async function migrate<DB>(db: Kysely<DB>, direction: "up" | "down" = "up
 }
 
 /** Used by the upgrade probe to boot an actual older schema before seeding data. */
-export async function migrateTo<DB>(db: Kysely<DB>, target: "001_text_probe" | "002_booking_setting_audit" | "003_tenant_scope_constraints" | "004_automation_setting_audit" | "005_clinic_write_stop" | "006_write_stop_recovery" | "007_clinic_knowledge" | "008_pending_location_calls" | "009_effect_call_leases" | "010_effect_call_lease_versions" | "011_portability_fence" | "012_config_import_registry" | "013_number_cutover" | "014_patient_phone_index" | "015_remove_turn_digests"): Promise<void> {
+export async function migrateTo<DB>(db: Kysely<DB>, target: "001_text_probe" | "002_booking_setting_audit" | "003_tenant_scope_constraints" | "004_automation_setting_audit" | "005_clinic_write_stop" | "006_write_stop_recovery" | "007_clinic_knowledge" | "008_pending_location_calls" | "009_effect_call_leases" | "010_effect_call_lease_versions" | "011_portability_fence" | "012_config_import_registry" | "013_number_cutover" | "014_patient_phone_index" | "015_remove_turn_digests" | "016_patient_phone_scan"): Promise<void> {
   assertMigration(await createMigrator(db).migrateTo(target));
 }

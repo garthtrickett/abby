@@ -7,6 +7,7 @@ import type { default as PendingLocationCallsTable } from './PendingLocationCall
 import type { default as ClinicWriteStopTable } from './ClinicWriteStop.js';
 import type { default as NumberRouteEventsTable } from './NumberRouteEvents.js';
 import type { default as ClinicKnowledgeHeadsTable } from './ClinicKnowledgeHeads.js';
+import type { default as PatientPhoneScanLinksTable } from './PatientPhoneScanLinks.js';
 import type { default as TenantPortabilityFencesTable } from './TenantPortabilityFences.js';
 import type { default as PatientPhoneSyncTable } from './PatientPhoneSync.js';
 import type { default as ClinicWriteStopInflightTable } from './ClinicWriteStopInflight.js';
@@ -14,6 +15,7 @@ import type { default as PatientPhoneIndexTable } from './PatientPhoneIndex.js';
 import type { default as TenantConfigImportsTable } from './TenantConfigImports.js';
 import type { default as EffectCallLeasesTable } from './EffectCallLeases.js';
 import type { default as ClinicAutomationTable } from './ClinicAutomation.js';
+import type { default as PatientPhoneScanTable } from './PatientPhoneScan.js';
 import type { default as StaffItemsTable } from './StaffItems.js';
 import type { default as ClinicKnowledgeEventsTable } from './ClinicKnowledgeEvents.js';
 import type { default as CallsTable } from './Calls.js';
@@ -22,6 +24,7 @@ import type { default as ClinicWriteStopEventsTable } from './ClinicWriteStopEve
 import type { default as CallEventsTable } from './CallEvents.js';
 import type { default as EffectOutboxTable } from './EffectOutbox.js';
 import type { default as TenantPortabilityFenceEventsTable } from './TenantPortabilityFenceEvents.js';
+import type { default as PatientPhoneScanSeenTable } from './PatientPhoneScanSeen.js';
 
 export default interface PublicSchema {
   clinic_settings: ClinicSettingsTable;
@@ -36,6 +39,8 @@ export default interface PublicSchema {
 
   clinic_knowledge_heads: ClinicKnowledgeHeadsTable;
 
+  patient_phone_scan_links: PatientPhoneScanLinksTable;
+
   tenant_portability_fences: TenantPortabilityFencesTable;
 
   patient_phone_sync: PatientPhoneSyncTable;
@@ -49,6 +54,8 @@ export default interface PublicSchema {
   effect_call_leases: EffectCallLeasesTable;
 
   clinic_automation: ClinicAutomationTable;
+
+  patient_phone_scan: PatientPhoneScanTable;
 
   staff_items: StaffItemsTable;
 
@@ -65,4 +72,6 @@ export default interface PublicSchema {
   effect_outbox: EffectOutboxTable;
 
   tenant_portability_fence_events: TenantPortabilityFenceEventsTable;
+
+  patient_phone_scan_seen: PatientPhoneScanSeenTable;
 }
