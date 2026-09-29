@@ -1,6 +1,6 @@
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
-import type { CallState, FinalCallerTurn, LocationScope, PendingPresentationRef, Presentation, Result, StaffReason, TransitionFailure } from "../core/model.ts";
+import type { ApprovedGreeting, CallState, FinalCallerTurn, LocationScope, PendingPresentationRef, Presentation, Result, StaffReason, TransitionFailure } from "../core/model.ts";
 import { CallRuntime } from "../core/runtime.ts";
 import type { TextReceptionFailure } from "../reference/text-reception.ts";
 import { TextReception } from "../reference/text-reception.ts";
@@ -25,6 +25,8 @@ export type PlaybackPort = Readonly<{
 }>;
 export type TransferOutcome = Readonly<{ kind: "connected"; providerConnectionRef: string }> | Readonly<{ kind: "failed" | "unproven" }>;
 export type TransferPort = Readonly<{ request(transferId: string, destinationRef: string): Promise<TransferOutcome> }>;
+/** Speech content is kept in this live session; durable presentation rows may contain only status and opaque IDs. */
+export type TransientPresentationConfig = Readonly<{ greeting: ApprovedGreeting }>;
 export type VoiceSessionFailure = TransitionFailure | TextReceptionFailure | TranscriptFailure |
   Readonly<{ kind: "sessionUnknown" | "deliveryBlocked" | "playbackUnknown" | "transportUnavailable" | "intentUnavailable" }>;
 export type DispatchResult = Readonly<{ kind: "none" | "queued" | "played" | "failed" | "unproven" | "interrupted" | "transferConnected" | "transferFailed" | "transferUnproven" | "transferCanceled"; playbackId?: string }>;
@@ -56,6 +58,8 @@ export class VoiceSession {
   private readonly resolveIntent: IntentResolver;
   private readonly monotonicNow: () => number;
   private readonly assembler: TurnAssembler;
+  private readonly transientContent: Map<string, string> | undefined;
+  private readonly transientGreeting: ApprovedGreeting | undefined;
   private attached = false;
   private localSendDeadlineMs: number | undefined;
   private leaseVersion: number | undefined;
@@ -64,7 +68,16 @@ export class VoiceSession {
   private activePlayback: ActivePlayback | undefined;
   private cachedIntent: VoiceIntent | undefined;
 
-  constructor(callId: string, sessionId: string, scope: LocationScope, ledger: LedgerStore, reception: TextReception, playback: PlaybackPort, resolveIntent: IntentResolver, transfer?: TransferPort, monotonicNow: () => number = () => performance.now()) {
+  constructor(callId: string, sessionId: string, scope: LocationScope, ledger: LedgerStore, reception: TextReception, playback: PlaybackPort, resolveIntent: IntentResolver, transfer?: TransferPort, monotonicNow: () => number = () => performance.now(), transient?: TransientPresentationConfig) {
+    if (transient && (transient.greeting.approved !== true ||
+        transient.greeting.scope.tenantId !== scope.tenantId ||
+        transient.greeting.scope.clinicId !== scope.clinicId ||
+        transient.greeting.scope.locationId !== scope.locationId ||
+        !transient.greeting.version?.trim() || transient.greeting.version.length > 256 ||
+        !transient.greeting.ownerRef?.trim() || transient.greeting.ownerRef.length > 256 ||
+        !transient.greeting.approvedText?.trim() || transient.greeting.approvedText.length > 2_000)) {
+      throw new RangeError("invalid transient greeting");
+    }
     this.callId = callId;
     this.sessionId = sessionId;
     this.scope = scope;
@@ -75,6 +88,18 @@ export class VoiceSession {
     this.resolveIntent = resolveIntent;
     this.monotonicNow = monotonicNow;
     this.assembler = new TurnAssembler(callId, sessionId);
+    this.transientGreeting = transient ? structuredClone(transient.greeting) : undefined;
+    this.transientContent = this.transientGreeting
+      ? new Map([[`${callId}:greeting`, this.transientGreeting.approvedText]]) : undefined;
+  }
+
+  private rememberPending(state: CallState): void {
+    if (!this.transientContent || state.callId !== this.callId || !state.pendingPresentationId) return;
+    const presentation = state.presentations[state.pendingPresentationId];
+    if (presentation && presentation.kind !== "transfer" && presentation.approvedText.trim() &&
+        presentation.approvedText.length <= 2_000) {
+      this.transientContent.set(presentation.id, presentation.approvedText);
+    }
   }
 
   matches(ref: PendingPresentationRef): boolean {
@@ -105,6 +130,7 @@ export class VoiceSession {
     this.attached = false;
     this.localSendDeadlineMs = undefined;
     this.activePlayback = undefined;
+    this.transientContent?.clear();
     if (active) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
@@ -122,6 +148,17 @@ export class VoiceSession {
 
   async attach(now: string): Promise<Result<CallState, VoiceSessionFailure>> {
     if (this.attached) return err({ kind: "invalidTransition" });
+    if (this.transientGreeting) {
+      const read = await this.runtime.read(this.callId);
+      if (!read.ok) return read;
+      const admitted = read.value.policy.greeting;
+      if (!admitted || admitted.approved !== true ||
+          admitted.version !== this.transientGreeting.version ||
+          admitted.ownerRef !== this.transientGreeting.ownerRef ||
+          (admitted.approvedText && admitted.approvedText !== this.transientGreeting.approvedText)) {
+        return err({ kind: "invalidTransition" });
+      }
+    }
     const startedMs = this.monotonicNow();
     const result = await this.runtime.activate(this.callId, this.sessionId, now);
     if (result.ok) {
@@ -169,6 +206,7 @@ export class VoiceSession {
       this.speechOpen = false;
       return began;
     }
+    this.transientContent?.clear();
     if (!active) return ok(generation);
     const result = await this.runtime.resolvePresentation(this.callId, active.presentationId, cleared ? "interrupted" : "unproven", this.sessionId, now);
     if (!cleared) {
@@ -231,7 +269,10 @@ export class VoiceSession {
       if (candidates.length !== 1) return err({ kind: "confirmationMissing" });
       result = await this.reception.affirm(this.scope, turn, candidates[0]!.key, candidates[0]!.digest, now, existing.value.conversationRevision);
     }
-    if (result.ok && generation === this.assembler.currentGeneration()) this.speechOpen = false;
+    if (result.ok && generation === this.assembler.currentGeneration()) {
+      this.rememberPending(result.value);
+      this.speechOpen = false;
+    }
     return result;
   }
 
@@ -246,6 +287,15 @@ export class VoiceSession {
     const presentation = read.value.presentations[presentationId];
     if (!presentation) return err({ kind: "invalidTransition" });
     if (presentation.kind === "transfer") return this.dispatchTransfer(presentation, now);
+    const approvedText = this.transientContent?.get(presentationId) ??
+      (this.transientContent ? undefined : presentation.approvedText);
+    if (!approvedText?.trim()) {
+      const ended = await this.runtime.endCall(this.callId, this.sessionId, now, "mediaFailure");
+      if (!ended.ok) return ended;
+      this.attached = false;
+      this.transientContent?.clear();
+      return err({ kind: "transportUnavailable" });
+    }
     const generation = this.assembler.currentGeneration();
     const started = await this.runtime.startPresentation(this.callId, presentationId, this.sessionId, now);
     if (!started.ok) return started;
@@ -258,7 +308,7 @@ export class VoiceSession {
     }
     if (!this.canSend()) return this.closeAfterLeaseLoss(now);
     let send: "queued" | "notSent" | "uncertain";
-    try { send = await this.playback.enqueue(playbackId, presentation.approvedText,
+    try { send = await this.playback.enqueue(playbackId, approvedText,
       () => this.activePlayback?.id === playbackId && !this.speechOpen &&
         generation === this.assembler.currentGeneration() && this.canSend()); }
     catch { send = "uncertain"; }
@@ -273,6 +323,7 @@ export class VoiceSession {
     if (!this.canSend()) return this.closeAfterLeaseLoss(now);
     if (send === "queued") return ok({ kind: "queued", playbackId });
     this.activePlayback = undefined;
+    this.transientContent?.delete(presentationId);
     const status = send === "notSent" ? "failed" : "unproven";
     const resolved = await this.runtime.resolvePresentation(this.callId, presentationId, status, this.sessionId, now);
     return resolved.ok ? ok({ kind: status }) : resolved;
@@ -317,12 +368,17 @@ export class VoiceSession {
     if (!active || active.id !== playbackId) return err({ kind: "playbackUnknown" });
     if (!this.canSend()) return err({ kind: "leaseLost" });
     const result = await this.runtime.resolvePresentation(this.callId, active.presentationId, status, this.sessionId, now);
-    if (result.ok) this.activePlayback = undefined;
+    if (result.ok) {
+      this.activePlayback = undefined;
+      this.transientContent?.delete(active.presentationId);
+    }
     return result;
   }
 
-  drainEffects(now: string): Promise<Result<CallState, VoiceSessionFailure>> {
-    return this.reception.drain(this.scope, this.callId, now);
+  async drainEffects(now: string): Promise<Result<CallState, VoiceSessionFailure>> {
+    const result = await this.reception.drain(this.scope, this.callId, now);
+    if (result.ok) this.rememberPending(result.value);
+    return result;
   }
 
   async end(now: string, reason: "callerDisconnected" | "sessionClosed" = "sessionClosed"): Promise<Result<CallState, VoiceSessionFailure>> {
@@ -334,6 +390,7 @@ export class VoiceSession {
     if (!ended.ok) return ended;
     this.attached = false;
     this.localSendDeadlineMs = undefined;
+    this.transientContent?.clear();
     if (active) {
       try { await this.playback.clear(active.id); } catch { /* durable status is unproven */ }
     }

@@ -5,13 +5,13 @@ import { MemoryLedger } from "../../src/core/ledger.ts";
 import type { LedgerStore } from "../../src/core/ledger.ts";
 import type { EffectCallLeaseStore } from "../../src/core/effect-call-lease.ts";
 import { err, ok } from "../../src/core/model.ts";
-import type { ApprovedKnowledge, AvailabilityRead, AvailabilityReadFailure, CallPolicy, LocationScope, Result } from "../../src/core/model.ts";
+import type { ApprovedKnowledge, AvailabilityRead, AvailabilityReadFailure, CallPolicy, CallState, LocationScope, Result } from "../../src/core/model.ts";
 import type { AvailabilityHost } from "../../src/core/host.ts";
 import { ClinikoAvailabilityReader } from "../../src/cliniko/availability.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { createEmbeddedTextComposition } from "../../src/reference/embedded-composition.ts";
-import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
+import { MemoryPolicyStore, referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { expandStaffSchedule } from "../../src/reference/staff-schedule.ts";
 import type { TextReception } from "../../src/reference/text-reception.ts";
 import type { PolicyStore } from "../../src/core/host.ts";
@@ -126,7 +126,21 @@ class PresentationStartHookLedger implements LedgerStore {
   }
 }
 
-async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: boolean, transferMode: "execute" | "requestOnly" | "unavailable" = "requestOnly", transferDestinationRef?: string, clock?: { now: () => number; onPresentationStarted?: () => void; onSessionRenewed?: () => void }, options: { bookingMode?: "execute" | "requestOnly"; knowledge?: (scope: LocationScope) => readonly ApprovedKnowledge[]; availability?: (scope: LocationScope) => AvailabilityHost; staffedIntervals?: CallPolicy["staffedIntervals"]; model?: RawModelPort; modelDeadlineMs?: number; streamedPlayback?: PlaybackPort } = {}) {
+function redactPresentationReads(ledger: LedgerStore): LedgerStore {
+  return new Proxy(ledger, { get(target, property, receiver) {
+    if (property === "read") return async (callId: string, scope: LocationScope) => {
+      const result = await target.read(callId, scope);
+      if (!result.ok) return result;
+      const presentations = Object.fromEntries(Object.entries(result.value.presentations).map(([id, presentation]) =>
+        [id, presentation.kind === "transfer" ? presentation : { ...presentation, approvedText: "" }])) as CallState["presentations"];
+      return ok({ ...result.value, presentations });
+    };
+    const value: unknown = Reflect.get(target, property, receiver);
+    return typeof value === "function" ? value.bind(target) : value;
+  } });
+}
+
+async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: boolean, transferMode: "execute" | "requestOnly" | "unavailable" = "requestOnly", transferDestinationRef?: string, clock?: { now: () => number; onPresentationStarted?: () => void; onSessionRenewed?: () => void }, options: { bookingMode?: "execute" | "requestOnly"; knowledge?: (scope: LocationScope) => readonly ApprovedKnowledge[]; availability?: (scope: LocationScope) => AvailabilityHost; staffedIntervals?: CallPolicy["staffedIntervals"]; model?: RawModelPort; modelDeadlineMs?: number; streamedPlayback?: PlaybackPort; transientPresentation?: boolean } = {}) {
   const scope: LocationScope = { tenantId: `voice-tenant-${id}`, clinicId: `voice-clinic-${id}`, locationId: `voice-location-${id}` };
   const patient = { scope, patientRef: `patient-${id}`, verificationRef: `proof-${id}`, expiresAt: at(86_400) };
   const offer = { scope, offerRef: `offer-${id}`, serviceRef: "physio", startsAt: at(90_000), expiresAt: at(86_400) };
@@ -162,8 +176,11 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
   }, () => now, async () => ok(true));
   const callId = value(await admission.begin({ key: { accountRef: `account-${id}`, providerCallRef: `call-${id}` }, dialedNumber: "+6125550100", receivedAt: now })).receipt.callId;
   const sessionId = `session-${id}`;
-  const sessionLedger = clock?.onPresentationStarted || clock?.onSessionRenewed
+  const baseSessionLedger = clock?.onPresentationStarted || clock?.onSessionRenewed
     ? new PresentationStartHookLedger(ledger, clock.onPresentationStarted ?? (() => {}), clock.onSessionRenewed) : ledger;
+  const sessionLedger = options.transientPresentation ? redactPresentationReads(baseSessionLedger) : baseSessionLedger;
+  const greeting = options.transientPresentation ? value(await policy.read(scope)).greeting : undefined;
+  if (options.transientPresentation) assert.ok(greeting);
   const session = new VoiceSession(callId, sessionId, scope, sessionLedger, reception, options.streamedPlayback ?? playback, async turn =>
     ok(turn.text.startsWith("Transfer")
       ? { kind: "transfer" as const, reason: "callerRequested" as const }
@@ -176,9 +193,10 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
           to: turn.text.includes("DST") ? "2026-10-05" : "2026-10-02" }
       : turn.text.startsWith("Book")
       ? { kind: "book" as const, verificationRef: patient.verificationRef, offerRef: offer.offerRef }
-      : { kind: "affirm" as const }), transfer, clock?.now);
+      : { kind: "affirm" as const }), transfer, clock?.now,
+    greeting ? { greeting } : undefined);
   value(await session.attach(at(1)));
-  return { scope, patient, offer, host, ledger, policy, reception, playback, transfer, session, sessionId, callId, model };
+  return { scope, patient, offer, host, ledger, sessionLedger, policy, reception, playback, transfer, session, sessionId, callId, model };
 }
 
 async function bookTurn(app: Awaited<ReturnType<typeof fixture>>, text = "Book physio") {
@@ -247,7 +265,65 @@ function hoursSource(scope: LocationScope): ApprovedKnowledge {
     approved: true, effectiveFrom: at(-86_400), effectiveUntil: at(86_400) };
 }
 
+test("E2E-133 transient greeting must match the admitted policy snapshot before activation", async () => {
+  const scope = { tenantId: "greeting-snapshot", clinicId: "clinic", locationId: "location" };
+  const callId = "transient-greeting-snapshot";
+  const ledger = new MemoryLedger();
+  const policy = referenceDefaultPolicy(scope);
+  assert.ok(policy.greeting);
+  value(await ledger.admit(callId, policy, { key: { accountRef: "account", providerCallRef: "call" },
+    dialedNumber: "+6125550100", acceptedAt: now, deadline: at(30) }));
+  const reception = createEmbeddedTextComposition(ledger, new MemoryPolicyStore(), new ReferenceClinicHost([], []));
+  for (const greeting of [{ ...policy.greeting, version: "different-version" },
+    { ...policy.greeting, approvedText: "A changed greeting" }]) {
+    const session = new VoiceSession(callId, "session", scope, ledger, reception, new FakePlayback(),
+      async () => ok({ kind: "handoff", reason: "callerRequested" }), undefined, () => 0, { greeting });
+    failure(await session.attach(at(1)), "invalidTransition");
+  }
+  assert.equal(value(await ledger.read(callId, scope)).lifecycle, "starting");
+});
+
 for (const kind of kinds) {
+  test(`E2E-133 ${kind}: transient voice content speaks after ledger reads redact both greeting and patient-specific details`, async () => {
+    const app = await fixture(kind, `${kind}-transient-content`, true, "unavailable", undefined, undefined,
+      { transientPresentation: true });
+    const hiddenGreeting = value(await app.sessionLedger.read(app.callId, app.scope));
+    assert.equal(hiddenGreeting.presentations[hiddenGreeting.pendingPresentationId!]?.kind, "notice");
+    assert.equal((hiddenGreeting.presentations[hiddenGreeting.pendingPresentationId!] as { approvedText: string }).approvedText, "");
+    const greeting = value(await app.session.dispatchPending(at(2)));
+    assert.equal(greeting.kind, "queued");
+    assert.equal(app.playback.queuedTexts[0], "Hello. How can I help you?");
+    value(await app.session.acceptPlaybackResult(greeting.playbackId!, "played", at(2)));
+
+    const planned = await bookTurn(app);
+    assert.ok(planned.pendingPresentationId);
+    const hiddenDetails = value(await app.sessionLedger.read(app.callId, app.scope));
+    assert.equal((hiddenDetails.presentations[planned.pendingPresentationId] as { approvedText: string }).approvedText, "");
+    const details = value(await app.session.dispatchPending(at(4)));
+    assert.equal(details.kind, "queued");
+    assert.match(app.playback.queuedTexts[1]!, /Please confirm the physio appointment at/);
+    value(await app.session.acceptPlaybackResult(details.playbackId!, "played", at(5)));
+    value(await app.session.end(at(6), "callerDisconnected"));
+  });
+
+  test(`E2E-133 ${kind}: missing transient voice content closes the call without speaking stored text`, async () => {
+    const app = await fixture(kind, `${kind}-missing-transient`, false, "unavailable", undefined, undefined,
+      { transientPresentation: true });
+    const greeting = value(await app.session.dispatchPending(at(2)));
+    value(await app.session.acceptPlaybackResult(greeting.playbackId!, "played", at(2)));
+    const runtime = new CallRuntime(app.ledger, app.scope);
+    value(await runtime.acceptTurn({ callId: app.callId, sessionId: app.sessionId, turnId: "missed-transient-turn",
+      text: "Patient detail must stay transient", quality: "clear", at: at(3) }, { kind: "clarify" }, at(3)));
+    const hidden = value(await app.sessionLedger.read(app.callId, app.scope));
+    assert.ok(hidden.pendingPresentationId);
+    assert.equal((hidden.presentations[hidden.pendingPresentationId] as { approvedText: string }).approvedText, "");
+    failure(await app.session.dispatchPending(at(4)), "transportUnavailable");
+    assert.equal(app.playback.queuedTexts.length, 1);
+    const ended = value(await runtime.read(app.callId));
+    assert.equal(ended.lifecycle, "ended");
+    assert.equal(ended.terminal?.reason, "mediaFailure");
+  });
+
   test(`${kind}: final turn and playback completion gate one booking`, async () => {
     const app = await fixture(kind, `${kind}-confirmed`, true);
     const generation = value(await app.session.speechStarted(at(2)));
