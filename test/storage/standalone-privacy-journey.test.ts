@@ -8,6 +8,7 @@ import type { Result } from "../../src/core/model.ts";
 import { ARCHIVE_SECTIONS } from "../../src/portability/archive-envelope.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { StandaloneAvailabilityTextRunner } from "../../src/standalone/availability-text-runner.ts";
+import { createAvailabilityConsoleServer } from "../../src/standalone/availability-console/server.ts";
 import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
 import { ClinikoPhoneLookup } from "../../src/standalone/cliniko-phone-lookup.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
@@ -16,6 +17,7 @@ import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-s
 import { PostgresPatientPhoneIndex } from "../../src/storage/postgres-patient-phone-index.ts";
 import { PostgresPatientPhoneScan } from "../../src/storage/postgres-patient-phone-scan.ts";
 import { scanDisposableBackupCanaries } from "./backup-canary-scan.ts";
+import { resolve } from "node:path";
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
@@ -259,4 +261,70 @@ test("E2E-125 text: standalone ingress presents provisional availability without
     { label: "caller_text", value: callerText }, { label: "patient_name", value: patientName },
     { label: "appointment_id", value: appointmentId },
   ]), []);
+});
+
+test("E2E-125 text: loopback HTTP availability goes through the strict PostgreSQL runner and leaves no private data", async () => {
+  const suffix = randomUUID().slice(0, 8);
+  const scope = { tenantId: `availability-http-${suffix}`, clinicId: "clinic", locationId: "frontdesk" };
+  const now = "2026-10-01T00:00:00Z";
+  const appointmentId = `appointment-http-${suffix}`;
+  const appointmentTime = "2026-10-02T00:00:00.000Z";
+  const privateName = `patient-http-${suffix}`;
+  const callerText = `caller-http-${suffix}`;
+  const fetchPort: typeof fetch = async input => {
+    const path = new URL(String(input)).pathname;
+    if (path === "/v1/businesses/11") return Response.json({ id: "11", show_in_online_bookings: true,
+      time_zone_identifier: "Australia/Sydney", patient_name: privateName });
+    if (path === "/v1/practitioners/22") return Response.json({ id: "22", active: true, show_in_online_bookings: true });
+    if (path === "/v1/appointment_types/33") return Response.json({ id: "33", show_in_online_bookings: true });
+    if (path === "/v1/businesses/11/practitioners") return Response.json({ total_entries: 1, practitioners: [{ id: "22" }] });
+    if (path === "/v1/practitioners/22/appointment_types") return Response.json({ total_entries: 1, appointment_types: [{ id: "33" }] });
+    if (path.endsWith("/available_times")) return Response.json({ total_entries: 1,
+      available_times: [{ appointment_start: appointmentTime, appointment_id: appointmentId }] });
+    throw new Error("unexpected Cliniko request");
+  };
+  const reader = value(ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5",
+    contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
+  fetchPort, () => now));
+  const runner = new StandaloneAvailabilityTextRunner(db, scope, reader, () => now);
+  const server = await createAvailabilityConsoleServer(runner, resolve("dist/availability-console/app.js"));
+  await new Promise<void>(done => server.listen(0, "127.0.0.1", done));
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const base = `http://127.0.0.1:${address.port}`;
+  try {
+    const invalid = await fetch(`${base}/api/availability`, { method: "POST", headers: {
+      Origin: base, "Content-Type": "application/json" }, body: JSON.stringify({
+        text: callerText, from: "2026-10-03", to: "2026-10-02",
+      }) });
+    assert.equal(invalid.status, 400);
+    assert.equal((await db.selectFrom("calls").select("call_id")
+      .where("tenant_id", "=", scope.tenantId as never).execute()).length, 0);
+    const response = await fetch(`${base}/api/availability`, { method: "POST", headers: {
+      Origin: base, "Content-Type": "application/json" }, body: JSON.stringify({
+        text: callerText, from: "2026-10-02", to: "2026-10-02",
+      }) });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    const answer = await response.json() as { ok: boolean; value: { status: string; message: string } };
+    assert.equal(answer.ok, true);
+    assert.equal(answer.value.status, "shown");
+    assert.match(answer.value.message, /can't reserve or confirm/);
+    assert.equal(JSON.stringify(answer).includes(appointmentId), false);
+    assert.equal(JSON.stringify(answer).includes(privateName), false);
+    const calls = await db.selectFrom("calls").select(["call_id", "state"])
+      .where("tenant_id", "=", scope.tenantId as never).execute();
+    assert.equal(calls.length, 1);
+    const stored = value(await createStandaloneTextComposition(db, reader).reception.read(scope, calls[0]!.call_id));
+    assert.deepEqual(stored.callerMessages, []);
+    assert.deepEqual(stored.availabilityReads, []);
+    assert.deepEqual(stored.actions, {});
+    assert.deepEqual(stored.staffItems, {});
+    const canaries = [callerText, privateName, appointmentId, appointmentTime]
+      .map((entry, index) => ({ label: `http_private_${index}`, value: entry }));
+    assert.deepEqual(await scanPatientDataCanaries(db, canaries), { ok: true, value: [] });
+    assert.deepEqual(await scanDisposableBackupCanaries(url, canaries), []);
+  } finally {
+    await new Promise<void>(done => { server.close(() => done()); server.closeAllConnections(); });
+  }
 });

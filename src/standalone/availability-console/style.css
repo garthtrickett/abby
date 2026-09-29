@@ -1,0 +1,11 @@
+:root { font-family: system-ui, sans-serif; color: #202b35; background: #f7f9fa; }
+main { max-width: 42rem; margin: 3rem auto; padding: 1.5rem; }
+h1 { margin-bottom: .4rem; }
+form, section { display: grid; gap: .75rem; margin-top: 1.5rem; padding: 1.25rem; background: white; border: 1px solid #d5dfe5; border-radius: .5rem; }
+textarea { min-height: 5rem; resize: vertical; }
+textarea, input, button { font: inherit; padding: .6rem; }
+.dates { display: flex; gap: 1rem; flex-wrap: wrap; }
+.dates label { display: grid; gap: .3rem; }
+button { border: 0; border-radius: .3rem; color: white; background: #18627a; cursor: pointer; }
+button:disabled { opacity: .55; cursor: wait; }
+section p { margin: 0; white-space: pre-wrap; }
