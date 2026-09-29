@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { ok } from "../../src/core/model.ts";
-import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { ReferenceConfigArchiveImporter } from "../../src/reference/config-archive-import.ts";
 import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
@@ -22,7 +21,7 @@ const authority = { authorizeAndRecord: async () => ok({ requestRef: "audited-mi
 test("standalone minimal settings export and stage without granting buyer capabilities", async () => {
   const scope = { tenantId: "minimal-export-source", clinicId: "clinic", locationId: "location" };
   const targetScope = { tenantId: "minimal-export-buyer", clinicId: "buyer", locationId: "location" };
-  const app = createStandaloneTextComposition(db, new ReferenceClinicHost([], []));
+  const app = createStandaloneTextComposition(db);
   assert.equal((await app.policy.changeBookingEnabled(scope, "0", true, "clinic-admin")).ok, true);
   const archive = await buildPostgresConfigArchive(db, { scope, targetScope, timeZone: "UTC",
     mappingProvenance: "reviewed-map", archiveId: "minimal-settings-archive", actorRef: "clinic-admin",
@@ -66,7 +65,7 @@ test("default archive rejects rich policy and any standalone knowledge draft", a
   assert.ok((await buildPostgresConfigArchive(db, { ...request, archiveMode: "unsafeReference" }, authority)).ok);
 
   const scope = { tenantId: "minimal-export-knowledge", clinicId: "clinic", locationId: "location" };
-  const app = createStandaloneTextComposition(db, new ReferenceClinicHost([], []));
+  const app = createStandaloneTextComposition(db);
   assert.equal((await app.policy.changeBookingEnabled(scope, "0", false, "clinic-admin")).ok, true);
   const catalogue = new PostgresKnowledgeCatalogue(db, "unsafeReference");
   assert.equal((await catalogue.saveDraft(scope, "parking", "0", "clinic-owner", "Patient name in draft",

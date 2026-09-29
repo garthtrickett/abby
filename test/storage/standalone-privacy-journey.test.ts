@@ -6,7 +6,6 @@ import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
 import { ok } from "../../src/core/model.ts";
 import type { Result } from "../../src/core/model.ts";
 import { ARCHIVE_SECTIONS } from "../../src/portability/archive-envelope.ts";
-import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
 import { ClinikoPhoneLookup } from "../../src/standalone/cliniko-phone-lookup.ts";
@@ -68,8 +67,7 @@ test("standalone phone, setting, export, and text journey retains only patient p
   assert.deepEqual(await lookup.candidates(clinicScope, phone),
     { ok: true, value: { kind: "one", candidateIds: ["901"] } });
 
-  const host = new ReferenceClinicHost([], []);
-  const app = createStandaloneTextComposition(db, host);
+  const app = createStandaloneTextComposition(db);
   assert.equal(value(await app.policy.changeBookingEnabled(scope, "0", true, "clinic-admin")).capabilities.book,
     "unavailable");
   const archiveRequest = { scope, targetScope, timeZone: "UTC",
@@ -91,7 +89,6 @@ test("standalone phone, setting, export, and text journey retains only patient p
   assert.equal(booking.callerMessages.at(-1), "I can't complete that request here.");
   assert.deepEqual(booking.actions, {});
   assert.deepEqual(booking.staffItems, {});
-  assert.equal(host.bookingEvidenceReads(), 0);
   const pendingId = booking.pendingPresentationId;
   assert.ok(pendingId);
   value(await app.reception.acknowledgeTextPresentation(scope, callId, pendingId));
@@ -105,7 +102,7 @@ test("standalone phone, setting, export, and text journey retains only patient p
   assert.deepEqual(appointments.actions, {});
   assert.deepEqual(appointments.staffItems, {});
   assert.equal(app.reception.appointmentReadEnabled(), false);
-  const reloaded = createStandaloneTextComposition(db, host);
+  const reloaded = createStandaloneTextComposition(db);
   const stored = value(await reloaded.reception.read(scope, callId));
   assert.deepEqual(stored.callerMessages, []);
   assert.deepEqual(stored.appointmentReads, []);
@@ -156,12 +153,11 @@ test("standalone agent reads provisional Cliniko times without retaining appoint
   const reader = value(ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5",
     contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
   fetchPort, () => now));
-  const host = new ReferenceClinicHost([], []);
-  const app = createStandaloneTextComposition(db, host, reader);
+  const app = createStandaloneTextComposition(db, reader);
   const agent = new CommandGateway({ actorRef: "agent", role: "agent", scope }, app.policy, app.reception);
   assert.equal(agent.listPermitted().some(item => item.id === "availability.read.v2"), true);
   assert.equal(agent.listPermitted().some(item => item.id === "appointments.read.v1"), false);
-  const withoutCliniko = createStandaloneTextComposition(db, host);
+  const withoutCliniko = createStandaloneTextComposition(db);
   assert.equal(new CommandGateway({ actorRef: "agent", role: "agent", scope }, withoutCliniko.policy,
     withoutCliniko.reception).listPermitted().some(item => item.id === "availability.read.v2"), false);
   const callId = randomUUID();
@@ -196,7 +192,7 @@ test("standalone agent reads provisional Cliniko times without retaining appoint
   assert.deepEqual(failed.staffItems, {});
   assert.match(failed.callerMessages.at(-1) ?? "", /contact the clinic directly/);
 
-  const reloaded = createStandaloneTextComposition(db, host, reader);
+  const reloaded = createStandaloneTextComposition(db, reader);
   const stored = value(await reloaded.reception.read(scope, callId));
   assert.deepEqual(stored.availabilityReads, []);
   assert.deepEqual(stored.callerMessages, []);
