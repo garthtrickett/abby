@@ -25,7 +25,12 @@ export type PlaybackCompletion = Readonly<{
 export type PlaybackEvidenceFailure = Readonly<{
   kind: "playbackUnknown" | "playbackNotQueued" | "invalidPlaybackEvidence" | "settlementUnavailable";
 }>;
-export type StreamedPlaybackOptions = Readonly<{ stepDeadlineMs?: number; maxChunks?: number }>;
+export type StreamedPlaybackOptions = Readonly<{
+  stepDeadlineMs?: number;
+  /** First synthesized chunk may have a separate bound; later chunks and output sends keep stepDeadlineMs. */
+  firstChunkDeadlineMs?: number;
+  maxChunks?: number;
+}>;
 
 type StreamState = {
   abort: AbortController;
@@ -47,30 +52,36 @@ export class StreamedPlaybackPort implements PlaybackPort {
   private readonly synthesis: SpeechSynthesisPort;
   private readonly output: AudioOutputPort;
   private readonly stepDeadlineMs: number;
+  private readonly firstChunkDeadlineMs: number;
   private readonly maxChunks: number;
   private readonly streams = new Map<string, StreamState>();
   private readonly retired = new Set<string>();
 
   constructor(synthesis: SpeechSynthesisPort, output: AudioOutputPort, options: StreamedPlaybackOptions = {}) {
     const stepDeadlineMs = options.stepDeadlineMs ?? 2_000;
+    const firstChunkDeadlineMs = options.firstChunkDeadlineMs ?? stepDeadlineMs;
     const maxChunks = options.maxChunks ?? 3_000;
     if (!Number.isSafeInteger(stepDeadlineMs) || stepDeadlineMs < 50 || stepDeadlineMs > 10_000 ||
+        !Number.isSafeInteger(firstChunkDeadlineMs) || firstChunkDeadlineMs < 50 ||
+        firstChunkDeadlineMs > 10_000 ||
         !Number.isSafeInteger(maxChunks) || maxChunks < 1 || maxChunks > 6_000) {
       throw new RangeError("invalid streamed playback configuration");
     }
     this.synthesis = synthesis;
     this.output = output;
     this.stepDeadlineMs = stepDeadlineMs;
+    this.firstChunkDeadlineMs = firstChunkDeadlineMs;
     this.maxChunks = maxChunks;
   }
 
-  private async bounded<T>(operation: () => Promise<T>, abort?: AbortController): Promise<Result<T, undefined>> {
+  private async bounded<T>(operation: () => Promise<T>, abort?: AbortController,
+                           deadlineMs = this.stepDeadlineMs): Promise<Result<T, undefined>> {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       return await Promise.race([
         Promise.resolve().then(operation).then(value => ok(value), () => err(undefined)),
         new Promise<Result<T, undefined>>(resolve => {
-          timer = setTimeout(() => { abort?.abort(); resolve(err(undefined)); }, this.stepDeadlineMs);
+          timer = setTimeout(() => { abort?.abort(); resolve(err(undefined)); }, deadlineMs);
         }),
       ]);
     } finally {
@@ -98,7 +109,8 @@ export class StreamedPlaybackPort implements PlaybackPort {
       const iterator = source[Symbol.asyncIterator]();
       for (let sequence = 0; sequence < this.maxChunks; sequence += 1) {
         if (state.canceled || !canSend()) return this.failed(playbackId, state);
-        const next = await this.bounded(() => iterator.next(), state.abort);
+        const next = await this.bounded(() => iterator.next(), state.abort,
+          sequence === 0 ? this.firstChunkDeadlineMs : this.stepDeadlineMs);
         if (!next.ok) return this.failed(playbackId, state);
         if (next.value.done) {
           if (!state.sentCount || state.canceled || !canSend()) return this.failed(playbackId, state);

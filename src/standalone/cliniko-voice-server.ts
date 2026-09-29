@@ -9,9 +9,11 @@ import type Database from "../storage/generated/Database.ts";
 import { checkStandaloneTextDatabase } from "../storage/standalone-privacy-preflight.ts";
 import type { StandalonePrivacyPreflightFailure } from "../storage/standalone-privacy-preflight.ts";
 import type { MediaTurnOptions } from "../voice/media-turn-controller.ts";
+import { FirstChunkFallbackSpeech } from "../voice/first-chunk-fallback-speech.ts";
 import { OpenAIRealtimeTranscription } from "../voice/openai-realtime-transcription.ts";
 import type { OpenAIRealtimeTranscriptionConfig } from "../voice/openai-realtime-transcription.ts";
 import { OpenAISpeechSynthesis } from "../voice/openai-speech-synthesis.ts";
+import type { StreamedPlaybackOptions } from "../voice/streamed-playback-port.ts";
 import { createTwilioIngressServer } from "../voice/twilio-ingress-server.ts";
 import { TwilioSignedIngress } from "../voice/twilio-signed-ingress.ts";
 import type { TwilioSignedIngressConfig } from "../voice/twilio-signed-ingress.ts";
@@ -40,12 +42,16 @@ export type ClinikoVoiceServerConfig = Readonly<{
     apiKey: string;
     intentModel: string;
     speechModel?: string;
+    /** Opt-in alternate model; it may speak only if the primary yielded no audio. */
+    speechFallbackModel?: string;
+    speechPrimaryFirstChunkMs?: number;
     voice?: string;
     fetch?: typeof fetch;
     transcriptionSocketFactory?: OpenAIRealtimeTranscriptionConfig["socketFactory"];
   }>;
   readiness: AutomationReadiness;
   mediaOptions?: MediaTurnOptions;
+  playbackOptions?: StreamedPlaybackOptions;
   now?: () => string;
   monotonicNow?: () => number;
 }>;
@@ -89,10 +95,30 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
   const transcriptionSocketFactory = config.openai.transcriptionSocketFactory;
   const readiness = config.readiness;
   // Validate provider configuration before exposing an HTTP listener.
-  const synthesis = new OpenAISpeechSynthesis({ apiKey: openaiApiKey,
+  const primarySynthesis = new OpenAISpeechSynthesis({ apiKey: openaiApiKey,
     ...(config.openai.speechModel ? { model: config.openai.speechModel } : {}),
     ...(config.openai.voice ? { voice: config.openai.voice } : {}),
     ...(config.openai.fetch ? { fetchPort: config.openai.fetch } : {}) });
+  if (config.openai.speechPrimaryFirstChunkMs !== undefined && !config.openai.speechFallbackModel) {
+    throw new RangeError("speech fallback model required");
+  }
+  const primaryFirstChunkMs = config.openai.speechPrimaryFirstChunkMs ?? 1_500;
+  const playbackOptions = config.openai.speechFallbackModel
+    ? { ...config.playbackOptions,
+      firstChunkDeadlineMs: config.playbackOptions?.firstChunkDeadlineMs ?? 5_000 }
+    : config.playbackOptions;
+  if (config.openai.speechFallbackModel &&
+      (playbackOptions?.firstChunkDeadlineMs ?? 0) <= primaryFirstChunkMs) {
+    throw new RangeError("speech fallback deadline unavailable");
+  }
+  const synthesis = config.openai.speechFallbackModel
+    ? new FirstChunkFallbackSpeech({ primary: primarySynthesis,
+      fallback: new OpenAISpeechSynthesis({ apiKey: openaiApiKey,
+        model: config.openai.speechFallbackModel,
+        ...(config.openai.voice ? { voice: config.openai.voice } : {}),
+        ...(config.openai.fetch ? { fetchPort: config.openai.fetch } : {}) }),
+      primaryFirstChunkMs })
+    : primarySynthesis;
   const resolvers = new Map([...routes].map(([number, route]) => [number,
     createOpenAIAvailabilityIntentResolver({ apiKey: openaiApiKey,
       model: config.openai.intentModel, clinicDate: route.clinicDate,
@@ -116,6 +142,7 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
         ...(transcriptionSocketFactory ? { socketFactory: transcriptionSocketFactory } : {}),
       }),
       ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}),
+      ...(playbackOptions ? { playbackOptions } : {}),
       ...(config.now ? { now: config.now } : {}),
       ...(config.monotonicNow ? { monotonicNow: config.monotonicNow } : {}),
     });
