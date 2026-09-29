@@ -54,7 +54,8 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
       assert.ok(["planned", "passed"].includes(evidence.status));
       assert.equal(evidence.status === "planned", evidence.testFiles.length === 0);
       for (const path of evidence.testFiles) {
-        assert.match(path, /^test\/[a-z-]+\/[a-z0-9-]+\.test\.ts$/);
+        assert.match(path, /^test\/[a-z-]+\/[a-z0-9-]+\.(?:test|spec)\.ts$/);
+        if (path.endsWith(".spec.ts")) assert.ok(path.startsWith("test/browser/"));
         assert.match(read(path), new RegExp(scenario.id));
       }
     }
