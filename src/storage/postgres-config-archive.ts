@@ -58,7 +58,7 @@ type AutomationRow = { clinic_id: string; version: number; enabled: boolean; cha
 type StopRow = { clinic_id: string; version: number; stopped: boolean; actor_ref: string; reason: string; changed_at: Date };
 type KnowledgeRow = { clinic_id: string; location_id: string; source_ref: string; version: number; status: string; owner_ref: string; answer_text: string;
   effective_from: Date; effective_until: Date; actor_ref: string; changed_at: Date };
-type RecordData = Record<string, unknown> & { recordVersion: 1; recordId: string; sourceTenantId: string };
+type RecordData = Record<string, unknown> & { recordVersion: 1 | 2; recordId: string; sourceTenantId: string };
 
 class ExportAbort extends Error {
   readonly kind: ConfigArchiveFailure["kind"];
@@ -255,7 +255,9 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
           where tenant_id = ${sourceTenantId} and status in ('approved', 'revoked')
           order by clinic_id, location_id, source_ref, version`.execute(trx)).rows;
       return { schemaVersion, settings: settings.rows, automation: automation.rows, stops: stops.rows,
-        knowledge, omittedTextCalls: callScan.value.count, sourceFenceVersion: request.expectedFenceVersion };
+        knowledge, omittedTextCalls: callScan.value.count,
+        omittedTextCallsByLocation: callScan.value.countsByLocation,
+        sourceFenceVersion: request.expectedFenceVersion };
     });
     const common = (recordId: string) => ({ recordVersion: 1 as const, recordId, sourceTenantId });
     const locations: RecordData[] = mappings.map(mapping => ({
@@ -314,16 +316,24 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
         changedAt: requiredInstant(row.changed_at),
         contentDigest: createHash("sha256").update(row.answer_text).digest("hex"), approvedText: row.answer_text };
     });
-    const records: Record<ArchiveSection, readonly RecordData[]> = { locations, settings, knowledge, calls: [], staffWork: [] };
+    const calls: RecordData[] = mappings.flatMap(mapping => {
+      const key = mappingKey(mapping.sourceScope);
+      const count = snapshot.omittedTextCallsByLocation.get(key) ?? 0;
+      return count === 0 ? [] : [{ ...common(recordId("omittedTextCalls", key, 1)), recordVersion: 2 as const,
+        kind: "omittedTextCallCount", sourceClinicId: mapping.sourceScope.clinicId,
+        sourceLocationId: mapping.sourceScope.locationId, notRetained: count }];
+    });
+    const records: Record<ArchiveSection, readonly RecordData[]> = { locations, settings, knowledge, calls, staffWork: [] };
     const bytes = Object.fromEntries(ARCHIVE_SECTIONS.map(name => [name, sectionBytes(records[name])])) as Record<ArchiveSection, Buffer>;
-    const manifest = { archiveVersion: 1, archiveId: request.archiveId, createdAt: request.createdAt,
+    const manifest = { archiveVersion: 2, archiveId: request.archiveId, createdAt: request.createdAt,
       sourceSystem: "abby-postgres", sourceSchemaVersion: snapshot.schemaVersion, sourceTenantId,
       ...(snapshot.sourceFenceVersion === undefined ? {} : { sourceFenceVersion: snapshot.sourceFenceVersion }),
       exportRequestRef: requestRef, omittedCalls: { retentionExpired: 0, consentDenied: 0,
         notRetained: snapshot.omittedTextCalls, activeCall: 0 },
       locationMappings: mappings.map(mapping => ({ sourceScope: mapping.sourceScope,
         targetScope: mapping.targetScope, provenance: mapping.mappingProvenance })),
-      sections: Object.fromEntries(ARCHIVE_SECTIONS.map(name => [name, { version: 1, recordCount: records[name].length,
+      sections: Object.fromEntries(ARCHIVE_SECTIONS.map(name => [name, { version: name === "calls" ? 2 : 1,
+        recordCount: records[name].length,
         byteCount: bytes[name].byteLength, sha256: createHash("sha256").update(bytes[name]).digest("hex") }])) };
     const section = (name: ArchiveSection) => async function* () { yield bytes[name]; };
     return ok({ manifestBytes: Buffer.from(JSON.stringify(manifest)), sections: { locations: section("locations"),

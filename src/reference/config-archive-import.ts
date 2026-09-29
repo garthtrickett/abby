@@ -34,8 +34,9 @@ export type ReferenceConfigPreflight = Readonly<{
   targetScope: LocationScope;
   sourceSchemaVersion: string;
   sourceFenceVersion?: number;
-  recordCounts: Readonly<{ locations: 1; settings: number; knowledge: number; calls: 0; staffWork: 0 }>;
+  recordCounts: Readonly<{ locations: 1; settings: number; knowledge: number; calls: number; staffWork: 0 }>;
   omittedCalls: ConfigArchiveData["omittedCalls"];
+  omittedTextCalls?: number;
   mappings: readonly ReferenceImportMapping[];
   status: "ready" | "alreadyStaged";
   plannedBookingEnabled: false;
@@ -56,6 +57,7 @@ export type ReferenceImportReceipt = Readonly<{
   writeStopVersions: number;
   publishedKnowledgeVersions: number;
   omittedCalls: ConfigArchiveData["omittedCalls"];
+  omittedTextCalls?: number;
   mappings: readonly ReferenceImportMapping[];
   importedPolicyVersion: string;
   automationEnabled: false;
@@ -174,7 +176,10 @@ function preflightReport(data: ConfigArchiveData, auditRef: string, mappings: re
     sourceScope: data.sourceScope, targetScope: data.targetScope, sourceSchemaVersion: data.sourceSchemaVersion,
     ...(data.sourceFenceVersion === undefined ? {} : { sourceFenceVersion: data.sourceFenceVersion }),
     recordCounts: { locations: 1, settings: data.policies.length + data.automation.length + data.writeStops.length,
-      knowledge: data.knowledge.length, calls: 0, staffWork: 0 }, omittedCalls: data.omittedCalls, mappings, status,
+      knowledge: data.knowledge.length, calls: data.sectionManifests.calls.recordCount, staffWork: 0 },
+    omittedCalls: data.omittedCalls,
+    ...(data.omittedTextCalls === undefined ? {} : { omittedTextCalls: data.omittedTextCalls }),
+    mappings, status,
     plannedBookingEnabled: false, plannedAutomationEnabled: false, plannedWritesStopped: true };
 }
 
@@ -256,6 +261,7 @@ export class ReferenceConfigArchiveImporter {
       policyVersions: data.policies.length,
       automationVersions: data.automation.length, writeStopVersions: data.writeStops.length,
       publishedKnowledgeVersions: data.knowledge.length, omittedCalls: data.omittedCalls,
+      ...(data.omittedTextCalls === undefined ? {} : { omittedTextCalls: data.omittedTextCalls }),
       mappings: mapped.value.mappings,
       importedPolicyVersion: effective.value.policyVersion,
       automationEnabled: false, bookingEnabled: false, writesStopped: true };
