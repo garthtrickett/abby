@@ -28,6 +28,35 @@ test("synthetic transcription corpus pins three patient-free 16 kHz PCM fixtures
   assert.throws(() => parseTranscriptionEvaluationCorpus(incorrectTerm), /invalid transcription evaluation case/);
 });
 
+test("E2E-152 telephone-band corpus pins and replays distinct G.711 normalized fixtures", async () => {
+  const file = new URL("../../eval/transcription-telephony-v1.json", import.meta.url);
+  const corpus = parseTranscriptionEvaluationCorpus(JSON.parse(readFileSync(file, "utf8")) as unknown);
+  assert.equal(corpus.version, "transcription-telephony-v1");
+  assert.equal(corpus.cases.length, 3);
+  for (const item of corpus.cases) {
+    const bytes = readFileSync(new URL(`../../eval/audio/${item.file}`, import.meta.url));
+    const cleanName = item.file.replace("-pcmu-8k.pcm", ".pcm");
+    const clean = readFileSync(new URL(`../../eval/audio/${cleanName}`, import.meta.url));
+    assert.ok(bytes.length >= 640 && bytes.length <= 1_000_000 && bytes.length % 640 === 0);
+    assert.notDeepEqual(bytes, clean);
+    assert.equal(createHash("sha256").update(bytes).digest("hex"), item.sha256);
+  }
+  const first = corpus.cases[0];
+  assert.ok(first);
+  const pcm = readFileSync(new URL(`../../eval/audio/${first.file}`, import.meta.url));
+  let acceptedBytes = 0;
+  const results = await runTranscriptionEvaluation([{ id: first.id, category: first.category,
+    expectedText: first.expectedText, criticalTerms: first.criticalTerms, pcm }], sessionId => ({
+    async accept(frame) { acceptedBytes += frame.bytes.length; return ok([]); },
+    async flush() { return ok([{ kind: "segmentFinal" as const, sessionId, generation: 1,
+      utteranceId: "telephony-fixture", text: first.expectedText, quality: "needsClarification" as const }]); },
+    async close() {},
+  }), 1, 1, 0);
+  assert.equal(acceptedBytes, pcm.length);
+  assert.deepEqual(results.map(result => [result.verdict, result.quality]),
+    [["match", "needsClarification"]]);
+});
+
 test("transcription evaluation replays bounded frames concurrently and keeps untrusted quality", async () => {
   let active = 0;
   let peak = 0;

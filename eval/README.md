@@ -38,6 +38,14 @@ npm run eval:transcription -- --out eval/results/transcription-candidate.json
 
 The runner verifies every fixture digest before opening a provider session, sends 20 ms frames at their recorded pace, and commits each turn through the adapter's normal 16-to-24 kHz conversion and item-ID correlation. It defaults to three repeats and two concurrent sessions; `--repeats` (1–10) and `--concurrency` (1–4) are bounded. The owner-only report records the exact model, corpus and source hashes, final transcript from synthetic audio, repeat-level latency, and whether the expected words and safety-critical terms were preserved. It does not contain an API key or patient audio. A missing critical term, mismatch, empty result, or provider failure exits nonzero. Every final remains `needsClarification`; a matching synthetic transcript does not authorize caller actions or mark live-call readiness. Human review, representative audio, and a real phone call remain separate gates. The [official OpenAI Realtime transcription guide](https://developers.openai.com/api/docs/guides/realtime-transcription) defines the session and commit protocol and cautions against tuning from synthetic audio alone.
 
+`transcription-telephony-v1.json` adds the same three patient-free phrases after an 8 kHz G.711 mu-law encode and Abby's production `TransportMediaNormalizer` decode. `node scripts/build-telephony-transcription-fixtures.ts` regenerates the pinned 16 kHz fixtures from the clean corpus and requires FFmpeg. The round trip exercises telephone bandwidth and codec loss; it does not add a real network, room noise, accent, packet loss, or a live caller. Run the real transcription adapter against this separate corpus with:
+
+```sh
+npm run eval:transcription -- --corpus transcription-telephony-v1 --out eval/results/transcription-telephony-candidate.json
+```
+
+The `--corpus` flag accepts only `transcription-v1` and `transcription-telephony-v1`. The same repeat, concurrency, digest, typed-result, and release-gate rules apply to both.
+
 ## Speech loopback smoke evaluation
 
 `speech-loop-v1.json` pins two patient-free messages: the AI disclosure and a provisional availability notice. The opt-in runner uses Abby's production `gpt-4o-mini-tts`/`coral` speech adapter, keeps its 16 kHz PCM output in memory, then replays it through Abby's production `gpt-live-transcribe` adapter. It rejects silent or malformed audio and flags missing safety words in the final transcript. Run with the key available in the process environment:
