@@ -8,7 +8,7 @@ const accountSidPattern = /^AC[0-9a-f]{32}$/i;
 const callSidPattern = /^CA[0-9a-f]{32}$/i;
 const streamSidPattern = /^MZ[0-9a-f]{32}$/i;
 const phonePattern = /^\+[1-9]\d{1,14}$/;
-const bindingLifetimeMs = 180_000;
+export const TWILIO_BINDING_LIFETIME_MS = 180_000;
 const maxBodyBytes = 16_384;
 const maxStartBytes = 16_384;
 
@@ -106,8 +106,8 @@ export class TwilioSignedIngress {
         !Number.isSafeInteger(decoded[6])) return err({ kind: "invalidTwilioRequest" });
     const [,, , dialedNumber, presentedCallerNumber, receivedAt, expiresAt] = decoded as unknown as Binding;
     const current = this.now().getTime();
-    if (!Number.isFinite(current) || current > expiresAt || expiresAt - current > bindingLifetimeMs ||
-        expiresAt !== Date.parse(receivedAt) + bindingLifetimeMs) {
+    if (!Number.isFinite(current) || current > expiresAt || expiresAt - current > TWILIO_BINDING_LIFETIME_MS ||
+        expiresAt !== Date.parse(receivedAt) + TWILIO_BINDING_LIFETIME_MS) {
       return err({ kind: "expiredTwilioBinding" });
     }
     return ok({ key: { accountRef: accountSid, providerCallRef: callSid }, dialedNumber,
@@ -136,7 +136,7 @@ export class TwilioSignedIngress {
     const receivedAt = new Date(issuedAt).toISOString();
     const from = phonePattern.test(form.From ?? "") ? form.From! : null;
     const token = this.binding([1, form.AccountSid, form.CallSid!, form.To!, from,
-      receivedAt, issuedAt + bindingLifetimeMs]);
+      receivedAt, issuedAt + TWILIO_BINDING_LIFETIME_MS]);
     if (token.length + "abbyBinding".length >= 500) return err({ kind: "invalidTwilioRequest" });
     const response = new twilio.twiml.VoiceResponse();
     response.connect().stream({ url: this.config.publicStreamUrl }).parameter({
