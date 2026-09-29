@@ -3,6 +3,7 @@ import { ClinikoAvailabilityReader } from "../src/cliniko/availability.ts";
 import { StandaloneAvailabilityTextRunner } from "../src/standalone/availability-text-runner.ts";
 import { createAvailabilityConsoleServer } from "../src/standalone/availability-console/server.ts";
 import { connectPostgres } from "../src/storage/connect.ts";
+import { PostgresClinikoRequestBudget } from "../src/storage/postgres-cliniko-request-budget.ts";
 import { checkStandaloneTextDatabase } from "../src/storage/standalone-privacy-preflight.ts";
 
 function required(name: string): string {
@@ -14,15 +15,19 @@ function required(name: string): string {
 async function main(): Promise<void> {
   const scope = { tenantId: required("ABBY_TENANT_ID"), clinicId: required("ABBY_CLINIC_ID"),
     locationId: required("ABBY_LOCATION_ID") };
-  const reader = ClinikoAvailabilityReader.create({ scope,
-    apiKey: required("ABBY_CLINIKO_API_KEY"), contactEmail: required("ABBY_CLINIKO_CONTACT_EMAIL"),
-    businessId: required("ABBY_CLINIKO_BUSINESS_ID"), practitionerId: required("ABBY_CLINIKO_PRACTITIONER_ID"),
-    appointmentTypeId: required("ABBY_CLINIKO_APPOINTMENT_TYPE_ID") });
-  if (!reader.ok) throw new Error("invalid Cliniko configuration");
+  const apiKey = required("ABBY_CLINIKO_API_KEY");
   const db = connectPostgres(required("DATABASE_URL"));
   try {
     const safe = await checkStandaloneTextDatabase(db);
     if (!safe.ok) throw new Error("standalone database privacy preflight failed");
+    const rateBudget = new PostgresClinikoRequestBudget(db, { apiKey,
+      ...(process.env.ABBY_CLINIKO_BUDGET_USER_REF
+        ? { sharedUserRef: process.env.ABBY_CLINIKO_BUDGET_USER_REF } : {}) });
+    const reader = ClinikoAvailabilityReader.create({ scope, apiKey, rateBudget,
+      contactEmail: required("ABBY_CLINIKO_CONTACT_EMAIL"),
+      businessId: required("ABBY_CLINIKO_BUSINESS_ID"), practitionerId: required("ABBY_CLINIKO_PRACTITIONER_ID"),
+      appointmentTypeId: required("ABBY_CLINIKO_APPOINTMENT_TYPE_ID") });
+    if (!reader.ok) throw new Error("invalid Cliniko configuration");
     const runner = new StandaloneAvailabilityTextRunner(db, scope, reader.value);
     const server = await createAvailabilityConsoleServer(runner, resolve("dist/availability-console/app.js"));
     const rawPort = process.env.ABBY_AVAILABILITY_PORT ?? "3401";

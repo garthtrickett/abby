@@ -2,7 +2,8 @@ import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import type { ClinikoClinicScope } from "./patients.ts";
 import { formatRecallNote, validRecallDate, validRecallMarker, validRecallSummary } from "./recall-note.ts";
-import { ClinikoReadBudget } from "./read-budget.ts";
+import { claimClinikoBudget, ClinikoReadBudget, observeCliniko429 } from "./read-budget.ts";
+import type { ClinikoRequestBudget } from "./read-budget.ts";
 import { boundedRecallJson, ClinikoRecallReader } from "./recalls.ts";
 import type { ClinikoRecallConfig, ClinikoRecallFailure, ClinikoRecallMatch } from "./recalls.ts";
 
@@ -32,7 +33,7 @@ export class ClinikoRecallWriter {
   private readonly baseUrl: string;
   private readonly authorization: string;
   private readonly userAgent: string;
-  private readonly rateBudget: ClinikoReadBudget;
+  private readonly rateBudget: ClinikoRequestBudget;
   private readonly fetchPort: typeof fetch;
   private readonly reader: ClinikoRecallReader;
   private readonly attempted = new Set<string>();
@@ -67,7 +68,7 @@ export class ClinikoRecallWriter {
     }
     if (this.attempted.has(request.marker)) return err({ kind: "invalidQuery" });
     if (this.attempted.size >= maxProcessAttempts) return err({ kind: "unavailable" });
-    const limited = this.rateBudget.claim();
+    const limited = await claimClinikoBudget(this.rateBudget);
     if (limited) return err(limited);
     this.attempted.add(request.marker);
     const notes = formatRecallNote(request.marker, request.summary);
@@ -81,6 +82,7 @@ export class ClinikoRecallWriter {
         redirect: "error", signal: AbortSignal.timeout(15_000),
       });
     } catch { return ok({ kind: "uncertain" }); }
+    if (response.status === 429) await observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset"));
     if (response.status !== 201) return ok({ kind: "uncertain" });
     const parsed = await boundedRecallJson(response);
     if (!parsed.ok) return ok({ kind: "uncertain" });

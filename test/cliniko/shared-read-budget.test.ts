@@ -4,6 +4,7 @@ import { ClinikoAppointmentReader } from "../../src/cliniko/appointments.ts";
 import { ClinikoAvailabilityReader } from "../../src/cliniko/availability.ts";
 import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
 import { ClinikoReadBudget } from "../../src/cliniko/read-budget.ts";
+import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 
 const scope = { tenantId: "budget-tenant", clinicId: "budget-clinic", locationId: "budget-location" };
@@ -104,4 +105,18 @@ test("parallel patient readers cannot spend the same final request slot", async 
   ]);
   assert.deepEqual(results.map(result => result.ok ? "none" : result.error.kind), ["none", "rateLimited"]);
   assert.equal(sent, 1);
+});
+
+test("a faulty host budget fails closed before a Cliniko request", async () => {
+  let sent = 0;
+  const port: typeof fetch = async () => { sent += 1; return Response.json({ total_entries: 0, patients: [] }); };
+  for (const claim of [async () => { throw new Error("budget offline"); }, async () => undefined]) {
+    const rateBudget = { claim, observe429: async () => ({ kind: "rateLimited" as const }) } as unknown as ClinikoRequestBudget;
+    const reader = ClinikoPatientCandidateReader.create({ scope, apiKey, contactEmail,
+      rateBudget }, port);
+    assert.ok(reader.ok);
+    assert.deepEqual(await reader.value.findByEmailAndBirthDate(scope, "test@example.test", "1990-01-01"),
+      { ok: false, error: { kind: "unavailable" } });
+  }
+  assert.equal(sent, 0);
 });

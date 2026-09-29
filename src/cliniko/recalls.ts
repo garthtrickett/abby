@@ -1,6 +1,7 @@
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
-import { ClinikoReadBudget } from "./read-budget.ts";
+import { claimClinikoBudget, ClinikoReadBudget, isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
+import type { ClinikoRequestBudget } from "./read-budget.ts";
 import type { ClinikoClinicScope } from "./patients.ts";
 import { matchesRecallMarker, validRecallDate, validRecallMarker } from "./recall-note.ts";
 
@@ -17,7 +18,7 @@ export type ClinikoRecallConfig = Readonly<{
   scope: ClinikoClinicScope;
   apiKey: string;
   contactEmail: string;
-  rateBudget?: ClinikoReadBudget;
+  rateBudget?: ClinikoRequestBudget;
 }>;
 export type ClinikoRecallExpectation = Readonly<{ notes: string; recallTypeId: string; recallAt: string }>;
 
@@ -67,7 +68,7 @@ export class ClinikoRecallReader {
   private readonly baseUrl: string;
   private readonly authorization: string;
   private readonly userAgent: string;
-  private readonly rateBudget: ClinikoReadBudget;
+  private readonly rateBudget: ClinikoRequestBudget;
   private readonly fetchPort: typeof fetch;
   private readonly clock: () => string;
 
@@ -88,7 +89,7 @@ export class ClinikoRecallReader {
         !validScope(config.scope) || typeof config.contactEmail !== "string" ||
         config.contactEmail.length > 254 || !emailPattern.test(config.contactEmail) ||
         typeof fetchPort !== "function" || typeof clock !== "function" ||
-        (config.rateBudget !== undefined && !(config.rateBudget instanceof ClinikoReadBudget))) {
+        (config.rateBudget !== undefined && !isClinikoRequestBudget(config.rateBudget))) {
       return err({ kind: "invalidConfig" });
     }
     return ok(new ClinikoRecallReader(config, fetchPort, clock, shard));
@@ -121,7 +122,7 @@ export class ClinikoRecallReader {
     let totalEntries: number | undefined;
     let lastId = 0n;
     for (let page = 1; page <= maxPages; page += 1) {
-      const limited = this.rateBudget.claim();
+      const limited = await claimClinikoBudget(this.rateBudget);
       if (limited) return err(limited);
       const query = new URLSearchParams({ page: String(page), per_page: String(pageSize), sort: "id:asc" });
       query.append("q[]", `patient_id:=${patientId}`);
@@ -134,7 +135,7 @@ export class ClinikoRecallReader {
         });
       } catch { return err({ kind: "unavailable" }); }
       if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
-      if (response.status === 429) return err(this.rateBudget.observe429(response.headers.get("X-RateLimit-Reset")));
+      if (response.status === 429) return err(await observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset")));
       if (response.status >= 500 || response.status === 404) return err({ kind: "unavailable" });
       if (response.status !== 200) return err({ kind: "malformed" });
       const parsed = await boundedRecallJson(response);

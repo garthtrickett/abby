@@ -1,5 +1,57 @@
+export type ClinikoRateLimit = Readonly<{ kind: "rateLimited"; resetAt?: string }>;
+export type ClinikoBudgetDenial = ClinikoRateLimit | Readonly<{ kind: "unavailable" }>;
+
+/** The host owns one budget per Cliniko API user; adapters reserve before every request. */
+export type ClinikoRequestBudget = Readonly<{
+  claim(): ClinikoBudgetDenial | null | Promise<ClinikoBudgetDenial | null>;
+  observe429(resetHeader: string | null): ClinikoRateLimit | Promise<ClinikoRateLimit>;
+}>;
+
+export function isClinikoRequestBudget(value: unknown): value is ClinikoRequestBudget {
+  return typeof value === "object" && value !== null &&
+    typeof (value as ClinikoRequestBudget).claim === "function" &&
+    typeof (value as ClinikoRequestBudget).observe429 === "function";
+}
+
+function normalizedLimit(value: unknown): ClinikoRateLimit | null {
+  if (typeof value !== "object" || value === null) return null;
+  const result = value as Partial<ClinikoRateLimit>;
+  if (result.kind !== "rateLimited") return null;
+  if (result.resetAt === undefined) return { kind: "rateLimited" };
+  return typeof result.resetAt === "string" && Number.isFinite(Date.parse(result.resetAt))
+    ? { kind: "rateLimited", resetAt: result.resetAt } : null;
+}
+
+function normalizedDenial(value: unknown): ClinikoBudgetDenial | null {
+  if (typeof value === "object" && value !== null && (value as { kind?: unknown }).kind === "unavailable") {
+    return { kind: "unavailable" };
+  }
+  return normalizedLimit(value);
+}
+
+/** A failed or malformed host reservation cannot authorize a provider request. */
+export async function claimClinikoBudget(budget: ClinikoRequestBudget): Promise<ClinikoBudgetDenial | null> {
+  try {
+    const result: unknown = await budget.claim();
+    if (result === null) return null;
+    const denied = normalizedDenial(result);
+    if (denied) return denied;
+  } catch { /* Budget failure closes the request path. */ }
+  return { kind: "unavailable" };
+}
+
+export async function observeCliniko429(budget: ClinikoRequestBudget,
+                                  resetHeader: string | null): Promise<ClinikoRateLimit> {
+  try {
+    const result: unknown = await budget.observe429(resetHeader);
+    const limited = normalizedLimit(result);
+    if (limited) return limited;
+  } catch { /* Budget failure closes the request path. */ }
+  return { kind: "rateLimited" };
+}
+
 /** A process-local budget shared by readers using the same Cliniko API user. */
-export class ClinikoReadBudget {
+export class ClinikoReadBudget implements ClinikoRequestBudget {
   private readonly sentAt: number[] = [];
   private cooldownUntil = 0;
   private readonly maxPerMinute: number;
@@ -14,7 +66,7 @@ export class ClinikoReadBudget {
   }
 
   /** Reserve before sending. Synchronous reservation keeps concurrent callers under one process budget. */
-  claim(): Readonly<{ kind: "rateLimited"; resetAt?: string }> | null {
+  claim(): ClinikoRateLimit | null {
     let now: number;
     try { now = this.clock(); }
     catch { return { kind: "rateLimited" }; }
@@ -29,7 +81,7 @@ export class ClinikoReadBudget {
   }
 
   /** A provider 429 fences all readers that share this budget, even with a missing reset header. */
-  observe429(resetHeader: string | null): Readonly<{ kind: "rateLimited"; resetAt?: string }> {
+  observe429(resetHeader: string | null): ClinikoRateLimit {
     let now: number;
     try { now = this.clock(); }
     catch { return { kind: "rateLimited" }; }

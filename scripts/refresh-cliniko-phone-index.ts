@@ -2,6 +2,7 @@ import { ClinikoPatientCandidateReader } from "../src/cliniko/patients.ts";
 import { ClinikoPhoneLookup } from "../src/standalone/cliniko-phone-lookup.ts";
 import { PhoneIndexRefreshWorker } from "../src/standalone/phone-index-refresh-worker.ts";
 import { connectPostgres } from "../src/storage/connect.ts";
+import { PostgresClinikoRequestBudget } from "../src/storage/postgres-cliniko-request-budget.ts";
 import { PostgresPatientPhoneIndex } from "../src/storage/postgres-patient-phone-index.ts";
 import { PostgresPatientPhoneScan } from "../src/storage/postgres-patient-phone-scan.ts";
 import { PostgresPhoneRefreshGuard } from "../src/storage/postgres-phone-refresh-guard.ts";
@@ -16,15 +17,19 @@ const scope = { tenantId: required("ABBY_TENANT_ID"), clinicId: required("ABBY_C
 const countryCallingCode = required("ABBY_COUNTRY_CALLING_CODE");
 const refreshEveryMs = Number(process.env.ABBY_PHONE_REFRESH_EVERY_MS ?? 900_000);
 const pollEveryMs = Number(process.env.ABBY_PHONE_REFRESH_POLL_MS ?? 60_000);
-const reader = ClinikoPatientCandidateReader.create({ scope, apiKey: required("ABBY_CLINIKO_API_KEY"),
-  contactEmail: required("ABBY_CLINIKO_CONTACT_EMAIL") });
-if (!reader.ok) throw new Error(`invalid Cliniko phone-index configuration: ${reader.error.kind}`);
+const apiKey = required("ABBY_CLINIKO_API_KEY");
 const connectionString = required("DATABASE_URL");
 const db = connectPostgres(connectionString);
 const stop = new AbortController();
 process.once("SIGINT", () => stop.abort());
 process.once("SIGTERM", () => stop.abort());
 try {
+  const rateBudget = new PostgresClinikoRequestBudget(db, { apiKey,
+    ...(process.env.ABBY_CLINIKO_BUDGET_USER_REF
+      ? { sharedUserRef: process.env.ABBY_CLINIKO_BUDGET_USER_REF } : {}) });
+  const reader = ClinikoPatientCandidateReader.create({ scope, apiKey, rateBudget,
+    contactEmail: required("ABBY_CLINIKO_CONTACT_EMAIL") });
+  if (!reader.ok) throw new Error(`invalid Cliniko phone-index configuration: ${reader.error.kind}`);
   const index = new PostgresPatientPhoneIndex(db);
   const lookupForSession = (session: typeof db) => new ClinikoPhoneLookup(reader.value,
     new PostgresPatientPhoneIndex(session), countryCallingCode, refreshEveryMs * 2,

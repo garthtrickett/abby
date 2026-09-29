@@ -129,7 +129,9 @@ test("a lost or malformed create response stays uncertain and cannot send the ma
     const request = { scope, patientId: "42", recallTypeId: "7", recallAt: "2026-10-01", marker,
       summary: "Please contact the patient" };
     assert.deepEqual(await created.value.openOnce(request), { ok: true, value: { kind: "uncertain" } });
-    assert.equal(value(await created.value.observe(request)).kind, "none");
+    const observed = await created.value.observe(request);
+    if (responseKind === "rateLimited") failure(observed, "rateLimited");
+    else assert.equal(value(observed).kind, "none");
     failure(await created.value.openOnce(request), "invalidQuery");
     assert.equal(writes, 1);
   }

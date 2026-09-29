@@ -1,14 +1,15 @@
 import type { PatientProofHost } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { AppointmentRead, AppointmentReadFailure, LocationScope, Result } from "../core/model.ts";
-import { ClinikoReadBudget } from "./read-budget.ts";
+import { claimClinikoBudget, ClinikoReadBudget, isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
+import type { ClinikoRequestBudget } from "./read-budget.ts";
 
 export type ClinikoAppointmentConfig = Readonly<{
   scope: LocationScope;
   apiKey: string;
   contactEmail: string;
   businessId: string;
-  rateBudget?: ClinikoReadBudget;
+  rateBudget?: ClinikoRequestBudget;
 }>;
 
 export type { AppointmentRead, AppointmentReadFailure } from "../core/model.ts";
@@ -73,7 +74,7 @@ export class ClinikoAppointmentReader {
   private readonly proof: PatientProofHost;
   private readonly fetchPort: typeof fetch;
   private readonly clock: () => string;
-  private readonly rateBudget: ClinikoReadBudget;
+  private readonly rateBudget: ClinikoRequestBudget;
 
   private constructor(config: ClinikoAppointmentConfig, shard: string, proof: PatientProofHost, fetchPort: typeof fetch, clock: () => string) {
     this.scope = structuredClone(config.scope);
@@ -95,12 +96,12 @@ export class ClinikoAppointmentReader {
         [config.scope.tenantId, config.scope.clinicId, config.scope.locationId].some(part => typeof part !== "string" || !part.trim()) ||
         !validId(config.businessId) || !proof || typeof proof.verifyPatient !== "function" ||
         typeof fetchPort !== "function" || typeof clock !== "function" ||
-        (config.rateBudget !== undefined && !(config.rateBudget instanceof ClinikoReadBudget))) return err({ kind: "invalidConfig" });
+        (config.rateBudget !== undefined && !isClinikoRequestBudget(config.rateBudget))) return err({ kind: "invalidConfig" });
     return ok(new ClinikoAppointmentReader(config, shard, proof, fetchPort, clock));
   }
 
   private async get(path: string): Promise<Result<unknown, AppointmentReadFailure>> {
-    const limited = this.rateBudget.claim();
+    const limited = await claimClinikoBudget(this.rateBudget);
     if (limited) return err(limited);
     let response: Response;
     try {
@@ -110,7 +111,7 @@ export class ClinikoAppointmentReader {
       });
     } catch { return err({ kind: "unavailable" }); }
     if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
-    if (response.status === 429) return err(this.rateBudget.observe429(response.headers.get("X-RateLimit-Reset")));
+    if (response.status === 429) return err(await observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset")));
     if (response.status >= 500) return err({ kind: "unavailable" });
     if (response.status !== 200) return err({ kind: "malformed" });
     return boundedJson(response);
