@@ -156,3 +156,74 @@ test("E2E-145 embedded voice books only after exact details playback and a later
   assert.ok((await call.disconnect(now)).ok);
   assert.equal(host.bookings(scope).length, 1);
 });
+
+test("E2E-148 embedded voice reads interchangeable host diaries and only speaks provisional times", async () => {
+  const now = "2026-09-29T10:00:00.000Z";
+  const providers = [
+    { name: "buyer-native", sourceRef: "buyer:main-diary", startsAt: "2026-10-01T00:00:00.000Z" },
+    { name: "partner-proxy", sourceRef: "partner:main-diary", startsAt: "2026-10-01T01:00:00.000Z" },
+  ] as const;
+  await Promise.all(providers.map(async provider => {
+    const scope = { tenantId: `buyer-${provider.name}`, clinicId: "clinic", locationId: "main" };
+    const ledger = new MemoryLedger();
+    const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+    assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "host-admin")).ok);
+    const host = new ReferenceClinicHost([], []);
+    const event = { key: { accountRef: `account-${provider.name}`, providerCallRef: `call-${provider.name}` },
+      dialedNumber: "+6125550199", receivedAt: now };
+    const routing = new ReferenceNumberRoutingHost([{ ...scope, accountRef: event.key.accountRef,
+      dialedNumber: event.dialedNumber, routeVersion: "host-route-v1" }]);
+    const reads: Array<{ scope: typeof scope; from: string; to: string }> = [];
+    const queued: Array<{ playbackId: string; sequence: number }> = [];
+    const call = createEmbeddedVoiceComposition({ event, sessionId: `session-${provider.name}`, ledger,
+      policy, routing, host, readiness: async () => ok(true),
+      availability: { async list(readScope, from, to) {
+        reads.push({ scope: readScope, from, to });
+        return ok({ kind: "times", scope: readScope, sourceRef: provider.sourceRef,
+          timeZone: "Australia/Sydney", observedAt: now, startsAt: [provider.startsAt], reservable: false });
+      } },
+      resolveIntent: async () => ok({ kind: "availability", from: "2026-10-01", to: "2026-10-02" }),
+      transcription: { async accept() { return ok([]); }, async flush(generation) {
+        return ok([{ kind: "segmentFinal", sessionId: `session-${provider.name}`, generation,
+          utteranceId: "caller-one", text: "What times are available?", quality: "clear" }]);
+      } },
+      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      output: { async queueChunk(playbackId, sequence) { queued.push({ playbackId, sequence }); return "queued"; },
+        async finishQueue() { return "queued"; }, async clear() { return true; } },
+      mediaOptions: { silenceMs: 100 }, now: () => now,
+    });
+    const started = await call.begin(now);
+    assert.ok(started.ok);
+    assert.equal(started.value.kind, "admitted");
+    if (started.value.kind !== "admitted" || started.value.delivery.kind !== "queued" ||
+        !started.value.delivery.playbackId) throw new Error("greeting not queued");
+    assert.ok((await call.acceptPlaybackCompletion({ playbackId: started.value.delivery.playbackId,
+      lastSequence: 0, status: "played" }, now)).ok);
+    let completed: Awaited<ReturnType<typeof call.acceptMedia>> | undefined;
+    for (let index = 0; index < 7; index += 1) {
+      const bytes = new Uint8Array(640);
+      if (index < 2) {
+        const view = new DataView(bytes.buffer);
+        for (let offset = 0; offset < bytes.length; offset += 2) view.setInt16(offset, 1_200, true);
+      }
+      completed = await call.acceptMedia({ sessionId: `session-${provider.name}`, sequence: index,
+        capturedAt: new Date(Date.parse(now) + index * 20).toISOString(), bytes });
+      assert.ok(completed.ok, completed.ok ? "" : completed.error.kind);
+    }
+    assert.ok(completed?.ok);
+    assert.equal(completed.value.kind, "turnCompleted");
+    assert.deepEqual(reads, [{ scope, from: "2026-10-01", to: "2026-10-02" }]);
+    const state = await ledger.read(callIdFor(event.key), scope);
+    assert.ok(state.ok);
+    assert.equal(state.value.availabilityReads[0]?.status, "shown");
+    assert.equal(state.value.availabilityReads[0]?.sourceRef, provider.sourceRef);
+    assert.deepEqual(state.value.availabilityReads[0]?.shownStartsAt, [provider.startsAt]);
+    assert.match(state.value.callerMessages.at(-1) ?? "", /can't reserve or confirm/);
+    assert.equal(Object.values(state.value.presentations).some(item => item.kind === "notice"), true);
+    assert.equal(Object.keys(state.value.actions).length, 0);
+    assert.equal(Object.keys(state.value.staffItems).length, 0);
+    assert.equal(host.bookings(scope).length, 0);
+    assert.equal(queued.length, 2);
+    assert.ok((await call.disconnect(now)).ok);
+  }));
+});
