@@ -59,12 +59,72 @@ test("Cliniko phone index stores only phone-to-ID links and rechecks shared cand
   const failed = await lookup.refresh(scope);
   assert.equal(failed.ok, false);
   const preserved = await index.find(scope, phone, 60_000);
-  assert.equal(preserved.ok && preserved.value.kind, "multiple");
+  assert.deepEqual(preserved, { ok: true, value: { kind: "stale", patientIds: [] } });
+  const preservedRows = await db.selectFrom("patient_phone_index").selectAll()
+    .where("tenant_id", "=", scope.tenantId as never).execute();
+  assert.equal(preservedRows.length, 2);
   const stale = await index.find(scope, phone, 60_000, new Date(Date.now() + 120_000));
   assert.deepEqual(stale, { ok: true, value: { kind: "stale", patientIds: [] } });
   const otherClinic = await index.find({ ...scope, clinicId: "other-clinic" }, phone, 60_000);
   assert.deepEqual(otherClinic, { ok: true, value: { kind: "stale", patientIds: [] } });
   assert.deepEqual(await lookup.candidates(scope, "withheld"), { ok: true, value: { kind: "noNumber", candidateIds: [] } });
+});
+
+test("a failed or older concurrent scan cannot invalidate or replace a newer generation", async () => {
+  const scope = { tenantId: "phone-race-tenant", clinicId: "phone-race-clinic" };
+  const index = new PostgresPatientPhoneIndex(db);
+  assert.deepEqual(await index.publish(scope, [{ normalizedPhone: "+61400111111", patientId: "401" }]),
+    { ok: true, value: 1 });
+  let releaseFailed: (() => void) | undefined;
+  let signalFailed: (() => void) | undefined;
+  const failedGate = new Promise<void>(resolve => { releaseFailed = resolve; });
+  const failedStarted = new Promise<void>(resolve => { signalFailed = resolve; });
+  const makeReader = (fetchPort: typeof fetch) => {
+    const created = ClinikoPatientCandidateReader.create({ scope, apiKey: "synthetic-au5",
+      contactEmail: "test@example.com" }, fetchPort);
+    assert.equal(created.ok, true);
+    if (!created.ok) throw new Error("reader expected");
+    return created.value;
+  };
+  const failedLookup = new ClinikoPhoneLookup(makeReader(async () => {
+    signalFailed!();
+    await failedGate;
+    return Response.json({ total_entries: 1, patients: [] });
+  }), index, "61", 60_000);
+  const winningLookup = new ClinikoPhoneLookup(makeReader(async () => Response.json({ total_entries: 1,
+    patients: [{ id: "402", archived_at: null,
+      patient_phone_numbers: [{ number: "0400 222 222", phone_type: "Mobile" }] }] })), index, "61", 60_000);
+  const first = failedLookup.refresh(scope);
+  await failedStarted;
+  assert.deepEqual(await winningLookup.refresh(scope), { ok: true, value: 2 });
+  releaseFailed!();
+  assert.equal((await first).ok, false);
+  assert.equal((await index.find(scope, "+61400222222", 60_000)).ok, true);
+  const head = await index.head(scope);
+  assert.equal(head.ok && head.value?.generation, 2);
+  const current = await index.find(scope, "+61400222222", 60_000);
+  assert.equal(current.ok && current.value.kind, "one");
+  assert.deepEqual(current.ok ? current.value.patientIds : [], ["402"]);
+
+  let releaseOlder: (() => void) | undefined;
+  let signalOlder: (() => void) | undefined;
+  const olderGate = new Promise<void>(resolve => { releaseOlder = resolve; });
+  const olderStarted = new Promise<void>(resolve => { signalOlder = resolve; });
+  const olderLookup = new ClinikoPhoneLookup(makeReader(async () => {
+    signalOlder!();
+    await olderGate;
+    return Response.json({ total_entries: 1, patients: [{ id: "401", archived_at: null,
+      patient_phone_numbers: [{ number: "0400 111 111", phone_type: "Mobile" }] }] });
+  }), index, "61", 60_000);
+  const older = olderLookup.refresh(scope);
+  await olderStarted;
+  assert.deepEqual(await winningLookup.refresh(scope), { ok: true, value: 3 });
+  releaseOlder!();
+  assert.deepEqual(await older, { ok: false, error: { kind: "generationChanged" } });
+  const obsolete = await index.find(scope, "+61400111111", 60_000);
+  assert.equal(obsolete.ok && obsolete.value.kind, "none");
+  const newest = await index.find(scope, "+61400222222", 60_000);
+  assert.equal(newest.ok && newest.value.kind, "one");
 });
 
 test("phone normalization accepts explicit international and configured national forms only", () => {
