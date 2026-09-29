@@ -8,6 +8,9 @@ import { CallAdmissionService } from "../voice/admission.ts";
 import { ConnectedVoiceCall } from "../voice/connected-voice-call.ts";
 import type { ConnectedVoiceCallConfig } from "../voice/connected-voice-call.ts";
 import { SharedNumberIntakeService } from "../voice/shared-number-intake.ts";
+import type { FullVoiceSessionFactory } from "../voice/shared-number-voice-call.ts";
+import { TwilioConnectedCall } from "../voice/twilio-connected-call.ts";
+import type { TwilioConnectedCallConfig } from "../voice/twilio-connected-call.ts";
 import { VoiceSession } from "../voice/voice-session.ts";
 import type { IntentResolver, TransferPort } from "../voice/voice-session.ts";
 import { ClinicPolicyRouter } from "./clinic-number-routing.ts";
@@ -15,8 +18,7 @@ import type { ClinicNumberRoutingHost } from "./clinic-number-routing.ts";
 import { createEmbeddedTextComposition } from "./embedded-composition.ts";
 import type { TextHost } from "./text-reception.ts";
 
-export type EmbeddedVoiceCompositionConfig = Omit<ConnectedVoiceCallConfig,
-  "ledger" | "intake" | "fullFactory"> & Readonly<{
+export type EmbeddedVoiceHostConfig = Readonly<{
   ledger: LedgerStore & EffectCallLeaseStore;
   policy: PolicyStore;
   routing: ClinicNumberRoutingHost;
@@ -30,24 +32,35 @@ export type EmbeddedVoiceCompositionConfig = Omit<ConnectedVoiceCallConfig,
   knowledge?: KnowledgeHost & Partial<ModelKnowledgeContextHost>;
   now?: () => string;
 }>;
+export type EmbeddedVoiceCompositionConfig = Omit<ConnectedVoiceCallConfig,
+  "ledger" | "intake" | "fullFactory"> & EmbeddedVoiceHostConfig;
+export type EmbeddedTwilioVoiceCompositionConfig = Omit<TwilioConnectedCallConfig,
+  "ledger" | "intake" | "fullFactory"> & EmbeddedVoiceHostConfig;
 
-/** Host-owned storage, settings, clinical actions, and transport around Abby's shared voice call. */
-export function createEmbeddedVoiceComposition(config: EmbeddedVoiceCompositionConfig): ConnectedVoiceCall {
+function hostVoiceServices(config: EmbeddedVoiceHostConfig &
+  Pick<ConnectedVoiceCallConfig, "monotonicNow">): Readonly<{
+  intake: SharedNumberIntakeService;
+  fullFactory: FullVoiceSessionFactory;
+}> {
   const now = config.now ?? (() => new Date().toISOString());
   const router = new ClinicPolicyRouter(config.routing, config.policy);
   const admission = new CallAdmissionService(config.ledger, router.resolve, now, config.readiness);
   const intake = new SharedNumberIntakeService(config.ledger, router, admission, now);
   const reception = createEmbeddedTextComposition(config.ledger, config.policy, config.host,
     config.availability, config.appointments, config.model, config.knowledge);
-  return new ConnectedVoiceCall({ event: config.event, sessionId: config.sessionId,
-    ledger: config.ledger, intake, transcription: config.transcription, synthesis: config.synthesis,
-    output: config.output,
-    ...(config.monotonicNow ? { monotonicNow: config.monotonicNow } : {}),
-    ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}),
-    ...(config.playbackOptions ? { playbackOptions: config.playbackOptions } : {}),
-    ...(config.callerCandidateLookup ? { callerCandidateLookup: config.callerCandidateLookup } : {}),
+  return { intake,
     fullFactory: (receipt, sessionId, playback) => new VoiceSession(receipt.callId, sessionId,
       receipt.scope, config.ledger, reception, playback, config.resolveIntent,
       config.transfer, config.monotonicNow),
-  });
+  };
+}
+
+/** Host-owned storage, settings, and clinical actions around a transport-neutral voice call. */
+export function createEmbeddedVoiceComposition(config: EmbeddedVoiceCompositionConfig): ConnectedVoiceCall {
+  return new ConnectedVoiceCall({ ...config, ...hostVoiceServices(config) });
+}
+
+/** Mounts the same host-owned call services on a signed Twilio stream inside the buyer's process. */
+export function createEmbeddedTwilioVoiceComposition(config: EmbeddedTwilioVoiceCompositionConfig): TwilioConnectedCall {
+  return new TwilioConnectedCall({ ...config, ...hostVoiceServices(config) });
 }
