@@ -81,3 +81,18 @@ The real `gpt-live-transcribe` adapter ran two repeats per case with two concurr
 | **Total** | **12** | **2** | **2** | **8** | **0** |
 
 The `kal` booking request lost the word “book” in both repeats. The noisy `slt` clips lost the required date, booking, or urgent-language terms. Earlier clean and telephone-band `slt` fixtures matched 9 of 9 repeated transcripts in each corpus; this small stress run exposes sensitivity to the added white noise without quantifying real-caller error rates. Every final remained `needsClarification`. Natural-language availability and patient actions stay disabled, and the report retains `humanReviewStatus: pending`, `liveCallStatus: notRun`, and `releaseGate: unverified`.
+
+## Bounded file transcription comparison
+
+The same pinned patient-free noisy corpus was submitted as in-memory 16 kHz WAV to OpenAI's file transcription endpoint. These were completed-recording requests, not Realtime sessions or live calls. Each model ran two repeats per case with two concurrent requests, without prompts or vocabulary hints. The [OpenAI file transcription guide](https://developers.openai.com/api/docs/guides/speech-to-text) currently recommends `gpt-transcribe` for bounded recordings; Abby's connected-call adapter still uses `gpt-live-transcribe`.
+
+| Model and corpus | Runs | Exact match | Wording mismatch | Missing critical term | Provider failure | Request p50 / p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `gpt-transcribe`, clean | 6 | 6 | 0 | 0 | 0 | 822 / 1,011 ms |
+| `gpt-transcribe`, telephone-band | 6 | 6 | 0 | 0 | 0 | 758 / 836 ms |
+| `gpt-transcribe`, noisy two-speaker | 12 | 6 | 2 | 4 | 0 | 1,389 / 1,656 ms |
+| `gpt-4o-transcribe`, noisy two-speaker | 12 | 2 | 4 | 6 | 0 | 880 / 1,317 ms |
+
+For comparison, the earlier Realtime noisy run had 2 exact matches, 2 wording mismatches, and 8 missing-critical-term results across 12 runs. `gpt-transcribe` recovered all six `kal` critical terms but still lost the booking or urgent-language terms in four `slt` runs; its `slt` date requests retained the critical day with different wording. File request latency begins after the complete WAV is available, so it cannot be compared directly with the paced Realtime turn duration or caller response time. The small synthetic sample cannot establish production accuracy or a latency percentile.
+
+Owner-only local reports are `eval/results/2026-09-29-clean-gpt-transcribe-v1.json`, `eval/results/2026-09-29-telephone-gpt-transcribe-v1.json`, `eval/results/2026-09-29-noisy-gpt-transcribe-v1.json`, and `eval/results/2026-09-29-noisy-gpt-4o-transcribe-v1.json`. They pin runner SHA-256 `b38c9fd28472dbe12ab9ab50396c0379d3c1b005e2182c62b9ec558ad4c0b88e` and the corpus hashes listed above. Every result remains `needsClarification` or `unavailable`; all four reports retain `releaseGate: unverified`. No model switch or caller action gate changed.
