@@ -26,4 +26,19 @@ Configuration hashes from the local reports:
 | Availability v2 | In adapter source | `b20f103bf8f8b15c286fed2018195ea63969fe3fc3ccb0e5dc97eb90a9bd9c5b` | `1dafc0bac037bda70456d3a27d67a3602d1717676982a4f85df50cba2d3d7d70` |
 | Transcription | None | `2d3fabc12d13699ffecc4017d64ba9cedc91373e001529abf135a6f311357905` | `4b0f51859cb1a9fa067ee60f91a0c31c22bd6f42d77d4aefb91c1ae529e3d0f1` |
 
-These are synthetic, model-only and transcription-only results. Human review is pending, the voice and phone-call gates are unrun, and every report says `releaseGate: unverified`. No live clinic pilot or autonomous patient action is approved by these counts.
+The results above are synthetic, model-only or transcription-only results. Human review and the full voice-call gate are unrun, and every report says `releaseGate: unverified`. No live clinic pilot or autonomous patient action is approved by these counts.
+
+## Speech synthesis and transcription loopback
+
+The patient-free `speech-loop-v1` corpus sends the AI disclosure and a provisional availability notice through Abby's actual synthesis adapter, keeps 16 kHz PCM only in memory, and replays it through the actual Realtime transcription adapter. Safety terms are `AI`, `receptionist`, `cannot`, `reserve`, and `confirm`. The runner uses a 30-second synthesis deadline and writes owner-only, ignored reports.
+
+| Speech candidate | Fixture executions | Match | Provider failure | Observed first-chunk time |
+| --- | ---: | ---: | ---: | --- |
+| `gpt-4o-mini-tts` / `coral`, two concurrent jobs | 4 | 3 | 1 | 0.6–28.2 s; failed stream timed out at 30 s |
+| `gpt-4o-mini-tts` / `coral`, disclosure-only sequential diagnostic | 2 | 0 | 2 | 22.9–27.8 s; both timed out at 30 s |
+| `tts-1` / `coral`, sequential comparison | 4 | 4 | 0 | 1.8–3.1 s |
+| `gpt-4o-mini-tts` / `marin`, sequential diagnostic | 2 | 1 | 1 | 1.7–12.3 s; failed stream timed out at 30 s |
+
+The repeated `gpt-4o-mini-tts` failures occurred with both tested voices. This is a provider-latency and completion concern, not a missing safety-word result; the typed evaluation kept each failed synthesis separate from a matching transcript. The small `tts-1` comparison suggests a candidate for further evaluation but cannot establish latency percentiles or spoken quality. No default model was changed. Human listening, representative telephony audio, interruption, and a declared pilot threshold remain open. Every speech-loop report retains `releaseGate: unverified`.
+
+The owner-only local reports are `eval/results/2026-09-29-speech-loop-v1.json`, `eval/results/2026-09-29-speech-loop-tts-1-v1.json`, and `eval/results/2026-09-29-speech-loop-marin-v1.json`. All pin corpus SHA-256 `b02fc915affa082502d417bf3eaaecb4435c14c00947c40ecda3e57ee7578857`. The first report pins runner/adapter SHA-256 `0aaa56415f116940688e50d7edeed53ea201003845cfaf48235ae218bb864efc`; the two comparisons pin `3e606d5c46d64325c8f1c5c7fcf52bda9137f830965add24d57503c8e176936b`. After those runs, the harness's permitted output chunk maximum was widened from 20 ms to the existing 100 ms speech-port contract; the provider adapters and observed failures were unchanged. Rerun the exact selected configuration before any release claim.
