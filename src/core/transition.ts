@@ -387,6 +387,23 @@ export function transition(current: CallState, action: TransitionAction): Result
       endMedia(state, now, action.reason);
       break;
     }
+    case "textPresentationWritten": {
+      const presentation = state.presentations[action.presentationId];
+      if (state.lifecycle === "ended" && state.terminal?.reason === "textCompleted" &&
+          presentation?.kind === "notice" && presentation.status === "played" &&
+          Object.values(state.presentations).filter(item => item.status === "played").length === 1) return ok(current);
+      if (state.lifecycle !== "active" || state.admission || state.sessionLease ||
+          state.pendingPresentationId !== action.presentationId || presentation?.kind !== "notice" ||
+          presentation.status !== "pending" ||
+          Object.values(state.presentations).some(item => item.id !== action.presentationId &&
+            (item.status === "pending" || item.status === "started" || item.status === "possiblySent" || item.status === "played"))) {
+        return err({ kind: "invalidTransition" });
+      }
+      state.presentations[action.presentationId] = { ...presentation, status: "played" };
+      delete state.pendingPresentationId;
+      endMedia(state, now, "textCompleted");
+      break;
+    }
     case "speechBegan": {
       if (state.lifecycle !== "active" || !state.admission || !state.sessionLease || state.sessionLease.sessionId !== action.sessionId || Date.parse(action.now) >= Date.parse(state.sessionLease.expiresAt)) return err({ kind: "leaseLost" });
       const pendingId = state.pendingPresentationId;

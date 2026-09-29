@@ -246,8 +246,20 @@ test("E2E-125 text: standalone ingress presents provisional availability without
   assert.equal(prepared.status, "shown");
   assert.match(prepared.message, /possible times/);
   assert.match(prepared.message, /can't reserve or confirm/);
+  assert.deepEqual(await createStandaloneTextComposition(db, reader).reception.completeTextPresentation(scope,
+    prepared.callId, "0".repeat(64), now),
+    { ok: false, error: { kind: "invalidTransition" } });
   assert.deepEqual(await runner.confirmWritten(prepared), { ok: true, value: true });
   const stored = value(await createStandaloneTextComposition(db, reader).reception.read(scope, prepared.callId));
+  const events = await db.selectFrom("call_events").select("sequence")
+    .where("call_id", "=", prepared.callId as never).execute();
+  assert.deepEqual(await runner.confirmWritten(prepared), { ok: true, value: true });
+  assert.equal(value(await createStandaloneTextComposition(db, reader).reception.read(scope, prepared.callId)).version,
+    stored.version);
+  assert.equal((await db.selectFrom("call_events").select("sequence")
+    .where("call_id", "=", prepared.callId as never).execute()).length, events.length);
+  assert.equal(stored.lifecycle, "ended");
+  assert.equal(stored.terminal?.reason, "textCompleted");
   assert.deepEqual(stored.callerMessages, []);
   assert.deepEqual(stored.availabilityReads, []);
   assert.deepEqual(stored.staffItems, {});
@@ -287,7 +299,15 @@ test("E2E-125 text: loopback HTTP availability goes through the strict PostgreSQ
     contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
   fetchPort, () => now));
   const runner = new StandaloneAvailabilityTextRunner(db, scope, reader, () => now);
-  const server = await createAvailabilityConsoleServer(runner, resolve("dist/availability-console/app.js"));
+  let resolveWritten!: () => void;
+  const written = new Promise<void>(resolve => { resolveWritten = resolve; });
+  const server = await createAvailabilityConsoleServer({
+    prepare: input => runner.prepare(input),
+    confirmWritten: async prepared => {
+      try { return await runner.confirmWritten(prepared); }
+      finally { resolveWritten(); }
+    },
+  }, resolve("dist/availability-console/app.js"));
   await new Promise<void>(done => server.listen(0, "127.0.0.1", done));
   const address = server.address();
   assert.ok(address && typeof address !== "string");
@@ -312,10 +332,13 @@ test("E2E-125 text: loopback HTTP availability goes through the strict PostgreSQ
     assert.match(answer.value.message, /can't reserve or confirm/);
     assert.equal(JSON.stringify(answer).includes(appointmentId), false);
     assert.equal(JSON.stringify(answer).includes(privateName), false);
+    await written;
     const calls = await db.selectFrom("calls").select(["call_id", "state"])
       .where("tenant_id", "=", scope.tenantId as never).execute();
     assert.equal(calls.length, 1);
     const stored = value(await createStandaloneTextComposition(db, reader).reception.read(scope, calls[0]!.call_id));
+    assert.equal(stored.lifecycle, "ended");
+    assert.equal(stored.terminal?.reason, "textCompleted");
     assert.deepEqual(stored.callerMessages, []);
     assert.deepEqual(stored.availabilityReads, []);
     assert.deepEqual(stored.actions, {});

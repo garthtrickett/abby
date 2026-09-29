@@ -221,6 +221,10 @@ export class TextReception {
     return runtime.resolvePresentation(callId, presentationId, "played");
   }
 
+  completeTextPresentation(scope: LocationScope, callId: string, presentationId: string, now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.runtime(scope).completeTextPresentation(callId, presentationId, now);
+  }
+
   affirm(scope: LocationScope, turn: FinalCallerTurn, actionKey: string, digest: string, now: string, expectedConversationRevision?: number): Promise<Result<CallState, TransitionFailure>> {
     return this.runtime(scope).acceptTurn(turn, { kind: "affirm", actionKey, digest, affirmative: true }, now, expectedConversationRevision);
   }

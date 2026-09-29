@@ -24,6 +24,8 @@ export function standaloneTextActionAllowed(action: TransitionAction): boolean {
   if (action.kind === "presentationStarted" || action.kind === "presentationResolved") {
     return NOTICE_ID.test(action.presentationId);
   }
+  if (action.kind === "textPresentationWritten") return NOTICE_ID.test(action.presentationId) &&
+    Number.isFinite(Date.parse(action.now));
   return false;
 }
 
@@ -56,7 +58,11 @@ function safePolicy(policy: CallPolicy | undefined): CallPolicy | undefined {
 /** Rebuild from named fields. Speech and knowledge-answer text are response-only and never written. */
 export function projectStandaloneTextState(state: CallState): Result<CallState, TransitionFailure> {
   const policy = safePolicy(state?.policy);
-  if (!state || !policy || !UUID_V4.test(state.callId) || state.lifecycle !== "active" || state.admission || state.sessionLease || state.terminal ||
+  if (!state || !policy || !UUID_V4.test(state.callId) || !["active", "ended"].includes(state.lifecycle) ||
+      state.admission || state.sessionLease ||
+      (state.lifecycle === "active" && state.terminal !== undefined) ||
+      (state.lifecycle === "ended" && (state.terminal?.reason !== "textCompleted" ||
+        typeof state.terminal.at !== "string" || !Number.isFinite(Date.parse(state.terminal.at)))) ||
       !Number.isSafeInteger(state.version) || state.version < 0 ||
       !Number.isSafeInteger(state.conversationRevision) || state.conversationRevision < 0 ||
       !Array.isArray(state.processedTurnIds) || state.processedTurnIds.some(id => !UUID_V4.test(id)) ||
@@ -75,10 +81,15 @@ export function projectStandaloneTextState(state: CallState): Result<CallState, 
   }
   if (state.pendingPresentationId !== undefined &&
       presentations[state.pendingPresentationId]?.status !== "pending") return err({ kind: "invalidTransition" });
+  if (state.lifecycle === "ended" && (state.pendingPresentationId !== undefined ||
+      Object.values(presentations).some(item => item.status === "pending" || item.status === "started"))) {
+    return err({ kind: "invalidTransition" });
+  }
   return ok({
     callId: state.callId,
     policy,
-    lifecycle: "active",
+    lifecycle: state.lifecycle,
+    ...(state.lifecycle === "ended" ? { terminal: { reason: "textCompleted" as const, at: state.terminal!.at } } : {}),
     version: state.version,
     conversationRevision: state.conversationRevision,
     processedTurnIds: [...state.processedTurnIds],
@@ -111,5 +122,7 @@ export function isStoredStandaloneTextEvent(kind: string, payload: unknown): boo
   if (kind === "presentationResolved") return keys === "presentationId,status" &&
     typeof payload.presentationId === "string" && NOTICE_ID.test(payload.presentationId) &&
     typeof payload.status === "string" && ["played", "interrupted", "failed", "unproven"].includes(payload.status);
+  if (kind === "textPresentationWritten") return keys === "presentationId" &&
+    typeof payload.presentationId === "string" && NOTICE_ID.test(payload.presentationId);
   return false;
 }

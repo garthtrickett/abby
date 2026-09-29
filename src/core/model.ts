@@ -15,7 +15,7 @@ export type Admission = Readonly<{
 }>;
 export type SessionLease = Readonly<{ sessionId: string; version: number; expiresAt: string; validForMs: number }>;
 export const CALL_TERMINAL_REASONS = ["callerDisconnected", "sessionClosed", "mediaFailure", "localLeaseClosed",
-  "admissionExpired", "leaseExpired", "transferConnected", "transferUnproven"] as const;
+  "admissionExpired", "leaseExpired", "transferConnected", "transferUnproven", "textCompleted"] as const;
 export type CallTerminalReason = typeof CALL_TERMINAL_REASONS[number];
 export type CallTerminal = Readonly<{ reason: CallTerminalReason; at: string }>;
 export type AdmissionReceipt = Readonly<{ callId: string; scope: LocationScope; admission: Admission; lifecycle: "starting" | "active" | "ended" }>;
@@ -368,6 +368,7 @@ export type TransitionAction =
   | Readonly<{ kind: "admissionExpired"; now: string }>
   | Readonly<{ kind: "sessionExpired"; sessionId: string; expectedLeaseVersion: number; now: string }>
   | Readonly<{ kind: "callEnded"; sessionId: string; reason: "callerDisconnected" | "sessionClosed" | "mediaFailure" | "localLeaseClosed"; now: string }>
+  | Readonly<{ kind: "textPresentationWritten"; presentationId: string; now: string }>
   | Readonly<{ kind: "speechBegan"; sessionId: string; now: string }>
   | Readonly<{ kind: "callerTurn"; turn: FinalCallerTurn; interpretation: TurnInterpretation; now: string; expectedConversationRevision?: number }>
   | Readonly<{ kind: "modelResolved"; effectId: string; result: Result<import("../model/proposal.ts").ModelProposal, import("../model/proposal.ts").ModelFailure>; now: string }>
