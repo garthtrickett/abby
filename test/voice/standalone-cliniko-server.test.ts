@@ -39,7 +39,7 @@ class FakeTranscriptionSocket extends EventEmitter {
   close(): void { this.terminate(); }
 }
 
-test("E2E-138 and E2E-139 local standalone server clarifies one uncertain turn before fallback",
+test("E2E-138, E2E-139, and E2E-140 local standalone server reads keypad availability then clarifies uncertain speech",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 20_000 }, async () => {
   const adminUrl = process.env.DATABASE_URL;
   assert.ok(adminUrl);
@@ -69,9 +69,31 @@ test("E2E-138 and E2E-139 local standalone server clarifies one uncertain turn b
     const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable",
       async () => ok(true), false, "standaloneMinimal");
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
+    const appointmentId = "private-appointment-140";
+    const appointmentTime = "2026-09-30T02:00:00.000Z";
+    let clinikoReads = 0;
     const availability = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5",
       contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
-    async () => { throw new Error("uncertain transcript must not read Cliniko"); }, () => now);
+    async input => {
+      clinikoReads += 1;
+      const url = new URL(String(input));
+      if (url.pathname === "/v1/businesses/11") return Response.json({ id: "11", show_in_online_bookings: true,
+        time_zone_identifier: "Australia/Sydney" });
+      if (url.pathname === "/v1/practitioners/22") return Response.json({ id: "22", active: true,
+        show_in_online_bookings: true });
+      if (url.pathname === "/v1/appointment_types/33") return Response.json({ id: "33", show_in_online_bookings: true });
+      if (url.pathname === "/v1/businesses/11/practitioners") return Response.json({ total_entries: 1,
+        practitioners: [{ id: "22" }] });
+      if (url.pathname === "/v1/practitioners/22/appointment_types") return Response.json({ total_entries: 1,
+        appointment_types: [{ id: "33" }] });
+      if (url.pathname.endsWith("/available_times")) {
+        assert.equal(url.searchParams.get("from"), "2026-09-30");
+        assert.equal(url.searchParams.get("to"), "2026-09-30");
+        return Response.json({ total_entries: 1,
+          available_times: [{ appointment_start: appointmentTime, appointment_id: appointmentId }] });
+      }
+      throw new Error("unexpected Cliniko request");
+    }, () => now);
     assert.ok(availability.ok);
     const provider = new FakeTranscriptionSocket();
     let modelCalls = 0;
@@ -82,7 +104,9 @@ test("E2E-138 and E2E-139 local standalone server clarifies one uncertain turn b
         fallbackNumbers: { [number]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x46),
         now: () => new Date(now) },
       routes: [{ dialedNumber: number, scope, routeVersion: "v1", availability: availability.value,
-        clinicDate: () => "2026-09-29" }],
+        clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: { scope, version: "keypad-v1",
+          ownerRef: "clinic-approval", approved: true,
+          approvedText: "Hello. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],
       openai: { apiKey: "synthetic-openai-key", intentModel: "configured-model",
         transcriptionSocketFactory: () => {
           queueMicrotask(() => provider.open());
@@ -121,10 +145,13 @@ test("E2E-138 and E2E-139 local standalone server clarifies one uncertain turn b
     const sent: Record<string, unknown>[] = [];
     let clarificationResolve!: () => void;
     const clarification = new Promise<void>(resolve => { clarificationResolve = resolve; });
+    let availabilityResolve!: () => void;
+    const availabilitySpoken = new Promise<void>(resolve => { availabilityResolve = resolve; });
     const greeting = new Promise<void>(resolve => caller!.on("message", data => {
       sent.push(JSON.parse(data.toString()) as Record<string, unknown>);
       if (sent.length === 2) resolve();
-      if (sent.length === 4) clarificationResolve();
+      if (sent.length === 4) availabilityResolve();
+      if (sent.length === 6) clarificationResolve();
     }));
     caller.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
     caller.send(JSON.stringify({ event: "start", sequenceNumber: "1", streamSid,
@@ -134,25 +161,45 @@ test("E2E-138 and E2E-139 local standalone server clarifies one uncertain turn b
     await greeting;
     assert.deepEqual(sent.map(item => item.event), ["media", "mark"]);
     assert.equal(synthesisCalls, 1);
-    caller.send(JSON.stringify({ event: "mark", sequenceNumber: "2", streamSid,
+    caller.send(JSON.stringify({ event: "dtmf", sequenceNumber: "2", streamSid,
+      dtmf: { track: "inbound_track", digit: "2" } }));
+    caller.send(JSON.stringify({ event: "mark", sequenceNumber: "3", streamSid,
       mark: { name: (sent[1]?.mark as { name: string }).name } }));
+    caller.send(JSON.stringify({ event: "dtmf", sequenceNumber: "4", streamSid,
+      dtmf: { track: "inbound_track", digit: "9" } }));
+    caller.send(JSON.stringify({ event: "dtmf", sequenceNumber: "5", streamSid,
+      dtmf: { track: "inbound_track", digit: "2" } }));
+    await availabilitySpoken;
+    assert.equal(synthesisCalls, 2);
+    assert.equal(modelCalls, 0);
+    assert.equal(clinikoReads, 6);
+    assert.match(spoken[1]!, /possible times/);
+    assert.equal(spoken[1]!.includes(appointmentId), false);
+    caller.send(JSON.stringify({ event: "mark", sequenceNumber: "6", streamSid,
+      mark: { name: (sent[3]?.mark as { name: string }).name } }));
     const committed = once(provider, "commit");
     const closed = once(caller, "close");
-    for (let index = 0; index < 7; index += 1) caller.send(JSON.stringify({ event: "media",
-      sequenceNumber: String(index + 3), streamSid, media: { track: "inbound", chunk: String(index + 1),
-        timestamp: String(index * 20), payload: Buffer.alloc(160, index < 2 ? 0x9f : 0xff).toString("base64") } }));
+    for (let index = 0; index < 7; index += 1) {
+      if (index === 1) caller.send(JSON.stringify({ event: "dtmf", sequenceNumber: "8", streamSid,
+        dtmf: { track: "inbound_track", digit: "1" } }));
+      caller.send(JSON.stringify({ event: "media",
+        sequenceNumber: String(index === 0 ? 7 : index + 8), streamSid,
+        media: { track: "inbound", chunk: String(index + 1),
+          timestamp: String(index * 20), payload: Buffer.alloc(160, index < 2 ? 0x9f : 0xff).toString("base64") } }));
+    }
     await committed;
     provider.receive({ type: "input_audio_buffer.committed", item_id: "provider-item" });
     provider.receive({ type: "conversation.item.input_audio_transcription.completed", item_id: "provider-item",
       transcript: "Do you have availability on October 2?" });
     await clarification;
-    assert.equal(synthesisCalls, 2);
-    assert.equal(spoken[1], "Could you repeat that for me?");
-    caller.send(JSON.stringify({ event: "mark", sequenceNumber: "10", streamSid,
-      mark: { name: (sent[3]?.mark as { name: string }).name } }));
+    assert.equal(synthesisCalls, 3);
+    assert.equal(spoken[2], "Could you repeat that for me?");
+    assert.equal(clinikoReads, 6);
+    caller.send(JSON.stringify({ event: "mark", sequenceNumber: "15", streamSid,
+      mark: { name: (sent[5]?.mark as { name: string }).name } }));
     const repeated = once(provider, "commit");
     for (let index = 0; index < 7; index += 1) caller.send(JSON.stringify({ event: "media",
-      sequenceNumber: String(index + 11), streamSid, media: { track: "inbound", chunk: String(index + 8),
+      sequenceNumber: String(index + 16), streamSid, media: { track: "inbound", chunk: String(index + 8),
         timestamp: String((index + 7) * 20), payload: Buffer.alloc(160, index < 2 ? 0x9f : 0xff).toString("base64") } }));
     await repeated;
     provider.receive({ type: "input_audio_buffer.committed", item_id: "provider-item-2" });
@@ -160,13 +207,16 @@ test("E2E-138 and E2E-139 local standalone server clarifies one uncertain turn b
       transcript: "Do you have availability on October 2?" });
     assert.equal((await closed)[0], 1008);
     assert.equal(modelCalls, 0);
+    assert.equal(clinikoReads, 6);
     assert.equal(provider.terminateCount, 1);
     assert.deepEqual(await scanPatientDataCanaries(db, [{ label: "caller", value: callerPhone },
       { label: "provider_call", value: callSid },
-      { label: "spoken_text", value: "Do you have availability on October 2?" }]), { ok: true, value: [] });
+      { label: "spoken_text", value: "Do you have availability on October 2?" },
+      { label: "appointment", value: appointmentId }, { label: "time", value: appointmentTime }]), { ok: true, value: [] });
     assert.deepEqual(await scanDisposableBackupCanaries(target.toString(), [{ label: "caller", value: callerPhone },
       { label: "provider_call", value: callSid },
-      { label: "spoken_text", value: "Do you have availability on October 2?" }]), []);
+      { label: "spoken_text", value: "Do you have availability on October 2?" },
+      { label: "appointment", value: appointmentId }, { label: "time", value: appointmentTime }]), []);
   } finally {
     caller?.terminate();
     if (server) { server.close(); await once(server, "close"); }

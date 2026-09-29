@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
 import type { ApprovedGreeting, CallState, FinalCallerTurn, LocationScope, PendingPresentationRef, Presentation, Result, StaffReason, TransitionFailure } from "../core/model.ts";
@@ -287,6 +288,26 @@ export class VoiceSession {
       this.unclearTurns = 0;
     }
     return result;
+  }
+
+  /** A validated keypad event is exact caller input; it bypasses speech transcription and intent inference. */
+  async acceptKeypadAvailability(date: string, now: string): Promise<Result<CallState, VoiceSessionFailure>> {
+    if (!this.attached) return err({ kind: "sessionUnknown" });
+    if (!this.canSend()) return err({ kind: "leaseLost" });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+        !Number.isFinite(Date.parse(`${date}T00:00:00.000Z`)) ||
+        new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10) !== date) return err({ kind: "invalidTransition" });
+    if (this.speechOpen || this.activePlayback) return err({ kind: "deliveryBlocked" });
+    const existing = await this.runtime.read(this.callId);
+    if (!existing.ok) return existing;
+    if (existing.value.pendingPresentationId) return err({ kind: "deliveryBlocked" });
+    if (existing.value.lifecycle !== "active" || !existing.value.policy.automationEnabled) return err({ kind: "invalidTransition" });
+    const turn: FinalCallerTurn = { callId: this.callId, sessionId: this.sessionId,
+      turnId: randomUUID(), text: `Keypad availability request for ${date}`, quality: "clear", at: now };
+    const checked = await this.reception.checkAvailability(this.scope, turn, date, date, now,
+      existing.value.conversationRevision);
+    if (checked.ok) { this.rememberPending(checked.value); this.unclearTurns = 0; }
+    return checked;
   }
 
   async dispatchPending(now: string): Promise<Result<DispatchResult, VoiceSessionFailure>> {

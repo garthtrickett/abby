@@ -72,6 +72,10 @@ export class MediaTurnController<T, F> {
   private turnMs = 0;
   private trailingSilenceMs = 0;
 
+  idle(): boolean {
+    return !this.closed && this.queuedFrames === 0 && this.generation === undefined && this.candidateMs === 0;
+  }
+
   constructor(sessionId: string, target: MediaTurnTarget<T, F>, transcription: TranscriptionPort,
               options: MediaTurnOptions = {}) {
     const speechThreshold = options.speechThreshold ?? 700;
