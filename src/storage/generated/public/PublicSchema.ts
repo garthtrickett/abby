@@ -8,7 +8,9 @@ import type { default as ClinicWriteStopTable } from './ClinicWriteStop.js';
 import type { default as NumberRouteEventsTable } from './NumberRouteEvents.js';
 import type { default as ClinicKnowledgeHeadsTable } from './ClinicKnowledgeHeads.js';
 import type { default as TenantPortabilityFencesTable } from './TenantPortabilityFences.js';
+import type { default as PatientPhoneSyncTable } from './PatientPhoneSync.js';
 import type { default as ClinicWriteStopInflightTable } from './ClinicWriteStopInflight.js';
+import type { default as PatientPhoneIndexTable } from './PatientPhoneIndex.js';
 import type { default as TenantConfigImportsTable } from './TenantConfigImports.js';
 import type { default as EffectCallLeasesTable } from './EffectCallLeases.js';
 import type { default as ClinicAutomationTable } from './ClinicAutomation.js';
@@ -36,7 +38,11 @@ export default interface PublicSchema {
 
   tenant_portability_fences: TenantPortabilityFencesTable;
 
+  patient_phone_sync: PatientPhoneSyncTable;
+
   clinic_write_stop_inflight: ClinicWriteStopInflightTable;
+
+  patient_phone_index: PatientPhoneIndexTable;
 
   tenant_config_imports: TenantConfigImportsTable;
 
