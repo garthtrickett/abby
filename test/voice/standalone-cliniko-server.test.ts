@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { EventEmitter, once } from "node:events";
+import type { Server } from "node:http";
 import test from "node:test";
 import { sql } from "kysely";
 import twilio from "twilio";
@@ -39,6 +40,50 @@ class FakeTranscriptionSocket extends EventEmitter {
   close(): void { this.terminate(); }
 }
 
+test("E2E-143 standalone voice server refuses unsafe storage before opening a listener",
+  { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 20_000 }, async () => {
+  const adminUrl = process.env.DATABASE_URL;
+  assert.ok(adminUrl);
+  const admin = connectPostgres(adminUrl);
+  const name = `abby_voice_preflight_${randomUUID().replaceAll("-", "")}`;
+  const target = new URL(adminUrl);
+  target.pathname = `/${name}`;
+  let created = false;
+  let db: ReturnType<typeof connectPostgres> | undefined;
+  try {
+    await sql.raw(`create database "${name}"`).execute(admin);
+    created = true;
+    db = connectPostgres(target.toString());
+    await migrate(db);
+    const scope = { tenantId: "voice-preflight", clinicId: "clinic", locationId: "main" };
+    const privateText = `private-note-${randomUUID()}`;
+    await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy)
+      values (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, 0,
+        ${JSON.stringify({ scope, policyVersion: "0", bookingEnabled: false, privateText })}::jsonb)`.execute(db);
+    const availability = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5",
+      contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
+    async () => { throw new Error("blocked server must not call Cliniko"); });
+    assert.ok(availability.ok);
+    const prepared = await createStandaloneClinikoVoiceServer({ db,
+      twilio: { accountSid: `AC${"1".repeat(32)}`, authToken: "synthetic-twilio-token",
+        publicWebhookUrl: "https://calls.example.test/twilio/inbound",
+        publicStreamUrl: "wss://calls.example.test/twilio/media/",
+        fallbackNumbers: { "+6125550199": "+6125550188" }, bindingKey: Buffer.alloc(32, 0x46) },
+      routes: [{ dialedNumber: "+6125550199", scope, routeVersion: "v1",
+        availability: availability.value, clinicDate: () => "2026-09-29" }],
+      openai: { apiKey: "synthetic-openai-key", intentModel: "configured-model" },
+      readiness: async () => ok(true),
+    });
+    assert.deepEqual(prepared, { ok: false,
+      error: { kind: "unsafeExistingData", areas: ["settings"] } });
+    assert.equal(JSON.stringify(prepared).includes(privateText), false);
+  } finally {
+    await db?.destroy();
+    try { if (created) await sql.raw(`drop database "${name}"`).execute(admin); }
+    finally { await admin.destroy(); }
+  }
+});
+
 test("E2E-138, E2E-139, and E2E-140 local standalone server reads keypad availability then clarifies uncertain speech",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 20_000 }, async () => {
   const adminUrl = process.env.DATABASE_URL;
@@ -49,7 +94,7 @@ test("E2E-138, E2E-139, and E2E-140 local standalone server reads keypad availab
   target.pathname = `/${name}`;
   let created = false;
   let db: ReturnType<typeof connectPostgres> | undefined;
-  let server: ReturnType<typeof createStandaloneClinikoVoiceServer> | undefined;
+  let server: Server | undefined;
   let caller: WebSocket | undefined;
   try {
     await sql.raw(`create database "${name}"`).execute(admin);
@@ -99,7 +144,7 @@ test("E2E-138, E2E-139, and E2E-140 local standalone server reads keypad availab
     let modelCalls = 0;
     let synthesisCalls = 0;
     const spoken: string[] = [];
-    server = createStandaloneClinikoVoiceServer({ db,
+    const prepared = await createStandaloneClinikoVoiceServer({ db,
       twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
         fallbackNumbers: { [number]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x46),
         now: () => new Date(now) },
@@ -124,6 +169,8 @@ test("E2E-138, E2E-139, and E2E-140 local standalone server reads keypad availab
         }) as typeof fetch },
       readiness: async () => ok(true), mediaOptions: { silenceMs: 100 }, now: () => now,
     });
+    assert.ok(prepared.ok);
+    server = prepared.value;
     server.listen(0, "127.0.0.1");
     await once(server, "listening");
     const address = server.address();

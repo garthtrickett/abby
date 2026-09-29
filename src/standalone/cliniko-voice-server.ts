@@ -1,10 +1,13 @@
 import type { Server } from "node:http";
 import type { Kysely } from "kysely";
 import { ClinikoAvailabilityReader } from "../cliniko/availability.ts";
-import type { ApprovedGreeting, LocationScope } from "../core/model.ts";
+import { err, ok } from "../core/model.ts";
+import type { ApprovedGreeting, LocationScope, Result } from "../core/model.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
 import { ReferenceNumberRoutingHost } from "../reference/clinic-number-routing.ts";
 import type Database from "../storage/generated/Database.ts";
+import { checkStandaloneTextDatabase } from "../storage/standalone-privacy-preflight.ts";
+import type { StandalonePrivacyPreflightFailure } from "../storage/standalone-privacy-preflight.ts";
 import type { MediaTurnOptions } from "../voice/media-turn-controller.ts";
 import { OpenAIRealtimeTranscription } from "../voice/openai-realtime-transcription.ts";
 import type { OpenAIRealtimeTranscriptionConfig } from "../voice/openai-realtime-transcription.ts";
@@ -47,8 +50,9 @@ export type ClinikoVoiceServerConfig = Readonly<{
   monotonicNow?: () => number;
 }>;
 
-/** Connects authenticated Twilio media to one transient Cliniko-only call per socket. */
-export function createStandaloneClinikoVoiceServer(config: ClinikoVoiceServerConfig): Server {
+/** Refuses unsafe standalone storage before a listener can accept calls. */
+export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceServerConfig):
+  Promise<Result<Server, StandalonePrivacyPreflightFailure>> {
   if (!config.routes.length || config.routes.length > 1_000) throw new RangeError("invalid clinic voice routes");
   const twilio = { ...config.twilio, bindingKey: new Uint8Array(config.twilio.bindingKey),
     fallbackNumbers: { ...config.twilio.fallbackNumbers } };
@@ -94,7 +98,10 @@ export function createStandaloneClinikoVoiceServer(config: ClinikoVoiceServerCon
       model: config.openai.intentModel, clinicDate: route.clinicDate,
       ...(config.openai.fetch ? { fetch: config.openai.fetch } : {}) })] as const));
 
-  return createTwilioIngressServer({ ingress, async createCall(stream, send, close) {
+  const privacy = await checkStandaloneTextDatabase(config.db);
+  if (!privacy.ok) return err(privacy.error);
+
+  return ok(createTwilioIngressServer({ ingress, async createCall(stream, send, close) {
     const route = routes.get(stream.event.dialedNumber);
     if (!route || stream.event.key.accountRef !== twilio.accountSid) throw new Error("clinic route unavailable");
     const composed = await createStandaloneTransientVoiceCall({ db: config.db, routingHost,
@@ -114,5 +121,5 @@ export function createStandaloneClinikoVoiceServer(config: ClinikoVoiceServerCon
     });
     if (!composed.ok) throw new Error("standalone voice storage unavailable");
     return composed.value;
-  } });
+  } }));
 }
