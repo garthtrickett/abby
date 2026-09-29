@@ -39,7 +39,7 @@ class FakeTranscriptionSocket extends EventEmitter {
   close(): void { this.terminate(); }
 }
 
-test("E2E-138 local standalone server wires signed Twilio, speech, uncertain transcription, and private Cliniko storage",
+test("E2E-138 and E2E-139 local standalone server clarifies one uncertain turn before fallback",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 20_000 }, async () => {
   const adminUrl = process.env.DATABASE_URL;
   assert.ok(adminUrl);
@@ -76,6 +76,7 @@ test("E2E-138 local standalone server wires signed Twilio, speech, uncertain tra
     const provider = new FakeTranscriptionSocket();
     let modelCalls = 0;
     let synthesisCalls = 0;
+    const spoken: string[] = [];
     server = createStandaloneClinikoVoiceServer({ db,
       twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
         fallbackNumbers: { [number]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x46),
@@ -91,6 +92,7 @@ test("E2E-138 local standalone server wires signed Twilio, speech, uncertain tra
           assert.equal(new Headers(init?.headers).get("authorization"), "Bearer synthetic-openai-key");
           if (String(url).endsWith("/audio/speech")) {
             synthesisCalls += 1;
+            spoken.push((JSON.parse(String(init?.body)) as { input: string }).input);
             return new Response(Buffer.alloc(960), { headers: { "content-type": "audio/pcm" } });
           }
           modelCalls += 1;
@@ -117,9 +119,12 @@ test("E2E-138 local standalone server wires signed Twilio, speech, uncertain tra
     } });
     await once(caller, "open");
     const sent: Record<string, unknown>[] = [];
+    let clarificationResolve!: () => void;
+    const clarification = new Promise<void>(resolve => { clarificationResolve = resolve; });
     const greeting = new Promise<void>(resolve => caller!.on("message", data => {
       sent.push(JSON.parse(data.toString()) as Record<string, unknown>);
       if (sent.length === 2) resolve();
+      if (sent.length === 4) clarificationResolve();
     }));
     caller.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
     caller.send(JSON.stringify({ event: "start", sequenceNumber: "1", streamSid,
@@ -139,6 +144,19 @@ test("E2E-138 local standalone server wires signed Twilio, speech, uncertain tra
     await committed;
     provider.receive({ type: "input_audio_buffer.committed", item_id: "provider-item" });
     provider.receive({ type: "conversation.item.input_audio_transcription.completed", item_id: "provider-item",
+      transcript: "Do you have availability on October 2?" });
+    await clarification;
+    assert.equal(synthesisCalls, 2);
+    assert.equal(spoken[1], "Could you repeat that for me?");
+    caller.send(JSON.stringify({ event: "mark", sequenceNumber: "10", streamSid,
+      mark: { name: (sent[3]?.mark as { name: string }).name } }));
+    const repeated = once(provider, "commit");
+    for (let index = 0; index < 7; index += 1) caller.send(JSON.stringify({ event: "media",
+      sequenceNumber: String(index + 11), streamSid, media: { track: "inbound", chunk: String(index + 8),
+        timestamp: String((index + 7) * 20), payload: Buffer.alloc(160, index < 2 ? 0x9f : 0xff).toString("base64") } }));
+    await repeated;
+    provider.receive({ type: "input_audio_buffer.committed", item_id: "provider-item-2" });
+    provider.receive({ type: "conversation.item.input_audio_transcription.completed", item_id: "provider-item-2",
       transcript: "Do you have availability on October 2?" });
     assert.equal((await closed)[0], 1008);
     assert.equal(modelCalls, 0);

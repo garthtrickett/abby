@@ -694,14 +694,23 @@ for (const kind of kinds) {
     assert.equal(Object.values(state.effects).some(effect => effect.kind === "hostWrite"), false);
   });
 
-  test(`${kind}: unclear availability speech never queries the provider`, async () => {
+  test(`E2E-139 ${kind}: unclear availability speech asks once, then fails without a provider query`, async () => {
     const requests: URL[] = [];
     const app = await fixture(kind, `${kind}-cliniko-unclear`, false, "requestOnly", undefined, undefined,
       { availability: scope => fakeClinikoReader(scope, requests) });
     const state = await availabilityTurn(app, 2, "Check times", "needsClarification");
-    assert.equal(state.availabilityReads[0]?.reason, "unclear");
+    assert.equal(state.availabilityReads.length, 0);
     assert.equal(requests.length, 0);
-    assert.equal(state.callerMessages.at(-1), "I can't check available times right now. I'll request staff follow-up.");
+    assert.equal(state.callerMessages.at(-1), "Could you repeat that for me?");
+    assert.equal(Object.keys(state.staffItems).length, 0);
+    const notice = value(await app.session.dispatchPending(at(4)));
+    assert.equal(notice.kind, "queued");
+    value(await app.session.acceptPlaybackResult(notice.playbackId!, "played", at(5)));
+    const generation = value(await app.session.speechStarted(at(6)));
+    value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation,
+      utteranceId: "repeat-availability", text: "Check times", quality: "needsClarification" }));
+    failure(await app.session.finishTurn(at(7)), "intentUnavailable");
+    assert.equal(requests.length, 0);
   });
 
   test(`${kind}: a late availability read cannot speak after a newer caller turn`, async () => {
@@ -960,7 +969,8 @@ for (const kind of kinds) {
     const unclear = await fixture(kind, `${kind}-transfer-unclear`, false, "execute");
     const state = await transferTurn(unclear, "needsClarification");
     assert.equal(state.presentations[state.pendingPresentationId!]?.kind, "notice");
-    assert.equal(Object.values(state.staffItems)[0]?.reason, "verificationFailed");
+    assert.equal(Object.keys(state.staffItems).length, 0);
+    assert.equal(state.callerMessages.at(-1), "Could you repeat that for me?");
     assert.equal(unclear.transfer.requested.length, 0);
 
     const unavailable = await fixture(kind, `${kind}-transfer-unavailable`, false, "unavailable");
