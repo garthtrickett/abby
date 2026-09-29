@@ -73,6 +73,51 @@ test("Cliniko phone index stores only phone-to-ID links and rechecks shared cand
   assert.deepEqual(await lookup.candidates(scope, "withheld"), { ok: true, value: { kind: "noNumber", candidateIds: [] } });
 });
 
+test("candidate lookup discards IDs when disconnect, reconnect, or refresh wins during Cliniko recheck", async () => {
+  for (const change of ["disconnect", "reconnect", "refresh"] as const) {
+    const scope = { tenantId: `phone-candidate-race-${change}`, clinicId: "clinic" };
+    const phone = "+61400111222";
+    let entered!: () => void;
+    let release!: () => void;
+    const reading = new Promise<void>(resolve => { entered = resolve; });
+    const held = new Promise<void>(resolve => { release = resolve; });
+    const fetchPort: typeof fetch = async input => {
+      const path = new URL(String(input)).pathname;
+      if (path === "/v1/patients") return Response.json({ total_entries: 1, patients: [
+        { id: "101", archived_at: null, patient_phone_numbers: [{ number: "0400 111 222", phone_type: "Mobile" }] },
+      ] });
+      if (path === "/v1/patients/101") {
+        entered();
+        await held;
+        return Response.json({ id: "101", archived_at: null,
+          patient_phone_numbers: [{ number: "0400 111 222", phone_type: "Mobile" }] });
+      }
+      throw new Error("unexpected Cliniko request");
+    };
+    const reader = ClinikoPatientCandidateReader.create({ scope, apiKey: "synthetic-au5",
+      contactEmail: "test@example.com" }, fetchPort);
+    assert.ok(reader.ok);
+    const index = new PostgresPatientPhoneIndex(db);
+    const lookup = new ClinikoPhoneLookup(reader.value, index, "61", 60_000);
+    assert.deepEqual(await lookup.refresh(scope), { ok: true, value: 1 });
+    const pending = lookup.candidates(scope, phone);
+    await reading;
+    if (change === "disconnect" || change === "reconnect") {
+      assert.deepEqual(await index.clear(scope), { ok: true, value: true });
+      if (change === "reconnect") {
+        assert.deepEqual(await index.enable(scope), { ok: true, value: true });
+        assert.deepEqual(await index.publish(scope, [{ normalizedPhone: phone, patientId: "101" }], "61", 1),
+          { ok: true, value: 2 });
+      }
+    } else assert.deepEqual(await index.publish(scope, [{ normalizedPhone: phone, patientId: "102" }], "61", 1),
+      { ok: true, value: 2 });
+    release();
+    assert.deepEqual(await pending, { ok: true, value: { kind: "indexStale", candidateIds: [] } });
+    if (change === "reconnect") assert.deepEqual(await lookup.candidates(scope, phone),
+      { ok: true, value: { kind: "one", candidateIds: ["101"] } });
+  }
+});
+
 test("a failed or older concurrent scan cannot invalidate or replace a newer generation", async () => {
   const scope = { tenantId: "phone-race-tenant", clinicId: "phone-race-clinic" };
   const index = new PostgresPatientPhoneIndex(db);
@@ -468,7 +513,7 @@ test("clinic disconnect fences future and in-flight phone refresh until explicit
   assert.deepEqual(await index.enable(scope), { ok: true, value: true });
   assert.deepEqual(await worker.runOnce(), [{ scope, kind: "refreshed" }]);
   assert.equal(listReads, 2);
-  assert.deepEqual(await index.markStale(scope, 1), { ok: true, value: true });
+  assert.deepEqual(await index.markStale(scope, 2), { ok: true, value: true });
   const inFlight = worker.runOnce();
   await started;
   assert.deepEqual(await index.clear(scope), { ok: true, value: true });
