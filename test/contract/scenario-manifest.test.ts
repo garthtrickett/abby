@@ -8,12 +8,13 @@ type Scenario = {
   id: string;
   requirements: string[];
   fixtureFamily: string;
-  fixtureState: "planned" | "textImplemented" | "fullImplemented";
+  fixtureState: "planned" | "textImplemented" | "syntheticImplemented" | "fullImplemented";
   intendedCompositions: string[];
   earliestPhase: number;
   providerProfile: string;
   fullCallEvidence: Evidence;
   textEvidence?: Evidence;
+  syntheticVoiceEvidence?: Evidence;
 };
 type Manifest = {
   version: string;
@@ -31,12 +32,12 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
   const manifest = JSON.parse(read("phase-0/SCENARIO_MANIFEST.json")) as Manifest;
   const design = read("TECHNICAL_DESIGN.md");
   const rows = [...design.matchAll(/^\| `(E2E-\d{3})` \| (.*?) \| (FR-\d{2}(?:, FR-\d{2})*) \|$/gm)];
-  assert.equal(manifest.version, "0.2");
+  assert.equal(manifest.version, "0.3");
   assert.equal(manifest.source, "TECHNICAL_DESIGN.md Section 11");
   assert.equal(manifest.fixtureIdPattern, "fixture-{lowercase scenario id}");
-  assert.equal(rows.length, 127);
+  assert.equal(rows.length, 128);
   assert.deepEqual(manifest.scenarios.map(scenario => scenario.id),
-    Array.from({ length: 127 }, (_, index) => `E2E-${String(index + 1).padStart(3, "0")}`));
+    Array.from({ length: 128 }, (_, index) => `E2E-${String(index + 1).padStart(3, "0")}`));
   const ids = new Set(manifest.scenarios.map(scenario => scenario.id));
   for (const [index, scenario] of manifest.scenarios.entries()) {
     const row = rows[index]!;
@@ -50,7 +51,8 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
       ["standalone", "embedded", "cutover"].includes(composition)));
     assert.equal(new Set(scenario.intendedCompositions).size, scenario.intendedCompositions.length);
     assert.ok(["reference", "cliniko"].includes(scenario.providerProfile));
-    for (const evidence of [scenario.fullCallEvidence, scenario.textEvidence].filter(Boolean) as Evidence[]) {
+    for (const evidence of [scenario.fullCallEvidence, scenario.textEvidence,
+      scenario.syntheticVoiceEvidence].filter(Boolean) as Evidence[]) {
       assert.ok(["planned", "passed"].includes(evidence.status));
       assert.equal(evidence.status === "planned", evidence.testFiles.length === 0);
       for (const path of evidence.testFiles) {
@@ -64,6 +66,8 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
       assert.ok(scenario.fullCallEvidence.testFiles.every(path => path.startsWith("test/e2e/")));
     } else if (scenario.textEvidence?.status === "passed") {
       assert.equal(scenario.fixtureState, "textImplemented");
+    } else if (scenario.syntheticVoiceEvidence?.status === "passed") {
+      assert.equal(scenario.fixtureState, "syntheticImplemented");
     } else assert.equal(scenario.fixtureState, "planned");
   }
   for (let number = 1; number <= 22; number += 1) {
