@@ -28,8 +28,8 @@ export type ClinikoVoiceRoute = Readonly<{
   availability: ClinikoAvailabilityReader;
   /** Today's YYYY-MM-DD date in this clinic's local time zone. */
   clinicDate: () => string;
-  /** Clinic-owned approval is required before callers are offered keypad availability. */
-  keypadAvailabilityGreeting?: ApprovedGreeting;
+  /** Required clinic approval: Realtime finals cannot yet authorize speech-led availability. */
+  keypadAvailabilityGreeting: ApprovedGreeting;
 }>;
 
 const keypadInstructions = "Press 1 for possible times today. Press 2 for possible times tomorrow.";
@@ -73,18 +73,18 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       throw new RangeError("invalid clinic voice route");
     }
     const greeting = route.keypadAvailabilityGreeting;
-    if (greeting && (greeting.approved !== true || !greeting.scope ||
+    if (!greeting || greeting.approved !== true || !greeting.scope ||
         greeting.scope.tenantId !== route.scope.tenantId ||
         greeting.scope.clinicId !== route.scope.clinicId ||
         greeting.scope.locationId !== route.scope.locationId ||
         !greeting.version?.trim() || greeting.version.length > 256 ||
         !greeting.ownerRef?.trim() || greeting.ownerRef.length > 256 ||
         typeof greeting.approvedText !== "string" || greeting.approvedText.length > 2_000 ||
-        !greeting.approvedText.includes(keypadInstructions))) {
+        !greeting.approvedText.includes(keypadInstructions)) {
       throw new RangeError("invalid keypad availability greeting");
     }
     routes.set(route.dialedNumber, { ...route, scope: structuredClone(route.scope),
-      ...(greeting ? { keypadAvailabilityGreeting: structuredClone(greeting) } : {}) });
+      keypadAvailabilityGreeting: structuredClone(greeting) });
   }
   if (routes.size !== fallbackNumbers.length) throw new RangeError("incomplete clinic voice routes");
   const ingress = new TwilioSignedIngress(twilio);
@@ -133,10 +133,8 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     if (!route || stream.event.key.accountRef !== twilio.accountSid) throw new Error("clinic route unavailable");
     const composed = await createStandaloneTransientVoiceCall({ db: config.db, routingHost,
       stream, send, closeTransport: close, synthesis, availability: route.availability,
-      ...(route.keypadAvailabilityGreeting ? {
-        approvedGreeting: route.keypadAvailabilityGreeting,
-        keypadAvailabilityDate: (digit: string) => keypadAvailabilityDate(route.clinicDate, digit),
-      } : {}),
+      approvedGreeting: route.keypadAvailabilityGreeting,
+      keypadAvailabilityDate: (digit: string) => keypadAvailabilityDate(route.clinicDate, digit),
       resolveIntent: resolvers.get(route.dialedNumber)!, readiness,
       transcriptionFactory: sessionId => new OpenAIRealtimeTranscription({
         apiKey: openaiApiKey, sessionId,

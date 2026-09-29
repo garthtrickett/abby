@@ -70,7 +70,9 @@ test("E2E-143 standalone voice server refuses unsafe storage before opening a li
         publicStreamUrl: "wss://calls.example.test/twilio/media/",
         fallbackNumbers: { "+6125550199": "+6125550188" }, bindingKey: Buffer.alloc(32, 0x46) },
       routes: [{ dialedNumber: "+6125550199", scope, routeVersion: "v1",
-        availability: availability.value, clinicDate: () => "2026-09-29" }],
+        availability: availability.value, clinicDate: () => "2026-09-29",
+        keypadAvailabilityGreeting: { scope, version: "startup-keypad-v1", ownerRef: "synthetic-clinic-approval",
+          approved: true, approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],
       openai: { apiKey: "synthetic-openai-key", intentModel: "configured-model" },
       readiness: async () => ok(true),
     });
@@ -300,8 +302,9 @@ test("E2E-151 signed standalone call switches speech models before the first out
     const streamUrl = "wss://calls.example.test/twilio/media/";
     const now = "2026-09-29T10:00:00.000Z";
     const scope = { tenantId: `fallback-${randomUUID().slice(0, 8)}`, clinicId: "clinic", locationId: "main" };
-    const expectedGreeting = referenceDefaultPolicy(scope).greeting;
-    assert.ok(expectedGreeting);
+    const expectedGreeting = { scope, version: "fallback-keypad-v1",
+      ownerRef: "synthetic-clinic-approval", approved: true as const,
+      approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." };
     const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable",
       async () => ok(true), false, "standaloneMinimal");
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
@@ -316,7 +319,7 @@ test("E2E-151 signed standalone call switches speech models before the first out
         fallbackNumbers: { [number]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x47),
         now: () => new Date(now) },
       routes: [{ dialedNumber: number, scope, routeVersion: "v1", availability: availability.value,
-        clinicDate: () => "2026-09-29" }],
+        clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: expectedGreeting }],
       openai: { apiKey: "synthetic-openai-key", intentModel: "configured-model",
         speechFallbackModel: "tts-1", speechPrimaryFirstChunkMs: 100,
         fetch: (async (url, init) => {
