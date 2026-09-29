@@ -181,6 +181,12 @@ export class ConnectedVoiceCall {
     }
   }
 
+  renew(now: string): Promise<Result<PendingLocationCall | CallState, ConnectedVoiceFailure>> {
+    if (this.closing || this.stopped || this.terminal) return Promise.resolve(err({ kind: "disconnected" }));
+    if (!this.begun) return Promise.resolve(err({ kind: "notStarted" }));
+    return this.call.renew(now);
+  }
+
   private async alreadySettled(event: PlaybackCompletion): Promise<PendingLocationCall | CallState | undefined> {
     if (!this.scope) {
       const pending = await this.ledger.findPendingLocation(this.callId);

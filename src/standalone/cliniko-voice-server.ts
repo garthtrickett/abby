@@ -94,11 +94,11 @@ export function createStandaloneClinikoVoiceServer(config: ClinikoVoiceServerCon
       model: config.openai.intentModel, clinicDate: route.clinicDate,
       ...(config.openai.fetch ? { fetch: config.openai.fetch } : {}) })] as const));
 
-  return createTwilioIngressServer({ ingress, async createCall(stream, send) {
+  return createTwilioIngressServer({ ingress, async createCall(stream, send, close) {
     const route = routes.get(stream.event.dialedNumber);
     if (!route || stream.event.key.accountRef !== twilio.accountSid) throw new Error("clinic route unavailable");
     const composed = await createStandaloneTransientVoiceCall({ db: config.db, routingHost,
-      stream, send, synthesis, availability: route.availability,
+      stream, send, closeTransport: close, synthesis, availability: route.availability,
       ...(route.keypadAvailabilityGreeting ? {
         approvedGreeting: route.keypadAvailabilityGreeting,
         keypadAvailabilityDate: (digit: string) => keypadAvailabilityDate(route.clinicDate, digit),

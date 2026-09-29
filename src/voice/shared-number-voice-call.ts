@@ -134,6 +134,17 @@ export class SharedNumberVoiceCall {
     return err({ kind: "sessionUnknown" });
   }
 
+  async renew(now: string): Promise<Result<PendingLocationCall | CallState, SharedVoiceFailure>> {
+    if (this.closing || this.terminal) return err({ kind: "disconnected" });
+    if (this.inFlight) return err({ kind: "deliveryBlocked" });
+    const done = this.trackTransition();
+    try {
+      if (this.prelocation) return await this.prelocation.renew();
+      if (this.full) return await this.full.renew(now);
+      return err({ kind: "sessionUnknown" });
+    } finally { done(); }
+  }
+
   async finishTurn(now: string): Promise<Result<SharedVoiceTurn, SharedVoiceFailure>> {
     if (this.closing || this.terminal) return err({ kind: "disconnected" });
     if (this.inFlight) return err({ kind: "deliveryBlocked" });

@@ -2,14 +2,15 @@ import { err } from "../core/model.ts";
 import type { CallState, Result } from "../core/model.ts";
 import { systemTimer } from "./timer.ts";
 import type { TimerPort } from "./timer.ts";
-import type { VoiceSession, VoiceSessionFailure } from "./voice-session.ts";
+import type { VoiceSessionFailure } from "./voice-session.ts";
 
-export type LeaseRenewalFailure = VoiceSessionFailure | Readonly<{ kind: "renewalUnavailable"; stage: "clock" | "session" }>;
+export type LeaseRenewalFailure<Failure extends Readonly<{ kind: string }> = VoiceSessionFailure> =
+  Failure | Readonly<{ kind: "renewalUnavailable"; stage: "clock" | "session" }>;
 
 /** One renewal timer per attached call; the host starts it after attach and stops it on disconnect. */
-export class VoiceLeaseLoop {
-  private readonly session: Pick<VoiceSession, "renew">;
-  private readonly onAttempt: (outcome: Result<CallState, LeaseRenewalFailure>) => void;
+export class VoiceLeaseLoop<State = CallState, Failure extends Readonly<{ kind: string }> = VoiceSessionFailure> {
+  private readonly session: Readonly<{ renew(now: string): Promise<Result<State, Failure>> }>;
+  private readonly onAttempt: (outcome: Result<State, LeaseRenewalFailure<Failure>>) => void;
   private readonly clock: () => string;
   private readonly timer: TimerPort;
   private readonly intervalMs: number;
@@ -19,8 +20,8 @@ export class VoiceLeaseLoop {
   private inFlight: Promise<void> | undefined;
 
   constructor(
-    session: Pick<VoiceSession, "renew">,
-    onAttempt: (outcome: Result<CallState, LeaseRenewalFailure>) => void,
+    session: Readonly<{ renew(now: string): Promise<Result<State, Failure>> }>,
+    onAttempt: (outcome: Result<State, LeaseRenewalFailure<Failure>>) => void,
     options: Readonly<{ clock?: () => string; timer?: TimerPort; intervalMs?: number; retryMs?: number }> = {},
   ) {
     const intervalMs = options.intervalMs ?? 10_000;
@@ -47,7 +48,7 @@ export class VoiceLeaseLoop {
   private async tick(): Promise<void> {
     this.scheduled = undefined;
     if (!this.running) return;
-    let outcome: Result<CallState, LeaseRenewalFailure>;
+    let outcome: Result<State, LeaseRenewalFailure<Failure>>;
     let now: string;
     try { now = this.clock(); }
     catch { now = ""; }

@@ -15,6 +15,7 @@ import { createTwilioIngressServer } from "../../src/voice/twilio-ingress-server
 import { TwilioConnectedCall } from "../../src/voice/twilio-connected-call.ts";
 import { TwilioSignedIngress } from "../../src/voice/twilio-signed-ingress.ts";
 import { VoiceSession } from "../../src/voice/voice-session.ts";
+import type { TimerPort } from "../../src/voice/timer.ts";
 
 const accountSid = `AC${"1".repeat(32)}`;
 const callSid = `CA${"2".repeat(32)}`;
@@ -26,15 +27,30 @@ const now = "2026-09-29T10:00:00.000Z";
 const number = "+6125550199";
 const scope = { tenantId: "signed-voice", clinicId: "clinic", locationId: "main" };
 
-test("E2E-132 local signed Twilio call admits, proves greeting playback, accepts media, and disconnects", async () => {
+test("E2E-132 and E2E-141 signed call renews beyond its first lease and closes the socket on lease loss",
+  { timeout: 20_000 }, async () => {
+  const startedMs = Date.parse(now);
+  let currentMs = startedMs;
+  const clock = () => new Date(currentMs).toISOString();
+  const pending = new Map<number, () => void>();
+  let nextTimer = 0;
+  const leaseTimer: TimerPort = {
+    schedule(callback) { const handle = ++nextTimer; pending.set(handle, callback); return handle; },
+    cancel(handle) { pending.delete(handle as number); },
+  };
+  const fireLeaseTimer = () => {
+    const [handle, callback] = pending.entries().next().value as [number, () => void];
+    pending.delete(handle);
+    callback();
+  };
   const ledger = new MemoryLedger();
   const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
   assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "admin")).ok);
   const router = new ClinicPolicyRouter(new ReferenceNumberRoutingHost([
     { accountRef: accountSid, dialedNumber: number, ...scope, routeVersion: "v1" },
   ]), policy);
-  const admission = new CallAdmissionService(ledger, router.resolve, () => now, async () => ok(true));
-  const intake = new SharedNumberIntakeService(ledger, router, admission, () => now);
+  const admission = new CallAdmissionService(ledger, router.resolve, clock, async () => ok(true));
+  const intake = new SharedNumberIntakeService(ledger, router, admission, clock);
   const reception = new TextReception(ledger, policy, new ReferenceClinicHost([], []));
   const ingress = new TwilioSignedIngress({ accountSid, authToken, publicWebhookUrl: webhookUrl,
     publicStreamUrl: streamUrl, fallbackNumbers: { [number]: "+6125550188" },
@@ -42,11 +58,13 @@ test("E2E-132 local signed Twilio call admits, proves greeting playback, accepts
   let created = 0;
   let playedResolve: (() => void) | undefined;
   let turnResolve: (() => void) | undefined;
-  let stoppedResolve: (() => void) | undefined;
+  let renewalResolve!: (kind: string) => void;
+  const renewal = new Promise<string>(resolve => { renewalResolve = resolve; });
+  let leaseLostResolve!: (kind: string) => void;
+  const leaseLost = new Promise<string>(resolve => { leaseLostResolve = resolve; });
   const played = new Promise<void>(resolve => { playedResolve = resolve; });
   const turn = new Promise<void>(resolve => { turnResolve = resolve; });
-  const stopped = new Promise<void>(resolve => { stoppedResolve = resolve; });
-  const server = createTwilioIngressServer({ ingress, async createCall(stream, send) {
+  const server = createTwilioIngressServer({ ingress, async createCall(stream, send, close) {
     created += 1;
     assert.equal(stream.event.presentedCallerNumber, "+6145550101");
     const call = new TwilioConnectedCall({ event: stream.event, sessionId: "session", ledger, intake,
@@ -58,13 +76,18 @@ test("E2E-132 local signed Twilio call admits, proves greeting playback, accepts
           utteranceId: "one", text: "Please speak with staff", quality: "clear" }]); },
       },
       synthesis: { async *stream() { yield new Uint8Array(640); } },
-      mediaOptions: { silenceMs: 100 }, streamStartedAt: stream.streamStartedAt, now: () => now, send,
+      mediaOptions: { silenceMs: 100 }, streamStartedAt: stream.streamStartedAt,
+      now: clock, send, leaseTimer, closeTransport: close,
+      onLeaseAttempt: outcome => {
+        const kind = outcome.kind === "renewed" ? "renewed" : outcome.reason;
+        if (kind === "renewed") renewalResolve(kind);
+        if (kind === "leaseLost") leaseLostResolve(kind);
+      },
     });
     return { async receive(raw: string) {
       const result = await call.receive(raw);
       if (result.ok && result.value.kind === "played") playedResolve?.();
       if (result.ok && result.value.kind === "media" && result.value.value.kind === "turnCompleted") turnResolve?.();
-      if (result.ok && result.value.kind === "stopped") stoppedResolve?.();
       return result;
     }, disconnect: () => call.disconnect() };
   } });
@@ -110,18 +133,27 @@ test("E2E-132 local signed Twilio call admits, proves greeting playback, accepts
     const after = await ledger.read(callId, scope);
     assert.ok(after.ok);
     assert.equal(Object.values(after.value.presentations)[0]?.status, "played");
+    currentMs = startedMs + 20_000;
+    fireLeaseTimer();
+    assert.equal(await renewal, "renewed");
+    const extended = await ledger.read(callId, scope);
+    assert.ok(extended.ok);
+    assert.equal(extended.value.sessionLease?.version, 2);
+    assert.equal(extended.value.sessionLease?.expiresAt, new Date(startedMs + 50_000).toISOString());
+    currentMs = startedMs + 35_000;
     for (let index = 0; index < 7; index += 1) socket.send(JSON.stringify({ event: "media",
       sequenceNumber: String(index + 3), streamSid, media: { track: "inbound", chunk: String(index + 1),
-        timestamp: String(index * 20), payload: Buffer.alloc(160, index < 2 ? 0x9f : 0xff).toString("base64") } }));
+        timestamp: String(35_000 + index * 20), payload: Buffer.alloc(160, index < 2 ? 0x9f : 0xff).toString("base64") } }));
     await turn;
     const handled = await ledger.read(callId, scope);
     assert.ok(handled.ok);
     assert.equal(handled.value.processedTurnIds.length, 1);
-    socket.send(JSON.stringify({ event: "stop", sequenceNumber: "10", streamSid, stop: { accountSid, callSid } }));
-    await stopped;
-    const ended = await ledger.read(callId, scope);
-    assert.ok(ended.ok);
-    assert.equal(ended.value.lifecycle, "ended");
+    const closed = once(socket, "close");
+    currentMs = startedMs + 60_000;
+    fireLeaseTimer();
+    assert.equal(await leaseLost, "leaseLost");
+    assert.equal((await closed)[0], 1008);
+    assert.equal(pending.size, 0);
   } finally {
     socket?.terminate();
     server.close();
