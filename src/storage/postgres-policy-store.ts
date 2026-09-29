@@ -27,10 +27,10 @@ function decodePolicy(value: unknown, scope: LocationScope, version: number): Re
 export class PostgresPolicyStore implements PolicyStore {
   private readonly db: Kysely<Database>;
   private readonly defaultPolicy: (scope: LocationScope) => CallPolicy;
-  private readonly hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly">;
+  private readonly hostBookingMode: CapabilityMode;
   private readonly readiness: AutomationReadiness;
 
-  constructor(db: Kysely<Database>, defaultPolicy: (scope: LocationScope) => CallPolicy, hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "requestOnly", readiness: AutomationReadiness = unprovenReadiness) {
+  constructor(db: Kysely<Database>, defaultPolicy: (scope: LocationScope) => CallPolicy, hostBookingMode: CapabilityMode = "unavailable", readiness: AutomationReadiness = unprovenReadiness) {
     this.db = db;
     this.defaultPolicy = defaultPolicy;
     this.hostBookingMode = hostBookingMode;
