@@ -7,6 +7,7 @@ import { ARCHIVE_SECTIONS } from "../portability/archive-envelope.ts";
 import type { ArchiveEnvelope, ArchiveSection } from "../portability/archive-envelope.ts";
 import type Database from "./generated/Database.ts";
 import { validWriteStopReason } from "./operational-reasons.ts";
+import { scanPortableTextCalls } from "./portable-text-call-scan.ts";
 
 export type ConfigArchiveRequest = Readonly<{
   scope: LocationScope;
@@ -215,12 +216,15 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
       const migration = await sql<{ name: string }>`select name from kysely_migration order by name desc limit 1`.execute(trx);
       const schemaVersion = migration.rows[0]?.name;
       if (!validRef(schemaVersion)) throw new ExportAbort("storageCorrupt");
-      const calls = await sql<{ found: number }>`select 1 as found from calls where tenant_id = ${sourceTenantId} limit 1`.execute(trx);
       const pending = await sql<{ found: number }>`select 1 as found from pending_location_calls where tenant_id = ${sourceTenantId} limit 1`.execute(trx);
       const inflight = await sql<{ found: number }>`select 1 as found from clinic_write_stop_inflight
         where tenant_id = ${sourceTenantId} limit 1`.execute(trx);
-      if (calls.rows.length || pending.rows.length) throw new ExportAbort("callsRequireRetention");
+      if (pending.rows.length) throw new ExportAbort("callsRequireRetention");
       if (inflight.rows.length) throw new ExportAbort("unresolvedWork");
+      const callScan = await scanPortableTextCalls(trx, sourceTenantId);
+      if (!callScan.ok) throw new ExportAbort(callScan.error.kind);
+      if (mode !== "standaloneMinimal" && callScan.value.count > 0) throw new ExportAbort("callsRequireRetention");
+      if ([...callScan.value.locationKeys].some(key => !byLocation.has(key))) throw new ExportAbort("scopeIncomplete");
       const observedLocations = await sql<{ clinic_id: string; location_id: string }>`select clinic_id, location_id from clinic_settings
         where tenant_id = ${sourceTenantId} union select clinic_id, location_id from clinic_knowledge_events
         where tenant_id = ${sourceTenantId}`.execute(trx);
@@ -251,7 +255,7 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
           where tenant_id = ${sourceTenantId} and status in ('approved', 'revoked')
           order by clinic_id, location_id, source_ref, version`.execute(trx)).rows;
       return { schemaVersion, settings: settings.rows, automation: automation.rows, stops: stops.rows,
-        knowledge, sourceFenceVersion: request.expectedFenceVersion };
+        knowledge, omittedTextCalls: callScan.value.count, sourceFenceVersion: request.expectedFenceVersion };
     });
     const common = (recordId: string) => ({ recordVersion: 1 as const, recordId, sourceTenantId });
     const locations: RecordData[] = mappings.map(mapping => ({
@@ -315,7 +319,8 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
     const manifest = { archiveVersion: 1, archiveId: request.archiveId, createdAt: request.createdAt,
       sourceSystem: "abby-postgres", sourceSchemaVersion: snapshot.schemaVersion, sourceTenantId,
       ...(snapshot.sourceFenceVersion === undefined ? {} : { sourceFenceVersion: snapshot.sourceFenceVersion }),
-      exportRequestRef: requestRef, omittedCalls: { retentionExpired: 0, consentDenied: 0, notRetained: 0, activeCall: 0 },
+      exportRequestRef: requestRef, omittedCalls: { retentionExpired: 0, consentDenied: 0,
+        notRetained: snapshot.omittedTextCalls, activeCall: 0 },
       locationMappings: mappings.map(mapping => ({ sourceScope: mapping.sourceScope,
         targetScope: mapping.targetScope, provenance: mapping.mappingProvenance })),
       sections: Object.fromEntries(ARCHIVE_SECTIONS.map(name => [name, { version: 1, recordCount: records[name].length,

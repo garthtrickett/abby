@@ -4,6 +4,7 @@ import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import type Database from "./generated/Database.ts";
 import { validPortabilityFenceReason } from "./operational-reasons.ts";
+import { scanPortableTextCalls } from "./portable-text-call-scan.ts";
 
 export type PortabilityFenceAction = "freeze" | "release";
 export type PortabilityFenceRequest = Readonly<{
@@ -107,8 +108,12 @@ export class PostgresPortabilityFence {
             exists(select 1 from clinic_write_stop_inflight where tenant_id = ${request.tenantId}) as has_inflight`.execute(trx);
           const observed = pending.rows[0];
           if (!observed) throw new Error("portability preflight unavailable");
-          if (observed.has_calls || observed.has_pending) return err({ kind: "callsRequireRetention" });
+          if (observed.has_pending) return err({ kind: "callsRequireRetention" });
           if (observed.has_inflight) return err({ kind: "unresolvedWork" });
+          if (observed.has_calls) {
+            const scan = await scanPortableTextCalls(trx, request.tenantId);
+            if (!scan.ok) return err({ kind: scan.error.kind });
+          }
           if (!current) {
             const inserted = await sql<FenceRow>`insert into tenant_portability_fences (tenant_id)
               values (${request.tenantId}) returning tenant_id, version, frozen, last_request_ref`.execute(trx);

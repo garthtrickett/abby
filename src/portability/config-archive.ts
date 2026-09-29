@@ -11,6 +11,7 @@ export type ConfigArchiveData = Readonly<{
   sourceSchemaVersion: string;
   sourceFenceVersion?: number;
   sectionManifests: Readonly<Record<ArchiveSection, ArchiveSectionManifest>>;
+  omittedCalls: OmittedCalls;
   sourceScope: LocationScope;
   targetScope: LocationScope;
   timeZone: string;
@@ -32,6 +33,7 @@ export type TenantConfigArchiveData = Readonly<{
   sourceSchemaVersion: string;
   sourceFenceVersion?: number;
   sectionManifests: Readonly<Record<ArchiveSection, ArchiveSectionManifest>>;
+  omittedCalls: OmittedCalls;
   sourceTenantId: string;
   targetTenantId: string;
   locations: readonly Readonly<{
@@ -47,6 +49,13 @@ export type TenantConfigArchiveData = Readonly<{
     automation: ConfigArchiveData["automation"];
     writeStops: ConfigArchiveData["writeStops"];
   }>[];
+}>;
+
+export type OmittedCalls = Readonly<{
+  retentionExpired: 0;
+  consentDenied: 0;
+  notRetained: number;
+  activeCall: 0;
 }>;
 
 export type PortablePublishedKnowledge = Readonly<{
@@ -225,9 +234,12 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
     const metadata = object(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(manifestBytes)), "locations");
     ref(metadata.exportRequestRef, "locations");
     const omissions = object(metadata.omittedCalls, "calls");
-    if (["retentionExpired", "consentDenied", "notRetained", "activeCall"].some(name => omissions[name] !== 0)) {
+    if (Object.keys(omissions).sort().join(",") !== "activeCall,consentDenied,notRetained,retentionExpired" ||
+        omissions.retentionExpired !== 0 || omissions.consentDenied !== 0 || omissions.activeCall !== 0) {
       throw new InvalidConfigArchive("calls");
     }
+    const omittedCalls: OmittedCalls = { retentionExpired: 0, consentDenied: 0,
+      notRetained: integer(omissions.notRetained, "calls"), activeCall: 0 };
     const locationRows = lines(sections.locations, "locations");
     if (locationRows.length < 1 || locationRows.length > 16) throw new InvalidConfigArchive("locations");
     const declared = metadata.locationMappings;
@@ -348,7 +360,8 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
       createdAt: verified.manifest.createdAt, sourceSchemaVersion: verified.manifest.sourceSchemaVersion,
       ...(verified.manifest.sourceFenceVersion === undefined ? {} : { sourceFenceVersion: verified.manifest.sourceFenceVersion }),
       sectionManifests: verified.manifest.sections, sourceTenantId: verified.manifest.sourceTenantId,
-      targetTenantId: expectedTargetTenantId, locations: [...locations.values()], clinics: [...clinics.values()] });
+      targetTenantId: expectedTargetTenantId, omittedCalls,
+      locations: [...locations.values()], clinics: [...clinics.values()] });
   } catch (cause) {
     return err({ kind: "invalidConfigArchive", ...(cause instanceof InvalidConfigArchive && cause.section ? { section: cause.section } : {}) });
   }
@@ -370,7 +383,7 @@ export async function decodeConfigArchive(input: ArchiveEnvelope, expectedTarget
   return ok({ archiveId: data.archiveId, manifestDigest: data.manifestDigest, createdAt: data.createdAt,
     sourceSchemaVersion: data.sourceSchemaVersion,
     ...(data.sourceFenceVersion === undefined ? {} : { sourceFenceVersion: data.sourceFenceVersion }),
-    sectionManifests: data.sectionManifests,
+    sectionManifests: data.sectionManifests, omittedCalls: data.omittedCalls,
     sourceScope: location.sourceScope, targetScope: location.targetScope, timeZone: location.timeZone,
     mappingProvenance: location.mappingProvenance, policies: location.policies, automation: clinic.automation,
     writeStops: clinic.writeStops, knowledge: location.knowledge });
