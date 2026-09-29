@@ -33,6 +33,10 @@ function fakeProvider(options: {
   changingTotal?: boolean;
   oversized?: boolean;
   invalidTimeZone?: boolean;
+  unrelated?: "practitioner" | "appointmentType";
+  inactivePractitioner?: boolean;
+  incompleteRelationship?: boolean;
+  pagedRelationship?: boolean;
 } = {}) {
   const requests: RequestRecord[] = [];
   const starts = options.starts ?? ["2026-10-01T09:00:00Z", "2026-10-01T10:00:00Z"];
@@ -44,8 +48,18 @@ function fakeProvider(options: {
     const path = url.pathname;
     if (path === "/v1/businesses/11") return json({ id: options.malformed ? "99" : "11", show_in_online_bookings: options.disabled !== "business",
       time_zone_identifier: options.invalidTimeZone ? "invalid/timezone" : "Australia/Sydney" });
-    if (path === "/v1/practitioners/22") return json({ id: "22", show_in_online_bookings: options.disabled !== "practitioner" });
+    if (path === "/v1/practitioners/22") return json({ id: "22", active: !options.inactivePractitioner,
+      show_in_online_bookings: options.disabled !== "practitioner" });
     if (path === "/v1/appointment_types/33") return json({ id: "33", show_in_online_bookings: options.disabled !== "appointmentType" });
+    if (path === "/v1/businesses/11/practitioners") {
+      if (options.pagedRelationship) return json({ total_entries: 101,
+        practitioners: url.searchParams.get("page") === "1"
+          ? Array.from({ length: 100 }, (_, index) => ({ id: String(index + 100) })) : [{ id: "22" }] });
+      return json({ total_entries: options.incompleteRelationship ? 2 : 1,
+        practitioners: [{ id: options.unrelated === "practitioner" ? "99" : "22" }] });
+    }
+    if (path === "/v1/practitioners/22/appointment_types") return json({ total_entries: 1,
+      appointment_types: [{ id: options.unrelated === "appointmentType" ? "99" : "33" }] });
     if (path.endsWith("/available_times")) {
       const page = Number(url.searchParams.get("page"));
       const slice = starts.slice((page - 1) * 100, page * 100).map(appointment_start => ({ appointment_start }));
@@ -71,7 +85,7 @@ test("Cliniko availability reads the bound shard and all pages without creating 
   assert.equal(result.timeZone, "Australia/Sydney");
   assert.equal(result.sourceRef, "cliniko:11:22:33");
   assert.equal(Number.isFinite(Date.parse(result.observedAt)), true);
-  assert.equal(fake.requests.length, 5);
+  assert.equal(fake.requests.length, 7);
   assert.deepEqual(fake.requests.filter(request => request.url.pathname.endsWith("/available_times")).map(request => request.url.searchParams.get("page")), ["1", "2"]);
   for (const request of fake.requests) {
     assert.equal(request.url.origin, "https://api.au5.cliniko.com");
@@ -90,6 +104,35 @@ for (const disabled of ["business", "practitioner", "appointmentType"] as const)
     assert.equal(fake.requests.some(request => request.url.pathname.endsWith("/available_times")), false);
   });
 }
+
+test("Cliniko refuses availability for an unrelated or inactive configured practitioner and unrelated appointment type", async () => {
+  for (const [options, reason] of [
+    [{ unrelated: "practitioner" }, "practitioner"],
+    [{ unrelated: "appointmentType" }, "appointmentType"],
+    [{ inactivePractitioner: true }, "practitioner"],
+  ] as const) {
+    const fake = fakeProvider(options);
+    const reader = value(ClinikoAvailabilityReader.create(config, fake.port));
+    assert.deepEqual(value(await reader.list(scope, "2026-10-01", "2026-10-02")), { kind: "notEligible", reason });
+    assert.equal(fake.requests.some(request => request.url.pathname.endsWith("/available_times")), false);
+  }
+});
+
+test("Cliniko incomplete relationship pagination fails closed before any offer read", async () => {
+  const fake = fakeProvider({ incompleteRelationship: true });
+  const reader = value(ClinikoAvailabilityReader.create(config, fake.port));
+  failure(await reader.list(scope, "2026-10-01", "2026-10-02"), "malformed");
+  assert.equal(fake.requests.some(request => request.url.pathname.endsWith("/available_times")), false);
+});
+
+test("Cliniko finds a configured practitioner on a later bounded relationship page", async () => {
+  const fake = fakeProvider({ pagedRelationship: true });
+  const reader = value(ClinikoAvailabilityReader.create(config, fake.port));
+  const result = value(await reader.list(scope, "2026-10-01", "2026-10-02"));
+  assert.equal(result.kind, "times");
+  assert.deepEqual(fake.requests.filter(request => request.url.pathname === "/v1/businesses/11/practitioners")
+    .map(request => request.url.searchParams.get("page")), ["1", "2"]);
+});
 
 test("Cliniko scope, configuration, and date bounds fail before an HTTP request", async () => {
   const fake = fakeProvider();

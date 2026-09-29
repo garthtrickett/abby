@@ -216,7 +216,8 @@ async function availabilityTurn(app: Awaited<ReturnType<typeof fixture>>, second
   return value(await app.session.finishTurn(at(seconds + 1)));
 }
 
-function fakeClinikoReader(scope: LocationScope, requests: URL[], options: { businessOnline?: boolean; starts?: readonly string[]; status?: number; timeZone?: string; observedAt?: string } = {}): AvailabilityHost {
+function fakeClinikoReader(scope: LocationScope, requests: URL[], options: { businessOnline?: boolean; starts?: readonly string[]; status?: number; timeZone?: string; observedAt?: string;
+  unrelated?: "practitioner" | "appointmentType" } = {}): AvailabilityHost {
   const fetchPort = (async (input: RequestInfo | URL) => {
     const url = new URL(String(input));
     requests.push(url);
@@ -225,8 +226,12 @@ function fakeClinikoReader(scope: LocationScope, requests: URL[], options: { bus
     let body: unknown;
     if (path === "/v1/businesses/11") body = { id: "11", show_in_online_bookings: options.businessOnline !== false,
       time_zone_identifier: options.timeZone ?? "Australia/Sydney" };
-    else if (path === "/v1/practitioners/22") body = { id: "22", show_in_online_bookings: true };
+    else if (path === "/v1/practitioners/22") body = { id: "22", active: true, show_in_online_bookings: true };
     else if (path === "/v1/appointment_types/33") body = { id: "33", show_in_online_bookings: true };
+    else if (path === "/v1/businesses/11/practitioners") body = { total_entries: 1,
+      practitioners: [{ id: options.unrelated === "practitioner" ? "99" : "22" }] };
+    else if (path === "/v1/practitioners/22/appointment_types") body = { total_entries: 1,
+      appointment_types: [{ id: options.unrelated === "appointmentType" ? "99" : "33" }] };
     else if (path.endsWith("/available_times")) {
       const starts = options.starts ?? ["2026-09-30T23:00:00.000Z", "2026-10-01T00:00:00.000Z"];
       body = { total_entries: starts.length, available_times: starts.map(appointment_start => ({ appointment_start })) };
@@ -533,7 +538,7 @@ for (const kind of kinds) {
     assert.equal(state.presentations[state.pendingPresentationId!]?.kind, "notice");
     assert.match(state.callerMessages.at(-1)!, /possible times.*Australia\/Sydney/);
     assert.match(state.callerMessages.at(-1)!, /can't reserve or confirm/);
-    assert.equal(requests.length, 4);
+    assert.equal(requests.length, 6);
     assert.equal(requests.every(request => request.hostname === "api.au5.cliniko.com"), true);
     const delivery = value(await app.session.dispatchPending(at(4)));
     assert.equal(delivery.kind, "queued");
@@ -569,10 +574,12 @@ for (const kind of kinds) {
 
   for (const scenario of [
     { name: "online booking disabled", options: { businessOnline: false }, reason: "notEligible", requestCount: 1 },
+    { name: "practitioner outside business", options: { unrelated: "practitioner" as const }, reason: "notEligible", requestCount: 4 },
+    { name: "appointment type outside practitioner", options: { unrelated: "appointmentType" as const }, reason: "notEligible", requestCount: 5 },
     { name: "rate limited", options: { status: 429 }, reason: "rateLimited", requestCount: 1 },
     { name: "invalid business timezone", options: { timeZone: "invalid/timezone" }, reason: "malformed", requestCount: 1 },
-    { name: "out of requested range", options: { starts: ["2026-10-03T23:00:00.000Z"] }, reason: "invalidEvidence", requestCount: 4 },
-    { name: "stale observation", options: { observedAt: at(-60) }, reason: "invalidEvidence", requestCount: 4 },
+    { name: "out of requested range", options: { starts: ["2026-10-03T23:00:00.000Z"] }, reason: "invalidEvidence", requestCount: 6 },
+    { name: "stale observation", options: { observedAt: at(-60) }, reason: "invalidEvidence", requestCount: 6 },
   ]) {
     test(`${kind}: Cliniko ${scenario.name} fails to a spoken staff route without a write`, async () => {
       const requests: URL[] = [];
