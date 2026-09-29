@@ -263,7 +263,8 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       state.callerMessages.push("I can't verify that information right now.");
       break;
     case "availability": {
-      const presentation = availabilityPresentation(interpretation.snapshot, state.policy.scope, interpretation.from, interpretation.to, now);
+      const presentation = availabilityPresentation(interpretation.snapshot, state.policy.scope, interpretation.from, interpretation.to,
+        now, state.policy.staffWorkEnabled !== false);
       if (turn.quality !== "clear" || !presentation.ok) {
         addStaffTask(state, "systemFailure", now);
         state.callerMessages.push(staffFallbackText(state, "I can't check available times right now. I'll request staff follow-up."));

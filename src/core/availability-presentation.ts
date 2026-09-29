@@ -26,7 +26,8 @@ function localDate(value: Date, formatter: Intl.DateTimeFormat): string {
   return `${year}-${month}-${day}`;
 }
 
-export function availabilityPresentation(snapshot: AvailabilitySnapshot, scope: LocationScope, from: string, to: string, now: string): Result<AvailabilityPresentation, InvalidEvidence> {
+export function availabilityPresentation(snapshot: AvailabilitySnapshot, scope: LocationScope, from: string, to: string,
+                                         now: string, staffWorkEnabled = true): Result<AvailabilityPresentation, InvalidEvidence> {
   if (!snapshot || snapshot.kind !== "times" || snapshot.reservable !== false || !snapshot.scope ||
       snapshot.scope.tenantId !== scope.tenantId || snapshot.scope.clinicId !== scope.clinicId || snapshot.scope.locationId !== scope.locationId ||
       typeof snapshot.sourceRef !== "string" || !snapshot.sourceRef.trim() || snapshot.sourceRef.length > 256 ||
@@ -58,7 +59,9 @@ export function availabilityPresentation(snapshot: AvailabilitySnapshot, scope: 
   if (new Set(startsAt).size !== startsAt.length) return err({ kind: "invalidEvidence" });
   const shownStartsAt = startsAt.filter(start => Date.parse(start) > Date.parse(now)).sort().slice(0, 3);
   if (shownStartsAt.length === 0) return ok({ status: "empty", sourceRef: snapshot.sourceRef, timeZone: snapshot.timeZone, observedAt: snapshot.observedAt,
-    shownStartsAt, text: "I couldn't find a possible appointment time for those dates. I can request staff follow-up if you'd like." });
+    shownStartsAt, text: staffWorkEnabled
+      ? "I couldn't find a possible appointment time for those dates. I can request staff follow-up if you'd like."
+      : "I couldn't find a possible appointment time for those dates. Please contact the clinic directly." });
   const labels = shownStartsAt.map(start => spoken.format(new Date(start)));
   return ok({ status: "shown", sourceRef: snapshot.sourceRef, timeZone: snapshot.timeZone, observedAt: snapshot.observedAt, shownStartsAt,
     text: `The clinic's schedule currently shows possible times: ${labels.join("; ")} (${snapshot.timeZone}). These may change. I can't reserve or confirm an appointment from this information.` });

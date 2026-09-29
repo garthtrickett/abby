@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test, { after } from "node:test";
+import { ClinikoAvailabilityReader } from "../../src/cliniko/availability.ts";
 import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
 import { ok } from "../../src/core/model.ts";
 import type { Result } from "../../src/core/model.ts";
 import { ARCHIVE_SECTIONS } from "../../src/portability/archive-envelope.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
+import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
 import { ClinikoPhoneLookup } from "../../src/standalone/cliniko-phone-lookup.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
@@ -126,4 +128,81 @@ test("standalone phone, setting, export, and text journey retains only patient p
     { ok: true, value: { kind: "indexStale", candidateIds: [] } });
   assert.equal((await db.selectFrom("patient_phone_index").select("patient_id")
     .where("tenant_id", "=", scope.tenantId as never).execute()).length, 0);
+});
+
+test("standalone agent reads provisional Cliniko times without retaining appointments or promising staff work", async () => {
+  const suffix = randomUUID().slice(0, 8);
+  const scope = { tenantId: `availability-${suffix}`, clinicId: "clinic", locationId: "frontdesk" };
+  const now = "2026-10-01T00:00:00Z";
+  const startsAt = "2026-10-02T00:00:00.000Z";
+  const privateName = `patient-availability-name-${suffix}`;
+  const appointmentId = `patient-appointment-id-${suffix}`;
+  const callerText = `caller-availability-${suffix}`;
+  let times = [startsAt];
+  let unavailable = false;
+  const fetchPort: typeof fetch = async input => {
+    const path = new URL(String(input)).pathname;
+    if (unavailable) return Response.json({}, { status: 503 });
+    if (path === "/v1/businesses/11") return Response.json({ id: "11", show_in_online_bookings: true,
+      time_zone_identifier: "Australia/Sydney", patient_name: privateName });
+    if (path === "/v1/practitioners/22") return Response.json({ id: "22", active: true, show_in_online_bookings: true });
+    if (path === "/v1/appointment_types/33") return Response.json({ id: "33", show_in_online_bookings: true });
+    if (path === "/v1/businesses/11/practitioners") return Response.json({ total_entries: 1, practitioners: [{ id: "22" }] });
+    if (path === "/v1/practitioners/22/appointment_types") return Response.json({ total_entries: 1, appointment_types: [{ id: "33" }] });
+    if (path.endsWith("/available_times")) return Response.json({ total_entries: times.length,
+      available_times: times.map(appointment_start => ({ appointment_start, appointment_id: appointmentId })) });
+    throw new Error("unexpected Cliniko request");
+  };
+  const reader = value(ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5",
+    contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
+  fetchPort, () => now));
+  const host = new ReferenceClinicHost([], []);
+  const app = createStandaloneTextComposition(db, host, reader);
+  const agent = new CommandGateway({ actorRef: "agent", role: "agent", scope }, app.policy, app.reception);
+  assert.equal(agent.listPermitted().some(item => item.id === "availability.read.v2"), true);
+  assert.equal(agent.listPermitted().some(item => item.id === "appointments.read.v1"), false);
+  const withoutCliniko = createStandaloneTextComposition(db, host);
+  assert.equal(new CommandGateway({ actorRef: "agent", role: "agent", scope }, withoutCliniko.policy,
+    withoutCliniko.reception).listPermitted().some(item => item.id === "availability.read.v2"), false);
+  const callId = randomUUID();
+  value(await app.reception.startCall(callId, scope, now));
+  const shown = value(await app.reception.checkAvailability(scope,
+    { callId, turnId: randomUUID(), text: callerText, quality: "clear", at: now },
+    "2026-10-02", "2026-10-02", now));
+  assert.equal(shown.availabilityReads.at(-1)?.status, "shown");
+  assert.deepEqual(shown.availabilityReads.at(-1)?.shownStartsAt, [startsAt]);
+  assert.match(shown.callerMessages.at(-1) ?? "", /possible times/);
+  assert.match(shown.callerMessages.at(-1) ?? "", /can't reserve or confirm/);
+  assert.deepEqual(shown.staffItems, {});
+
+  times = [];
+  const emptyTurnId = randomUUID();
+  const empty = value(await agent.submit({ kind: "availability.read.v2",
+    turn: { callId, turnId: emptyTurnId, text: callerText, quality: "clear", at: now },
+    from: "2026-10-02", to: "2026-10-02", now }));
+  assert.equal(empty.kind, "availabilityAnswer");
+  if (empty.kind !== "availabilityAnswer") return;
+  assert.deepEqual(empty.progress.availability?.status, "empty");
+  const noTimes = value(await app.reception.checkAvailability(scope,
+    { callId, turnId: randomUUID(), text: callerText, quality: "clear", at: now },
+    "2026-10-02", "2026-10-02", now));
+  assert.match(noTimes.callerMessages.at(-1) ?? "", /contact the clinic directly/);
+  assert.doesNotMatch(noTimes.callerMessages.at(-1) ?? "", /staff follow-up/);
+  unavailable = true;
+  const failed = value(await app.reception.checkAvailability(scope,
+    { callId, turnId: randomUUID(), text: callerText, quality: "clear", at: now },
+    "2026-10-02", "2026-10-02", now));
+  assert.equal(failed.availabilityReads.at(-1)?.status, "failed");
+  assert.deepEqual(failed.staffItems, {});
+  assert.match(failed.callerMessages.at(-1) ?? "", /contact the clinic directly/);
+
+  const reloaded = createStandaloneTextComposition(db, host, reader);
+  const stored = value(await reloaded.reception.read(scope, callId));
+  assert.deepEqual(stored.availabilityReads, []);
+  assert.deepEqual(stored.callerMessages, []);
+  assert.deepEqual(stored.staffItems, {});
+  assert.deepEqual(await scanPatientDataCanaries(db, [
+    { label: "patient_name", value: privateName }, { label: "appointment_id", value: appointmentId },
+    { label: "appointment_time", value: startsAt }, { label: "caller_text", value: callerText },
+  ]), { ok: true, value: [] });
 });
