@@ -53,7 +53,7 @@ test("renewal retries a clock fault and stops when its lease is lost", async () 
 test("stopping an in-flight renewal waits for its result and prevents rescheduling", async () => {
   const { timer, pending, fire } = manualTimer();
   let finishRenew!: (result: Result<CallState, VoiceSessionFailure>) => void;
-  const loop = new VoiceLeaseLoop(
+  const loop = new VoiceLeaseLoop<CallState, VoiceSessionFailure>(
     { renew: () => new Promise(resolve => { finishRenew = resolve; }) },
     () => {},
     { timer, clock: () => "2026-09-28T10:00:00.000Z" },

@@ -5,12 +5,19 @@ import type { ConnectedVoiceCallConfig, ConnectedVoiceFailure, ConnectedVoicePro
   ConnectedVoiceStart } from "./connected-voice-call.ts";
 import { TwilioMediaStream } from "./twilio-media-stream.ts";
 import type { TwilioStreamConfig, TwilioStreamFailure } from "./twilio-media-stream.ts";
+import { VoiceLeaseLoop } from "./voice-lease-loop.ts";
+import type { TimerPort } from "./timer.ts";
 
 export type TwilioConnectedCallConfig = Omit<ConnectedVoiceCallConfig, "output"> & Readonly<{
   streamStartedAt: string;
   send: TwilioStreamConfig["send"];
   now?: () => string;
   keypadAvailabilityDate?: (digit: string) => string | undefined;
+  leaseTimer?: TimerPort;
+  closeTransport?: () => void;
+  /** PHI-free diagnostic: never exposes the renewed call state. */
+  onLeaseAttempt?: (outcome: Readonly<{ kind: "renewed" }> |
+    Readonly<{ kind: "failed"; reason: string }>) => void;
 }>;
 export type TwilioConnectedProgress =
   | Readonly<{ kind: "connected" | "ignored" | "stopped" }>
@@ -27,6 +34,8 @@ export class TwilioConnectedCall {
   private readonly call: ConnectedVoiceCall;
   private readonly now: () => string;
   private readonly keypadAvailabilityDate: ((digit: string) => string | undefined) | undefined;
+  private readonly lease: VoiceLeaseLoop<PendingLocationCall | CallState, ConnectedVoiceFailure>;
+  private readonly closeTransport: (() => void) | undefined;
   private tail: Promise<void> = Promise.resolve();
   private outstanding = 0;
   private begun = false;
@@ -46,11 +55,30 @@ export class TwilioConnectedCall {
     });
     this.now = config.now ?? (() => new Date().toISOString());
     this.keypadAvailabilityDate = config.keypadAvailabilityDate;
+    this.closeTransport = config.closeTransport;
+    this.lease = new VoiceLeaseLoop({ renew: now => this.renew(now) }, outcome => {
+      try { config.onLeaseAttempt?.(outcome.ok ? { kind: "renewed" } :
+        { kind: "failed", reason: outcome.error.kind }); } catch { /* diagnostics cannot interrupt lease loss */ }
+      if (!this.closed && !outcome.ok &&
+          (outcome.error.kind === "leaseLost" || outcome.error.kind === "sessionUnknown")) {
+        void this.failSession().catch(() => undefined);
+      }
+    }, { clock: this.now, ...(config.leaseTimer ? { timer: config.leaseTimer } : {}) });
+  }
+
+  private renew(now: string): Promise<Result<PendingLocationCall | CallState, ConnectedVoiceFailure>> {
+    const handled = this.tail.then(() => this.closed
+      ? err<ConnectedVoiceFailure>({ kind: "sessionUnknown" }) : this.call.renew(now))
+      .catch(() => err<ConnectedVoiceFailure>({ kind: "targetUnavailable" }));
+    this.tail = handled.then(() => undefined);
+    return handled;
   }
 
   private async failSession(): Promise<void> {
     this.closed = true;
+    void this.lease.stop();
     this.stream.close();
+    try { this.closeTransport?.(); } catch { /* call cleanup remains required */ }
     if (this.begun) await this.call.disconnect(this.now());
   }
 
@@ -67,6 +95,8 @@ export class TwilioConnectedCall {
       const started = await this.call.begin(this.now());
       if (!started.ok) { await this.failSession(); return started; }
       this.begun = true;
+      try { this.lease.start(); }
+      catch { await this.failSession(); return err({ kind: "streamUnavailable" }); }
       return ok({ kind: "started", value: started.value });
     }
     if (event.kind === "media") {
@@ -90,6 +120,7 @@ export class TwilioConnectedCall {
     }
     if (event.kind === "stopped") {
       this.closed = true;
+      void this.lease.stop();
       if (this.begun) {
         const ended = await this.call.disconnect(this.now());
         if (!ended.ok) return ended;
@@ -120,8 +151,10 @@ export class TwilioConnectedCall {
 
   async disconnect(): Promise<Result<PendingLocationCall | CallState | undefined, TwilioConnectedFailure>> {
     this.closed = true;
+    const stopped = this.lease.stop();
     this.stream.close();
     await this.tail;
+    await stopped;
     return this.begun ? this.call.disconnect(this.now()) : ok(undefined);
   }
 }

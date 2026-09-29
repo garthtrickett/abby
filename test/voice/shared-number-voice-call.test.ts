@@ -107,6 +107,20 @@ function fixture(kind: "memory" | "postgres", outputPort?: PlaybackPort) {
 }
 
 for (const kind of kinds) {
+  test(`E2E-141 ${kind}: shared-number location choice renews before binding`, async () => {
+    const app = fixture(kind);
+    const inbound = app.event(app.sharedNumber, "renew-choice");
+    const call = app.call(inbound);
+    const started = value(await call.begin(now));
+    assert.equal(started.kind, "locationChoice");
+    app.setTime(at(20));
+    const renewed = value(await call.renew(at(20)));
+    assert.equal("status" in renewed && renewed.status, "pending");
+    assert.equal(renewed.sessionLease?.version, 2);
+    assert.equal(renewed.sessionLease?.expiresAt, at(50));
+    value(await call.end(at(21)));
+  });
+
   test(`${kind}: caller phone reaches candidate lookup only after admission and stays out of the ledger`, async () => {
     const app = fixture(kind);
     value(await app.policy.changeAutomationEnabled(app.main, "0", true, "admin"));

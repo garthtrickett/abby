@@ -41,6 +41,7 @@ export type TransientVoiceConfig = Readonly<{
   availability?: ClinikoAvailabilityReader;
   approvedGreeting?: ApprovedGreeting;
   keypadAvailabilityDate?: (digit: string) => string | undefined;
+  closeTransport?: () => void;
   callerCandidateLookup?: CallerCandidateLookup;
   mediaOptions?: MediaTurnOptions;
   playbackOptions?: StreamedPlaybackOptions;
@@ -87,6 +88,7 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
     event: config.stream.event, streamStartedAt: config.stream.streamStartedAt,
     sessionId, ledger, intake, transcription,
     synthesis: config.synthesis, send: config.send, now,
+    ...(config.closeTransport ? { closeTransport: config.closeTransport } : {}),
     ...(config.keypadAvailabilityDate ? { keypadAvailabilityDate: config.keypadAvailabilityDate } : {}),
     ...(config.callerCandidateLookup ? { callerCandidateLookup: config.callerCandidateLookup } : {}),
     ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}),
