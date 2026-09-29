@@ -8,4 +8,6 @@ A final Abby caller turn or `appointments.read.v1` agent command uses the same `
 
 `test/cliniko/appointments.test.ts` covers HTTP filters, proof-first denial, cross-scope rows, pagination faults, cancelled rows, and typed provider failures. `test/voice/appointment-read.test.ts` runs the adapter through final-turn, presentation, playback, failure, and agent-command paths with both memory and PostgreSQL ledgers. These are synthetic E2E scenarios contributing to `E2E-003` and `E2E-015`; they do not complete either scenario's real caller or approved host verification gate.
 
+The appointment reader accepts the shared [Cliniko read budget](CLINIKO_READ_BUDGET.md) used by the other adapters for the same API user.
+
 A controlled [demo-account probe](../phase-0/CLINIKO_EVIDENCE.md) now confirms one positive adapter read against an active synthetic appointment, the business time zone, and complete fixture cleanup. Before caller use, a clinic owner must approve a verification method and disclosure wording, shared-phone ambiguity must be tested, and real media E2E must prove interruption and completed playback. Until then, this adapter is opt-in for synthetic/test compositions only.

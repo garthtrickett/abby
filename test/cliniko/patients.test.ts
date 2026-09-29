@@ -105,8 +105,8 @@ test("permission, rate limit, transport, and oversized responses have typed fail
   failure(await reader(failedFetch).findByEmailAndBirthDate(scope, email, dateOfBirth), "unavailable");
   const oversized = provider({ total_entries: 1, patients: [patient("22", { notes: "x".repeat(1_000_000) })] });
   failure(await reader(oversized.fetchPort).findByEmailAndBirthDate(scope, email, dateOfBirth), "tooManyResults");
-  const limited = provider({}, 429, { "X-RateLimit-Reset": "1790599200" });
+  const limited = provider({}, 429, { "X-RateLimit-Reset": "1893456000" });
   const result = await reader(limited.fetchPort).findByEmailAndBirthDate(scope, email, dateOfBirth);
   assert.equal(result.ok, false);
-  assert.deepEqual(result.error, { kind: "rateLimited", resetAt: new Date(1790599200 * 1000).toISOString() });
+  assert.deepEqual(result.error, { kind: "rateLimited", resetAt: new Date(1893456000 * 1000).toISOString() });
 });

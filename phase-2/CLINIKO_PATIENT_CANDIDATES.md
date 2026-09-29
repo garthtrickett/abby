@@ -6,4 +6,6 @@ Cliniko's published patient-list filters do not include phone number. Caller ID 
 
 The adapter is not wired to a caller turn or agent command. It has no setting to enable and makes no Cliniko write. `test/cliniko/patients.test.ts` exercises the complete adapter-to-fake-HTTP path, including exact filters, one/none/multiple results, no clinical-data projection, foreign-scope and invalid-clue rejection before HTTP, provider filter drift, and typed transport and permission failures. These are provider contract tests, not full-call E2E.
 
+The patient reader accepts the shared [Cliniko read budget](CLINIKO_READ_BUDGET.md) used by the other adapters for the same API user.
+
 The [controlled demo probes](../phase-0/CLINIKO_EVIDENCE.md) now prove one exact synthetic match, a wrong-birth-date miss, two matching records returning only `ambiguous`, and verified archive cleanup (C-LIVE-08/09). A clinic-approved verification and disclosure policy remains open. Only after that decision should a call-level candidate journey and its new full-call E2E scenarios be implemented and enabled.

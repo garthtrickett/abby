@@ -1,12 +1,14 @@
 import type { PatientProofHost } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { AppointmentRead, AppointmentReadFailure, LocationScope, Result } from "../core/model.ts";
+import { ClinikoReadBudget } from "./read-budget.ts";
 
 export type ClinikoAppointmentConfig = Readonly<{
   scope: LocationScope;
   apiKey: string;
   contactEmail: string;
   businessId: string;
+  rateBudget?: ClinikoReadBudget;
 }>;
 
 export type { AppointmentRead, AppointmentReadFailure } from "../core/model.ts";
@@ -71,6 +73,7 @@ export class ClinikoAppointmentReader {
   private readonly proof: PatientProofHost;
   private readonly fetchPort: typeof fetch;
   private readonly clock: () => string;
+  private readonly rateBudget: ClinikoReadBudget;
 
   private constructor(config: ClinikoAppointmentConfig, shard: string, proof: PatientProofHost, fetchPort: typeof fetch, clock: () => string) {
     this.scope = structuredClone(config.scope);
@@ -81,6 +84,7 @@ export class ClinikoAppointmentReader {
     this.proof = proof;
     this.fetchPort = fetchPort;
     this.clock = clock;
+    this.rateBudget = config.rateBudget ?? new ClinikoReadBudget();
   }
 
   static create(config: ClinikoAppointmentConfig, proof: PatientProofHost, fetchPort: typeof fetch = fetch,
@@ -90,11 +94,14 @@ export class ClinikoAppointmentReader {
         !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.contactEmail) || !config.scope ||
         [config.scope.tenantId, config.scope.clinicId, config.scope.locationId].some(part => typeof part !== "string" || !part.trim()) ||
         !validId(config.businessId) || !proof || typeof proof.verifyPatient !== "function" ||
-        typeof fetchPort !== "function" || typeof clock !== "function") return err({ kind: "invalidConfig" });
+        typeof fetchPort !== "function" || typeof clock !== "function" ||
+        (config.rateBudget !== undefined && !(config.rateBudget instanceof ClinikoReadBudget))) return err({ kind: "invalidConfig" });
     return ok(new ClinikoAppointmentReader(config, shard, proof, fetchPort, clock));
   }
 
   private async get(path: string): Promise<Result<unknown, AppointmentReadFailure>> {
+    const limited = this.rateBudget.claim();
+    if (limited) return err(limited);
     let response: Response;
     try {
       response = await this.fetchPort(`${this.baseUrl}${path}`, {
@@ -103,12 +110,7 @@ export class ClinikoAppointmentReader {
       });
     } catch { return err({ kind: "unavailable" }); }
     if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
-    if (response.status === 429) {
-      const reset = response.headers.get("X-RateLimit-Reset");
-      const seconds = reset && /^[0-9]+$/.test(reset) ? Number(reset) : NaN;
-      return err(Number.isSafeInteger(seconds) && seconds >= 0 && seconds <= 8_640_000_000_000
-        ? { kind: "rateLimited", resetAt: new Date(seconds * 1000).toISOString() } : { kind: "rateLimited" });
-    }
+    if (response.status === 429) return err(this.rateBudget.observe429(response.headers.get("X-RateLimit-Reset")));
     if (response.status >= 500) return err({ kind: "unavailable" });
     if (response.status !== 200) return err({ kind: "malformed" });
     return boundedJson(response);
