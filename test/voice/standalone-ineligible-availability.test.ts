@@ -13,6 +13,7 @@ import { createStandaloneClinikoVoiceServer } from "../../src/standalone/cliniko
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
+import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
 
 test("E2E-153 signed keypad call refuses availability when Cliniko business is not online-booking eligible",
@@ -47,7 +48,8 @@ test("E2E-153 signed keypad call refuses availability when Cliniko business is n
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
     let businessReads = 0;
     let availableTimeReads = 0;
-    const availability = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5",
+    const rateBudget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-key-au5" });
+    const availability = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5", rateBudget,
       contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
     async input => {
       const url = new URL(String(input));
@@ -65,7 +67,7 @@ test("E2E-153 signed keypad call refuses availability when Cliniko business is n
       twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
         fallbackNumbers: { [dialedNumber]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x49),
         now: () => new Date(now) },
-      routes: [{ dialedNumber, scope, routeVersion: "v1", availability: availability.value,
+      routes: [{ dialedNumber, scope, routeVersion: "v1", availability: availability.value, rateBudget,
         clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: { scope, version: "ineligible-keypad-v1",
           ownerRef: "synthetic-clinic-approval", approved: true,
           approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],

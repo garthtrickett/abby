@@ -13,6 +13,7 @@ import { createStandaloneClinikoVoiceServer } from "../../src/standalone/cliniko
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
+import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 
@@ -60,7 +61,8 @@ test("E2E-143 standalone voice server refuses unsafe storage before opening a li
     await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy)
       values (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, 0,
         ${JSON.stringify({ scope, policyVersion: "0", bookingEnabled: false, privateText })}::jsonb)`.execute(db);
-    const availability = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5",
+    const rateBudget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-key-au5" });
+    const availability = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5", rateBudget,
       contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
     async () => { throw new Error("blocked server must not call Cliniko"); });
     assert.ok(availability.ok);
@@ -70,7 +72,7 @@ test("E2E-143 standalone voice server refuses unsafe storage before opening a li
         publicStreamUrl: "wss://calls.example.test/twilio/media/",
         fallbackNumbers: { "+6125550199": "+6125550188" }, bindingKey: Buffer.alloc(32, 0x46) },
       routes: [{ dialedNumber: "+6125550199", scope, routeVersion: "v1",
-        availability: availability.value, clinicDate: () => "2026-09-29",
+        availability: availability.value, rateBudget, clinicDate: () => "2026-09-29",
         keypadAvailabilityGreeting: { scope, version: "startup-keypad-v1", ownerRef: "synthetic-clinic-approval",
           approved: true, approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],
       openai: { apiKey: "synthetic-openai-key", intentModel: "configured-model" },
@@ -119,7 +121,8 @@ test("E2E-138, E2E-139, and E2E-140 local standalone server reads keypad availab
     const appointmentId = "private-appointment-140";
     const appointmentTime = "2026-09-30T02:00:00.000Z";
     let clinikoReads = 0;
-    const availability = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5",
+    const rateBudget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-key-au5" });
+    const availability = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5", rateBudget,
       contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
     async input => {
       clinikoReads += 1;
@@ -150,7 +153,7 @@ test("E2E-138, E2E-139, and E2E-140 local standalone server reads keypad availab
       twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
         fallbackNumbers: { [number]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x46),
         now: () => new Date(now) },
-      routes: [{ dialedNumber: number, scope, routeVersion: "v1", availability: availability.value,
+      routes: [{ dialedNumber: number, scope, routeVersion: "v1", availability: availability.value, rateBudget,
         clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: { scope, version: "keypad-v1",
           ownerRef: "clinic-approval", approved: true,
           approvedText: "Hello. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],
@@ -308,7 +311,8 @@ test("E2E-151 signed standalone call switches speech models before the first out
     const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable",
       async () => ok(true), false, "standaloneMinimal");
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
-    const availability = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5",
+    const rateBudget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-key-au5" });
+    const availability = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5", rateBudget,
       contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
     async () => { throw new Error("greeting must not query Cliniko"); });
     assert.ok(availability.ok);
@@ -318,7 +322,7 @@ test("E2E-151 signed standalone call switches speech models before the first out
       twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
         fallbackNumbers: { [number]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x47),
         now: () => new Date(now) },
-      routes: [{ dialedNumber: number, scope, routeVersion: "v1", availability: availability.value,
+      routes: [{ dialedNumber: number, scope, routeVersion: "v1", availability: availability.value, rateBudget,
         clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: expectedGreeting }],
       openai: { apiKey: "synthetic-openai-key", intentModel: "configured-model",
         speechFallbackModel: "tts-1", speechPrimaryFirstChunkMs: 100,
