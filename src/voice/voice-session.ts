@@ -67,6 +67,7 @@ export class VoiceSession {
   private speechOpen = false;
   private activePlayback: ActivePlayback | undefined;
   private cachedIntent: VoiceIntent | undefined;
+  private unclearTurns = 0;
 
   constructor(callId: string, sessionId: string, scope: LocationScope, ledger: LedgerStore, reception: TextReception, playback: PlaybackPort, resolveIntent: IntentResolver, transfer?: TransferPort, monotonicNow: () => number = () => performance.now(), transient?: TransientPresentationConfig) {
     if (transient && (transient.greeting.approved !== true ||
@@ -238,6 +239,17 @@ export class VoiceSession {
       this.speechOpen = false;
       return existing;
     }
+    if (turn.quality === "needsClarification") {
+      if (this.unclearTurns >= 1) return err({ kind: "intentUnavailable" });
+      const clarified = await this.runtime.acceptTurn(turn, { kind: "clarify" }, now,
+        existing.value.conversationRevision);
+      if (clarified.ok && generation === this.assembler.currentGeneration()) {
+        this.rememberPending(clarified.value);
+        this.speechOpen = false;
+        this.unclearTurns += 1;
+      }
+      return clarified;
+    }
     if (!this.cachedIntent) {
       let intent: Result<VoiceIntent, Readonly<{ kind: "intentUnavailable" }>>;
       try { intent = await this.resolveIntent(turn); } catch { return err({ kind: "intentUnavailable" }); }
@@ -272,6 +284,7 @@ export class VoiceSession {
     if (result.ok && generation === this.assembler.currentGeneration()) {
       this.rememberPending(result.value);
       this.speechOpen = false;
+      this.unclearTurns = 0;
     }
     return result;
   }
