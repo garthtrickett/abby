@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import test, { after } from "node:test";
 import { sql } from "kysely";
 import { ok } from "../../src/core/model.ts";
@@ -192,4 +193,62 @@ test("release after stage prevents publication while the source route remains au
   assert.equal(active.ok && active.value.tenantId, source.tenantId);
   assert.equal(active.ok && active.value.routeVersion, "1");
   assert.equal((await cutover.discard(command, routeAuthority)).ok, true);
+});
+
+test("E2E-165 unlisted target configuration blocks publication and leaves the source route active", async () => {
+  const suffix = randomUUID().slice(0, 8);
+  const source = { tenantId: `extra-source-${suffix}`, clinicId: "clinic", locationId: "main" };
+  const target = { tenantId: `extra-target-${suffix}`, clinicId: "clinic", locationId: "main" };
+  const extra = { ...target, clinicId: "unmapped-clinic", locationId: "unmapped-location" };
+  const accountRef = `extra-account-${suffix}`;
+  const dialedNumber = "+6125550197";
+  await sql`insert into number_routes (account_ref, dialed_number, version, assignment)
+    values (${accountRef}, ${dialedNumber}, 1,
+      ${JSON.stringify({ tenantId: source.tenantId, clinicId: source.clinicId,
+        candidateLocationIds: [source.locationId] })}::jsonb)`.execute(db);
+  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference");
+  assert.equal((await policy.changeBookingEnabled(source, "0", false, "source-admin")).ok, true);
+  const fence = new PostgresPortabilityFence(db);
+  const fenceAuthority = { authorizeAndRecord: async () => ok({ requestRef: `extra-fence-${suffix}` }) };
+  assert.equal((await fence.freeze({ tenantId: source.tenantId, actorRef: "source-admin",
+    reason: "cutoverFreeze" }, fenceAuthority)).ok, true);
+  const request = { sourceTenantId: source.tenantId, archiveId: `extra-archive-${suffix}`,
+    actorRef: "source-admin", archiveMode: "unsafeReference" as const,
+    createdAt: "2026-09-29T00:00:00Z", expectedFenceVersion: 1,
+    locations: [{ sourceScope: source, targetScope: target, timeZone: "UTC", mappingProvenance: "reviewed" }] };
+  const exportAuthority = { authorizeAndRecord: async () => ok({ requestRef: `extra-export-${suffix}` }) };
+  const archive = await buildPostgresFencedTenantConfigArchive(db, request, exportAuthority);
+  assert.equal(archive.ok, true);
+  if (!archive.ok) return;
+  const imported = await new PostgresTenantConfigArchiveImporter(db, undefined, "unsafeReference").stage(
+    archive.value, target.tenantId, "target-admin",
+    { authorizeAndRecord: async () => ok({ auditRef: `extra-import-${suffix}` }) },
+    { mapRef: (kind, ref) => `target:${kind}:${ref}` });
+  assert.equal(imported.ok, true);
+  const cutover = new PostgresConfigNumberCutover(db);
+  const command = { accountRef, dialedNumber, actorRef: "route-admin" };
+  let routeAudits = 0;
+  const routeAuthority = { authorizeAndRecord: async () => ok({ auditRef: `extra-route-${suffix}-${++routeAudits}` }) };
+  assert.equal((await cutover.stage({ ...command, expectedRouteVersion: 1, baseline: archive.value,
+    comparison: { ...request, archiveId: `extra-comparison-${suffix}` } },
+  routeAuthority, exportAuthority)).ok, true);
+  await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy)
+    values (${target.tenantId}, ${extra.clinicId}, ${extra.locationId}, 0,
+      ${JSON.stringify(referenceDefaultPolicy(extra))}::jsonb)`.execute(db);
+  assert.deepEqual(await cutover.publish(command, routeAuthority),
+    { ok: false, error: { kind: "targetNotReady" } });
+  const active = await new PostgresNumberRoutingHost(db).identifyCall(accountRef, dialedNumber);
+  assert.equal(active.ok && active.value.tenantId, source.tenantId);
+  assert.equal(active.ok && active.value.routeVersion, "1");
+  await sql`delete from clinic_settings where tenant_id = ${target.tenantId}
+    and clinic_id = ${extra.clinicId} and location_id = ${extra.locationId}`.execute(db);
+  await sql`insert into clinic_write_stop (tenant_id, clinic_id, stopped, actor_ref, reason, changed_at, version)
+    values (${target.tenantId}, ${extra.clinicId}, true, 'test-operator', 'unmappedConfig',
+      clock_timestamp(), 1)`.execute(db);
+  assert.deepEqual(await cutover.publish(command, routeAuthority),
+    { ok: false, error: { kind: "targetNotReady" } });
+  await sql`delete from clinic_write_stop where tenant_id = ${target.tenantId}
+    and clinic_id = ${extra.clinicId}`.execute(db);
+  const published = await cutover.publish(command, routeAuthority);
+  assert.equal(published.ok && published.value.activeTenantId, target.tenantId, JSON.stringify(published));
 });
