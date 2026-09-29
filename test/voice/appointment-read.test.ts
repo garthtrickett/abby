@@ -46,7 +46,7 @@ async function fixture(kind: "memory" | "postgres", suffix: string, verified = t
     }] }));
   };
   const reader = value(ClinikoAppointmentReader.create({ scope, apiKey: "synthetic-key-au5", contactEmail: "dev@example.test", businessId: "11" }, host, port, () => at(3)));
-  const ledger = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt) : new MemoryLedger();
+  const ledger = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt, undefined, "unsafeReference") : new MemoryLedger();
   const composed = kind === "postgres"
     ? createReferenceStandaloneTextComposition(db!, host, "execute", ledger, undefined, reader)
     : { policy: new MemoryPolicyStore(), reception: undefined };

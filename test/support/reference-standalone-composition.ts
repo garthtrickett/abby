@@ -16,7 +16,7 @@ import { PostgresKnowledgeCatalogue } from "../../src/storage/postgres-knowledge
 
 /** Reference-only fixture for executable and request-only contract journeys. */
 export function createReferenceStandaloneTextComposition(db: Kysely<Database>, host: TextHost, hostBookingMode: CapabilityMode,
-                                                         ledger: LedgerStore & EffectCallLeaseStore = new PostgresLedger(db), availability?: AvailabilityHost,
+                                                         ledger: LedgerStore & EffectCallLeaseStore = new PostgresLedger(db, undefined, undefined, "unsafeReference"), availability?: AvailabilityHost,
                                                          appointments?: AppointmentHost, readiness: AutomationReadiness = unprovenReadiness,
                                                          model?: ModelWork,
                                                          knowledge: KnowledgeHost & Partial<ModelKnowledgeContextHost> = new PostgresKnowledgeCatalogue(db)):

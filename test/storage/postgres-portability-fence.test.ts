@@ -88,7 +88,7 @@ test("a durable fence keeps a configuration-only archive unchanged until an audi
   const policy = new PostgresPolicyStore(db, referenceDefaultPolicy);
   const catalogue = new PostgresKnowledgeCatalogue(db);
   const fence = new PostgresPortabilityFence(db);
-  const ledger = new PostgresLedger(db);
+  const ledger = new PostgresLedger(db, undefined, undefined, "unsafeReference");
   assert.equal((await policy.changeBookingEnabled(scope, "0", true, "clinic-admin")).ok, true);
   const before = await buildPostgresConfigArchive(db, request, exportAuthority);
   assert.equal(before.ok, true);
@@ -156,7 +156,7 @@ test("a durable fence keeps a configuration-only archive unchanged until an audi
 
 test("call history makes a freeze fail before any fence state is changed", async () => {
   const scope = { tenantId: "fence-calls-tenant", clinicId: "clinic", locationId: "location" };
-  const ledger = new PostgresLedger(db);
+  const ledger = new PostgresLedger(db, undefined, undefined, "unsafeReference");
   assert.equal((await ledger.start("fence-existing-call", referenceDefaultPolicy(scope))).ok, true);
   const fence = new PostgresPortabilityFence(db);
   const result = await fence.freeze({ tenantId: scope.tenantId, actorRef: "export-admin", reason: "Archive rehearsal" },
@@ -172,7 +172,7 @@ test("call history makes a freeze fail before any fence state is changed", async
 test("a pending shared-number route blocks freeze before location binding", async () => {
   const tenantId = "fence-pending-tenant";
   const key = { accountRef: "pending-account", providerCallRef: "pending-call" };
-  const ledger = new PostgresLedger(db);
+  const ledger = new PostgresLedger(db, undefined, undefined, "unsafeReference");
   const reserved = await ledger.reservePendingLocation(pendingCallId(key), {
     tenantId, clinicId: "clinic", routeVersion: "route-1", candidateLocationIds: ["a", "b"],
     candidateNames: [{ locationId: "a", spokenName: "North" }, { locationId: "b", spokenName: "South" }],
@@ -185,7 +185,7 @@ test("a pending shared-number route blocks freeze before location binding", asyn
 
 test("orphaned in-flight write evidence also blocks a configuration-only freeze", async () => {
   const scope = { tenantId: "fence-inflight-tenant", clinicId: "clinic", locationId: "location" };
-  const ledger = new PostgresLedger(db);
+  const ledger = new PostgresLedger(db, undefined, undefined, "unsafeReference");
   assert.equal((await ledger.stopWrites(scope, "clinic-admin", "Incident review")).ok, true);
   await sql`insert into clinic_write_stop_inflight (tenant_id, clinic_id, stop_version, effect_id, call_id,
     action_key, status) values (${scope.tenantId}, ${scope.clinicId}, 1, 'orphan-effect', 'missing-call',

@@ -194,7 +194,7 @@ test("PostgreSQL config archive takes a consistent scoped snapshot with an allow
   assert.equal(missingSequence.ok, false);
   if (!missingSequence.ok) assert.equal(missingSequence.error.kind, "invalidConfigArchive");
 
-  const call = await new PostgresLedger(db).start("archive-existing-call", referenceDefaultPolicy(scope));
+  const call = await new PostgresLedger(db, undefined, undefined, "unsafeReference").start("archive-existing-call", referenceDefaultPolicy(scope));
   assert.equal(call.ok, true);
   const rejected = await buildPostgresConfigArchive(db, { ...request, archiveId: "config-archive-2" }, authority);
   assert.deepEqual(rejected, { ok: false, error: { kind: "callsRequireRetention" } });
@@ -284,7 +284,7 @@ test("configuration snapshot comparison detects setting and knowledge drift befo
     { ...comparison, archiveId: "drift-check-3" }, authority);
   assert.equal(changedBoth.ok, true);
   if (changedBoth.ok) assert.deepEqual(changedBoth.value.changed, ["settings", "knowledge"]);
-  assert.equal((await new PostgresLedger(db).start("archive-drift-call", referenceDefaultPolicy(scope))).ok, true);
+  assert.equal((await new PostgresLedger(db, undefined, undefined, "unsafeReference").start("archive-drift-call", referenceDefaultPolicy(scope))).ok, true);
   const ineligible = await comparePostgresConfigArchiveSource(db, baseline.value,
     { ...comparison, archiveId: "drift-check-4" }, authority);
   assert.deepEqual(ineligible, { ok: false, error: { kind: "callsRequireRetention" } });

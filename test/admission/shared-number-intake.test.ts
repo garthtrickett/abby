@@ -42,7 +42,7 @@ function fixture(kind: "memory" | "postgres") {
   let routeHost = new ReferenceNumberRoutingHost(assignments);
   let identityReads = 0;
   let policyReads = 0;
-  const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggested => suggested) : new MemoryLedger();
+  const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggested => suggested, undefined, "unsafeReference") : new MemoryLedger();
   const policy = kind === "postgres"
     ? new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true))
     : new MemoryPolicyStore("execute", () => now, async () => ok(true));

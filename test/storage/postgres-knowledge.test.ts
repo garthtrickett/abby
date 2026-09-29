@@ -40,7 +40,7 @@ test("PostgreSQL knowledge approval is scoped, durable, and compare-and-swap pro
   const at = "2026-09-28T10:00:00.000Z";
   const started = await composition.reception.startCall("knowledge-pg-call", scope, at);
   assert.ok(started.ok);
-  const reloadedCall = await new PostgresLedger(db).read("knowledge-pg-call", scope);
+  const reloadedCall = await new PostgresLedger(db, undefined, undefined, "unsafeReference").read("knowledge-pg-call", scope);
   assert.ok(reloadedCall.ok);
   assert.deepEqual(reloadedCall.value.policy.knowledgeSnapshot, [{ sourceRef, version: "2" }]);
   const spoken = await composition.reception.answer(scope,

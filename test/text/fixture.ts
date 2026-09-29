@@ -71,7 +71,7 @@ export async function setup(id: string, modes?: Partial<CallPolicy["capabilities
     if (!url) throw new Error("DATABASE_URL is required for PostgreSQL text tests");
     postgresDb = connectPostgres(url);
   }
-  const ledger = process.env.ABBY_LEDGER === "postgres" ? new PostgresLedger(postgresDb!, suggestedAt => suggestedAt, readiness) : new MemoryLedger(readiness);
+  const ledger = process.env.ABBY_LEDGER === "postgres" ? new PostgresLedger(postgresDb!, suggestedAt => suggestedAt, readiness, "unsafeReference") : new MemoryLedger(readiness);
   const runtime = new CallRuntime(ledger, scope);
   const host = new FakeHost();
   const worker = new EffectWorker(runtime, host);

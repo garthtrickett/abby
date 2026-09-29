@@ -10,6 +10,7 @@ import type { EffectCallLeaseGuard, EffectCallLeaseStore } from "../core/effect-
 import { transition } from "../core/transition.ts";
 import { validKnowledgeSnapshot } from "../core/knowledge-evidence.ts";
 import { READINESS_REQUIREMENTS, unprovenReadiness } from "../core/readiness.ts";
+import { isStoredStandaloneTextState, projectStandaloneTextState, standaloneTextActionAllowed } from "./standalone-call-state.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
 import type { WriteStopAuditPage, WriteStopFailure, WriteStopStatus } from "../core/write-stop.ts";
 import type Database from "./generated/Database.ts";
@@ -86,11 +87,15 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   private readonly db: Kysely<Database>;
   private readonly clockForTests: ((suggestedAt: string) => string) | undefined;
   private readonly readiness: AutomationReadiness;
+  /** Rich reference mode is for synthetic host-contract tests, never standalone patient traffic. */
+  private readonly mode: "unsafeReference" | "standaloneText";
 
-  constructor(db: Kysely<Database>, clockForTests?: (suggestedAt: string) => string, readiness: AutomationReadiness = unprovenReadiness) {
+  constructor(db: Kysely<Database>, clockForTests?: (suggestedAt: string) => string, readiness: AutomationReadiness = unprovenReadiness,
+              mode: "unsafeReference" | "standaloneText" = "standaloneText") {
     this.db = db;
     this.clockForTests = clockForTests;
     this.readiness = readiness;
+    this.mode = mode;
   }
 
   private async trustedNow(db: Kysely<Database>, suggestedAt: string): Promise<string> {
@@ -215,7 +220,10 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
 
   async start(callId: string, policy: CallPolicy): Promise<Result<CallState, TransitionFailure>> {
     if (!callId) return err({ kind: "invalidTransition" });
-    const state = initialState(callId, policy);
+    const initial = initialState(callId, policy);
+    const projected = this.mode === "standaloneText" ? projectStandaloneTextState(initial) : ok(initial);
+    if (!projected.ok) return projected;
+    const state = projected.value;
     try {
       return await this.db.transaction().execute(async trx => {
         await this.lockCall(trx, callId);
@@ -243,6 +251,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
       const row = await this.db.selectFrom("calls").select("state").where("call_id", "=", callId as CallsCallId).executeTakeFirst();
       if (!row) return ok(null);
       const decoded = decodeState(row.state, callId);
+      if (this.mode === "standaloneText" && decoded.ok && !isStoredStandaloneTextState(decoded.value)) return err({ kind: "storageCorrupt" });
       return decoded.ok ? ok(admissionReceipt(decoded.value)) : decoded;
     } catch {
       return err({ kind: "storageFailure" });
@@ -261,6 +270,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   }
 
   async reservePendingLocation(callId: string, route: PendingLocationRoute, admission: Admission): Promise<Result<PendingLocationResult, TransitionFailure>> {
+    if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
     if (!validPendingRoute(route) || !validPendingAdmission(callId, admission)) return err({ kind: "invalidTransition" });
     try {
       return await this.db.transaction().execute(async trx => {
@@ -406,6 +416,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   }
 
   async bindPendingLocation(callId: string, policy: CallPolicy, sessionId: string, expectedLeaseVersion: number, turnId: string, now: string): Promise<Result<AdmissionResult, TransitionFailure>> {
+    if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
     if (!sessionId?.trim() || sessionId.length > 256 || !turnId?.trim() || turnId.length > 256 ||
         !Number.isSafeInteger(expectedLeaseVersion) || !Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
     try {
@@ -691,6 +702,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   }
 
   async admit(callId: string, policy: CallPolicy, admission: Admission): Promise<Result<AdmissionResult, TransitionFailure>> {
+    if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
     if (!callId || !admission.key.accountRef || !admission.key.providerCallRef || !admission.dialedNumber ||
         !Number.isFinite(Date.parse(admission.acceptedAt)) || Date.parse(admission.deadline) <= Date.parse(admission.acceptedAt)) return err({ kind: "invalidTransition" });
     try {
@@ -745,6 +757,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
       if (!row) return err({ kind: "callUnknown" });
       const decoded = decodeState(row.state, callId);
       if (!decoded.ok) return decoded;
+      if (this.mode === "standaloneText" && !isStoredStandaloneTextState(decoded.value)) return err({ kind: "storageCorrupt" });
       if (decoded.value.version !== row.version) return err({ kind: "storageCorrupt" });
       return ok(structuredClone(decoded.value));
     } catch {
@@ -763,6 +776,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
       for (const row of rows) {
         const decoded = decodeState(row.state, row.call_id);
         if (!decoded.ok || decoded.value.version !== row.version || !decoded.value.policy?.scope ||
+            (this.mode === "standaloneText" && !isStoredStandaloneTextState(decoded.value)) ||
             decoded.value.policy.scope.tenantId !== scope.tenantId || decoded.value.policy.scope.clinicId !== scope.clinicId ||
             decoded.value.policy.scope.locationId !== scope.locationId) return err({ kind: "storageCorrupt" });
         calls.push(decoded.value);
@@ -804,6 +818,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   }
 
   async apply(callId: string, scope: LocationScope, expectedVersion: number, action: TransitionAction, guard?: EffectCallLeaseGuard): Promise<Result<CallState, TransitionFailure>> {
+    if (this.mode === "standaloneText" && !standaloneTextActionAllowed(action)) return err({ kind: "invalidTransition" });
     try {
       return await this.db.transaction().execute(async trx => {
         const row = await trx.selectFrom("calls").select(["state", "version"])
@@ -828,6 +843,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
         if (row.version !== expectedVersion) return err({ kind: "versionConflict" });
         const decoded = decodeState(row.state, callId);
         if (!decoded.ok || decoded.value.version !== row.version) return err({ kind: "storageCorrupt" });
+        if (this.mode === "standaloneText" && !isStoredStandaloneTextState(decoded.value)) return err({ kind: "storageCorrupt" });
         let effectiveAction = action;
         if (action.kind === "markHostPossiblySent") {
           const ids = this.stopIds(scope);
@@ -843,8 +859,10 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
         if (!result.ok) return result;
         const next = result.value;
         if (next.version === row.version) return ok(structuredClone(next));
+        const stored = this.mode === "standaloneText" ? projectStandaloneTextState(next) : ok(next);
+        if (!stored.ok) return stored;
 
-        await trx.updateTable("calls").set({ version: next.version, state: next })
+        await trx.updateTable("calls").set({ version: next.version, state: stored.value })
           .where("call_id", "=", callId as CallsCallId).execute();
         await trx.insertInto("call_events").values({
           call_id: callId as CallsCallId,

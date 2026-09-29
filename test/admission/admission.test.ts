@@ -36,7 +36,7 @@ function failure<T>(result: Result<T, { kind: string }>, kind: string): void {
 function fixture(kind: "memory" | "postgres", suffix: string) {
   const scope = { tenantId: `admission-tenant-${suffix}`, clinicId: `admission-clinic-${suffix}`, locationId: `admission-location-${suffix}` };
   const policy: CallPolicy = { ...referenceDefaultPolicy(scope), automationEnabled: true, bookingEnabled: true, capabilities: { book: "execute", cancel: "requestOnly", reschedule: "requestOnly", intake: "requestOnly", transfer: "requestOnly" } };
-  const ledger: LedgerStore & EffectCallLeaseStore = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt) : new MemoryLedger();
+  const ledger: LedgerStore & EffectCallLeaseStore = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt, undefined, "unsafeReference") : new MemoryLedger();
   let routeReads = 0;
   let automationEnabled = true;
   const service = new CallAdmissionService(ledger, async dialed => {
@@ -261,7 +261,7 @@ test("postgres: admission and activation events persist as separate versions", {
 
 test("postgres: ledger clock rejects forged intake, renewal, and expiry timestamps", { skip: !db }, async () => {
   const scope = { tenantId: "database-clock-tenant", clinicId: "database-clock-clinic", locationId: "database-clock-location" };
-  const ledger = new PostgresLedger(db!);
+  const ledger = new PostgresLedger(db!, undefined, undefined, "unsafeReference");
   const basePolicy = referenceDefaultPolicy(scope);
   const policy: CallPolicy = { ...basePolicy, automationEnabled: true, capabilities: { ...basePolicy.capabilities, transfer: "execute" },
     transferDestinationRef: "database-clock-destination",

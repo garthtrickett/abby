@@ -12,7 +12,7 @@ import { unprovenReadiness } from "../core/readiness.ts";
 /** Standalone patient-specific actions stay off until Cliniko-owned work is implemented and proven. */
 export function createStandaloneTextComposition(db: Kysely<Database>, host: TextHost):
   Readonly<{ reception: TextReception; policy: PostgresPolicyStore; knowledge: KnowledgeHost & Partial<ModelKnowledgeContextHost> }> {
-  const ledger = new PostgresLedger(db);
+  const ledger = new PostgresLedger(db, undefined, unprovenReadiness, "standaloneText");
   const knowledge = new PostgresKnowledgeCatalogue(db);
   const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable", unprovenReadiness, false);
   return { reception: new TextReception(ledger, policy, host, undefined, undefined, undefined, knowledge), policy, knowledge };

@@ -50,7 +50,7 @@ test("global call key and tenant scope are enforced by the database adapter", as
   const app = await setup("pg-uniqueness");
   const otherScope = { tenantId: "another-tenant", clinicId: "another-clinic", locationId: "another-location" };
   const otherPolicy = { ...app.policy, scope: otherScope };
-  const other = new CallRuntime(new PostgresLedger(db), otherScope);
+  const other = new CallRuntime(new PostgresLedger(db, undefined, undefined, "unsafeReference"), otherScope);
   failure(await other.start(app.callId, otherPolicy), "invalidTransition");
   failure(await other.read(app.callId), "callUnknown");
   failure(await other.apply(app.callId, 0, { kind: "callerTurn", turn: { callId: app.callId, turnId: "intruder", text: "book", quality: "clear", at: now }, interpretation: { kind: "requestAction", request: app.book() }, now }), "callUnknown");
@@ -87,14 +87,14 @@ test("emergency stop latches even when an in-flight outbox row has lost its acti
   const stop = success(await app.ledger.stopWrites(app.scope, "clinic-admin", "Provider incident"));
   assert.equal(stop.stopped, true);
   assert.deepEqual(stop.inFlight.map(item => [item.callId, item.actionKey]), [[app.callId, "unknown"]]);
-  assert.equal(success(await new PostgresLedger(db).readWriteStop(app.scope)).stopped, true);
+  assert.equal(success(await new PostgresLedger(db, undefined, undefined, "unsafeReference").readWriteStop(app.scope)).stopped, true);
 });
 
 test("PostgreSQL staff queue reads the indexed task projection within one clinic", async () => {
   const app = await setup("pg-staff-queue");
   success(await app.runtime.acceptTurn({ callId: app.callId, turnId: "staff-request", text: "Need staff", quality: "clear", at: now },
     { kind: "handoff", reason: "callerRequested" }, now));
-  const queue = new StaffQueue(new PostgresLedger(db), () => "2026-09-30T10:00:00.000Z");
+  const queue = new StaffQueue(new PostgresLedger(db, undefined, undefined, "unsafeReference"), () => "2026-09-30T10:00:00.000Z");
   const result = success(await queue.list(app.scope));
   assert.equal(result.items.length, 1);
   assert.deepEqual({ callId: result.items[0]?.callId, reason: result.items[0]?.reason, status: result.items[0]?.status, overdue: result.items[0]?.overdue },
@@ -126,7 +126,7 @@ test("host-confirmed staff resolution commits call, outbox, and queue projection
     .where("task_key", "=", item.key as StaffItemsTaskKey).executeTakeFirstOrThrow();
   const effect = await db.selectFrom("effect_outbox").select("status")
     .where("effect_id", "=", `${commandKey}:send` as EffectOutboxEffectId).executeTakeFirstOrThrow();
-  const queue = success(await new StaffQueue(new PostgresLedger(db), () => "2026-09-30T10:00:00.000Z").list(app.scope));
+  const queue = success(await new StaffQueue(new PostgresLedger(db, undefined, undefined, "unsafeReference"), () => "2026-09-30T10:00:00.000Z").list(app.scope));
   assert.equal(state.staffItems[item.key]?.status, "resolved");
   assert.equal(task.status, "resolved");
   assert.equal((task.payload as { pendingChangeKey?: string }).pendingChangeKey, undefined);
@@ -143,7 +143,7 @@ test("calls written before read provenance existed remain readable and upgrade o
   delete legacy.knowledgeAnswers;
   delete legacy.availabilityReads;
   await db.updateTable("calls").set({ state: legacy }).where("call_id", "=", app.callId as CallsCallId).execute();
-  const restarted = new CallRuntime(new PostgresLedger(db), app.scope);
+  const restarted = new CallRuntime(new PostgresLedger(db, undefined, undefined, "unsafeReference"), app.scope);
   assert.deepEqual(success(await restarted.read(app.callId)).knowledgeAnswers, []);
   assert.deepEqual(success(await restarted.read(app.callId)).availabilityReads, []);
   success(await restarted.acceptTurn({ callId: app.callId, turnId: "legacy-next-turn", text: "Please help", quality: "clear", at: now },
@@ -168,7 +168,7 @@ test("older ended calls without terminal evidence remain readable while new endi
   const legacy = { ...ended };
   delete legacy.terminal;
   await db.updateTable("calls").set({ state: legacy }).where("call_id", "=", callId as CallsCallId).execute();
-  const read = success(await new CallRuntime(new PostgresLedger(db), app.scope).read(callId));
+  const read = success(await new CallRuntime(new PostgresLedger(db, undefined, undefined, "unsafeReference"), app.scope).read(callId));
   assert.equal(read.lifecycle, "ended");
   assert.equal(read.terminal, undefined);
 });
@@ -209,7 +209,7 @@ test("restart after possible send yields one persisted reconciliation intent", a
   const action = await app.pendingAction();
   await app.confirm(action.key);
   success(await app.runtime.markHostPossiblySent(app.callId, `${action.key}:write`, now));
-  const restarted = new CallRuntime(new PostgresLedger(db), app.scope);
+  const restarted = new CallRuntime(new PostgresLedger(db, undefined, undefined, "unsafeReference"), app.scope);
   const effectId = `${action.key}:write`;
   assert.equal((await restarted.read(app.callId)).ok, true);
   failure(await restarted.recoverHostPossiblySent(app.callId, effectId, now), "invalidTransition");
@@ -234,7 +234,7 @@ test("restart after possible staff-task send keeps operator review and persists 
   assert.ok(item);
   const effectId = `${item.key}:open`;
   success(await app.runtime.markStaffPossiblySent(app.callId, effectId, now));
-  const restarted = new CallRuntime(new PostgresLedger(db), app.scope);
+  const restarted = new CallRuntime(new PostgresLedger(db, undefined, undefined, "unsafeReference"), app.scope);
   failure(await restarted.recoverStaffPossiblySent(app.callId, effectId, now), "invalidTransition");
   success(await restarted.recoverStaffPossiblySent(app.callId, effectId, "2026-09-28T10:01:01.000Z"));
   const recovered = success(await restarted.read(app.callId));
