@@ -31,5 +31,7 @@ test("ledger compare-and-swap rejects stale writes and duplicates do not replay 
   failure(await app.runtime.apply(app.callId, version, { kind: "callerTurn", turn: { callId: app.callId, turnId: "other", text: "again", quality: "clear", at: now }, interpretation: { kind: "requestAction", request: app.book() }, now }), "versionConflict");
   await app.turn("request-1", "Book physio", { kind: "requestAction", request: app.book() });
   assert.deepEqual((await app.state()), after);
-  failure(await app.runtime.acceptTurn({ callId: app.callId, turnId: "request-1", text: "Book something else", quality: "clear", at: now }, { kind: "requestAction", request: app.book("other") }, now), "keyMismatch");
+  const divergentReplay = await app.runtime.acceptTurn({ callId: app.callId, turnId: "request-1", text: "Book something else", quality: "clear", at: now }, { kind: "requestAction", request: app.book("other") }, now);
+  assert.equal(divergentReplay.ok, true);
+  assert.deepEqual((await app.state()), after);
 });

@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { sql } from "kysely";
+import type { Kysely } from "kysely";
 import { CallRuntime } from "../../src/core/runtime.ts";
+import { digestTurn } from "../../src/core/digest.ts";
 import { EffectWorker } from "../../src/core/effect-worker.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
+import { up as removeTurnDigests } from "../../src/storage/migrations/015_remove_turn_digests.ts";
 import { StaffQueue } from "../../src/reference/staff-queue.ts";
 import type { CallsCallId } from "../../src/storage/generated/public/Calls.ts";
 import type { EffectOutboxEffectId } from "../../src/storage/generated/public/EffectOutbox.ts";
@@ -16,6 +19,32 @@ const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
 const db = connectPostgres(url);
 after(async () => { await db.destroy(); });
+
+test("PostgreSQL caller-turn replay stores neither speech nor a speech-derived digest", async () => {
+  const app = await setup("pg-private-turn");
+  const text = "synthetic-private-speech-canary";
+  const turn = { callId: app.callId, turnId: "private-turn", text, quality: "clear" as const, at: now };
+  const interpretation = { kind: "clarify" as const };
+  const legacyDigest = digestTurn({ turn, interpretation });
+  success(await app.runtime.acceptTurn(turn, interpretation, now));
+  const first = success(await app.runtime.read(app.callId));
+  success(await app.runtime.acceptTurn({ ...turn, text: "different-replay-canary" }, { kind: "clarify" }, now));
+  assert.deepEqual(success(await app.runtime.read(app.callId)), first);
+  const row = await db.selectFrom("calls").select("state").where("call_id", "=", app.callId as CallsCallId)
+    .executeTakeFirstOrThrow();
+  const events = await db.selectFrom("call_events").select("payload").where("call_id", "=", app.callId as CallsCallId).execute();
+  const persisted = JSON.stringify({ state: row.state, events });
+  assert.equal(persisted.includes(text), false);
+  assert.equal(persisted.includes(legacyDigest), false);
+  assert.equal(persisted.includes("processedTurnDigests"), false);
+
+  await sql`update calls set state = jsonb_set(state, '{processedTurnDigests}', ${JSON.stringify({ "private-turn": legacyDigest })}::jsonb)
+    where call_id = ${app.callId}`.execute(db);
+  await removeTurnDigests(db as unknown as Kysely<unknown>);
+  const scrubbed = await db.selectFrom("calls").select("state").where("call_id", "=", app.callId as CallsCallId)
+    .executeTakeFirstOrThrow();
+  assert.equal(JSON.stringify(scrubbed.state).includes(legacyDigest), false);
+});
 
 test("global call key and tenant scope are enforced by the database adapter", async () => {
   const app = await setup("pg-uniqueness");

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { digestActionRequest, digestTurn } from "./digest.ts";
+import { digestActionRequest } from "./digest.ts";
 import { availabilityPresentation } from "./availability-presentation.ts";
 import { appointmentPresentation } from "./appointment-presentation.ts";
 import { addStaffTask, planStaffChange } from "./staff-work.ts";
@@ -19,10 +19,6 @@ const CLOSED_TRANSFER_NOTICE = "Staff aren't available for a live transfer now. 
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
-}
-
-function turnDigest(turn: FinalCallerTurn, interpretation: TurnInterpretation): string {
-  return digestTurn({ turn, interpretation });
 }
 
 function describe(request: ActionRequest): string {
@@ -303,7 +299,6 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
     state.pendingPresentationId = id;
   }
   state.processedTurnIds.push(turn.turnId);
-  state.processedTurnDigests[turn.turnId] = turnDigest(turn, interpretation);
   return ok(undefined);
 }
 
@@ -401,8 +396,7 @@ export function transition(current: CallState, action: TransitionAction): Result
     }
     case "callerTurn": {
       if (current.processedTurnIds.includes(action.turn.turnId)) {
-        return current.processedTurnDigests[action.turn.turnId] === turnDigest(action.turn, action.interpretation)
-          ? ok(current) : err({ kind: "keyMismatch" });
+        return ok(current);
       }
       if (action.expectedConversationRevision !== undefined && action.expectedConversationRevision !== current.conversationRevision) return err({ kind: "staleTurn" });
       const result = handleTurn(state, action.turn, action.interpretation, now);
