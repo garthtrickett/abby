@@ -31,7 +31,7 @@ async function main(): Promise<void> {
   const apiKey = process.env.ABBY_OPENAI_API_KEY;
   if (!apiKey) throw new Error("ABBY_OPENAI_API_KEY is required for a live model evaluation");
   const corpusPath = resolve(args.corpus ?? "eval/model-v1.json");
-  const promptPath = resolve(args.prompt ?? "eval/prompt-v1.txt");
+  const promptPath = resolve(args.prompt ?? `eval/${args["prompt-version"]}.txt`);
   const corpusBytes = await readFile(corpusPath);
   const promptBytes = await readFile(promptPath);
   const corpus = parseEvaluationCorpus(JSON.parse(corpusBytes.toString("utf8")) as unknown);
