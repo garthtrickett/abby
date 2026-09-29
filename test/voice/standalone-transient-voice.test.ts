@@ -7,6 +7,7 @@ import { ClinikoAvailabilityReader } from "../../src/cliniko/availability.ts";
 import { ok } from "../../src/core/model.ts";
 import { ReferenceNumberRoutingHost } from "../../src/reference/clinic-number-routing.ts";
 import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
+import { createOpenAIAvailabilityIntentResolver } from "../../src/standalone/openai-availability-intent.ts";
 import { createStandaloneTransientVoiceCall } from "../../src/standalone/transient-voice-composition.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { migrate } from "../../src/storage/migrate.ts";
@@ -15,7 +16,7 @@ import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts"
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 import { TwilioSignedIngress } from "../../src/voice/twilio-signed-ingress.ts";
 
-test("E2E-134 standalone signed voice keeps the live SAM state out of PostgreSQL and discards it at disconnect",
+test("E2E-134 and E2E-137 standalone signed voice keeps the model decision and live SAM state out of PostgreSQL",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" }, async () => {
   const adminUrl = process.env.DATABASE_URL;
   assert.ok(adminUrl);
@@ -40,7 +41,7 @@ test("E2E-134 standalone signed voice keeps the live SAM state out of PostgreSQL
     const streamUrl = "wss://calls.example.test/twilio/media/";
     const callerPhone = "+6145550101";
     const dialedNumber = "+6125550199";
-    const callerText = `caller-private-${suffix}`;
+    const callerText = `Do you have appointments available on October 2? caller-private-${suffix}`;
     const appointmentId = `appointment-private-${suffix}`;
     const startsAt = "2026-10-02T00:00:00.000Z";
     const now = "2026-09-29T10:00:00.000Z";
@@ -67,6 +68,7 @@ test("E2E-134 standalone signed voice keeps the live SAM state out of PostgreSQL
       signature: twilio.getExpectedTwilioSignature(authToken, streamUrl, {}), connected, start });
     assert.ok(authenticated.ok);
     let clinikoReads = 0;
+    let modelReads = 0;
     const availability = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5",
       contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
     async input => {
@@ -98,7 +100,17 @@ test("E2E-134 standalone signed voice keeps the live SAM state out of PostgreSQL
           utteranceId: "one", text: callerText, quality: "clear" }]); },
       },
       synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
-      resolveIntent: async () => ok({ kind: "availability", from: "2026-10-02", to: "2026-10-02" }),
+      resolveIntent: createOpenAIAvailabilityIntentResolver({ apiKey: "synthetic-model-key",
+        model: "configured-model", clinicDate: () => "2026-09-29", fetch: (async (_url, init) => {
+          modelReads += 1;
+          const input = JSON.parse(String(init?.body));
+          assert.equal(input.store, false);
+          assert.deepEqual(JSON.parse(input.input[1].content), { callerText });
+          assert.equal(String(init?.body).includes(callerPhone), false);
+          return Response.json({ status: "completed", output: [{ type: "message", status: "completed",
+            content: [{ type: "output_text", text: JSON.stringify({ kind: "availability",
+              from: "2026-10-02", to: "2026-10-02" }) }] }] });
+        }) as typeof fetch }),
       readiness, availability: availability.value, now: () => now, mediaOptions: { silenceMs: 100 },
     });
     assert.ok(constructed.ok);
@@ -115,6 +127,7 @@ test("E2E-134 standalone signed voice keeps the live SAM state out of PostgreSQL
           payload: Buffer.alloc(160, index < 2 ? 0x9f : 0xff).toString("base64") } }))).ok, true);
     }
     assert.ok(sent.length >= 4);
+    assert.equal(modelReads, 1);
     assert.ok(clinikoReads >= 6);
     assert.ok(spoken.some(text => /possible times/i.test(text)));
     assert.ok(spoken.every(text => !text.includes(callerText) && !text.includes(appointmentId)));
