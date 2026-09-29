@@ -30,6 +30,19 @@ export class PostgresPatientPhoneIndex {
 
   constructor(db: Kysely<Database>) { this.db = db; }
 
+  /** Operational freshness only; no patient row or phone is returned. */
+  async completedAt(scope: PatientPhoneClinicScope): Promise<Result<Date | null, PhoneIndexFailure>> {
+    if (!validScope(scope)) return err({ kind: "invalidInput" });
+    try {
+      const row = await this.db.selectFrom("patient_phone_sync").select("completed_at")
+        .where("tenant_id", "=", scope.tenantId as PatientPhoneSyncTenantId)
+        .where("clinic_id", "=", scope.clinicId as PatientPhoneSyncClinicId).executeTakeFirst();
+      if (!row) return ok(null);
+      return row.completed_at instanceof Date && Number.isFinite(row.completed_at.getTime())
+        ? ok(row.completed_at) : err({ kind: "storageFailure" });
+    } catch { return err({ kind: "storageFailure" }); }
+  }
+
   async publish(scope: PatientPhoneClinicScope, links: readonly PatientPhoneLink[]): Promise<Result<number, PhoneIndexFailure>> {
     if (!validScope(scope) || !Array.isArray(links) || links.length > 100_000 ||
         links.some(link => !link || !phonePattern.test(link.normalizedPhone) || !patientIdPattern.test(link.patientId) ||
