@@ -6,6 +6,7 @@ import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
 import { ok } from "../../src/core/model.ts";
 import type { Result } from "../../src/core/model.ts";
 import { ARCHIVE_SECTIONS } from "../../src/portability/archive-envelope.ts";
+import { decodeTenantConfigArchive } from "../../src/portability/config-archive.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { StandaloneAvailabilityTextRunner } from "../../src/standalone/availability-text-runner.ts";
 import { createAvailabilityConsoleServer } from "../../src/standalone/availability-console/server.ts";
@@ -275,7 +276,7 @@ test("E2E-125 text: standalone ingress presents provisional availability without
   ]), []);
 });
 
-test("E2E-125 text: loopback HTTP availability goes through the strict PostgreSQL runner and leaves no private data", async () => {
+test("E2E-125/E2E-127 text: HTTP availability completes and exports no caller or Cliniko details", async () => {
   const suffix = randomUUID().slice(0, 8);
   const scope = { tenantId: `availability-http-${suffix}`, clinicId: "clinic", locationId: "frontdesk" };
   const now = "2026-10-01T00:00:00Z";
@@ -347,6 +348,21 @@ test("E2E-125 text: loopback HTTP availability goes through the strict PostgreSQ
       .map((entry, index) => ({ label: `http_private_${index}`, value: entry }));
     assert.deepEqual(await scanPatientDataCanaries(db, canaries), { ok: true, value: [] });
     assert.deepEqual(await scanDisposableBackupCanaries(url, canaries), []);
+    const targetScope = { ...scope, tenantId: `availability-http-buyer-${suffix}` };
+    const archive = value(await buildPostgresConfigArchive(db, { scope, targetScope,
+      timeZone: "Australia/Sydney", mappingProvenance: "reviewed", archiveId: `http-export-${suffix}`,
+      actorRef: "clinic-admin", createdAt: now },
+    { authorizeAndRecord: async () => ok({ requestRef: `http-audit-${suffix}` }) }));
+    const decoded = value(await decodeTenantConfigArchive(archive, targetScope.tenantId));
+    assert.equal(decoded.omittedCalls.notRetained, 1);
+    assert.equal(decoded.sectionManifests.calls.recordCount, 0);
+    const archiveBytes: Uint8Array[] = [archive.manifestBytes];
+    for (const section of ARCHIVE_SECTIONS) {
+      for await (const chunk of archive.sections[section]()) archiveBytes.push(chunk);
+    }
+    const serializedArchive = Buffer.concat(archiveBytes).toString("utf8");
+    assert.equal(canaries.some(canary => serializedArchive.includes(canary.value)), false);
+    assert.equal(serializedArchive.includes(calls[0]!.call_id), false);
   } finally {
     await new Promise<void>(done => { server.close(() => done()); server.closeAllConnections(); });
   }
