@@ -34,9 +34,9 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
   assert.equal(manifest.version, "0.2");
   assert.equal(manifest.source, "TECHNICAL_DESIGN.md Section 11");
   assert.equal(manifest.fixtureIdPattern, "fixture-{lowercase scenario id}");
-  assert.equal(rows.length, 125);
+  assert.equal(rows.length, 126);
   assert.deepEqual(manifest.scenarios.map(scenario => scenario.id),
-    Array.from({ length: 125 }, (_, index) => `E2E-${String(index + 1).padStart(3, "0")}`));
+    Array.from({ length: 126 }, (_, index) => `E2E-${String(index + 1).padStart(3, "0")}`));
   const ids = new Set(manifest.scenarios.map(scenario => scenario.id));
   for (const [index, scenario] of manifest.scenarios.entries()) {
     const row = rows[index]!;
@@ -45,8 +45,10 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
     assert.deepEqual(scenario.requirements, row[3]!.split(", "));
     assert.match(scenario.fixtureFamily, /^[a-z][a-z-]+$/);
     assert.ok([1, 2, 3, 4, 5].includes(scenario.earliestPhase));
-    assert.ok(scenario.intendedCompositions.includes("standalone"));
-    assert.ok(scenario.intendedCompositions.includes("embedded"));
+    assert.ok(scenario.intendedCompositions.length > 0);
+    assert.ok(scenario.intendedCompositions.every(composition =>
+      ["standalone", "embedded", "cutover"].includes(composition)));
+    assert.equal(new Set(scenario.intendedCompositions).size, scenario.intendedCompositions.length);
     assert.ok(["reference", "cliniko"].includes(scenario.providerProfile));
     for (const evidence of [scenario.fullCallEvidence, scenario.textEvidence].filter(Boolean) as Evidence[]) {
       assert.ok(["planned", "passed"].includes(evidence.status));

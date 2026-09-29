@@ -1,6 +1,7 @@
 import { ClinikoAvailabilityReader } from "../src/cliniko/availability.ts";
 import { StandaloneAvailabilityTextRunner } from "../src/standalone/availability-text-runner.ts";
 import { connectPostgres } from "../src/storage/connect.ts";
+import { checkStandaloneTextDatabase } from "../src/storage/standalone-privacy-preflight.ts";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -39,6 +40,8 @@ async function main(): Promise<void> {
   if (!reader.ok) { await write({ ok: false, error: reader.error }); process.exitCode = 1; return; }
   const db = connectPostgres(required("DATABASE_URL"));
   try {
+    const safe = await checkStandaloneTextDatabase(db);
+    if (!safe.ok) { await write(safe); process.exitCode = 1; return; }
     const request = await input();
     const runner = new StandaloneAvailabilityTextRunner(db, scope, reader.value);
     const prepared = await runner.prepare(request as Parameters<typeof runner.prepare>[0]);
