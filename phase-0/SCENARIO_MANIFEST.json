@@ -1,0 +1,3000 @@
+{
+  "version": "0.1",
+  "source": "TECHNICAL_DESIGN.md Section 11",
+  "capabilityMappings": {
+    "settings.read.v1": [
+      "E2E-010"
+    ],
+    "settings.automation.enabled.change.v1": [
+      "E2E-018"
+    ],
+    "settings.automation.audit.v1": [
+      "E2E-018"
+    ],
+    "calls.writes.stop.v1": [
+      "E2E-074"
+    ],
+    "calls.writes.stop.read.v1": [
+      "E2E-074"
+    ],
+    "calls.writes.resume.v1": [
+      "E2E-074"
+    ],
+    "calls.writes.stop.audit.v1": [
+      "E2E-074"
+    ],
+    "settings.appointments.booking.enabled.change.v1": [
+      "E2E-010"
+    ],
+    "settings.appointments.booking.audit.v1": [
+      "E2E-010"
+    ],
+    "booking.propose.v2": [
+      "E2E-006",
+      "E2E-064"
+    ],
+    "calls.turn.model.v1": [
+      "E2E-030",
+      "E2E-076",
+      "E2E-077",
+      "E2E-078"
+    ],
+    "knowledge.answer.v2": [
+      "E2E-004",
+      "E2E-058",
+      "E2E-059",
+      "E2E-060",
+      "E2E-061"
+    ],
+    "knowledge.list.v1": [
+      "E2E-004",
+      "E2E-058"
+    ],
+    "knowledge.draft.save.v1": [
+      "E2E-004",
+      "E2E-059"
+    ],
+    "knowledge.approve.v1": [
+      "E2E-004"
+    ],
+    "knowledge.revoke.v1": [
+      "E2E-059"
+    ],
+    "availability.read.v2": [
+      "E2E-125"
+    ],
+    "appointments.read.v1": [
+      "E2E-003",
+      "E2E-117"
+    ],
+    "calls.read.v1": [
+      "E2E-010",
+      "E2E-014"
+    ],
+    "calls.outcomes.v1": [
+      "E2E-014"
+    ],
+    "staff.list.v1": [
+      "E2E-009",
+      "E2E-068"
+    ],
+    "staff.change.v1": [
+      "E2E-098",
+      "E2E-109"
+    ]
+  },
+  "settingMappings": {
+    "appointments.booking.enabled": [
+      "E2E-010"
+    ],
+    "automation.enabled": [
+      "E2E-018"
+    ],
+    "calls.writes.stop": [
+      "E2E-074"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "E2E-001",
+      "requirements": [
+        "FR-01",
+        "FR-20"
+      ],
+      "journey": "Unknown dialed number uses the approved no-clinic route without patient lookup",
+      "fixture": {
+        "id": "fixture-e2e-001",
+        "family": "routing",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-002",
+      "requirements": [
+        "FR-02"
+      ],
+      "journey": "Anonymous caller receives an allowed route without fabricated patient identity",
+      "fixture": {
+        "id": "fixture-e2e-002",
+        "family": "routing",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-003",
+      "requirements": [
+        "FR-03"
+      ],
+      "journey": "Shared phone, failed and successful patient verification",
+      "fixture": {
+        "id": "fixture-e2e-003",
+        "family": "patient-candidates",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 2,
+      "providerProfile": "cliniko",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-004",
+      "requirements": [
+        "FR-04",
+        "FR-21"
+      ],
+      "journey": "Approved, current knowledge produces a sourced administrative answer",
+      "fixture": {
+        "id": "fixture-e2e-004",
+        "family": "knowledge",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-005",
+      "requirements": [
+        "FR-05"
+      ],
+      "journey": "Host offer search uses the clinic timezone and host eligibility rules",
+      "fixture": {
+        "id": "fixture-e2e-005",
+        "family": "offers",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-006",
+      "requirements": [
+        "FR-06",
+        "FR-07",
+        "FR-12"
+      ],
+      "journey": "Confirmed booking produces one committed receipt and truthful caller statement",
+      "fixture": {
+        "id": "fixture-e2e-006",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-007",
+      "requirements": [
+        "FR-06",
+        "FR-07"
+      ],
+      "journey": "Confirmed cancellation produces one committed receipt",
+      "fixture": {
+        "id": "fixture-e2e-007",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-008",
+      "requirements": [
+        "FR-08",
+        "FR-13"
+      ],
+      "journey": "Two actions in one call, partial success, caller correction",
+      "fixture": {
+        "id": "fixture-e2e-008",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-009",
+      "requirements": [
+        "FR-09",
+        "FR-19"
+      ],
+      "journey": "Staff-task creation failure after a failed transfer leaves visible unresolved work and no false handoff claim",
+      "fixture": {
+        "id": "fixture-e2e-009",
+        "family": "staff-work",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-010",
+      "requirements": [
+        "FR-10",
+        "FR-17"
+      ],
+      "journey": "Browser setting change, default/on/off, next-call effect, view-only denial",
+      "fixture": {
+        "id": "fixture-e2e-010",
+        "family": "settings-and-authority",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-011",
+      "requirements": [
+        "FR-11"
+      ],
+      "journey": "Duplicate webhook before activation returns the stored receipt without a second session, greeting, or fallback",
+      "fixture": {
+        "id": "fixture-e2e-011",
+        "family": "admission-and-lease",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-012",
+      "requirements": [
+        "FR-13"
+      ],
+      "journey": "Barge-in during a task switch stops old speech and continues from the corrected request",
+      "fixture": {
+        "id": "fixture-e2e-012",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-013",
+      "requirements": [
+        "FR-14",
+        "FR-22"
+      ],
+      "journey": "Readiness refusal blocks automation before a new call is admitted",
+      "fixture": {
+        "id": "fixture-e2e-013",
+        "family": "settings-and-authority",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-014",
+      "requirements": [
+        "FR-15"
+      ],
+      "journey": "Abby operational reporting reconciles without a patient-linked call record; patient-specific status is read from the authorized host",
+      "fixture": {
+        "id": "fixture-e2e-014",
+        "family": "reporting-and-agent",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-015",
+      "requirements": [
+        "FR-16"
+      ],
+      "journey": "Authorized agent discovers and invokes a capability with the same audit as the UI",
+      "fixture": {
+        "id": "fixture-e2e-015",
+        "family": "reporting-and-agent",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-016",
+      "requirements": [
+        "FR-18"
+      ],
+      "journey": "Successful first-time intake followed by definitive booking failure retains the patient reference and opens follow-up",
+      "fixture": {
+        "id": "fixture-e2e-016",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-017",
+      "requirements": [
+        "FR-20"
+      ],
+      "journey": "After-hours and holiday routing follows approved information and staff-request policy",
+      "fixture": {
+        "id": "fixture-e2e-017",
+        "family": "hours-and-silence",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-018",
+      "requirements": [
+        "FR-17",
+        "FR-20"
+      ],
+      "journey": "Disabling automation stops new calls while an existing call retains its captured policy",
+      "fixture": {
+        "id": "fixture-e2e-018",
+        "family": "settings-and-authority",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-019",
+      "requirements": [
+        "FR-13",
+        "FR-22"
+      ],
+      "journey": "Partial hypotheses, segment-final text, duplicate and stale generations produce one Abby-final turn ID; provider segment finality alone cannot trigger a write",
+      "fixture": {
+        "id": "fixture-e2e-019",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-020",
+      "requirements": [
+        "FR-06",
+        "FR-22"
+      ],
+      "journey": "Queued audio does not count as played; complete action-details playback plus a later clear final affirmation permits one write",
+      "fixture": {
+        "id": "fixture-e2e-020",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-021",
+      "requirements": [
+        "FR-06",
+        "FR-13",
+        "FR-22"
+      ],
+      "journey": "Interruption during action details clears playback; a late completion acknowledgment cannot revive that prompt or permit a write",
+      "fixture": {
+        "id": "fixture-e2e-021",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-022",
+      "requirements": [
+        "FR-07",
+        "FR-22"
+      ],
+      "journey": "Immediate speech synthesis failure settles the delivery once as failed, even if a late provider callback arrives; a permitted transfer or visible staff work follows without claiming the prompt was heard",
+      "fixture": {
+        "id": "fixture-e2e-022",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-023",
+      "requirements": [
+        "FR-09",
+        "FR-22"
+      ],
+      "journey": "Failed transfer produces staff work and no claim that staff answered",
+      "fixture": {
+        "id": "fixture-e2e-023",
+        "family": "staff-work",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-024",
+      "requirements": [
+        "FR-09",
+        "FR-22"
+      ],
+      "journey": "Connected transfer ends Abby media control with one connected result",
+      "fixture": {
+        "id": "fixture-e2e-024",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-025",
+      "requirements": [
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "Disconnect during an uncertain host write preserves reconciliation and staff visibility without replaying media",
+      "fixture": {
+        "id": "fixture-e2e-025",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-026",
+      "requirements": [
+        "FR-20",
+        "FR-22"
+      ],
+      "journey": "Intake ledger failure uses the independent dialed-number fallback before patient lookup or greeting",
+      "fixture": {
+        "id": "fixture-e2e-026",
+        "family": "admission-and-lease",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-027",
+      "requirements": [
+        "FR-20",
+        "FR-22"
+      ],
+      "journey": "Mid-call ledger failure stops new decisions and uses only a proven live failure route",
+      "fixture": {
+        "id": "fixture-e2e-027",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-028",
+      "requirements": [
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "A lost dispatcher wake-up leaves a pending intent for the live-session scan to start once",
+      "fixture": {
+        "id": "fixture-e2e-028",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-029",
+      "requirements": [
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "A process crash after atomic start resolves the presentation as unproven without replay or false confirmation",
+      "fixture": {
+        "id": "fixture-e2e-029",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-030",
+      "requirements": [
+        "FR-04",
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "A typed model success enters T3 and produces the approved next caller outcome",
+      "fixture": {
+        "id": "fixture-e2e-030",
+        "family": "effect-results",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-031",
+      "requirements": [
+        "FR-06",
+        "FR-13",
+        "FR-22"
+      ],
+      "journey": "Caller correction before atomic start supersedes the old pending details in the same call transition; only the corrected presentation can play",
+      "fixture": {
+        "id": "fixture-e2e-031",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-032",
+      "requirements": [
+        "FR-06",
+        "FR-13",
+        "FR-22"
+      ],
+      "journey": "Correction racing atomic presentation start suppresses pending speech or interrupts started speech",
+      "fixture": {
+        "id": "fixture-e2e-032",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-033",
+      "requirements": [
+        "FR-11",
+        "FR-20",
+        "FR-22"
+      ],
+      "journey": "Kill the voice process after T1 and before T2: the monitor closes the starting call and pending greeting once, while provider fallback handles the caller",
+      "fixture": {
+        "id": "fixture-e2e-033",
+        "family": "admission-and-lease",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-034",
+      "requirements": [
+        "FR-13",
+        "FR-22"
+      ],
+      "journey": "Distinct supported provider input codecs normalize to the same canonical media frames and produce the same final turn and call decision",
+      "fixture": {
+        "id": "fixture-e2e-034",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-035",
+      "requirements": [
+        "FR-06",
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "T4 rejects internal supersession as a second external result before a SAM transition",
+      "fixture": {
+        "id": "fixture-e2e-035",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-036",
+      "requirements": [
+        "FR-09",
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "Interruption before a transfer request crosses transport resolves canceled without a failure handoff",
+      "fixture": {
+        "id": "fixture-e2e-036",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-037",
+      "requirements": [
+        "FR-07",
+        "FR-11",
+        "FR-12"
+      ],
+      "journey": "An effect result with the wrong kind cannot advance an action or emit follow-up work",
+      "fixture": {
+        "id": "fixture-e2e-037",
+        "family": "effect-results",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-038",
+      "requirements": [
+        "FR-09",
+        "FR-11",
+        "FR-12"
+      ],
+      "journey": "Lose a staff-task response after possible send: key-based reconciliation or visible operator review resolves it without blind resend or duplicate staff work",
+      "fixture": {
+        "id": "fixture-e2e-038",
+        "family": "staff-work",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-039",
+      "requirements": [
+        "FR-13",
+        "FR-22"
+      ],
+      "journey": "A final caller correction clears the old pending prompt in T2 before delayed model interpretation",
+      "fixture": {
+        "id": "fixture-e2e-039",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-040",
+      "requirements": [
+        "FR-07",
+        "FR-11",
+        "FR-13"
+      ],
+      "journey": "A model result from an older conversation revision is recorded but cannot create obsolete speech, plans, or writes",
+      "fixture": {
+        "id": "fixture-e2e-040",
+        "family": "effect-results",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-041",
+      "requirements": [
+        "FR-07",
+        "FR-11"
+      ],
+      "journey": "A proven before-send host-write failure retries safely within budget",
+      "fixture": {
+        "id": "fixture-e2e-041",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-042",
+      "requirements": [
+        "FR-11"
+      ],
+      "journey": "Duplicate webhook after activation returns the stored receipt without another session or greeting",
+      "fixture": {
+        "id": "fixture-e2e-042",
+        "family": "admission-and-lease",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-043",
+      "requirements": [
+        "FR-11",
+        "FR-17"
+      ],
+      "journey": "Duplicate webhook after automation is disabled for new calls still returns the original receipt without launching fallback",
+      "fixture": {
+        "id": "fixture-e2e-043",
+        "family": "admission-and-lease",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-044",
+      "requirements": [
+        "FR-11"
+      ],
+      "journey": "The same provider call ID in distinct authenticated provider accounts admits two distinct calls",
+      "fixture": {
+        "id": "fixture-e2e-044",
+        "family": "admission-and-lease",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-045",
+      "requirements": [
+        "FR-11"
+      ],
+      "journey": "Crash before the dispatch mark leaves a proven-unsent host write eligible for bounded dispatch",
+      "fixture": {
+        "id": "fixture-e2e-045",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-046",
+      "requirements": [
+        "FR-11"
+      ],
+      "journey": "Crash after the dispatch mark but before network send enters reconciliation under the original key without blind resend",
+      "fixture": {
+        "id": "fixture-e2e-046",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-047",
+      "requirements": [
+        "FR-11"
+      ],
+      "journey": "Crash after host send enters reconciliation under the original key without a duplicate mutation",
+      "fixture": {
+        "id": "fixture-e2e-047",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-048",
+      "requirements": [
+        "FR-11"
+      ],
+      "journey": "Crash after host response but before T3 recovers the original outcome without a duplicate mutation",
+      "fixture": {
+        "id": "fixture-e2e-048",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-049",
+      "requirements": [
+        "FR-11",
+        "FR-12"
+      ],
+      "journey": "Lose a notification response after possible send: key-based reconciliation or visible operator review resolves it without blind resend or duplicate notification",
+      "fixture": {
+        "id": "fixture-e2e-049",
+        "family": "effect-results",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-050",
+      "requirements": [
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "A stale session-lease version cannot renew or extend the lease",
+      "fixture": {
+        "id": "fixture-e2e-050",
+        "family": "admission-and-lease",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-051",
+      "requirements": [
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "An expired session lease cannot renew or start media, and the monitor closes the call once",
+      "fixture": {
+        "id": "fixture-e2e-051",
+        "family": "admission-and-lease",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-052",
+      "requirements": [
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "Skewed voice-process and monitor clocks cannot alter ledger-owned lease expiry or its fenced close decision",
+      "fixture": {
+        "id": "fixture-e2e-052",
+        "family": "admission-and-lease",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-053",
+      "requirements": [
+        "FR-07",
+        "FR-11"
+      ],
+      "journey": "A host write that may have been sent becomes uncertain and reconciles under the original action key without blind resend",
+      "fixture": {
+        "id": "fixture-e2e-053",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-054",
+      "requirements": [
+        "FR-01",
+        "FR-20"
+      ],
+      "journey": "Unknown-number tenant isolation prevents cross-tenant call or patient data access",
+      "fixture": {
+        "id": "fixture-e2e-054",
+        "family": "routing",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-055",
+      "requirements": [
+        "FR-01",
+        "FR-20"
+      ],
+      "journey": "A shared dialed number binds the chosen location before any appointment action",
+      "fixture": {
+        "id": "fixture-e2e-055",
+        "family": "routing",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-056",
+      "requirements": [
+        "FR-02"
+      ],
+      "journey": "Patient lookup returns a definitive no-match without treating it as a provider failure",
+      "fixture": {
+        "id": "fixture-e2e-056",
+        "family": "patient-candidates",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 2,
+      "providerProfile": "cliniko",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-057",
+      "requirements": [
+        "FR-02"
+      ],
+      "journey": "Patient lookup failure prompts bounded retry or staff work without claiming no match",
+      "fixture": {
+        "id": "fixture-e2e-057",
+        "family": "patient-candidates",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 2,
+      "providerProfile": "cliniko",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-058",
+      "requirements": [
+        "FR-04",
+        "FR-21"
+      ],
+      "journey": "Missing approved answer source triggers clarification or staff follow-up without invented content",
+      "fixture": {
+        "id": "fixture-e2e-058",
+        "family": "knowledge",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-059",
+      "requirements": [
+        "FR-04",
+        "FR-21"
+      ],
+      "journey": "Expired approved answer source is not stated as current clinic policy",
+      "fixture": {
+        "id": "fixture-e2e-059",
+        "family": "knowledge",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-060",
+      "requirements": [
+        "FR-04",
+        "FR-21"
+      ],
+      "journey": "Conflicting answer sources prevent an unsupported factual answer",
+      "fixture": {
+        "id": "fixture-e2e-060",
+        "family": "knowledge",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-061",
+      "requirements": [
+        "FR-04",
+        "FR-21"
+      ],
+      "journey": "Injected instructions inside retrieved tool text cannot invoke a capability",
+      "fixture": {
+        "id": "fixture-e2e-061",
+        "family": "knowledge",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-062",
+      "requirements": [
+        "FR-05"
+      ],
+      "journey": "A daylight-saving transition yields the host-approved local offer time and UTC instant",
+      "fixture": {
+        "id": "fixture-e2e-062",
+        "family": "offers",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-063",
+      "requirements": [
+        "FR-05",
+        "FR-07"
+      ],
+      "journey": "An expired offer cannot produce a committed booking or false confirmation",
+      "fixture": {
+        "id": "fixture-e2e-063",
+        "family": "offers",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-064",
+      "requirements": [
+        "FR-06",
+        "FR-07"
+      ],
+      "journey": "A definitive booking rejection produces no confirmation and one accurate caller outcome",
+      "fixture": {
+        "id": "fixture-e2e-064",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-065",
+      "requirements": [
+        "FR-07",
+        "FR-12"
+      ],
+      "journey": "A lost booking response reconciles the original action key before any caller confirmation",
+      "fixture": {
+        "id": "fixture-e2e-065",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-066",
+      "requirements": [
+        "FR-06",
+        "FR-07"
+      ],
+      "journey": "A supported atomic reschedule commits once with a truthful receipt",
+      "fixture": {
+        "id": "fixture-e2e-066",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-067",
+      "requirements": [
+        "FR-06",
+        "FR-07"
+      ],
+      "journey": "An unsafe reschedule capability takes the request-only staff path",
+      "fixture": {
+        "id": "fixture-e2e-067",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-068",
+      "requirements": [
+        "FR-09",
+        "FR-19"
+      ],
+      "journey": "Overdue staff work alerts its configured owner without marking the task resolved",
+      "fixture": {
+        "id": "fixture-e2e-068",
+        "family": "staff-work",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-069",
+      "requirements": [
+        "FR-10",
+        "FR-17"
+      ],
+      "journey": "A view-only staff member cannot change settings through the browser command path",
+      "fixture": {
+        "id": "fixture-e2e-069",
+        "family": "settings-and-authority",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-070",
+      "requirements": [
+        "FR-13"
+      ],
+      "journey": "Silence reaches a bounded retry and then an approved outcome rather than looping",
+      "fixture": {
+        "id": "fixture-e2e-070",
+        "family": "hours-and-silence",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-071",
+      "requirements": [
+        "FR-16"
+      ],
+      "journey": "An agent with denied tenant or role scope cannot invoke the capability or read protected results",
+      "fixture": {
+        "id": "fixture-e2e-071",
+        "family": "settings-and-authority",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-072",
+      "requirements": [
+        "FR-16"
+      ],
+      "journey": "An agent command requiring approval remains pending until the approved command is applied and audited",
+      "fixture": {
+        "id": "fixture-e2e-072",
+        "family": "settings-and-authority",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-073",
+      "requirements": [
+        "FR-18"
+      ],
+      "journey": "Successful first-time intake followed by uncertain booking retains the patient reference and reconciles booking",
+      "fixture": {
+        "id": "fixture-e2e-073",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-074",
+      "requirements": [
+        "FR-17",
+        "FR-20"
+      ],
+      "journey": "Emergency-stop on an active call blocks a new host write and routes unresolved work to staff",
+      "fixture": {
+        "id": "fixture-e2e-074",
+        "family": "settings-and-authority",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-075",
+      "requirements": [
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "Dispatcher-task restart with an attached voice session recovers the pending intent once",
+      "fixture": {
+        "id": "fixture-e2e-075",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-076",
+      "requirements": [
+        "FR-04",
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "Malformed model output enters T3 as a typed failure and produces a bounded caller outcome",
+      "fixture": {
+        "id": "fixture-e2e-076",
+        "family": "effect-results",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-077",
+      "requirements": [
+        "FR-04",
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "Unavailable model enters T3 as a typed failure and produces a bounded caller outcome",
+      "fixture": {
+        "id": "fixture-e2e-077",
+        "family": "effect-results",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-078",
+      "requirements": [
+        "FR-04",
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "Timed-out model enters T3 as a typed failure and produces a bounded caller outcome",
+      "fixture": {
+        "id": "fixture-e2e-078",
+        "family": "effect-results",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-079",
+      "requirements": [
+        "FR-06",
+        "FR-13",
+        "FR-22"
+      ],
+      "journey": "A correction in the gap after durable presentation start but before deliver closes the delivery gate before media",
+      "fixture": {
+        "id": "fixture-e2e-079",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-080",
+      "requirements": [
+        "FR-11",
+        "FR-20",
+        "FR-22"
+      ],
+      "journey": "Activation racing an admission-expiry scan invalidates the stale scan ref",
+      "fixture": {
+        "id": "fixture-e2e-080",
+        "family": "admission-and-lease",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-081",
+      "requirements": [
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "A heartbeat racing an active-session expiry scan invalidates the stale scan ref",
+      "fixture": {
+        "id": "fixture-e2e-081",
+        "family": "admission-and-lease",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-082",
+      "requirements": [
+        "FR-06",
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "T4 rejects played for a still-pending speech intent before confirmation",
+      "fixture": {
+        "id": "fixture-e2e-082",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-083",
+      "requirements": [
+        "FR-06",
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "T4 rejects played for a transfer intent before confirmation",
+      "fixture": {
+        "id": "fixture-e2e-083",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-084",
+      "requirements": [
+        "FR-06",
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "T4 rejects a mismatched presentation ID before any second SAM transition",
+      "fixture": {
+        "id": "fixture-e2e-084",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-085",
+      "requirements": [
+        "FR-09",
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "After a transfer request may have crossed transport, only connected, failed, or unproven evidence settles it",
+      "fixture": {
+        "id": "fixture-e2e-085",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-086",
+      "requirements": [
+        "FR-07",
+        "FR-11",
+        "FR-12"
+      ],
+      "journey": "An effect result with the wrong tenant cannot advance another action or emit follow-up work",
+      "fixture": {
+        "id": "fixture-e2e-086",
+        "family": "effect-results",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-087",
+      "requirements": [
+        "FR-07",
+        "FR-11",
+        "FR-12"
+      ],
+      "journey": "An effect result with the wrong lease version cannot advance another action or emit follow-up work",
+      "fixture": {
+        "id": "fixture-e2e-087",
+        "family": "effect-results",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-088",
+      "requirements": [
+        "FR-07",
+        "FR-11",
+        "FR-12"
+      ],
+      "journey": "An effect result with the wrong action key cannot advance another action or emit follow-up work",
+      "fixture": {
+        "id": "fixture-e2e-088",
+        "family": "effect-results",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-089",
+      "requirements": [
+        "FR-07",
+        "FR-11",
+        "FR-12"
+      ],
+      "journey": "A reconciliation result with the wrong original action key cannot close the original effect",
+      "fixture": {
+        "id": "fixture-e2e-089",
+        "family": "effect-results",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-090",
+      "requirements": [
+        "FR-09",
+        "FR-11",
+        "FR-12"
+      ],
+      "journey": "A staff-task result with the wrong task key cannot advance staff work or emit follow-up work",
+      "fixture": {
+        "id": "fixture-e2e-090",
+        "family": "staff-work",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-091",
+      "requirements": [
+        "FR-11",
+        "FR-12"
+      ],
+      "journey": "A notification result with the wrong notification key cannot advance another request",
+      "fixture": {
+        "id": "fixture-e2e-091",
+        "family": "effect-results",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-092",
+      "requirements": [
+        "FR-13",
+        "FR-22"
+      ],
+      "journey": "A lost T2 acknowledgment retries the same caller-turn ID without reopening output or duplicating the turn",
+      "fixture": {
+        "id": "fixture-e2e-092",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-093",
+      "requirements": [
+        "FR-07",
+        "FR-11",
+        "FR-13"
+      ],
+      "journey": "A host-read result from an older conversation revision cannot create an obsolete plan or speech",
+      "fixture": {
+        "id": "fixture-e2e-093",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-094",
+      "requirements": [
+        "FR-07",
+        "FR-11",
+        "FR-13"
+      ],
+      "journey": "A prior host-write result still updates its action after a caller correction",
+      "fixture": {
+        "id": "fixture-e2e-094",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-095",
+      "requirements": [
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "A retry after a lost lease-renewal acknowledgment returns the current unexpired lease without extending it",
+      "fixture": {
+        "id": "fixture-e2e-095",
+        "family": "admission-and-lease",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-096",
+      "requirements": [
+        "FR-11"
+      ],
+      "journey": "Provider call replay after number reassignment acknowledges the original receipt without routing under the new tenant",
+      "fixture": {
+        "id": "fixture-e2e-096",
+        "family": "routing",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-097",
+      "requirements": [
+        "FR-11"
+      ],
+      "journey": "A reused provider call key with a conflicting dialed number is rejected without disclosing the original tenant",
+      "fixture": {
+        "id": "fixture-e2e-097",
+        "family": "routing",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-098",
+      "requirements": [
+        "FR-19"
+      ],
+      "journey": "An authorized staff-item transition stores its command and host effect before dispatch; lost host response reconciles by command key",
+      "fixture": {
+        "id": "fixture-e2e-098",
+        "family": "staff-work",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-099",
+      "requirements": [
+        "FR-09",
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "Disconnect after possible speech or transfer send without terminal transport evidence resolves one `unproven.failed` result and never fabricates playback or connection",
+      "fixture": {
+        "id": "fixture-e2e-099",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-100",
+      "requirements": [
+        "FR-12",
+        "FR-17"
+      ],
+      "journey": "Notification ownership changes after call admission but before dispatch; the original intent sends only through its captured owner",
+      "fixture": {
+        "id": "fixture-e2e-100",
+        "family": "settings-and-authority",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-101",
+      "requirements": [
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "Session lease expires during a process stall between durable presentation start and first output; resumed voice processing emits no media or transfer request",
+      "fixture": {
+        "id": "fixture-e2e-101",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-102",
+      "requirements": [
+        "FR-07",
+        "FR-11"
+      ],
+      "journey": "Reconciliation with another tenant's location scope or colliding action key cannot read or settle the original mutation",
+      "fixture": {
+        "id": "fixture-e2e-102",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-103",
+      "requirements": [
+        "FR-06",
+        "FR-07",
+        "FR-11",
+        "FR-13"
+      ],
+      "journey": "Caller correction commits before a host-write dispatch mark, canceling the unsent intent without a send permit",
+      "fixture": {
+        "id": "fixture-e2e-103",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-104",
+      "requirements": [
+        "FR-09",
+        "FR-11",
+        "FR-19"
+      ],
+      "journey": "A cross-tenant staff-task reconciliation request is rejected before disclosure",
+      "fixture": {
+        "id": "fixture-e2e-104",
+        "family": "staff-work",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-105",
+      "requirements": [
+        "FR-06",
+        "FR-07",
+        "FR-11",
+        "FR-13"
+      ],
+      "journey": "A host-write dispatch mark commits before caller correction; the possible write remains in flight for truthful receipt or reconciliation",
+      "fixture": {
+        "id": "fixture-e2e-105",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-106",
+      "requirements": [
+        "FR-09",
+        "FR-11",
+        "FR-19"
+      ],
+      "journey": "A cross-tenant staff-item advance request is rejected before host mutation",
+      "fixture": {
+        "id": "fixture-e2e-106",
+        "family": "staff-work",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-107",
+      "requirements": [
+        "FR-09",
+        "FR-11",
+        "FR-19"
+      ],
+      "journey": "A cross-tenant staff-transition reconciliation request is rejected before disclosure or state change",
+      "fixture": {
+        "id": "fixture-e2e-107",
+        "family": "staff-work",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-108",
+      "requirements": [
+        "FR-01",
+        "FR-05",
+        "FR-11"
+      ],
+      "journey": "A host-read intent with clinic scope cannot dispatch an offer search before location binding",
+      "fixture": {
+        "id": "fixture-e2e-108",
+        "family": "routing",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-109",
+      "requirements": [
+        "FR-09",
+        "FR-19"
+      ],
+      "journey": "An authorized staff reassignment after call media ends updates the call aggregate's single staff-item state through T2/T3 and projects one versioned result",
+      "fixture": {
+        "id": "fixture-e2e-109",
+        "family": "staff-work",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-110",
+      "requirements": [
+        "FR-17",
+        "FR-22"
+      ],
+      "journey": "Caller audio and final transcript are processed live and absent from every Abby durable surface after a completed call",
+      "fixture": {
+        "id": "fixture-e2e-110",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-111",
+      "requirements": [
+        "FR-03",
+        "FR-17"
+      ],
+      "journey": "A phone-index refresh publishes only Cliniko patient IDs and normalized phone numbers after all pages complete",
+      "fixture": {
+        "id": "fixture-e2e-111",
+        "family": "patient-candidates",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "cliniko",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-112",
+      "requirements": [
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "A voice-process restart leaves no recoverable audio, transcript, or patient-specific presentation text",
+      "fixture": {
+        "id": "fixture-e2e-112",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-113",
+      "requirements": [
+        "FR-03",
+        "FR-17"
+      ],
+      "journey": "A changed or archived Cliniko patient phone invalidates a stale local candidate before disclosure",
+      "fixture": {
+        "id": "fixture-e2e-113",
+        "family": "patient-candidates",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 2,
+      "providerProfile": "cliniko",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-114",
+      "requirements": [
+        "FR-09",
+        "FR-19"
+      ],
+      "journey": "A location without an approved host task destination cannot accept patient-specific staff work; standalone Cliniko mode remains unavailable and emits only a non-patient alert",
+      "fixture": {
+        "id": "fixture-e2e-114",
+        "family": "staff-work",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 2,
+      "providerProfile": "cliniko",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-115",
+      "requirements": [
+        "FR-09",
+        "FR-19"
+      ],
+      "journey": "A host task receipt reporting an unapproved destination cannot mark the handoff complete; standalone Cliniko mode retains no patient-specific Abby review item and uses the approved caller fallback",
+      "fixture": {
+        "id": "fixture-e2e-115",
+        "family": "staff-work",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 2,
+      "providerProfile": "cliniko",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-116",
+      "requirements": [
+        "FR-11",
+        "FR-22"
+      ],
+      "journey": "Crash after ordinary call-end T2 but before a transient delivery promise reaches T4 leaves one durable unproven resolution and no replay",
+      "fixture": {
+        "id": "fixture-e2e-116",
+        "family": "media-and-presentation",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-117",
+      "requirements": [
+        "FR-03",
+        "FR-22"
+      ],
+      "journey": "A shared phone maps to multiple patient IDs and does not authorize appointment disclosure before host-approved verification",
+      "fixture": {
+        "id": "fixture-e2e-117",
+        "family": "patient-candidates",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "cliniko",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-118",
+      "requirements": [
+        "FR-03",
+        "FR-17"
+      ],
+      "journey": "A failed or partial phone-index refresh leaves the published generation unchanged and stale, blocking automatic lookup",
+      "fixture": {
+        "id": "fixture-e2e-118",
+        "family": "patient-candidates",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "cliniko",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-119",
+      "requirements": [
+        "FR-01",
+        "FR-03",
+        "FR-17"
+      ],
+      "journey": "A location change switches the phone-index scope and cannot select a candidate from the previous clinic",
+      "fixture": {
+        "id": "fixture-e2e-119",
+        "family": "routing",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 1,
+      "providerProfile": "cliniko",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-120",
+      "requirements": [
+        "FR-06",
+        "FR-07",
+        "FR-11"
+      ],
+      "journey": "Host permission is revoked after call snapshot but before commit; the adapter/host rejects the original keyed write, records `rejected.forbidden`, and does not claim a booking",
+      "fixture": {
+        "id": "fixture-e2e-120",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 2,
+      "providerProfile": "cliniko",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-121",
+      "requirements": [
+        "FR-06",
+        "FR-07",
+        "FR-11"
+      ],
+      "journey": "Host capability is withdrawn after call snapshot but before commit; the adapter/host returns keyed `unsupported`, performs no mutation, and uses a request-only path only when a proven host staff route exists",
+      "fixture": {
+        "id": "fixture-e2e-121",
+        "family": "appointment-actions",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 2,
+      "providerProfile": "cliniko",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-122",
+      "requirements": [
+        "FR-01",
+        "FR-11",
+        "FR-17"
+      ],
+      "journey": "A frozen configuration-only source and staged target publish one shared-number route under the exact fence version; concurrent publication has one winner and rollback retains target staff work",
+      "fixture": {
+        "id": "fixture-e2e-122",
+        "family": "cutover",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded",
+        "cutover"
+      ],
+      "earliestPhase": 5,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-123",
+      "requirements": [
+        "FR-01",
+        "FR-11",
+        "FR-17"
+      ],
+      "journey": "A stale source fence, changed native target knowledge, or stale number version blocks route publication while the source assignment remains authoritative",
+      "fixture": {
+        "id": "fixture-e2e-123",
+        "family": "cutover",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded",
+        "cutover"
+      ],
+      "earliestPhase": 5,
+      "providerProfile": "reference",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-124",
+      "requirements": [
+        "FR-09",
+        "FR-17",
+        "FR-19"
+      ],
+      "journey": "A standalone Cliniko profile without a proven Cliniko-owned task route keeps patient-specific request-only unavailable after restart; a failed transfer leaves no patient details in Abby storage, outbox, logs, or alerts and makes no delivered-handoff claim",
+      "fixture": {
+        "id": "fixture-e2e-124",
+        "family": "staff-work",
+        "state": "planned"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 2,
+      "providerProfile": "cliniko",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      }
+    },
+    {
+      "id": "E2E-125",
+      "requirements": [
+        "FR-05",
+        "FR-07",
+        "FR-17"
+      ],
+      "journey": "A configured standalone Cliniko availability question presents provisional times or a truthful empty/failure result, claims no reservation or staff delivery, and retains no caller text or offered times in Abby's database or disposable backup",
+      "fixture": {
+        "id": "fixture-e2e-125",
+        "family": "availability",
+        "state": "textImplemented"
+      },
+      "intendedCompositions": [
+        "standalone",
+        "embedded"
+      ],
+      "earliestPhase": 2,
+      "providerProfile": "cliniko",
+      "fullCallEvidence": {
+        "status": "planned",
+        "testFiles": []
+      },
+      "textEvidence": {
+        "status": "passed",
+        "testFiles": [
+          "test/storage/standalone-privacy-journey.test.ts"
+        ]
+      }
+    }
+  ]
+}

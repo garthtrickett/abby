@@ -130,7 +130,7 @@ test("standalone phone, setting, export, and text journey retains only patient p
     .where("tenant_id", "=", scope.tenantId as never).execute()).length, 0);
 });
 
-test("standalone agent reads provisional Cliniko times without retaining appointments or promising staff work", async () => {
+test("E2E-125 text: agent reads provisional times and gives truthful empty or failed fallback", async () => {
   const suffix = randomUUID().slice(0, 8);
   const scope = { tenantId: `availability-${suffix}`, clinicId: "clinic", locationId: "frontdesk" };
   const now = "2026-10-01T00:00:00Z";
@@ -210,7 +210,7 @@ test("standalone agent reads provisional Cliniko times without retaining appoint
   ]), []);
 });
 
-test("standalone text ingress presents availability and persists no patient-specific input or result", async () => {
+test("E2E-125 text: standalone ingress presents provisional availability without patient-data retention", async () => {
   const suffix = randomUUID().slice(0, 8);
   const scope = { tenantId: `availability-entry-${suffix}`, clinicId: "clinic", locationId: "frontdesk" };
   const now = "2026-10-01T00:00:00Z";

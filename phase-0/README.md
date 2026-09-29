@@ -11,6 +11,8 @@ The [execution plan](../PHASE_0_EXECUTION_PLAN.md) is the gate. These files are 
 | P0-05 media and fallback | Deferred during the text-first checkpoint; provider/account not selected | The [text test plan](TEXT_TEST_PLAN.md) advances call/action contracts. Playback, transfer, and fallback remain required before full Phase 0 sign-off or live-call readiness. |
 | P0-06 to P0-10 | TXT-01 through TXT-09 run against memory and disposable PostgreSQL; a [reference host composition](REFERENCE_HOST_CONTRACT.md) exercises booking, one setting, and staff fallback in standalone and embedded forms. The proposed [portable archive contract](PORTABLE_ARCHIVE_CONTRACT.md) defines the P0-08 export/import boundary. | Run `npm test` and `npm run probe:postgres`. The archive implementation, final contracts, and full-call E2E remain open. |
 
+The [scenario manifest](SCENARIO_MANIFEST.md) tracks all current E2E IDs and maps the current agent catalogue and settings. Only the standalone availability case has passing text-only evidence in that registry; full-call evidence remains planned.
+
 The Cliniko [read-only probe](probes/cliniko_readonly.py) prompts for its key in a terminal. Credentials and provider response records are not committed. A 200 GET proves only that this key can perform that read; it does not prove safe automation or write permission.
 
 ## Local text availability entrypoint
