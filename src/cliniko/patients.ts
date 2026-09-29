@@ -1,6 +1,7 @@
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
 import { ClinikoReadBudget } from "./read-budget.ts";
+import { normalizePatientPhone } from "./phone-number.ts";
 
 export type ClinikoClinicScope = Pick<LocationScope, "tenantId" | "clinicId">;
 export type ClinikoPatientConfig = Readonly<{
@@ -20,9 +21,15 @@ export type ClinikoPatientFailure = Readonly<{
     "unavailable" | "malformed" | "tooManyResults";
   resetAt?: string;
 }>;
+export type ClinikoPhoneSnapshot = Readonly<{
+  scope: ClinikoClinicScope;
+  observedAt: string;
+  links: readonly Readonly<{ normalizedPhone: string; patientId: string }>[];
+}>;
 
 const maxBodyBytes = 1_000_000;
 const emailPattern = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+const patientIdPattern = /^[1-9][0-9]*$/;
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
@@ -151,5 +158,116 @@ export class ClinikoPatientCandidateReader {
     if (body.total_entries === 0) return ok({ ...base, kind: "none" });
     if (Number(body.total_entries) > 1) return ok({ ...base, kind: "ambiguous" });
     return ok({ ...base, kind: "one", candidateRef: `cliniko:patient:${body.patients[0].id}` });
+  }
+
+  /** Full bounded scan for the local phone-to-ID index; no other patient fields escape this method. */
+  async readPhoneSnapshot(scope: ClinikoClinicScope, countryCallingCode: string, maxPatients = 10_000):
+    Promise<Result<ClinikoPhoneSnapshot, ClinikoPatientFailure>> {
+    if (!validScope(scope) || scope.tenantId !== this.scope.tenantId || scope.clinicId !== this.scope.clinicId) {
+      return err({ kind: "scopeMismatch" });
+    }
+    if (!/^[1-9][0-9]{0,2}$/.test(countryCallingCode) || !Number.isSafeInteger(maxPatients) ||
+        maxPatients < 1 || maxPatients > 100_000) return err({ kind: "invalidQuery" });
+    const links: Array<{ normalizedPhone: string; patientId: string }> = [];
+    const seenIds = new Set<string>();
+    let totalEntries: number | undefined;
+    for (let page = 1; ; page++) {
+      const limited = this.rateBudget.claim();
+      if (limited) return err(limited);
+      const query = new URLSearchParams({ page: String(page), per_page: "100", sort: "id:asc" });
+      let response: Response;
+      try {
+        response = await this.fetchPort(`${this.baseUrl}/patients?${query}`, {
+          method: "GET", headers: { Accept: "application/json", Authorization: this.authorization,
+            "User-Agent": this.userAgent }, redirect: "error", signal: AbortSignal.timeout(15_000),
+        });
+      } catch { return err({ kind: "unavailable" }); }
+      if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
+      if (response.status === 429) return err(this.rateBudget.observe429(response.headers.get("X-RateLimit-Reset")));
+      if (response.status >= 500 || response.status === 404) return err({ kind: "unavailable" });
+      if (response.status !== 200) return err({ kind: "malformed" });
+      const parsed = await boundedJson(response);
+      if (!parsed.ok) return parsed;
+      const body = record(parsed.value);
+      if (!body || !Number.isSafeInteger(body.total_entries) || Number(body.total_entries) < 0 ||
+          Number(body.total_entries) > maxPatients || !Array.isArray(body.patients) || body.patients.length > 100 ||
+          (totalEntries !== undefined && totalEntries !== body.total_entries)) return err({ kind: "tooManyResults" });
+      totalEntries = Number(body.total_entries);
+      const expected = Math.min(100, Math.max(0, totalEntries - (page - 1) * 100));
+      if (body.patients.length !== expected) return err({ kind: "malformed" });
+      for (const candidate of body.patients) {
+        const patient = record(candidate);
+        if (!patient || typeof patient.id !== "string" || !patientIdPattern.test(patient.id) ||
+            seenIds.has(patient.id) || (patient.archived_at !== null && patient.archived_at !== undefined &&
+              typeof patient.archived_at !== "string") ||
+            (patient.patient_phone_numbers !== null && !Array.isArray(patient.patient_phone_numbers))) {
+          return err({ kind: "malformed" });
+        }
+        seenIds.add(patient.id);
+        if (patient.archived_at !== null && patient.archived_at !== undefined) continue;
+        const phones = Array.isArray(patient.patient_phone_numbers) ? patient.patient_phone_numbers : [];
+        for (const value of phones) {
+          const phone = record(value);
+          if (!phone || (phone.number !== null && typeof phone.number !== "string") ||
+              (phone.phone_type !== null && phone.phone_type !== undefined && typeof phone.phone_type !== "string")) {
+            return err({ kind: "malformed" });
+          }
+          if (typeof phone.phone_type === "string" && phone.phone_type.toLowerCase() === "fax") continue;
+          const normalizedPhone = normalizePatientPhone(String(phone.number ?? ""), countryCallingCode);
+          if (normalizedPhone) links.push({ normalizedPhone, patientId: patient.id });
+        }
+      }
+      if (seenIds.size === totalEntries) break;
+      if (page * 100 >= maxPatients || expected < 100) return err({ kind: "malformed" });
+    }
+    let observedAt: string;
+    try { observedAt = this.clock(); }
+    catch { return err({ kind: "unavailable" }); }
+    if (!Number.isFinite(Date.parse(observedAt))) return err({ kind: "unavailable" });
+    return ok({ scope: structuredClone(this.scope), observedAt, links });
+  }
+
+  /** Rechecks an indexed candidate against Cliniko before any identity workflow uses it. */
+  async hasCurrentPhone(scope: ClinikoClinicScope, patientId: string, normalizedPhone: string, countryCallingCode: string):
+    Promise<Result<boolean, ClinikoPatientFailure>> {
+    if (!validScope(scope) || scope.tenantId !== this.scope.tenantId || scope.clinicId !== this.scope.clinicId) {
+      return err({ kind: "scopeMismatch" });
+    }
+    if (!patientIdPattern.test(patientId) || !/^\+[1-9][0-9]{7,14}$/.test(normalizedPhone) ||
+        !/^[1-9][0-9]{0,2}$/.test(countryCallingCode)) return err({ kind: "invalidQuery" });
+    const limited = this.rateBudget.claim();
+    if (limited) return err(limited);
+    let response: Response;
+    try {
+      response = await this.fetchPort(`${this.baseUrl}/patients/${patientId}`, {
+        method: "GET", headers: { Accept: "application/json", Authorization: this.authorization,
+          "User-Agent": this.userAgent }, redirect: "error", signal: AbortSignal.timeout(15_000),
+      });
+    } catch { return err({ kind: "unavailable" }); }
+    if (response.status === 404) return ok(false);
+    if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
+    if (response.status === 429) return err(this.rateBudget.observe429(response.headers.get("X-RateLimit-Reset")));
+    if (response.status >= 500) return err({ kind: "unavailable" });
+    if (response.status !== 200) return err({ kind: "malformed" });
+    const parsed = await boundedJson(response);
+    if (!parsed.ok) return parsed;
+    const patient = record(parsed.value);
+    if (!patient || patient.id !== patientId ||
+        (patient.archived_at !== null && patient.archived_at !== undefined && typeof patient.archived_at !== "string") ||
+        (patient.patient_phone_numbers !== null && !Array.isArray(patient.patient_phone_numbers))) {
+      return err({ kind: "malformed" });
+    }
+    if (patient.archived_at !== null && patient.archived_at !== undefined) return ok(false);
+    const phones = Array.isArray(patient.patient_phone_numbers) ? patient.patient_phone_numbers : [];
+    for (const value of phones) {
+      const phone = record(value);
+      if (!phone || (phone.number !== null && typeof phone.number !== "string") ||
+          (phone.phone_type !== null && phone.phone_type !== undefined && typeof phone.phone_type !== "string")) {
+        return err({ kind: "malformed" });
+      }
+      if (typeof phone.phone_type === "string" && phone.phone_type.toLowerCase() === "fax") continue;
+      if (normalizePatientPhone(String(phone.number ?? ""), countryCallingCode) === normalizedPhone) return ok(true);
+    }
+    return ok(false);
   }
 }

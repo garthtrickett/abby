@@ -1,15 +1,15 @@
 # Phase 0 product decisions
 
-**Status:** Proposed defaults for review. None of these rows is an approved clinic or product decision.
+**Status:** Product owner fixed the D-06 storage boundary and confirmed phone-to-ID lookup in D-01. Clinic verification details and all other proposed defaults still require their listed owners.
 
 | Decision ID | Question | Proposed default pending approval | Owner and deadline |
 | --- | --- | --- | --- |
-| D-01 | How is an existing caller verified before appointment details or changes? | Use bounded host-supported clues for candidates; phone match is available only where the host supports it and is never proof. The Cliniko adapter has observed exact email/date-of-birth candidate search, but those clues are not verification. Use clinic-approved proof with a bounded attempt count, then staff handoff. | Product and clinic owner; before patient lookup automation. |
+| D-01 | How is an existing caller verified before appointment details or changes? | The caller's presented phone is looked up in Abby's clinic-scoped phone-to-Cliniko-patient-ID index, then each candidate is re-read from Cliniko. A match is never proof; shared or stale numbers require bounded clarification or staff handoff. Clinic-approved proof is required before protected disclosure or mutation. | Product and clinic owner; before patient lookup automation. |
 | D-02 | Which action result may Abby describe as confirmed? | Only an exact committed host receipt; uncertain writes are called pending and assigned reconciliation or staff work. | Product; before the first action E2E. |
 | D-03 | What may a first-time caller complete automatically? | Staff request until approved intake consent, duplicate check, stable patient ref, and safe write recovery are proven. | Product and clinic owner; before intake automation. |
 | D-04 | Can Abby reschedule an appointment? | Staff request until a host-native or atomic operation and exact recovery are proven. | Product; before rescheduling automation. |
 | D-05 | Who owns confirmations and reminders? | One host-approved owner per notification kind, captured for each call; no duplicate send. | Product and clinic owner; before notification implementation. |
-| D-06 | When may audio or transcript be retained? | Persistent capture off until a bound location and durable policy/consent outcome allow it. | Product and clinic owner; before retained-media implementation. |
+| D-06 | What patient information may Abby persist? | Only Cliniko patient IDs and patient phone numbers, in the local lookup index. Audio, transcripts, appointment data, patient-linked outcomes, and free-text notes remain outside Abby persistence. | Decided by product owner; privacy-safe ledger and host handoff required before real patient traffic. |
 | D-07 | Where does failed or overdue staff work go? | A required operator review queue is configured before automation; failed task delivery never counts as handoff. | Product and clinic owner; before staff-task implementation. |
 | D-08 | Which market, locale, and quality thresholds govern the first pilot? | Use existing clinic markets; declare sample size, critical failures, latency and language thresholds before pilot traffic. | Product; before pilot design approval. |
 | D-09 | Which telephony route handles failed intake or voice startup? | A provider-owned number fallback, tested while Abby is unavailable; block live-call readiness until proven. | Product and voice engineering; before live routing. |
