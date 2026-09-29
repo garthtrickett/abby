@@ -18,6 +18,10 @@ export default interface PatientPhoneSyncTable {
   generation: ColumnType<number, number, number>;
 
   completed_at: ColumnType<Date, Date | string, Date | string>;
+
+  country_calling_code: ColumnType<string | null, string | null, string | null>;
+
+  normalization_version: ColumnType<number | null, number | null, number | null>;
 }
 
 export type PatientPhoneSync = Selectable<PatientPhoneSyncTable>;

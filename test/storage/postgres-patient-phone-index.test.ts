@@ -61,14 +61,14 @@ test("Cliniko phone index stores only phone-to-ID links and rechecks shared cand
   failRefresh = true;
   const failed = await lookup.refresh(scope);
   assert.equal(failed.ok, false);
-  const preserved = await index.find(scope, phone, 60_000);
+  const preserved = await index.find(scope, phone, 60_000, "61");
   assert.deepEqual(preserved, { ok: true, value: { kind: "stale", patientIds: [] } });
   const preservedRows = await db.selectFrom("patient_phone_index").selectAll()
     .where("tenant_id", "=", scope.tenantId as never).execute();
   assert.equal(preservedRows.length, 2);
-  const stale = await index.find(scope, phone, 60_000, new Date(Date.now() + 120_000));
+  const stale = await index.find(scope, phone, 60_000, "61", new Date(Date.now() + 120_000));
   assert.deepEqual(stale, { ok: true, value: { kind: "stale", patientIds: [] } });
-  const otherClinic = await index.find({ ...scope, clinicId: "other-clinic" }, phone, 60_000);
+  const otherClinic = await index.find({ ...scope, clinicId: "other-clinic" }, phone, 60_000, "61");
   assert.deepEqual(otherClinic, { ok: true, value: { kind: "stale", patientIds: [] } });
   assert.deepEqual(await lookup.candidates(scope, "withheld"), { ok: true, value: { kind: "noNumber", candidateIds: [] } });
 });
@@ -76,7 +76,7 @@ test("Cliniko phone index stores only phone-to-ID links and rechecks shared cand
 test("a failed or older concurrent scan cannot invalidate or replace a newer generation", async () => {
   const scope = { tenantId: "phone-race-tenant", clinicId: "phone-race-clinic" };
   const index = new PostgresPatientPhoneIndex(db);
-  assert.deepEqual(await index.publish(scope, [{ normalizedPhone: "+61400111111", patientId: "401" }]),
+  assert.deepEqual(await index.publish(scope, [{ normalizedPhone: "+61400111111", patientId: "401" }], "61"),
     { ok: true, value: 1 });
   let releaseFailed: (() => void) | undefined;
   let signalFailed: (() => void) | undefined;
@@ -102,10 +102,10 @@ test("a failed or older concurrent scan cannot invalidate or replace a newer gen
   assert.deepEqual(await winningLookup.refresh(scope), { ok: true, value: 2 });
   releaseFailed!();
   assert.equal((await first).ok, false);
-  assert.equal((await index.find(scope, "+61400222222", 60_000)).ok, true);
+  assert.equal((await index.find(scope, "+61400222222", 60_000, "61")).ok, true);
   const head = await index.head(scope);
   assert.equal(head.ok && head.value?.generation, 2);
-  const current = await index.find(scope, "+61400222222", 60_000);
+  const current = await index.find(scope, "+61400222222", 60_000, "61");
   assert.equal(current.ok && current.value.kind, "one");
   assert.deepEqual(current.ok ? current.value.patientIds : [], ["402"]);
 
@@ -124,9 +124,9 @@ test("a failed or older concurrent scan cannot invalidate or replace a newer gen
   assert.deepEqual(await winningLookup.refresh(scope), { ok: true, value: 3 });
   releaseOlder!();
   assert.deepEqual(await older, { ok: false, error: { kind: "generationChanged" } });
-  const obsolete = await index.find(scope, "+61400111111", 60_000);
+  const obsolete = await index.find(scope, "+61400111111", 60_000, "61");
   assert.equal(obsolete.ok && obsolete.value.kind, "none");
-  const newest = await index.find(scope, "+61400222222", 60_000);
+  const newest = await index.find(scope, "+61400222222", 60_000, "61");
   assert.equal(newest.ok && newest.value.kind, "one");
 });
 
@@ -156,14 +156,14 @@ test("Cliniko full scan follows all pages before publishing a generation", async
   const lookup = new ClinikoPhoneLookup(created.value, index, "61", 60_000);
   assert.equal((await lookup.refresh(scope)).ok, true);
   assert.deepEqual(pages, [1, 2]);
-  const found = await index.find(scope, "+61400111222", 60_000);
+  const found = await index.find(scope, "+61400111222", 60_000, "61");
   assert.equal(found.ok && found.value.kind, "tooMany");
   const count = await db.selectFrom("patient_phone_index").selectAll()
     .where("tenant_id", "=", scope.tenantId as never).execute();
   assert.equal(count.length, 101);
   assert.equal(JSON.stringify(count).includes("private-canary"), false);
   assert.equal((await index.clear(scope)).ok, true);
-  assert.deepEqual(await index.find(scope, "+61400111222", 60_000),
+  assert.deepEqual(await index.find(scope, "+61400111222", 60_000, "61"),
     { ok: true, value: { kind: "stale", patientIds: [] } });
 });
 
@@ -186,7 +186,7 @@ test("refresh worker scans outside calls, skips fresh generations, and shares co
   const index = new PostgresPatientPhoneIndex(db);
   const lookup = new ClinikoPhoneLookup(created.value, index, "61", 60_000);
   let clock = new Date();
-  const worker = new PhoneIndexRefreshWorker(index, [{ scope, lookup, refreshEveryMs: 60_000 }], () => clock);
+  const worker = new PhoneIndexRefreshWorker(index, [{ scope, lookup, countryCallingCode: "61", refreshEveryMs: 60_000 }], () => clock);
   const first = worker.runOnce();
   const concurrent = worker.runOnce();
   releaseFirst!();
@@ -196,7 +196,7 @@ test("refresh worker scans outside calls, skips fresh generations, and shares co
   clock = new Date();
   assert.deepEqual(await worker.runOnce(), [{ scope, kind: "fresh" }]);
   assert.equal(scans, 1);
-  const completed = await index.completedAt(scope);
+  const completed = await index.completedAt(scope, "61");
   assert.equal(completed.ok && completed.value instanceof Date, true);
   if (!completed.ok || !completed.value) return;
   clock = new Date(completed.value.getTime() + 60_001);
@@ -268,7 +268,7 @@ test("interrupted phone scan resumes at the next page without publishing partial
   const scope = { tenantId: "phone-resume-tenant", clinicId: "phone-resume-clinic" };
   const index = new PostgresPatientPhoneIndex(db);
   const scan = new PostgresPatientPhoneScan(db);
-  assert.deepEqual(await index.publish(scope, [{ normalizedPhone: "+61400999999", patientId: "900" }]),
+  assert.deepEqual(await index.publish(scope, [{ normalizedPhone: "+61400999999", patientId: "900" }], "61"),
     { ok: true, value: 1 });
   const pages: number[] = [];
   let failSecondPage = true;
@@ -303,7 +303,7 @@ test("interrupted phone scan resumes at the next page without publishing partial
   const oldRows = await db.selectFrom("patient_phone_index").select("patient_id")
     .where("tenant_id", "=", scope.tenantId as never).execute();
   assert.deepEqual(oldRows.map(row => String(row.patient_id)), ["900"]);
-  const stale = await index.find(scope, "+61400999999", 60_000);
+  const stale = await index.find(scope, "+61400999999", 60_000, "61");
   assert.equal(stale.ok && stale.value.kind, "stale");
 
   failSecondPage = false;
@@ -349,9 +349,9 @@ test("two worker processes coordinate one clinic scan and the losing worker retr
     undefined, new PostgresPatientPhoneScan(db));
   const firstGuard = new PostgresPhoneRefreshGuard(url);
   const secondGuard = new PostgresPhoneRefreshGuard(url);
-  const first = new PhoneIndexRefreshWorker(index, [{ scope, lookup, refreshEveryMs: 60_000 }],
+  const first = new PhoneIndexRefreshWorker(index, [{ scope, lookup, countryCallingCode: "61", refreshEveryMs: 60_000 }],
     undefined, firstGuard);
-  const second = new PhoneIndexRefreshWorker(index, [{ scope, lookup, refreshEveryMs: 60_000 }],
+  const second = new PhoneIndexRefreshWorker(index, [{ scope, lookup, countryCallingCode: "61", refreshEveryMs: 60_000 }],
     undefined, secondGuard);
   const pending = first.runOnce();
   await started;
@@ -366,4 +366,65 @@ test("two worker processes coordinate one clinic scan and the losing worker retr
     { ok: false, error: { kind: "storageFailure" } });
   assert.deepEqual(await secondGuard.run(scope, async () => "next owner"),
     { ok: true, value: { kind: "ran", value: "next owner" } });
+});
+
+test("changing a clinic normalization plan blocks lookup until the index is rebuilt", async () => {
+  const scope = { tenantId: "phone-plan-tenant", clinicId: "phone-plan-clinic" };
+  const index = new PostgresPatientPhoneIndex(db);
+  let listReads = 0;
+  let patientReads = 0;
+  const reader = ClinikoPatientCandidateReader.create({ scope, apiKey: "synthetic-au5",
+    contactEmail: "test@example.com" }, async input => {
+    const path = new URL(String(input)).pathname;
+    if (path === "/v1/patients") {
+      listReads += 1;
+      return Response.json({ total_entries: 1, patients: [{ id: "801", first_name: "private-plan-canary",
+        archived_at: null, patient_phone_numbers: [{ number: "0400 888 999", phone_type: "Mobile" }] }] });
+    }
+    if (path === "/v1/patients/801") {
+      patientReads += 1;
+      return Response.json({ id: "801", archived_at: null,
+        patient_phone_numbers: [{ number: "0400 888 999", phone_type: "Mobile" }] });
+    }
+    throw new Error("unexpected Cliniko request");
+  });
+  assert.equal(reader.ok, true);
+  if (!reader.ok) return;
+  const scan = new PostgresPatientPhoneScan(db);
+  const australian = new ClinikoPhoneLookup(reader.value, index, "61", 60_000, undefined, scan);
+  const newZealand = new ClinikoPhoneLookup(reader.value, index, "64", 60_000, undefined, scan);
+  assert.deepEqual(await australian.refresh(scope), { ok: true, value: 1 });
+  assert.deepEqual(await australian.candidates(scope, "0400 888 999"),
+    { ok: true, value: { kind: "one", candidateIds: ["801"] } });
+  assert.equal(patientReads, 1);
+  assert.deepEqual(await newZealand.candidates(scope, "0400 888 999"),
+    { ok: true, value: { kind: "indexStale", candidateIds: [] } });
+  assert.equal(patientReads, 1);
+
+  const worker = new PhoneIndexRefreshWorker(index, [{ scope, lookup: newZealand,
+    countryCallingCode: "64", refreshEveryMs: 60_000 }]);
+  assert.deepEqual(await worker.runOnce(), [{ scope, kind: "refreshed" }]);
+  assert.equal(listReads, 2);
+  assert.deepEqual(await newZealand.candidates(scope, "0400 888 999"),
+    { ok: true, value: { kind: "one", candidateIds: ["801"] } });
+  assert.deepEqual(await australian.candidates(scope, "0400 888 999"),
+    { ok: true, value: { kind: "indexStale", candidateIds: [] } });
+  const head = await index.head(scope);
+  assert.equal(head.ok && head.value?.countryCallingCode, "64");
+  assert.equal(head.ok && head.value?.normalizationVersion, 1);
+  await db.updateTable("patient_phone_sync").set({ country_calling_code: null, normalization_version: null })
+    .where("tenant_id", "=", scope.tenantId as never).execute();
+  assert.deepEqual(await newZealand.candidates(scope, "0400 888 999"),
+    { ok: true, value: { kind: "indexStale", candidateIds: [] } });
+  assert.deepEqual(await worker.runOnce(), [{ scope, kind: "refreshed" }]);
+  assert.equal(listReads, 3);
+  await db.updateTable("patient_phone_sync").set({ normalization_version: 2 })
+    .where("tenant_id", "=", scope.tenantId as never).execute();
+  assert.deepEqual(await newZealand.candidates(scope, "0400 888 999"),
+    { ok: true, value: { kind: "indexStale", candidateIds: [] } });
+  assert.deepEqual(await worker.runOnce(), [{ scope, kind: "refreshed" }]);
+  assert.equal(listReads, 4);
+  const rows = await db.selectFrom("patient_phone_sync").selectAll()
+    .where("tenant_id", "=", scope.tenantId as never).execute();
+  assert.equal(JSON.stringify(rows).includes("private-plan-canary"), false);
 });

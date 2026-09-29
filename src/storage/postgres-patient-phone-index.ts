@@ -2,6 +2,7 @@ import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
+import { PHONE_NORMALIZATION_VERSION } from "../cliniko/phone-number.ts";
 import type Database from "./generated/Database.ts";
 import type { PatientPhoneIndexClinicId, PatientPhoneIndexNormalizedPhone, PatientPhoneIndexPatientId,
   PatientPhoneIndexTenantId } from "./generated/public/PatientPhoneIndex.ts";
@@ -11,7 +12,12 @@ import type { PatientPhoneScanClinicId, PatientPhoneScanTenantId } from "./gener
 export type PatientPhoneLink = Readonly<{ normalizedPhone: string; patientId: string }>;
 export type PatientPhoneClinicScope = Pick<LocationScope, "tenantId" | "clinicId">;
 export type PhoneIndexFailure = Readonly<{ kind: "invalidInput" | "storageFailure" | "generationChanged" }>;
-export type PhoneIndexHead = Readonly<{ generation: number; completedAt: Date }>;
+export type PhoneIndexHead = Readonly<{
+  generation: number;
+  completedAt: Date;
+  countryCallingCode: string | null;
+  normalizationVersion: number | null;
+}>;
 export type PhoneCandidates = Readonly<{
   kind: "stale" | "none" | "one" | "multiple" | "tooMany";
   patientIds: readonly string[];
@@ -36,19 +42,28 @@ export class PostgresPatientPhoneIndex {
   async head(scope: PatientPhoneClinicScope): Promise<Result<PhoneIndexHead | null, PhoneIndexFailure>> {
     if (!validScope(scope)) return err({ kind: "invalidInput" });
     try {
-      const row = await this.db.selectFrom("patient_phone_sync").select(["generation", "completed_at"])
+      const row = await this.db.selectFrom("patient_phone_sync")
+        .select(["generation", "completed_at", "country_calling_code", "normalization_version"])
         .where("tenant_id", "=", scope.tenantId as PatientPhoneSyncTenantId)
         .where("clinic_id", "=", scope.clinicId as PatientPhoneSyncClinicId).executeTakeFirst();
       if (!row) return ok(null);
       return Number.isSafeInteger(row.generation) && row.generation > 0 &&
         row.completed_at instanceof Date && Number.isFinite(row.completed_at.getTime())
-        ? ok({ generation: row.generation, completedAt: row.completed_at }) : err({ kind: "storageFailure" });
+        ? ok({ generation: row.generation, completedAt: row.completed_at,
+          countryCallingCode: row.country_calling_code, normalizationVersion: row.normalization_version })
+        : err({ kind: "storageFailure" });
     } catch { return err({ kind: "storageFailure" }); }
   }
 
-  async completedAt(scope: PatientPhoneClinicScope): Promise<Result<Date | null, PhoneIndexFailure>> {
+  async completedAt(scope: PatientPhoneClinicScope, countryCallingCode: string): Promise<Result<Date | null, PhoneIndexFailure>> {
+    if (!/^[1-9][0-9]{0,2}$/.test(countryCallingCode)) {
+      return err({ kind: "invalidInput" });
+    }
     const head = await this.head(scope);
-    return head.ok ? ok(head.value?.completedAt ?? null) : head;
+    if (!head.ok) return head;
+    if (!head.value || head.value.countryCallingCode !== countryCallingCode ||
+        head.value.normalizationVersion !== PHONE_NORMALIZATION_VERSION) return ok(null);
+    return ok(head.value?.completedAt ?? null);
   }
 
   /** A failed scan invalidates only the generation it started from. */
@@ -65,8 +80,10 @@ export class PostgresPatientPhoneIndex {
     } catch { return err({ kind: "storageFailure" }); }
   }
 
-  async publish(scope: PatientPhoneClinicScope, links: readonly PatientPhoneLink[], expectedGeneration?: number | null): Promise<Result<number, PhoneIndexFailure>> {
+  async publish(scope: PatientPhoneClinicScope, links: readonly PatientPhoneLink[], countryCallingCode: string,
+                expectedGeneration?: number | null): Promise<Result<number, PhoneIndexFailure>> {
     if (!validScope(scope) || !Array.isArray(links) || links.length > 100_000 ||
+        !/^[1-9][0-9]{0,2}$/.test(countryCallingCode) ||
         (expectedGeneration !== undefined && expectedGeneration !== null &&
           (!Number.isSafeInteger(expectedGeneration) || expectedGeneration < 1)) ||
         links.some(link => !link || !phonePattern.test(link.normalizedPhone) || !patientIdPattern.test(link.patientId) ||
@@ -96,9 +113,12 @@ export class PostgresPatientPhoneIndex {
           }))).execute();
         }
         await trx.insertInto("patient_phone_sync").values({ tenant_id: scope.tenantId as PatientPhoneSyncTenantId,
-          clinic_id: scope.clinicId as PatientPhoneSyncClinicId, generation, completed_at: new Date() })
+          clinic_id: scope.clinicId as PatientPhoneSyncClinicId, generation, completed_at: new Date(),
+          country_calling_code: countryCallingCode,
+          normalization_version: PHONE_NORMALIZATION_VERSION })
           .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id"])
-            .doUpdateSet({ generation, completed_at: new Date() })).execute();
+            .doUpdateSet({ generation, completed_at: new Date(), country_calling_code: countryCallingCode,
+              normalization_version: PHONE_NORMALIZATION_VERSION })).execute();
         return ok(generation);
       });
     } catch { return err({ kind: "storageFailure" }); }
@@ -124,16 +144,21 @@ export class PostgresPatientPhoneIndex {
     } catch { return err({ kind: "storageFailure" }); }
   }
 
-  async find(scope: PatientPhoneClinicScope, normalizedPhone: string, maxAgeMs: number, now: Date = new Date()):
+  async find(scope: PatientPhoneClinicScope, normalizedPhone: string, maxAgeMs: number, countryCallingCode: string,
+             now: Date = new Date()):
     Promise<Result<PhoneCandidates, PhoneIndexFailure>> {
     if (!validScope(scope) || !phonePattern.test(normalizedPhone) || !Number.isSafeInteger(maxAgeMs) || maxAgeMs < 0 ||
+        !/^[1-9][0-9]{0,2}$/.test(countryCallingCode) ||
         !(now instanceof Date) || !Number.isFinite(now.getTime())) return err({ kind: "invalidInput" });
     try {
       return await this.db.transaction().setIsolationLevel("repeatable read").execute(async trx => {
-        const sync = await trx.selectFrom("patient_phone_sync").select(["generation", "completed_at"])
+        const sync = await trx.selectFrom("patient_phone_sync")
+          .select(["generation", "completed_at", "country_calling_code", "normalization_version"])
           .where("tenant_id", "=", scope.tenantId as PatientPhoneSyncTenantId)
           .where("clinic_id", "=", scope.clinicId as PatientPhoneSyncClinicId).executeTakeFirst();
-        if (!sync || !(sync.completed_at instanceof Date) || now.getTime() - sync.completed_at.getTime() > maxAgeMs ||
+        if (!sync || sync.country_calling_code !== countryCallingCode ||
+            sync.normalization_version !== PHONE_NORMALIZATION_VERSION ||
+            !(sync.completed_at instanceof Date) || now.getTime() - sync.completed_at.getTime() > maxAgeMs ||
             now.getTime() < sync.completed_at.getTime() - 60_000) return ok({ kind: "stale", patientIds: [] });
         const rows = await trx.selectFrom("patient_phone_index").select("patient_id")
           .where("tenant_id", "=", scope.tenantId as PatientPhoneIndexTenantId)

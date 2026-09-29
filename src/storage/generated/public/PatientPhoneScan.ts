@@ -32,6 +32,8 @@ export default interface PatientPhoneScanTable {
   started_at: ColumnType<Date, Date | string | undefined, Date | string>;
 
   updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
+
+  normalization_version: ColumnType<number | null, number | null, number | null>;
 }
 
 export type PatientPhoneScan = Selectable<PatientPhoneScanTable>;

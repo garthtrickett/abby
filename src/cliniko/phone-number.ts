@@ -1,4 +1,6 @@
 /** Conservative international form for caller ID and Cliniko patient numbers. */
+export const PHONE_NORMALIZATION_VERSION = 1;
+
 export function normalizePatientPhone(input: string, countryCallingCode: string): string | undefined {
   if (typeof input !== "string" || typeof countryCallingCode !== "string" ||
       !/^[1-9][0-9]{0,2}$/.test(countryCallingCode) || input.length > 64 ||

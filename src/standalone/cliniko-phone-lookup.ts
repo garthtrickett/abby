@@ -46,7 +46,7 @@ export class ClinikoPhoneLookup {
       const stale = await this.index.markStale(scope, generation);
       return stale.ok ? snapshot : stale;
     }
-    const published = await this.index.publish(scope, snapshot.value.links, generation);
+    const published = await this.index.publish(scope, snapshot.value.links, this.countryCallingCode, generation);
     if (published.ok || published.error.kind === "generationChanged") return published;
     const stale = await this.index.markStale(scope, generation);
     return stale.ok ? published : stale;
@@ -96,7 +96,7 @@ export class ClinikoPhoneLookup {
     Promise<Result<PhoneLookupResult, ClinikoPatientFailure | PhoneIndexFailure>> {
     const phone = normalizePatientPhone(presentedCallerNumber, this.countryCallingCode);
     if (!phone) return ok({ kind: "noNumber", candidateIds: [] });
-    const indexed = await this.index.find(scope, phone, this.maxIndexAgeMs);
+    const indexed = await this.index.find(scope, phone, this.maxIndexAgeMs, this.countryCallingCode);
     if (!indexed.ok) return indexed;
     if (indexed.value.kind === "stale") return ok({ kind: "indexStale", candidateIds: [] });
     if (indexed.value.kind === "tooMany") return ok({ kind: "tooMany", candidateIds: [] });
