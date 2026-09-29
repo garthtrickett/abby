@@ -11,6 +11,7 @@ import { transition } from "../core/transition.ts";
 import { validKnowledgeSnapshot } from "../core/knowledge-evidence.ts";
 import { READINESS_REQUIREMENTS, unprovenReadiness } from "../core/readiness.ts";
 import { isStoredStandaloneTextState, projectStandaloneTextState, standaloneTextActionAllowed } from "./standalone-call-state.ts";
+import { validWriteStopReason } from "./operational-reasons.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
 import type { WriteStopAuditPage, WriteStopFailure, WriteStopStatus } from "../core/write-stop.ts";
 import type Database from "./generated/Database.ts";
@@ -120,6 +121,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
       .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).executeTakeFirst();
     if (!row || row.version === 0) return ok({ stopped: false, version: "0", inFlight: [] });
     if (!Number.isSafeInteger(row.version) || row.version < 1 || !row.actor_ref || !row.reason ||
+        (this.mode === "standaloneText" && !validWriteStopReason(row.stopped, row.reason)) ||
         !(row.changed_at instanceof Date) || !Number.isFinite(row.changed_at.getTime())) return err({ kind: "storageCorrupt" });
     let query = db.selectFrom("clinic_write_stop_inflight").select(["effect_id", "call_id", "action_key", "status"])
       .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id)
@@ -147,7 +149,9 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
         .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id)
         .where("version", ">", (afterVersion ?? 0) as ClinicWriteStopEventsVersion)
         .orderBy("version").limit(50).execute();
-      if (rows.some(row => !row.actor_ref || !row.reason || !(row.changed_at instanceof Date) || !Number.isFinite(row.changed_at.getTime()))) return err({ kind: "storageCorrupt" });
+      if (rows.some(row => !row.actor_ref || !row.reason ||
+        (this.mode === "standaloneText" && !validWriteStopReason(row.stopped, row.reason)) ||
+        !(row.changed_at instanceof Date) || !Number.isFinite(row.changed_at.getTime()))) return err({ kind: "storageCorrupt" });
       const entries = rows.map(row => ({ version: String(row.version), stopped: row.stopped, actorRef: row.actor_ref,
         reason: row.reason, changedAt: row.changed_at.toISOString() }));
       return ok({ entries, ...(entries.length === 50 ? { nextAfterVersion: Number(entries[49]!.version) } : {}) });
@@ -155,7 +159,8 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   }
 
   async stopWrites(scope: LocationScope, actorRef: string, reason: string): Promise<Result<WriteStopStatus, TransitionFailure>> {
-    if (!scope.tenantId || !scope.clinicId || !actorRef.trim() || actorRef.length > 256 || !reason.trim() || reason.length > 1_000) return err({ kind: "invalidTransition" });
+    if (!scope.tenantId || !scope.clinicId || !actorRef.trim() || actorRef.length > 256 || !reason.trim() || reason.length > 1_000 ||
+        (this.mode === "standaloneText" && !validWriteStopReason(true, reason))) return err({ kind: "invalidTransition" });
     try {
       return await this.db.transaction().execute(async trx => {
         const ids = this.stopIds(scope);
@@ -187,7 +192,8 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
   }
 
   async resumeWrites(scope: LocationScope, expectedVersion: string, actorRef: string, reason: string): Promise<Result<WriteStopStatus, WriteStopFailure>> {
-    if (!scope.tenantId || !scope.clinicId || !actorRef.trim() || actorRef.length > 256 || !reason.trim() || reason.length > 1_000) return err({ kind: "invalidTransition" });
+    if (!scope.tenantId || !scope.clinicId || !actorRef.trim() || actorRef.length > 256 || !reason.trim() || reason.length > 1_000 ||
+        (this.mode === "standaloneText" && !validWriteStopReason(false, reason))) return err({ kind: "invalidTransition" });
     const initial = await this.readWriteStop(scope);
     if (!initial.ok) return initial;
     if (initial.value.version !== expectedVersion) return err({ kind: "versionConflict" });

@@ -47,7 +47,7 @@ test("shared-number cutover stages, publishes once, and rolls back without losin
   const fenceAuthority = { authorizeAndRecord: async (action: string) =>
     ok({ requestRef: `route-cutover-fence-${action}` }) };
   const frozen = await fence.freeze({ tenantId: sourceA.tenantId, actorRef: "source-admin",
-    reason: "Synthetic number cutover" }, fenceAuthority);
+    reason: "cutoverFreeze" }, fenceAuthority);
   assert.equal(frozen.ok && frozen.value.version === 1, true);
   const exportRequest = { sourceTenantId: sourceA.tenantId, archiveId: "route-cutover-archive",
     archiveMode: "unsafeReference" as const,
@@ -122,7 +122,7 @@ test("shared-number cutover stages, publishes once, and rolls back without losin
     }
   }
   const blocked = await fence.release({ tenantId: sourceA.tenantId, actorRef: "source-admin",
-    reason: "Premature release", expectedVersion: 1 }, fenceAuthority);
+    reason: "cutoverRelease", expectedVersion: 1 }, fenceAuthority);
   assert.deepEqual(blocked, { ok: false, error: { kind: "routeOwnedByTarget" } });
   await assert.rejects(sql`update tenant_portability_fences set frozen = false
     where tenant_id = ${sourceA.tenantId}`.execute(db));
@@ -132,7 +132,7 @@ test("shared-number cutover stages, publishes once, and rolls back without losin
   assert.deepEqual(await cutover.finishRollback(command, routeAuthority),
     { ok: false, error: { kind: "sourceFenceChanged" } });
   const released = await fence.release({ tenantId: sourceA.tenantId, actorRef: "source-admin",
-    reason: "Return route to source", expectedVersion: 1 }, fenceAuthority);
+    reason: "cutoverRelease", expectedVersion: 1 }, fenceAuthority);
   assert.equal(released.ok && released.value.version === 2 && !released.value.frozen, true);
   const beforeFinish = await routeHost.identifyCall(accountRef, dialedNumber);
   assert.equal(beforeFinish.ok && beforeFinish.value.tenantId, targetA.tenantId);
@@ -163,7 +163,7 @@ test("release after stage prevents publication while the source route remains au
   const fenceAuthority = { authorizeAndRecord: async () => ok({ requestRef: `route-stale-fence-${++fenceAudits}` }) };
   const fence = new PostgresPortabilityFence(db);
   assert.equal((await fence.freeze({ tenantId: source.tenantId, actorRef: "source-admin",
-    reason: "Stage a synthetic route" }, fenceAuthority)).ok, true);
+    reason: "cutoverFreeze" }, fenceAuthority)).ok, true);
   const request = { sourceTenantId: source.tenantId, archiveId: "route-stale-archive", actorRef: "source-admin",
     archiveMode: "unsafeReference" as const,
     createdAt: "2026-09-29T00:00:00Z", expectedFenceVersion: 1, locations: [
@@ -185,7 +185,7 @@ test("release after stage prevents publication while the source route remains au
   assert.equal((await cutover.stage({ ...command, expectedRouteVersion: 1, baseline: archive.value,
     comparison: { ...request, archiveId: "route-stale-compare" } }, routeAuthority, exportAuthority)).ok, true);
   assert.equal((await fence.release({ tenantId: source.tenantId, actorRef: "source-admin",
-    reason: "Cancel staged switch", expectedVersion: 1 }, fenceAuthority)).ok, true);
+    reason: "cutoverRelease", expectedVersion: 1 }, fenceAuthority)).ok, true);
   assert.deepEqual(await cutover.publish(command, routeAuthority),
     { ok: false, error: { kind: "sourceFenceChanged" } });
   const active = await new PostgresNumberRoutingHost(db).identifyCall(accountRef, dialedNumber);

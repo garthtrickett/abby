@@ -6,6 +6,7 @@ import type { LocationScope, Result, StaffDestination } from "../core/model.ts";
 import { ARCHIVE_SECTIONS } from "../portability/archive-envelope.ts";
 import type { ArchiveEnvelope, ArchiveSection } from "../portability/archive-envelope.ts";
 import type Database from "./generated/Database.ts";
+import { validWriteStopReason } from "./operational-reasons.ts";
 
 export type ConfigArchiveRequest = Readonly<{
   scope: LocationScope;
@@ -240,7 +241,7 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
         const anyEvents = await sql<{ found: number }>`select 1 as found from clinic_knowledge_events
           where tenant_id = ${sourceTenantId} limit 1`.execute(trx);
         if (anyKnowledge.rows.length || anyEvents.rows.length ||
-            stops.rows.some(row => !["cutover", "operatorStop", "operatorResume"].includes(row.reason))) {
+            stops.rows.some(row => !validWriteStopReason(row.stopped, row.reason))) {
           throw new ExportAbort("storageCorrupt");
         }
       }
