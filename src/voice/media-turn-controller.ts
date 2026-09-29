@@ -16,6 +16,7 @@ export type TranscriptionPort = Readonly<{
   accept(frame: MediaFrame, generation: number, signal: AbortSignal): Promise<Result<readonly TranscriptEvent[], TranscriptionFailure>>;
   flush(generation: number, signal: AbortSignal): Promise<Result<readonly TranscriptEvent[], TranscriptionFailure>>;
   cancel?(generation: number): Promise<void>;
+  close?(): Promise<void>;
 }>;
 
 export type MediaTurnTarget<T, F> = Readonly<{
@@ -227,5 +228,13 @@ export class MediaTurnController<T, F> {
       } catch { /* media already closed */ }
       finally { if (timeout) clearTimeout(timeout); }
     }
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        Promise.resolve().then(() => this.transcription.close?.()),
+        new Promise<void>(resolve => { timeout = setTimeout(resolve, this.transcriptionDeadlineMs); }),
+      ]);
+    } catch { /* media already closed */ }
+    finally { if (timeout) clearTimeout(timeout); }
   }
 }
