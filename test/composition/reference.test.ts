@@ -552,8 +552,7 @@ test("standalone patient actions stay unavailable without durable host work", { 
   const scope = { tenantId: "safe-default-tenant", clinicId: "safe-default-clinic", locationId: "safe-default-location" };
   const patient = { scope, patientRef: "safe-default-patient", verificationRef: "safe-default-proof", expiresAt };
   const offer = { scope, offerRef: "safe-default-offer-canary-8792", serviceRef: "physio", startsAt: "2026-09-29T11:00:00.000Z", expiresAt };
-  const host = new ReferenceClinicHost([patient], [offer]);
-  const { reception, policy } = createStandaloneTextComposition(db!, host);
+  const { reception, policy } = createStandaloneTextComposition(db!);
   const initial = value(await policy.read(scope));
   assert.equal(initial.capabilities.book, "unavailable");
   assert.equal(initial.capabilities.transfer, "unavailable");
@@ -608,8 +607,10 @@ test("standalone patient actions stay unavailable without durable host work", { 
   assert.deepEqual(persisted.availabilityReads, []);
   assert.deepEqual(persisted.appointmentReads, []);
   value(await reception.drain(scope, callId, now));
-  assert.equal(host.bookings(scope).length, 0);
-  assert.equal(host.tasks(scope).length, 0);
+  const unsafeWork = await sql<{ effects: string; staff: string }>`select
+    (select count(*)::text from effect_outbox where tenant_id = ${scope.tenantId}) as effects,
+    (select count(*)::text from staff_items where tenant_id = ${scope.tenantId}) as staff`.execute(db!);
+  assert.deepEqual(unsafeWork.rows, [{ effects: "0", staff: "0" }]);
   const scan = await scanPatientDataCanaries(db!, [
     { label: "default_offer", value: offer.offerRef },
     { label: "appointment", value: appointmentRef },

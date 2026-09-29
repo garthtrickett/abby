@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test, { after } from "node:test";
 import { sql } from "kysely";
-import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
@@ -54,10 +53,7 @@ test("standalone setting toggle stores only structured policy while knowledge st
   const other = { ...scope, locationId: "location-b" };
   const canary = "private-patient-note-canary-16492";
   const now = "2026-09-29T10:00:00.000Z";
-  const host = new ReferenceClinicHost([], [], [{ scope, sourceRef: "parking", version: "1", ownerRef: "clinic-owner",
-    approvedText: canary, approved: true, effectiveFrom: "2026-09-01T00:00:00.000Z",
-    effectiveUntil: "2026-10-01T00:00:00.000Z" }]);
-  const app = createStandaloneTextComposition(db, host);
+  const app = createStandaloneTextComposition(db);
 
   assert.equal(value(await app.policy.read(scope)).bookingEnabled, false);
   assert.deepEqual(value(await app.knowledge.readKnowledge(scope, ["parking"])), []);
@@ -74,7 +70,7 @@ test("standalone setting toggle stores only structured policy while knowledge st
     { version: 2, policy: { scope, policyVersion: "2", bookingEnabled: false } },
   ]);
 
-  const reloaded = createStandaloneTextComposition(db, host);
+  const reloaded = createStandaloneTextComposition(db);
   assert.equal(value(await reloaded.policy.read(scope)).policyVersion, "2");
   assert.equal(value(await reloaded.policy.read(scope)).bookingEnabled, false);
   assert.equal(value(await reloaded.policy.read(other)).policyVersion, "0");
@@ -96,7 +92,7 @@ test("standalone settings reject a legacy full-policy row instead of importing i
   const policy = { scope, policyVersion: "0", bookingEnabled: false, greeting: { approvedText: "patient-canary-legacy-731" } };
   await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy)
     values (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, 0, ${JSON.stringify(policy)}::jsonb)`.execute(db);
-  const app = createStandaloneTextComposition(db, new ReferenceClinicHost([], []));
+  const app = createStandaloneTextComposition(db);
   const read = await app.policy.read(scope);
   assert.equal(read.ok, false);
   assert.equal(read.error.kind, "storageFailure");
