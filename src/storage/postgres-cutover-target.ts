@@ -30,7 +30,7 @@ type KnowledgeRow = { source_ref: string; version: number; status: string; owner
   answer_text: string; effective_from: Date; effective_until: Date; actor_ref: string; changed_at: Date };
 type KnowledgeHead = { source_ref: string; version: number; effective_version: number | null };
 type TargetTotals = { policies: string; automation: string; knowledgeEvents: string;
-  knowledgeHeads: string; writeStops: string };
+  knowledgeHeads: string; writeStops: string; writeStopEvents: string };
 
 function sameInstant(actual: Date | null, expected: string | null): boolean {
   return expected === null ? actual === null : actual instanceof Date && actual.toISOString() === expected;
@@ -54,7 +54,8 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       sameScope(item.sourceScope, sourceScope) && sameScope(item.targetScope, targetScope));
     return decisions.length === 1 ? decisions[0]!.targetRef : null;
   } };
-  const expectedTotals = { policies: 0, automation: 0, knowledgeEvents: 0, knowledgeHeads: 0, writeStops: 0 };
+  const expectedTotals = { policies: 0, automation: 0, knowledgeEvents: 0, knowledgeHeads: 0,
+    writeStops: 0, writeStopEvents: 0 };
   for (const location of data.locations) {
     const clinic = data.clinics.find(item => item.sourceClinicId === location.sourceScope.clinicId);
     if (!clinic) return false;
@@ -140,10 +141,22 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       if (actual.version !== head.version + 1 || actual.enabled || actual.changed_by !== actor ||
           actual.previous_enabled !== true || !(actual.changed_at instanceof Date)) return false;
     }
-    const stop = (await sql<{ version: number; stopped: boolean; actor_ref: string }>`select version, stopped, actor_ref
+    const stop = (await sql<{ version: number; stopped: boolean; actor_ref: string; reason: string;
+      changed_at: Date }>`select version, stopped, actor_ref, reason, changed_at
       from clinic_write_stop where tenant_id = ${data.targetTenantId} and clinic_id = ${location.targetScope.clinicId}`.execute(trx)).rows[0];
-    if (!stop || stop.version !== 1 || !stop.stopped || stop.actor_ref !== actor) return false;
+    if (!stop || stop.version !== 1 || !stop.stopped || stop.actor_ref !== actor ||
+        !["cutover", "Imported configuration awaiting target readiness"].includes(stop.reason) ||
+        !(stop.changed_at instanceof Date) || !Number.isFinite(stop.changed_at.getTime())) return false;
     expectedTotals.writeStops += 1;
+    const stopEvents = (await sql<{ version: number; stopped: boolean; actor_ref: string; reason: string;
+      changed_at: Date }>`select version, stopped, actor_ref, reason, changed_at
+      from clinic_write_stop_events where tenant_id = ${data.targetTenantId}
+      and clinic_id = ${location.targetScope.clinicId} order by version`.execute(trx)).rows;
+    if (stopEvents.length !== 1 || stopEvents[0]!.version !== stop.version ||
+        stopEvents[0]!.stopped !== stop.stopped || stopEvents[0]!.actor_ref !== stop.actor_ref ||
+        stopEvents[0]!.reason !== stop.reason ||
+        !sameInstant(stopEvents[0]!.changed_at, stop.changed_at.toISOString())) return false;
+    expectedTotals.writeStopEvents += 1;
   }
   // Scope-level checks above cannot see rows added under an unlisted target clinic or location.
   // Count the entire tenant before number publication so those rows cannot escape reconciliation.
@@ -152,7 +165,8 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
     (select count(*)::text from clinic_automation where tenant_id = ${data.targetTenantId}) as automation,
     (select count(*)::text from clinic_knowledge_events where tenant_id = ${data.targetTenantId}) as "knowledgeEvents",
     (select count(*)::text from clinic_knowledge_heads where tenant_id = ${data.targetTenantId}) as "knowledgeHeads",
-    (select count(*)::text from clinic_write_stop where tenant_id = ${data.targetTenantId}) as "writeStops"`.execute(trx)).rows[0];
+    (select count(*)::text from clinic_write_stop where tenant_id = ${data.targetTenantId}) as "writeStops",
+    (select count(*)::text from clinic_write_stop_events where tenant_id = ${data.targetTenantId}) as "writeStopEvents"`.execute(trx)).rows[0];
   return !!totals && (Object.keys(expectedTotals) as (keyof TargetTotals)[]).every(key =>
     totals[key] === String(expectedTotals[key]));
 }
