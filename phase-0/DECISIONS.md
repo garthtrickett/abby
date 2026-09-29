@@ -1,6 +1,6 @@
 # Phase 0 product decisions
 
-**Status:** Product owner fixed the D-06 storage boundary, confirmed phone-to-ID lookup in D-01, and chose Cliniko as the sole durable home for standalone patient-specific work in D-11. Clinic verification and the actual Cliniko staff workflow still require their listed owners and proof.
+**Status:** Product owner fixed the D-06 storage boundary, confirmed phone-to-ID lookup in D-01, and chose Cliniko as the sole durable home for standalone patient-specific work in D-11. On 2026-09-29, the product owner kept patient-specific handoff disabled for the first Cliniko-only release until a clinic approves the workflow. Clinic verification and the actual Cliniko staff workflow still require their listed owners and proof.
 
 | Decision ID | Question | Proposed default pending approval | Owner and deadline |
 | --- | --- | --- | --- |
@@ -10,7 +10,7 @@
 | D-04 | Can Abby reschedule an appointment? | Staff request until a host-native or atomic operation and exact recovery are proven. | Product; before rescheduling automation. |
 | D-05 | Who owns confirmations and reminders? | One host-approved owner per notification kind, captured for each call; no duplicate send. | Product and clinic owner; before notification implementation. |
 | D-06 | What patient information may Abby persist? | Only Cliniko patient IDs and patient phone numbers, in the local lookup index. Audio, transcripts, appointment data, patient-linked outcomes, and free-text notes remain outside Abby persistence. | Decided by product owner; privacy-safe ledger and host handoff required before real patient traffic. |
-| D-07 | Where does failed or overdue staff work go? | A required operator review queue is configured before automation; failed task delivery never counts as handoff. | Product and clinic owner; before staff-task implementation. |
+| D-07 | Where does failed or overdue staff work go? | Patient-specific handoff stays disabled in the first Cliniko-only release until a clinic approves a workflow. A dedicated Cliniko recall type and manually reviewed Recalls report remain a candidate, not an approved queue. No recall POST counts as assignment, notification, acknowledgment, or safe retry. A required operator review route and failure escalation must be proven before enabling handoff. | Product owner decision 2026-09-29; clinic owner approval and workflow proof remain open. |
 | D-08 | Which market, locale, and quality thresholds govern the first pilot? | Use existing clinic markets; declare sample size, critical failures, latency and language thresholds before pilot traffic. | Product; before pilot design approval. |
 | D-09 | Which telephony route handles failed intake or voice startup? | A provider-owned number fallback, tested while Abby is unavailable; block live-call readiness until proven. | Product and voice engineering; before live routing. |
 | D-10 | What may Abby say first at each location? | Require a location-scoped greeting with recorded clinic approval and owner; block voice admission if absent, and never send it before session activation. The reference greeting is only a synthetic fixture. | Clinic owner; before live routing. |

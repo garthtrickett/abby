@@ -14,6 +14,7 @@ const observedAt = "2026-09-29T10:00:00.000Z";
 function recall(id: string, notes: string | null = marker, patientId = "42", archivedAt: string | null = null) {
   return { id, notes, recalled: false, archived_at: archivedAt,
     patient: { links: { self: `https://api.au5.cliniko.com/v1/patients/${patientId}` } },
+    recall_at: "2026-10-01", recall_type: { links: { self: "https://api.au5.cliniko.com/v1/recall_types/7" } },
     private_patient_notes: "clinical secret" };
 }
 
@@ -87,7 +88,27 @@ test("Cliniko owns request details while one-attempt create and observe expose o
   assert.deepEqual(observed, { kind: "one", scope, recallRef: "cliniko:recall:91", recalled: false,
     archived: false, observedAt: observed.observedAt });
   assert.equal(value(await created.value.observe({ ...request, summary: "Different request" })).kind, "mismatch");
+  assert.equal(value(await created.value.observe({ ...request, recallTypeId: "8" })).kind, "mismatch");
+  assert.equal(value(await created.value.observe({ ...request, recallAt: "2026-10-02" })).kind, "mismatch");
   failure(await created.value.openOnce(request), "invalidQuery");
+  assert.equal(writes, 1);
+});
+
+test("recall observation rejects a changed type or date and cannot authorize another write", async () => {
+  let writes = 0;
+  const notes = `Abby request ${marker}\nPatient asks staff to call`;
+  const adapter = ClinikoRecallWriter.create(config, async (_input, init) => {
+    if (init?.method === "POST") { writes += 1; throw new Error("lost response"); }
+    return Response.json({ total_entries: 1, recalls: [
+      { ...recall("91", notes), recall_at: "2026-10-03" },
+    ] });
+  });
+  assert.ok(adapter.ok);
+  const request = { scope, patientId: "42", recallTypeId: "7", recallAt: "2026-10-01", marker,
+    summary: "Patient asks staff to call" };
+  assert.deepEqual(await adapter.value.openOnce(request), { ok: true, value: { kind: "uncertain" } });
+  assert.equal(value(await adapter.value.observe(request)).kind, "mismatch");
+  failure(await adapter.value.openOnce(request), "invalidQuery");
   assert.equal(writes, 1);
 });
 
@@ -126,6 +147,7 @@ test("invalid recall scope and fields fail before a provider write", async () =>
   failure(await created.value.openOnce({ ...request, recallAt: "2026-02-30" }), "invalidQuery");
   failure(await created.value.openOnce({ ...request, marker: "patient name" }), "invalidQuery");
   failure(await created.value.openOnce({ ...request, summary: "" }), "invalidQuery");
+  failure(await created.value.observe({ ...request, recallAt: "2026-02-30" }), "invalidQuery");
   assert.equal(writes, 0);
 });
 
