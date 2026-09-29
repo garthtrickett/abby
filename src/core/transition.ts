@@ -16,6 +16,15 @@ import type {
 
 const HOUR = 60 * 60 * 1000;
 const CLOSED_TRANSFER_NOTICE = "Staff aren't available for a live transfer now. I'll request follow-up, but I can't confirm they've received it yet.";
+const NO_STAFF_WORK_NOTICE = "I can't send a staff request from this call. Please contact the clinic directly.";
+
+function staffFallbackText(state: CallState, whenAvailable: string): string {
+  return state.policy.staffWorkEnabled === false ? NO_STAFF_WORK_NOTICE : whenAvailable;
+}
+
+function staffRequestNotice(state: CallState): string {
+  return staffFallbackText(state, "I can request staff follow-up, but I can't confirm they have received it yet.");
+}
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
@@ -137,7 +146,7 @@ function handleRequest(state: CallState, turn: FinalCallerTurn, request: ActionR
   }
   if (mode === "requestOnly") {
     addStaffTask(state, "unsupported", now, undefined, request);
-    state.callerMessages.push("I can request staff follow-up, but I can't confirm they have received it yet.");
+    state.callerMessages.push(staffRequestNotice(state));
     return ok(undefined);
   }
 
@@ -178,7 +187,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       break;
     case "modelFallback":
       addStaffTask(state, "systemFailure", now);
-      state.callerMessages.push("I can request staff follow-up, but I can't confirm they have received it yet.");
+      state.callerMessages.push(staffRequestNotice(state));
       break;
     case "requestAction": {
       const result = handleRequest(state, turn, interpretation.request, now);
@@ -200,22 +209,22 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
     }
     case "handoff":
       addStaffTask(state, interpretation.reason, now);
-      state.callerMessages.push("I can request staff follow-up, but I can't confirm they have received it yet.");
+      state.callerMessages.push(staffRequestNotice(state));
       break;
     case "transfer": {
       if (turn.quality !== "clear") {
         addStaffTask(state, "verificationFailed", now);
-        state.callerMessages.push("I can't confirm the transfer request safely. I'll request staff follow-up.");
+        state.callerMessages.push(staffFallbackText(state, "I can't confirm the transfer request safely. I'll request staff follow-up."));
       } else if (state.policy.capabilities.transfer === "execute" && state.policy.transferDestinationRef?.trim() && staffedForTransfer(state.policy, now)) {
         const id = createHash("sha256").update(JSON.stringify([state.callId, turn.turnId, state.policy.transferDestinationRef])).digest("hex");
         state.presentations[id] = { kind: "transfer", id, destinationRef: state.policy.transferDestinationRef, reason: interpretation.reason, status: "pending" };
         state.pendingPresentationId = id;
       } else if (state.policy.capabilities.transfer === "execute" && state.policy.transferDestinationRef?.trim()) {
         addStaffTask(state, interpretation.reason, now);
-        state.callerMessages.push(CLOSED_TRANSFER_NOTICE);
+        state.callerMessages.push(staffFallbackText(state, CLOSED_TRANSFER_NOTICE));
       } else if (state.policy.capabilities.transfer === "requestOnly") {
         addStaffTask(state, interpretation.reason, now);
-        state.callerMessages.push("I can request staff follow-up, but I can't confirm they've received it yet.");
+        state.callerMessages.push(staffFallbackText(state, "I can request staff follow-up, but I can't confirm they've received it yet."));
       } else {
         state.callerMessages.push("I can't connect you to staff from this call.");
       }
@@ -223,7 +232,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
     }
     case "ambiguousTarget":
       addStaffTask(state, "verificationFailed", now);
-      state.callerMessages.push("I can't identify the right appointment safely. I'll request staff follow-up.");
+      state.callerMessages.push(staffFallbackText(state, "I can't identify the right appointment safely. I'll request staff follow-up."));
       break;
     case "readFailure":
       if (interpretation.failure === "notFound") {
@@ -257,7 +266,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       const presentation = availabilityPresentation(interpretation.snapshot, state.policy.scope, interpretation.from, interpretation.to, now);
       if (turn.quality !== "clear" || !presentation.ok) {
         addStaffTask(state, "systemFailure", now);
-        state.callerMessages.push("I can't check available times right now. I'll request staff follow-up.");
+        state.callerMessages.push(staffFallbackText(state, "I can't check available times right now. I'll request staff follow-up."));
         state.availabilityReads.push({ turnId: turn.turnId, status: "failed", reason: turn.quality !== "clear" ? "unclear" : "invalidEvidence" });
       } else {
         state.callerMessages.push(presentation.value.text);
@@ -268,14 +277,14 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
     }
     case "availabilityFailure":
       addStaffTask(state, "systemFailure", now);
-      state.callerMessages.push("I can't check available times right now. I'll request staff follow-up.");
+      state.callerMessages.push(staffFallbackText(state, "I can't check available times right now. I'll request staff follow-up."));
       state.availabilityReads.push({ turnId: turn.turnId, status: "failed", reason: interpretation.reason });
       break;
     case "appointments": {
       const presentation = appointmentPresentation(interpretation.snapshot, state.policy.scope, interpretation.from, interpretation.to, now);
       if (turn.quality !== "clear" || !presentation.ok) {
         addStaffTask(state, "systemFailure", now);
-        state.callerMessages.push("I can't check appointments right now. I'll request staff follow-up.");
+        state.callerMessages.push(staffFallbackText(state, "I can't check appointments right now. I'll request staff follow-up."));
         state.appointmentReads.push({ turnId: turn.turnId, status: "failed", reason: turn.quality !== "clear" ? "unclear" : "invalidEvidence" });
       } else {
         state.callerMessages.push(presentation.value.text);
@@ -286,9 +295,9 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
     }
     case "appointmentsFailure":
       addStaffTask(state, interpretation.reason === "invalidProof" || interpretation.reason === "unclear" ? "verificationFailed" : "systemFailure", now);
-      state.callerMessages.push(interpretation.reason === "invalidProof" || interpretation.reason === "unclear"
+      state.callerMessages.push(staffFallbackText(state, interpretation.reason === "invalidProof" || interpretation.reason === "unclear"
         ? "I can't verify whose appointment to check. I'll request staff follow-up."
-        : "I can't check appointments right now. I'll request staff follow-up.");
+        : "I can't check appointments right now. I'll request staff follow-up."));
       state.appointmentReads.push({ turnId: turn.turnId, status: "failed", reason: interpretation.reason });
       break;
   }
@@ -433,9 +442,10 @@ export function transition(current: CallState, action: TransitionAction): Result
         state.presentations[presentation.id] = { ...presentation, status: "canceled" };
         addStaffTask(state, presentation.reason, now);
         const noticeId = `${presentation.id}:closedNotice`;
-        state.presentations[noticeId] = { kind: "notice", id: noticeId, approvedText: CLOSED_TRANSFER_NOTICE, status: "pending" };
+        const approvedText = staffFallbackText(state, CLOSED_TRANSFER_NOTICE);
+        state.presentations[noticeId] = { kind: "notice", id: noticeId, approvedText, status: "pending" };
         state.pendingPresentationId = noticeId;
-        state.callerMessages.push(CLOSED_TRANSFER_NOTICE);
+        state.callerMessages.push(approvedText);
         break;
       }
       state.presentations[presentation.id] = { ...presentation, status: "possiblySent" };
@@ -458,7 +468,7 @@ export function transition(current: CallState, action: TransitionAction): Result
           if (action.status === "failed") {
             addStaffTask(state, "transferFailed", now);
             const noticeId = `${presentation.id}:failureNotice`;
-            const approvedText = "I couldn't connect you. I'll request staff follow-up, but I can't confirm they've received it yet.";
+            const approvedText = staffFallbackText(state, "I couldn't connect you. I'll request staff follow-up, but I can't confirm they've received it yet.");
             state.presentations[noticeId] = { kind: "notice", id: noticeId, approvedText, status: "pending" };
             state.pendingPresentationId = noticeId;
             state.callerMessages.push(approvedText);
@@ -492,7 +502,7 @@ export function transition(current: CallState, action: TransitionAction): Result
       state.effects[effect.id] = { ...effect, status: "canceled" };
       state.actions[pendingAction.key] = { ...pendingAction, status: "unsupported" };
       addStaffTask(state, "emergencyStopped", action.now, pendingAction.key, effect.mutation.request);
-      const approvedText = "I can't complete that action now. I'll request staff follow-up, but I can't confirm they've received it yet.";
+      const approvedText = staffFallbackText(state, "I can't complete that action now. I'll request staff follow-up, but I can't confirm they've received it yet.");
       state.callerMessages.push(approvedText);
       if (state.lifecycle === "active" && !state.pendingPresentationId) {
         const id = `${effect.id}:stoppedNotice`;

@@ -76,6 +76,8 @@ export type CallPolicy = Readonly<{
   staffedIntervals?: readonly StaffedInterval[];
   staffDestination: StaffDestination;
   operatorQueue: StaffDestination;
+  /** Host-owned staff work is proven for this call; false blocks all task intents. */
+  staffWorkEnabled?: boolean;
   /** Required for voice admission; optional for legacy and text-only snapshots. */
   greeting?: ApprovedGreeting;
   numberRouteVersion?: string;

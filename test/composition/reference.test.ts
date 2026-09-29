@@ -15,6 +15,7 @@ import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { createEmbeddedTextComposition } from "../../src/reference/embedded-composition.ts";
 import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
 import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
+import { createReferenceStandaloneTextComposition } from "../support/reference-standalone-composition.ts";
 import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
@@ -76,7 +77,7 @@ function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = f
   const ledger = suppliedLedger ?? (kind === "standalone" ? new PostgresLedger(db!, undefined, readiness) : new MemoryLedger(readiness));
   if (kind === "standalone") {
     assert.ok(db);
-    ({ reception, policy } = createStandaloneTextComposition(db, host, hostBookingMode, ledger, availability, undefined, readiness, undefined, host));
+    ({ reception, policy } = createReferenceStandaloneTextComposition(db, host, hostBookingMode, ledger, availability, undefined, readiness, undefined, host));
   } else {
     policy = new MemoryPolicyStore(hostBookingMode, undefined, readiness);
     reception = createEmbeddedTextComposition(ledger, policy, host, availability);
@@ -552,7 +553,10 @@ test("standalone patient actions stay unavailable without durable host work", { 
   const offer = { scope, offerRef: "safe-default-offer-canary-8792", serviceRef: "physio", startsAt: "2026-09-29T11:00:00.000Z", expiresAt };
   const host = new ReferenceClinicHost([patient], [offer]);
   const { reception, policy } = createStandaloneTextComposition(db!, host);
-  assert.equal(value(await policy.read(scope)).capabilities.book, "unavailable");
+  const initial = value(await policy.read(scope));
+  assert.equal(initial.capabilities.book, "unavailable");
+  assert.equal(initial.capabilities.transfer, "unavailable");
+  assert.equal(initial.staffWorkEnabled, false);
   const enabled = value(await policy.changeBookingEnabled(scope, "0", true, "clinic-admin"));
   assert.deepEqual({ book: enabled.capabilities.book, cancel: enabled.capabilities.cancel,
     reschedule: enabled.capabilities.reschedule, intake: enabled.capabilities.intake },
@@ -580,6 +584,18 @@ test("standalone patient actions stay unavailable without durable host work", { 
       consentRef: "private-consent-canary-6625", duplicateCheckRef: "private-duplicate-canary-5016" },
   }, now));
   assert.deepEqual(Object.keys(intake.staffItems), []);
+  const handoff = value(await runtime.acceptTurn(turn(callId, "handoff", "Please ask staff to call me"),
+    { kind: "handoff", reason: "callerRequested" }, now));
+  assert.deepEqual(Object.keys(handoff.staffItems), []);
+  assert.match(handoff.callerMessages.at(-1) ?? "", /contact the clinic directly/);
+  const transfer = value(await runtime.acceptTurn(turn(callId, "transfer", "Please transfer me"),
+    { kind: "transfer", reason: "callerRequested" }, now));
+  assert.deepEqual(Object.keys(transfer.staffItems), []);
+  assert.equal(transfer.policy.capabilities.transfer, "unavailable");
+  const ambiguous = value(await runtime.acceptTurn(turn(callId, "ambiguous", "Which appointment is mine?"),
+    { kind: "ambiguousTarget" }, now));
+  assert.deepEqual(Object.keys(ambiguous.staffItems), []);
+  assert.match(ambiguous.callerMessages.at(-1) ?? "", /contact the clinic directly/);
   value(await reception.drain(scope, callId, now));
   assert.equal(host.bookings(scope).length, 0);
   assert.equal(host.tasks(scope).length, 0);

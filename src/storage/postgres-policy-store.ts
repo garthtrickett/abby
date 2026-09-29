@@ -18,6 +18,7 @@ function decodePolicy(value: unknown, scope: LocationScope, version: number): Re
   const policy = value as CallPolicy;
   if (!policy.scope || !sameScope(policy.scope, scope) || policy.policyVersion !== String(version) ||
       (policy.automationEnabled !== undefined && typeof policy.automationEnabled !== "boolean") ||
+      (policy.staffWorkEnabled !== undefined && typeof policy.staffWorkEnabled !== "boolean") ||
       typeof policy.bookingEnabled !== "boolean" || !policy.capabilities ||
       !["execute", "requestOnly", "unavailable"].includes(policy.capabilities.transfer) ||
       !policy.staffDestination || !policy.operatorQueue) return err({ kind: "storageFailure" });
@@ -29,20 +30,25 @@ export class PostgresPolicyStore implements PolicyStore {
   private readonly defaultPolicy: (scope: LocationScope) => CallPolicy;
   private readonly hostBookingMode: CapabilityMode;
   private readonly readiness: AutomationReadiness;
+  private readonly staffWorkEnabled: boolean;
 
-  constructor(db: Kysely<Database>, defaultPolicy: (scope: LocationScope) => CallPolicy, hostBookingMode: CapabilityMode = "unavailable", readiness: AutomationReadiness = unprovenReadiness) {
+  constructor(db: Kysely<Database>, defaultPolicy: (scope: LocationScope) => CallPolicy, hostBookingMode: CapabilityMode = "unavailable", readiness: AutomationReadiness = unprovenReadiness,
+              staffWorkEnabled = true) {
     this.db = db;
     this.defaultPolicy = defaultPolicy;
     this.hostBookingMode = hostBookingMode;
     this.readiness = readiness;
+    this.staffWorkEnabled = staffWorkEnabled;
   }
 
   private effective(policy: CallPolicy, automation?: Readonly<{ version: number; enabled: boolean }>): CallPolicy {
     const patientModes = this.hostBookingMode === "unavailable"
       ? { cancel: "unavailable", reschedule: "unavailable", intake: "unavailable" } as const : {};
-    return { ...policy, automationVersion: String(automation?.version ?? 0), automationEnabled: automation?.enabled ?? false,
+    return { ...policy, staffWorkEnabled: this.staffWorkEnabled,
+      automationVersion: String(automation?.version ?? 0), automationEnabled: automation?.enabled ?? false,
       capabilities: { ...policy.capabilities, ...patientModes,
-        book: policy.bookingEnabled ? this.hostBookingMode : "unavailable" } };
+        book: policy.bookingEnabled ? this.hostBookingMode : "unavailable",
+        transfer: this.staffWorkEnabled ? policy.capabilities.transfer : "unavailable" } };
   }
 
   async read(scope: LocationScope): Promise<Result<CallPolicy, PolicyFailure>> {
