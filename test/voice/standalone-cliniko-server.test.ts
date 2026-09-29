@@ -272,3 +272,111 @@ test("E2E-138, E2E-139, and E2E-140 local standalone server reads keypad availab
     finally { await admin.destroy(); }
   }
 });
+
+test("E2E-151 signed standalone call switches speech models before the first output chunk",
+  { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 20_000 }, async () => {
+  const adminUrl = process.env.DATABASE_URL;
+  assert.ok(adminUrl);
+  const admin = connectPostgres(adminUrl);
+  const name = `abby_speech_fallback_${randomUUID().replaceAll("-", "")}`;
+  const target = new URL(adminUrl);
+  target.pathname = `/${name}`;
+  let created = false;
+  let db: ReturnType<typeof connectPostgres> | undefined;
+  let server: Server | undefined;
+  let caller: WebSocket | undefined;
+  try {
+    await sql.raw(`create database "${name}"`).execute(admin);
+    created = true;
+    db = connectPostgres(target.toString());
+    await migrate(db);
+    const accountSid = `AC${"4".repeat(32)}`;
+    const callSid = `CA${"5".repeat(32)}`;
+    const streamSid = `MZ${"6".repeat(32)}`;
+    const number = "+6125550199";
+    const callerPhone = "+6145550101";
+    const authToken = "synthetic-twilio-fallback-token";
+    const webhookUrl = "https://calls.example.test/twilio/inbound";
+    const streamUrl = "wss://calls.example.test/twilio/media/";
+    const now = "2026-09-29T10:00:00.000Z";
+    const scope = { tenantId: `fallback-${randomUUID().slice(0, 8)}`, clinicId: "clinic", locationId: "main" };
+    const expectedGreeting = referenceDefaultPolicy(scope).greeting;
+    assert.ok(expectedGreeting);
+    const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable",
+      async () => ok(true), false, "standaloneMinimal");
+    assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
+    const availability = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5",
+      contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
+    async () => { throw new Error("greeting must not query Cliniko"); });
+    assert.ok(availability.ok);
+    const models: string[] = [];
+    let primaryAborted = false;
+    const prepared = await createStandaloneClinikoVoiceServer({ db,
+      twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
+        fallbackNumbers: { [number]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x47),
+        now: () => new Date(now) },
+      routes: [{ dialedNumber: number, scope, routeVersion: "v1", availability: availability.value,
+        clinicDate: () => "2026-09-29" }],
+      openai: { apiKey: "synthetic-openai-key", intentModel: "configured-model",
+        speechFallbackModel: "tts-1", speechPrimaryFirstChunkMs: 100,
+        fetch: (async (url, init) => {
+          assert.equal(String(url), "https://api.openai.com/v1/audio/speech");
+          const body = JSON.parse(String(init?.body)) as { model: string; input: string };
+          models.push(body.model);
+          assert.equal(body.input, expectedGreeting.approvedText);
+          if (body.model === "gpt-4o-mini-tts") return new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => {
+              primaryAborted = true;
+              reject(new Error("primary canceled"));
+            }, { once: true });
+          });
+          assert.equal(body.model, "tts-1");
+          return new Response(Buffer.alloc(960, 0x20), { headers: { "content-type": "audio/pcm" } });
+        }) as typeof fetch },
+      readiness: async () => ok(true), now: () => now,
+      playbackOptions: { stepDeadlineMs: 1_000, firstChunkDeadlineMs: 1_500 },
+    });
+    assert.ok(prepared.ok);
+    server = prepared.value;
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const form = { AccountSid: accountSid, CallSid: callSid, To: number, From: callerPhone };
+    const webhook = await fetch(`http://127.0.0.1:${address.port}/twilio/inbound`, { method: "POST", headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, webhookUrl, form),
+    }, body: new URLSearchParams(form).toString() });
+    assert.equal(webhook.status, 200);
+    const binding = (await webhook.text()).match(/<Parameter name="abbyBinding" value="([^"]+)"\/>/)?.[1];
+    assert.ok(binding);
+    caller = new WebSocket(`ws://127.0.0.1:${address.port}/twilio/media/`, { headers: {
+      "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, streamUrl, {}),
+    } });
+    await once(caller, "open");
+    const sent: Record<string, unknown>[] = [];
+    const greeting = new Promise<void>(resolve => caller!.on("message", data => {
+      sent.push(JSON.parse(data.toString()) as Record<string, unknown>);
+      if (sent.length === 2) resolve();
+    }));
+    caller.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
+    caller.send(JSON.stringify({ event: "start", sequenceNumber: "1", streamSid,
+      start: { accountSid, callSid, streamSid, tracks: ["inbound"],
+        mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 },
+        customParameters: { abbyBinding: binding } } }));
+    await greeting;
+    assert.deepEqual(models, ["gpt-4o-mini-tts", "tts-1"]);
+    assert.equal(primaryAborted, true);
+    assert.deepEqual(sent.map(item => item.event), ["media", "mark"]);
+    caller.send(JSON.stringify({ event: "mark", sequenceNumber: "2", streamSid,
+      mark: { name: (sent[1]?.mark as { name: string }).name } }));
+    assert.deepEqual(await scanPatientDataCanaries(db, [{ label: "caller", value: callerPhone },
+      { label: "provider_call", value: callSid }]), { ok: true, value: [] });
+  } finally {
+    caller?.terminate();
+    if (server) { server.close(); await once(server, "close"); }
+    await db?.destroy();
+    try { if (created) await sql.raw(`drop database "${name}"`).execute(admin); }
+    finally { await admin.destroy(); }
+  }
+});
