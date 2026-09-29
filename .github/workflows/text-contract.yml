@@ -43,6 +43,7 @@ jobs:
           --health-retries 20
     env:
       DATABASE_URL: postgresql://postgres@127.0.0.1:5432/postgres
+      ABBY_ISOLATED_POSTGRES_PROBE: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -3,6 +3,7 @@ import test, { after } from "node:test";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { setup } from "../text/fixture.ts";
+import { scanDisposableBackupCanaries } from "./backup-canary-scan.ts";
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
@@ -38,4 +39,7 @@ test("database canary scan identifies current patient-data leaks without returni
   assert.equal(scan.value.some(hit => hit.label === "caller_text"), false);
   assert.equal(JSON.stringify(scan.value).includes(offerRef), false);
   assert.equal(JSON.stringify(scan.value).includes(appointmentRef), false);
+  assert.deepEqual(await scanDisposableBackupCanaries(url, [
+    { label: "offer", value: offerRef }, { label: "appointment", value: appointmentRef },
+  ]), ["appointment", "offer"]);
 });
