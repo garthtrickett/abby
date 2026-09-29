@@ -1,6 +1,6 @@
 # Phase 0 product decisions
 
-**Status:** Product owner fixed the D-06 storage boundary and confirmed phone-to-ID lookup in D-01. Clinic verification details and all other proposed defaults still require their listed owners.
+**Status:** Product owner fixed the D-06 storage boundary, confirmed phone-to-ID lookup in D-01, and chose Cliniko as the sole durable home for standalone patient-specific work in D-11. Clinic verification and the actual Cliniko staff workflow still require their listed owners and proof.
 
 | Decision ID | Question | Proposed default pending approval | Owner and deadline |
 | --- | --- | --- | --- |
@@ -14,5 +14,6 @@
 | D-08 | Which market, locale, and quality thresholds govern the first pilot? | Use existing clinic markets; declare sample size, critical failures, latency and language thresholds before pilot traffic. | Product; before pilot design approval. |
 | D-09 | Which telephony route handles failed intake or voice startup? | A provider-owned number fallback, tested while Abby is unavailable; block live-call readiness until proven. | Product and voice engineering; before live routing. |
 | D-10 | What may Abby say first at each location? | Require a location-scoped greeting with recorded clinic approval and owner; block voice admission if absent, and never send it before session activation. The reference greeting is only a synthetic fixture. | Clinic owner; before live routing. |
+| D-11 | Where may a standalone Cliniko clinic keep durable patient-specific booking and staff-follow-up details? | Cliniko only. Abby may persist patient phone numbers and Cliniko patient IDs in its lookup index, but no patient-specific action, task, review, or outcome details. If Cliniko cannot durably own and safely reconcile a request or staff item, that patient-specific capability is unavailable, including `requestOnly`; a generic non-patient alert or caller fallback is not a delivered staff task. Embedded buyers may use their own authorized patient/work system. | Decided by product owner; Cliniko workflow and failure handling must be proven under D-07 before patient-specific handoff. |
 
 An engineering proposal remains a proposal until its owner records the decision and evidence. A changed answer updates the PRD, technical contract, scenario expectation, and support matrix where affected.
