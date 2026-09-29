@@ -37,7 +37,8 @@ test("E2E-132 local signed Twilio call admits, proves greeting playback, accepts
   const intake = new SharedNumberIntakeService(ledger, router, admission, () => now);
   const reception = new TextReception(ledger, policy, new ReferenceClinicHost([], []));
   const ingress = new TwilioSignedIngress({ accountSid, authToken, publicWebhookUrl: webhookUrl,
-    publicStreamUrl: streamUrl, bindingKey: Buffer.alloc(32, 0x34), now: () => new Date(now) });
+    publicStreamUrl: streamUrl, fallbackNumbers: { [number]: "+6125550188" },
+    bindingKey: Buffer.alloc(32, 0x34), now: () => new Date(now) });
   let created = 0;
   let playedResolve: (() => void) | undefined;
   let turnResolve: (() => void) | undefined;

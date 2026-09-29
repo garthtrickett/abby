@@ -15,7 +15,8 @@ const streamUrl = "wss://calls.example.test/twilio/media/";
 
 test("E2E-131 local transport: a signed webhook and upgrade reach one authenticated call owner in wire order", async () => {
   const ingress = new TwilioSignedIngress({ accountSid, authToken, publicWebhookUrl: webhookUrl,
-    publicStreamUrl: streamUrl, bindingKey: Buffer.alloc(32, 0x37),
+    publicStreamUrl: streamUrl, fallbackNumbers: { "+6125550199": "+6125550188" },
+    bindingKey: Buffer.alloc(32, 0x37),
     now: () => new Date("2026-09-29T10:00:00.000Z") });
   const delivered: string[] = [];
   let created = 0;
@@ -80,7 +81,8 @@ test("E2E-135 local transport: concurrent and later replays cannot construct a s
   { timeout: 15_000 }, async () => {
   let clockMs = Date.parse("2026-09-29T10:00:00.000Z");
   const ingress = new TwilioSignedIngress({ accountSid, authToken, publicWebhookUrl: webhookUrl,
-    publicStreamUrl: streamUrl, bindingKey: Buffer.alloc(32, 0x38),
+    publicStreamUrl: streamUrl, fallbackNumbers: { "+6125550199": "+6125550188" },
+    bindingKey: Buffer.alloc(32, 0x38),
     now: () => new Date(clockMs) });
   let created = 0;
   let disconnected = 0;
@@ -184,6 +186,57 @@ test("E2E-135 local transport: concurrent and later replays cannot construct a s
   } finally {
     release();
     for (const socket of sockets) socket.terminate();
+    server.close();
+    await once(server, "close");
+  }
+});
+
+test("E2E-136 local webhook: Twilio receives a distinct static post-stream clinic fallback", async () => {
+  const inboundA = "+6125550199";
+  const inboundB = "+6125550177";
+  const fallbackA = "+6125550188";
+  const fallbackB = "+6125550166";
+  const baseConfig = { accountSid, authToken, publicWebhookUrl: webhookUrl,
+    publicStreamUrl: streamUrl, bindingKey: Buffer.alloc(32, 0x39),
+    now: () => new Date("2026-09-29T10:00:00.000Z") };
+  for (const fallbackNumbers of [{}, { [inboundA]: inboundA }, { [inboundA]: inboundB, [inboundB]: fallbackB },
+    { [inboundA]: "not-a-phone" }]) {
+    assert.throws(() => new TwilioSignedIngress({ ...baseConfig, fallbackNumbers }), RangeError);
+  }
+  const fallbackNumbers = { [inboundA]: fallbackA, [inboundB]: fallbackB };
+  const ingress = new TwilioSignedIngress({ ...baseConfig, fallbackNumbers });
+  fallbackNumbers[inboundA] = "+6125550144";
+  let constructed = 0;
+  const server = createTwilioIngressServer({ ingress, async createCall() {
+    constructed += 1;
+    throw new Error("webhook must not create a call owner");
+  } });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  try {
+    for (const [dialed, fallback] of [[inboundA, fallbackA], [inboundB, fallbackB]] as const) {
+      const form = { AccountSid: accountSid, CallSid: callSid, To: dialed, From: "+6145550101" };
+      const response: Response = await fetch(`http://127.0.0.1:${address.port}/twilio/inbound`, { method: "POST", headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, webhookUrl, form),
+      }, body: new URLSearchParams(form).toString() });
+      assert.equal(response.status, 200);
+      const xml = await response.text();
+      assert.ok(xml.endsWith(`</Connect><Dial>${fallback}</Dial></Response>`));
+      assert.equal(xml.includes("+6145550101"), false);
+      assert.equal(xml.includes(dialed), false);
+    }
+    const unknown = { AccountSid: accountSid, CallSid: callSid, To: "+6125550155", From: "+6145550101" };
+    const refused = await fetch(`http://127.0.0.1:${address.port}/twilio/inbound`, { method: "POST", headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, webhookUrl, unknown),
+    }, body: new URLSearchParams(unknown).toString() });
+    assert.equal(refused.status, 503);
+    assert.equal(await refused.text(), "Unavailable");
+    assert.equal(constructed, 0);
+  } finally {
     server.close();
     await once(server, "close");
   }

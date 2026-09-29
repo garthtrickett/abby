@@ -48,7 +48,8 @@ test("E2E-134 standalone signed voice keeps the live SAM state out of PostgreSQL
     const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable", readiness, false, "standaloneMinimal");
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
     const ingress = new TwilioSignedIngress({ accountSid, authToken, publicWebhookUrl: webhookUrl,
-      publicStreamUrl: streamUrl, bindingKey: Buffer.alloc(32, 0x34), now: () => new Date(now) });
+      publicStreamUrl: streamUrl, fallbackNumbers: { [dialedNumber]: "+6125550188" },
+      bindingKey: Buffer.alloc(32, 0x34), now: () => new Date(now) });
     const form = { AccountSid: accountSid, CallSid: callSid, To: dialedNumber, From: callerPhone };
     const answered = ingress.answerWebhook({ method: "POST", requestTarget: "/twilio/inbound",
       contentType: "application/x-www-form-urlencoded",

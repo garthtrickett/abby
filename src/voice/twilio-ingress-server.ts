@@ -152,9 +152,10 @@ export function createTwilioIngressServer(config: TwilioIngressServerConfig): Se
       const answered = config.ingress.answerWebhook({ method: request.method ?? "",
         requestTarget: request.url ?? "", contentType: header(request.headers["content-type"]),
         signature: header(request.headers["x-twilio-signature"]), body: raw });
-      response.writeHead(answered.ok ? 200 : 403, { "content-type": answered.ok ? "application/xml; charset=utf-8" : "text/plain",
+      const status = answered.ok ? 200 : answered.error.kind === "fallbackNotConfigured" ? 503 : 403;
+      response.writeHead(status, { "content-type": answered.ok ? "application/xml; charset=utf-8" : "text/plain",
         "cache-control": "no-store" });
-      response.end(answered.ok ? answered.value : "Forbidden");
+      response.end(answered.ok ? answered.value : status === 503 ? "Unavailable" : "Forbidden");
     })().catch(() => { if (!response.headersSent) response.writeHead(500); response.end(); });
   });
   server.requestTimeout = 10_000;
