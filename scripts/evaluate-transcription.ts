@@ -6,7 +6,7 @@ import { parseTranscriptionEvaluationCorpus, runTranscriptionEvaluation } from "
 import type { TranscriptionEvaluationCase } from "../src/voice/transcription-evaluation.ts";
 
 function argsFrom(argv: readonly string[]): Record<string, string> {
-  const allowed = new Set(["out", "repeats", "concurrency"]);
+  const allowed = new Set(["out", "repeats", "concurrency", "corpus"]);
   const args: Record<string, string> = {};
   if (argv.length % 2 !== 0) throw new Error("invalid evaluation arguments");
   for (let index = 0; index < argv.length; index += 2) {
@@ -30,7 +30,11 @@ async function main(): Promise<void> {
   const args = argsFrom(process.argv.slice(2));
   const apiKey = process.env.ABBY_OPENAI_API_KEY;
   if (!apiKey) throw new Error("ABBY_OPENAI_API_KEY is required");
-  const corpusBytes = await readFile(resolve("eval/transcription-v1.json"));
+  const corpusName = args.corpus ?? "transcription-v1";
+  if (corpusName !== "transcription-v1" && corpusName !== "transcription-telephony-v1") {
+    throw new Error("unsupported transcription evaluation corpus");
+  }
+  const corpusBytes = await readFile(resolve(`eval/${corpusName}.json`));
   const corpus = parseTranscriptionEvaluationCorpus(JSON.parse(corpusBytes.toString("utf8")) as unknown);
   const cases: TranscriptionEvaluationCase[] = await Promise.all(corpus.cases.map(async item => {
     const pcm = await readFile(resolve("eval/audio", item.file));

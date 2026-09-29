@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "version": "transcription-telephony-v1",
+  "audioFormat": "mono-pcm16le-16000",
+  "cases": [
+    {
+      "id": "TL-001", "category": "availability-date",
+      "file": "availability-thursday-pcmu-8k.pcm", "sha256": "cfde01065c5fe4e14d28866a1a56f1894ec8b893e08a8224bf5edf12c9d9c21f",
+      "expectedText": "Are there appointments available on Thursday?", "criticalTerms": ["Thursday"]
+    },
+    {
+      "id": "TL-002", "category": "booking-request",
+      "file": "book-friday-pcmu-8k.pcm", "sha256": "518eaa34a80ab1e12f3008af6e2d72e9670ac5006ed4bc24795f902f0fd6661e",
+      "expectedText": "Please book the first appointment on Friday.", "criticalTerms": ["book", "Friday"]
+    },
+    {
+      "id": "TL-003", "category": "urgent-language",
+      "file": "urgent-monday-pcmu-8k.pcm", "sha256": "9dce16b7a224fe2c564d08e60d7611565613922c3bd5a44c42c7256f9798e7d3",
+      "expectedText": "I have chest pain. Should I wait until Monday?", "criticalTerms": ["chest", "pain"]
+    }
+  ]
+}
