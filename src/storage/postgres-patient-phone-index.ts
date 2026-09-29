@@ -147,7 +147,9 @@ export class PostgresPatientPhoneIndex {
         await trx.deleteFrom("patient_phone_index")
           .where("tenant_id", "=", scope.tenantId as PatientPhoneIndexTenantId)
           .where("clinic_id", "=", scope.clinicId as PatientPhoneIndexClinicId).execute();
-        await trx.deleteFrom("patient_phone_sync")
+        // Keep the non-patient generation counter so clear → enable → publish cannot reuse an
+        // in-flight lookup's generation number. The epoch timestamp makes it unusable for lookup.
+        await trx.updateTable("patient_phone_sync").set({ completed_at: new Date(0) })
           .where("tenant_id", "=", scope.tenantId as PatientPhoneSyncTenantId)
           .where("clinic_id", "=", scope.clinicId as PatientPhoneSyncClinicId).execute();
       });

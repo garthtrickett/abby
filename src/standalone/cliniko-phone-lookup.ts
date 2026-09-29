@@ -106,6 +106,17 @@ export class ClinikoPhoneLookup {
       if (!current.ok) return err(current.error);
       if (current.value) candidateIds.push(patientId);
     }
+    if (indexed.value.patientIds.length) {
+      // Provider reads may outlive a clinic disconnect, failed scan, or replacement generation.
+      const latest = await this.index.find(scope, phone, this.maxIndexAgeMs, this.countryCallingCode);
+      if (!latest.ok) return latest;
+      if (latest.value.kind === "stale" || latest.value.kind === "tooMany" ||
+          latest.value.generation !== indexed.value.generation ||
+          latest.value.patientIds.length !== indexed.value.patientIds.length ||
+          latest.value.patientIds.some((id, index) => id !== indexed.value.patientIds[index])) {
+        return ok({ kind: "indexStale", candidateIds: [] });
+      }
+    }
     const kind = candidateIds.length === 0 ? "none" : candidateIds.length === 1 ? "one" : "multiple";
     return ok({ kind, candidateIds });
   }
