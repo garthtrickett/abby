@@ -27,7 +27,7 @@ test("configuration archive persists native target state, source history, and re
   assert.equal((await policy.changeBookingEnabled(source, "0", true, "source-admin")).ok, true);
   assert.equal((await policy.changeBookingEnabled(sourceB, "0", false, "source-admin")).ok, true);
   assert.equal((await policy.changeAutomationEnabled(source, "0", true, "source-admin")).ok, true);
-  const knowledge = new PostgresKnowledgeCatalogue(db);
+  const knowledge = new PostgresKnowledgeCatalogue(db, "unsafeReference");
   for (const [scope, ref] of [[source, "parking-a"], [sourceB, "parking-b"]] as const) {
     assert.equal((await knowledge.saveDraft(scope, ref, "0", "source-owner", `Directions for ${ref}`,
       "2026-09-01T00:00:00Z", "2026-10-01T00:00:00Z", "source-admin")).ok, true);

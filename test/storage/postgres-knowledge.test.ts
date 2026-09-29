@@ -33,7 +33,7 @@ test("PostgreSQL knowledge approval is scoped, durable, and compare-and-swap pro
   assert.deepEqual(unpublished.value, []);
   const approve = await admin.submit({ kind: "knowledge.approve.v1", sourceRef, expectedVersion: "1" });
   assert.ok(approve.ok);
-  const restarted = new PostgresKnowledgeCatalogue(db);
+  const restarted = new PostgresKnowledgeCatalogue(db, "unsafeReference");
   const approved = await restarted.readKnowledge(scope, [sourceRef]);
   assert.ok(approved.ok);
   assert.equal(approved.value[0]?.approvedText, first.ok ? draft.text : "Wrong competing text");

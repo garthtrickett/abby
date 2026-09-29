@@ -40,10 +40,16 @@ function approved(entry: KnowledgeEntry): ApprovedKnowledge {
 
 export class PostgresKnowledgeCatalogue implements KnowledgeCatalogue {
   private readonly db: Kysely<Database>;
+  private readonly mode: "standaloneDisabled" | "unsafeReference";
 
-  constructor(db: Kysely<Database>) { this.db = db; }
+  /** Durable free-text knowledge requires a separate patient-data-safe content workflow. */
+  constructor(db: Kysely<Database>, mode: "standaloneDisabled" | "unsafeReference" = "standaloneDisabled") {
+    this.db = db;
+    this.mode = mode;
+  }
 
   async list(scope: LocationScope): Promise<Result<readonly KnowledgeEntry[], KnowledgeFailure>> {
+    if (this.mode === "standaloneDisabled") return err({ kind: "storageFailure" });
     try {
       const result = await sql<Row>`select source_ref, version, status, owner_ref, answer_text, effective_from,
         effective_until, actor_ref, changed_at from clinic_knowledge_events
@@ -55,17 +61,20 @@ export class PostgresKnowledgeCatalogue implements KnowledgeCatalogue {
 
   async saveDraft(scope: LocationScope, sourceRef: string, expectedVersion: string, ownerRef: string,
     text: string, effectiveFrom: string, effectiveUntil: string, actorRef: string): Promise<Result<KnowledgeEntry, KnowledgeFailure>> {
+    if (this.mode === "standaloneDisabled") return err({ kind: "invalidValue" });
     if (![sourceRef, ownerRef, actorRef].every(validRef) || typeof text !== "string" || !text.trim() || text.length > 2_000 ||
         !validPeriod(effectiveFrom, effectiveUntil)) return err({ kind: "invalidValue" });
     return this.change(scope, sourceRef, expectedVersion, actorRef, "draft", { ownerRef, text, effectiveFrom, effectiveUntil });
   }
 
   async approve(scope: LocationScope, sourceRef: string, expectedVersion: string, actorRef: string): Promise<Result<KnowledgeEntry, KnowledgeFailure>> {
+    if (this.mode === "standaloneDisabled") return err({ kind: "invalidValue" });
     if (!validRef(sourceRef) || !validRef(actorRef)) return err({ kind: "invalidValue" });
     return this.change(scope, sourceRef, expectedVersion, actorRef, "approved");
   }
 
   async revoke(scope: LocationScope, sourceRef: string, expectedVersion: string, actorRef: string): Promise<Result<KnowledgeEntry, KnowledgeFailure>> {
+    if (this.mode === "standaloneDisabled") return err({ kind: "invalidValue" });
     if (!validRef(sourceRef) || !validRef(actorRef)) return err({ kind: "invalidValue" });
     return this.change(scope, sourceRef, expectedVersion, actorRef, "revoked");
   }
@@ -128,6 +137,7 @@ export class PostgresKnowledgeCatalogue implements KnowledgeCatalogue {
   }
 
   async readKnowledge(scope: LocationScope, sourceRefs: readonly string[]): Promise<Result<readonly ApprovedKnowledge[], KnowledgeReadFailure>> {
+    if (this.mode === "standaloneDisabled") return err({ kind: "unavailable" });
     if (!Array.isArray(sourceRefs) || sourceRefs.length < 1 || sourceRefs.length > 8 ||
         sourceRefs.some(ref => !validRef(ref)) || new Set(sourceRefs).size !== sourceRefs.length) return err({ kind: "invalidQuery" });
     try { return ok(await this.effective(scope, sourceRefs)); }
@@ -135,6 +145,7 @@ export class PostgresKnowledgeCatalogue implements KnowledgeCatalogue {
   }
 
   async listModelKnowledge(scope: LocationScope, now: string): Promise<Result<readonly ApprovedKnowledge[], KnowledgeReadFailure>> {
+    if (this.mode === "standaloneDisabled") return err({ kind: "unavailable" });
     if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidQuery" });
     try { return ok((await this.effective(scope)).filter(source => validKnowledgeSource(source, scope, now))); }
     catch { return err({ kind: "unavailable" }); }

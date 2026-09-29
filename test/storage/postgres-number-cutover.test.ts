@@ -39,7 +39,7 @@ test("shared-number cutover stages, publishes once, and rolls back without losin
   assert.equal(initial.ok && initial.value.routeVersion, "1");
   assert.equal((await policy.changeBookingEnabled(sourceA, "0", true, "source-admin")).ok, true);
   assert.equal((await policy.changeBookingEnabled(sourceB, "0", false, "source-admin")).ok, true);
-  const knowledge = new PostgresKnowledgeCatalogue(db);
+  const knowledge = new PostgresKnowledgeCatalogue(db, "unsafeReference");
   assert.equal((await knowledge.saveDraft(sourceA, "parking", "0", "source-owner", "Parking is behind the clinic.",
     "2026-09-01T00:00:00Z", "2026-10-01T00:00:00Z", "source-admin")).ok, true);
   assert.equal((await knowledge.approve(sourceA, "parking", "1", "source-admin")).ok, true);

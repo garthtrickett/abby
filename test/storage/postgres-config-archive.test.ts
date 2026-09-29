@@ -42,7 +42,7 @@ test("PostgreSQL config archive takes a consistent scoped snapshot with an allow
   assert.equal((await policy.changeBookingEnabled(scope, "1", false, "archive-admin")).ok, true);
   assert.equal((await policy.changeBookingEnabled(scope, "2", true, "archive-admin")).ok, true);
   assert.equal((await policy.changeAutomationEnabled(scope, "0", true, "archive-admin")).ok, true);
-  const catalogue = new PostgresKnowledgeCatalogue(db);
+  const catalogue = new PostgresKnowledgeCatalogue(db, "unsafeReference");
   const draft = await catalogue.saveDraft(scope, "parking", "0", "clinic-owner", "Parking is behind the clinic.",
     "2026-09-01T00:00:00Z", "2026-10-01T00:00:00Z", "archive-admin");
   assert.equal(draft.ok, true);
@@ -280,7 +280,7 @@ test("configuration snapshot comparison detects setting and knowledge drift befo
     { ...comparison, archiveId: "drift-check-2" }, authority);
   assert.equal(changedSettings.ok, true);
   if (changedSettings.ok) assert.deepEqual(changedSettings.value.changed, ["settings"]);
-  const catalogue = new PostgresKnowledgeCatalogue(db);
+  const catalogue = new PostgresKnowledgeCatalogue(db, "unsafeReference");
   assert.equal((await catalogue.saveDraft(scope, "arrival", "0", "clinic-owner", "Please arrive early.",
     "2026-09-01T00:00:00Z", "2026-10-01T00:00:00Z", "archive-admin")).ok, true);
   assert.equal((await catalogue.approve(scope, "arrival", "1", "archive-admin")).ok, true);
@@ -302,7 +302,7 @@ test("one PostgreSQL snapshot exports every mapped location and refuses a partia
   assert.equal((await policy.changeBookingEnabled(first, "0", true, "archive-admin")).ok, true);
   assert.equal((await policy.changeBookingEnabled(second, "0", false, "archive-admin")).ok, true);
   assert.equal((await policy.changeAutomationEnabled(first, "0", true, "archive-admin")).ok, true);
-  const knowledge = new PostgresKnowledgeCatalogue(db);
+  const knowledge = new PostgresKnowledgeCatalogue(db, "unsafeReference");
   for (const [scope, sourceRef] of [[first, "parking-a"], [second, "parking-b"]] as const) {
     assert.equal((await knowledge.saveDraft(scope, sourceRef, "0", "clinic-owner", `Directions for ${sourceRef}`,
       "2026-09-01T00:00:00Z", "2026-10-01T00:00:00Z", "archive-admin")).ok, true);
