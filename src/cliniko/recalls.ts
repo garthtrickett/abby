@@ -2,7 +2,7 @@ import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import { ClinikoReadBudget } from "./read-budget.ts";
 import type { ClinikoClinicScope } from "./patients.ts";
-import { matchesRecallMarker, validRecallMarker } from "./recall-note.ts";
+import { matchesRecallMarker, validRecallDate, validRecallMarker } from "./recall-note.ts";
 
 export type ClinikoRecallFailure = Readonly<{
   kind: "invalidConfig" | "scopeMismatch" | "invalidQuery" | "forbidden" | "rateLimited" |
@@ -19,6 +19,7 @@ export type ClinikoRecallConfig = Readonly<{
   contactEmail: string;
   rateBudget?: ClinikoReadBudget;
 }>;
+export type ClinikoRecallExpectation = Readonly<{ notes: string; recallTypeId: string; recallAt: string }>;
 
 const idPattern = /^[1-9][0-9]*$/;
 const emailPattern = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
@@ -95,15 +96,18 @@ export class ClinikoRecallReader {
 
   /** Reads one patient's active or archived recalls and matches an exact random marker in notes. */
   async findByMarker(scope: ClinikoClinicScope, patientId: string, marker: string, archived = false,
-                     expectedNotes?: string):
+                     expected?: ClinikoRecallExpectation):
     Promise<Result<ClinikoRecallMatch, ClinikoRecallFailure>> {
+    const expectedValue = expected === undefined ? undefined : record(expected);
     if (!validScope(scope) || scope.tenantId !== this.scope.tenantId || scope.clinicId !== this.scope.clinicId) {
       return err({ kind: "scopeMismatch" });
     }
     if (typeof patientId !== "string" || !idPattern.test(patientId) ||
         !validRecallMarker(marker) || typeof archived !== "boolean" ||
-        (expectedNotes !== undefined && (typeof expectedNotes !== "string" ||
-          !expectedNotes.startsWith(`Abby request ${marker}\n`)))) {
+        (expected !== undefined && (!expectedValue || typeof expectedValue.notes !== "string" ||
+          !expectedValue.notes.startsWith(`Abby request ${marker}\n`) ||
+          typeof expectedValue.recallTypeId !== "string" || !idPattern.test(expectedValue.recallTypeId) ||
+          expectedValue.recallTypeId.length > 19 || !validRecallDate(expectedValue.recallAt)))) {
       return err({ kind: "invalidQuery" });
     }
     let observedAt: string;
@@ -112,7 +116,8 @@ export class ClinikoRecallReader {
     if (typeof observedAt !== "string" || !Number.isFinite(Date.parse(observedAt))) return err({ kind: "unavailable" });
 
     const seen = new Set<string>();
-    const matches: Array<{ id: string; notes: string | null; recalled: boolean; archived: boolean }> = [];
+    const matches: Array<{ id: string; notes: string | null; recalled: boolean; archived: boolean;
+      recallAt: unknown; recallTypeLink: unknown }> = [];
     let totalEntries: number | undefined;
     let lastId = 0n;
     for (let page = 1; page <= maxPages; page += 1) {
@@ -158,8 +163,13 @@ export class ClinikoRecallReader {
         if (numericId <= lastId) return err({ kind: "malformed" });
         lastId = numericId;
         seen.add(recall.id);
-        if (matchesRecallMarker(recall.notes as string | null, marker)) matches.push({ id: recall.id,
-          notes: recall.notes as string | null, recalled: recall.recalled === true, archived });
+        if (matchesRecallMarker(recall.notes as string | null, marker)) {
+          const type = record(recall.recall_type);
+          const typeLinks = record(type?.links);
+          matches.push({ id: recall.id, notes: recall.notes as string | null,
+            recalled: recall.recalled === true, archived, recallAt: recall.recall_at,
+            recallTypeLink: typeLinks?.self });
+        }
       }
       if (seen.size === totalEntries) break;
     }
@@ -167,7 +177,11 @@ export class ClinikoRecallReader {
     const base = { scope: structuredClone(this.scope), observedAt };
     if (matches.length === 0) return ok({ ...base, kind: "none" });
     if (matches.length > 1) return ok({ ...base, kind: "ambiguous" });
-    if (expectedNotes !== undefined && matches[0]!.notes !== expectedNotes) return ok({ ...base, kind: "mismatch" });
+    if (expected !== undefined && (matches[0]!.notes !== expected.notes ||
+        matches[0]!.recallAt !== expected.recallAt ||
+        matches[0]!.recallTypeLink !== `${this.baseUrl}/recall_types/${expected.recallTypeId}`)) {
+      return ok({ ...base, kind: "mismatch" });
+    }
     return ok({ ...base, kind: "one", recallRef: `cliniko:recall:${matches[0]!.id}`,
       recalled: matches[0]!.recalled, archived: matches[0]!.archived });
   }

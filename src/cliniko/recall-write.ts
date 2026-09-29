@@ -1,7 +1,7 @@
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import type { ClinikoClinicScope } from "./patients.ts";
-import { formatRecallNote, validRecallMarker, validRecallSummary } from "./recall-note.ts";
+import { formatRecallNote, validRecallDate, validRecallMarker, validRecallSummary } from "./recall-note.ts";
 import { ClinikoReadBudget } from "./read-budget.ts";
 import { boundedRecallJson, ClinikoRecallReader } from "./recalls.ts";
 import type { ClinikoRecallConfig, ClinikoRecallFailure, ClinikoRecallMatch } from "./recalls.ts";
@@ -24,12 +24,6 @@ const maxProcessAttempts = 10_000;
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-}
-
-function validDate(value: unknown): value is string {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const parsed = new Date(`${value}T00:00:00Z`);
-  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 /** One process-local send attempt. A lost response never triggers another POST. */
@@ -68,7 +62,7 @@ export class ClinikoRecallWriter {
     }
     if (typeof request.patientId !== "string" || !idPattern.test(request.patientId) ||
         typeof request.recallTypeId !== "string" || !idPattern.test(request.recallTypeId) ||
-        !validDate(request.recallAt) || !validRecallMarker(request.marker) || !validRecallSummary(request.summary)) {
+        !validRecallDate(request.recallAt) || !validRecallMarker(request.marker) || !validRecallSummary(request.summary)) {
       return err({ kind: "invalidQuery" });
     }
     if (this.attempted.has(request.marker)) return err({ kind: "invalidQuery" });
@@ -106,12 +100,14 @@ export class ClinikoRecallWriter {
   }
 
   /** A miss is only an observation; it never authorizes retrying an uncertain create. */
-  observe(request: Pick<ClinikoRecallWriteRequest, "scope" | "patientId" | "marker" | "summary">, archived = false):
+  observe(request: ClinikoRecallWriteRequest, archived = false):
     Promise<Result<ClinikoRecallMatch, ClinikoRecallFailure>> {
-    if (!validRecallMarker(request?.marker) || !validRecallSummary(request?.summary)) {
+    if (!validRecallMarker(request?.marker) || !validRecallSummary(request?.summary) ||
+        !validRecallDate(request?.recallAt)) {
       return Promise.resolve(err({ kind: "invalidQuery" }));
     }
     return this.reader.findByMarker(request.scope, request.patientId, request.marker, archived,
-      formatRecallNote(request.marker, request.summary));
+      { notes: formatRecallNote(request.marker, request.summary), recallTypeId: request.recallTypeId,
+        recallAt: request.recallAt });
   }
 }
