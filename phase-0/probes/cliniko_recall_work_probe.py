@@ -5,9 +5,11 @@ import base64
 import getpass
 import json
 import re
+import subprocess
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from urllib.error import URLError
 from urllib.parse import quote, urlencode
 
@@ -28,6 +30,23 @@ def matching_recalls(base: str, headers: dict[str, str], patient_id: str, marker
             or total < 0 or total > 100 or len(rows) != total):
         raise ProbeError(f"recall_reconcile_read_{status}")
     return [row for row in rows if isinstance(row, dict) and row.get("notes") == marker]
+
+
+def adapter_probe(key: str, contact: str, patient_id: str, recall_id: str, marker: str,
+                  archived: bool, recalled: bool) -> dict:
+    result = subprocess.run(
+        ["node", str(Path(__file__).with_name("cliniko_recall_adapter_probe.ts"))],
+        input=json.dumps({"apiKey": key, "contactEmail": contact, "patientId": patient_id,
+                          "recallId": recall_id, "marker": marker, "archived": archived, "recalled": recalled}),
+        text=True, capture_output=True, cwd=Path(__file__).resolve().parents[2], timeout=60, check=False,
+    )
+    try:
+        outcome = json.loads(result.stdout)
+    except ValueError:
+        raise ProbeError("adapter_output_invalid") from None
+    if result.returncode != 0 or outcome.get("ok") is not True:
+        raise ProbeError("typescript_recall_adapter_unproven")
+    return outcome
 
 
 def main() -> int:
@@ -51,7 +70,7 @@ def main() -> int:
         "User-Agent": f"Abby Phase 0 ({contact})",
     }
     reference_id = uuid.uuid4().hex
-    marker = "Abby synthetic recall probe " + reference_id
+    marker = str(uuid.uuid4())
     patient_id = None
     recall_id = None
     archived_recall = False
@@ -106,6 +125,10 @@ def main() -> int:
         if not exact:
             raise ProbeError("exact_recall_read_unproven")
 
+        adapter = adapter_probe(key, contact, patient_id, recall_id, marker, False, False)
+        print(json.dumps({"step": "typescript_active_recall", "kind": adapter["kind"],
+                          "recalled": adapter["recalled"]}))
+
         path = f"/recalls/{quote(recall_id, safe='')}"
         status, _ = request(base, headers, "PATCH", path, {"recalled": True})
         read_status, current = request(base, headers, "GET", path)
@@ -113,7 +136,7 @@ def main() -> int:
         print(json.dumps({"step": "mark_recalled", "patch_status": status, "read_status": read_status, "verified": marked}))
         if not marked:
             failed = True
-    except (ProbeError, URLError, TimeoutError, ValueError, KeyError) as error:
+    except (ProbeError, URLError, TimeoutError, ValueError, KeyError, subprocess.TimeoutExpired, OSError) as error:
         failed = True
         label = str(error) if isinstance(error, ProbeError) else type(error).__name__
         print(json.dumps({"error": label}), file=sys.stderr)
@@ -155,6 +178,14 @@ def main() -> int:
             except (ProbeError, URLError, TimeoutError, ValueError, KeyError):
                 cleanup_failed = True
                 print(json.dumps({"step": "archive_recall", "verified": False}))
+            if archived_recall:
+                try:
+                    adapter = adapter_probe(key, contact, patient_id, recall_id, marker, True, True)
+                    print(json.dumps({"step": "typescript_archived_recall", "kind": adapter["kind"],
+                                      "archived": adapter["archived"], "recalled": adapter["recalled"]}))
+                except (ProbeError, subprocess.TimeoutExpired, OSError):
+                    failed = True
+                    print(json.dumps({"step": "typescript_archived_recall", "verified": False}))
         if patient_id and (not recall_create_uncertain or archived_recall) and not cleanup_failed:
             try:
                 path = f"/patients/{quote(patient_id, safe='')}"
