@@ -120,6 +120,14 @@ function destination(value: unknown): StaffDestination {
 
 function policy(value: unknown, sourceScope: LocationScope, version: number): CallPolicy {
   const row = object(value, "settings");
+  if (row.shape === "standaloneMinimal") {
+    if (Object.keys(row).sort().join(",") !== "bookingEnabled,policyVersion,shape" ||
+        row.policyVersion !== String(version)) throw new InvalidConfigArchive("settings");
+    return { scope: sourceScope, policyVersion: String(version), automationVersion: "0", automationEnabled: false,
+      bookingEnabled: flag(row.bookingEnabled, "settings"),
+      capabilities: { book: "unavailable", cancel: "unavailable", reschedule: "unavailable", intake: "unavailable", transfer: "unavailable" },
+      staffDestination: { kind: "queue", queueRef: "disabled" }, operatorQueue: { kind: "queue", queueRef: "disabled" } };
+  }
   const caps = object(row.capabilities, "settings");
   const modes = ["execute", "requestOnly", "unavailable"];
   const capability = (name: string) => {

@@ -50,6 +50,7 @@ test("shared-number cutover stages, publishes once, and rolls back without losin
     reason: "Synthetic number cutover" }, fenceAuthority);
   assert.equal(frozen.ok && frozen.value.version === 1, true);
   const exportRequest = { sourceTenantId: sourceA.tenantId, archiveId: "route-cutover-archive",
+    archiveMode: "unsafeReference" as const,
     actorRef: "source-admin", createdAt: "2026-09-29T00:00:00Z", expectedFenceVersion: 1,
     locations: [
       { sourceScope: sourceA, targetScope: targetA, timeZone: "Australia/Sydney", mappingProvenance: "reviewed-a" },
@@ -164,6 +165,7 @@ test("release after stage prevents publication while the source route remains au
   assert.equal((await fence.freeze({ tenantId: source.tenantId, actorRef: "source-admin",
     reason: "Stage a synthetic route" }, fenceAuthority)).ok, true);
   const request = { sourceTenantId: source.tenantId, archiveId: "route-stale-archive", actorRef: "source-admin",
+    archiveMode: "unsafeReference" as const,
     createdAt: "2026-09-29T00:00:00Z", expectedFenceVersion: 1, locations: [
       { sourceScope: source, targetScope: target, timeZone: "UTC", mappingProvenance: "reviewed" }] };
   let exportAudits = 0;

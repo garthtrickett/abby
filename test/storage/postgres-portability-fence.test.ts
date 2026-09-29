@@ -65,6 +65,7 @@ test("one tenant fence covers every mapped location in a two-location archive", 
   assert.equal((await policy.changeBookingEnabled(north, "1", false, "clinic-admin")).ok, false);
   assert.equal((await policy.changeBookingEnabled(south, "1", false, "clinic-admin")).ok, false);
   const exported = await buildPostgresTenantConfigArchive(db, { sourceTenantId: tenantId,
+    archiveMode: "unsafeReference",
     locations: [north, south].map(sourceScope => ({ sourceScope,
       targetScope: { ...sourceScope, tenantId: "buyer-two-location" },
       timeZone: "Australia/Sydney", mappingProvenance: "reviewed-map" })),
@@ -83,6 +84,7 @@ test("a durable fence keeps a configuration-only archive unchanged until an audi
   const scope = { tenantId: "fence-config-tenant", clinicId: "clinic", locationId: "location" };
   const targetScope = { tenantId: "buyer-fence", clinicId: "buyer-clinic", locationId: "buyer-location" };
   const request = { scope, targetScope, timeZone: "Australia/Sydney", mappingProvenance: "reviewed-map",
+    archiveMode: "unsafeReference" as const,
     archiveId: "fence-before", actorRef: "export-admin", createdAt: "2026-09-29T00:00:00Z" };
   const exportAuthority = { authorizeAndRecord: async () => ok({ requestRef: "export-audit" }) };
   const policy = new PostgresPolicyStore(db, referenceDefaultPolicy);
@@ -228,6 +230,7 @@ test("freeze waits for an earlier tenant write and archives the committed settin
   const frozen = await freezing;
   assert.equal(frozen.ok, true);
   const exported = await buildPostgresConfigArchive(db, { scope, targetScope: { ...scope, tenantId: "buyer-race" },
+    archiveMode: "unsafeReference",
     timeZone: "UTC", mappingProvenance: "race-map", archiveId: "race-archive", actorRef: "export-admin",
     createdAt: "2026-09-29T00:00:00Z" }, { authorizeAndRecord: async () => ok({ requestRef: "race-export" }) });
   assert.equal(exported.ok, true);

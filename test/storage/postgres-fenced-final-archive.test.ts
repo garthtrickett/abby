@@ -23,11 +23,13 @@ test("final archive and durable import receipt bind the exact frozen source vers
   const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly");
   assert.equal((await policy.changeBookingEnabled(source, "0", true, "source-admin")).ok, true);
   const request = { sourceTenantId: source.tenantId, archiveId: "fenced-final-archive",
+    archiveMode: "unsafeReference" as const,
     actorRef: "source-admin", createdAt: "2026-09-28T22:00:00Z", expectedFenceVersion: 1,
     locations: [{ sourceScope: source, targetScope: target, timeZone: "UTC", mappingProvenance: "reviewed" }] };
   let exportsAudited = 0;
   const exportAuthority = { authorizeAndRecord: async () => ok({ requestRef: `fenced-final-export-${++exportsAudited}` }) };
   const dryRequest = { sourceTenantId: request.sourceTenantId, archiveId: "fenced-dry-run",
+    archiveMode: request.archiveMode,
     actorRef: request.actorRef, createdAt: request.createdAt, locations: request.locations };
   const unfenced = await buildPostgresTenantConfigArchive(db, dryRequest, exportAuthority);
   assert.equal(unfenced.ok, true);
@@ -95,6 +97,7 @@ test("a digest-valid archive with a forged fence number fails the fresh source-c
   const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly");
   assert.equal((await policy.changeBookingEnabled(source, "0", true, "source-admin")).ok, true);
   const request = { sourceTenantId: source.tenantId, archiveId: "forged-baseline",
+    archiveMode: "unsafeReference" as const,
     actorRef: "source-admin", createdAt: "2026-09-28T22:00:00Z",
     locations: [{ sourceScope: source, targetScope: target, timeZone: "UTC", mappingProvenance: "reviewed" }] };
   let audits = 0;

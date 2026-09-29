@@ -15,6 +15,8 @@ export type ConfigArchiveRequest = Readonly<{
   archiveId: string;
   actorRef: string;
   createdAt: string;
+  /** Rich reference fixtures must opt in; production defaults to the minimal standalone contract. */
+  archiveMode?: "standaloneMinimal" | "unsafeReference";
 }>;
 
 export type TenantConfigLocationMapping = Readonly<{
@@ -30,6 +32,7 @@ export type TenantConfigArchiveRequest = Readonly<{
   archiveId: string;
   actorRef: string;
   createdAt: string;
+  archiveMode?: "standaloneMinimal" | "unsafeReference";
   /** A final cutover export names the exact frozen source version. */
   expectedFenceVersion?: number;
 }>;
@@ -76,9 +79,18 @@ function destination(value: unknown): StaffDestination {
 }
 
 /** Export only known policy fields; extra JSONB keys never cross the archive boundary. */
-function policyFields(value: unknown, scope: LocationScope, version: number): Record<string, unknown> {
+function policyFields(value: unknown, scope: LocationScope, version: number,
+                      mode: "standaloneMinimal" | "unsafeReference"): Record<string, unknown> {
   const row = object(value);
   const storedScope = object(row?.scope);
+  if (mode === "standaloneMinimal") {
+    if (!row || !storedScope || Object.keys(row).sort().join(",") !== "bookingEnabled,policyVersion,scope" ||
+        Object.keys(storedScope).sort().join(",") !== "clinicId,locationId,tenantId" ||
+        storedScope.tenantId !== scope.tenantId || storedScope.clinicId !== scope.clinicId ||
+        storedScope.locationId !== scope.locationId || row.policyVersion !== String(version) ||
+        typeof row.bookingEnabled !== "boolean") throw new ExportAbort("storageCorrupt");
+    return { shape: "standaloneMinimal", policyVersion: row.policyVersion, bookingEnabled: row.bookingEnabled };
+  }
   const caps = object(row?.capabilities);
   if (!row || !storedScope || storedScope.tenantId !== scope.tenantId || storedScope.clinicId !== scope.clinicId ||
       storedScope.locationId !== scope.locationId || row.policyVersion !== String(version) ||
@@ -142,7 +154,8 @@ export function validConfigArchiveRequest(request: ConfigArchiveRequest): boolea
   return validTenantConfigArchiveRequest({ sourceTenantId: request.scope.tenantId,
     locations: [{ sourceScope: request.scope, targetScope: request.targetScope,
       timeZone: request.timeZone, mappingProvenance: request.mappingProvenance }],
-    archiveId: request.archiveId, actorRef: request.actorRef, createdAt: request.createdAt });
+    archiveId: request.archiveId, actorRef: request.actorRef, createdAt: request.createdAt,
+    ...(request.archiveMode === undefined ? {} : { archiveMode: request.archiveMode }) });
 }
 
 function mappingKey(scope: LocationScope): string {
@@ -151,6 +164,7 @@ function mappingKey(scope: LocationScope): string {
 
 export function validTenantConfigArchiveRequest(request: TenantConfigArchiveRequest): boolean {
   if (!request || ![request.sourceTenantId, request.archiveId, request.actorRef].every(validRef) ||
+      (request.archiveMode !== undefined && request.archiveMode !== "standaloneMinimal" && request.archiveMode !== "unsafeReference") ||
       typeof request.createdAt !== "string" || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$/.test(request.createdAt) ||
       !Number.isFinite(Date.parse(request.createdAt)) ||
       (request.expectedFenceVersion !== undefined &&
@@ -182,6 +196,7 @@ export function validTenantConfigArchiveRequest(request: TenantConfigArchiveRequ
 async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfigArchiveRequest, requestRef: string):
   Promise<Result<ArchiveEnvelope, ConfigArchiveFailure>> {
   const sourceTenantId = request.sourceTenantId;
+  const mode = request.archiveMode ?? "standaloneMinimal";
   const mappings = [...request.locations].sort((a, b) => Buffer.compare(Buffer.from(mappingKey(a.sourceScope)), Buffer.from(mappingKey(b.sourceScope))));
   const byLocation = new Map(mappings.map(mapping => [mappingKey(mapping.sourceScope), mapping]));
   const clinics = new Set(mappings.map(mapping => mapping.sourceScope.clinicId));
@@ -219,12 +234,23 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
         from clinic_automation where tenant_id = ${sourceTenantId} order by clinic_id, version`.execute(trx);
       const stops = await sql<StopRow>`select clinic_id, version, stopped, actor_ref, reason, changed_at
         from clinic_write_stop_events where tenant_id = ${sourceTenantId} order by clinic_id, version`.execute(trx);
-      const knowledge = await sql<KnowledgeRow>`select clinic_id, location_id, source_ref, version, status, owner_ref, answer_text,
-        effective_from, effective_until, actor_ref, changed_at from clinic_knowledge_events
-        where tenant_id = ${sourceTenantId} and status in ('approved', 'revoked')
-        order by clinic_id, location_id, source_ref, version`.execute(trx);
+      if (mode === "standaloneMinimal") {
+        const anyKnowledge = await sql<{ found: number }>`select 1 as found from clinic_knowledge_heads
+          where tenant_id = ${sourceTenantId} limit 1`.execute(trx);
+        const anyEvents = await sql<{ found: number }>`select 1 as found from clinic_knowledge_events
+          where tenant_id = ${sourceTenantId} limit 1`.execute(trx);
+        if (anyKnowledge.rows.length || anyEvents.rows.length ||
+            stops.rows.some(row => !["cutover", "operatorStop", "operatorResume"].includes(row.reason))) {
+          throw new ExportAbort("storageCorrupt");
+        }
+      }
+      const knowledge = mode === "standaloneMinimal" ? [] :
+        (await sql<KnowledgeRow>`select clinic_id, location_id, source_ref, version, status, owner_ref, answer_text,
+          effective_from, effective_until, actor_ref, changed_at from clinic_knowledge_events
+          where tenant_id = ${sourceTenantId} and status in ('approved', 'revoked')
+          order by clinic_id, location_id, source_ref, version`.execute(trx)).rows;
       return { schemaVersion, settings: settings.rows, automation: automation.rows, stops: stops.rows,
-        knowledge: knowledge.rows, sourceFenceVersion: request.expectedFenceVersion };
+        knowledge, sourceFenceVersion: request.expectedFenceVersion };
     });
     const common = (recordId: string) => ({ recordVersion: 1 as const, recordId, sourceTenantId });
     const locations: RecordData[] = mappings.map(mapping => ({
@@ -232,20 +258,30 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
       sourceClinicId: mapping.sourceScope.clinicId, sourceLocationId: mapping.sourceScope.locationId,
       targetScope: mapping.targetScope, timeZone: mapping.timeZone, mappingProvenance: mapping.mappingProvenance,
     }));
+    const settingsRows = [...snapshot.settings];
+    if (mode === "standaloneMinimal") {
+      for (const mapping of mappings) {
+        if (settingsRows.some(row => row.clinic_id === mapping.sourceScope.clinicId &&
+            row.location_id === mapping.sourceScope.locationId)) continue;
+        settingsRows.push({ clinic_id: mapping.sourceScope.clinicId, location_id: mapping.sourceScope.locationId,
+          version: 0, policy: { scope: mapping.sourceScope, policyVersion: "0", bookingEnabled: false },
+          changed_by: null, previous_booking_enabled: null, changed_at: null });
+      }
+    }
     const policyHeads = new Map<string, number>();
-    for (const row of snapshot.settings) policyHeads.set(JSON.stringify([row.clinic_id, row.location_id]), row.version);
+    for (const row of settingsRows) policyHeads.set(JSON.stringify([row.clinic_id, row.location_id]), row.version);
     const automationHeads = new Map<string, number>();
     for (const row of snapshot.automation) automationHeads.set(row.clinic_id, row.version);
     const stopHeads = new Map<string, number>();
     for (const row of snapshot.stops) stopHeads.set(row.clinic_id, row.version);
     const settings: RecordData[] = [
-      ...snapshot.settings.map(row => {
+      ...settingsRows.map(row => {
         const mapping = byLocation.get(JSON.stringify([row.clinic_id, row.location_id]));
         if (!mapping) throw new ExportAbort("scopeIncomplete");
         return { ...common(recordId("policy", mappingKey(mapping.sourceScope), row.version)),
           sourceClinicId: row.clinic_id, sourceLocationId: row.location_id, kind: "locationPolicy", version: row.version,
           isHead: policyHeads.get(mappingKey(mapping.sourceScope)) === row.version,
-          policy: policyFields(row.policy, mapping.sourceScope, row.version),
+          policy: policyFields(row.policy, mapping.sourceScope, row.version, mode),
           changedBy: row.changed_by, previousBookingEnabled: row.previous_booking_enabled, changedAt: instant(row.changed_at) };
       }),
       ...snapshot.automation.map(row => ({ ...common(recordId("automation", row.clinic_id, row.version)),
@@ -303,7 +339,8 @@ export async function buildPostgresConfigArchive(db: Kysely<Database>, request: 
   return buildTenantAuthorized(db, { sourceTenantId: request.scope.tenantId,
     locations: [{ sourceScope: request.scope, targetScope: request.targetScope,
       timeZone: request.timeZone, mappingProvenance: request.mappingProvenance }],
-    archiveId: request.archiveId, actorRef: request.actorRef, createdAt: request.createdAt }, authorization.value.requestRef);
+    archiveId: request.archiveId, actorRef: request.actorRef, createdAt: request.createdAt,
+    ...(request.archiveMode === undefined ? {} : { archiveMode: request.archiveMode }) }, authorization.value.requestRef);
 }
 
 /** Exports all explicitly mapped locations from one consistent tenant snapshot. */
