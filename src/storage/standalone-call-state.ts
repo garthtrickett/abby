@@ -98,3 +98,18 @@ export function isStoredStandaloneTextState(state: CallState): boolean {
   const projected = projectStandaloneTextState(state);
   return projected.ok && isDeepStrictEqual(projected.value, state);
 }
+
+/** Strict text events contain only opaque IDs, interpretation kinds, and delivery status. */
+export function isStoredStandaloneTextEvent(kind: string, payload: unknown): boolean {
+  if (!record(payload)) return false;
+  const keys = Object.keys(payload).sort().join(",");
+  if (kind === "callerTurn") return keys === "interpretation,turnId" &&
+    typeof payload.turnId === "string" && UUID_V4.test(payload.turnId) &&
+    typeof payload.interpretation === "string" && SAFE_INTERPRETATIONS.has(payload.interpretation);
+  if (kind === "presentationStarted") return keys === "presentationId" &&
+    typeof payload.presentationId === "string" && NOTICE_ID.test(payload.presentationId);
+  if (kind === "presentationResolved") return keys === "presentationId,status" &&
+    typeof payload.presentationId === "string" && NOTICE_ID.test(payload.presentationId) &&
+    typeof payload.status === "string" && ["played", "interrupted", "failed", "unproven"].includes(payload.status);
+  return false;
+}

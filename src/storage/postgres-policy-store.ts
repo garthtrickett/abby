@@ -25,18 +25,24 @@ function standalonePolicy(scope: LocationScope, version: number, bookingEnabled:
     policyVersion: String(version), bookingEnabled };
 }
 
-function decodeStandalonePolicy(value: unknown, scope: LocationScope, version: number,
-                                defaultPolicy: (scope: LocationScope) => CallPolicy): Result<CallPolicy, PolicyFailure> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return err({ kind: "storageFailure" });
+export function isStoredStandalonePolicy(value: unknown, scope: LocationScope, version: number): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const stored = value as Record<string, unknown>;
   if (Object.keys(stored).sort().join(",") !== "bookingEnabled,policyVersion,scope" ||
       typeof stored.bookingEnabled !== "boolean" || stored.policyVersion !== String(version) ||
-      typeof stored.scope !== "object" || stored.scope === null || Array.isArray(stored.scope)) return err({ kind: "storageFailure" });
+      typeof stored.scope !== "object" || stored.scope === null || Array.isArray(stored.scope)) return false;
   const storedScope = stored.scope as Record<string, unknown>;
   if (Object.keys(storedScope).sort().join(",") !== "clinicId,locationId,tenantId" ||
-      !sameScope(storedScope as LocationScope, scope)) return err({ kind: "storageFailure" });
+      !sameScope(storedScope as LocationScope, scope)) return false;
+  return true;
+}
+
+function decodeStandalonePolicy(value: unknown, scope: LocationScope, version: number,
+                                defaultPolicy: (scope: LocationScope) => CallPolicy): Result<CallPolicy, PolicyFailure> {
+  if (!isStoredStandalonePolicy(value, scope, version)) return err({ kind: "storageFailure" });
+  const stored = value as Record<string, unknown>;
   const base = defaultPolicy(scope);
-  return ok({ ...base, scope: { ...scope }, policyVersion: String(version), bookingEnabled: stored.bookingEnabled });
+  return ok({ ...base, scope: { ...scope }, policyVersion: String(version), bookingEnabled: stored.bookingEnabled as boolean });
 }
 
 function decodePolicy(value: unknown, scope: LocationScope, version: number): Result<CallPolicy, PolicyFailure> {
