@@ -17,7 +17,7 @@ import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
 
-test("opt-in signed local call uses live speech, caller transcription, and bounded clarification",
+test("opt-in signed local call recovers uncertain speech through clinic-approved keypad availability",
   { skip: process.env.ABBY_LIVE_VOICE_EVAL !== "1" ||
     process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || !process.env.ABBY_OPENAI_API_KEY,
   timeout: 60_000 }, async () => {
@@ -47,22 +47,46 @@ test("opt-in signed local call uses live speech, caller transcription, and bound
     const streamUrl = "wss://calls.example.test/twilio/media/";
     const now = "2026-09-29T10:00:00.000Z";
     const scope = { tenantId: `live-${randomUUID().slice(0, 8)}`, clinicId: "clinic", locationId: "main" };
+    const appointmentId = "synthetic-appointment-availability";
+    const appointmentTime = "2026-09-30T02:00:00.000Z";
     const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable",
       async () => ok(true), false, "standaloneMinimal");
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
     let clinikoReads = 0;
     const availability = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5",
       contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
-    async () => { clinikoReads += 1; throw new Error("uncertain speech must not query Cliniko"); });
+    async input => {
+      clinikoReads += 1;
+      const url = new URL(String(input));
+      if (url.pathname === "/v1/businesses/11") return Response.json({ id: "11", show_in_online_bookings: true,
+        time_zone_identifier: "Australia/Sydney" });
+      if (url.pathname === "/v1/practitioners/22") return Response.json({ id: "22", active: true,
+        show_in_online_bookings: true });
+      if (url.pathname === "/v1/appointment_types/33") return Response.json({ id: "33", show_in_online_bookings: true });
+      if (url.pathname === "/v1/businesses/11/practitioners") return Response.json({ total_entries: 1,
+        practitioners: [{ id: "22" }] });
+      if (url.pathname === "/v1/practitioners/22/appointment_types") return Response.json({ total_entries: 1,
+        appointment_types: [{ id: "33" }] });
+      if (url.pathname.endsWith("/available_times")) {
+        assert.equal(url.searchParams.get("from"), "2026-09-30");
+        assert.equal(url.searchParams.get("to"), "2026-09-30");
+        return Response.json({ total_entries: 1,
+          available_times: [{ appointment_start: appointmentTime, appointment_id: appointmentId }] });
+      }
+      throw new Error("unexpected synthetic Cliniko request");
+    }, () => now);
     assert.ok(availability.ok);
     const models: string[] = [];
+    const spoken: string[] = [];
     let intentRequests = 0;
     const prepared = await createStandaloneClinikoVoiceServer({ db,
       twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
         fallbackNumbers: { [number]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x48),
         now: () => new Date(now) },
       routes: [{ dialedNumber: number, scope, routeVersion: "v1", availability: availability.value,
-        clinicDate: () => "2026-09-29" }],
+        clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: { scope, version: "live-eval-keypad-v1",
+          ownerRef: "synthetic-clinic-approval", approved: true,
+          approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],
       openai: { apiKey, intentModel: "gpt-6-luna", speechFallbackModel: "tts-1",
         fetch: (async (url, init) => {
           if (String(url) === "https://api.openai.com/v1/responses") {
@@ -70,8 +94,9 @@ test("opt-in signed local call uses live speech, caller transcription, and bound
             throw new Error("uncertain speech must not reach intent model");
           }
           assert.equal(String(url), "https://api.openai.com/v1/audio/speech");
-          const body = JSON.parse(String(init?.body)) as { model: string };
+          const body = JSON.parse(String(init?.body)) as { model: string; input: string };
           models.push(body.model);
+          spoken.push(body.input);
           return fetch(url, init);
         }) as typeof fetch },
       readiness: async () => ok(true), now: () => now,
@@ -157,16 +182,41 @@ test("opt-in signed local call uses live speech, caller transcription, and bound
     const followupMark = await followup;
     assert.ok(followupMark);
     assert.ok(mediaCount > greetingMediaCount);
+    const afterClarificationMediaCount = mediaCount;
     assert.ok(models.length > greetingModelAttempts && models.length <= greetingModelAttempts + 2);
     assert.equal(intentRequests, 0);
     assert.equal(clinikoReads, 0);
     caller.send(JSON.stringify({ event: "mark", sequenceNumber: String(inboundChunk + 3), streamSid,
       mark: { name: followupMark } }));
+    const availabilityMark = new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("availability mark timed out")), 25_000);
+      caller!.on("message", raw => {
+        const event = JSON.parse(raw.toString()) as { event: string; mark?: { name: string } };
+        if (event.event === "mark" && event.mark?.name &&
+            event.mark.name !== markName && event.mark.name !== followupMark) {
+          clearTimeout(timer);
+          resolve(event.mark.name);
+        }
+      });
+    });
+    caller.send(JSON.stringify({ event: "dtmf", sequenceNumber: String(inboundChunk + 4), streamSid,
+      dtmf: { track: "inbound_track", digit: "2" } }));
+    const thirdMark = await availabilityMark;
+    assert.ok(thirdMark);
+    assert.ok(mediaCount > afterClarificationMediaCount);
+    assert.equal(clinikoReads, 6);
+    assert.equal(intentRequests, 0);
+    assert.match(spoken.at(-1) ?? "", /possible times/i);
+    assert.equal((spoken.at(-1) ?? "").includes(appointmentId), false);
+    caller.send(JSON.stringify({ event: "mark", sequenceNumber: String(inboundChunk + 5), streamSid,
+      mark: { name: thirdMark } }));
     assert.deepEqual(await scanPatientDataCanaries(db, [{ label: "caller", value: callerPhone },
-      { label: "provider_call", value: callSid }]), { ok: true, value: [] });
+      { label: "provider_call", value: callSid }, { label: "appointment", value: appointmentId },
+      { label: "appointment_time", value: appointmentTime }]), { ok: true, value: [] });
     process.stdout.write(`${JSON.stringify({ modelAttempts: models, greetingMediaCount,
-      clarificationMediaCount: mediaCount - greetingMediaCount, nonSilence,
-      localMarksReturned: 2, inboundFrames: inboundChunk, intentRequests, clinikoReads,
+      clarificationMediaCount: afterClarificationMediaCount - greetingMediaCount,
+      availabilityMediaCount: mediaCount - afterClarificationMediaCount, nonSilence,
+      localMarksReturned: 3, inboundFrames: inboundChunk, intentRequests, clinikoReads,
       realTelephonyEvidence: false })}\n`);
   } finally {
     caller?.terminate();

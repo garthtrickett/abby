@@ -55,6 +55,8 @@ An extended run on the same signed local composition sent 195 patient-free inbou
 
 A repeat after tightening the assertions also passed: 143 greeting media messages and 128 clarification media messages, two primary speech-model attempts, two returned local marks, and again zero intent-model requests or Cliniko reads. The repeat used no fallback model. Both outcomes leave the release gate unverified.
 
+A further signed local run configured a synthetic clinic-approved keypad greeting. The 195-frame patient-free speech turn still produced only a clarification, with no intent-model request or Cliniko read. After that local mark, keypad 2 selected tomorrow and made six fake Cliniko eligibility and availability reads. Abby emitted a third local response mark; the synthetic appointment ID, appointment time, caller phone, and provider call ID were absent from the database canary scan. The run made three primary Speech API requests and one `tts-1` fallback request across its responses. The availability response was provisional and did not book anything. This verifies a local no-number recovery journey with real OpenAI adapters and fake Cliniko reads, not real caller playback or clinic approval.
+
 ## Repeated first-chunk fallback timing
 
 The fixed patient-free `speech-loop-v1` phrases were run through the real Speech API, `FirstChunkFallbackSpeech`, and `StreamedPlaybackPort` using `gpt-4o-mini-tts` primary, `tts-1` fallback, and `coral` voice. Abby allowed 1,500 ms for the primary's first chunk, 5,000 ms for the combined first chunk, 2,000 ms for later steps, and 20,000 ms for the whole synthetic utterance. The output port counted chunks and timed the first queue without saving audio.
