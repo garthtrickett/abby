@@ -44,6 +44,10 @@ test("E2E-125 text: embedded host runs shared Cliniko availability ingress and o
   const runner = new AvailabilityTextRunner(reception, scope, () => now);
   const question = { text: "Do you have an opening?", from: "2026-10-02", to: "2026-10-02" };
 
+  value(await reception.startCall("empty-text-call", scope, now));
+  assert.deepEqual(await reception.completeTextPresentation(scope, "empty-text-call", "missing", now),
+    { ok: false, error: { kind: "invalidTransition" } });
+
   for (const expected of ["shown", "empty", "failed"] as const) {
     mode = expected;
     const prepared = value(await runner.prepare(question));
@@ -52,6 +56,11 @@ test("E2E-125 text: embedded host runs shared Cliniko availability ingress and o
     assert.doesNotMatch(prepared.message, /staff (has|will) (receive|contact)|confirmed appointment/i);
     assert.deepEqual(await runner.confirmWritten(prepared), { ok: true, value: true });
     const state = value(await reception.read(scope, prepared.callId));
+    assert.deepEqual(await runner.confirmWritten(prepared), { ok: true, value: true });
+    assert.equal(value(await reception.read(scope, prepared.callId)).version, state.version);
+    assert.equal(state.lifecycle, "ended");
+    assert.equal(state.terminal?.reason, "textCompleted");
+    assert.deepEqual(state.callerMessages, []);
     assert.equal(state.presentations[prepared.presentationId]?.status, "played");
     assert.deepEqual(state.actions, {});
     if (expected === "failed") {

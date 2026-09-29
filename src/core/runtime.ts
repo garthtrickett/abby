@@ -59,6 +59,10 @@ export class CallRuntime {
     return this.update(callId, { kind: "callEnded", sessionId, reason, now });
   }
 
+  completeTextPresentation(callId: string, presentationId: string, now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "textPresentationWritten", presentationId, now });
+  }
+
   beginSpeech(callId: string, sessionId: string, now: string): Promise<Result<CallState, TransitionFailure>> {
     return this.update(callId, { kind: "speechBegan", sessionId, now });
   }

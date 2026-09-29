@@ -58,8 +58,12 @@ export class AvailabilityTextRunner {
   /** The text transport calls this only after it accepts the response bytes. */
   async confirmWritten(prepared: Pick<PreparedAvailabilityText, "callId" | "presentationId">):
     Promise<Result<true, TransitionFailure>> {
-    const acknowledged = await this.reception.acknowledgeTextPresentation(this.scope,
-      prepared.callId, prepared.presentationId);
-    return acknowledged.ok ? ok(true) : acknowledged;
+    let now: string;
+    try { now = this.clock(); }
+    catch { return err({ kind: "invalidTransition" }); }
+    if (typeof now !== "string" || !Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
+    const completed = await this.reception.completeTextPresentation(this.scope, prepared.callId,
+      prepared.presentationId, now);
+    return completed.ok ? ok(true) : completed;
   }
 }
