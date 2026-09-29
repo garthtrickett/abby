@@ -48,14 +48,14 @@ The `--corpus` flag accepts only `transcription-v1` and `transcription-telephony
 
 ## Signed local live speech evaluation
 
-`test/live/signed-openai-voice.test.ts` is an opt-in integration test for a standalone greeting and one caller turn. It starts an isolated PostgreSQL database, signs synthetic Twilio webhook and WebSocket messages, calls the real OpenAI Speech and Realtime transcription APIs, sends a patient-free Flite clip through G.711 media, and checks non-silent outbound media and both returned local completion marks. The real transcript remains `needsClarification`, so the composed call speaks the approved clarification without querying an intent model or Cliniko. The test scans the database for the synthetic caller number and provider call ID. It needs FFmpeg to generate the inbound G.711 clip and uses no real Cliniko patient data or telephone number. With `ABBY_OPENAI_API_KEY` in the process environment, run:
+`test/live/signed-openai-voice.test.ts` is an opt-in integration test for a standalone greeting, one caller turn, and clinic-approved keypad recovery. It starts an isolated PostgreSQL database, signs synthetic Twilio webhook and WebSocket messages, calls the real OpenAI Speech and Realtime transcription APIs, sends a patient-free Flite clip through G.711 media, and checks non-silent outbound media and three returned local completion marks. The real transcript remains `needsClarification`, so the composed call speaks the approved clarification without querying an intent model or Cliniko. After that mark, keypad 2 reads a fake Cliniko availability response for tomorrow and speaks only provisional times. The test scans the database for the synthetic caller number, provider call ID, appointment ID, and appointment time. It needs FFmpeg to generate the inbound G.711 clip and uses no real Cliniko patient data or telephone number. With `ABBY_OPENAI_API_KEY` in the process environment, run:
 
 ```sh
 work run "Abby signed local live speech evaluation" -- bash scripts/with-postgres.sh env ABBY_LIVE_VOICE_EVAL=1 node --test test/live/signed-openai-voice.test.ts
 work wait "Abby signed local live speech evaluation"
 ```
 
-The test is excluded from `npm test` because it makes paid provider calls. A locally returned mark is only synthetic transport evidence; this run does not prove that a real caller heard either response, that Twilio accepted the media, or that the pilot latency and voice-quality gates pass. A separate transcription quality gate is required before natural-language availability can use the Realtime final text.
+The test is excluded from `npm test` because it makes paid provider calls. A locally returned mark is only synthetic transport evidence; this run does not prove that a real caller heard any response, that Twilio accepted the media, or that the pilot latency and voice-quality gates pass. A separate transcription quality gate is required before natural-language availability can use the Realtime final text. Keypad availability requires a clinic-approved greeting and remains unavailable by default.
 
 ## First-chunk speech fallback timing
 
