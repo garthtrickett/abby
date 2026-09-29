@@ -3,6 +3,7 @@ import test, { after } from "node:test";
 import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
 import { normalizePatientPhone } from "../../src/cliniko/phone-number.ts";
 import { ClinikoPhoneLookup } from "../../src/standalone/cliniko-phone-lookup.ts";
+import { PhoneIndexRefreshWorker } from "../../src/standalone/phone-index-refresh-worker.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresPatientPhoneIndex } from "../../src/storage/postgres-patient-phone-index.ts";
 
@@ -101,4 +102,45 @@ test("Cliniko full scan follows all pages before publishing a generation", async
   assert.equal((await index.clear(scope)).ok, true);
   assert.deepEqual(await index.find(scope, "+61400111222", 60_000),
     { ok: true, value: { kind: "stale", patientIds: [] } });
+});
+
+test("refresh worker scans outside calls, skips fresh generations, and shares concurrent ticks", async () => {
+  const scope = { tenantId: "phone-worker-tenant", clinicId: "phone-worker-clinic" };
+  let releaseFirst: (() => void) | undefined;
+  const firstScan = new Promise<void>(resolve => { releaseFirst = resolve; });
+  let scans = 0;
+  const fetchPort: typeof fetch = async input => {
+    assert.equal(new URL(String(input)).pathname, "/v1/patients");
+    scans += 1;
+    if (scans === 1) await firstScan;
+    return Response.json({ total_entries: 1, patients: [{ id: "301", first_name: "private-worker-canary",
+      archived_at: null, patient_phone_numbers: [{ number: "0400 555 777", phone_type: "Mobile" }] }] });
+  };
+  const created = ClinikoPatientCandidateReader.create({ scope, apiKey: "synthetic-au5",
+    contactEmail: "test@example.com" }, fetchPort);
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  const index = new PostgresPatientPhoneIndex(db);
+  const lookup = new ClinikoPhoneLookup(created.value, index, "61", 60_000);
+  let clock = new Date();
+  const worker = new PhoneIndexRefreshWorker(index, [{ scope, lookup, refreshEveryMs: 60_000 }], () => clock);
+  const first = worker.runOnce();
+  const concurrent = worker.runOnce();
+  releaseFirst!();
+  assert.deepEqual(await first, [{ scope, kind: "refreshed" }]);
+  assert.deepEqual(await concurrent, [{ scope, kind: "refreshed" }]);
+  assert.equal(scans, 1);
+  clock = new Date();
+  assert.deepEqual(await worker.runOnce(), [{ scope, kind: "fresh" }]);
+  assert.equal(scans, 1);
+  const completed = await index.completedAt(scope);
+  assert.equal(completed.ok && completed.value instanceof Date, true);
+  if (!completed.ok || !completed.value) return;
+  clock = new Date(completed.value.getTime() + 60_001);
+  assert.deepEqual(await worker.runOnce(), [{ scope, kind: "refreshed" }]);
+  assert.equal(scans, 2);
+  const rows = await db.selectFrom("patient_phone_index").selectAll()
+    .where("tenant_id", "=", scope.tenantId as never).execute();
+  assert.equal(JSON.stringify(rows).includes("private-worker-canary"), false);
+  assert.deepEqual(rows.map(row => String(row.patient_id)), ["301"]);
 });
