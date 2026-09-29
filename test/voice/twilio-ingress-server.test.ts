@@ -75,3 +75,116 @@ test("E2E-131 local transport: a signed webhook and upgrade reach one authentica
     await once(server, "close");
   }
 });
+
+test("E2E-135 local transport: concurrent and later replays cannot construct a second call owner",
+  { timeout: 15_000 }, async () => {
+  let clockMs = Date.parse("2026-09-29T10:00:00.000Z");
+  const ingress = new TwilioSignedIngress({ accountSid, authToken, publicWebhookUrl: webhookUrl,
+    publicStreamUrl: streamUrl, bindingKey: Buffer.alloc(32, 0x38),
+    now: () => new Date(clockMs) });
+  let created = 0;
+  let disconnected = 0;
+  let entered!: () => void;
+  let release!: () => void;
+  const firstEntered = new Promise<void>(resolve => { entered = resolve; });
+  const firstReleased = new Promise<void>(resolve => { release = resolve; });
+  const failedSid = `CA${"5".repeat(32)}`;
+  const server = createTwilioIngressServer({ ingress, async createCall(stream, send) {
+    created += 1;
+    if (created === 1) { entered(); await firstReleased; }
+    if (stream.event.key.providerCallRef === failedSid) throw new Error("synthetic call factory failure");
+    return { async receive(raw) {
+      if (JSON.parse(raw).event === "start") send(JSON.stringify({ event: "ready" }));
+      return { ok: true };
+    }, async disconnect() { disconnected += 1; } };
+  } });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const base = `http://127.0.0.1:${address.port}`;
+  const socketUrl = `ws://127.0.0.1:${address.port}/twilio/media/`;
+  const sockets: WebSocket[] = [];
+  const signature = twilio.getExpectedTwilioSignature(authToken, streamUrl, {});
+  async function bindingFor(providerCallSid: string): Promise<string> {
+    const form = { AccountSid: accountSid, CallSid: providerCallSid, To: "+6125550199", From: "+6145550101" };
+    const response = await fetch(`${base}/twilio/inbound`, { method: "POST", headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, webhookUrl, form),
+    }, body: new URLSearchParams(form).toString() });
+    assert.equal(response.status, 200);
+    const token = (await response.text()).match(/<Parameter name="abbyBinding" value="([^"]+)"\/>/)?.[1];
+    assert.ok(token);
+    return token;
+  }
+  async function openSocket(): Promise<WebSocket> {
+    const socket = new WebSocket(socketUrl, { headers: { "x-twilio-signature": signature } });
+    sockets.push(socket);
+    await once(socket, "open");
+    return socket;
+  }
+  function start(socket: WebSocket, providerCallSid: string, token: string): void {
+    socket.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
+    socket.send(JSON.stringify({ event: "start", sequenceNumber: "1", streamSid,
+      start: { accountSid, callSid: providerCallSid, streamSid, tracks: ["inbound"],
+        mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 },
+        customParameters: { abbyBinding: token } } }));
+  }
+  try {
+    const token = await bindingFor(callSid);
+    const first = await openSocket();
+    const readyFirst = once(first, "message");
+    start(first, callSid, token);
+    await firstEntered;
+    const concurrent = await openSocket();
+    const concurrentClosed = once(concurrent, "close");
+    start(concurrent, callSid, token);
+    const [code] = await concurrentClosed;
+    assert.equal(code, 1008);
+    assert.equal(created, 1);
+    release();
+    assert.deepEqual(JSON.parse((await readyFirst)[0].toString()), { event: "ready" });
+    const firstClosed = once(first, "close");
+    first.close();
+    await firstClosed;
+    assert.equal(disconnected, 1);
+
+    clockMs += 1_000;
+    const retryToken = await bindingFor(callSid);
+    assert.notEqual(retryToken, token);
+    const replay = await openSocket();
+    const replayClosed = once(replay, "close");
+    start(replay, callSid, retryToken);
+    assert.equal((await replayClosed)[0], 1008);
+    assert.equal(created, 1);
+
+    const otherSid = `CA${"4".repeat(32)}`;
+    const otherToken = await bindingFor(otherSid);
+    const other = await openSocket();
+    const readyOther = once(other, "message");
+    start(other, otherSid, otherToken);
+    assert.deepEqual(JSON.parse((await readyOther)[0].toString()), { event: "ready" });
+    assert.equal(created, 2);
+    const otherClosed = once(other, "close");
+    other.close();
+    await otherClosed;
+    assert.equal(disconnected, 2);
+
+    const failedToken = await bindingFor(failedSid);
+    const failed = await openSocket();
+    const failedClosed = once(failed, "close");
+    start(failed, failedSid, failedToken);
+    assert.equal((await failedClosed)[0], 1011);
+    assert.equal(created, 3);
+    const failedReplay = await openSocket();
+    const failedReplayClosed = once(failedReplay, "close");
+    start(failedReplay, failedSid, failedToken);
+    assert.equal((await failedReplayClosed)[0], 1008);
+    assert.equal(created, 3);
+  } finally {
+    release();
+    for (const socket of sockets) socket.terminate();
+    server.close();
+    await once(server, "close");
+  }
+});

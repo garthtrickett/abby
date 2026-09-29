@@ -3,11 +3,52 @@ import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
 import type { AuthenticatedTwilioStream } from "./twilio-signed-ingress.ts";
-import { TwilioSignedIngress } from "./twilio-signed-ingress.ts";
+import { TWILIO_BINDING_LIFETIME_MS, TwilioSignedIngress } from "./twilio-signed-ingress.ts";
 
 const maxBodyBytes = 16_384;
 const maxBufferedBytes = 512 * 1_024;
 const startDeadlineMs = 5_000;
+const maxCallClaims = 10_000;
+
+/** Process-local duplicate fence for the first signed binding window. */
+class LiveCallClaims {
+  private readonly calls = new Map<string, { active: boolean; expiresAt: number }>();
+  private readonly cleanup: ReturnType<typeof setInterval>;
+
+  constructor() {
+    this.cleanup = setInterval(() => this.sweep(Date.now()), 30_000);
+    this.cleanup.unref();
+  }
+
+  private sweep(now: number): void {
+    for (const [key, claim] of this.calls) {
+      if (!claim.active && claim.expiresAt <= now) this.calls.delete(key);
+    }
+  }
+
+  claim(accountRef: string, providerCallRef: string): string | undefined {
+    const key = JSON.stringify([accountRef, providerCallRef]);
+    const now = Date.now();
+    const prior = this.calls.get(key);
+    if (prior && (prior.active || prior.expiresAt > now)) return undefined;
+    if (prior) this.calls.delete(key);
+    if (this.calls.size >= maxCallClaims) {
+      this.sweep(now);
+      if (this.calls.size >= maxCallClaims) return undefined;
+    }
+    this.calls.set(key, { active: true, expiresAt: now + TWILIO_BINDING_LIFETIME_MS });
+    return key;
+  }
+
+  release(key: string): void {
+    const claimed = this.calls.get(key);
+    if (!claimed) return;
+    if (claimed.expiresAt <= Date.now()) this.calls.delete(key);
+    else claimed.active = false;
+  }
+
+  clear(): void { clearInterval(this.cleanup); this.calls.clear(); }
+}
 
 export type TwilioWireCall = Readonly<{
   receive: (raw: string) => Promise<Readonly<{ ok: boolean }>>;
@@ -42,19 +83,22 @@ function refuseUpgrade(socket: Duplex): void {
   socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
 }
 
-function runStream(socket: WebSocket, request: IncomingMessage, config: TwilioIngressServerConfig): void {
+function runStream(socket: WebSocket, request: IncomingMessage, config: TwilioIngressServerConfig,
+                   claims: LiveCallClaims): void {
   const upgrade = { method: request.method ?? "", requestTarget: request.url ?? "",
     signature: header(request.headers["x-twilio-signature"]) };
   let connected: string | undefined;
   let call: TwilioWireCall | undefined;
   let tail = Promise.resolve();
   let disconnected = false;
+  let claimedKey: string | undefined;
   const deadline = setTimeout(() => socket.close(1008), startDeadlineMs);
   deadline.unref();
   const disconnect = () => {
     if (disconnected) return;
     disconnected = true;
     clearTimeout(deadline);
+    if (claimedKey) claims.release(claimedKey);
     if (call) void call.disconnect().catch(() => undefined);
   };
   socket.on("close", disconnect);
@@ -78,6 +122,9 @@ function runStream(socket: WebSocket, request: IncomingMessage, config: TwilioIn
       if (!call) {
         const authenticated = config.ingress.authenticateStream({ ...upgrade, connected, start: raw });
         if (!authenticated.ok) { socket.close(1008); return; }
+        claimedKey = claims.claim(authenticated.value.event.key.accountRef,
+          authenticated.value.event.key.providerCallRef);
+        if (!claimedKey) { socket.close(1008); return; }
         call = await config.createCall(authenticated.value, send);
         if (socket.readyState !== WebSocket.OPEN) { await call.disconnect(); return; }
         clearTimeout(deadline);
@@ -95,6 +142,7 @@ function runStream(socket: WebSocket, request: IncomingMessage, config: TwilioIn
 
 /** Node HTTP/WebSocket transport; the caller supplies its privacy-safe voice call composition. */
 export function createTwilioIngressServer(config: TwilioIngressServerConfig): Server {
+  const claims = new LiveCallClaims();
   const websocket = new WebSocketServer({ noServer: true, maxPayload: maxBodyBytes,
     perMessageDeflate: false });
   const server = createServer((request, response) => {
@@ -114,8 +162,8 @@ export function createTwilioIngressServer(config: TwilioIngressServerConfig): Se
     const authorized = config.ingress.authorizeUpgrade({ method: request.method ?? "",
       requestTarget: request.url ?? "", signature: header(request.headers["x-twilio-signature"]) });
     if (!authorized.ok) { refuseUpgrade(socket); return; }
-    websocket.handleUpgrade(request, socket, head, connection => runStream(connection, request, config));
+    websocket.handleUpgrade(request, socket, head, connection => runStream(connection, request, config, claims));
   });
-  server.on("close", () => { for (const client of websocket.clients) client.close(1001); websocket.close(); });
+  server.on("close", () => { for (const client of websocket.clients) client.close(1001); websocket.close(); claims.clear(); });
   return server;
 }
