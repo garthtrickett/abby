@@ -24,7 +24,8 @@ export type PortabilityFenceStatus = Readonly<{
 }>;
 export type PortabilityFenceFailure = Readonly<{
   kind: "invalidRequest" | "denied" | "auditFailure" | "callsRequireRetention" |
-    "unresolvedWork" | "alreadyFrozen" | "notFrozen" | "versionConflict" | "staleRequest" | "storageFailure";
+    "unresolvedWork" | "alreadyFrozen" | "notFrozen" | "versionConflict" | "staleRequest" |
+    "routeOwnedByTarget" | "storageFailure";
 }>;
 
 type FenceRow = { tenant_id: string; version: number; frozen: boolean; last_request_ref: string | null };
@@ -115,6 +116,9 @@ export class PostgresPortabilityFence {
         } else {
           if (!current?.frozen) return err({ kind: "notFrozen" });
           if (current.version !== request.expectedVersion) return err({ kind: "versionConflict" });
+          const liveRoute = await sql<{ found: number }>`select 1 as found from number_cutovers
+            where source_tenant_id = ${request.tenantId} and state = 'published' limit 1`.execute(trx);
+          if (liveRoute.rows.length) return err({ kind: "routeOwnedByTarget" });
         }
         if (!current) throw new Error("portability fence row missing");
         const nextVersion = current.version + 1;
