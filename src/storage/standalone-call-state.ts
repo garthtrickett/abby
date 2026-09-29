@@ -7,7 +7,7 @@ const NOTICE_ID = /^[0-9a-f]{64}$/;
 const SCOPE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const SAFE_INTERPRETATIONS = new Set([
   "clarify", "modelFallback", "requestAction", "handoff", "transfer", "ambiguousTarget", "readFailure",
-  "unavailableAction", "answer", "knowledgeFailure", "availabilityFailure", "appointmentsFailure",
+  "unavailableAction", "answer", "knowledgeFailure", "availability", "availabilityFailure", "appointmentsFailure",
 ]);
 const NOTICE_STATUSES = new Set(["pending", "started", "played", "interrupted", "failed", "unproven", "superseded"]);
 
