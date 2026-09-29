@@ -23,14 +23,14 @@ class FakeSocket extends EventEmitter {
   close(): void { this.terminate(); }
 }
 
-function configured(socket: FakeSocket): void {
+function configured(socket: FakeSocket, model: "gpt-live-transcribe" | "gpt-transcribe" = "gpt-live-transcribe"): void {
   socket.open();
   assert.deepEqual(socket.sent[0], { type: "session.update", session: { type: "transcription", audio: { input: {
-    format: { type: "audio/pcm", rate: 24000 }, transcription: { model: "gpt-live-transcribe" },
+    format: { type: "audio/pcm", rate: 24000 }, transcription: { model },
     turn_detection: null,
   } } } });
   socket.receive({ type: "session.updated", session: { type: "transcription", audio: { input: {
-    format: { type: "audio/pcm", rate: 24000 }, transcription: { model: "gpt-live-transcribe" },
+    format: { type: "audio/pcm", rate: 24000 }, transcription: { model },
     turn_detection: null,
   } } } });
 }
@@ -128,6 +128,38 @@ test("E2E-146 synthetic voice: an early final waits for its committed item ID an
     transcript: "Unrelated", });
   assert.deepEqual(await waiting, { ok: false, error: { kind: "transcriptionUnavailable" } });
   assert.equal(floodedSocket.terminateCount, 1);
+});
+
+test("E2E-162 committed-turn transcription candidate keeps only the matched final untrusted", async () => {
+  const socket = new FakeSocket();
+  const transcription = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+    model: "gpt-transcribe", socketFactory: () => socket as unknown as WebSocket });
+  configured(socket, "gpt-transcribe");
+  assert.ok((await transcription.accept(frame(0, 2_000), 1, new AbortController().signal)).ok);
+  const pending = transcription.flush(1, new AbortController().signal);
+  await new Promise<void>(resolve => setImmediate(resolve));
+  socket.receive({ type: "conversation.item.input_audio_transcription.completed", item_id: "foreign",
+    transcript: "Book an appointment" });
+  socket.receive({ type: "input_audio_buffer.committed", item_id: "committed" });
+  socket.receive({ type: "conversation.item.input_audio_transcription.completed", item_id: "committed",
+    transcript: "Do you have times tomorrow?", languages: [{ code: "en" }] });
+  const result = await pending;
+  assert.ok(result.ok);
+  assert.deepEqual(result.value, [{ kind: "segmentFinal", sessionId: "session", generation: 1,
+    utteranceId: "committed", text: "Do you have times tomorrow?", quality: "needsClarification" }]);
+  await transcription.close();
+
+  const wrongSocket = new FakeSocket();
+  const wrong = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+    model: "gpt-transcribe", socketFactory: () => wrongSocket as unknown as WebSocket });
+  wrongSocket.open();
+  wrongSocket.receive({ type: "session.updated", session: { type: "transcription", audio: { input: {
+    format: { type: "audio/pcm", rate: 24000 }, transcription: { model: "gpt-live-transcribe" },
+    turn_detection: null,
+  } } } });
+  assert.deepEqual(await wrong.accept(frame(0, 2_000), 1, new AbortController().signal),
+    { ok: false, error: { kind: "transcriptionUnavailable" } });
+  assert.equal(wrongSocket.terminateCount, 1);
 });
 
 test("E2E-129 synthetic voice: rejected session, malformed completion and caller stop fail closed", async () => {
