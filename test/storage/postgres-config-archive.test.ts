@@ -33,6 +33,7 @@ async function records(archive: ArchiveEnvelope, section: ArchiveSection): Promi
 test("PostgreSQL config archive takes a consistent scoped snapshot with an allowlisted policy", async () => {
   const scope = { tenantId: "archive-config-tenant", clinicId: "archive-clinic", locationId: "archive-location" };
   const request: ConfigArchiveRequest = { scope, targetScope: { tenantId: "buyer", clinicId: "target-clinic", locationId: "target-location" },
+    archiveMode: "unsafeReference",
     timeZone: "Australia/Sydney", mappingProvenance: "buyer-reviewed-map-1", archiveId: "config-archive-1",
     actorRef: "archive-admin", createdAt: "2026-09-28T22:00:00Z" };
   const authority: ConfigArchiveAuthority = { authorizeAndRecord: async () => ok({ requestRef: "audited-request-1" }) };
@@ -208,7 +209,7 @@ test("config archive denies a request before reading settings", async () => {
   assert.deepEqual(result, { ok: false, error: { kind: "denied" } });
 });
 
-test("a pristine PostgreSQL source stages the reference default with writes stopped", async () => {
+test("a pristine PostgreSQL source stages a disabled standalone default with writes stopped", async () => {
   const sourceScope = { tenantId: "archive-pristine-tenant", clinicId: "clinic", locationId: "location" };
   const targetScope = { tenantId: "buyer-pristine", clinicId: "clinic", locationId: "location" };
   const archive = await buildPostgresConfigArchive(db, { scope: sourceScope, targetScope, timeZone: "UTC",
@@ -221,7 +222,7 @@ test("a pristine PostgreSQL source stages the reference default with writes stop
     { mapRef: (kind, sourceRef) => `buyer:${kind}:${sourceRef}` });
   assert.equal(staged.ok, true);
   if (!staged.ok) return;
-  assert.equal(staged.value.receipt.policyVersions, 0);
+  assert.equal(staged.value.receipt.policyVersions, 1);
   assert.equal(staged.value.receipt.automationVersions, 0);
   const policy = await staged.value.policy.read(targetScope);
   assert.equal(policy.ok, true);
@@ -229,6 +230,8 @@ test("a pristine PostgreSQL source stages the reference default with writes stop
     assert.equal(policy.value.bookingEnabled, false);
     assert.equal(policy.value.automationEnabled, false);
     assert.equal(policy.value.capabilities.book, "unavailable");
+    assert.deepEqual(Object.values(policy.value.capabilities), Array(5).fill("unavailable"));
+    assert.equal(policy.value.greeting, undefined);
   }
   const stop = await staged.value.ledger.readWriteStop(targetScope);
   assert.equal(stop.ok && stop.value.stopped, true);
@@ -249,6 +252,7 @@ test("configuration snapshot comparison detects setting and knowledge drift befo
   const scope = { tenantId: "archive-drift-tenant", clinicId: "clinic", locationId: "location" };
   const targetScope = { tenantId: "archive-drift-buyer", clinicId: "clinic", locationId: "location" };
   const request: ConfigArchiveRequest = { scope, targetScope, timeZone: "UTC", mappingProvenance: "reviewed-drift-map",
+    archiveMode: "unsafeReference",
     archiveId: "drift-baseline", actorRef: "archive-admin", createdAt: "2026-09-28T22:00:00Z" };
   let audited = 0;
   const authority: ConfigArchiveAuthority = { authorizeAndRecord: async () => ok({ requestRef: `drift-audit-${++audited}` }) };
@@ -305,6 +309,7 @@ test("one PostgreSQL snapshot exports every mapped location and refuses a partia
     assert.equal((await knowledge.approve(scope, sourceRef, "1", "archive-admin")).ok, true);
   }
   const request: TenantConfigArchiveRequest = { sourceTenantId: tenantId, archiveId: "two-location-archive",
+    archiveMode: "unsafeReference",
     actorRef: "archive-admin", createdAt: "2026-09-28T22:00:00Z", locations: [
       { sourceScope: second, targetScope: { tenantId: "buyer-two", clinicId: "clinic", locationId: "b" },
         timeZone: "Australia/Melbourne", mappingProvenance: "reviewed-b" },

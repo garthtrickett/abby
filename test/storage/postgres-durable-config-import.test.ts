@@ -34,6 +34,7 @@ test("configuration archive persists native target state, source history, and re
     assert.equal((await knowledge.approve(scope, ref, "1", "source-admin")).ok, true);
   }
   const exported = await buildPostgresTenantConfigArchive(db, {
+    archiveMode: "unsafeReference",
     sourceTenantId: source.tenantId, archiveId: "durable-archive-1", actorRef: "source-admin",
     createdAt: "2026-09-28T22:00:00Z", locations: [
       { sourceScope: source, targetScope: target, timeZone: "Australia/Sydney", mappingProvenance: "reviewed-a" },
@@ -118,6 +119,7 @@ test("concurrent stage is one durable import and pre-existing target data blocks
   const policy = new PostgresPolicyStore(db, referenceDefaultPolicy);
   assert.equal((await policy.changeBookingEnabled(source, "0", false, "source-admin")).ok, true);
   const request = { sourceTenantId: source.tenantId, archiveId: "durable-race-archive", actorRef: "source-admin",
+    archiveMode: "unsafeReference" as const,
     createdAt: "2026-09-28T22:00:00Z", locations: [
       { sourceScope: source, targetScope: target, timeZone: "UTC", mappingProvenance: "reviewed" },
     ] };
