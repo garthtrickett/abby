@@ -15,7 +15,8 @@ export type ConfigArchiveData = Readonly<{
   targetScope: LocationScope;
   timeZone: string;
   mappingProvenance: string;
-  policies: readonly Readonly<{ version: number; isHead: boolean; policy: CallPolicy; changedBy: string | null;
+  policies: readonly Readonly<{ version: number; isHead: boolean; storageShape: "standaloneMinimal" | "unsafeReference";
+    policy: CallPolicy; changedBy: string | null;
     previousBookingEnabled: boolean | null; changedAt: string | null }>[];
   automation: readonly Readonly<{ version: number; isHead: boolean; enabled: boolean; changedBy: string | null;
     previousEnabled: boolean | null; changedAt: string | null }>[];
@@ -279,7 +280,10 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
         if (!location || row.recordId !== expectedId("policy", locationKey(location.sourceScope), version)) {
           throw new InvalidConfigArchive("settings");
         }
-        location.policies.push({ version, isHead, policy: policy(row.policy, location.sourceScope, version),
+        const rawPolicy = object(row.policy, "settings");
+        location.policies.push({ version, isHead,
+          storageShape: rawPolicy.shape === "standaloneMinimal" ? "standaloneMinimal" : "unsafeReference",
+          policy: policy(rawPolicy, location.sourceScope, version),
           changedBy: optionalRef(row.changedBy, "settings"),
           previousBookingEnabled: row.previousBookingEnabled === null ? null : flag(row.previousBookingEnabled, "settings"),
           changedAt: optionalInstant(row.changedAt, "settings") });

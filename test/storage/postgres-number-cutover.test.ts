@@ -63,7 +63,7 @@ test("shared-number cutover stages, publishes once, and rolls back without losin
   if (!archive.ok) return;
   const mapper = { mapRef: (kind: string, ref: string) => `target:${kind}:${ref}` };
   const importAuthority = { authorizeAndRecord: async () => ok({ auditRef: "route-cutover-import-audit" }) };
-  const imported = await new PostgresTenantConfigArchiveImporter(db).stage(archive.value,
+  const imported = await new PostgresTenantConfigArchiveImporter(db, undefined, "unsafeReference").stage(archive.value,
     targetA.tenantId, "target-admin", importAuthority, mapper);
   assert.equal(imported.ok && imported.value.sourceFenceVersion, 1);
   const cutover = new PostgresConfigNumberCutover(db);
@@ -173,7 +173,7 @@ test("release after stage prevents publication while the source route remains au
   const archive = await buildPostgresFencedTenantConfigArchive(db, request, exportAuthority);
   assert.equal(archive.ok, true);
   if (!archive.ok) return;
-  const imported = await new PostgresTenantConfigArchiveImporter(db).stage(archive.value,
+  const imported = await new PostgresTenantConfigArchiveImporter(db, undefined, "unsafeReference").stage(archive.value,
     target.tenantId, "target-admin", { authorizeAndRecord: async () => ok({ auditRef: "route-stale-import" }) },
     { mapRef: (kind, ref) => `target:${kind}:${ref}` });
   assert.equal(imported.ok, true);

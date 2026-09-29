@@ -46,7 +46,7 @@ test("configuration archive persists native target state, source history, and re
   let audits = 0;
   const authority = { authorizeAndRecord: async () => ok({ auditRef: `buyer-audit-${++audits}` }) };
   const mapper = { mapRef: (kind: string, ref: string) => `buyer:${kind}:${ref}` };
-  const importer = new PostgresTenantConfigArchiveImporter(db, () => "2026-09-28T22:05:00Z");
+  const importer = new PostgresTenantConfigArchiveImporter(db, () => "2026-09-28T22:05:00Z", "unsafeReference");
   const before = await importer.preflight(exported.value, target.tenantId, "buyer-admin", authority, mapper);
   assert.equal(before.ok && before.value.status, "ready");
   assert.equal((await sql<{ count: string }>`select count(*)::text as count from tenant_config_imports
@@ -93,7 +93,7 @@ test("configuration archive persists native target state, source history, and re
   assert.equal(answered.ok, true);
   if (answered.ok) assert.equal(answered.value.callerMessages.at(-1), "Directions for parking-a");
 
-  const restarted = new PostgresTenantConfigArchiveImporter(db);
+  const restarted = new PostgresTenantConfigArchiveImporter(db, undefined, "unsafeReference");
   const retained = await restarted.read(target.tenantId, "buyer-admin", authority);
   assert.equal(retained.ok && retained.value?.sourceHistory.locations.length, 2);
   if (retained.ok && retained.value) {
@@ -130,7 +130,7 @@ test("concurrent stage is one durable import and pre-existing target data blocks
   const authority = { authorizeAndRecord: async () => ok({ auditRef: "durable-race-import-audit" }) };
   const mapper = { mapRef: (kind: string, ref: string) => `buyer:${kind}:${ref}` };
   const results = await Promise.all([0, 1].map(() => new PostgresTenantConfigArchiveImporter(db,
-    () => "2026-09-28T22:05:00Z").stage(exported.value, target.tenantId, "buyer-admin", authority, mapper)));
+    () => "2026-09-28T22:05:00Z", "unsafeReference").stage(exported.value, target.tenantId, "buyer-admin", authority, mapper)));
   const first = results[0]!;
   const second = results[1]!;
   assert.equal(first.ok && second.ok, true);
@@ -157,7 +157,7 @@ test("concurrent stage is one durable import and pre-existing target data blocks
   }, { authorizeAndRecord: async () => ok({ requestRef: "durable-occupied-export-audit" }) });
   assert.equal(occupiedArchive.ok, true);
   if (!occupiedArchive.ok) return;
-  const importer = new PostgresTenantConfigArchiveImporter(db);
+  const importer = new PostgresTenantConfigArchiveImporter(db, undefined, "unsafeReference");
   assert.deepEqual(await importer.stage(occupiedArchive.value, occupied.tenantId, "buyer-admin", authority, mapper),
     { ok: false, error: { kind: "targetOccupied" } });
   assert.equal((await importer.read(occupied.tenantId, "buyer-admin", authority)).ok, true);
