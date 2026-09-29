@@ -1,0 +1,129 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import test, { after } from "node:test";
+import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
+import { ok } from "../../src/core/model.ts";
+import type { Result } from "../../src/core/model.ts";
+import { ARCHIVE_SECTIONS } from "../../src/portability/archive-envelope.ts";
+import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
+import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
+import { ClinikoPhoneLookup } from "../../src/standalone/cliniko-phone-lookup.ts";
+import { connectPostgres } from "../../src/storage/connect.ts";
+import { buildPostgresConfigArchive } from "../../src/storage/postgres-config-archive.ts";
+import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
+import { PostgresPatientPhoneIndex } from "../../src/storage/postgres-patient-phone-index.ts";
+import { PostgresPatientPhoneScan } from "../../src/storage/postgres-patient-phone-scan.ts";
+
+const url = process.env.DATABASE_URL;
+if (!url) throw new Error("DATABASE_URL is required");
+const db = connectPostgres(url);
+after(async () => { await db.destroy(); });
+
+function value<T, E>(result: Result<T, E>): T {
+  assert.ok(result.ok, result.ok ? "" : JSON.stringify(result.error));
+  return result.value;
+}
+
+test("standalone phone, setting, export, and text journey retains only patient phone-to-ID links", async () => {
+  const suffix = randomUUID().slice(0, 8);
+  const scope = { tenantId: `privacy-${suffix}`, clinicId: "clinic", locationId: "frontdesk" };
+  const targetScope = { tenantId: `privacy-buyer-${suffix}`, clinicId: "clinic", locationId: "frontdesk" };
+  const clinicScope = { tenantId: scope.tenantId, clinicId: scope.clinicId };
+  const phone = "+61400111222";
+  const patientIds = ["901", "902"];
+  const privateName = `patient-name-${suffix}`;
+  const privateNote = `patient-note-${suffix}`;
+  const appointmentId = `appointment-${suffix}`;
+  const appointmentTime = `2030-03-14T12:34:56.${String(parseInt(suffix.slice(0, 3), 16) % 1000).padStart(3, "0")}Z`;
+  const callerText = `caller-request-${suffix}`;
+  const answerText = `answer-private-${suffix}`;
+  const verificationRef = `verification-private-${suffix}`;
+  const offerRef = `offer-private-${suffix}`;
+  let secondPhone = "0400 111 222";
+  const fetchPort: typeof fetch = async input => {
+    const path = new URL(String(input)).pathname;
+    if (path === "/v1/patients") return Response.json({ total_entries: 2, patients: patientIds.map(id => ({
+      id, first_name: privateName, appointment_notes: privateNote,
+      next_appointment_id: appointmentId, next_appointment_at: appointmentTime,
+      archived_at: null, patient_phone_numbers: [{ number: "0400 111 222", phone_type: "Mobile" }],
+    })) });
+    if (path === "/v1/patients/901" || path === "/v1/patients/902") return Response.json({
+      id: path.slice(-3), first_name: privateName, appointment_notes: privateNote,
+      next_appointment_id: appointmentId, next_appointment_at: appointmentTime,
+      archived_at: null, patient_phone_numbers: [{ number: path.endsWith("902") ? secondPhone : "0400 111 222",
+        phone_type: "Mobile" }],
+    });
+    throw new Error("unexpected Cliniko request");
+  };
+  const reader = value(ClinikoPatientCandidateReader.create({ scope: clinicScope,
+    apiKey: "synthetic-au5", contactEmail: "test@example.com" }, fetchPort));
+  const index = new PostgresPatientPhoneIndex(db);
+  const lookup = new ClinikoPhoneLookup(reader, index, "61", 60_000, undefined, new PostgresPatientPhoneScan(db));
+  assert.deepEqual(await lookup.refresh(clinicScope), { ok: true, value: 1 });
+  assert.deepEqual(await lookup.candidates(clinicScope, phone),
+    { ok: true, value: { kind: "multiple", candidateIds: patientIds } });
+  secondPhone = "0400 999 999";
+  assert.deepEqual(await lookup.candidates(clinicScope, phone),
+    { ok: true, value: { kind: "one", candidateIds: ["901"] } });
+
+  const host = new ReferenceClinicHost([], []);
+  const app = createStandaloneTextComposition(db, host);
+  assert.equal(value(await app.policy.changeBookingEnabled(scope, "0", true, "clinic-admin")).capabilities.book,
+    "unavailable");
+  const archiveRequest = { scope, targetScope, timeZone: "UTC",
+    mappingProvenance: "approved-map", archiveId: `privacy-export-${suffix}`, actorRef: "clinic-admin",
+    createdAt: "2026-09-29T10:00:00Z" };
+  const archiveAuthority = { authorizeAndRecord: async () => ok({ requestRef: "audited-export" }) };
+  const archive = value(await buildPostgresConfigArchive(db, archiveRequest, archiveAuthority));
+  const archiveBytes: Uint8Array[] = [archive.manifestBytes];
+  for (const section of ARCHIVE_SECTIONS) {
+    for await (const chunk of archive.sections[section]()) archiveBytes.push(chunk);
+  }
+
+  const now = "2026-09-29T10:00:00Z";
+  const callId = randomUUID();
+  value(await app.reception.startCall(callId, scope, now));
+  const booking = value(await app.reception.proposeBooking(scope,
+    { callId, turnId: randomUUID(), text: callerText, quality: "clear", at: now },
+    verificationRef, offerRef, now));
+  assert.equal(booking.callerMessages.at(-1), "I can't complete that request here.");
+  assert.deepEqual(booking.actions, {});
+  assert.deepEqual(booking.staffItems, {});
+  assert.equal(host.bookingEvidenceReads(), 0);
+  const pendingId = booking.pendingPresentationId;
+  assert.ok(pendingId);
+  value(await app.reception.acknowledgeTextPresentation(scope, callId, pendingId));
+  const answered = value(await app.reception.answer(scope,
+    { callId, turnId: randomUUID(), text: callerText, quality: "clear", at: now },
+    ["parking"], answerText, now));
+  assert.equal(answered.callerMessages.includes(answerText), false);
+  const appointments = value(await app.reception.checkAppointments(scope,
+    { callId, turnId: randomUUID(), text: callerText, quality: "clear", at: now },
+    verificationRef, appointmentTime, appointmentTime, now));
+  assert.deepEqual(appointments.actions, {});
+  assert.deepEqual(appointments.staffItems, {});
+  assert.equal(app.reception.appointmentReadEnabled(), false);
+  const reloaded = createStandaloneTextComposition(db, host);
+  const stored = value(await reloaded.reception.read(scope, callId));
+  assert.deepEqual(stored.callerMessages, []);
+  assert.deepEqual(stored.appointmentReads, []);
+  assert.deepEqual(stored.staffItems, {});
+  assert.deepEqual(await buildPostgresConfigArchive(db, archiveRequest, archiveAuthority),
+    { ok: false, error: { kind: "callsRequireRetention" } });
+
+  const canaries = [privateName, privateNote, appointmentId, appointmentTime, callerText,
+    answerText, verificationRef, offerRef].map((canary, index) => ({ label: `private_${index}`, value: canary }));
+  assert.deepEqual(await scanPatientDataCanaries(db, canaries), { ok: true, value: [] });
+  const serializedArchive = Buffer.concat(archiveBytes).toString("utf8");
+  assert.equal(canaries.some(canary => serializedArchive.includes(canary.value)), false,
+    "configuration export contained a patient-data canary");
+  const links = await db.selectFrom("patient_phone_index").select(["normalized_phone", "patient_id"])
+    .where("tenant_id", "=", scope.tenantId as never).orderBy("patient_id").execute();
+  assert.deepEqual(links.map(link => [link.normalized_phone, link.patient_id]),
+    patientIds.map(id => [phone, id]));
+  assert.deepEqual(await index.clear(clinicScope), { ok: true, value: true });
+  assert.deepEqual(await lookup.candidates(clinicScope, phone),
+    { ok: true, value: { kind: "indexStale", candidateIds: [] } });
+  assert.equal((await db.selectFrom("patient_phone_index").select("patient_id")
+    .where("tenant_id", "=", scope.tenantId as never).execute()).length, 0);
+});
