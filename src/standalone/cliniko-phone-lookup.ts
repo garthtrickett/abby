@@ -82,6 +82,43 @@ export class ClinikoPhoneLookup {
         cursor = staged.value;
       }
     }
+    // Offset pages are not a point-in-time Cliniko snapshot. Re-read multi-page
+    // scans and compare every ID and phone link before exposing a new generation.
+    if (cursor.totalEntries !== null && cursor.totalEntries > 100) {
+      const seenIds = new Set<string>();
+      for await (const page of this.reader.phonePages(scope, this.countryCallingCode, 1, 100_000, this.waitUntil)) {
+        if (!page.ok) {
+          if (["malformed", "tooManyResults", "invalidQuery", "scopeMismatch"].includes(page.error.kind)) {
+            const discarded = await scan.discard(scope, cursor.scanRef);
+            if (!discarded.ok) return discarded;
+          }
+          const stale = await this.index.markStale(scope, cursor.expectedGeneration);
+          return stale.ok ? page : stale;
+        }
+        if (page.value.patientIds.some(id => seenIds.has(id))) {
+          const discarded = await scan.discard(scope, cursor.scanRef);
+          if (!discarded.ok) return discarded;
+          const stale = await this.index.markStale(scope, cursor.expectedGeneration);
+          return stale.ok ? err({ kind: "sourceChanged" }) : stale;
+        }
+        for (const id of page.value.patientIds) seenIds.add(id);
+        const verified = await scan.verifyPage(scope, cursor.scanRef, page.value);
+        if (!verified.ok) {
+          if (verified.error.kind === "sourceChanged" || verified.error.kind === "invalidInput") {
+            const discarded = await scan.discard(scope, cursor.scanRef);
+            if (!discarded.ok) return discarded;
+          }
+          const stale = await this.index.markStale(scope, cursor.expectedGeneration);
+          return stale.ok ? verified : stale;
+        }
+      }
+      if (seenIds.size !== cursor.totalEntries) {
+        const discarded = await scan.discard(scope, cursor.scanRef);
+        if (!discarded.ok) return discarded;
+        const stale = await this.index.markStale(scope, cursor.expectedGeneration);
+        return stale.ok ? err({ kind: "sourceChanged" }) : stale;
+      }
+    }
     const finished = await scan.finish(scope, cursor.scanRef);
     if (finished.ok || finished.error.kind === "staleScan") return finished;
     if (finished.error.kind === "sourceChanged") {

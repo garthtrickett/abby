@@ -154,6 +154,51 @@ export class PostgresPatientPhoneScan {
     } catch { return err({ kind: "storageFailure" }); }
   }
 
+  /** Compare one current Cliniko page with the staged ID and phone-link set before publication. */
+  async verifyPage(scope: PatientPhoneClinicScope, scanRef: string, page: PhoneScanPage):
+    Promise<Result<true, PhoneScanFailure>> {
+    if (!validScope(scope) || !scanRefPattern.test(scanRef) || !page ||
+        !Number.isSafeInteger(page.page) || page.page < 1 || !Number.isSafeInteger(page.totalEntries) ||
+        page.totalEntries < 0 || page.totalEntries > 100_000 || !Array.isArray(page.patientIds) ||
+        page.patientIds.length > 100 || page.patientIds.some(id => !patientIdPattern.test(id)) ||
+        !Array.isArray(page.links) || page.links.some(link => !link || !phonePattern.test(link.normalizedPhone) ||
+          !patientIdPattern.test(link.patientId))) return err({ kind: "invalidInput" });
+    try {
+      return await this.db.transaction().setIsolationLevel("repeatable read").execute(async trx => {
+        const row = await trx.selectFrom("patient_phone_scan")
+          .select(["scan_ref", "total_entries", "seen_count", "next_page"])
+          .where("tenant_id", "=", scope.tenantId as PatientPhoneScanTenantId)
+          .where("clinic_id", "=", scope.clinicId as PatientPhoneScanClinicId).executeTakeFirst();
+        if (!row || row.scan_ref !== scanRef) return err({ kind: "staleScan" });
+        if (row.total_entries !== page.totalEntries || row.seen_count !== page.totalEntries ||
+            row.next_page !== Math.max(1, Math.ceil(page.totalEntries / 100)) + 1) {
+          return err({ kind: "sourceChanged" });
+        }
+        if (page.patientIds.length !== Math.min(100, Math.max(0, page.totalEntries - (page.page - 1) * 100)) ||
+            new Set(page.patientIds).size !== page.patientIds.length) return err({ kind: "sourceChanged" });
+        const ids = page.patientIds.map(id => id as PatientPhoneScanSeenPatientId);
+        const stagedIds = ids.length ? await trx.selectFrom("patient_phone_scan_seen").select("patient_id")
+          .where("tenant_id", "=", scope.tenantId as PatientPhoneScanTenantId)
+          .where("clinic_id", "=", scope.clinicId as PatientPhoneScanClinicId)
+          .where("scan_ref", "=", scanRef as PatientPhoneScanSeenScanRef)
+          .where("patient_id", "in", ids).execute() : [];
+        if (stagedIds.length !== ids.length) return err({ kind: "sourceChanged" });
+        const stagedLinks = ids.length ? await trx.selectFrom("patient_phone_scan_links")
+          .select(["patient_id", "normalized_phone"])
+          .where("tenant_id", "=", scope.tenantId as PatientPhoneScanTenantId)
+          .where("clinic_id", "=", scope.clinicId as PatientPhoneScanClinicId)
+          .where("scan_ref", "=", scanRef as PatientPhoneScanLinksScanRef)
+          .where("patient_id", "in", page.patientIds.map(id => id as PatientPhoneScanLinksPatientId)).execute() : [];
+        const currentLinks = new Set(page.links.map(link => `${link.patientId}\0${link.normalizedPhone}`));
+        if (currentLinks.size !== page.links.length || stagedLinks.length !== currentLinks.size ||
+            stagedLinks.some(link => !currentLinks.has(`${link.patient_id}\0${link.normalized_phone}`))) {
+          return err({ kind: "sourceChanged" });
+        }
+        return ok(true);
+      });
+    } catch { return err({ kind: "storageFailure" }); }
+  }
+
   async finish(scope: PatientPhoneClinicScope, scanRef: string): Promise<Result<number, PhoneScanFailure>> {
     if (!validScope(scope) || !scanRefPattern.test(scanRef)) return err({ kind: "invalidInput" });
     try {
