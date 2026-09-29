@@ -8,7 +8,8 @@ if (!process.env.DATABASE_URL) {
 module.exports = {
   connection: { connectionString: process.env.DATABASE_URL },
   schemas: ["public"],
-  typeFilter: (pgType) => !["kysely_migration", "kysely_migration_lock"].includes(pgType.name.toLowerCase()),
+  typeFilter: (pgType) => pgType.kind !== "function" && pgType.kind !== "procedure" &&
+    !["kysely_migration", "kysely_migration_lock"].includes(pgType.name.toLowerCase()),
   outputPath: "./src/storage/generated",
   preDeleteOutputFolder: true,
   tsModuleFormat: "esm",
