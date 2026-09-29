@@ -8,6 +8,7 @@ import { PhoneIndexRefreshWorker } from "../../src/standalone/phone-index-refres
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresPatientPhoneIndex } from "../../src/storage/postgres-patient-phone-index.ts";
 import { PostgresPatientPhoneScan } from "../../src/storage/postgres-patient-phone-scan.ts";
+import { PostgresPhoneRefreshGuard } from "../../src/storage/postgres-phone-refresh-guard.ts";
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
@@ -324,4 +325,45 @@ test("interrupted phone scan resumes at the next page without publishing partial
   if (!pending.ok) return;
   assert.deepEqual(await index.clear(scope), { ok: true, value: true });
   assert.deepEqual(await scan.finish(scope, pending.value.scanRef), { ok: false, error: { kind: "staleScan" } });
+});
+
+test("two worker processes coordinate one clinic scan and the losing worker retries after publication", async () => {
+  const scope = { tenantId: "phone-owner-tenant", clinicId: "phone-owner-clinic" };
+  const index = new PostgresPatientPhoneIndex(db);
+  let releaseRead: (() => void) | undefined;
+  let readStarted: (() => void) | undefined;
+  const heldRead = new Promise<void>(resolve => { releaseRead = resolve; });
+  const started = new Promise<void>(resolve => { readStarted = resolve; });
+  let reads = 0;
+  const reader = ClinikoPatientCandidateReader.create({ scope, apiKey: "synthetic-au5",
+    contactEmail: "test@example.com" }, async () => {
+    reads += 1;
+    readStarted!();
+    await heldRead;
+    return Response.json({ total_entries: 1, patients: [{ id: "701", archived_at: null,
+      patient_phone_numbers: [{ number: "0400 777 888", phone_type: "Mobile" }] }] });
+  });
+  assert.equal(reader.ok, true);
+  if (!reader.ok) return;
+  const lookup = new ClinikoPhoneLookup(reader.value, index, "61", 60_000,
+    undefined, new PostgresPatientPhoneScan(db));
+  const firstGuard = new PostgresPhoneRefreshGuard(url);
+  const secondGuard = new PostgresPhoneRefreshGuard(url);
+  const first = new PhoneIndexRefreshWorker(index, [{ scope, lookup, refreshEveryMs: 60_000 }],
+    undefined, firstGuard);
+  const second = new PhoneIndexRefreshWorker(index, [{ scope, lookup, refreshEveryMs: 60_000 }],
+    undefined, secondGuard);
+  const pending = first.runOnce();
+  await started;
+  assert.deepEqual(await second.runOnce(), [{ scope, kind: "busy" }]);
+  assert.equal(reads, 1);
+  releaseRead!();
+  assert.deepEqual(await pending, [{ scope, kind: "refreshed" }]);
+  assert.deepEqual(await second.runOnce(), [{ scope, kind: "fresh" }]);
+  assert.equal(reads, 1);
+
+  assert.deepEqual(await firstGuard.run(scope, async () => { throw new Error("synthetic worker crash"); }),
+    { ok: false, error: { kind: "storageFailure" } });
+  assert.deepEqual(await secondGuard.run(scope, async () => "next owner"),
+    { ok: true, value: { kind: "ran", value: "next owner" } });
 });
