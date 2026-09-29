@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "version": "speech-loop-v1",
+  "cases": [
+    {
+      "id": "SL-001",
+      "category": "ai-disclosure",
+      "text": "This is Abby, an AI receptionist.",
+      "criticalTerms": ["AI", "receptionist"]
+    },
+    {
+      "id": "SL-002",
+      "category": "provisional-availability",
+      "text": "I found possible times, but I cannot reserve or confirm an appointment.",
+      "criticalTerms": ["cannot", "reserve", "confirm"]
+    }
+  ]
+}

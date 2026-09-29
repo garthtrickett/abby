@@ -21,6 +21,7 @@
     "eval:model": "node scripts/evaluate-model.ts",
     "eval:availability-intent": "node scripts/evaluate-availability-intent.ts",
     "eval:transcription": "node scripts/evaluate-transcription.ts",
+    "eval:speech-loop": "node scripts/evaluate-speech-loop.ts",
     "probe:postgres": "bash scripts/with-postgres.sh bash scripts/probe-postgres.sh",
     "test": "npm run typecheck && npm run test:text"
   },
