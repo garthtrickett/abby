@@ -46,6 +46,17 @@ npm run eval:transcription -- --corpus transcription-telephony-v1 --out eval/res
 
 The `--corpus` flag accepts only `transcription-v1` and `transcription-telephony-v1`. The same repeat, concurrency, digest, typed-result, and release-gate rules apply to both.
 
+## Signed local live speech evaluation
+
+`test/live/signed-openai-voice.test.ts` is an opt-in integration test for the standalone greeting. It starts an isolated PostgreSQL database, signs synthetic Twilio webhook and WebSocket messages, calls the real OpenAI Speech API with the opt-in `tts-1` pre-output fallback, checks non-silent outbound G.711 media and the returned local completion mark, and scans the database for the synthetic caller number and provider call ID. It uses no real Cliniko patient data or telephone number. With `ABBY_OPENAI_API_KEY` in the process environment, run:
+
+```sh
+work run "Abby signed local live speech evaluation" -- bash scripts/with-postgres.sh env ABBY_LIVE_VOICE_EVAL=1 node --test test/live/signed-openai-voice.test.ts
+work wait "Abby signed local live speech evaluation"
+```
+
+The test is excluded from `npm test` because it makes paid provider calls. A locally returned mark is only synthetic transport evidence; this run does not prove that a real caller heard the greeting, that Twilio accepted the media, or that the pilot latency and voice-quality gates pass.
+
 ## Speech loopback smoke evaluation
 
 `speech-loop-v1.json` pins two patient-free messages: the AI disclosure and a provisional availability notice. The opt-in runner uses Abby's production `gpt-4o-mini-tts`/`coral` speech adapter, keeps its 16 kHz PCM output in memory, then replays it through Abby's production `gpt-live-transcribe` adapter. It rejects silent or malformed audio and flags missing safety words in the final transcript. Run with the key available in the process environment:
