@@ -3,6 +3,7 @@ import { sql } from "kysely";
 import type { Kysely, Transaction } from "kysely";
 import { validCandidateNames } from "../core/pending-location.ts";
 import { err, ok } from "../core/model.ts";
+import { PHONE_NORMALIZATION_VERSION } from "../cliniko/phone-number.ts";
 import type { Result } from "../core/model.ts";
 import type { ArchiveEnvelope } from "../portability/archive-envelope.ts";
 import { decodeTenantConfigArchive } from "../portability/config-archive.ts";
@@ -19,6 +20,7 @@ export type NumberAssignment = Readonly<{ tenantId: string; clinicId: string;
   candidateNames?: readonly Readonly<{ locationId: string; spokenName: string }>[] }>;
 export type CutoverAction = "stage" | "publish" | "discard" | "beginRollback" | "finishRollback";
 export type CutoverCommand = Readonly<{ accountRef: string; dialedNumber: string; actorRef: string }>;
+export type TargetPhoneIndexPlan = Readonly<{ countryCallingCode: string; maxAgeMs: number }>;
 export type CutoverAuthority = Readonly<{
   authorizeAndRecord(action: CutoverAction, command: CutoverCommand):
     Promise<Result<Readonly<{ auditRef: string }>, Readonly<{ kind: "denied" | "auditFailure" }>>>;
@@ -29,16 +31,25 @@ export type CutoverStatus = Readonly<{ state: CutoverState; routeVersion: number
   archiveId: string; manifestDigest: string }>;
 export type CutoverFailure = Readonly<{ kind: "invalidRequest" | "denied" | "auditFailure" |
   "invalidArchive" | "sourceDrift" | "sourceFenceChanged" | "routeConflict" | "targetNotReady" |
-  "targetImportMismatch" | "notStaged" | "invalidTransition" | "storageFailure" }>;
+  "targetPhoneIndexNotReady" | "targetImportMismatch" | "notStaged" | "invalidTransition" | "storageFailure" }>;
 
 type RouteRow = { version: number; assignment: unknown };
 type PlanRow = { source_tenant_id: string; target_tenant_id: string; source_fence_version: number;
   archive_id: string; manifest_digest: string; source_schema_version: string;
   source_assignment: unknown; target_assignment: unknown; staged_route_version: number;
-  published_route_version: number | null; state: CutoverState };
+  published_route_version: number | null; state: CutoverState;
+  phone_index_country_calling_code: string | null; phone_index_max_age_ms: number | null };
 
 function validRef(value: unknown): value is string {
   return typeof value === "string" && !!value.trim() && value.length <= 256 && !/[\u0000-\u001f\u007f]/.test(value);
+}
+
+function validPhoneIndexPlan(value: unknown): value is TargetPhoneIndexPlan {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const plan = value as Partial<TargetPhoneIndexPlan>;
+  return typeof plan.countryCallingCode === "string" && /^[1-9][0-9]{0,2}$/.test(plan.countryCallingCode) &&
+    typeof plan.maxAgeMs === "number" && Number.isSafeInteger(plan.maxAgeMs) &&
+    plan.maxAgeMs >= 1 && plan.maxAgeMs <= 3_600_000;
 }
 
 function assignment(value: unknown): NumberAssignment | undefined {
@@ -87,8 +98,31 @@ async function route(trx: Transaction<Database>, command: CutoverCommand): Promi
 async function plan(trx: Transaction<Database>, command: CutoverCommand): Promise<PlanRow | undefined> {
   return (await sql<PlanRow>`select source_tenant_id, target_tenant_id, source_fence_version,
     archive_id, manifest_digest, source_schema_version, source_assignment, target_assignment,
-    staged_route_version, published_route_version, state from number_cutovers
+    staged_route_version, published_route_version, state, phone_index_country_calling_code,
+    phone_index_max_age_ms from number_cutovers
     where account_ref = ${command.accountRef} and dialed_number = ${command.dialedNumber} for update`.execute(trx)).rows[0];
+}
+
+async function targetPhoneIndexReady(trx: Transaction<Database>, target: NumberAssignment,
+                                     plan: TargetPhoneIndexPlan): Promise<boolean> {
+  // Refresh and disconnect take the exclusive clinic lock. Hold its shared form
+  // through route publication so an index cannot be cleared during this check.
+  await sql`select pg_advisory_xact_lock_shared(hashtext(${target.tenantId}),
+    hashtext(${target.clinicId}))`.execute(trx);
+  const connection = (await sql<{ enabled: boolean }>`select enabled from patient_phone_clinic_status
+    where tenant_id = ${target.tenantId} and clinic_id = ${target.clinicId} for share`.execute(trx)).rows[0];
+  if (connection?.enabled === false) return false;
+  const head = (await sql<{ generation: number; completed_at: Date; country_calling_code: string | null;
+    normalization_version: number | null }>`select generation, completed_at, country_calling_code, normalization_version
+    from patient_phone_sync where tenant_id = ${target.tenantId} and clinic_id = ${target.clinicId}
+    for share`.execute(trx)).rows[0];
+  if (!head || !Number.isSafeInteger(head.generation) || head.generation < 1 ||
+      head.country_calling_code !== plan.countryCallingCode ||
+      head.normalization_version !== PHONE_NORMALIZATION_VERSION ||
+      !(head.completed_at instanceof Date) || !Number.isFinite(head.completed_at.getTime())) return false;
+  const now = (await sql<{ current_time: Date }>`select clock_timestamp() as current_time`.execute(trx)).rows[0]?.current_time;
+  const ageMs = now instanceof Date ? now.getTime() - head.completed_at.getTime() : NaN;
+  return Number.isFinite(ageMs) && ageMs >= -60_000 && ageMs <= plan.maxAgeMs;
 }
 
 async function frozenAt(trx: Transaction<Database>, tenantId: string, version: number): Promise<boolean> {
@@ -153,13 +187,16 @@ export class PostgresConfigNumberCutover {
   }
 
   async stage(command: CutoverCommand & Readonly<{ expectedRouteVersion: number; baseline: ArchiveEnvelope;
-    comparison: TenantConfigArchiveRequest & Readonly<{ expectedFenceVersion: number }> }>,
+    comparison: TenantConfigArchiveRequest & Readonly<{ expectedFenceVersion: number }>;
+    targetPhoneIndex: TargetPhoneIndexPlan }>,
     authority: CutoverAuthority, exportAuthority: TenantConfigArchiveAuthority):
     Promise<Result<CutoverStatus, CutoverFailure>> {
     const approved = await this.authorize("stage", command, authority);
     if (!approved.ok) return approved;
     if (!Number.isSafeInteger(command.expectedRouteVersion) || command.expectedRouteVersion < 1 ||
-        !command.baseline || !command.comparison) return err({ kind: "invalidRequest" });
+        !command.baseline || !command.comparison || !validPhoneIndexPlan(command.targetPhoneIndex)) {
+      return err({ kind: "invalidRequest" });
+    }
     const comparison = await comparePostgresFencedTenantArchiveSource(this.db, command.baseline,
       command.comparison, exportAuthority);
     if (!comparison.ok) return err({ kind: comparison.error.kind === "fenceMismatch" ? "sourceFenceChanged" : "invalidArchive" });
@@ -175,7 +212,9 @@ export class PostgresConfigNumberCutover {
         if (!current) return err({ kind: "routeConflict" });
         const existing = await plan(trx, command);
         if (existing) return existing.archive_id === data.archiveId && existing.manifest_digest === data.manifestDigest &&
-          existing.source_fence_version === data.sourceFenceVersion && status(current, existing)
+          existing.source_fence_version === data.sourceFenceVersion &&
+          existing.phone_index_country_calling_code === command.targetPhoneIndex.countryCallingCode &&
+          existing.phone_index_max_age_ms === command.targetPhoneIndex.maxAgeMs && status(current, existing)
           ? ok(status(current, existing)!) : err({ kind: "routeConflict" });
         if (current.version !== command.expectedRouteVersion) return err({ kind: "routeConflict" });
         const source = assignment(current.assignment);
@@ -191,10 +230,12 @@ export class PostgresConfigNumberCutover {
         if (!await targetReady(trx, data, registry!)) return err({ kind: "targetNotReady" });
         await sql`insert into number_cutovers (account_ref, dialed_number, source_tenant_id, target_tenant_id,
           source_fence_version, archive_id, manifest_digest, source_schema_version, source_assignment,
-          target_assignment, staged_route_version, state) values
+          target_assignment, staged_route_version, phone_index_country_calling_code,
+          phone_index_max_age_ms, state) values
           (${command.accountRef}, ${command.dialedNumber}, ${data.sourceTenantId}, ${data.targetTenantId},
            ${data.sourceFenceVersion}, ${data.archiveId}, ${data.manifestDigest}, ${data.sourceSchemaVersion},
-           ${JSON.stringify(source)}::jsonb, ${JSON.stringify(target)}::jsonb, ${current.version}, 'staged')`.execute(trx);
+           ${JSON.stringify(source)}::jsonb, ${JSON.stringify(target)}::jsonb, ${current.version},
+           ${command.targetPhoneIndex.countryCallingCode}, ${command.targetPhoneIndex.maxAgeMs}, 'staged')`.execute(trx);
         await event(trx, command, "stage", current.version, approved.value);
         return ok({ state: "staged", routeVersion: current.version, activeTenantId: source.tenantId,
           sourceTenantId: data.sourceTenantId, targetTenantId: data.targetTenantId,
@@ -229,7 +270,8 @@ export class PostgresConfigNumberCutover {
         // Read the immutable plan first; lock ordering begins with tenant advisory locks.
         const found = (await sql<PlanRow>`select source_tenant_id, target_tenant_id, source_fence_version,
           archive_id, manifest_digest, source_schema_version, source_assignment, target_assignment,
-          staged_route_version, published_route_version, state from number_cutovers
+          staged_route_version, published_route_version, state, phone_index_country_calling_code,
+          phone_index_max_age_ms from number_cutovers
           where account_ref = ${command.accountRef} and dialed_number = ${command.dialedNumber}`.execute(trx)).rows[0];
         if (!found) return err({ kind: "notStaged" });
         await lockTenants(trx, [found.source_tenant_id, found.target_tenant_id]);
@@ -256,6 +298,11 @@ export class PostgresConfigNumberCutover {
             return err({ kind: "targetImportMismatch" });
           }
           if (!await targetReady(trx, registry.source_history, registry)) return err({ kind: "targetNotReady" });
+          const phonePlan = { countryCallingCode: staged.phone_index_country_calling_code,
+            maxAgeMs: staged.phone_index_max_age_ms };
+          if (!validPhoneIndexPlan(phonePlan) || !await targetPhoneIndexReady(trx, target, phonePlan)) {
+            return err({ kind: "targetPhoneIndexNotReady" });
+          }
           const next = current.version + 1;
           await sql`update number_routes set version = ${next}, assignment = ${JSON.stringify(target)}::jsonb
             where account_ref = ${command.accountRef} and dialed_number = ${command.dialedNumber}`.execute(trx);

@@ -10,6 +10,7 @@ import { connectPostgres } from "../../src/storage/connect.ts";
 import { buildPostgresFencedTenantConfigArchive } from "../../src/storage/postgres-config-archive.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
 import { PostgresKnowledgeCatalogue } from "../../src/storage/postgres-knowledge-catalogue.ts";
+import { PostgresPatientPhoneIndex } from "../../src/storage/postgres-patient-phone-index.ts";
 import { PostgresConfigNumberCutover, PostgresNumberRoutingHost } from "../../src/storage/postgres-number-cutover.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
 import { PostgresPortabilityFence } from "../../src/storage/postgres-portability-fence.ts";
@@ -19,6 +20,7 @@ const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
 const db = connectPostgres(url);
 after(async () => { await db.destroy(); });
+const targetPhoneIndex = { countryCallingCode: "61", maxAgeMs: 30 * 60_000 };
 
 test("shared-number cutover stages, publishes once, and rolls back without losing target staff work", async () => {
   const sourceA = { tenantId: "route-cutover-source", clinicId: "source-clinic", locationId: "a" };
@@ -72,14 +74,15 @@ test("shared-number cutover stages, publishes once, and rolls back without losin
   const routeAuthority = { authorizeAndRecord: async (action: string) =>
     ok({ auditRef: `route-cutover-${action}-${++routeAudits}` }) };
   const command = { accountRef, dialedNumber, actorRef: "route-admin" };
-  const wrongRouteVersion = await cutover.stage({ ...command, expectedRouteVersion: 2, baseline: archive.value,
+  const wrongRouteVersion = await cutover.stage({ ...command, expectedRouteVersion: 2, targetPhoneIndex, baseline: archive.value,
     comparison: { ...exportRequest, archiveId: "route-cutover-wrong-route-compare" } },
   routeAuthority, exportAuthority);
   assert.deepEqual(wrongRouteVersion, { ok: false, error: { kind: "routeConflict" } });
-  const staged = await cutover.stage({ ...command, expectedRouteVersion: 1, baseline: archive.value,
+  const staged = await cutover.stage({ ...command, expectedRouteVersion: 1, targetPhoneIndex, baseline: archive.value,
     comparison: { ...exportRequest, archiveId: "route-cutover-compare" } }, routeAuthority, exportAuthority);
   assert.equal(staged.ok && staged.value.state === "staged" && staged.value.activeTenantId === sourceA.tenantId, true);
   const restaged = await new PostgresConfigNumberCutover(db).stage({ ...command, expectedRouteVersion: 1,
+    targetPhoneIndex,
     baseline: archive.value, comparison: { ...exportRequest, archiveId: "route-cutover-replay-compare" } },
   routeAuthority, exportAuthority);
   assert.deepEqual(restaged, staged);
@@ -95,6 +98,7 @@ test("shared-number cutover stages, publishes once, and rolls back without losin
   await sql`update clinic_knowledge_events set answer_text = 'Parking is behind the clinic.'
     where tenant_id = ${targetA.tenantId} and clinic_id = ${targetA.clinicId}
     and location_id = ${targetA.locationId} and source_ref = 'parking' and version = 2`.execute(db);
+  assert.equal((await new PostgresPatientPhoneIndex(db).publish(targetA, [], targetPhoneIndex.countryCallingCode)).ok, true);
   const [published, concurrentPublish] = await Promise.all([
     cutover.publish(command, routeAuthority), new PostgresConfigNumberCutover(db).publish(command, routeAuthority)]);
   assert.equal(published.ok && published.value.state === "published" && published.value.routeVersion === 2, true);
@@ -183,7 +187,7 @@ test("release after stage prevents publication while the source route remains au
     ok({ auditRef: `route-stale-${action}-${++routeAudits}` }) };
   const command = { accountRef, dialedNumber, actorRef: "route-admin" };
   const cutover = new PostgresConfigNumberCutover(db);
-  assert.equal((await cutover.stage({ ...command, expectedRouteVersion: 1, baseline: archive.value,
+  assert.equal((await cutover.stage({ ...command, expectedRouteVersion: 1, targetPhoneIndex, baseline: archive.value,
     comparison: { ...request, archiveId: "route-stale-compare" } }, routeAuthority, exportAuthority)).ok, true);
   assert.equal((await fence.release({ tenantId: source.tenantId, actorRef: "source-admin",
     reason: "cutoverRelease", expectedVersion: 1 }, fenceAuthority)).ok, true);
@@ -229,7 +233,7 @@ test("E2E-165 unlisted target configuration blocks publication and leaves the so
   const command = { accountRef, dialedNumber, actorRef: "route-admin" };
   let routeAudits = 0;
   const routeAuthority = { authorizeAndRecord: async () => ok({ auditRef: `extra-route-${suffix}-${++routeAudits}` }) };
-  assert.equal((await cutover.stage({ ...command, expectedRouteVersion: 1, baseline: archive.value,
+  assert.equal((await cutover.stage({ ...command, expectedRouteVersion: 1, targetPhoneIndex, baseline: archive.value,
     comparison: { ...request, archiveId: `extra-comparison-${suffix}` } },
   routeAuthority, exportAuthority)).ok, true);
   await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy)
@@ -249,6 +253,7 @@ test("E2E-165 unlisted target configuration blocks publication and leaves the so
     { ok: false, error: { kind: "targetNotReady" } });
   await sql`delete from clinic_write_stop where tenant_id = ${target.tenantId}
     and clinic_id = ${extra.clinicId}`.execute(db);
+  assert.equal((await new PostgresPatientPhoneIndex(db).publish(target, [], targetPhoneIndex.countryCallingCode)).ok, true);
   const published = await cutover.publish(command, routeAuthority);
   assert.equal(published.ok && published.value.activeTenantId, target.tenantId, JSON.stringify(published));
 });
