@@ -13,6 +13,32 @@ function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
 }
 
+type StoredStandalonePolicy = Readonly<{ scope: LocationScope; policyVersion: string; bookingEnabled: boolean }>;
+const standaloneScopeId = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+
+function validStandaloneScope(scope: LocationScope): boolean {
+  return [scope.tenantId, scope.clinicId, scope.locationId].every(value => typeof value === "string" && standaloneScopeId.test(value));
+}
+
+function standalonePolicy(scope: LocationScope, version: number, bookingEnabled: boolean): StoredStandalonePolicy {
+  return { scope: { tenantId: scope.tenantId, clinicId: scope.clinicId, locationId: scope.locationId },
+    policyVersion: String(version), bookingEnabled };
+}
+
+function decodeStandalonePolicy(value: unknown, scope: LocationScope, version: number,
+                                defaultPolicy: (scope: LocationScope) => CallPolicy): Result<CallPolicy, PolicyFailure> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return err({ kind: "storageFailure" });
+  const stored = value as Record<string, unknown>;
+  if (Object.keys(stored).sort().join(",") !== "bookingEnabled,policyVersion,scope" ||
+      typeof stored.bookingEnabled !== "boolean" || stored.policyVersion !== String(version) ||
+      typeof stored.scope !== "object" || stored.scope === null || Array.isArray(stored.scope)) return err({ kind: "storageFailure" });
+  const storedScope = stored.scope as Record<string, unknown>;
+  if (Object.keys(storedScope).sort().join(",") !== "clinicId,locationId,tenantId" ||
+      !sameScope(storedScope as LocationScope, scope)) return err({ kind: "storageFailure" });
+  const base = defaultPolicy(scope);
+  return ok({ ...base, scope: { ...scope }, policyVersion: String(version), bookingEnabled: stored.bookingEnabled });
+}
+
 function decodePolicy(value: unknown, scope: LocationScope, version: number): Result<CallPolicy, PolicyFailure> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return err({ kind: "storageFailure" });
   const policy = value as CallPolicy;
@@ -31,14 +57,21 @@ export class PostgresPolicyStore implements PolicyStore {
   private readonly hostBookingMode: CapabilityMode;
   private readonly readiness: AutomationReadiness;
   private readonly staffWorkEnabled: boolean;
+  private readonly storageMode: "reference" | "standaloneMinimal";
 
   constructor(db: Kysely<Database>, defaultPolicy: (scope: LocationScope) => CallPolicy, hostBookingMode: CapabilityMode = "unavailable", readiness: AutomationReadiness = unprovenReadiness,
-              staffWorkEnabled = true) {
+              staffWorkEnabled = true, storageMode: "reference" | "standaloneMinimal" = "reference") {
     this.db = db;
     this.defaultPolicy = defaultPolicy;
     this.hostBookingMode = hostBookingMode;
     this.readiness = readiness;
     this.staffWorkEnabled = staffWorkEnabled;
+    this.storageMode = storageMode;
+  }
+
+  private decode(value: unknown, scope: LocationScope, version: number): Result<CallPolicy, PolicyFailure> {
+    return this.storageMode === "standaloneMinimal"
+      ? decodeStandalonePolicy(value, scope, version, this.defaultPolicy) : decodePolicy(value, scope, version);
   }
 
   private effective(policy: CallPolicy, automation?: Readonly<{ version: number; enabled: boolean }>): CallPolicy {
@@ -52,6 +85,7 @@ export class PostgresPolicyStore implements PolicyStore {
   }
 
   async read(scope: LocationScope): Promise<Result<CallPolicy, PolicyFailure>> {
+    if (this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope)) return err({ kind: "invalidValue" });
     try {
       const local = this.db.selectFrom("clinic_settings").select(["version", "policy"])
         .where("tenant_id", "=", scope.tenantId as ClinicSettingsTenantId)
@@ -63,7 +97,7 @@ export class PostgresPolicyStore implements PolicyStore {
         .where("clinic_id", "=", scope.clinicId as ClinicAutomationClinicId)
         .orderBy("version", "desc").limit(1).executeTakeFirst();
       const [row, automation] = await Promise.all([local, clinic]);
-      const decoded = row ? decodePolicy(row.policy, scope, row.version) : ok(this.defaultPolicy(scope));
+      const decoded = row ? this.decode(row.policy, scope, row.version) : ok(this.defaultPolicy(scope));
       return decoded.ok ? ok(this.effective(decoded.value, automation)) : decoded;
     } catch {
       return err({ kind: "storageFailure" });
@@ -71,7 +105,8 @@ export class PostgresPolicyStore implements PolicyStore {
   }
 
   async changeAutomationEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
-    if (typeof enabled !== "boolean" || typeof actorRef !== "string" || !actorRef.trim() || actorRef.length > 256) return err({ kind: "invalidValue" });
+    if (typeof enabled !== "boolean" || typeof actorRef !== "string" || !actorRef.trim() || actorRef.length > 256 ||
+        (this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope))) return err({ kind: "invalidValue" });
     try {
       const current = await this.db.selectFrom("clinic_automation").select("version")
         .where("tenant_id", "=", scope.tenantId as ClinicAutomationTenantId)
@@ -106,7 +141,7 @@ export class PostgresPolicyStore implements PolicyStore {
           .where("clinic_id", "=", scope.clinicId as ClinicSettingsClinicId)
           .where("location_id", "=", scope.locationId as ClinicSettingsLocationId)
           .orderBy("version", "desc").limit(1).executeTakeFirst();
-        const decoded = local ? decodePolicy(local.policy, scope, local.version) : ok(this.defaultPolicy(scope));
+        const decoded = local ? this.decode(local.policy, scope, local.version) : ok(this.defaultPolicy(scope));
         if (!decoded.ok) throw new Error("invalid location policy");
         await trx.insertInto("clinic_automation").values({ ...ids, version: latest.version + 1 as ClinicAutomationVersion,
           enabled, changed_by: actorRef, previous_enabled: latest.enabled, changed_at: sql`clock_timestamp()` }).execute();
@@ -136,7 +171,8 @@ export class PostgresPolicyStore implements PolicyStore {
   }
 
   async changeBookingEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
-    if (typeof enabled !== "boolean" || typeof actorRef !== "string" || !actorRef.trim() || actorRef.length > 256) return err({ kind: "invalidValue" });
+    if (typeof enabled !== "boolean" || typeof actorRef !== "string" || !actorRef.trim() || actorRef.length > 256 ||
+        (this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope))) return err({ kind: "invalidValue" });
     try {
       return await this.db.transaction().execute(async trx => {
         const ids = {
@@ -144,7 +180,9 @@ export class PostgresPolicyStore implements PolicyStore {
           clinic_id: scope.clinicId as ClinicSettingsClinicId,
           location_id: scope.locationId as ClinicSettingsLocationId,
         };
-        await trx.insertInto("clinic_settings").values({ ...ids, version: 0 as ClinicSettingsVersion, policy: this.defaultPolicy(scope) })
+        const initialPolicy = this.defaultPolicy(scope);
+        await trx.insertInto("clinic_settings").values({ ...ids, version: 0 as ClinicSettingsVersion,
+          policy: this.storageMode === "standaloneMinimal" ? standalonePolicy(scope, 0, initialPolicy.bookingEnabled) : initialPolicy })
           .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id", "location_id", "version"]).doNothing()).execute();
         await trx.selectFrom("clinic_settings").select("version")
           .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).where("location_id", "=", ids.location_id)
@@ -152,7 +190,7 @@ export class PostgresPolicyStore implements PolicyStore {
         const latest = await trx.selectFrom("clinic_settings").select(["version", "policy"])
           .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).where("location_id", "=", ids.location_id)
           .orderBy("version", "desc").limit(1).executeTakeFirstOrThrow();
-        const decoded = decodePolicy(latest.policy, scope, latest.version);
+        const decoded = this.decode(latest.policy, scope, latest.version);
         if (!decoded.ok) return decoded;
         if (decoded.value.policyVersion !== expectedVersion) return err({ kind: "versionConflict" });
         const next: CallPolicy = {
@@ -161,7 +199,8 @@ export class PostgresPolicyStore implements PolicyStore {
           bookingEnabled: enabled,
           capabilities: { ...decoded.value.capabilities, book: enabled ? this.hostBookingMode : "unavailable" },
         };
-        await trx.insertInto("clinic_settings").values({ ...ids, version: latest.version + 1 as ClinicSettingsVersion, policy: next,
+        await trx.insertInto("clinic_settings").values({ ...ids, version: latest.version + 1 as ClinicSettingsVersion,
+          policy: this.storageMode === "standaloneMinimal" ? standalonePolicy(scope, latest.version + 1, enabled) : next,
           changed_by: actorRef, previous_booking_enabled: decoded.value.bookingEnabled, changed_at: sql`clock_timestamp()` }).execute();
         const automation = await trx.selectFrom("clinic_automation").select(["version", "enabled"])
           .where("tenant_id", "=", scope.tenantId as ClinicAutomationTenantId)
@@ -186,7 +225,7 @@ export class PostgresPolicyStore implements PolicyStore {
         .orderBy("version", "asc").limit(50).execute();
       const entries: BookingSettingAuditEntry[] = [];
       for (const row of rows) {
-        const decoded = decodePolicy(row.policy, scope, row.version);
+        const decoded = this.decode(row.policy, scope, row.version);
         if (!decoded.ok) return decoded;
         const metadata = [row.changed_by, row.previous_booking_enabled, row.changed_at];
         if (metadata.every(value => value === null)) {
