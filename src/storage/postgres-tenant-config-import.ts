@@ -4,6 +4,7 @@ import type { Kysely, Transaction } from "kysely";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
 import type { ArchiveEnvelope } from "../portability/archive-envelope.ts";
+import { decodeTenantConfigArchive } from "../portability/config-archive.ts";
 import type { ConfigArchiveData, TenantConfigArchiveData } from "../portability/config-archive.ts";
 import { mapConfig } from "../reference/config-archive-import.ts";
 import type { ReferenceImportMapper } from "../reference/config-archive-import.ts";
@@ -13,8 +14,23 @@ import type { ReferenceTenantImportAuthority, ReferenceTenantImportFailure, Refe
 import type Database from "./generated/Database.ts";
 
 export type PostgresTenantImportFailure = ReferenceTenantImportFailure | Readonly<{ kind: "storageFailure" }>;
+type ImportMode = "standaloneMinimal" | "unsafeReference";
 type RegistryRow = { archive_id: string; manifest_digest: string; receipt: ReferenceTenantImportReport;
   source_history: TenantConfigArchiveData };
+
+function minimalHistory(data: TenantConfigArchiveData): boolean {
+  return Array.isArray(data?.locations) && data.locations.length > 0 && data.locations.every(location =>
+    Array.isArray(location.policies) && location.policies.length > 0 &&
+    location.policies.every((row: ConfigArchiveData["policies"][number]) => row.storageShape === "standaloneMinimal") &&
+    Array.isArray(location.knowledge) && location.knowledge.length === 0);
+}
+
+function storedPolicy(scope: LocationScope, version: number, bookingEnabled: boolean):
+  Readonly<{ scope: LocationScope; policyVersion: string; bookingEnabled: boolean }> {
+  return { scope: { ...scope }, policyVersion: String(version), bookingEnabled };
+}
+
+const minimalMapper: ReferenceImportMapper = { mapRef: () => "disabled" };
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
@@ -57,7 +73,7 @@ function replayMapper(staged: StagedReferenceTenantConfiguration): ReferenceImpo
 
 async function writeLocation(trx: Transaction<Database>, location: TenantConfigArchiveData["locations"][number],
                              clinic: TenantConfigArchiveData["clinics"][number], mapper: ReferenceImportMapper,
-                             actorRef: string, importedAt: string): Promise<void> {
+                             actorRef: string, importedAt: string, mode: ImportMode): Promise<void> {
   const scope = location.targetScope;
   const scoped: Pick<ConfigArchiveData, "sourceScope" | "policies" | "automation" | "knowledge"> = {
     sourceScope: location.sourceScope, policies: location.policies, automation: clinic.automation,
@@ -68,21 +84,24 @@ async function writeLocation(trx: Transaction<Database>, location: TenantConfigA
     { version: 0, isHead: true, policy: mapped.value.policy, changedBy: null,
       previousBookingEnabled: null, changedAt: null }];
   for (const row of policyRows) {
+    const value = mode === "standaloneMinimal" ? storedPolicy(scope, row.version, row.policy.bookingEnabled) : row.policy;
     await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy,
       changed_by, previous_booking_enabled, changed_at) values
       (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, ${row.version},
-       ${JSON.stringify(row.policy)}::jsonb, ${row.changedBy}, ${row.previousBookingEnabled},
+       ${JSON.stringify(value)}::jsonb, ${row.changedBy}, ${row.previousBookingEnabled},
        ${row.changedAt}::timestamptz)`.execute(trx);
   }
   const head = policyRows.find(row => row.isHead)!;
   if (head.policy.bookingEnabled) {
-    const next = { ...head.policy, policyVersion: String(head.version + 1), bookingEnabled: false,
-      capabilities: { ...head.policy.capabilities, book: "unavailable" as const } };
+    const next = mode === "standaloneMinimal" ? storedPolicy(scope, head.version + 1, false) :
+      { ...head.policy, policyVersion: String(head.version + 1), bookingEnabled: false,
+        capabilities: { ...head.policy.capabilities, book: "unavailable" as const } };
     await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy,
       changed_by, previous_booking_enabled, changed_at) values
       (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, ${head.version + 1},
        ${JSON.stringify(next)}::jsonb, ${actorRef}, true, ${importedAt}::timestamptz)`.execute(trx);
   }
+  if (mode === "standaloneMinimal" && mapped.value.knowledgeEntries.length) throw new Error("minimal import contains knowledge");
   const bySource = new Map<string, typeof mapped.value.knowledgeEntries[number][]>();
   for (const entry of mapped.value.knowledgeEntries) {
     const entries = bySource.get(entry.sourceRef) ?? [];
@@ -105,7 +124,8 @@ async function writeLocation(trx: Transaction<Database>, location: TenantConfigA
 }
 
 async function writeClinic(trx: Transaction<Database>, scope: LocationScope,
-                           clinic: TenantConfigArchiveData["clinics"][number], actorRef: string, importedAt: string): Promise<void> {
+                           clinic: TenantConfigArchiveData["clinics"][number], actorRef: string, importedAt: string,
+                           mode: ImportMode): Promise<void> {
   const automation = clinic.automation.length ? clinic.automation : [
     { version: 0, isHead: true, enabled: false, changedBy: null, previousEnabled: null, changedAt: null }];
   for (const row of automation) {
@@ -121,7 +141,7 @@ async function writeClinic(trx: Transaction<Database>, scope: LocationScope,
       (${scope.tenantId}, ${scope.clinicId}, ${head.version + 1}, false,
        ${actorRef}, true, ${importedAt}::timestamptz)`.execute(trx);
   }
-  const reason = "Imported configuration awaiting target readiness";
+  const reason = mode === "standaloneMinimal" ? "cutover" : "Imported configuration awaiting target readiness";
   await sql`insert into clinic_write_stop (tenant_id, clinic_id, version, stopped, actor_ref, reason, changed_at)
     values (${scope.tenantId}, ${scope.clinicId}, 1, true, ${actorRef}, ${reason}, ${importedAt}::timestamptz)`.execute(trx);
   await sql`insert into clinic_write_stop_events (tenant_id, clinic_id, version, stopped, actor_ref, reason, changed_at)
@@ -132,9 +152,12 @@ async function writeClinic(trx: Transaction<Database>, scope: LocationScope,
 export class PostgresTenantConfigArchiveImporter {
   private readonly db: Kysely<Database>;
   private readonly clock: () => string;
-  constructor(db: Kysely<Database>, clock: () => string = () => new Date().toISOString()) {
+  private readonly mode: ImportMode;
+  constructor(db: Kysely<Database>, clock: () => string = () => new Date().toISOString(),
+              mode: ImportMode = "standaloneMinimal") {
     this.db = db;
     this.clock = clock;
+    this.mode = mode;
   }
 
   async read(targetTenantId: string, actorRef: string, authority: ReferenceTenantImportAuthority):
@@ -152,6 +175,7 @@ export class PostgresTenantConfigArchiveImporter {
     } catch { return err({ kind: "auditFailure" }); }
     try {
       const row = await existing(this.db, targetTenantId);
+      if (row && this.mode === "standaloneMinimal" && !minimalHistory(row.source_history)) return err({ kind: "storageFailure" });
       return ok(row ? { receipt: row.receipt, sourceHistory: row.source_history } : null);
     } catch { return err({ kind: "storageFailure" }); }
   }
@@ -160,10 +184,18 @@ export class PostgresTenantConfigArchiveImporter {
                   authority: ReferenceTenantImportAuthority, mapper: ReferenceImportMapper):
     Promise<Result<ReferenceTenantImportReport, PostgresTenantImportFailure>> {
     const validated = await new ReferenceTenantConfigArchiveImporter().preflight(input, targetTenantId,
-      actorRef, authority, mapper);
+      actorRef, authority, this.mode === "standaloneMinimal" ? minimalMapper : mapper);
     if (!validated.ok) return validated;
+    if (this.mode === "standaloneMinimal") {
+      const decoded = await decodeTenantConfigArchive(input, targetTenantId);
+      if (!decoded.ok) return decoded;
+      if (decoded.value.manifestDigest !== validated.value.manifestDigest || !minimalHistory(decoded.value)) {
+        return err({ kind: "invalidConfigArchive", section: "settings" });
+      }
+    }
     try {
       const row = await existing(this.db, targetTenantId);
+      if (row && this.mode === "standaloneMinimal" && !minimalHistory(row.source_history)) return err({ kind: "storageFailure" });
       if (row) return row.archive_id === validated.value.archiveId && row.manifest_digest === validated.value.manifestDigest
         ? ok({ ...row.receipt, status: "alreadyStaged" })
         : err({ kind: row.archive_id === validated.value.archiveId ? "archiveConflict" : "targetOccupied" });
@@ -180,14 +212,16 @@ export class PostgresTenantConfigArchiveImporter {
     catch { return err({ kind: "invalidRequest" }); }
     if (!validInstant(importedAt)) return err({ kind: "invalidRequest" });
     const validated = await new ReferenceTenantConfigArchiveImporter(() => importedAt).stage(input, targetTenantId,
-      actorRef, authority, mapper);
+      actorRef, authority, this.mode === "standaloneMinimal" ? minimalMapper : mapper);
     if (!validated.ok) return validated;
     const staged = validated.value;
     const data = staged.sourceHistory;
+    if (this.mode === "standaloneMinimal" && !minimalHistory(data)) return err({ kind: "invalidConfigArchive", section: "settings" });
     try {
       return await this.db.transaction().setIsolationLevel("read committed").execute(async trx => {
         await sql`select pg_advisory_xact_lock(172934501, hashtext(${targetTenantId}))`.execute(trx);
         const row = await existing(trx, targetTenantId);
+        if (row && this.mode === "standaloneMinimal" && !minimalHistory(row.source_history)) return err({ kind: "storageFailure" });
         if (row) return row.archive_id === data.archiveId && row.manifest_digest === data.manifestDigest
           ? ok(row.receipt)
           : err({ kind: row.archive_id === data.archiveId ? "archiveConflict" : "targetOccupied" });
@@ -197,12 +231,12 @@ export class PostgresTenantConfigArchiveImporter {
         for (const location of data.locations) {
           const clinic = data.clinics.find(item => item.sourceClinicId === location.sourceScope.clinicId);
           if (!clinic) throw new Error("validated clinic absent");
-          await writeLocation(trx, location, clinic, mapperFromReceipt, actor, importedAt);
+          await writeLocation(trx, location, clinic, mapperFromReceipt, actor, importedAt, this.mode);
         }
         for (const clinic of data.clinics) {
           const location = data.locations.find(item => item.sourceScope.clinicId === clinic.sourceClinicId);
           if (!location) throw new Error("validated location absent");
-          await writeClinic(trx, location.targetScope, clinic, actor, importedAt);
+          await writeClinic(trx, location.targetScope, clinic, actor, importedAt, this.mode);
         }
         await sql`insert into tenant_config_imports (target_tenant_id, archive_id, manifest_digest, receipt, source_history)
           values (${targetTenantId}, ${data.archiveId}, ${data.manifestDigest},

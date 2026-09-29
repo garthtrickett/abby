@@ -65,14 +65,14 @@ test("final archive and durable import receipt bind the exact frozen source vers
   const reference = await new ReferenceConfigArchiveImporter().preflight(finalArchive.value, target,
     "buyer-admin", { authorizeAndRecord: async () => ok({ auditRef: "fenced-final-reference" }) }, mapper);
   assert.equal(reference.ok && reference.value.sourceFenceVersion, 1);
-  const imported = await new PostgresTenantConfigArchiveImporter(db).stage(finalArchive.value,
+  const imported = await new PostgresTenantConfigArchiveImporter(db, undefined, "unsafeReference").stage(finalArchive.value,
     target.tenantId, "buyer-admin", importAuthority, mapper);
   assert.equal(imported.ok && imported.value.sourceFenceVersion, 1);
   const compared = await comparePostgresFencedTenantArchiveSource(db, finalArchive.value,
     { ...request, archiveId: "fenced-final-compare" }, exportAuthority);
   assert.equal(compared.ok && compared.value.kind, "unchanged");
   if (compared.ok) assert.deepEqual(compared.value.changed, []);
-  const retained = await new PostgresTenantConfigArchiveImporter(db).read(target.tenantId, "buyer-admin", importAuthority);
+  const retained = await new PostgresTenantConfigArchiveImporter(db, undefined, "unsafeReference").read(target.tenantId, "buyer-admin", importAuthority);
   assert.equal(retained.ok && retained.value?.sourceHistory.sourceFenceVersion, 1);
   assert.equal((await policy.changeBookingEnabled(source, "1", false, "source-admin")).ok, false);
 
