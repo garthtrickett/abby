@@ -7,6 +7,7 @@ import type { default as ClinicWriteStopTable } from './ClinicWriteStop.js';
 import type { default as ClinicKnowledgeHeadsTable } from './ClinicKnowledgeHeads.js';
 import type { default as TenantPortabilityFencesTable } from './TenantPortabilityFences.js';
 import type { default as ClinicWriteStopInflightTable } from './ClinicWriteStopInflight.js';
+import type { default as TenantConfigImportsTable } from './TenantConfigImports.js';
 import type { default as EffectCallLeasesTable } from './EffectCallLeases.js';
 import type { default as ClinicAutomationTable } from './ClinicAutomation.js';
 import type { default as StaffItemsTable } from './StaffItems.js';
@@ -29,6 +30,8 @@ export default interface PublicSchema {
   tenant_portability_fences: TenantPortabilityFencesTable;
 
   clinic_write_stop_inflight: ClinicWriteStopInflightTable;
+
+  tenant_config_imports: TenantConfigImportsTable;
 
   effect_call_leases: EffectCallLeasesTable;
 

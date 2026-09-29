@@ -89,7 +89,7 @@ function mappedDestination(mapper: ReferenceImportMapper, source: StaffDestinati
   return { kind: "queue", queueRef: mappedRef(mapper, role, source.queueRef, sourceScope, targetScope) };
 }
 
-function targetPolicy(source: CallPolicy, mapper: ReferenceImportMapper, sourceScope: LocationScope, targetScope: LocationScope): CallPolicy {
+function mapImportedPolicy(source: CallPolicy, mapper: ReferenceImportMapper, sourceScope: LocationScope, targetScope: LocationScope): CallPolicy {
   const restricted = (mode: CallPolicy["capabilities"]["book"]) => mode === "unavailable" ? "unavailable" as const : "requestOnly" as const;
   return { ...structuredClone(source), scope: structuredClone(targetScope), automationEnabled: false,
     capabilities: { book: "unavailable", cancel: restricted(source.capabilities.cancel),
@@ -104,7 +104,7 @@ function targetPolicy(source: CallPolicy, mapper: ReferenceImportMapper, sourceS
   };
 }
 
-function bookingAudit(data: ConfigArchiveData): BookingSettingAuditEntry[] {
+function bookingAudit(data: Pick<ConfigArchiveData, "policies">): BookingSettingAuditEntry[] {
   return data.policies.filter(row => row.version > 0).map(row => {
     const metadata = [row.changedBy, row.previousBookingEnabled, row.changedAt];
     if (metadata.every(value => value === null)) return { version: String(row.version), enabled: row.policy.bookingEnabled, provenance: "legacyUnattributed" };
@@ -114,7 +114,7 @@ function bookingAudit(data: ConfigArchiveData): BookingSettingAuditEntry[] {
   });
 }
 
-function automationAudit(data: ConfigArchiveData): AutomationSettingAuditEntry[] {
+function automationAudit(data: Pick<ConfigArchiveData, "automation">): AutomationSettingAuditEntry[] {
   return data.automation.filter(row => row.version > 0).map(row => {
     if (!row.changedBy || row.previousEnabled === null || !row.changedAt) throw new Error("invalid automation audit");
     return { version: String(row.version), enabled: row.enabled, previousEnabled: row.previousEnabled,
@@ -124,6 +124,8 @@ function automationAudit(data: ConfigArchiveData): AutomationSettingAuditEntry[]
 
 export type MappedConfig = Readonly<{
   policy: CallPolicy;
+  policyRows: readonly Readonly<{ version: number; isHead: boolean; policy: CallPolicy; changedBy: string | null;
+    previousBookingEnabled: boolean | null; changedAt: string | null }>[];
   bookingHistory: readonly BookingSettingAuditEntry[];
   automationHistory: readonly AutomationSettingAuditEntry[];
   knowledge: MemoryKnowledgeCatalogue;
@@ -131,7 +133,8 @@ export type MappedConfig = Readonly<{
   mappings: readonly ReferenceImportMapping[];
 }>;
 
-export function mapConfig(data: ConfigArchiveData, targetScope: LocationScope, mapper: ReferenceImportMapper):
+export function mapConfig(data: Pick<ConfigArchiveData, "sourceScope" | "policies" | "automation" | "knowledge">,
+                          targetScope: LocationScope, mapper: ReferenceImportMapper):
   Result<MappedConfig, ReferenceImportFailure> {
   const decisions = new Map<string, ReferenceImportMapping>();
   const recordingMapper: ReferenceImportMapper = { mapRef: (kind, sourceRef, source, target) => {
@@ -146,14 +149,16 @@ export function mapConfig(data: ConfigArchiveData, targetScope: LocationScope, m
     return targetRef;
   } };
   try {
-    const sourcePolicy = data.policies.find(row => row.isHead)?.policy ?? referenceDefaultPolicy(data.sourceScope);
-    const policy = targetPolicy(sourcePolicy, recordingMapper, data.sourceScope, targetScope);
+    const policyRows = data.policies.map(row => ({ ...row,
+      policy: mapImportedPolicy(row.policy, recordingMapper, data.sourceScope, targetScope) }));
+    const policy = policyRows.find(row => row.isHead)?.policy ??
+      mapImportedPolicy(referenceDefaultPolicy(data.sourceScope), recordingMapper, data.sourceScope, targetScope);
     const bookingHistory = bookingAudit(data);
     const automationHistory = automationAudit(data);
     const knowledgeEntries = data.knowledge.map(entry => ({ ...entry,
       scope: structuredClone(targetScope), ownerRef: mappedRef(recordingMapper, "knowledgeOwner", entry.ownerRef, data.sourceScope, targetScope) }));
     const knowledge = MemoryKnowledgeCatalogue.fromPublishedHistory(knowledgeEntries);
-    return ok({ policy, bookingHistory, automationHistory, knowledge, knowledgeEntries, mappings: [...decisions.values()] });
+    return ok({ policy, policyRows, bookingHistory, automationHistory, knowledge, knowledgeEntries, mappings: [...decisions.values()] });
   } catch (cause) {
     return err({ kind: cause instanceof UnmappedRef ? "unmappedRef" : "invalidConfigArchive" });
   }
