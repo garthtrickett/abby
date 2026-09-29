@@ -17,7 +17,8 @@ const fixed = new Date("2026-09-29T10:00:00.000Z");
 function fixture() {
   let clock = fixed.getTime();
   const ingress = new TwilioSignedIngress({ accountSid, authToken, publicWebhookUrl: webhookUrl,
-    publicStreamUrl: streamUrl, bindingKey: Buffer.alloc(32, 0x5a), now: () => new Date(clock) });
+    publicStreamUrl: streamUrl, fallbackNumbers: { [dialedNumber]: "+6125550188" },
+    bindingKey: Buffer.alloc(32, 0x5a), now: () => new Date(clock) });
   const form = { AccountSid: accountSid, CallSid: callSid, To: dialedNumber, From: callerNumber,
     ExtraFutureParameter: "retained for signature validation" };
   const body = new URLSearchParams(form).toString();
@@ -83,7 +84,8 @@ test("E2E-131 synthetic Twilio: unsigned, mismatched and expired stream bindings
 
 test("E2E-131 synthetic Twilio: an unknown caller ID is not treated as a trusted patient phone", () => {
   const ingress = new TwilioSignedIngress({ accountSid, authToken, publicWebhookUrl: webhookUrl,
-    publicStreamUrl: streamUrl, bindingKey: Buffer.alloc(32, 0x5a), now: () => fixed });
+    publicStreamUrl: streamUrl, fallbackNumbers: { [dialedNumber]: "+6125550188" },
+    bindingKey: Buffer.alloc(32, 0x5a), now: () => fixed });
   const form = { AccountSid: accountSid, CallSid: callSid, To: dialedNumber, From: "anonymous" };
   const answer = ingress.answerWebhook({ method: "POST", requestTarget: "/twilio/inbound?source=clinic",
     contentType: "application/x-www-form-urlencoded", body: new URLSearchParams(form).toString(),

@@ -13,7 +13,7 @@ const maxBodyBytes = 16_384;
 const maxStartBytes = 16_384;
 
 export type TwilioIngressFailure = Readonly<{
-  kind: "invalidTwilioRequest" | "invalidTwilioSignature" | "expiredTwilioBinding";
+  kind: "invalidTwilioRequest" | "invalidTwilioSignature" | "expiredTwilioBinding" | "fallbackNotConfigured";
 }>;
 export type TwilioSignedIngressConfig = Readonly<{
   accountSid: string;
@@ -22,6 +22,8 @@ export type TwilioSignedIngressConfig = Readonly<{
   publicWebhookUrl: string;
   /** Exact public WSS URL emitted in TwiML, including its trailing slash if any. */
   publicStreamUrl: string;
+  /** Provider-executed staff routes keyed by the dialed clinic number; independent of Abby's database. */
+  fallbackNumbers: Readonly<Record<string, string>>;
   /** Independent HMAC key shared by all Abby instances serving this account. */
   bindingKey: Uint8Array;
   now?: () => Date;
@@ -61,6 +63,7 @@ export class TwilioSignedIngress {
   private readonly webhookUrl: URL;
   private readonly streamUrl: URL;
   private readonly now: () => Date;
+  private readonly fallbackNumbers: ReadonlyMap<string, string>;
 
   constructor(config: TwilioSignedIngressConfig) {
     const webhookUrl = new URL(config.publicWebhookUrl);
@@ -71,10 +74,20 @@ export class TwilioSignedIngress {
         webhookUrl.username || webhookUrl.password || streamUrl.username || streamUrl.password) {
       throw new RangeError("invalid Twilio ingress configuration");
     }
+    if (!config.fallbackNumbers || typeof config.fallbackNumbers !== "object" ||
+        Array.isArray(config.fallbackNumbers)) throw new RangeError("invalid Twilio fallback numbers");
+    const fallbackNumbers = Object.entries(config.fallbackNumbers);
+    const inboundNumbers = new Set(fallbackNumbers.map(([number]) => number));
+    if (fallbackNumbers.length < 1 || fallbackNumbers.length > 1_000 ||
+        fallbackNumbers.some(([number, fallback]) => !phonePattern.test(number) ||
+          !phonePattern.test(fallback) || inboundNumbers.has(fallback))) {
+      throw new RangeError("invalid Twilio fallback numbers");
+    }
     this.config = config;
     this.webhookUrl = webhookUrl;
     this.streamUrl = streamUrl;
     this.now = config.now ?? (() => new Date());
+    this.fallbackNumbers = new Map(fallbackNumbers);
   }
 
   private mac(payload: string): Buffer {
@@ -131,6 +144,8 @@ export class TwilioSignedIngress {
     }
     if (form.AccountSid !== this.config.accountSid || !callSidPattern.test(form.CallSid ?? "") ||
         !phonePattern.test(form.To ?? "")) return err({ kind: "invalidTwilioRequest" });
+    const fallback = this.fallbackNumbers.get(form.To!);
+    if (!fallback) return err({ kind: "fallbackNotConfigured" });
     const issuedAt = this.now().getTime();
     if (!Number.isSafeInteger(issuedAt)) return err({ kind: "invalidTwilioRequest" });
     const receivedAt = new Date(issuedAt).toISOString();
@@ -142,6 +157,7 @@ export class TwilioSignedIngress {
     response.connect().stream({ url: this.config.publicStreamUrl }).parameter({
       name: "abbyBinding", value: token,
     });
+    response.dial(fallback);
     return ok(response.toString());
   }
 
