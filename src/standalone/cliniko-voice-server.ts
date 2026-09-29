@@ -6,6 +6,7 @@ import type { ApprovedGreeting, LocationScope, Result } from "../core/model.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
 import { ReferenceNumberRoutingHost } from "../reference/clinic-number-routing.ts";
 import type Database from "../storage/generated/Database.ts";
+import { PostgresClinikoRequestBudget } from "../storage/postgres-cliniko-request-budget.ts";
 import { checkStandaloneTextDatabase } from "../storage/standalone-privacy-preflight.ts";
 import type { StandalonePrivacyPreflightFailure } from "../storage/standalone-privacy-preflight.ts";
 import type { MediaTurnOptions } from "../voice/media-turn-controller.ts";
@@ -26,6 +27,7 @@ export type ClinikoVoiceRoute = Readonly<{
   scope: LocationScope;
   routeVersion: string;
   availability: ClinikoAvailabilityReader;
+  rateBudget: PostgresClinikoRequestBudget;
   /** Today's YYYY-MM-DD date in this clinic's local time zone. */
   clinicDate: () => string;
   /** Required clinic approval: Realtime finals cannot yet authorize speech-led availability. */
@@ -68,6 +70,9 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     if (!route.scope.tenantId || !route.scope.clinicId || !route.scope.locationId ||
         !route.routeVersion?.trim() || !(route.availability instanceof ClinikoAvailabilityReader) ||
         !route.availability.matchesScope(route.scope) ||
+        !(route.rateBudget instanceof PostgresClinikoRequestBudget) ||
+        !route.rateBudget.matchesDatabase(config.db) || !route.availability.usesBudget(route.rateBudget) ||
+        !route.rateBudget.matchesCredentialFingerprint(route.availability.credentialFingerprint()) ||
         typeof route.clinicDate !== "function" || routes.has(route.dialedNumber) ||
         !Object.hasOwn(twilio.fallbackNumbers, route.dialedNumber)) {
       throw new RangeError("invalid clinic voice route");

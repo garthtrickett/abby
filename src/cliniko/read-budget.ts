@@ -1,3 +1,10 @@
+import { createHash } from "node:crypto";
+
+/** Compare a reader and its budget without revealing or persisting the API credential. */
+export function clinikoCredentialFingerprint(apiKey: string): string {
+  return createHash("sha256").update("abby-cliniko-credential-v1\0").update(apiKey).digest("hex");
+}
+
 export type ClinikoRateLimit = Readonly<{ kind: "rateLimited"; resetAt?: string }>;
 export type ClinikoBudgetDenial = ClinikoRateLimit | Readonly<{ kind: "unavailable" }>;
 

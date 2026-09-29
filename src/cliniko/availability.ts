@@ -1,6 +1,7 @@
 import { err, ok } from "../core/model.ts";
 import type { AvailabilityRead, AvailabilityReadFailure, LocationScope, Result } from "../core/model.ts";
-import { claimClinikoBudget, ClinikoReadBudget, isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
+import { claimClinikoBudget, ClinikoReadBudget, clinikoCredentialFingerprint,
+  isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
 import type { ClinikoRequestBudget } from "./read-budget.ts";
 
 export type ClinikoAvailabilityConfig = Readonly<{
@@ -83,6 +84,7 @@ export class ClinikoAvailabilityReader {
   private readonly fetchPort: typeof fetch;
   private readonly observedClock: () => string;
   private readonly rateBudget: ClinikoRequestBudget;
+  private readonly credentialHash: string;
 
   private constructor(config: ClinikoAvailabilityConfig, shard: string, fetchPort: typeof fetch, observedClock: () => string) {
     this.scope = structuredClone(config.scope);
@@ -95,6 +97,7 @@ export class ClinikoAvailabilityReader {
     this.fetchPort = fetchPort;
     this.observedClock = observedClock;
     this.rateBudget = config.rateBudget ?? new ClinikoReadBudget();
+    this.credentialHash = clinikoCredentialFingerprint(config.apiKey);
   }
 
   static create(config: ClinikoAvailabilityConfig, fetchPort: typeof fetch = fetch, observedClock: () => string = () => new Date().toISOString()): Result<ClinikoAvailabilityReader, ClinikoAvailabilityFailure> {
@@ -110,6 +113,13 @@ export class ClinikoAvailabilityReader {
   matchesScope(scope: LocationScope): boolean {
     return sameScope(this.scope, scope);
   }
+
+  /** Let a standalone composition verify the exact budget used before opening a listener. */
+  usesBudget(budget: ClinikoRequestBudget): boolean {
+    return this.rateBudget === budget;
+  }
+
+  credentialFingerprint(): string { return this.credentialHash; }
 
   private async get(path: string): Promise<Result<unknown, ClinikoAvailabilityFailure>> {
     const limited = await claimClinikoBudget(this.rateBudget);

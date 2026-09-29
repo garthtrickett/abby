@@ -15,9 +15,10 @@ import { createStandaloneClinikoVoiceServer } from "../../src/standalone/cliniko
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
+import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
 
-test("opt-in signed local call recovers uncertain speech through clinic-approved keypad availability",
+test("E2E-163 opt-in signed local call recovers uncertain speech and charges keypad Cliniko reads to the shared budget",
   { skip: process.env.ABBY_LIVE_VOICE_EVAL !== "1" ||
     process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || !process.env.ABBY_OPENAI_API_KEY,
   timeout: 60_000 }, async () => {
@@ -53,7 +54,8 @@ test("opt-in signed local call recovers uncertain speech through clinic-approved
       async () => ok(true), false, "standaloneMinimal");
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
     let clinikoReads = 0;
-    const availability = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5",
+    const rateBudget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-key-au5" });
+    const availability = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5", rateBudget,
       contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
     async input => {
       clinikoReads += 1;
@@ -83,7 +85,7 @@ test("opt-in signed local call recovers uncertain speech through clinic-approved
       twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
         fallbackNumbers: { [number]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x48),
         now: () => new Date(now) },
-      routes: [{ dialedNumber: number, scope, routeVersion: "v1", availability: availability.value,
+      routes: [{ dialedNumber: number, scope, routeVersion: "v1", availability: availability.value, rateBudget,
         clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: { scope, version: "live-eval-keypad-v1",
           ownerRef: "synthetic-clinic-approval", approved: true,
           approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],
@@ -205,6 +207,10 @@ test("opt-in signed local call recovers uncertain speech through clinic-approved
     assert.ok(thirdMark);
     assert.ok(mediaCount > afterClarificationMediaCount);
     assert.equal(clinikoReads, 6);
+    const budgetRows = await sql<{ sent_at_ms: unknown }>`select sent_at_ms from cliniko_request_budgets`.execute(db);
+    assert.equal(budgetRows.rows.length, 1);
+    assert.ok(Array.isArray(budgetRows.rows[0]?.sent_at_ms));
+    assert.equal(budgetRows.rows[0].sent_at_ms.length, clinikoReads);
     assert.equal(intentRequests, 0);
     assert.match(spoken.at(-1) ?? "", /possible times/i);
     assert.equal((spoken.at(-1) ?? "").includes(appointmentId), false);

@@ -5,6 +5,7 @@ import { ok } from "../../src/core/model.ts";
 import { createStandaloneClinikoVoiceServer } from "../../src/standalone/cliniko-voice-server.ts";
 import type { ClinikoVoiceRoute } from "../../src/standalone/cliniko-voice-server.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
+import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 
 test("E2E-154 standalone voice refuses a Cliniko reader bound to another clinic before opening a listener",
   async () => {
@@ -14,7 +15,8 @@ test("E2E-154 standalone voice refuses a Cliniko reader bound to another clinic 
     const routeScopes = [{ ...readerScope, tenantId: "tenant-b" },
       { ...readerScope, clinicId: "clinic-b" }, { ...readerScope, locationId: "other" }];
     let providerReads = 0;
-    const reader = ClinikoAvailabilityReader.create({ scope: readerScope, apiKey: "synthetic-key-au5",
+    const rateBudget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-key-au5" });
+    const reader = ClinikoAvailabilityReader.create({ scope: readerScope, apiKey: "synthetic-key-au5", rateBudget,
       contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
     async () => { providerReads += 1; throw new Error("provider must not be read"); });
     assert.ok(reader.ok);
@@ -28,7 +30,7 @@ test("E2E-154 standalone voice refuses a Cliniko reader bound to another clinic 
             publicStreamUrl: "wss://calls.example.test/twilio/media/",
             fallbackNumbers: { "+6125550199": "+6125550188" }, bindingKey: Buffer.alloc(32, 0x46) },
           routes: [{ dialedNumber: "+6125550199", scope: routeScope, routeVersion: "v1",
-            availability: reader.value, clinicDate: () => "2026-09-29",
+            availability: reader.value, rateBudget, clinicDate: () => "2026-09-29",
             keypadAvailabilityGreeting: { scope: routeScope, version: "route-keypad-v1",
               ownerRef: "synthetic-clinic-approval", approved: true,
               approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],
@@ -45,7 +47,8 @@ test("E2E-155 standalone voice refuses a missing or unapproved usable keypad rou
     const db = connectPostgres("postgresql://postgres@127.0.0.1:1/unused");
     const scope = { tenantId: "tenant-a", clinicId: "clinic-a", locationId: "main" };
     let providerReads = 0;
-    const reader = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5",
+    const rateBudget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-key-au5" });
+    const reader = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5", rateBudget,
       contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
     async () => { providerReads += 1; throw new Error("provider must not be read"); });
     assert.ok(reader.ok);
@@ -57,7 +60,7 @@ test("E2E-155 standalone voice refuses a missing or unapproved usable keypad rou
     try {
       for (const greeting of invalidGreetings) {
         const route = { dialedNumber: "+6125550199", scope, routeVersion: "v1",
-          availability: reader.value, clinicDate: () => "2026-09-29",
+          availability: reader.value, rateBudget, clinicDate: () => "2026-09-29",
           keypadAvailabilityGreeting: greeting } as unknown as ClinikoVoiceRoute;
         await assert.rejects(createStandaloneClinikoVoiceServer({ db,
           twilio: { accountSid: `AC${"1".repeat(32)}`, authToken: "synthetic-route-token",
@@ -70,4 +73,49 @@ test("E2E-155 standalone voice refuses a missing or unapproved usable keypad rou
       }
       assert.equal(providerReads, 0);
     } finally { await db.destroy(); }
+  });
+
+test("E2E-163 standalone voice refuses a process-local, wrong-key, or foreign Cliniko request budget before startup",
+  async () => {
+    const db = connectPostgres("postgresql://postgres@127.0.0.1:1/unused");
+    const foreignDb = connectPostgres("postgresql://postgres@127.0.0.1:1/other");
+    const scope = { tenantId: "budget-tenant", clinicId: "clinic", locationId: "main" };
+    const apiKey = "synthetic-key-au5";
+    const rateBudget = new PostgresClinikoRequestBudget(db, { apiKey });
+    const differentBudget = new PostgresClinikoRequestBudget(db, { apiKey });
+    const wrongKeyBudget = new PostgresClinikoRequestBudget(db, { apiKey: "other-synthetic-key-au5" });
+    const foreignBudget = new PostgresClinikoRequestBudget(foreignDb, { apiKey });
+    let providerReads = 0;
+    const readerConfig = { scope, apiKey, contactEmail: "test@example.com",
+      businessId: "11", practitionerId: "22", appointmentTypeId: "33" };
+    const blockedFetch = async () => { providerReads += 1; throw new Error("provider must not be read"); };
+    const localReader = ClinikoAvailabilityReader.create(readerConfig, blockedFetch);
+    const boundReader = ClinikoAvailabilityReader.create({ ...readerConfig, rateBudget }, blockedFetch);
+    const wrongKeyReader = ClinikoAvailabilityReader.create({ ...readerConfig, rateBudget: wrongKeyBudget },
+      blockedFetch);
+    assert.ok(localReader.ok && boundReader.ok && wrongKeyReader.ok);
+    const greeting = { scope, version: "budget-keypad-v1", ownerRef: "clinic-owner", approved: true as const,
+      approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." };
+    const makeConfig = (availability: ClinikoAvailabilityReader, budget: PostgresClinikoRequestBudget) => ({
+      db,
+      twilio: { accountSid: `AC${"1".repeat(32)}`, authToken: "synthetic-budget-token",
+        publicWebhookUrl: "https://calls.example.test/twilio/inbound",
+        publicStreamUrl: "wss://calls.example.test/twilio/media/",
+        fallbackNumbers: { "+6125550199": "+6125550188" }, bindingKey: Buffer.alloc(32, 0x46) },
+      routes: [{ dialedNumber: "+6125550199", scope, routeVersion: "v1", availability,
+        rateBudget: budget, clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: greeting }],
+      openai: { apiKey: "synthetic-openai-key", intentModel: "configured-model" },
+      readiness: async () => ok(true as const),
+    });
+    try {
+      await assert.rejects(createStandaloneClinikoVoiceServer(makeConfig(localReader.value, rateBudget)),
+        /invalid clinic voice route/);
+      await assert.rejects(createStandaloneClinikoVoiceServer(makeConfig(boundReader.value, differentBudget)),
+        /invalid clinic voice route/);
+      await assert.rejects(createStandaloneClinikoVoiceServer(makeConfig(boundReader.value, foreignBudget)),
+        /invalid clinic voice route/);
+      await assert.rejects(createStandaloneClinikoVoiceServer(makeConfig(wrongKeyReader.value, wrongKeyBudget)),
+        /invalid clinic voice route/);
+      assert.equal(providerReads, 0);
+    } finally { await Promise.all([db.destroy(), foreignDb.destroy()]); }
   });

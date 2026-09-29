@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
+import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
 import type { ClinikoBudgetDenial, ClinikoRateLimit, ClinikoRequestBudget } from "../cliniko/read-budget.ts";
 import type Database from "./generated/Database.ts";
 import type { ClinikoRequestBudgetsBudgetRef } from "./generated/public/ClinikoRequestBudgets.ts";
@@ -30,6 +31,7 @@ export class PostgresClinikoRequestBudget implements ClinikoRequestBudget {
   private readonly db: Kysely<Database>;
   private readonly budgetRef: ClinikoRequestBudgetsBudgetRef;
   private readonly maxPerMinute: number;
+  private readonly credentialFingerprint: string;
 
   constructor(db: Kysely<Database>, config: Readonly<{
     apiKey: string;
@@ -42,11 +44,17 @@ export class PostgresClinikoRequestBudget implements ClinikoRequestBudget {
         !Number.isSafeInteger(config.maxPerMinute ?? 180) || (config.maxPerMinute ?? 180) < 1 ||
         (config.maxPerMinute ?? 180) > 200) throw new RangeError("invalid Cliniko budget configuration");
     this.db = db;
+    this.credentialFingerprint = clinikoCredentialFingerprint(config.apiKey);
     this.budgetRef = createHash("sha256")
       .update(`abby-cliniko-budget-v1\0${config.sharedUserRef ?? config.apiKey}`)
       .digest("hex") as ClinikoRequestBudgetsBudgetRef;
     this.maxPerMinute = config.maxPerMinute ?? 180;
   }
+
+  /** Standalone listeners must share their own database connection with this budget. */
+  matchesDatabase(db: Kysely<Database>): boolean { return this.db === db; }
+
+  matchesCredentialFingerprint(fingerprint: string): boolean { return this.credentialFingerprint === fingerprint; }
 
   private async locked<T>(run: (trx: Kysely<Database>, now: number,
     row: Readonly<{ sent_at_ms: unknown; cooldown_until_ms: string; max_per_minute: number }>) => Promise<T>): Promise<T> {
