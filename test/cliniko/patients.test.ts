@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
+import { ClinikoReadBudget } from "../../src/cliniko/read-budget.ts";
 import type { ClinikoPatientFailure, ClinikoPatientSearch } from "../../src/cliniko/patients.ts";
 import type { Result } from "../../src/core/model.ts";
 
@@ -109,4 +110,50 @@ test("permission, rate limit, transport, and oversized responses have typed fail
   const result = await reader(limited.fetchPort).findByEmailAndBirthDate(scope, email, dateOfBirth);
   assert.equal(result.ok, false);
   assert.deepEqual(result.error, { kind: "rateLimited", resetAt: new Date(1893456000 * 1000).toISOString() });
+});
+
+test("phone snapshot retries the same page after provider 429 and bounds repeated resets", async () => {
+  let clock = Date.parse("2026-09-29T00:00:00.000Z");
+  let requests = 0;
+  const makeReader = (fetchPort: typeof fetch) => {
+    const created = ClinikoPatientCandidateReader.create({ ...config,
+      rateBudget: new ClinikoReadBudget(200, () => clock) }, fetchPort, () => new Date(clock).toISOString());
+    assert.equal(created.ok, true);
+    if (!created.ok) throw new Error("reader expected");
+    return created.value;
+  };
+  const waitUntil = async (resetAt: string) => { clock = Date.parse(resetAt); };
+  const recovered = makeReader(async () => {
+    requests += 1;
+    return requests === 1
+      ? new Response(null, { status: 429, headers: { "X-RateLimit-Reset": String((clock + 60_000) / 1000) } })
+      : Response.json({ total_entries: 1, patients: [{ id: "81", archived_at: null,
+        patient_phone_numbers: [{ number: "0400 111 222", phone_type: "Mobile" }] }] });
+  });
+  const snapshot = await recovered.readPhoneSnapshot(scope, "61", 100_000, waitUntil);
+  assert.deepEqual(snapshot.ok ? snapshot.value.links : snapshot, [{ normalizedPhone: "+61400111222", patientId: "81" }]);
+  assert.equal(requests, 2);
+
+  requests = 0;
+  const repeated = makeReader(async () => {
+    requests += 1;
+    return new Response(null, { status: 429,
+      headers: { "X-RateLimit-Reset": String((clock + 60_000) / 1000) } });
+  });
+  failure(await repeated.readPhoneSnapshot(scope, "61", 100_000, waitUntil), "rateLimited");
+  assert.equal(requests, 13);
+});
+
+test("phone snapshot deduplicates repeated numbers for one patient before its link limit", async () => {
+  const created = ClinikoPatientCandidateReader.create(config, async () => Response.json({
+    total_entries: 1, patients: [{ id: "82", archived_at: null,
+      patient_phone_numbers: [
+        { number: "0400 111 222", phone_type: "Mobile" },
+        { number: "+61 400 111 222", phone_type: "Home" },
+      ] }],
+  }));
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  const result = await created.value.readPhoneSnapshot(scope, "61");
+  assert.deepEqual(result.ok ? result.value.links : result, [{ normalizedPhone: "+61400111222", patientId: "82" }]);
 });

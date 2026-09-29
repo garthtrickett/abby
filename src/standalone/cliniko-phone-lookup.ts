@@ -1,3 +1,4 @@
+import { setTimeout as wait } from "node:timers/promises";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import { normalizePatientPhone } from "../cliniko/phone-number.ts";
@@ -15,20 +16,27 @@ export class ClinikoPhoneLookup {
   private readonly index: PostgresPatientPhoneIndex;
   private readonly countryCallingCode: string;
   private readonly maxIndexAgeMs: number;
+  private readonly waitUntil: (resetAt: string) => Promise<void>;
 
   constructor(reader: ClinikoPatientCandidateReader, index: PostgresPatientPhoneIndex,
-              countryCallingCode: string, maxIndexAgeMs: number) {
+              countryCallingCode: string, maxIndexAgeMs: number,
+              waitUntil: (resetAt: string) => Promise<void> = async resetAt => {
+                const delay = Date.parse(resetAt) - Date.now();
+                if (!Number.isFinite(delay) || delay > 120_000) throw new Error("rate reset outside scan budget");
+                if (delay > 0) await wait(delay);
+              }) {
     this.reader = reader;
     this.index = index;
     this.countryCallingCode = countryCallingCode;
     this.maxIndexAgeMs = maxIndexAgeMs;
+    this.waitUntil = waitUntil;
   }
 
   async refresh(scope: ClinikoClinicScope): Promise<Result<number, ClinikoPatientFailure | PhoneIndexFailure>> {
     const head = await this.index.head(scope);
     if (!head.ok) return head;
     const generation = head.value?.generation ?? null;
-    const snapshot = await this.reader.readPhoneSnapshot(scope, this.countryCallingCode);
+    const snapshot = await this.reader.readPhoneSnapshot(scope, this.countryCallingCode, 100_000, this.waitUntil);
     if (!snapshot.ok) {
       const stale = await this.index.markStale(scope, generation);
       return stale.ok ? snapshot : stale;

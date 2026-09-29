@@ -161,7 +161,8 @@ export class ClinikoPatientCandidateReader {
   }
 
   /** Full bounded scan for the local phone-to-ID index; no other patient fields escape this method. */
-  async readPhoneSnapshot(scope: ClinikoClinicScope, countryCallingCode: string, maxPatients = 10_000):
+  async readPhoneSnapshot(scope: ClinikoClinicScope, countryCallingCode: string, maxPatients = 100_000,
+                          waitUntil?: (resetAt: string) => Promise<void>):
     Promise<Result<ClinikoPhoneSnapshot, ClinikoPatientFailure>> {
     if (!validScope(scope) || scope.tenantId !== this.scope.tenantId || scope.clinicId !== this.scope.clinicId) {
       return err({ kind: "scopeMismatch" });
@@ -170,10 +171,21 @@ export class ClinikoPatientCandidateReader {
         maxPatients < 1 || maxPatients > 100_000) return err({ kind: "invalidQuery" });
     const links: Array<{ normalizedPhone: string; patientId: string }> = [];
     const seenIds = new Set<string>();
+    const seenLinks = new Set<string>();
     let totalEntries: number | undefined;
-    for (let page = 1; ; page++) {
+    let rateWaits = 0;
+    const pause = async (resetAt: string | undefined): Promise<boolean> => {
+      if (!waitUntil || !resetAt || rateWaits >= 12) return false;
+      rateWaits += 1;
+      try { await waitUntil(resetAt); return true; }
+      catch { return false; }
+    };
+    for (let page = 1; ;) {
       const limited = this.rateBudget.claim();
-      if (limited) return err(limited);
+      if (limited) {
+        if (await pause(limited.resetAt)) continue;
+        return err(limited);
+      }
       const query = new URLSearchParams({ page: String(page), per_page: "100", sort: "id:asc" });
       let response: Response;
       try {
@@ -183,7 +195,11 @@ export class ClinikoPatientCandidateReader {
         });
       } catch { return err({ kind: "unavailable" }); }
       if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
-      if (response.status === 429) return err(this.rateBudget.observe429(response.headers.get("X-RateLimit-Reset")));
+      if (response.status === 429) {
+        const limited = this.rateBudget.observe429(response.headers.get("X-RateLimit-Reset"));
+        if (await pause(limited.resetAt)) continue;
+        return err(limited);
+      }
       if (response.status >= 500 || response.status === 404) return err({ kind: "unavailable" });
       if (response.status !== 200) return err({ kind: "malformed" });
       const parsed = await boundedJson(response);
@@ -214,11 +230,19 @@ export class ClinikoPatientCandidateReader {
           }
           if (typeof phone.phone_type === "string" && phone.phone_type.toLowerCase() === "fax") continue;
           const normalizedPhone = normalizePatientPhone(String(phone.number ?? ""), countryCallingCode);
-          if (normalizedPhone) links.push({ normalizedPhone, patientId: patient.id });
+          if (normalizedPhone) {
+            const key = `${normalizedPhone}\0${patient.id}`;
+            if (!seenLinks.has(key)) {
+              seenLinks.add(key);
+              links.push({ normalizedPhone, patientId: patient.id });
+              if (links.length > 100_000) return err({ kind: "tooManyResults" });
+            }
+          }
         }
       }
       if (seenIds.size === totalEntries) break;
       if (page * 100 >= maxPatients || expected < 100) return err({ kind: "malformed" });
+      page += 1;
     }
     let observedAt: string;
     try { observedAt = this.clock(); }
