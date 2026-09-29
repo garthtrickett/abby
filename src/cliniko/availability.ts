@@ -128,13 +128,41 @@ export class ClinikoAvailabilityReader {
     return boundedJson(response);
   }
 
-  private async onlineFlag(id: string, path: string): Promise<Result<boolean, ClinikoAvailabilityFailure>> {
+  private async onlineFlag(id: string, path: string, requireActive = false): Promise<Result<boolean, ClinikoAvailabilityFailure>> {
     const fetched = await this.get(path);
     if (!fetched.ok) return fetched;
     const body = record(fetched.value);
-    if (!body || String(body.id) !== id || typeof body.show_in_online_bookings !== "boolean") return err({ kind: "malformed" });
+    if (!body || String(body.id) !== id || typeof body.show_in_online_bookings !== "boolean" ||
+        (requireActive && body.active !== true && body.active !== false && body.active !== null)) return err({ kind: "malformed" });
     if (body.archived_at !== undefined && body.archived_at !== null) return ok(false);
-    return ok(body.show_in_online_bookings);
+    return ok(body.show_in_online_bookings && (!requireActive || body.active === true));
+  }
+
+  /** Relationship lists, rather than an unscoped ID, prove this configured combination belongs together. */
+  private async includesRelated(path: string, collection: "practitioners" | "appointment_types", id: string):
+    Promise<Result<boolean, ClinikoAvailabilityFailure>> {
+    const seen = new Set<string>();
+    let total: number | undefined;
+    for (let page = 1; page <= maxPages; page += 1) {
+      const query = new URLSearchParams({ page: String(page), per_page: String(perPage) });
+      const fetched = await this.get(`${path}?${query}`);
+      if (!fetched.ok) return fetched;
+      const body = record(fetched.value);
+      if (!body || !Number.isSafeInteger(body.total_entries) || Number(body.total_entries) < 0 ||
+          !Array.isArray(body[collection]) ||
+          body[collection].length > perPage) return err({ kind: "malformed" });
+      if (Number(body.total_entries) > maxPages * perPage) return err({ kind: "tooManyResults" });
+      if (total !== undefined && total !== body.total_entries) return err({ kind: "unavailable" });
+      total = Number(body.total_entries);
+      for (const value of body[collection]) {
+        const item = record(value);
+        if (!item || typeof item.id !== "string" || !validId(item.id) || seen.has(item.id)) return err({ kind: "malformed" });
+        seen.add(item.id);
+      }
+      if (seen.size === total) return ok(seen.has(id));
+      if (body[collection].length === 0 || seen.size > total) return err({ kind: "unavailable" });
+    }
+    return err({ kind: "tooManyResults" });
   }
 
   private async business(): Promise<Result<Readonly<{ eligible: false }> | Readonly<{ eligible: true; timeZone: string }>, ClinikoAvailabilityFailure>> {
@@ -159,15 +187,20 @@ export class ClinikoAvailabilityReader {
     if (!business.value.eligible) return ok({ kind: "notEligible", reason: "business" });
     const timeZone = business.value.timeZone;
 
-    const resources = [
-      ["practitioner", this.practitionerId, `/practitioners/${this.practitionerId}`],
-      ["appointmentType", this.appointmentTypeId, `/appointment_types/${this.appointmentTypeId}`],
-    ] as const;
-    for (const [kind, id, path] of resources) {
-      const flag = await this.onlineFlag(id, path);
-      if (!flag.ok) return flag;
-      if (!flag.value) return ok({ kind: "notEligible", reason: kind });
-    }
+    const practitioner = await this.onlineFlag(this.practitionerId, `/practitioners/${this.practitionerId}`, true);
+    if (!practitioner.ok) return practitioner;
+    if (!practitioner.value) return ok({ kind: "notEligible", reason: "practitioner" });
+    const appointmentType = await this.onlineFlag(this.appointmentTypeId, `/appointment_types/${this.appointmentTypeId}`);
+    if (!appointmentType.ok) return appointmentType;
+    if (!appointmentType.value) return ok({ kind: "notEligible", reason: "appointmentType" });
+    const businessPractitioner = await this.includesRelated(`/businesses/${this.businessId}/practitioners`,
+      "practitioners", this.practitionerId);
+    if (!businessPractitioner.ok) return businessPractitioner;
+    if (!businessPractitioner.value) return ok({ kind: "notEligible", reason: "practitioner" });
+    const practitionerType = await this.includesRelated(`/practitioners/${this.practitionerId}/appointment_types`,
+      "appointment_types", this.appointmentTypeId);
+    if (!practitionerType.ok) return practitionerType;
+    if (!practitionerType.value) return ok({ kind: "notEligible", reason: "appointmentType" });
 
     const prefix = `/businesses/${this.businessId}/practitioners/${this.practitionerId}/appointment_types/${this.appointmentTypeId}/available_times`;
     const startsAt: string[] = [];
