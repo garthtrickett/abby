@@ -436,7 +436,7 @@ for (const kind of kinds) {
   test(`${kind}: agent knowledge command uses host approval and records its source`, async () => {
     const app = fixture(kind, `${kind}-knowledge-command`);
     const callId = `call-${kind}-knowledge-command`;
-    value(await app.reception.startCall(callId, app.scope));
+    value(await app.reception.startCall(callId, app.scope, now));
     const response = value(await app.agent.submit({ kind: "knowledge.answer.v2", turn: turn(callId, "hours", "Hours?"),
       sourceRefs: ["hours"], proposedText: "We open at 9 am.", now }));
     assert.equal(response.kind, "knowledgeAnswer");
