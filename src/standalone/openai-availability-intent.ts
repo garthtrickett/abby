@@ -3,6 +3,7 @@ import type { FinalCallerTurn, Result } from "../core/model.ts";
 import type { IntentResolver, VoiceIntent } from "../voice/voice-session.ts";
 
 const endpoint = "https://api.openai.com/v1/responses";
+export const availabilityIntentPromptVersion = "availability-intent-v1";
 const maxResponseBytes = 16 * 1024;
 const timeoutMs = 5_000;
 const unavailable = { kind: "intentUnavailable" } as const;
