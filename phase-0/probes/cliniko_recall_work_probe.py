@@ -29,7 +29,10 @@ def matching_recalls(base: str, headers: dict[str, str], patient_id: str, marker
     if (status != 200 or not isinstance(rows, list) or not isinstance(total, int)
             or total < 0 or total > 100 or len(rows) != total):
         raise ProbeError(f"recall_reconcile_read_{status}")
-    return [row for row in rows if isinstance(row, dict) and row.get("notes") == marker]
+    return [row for row in rows if isinstance(row, dict) and
+            (row.get("notes") == marker or
+             isinstance(row.get("notes"), str) and
+             row["notes"].startswith(f"Abby request {marker}\n"))]
 
 
 def adapter_probe(key: str, contact: str, patient_id: str, recall_id: str, marker: str,
@@ -46,6 +49,23 @@ def adapter_probe(key: str, contact: str, patient_id: str, recall_id: str, marke
         raise ProbeError("adapter_output_invalid") from None
     if result.returncode != 0 or outcome.get("ok") is not True:
         raise ProbeError("typescript_recall_adapter_unproven")
+    return outcome
+
+
+def writer_probe(key: str, contact: str, patient_id: str, recall_type_id: str,
+                 recall_at: str, marker: str) -> dict:
+    result = subprocess.run(
+        ["node", str(Path(__file__).with_name("cliniko_recall_write_adapter_probe.ts"))],
+        input=json.dumps({"apiKey": key, "contactEmail": contact, "patientId": patient_id,
+                          "recallTypeId": recall_type_id, "recallAt": recall_at, "marker": marker}),
+        text=True, capture_output=True, cwd=Path(__file__).resolve().parents[2], timeout=60, check=False,
+    )
+    try:
+        outcome = json.loads(result.stdout)
+    except ValueError:
+        raise ProbeError("writer_output_invalid") from None
+    if result.returncode != 0 or outcome.get("ok") is not True:
+        raise ProbeError("typescript_recall_writer_unproven")
     return outcome
 
 
@@ -107,20 +127,16 @@ def main() -> int:
 
         recall_at = (datetime.now(timezone.utc).date() + timedelta(days=2)).isoformat()
         recall_create_uncertain = True
-        status, recall = request(base, headers, "POST", "/recalls", {
-            "patient_id": patient_id, "recall_type_id": type_id,
-            "recall_at": recall_at, "notes": marker, "recalled": False,
-        })
-        if status != 201:
-            recall_create_uncertain = False
-        if status != 201 or not recall.get("id"):
-            raise ProbeError(f"create_recall_{status}")
-        recall_id = str(recall["id"])
+        sent = writer_probe(key, contact, patient_id, str(type_id), recall_at, marker)
+        if sent.get("kind") != "accepted" or not re.fullmatch(r"[1-9][0-9]*", str(sent.get("recallId", ""))):
+            raise ProbeError("create_recall_uncertain")
+        recall_id = str(sent["recallId"])
         recall_create_uncertain = False
-        print(json.dumps({"step": "create_recall", "http_status": status}))
+        print(json.dumps({"step": "create_recall_via_typescript", "kind": sent["kind"]}))
 
         matches = matching_recalls(base, headers, patient_id, marker)
-        exact = len(matches) == 1 and str(matches[0].get("id")) == recall_id
+        exact = (len(matches) == 1 and str(matches[0].get("id")) == recall_id and
+                 matches[0].get("notes") == f"Abby request {marker}\nSynthetic demo follow-up; archive after probe.")
         print(json.dumps({"step": "reconcile_without_post_response", "exact_matches": len(matches), "same_recall": exact}))
         if not exact:
             raise ProbeError("exact_recall_read_unproven")
