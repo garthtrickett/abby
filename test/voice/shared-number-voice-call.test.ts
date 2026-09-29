@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
+import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
 import type { LedgerStore } from "../../src/core/ledger.ts";
 import type { EffectCallLeaseStore } from "../../src/core/effect-call-lease.ts";
 import { err, ok } from "../../src/core/model.ts";
@@ -13,8 +14,11 @@ import { TextReception } from "../../src/reference/text-reception.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
+import { PostgresPatientPhoneIndex } from "../../src/storage/postgres-patient-phone-index.ts";
+import { ClinikoPhoneLookup } from "../../src/standalone/cliniko-phone-lookup.ts";
 import { CallAdmissionService, callIdFor } from "../../src/voice/admission.ts";
 import { ConnectedVoiceCall } from "../../src/voice/connected-voice-call.ts";
+import type { CallerCandidateLookup } from "../../src/voice/caller-candidates.ts";
 import { SharedNumberIntakeService } from "../../src/voice/shared-number-intake.ts";
 import { SharedNumberVoiceCall } from "../../src/voice/shared-number-voice-call.ts";
 import type { FullVoiceSessionFactory } from "../../src/voice/shared-number-voice-call.ts";
@@ -102,6 +106,93 @@ function fixture(kind: "memory" | "postgres", outputPort?: PlaybackPort) {
 }
 
 for (const kind of kinds) {
+  test(`${kind}: caller phone reaches candidate lookup only after admission and stays out of the ledger`, async () => {
+    const app = fixture(kind);
+    value(await app.policy.changeAutomationEnabled(app.main, "0", true, "admin"));
+    const presentedCallerNumber = "+61400111222";
+    const inbound = { ...app.event(app.singleNumber, "phone-candidates"), presentedCallerNumber };
+    const lookedUp: Array<{ clinicId: string; phone: string }> = [];
+    let candidateLookup: CallerCandidateLookup = { async candidates(scope, phone) {
+      lookedUp.push({ clinicId: scope.clinicId, phone });
+      return ok({ kind: "one", candidateIds: ["123"] });
+    } };
+    if (kind === "postgres") {
+      const created = ClinikoPatientCandidateReader.create({ scope: app.main, apiKey: "synthetic-au5",
+        contactEmail: "test@example.com" }, async input => {
+        const path = new URL(String(input)).pathname;
+        if (path === "/v1/patients") return Response.json({ total_entries: 1, patients: [
+          { id: "123", first_name: "private-canary", archived_at: null,
+            patient_phone_numbers: [{ number: "0400 111 222", phone_type: "Mobile" }] },
+        ] });
+        if (path === "/v1/patients/123") {
+          lookedUp.push({ clinicId: app.main.clinicId, phone: presentedCallerNumber });
+          return Response.json({ id: "123", first_name: "private-canary", archived_at: null,
+            patient_phone_numbers: [{ number: "0400 111 222", phone_type: "Mobile" }] });
+        }
+        throw new Error("unexpected Cliniko request");
+      });
+      assert.equal(created.ok, true);
+      if (!created.ok) return;
+      const lookup = new ClinikoPhoneLookup(created.value, new PostgresPatientPhoneIndex(db!), "61", 60_000);
+      assert.equal((await lookup.refresh(app.main)).ok, true);
+      candidateLookup = lookup;
+    }
+    const call = new ConnectedVoiceCall({ event: inbound, sessionId: "session", ledger: app.ledger,
+      intake: app.intake, fullFactory: app.fullFactory,
+      callerCandidateLookup: candidateLookup,
+      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
+      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      output: { async queueChunk() { return "queued"; }, async finishQueue() { return "queued"; },
+        async clear() { return true; } },
+    });
+    assert.equal((await call.findPatientCandidates()).ok, false);
+    const started = value(await call.begin(now));
+    if (started.kind !== "admitted") throw new Error("admission expected");
+    assert.deepEqual(value(await call.findPatientCandidates()), { kind: "one", candidateIds: ["123"] });
+    assert.deepEqual(lookedUp, [{ clinicId: app.main.clinicId, phone: presentedCallerNumber }]);
+    const stored = value(await app.ledger.read(started.receipt.callId, app.main));
+    assert.equal(JSON.stringify(stored).includes(presentedCallerNumber), false);
+    if (kind === "postgres") {
+      const row = await db!.selectFrom("calls").select("state").where("call_id", "=", started.receipt.callId as never)
+        .executeTakeFirstOrThrow();
+      assert.equal(JSON.stringify(row.state).includes(presentedCallerNumber), false);
+      const events = await db!.selectFrom("call_events").select("payload")
+        .where("call_id", "=", started.receipt.callId as never).execute();
+      assert.equal(JSON.stringify(events).includes(presentedCallerNumber), false);
+    }
+    value(await call.disconnect(at(1)));
+    const afterEnd = await call.findPatientCandidates();
+    assert.equal(afterEnd.ok, false);
+    if (!afterEnd.ok) assert.equal(afterEnd.error.kind, "disconnected");
+  });
+
+  test(`${kind}: shared clinic number cannot use caller phone before location binding`, async () => {
+    const app = fixture(kind);
+    const presentedCallerNumber = "+61400999888";
+    const inbound = { ...app.event(app.sharedNumber, "phone-before-location"), presentedCallerNumber };
+    let lookups = 0;
+    const call = new ConnectedVoiceCall({ event: inbound, sessionId: "session", ledger: app.ledger,
+      intake: app.intake, fullFactory: app.fullFactory,
+      callerCandidateLookup: { async candidates() {
+        lookups += 1;
+        return ok({ kind: "one", candidateIds: ["123"] });
+      } },
+      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
+      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      output: { async queueChunk() { return "queued"; }, async finishQueue() { return "queued"; },
+        async clear() { return true; } },
+    });
+    const started = value(await call.begin(now));
+    assert.equal(started.kind, "locationChoice");
+    const unresolved = await call.findPatientCandidates();
+    assert.equal(unresolved.ok, false);
+    if (!unresolved.ok) assert.equal(unresolved.error.kind, "locationUnbound");
+    assert.equal(lookups, 0);
+    const pending = value(await app.ledger.findPendingLocation(callIdFor(inbound.key)));
+    assert.equal(JSON.stringify(pending).includes(presentedCallerNumber), false);
+    value(await call.disconnect(at(1)));
+  });
+
   test(`${kind}: PCMU and PCM16 ingress produce the same canonical frames and staff decision`, async () => {
     async function journey(encoding: TransportMediaEncoding) {
       const app = fixture(kind);

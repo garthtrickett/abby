@@ -13,6 +13,8 @@ import type { AudioOutputPort, PlaybackCompletion, PlaybackEvidenceFailure, Spee
   StreamedPlaybackOptions } from "./streamed-playback-port.ts";
 import type { DispatchResult } from "./voice-session.ts";
 import type { PrelocationPromptResult } from "./prelocation-voice-session.ts";
+import { validCallerCandidates } from "./caller-candidates.ts";
+import type { CallerCandidateLookup, CallerCandidates } from "./caller-candidates.ts";
 
 export type ConnectedVoiceCallConfig = Readonly<{
   event: AuthenticatedInboundCall;
@@ -26,6 +28,7 @@ export type ConnectedVoiceCallConfig = Readonly<{
   monotonicNow?: () => number;
   mediaOptions?: MediaTurnOptions;
   playbackOptions?: StreamedPlaybackOptions;
+  callerCandidateLookup?: CallerCandidateLookup;
 }>;
 
 export type ConnectedVoiceFailure = SharedVoiceFailure | MediaFailure | PlaybackEvidenceFailure |
@@ -45,6 +48,8 @@ export class ConnectedVoiceCall {
   private readonly playback: StreamedPlaybackPort;
   private readonly ledger: LedgerStore;
   private readonly callId: string;
+  private readonly presentedCallerNumber: string | undefined;
+  private readonly callerCandidateLookup: CallerCandidateLookup | undefined;
   private scope: LocationScope | undefined;
   private begun = false;
   private starting = false;
@@ -55,6 +60,8 @@ export class ConnectedVoiceCall {
   constructor(config: ConnectedVoiceCallConfig) {
     this.ledger = config.ledger;
     this.callId = callIdFor(config.event.key);
+    this.presentedCallerNumber = config.event.presentedCallerNumber;
+    this.callerCandidateLookup = config.callerCandidateLookup;
     const gatedOutput: AudioOutputPort = {
       queueChunk: (id, sequence, bytes, signal) => this.closing || this.stopped || this.terminal
         ? Promise.resolve("notSent") : config.output.queueChunk(id, sequence, bytes, signal),
@@ -66,6 +73,26 @@ export class ConnectedVoiceCall {
     this.call = new SharedNumberVoiceCall(config.event, config.sessionId, config.ledger, config.intake,
       this.playback, config.fullFactory, config.monotonicNow);
     this.media = new MediaTurnController(config.sessionId, this.call, config.transcription, config.mediaOptions);
+  }
+
+  /** Runs only after clinic binding; the presented number and candidates remain in this live call. */
+  async findPatientCandidates(): Promise<Result<CallerCandidates, Readonly<{
+    kind: "notStarted" | "disconnected" | "locationUnbound" | "lookupUnavailable";
+  }>>> {
+    if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
+    if (!this.begun) return err({ kind: "notStarted" });
+    if (!this.scope) return err({ kind: "locationUnbound" });
+    if (typeof this.presentedCallerNumber !== "string" || !this.presentedCallerNumber || this.presentedCallerNumber.length > 64) {
+      return ok({ kind: "noNumber", candidateIds: [] });
+    }
+    if (!this.callerCandidateLookup) return err({ kind: "lookupUnavailable" });
+    const scope = this.scope;
+    try {
+      const result = await this.callerCandidateLookup.candidates(scope, this.presentedCallerNumber);
+      if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
+      if (this.scope !== scope) return err({ kind: "locationUnbound" });
+      return result.ok && validCallerCandidates(result.value) ? ok(result.value) : err({ kind: "lookupUnavailable" });
+    } catch { return err({ kind: "lookupUnavailable" }); }
   }
 
   async begin(now: string): Promise<Result<ConnectedVoiceStart, ConnectedVoiceFailure>> {
