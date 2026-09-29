@@ -388,7 +388,8 @@ test("E2E-125/E2E-127 text: HTTP availability completes and exports no caller or
     { authorizeAndRecord: async () => ok({ requestRef: `http-audit-${suffix}` }) }));
     const decoded = value(await decodeTenantConfigArchive(archive, targetScope.tenantId));
     assert.equal(decoded.omittedCalls.notRetained, 1);
-    assert.equal(decoded.sectionManifests.calls.recordCount, 0);
+    assert.equal(decoded.sectionManifests.calls.recordCount, 1);
+    assert.equal(decoded.locations[0]?.omittedTextCalls, 1);
     const archiveBytes: Uint8Array[] = [archive.manifestBytes];
     for (const section of ARCHIVE_SECTIONS) {
       for await (const chunk of archive.sections[section]()) archiveBytes.push(chunk);

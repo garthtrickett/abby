@@ -12,6 +12,8 @@ export type ConfigArchiveData = Readonly<{
   sourceFenceVersion?: number;
   sectionManifests: Readonly<Record<ArchiveSection, ArchiveSectionManifest>>;
   omittedCalls: OmittedCalls;
+  /** Present in archive v2; v1 has only a tenant-wide omission total. */
+  omittedTextCalls?: number;
   sourceScope: LocationScope;
   targetScope: LocationScope;
   timeZone: string;
@@ -41,6 +43,8 @@ export type TenantConfigArchiveData = Readonly<{
     targetScope: LocationScope;
     timeZone: string;
     mappingProvenance: string;
+    /** Present in archive v2; absent for legacy v1 imports. */
+    omittedTextCalls?: number;
     policies: ConfigArchiveData["policies"];
     knowledge: readonly PortablePublishedKnowledge[];
   }>[];
@@ -204,6 +208,7 @@ type MutableLocation = {
   targetScope: LocationScope;
   timeZone: string;
   mappingProvenance: string;
+  omittedTextCalls?: number;
   policies: ConfigArchiveData["policies"][number][];
   knowledge: PortablePublishedKnowledge[];
 };
@@ -229,7 +234,8 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
   if (!materialized.ok) return materialized;
   const { verified, sections, manifestBytes } = materialized.value;
   try {
-    if (verified.manifest.sourceSystem !== "abby-postgres" || verified.manifest.sections.calls.recordCount !== 0 ||
+    if (verified.manifest.sourceSystem !== "abby-postgres" ||
+        (verified.manifest.archiveVersion === 1 && verified.manifest.sections.calls.recordCount !== 0) ||
         verified.manifest.sections.staffWork.recordCount !== 0) throw new InvalidConfigArchive();
     const metadata = object(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(manifestBytes)), "locations");
     ref(metadata.exportRequestRef, "locations");
@@ -279,6 +285,26 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
         { sourceClinicId: sourceScope.clinicId, automation: [], writeStops: [] });
     }
     if (locations.size !== declaredMappings.size) throw new InvalidConfigArchive("locations");
+
+    if (verified.manifest.archiveVersion === 2) {
+      const counts = new Map<string, number>();
+      let total = 0;
+      for (const row of lines(sections.calls, "calls")) {
+        if (Object.keys(row).sort().join(",") !==
+            "kind,notRetained,recordId,recordVersion,sourceClinicId,sourceLocationId,sourceTenantId" ||
+            row.kind !== "omittedTextCallCount") throw new InvalidConfigArchive("calls");
+        const key = JSON.stringify([ref(row.sourceClinicId, "calls"), ref(row.sourceLocationId, "calls")]);
+        const count = integer(row.notRetained, "calls", 1);
+        if (!locations.has(key) || counts.has(key) || row.recordId !== expectedId("omittedTextCalls", key, 1)) {
+          throw new InvalidConfigArchive("calls");
+        }
+        counts.set(key, count);
+        total += count;
+        if (!Number.isSafeInteger(total)) throw new InvalidConfigArchive("calls");
+      }
+      if (total !== omittedCalls.notRetained) throw new InvalidConfigArchive("calls");
+      for (const [key, location] of locations) location.omittedTextCalls = counts.get(key) ?? 0;
+    }
 
     for (const row of lines(sections.settings, "settings")) {
       const version = integer(row.version, "settings", row.kind === "writeStop" ? 1 : 0);
@@ -384,6 +410,7 @@ export async function decodeConfigArchive(input: ArchiveEnvelope, expectedTarget
     sourceSchemaVersion: data.sourceSchemaVersion,
     ...(data.sourceFenceVersion === undefined ? {} : { sourceFenceVersion: data.sourceFenceVersion }),
     sectionManifests: data.sectionManifests, omittedCalls: data.omittedCalls,
+    ...(location.omittedTextCalls === undefined ? {} : { omittedTextCalls: location.omittedTextCalls }),
     sourceScope: location.sourceScope, targetScope: location.targetScope, timeZone: location.timeZone,
     mappingProvenance: location.mappingProvenance, policies: location.policies, automation: clinic.automation,
     writeStops: clinic.writeStops, knowledge: location.knowledge });

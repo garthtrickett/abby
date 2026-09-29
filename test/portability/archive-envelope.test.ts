@@ -2,19 +2,22 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import { ARCHIVE_SECTIONS, materializeVerifiedArchive, verifyArchiveEnvelope } from "../../src/portability/archive-envelope.ts";
-import type { ArchiveEnvelope, ArchiveManifestV1, ArchiveSection } from "../../src/portability/archive-envelope.ts";
+import type { ArchiveEnvelope, ArchiveManifest, ArchiveSection } from "../../src/portability/archive-envelope.ts";
 
-function archive(records: Partial<Record<ArchiveSection, readonly Record<string, unknown>[]>> = {}): ArchiveEnvelope {
+function archive(records: Partial<Record<ArchiveSection, readonly Record<string, unknown>[]>> = {},
+                 archiveVersion: 1 | 2 = 1): ArchiveEnvelope {
   const bytes = Object.fromEntries(ARCHIVE_SECTIONS.map(name => [name, Buffer.from(
-    (records[name] ?? [{ recordVersion: 1, recordId: "a", sourceTenantId: "tenant-1" }])
+    (records[name] ?? [{ recordVersion: archiveVersion === 2 && name === "calls" ? 2 : 1,
+      recordId: "a", sourceTenantId: "tenant-1" }])
       .map(row => `${JSON.stringify(row)}\n`).join(""), "utf8")])) as Record<ArchiveSection, Buffer>;
-  const manifest: ArchiveManifestV1 = {
-    archiveVersion: 1, archiveId: "archive-1", createdAt: "2026-09-28T00:00:00Z",
+  const manifest: ArchiveManifest = {
+    archiveVersion, archiveId: "archive-1", createdAt: "2026-09-28T00:00:00Z",
     sourceSystem: "reference", sourceSchemaVersion: "10", sourceTenantId: "tenant-1",
     sections: Object.fromEntries(ARCHIVE_SECTIONS.map(name => [name, {
-      version: 1, recordCount: records[name]?.length ?? 1, byteCount: bytes[name].byteLength,
+      version: archiveVersion === 2 && name === "calls" ? 2 : 1,
+      recordCount: records[name]?.length ?? 1, byteCount: bytes[name].byteLength,
       sha256: createHash("sha256").update(bytes[name]).digest("hex"),
-    }])) as ArchiveManifestV1["sections"],
+    }])) as ArchiveManifest["sections"],
   };
   function section(name: ArchiveSection): () => AsyncIterable<Uint8Array> {
     return async function* () {
@@ -65,7 +68,7 @@ test("archive envelope rejects duplicate IDs and cross-tenant records even with 
 
 test("archive envelope rejects unknown versions, truncated records, and unreadable streams", async () => {
   const input = archive();
-  const version = { ...input, manifestBytes: Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(input.manifestBytes).toString()), archiveVersion: 2 })) };
+  const version = { ...input, manifestBytes: Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(input.manifestBytes).toString()), archiveVersion: 3 })) };
   assert.deepEqual(await verifyArchiveEnvelope(version), { ok: false, error: { kind: "unsupportedVersion" } });
   const truncated = { ...input, sections: { ...input.sections, locations: async function* () {
     yield Buffer.from('{"recordVersion":1,"recordId":"a","sourceTenantId":"tenant-1"}');
@@ -75,6 +78,20 @@ test("archive envelope rejects unknown versions, truncated records, and unreadab
     throw new Error("disk failed");
   } } };
   assert.deepEqual(await verifyArchiveEnvelope(unreadable), { ok: false, error: { kind: "readFailure", section: "settings" } });
+});
+
+test("archive v2 permits only version 2 omitted-call records in its calls section", async () => {
+  const valid = archive({}, 2);
+  const verified = await verifyArchiveEnvelope(valid);
+  assert.equal(verified.ok && verified.value.manifest.archiveVersion, 2);
+  const oldRecord = archive({ calls: [{ recordVersion: 1, recordId: "a", sourceTenantId: "tenant-1" }] }, 2);
+  assert.deepEqual(await verifyArchiveEnvelope(oldRecord),
+    { ok: false, error: { kind: "unsupportedVersion", section: "calls" } });
+  const wrongSectionVersion = JSON.parse(Buffer.from(valid.manifestBytes).toString());
+  wrongSectionVersion.sections.calls.version = 1;
+  assert.deepEqual(await verifyArchiveEnvelope({ ...valid,
+    manifestBytes: Buffer.from(JSON.stringify(wrongSectionVersion)) }),
+  { ok: false, error: { kind: "unsupportedVersion", section: "calls" } });
 });
 
 test("archive envelope rejects a matching digest with a false record count or record version", async () => {

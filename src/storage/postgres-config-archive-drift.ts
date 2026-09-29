@@ -54,7 +54,8 @@ export async function comparePostgresConfigArchiveSource(db: Kysely<Database>, b
   for (const section of ["locations", "settings", "knowledge", "calls", "staffWork"] as const) {
     const before = previous.value.sectionManifests[section];
     const after = current.value.sectionManifests[section];
-    if (before.recordCount !== after.recordCount || before.byteCount !== after.byteCount || before.sha256 !== after.sha256) {
+    if (before.version !== after.version || before.recordCount !== after.recordCount ||
+        before.byteCount !== after.byteCount || before.sha256 !== after.sha256) {
       changed.push(section);
     }
   }

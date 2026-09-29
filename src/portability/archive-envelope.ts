@@ -6,7 +6,7 @@ export const ARCHIVE_SECTIONS = ["locations", "settings", "knowledge", "calls", 
 export type ArchiveSection = typeof ARCHIVE_SECTIONS[number];
 
 export type ArchiveSectionManifest = Readonly<{
-  version: 1;
+  version: 1 | 2;
   recordCount: number;
   byteCount: number;
   sha256: string;
@@ -23,6 +23,10 @@ export type ArchiveManifestV1 = Readonly<{
   sections: Readonly<Record<ArchiveSection, ArchiveSectionManifest>>;
 }>;
 
+/** Version 2 seals per-location omitted-call counts in the calls section. */
+export type ArchiveManifestV2 = Omit<ArchiveManifestV1, "archiveVersion"> & Readonly<{ archiveVersion: 2 }>;
+export type ArchiveManifest = ArchiveManifestV1 | ArchiveManifestV2;
+
 /** A section opener must return a fresh stream for a later semantic preflight/import pass. */
 export type ArchiveEnvelope = Readonly<{
   manifestBytes: Uint8Array;
@@ -36,7 +40,7 @@ export type ArchiveEnvelopeFailure = Readonly<{
 }>;
 
 export type VerifiedArchiveEnvelope = Readonly<{
-  manifest: ArchiveManifestV1;
+  manifest: ArchiveManifest;
   manifestDigest: string;
 }>;
 
@@ -60,10 +64,10 @@ function nonempty(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= 256 && !/[\u0000-\u001f\u007f]/.test(value);
 }
 
-function validManifest(value: unknown): Result<ArchiveManifestV1, ArchiveEnvelopeFailure> {
+function validManifest(value: unknown): Result<ArchiveManifest, ArchiveEnvelopeFailure> {
   const manifest = object(value);
   if (!manifest) return err({ kind: "invalidManifest" });
-  if (manifest.archiveVersion !== 1) return err({ kind: "unsupportedVersion" });
+  if (manifest.archiveVersion !== 1 && manifest.archiveVersion !== 2) return err({ kind: "unsupportedVersion" });
   if (!nonempty(manifest.archiveId) || !nonempty(manifest.sourceSystem) ||
       !nonempty(manifest.sourceSchemaVersion) || !nonempty(manifest.sourceTenantId) ||
       (manifest.sourceFenceVersion !== undefined &&
@@ -76,16 +80,20 @@ function validManifest(value: unknown): Result<ArchiveManifestV1, ArchiveEnvelop
       ARCHIVE_SECTIONS.some(name => !Object.hasOwn(sections, name))) return err({ kind: "invalidManifest" });
   for (const name of ARCHIVE_SECTIONS) {
     const section = object(sections[name]);
-    if (!section || section.version !== 1 || !Number.isSafeInteger(section.recordCount) || Number(section.recordCount) < 0 ||
+    const expectedVersion = manifest.archiveVersion === 2 && name === "calls" ? 2 : 1;
+    if (!section || section.version !== expectedVersion ||
+        !Number.isSafeInteger(section.recordCount) || Number(section.recordCount) < 0 ||
         !Number.isSafeInteger(section.byteCount) || Number(section.byteCount) < 0 ||
         typeof section.sha256 !== "string" || !sha256.test(section.sha256)) {
-      return err({ kind: section?.version !== undefined && section.version !== 1 ? "unsupportedVersion" : "invalidManifest", section: name });
+      return err({ kind: section?.version !== undefined && section.version !== expectedVersion
+        ? "unsupportedVersion" : "invalidManifest", section: name });
     }
   }
-  return ok(manifest as ArchiveManifestV1);
+  return ok(manifest as ArchiveManifest);
 }
 
-function recordLine(bytes: Buffer, tenantId: string, previousId: Buffer | undefined, section: ArchiveSection):
+function recordLine(bytes: Buffer, tenantId: string, previousId: Buffer | undefined,
+                    section: ArchiveSection, version: ArchiveSectionManifest["version"]):
   Result<Buffer, ArchiveEnvelopeFailure> {
   if (bytes.byteLength === 0 || bytes.byteLength > maxRecordBytes) return err({ kind: "invalidSection", section });
   let parsed: unknown;
@@ -93,7 +101,7 @@ function recordLine(bytes: Buffer, tenantId: string, previousId: Buffer | undefi
   catch { return err({ kind: "invalidSection", section }); }
   const record = object(parsed);
   if (!record || !nonempty(record.recordId)) return err({ kind: "invalidSection", section });
-  if (record.recordVersion !== 1) return err({ kind: "unsupportedVersion", section });
+  if (record.recordVersion !== version) return err({ kind: "unsupportedVersion", section });
   if (record.sourceTenantId !== tenantId) return err({ kind: "scopeMismatch", section });
   const id = Buffer.from(record.recordId, "utf8");
   if (previousId && Buffer.compare(id, previousId) <= 0) return err({ kind: "duplicateOrUnsorted", section });
@@ -117,7 +125,7 @@ async function verifySection(section: ArchiveSection, expected: ArchiveSectionMa
         const chunk = Buffer.concat([pending, Buffer.from(part.subarray(partOffset, partOffset + processingWindowBytes))]);
         let offset = 0;
         for (let newline = chunk.indexOf(10, offset); newline !== -1; newline = chunk.indexOf(10, offset)) {
-          const checked = recordLine(chunk.subarray(offset, newline), tenantId, previousId, section);
+          const checked = recordLine(chunk.subarray(offset, newline), tenantId, previousId, section, expected.version);
           if (!checked.ok) return checked;
           previousId = checked.value;
           recordCount += 1;

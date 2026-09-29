@@ -26,6 +26,7 @@ export type TenantImportMapping = ReferenceImportMapping & Readonly<{
 export type TenantImportLocation = Readonly<{
   sourceScope: LocationScope;
   targetScope: LocationScope;
+  omittedTextCalls?: number;
   policyVersions: number;
   publishedKnowledgeVersions: number;
   importedPolicyVersion?: string;
@@ -97,6 +98,7 @@ function prepare(data: TenantConfigArchiveData, mapper: ReferenceImportMapper):
     const scoped: ConfigArchiveData = { archiveId: data.archiveId, manifestDigest: data.manifestDigest,
       createdAt: data.createdAt, sourceSchemaVersion: data.sourceSchemaVersion,
       sectionManifests: data.sectionManifests, omittedCalls: data.omittedCalls,
+      ...(location.omittedTextCalls === undefined ? {} : { omittedTextCalls: location.omittedTextCalls }),
       sourceScope: location.sourceScope, targetScope: location.targetScope,
       timeZone: location.timeZone, mappingProvenance: location.mappingProvenance,
       policies: location.policies, automation: clinic.automation, writeStops: clinic.writeStops,
@@ -127,7 +129,7 @@ function report(data: TenantConfigArchiveData, auditRef: string, prepared: Prepa
     ...(data.sourceFenceVersion === undefined ? {} : { sourceFenceVersion: data.sourceFenceVersion }),
     recordCounts: { locations: data.sectionManifests.locations.recordCount,
       settings: data.sectionManifests.settings.recordCount, knowledge: data.sectionManifests.knowledge.recordCount,
-      calls: 0, staffWork: 0 },
+      calls: data.sectionManifests.calls.recordCount, staffWork: 0 },
     sectionDigests: { locations: data.sectionManifests.locations.sha256,
       settings: data.sectionManifests.settings.sha256, knowledge: data.sectionManifests.knowledge.sha256,
       calls: data.sectionManifests.calls.sha256, staffWork: data.sectionManifests.staffWork.sha256 },
@@ -135,6 +137,7 @@ function report(data: TenantConfigArchiveData, auditRef: string, prepared: Prepa
     locations: prepared.locations.map(location => ({ sourceScope: location.sourceScope,
       targetScope: location.targetScope, policyVersions: location.source.policies.length,
       publishedKnowledgeVersions: location.source.knowledge.length,
+      ...(location.source.omittedTextCalls === undefined ? {} : { omittedTextCalls: location.source.omittedTextCalls }),
       ...(importedVersions?.has(JSON.stringify(location.targetScope))
         ? { importedPolicyVersion: importedVersions.get(JSON.stringify(location.targetScope))! } : {}) })),
     mappings: prepared.mappings, status, bookingEnabled: false, automationEnabled: false, writesStopped: true };

@@ -6,7 +6,8 @@ import type Database from "./generated/Database.ts";
 import type { CallsCallId } from "./generated/public/Calls.ts";
 import { isStoredStandaloneTextEvent, isStoredStandaloneTextState } from "./standalone-call-state.ts";
 
-export type PortableTextCallScan = Readonly<{ count: number; locationKeys: ReadonlySet<string> }>;
+export type PortableTextCallScan = Readonly<{ count: number; locationKeys: ReadonlySet<string>;
+  countsByLocation: ReadonlyMap<string, number> }>;
 export type PortableTextCallScanFailure = Readonly<{
   kind: "callsRequireRetention" | "unresolvedWork" | "storageFailure";
 }>;
@@ -26,6 +27,7 @@ export async function scanPortableTextCalls(db: Kysely<Database>, tenantId: stri
       return err({ kind: "unresolvedWork" });
     }
     const locationKeys = new Set<string>();
+    const countsByLocation = new Map<string, number>();
     let count = 0;
     let afterCallId: CallsCallId | undefined;
     while (true) {
@@ -45,9 +47,13 @@ export async function scanPortableTextCalls(db: Kysely<Database>, tenantId: stri
             state.policy.scope.clinicId !== row.clinic_id ||
             state.policy.scope.locationId !== row.location_id) return err({ kind: "callsRequireRetention" });
         versions.set(row.call_id, { expected: row.version, seen: 0, lastKind: null });
-        locationKeys.add(JSON.stringify([row.clinic_id, row.location_id]));
+        const locationKey = JSON.stringify([row.clinic_id, row.location_id]);
+        locationKeys.add(locationKey);
+        countsByLocation.set(locationKey, (countsByLocation.get(locationKey) ?? 0) + 1);
         count += 1;
-        if (!Number.isSafeInteger(count)) return err({ kind: "callsRequireRetention" });
+        if (!Number.isSafeInteger(count) || !Number.isSafeInteger(countsByLocation.get(locationKey))) {
+          return err({ kind: "callsRequireRetention" });
+        }
       }
       const callIds = rows.map(row => row.call_id);
       let afterEvent: Readonly<{ callId: string; sequence: number }> | undefined;
@@ -74,7 +80,7 @@ export async function scanPortableTextCalls(db: Kysely<Database>, tenantId: stri
       afterCallId = rows.at(-1)!.call_id;
       if (rows.length < pageSize) break;
     }
-    return ok({ count, locationKeys });
+    return ok({ count, locationKeys, countsByLocation });
   } catch {
     return err({ kind: "storageFailure" });
   }
