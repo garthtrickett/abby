@@ -30,6 +30,8 @@ export type TenantConfigArchiveRequest = Readonly<{
   archiveId: string;
   actorRef: string;
   createdAt: string;
+  /** A final cutover export names the exact frozen source version. */
+  expectedFenceVersion?: number;
 }>;
 
 export type TenantConfigArchiveAuthority = Readonly<{
@@ -43,7 +45,7 @@ export type ConfigArchiveAuthority = Readonly<{
 
 export type ConfigArchiveFailure = Readonly<{
   kind: "invalidConfig" | "denied" | "auditFailure" | "scopeIncomplete" | "callsRequireRetention" |
-    "unresolvedWork" | "storageCorrupt" | "storageFailure" | "tooLarge";
+    "unresolvedWork" | "fenceMismatch" | "storageCorrupt" | "storageFailure" | "tooLarge";
 }>;
 
 type SettingRow = { clinic_id: string; location_id: string; version: number; policy: unknown; changed_by: string | null; previous_booking_enabled: boolean | null; changed_at: Date | null };
@@ -150,7 +152,10 @@ function mappingKey(scope: LocationScope): string {
 export function validTenantConfigArchiveRequest(request: TenantConfigArchiveRequest): boolean {
   if (!request || ![request.sourceTenantId, request.archiveId, request.actorRef].every(validRef) ||
       typeof request.createdAt !== "string" || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$/.test(request.createdAt) ||
-      !Number.isFinite(Date.parse(request.createdAt)) || !Array.isArray(request.locations) ||
+      !Number.isFinite(Date.parse(request.createdAt)) ||
+      (request.expectedFenceVersion !== undefined &&
+        (!Number.isSafeInteger(request.expectedFenceVersion) || request.expectedFenceVersion < 1)) ||
+      !Array.isArray(request.locations) ||
       request.locations.length < 1 || request.locations.length > 16) return false;
   const sources = new Set<string>();
   const targets = new Set<string>();
@@ -182,6 +187,15 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
   const clinics = new Set(mappings.map(mapping => mapping.sourceScope.clinicId));
   try {
     const snapshot = await db.transaction().setIsolationLevel("repeatable read").execute(async trx => {
+      // Serialize a final snapshot with release; stale repeatable-read snapshots fail closed.
+      if (request.expectedFenceVersion !== undefined) {
+        await sql`select pg_advisory_xact_lock_shared(172934501, hashtext(${sourceTenantId}))`.execute(trx);
+        const fence = await sql<{ version: number; frozen: boolean }>`select version, frozen
+          from tenant_portability_fences where tenant_id = ${sourceTenantId} for share`.execute(trx);
+        if (!fence.rows[0]?.frozen || fence.rows[0].version !== request.expectedFenceVersion) {
+          throw new ExportAbort("fenceMismatch");
+        }
+      }
       const migration = await sql<{ name: string }>`select name from kysely_migration order by name desc limit 1`.execute(trx);
       const schemaVersion = migration.rows[0]?.name;
       if (!validRef(schemaVersion)) throw new ExportAbort("storageCorrupt");
@@ -209,7 +223,8 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
         effective_from, effective_until, actor_ref, changed_at from clinic_knowledge_events
         where tenant_id = ${sourceTenantId} and status in ('approved', 'revoked')
         order by clinic_id, location_id, source_ref, version`.execute(trx);
-      return { schemaVersion, settings: settings.rows, automation: automation.rows, stops: stops.rows, knowledge: knowledge.rows };
+      return { schemaVersion, settings: settings.rows, automation: automation.rows, stops: stops.rows,
+        knowledge: knowledge.rows, sourceFenceVersion: request.expectedFenceVersion };
     });
     const common = (recordId: string) => ({ recordVersion: 1 as const, recordId, sourceTenantId });
     const locations: RecordData[] = mappings.map(mapping => ({
@@ -262,6 +277,7 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
     const bytes = Object.fromEntries(ARCHIVE_SECTIONS.map(name => [name, sectionBytes(records[name])])) as Record<ArchiveSection, Buffer>;
     const manifest = { archiveVersion: 1, archiveId: request.archiveId, createdAt: request.createdAt,
       sourceSystem: "abby-postgres", sourceSchemaVersion: snapshot.schemaVersion, sourceTenantId,
+      ...(snapshot.sourceFenceVersion === undefined ? {} : { sourceFenceVersion: snapshot.sourceFenceVersion }),
       exportRequestRef: requestRef, omittedCalls: { retentionExpired: 0, consentDenied: 0, notRetained: 0, activeCall: 0 },
       locationMappings: mappings.map(mapping => ({ sourceScope: mapping.sourceScope,
         targetScope: mapping.targetScope, provenance: mapping.mappingProvenance })),
@@ -301,4 +317,14 @@ export async function buildPostgresTenantConfigArchive(db: Kysely<Database>, req
   if (!authorization.ok) return err({ kind: authorization.error.kind });
   if (!validRef(authorization.value.requestRef)) return err({ kind: "auditFailure" });
   return buildTenantAuthorized(db, request, authorization.value.requestRef);
+}
+
+/** Final snapshot: fails unless the source remains frozen at the named fence version. */
+export async function buildPostgresFencedTenantConfigArchive(db: Kysely<Database>,
+  request: TenantConfigArchiveRequest & Readonly<{ expectedFenceVersion: number }>,
+  authority: TenantConfigArchiveAuthority): Promise<Result<ArchiveEnvelope, ConfigArchiveFailure>> {
+  if (!Number.isSafeInteger(request?.expectedFenceVersion) || request.expectedFenceVersion < 1) {
+    return err({ kind: "invalidConfig" });
+  }
+  return buildPostgresTenantConfigArchive(db, request, authority);
 }

@@ -19,6 +19,7 @@ export type ArchiveManifestV1 = Readonly<{
   sourceSystem: string;
   sourceSchemaVersion: string;
   sourceTenantId: string;
+  sourceFenceVersion?: number;
   sections: Readonly<Record<ArchiveSection, ArchiveSectionManifest>>;
 }>;
 
@@ -65,6 +66,8 @@ function validManifest(value: unknown): Result<ArchiveManifestV1, ArchiveEnvelop
   if (manifest.archiveVersion !== 1) return err({ kind: "unsupportedVersion" });
   if (!nonempty(manifest.archiveId) || !nonempty(manifest.sourceSystem) ||
       !nonempty(manifest.sourceSchemaVersion) || !nonempty(manifest.sourceTenantId) ||
+      (manifest.sourceFenceVersion !== undefined &&
+        (!Number.isSafeInteger(manifest.sourceFenceVersion) || Number(manifest.sourceFenceVersion) < 1)) ||
       typeof manifest.createdAt !== "string" ||
       !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$/.test(manifest.createdAt) ||
       !Number.isFinite(Date.parse(manifest.createdAt))) return err({ kind: "invalidManifest" });

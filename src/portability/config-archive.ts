@@ -9,6 +9,7 @@ export type ConfigArchiveData = Readonly<{
   manifestDigest: string;
   createdAt: string;
   sourceSchemaVersion: string;
+  sourceFenceVersion?: number;
   sectionManifests: Readonly<Record<ArchiveSection, ArchiveSectionManifest>>;
   sourceScope: LocationScope;
   targetScope: LocationScope;
@@ -28,6 +29,7 @@ export type TenantConfigArchiveData = Readonly<{
   manifestDigest: string;
   createdAt: string;
   sourceSchemaVersion: string;
+  sourceFenceVersion?: number;
   sectionManifests: Readonly<Record<ArchiveSection, ArchiveSectionManifest>>;
   sourceTenantId: string;
   targetTenantId: string;
@@ -332,6 +334,7 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
     }
     return ok({ archiveId: verified.manifest.archiveId, manifestDigest: verified.manifestDigest,
       createdAt: verified.manifest.createdAt, sourceSchemaVersion: verified.manifest.sourceSchemaVersion,
+      ...(verified.manifest.sourceFenceVersion === undefined ? {} : { sourceFenceVersion: verified.manifest.sourceFenceVersion }),
       sectionManifests: verified.manifest.sections, sourceTenantId: verified.manifest.sourceTenantId,
       targetTenantId: expectedTargetTenantId, locations: [...locations.values()], clinics: [...clinics.values()] });
   } catch (cause) {
@@ -353,7 +356,9 @@ export async function decodeConfigArchive(input: ArchiveEnvelope, expectedTarget
       !sameScope(location.targetScope, expectedTargetScope)) return err({ kind: "invalidConfigArchive", section: "locations" });
   const clinic = data.clinics[0]!;
   return ok({ archiveId: data.archiveId, manifestDigest: data.manifestDigest, createdAt: data.createdAt,
-    sourceSchemaVersion: data.sourceSchemaVersion, sectionManifests: data.sectionManifests,
+    sourceSchemaVersion: data.sourceSchemaVersion,
+    ...(data.sourceFenceVersion === undefined ? {} : { sourceFenceVersion: data.sourceFenceVersion }),
+    sectionManifests: data.sectionManifests,
     sourceScope: location.sourceScope, targetScope: location.targetScope, timeZone: location.timeZone,
     mappingProvenance: location.mappingProvenance, policies: location.policies, automation: clinic.automation,
     writeStops: clinic.writeStops, knowledge: location.knowledge });
