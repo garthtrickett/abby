@@ -57,6 +57,34 @@ test("E2E-152 telephone-band corpus pins and replays distinct G.711 normalized f
     [["match", "needsClarification"]]);
 });
 
+test("E2E-161 two-speaker noisy telephone corpus pins patient-free fixtures and keeps finals untrusted", async () => {
+  const file = new URL("../../eval/transcription-noise-v1.json", import.meta.url);
+  const corpus = parseTranscriptionEvaluationCorpus(JSON.parse(readFileSync(file, "utf8")) as unknown);
+  assert.equal(corpus.version, "transcription-noise-v1");
+  assert.equal(corpus.cases.length, 6);
+  const audio = corpus.cases.map(item => {
+    const bytes = readFileSync(new URL(`../../eval/audio/${item.file}`, import.meta.url));
+    assert.ok(bytes.length >= 640 && bytes.length <= 1_000_000 && bytes.length % 640 === 0);
+    assert.equal(createHash("sha256").update(bytes).digest("hex"), item.sha256);
+    return bytes;
+  });
+  for (let index = 0; index < 3; index += 1) {
+    assert.notDeepEqual(audio[index], audio[index + 3]);
+    const cleanFile = corpus.cases[index + 3]!.file.replace("-slt-white-10db-pcmu-8k.pcm", "-pcmu-8k.pcm");
+    const clean = readFileSync(new URL(`../../eval/audio/${cleanFile}`, import.meta.url));
+    assert.notDeepEqual(audio[index + 3], clean);
+  }
+  const item = corpus.cases[2]!;
+  const results = await runTranscriptionEvaluation([{ id: item.id, category: item.category,
+    expectedText: item.expectedText, criticalTerms: item.criticalTerms, pcm: audio[2]! }], sessionId => ({
+    async accept() { return ok([]); },
+    async flush() { return ok([{ kind: "segmentFinal" as const, sessionId, generation: 1,
+      utteranceId: "noisy-fixture", text: item.expectedText, quality: "needsClarification" as const }]); },
+    async close() {},
+  }), 1, 1, 0);
+  assert.deepEqual(results.map(result => [result.verdict, result.quality]), [["match", "needsClarification"]]);
+});
+
 test("transcription evaluation replays bounded frames concurrently and keeps untrusted quality", async () => {
   let active = 0;
   let peak = 0;

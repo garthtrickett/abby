@@ -44,7 +44,9 @@ The runner verifies every fixture digest before opening a provider session, send
 npm run eval:transcription -- --corpus transcription-telephony-v1 --out eval/results/transcription-telephony-candidate.json
 ```
 
-The `--corpus` flag accepts only `transcription-v1` and `transcription-telephony-v1`. The same repeat, concurrency, digest, typed-result, and release-gate rules apply to both.
+The `--corpus` flag accepts `transcription-v1`, `transcription-telephony-v1`, and `transcription-noise-v1`. The same repeat, concurrency, digest, typed-result, and release-gate rules apply to all three.
+
+`transcription-noise-v1.json` adds six patient-free clips from two Flite voices, `kal` and `slt`. `node scripts/build-noisy-transcription-fixtures.ts` mixes deterministic white noise at a nominal 10 dB signal-to-noise ratio before 8 kHz G.711 mu-law encoding and production media normalization. Each resulting 16 kHz fixture is pinned by SHA-256. Run it with `--corpus transcription-noise-v1`; use an owner-only output path and the same key handling as above. This is controlled synthetic interference, not representative clinic acoustics, accents, packet loss, or a real call. The [first live run](LIVE_BASELINE_2026-09-29.md#noisy-two-speaker-transcription-stress) had missing safety terms and leaves all finals `needsClarification`. Noisy results cannot promote natural-language caller actions.
 
 ## Signed local live speech evaluation
 

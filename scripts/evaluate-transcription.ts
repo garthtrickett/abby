@@ -31,7 +31,8 @@ async function main(): Promise<void> {
   const apiKey = process.env.ABBY_OPENAI_API_KEY;
   if (!apiKey) throw new Error("ABBY_OPENAI_API_KEY is required");
   const corpusName = args.corpus ?? "transcription-v1";
-  if (corpusName !== "transcription-v1" && corpusName !== "transcription-telephony-v1") {
+  if (corpusName !== "transcription-v1" && corpusName !== "transcription-telephony-v1" &&
+      corpusName !== "transcription-noise-v1") {
     throw new Error("unsupported transcription evaluation corpus");
   }
   const corpusBytes = await readFile(resolve(`eval/${corpusName}.json`));
