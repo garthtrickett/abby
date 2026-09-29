@@ -8,10 +8,11 @@ import type { PatientPhoneIndexClinicId, PatientPhoneIndexNormalizedPhone, Patie
   PatientPhoneIndexTenantId } from "./generated/public/PatientPhoneIndex.ts";
 import type { PatientPhoneSyncClinicId, PatientPhoneSyncTenantId } from "./generated/public/PatientPhoneSync.ts";
 import type { PatientPhoneScanClinicId, PatientPhoneScanTenantId } from "./generated/public/PatientPhoneScan.ts";
+import type { PatientPhoneClinicStatusClinicId, PatientPhoneClinicStatusTenantId } from "./generated/public/PatientPhoneClinicStatus.ts";
 
 export type PatientPhoneLink = Readonly<{ normalizedPhone: string; patientId: string }>;
 export type PatientPhoneClinicScope = Pick<LocationScope, "tenantId" | "clinicId">;
-export type PhoneIndexFailure = Readonly<{ kind: "invalidInput" | "storageFailure" | "generationChanged" }>;
+export type PhoneIndexFailure = Readonly<{ kind: "invalidInput" | "storageFailure" | "generationChanged" | "clinicDisconnected" }>;
 export type PhoneIndexHead = Readonly<{
   generation: number;
   completedAt: Date;
@@ -94,6 +95,10 @@ export class PostgresPatientPhoneIndex {
     try {
       return await this.db.transaction().execute(async trx => {
         await sql`select pg_advisory_xact_lock(hashtext(${scope.tenantId}), hashtext(${scope.clinicId}))`.execute(trx);
+        const connection = await trx.selectFrom("patient_phone_clinic_status").select("enabled")
+          .where("tenant_id", "=", scope.tenantId as PatientPhoneClinicStatusTenantId)
+          .where("clinic_id", "=", scope.clinicId as PatientPhoneClinicStatusClinicId).executeTakeFirst();
+        if (connection?.enabled === false) return err({ kind: "clinicDisconnected" });
         const ids = { tenant_id: scope.tenantId as PatientPhoneIndexTenantId,
           clinic_id: scope.clinicId as PatientPhoneIndexClinicId };
         const head = await trx.selectFrom("patient_phone_sync").select("generation")
@@ -130,6 +135,12 @@ export class PostgresPatientPhoneIndex {
     try {
       await this.db.transaction().execute(async trx => {
         await sql`select pg_advisory_xact_lock(hashtext(${scope.tenantId}), hashtext(${scope.clinicId}))`.execute(trx);
+        await trx.insertInto("patient_phone_clinic_status").values({
+          tenant_id: scope.tenantId as PatientPhoneClinicStatusTenantId,
+          clinic_id: scope.clinicId as PatientPhoneClinicStatusClinicId,
+          enabled: false, changed_at: new Date(),
+        }).onConflict(conflict => conflict.columns(["tenant_id", "clinic_id"])
+          .doUpdateSet({ enabled: false, changed_at: new Date() })).execute();
         await trx.deleteFrom("patient_phone_scan")
           .where("tenant_id", "=", scope.tenantId as PatientPhoneScanTenantId)
           .where("clinic_id", "=", scope.clinicId as PatientPhoneScanClinicId).execute();
@@ -144,6 +155,23 @@ export class PostgresPatientPhoneIndex {
     } catch { return err({ kind: "storageFailure" }); }
   }
 
+  /** Explicit reconnect after clinic ownership and credentials have been re-established. */
+  async enable(scope: PatientPhoneClinicScope): Promise<Result<true, PhoneIndexFailure>> {
+    if (!validScope(scope)) return err({ kind: "invalidInput" });
+    try {
+      await this.db.transaction().execute(async trx => {
+        await sql`select pg_advisory_xact_lock(hashtext(${scope.tenantId}), hashtext(${scope.clinicId}))`.execute(trx);
+        await trx.insertInto("patient_phone_clinic_status").values({
+          tenant_id: scope.tenantId as PatientPhoneClinicStatusTenantId,
+          clinic_id: scope.clinicId as PatientPhoneClinicStatusClinicId,
+          enabled: true, changed_at: new Date(),
+        }).onConflict(conflict => conflict.columns(["tenant_id", "clinic_id"])
+          .doUpdateSet({ enabled: true, changed_at: new Date() })).execute();
+      });
+      return ok(true);
+    } catch { return err({ kind: "storageFailure" }); }
+  }
+
   async find(scope: PatientPhoneClinicScope, normalizedPhone: string, maxAgeMs: number, countryCallingCode: string,
              now: Date = new Date()):
     Promise<Result<PhoneCandidates, PhoneIndexFailure>> {
@@ -152,6 +180,10 @@ export class PostgresPatientPhoneIndex {
         !(now instanceof Date) || !Number.isFinite(now.getTime())) return err({ kind: "invalidInput" });
     try {
       return await this.db.transaction().setIsolationLevel("repeatable read").execute(async trx => {
+        const connection = await trx.selectFrom("patient_phone_clinic_status").select("enabled")
+          .where("tenant_id", "=", scope.tenantId as PatientPhoneClinicStatusTenantId)
+          .where("clinic_id", "=", scope.clinicId as PatientPhoneClinicStatusClinicId).executeTakeFirst();
+        if (connection?.enabled === false) return ok({ kind: "stale", patientIds: [] });
         const sync = await trx.selectFrom("patient_phone_sync")
           .select(["generation", "completed_at", "country_calling_code", "normalization_version"])
           .where("tenant_id", "=", scope.tenantId as PatientPhoneSyncTenantId)

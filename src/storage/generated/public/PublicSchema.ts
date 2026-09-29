@@ -22,6 +22,7 @@ import type { default as CallsTable } from './Calls.js';
 import type { default as NumberRoutesTable } from './NumberRoutes.js';
 import type { default as ClinicWriteStopEventsTable } from './ClinicWriteStopEvents.js';
 import type { default as CallEventsTable } from './CallEvents.js';
+import type { default as PatientPhoneClinicStatusTable } from './PatientPhoneClinicStatus.js';
 import type { default as EffectOutboxTable } from './EffectOutbox.js';
 import type { default as TenantPortabilityFenceEventsTable } from './TenantPortabilityFenceEvents.js';
 import type { default as PatientPhoneScanSeenTable } from './PatientPhoneScanSeen.js';
@@ -68,6 +69,8 @@ export default interface PublicSchema {
   clinic_write_stop_events: ClinicWriteStopEventsTable;
 
   call_events: CallEventsTable;
+
+  patient_phone_clinic_status: PatientPhoneClinicStatusTable;
 
   effect_outbox: EffectOutboxTable;
 

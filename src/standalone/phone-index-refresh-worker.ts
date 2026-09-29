@@ -12,7 +12,7 @@ export type PhoneIndexRefreshTarget = Readonly<{
 }>;
 export type PhoneIndexRefreshResult = Readonly<{
   scope: ClinikoClinicScope;
-  kind: "fresh" | "refreshed" | "busy" | "failed";
+  kind: "fresh" | "refreshed" | "busy" | "disabled" | "failed";
 }>;
 export type PhoneRefreshGuard = Readonly<{
   run<T>(scope: ClinikoClinicScope, task: () => Promise<T>):
@@ -56,7 +56,8 @@ export class PhoneIndexRefreshWorker {
           return { scope: target.scope, kind: "fresh" };
         }
         const refreshed = await target.lookup.refresh(target.scope);
-        return refreshed.ok ? { scope: target.scope, kind: "refreshed" } : failed;
+        return refreshed.ok ? { scope: target.scope, kind: "refreshed" } :
+          refreshed.error.kind === "clinicDisconnected" ? { scope: target.scope, kind: "disabled" } : failed;
       };
       if (!this.guard) return attempt();
       const initial = await this.index.completedAt(target.scope, target.countryCallingCode);

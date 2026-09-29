@@ -428,3 +428,58 @@ test("changing a clinic normalization plan blocks lookup until the index is rebu
     .where("tenant_id", "=", scope.tenantId as never).execute();
   assert.equal(JSON.stringify(rows).includes("private-plan-canary"), false);
 });
+
+test("clinic disconnect fences future and in-flight phone refresh until explicit reconnect", async () => {
+  const scope = { tenantId: "phone-disconnect-tenant", clinicId: "phone-disconnect-clinic" };
+  const index = new PostgresPatientPhoneIndex(db);
+  let releaseThirdRead: (() => void) | undefined;
+  let thirdReadStarted: (() => void) | undefined;
+  const heldRead = new Promise<void>(resolve => { releaseThirdRead = resolve; });
+  const started = new Promise<void>(resolve => { thirdReadStarted = resolve; });
+  let listReads = 0;
+  const reader = ClinikoPatientCandidateReader.create({ scope, apiKey: "synthetic-au5",
+    contactEmail: "test@example.com" }, async () => {
+    listReads += 1;
+    if (listReads === 3) { thirdReadStarted!(); await heldRead; }
+    return Response.json({ total_entries: 1, patients: [{ id: "901", archived_at: null,
+      first_name: "private-disconnect-canary",
+      patient_phone_numbers: [{ number: "0400 999 111", phone_type: "Mobile" }] }] });
+  });
+  assert.equal(reader.ok, true);
+  if (!reader.ok) return;
+  const lookup = new ClinikoPhoneLookup(reader.value, index, "61", 60_000,
+    undefined, new PostgresPatientPhoneScan(db));
+  const worker = new PhoneIndexRefreshWorker(index, [{ scope, lookup,
+    countryCallingCode: "61", refreshEveryMs: 60_000 }]);
+  assert.deepEqual(await worker.runOnce(), [{ scope, kind: "refreshed" }]);
+  assert.deepEqual(await index.clear(scope), { ok: true, value: true });
+  assert.deepEqual(await worker.runOnce(), [{ scope, kind: "disabled" }]);
+  assert.equal(listReads, 1);
+  assert.deepEqual(await lookup.refresh(scope), { ok: false, error: { kind: "clinicDisconnected" } });
+  assert.deepEqual(await index.publish(scope, [{ normalizedPhone: "+61400999111", patientId: "901" }], "61"),
+    { ok: false, error: { kind: "clinicDisconnected" } });
+  const restarted = new PhoneIndexRefreshWorker(new PostgresPatientPhoneIndex(db), [{ scope, lookup,
+    countryCallingCode: "61", refreshEveryMs: 60_000 }]);
+  assert.deepEqual(await restarted.runOnce(), [{ scope, kind: "disabled" }]);
+  assert.equal(listReads, 1);
+  assert.equal((await db.selectFrom("patient_phone_index").selectAll()
+    .where("tenant_id", "=", scope.tenantId as never).execute()).length, 0);
+
+  assert.deepEqual(await index.enable(scope), { ok: true, value: true });
+  assert.deepEqual(await worker.runOnce(), [{ scope, kind: "refreshed" }]);
+  assert.equal(listReads, 2);
+  assert.deepEqual(await index.markStale(scope, 1), { ok: true, value: true });
+  const inFlight = worker.runOnce();
+  await started;
+  assert.deepEqual(await index.clear(scope), { ok: true, value: true });
+  releaseThirdRead!();
+  assert.deepEqual(await inFlight, [{ scope, kind: "failed" }]);
+  assert.deepEqual(await worker.runOnce(), [{ scope, kind: "disabled" }]);
+  assert.equal(listReads, 3);
+  assert.equal((await db.selectFrom("patient_phone_index").selectAll()
+    .where("tenant_id", "=", scope.tenantId as never).execute()).length, 0);
+  assert.equal((await db.selectFrom("patient_phone_scan_links").selectAll()
+    .where("tenant_id", "=", scope.tenantId as never).execute()).length, 0);
+  assert.deepEqual(await index.find(scope, "+61400999111", 60_000, "61"),
+    { ok: true, value: { kind: "stale", patientIds: [] } });
+});
