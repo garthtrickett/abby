@@ -96,3 +96,17 @@ The same pinned patient-free noisy corpus was submitted as in-memory 16 kHz WAV 
 For comparison, the earlier Realtime noisy run had 2 exact matches, 2 wording mismatches, and 8 missing-critical-term results across 12 runs. `gpt-transcribe` recovered all six `kal` critical terms but still lost the booking or urgent-language terms in four `slt` runs; its `slt` date requests retained the critical day with different wording. File request latency begins after the complete WAV is available, so it cannot be compared directly with the paced Realtime turn duration or caller response time. The small synthetic sample cannot establish production accuracy or a latency percentile.
 
 Owner-only local reports are `eval/results/2026-09-29-clean-gpt-transcribe-v1.json`, `eval/results/2026-09-29-telephone-gpt-transcribe-v1.json`, `eval/results/2026-09-29-noisy-gpt-transcribe-v1.json`, and `eval/results/2026-09-29-noisy-gpt-4o-transcribe-v1.json`. They pin runner SHA-256 `b38c9fd28472dbe12ab9ab50396c0379d3c1b005e2182c62b9ec558ad4c0b88e` and the corpus hashes listed above. Every result remains `needsClarification` or `unavailable`; all four reports retain `releaseGate: unverified`. No model switch or caller action gate changed.
+
+## Realtime committed-turn transcription comparison
+
+The same adapter can now select OpenAI's documented `gpt-transcribe` committed-turn workflow for a bounded experiment. The [Realtime transcription guide](https://developers.openai.com/api/docs/guides/realtime-transcription#transcribe-a-committed-turn) describes this model's WebSocket session and detected-language output after a commit. `E2E-162` checks the selected session model, committed item correlation, mismatched configuration failure, and untrusted final. The production standalone composition still uses `gpt-live-transcribe`.
+
+| Realtime `gpt-transcribe` corpus | Runs | Exact match | Wording mismatch | Missing critical term | Provider failure | Turn p50 / p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Clean | 6 | 6 | 0 | 0 | 0 | 4,869 / 5,247 ms |
+| Telephone-band | 6 | 6 | 0 | 0 | 0 | 4,803 / 5,068 ms |
+| Noisy two-speaker | 12 | 6 | 1 | 5 | 0 | 4,857 / 5,821 ms |
+
+These patient-free runs used two repeats and two concurrent sessions per corpus, with the same 20 ms media-frame pacing and no context hints. The noisy result improves on the earlier `gpt-live-transcribe` run's 8 critical misses, but five misses still block promotion of natural-language caller turns. Turn duration includes paced fixture replay and connection setup, and cannot establish audible response latency. This small synthetic sample cannot select a production model or determine a pilot quality threshold.
+
+The owner-only reports are `eval/results/2026-09-29-clean-realtime-gpt-transcribe-v1.json`, `eval/results/2026-09-29-telephone-realtime-gpt-transcribe-v1.json`, and `eval/results/2026-09-29-noisy-realtime-gpt-transcribe-v1.json`. They pin adapter SHA-256 `65104bd11ce1466bee5c367b2f11fee5f90dabcc63e61d92a4deddcd3243f3b2`. All finals remain `needsClarification`, and every report retains `releaseGate: unverified`.

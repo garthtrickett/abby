@@ -12,9 +12,11 @@ const maxTranscriptChars = 4_096;
 const maxEarlyCompletions = 8;
 
 type Socket = Pick<WebSocket, "on" | "send" | "close" | "terminate" | "bufferedAmount" | "readyState">;
+export type OpenAIRealtimeTranscriptionModel = "gpt-live-transcribe" | "gpt-transcribe";
 export type OpenAIRealtimeTranscriptionConfig = Readonly<{
   apiKey: string;
   sessionId: string;
+  model?: OpenAIRealtimeTranscriptionModel;
   socketFactory?: (url: string, headers: Readonly<Record<string, string>>) => Socket;
 }>;
 
@@ -75,6 +77,7 @@ type PendingTurn = {
 /** Transient Realtime transcription; Abby owns endpointing and the final caller turn. */
 export class OpenAIRealtimeTranscription implements TranscriptionPort {
   private readonly sessionId: string;
+  private readonly model: OpenAIRealtimeTranscriptionModel;
   private readonly socket: Socket;
   private readonly converter = new Pcm16To24();
   private readonly ready: Promise<boolean>;
@@ -87,17 +90,19 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
   constructor(config: OpenAIRealtimeTranscriptionConfig) {
     if (!config || typeof config.apiKey !== "string" || !config.apiKey.trim() || /[\r\n]/.test(config.apiKey) ||
         typeof config.sessionId !== "string" || !config.sessionId.trim() || config.sessionId.length > 256 ||
+        (config.model !== undefined && config.model !== "gpt-live-transcribe" && config.model !== "gpt-transcribe") ||
         (config.socketFactory !== undefined && typeof config.socketFactory !== "function")) {
       throw new RangeError("invalid transcription configuration");
     }
     this.sessionId = config.sessionId;
+    this.model = config.model ?? "gpt-live-transcribe";
     this.ready = new Promise(resolve => { this.resolveReady = resolve; });
     const headers = { Authorization: `Bearer ${config.apiKey}` };
     this.socket = config.socketFactory?.(endpoint, headers) ?? new WebSocket(endpoint, { headers });
     this.socket.on("open", () => {
       this.send({ type: "session.update", session: { type: "transcription", audio: { input: {
         format: { type: "audio/pcm", rate: 24000 },
-        transcription: { model: "gpt-live-transcribe" }, turn_detection: null,
+        transcription: { model: this.model }, turn_detection: null,
       } } } });
     });
     this.socket.on("message", data => this.message(data));
@@ -146,7 +151,7 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
       } } } | undefined;
       if (session?.type !== "transcription" || session.audio?.input?.format?.type !== "audio/pcm" ||
           session.audio.input.format.rate !== 24000 ||
-          session.audio.input.transcription?.model !== "gpt-live-transcribe" ||
+          session.audio.input.transcription?.model !== this.model ||
           session.audio.input.turn_detection !== null) { this.fail(); return; }
       this.configured = true;
       this.resolveReady(true);
