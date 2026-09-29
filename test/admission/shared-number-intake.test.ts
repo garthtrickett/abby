@@ -61,6 +61,25 @@ function fixture(kind: "memory" | "postgres") {
     replaceHost(host: ReferenceNumberRoutingHost) { routeHost = host; } };
 }
 
+function pausePendingRead(ledger: LedgerStore): { ledger: LedgerStore; entered: Promise<void>; release: () => void } {
+  let markEntered!: () => void;
+  let release!: () => void;
+  const entered = new Promise<void>(done => { markEntered = done; });
+  const gate = new Promise<void>(done => { release = done; });
+  const paused = new Proxy(ledger, {
+    get(target, key) {
+      if (key === "findPendingLocation") return async (callId: string) => {
+        markEntered();
+        await gate;
+        return target.findPendingLocation(callId);
+      };
+      const value = Reflect.get(target, key) as unknown;
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  return { ledger: paused, entered, release };
+}
+
 for (const kind of kinds) {
   test(`${kind}: shared-number retry reuses durable candidates without reading location policy`, async () => {
     const app = fixture(kind);
@@ -266,6 +285,39 @@ for (const kind of kinds) {
     const receipt = value(await app.ledger.findAdmission(callIdFor(event.key)));
     assert.ok(receipt);
     assert.ok(receipt.scope.locationId === "main" || receipt.scope.locationId === "other");
+  });
+
+  test(`${kind}: a choice seeing the bound row after a stale admission read reports a replay conflict`, async () => {
+    const app = fixture(kind);
+    value(await app.policy.changeAutomationEnabled(app.main, "0", true, "clinic-admin"));
+    const event = app.event("bound-race");
+    value(await app.intake.begin(event));
+    value(await app.intake.attachSession(event, "session"));
+    const paused = pausePendingRead(app.ledger);
+    const intake = new SharedNumberIntakeService(paused.ledger, app.router,
+      new CallAdmissionService(paused.ledger, app.router.resolve, () => now, async () => ok(true)), () => now);
+    const losingChoice = intake.choose(event, app.turn(event, "losing-turn"), app.other.locationId, 1);
+    await paused.entered;
+    const winner = value(await app.intake.choose(event, app.turn(event, "winning-turn"), app.main.locationId, 1));
+    assert.equal(winner.kind, "created");
+    paused.release();
+    assert.deepEqual(await losingChoice, { ok: false, error: { kind: "keyMismatch" } });
+  });
+
+  test(`${kind}: admission binding sees a committed competing location after a stale read`, async () => {
+    const app = fixture(kind);
+    value(await app.policy.changeAutomationEnabled(app.main, "0", true, "clinic-admin"));
+    const event = app.event("binding-race");
+    value(await app.intake.begin(event));
+    value(await app.intake.attachSession(event, "session"));
+    const paused = pausePendingRead(app.ledger);
+    const admission = new CallAdmissionService(paused.ledger, app.router.resolve, () => now, async () => ok(true));
+    const losingBinding = admission.bindSelected(event, value(await app.policy.read(app.other)), "session", 1, "losing-turn");
+    await paused.entered;
+    const winner = value(await app.intake.choose(event, app.turn(event, "winning-turn"), app.main.locationId, 1));
+    assert.equal(winner.kind, "created");
+    paused.release();
+    assert.deepEqual(await losingBinding, { ok: false, error: { kind: "invalidLocationChoice" } });
   });
 
   test(`${kind}: single-location calls still use normal admission and unknown numbers do not reserve`, async () => {
