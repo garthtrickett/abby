@@ -117,7 +117,7 @@ test("a durable fence keeps a configuration-only archive unchanged until an audi
     archiveId: "fence-before", actorRef: "export-admin", createdAt: "2026-09-29T00:00:00Z" };
   const exportAuthority = { authorizeAndRecord: async () => ok({ requestRef: "export-audit" }) };
   const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference");
-  const catalogue = new PostgresKnowledgeCatalogue(db);
+  const catalogue = new PostgresKnowledgeCatalogue(db, "unsafeReference");
   const fence = new PostgresPortabilityFence(db);
   const ledger = new PostgresLedger(db, undefined, undefined, "unsafeReference");
   assert.equal((await policy.changeBookingEnabled(scope, "0", true, "clinic-admin")).ok, true);

@@ -68,7 +68,7 @@ test("default archive rejects rich policy and any standalone knowledge draft", a
   const scope = { tenantId: "minimal-export-knowledge", clinicId: "clinic", locationId: "location" };
   const app = createStandaloneTextComposition(db, new ReferenceClinicHost([], []));
   assert.equal((await app.policy.changeBookingEnabled(scope, "0", false, "clinic-admin")).ok, true);
-  const catalogue = new PostgresKnowledgeCatalogue(db);
+  const catalogue = new PostgresKnowledgeCatalogue(db, "unsafeReference");
   assert.equal((await catalogue.saveDraft(scope, "parking", "0", "clinic-owner", "Patient name in draft",
     "2026-09-01T00:00:00Z", "2026-10-01T00:00:00Z", "clinic-admin")).ok, true);
   assert.deepEqual(await buildPostgresConfigArchive(db, { ...request, scope, targetScope: { ...scope, tenantId: "buyer-knowledge" },
