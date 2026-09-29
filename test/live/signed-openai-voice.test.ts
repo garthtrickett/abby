@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
+import { readFileSync } from "node:fs";
 import type { Server } from "node:http";
 import test from "node:test";
 import { sql } from "kysely";
@@ -15,7 +17,7 @@ import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
 
-test("opt-in patient-free signed local call uses live OpenAI speech and exact Twilio mark",
+test("opt-in signed local call uses live speech, caller transcription, and bounded clarification",
   { skip: process.env.ABBY_LIVE_VOICE_EVAL !== "1" ||
     process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || !process.env.ABBY_OPENAI_API_KEY,
   timeout: 60_000 }, async () => {
@@ -48,11 +50,13 @@ test("opt-in patient-free signed local call uses live OpenAI speech and exact Tw
     const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable",
       async () => ok(true), false, "standaloneMinimal");
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
+    let clinikoReads = 0;
     const availability = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5",
       contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
-    async () => { throw new Error("greeting must not query Cliniko"); });
+    async () => { clinikoReads += 1; throw new Error("uncertain speech must not query Cliniko"); });
     assert.ok(availability.ok);
     const models: string[] = [];
+    let intentRequests = 0;
     const prepared = await createStandaloneClinikoVoiceServer({ db,
       twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
         fallbackNumbers: { [number]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x48),
@@ -61,6 +65,10 @@ test("opt-in patient-free signed local call uses live OpenAI speech and exact Tw
         clinicDate: () => "2026-09-29" }],
       openai: { apiKey, intentModel: "gpt-6-luna", speechFallbackModel: "tts-1",
         fetch: (async (url, init) => {
+          if (String(url) === "https://api.openai.com/v1/responses") {
+            intentRequests += 1;
+            throw new Error("uncertain speech must not reach intent model");
+          }
           assert.equal(String(url), "https://api.openai.com/v1/audio/speech");
           const body = JSON.parse(String(init?.body)) as { model: string };
           models.push(body.model);
@@ -118,12 +126,48 @@ test("opt-in patient-free signed local call uses live OpenAI speech and exact Tw
     assert.ok(models.length >= 1 && models.length <= 2);
     assert.equal(models[0], "gpt-4o-mini-tts");
     if (models.length === 2) assert.equal(models[1], "tts-1");
+    const greetingMediaCount = mediaCount;
+    const greetingModelAttempts = models.length;
     caller.send(JSON.stringify({ event: "mark", sequenceNumber: "2", streamSid,
       mark: { name: markName } }));
+    const followup = new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("clarification mark timed out")), 25_000);
+      caller!.on("message", raw => {
+        const event = JSON.parse(raw.toString()) as { event: string; mark?: { name: string } };
+        if (event.event === "mark" && event.mark?.name && event.mark.name !== markName) {
+          clearTimeout(timer);
+          resolve(event.mark.name);
+        }
+      });
+    });
+    const source = readFileSync(new URL("../../eval/audio/availability-thursday.pcm", import.meta.url));
+    const ulaw = execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "s16le",
+      "-ar", "16000", "-ac", "1", "-i", "pipe:0", "-ar", "8000", "-ac", "1",
+      "-acodec", "pcm_mulaw", "-f", "mulaw", "pipe:1"], { input: source, maxBuffer: 1_000_000 });
+    let inboundChunk = 0;
+    for (let offset = 0; offset < ulaw.length + 8_000; offset += 160) {
+      const payload = new Uint8Array(160).fill(0xff);
+      if (offset < ulaw.length) payload.set(ulaw.subarray(offset, offset + 160));
+      inboundChunk += 1;
+      caller.send(JSON.stringify({ event: "media", sequenceNumber: String(inboundChunk + 2), streamSid,
+        media: { track: "inbound", chunk: String(inboundChunk), timestamp: String((inboundChunk - 1) * 20),
+          payload: Buffer.from(payload).toString("base64") } }));
+      await new Promise<void>(resolve => setTimeout(resolve, 20));
+    }
+    const followupMark = await followup;
+    assert.ok(followupMark);
+    assert.ok(mediaCount > greetingMediaCount);
+    assert.ok(models.length > greetingModelAttempts && models.length <= greetingModelAttempts + 2);
+    assert.equal(intentRequests, 0);
+    assert.equal(clinikoReads, 0);
+    caller.send(JSON.stringify({ event: "mark", sequenceNumber: String(inboundChunk + 3), streamSid,
+      mark: { name: followupMark } }));
     assert.deepEqual(await scanPatientDataCanaries(db, [{ label: "caller", value: callerPhone },
       { label: "provider_call", value: callSid }]), { ok: true, value: [] });
-    process.stdout.write(`${JSON.stringify({ modelAttempts: models, mediaCount, nonSilence,
-      localMarkReturned: true, realTelephonyEvidence: false })}\n`);
+    process.stdout.write(`${JSON.stringify({ modelAttempts: models, greetingMediaCount,
+      clarificationMediaCount: mediaCount - greetingMediaCount, nonSilence,
+      localMarksReturned: 2, inboundFrames: inboundChunk, intentRequests, clinikoReads,
+      realTelephonyEvidence: false })}\n`);
   } finally {
     caller?.terminate();
     if (server) { server.close(); await once(server, "close"); }
