@@ -103,6 +103,12 @@ export class CallAdmissionService {
     if (original.key.accountRef !== event.key.accountRef || original.key.providerCallRef !== event.key.providerCallRef ||
         original.dialedNumber !== event.dialedNumber) return err({ kind: "callConflict" });
     if (pending.value.status === "expired") return err({ kind: "admissionExpired" });
+    if (pending.value.status === "bound") {
+      const raced = await this.ledger.findAdmission(callId);
+      if (!raced.ok) return raced;
+      return raced.value ? this.selectedReplay(raced.value, event, policy, sessionId, expectedLeaseVersion, turnId)
+        : err({ kind: "storageCorrupt" });
+    }
     if (pending.value.status !== "pending") return err({ kind: "storageCorrupt" });
     if (!policyMatchesPending(pending.value, policy)) return err({ kind: "scopeMismatch" });
     if (!pending.value.sessionLease || pending.value.sessionLease.sessionId !== sessionId ||
@@ -125,9 +131,17 @@ export class CallAdmissionService {
     if (existing.value) return duplicateOrConflict(existing.value, event);
     const pending = await this.ledger.findPendingLocation(callId);
     if (!pending.ok) return pending;
-    if (pending.value) return pending.value.admission.key.accountRef === event.key.accountRef &&
-      pending.value.admission.key.providerCallRef === event.key.providerCallRef && pending.value.admission.dialedNumber === event.dialedNumber
-      ? err({ kind: pending.value.status === "expired" ? "admissionExpired" : "locationChoicePending" }) : err({ kind: "callConflict" });
+    if (pending.value) {
+      if (pending.value.admission.key.accountRef !== event.key.accountRef ||
+          pending.value.admission.key.providerCallRef !== event.key.providerCallRef ||
+          pending.value.admission.dialedNumber !== event.dialedNumber) return err({ kind: "callConflict" });
+      if (pending.value.status === "bound") {
+        const raced = await this.ledger.findAdmission(callId);
+        if (!raced.ok) return raced;
+        return raced.value ? duplicateOrConflict(raced.value, event) : err({ kind: "storageCorrupt" });
+      }
+      return err({ kind: pending.value.status === "expired" ? "admissionExpired" : "locationChoicePending" });
+    }
     let policy: Result<CallPolicy, RouteFailure>;
     try {
       policy = await this.resolvePolicy(event.dialedNumber, event.key.accountRef);

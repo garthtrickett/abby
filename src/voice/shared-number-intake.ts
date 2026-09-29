@@ -42,6 +42,20 @@ export class SharedNumberIntakeService {
     this.now = now;
   }
 
+  private async replayChoice(receipt: AdmissionReceipt, event: AuthenticatedInboundCall, turn: FinalCallerTurn,
+                             selectedLocationId: string, expectedLeaseVersion: number):
+    Promise<Result<AdmissionResult, TransitionFailure | RouteFailure>> {
+    const pending = await this.ledger.findPendingLocation(receipt.callId);
+    if (!pending.ok) return pending;
+    const evidence = pending.value?.choiceEvidence;
+    if (!pending.value || pending.value.status !== "bound" ||
+        !evidence || evidence.sessionId !== turn.sessionId ||
+        evidence.leaseVersion !== expectedLeaseVersion ||
+        evidence.turnId !== turn.turnId ||
+        evidence.selectedLocationId !== selectedLocationId) return err({ kind: "keyMismatch" });
+    return existingChoice(receipt, event, selectedLocationId);
+  }
+
   async begin(event: AuthenticatedInboundCall): Promise<Result<SharedNumberIntakeResult, TransitionFailure | RouteFailure>> {
     if (!validEvent(event)) return err({ kind: "invalidTransition" });
     const callId = callIdFor(event.key);
@@ -56,6 +70,13 @@ export class SharedNumberIntakeService {
     if (pending.value) {
       if (!matchesEvent(pending.value.admission, event)) return err({ kind: "callConflict" });
       if (pending.value.status === "expired") return err({ kind: "admissionExpired" });
+      if (pending.value.status === "bound") {
+        const raced = await this.ledger.findAdmission(callId);
+        if (!raced.ok) return raced;
+        if (!raced.value) return err({ kind: "storageCorrupt" });
+        const duplicate = existingChoice(raced.value, event);
+        return duplicate.ok ? ok({ kind: "admitted", admission: duplicate.value }) : duplicate;
+      }
       if (pending.value.status !== "pending") return err({ kind: "storageCorrupt" });
       return ok({ kind: "locationChoice", pending: pending.value, newReservation: false });
     }
@@ -117,20 +138,18 @@ export class SharedNumberIntakeService {
         !Number.isSafeInteger(expectedLeaseVersion) || expectedLeaseVersion < 1) return err({ kind: "invalidTransition" });
     const existing = await this.ledger.findAdmission(callId);
     if (!existing.ok) return existing;
-    if (existing.value) {
-      const pending = await this.ledger.findPendingLocation(callId);
-      if (!pending.ok) return pending;
-      if (!pending.value || pending.value.status !== "bound" ||
-          pending.value.choiceEvidence?.sessionId !== turn.sessionId || pending.value.choiceEvidence.leaseVersion !== expectedLeaseVersion ||
-          pending.value.choiceEvidence.turnId !== turn.turnId ||
-          pending.value.choiceEvidence.selectedLocationId !== selectedLocationId) return err({ kind: "keyMismatch" });
-      return existingChoice(existing.value, event, selectedLocationId);
-    }
+    if (existing.value) return this.replayChoice(existing.value, event, turn, selectedLocationId, expectedLeaseVersion);
     const pending = await this.ledger.findPendingLocation(callId);
     if (!pending.ok) return pending;
     if (!pending.value) return err({ kind: "callUnknown" });
     if (!matchesEvent(pending.value.admission, event)) return err({ kind: "callConflict" });
     if (pending.value.status === "expired") return err({ kind: "admissionExpired" });
+    if (pending.value.status === "bound") {
+      const raced = await this.ledger.findAdmission(callId);
+      if (!raced.ok) return raced;
+      return raced.value ? this.replayChoice(raced.value, event, turn, selectedLocationId, expectedLeaseVersion)
+        : err({ kind: "storageCorrupt" });
+    }
     if (pending.value.status !== "pending") return err({ kind: "storageCorrupt" });
     const current = this.now();
     if (!Number.isFinite(Date.parse(current)) || Date.parse(turn.at) < Date.parse(pending.value.admission.acceptedAt) ||
