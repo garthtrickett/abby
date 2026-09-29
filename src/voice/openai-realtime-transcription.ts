@@ -9,6 +9,7 @@ const failure: TranscriptionFailure = { kind: "transcriptionUnavailable" };
 const maxBufferedBytes = 1_000_000;
 const maxEventBytes = 64_000;
 const maxTranscriptChars = 4_096;
+const maxEarlyCompletions = 8;
 
 type Socket = Pick<WebSocket, "on" | "send" | "close" | "terminate" | "bufferedAmount" | "readyState">;
 export type OpenAIRealtimeTranscriptionConfig = Readonly<{
@@ -67,6 +68,7 @@ type PendingTurn = {
   generation: number;
   itemId?: string;
   transcript?: string;
+  earlyCompletions: Map<string, string>;
   resolve: (result: Result<readonly TranscriptEvent[], TranscriptionFailure>) => void;
 };
 
@@ -154,13 +156,22 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
     if (event.type === "input_audio_buffer.committed") {
       if (typeof event.item_id !== "string" || !event.item_id || pending.itemId) { this.fail(); return; }
       pending.itemId = event.item_id;
+      const early = pending.earlyCompletions.get(event.item_id);
+      pending.earlyCompletions.clear();
+      if (early !== undefined) pending.transcript = early;
       if (pending.transcript !== undefined) this.complete(pending);
     } else if (event.type === "conversation.item.input_audio_transcription.completed") {
-      if (typeof event.item_id !== "string" || typeof event.transcript !== "string" ||
+      if (typeof event.item_id !== "string" || !event.item_id || typeof event.transcript !== "string" ||
           event.transcript.length > maxTranscriptChars) { this.fail(); return; }
       if (event.item_id === pending.itemId) {
         pending.transcript = event.transcript;
         this.complete(pending);
+      } else if (!pending.itemId) {
+        // If a completion precedes its commit acknowledgment, keep only a bounded
+        // set of candidates and accept only the committed item ID.
+        if (pending.earlyCompletions.has(event.item_id) ||
+            pending.earlyCompletions.size >= maxEarlyCompletions) { this.fail(); return; }
+        pending.earlyCompletions.set(event.item_id, event.transcript);
       }
     }
   }
@@ -207,7 +218,7 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
         signal.removeEventListener("abort", abort);
         resolve(result);
       };
-      this.pending = { generation, resolve: settle };
+      this.pending = { generation, earlyCompletions: new Map(), resolve: settle };
       if (signal.aborted || !this.send({ type: "input_audio_buffer.commit" })) this.fail();
     });
   }
