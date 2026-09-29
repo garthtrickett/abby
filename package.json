@@ -20,6 +20,7 @@
     "test:postgres": "npm run build:availability-console && node --test --test-concurrency=4 test/text/*.test.ts test/storage/*.test.ts test/composition/*.test.ts test/admission/*.test.ts test/voice/*.test.ts test/cliniko/*.test.ts test/portability/*.test.ts test/contract/*.test.ts",
     "eval:model": "node scripts/evaluate-model.ts",
     "eval:availability-intent": "node scripts/evaluate-availability-intent.ts",
+    "eval:transcription": "node scripts/evaluate-transcription.ts",
     "probe:postgres": "bash scripts/with-postgres.sh bash scripts/probe-postgres.sh",
     "test": "npm run typecheck && npm run test:text"
   },

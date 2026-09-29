@@ -25,3 +25,15 @@ npm run eval:availability-intent -- --model <model-id> --out eval/results/availa
 ```
 
 The report is created with owner-only permissions and cannot overwrite an earlier run. It records repeat-level verdicts and elapsed time, but no caller text or API key. Runs default to three repeats and four concurrent requests, with the same bounded `--repeats` and `--concurrency` overrides as `eval:model`. A mismatch or provider failure exits nonzero. Human review and the voice evaluation remain pending even if every synthetic text case matches. `gpt-live-transcribe` provides no confidence score, so this model-only result cannot promote a real transcript to `clear` or enable patient calls.
+
+## Realtime transcription smoke evaluation
+
+`transcription-v1.json` binds three synthetic, patient-free PCM fixtures by SHA-256. The fixtures were generated locally with FFmpeg's Flite voice, then converted to mono signed 16-bit PCM at 16 kHz. They exercise a date, a booking request, and urgent language through Abby's existing `gpt-live-transcribe` adapter. They are clean, robotic speech and cannot establish performance on a telephone line or on real callers.
+
+With `ABBY_OPENAI_API_KEY` already in the environment, run:
+
+```sh
+npm run eval:transcription -- --out eval/results/transcription-candidate.json
+```
+
+The runner verifies every fixture digest before opening a provider session, sends 20 ms frames at their recorded pace, and commits each turn through the adapter's normal 16-to-24 kHz conversion and item-ID correlation. It defaults to three repeats and two concurrent sessions; `--repeats` (1–10) and `--concurrency` (1–4) are bounded. The owner-only report records the exact model, corpus and source hashes, final transcript from synthetic audio, repeat-level latency, and whether the expected words and safety-critical terms were preserved. It does not contain an API key or patient audio. A missing critical term, mismatch, empty result, or provider failure exits nonzero. Every final remains `needsClarification`; a matching synthetic transcript does not authorize caller actions or mark live-call readiness. Human review, representative audio, and a real phone call remain separate gates. The [official OpenAI Realtime transcription guide](https://developers.openai.com/api/docs/guides/realtime-transcription) defines the session and commit protocol and cautions against tuning from synthetic audio alone.
