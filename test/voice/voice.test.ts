@@ -21,7 +21,7 @@ import { ModelIngress } from "../../src/model/proposal.ts";
 import type { RawModelPort } from "../../src/model/proposal.ts";
 import { ModelWork } from "../../src/model/work.ts";
 import { OpenAIResponsesPort } from "../../src/model/openai-responses-port.ts";
-import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
+import { createReferenceStandaloneTextComposition } from "../support/reference-standalone-composition.ts";
 import { CallAdmissionService } from "../../src/voice/admission.ts";
 import { CallLivenessMonitor } from "../../src/voice/call-liveness-monitor.ts";
 import { AttachedVoiceSessions } from "../../src/voice/managed-voice-session.ts";
@@ -139,7 +139,7 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
   if (kind === "postgres") {
     assert.ok(db);
     ledger = new PostgresLedger(db, suggestedAt => suggestedAt);
-    ({ policy, reception } = createStandaloneTextComposition(db, host, options.bookingMode ?? "execute", ledger, availability, undefined, undefined, model, host));
+    ({ policy, reception } = createReferenceStandaloneTextComposition(db, host, options.bookingMode ?? "execute", ledger, availability, undefined, undefined, model, host));
   } else {
     ledger = new MemoryLedger();
     policy = new MemoryPolicyStore(options.bookingMode);

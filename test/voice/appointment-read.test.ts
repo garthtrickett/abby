@@ -9,7 +9,7 @@ import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { createEmbeddedTextComposition } from "../../src/reference/embedded-composition.ts";
 import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
-import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
+import { createReferenceStandaloneTextComposition } from "../support/reference-standalone-composition.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
 import { CallAdmissionService } from "../../src/voice/admission.ts";
@@ -48,7 +48,7 @@ async function fixture(kind: "memory" | "postgres", suffix: string, verified = t
   const reader = value(ClinikoAppointmentReader.create({ scope, apiKey: "synthetic-key-au5", contactEmail: "dev@example.test", businessId: "11" }, host, port, () => at(3)));
   const ledger = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt) : new MemoryLedger();
   const composed = kind === "postgres"
-    ? createStandaloneTextComposition(db!, host, "execute", ledger, undefined, reader)
+    ? createReferenceStandaloneTextComposition(db!, host, "execute", ledger, undefined, reader)
     : { policy: new MemoryPolicyStore(), reception: undefined };
   const policy = composed.policy;
   const reception = kind === "postgres" ? composed.reception : createEmbeddedTextComposition(ledger, policy, host, undefined, reader);

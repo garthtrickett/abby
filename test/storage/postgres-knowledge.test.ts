@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
-import { createStandaloneTextComposition } from "../../src/standalone/text-composition.ts";
+import { createReferenceStandaloneTextComposition } from "../support/reference-standalone-composition.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresKnowledgeCatalogue } from "../../src/storage/postgres-knowledge-catalogue.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
@@ -16,7 +16,7 @@ test("PostgreSQL knowledge approval is scoped, durable, and compare-and-swap pro
   const scope = { tenantId: "knowledge-tenant", clinicId: "knowledge-clinic", locationId: "knowledge-location" };
   const other = { ...scope, locationId: "other-location" };
   const host = new ReferenceClinicHost([], []);
-  const composition = createStandaloneTextComposition(db, host, "requestOnly");
+  const composition = createReferenceStandaloneTextComposition(db, host, "requestOnly");
   const catalogue = composition.knowledge as PostgresKnowledgeCatalogue;
   const admin = new CommandGateway({ actorRef: "knowledge-admin", role: "clinicAdmin", scope },
     composition.policy, composition.reception, undefined, undefined, undefined, undefined, catalogue);
