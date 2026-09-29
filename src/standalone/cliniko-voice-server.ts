@@ -67,6 +67,7 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
   for (const route of config.routes) {
     if (!route.scope.tenantId || !route.scope.clinicId || !route.scope.locationId ||
         !route.routeVersion?.trim() || !(route.availability instanceof ClinikoAvailabilityReader) ||
+        !route.availability.matchesScope(route.scope) ||
         typeof route.clinicDate !== "function" || routes.has(route.dialedNumber) ||
         !Object.hasOwn(twilio.fallbackNumbers, route.dialedNumber)) {
       throw new RangeError("invalid clinic voice route");
