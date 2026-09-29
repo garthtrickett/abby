@@ -96,6 +96,14 @@ export class MemoryLedger implements LedgerStore, EffectCallLeaseStore {
     this.leaseClock = leaseClock;
   }
 
+  /** Release a ledger owned by one disconnected live call. Do not reuse it afterward. */
+  dispose(): void {
+    this.calls.clear();
+    this.effectCallLeases.clear();
+    this.pendingLocations.clear();
+    this.writeStops.clear();
+  }
+
   private stopKey(scope: LocationScope): string {
     return JSON.stringify([scope.tenantId, scope.clinicId]);
   }
