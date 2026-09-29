@@ -91,6 +91,7 @@ function runStream(socket: WebSocket, request: IncomingMessage, config: TwilioIn
   let connected: string | undefined;
   let call: TwilioWireCall | undefined;
   let tail = Promise.resolve();
+  let pendingMessages = 0;
   let disconnected = false;
   let claimedKey: string | undefined;
   const deadline = setTimeout(() => socket.close(1008), startDeadlineMs);
@@ -135,8 +136,13 @@ function runStream(socket: WebSocket, request: IncomingMessage, config: TwilioIn
         if (!second.ok) socket.close(1008);
         return;
       }
-      const received = await call.receive(raw);
-      if (!received.ok) socket.close(1008);
+      // Dispatch in wire order without waiting for semantic work. An inbound mark
+      // can then release a clear fence awaited by an earlier media message.
+      if (pendingMessages >= 64) { socket.close(1008); return; }
+      pendingMessages += 1;
+      void call.receive(raw).then(received => {
+        if (!received.ok) socket.close(1008);
+      }, () => socket.close(1011)).finally(() => { pendingMessages -= 1; });
     }).catch(() => socket.close(1011));
   });
 }
