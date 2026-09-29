@@ -39,6 +39,8 @@ export type TransientVoiceConfig = Readonly<{
   resolveIntent: IntentResolver;
   readiness?: AutomationReadiness;
   availability?: ClinikoAvailabilityReader;
+  approvedGreeting?: ApprovedGreeting;
+  keypadAvailabilityDate?: (digit: string) => string | undefined;
   callerCandidateLookup?: CallerCandidateLookup;
   mediaOptions?: MediaTurnOptions;
   playbackOptions?: StreamedPlaybackOptions;
@@ -58,6 +60,9 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
   if (config.availability && !(config.availability instanceof ClinikoAvailabilityReader)) {
     throw new TypeError("standalone availability requires a Cliniko reader");
   }
+  if (config.keypadAvailabilityDate && (!config.availability || !config.approvedGreeting)) {
+    throw new TypeError("keypad availability requires a Cliniko reader and approved greeting");
+  }
   const sessionId = randomUUID();
   const transcription = config.transcriptionFactory
     ? config.transcriptionFactory(sessionId) : config.transcription;
@@ -65,7 +70,9 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
   const readiness = config.readiness ?? unprovenReadiness;
   const now = config.now ?? (() => new Date().toISOString());
   const ledger = new MemoryLedger(readiness);
-  const policy = new PostgresPolicyStore(config.db, referenceDefaultPolicy, "unavailable", readiness, false, "standaloneMinimal");
+  const defaultPolicy = (scope: LocationScope) => ({ ...referenceDefaultPolicy(scope),
+    ...(config.approvedGreeting ? { greeting: structuredClone(config.approvedGreeting) } : {}) });
+  const policy = new PostgresPolicyStore(config.db, defaultPolicy, "unavailable", readiness, false, "standaloneMinimal");
   let greeting: ApprovedGreeting | undefined;
   const router = new ClinicPolicyRouter(config.routingHost, { read: async scope => {
     const loaded = await policy.read(scope);
@@ -80,6 +87,7 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
     event: config.stream.event, streamStartedAt: config.stream.streamStartedAt,
     sessionId, ledger, intake, transcription,
     synthesis: config.synthesis, send: config.send, now,
+    ...(config.keypadAvailabilityDate ? { keypadAvailabilityDate: config.keypadAvailabilityDate } : {}),
     ...(config.callerCandidateLookup ? { callerCandidateLookup: config.callerCandidateLookup } : {}),
     ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}),
     ...(config.playbackOptions ? { playbackOptions: config.playbackOptions } : {}),

@@ -67,8 +67,12 @@ test("E2E-130 synthetic Twilio: ordered wire events start the call, prove greeti
   assert.ok(after.ok);
   assert.equal(Object.values(after.value.presentations)[0]?.status, "played");
 
+  const disabledKeypad = await call.receive(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid,
+    dtmf: { track: "inbound_track", digit: "2" } }));
+  assert.deepEqual(disabledKeypad, { ok: true, value: { kind: "ignored" } });
+
   for (let index = 0; index < 7; index += 1) {
-    const incoming = await call.receive(JSON.stringify({ event: "media", sequenceNumber: String(index + 3), streamSid,
+    const incoming = await call.receive(JSON.stringify({ event: "media", sequenceNumber: String(index + 4), streamSid,
       media: { track: "inbound", chunk: String(index + 1), timestamp: String(index * 20),
         payload: Buffer.alloc(160, index < 2 ? 0x9f : 0xff).toString("base64") } }));
     assert.ok(incoming.ok, incoming.ok ? "" : incoming.error.kind);
@@ -79,7 +83,7 @@ test("E2E-130 synthetic Twilio: ordered wire events start the call, prove greeti
   assert.ok(handled.ok);
   assert.equal(handled.value.processedTurnIds.length, 1);
   assert.ok(handled.value.conversationRevision > 0);
-  const stopped = await call.receive(JSON.stringify({ event: "stop", sequenceNumber: "10", streamSid,
+  const stopped = await call.receive(JSON.stringify({ event: "stop", sequenceNumber: "11", streamSid,
     stop: { accountSid, callSid } }));
   assert.ok(stopped.ok && stopped.value.kind === "stopped");
   const ended = await ledger.read(callId, scope);

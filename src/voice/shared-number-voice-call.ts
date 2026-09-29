@@ -155,6 +155,17 @@ export class SharedNumberVoiceCall {
     } finally { done(); }
   }
 
+  async acceptKeypadAvailability(date: string, now: string): Promise<Result<SharedVoiceTurn, SharedVoiceFailure>> {
+    if (this.closing || this.terminal) return err({ kind: "disconnected" });
+    if (this.inFlight) return err({ kind: "deliveryBlocked" });
+    if (!this.full) return err({ kind: "sessionUnknown" });
+    const done = this.trackTransition();
+    try {
+      const turn = await this.full.acceptKeypadAvailability(date, now);
+      return turn.ok ? ok({ kind: "callerTurn", state: turn.value }) : turn;
+    } finally { done(); }
+  }
+
   acceptPlaybackResult(playbackId: string, status: "played" | "failed", now: string):
     Promise<Result<PendingLocationCall | CallState, SharedVoiceFailure>> {
     if (this.closing || this.terminal) return Promise.resolve(err({ kind: "disconnected" }));

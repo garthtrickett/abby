@@ -10,20 +10,23 @@ export type TwilioConnectedCallConfig = Omit<ConnectedVoiceCallConfig, "output">
   streamStartedAt: string;
   send: TwilioStreamConfig["send"];
   now?: () => string;
+  keypadAvailabilityDate?: (digit: string) => string | undefined;
 }>;
 export type TwilioConnectedProgress =
   | Readonly<{ kind: "connected" | "ignored" | "stopped" }>
   | Readonly<{ kind: "started"; value: ConnectedVoiceStart }>
   | Readonly<{ kind: "media"; value: ConnectedVoiceProgress }>
+  | Readonly<{ kind: "keypad"; value: ConnectedVoiceProgress }>
   | Readonly<{ kind: "played"; value: PendingLocationCall | CallState }>;
 export type TwilioConnectedFailure = TwilioStreamFailure | ConnectedVoiceFailure |
-  Readonly<{ kind: "streamOverloaded" }>;
+  Readonly<{ kind: "streamOverloaded" | "keypadUnavailable" }>;
 
 /** Serializes provider events through Abby's call owner; the host owns signature verification and WebSocket closure. */
 export class TwilioConnectedCall {
   readonly stream: TwilioMediaStream;
   private readonly call: ConnectedVoiceCall;
   private readonly now: () => string;
+  private readonly keypadAvailabilityDate: ((digit: string) => string | undefined) | undefined;
   private tail: Promise<void> = Promise.resolve();
   private outstanding = 0;
   private begun = false;
@@ -42,6 +45,7 @@ export class TwilioConnectedCall {
       ...(config.callerCandidateLookup ? { callerCandidateLookup: config.callerCandidateLookup } : {}),
     });
     this.now = config.now ?? (() => new Date().toISOString());
+    this.keypadAvailabilityDate = config.keypadAvailabilityDate;
   }
 
   private async failSession(): Promise<void> {
@@ -69,6 +73,15 @@ export class TwilioConnectedCall {
       const progressed = await this.call.acceptMedia(event.frame);
       if (!progressed.ok) { await this.failSession(); return progressed; }
       return ok({ kind: "media", value: progressed.value });
+    }
+    if (event.kind === "dtmf") {
+      if (!this.keypadAvailabilityDate || (event.digit !== "1" && event.digit !== "2")) return ok({ kind: "ignored" });
+      const date = this.keypadAvailabilityDate(event.digit);
+      if (!date) { await this.failSession(); return err({ kind: "keypadUnavailable" }); }
+      const progressed = await this.call.acceptKeypadAvailability(date, this.now());
+      if (!progressed.ok && progressed.error.kind === "deliveryBlocked") return ok({ kind: "ignored" });
+      if (!progressed.ok) { await this.failSession(); return progressed; }
+      return ok({ kind: "keypad", value: progressed.value });
     }
     if (event.kind === "played") {
       const completed = await this.call.acceptPlaybackCompletion(event.completion, this.now());

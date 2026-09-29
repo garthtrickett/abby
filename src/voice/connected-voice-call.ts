@@ -32,7 +32,7 @@ export type ConnectedVoiceCallConfig = Readonly<{
 }>;
 
 export type ConnectedVoiceFailure = SharedVoiceFailure | MediaFailure | PlaybackEvidenceFailure |
-  Readonly<{ kind: "notStarted" }>;
+  Readonly<{ kind: "notStarted" | "locationUnbound" }>;
 export type ConnectedVoiceStart =
   | Extract<SharedVoiceStart, { kind: "locationChoice" }>
   | (Extract<SharedVoiceStart, { kind: "admitted" }> & Readonly<{ delivery: DispatchResult }>);
@@ -157,6 +157,26 @@ export class ConnectedVoiceCall {
       return ok({ kind: "turnCompleted", turn, delivery: delivery.value });
     } catch {
       await this.close(frame.capturedAt, "sessionClosed");
+      return err({ kind: "targetUnavailable" });
+    }
+  }
+
+  async acceptKeypadAvailability(date: string, now: string): Promise<Result<ConnectedVoiceProgress, ConnectedVoiceFailure>> {
+    if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
+    if (!this.begun) return err({ kind: "notStarted" });
+    if (!this.scope) return err({ kind: "locationUnbound" });
+    if (!this.media.idle()) return err({ kind: "deliveryBlocked" });
+    try {
+      const turn = await this.call.acceptKeypadAvailability(date, now);
+      if (!turn.ok) return turn;
+      const drained = await this.call.drainEffects(now);
+      if (!drained.ok) { await this.close(now, "sessionClosed"); return drained; }
+      if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
+      const delivery = await this.call.dispatchPending(now);
+      if (!delivery.ok) { await this.close(now, "sessionClosed"); return delivery; }
+      return ok({ kind: "turnCompleted", turn: turn.value, delivery: delivery.value });
+    } catch {
+      await this.close(now, "sessionClosed");
       return err({ kind: "targetUnavailable" });
     }
   }
