@@ -38,6 +38,7 @@ export type ReferenceTenantImportReport = Readonly<{
   sourceTenantId: string;
   targetTenantId: string;
   sourceSchemaVersion: string;
+  sourceFenceVersion?: number;
   recordCounts: Readonly<Record<ArchiveSection, number>>;
   sectionDigests: Readonly<Record<ArchiveSection, string>>;
   omittedCalls: Readonly<{ retentionExpired: 0; consentDenied: 0; notRetained: 0; activeCall: 0 }>;
@@ -122,6 +123,7 @@ function report(data: TenantConfigArchiveData, auditRef: string, prepared: Prepa
   return { archiveId: data.archiveId, manifestDigest: data.manifestDigest, auditRef,
     sourceTenantId: data.sourceTenantId, targetTenantId: data.targetTenantId,
     sourceSchemaVersion: data.sourceSchemaVersion,
+    ...(data.sourceFenceVersion === undefined ? {} : { sourceFenceVersion: data.sourceFenceVersion }),
     recordCounts: { locations: data.sectionManifests.locations.recordCount,
       settings: data.sectionManifests.settings.recordCount, knowledge: data.sectionManifests.knowledge.recordCount,
       calls: 0, staffWork: 0 },

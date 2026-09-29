@@ -10,7 +10,7 @@
 
 `comparePostgresConfigArchiveSource` takes a new audited source snapshot with a new archive ID and compares its schema and exact section count/byte/digest markers with a verified baseline. It rejects a changed mapping, setting or knowledge drift, and a source that has acquired call history. An unchanged result means only that the two snapshots contain the same portable configuration; a later write remains possible until a host-owned quiescence fence is established.
 
-The [PostgreSQL source quiescence fence](SOURCE_QUIESCENCE_FENCE.md) now provides that durable write barrier for a configuration-only tenant with no calls. The archive and comparison APIs remain usable for ordinary dry runs without a fence; a final cutover must verify the fence version again when changing route ownership.
+The [PostgreSQL source quiescence fence](SOURCE_QUIESCENCE_FENCE.md) provides a durable write barrier for a configuration-only tenant with no calls. A [fenced final archive](FENCED_FINAL_ARCHIVE.md) binds the exact frozen version into the archive and import receipt, and a fresh fenced source comparison checks exact section contents. The archive and comparison APIs remain usable for ordinary dry runs without a fence; a final cutover must verify the fence version again when changing route ownership.
 
 The [durable PostgreSQL target importer](DURABLE_TARGET_IMPORT.md) stages this same configuration-only archive into native target policy, knowledge, and write-stop tables. Its receipt and full source configuration history survive a process restart. The import transaction rejects occupied tenants and serializes concurrent stages; it leaves all target automation and writes stopped and does not publish a route.
 

@@ -33,6 +33,7 @@ export type ReferenceConfigPreflight = Readonly<{
   sourceScope: LocationScope;
   targetScope: LocationScope;
   sourceSchemaVersion: string;
+  sourceFenceVersion?: number;
   recordCounts: Readonly<{ locations: 1; settings: number; knowledge: number; calls: 0; staffWork: 0 }>;
   mappings: readonly ReferenceImportMapping[];
   status: "ready" | "alreadyStaged";
@@ -48,6 +49,7 @@ export type ReferenceImportReceipt = Readonly<{
   sourceScope: LocationScope;
   targetScope: LocationScope;
   sourceSchemaVersion: string;
+  sourceFenceVersion?: number;
   policyVersions: number;
   automationVersions: number;
   writeStopVersions: number;
@@ -168,6 +170,7 @@ function preflightReport(data: ConfigArchiveData, auditRef: string, mappings: re
                          status: ReferenceConfigPreflight["status"]): ReferenceConfigPreflight {
   return { archiveId: data.archiveId, manifestDigest: data.manifestDigest, auditRef,
     sourceScope: data.sourceScope, targetScope: data.targetScope, sourceSchemaVersion: data.sourceSchemaVersion,
+    ...(data.sourceFenceVersion === undefined ? {} : { sourceFenceVersion: data.sourceFenceVersion }),
     recordCounts: { locations: 1, settings: data.policies.length + data.automation.length + data.writeStops.length,
       knowledge: data.knowledge.length, calls: 0, staffWork: 0 }, mappings, status,
     plannedBookingEnabled: false, plannedAutomationEnabled: false, plannedWritesStopped: true };
@@ -246,7 +249,9 @@ export class ReferenceConfigArchiveImporter {
     if (!effective.ok || effective.value.bookingEnabled || effective.value.automationEnabled) return err({ kind: "invalidConfigArchive" });
     const receipt: ReferenceImportReceipt = { archiveId: data.archiveId, manifestDigest: data.manifestDigest,
       auditRef, sourceScope: data.sourceScope, targetScope: structuredClone(targetScope),
-      sourceSchemaVersion: data.sourceSchemaVersion, policyVersions: data.policies.length,
+      sourceSchemaVersion: data.sourceSchemaVersion,
+      ...(data.sourceFenceVersion === undefined ? {} : { sourceFenceVersion: data.sourceFenceVersion }),
+      policyVersions: data.policies.length,
       automationVersions: data.automation.length, writeStopVersions: data.writeStops.length,
       publishedKnowledgeVersions: data.knowledge.length, mappings: mapped.value.mappings,
       importedPolicyVersion: effective.value.policyVersion,
