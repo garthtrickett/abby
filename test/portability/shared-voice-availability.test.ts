@@ -20,9 +20,10 @@ import { TwilioSignedIngress } from "../../src/voice/twilio-signed-ingress.ts";
 import type { TwilioWireCall } from "../../src/voice/twilio-ingress-server.ts";
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 
-const now = "2026-09-29T10:00:00.000Z";
+const defaultNow = "2026-09-29T10:00:00.000Z";
 const day = "2026-10-01";
 const start = "2026-09-30T23:00:00.000Z";
+const overlapStarts = ["2026-04-04T15:30:00.000Z", "2026-04-04T16:30:00.000Z"];
 const number = "+6125550199";
 const caller = "+6145550101";
 const accountSid = `AC${"4".repeat(32)}`;
@@ -31,13 +32,16 @@ const webhookUrl = "https://portable.example.test/twilio/inbound";
 const streamUrl = "wss://portable.example.test/twilio/media/";
 
 type Composition = "standalone" | "embedded";
-type Case = "shown" | "empty" | "rateLimited";
+type Case = "shown" | "empty" | "rateLimited" | "dstOverlap";
 function value<T, E>(result: Result<T, E>): T {
   assert.ok(result.ok, result.ok ? "" : JSON.stringify(result.error));
   return result.value;
 }
 
 async function runCase(composition: Composition, scenario: Case, adminUrl: string): Promise<void> {
+  const now = scenario === "dstOverlap" ? "2026-03-30T10:00:00.000Z" : defaultNow;
+  const requestedDay = scenario === "dstOverlap" ? "2026-04-05" : day;
+  const offeredStarts = scenario === "shown" ? [start] : scenario === "dstOverlap" ? overlapStarts : [];
   const suffix = randomUUID().replaceAll("-", "");
   const name = `abby_portable_voice_${suffix}`;
   const target = new URL(adminUrl);
@@ -72,8 +76,8 @@ async function runCase(composition: Composition, scenario: Case, adminUrl: strin
         appointment_types: [{ id: "33" }] });
       if (path.endsWith("/available_times")) {
         if (scenario === "rateLimited") return new Response(null, { status: 429 });
-        return Response.json({ total_entries: scenario === "shown" ? 1 : 0,
-          available_times: scenario === "shown" ? [{ appointment_start: start, appointment_id: appointmentId }] : [] });
+        return Response.json({ total_entries: offeredStarts.length,
+          available_times: offeredStarts.map(appointment_start => ({ appointment_start, appointment_id: appointmentId })) });
       }
       throw new Error(`unexpected Cliniko read ${path}`);
     }, () => now));
@@ -104,7 +108,7 @@ async function runCase(composition: Composition, scenario: Case, adminUrl: strin
         utteranceId: "caller-one", text: callerText, quality: "clear" as const }]); } };
     const synthesis = { async *stream(text: string) { spoken.push(text); yield new Uint8Array(640); } };
     const send = (json: string) => { sent.push(JSON.parse(json) as Record<string, unknown>); return "queued" as const; };
-    const resolveIntent = async () => ok({ kind: "availability" as const, from: day, to: day });
+    const resolveIntent = async () => ok({ kind: "availability" as const, from: requestedDay, to: requestedDay });
     const readiness = async () => ok(true as const);
     const host = new ReferenceClinicHost([], []);
     if (composition === "standalone") {
@@ -138,8 +142,12 @@ async function runCase(composition: Composition, scenario: Case, adminUrl: strin
     assert.ok(methods.length >= 6 && methods.every(method => method === "GET"));
     assert.equal(host.bookings(scope).length, 0);
     assert.ok(spoken.every(text => !text.includes(callerText) && !text.includes(appointmentId)));
-    if (scenario === "shown") assert.match(spoken.at(-1) ?? "", /can't reserve or confirm/);
-    if (scenario !== "shown") assert.doesNotMatch(spoken.at(-1) ?? "", /possible times|confirmed/i);
+    if (scenario === "shown" || scenario === "dstOverlap") assert.match(spoken.at(-1) ?? "", /can't reserve or confirm/);
+    if (scenario === "dstOverlap") {
+      assert.match(spoken.at(-1) ?? "", /Sunday,? 5 April.*2:30 am Australian Eastern Daylight Time/);
+      assert.match(spoken.at(-1) ?? "", /Sunday,? 5 April.*2:30 am Australian Eastern Standard Time/);
+    }
+    if (scenario === "empty" || scenario === "rateLimited") assert.doesNotMatch(spoken.at(-1) ?? "", /possible times|confirmed/i);
     assert.ok((await call.receive(JSON.stringify({ event: "mark", sequenceNumber: "10", streamSid,
       mark: { name: (sent[3]!.mark as { name: string }).name } }))).ok);
     assert.ok((await call.receive(JSON.stringify({ event: "stop", sequenceNumber: "11", streamSid,
@@ -148,7 +156,7 @@ async function runCase(composition: Composition, scenario: Case, adminUrl: strin
     assert.deepEqual(await scanPatientDataCanaries(db, [
       { label: "caller", value: caller }, { label: "caller_text", value: callerText },
       { label: "call", value: callSid }, { label: "appointment", value: appointmentId },
-      { label: "time", value: start },
+      { label: "time", value: start }, ...overlapStarts.map((value, index) => ({ label: `overlap_time_${index}`, value })),
     ]), { ok: true, value: [] });
     assert.deepEqual(await scanDisposableBackupCanaries(target.toString(), [
       { label: "caller", value: caller }, { label: "call", value: callSid },
@@ -162,11 +170,11 @@ async function runCase(composition: Composition, scenario: Case, adminUrl: strin
   }
 }
 
-test("E2E-179 signed voice availability corpus is portable across standalone Cliniko and embedded host",
+test("E2E-179 and E2E-192 signed voice availability corpus is portable across standalone Cliniko and embedded host",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 90_000, concurrency: 6 }, async t => {
   const adminUrl = process.env.DATABASE_URL;
   assert.ok(adminUrl);
-  await Promise.all((["shown", "empty", "rateLimited"] as const).flatMap(scenario =>
+  await Promise.all((["shown", "empty", "rateLimited", "dstOverlap"] as const).flatMap(scenario =>
     (["standalone", "embedded"] as const).map(composition =>
       t.test(`${composition} ${scenario}`, () => runCase(composition, scenario, adminUrl)))));
 });
