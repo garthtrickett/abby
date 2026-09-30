@@ -81,6 +81,7 @@ test("C-LIVE-17 Cliniko phone refresh and provisional text availability preserve
   const patientEmail = `abby-rehearsal+${marker}@example.test`;
   const callerText = `availability-rehearsal-${marker}`;
   const phone = `+614555${randomInt(10_000, 100_000)}`;
+  const replacementPhone = `+614556${randomInt(10_000, 100_000)}`;
   let patientAttempted = false;
   let patientId: string | undefined;
   let patientArchived = false;
@@ -137,8 +138,10 @@ test("C-LIVE-17 Cliniko phone refresh and provisional text availability preserve
       return new ClinikoPhoneLookup(sessionReader.value, new PostgresPatientPhoneIndex(session), "61",
         60 * 60_000, undefined, new PostgresPatientPhoneScan(session));
     };
+    let workerOffsetMs = 0;
     const worker = new PhoneIndexRefreshWorker(index, [{ scope: clinicScope, lookupForSession,
-      credentialFingerprint: patients.value.credentialFingerprint(), countryCallingCode: "61", refreshEveryMs: 15 * 60_000 }], undefined,
+      credentialFingerprint: patients.value.credentialFingerprint(), countryCallingCode: "61", refreshEveryMs: 15 * 60_000 }],
+    () => new Date(Date.now() + workerOffsetMs),
     new PostgresPhoneRefreshGuard(databaseUrl.toString()));
     assert.equal((await worker.runOnce())[0]?.kind, "refreshed");
     assert.equal((await worker.runOnce())[0]?.kind, "fresh");
@@ -157,6 +160,29 @@ test("C-LIVE-17 Cliniko phone refresh and provisional text availability preserve
     assert.ok(candidates.ok, candidates.ok ? "" : candidates.error.kind);
     assert.ok(candidates.value.kind === "one" && candidates.value.candidateIds.length === 1 &&
       candidates.value.candidateIds[0] === patientId);
+
+    const changedPhone = await request("PATCH", `/patients/${patientId}`, {
+      patient_phone_numbers: [{ number: replacementPhone, phone_type: "Mobile" }] });
+    assert.equal(changedPhone.status, 200);
+    const changedRead = await request("GET", `/patients/${patientId}`);
+    assert.ok(changedRead.status === 200 && Array.isArray(changedRead.body.patient_phone_numbers) &&
+      changedRead.body.patient_phone_numbers.length === 1 &&
+      record(changedRead.body.patient_phone_numbers[0])?.number === replacementPhone);
+    const oldBeforeRefresh = await lookup.candidates(clinicScope, phone);
+    const newBeforeRefresh = await lookup.candidates(clinicScope, replacementPhone);
+    assert.ok(oldBeforeRefresh.ok && oldBeforeRefresh.value.kind === "none" &&
+      newBeforeRefresh.ok && newBeforeRefresh.value.kind === "none");
+    workerOffsetMs = 16 * 60_000;
+    assert.equal((await worker.runOnce())[0]?.kind, "refreshed");
+    const replacedLinks = await db.selectFrom("patient_phone_index")
+      .select(["normalized_phone", "patient_id"]).execute();
+    assert.ok(replacedLinks.length === 1 && replacedLinks[0]?.normalized_phone === replacementPhone &&
+      replacedLinks[0]?.patient_id === patientId);
+    const replacementCandidate = await lookup.candidates(clinicScope, replacementPhone);
+    assert.ok(replacementCandidate.ok && replacementCandidate.value.kind === "one" &&
+      replacementCandidate.value.candidateIds[0] === patientId);
+    const removedPhone = await scanPatientDataCanaries(db, [{ label: "removed_phone", value: phone }]);
+    assert.ok(removedPhone.ok && removedPhone.value.length === 0);
 
     const availability = ClinikoAvailabilityReader.create({ scope, apiKey, contactEmail, rateBudget: budget,
       businessId, practitionerId, appointmentTypeId: typeId });
@@ -188,7 +214,7 @@ test("C-LIVE-17 Cliniko phone refresh and provisional text availability preserve
     assert.equal(stored.value.callerMessages.length, 0);
     assert.equal(stored.value.availabilityReads.length, 0);
 
-    const canaries = [patientName, patientEmail, marker, "1990-05-21", callerText,
+    const canaries = [patientName, patientEmail, marker, "1990-05-21", callerText, phone,
       ...offers.value.startsAt.slice(0, 1)].map((value, index) => ({ label: `live_private_${index}`, value }));
     const scanned = await scanPatientDataCanaries(db, canaries);
     assert.ok(scanned.ok && scanned.value.length === 0);
@@ -199,10 +225,16 @@ test("C-LIVE-17 Cliniko phone refresh and provisional text availability preserve
     const archivedRead = await request("GET", `/patients/${patientId}?q%5B%5D=archived_at%3A*`);
     assert.ok(archivedRead.status === 200 && !!archivedRead.body.archived_at);
     patientArchived = true;
-    const afterArchive = await lookup.candidates(clinicScope, phone);
+    const afterArchive = await lookup.candidates(clinicScope, replacementPhone);
     assert.ok(afterArchive.ok && afterArchive.value.kind === "none" && afterArchive.value.candidateIds.length === 0);
+    workerOffsetMs = 32 * 60_000;
+    assert.equal((await worker.runOnce())[0]?.kind, "refreshed");
+    const afterArchiveLinks = await db.selectFrom("patient_phone_index").select("patient_id").execute();
+    assert.equal(afterArchiveLinks.length, 0);
+    assert.equal((await scanDisposableBackupCanaries(databaseUrl.toString(), [
+      { label: "old_phone", value: phone }, { label: "archived_phone", value: replacementPhone },
+    ])).length, 0);
     assert.equal((await index.clear(clinicScope)).ok, true);
-    assert.equal((await db.selectFrom("patient_phone_index").select("patient_id").execute()).length, 0);
   } finally {
     if (patientAttempted && !patientArchived) {
       try {
