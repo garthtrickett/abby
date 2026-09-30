@@ -25,9 +25,9 @@ export function voiceTransportConfig(): Readonly<{ webhookUrl: URL; streamUrl: U
   return { webhookUrl, streamUrl };
 }
 
-export function voicePublicConfig(): Readonly<{
+export function voiceNumberPlanConfig(): Readonly<{
   webhookUrl: URL; streamUrl: URL; fallbackUrl: URL;
-  testNumber: string; fallbackNumber: string; accountSid: string; authToken: string;
+  testNumber: string; fallbackNumber: string;
 }> {
   if (required("ABBY_VOICE_TEST_MODE") !== "1") throw new Error("invalid ABBY_VOICE_TEST_MODE");
   const { webhookUrl, streamUrl } = voiceTransportConfig();
@@ -35,16 +35,23 @@ export function voicePublicConfig(): Readonly<{
   const testNumber = required("ABBY_TWILIO_TEST_NUMBER");
   const callerNumber = required("ABBY_TWILIO_TEST_CALLER_NUMBER");
   const fallbackNumber = required("ABBY_TWILIO_FALLBACK_NUMBER");
-  const accountSid = required("ABBY_TWILIO_ACCOUNT_SID");
-  const authToken = required("ABBY_TWILIO_AUTH_TOKEN");
   if (webhookUrl.hostname === fallbackUrl.hostname ||
       !/^\+[1-9]\d{1,14}$/.test(testNumber) || !/^\+[1-9]\d{1,14}$/.test(fallbackNumber) ||
       !/^\+[1-9]\d{1,14}$/.test(callerNumber) ||
-      new Set([testNumber, callerNumber, fallbackNumber]).size !== 3 ||
-      !/^AC[0-9a-f]{32}$/i.test(accountSid)) {
+      new Set([testNumber, callerNumber, fallbackNumber]).size !== 3) {
     throw new Error("invalid voice public configuration");
   }
-  return { webhookUrl, streamUrl, fallbackUrl, testNumber, fallbackNumber, accountSid, authToken };
+  return { webhookUrl, streamUrl, fallbackUrl, testNumber, fallbackNumber };
+}
+
+export function voicePublicConfig(): ReturnType<typeof voiceNumberPlanConfig> & Readonly<{
+  accountSid: string; authToken: string;
+}> {
+  const plan = voiceNumberPlanConfig();
+  const accountSid = required("ABBY_TWILIO_ACCOUNT_SID");
+  const authToken = required("ABBY_TWILIO_AUTH_TOKEN");
+  if (!/^AC[0-9a-f]{32}$/i.test(accountSid)) throw new Error("invalid ABBY_TWILIO_ACCOUNT_SID");
+  return { ...plan, accountSid, authToken };
 }
 
 function unsignedStreamRejected(url: URL): Promise<boolean> {
@@ -69,8 +76,23 @@ function unsignedStreamRejected(url: URL): Promise<boolean> {
 async function check(): Promise<void> {
   const mode = process.argv[2];
   if (process.argv.length > 3 ||
-      (mode !== undefined && mode !== "--config-only" && mode !== "--transport-only")) {
+      (mode !== undefined && mode !== "--config-only" && mode !== "--transport-only" &&
+       mode !== "--dry-run")) {
     throw new Error("invalid preflight argument");
+  }
+  if (mode === "--dry-run") {
+    const plan = voiceNumberPlanConfig();
+    process.stdout.write(`${JSON.stringify({
+      testNumber: plan.testNumber,
+      primary: { url: plan.webhookUrl.href, method: "POST" },
+      streamUrl: plan.streamUrl.href,
+      fallback: { url: plan.fallbackUrl.href, method: "POST" },
+      fallbackDestinationLast4: plan.fallbackNumber.length > 5 ? plan.fallbackNumber.slice(-4) : null,
+      voiceApplicationSid: null,
+      trunkSid: null,
+      applied: false,
+    }, null, 2)}\n`);
+    return;
   }
   const full = mode === "--transport-only" ? undefined : voicePublicConfig();
   const config = full ?? voiceTransportConfig();
