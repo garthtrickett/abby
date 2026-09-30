@@ -18,11 +18,20 @@ export type ModelFailure = Readonly<{ kind: "malformed" | "unavailable" | "deadl
 export type ModelInput = Readonly<{
   scope: LocationScope;
   turn: FinalCallerTurn;
+  /** Bounded prior caller turns from this scoped call; never identity or action evidence. */
+  priorCallerTurns?: readonly string[];
   knowledge: readonly Readonly<{ sourceRef: string; approvedText: string }>[];
   conversationRevision: number;
   policyVersion: string;
   promptVersion: string;
 }>;
+
+/** Applies the same transient context bound at task preparation and provider egress. */
+export function validPriorCallerTurns(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.length <= 3 &&
+    value.every(text => typeof text === "string" && !!text.trim() && text.length <= 4_000) &&
+    value.reduce((length: number, text: string) => length + text.length, 0) <= 4_000;
+}
 
 export interface RawModelPort {
   propose(input: ModelInput, signal: AbortSignal): Promise<unknown>;

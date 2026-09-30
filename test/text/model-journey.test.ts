@@ -10,7 +10,7 @@ import type { LedgerStore } from "../../src/core/ledger.ts";
 import type { ApprovedKnowledge, CallState, FinalCallerTurn, LocationScope, Result } from "../../src/core/model.ts";
 import { ok } from "../../src/core/model.ts";
 import { ModelIngress } from "../../src/model/proposal.ts";
-import type { RawModelPort } from "../../src/model/proposal.ts";
+import type { ModelInput, RawModelPort } from "../../src/model/proposal.ts";
 import { ModelWork } from "../../src/model/work.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
@@ -41,8 +41,10 @@ function fixture(kind: "memory" | "postgres", raw: unknown | ((turn: FinalCaller
   configureHost?.(host, scope);
   const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
   let calls = 0;
+  const modelInputs: ModelInput[] = [];
   const port: RawModelPort = { async propose(input) {
     calls += 1;
+    modelInputs.push(structuredClone(input));
     return typeof raw === "function" ? raw(input.turn) : raw;
   } };
   const model = new ModelWork(new ModelIngress(port), "prompt-v1", 5_000, maxTasks);
@@ -52,13 +54,31 @@ function fixture(kind: "memory" | "postgres", raw: unknown | ((turn: FinalCaller
     ({ callId, turnId, text, quality, at: now });
   const submit = (turn: FinalCallerTurn) => agent.submit({ kind: "calls.turn.model.v1", turn, now });
   const state = async (): Promise<CallState> => value(await reception.read(scope, callId));
-  return { scope, callId, ledger, host, policy, model, reception, agent, turn, submit, state, calls: () => calls };
+  return { scope, callId, ledger, host, policy, model, modelInputs, reception, agent, turn, submit, state,
+    calls: () => calls };
 }
 
 async function start(app: ReturnType<typeof fixture>): Promise<void> {
   value(await app.policy.changeAutomationEnabled(app.scope, "0", true, "test-admin"));
   value(await app.reception.startCall(app.callId, app.scope));
 }
+
+test("E2E-188 transient model history expires, stays scoped, and cannot survive explicit call cleanup", () => {
+  let time = 0;
+  const model = new ModelWork(new ModelIngress({ async propose() {
+    throw new Error("history test must not call a provider");
+  } }), "prompt-v1", 1_000, 10, () => time);
+  const scope = { tenantId: "history-tenant", clinicId: "history-clinic", locationId: "main" };
+  model.recordAcceptedTurn(scope, "call", "First request");
+  assert.deepEqual(model.priorCallerTurns(scope, "call"), ["First request"]);
+  assert.deepEqual(model.priorCallerTurns({ ...scope, locationId: "other" }, "call"), []);
+  time = 60_000;
+  assert.deepEqual(model.priorCallerTurns(scope, "call"), []);
+  model.recordAcceptedTurn(scope, "call", "Fresh request");
+  assert.deepEqual(model.priorCallerTurns(scope, "call"), ["Fresh request"]);
+  model.forgetCall(scope, "call");
+  assert.deepEqual(model.priorCallerTurns(scope, "call"), []);
+});
 
 for (const kind of kinds) {
   test(`${kind}: model result cannot speak a source version approved after call admission`, async () => {
@@ -161,6 +181,7 @@ for (const kind of kinds) {
     assert.equal(after.version, before.version);
     assert.equal(after.processedTurnIds.includes("turn-stale"), false);
     assert.equal(JSON.stringify(after).includes("Stale voice request"), false);
+    assert.deepEqual(app.model.priorCallerTurns(app.scope, app.callId), ["Current request"]);
     assert.equal(app.calls(), 0);
   });
 
@@ -310,6 +331,38 @@ for (const kind of kinds) {
     const state = await app.state();
     assert.equal(Object.values(state.staffItems).length, 1);
     assert.equal(Object.values(state.presentations).filter(item => item.status === "pending").length, 1);
+  });
+
+  test(`E2E-188 ${kind}: accepted caller turns supply transient context for corrections without authorizing a booking`, async () => {
+    const app = fixture(kind, (turn: FinalCallerTurn) => turn.text.startsWith("No,")
+      ? { schemaVersion: 1, kind: "handoff", reason: "callerRequested" }
+      : { schemaVersion: 1, kind: "action", operation: "book" });
+    await start(app);
+    const first = "I'd like to book physiotherapy next week.";
+    const second = "Actually, make that Friday instead.";
+    const third = "No, forget the booking. Please ask a person to call me.";
+    value(await app.submit(app.turn("multi-first", first)));
+    value(await app.submit(app.turn("multi-second", second)));
+    assert.deepEqual(app.model.priorCallerTurns(app.scope, app.callId), [first, second]);
+    const pending = Object.values((await app.state()).effects).find(effect => effect.kind === "model" &&
+      effect.turnId === "multi-second");
+    assert.ok(pending && pending.kind === "model");
+    assert.deepEqual(app.model.input(pending.taskRef)?.priorCallerTurns, [first]);
+    value(await app.reception.drain(app.scope, app.callId, now));
+    assert.deepEqual(app.modelInputs.map(input => input.priorCallerTurns), [[first]]);
+
+    value(await app.submit(app.turn("multi-third", third)));
+    value(await app.reception.drain(app.scope, app.callId, now));
+    assert.deepEqual(app.modelInputs.map(input => input.priorCallerTurns), [[first], [first, second]]);
+    assert.deepEqual(app.model.priorCallerTurns({ ...app.scope, tenantId: "foreign" }, app.callId), []);
+    const state = await app.state();
+    assert.equal(JSON.stringify(state).includes(first) || JSON.stringify(state).includes(second) ||
+      JSON.stringify(state).includes(third), false);
+    assert.equal(Object.values(state.effects).some(effect => effect.kind === "hostWrite"), false);
+    assert.equal(app.host.bookings(app.scope).length, 0);
+    assert.equal(Object.values(state.staffItems).some(item => item.reason === "callerRequested"), true);
+    app.model.forgetCall(app.scope, app.callId);
+    assert.deepEqual(app.model.priorCallerTurns(app.scope, app.callId), []);
   });
 
   test(`${kind}: correction while the model is running fences its late answer`, async () => {

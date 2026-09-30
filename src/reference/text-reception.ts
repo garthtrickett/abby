@@ -100,7 +100,8 @@ export class TextReception {
         return fallback;
       }
     }
-    const input = { scope, turn, knowledge, conversationRevision: current.value.conversationRevision + 1,
+    const priorCallerTurns = this.model.priorCallerTurns(scope, turn.callId);
+    const input = { scope, turn, priorCallerTurns, knowledge, conversationRevision: current.value.conversationRevision + 1,
       policyVersion: current.value.policy.policyVersion, promptVersion: this.model.promptVersion };
     const prepared = this.model.prepare(input);
     if (!prepared.ok) {
@@ -113,7 +114,10 @@ export class TextReception {
     }
     const accepted = await runtime.acceptTurn(turn, interpretation, now, current.value.conversationRevision);
     if (!accepted.ok && prepared.value.created) this.model.forget(taskRef);
-    if (accepted.ok) this.forgetCanceledModelWork(current.value, accepted.value);
+    if (accepted.ok) {
+      this.model.recordAcceptedTurn(scope, turn.callId, turn.text);
+      this.forgetCanceledModelWork(current.value, accepted.value);
+    }
     return accepted;
   }
 
@@ -122,6 +126,10 @@ export class TextReception {
       if ((effect.kind === "model" || effect.kind === "modelKnowledge") && effect.status === "pending" &&
           after.effects[effect.id]?.status === "canceled") this.model?.forget(effect.taskRef);
     }
+  }
+
+  forgetModelCall(scope: LocationScope, callId: string): void {
+    this.model?.forgetCall(scope, callId);
   }
 
   async proposeBooking(scope: LocationScope, turn: FinalCallerTurn, verificationRef: string, offerRef: string, now: string, expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {

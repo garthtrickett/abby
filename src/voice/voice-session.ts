@@ -422,6 +422,7 @@ export class VoiceSession {
     this.activePlayback = undefined;
     const ended = await this.runtime.endCall(this.callId, this.sessionId, now, reason);
     if (!ended.ok) return ended;
+    this.reception.forgetModelCall(this.scope, this.callId);
     this.attached = false;
     this.localSendDeadlineMs = undefined;
     this.transientContent?.clear();

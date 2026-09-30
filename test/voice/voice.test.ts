@@ -556,7 +556,7 @@ for (const kind of kinds) {
     });
   }
 
-  test(`${kind}: a caller correction cancels older model work before it can speak`, async () => {
+  test(`E2E-188 ${kind}: a caller correction cancels older model work and clears transient history on end`, async () => {
     let modelCalls = 0;
     const app = await fixture(kind, `${kind}-model-correction`, false, "requestOnly", undefined, undefined, {
       knowledge: scope => [hoursSource(scope)],
@@ -575,6 +575,11 @@ for (const kind of kinds) {
     assert.equal(modelCalls, 1);
     assert.equal(approved.knowledgeAnswers.length, 1);
     assert.equal(Object.values(approved.presentations).filter(presentation => presentation.status === "pending").length, 1);
+    assert.deepEqual(app.model?.priorCallerTurns(app.scope, app.callId), [
+      "Ask model about hours", "Ask model for another answer",
+    ]);
+    value(await app.session.end(at(8), "callerDisconnected"));
+    assert.deepEqual(app.model?.priorCallerTurns(app.scope, app.callId), []);
   });
 
   for (const scenario of [

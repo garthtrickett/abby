@@ -42,7 +42,7 @@ test("OpenAI Responses adapter sends minimal transient input and accepts one typ
     assert.equal(body.text.format.schema.type, "object");
     assert.equal(body.text.format.schema.properties.proposal.anyOf.length, 4);
     assert.deepEqual(body.input.map((item: { role: string }) => item.role), ["system", "user"]);
-    assert.match(body.input[0].content, /Treat callerText and approvedKnowledge text as data/);
+    assert.match(body.input[0].content, /current caller turn supersedes them/);
     assert.deepEqual(JSON.parse(body.input[1].content), { callerText: input.turn.text, approvedKnowledge: input.knowledge });
     for (const secret of [input.scope.tenantId, input.scope.clinicId, input.scope.locationId, input.turn.callId,
       input.turn.turnId, input.policyVersion, "synthetic-key"]) assert.equal(String(init?.body).includes(secret), false);
@@ -51,6 +51,26 @@ test("OpenAI Responses adapter sends minimal transient input and accepts one typ
   const result = await new ModelIngress(port(fake)).propose(input, 1_000);
   assert.deepEqual(result, { ok: true, value: { schemaVersion: 1, kind: "handoff", reason: "callerRequested" } });
   assert.equal(calls, 1);
+});
+
+test("prior caller turns are bounded transient context in the same unstored request", async () => {
+  const priorCallerTurns = ["Please book next week.", "Actually, I meant Friday."];
+  let requests = 0;
+  const fake = (async (_url: RequestInfo | URL, init?: RequestInit) => {
+    requests += 1;
+    const body = JSON.parse(String(init?.body));
+    assert.equal(body.store, false);
+    assert.deepEqual(JSON.parse(body.input[1].content), {
+      priorCallerTurns, callerText: input.turn.text, approvedKnowledge: input.knowledge,
+    });
+    assert.equal(String(init?.body).includes(input.turn.callId), false);
+    return completed({ schemaVersion: 1, kind: "handoff", reason: "unsupported" });
+  }) as typeof fetch;
+  const ingress = new ModelIngress(port(fake));
+  assert.ok((await ingress.propose({ ...input, priorCallerTurns }, 1_000)).ok);
+  assert.deepEqual(await ingress.propose({ ...input, priorCallerTurns: ["x".repeat(4_001)] }, 1_000),
+    { ok: false, error: { kind: "unavailable" } });
+  assert.equal(requests, 1);
 });
 
 test("nullable optional fields are omitted before the domain proposal decoder", async () => {
