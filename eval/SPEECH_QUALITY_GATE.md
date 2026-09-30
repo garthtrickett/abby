@@ -1,0 +1,21 @@
+# Speech quality and latency gate, version 1
+
+This gate rejects weak voice configurations before a pilot. Passing its synthetic checks never grants caller-action or clinic readiness. The current standalone route keeps Realtime finals at `needsClarification`, and keypad availability remains the bounded recovery path.
+
+## Synthetic candidate checks
+
+Run the exact candidate Realtime adapter and model three times per case on each pinned corpus: telephone-band clean speech, 10 dB noisy speech, and the eight-case safety corpus. The safety corpus adds two generated voices reading clinic terminology, a date, spoken numbers, an email address, and currency after 8 kHz G.711 and a seeded 20 dB noise mix. Every fixture is patient-free and SHA-256 pinned. The evaluation runner replays 20 ms frames at their recorded pace and retains only an owner-only report. Its final time starts when Abby commits the audio turn; total time also includes audio playback into the adapter.
+
+For **each** corpus, the machine gate requires at least three repeats of every case, zero missing critical terms, zero provider failures, zero empty finals, zero likely truncated finals, word error rate at most **10%**, final-transcript p95 at most **2.5 seconds** after commit, and no individual final over **5 seconds**. Word error rate uses case-insensitive word tokens and treats alternate numeric spellings as errors until a reviewed normalization rule exists. A likely truncated final is a strict prefix missing at least two expected words. Empty, truncated, late, and provider-failed results are reported separately. These are conservative candidate thresholds, not measured real-caller performance targets.
+
+Run the fixed two-message synthesis corpus for **40 jobs** with at most four concurrent provider calls. All jobs must queue audio; first queued chunk p95 must be at most **3.5 seconds**, every first queued chunk at most **5 seconds**, and full-utterance p95 at most **6 seconds**. Failed or uncertain jobs count against the gate even if the p95 of successful jobs passes. Queue timing is not audible playback timing.
+
+`npm run eval:speech-gate -- --telephony <report> --noise <report> --safety <report> --speech <report>` recomputes all four checks from owner-only reports. It verifies the pinned corpus and current adapter source hashes, rejects stale reports, prints only aggregate metrics, and exits nonzero if any check fails. It always reports `releaseGate: unverified`.
+
+## Representative call gate
+
+Before any patient call or natural-language availability is enabled, record a consented, patient-free evaluation over the intended carrier and clinic acoustic route. Predeclare at least **100 complete calls** from at least **10 speakers**, covering each intended locale and varied accents, quiet and noisy rooms, interruptions, numbers, dates, email, currency, clinic names, urgent language, and long turns. Keep source audio and review notes in a restricted evaluation store outside Abby's patient database. Compare final transcripts with human-labeled words and review all critical errors plus a predeclared sample of other calls.
+
+The proposed pilot threshold is zero missed urgent or booking safety terms, zero false booking confirmations or patient disclosures, at most **10%** word error rate overall and per target locale, final-transcript p95 at most **2.5 seconds** after caller turn end, first *audible* response p95 at most **5 seconds**, and interruption-to-silence p95 at most **300 ms**. Report empty, truncated, delayed, dropped, and failed turns separately. A clinic owner and product owner must approve the wording, policy, and recorded result before routing patient calls. A synthetic pass cannot substitute for this representative gate.
+
+The thresholds and case mix are Abby's predeclared engineering targets. [OpenAI's Realtime transcription production checklist](https://developers.openai.com/api/docs/guides/realtime-transcription#production-checklist) calls for representative telephony audio, target latency and accuracy thresholds, numbers and domain terms, separate tracking of empty/truncated/delayed results, and item-ID reconciliation. It does not supply Abby's numerical thresholds.

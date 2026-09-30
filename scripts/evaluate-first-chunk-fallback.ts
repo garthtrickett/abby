@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { FirstChunkFallbackSpeech } from "../src/voice/first-chunk-fallback-speech.ts";
 import { OpenAISpeechSynthesis } from "../src/voice/openai-speech-synthesis.ts";
 import { parseSpeechLoopCorpus } from "../src/voice/speech-loop-evaluation.ts";
+import { assessSyntheticSpeechLatency } from "../src/voice/speech-latency-gate.ts";
 import { StreamedPlaybackPort } from "../src/voice/streamed-playback-port.ts";
 
 type Sample = Readonly<{ caseId: string; repeat: number; selected: "primary" | "fallback" | "none";
@@ -31,19 +32,13 @@ function digest(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-function percentile(values: readonly number[], percent: number): number | null {
-  if (!values.length) return null;
-  const sorted = [...values].sort((left, right) => left - right);
-  return sorted[Math.ceil(sorted.length * percent) - 1] ?? null;
-}
-
 async function main(): Promise<void> {
   const args = argsFrom(process.argv.slice(2));
   const apiKey = process.env.ABBY_OPENAI_API_KEY;
   if (!apiKey) throw new Error("ABBY_OPENAI_API_KEY is required");
   const corpusBytes = await readFile(resolve("eval/speech-loop-v1.json"));
   const corpus = parseSpeechLoopCorpus(JSON.parse(corpusBytes.toString("utf8")) as unknown);
-  const repeats = args.repeats === undefined ? 8 : Number(args.repeats);
+  const repeats = args.repeats === undefined ? 20 : Number(args.repeats);
   const concurrency = args.concurrency === undefined ? 2 : Number(args.concurrency);
   if (!Number.isSafeInteger(repeats) || repeats < 1 || repeats > 20 ||
       !Number.isSafeInteger(concurrency) || concurrency < 1 || concurrency > 4) {
@@ -93,8 +88,10 @@ async function main(): Promise<void> {
     primary: results.filter(item => item.selected === "primary").length,
     fallback: results.filter(item => item.selected === "fallback").length,
     firstChunkMisses: results.filter(item => item.firstChunkMs === null || item.firstChunkMs > 5_000).length };
+  const candidateGate = assessSyntheticSpeechLatency(results);
   const sourcePaths = ["src/voice/openai-speech-synthesis.ts", "src/voice/first-chunk-fallback-speech.ts",
-    "src/voice/streamed-playback-port.ts", "scripts/evaluate-first-chunk-fallback.ts"];
+    "src/voice/streamed-playback-port.ts", "src/voice/speech-latency-gate.ts",
+    "scripts/evaluate-first-chunk-fallback.ts"];
   const sourceBytes = await Promise.all(sourcePaths.map(path => readFile(resolve(path))));
   const report = { schemaVersion: 1, kind: "speech-first-chunk-fallback-evaluation",
     runAt: new Date().toISOString(), configuration: { primaryModel: "gpt-4o-mini-tts",
@@ -102,15 +99,17 @@ async function main(): Promise<void> {
       combinedFirstChunkMs: 5_000, laterStepMs: 2_000, maxUtteranceMs: 20_000,
       corpusVersion: corpus.version, corpusSha256: digest(corpusBytes),
       sourceSha256: digest(Buffer.concat(sourceBytes)), repeats, concurrency,
-      nodeVersion: process.version }, counts,
-    firstChunkP95AmongQueuedMs: percentile(queued.flatMap(item => item.firstChunkMs === null ? [] : [item.firstChunkMs]), 0.95),
+      nodeVersion: process.version }, counts, candidateGate,
+    firstChunkP95AmongQueuedMs: candidateGate.metrics.firstChunkP95Ms,
     results, humanReviewStatus: "pending", liveCallStatus: "notRun", releaseGate: "unverified" };
   const output = resolve(args.out!);
   await mkdir(dirname(output), { recursive: true });
   await writeFile(output, `${JSON.stringify(report, null, 2)}\n`, { flag: "wx", mode: 0o600 });
-  process.stdout.write(`${JSON.stringify({ counts, firstChunkP95AmongQueuedMs: report.firstChunkP95AmongQueuedMs,
+  process.stdout.write(`${JSON.stringify({ counts, candidateGate: { status: candidateGate.status,
+    failures: candidateGate.failures, metrics: candidateGate.metrics },
+    firstChunkP95AmongQueuedMs: report.firstChunkP95AmongQueuedMs,
     output, releaseGate: report.releaseGate })}\n`);
-  if (counts.notSent || counts.uncertain || counts.firstChunkMisses) process.exitCode = 1;
+  if (candidateGate.status !== "pass") process.exitCode = 1;
 }
 
 main().catch(() => {

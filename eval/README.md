@@ -44,9 +44,11 @@ The runner verifies every fixture digest before opening a provider session, send
 npm run eval:transcription -- --corpus transcription-telephony-v1 --out eval/results/transcription-telephony-candidate.json
 ```
 
-The `--corpus` flag accepts `transcription-v1`, `transcription-telephony-v1`, and `transcription-noise-v1`. The same repeat, concurrency, digest, typed-result, and release-gate rules apply to all three.
+The `--corpus` flag accepts `transcription-v1`, `transcription-telephony-v1`, `transcription-noise-v1`, and `transcription-safety-v1`. The same repeat, concurrency, digest, typed-result, and release-gate rules apply to all four.
 
 `transcription-noise-v1.json` adds six patient-free clips from two Flite voices, `kal` and `slt`. `node scripts/build-noisy-transcription-fixtures.ts` mixes deterministic white noise at a nominal 10 dB signal-to-noise ratio before 8 kHz G.711 mu-law encoding and production media normalization. Each resulting 16 kHz fixture is pinned by SHA-256. Run it with `--corpus transcription-noise-v1`; use an owner-only output path and the same key handling as above. This is controlled synthetic interference, not representative clinic acoustics, accents, packet loss, or a real call. The [first live run](LIVE_BASELINE_2026-09-29.md#noisy-two-speaker-transcription-stress) had missing safety terms and leaves all finals `needsClarification`. Noisy results cannot promote natural-language caller actions.
+
+`transcription-safety-v1.json` adds eight patient-free telephone-band clips with a seeded 20 dB noise mix from two generated voices. The cases cover clinic terminology, dates, spoken numbers, an email address, and currency. `node scripts/build-safety-transcription-fixtures.ts` regenerates and pins them. Run with `--corpus transcription-safety-v1`. Each `eval:transcription` report now includes the [versioned synthetic candidate gate](SPEECH_QUALITY_GATE.md): zero critical, provider, empty, and truncated results; word error rate no more than 10%; and bounded post-commit final latency across at least three repeats per case. A failing gate exits nonzero after saving its owner-only report. Older corpora use the same per-corpus gate for comparison; all required corpora must pass before a synthetic candidate can pass.
 
 The Realtime runner also accepts `--model gpt-transcribe` for OpenAI's committed-turn transcription candidate. The production adapter still defaults to `gpt-live-transcribe`; the candidate uses the same bounded frame replay, item-ID matching, and untrusted final quality. Its [live synthetic comparison](LIVE_BASELINE_2026-09-29.md#realtime-committed-turn-transcription-comparison) is evaluation evidence, not a quality-gate change.
 
@@ -71,7 +73,9 @@ The test is excluded from `npm test` because it makes paid provider calls. A loc
 npm run eval:speech-fallback -- --out eval/results/speech-fallback-candidate.json
 ```
 
-The default is eight repeats per phrase with two concurrent jobs; `--repeats` accepts 1–20 and `--concurrency` accepts 1–4. The owner-only report records the selected source, queue outcome, first-chunk time, complete-utterance time, and source and corpus hashes for every job. Its p95 is computed only among queued outputs and must be read alongside failed jobs. The process exits nonzero if any utterance fails to queue or misses the first-chunk bound. This is provider and in-memory output evidence, not a caller's first audible speech or playback acknowledgment. Human review and a real call remain separate gates.
+The default is twenty repeats per phrase with two concurrent jobs; `--repeats` accepts 1–20 and `--concurrency` accepts 1–4. The owner-only report records the selected source, queue outcome, first-chunk time, complete-utterance time, and source and corpus hashes for every job. The [synthetic latency gate](SPEECH_QUALITY_GATE.md) requires all forty jobs to queue, p95 first chunk at most 3.5 seconds, no individual first chunk over 5 seconds, and p95 utterance completion at most 6 seconds. It counts failures separately from the successful-job p95 and exits nonzero on any failed condition. This is provider and in-memory output evidence, not a caller's first audible speech or playback acknowledgment. Human review and a real call remain separate gates.
+
+After running the telephone-band, noisy, safety, and first-chunk evaluations with the same candidate configuration, run `npm run eval:speech-gate -- --telephony <report> --noise <report> --safety <report> --speech <report>`. It rejects stale report hashes and prints a concise candidate verdict without transcripts. The [representative call gate](SPEECH_QUALITY_GATE.md#representative-call-gate) remains required even if every synthetic check passes.
 
 ## Speech loopback smoke evaluation
 
