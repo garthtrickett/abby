@@ -1,0 +1,11 @@
+# Supply ABBY_VOICE_PUBLIC_HOST and ABBY_VOICE_PORT to Caddy's environment.
+# DNS for the host must reach this proxy on ports 80 and 443.
+{$ABBY_VOICE_PUBLIC_HOST} {
+	@voice path /twilio/inbound /twilio/media/
+	handle @voice {
+		reverse_proxy 127.0.0.1:{$ABBY_VOICE_PORT}
+	}
+	handle {
+		respond "Not found" 404
+	}
+}

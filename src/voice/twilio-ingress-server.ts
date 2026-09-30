@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
+import type { AuthenticatedInboundCall } from "./admission.ts";
 import type { AuthenticatedTwilioStream } from "./twilio-signed-ingress.ts";
 import { TWILIO_BINDING_LIFETIME_MS, TwilioSignedIngress } from "./twilio-signed-ingress.ts";
 
@@ -69,7 +70,8 @@ export type TwilioIngressServerConfig = Readonly<{
   /** Optional operational probe; it cannot authorize a call. */
   health?: () => Promise<boolean>;
   /** Checked after signature verification and before returning stream TwiML. */
-  admitWebhook?: () => Promise<boolean>;
+  /** No event means a general readiness probe, which a restricted test gate must refuse. */
+  admitWebhook?: (event?: AuthenticatedInboundCall) => Promise<boolean>;
   /** Constructs a call owner only after the webhook, upgrade, and start have been authenticated. */
   createCall: (stream: AuthenticatedTwilioStream,
     send: (json: string) => "queued" | "notSent" | "uncertain",
@@ -140,6 +142,9 @@ function runStream(socket: WebSocket, request: IncomingMessage, config: TwilioIn
       if (!call) {
         const authenticated = config.ingress.authenticateStream({ ...upgrade, connected, start: raw });
         if (!authenticated.ok) { socket.close(1008); return; }
+        if (config.admitWebhook && !await config.admitWebhook(authenticated.value.event).catch(() => false)) {
+          socket.close(1008); return;
+        }
         claimedKey = claims.claim(authenticated.value.event.key.accountRef,
           authenticated.value.event.key.providerCallRef);
         if (!claimedKey) { socket.close(1008); return; }
@@ -194,10 +199,10 @@ export function createTwilioIngressServer(config: TwilioIngressServerConfig): Se
       }
       const raw = await body(request);
       if (raw === undefined) { response.writeHead(413); response.end(); return; }
-      const answered = config.ingress.answerWebhook({ method: request.method ?? "",
+      const answered = config.ingress.authenticateWebhook({ method: request.method ?? "",
         requestTarget: request.url ?? "", contentType: header(request.headers["content-type"]),
         signature: header(request.headers["x-twilio-signature"]), body: raw });
-      if (answered.ok && config.admitWebhook && !await config.admitWebhook().catch(() => false)) {
+      if (answered.ok && config.admitWebhook && !await config.admitWebhook(answered.value.event).catch(() => false)) {
         response.writeHead(503, { "content-type": "text/plain", "cache-control": "no-store" });
         response.end("Unavailable");
         return;
@@ -205,7 +210,7 @@ export function createTwilioIngressServer(config: TwilioIngressServerConfig): Se
       const status = answered.ok ? 200 : answered.error.kind === "fallbackNotConfigured" ? 503 : 403;
       response.writeHead(status, { "content-type": answered.ok ? "application/xml; charset=utf-8" : "text/plain",
         "cache-control": "no-store" });
-      response.end(answered.ok ? answered.value : status === 503 ? "Unavailable" : "Forbidden");
+      response.end(answered.ok ? answered.value.twiml : status === 503 ? "Unavailable" : "Forbidden");
     })().catch(() => { if (!response.headersSent) response.writeHead(500); response.end(); });
   });
   server.requestTimeout = 10_000;
