@@ -38,6 +38,8 @@ The [PostgreSQL ledger clock](../phase-1/LEDGER_CLOCK.md) now owns admitted-call
 
 The [Cliniko availability adapter](../phase-2/CLINIKO_AVAILABILITY.md) reads scoped online-booking eligibility and available times through a bounded, read-only HTTP port. An [opt-in synthetic call journey](../phase-2/CLINIKO_CALL_READ.md) now presents fresh, local-time provisional results through durable voice notices. Returned times are not booking evidence.
 
+`cliniko/catalogue.ts` reads bounded business and selected resource metadata for clinic setup. It reports scoped candidate or unavailable snapshots with explicit eligibility reasons and a short freshness check; these snapshots grant no call route, patient action, or staff-request permission. Clinic admin authentication, a recorded selection, and route binding are separate work.
+
 Standalone Cliniko readers use a [PostgreSQL-coordinated request budget](../phase-2/CLINIKO_READ_BUDGET.md) across the text command, availability console, and phone-index refresh worker. The host can provide the same small budget interface inside a buyer monolith.
 
 Standalone booking defaults to `requestOnly` even after an admin enables the booking setting. Executable booking requires an explicit host capability decision; the Cliniko demo profile remains request-only after its same-slot concurrency probe.
