@@ -191,12 +191,20 @@ export class ClinikoAvailabilityReader {
     return err({ kind: "tooManyResults" });
   }
 
-  private async business(): Promise<Result<Readonly<{ eligible: false }> | Readonly<{ eligible: true; timeZone: string }>, ClinikoAvailabilityFailure>> {
+  private async business(): Promise<Result<Readonly<{ eligible: false; reason: "business" | "appointmentType" }> |
+    Readonly<{ eligible: true; timeZone: string }>, ClinikoAvailabilityFailure>> {
     const fetched = await this.get(`/businesses/${this.businessId}`);
     if (!fetched.ok) return fetched;
     const body = record(fetched.value);
-    if (!body || String(body.id) !== this.businessId || typeof body.show_in_online_bookings !== "boolean") return err({ kind: "malformed" });
-    if ((body.archived_at !== undefined && body.archived_at !== null) || !body.show_in_online_bookings) return ok({ eligible: false });
+    if (!body || String(body.id) !== this.businessId || typeof body.show_in_online_bookings !== "boolean" ||
+        !(body.appointment_type_ids === null || Array.isArray(body.appointment_type_ids)) ||
+        (Array.isArray(body.appointment_type_ids) && !body.appointment_type_ids.every(validId))) return err({ kind: "malformed" });
+    if ((body.archived_at !== undefined && body.archived_at !== null) || !body.show_in_online_bookings) {
+      return ok({ eligible: false, reason: "business" });
+    }
+    if (body.appointment_type_ids === null || !body.appointment_type_ids.includes(this.appointmentTypeId)) {
+      return ok({ eligible: false, reason: "appointmentType" });
+    }
     if (typeof body.time_zone_identifier !== "string" || !body.time_zone_identifier.trim()) return err({ kind: "malformed" });
     try { new Intl.DateTimeFormat("en-AU", { timeZone: body.time_zone_identifier }); }
     catch { return err({ kind: "malformed" }); }
@@ -210,7 +218,7 @@ export class ClinikoAvailabilityReader {
 
     const business = await this.business();
     if (!business.ok) return business;
-    if (!business.value.eligible) return ok({ kind: "notEligible", reason: "business" });
+    if (!business.value.eligible) return ok({ kind: "notEligible", reason: business.value.reason });
     const timeZone = business.value.timeZone;
     const clinicDate = new Intl.DateTimeFormat("en-US", { timeZone, calendar: "gregory", numberingSystem: "latn",
       year: "numeric", month: "2-digit", day: "2-digit" });

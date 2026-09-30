@@ -63,7 +63,7 @@ test("E2E-163 opt-in signed local call recovers uncertain speech and charges key
       clinikoReads += 1;
       const url = new URL(String(input));
       if (url.pathname === "/v1/businesses/11") return Response.json({ id: "11", show_in_online_bookings: true,
-        time_zone_identifier: "Australia/Sydney" });
+        appointment_type_ids: ["33"], time_zone_identifier: "Australia/Sydney" });
       if (url.pathname === "/v1/practitioners/22") return Response.json({ id: "22", active: true,
         show_in_online_bookings: true });
       if (url.pathname === "/v1/appointment_types/33") return Response.json({ id: "33", show_in_online_bookings: true });

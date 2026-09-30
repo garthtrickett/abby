@@ -147,7 +147,7 @@ test("E2E-125 text: agent reads provisional times and gives truthful empty or fa
     const path = new URL(String(input)).pathname;
     if (unavailable) return Response.json({}, { status: 503 });
     if (path === "/v1/businesses/11") return Response.json({ id: "11", show_in_online_bookings: true,
-      time_zone_identifier: "Australia/Sydney", patient_name: privateName });
+      appointment_type_ids: ["33"], time_zone_identifier: "Australia/Sydney", patient_name: privateName });
     if (path === "/v1/practitioners/22") return Response.json({ id: "22", active: true, show_in_online_bookings: true });
     if (path === "/v1/appointment_types/33") return Response.json({ id: "33", show_in_online_bookings: true });
     if (path === "/v1/businesses/11/practitioners") return Response.json({ total_entries: 1, practitioners: [{ id: "22" }] });
@@ -224,7 +224,7 @@ test("E2E-125 text: standalone ingress presents provisional availability without
   const fetchPort: typeof fetch = async input => {
     const path = new URL(String(input)).pathname;
     if (path === "/v1/businesses/11") return Response.json({ id: "11", show_in_online_bookings: true,
-      time_zone_identifier: "Australia/Sydney", patient_name: patientName });
+      appointment_type_ids: ["33"], time_zone_identifier: "Australia/Sydney", patient_name: patientName });
     if (path === "/v1/practitioners/22") return Response.json({ id: "22", active: true, show_in_online_bookings: true });
     if (path === "/v1/appointment_types/33") return Response.json({ id: "33", show_in_online_bookings: true });
     if (path === "/v1/businesses/11/practitioners") return Response.json({ total_entries: 1, practitioners: [{ id: "22" }] });
@@ -283,7 +283,7 @@ test("E2E-147 text: wrong clinic-day slot becomes a failed answer and never reac
   const fetchPort: typeof fetch = async input => {
     const path = new URL(String(input)).pathname;
     if (path === "/v1/businesses/11") return Response.json({ id: "11", show_in_online_bookings: true,
-      time_zone_identifier: "Australia/Sydney" });
+      appointment_type_ids: ["33"], time_zone_identifier: "Australia/Sydney" });
     if (path === "/v1/practitioners/22") return Response.json({ id: "22", active: true, show_in_online_bookings: true });
     if (path === "/v1/appointment_types/33") return Response.json({ id: "33", show_in_online_bookings: true });
     if (path === "/v1/businesses/11/practitioners") return Response.json({ total_entries: 1, practitioners: [{ id: "22" }] });
@@ -320,7 +320,7 @@ test("E2E-125/E2E-127 text: HTTP availability completes and exports no caller or
   const fetchPort: typeof fetch = async input => {
     const path = new URL(String(input)).pathname;
     if (path === "/v1/businesses/11") return Response.json({ id: "11", show_in_online_bookings: true,
-      time_zone_identifier: "Australia/Sydney", patient_name: privateName });
+      appointment_type_ids: ["33"], time_zone_identifier: "Australia/Sydney", patient_name: privateName });
     if (path === "/v1/practitioners/22") return Response.json({ id: "22", active: true, show_in_online_bookings: true });
     if (path === "/v1/appointment_types/33") return Response.json({ id: "33", show_in_online_bookings: true });
     if (path === "/v1/businesses/11/practitioners") return Response.json({ total_entries: 1, practitioners: [{ id: "22" }] });

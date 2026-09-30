@@ -35,6 +35,7 @@ function fakeProvider(options: {
   invalidTimeZone?: boolean;
   unrelated?: "practitioner" | "appointmentType";
   inactivePractitioner?: boolean;
+  businessType?: "removed" | "unconfirmed";
   incompleteRelationship?: boolean;
   pagedRelationship?: boolean;
   partialAvailablePage?: boolean;
@@ -48,6 +49,7 @@ function fakeProvider(options: {
     if (options.oversized) return json({ padding: "x".repeat(1_000_001) });
     const path = url.pathname;
     if (path === "/v1/businesses/11") return json({ id: options.malformed ? "99" : "11", show_in_online_bookings: options.disabled !== "business",
+      appointment_type_ids: options.businessType === "unconfirmed" ? null : [options.businessType === "removed" ? "44" : "33"],
       time_zone_identifier: options.invalidTimeZone ? "invalid/timezone" : "Australia/Sydney" });
     if (path === "/v1/practitioners/22") return json({ id: "22", active: !options.inactivePractitioner,
       show_in_online_bookings: options.disabled !== "practitioner" });
@@ -117,6 +119,16 @@ test("Cliniko refuses availability for an unrelated or inactive configured pract
     const reader = value(ClinikoAvailabilityReader.create(config, fake.port));
     assert.deepEqual(value(await reader.list(scope, "2026-10-01", "2026-10-02")), { kind: "notEligible", reason });
     assert.equal(fake.requests.some(request => request.url.pathname.endsWith("/available_times")), false);
+  }
+});
+
+test("Cliniko refuses times after the approved appointment type is removed from the business", async () => {
+  for (const businessType of ["removed", "unconfirmed"] as const) {
+    const fake = fakeProvider({ businessType });
+    const reader = value(ClinikoAvailabilityReader.create(config, fake.port));
+    assert.deepEqual(value(await reader.list(scope, "2026-10-01", "2026-10-02")),
+      { kind: "notEligible", reason: "appointmentType" });
+    assert.deepEqual(fake.requests.map(request => request.url.pathname), ["/v1/businesses/11"]);
   }
 });
 
