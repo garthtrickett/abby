@@ -20,9 +20,11 @@ function fixture() {
   let routeVersion = route.routeVersion;
   let policyVersion = selection.policyVersion;
   let businessEnabled = true;
+  let partialPractitionerPage = false;
   let onBusinessRead: (() => void | Promise<void>) | undefined;
   const fetchPort: typeof fetch = async input => {
-    const path = new URL(String(input)).pathname;
+    const url = new URL(String(input));
+    const path = url.pathname;
     requests.push(path);
     if (path === "/v1/businesses") return Response.json({ total_entries: 1, businesses: [{ id: "11",
       business_name: "Demo practice", show_in_online_bookings: true, archived_at: null,
@@ -37,8 +39,9 @@ function fixture() {
       active: true, show_in_online_bookings: true });
     if (path === "/v1/appointment_types/33") return Response.json({ id: "33", name: "Consult",
       archived_at: null, show_in_online_bookings: true });
-    if (path === "/v1/businesses/11/practitioners") return Response.json({ total_entries: 1,
-      practitioners: [{ id: "22" }] });
+    if (path === "/v1/businesses/11/practitioners") return partialPractitionerPage
+      ? Response.json({ total_entries: 2, practitioners: [{ id: url.searchParams.get("page") === "1" ? "55" : "22" }] })
+      : Response.json({ total_entries: 1, practitioners: [{ id: "22" }] });
     if (path === "/v1/practitioners/22/appointment_types") return Response.json({ total_entries: 1,
       appointment_types: [{ id: "33" }] });
     throw new Error(`unexpected path ${path}`);
@@ -62,6 +65,7 @@ function fixture() {
     setRouteVersion(value: string) { routeVersion = value; },
     setPolicyVersion(value: string) { policyVersion = value; },
     setBusinessEnabled(value: boolean) { businessEnabled = value; },
+    setPartialPractitionerPage(value: boolean) { partialPractitionerPage = value; },
     onBusinessRead(callback: () => void | Promise<void>) { onBusinessRead = callback; } };
 }
 
@@ -168,6 +172,22 @@ test("B1 route or policy changes during provider reads fail before recording app
   const state = await app.store.read(scope);
   assert.ok(state.ok);
   assert.equal(state.value.version, 0);
+});
+
+test("E2E-191 a short catalogue relationship page cannot approve or revalidate a clinic route", async () => {
+  const app = fixture();
+  app.setPartialPractitionerPage(true);
+  assert.deepEqual(await app.setup.approve(admin, route, selection, 0),
+    { ok: false, error: { kind: "catalogueUnavailable" } });
+  const empty = await app.store.read(scope);
+  assert.ok(empty.ok);
+  assert.equal(empty.value.version, 0);
+  assert.equal(empty.value.approval, null);
+  app.setPartialPractitionerPage(false);
+  assert.ok((await app.setup.approve(admin, route, selection, 0)).ok);
+  app.setPartialPractitionerPage(true);
+  assert.deepEqual(await app.setup.resolveForCall(scope, route),
+    { ok: false, error: { kind: "catalogueUnavailable" } });
 });
 
 test("B1 revocation during call-time provider recheck wins before approval is returned", async () => {

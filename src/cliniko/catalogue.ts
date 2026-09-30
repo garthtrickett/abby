@@ -189,6 +189,8 @@ export class ClinikoCatalogueReader {
       if (Number(body.total_entries) > maxPages * perPage) return err({ kind: "tooManyResults" });
       if (total !== undefined && total !== body.total_entries) return err({ kind: "unavailable" });
       total = Number(body.total_entries);
+      const expected = Math.min(perPage, Math.max(0, total - (page - 1) * perPage));
+      if (items.length !== expected) return err({ kind: "unavailable" });
       for (const value of items) {
         const item = record(value);
         if (!item || !validId(item.id) || seen.has(item.id)) return err({ kind: "malformed" });
