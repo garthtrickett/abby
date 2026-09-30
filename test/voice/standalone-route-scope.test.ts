@@ -5,6 +5,7 @@ import { ok } from "../../src/core/model.ts";
 import { createStandaloneClinikoVoiceServer } from "../../src/standalone/cliniko-voice-server.ts";
 import type { ClinikoVoiceRoute } from "../../src/standalone/cliniko-voice-server.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
+import { PostgresActiveCallClaims } from "../../src/storage/postgres-active-call-claims.ts";
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 
 test("E2E-154 standalone voice refuses a Cliniko reader bound to another clinic before opening a listener",
@@ -25,6 +26,8 @@ test("E2E-154 standalone voice refuses a Cliniko reader bound to another clinic 
       for (const routeScope of routeScopes) {
         assert.equal(reader.value.matchesScope(routeScope), false);
         await assert.rejects(createStandaloneClinikoVoiceServer({ db,
+          activeCallClaims: new PostgresActiveCallClaims("postgresql://postgres@127.0.0.1:1/unused",
+            Buffer.alloc(32, 0x54)),
           twilio: { accountSid: `AC${"1".repeat(32)}`, authToken: "synthetic-route-token",
             publicWebhookUrl: "https://calls.example.test/twilio/inbound",
             publicStreamUrl: "wss://calls.example.test/twilio/media/",
@@ -63,6 +66,8 @@ test("E2E-155 standalone voice refuses a missing or unapproved usable keypad rou
           availability: reader.value, rateBudget, clinicDate: () => "2026-09-29",
           keypadAvailabilityGreeting: greeting } as unknown as ClinikoVoiceRoute;
         await assert.rejects(createStandaloneClinikoVoiceServer({ db,
+          activeCallClaims: new PostgresActiveCallClaims("postgresql://postgres@127.0.0.1:1/unused",
+            Buffer.alloc(32, 0x54)),
           twilio: { accountSid: `AC${"1".repeat(32)}`, authToken: "synthetic-route-token",
             publicWebhookUrl: "https://calls.example.test/twilio/inbound",
             publicStreamUrl: "wss://calls.example.test/twilio/media/",
@@ -98,6 +103,8 @@ test("E2E-163 standalone voice refuses a process-local, wrong-key, or foreign Cl
       approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." };
     const makeConfig = (availability: ClinikoAvailabilityReader, budget: PostgresClinikoRequestBudget) => ({
       db,
+      activeCallClaims: new PostgresActiveCallClaims("postgresql://postgres@127.0.0.1:1/unused",
+        Buffer.alloc(32, 0x54)),
       twilio: { accountSid: `AC${"1".repeat(32)}`, authToken: "synthetic-budget-token",
         publicWebhookUrl: "https://calls.example.test/twilio/inbound",
         publicStreamUrl: "wss://calls.example.test/twilio/media/",

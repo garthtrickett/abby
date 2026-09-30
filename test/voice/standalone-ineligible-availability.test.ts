@@ -12,6 +12,7 @@ import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { createStandaloneClinikoVoiceServer } from "../../src/standalone/cliniko-voice-server.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { migrate } from "../../src/storage/migrate.ts";
+import { PostgresActiveCallClaims } from "../../src/storage/postgres-active-call-claims.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
@@ -64,6 +65,7 @@ test("E2E-153 signed keypad call refuses availability when Cliniko business is n
     const spoken: string[] = [];
     let modelCalls = 0;
     const prepared = await createStandaloneClinikoVoiceServer({ db,
+      activeCallClaims: new PostgresActiveCallClaims(target.toString(), Buffer.alloc(32, 0x52)),
       twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
         fallbackNumbers: { [dialedNumber]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x49),
         now: () => new Date(now) },

@@ -14,6 +14,7 @@ import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { createStandaloneClinikoVoiceServer } from "../../src/standalone/cliniko-voice-server.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { migrate } from "../../src/storage/migrate.ts";
+import { PostgresActiveCallClaims } from "../../src/storage/postgres-active-call-claims.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
@@ -82,6 +83,7 @@ test("E2E-163 opt-in signed local call recovers uncertain speech and charges key
     const spoken: string[] = [];
     let intentRequests = 0;
     const prepared = await createStandaloneClinikoVoiceServer({ db,
+      activeCallClaims: new PostgresActiveCallClaims(target.toString(), Buffer.alloc(32, 0x53)),
       twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
         fallbackNumbers: { [number]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x48),
         now: () => new Date(now) },

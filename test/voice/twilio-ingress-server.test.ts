@@ -77,7 +77,7 @@ test("E2E-131 local transport: a signed webhook and upgrade reach one authentica
   }
 });
 
-test("E2E-164 graceful shutdown closes an active signed stream and releases its call owner",
+test("E2E-169 graceful shutdown closes an active signed stream and releases its call owner",
   { timeout: 10_000 }, async () => {
   const ingress = new TwilioSignedIngress({ accountSid, authToken, publicWebhookUrl: webhookUrl,
     publicStreamUrl: streamUrl, fallbackNumbers: { "+6125550199": "+6125550188" },
