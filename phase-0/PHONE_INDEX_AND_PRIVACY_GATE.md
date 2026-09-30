@@ -1,6 +1,6 @@
 # Cliniko phone index and patient-data boundary
 
-**Status:** Phone-index storage, synthetic full scan, page-checkpointed refresh, periodic refresh worker, and live candidate recheck are implemented and locally tested. The full receptionist flow is not yet compliant. This contract supersedes earlier proposals for retained transcripts, recordings, patient-specific presentation text, action payloads, and patient-linked call history in Abby.
+**Status:** Phone-index storage, synthetic full scan, page-checkpointed refresh, periodic refresh worker, and live candidate recheck are implemented and locally tested. An opt-in demo-account E2E now exercises the guarded refresh with a synthetic Cliniko patient and the standalone text availability path, including database and backup canary scans. The full receptionist flow is not yet compliant. This contract supersedes earlier proposals for retained transcripts, recordings, patient-specific presentation text, action payloads, and patient-linked call history in Abby.
 
 ## Storage rule
 
