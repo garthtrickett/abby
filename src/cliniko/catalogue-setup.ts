@@ -2,10 +2,11 @@ import { err, ok } from "../core/model.ts";
 import type { CallPolicy, LocationScope, Result } from "../core/model.ts";
 import type { HostActor } from "../reference/command-gateway.ts";
 import type { ClinicNumberRoutingHost } from "../reference/clinic-number-routing.ts";
-import type { ClinikoCatalogueReader, ClinikoSelection, ClinikoSelectionSnapshot } from "./catalogue.ts";
+import type { ClinikoCatalogueFailure, ClinikoCatalogueReader, ClinikoSelection, ClinikoSelectionSnapshot } from "./catalogue.ts";
 
 export type ClinikoSetupFailure = Readonly<{ kind: "forbidden" | "invalid" | "scopeMismatch" |
-  "routeChanged" | "policyChanged" | "catalogueUnavailable" | "selectionUnavailable" |
+  "routeChanged" | "policyChanged" | "credentialForbidden" | "catalogueRateLimited" |
+  "catalogueUnavailable" | "selectionUnavailable" |
   "staleCatalogue" | "notApproved" | "staleApproval" | "versionConflict" | "storageFailure" }>;
 
 export type ClinikoSetupRoute = Readonly<{
@@ -60,6 +61,10 @@ const sameScope = (left: LocationScope, right: LocationScope): boolean =>
   left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
 const validInstant = (value: unknown): value is string =>
   typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value));
+const catalogueFailure = (failure: ClinikoCatalogueFailure): ClinikoSetupFailure => ({
+  kind: failure.kind === "forbidden" ? "credentialForbidden" :
+    failure.kind === "rateLimited" ? "catalogueRateLimited" : "catalogueUnavailable",
+});
 export const isClinikoApprovalState = (state: ClinikoApprovalState): boolean =>
   !!state && Number.isSafeInteger(state.version) && state.version >= 0 &&
   (state.approval === null || (!!state.approval && validScope(state.approval.scope) &&
@@ -125,7 +130,27 @@ export class ClinikoCatalogueSetup {
     const allowed = this.authorize(actor);
     if (!allowed.ok) return allowed;
     const result = await this.reader.businesses(allowed.value);
-    return result.ok ? result : err({ kind: "catalogueUnavailable" } as const);
+    return result.ok ? result : err(catalogueFailure(result.error));
+  }
+
+  async inspect(actor: HostActor, selection: ClinikoSelection):
+    Promise<Result<ClinikoSelectionSnapshot, ClinikoSetupFailure>> {
+    const allowed = this.authorize(actor);
+    if (!allowed.ok) return allowed;
+    const result = await this.reader.inspect(allowed.value, selection);
+    return result.ok ? result : err(catalogueFailure(result.error));
+  }
+
+  async current(actor: HostActor): Promise<Result<ClinikoApprovalState, ClinikoSetupFailure>> {
+    const allowed = this.authorize(actor);
+    if (!allowed.ok) return allowed;
+    try {
+      const result = await this.store.read(allowed.value);
+      if (!result.ok) return result;
+      if (!isClinikoApprovalState(result.value) || (result.value.approval &&
+          !sameScope(result.value.approval.scope, allowed.value))) return err({ kind: "storageFailure" });
+      return ok(structuredClone(result.value));
+    } catch { return err({ kind: "storageFailure" }); }
   }
 
   private async bind(scope: LocationScope, route: ClinikoSetupRoute, selection: ClinikoSelection):
@@ -149,7 +174,7 @@ export class ClinikoCatalogueSetup {
     const before = await verifyContext();
     if (!before.ok) return before;
     const inspected = await this.reader.inspect(scope, selection);
-    if (!inspected.ok) return err({ kind: "catalogueUnavailable" });
+    if (!inspected.ok) return err(catalogueFailure(inspected.error));
     if (inspected.value.status !== "candidate") return err({ kind: "selectionUnavailable" });
     let at: string;
     try { at = this.now(); }
