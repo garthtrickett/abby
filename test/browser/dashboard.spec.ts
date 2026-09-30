@@ -146,7 +146,7 @@ test("E2E-074 emergency stop in the browser blocks a queued active-call write an
   } finally { await app.close(); }
 });
 
-test("E2E-010: dashboard toggle persists default, enabled and disabled policy for new calls", async ({ page }) => {
+test("E2E-010: dashboard toggle persists default, enabled and disabled policy for new calls", async ({ page, request }) => {
   const app = await localDashboard("clinicAdmin");
   try {
     await page.goto(app.url);
@@ -167,6 +167,8 @@ test("E2E-010: dashboard toggle persists default, enabled and disabled policy fo
     await page.reload();
     await expect(page.getByRole("button", { name: "Enable booking" })).toBeVisible();
     await expect(page.getByLabel("Booking setting audit")).toContainText("Version 2 · disabled · browser-clinicAdmin");
+    assert.equal((await request.post(`${app.url}/api/settings/booking-enabled`,
+      { data: { expectedVersion: "2", enabled: "yes" } })).status(), 400);
     const before = await app.ledger.read("before-setting", app.scope);
     const enabled = await app.ledger.read("enabled-setting", app.scope);
     const disabled = await app.ledger.read("disabled-setting", app.scope);
@@ -198,7 +200,7 @@ test("agent capability endpoint publishes versioned schemas without exposing int
   } finally { await app.close(); }
 });
 
-test("E2E-069: view-only staff can review a call but cannot change booking settings", async ({ page, request }) => {
+test("E2E-010 E2E-069: view-only staff can review a call but cannot change booking settings", async ({ page, request }) => {
   const app = await localDashboard("staff");
   try {
     await page.goto(app.url);

@@ -71,10 +71,10 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
     if (scenario.fullCallEvidence.status === "passed") {
       assert.equal(scenario.fixtureState, "fullImplemented");
       assert.ok(scenario.fullCallEvidence.testFiles.every(path => path.startsWith("test/e2e/")));
-    } else if (scenario.textEvidence?.status === "passed") {
-      assert.equal(scenario.fixtureState, "textImplemented");
     } else if (scenario.syntheticVoiceEvidence?.status === "passed") {
       assert.equal(scenario.fixtureState, "syntheticImplemented");
+    } else if (scenario.textEvidence?.status === "passed") {
+      assert.equal(scenario.fixtureState, "textImplemented");
     } else assert.equal(scenario.fixtureState, "planned");
   }
   for (let number = 1; number <= 22; number += 1) {

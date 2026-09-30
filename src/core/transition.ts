@@ -30,6 +30,14 @@ function staffRequestNotice(state: CallState): string {
   return staffFallbackText(state, "I can request staff follow-up, but I can't confirm they have received it yet.");
 }
 
+function hostOutcomeNotice(state: CallState, effectId: string, approvedText: string): void {
+  state.callerMessages.push(approvedText);
+  if (state.lifecycle !== "active" || state.pendingPresentationId) return;
+  const id = `${effectId}:resultNotice`;
+  state.presentations[id] = { kind: "notice", id, approvedText, status: "pending" };
+  state.pendingPresentationId = id;
+}
+
 function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
 }
@@ -329,21 +337,23 @@ function recordHostResult(state: CallState, effectId: string, receipt: import(".
     if (!receipt.hostRef) return err({ kind: "invalidTransition" });
     state.actions[action.key] = { ...action, status: "committed", hostRef: receipt.hostRef };
     state.effects[effectId] = { ...effect, status: "completed" };
-    state.callerMessages.push(action.kind === "intake" ? "Your details were saved. No appointment is confirmed yet." : `Your ${action.kind === "book" ? "booking" : "appointment change"} is confirmed.`);
+    hostOutcomeNotice(state, effectId, action.kind === "intake"
+      ? "Your details were saved. No appointment is confirmed yet."
+      : `Your ${action.kind === "book" ? "booking" : "appointment change"} is confirmed.`);
   } else if (receipt.kind === "uncertain") {
     if (!Number.isFinite(Date.parse(receipt.reconcileAfter)) || !Number.isFinite(Date.parse(receipt.deadline)) || Date.parse(receipt.deadline) <= Date.parse(now)) return err({ kind: "invalidTransition" });
     state.actions[action.key] = { ...action, status: "uncertain", reconciliationDeadline: receipt.deadline };
     state.effects[effectId] = { ...effect, status: "uncertain" };
     const reconcileId = `${effectId}:reconcile`;
     state.effects[reconcileId] = { kind: "hostReconcile", id: reconcileId, actionKey: action.key, originalEffectId: effectId, status: "pending" };
-    state.callerMessages.push("I can't confirm that action yet. It is pending review.");
+    hostOutcomeNotice(state, effectId, "I can't confirm that action yet. It is pending review.");
     if (action.kind === "book" && Object.values(state.actions).some(item => item.kind === "intake" && item.status === "committed")) {
       addStaffTask(state, "partialIntake", now, action.key);
     }
   } else {
     state.actions[action.key] = { ...action, status: receipt.kind === "unsupported" ? "unsupported" : "rejected" };
     state.effects[effectId] = { ...effect, status: "completed" };
-    state.callerMessages.push("That action was not completed.");
+    hostOutcomeNotice(state, effectId, "That action was not completed.");
     if (action.kind === "book" && Object.values(state.actions).some(item => item.kind === "intake" && item.status === "committed")) {
       addStaffTask(state, "partialIntake", now, action.key);
     }
@@ -562,10 +572,12 @@ export function transition(current: CallState, action: TransitionAction): Result
       if (action.observation.kind === "exactCommit") {
         if (!action.observation.hostRef) return err({ kind: "invalidTransition" });
         state.actions[linked.key] = { ...linked, status: "committed", hostRef: action.observation.hostRef };
-        state.callerMessages.push(linked.kind === "intake" ? "Your details were saved. No appointment is confirmed yet." : `Your ${linked.kind === "book" ? "booking" : "appointment change"} is confirmed.`);
+        hostOutcomeNotice(state, effect.id, linked.kind === "intake"
+          ? "Your details were saved. No appointment is confirmed yet."
+          : `Your ${linked.kind === "book" ? "booking" : "appointment change"} is confirmed.`);
       } else if (action.observation.kind === "definitiveNonCommit") {
         state.actions[linked.key] = { ...linked, status: "rejected" };
-        state.callerMessages.push("That action was not completed.");
+        hostOutcomeNotice(state, effect.id, "That action was not completed.");
       } else {
         if (!linked.reconciliationDeadline || Date.parse(action.now) >= Date.parse(linked.reconciliationDeadline)) {
           state.actions[linked.key] = { ...linked, status: "needsReview" };

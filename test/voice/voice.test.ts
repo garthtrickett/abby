@@ -354,9 +354,40 @@ for (const kind of kinds) {
     assert.equal(committed.actions[action.key]?.status, "committed");
     assert.equal(app.host.bookings(app.scope).length, 1);
     assert.equal(committed.callerMessages.at(-1), "Your booking is confirmed.");
+    assert.equal(committed.presentations[committed.pendingPresentationId!]?.kind, "notice");
+    const confirmation = value(await app.session.dispatchPending(at(8)));
+    assert.equal(confirmation.kind, "queued");
+    assert.equal(app.playback.queuedTexts.at(-1), "Your booking is confirmed.");
+    value(await app.session.acceptPlaybackResult(confirmation.playbackId!, "played", at(8)));
     const ended = value(await app.session.end(at(9), "callerDisconnected"));
     assert.deepEqual(ended.callerMessages, []);
     assert.equal(ended.actions[action.key]?.status, "committed");
+  });
+
+  test(`${kind}: an uncertain host write speaks pending review without a booking claim`, async () => {
+    const app = await fixture(kind, `${kind}-uncertain-write-notice`, true);
+    const planned = await bookTurn(app);
+    const action = Object.values(planned.actions)[0];
+    assert.ok(action);
+    const details = value(await app.session.dispatchPending(at(4)));
+    assert.equal(details.kind, "queued");
+    value(await app.session.acceptPlaybackResult(details.playbackId!, "played", at(4)));
+    const generation = value(await app.session.speechStarted(at(5)));
+    value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation,
+      utteranceId: "uncertain-affirm", text: "Yes book it", quality: "clear" }));
+    value(await app.session.finishTurn(at(6)));
+    app.host.write = async mutation => ({ kind: "uncertain", actionKey: mutation.actionKey,
+      reconcileAfter: at(8), deadline: at(86_400) });
+    const uncertain = value(await app.session.drainEffects(at(7)));
+    assert.equal(uncertain.actions[action.key]?.status, "uncertain");
+    assert.equal(app.host.bookings(app.scope).length, 0);
+    assert.equal(uncertain.presentations[uncertain.pendingPresentationId!]?.kind, "notice");
+    const notice = value(await app.session.dispatchPending(at(7)));
+    assert.equal(notice.kind, "queued");
+    assert.equal(app.playback.queuedTexts.at(-1), "I can't confirm that action yet. It is pending review.");
+    assert.equal(app.playback.queuedTexts.some(text => text.includes("booking is confirmed")), false);
+    value(await app.session.acceptPlaybackResult(notice.playbackId!, "played", at(7)));
+    value(await app.session.end(at(9), "callerDisconnected"));
   });
 
   test(`${kind}: disabled booking setting avoids host reads and writes`, async () => {
