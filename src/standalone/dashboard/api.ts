@@ -37,6 +37,9 @@ export type DashboardPort = Readonly<{
   availabilityApproval(): Promise<Result<ClinicAvailabilityApprovalState, DashboardFailure>>;
   approveAvailability(route: ClinicAvailabilityRoute, selection: ClinicAvailabilitySelection, expectedVersion: number):
     Promise<Result<ClinicAvailabilityApprovalState, DashboardFailure>>;
+  approveAvailabilityAlternatives(route: ClinicAvailabilityRoute, selection: ClinicAvailabilitySelection,
+    alternatives: readonly ClinicAvailabilitySelection[], expectedVersion: number):
+    Promise<Result<ClinicAvailabilityApprovalState, DashboardFailure>>;
   revokeAvailability(expectedVersion: number): Promise<Result<ClinicAvailabilityApprovalState, DashboardFailure>>;
 }>;
 
@@ -132,6 +135,14 @@ export class FetchDashboardPort implements DashboardPort {
     Promise<Result<ClinicAvailabilityApprovalState, DashboardFailure>> {
     const result = await availabilityCommand({ kind: "clinic.availability.approval.change.v1", route, selection, expectedVersion },
       "clinicAvailabilityApprovalState");
+    return result.ok ? ok(result.value.state) : result;
+  }
+
+  async approveAvailabilityAlternatives(route: ClinicAvailabilityRoute, selection: ClinicAvailabilitySelection,
+    alternatives: readonly ClinicAvailabilitySelection[], expectedVersion: number):
+    Promise<Result<ClinicAvailabilityApprovalState, DashboardFailure>> {
+    const result = await availabilityCommand({ kind: "clinic.availability.approval.change.v2",
+      route, selection, alternatives, expectedVersion }, "clinicAvailabilityApprovalState");
     return result.ok ? ok(result.value.state) : result;
   }
 

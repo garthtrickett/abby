@@ -8,6 +8,7 @@ export function syntheticCatalogueApproval(availability: ClinikoAvailabilityRead
                                            route: ClinikoSetupRoute, policyVersion = "0") {
   const approval: ClinikoSelectionApproval = { scope, route,
     selection: { businessId: "11", practitionerId: "22", appointmentTypeId: "33", policyVersion },
+    alternatives: [],
     credentialFingerprint: availability.credentialFingerprint(),
     catalogueObservedAt: "2026-09-29T10:00:00.000Z", approvedAt: "2026-09-29T10:00:00.000Z",
     approvedBy: "synthetic-admin", patientActionMode: "unavailable", patientRequestMode: "unavailable" };

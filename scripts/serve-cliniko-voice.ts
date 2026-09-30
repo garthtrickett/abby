@@ -109,6 +109,12 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
         fallbackNumbers: { [dialedNumber]: fallbackNumber }, bindingKey: key },
       routes: [{ dialedNumber, scope, routeVersion,
         availability: availability.value, approval, rateBudget, clinicDate,
+        alternativeAvailability: choice => {
+          const reader = ClinikoAvailabilityReader.create({ scope, apiKey, rateBudget, contactEmail,
+            businessId: choice.businessId, practitionerId: choice.practitionerId,
+            appointmentTypeId: choice.appointmentTypeId }, ports.clinikoFetch);
+          return reader.ok ? reader.value : null;
+        },
         keypadAvailabilityGreeting: { scope, version: required("ABBY_GREETING_VERSION"),
           ownerRef: required("ABBY_GREETING_APPROVAL_OWNER_REF"), approved: true,
           approvedText: required("ABBY_GREETING_APPROVED_TEXT") },

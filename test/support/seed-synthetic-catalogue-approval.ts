@@ -12,6 +12,7 @@ export async function seedSyntheticCatalogueApproval(db: Kysely<Database>, input
   routeVersion: string;
   apiKey: string;
   policyVersion?: string;
+  alternatives?: readonly Readonly<{ practitionerId: string; appointmentTypeId: string }>[];
 }>): Promise<void> {
   if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || input.apiKey !== "synthetic-key-au5") {
     throw new Error("synthetic catalogue approval requires an isolated fixture");
@@ -23,6 +24,10 @@ export async function seedSyntheticCatalogueApproval(db: Kysely<Database>, input
     route: { accountRef: input.accountRef, dialedNumber: input.dialedNumber, routeVersion: input.routeVersion },
     selection: { businessId: "11", practitionerId: "22", appointmentTypeId: "33",
       policyVersion: input.policyVersion ?? "0" },
+    alternatives: (input.alternatives ?? []).map(choice => ({
+      businessId: "11", practitionerId: choice.practitionerId,
+      appointmentTypeId: choice.appointmentTypeId, policyVersion: input.policyVersion ?? "0",
+    })),
     credentialFingerprint: clinikoCredentialFingerprint(input.apiKey),
     catalogueObservedAt: at, approvedBy: "synthetic-admin", approvedAt: at,
     patientActionMode: "unavailable", patientRequestMode: "unavailable",

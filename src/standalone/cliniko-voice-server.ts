@@ -1,7 +1,10 @@
 import type { Server } from "node:http";
 import type { Kysely } from "kysely";
 import { ClinikoAvailabilityReader } from "../cliniko/availability.ts";
+import { ClinikoApprovedAvailabilitySearch } from "../cliniko/approved-availability-search.ts";
+import type { ClinikoSelection } from "../cliniko/catalogue.ts";
 import type { ClinikoCatalogueSetup, ClinikoSelectionApproval, ClinikoSetupRoute } from "../cliniko/catalogue-setup.ts";
+import { isClinikoApprovalState } from "../cliniko/catalogue-setup.ts";
 import { err, ok } from "../core/model.ts";
 import type { ApprovedGreeting, LocationScope, Result } from "../core/model.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
@@ -30,6 +33,8 @@ export type ClinikoVoiceRoute = Readonly<{
   scope: LocationScope;
   routeVersion: string;
   availability: ClinikoAvailabilityReader;
+  /** Builds only the currently approved choice, using this route's credential and shared budget. */
+  alternativeAvailability?: (selection: ClinikoSelection) => ClinikoAvailabilityReader | null;
   approval: Pick<ClinikoCatalogueSetup, "readApprovedRoute">;
   rateBudget: PostgresClinikoRequestBudget;
   /** Today's YYYY-MM-DD date in this clinic's local time zone. */
@@ -88,6 +93,7 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
         !(route.rateBudget instanceof PostgresClinikoRequestBudget) ||
         !route.rateBudget.matchesDatabase(config.db) || !route.availability.usesBudget(route.rateBudget) ||
         !route.rateBudget.matchesCredentialFingerprint(route.availability.credentialFingerprint()) ||
+        (route.alternativeAvailability !== undefined && typeof route.alternativeAvailability !== "function") ||
         typeof route.clinicDate !== "function" || routes.has(route.dialedNumber) ||
         !Object.hasOwn(twilio.fallbackNumbers, route.dialedNumber)) {
       throw new RangeError("invalid clinic voice route");
@@ -114,22 +120,36 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     accountRef: twilio.accountSid, dialedNumber: route.dialedNumber,
     ...route.scope, routeVersion: route.routeVersion,
   })));
-  const approvedRoute = async (route: ClinikoVoiceRoute): Promise<ClinikoSelectionApproval | null> => {
+  const approvedRoute = async (route: ClinikoVoiceRoute): Promise<Readonly<{
+    approval: ClinikoSelectionApproval; readers: readonly ClinikoAvailabilityReader[];
+  }> | null> => {
     const binding: ClinikoSetupRoute = { accountRef: twilio.accountSid,
       dialedNumber: route.dialedNumber, routeVersion: route.routeVersion };
     try {
       const result = await route.approval.readApprovedRoute(route.scope, binding);
       if (!result.ok) return null;
       const approval = result.value;
-      if (!approval || !approval.scope || approval.scope.tenantId !== route.scope.tenantId ||
+      if (!isClinikoApprovalState({ version: 1, approval }) ||
+          !approval.scope || approval.scope.tenantId !== route.scope.tenantId ||
           approval.scope.clinicId !== route.scope.clinicId || approval.scope.locationId !== route.scope.locationId ||
           !approval.route || approval.route.accountRef !== binding.accountRef ||
           approval.route.dialedNumber !== binding.dialedNumber || approval.route.routeVersion !== binding.routeVersion ||
           !approval.selection || !approval.selection.policyVersion?.trim() ||
           approval.patientActionMode !== "unavailable" || approval.patientRequestMode !== "unavailable" ||
           !route.availability.matchesSelection(route.scope, { ...approval.selection,
-            credentialFingerprint: approval.credentialFingerprint })) return null;
-      return approval;
+            credentialFingerprint: approval.credentialFingerprint }) ||
+          !Array.isArray(approval.alternatives) || approval.alternatives.length > 2 ||
+          (approval.alternatives.length > 0 && !route.alternativeAvailability)) return null;
+      const readers: ClinikoAvailabilityReader[] = [];
+      for (const choice of approval.alternatives) {
+        const reader = route.alternativeAvailability?.(choice);
+        if (!(reader instanceof ClinikoAvailabilityReader) ||
+            !reader.matchesSelection(route.scope, { ...choice,
+              credentialFingerprint: approval.credentialFingerprint }) ||
+            !reader.usesBudget(route.rateBudget)) return null;
+        readers.push(reader);
+      }
+      return { approval, readers };
     } catch { return null; }
   };
   const openaiApiKey = config.openai.apiKey;
@@ -185,8 +205,11 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     const approved = await approvedRoute(route);
     if (!approved) throw new Error("clinic catalogue approval unavailable");
     const composed = await createStandaloneTransientVoiceCall({ db: config.db, routingHost,
-      expectedPolicyVersion: approved.selection.policyVersion,
-      stream, send, closeTransport: close, synthesis, availability: route.availability,
+      expectedPolicyVersion: approved.approval.selection.policyVersion,
+      stream, send, closeTransport: close, synthesis,
+      availability: approved.readers.length
+        ? new ClinikoApprovedAvailabilitySearch([route.availability, ...approved.readers], config.now)
+        : route.availability,
       approvedGreeting: route.keypadAvailabilityGreeting,
       keypadAvailabilityRange: (digit: string) => keypadAvailabilityRange(route.clinicDate, digit,
         route.sevenDayAvailabilityEnabled === true),

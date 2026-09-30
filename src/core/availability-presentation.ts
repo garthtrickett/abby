@@ -26,6 +26,11 @@ function localDate(value: Date, formatter: Intl.DateTimeFormat): string {
   return `${year}-${month}-${day}`;
 }
 
+function spokenName(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 120 &&
+    value.trim() === value && /^[\p{L}\p{M}\p{N} .,'()&/-]+$/u.test(value);
+}
+
 export function availabilityPresentation(snapshot: AvailabilitySnapshot, scope: LocationScope, from: string, to: string,
                                          now: string, staffWorkEnabled = true): Result<AvailabilityPresentation, InvalidEvidence> {
   if (!snapshot || snapshot.kind !== "times" || snapshot.reservable !== false || !snapshot.scope ||
@@ -39,6 +44,9 @@ export function availabilityPresentation(snapshot: AvailabilitySnapshot, scope: 
       !Number.isFinite(Date.parse(now)) || Date.parse(now) - Date.parse(snapshot.observedAt) > 30_000 ||
       Date.parse(snapshot.observedAt) - Date.parse(now) > 5_000 ||
       !Array.isArray(snapshot.startsAt) || snapshot.startsAt.length > 1_000) return err({ kind: "invalidEvidence" });
+  if (snapshot.offering !== undefined && (!snapshot.offering ||
+      !spokenName(snapshot.offering.practitionerName) ||
+      !spokenName(snapshot.offering.appointmentTypeName))) return err({ kind: "invalidEvidence" });
 
   let dates: Intl.DateTimeFormat;
   let spoken: Intl.DateTimeFormat;
@@ -63,6 +71,9 @@ export function availabilityPresentation(snapshot: AvailabilitySnapshot, scope: 
       ? "I couldn't find a possible appointment time for those dates. I can request staff follow-up if you'd like."
       : "I couldn't find a possible appointment time for those dates. Please contact the clinic directly." });
   const labels = shownStartsAt.map(start => spoken.format(new Date(start)));
+  const choice = snapshot.offering
+    ? `For ${snapshot.offering.appointmentTypeName} with ${snapshot.offering.practitionerName}, the`
+    : "The";
   return ok({ status: "shown", sourceRef: snapshot.sourceRef, timeZone: snapshot.timeZone, observedAt: snapshot.observedAt, shownStartsAt,
-    text: `The clinic's schedule currently shows possible times: ${labels.join("; ")} (${snapshot.timeZone}). These may change. I can't reserve or confirm an appointment from this information.` });
+    text: `${choice} clinic's schedule currently shows possible times: ${labels.join("; ")} (${snapshot.timeZone}). These may change. I can't reserve or confirm an appointment from this information.` });
 }
