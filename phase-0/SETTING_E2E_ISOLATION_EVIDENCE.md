@@ -1,6 +1,6 @@
 # Setting E2E isolation evidence
 
-**Code revision tested:** `834d5c4991b21d6d18c6ebddca3dc3bd53d459c7`
+**Code revision tested:** `b5da9174c2ef80e77a6ad3836a28990e4e87db71`
 
 **Fixture source:** `SCENARIO_MANIFEST.json` version 1.5 and the five mapped synthetic voice files at that revision.
 **Capability mode:** synthetic reference/embedded hosts only; automation and booking are exercised in their test-local default, enabled and disabled states. No real clinic route or patient capability is activated.
