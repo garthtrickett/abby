@@ -12,6 +12,8 @@ const result = (value: JsonSchema): JsonSchema => root({ oneOf: [
     "forbidden", "invalid", "commandOutcomeUnknown", "responseContractViolation", "versionConflict", "invalidValue", "storageFailure", "storageCorrupt", "effectFailure",
     "callUnknown", "callConflict", "invalidTransition", "scopeMismatch", "evidenceExpired", "confirmationMissing",
     "digestChanged", "effectUnknown", "keyMismatch", "admissionExpired", "leaseLost", "staleTurn",
+    "routeChanged", "policyChanged", "credentialForbidden", "catalogueRateLimited", "catalogueUnavailable", "selectionUnavailable", "staleCatalogue",
+    "notApproved", "staleApproval",
   ) }), object({ kind: { const: "readinessFailed" }, missing: { type: "array", items: choice(...READINESS_REQUIREMENTS), minItems: 1, uniqueItems: true } })] } }),
 ] });
 const reply = (kind: string, name: string, value: JsonSchema): JsonSchema => object({ kind: { const: kind }, [name]: value });
@@ -92,6 +94,24 @@ const turn = optional({ callId: key, sessionId: key, turnId: key, text: { type: 
   quality: choice("clear", "needsClarification"), at: str }, ["callId", "turnId", "text", "quality", "at"]);
 const change = { oneOf: [object({ kind: { const: "acknowledge" } }), object({ kind: { const: "resolve" } }),
   object({ kind: { const: "reassign" }, target: choice("staff", "operator") })] } satisfies JsonSchema;
+const nullable = (value: JsonSchema): JsonSchema => ({ oneOf: [value, { const: null }] });
+const providerId: JsonSchema = { type: "string", pattern: "^[1-9][0-9]*$", maxLength: 20 };
+const clinicAvailabilitySelection = object({ businessId: providerId, practitionerId: providerId,
+  appointmentTypeId: providerId, policyVersion: { type: "string", pattern: "^[A-Za-z0-9._-]{1,128}$" } });
+const clinicAvailabilityRoute = object({ accountRef: key,
+  dialedNumber: { type: "string", pattern: "^\\+[1-9][0-9]{1,14}$" }, routeVersion: key });
+const clinicAvailabilityBusinessCatalogue = object({ scope, observedAt: str, credentialFingerprint: key,
+  status: { const: "complete" }, businesses: array(object({ businessId: providerId,
+    name: str, timeZone: nullable(str), onlineBooking: bool, archived: bool })) });
+const clinicAvailabilitySelectionSnapshot = object({ scope, selection: clinicAvailabilitySelection,
+  observedAt: str, credentialFingerprint: key, businessName: str, practitionerName: str,
+  appointmentTypeName: str, timeZone: nullable(str), status: choice("candidate", "unavailable"),
+  reasons: array(str), patientActionMode: { const: "unavailable" }, patientRequestMode: { const: "unavailable" } });
+const clinicAvailabilityApproval = object({ scope, route: clinicAvailabilityRoute,
+  selection: clinicAvailabilitySelection, credentialFingerprint: key, catalogueObservedAt: str,
+  approvedBy: key, approvedAt: str, patientActionMode: { const: "unavailable" },
+  patientRequestMode: { const: "unavailable" } });
+const clinicAvailabilityApprovalState = object({ version: uint, approval: nullable(clinicAvailabilityApproval) });
 
 export type CapabilityDescriptor = Readonly<{
   id: string;
@@ -111,7 +131,7 @@ export type CapabilityPrecondition = "expectedPolicyVersion" | "expectedAutomati
   "hostEvidenceForExecution" | "approvedKnowledgeForAnswer" | "availabilityHostConfigured" |
   "appointmentHostConfigured" | "hostIssuedPatientProof" |
   "callReviewAvailable" | "outcomeReportAvailable" | "staffQueueAvailable" |
-  "hostConfirmedTask" | "expectedCallVersion";
+  "hostConfirmedTask" | "expectedCallVersion" | "availabilitySetupAvailable" | "expectedAvailabilityApprovalVersion";
 
 function entry(id: string, input: JsonSchema, success: JsonSchema, effect: CapabilityDescriptor["effect"],
                authority: CapabilityDescriptor["authority"], approval: CapabilityDescriptor["approval"] = "none",
@@ -173,6 +193,27 @@ export const capabilityCatalogue = {
   "knowledge.revoke.v1": entry("knowledge.revoke.v1",
     object({ kind: { const: "knowledge.revoke.v1" }, sourceRef: key, expectedVersion: key }),
     reply("knowledgeEntry", "entry", knowledgeEntry), "policyChange", "clinicAdmin"),
+  "clinic.availability.businesses.list.v1": entry("clinic.availability.businesses.list.v1",
+    object({ kind: { const: "clinic.availability.businesses.list.v1" } }),
+    reply("clinicAvailabilityBusinesses", "catalogue", clinicAvailabilityBusinessCatalogue),
+    "read", "clinicAdmin", "none", ["availabilitySetupAvailable"]),
+  "clinic.availability.selection.inspect.v1": entry("clinic.availability.selection.inspect.v1",
+    object({ kind: { const: "clinic.availability.selection.inspect.v1" }, selection: clinicAvailabilitySelection }),
+    reply("clinicAvailabilitySelection", "snapshot", clinicAvailabilitySelectionSnapshot),
+    "read", "clinicAdmin", "none", ["availabilitySetupAvailable"]),
+  "clinic.availability.approval.read.v1": entry("clinic.availability.approval.read.v1",
+    object({ kind: { const: "clinic.availability.approval.read.v1" } }),
+    reply("clinicAvailabilityApprovalState", "state", clinicAvailabilityApprovalState),
+    "read", "clinicAdmin", "none", ["availabilitySetupAvailable"]),
+  "clinic.availability.approval.change.v1": entry("clinic.availability.approval.change.v1",
+    object({ kind: { const: "clinic.availability.approval.change.v1" }, route: clinicAvailabilityRoute,
+      selection: clinicAvailabilitySelection, expectedVersion: uint }),
+    reply("clinicAvailabilityApprovalState", "state", clinicAvailabilityApprovalState),
+    "policyChange", "clinicAdmin", "none", ["availabilitySetupAvailable", "expectedAvailabilityApprovalVersion"]),
+  "clinic.availability.approval.revoke.v1": entry("clinic.availability.approval.revoke.v1",
+    object({ kind: { const: "clinic.availability.approval.revoke.v1" }, expectedVersion: uint }),
+    reply("clinicAvailabilityApprovalState", "state", clinicAvailabilityApprovalState),
+    "policyChange", "clinicAdmin", "none", ["availabilitySetupAvailable", "expectedAvailabilityApprovalVersion"]),
   "availability.read.v2": entry("availability.read.v2",
     object({ kind: { const: "availability.read.v2" }, turn, from: str, to: str, now: str }),
     reply("availabilityAnswer", "progress", progress), "read", "permittedActor", "none", ["activeCall", "availabilityHostConfigured"]),

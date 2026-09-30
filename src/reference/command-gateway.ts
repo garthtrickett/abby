@@ -16,6 +16,9 @@ import { matchesSchema } from "./schema-shapes.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import type { WriteStopAuditPage, WriteStopStatus } from "../core/write-stop.ts";
 import type { KnowledgeCatalogue, KnowledgeEntry, KnowledgeFailure } from "./knowledge-catalogue.ts";
+import type { ClinicAvailabilitySetup, ClinicAvailabilityApprovalState, ClinicAvailabilitySetupFailure,
+  ClinicAvailabilityRoute, ClinicAvailabilityBusinessCatalogue, ClinicAvailabilitySelection,
+  ClinicAvailabilitySelectionSnapshot } from "./clinic-availability-setup.ts";
 
 export type { CapabilityDescriptor } from "./capability-catalogue.ts";
 
@@ -42,6 +45,11 @@ export type GatewayCommand =
   | Readonly<{ kind: "knowledge.draft.save.v1"; sourceRef: string; expectedVersion: string; ownerRef: string; text: string; effectiveFrom: string; effectiveUntil: string }>
   | Readonly<{ kind: "knowledge.approve.v1"; sourceRef: string; expectedVersion: string }>
   | Readonly<{ kind: "knowledge.revoke.v1"; sourceRef: string; expectedVersion: string }>
+  | Readonly<{ kind: "clinic.availability.businesses.list.v1" }>
+  | Readonly<{ kind: "clinic.availability.selection.inspect.v1"; selection: ClinicAvailabilitySelection }>
+  | Readonly<{ kind: "clinic.availability.approval.read.v1" }>
+  | Readonly<{ kind: "clinic.availability.approval.change.v1"; route: ClinicAvailabilityRoute; selection: ClinicAvailabilitySelection; expectedVersion: number }>
+  | Readonly<{ kind: "clinic.availability.approval.revoke.v1"; expectedVersion: number }>
   | Readonly<{ kind: "availability.read.v2"; turn: FinalCallerTurn; from: string; to: string; now: string }>
   | Readonly<{ kind: "appointments.read.v1"; turn: FinalCallerTurn; verificationRef: string; from: string; to: string; now: string }>
   | Readonly<{ kind: "calls.read.v1"; callId: string }>
@@ -64,6 +72,9 @@ export type GatewayReply =
   | Readonly<{ kind: "knowledgeAnswer"; progress: CallCommandProgress }>
   | Readonly<{ kind: "knowledgeList"; entries: readonly KnowledgeEntry[] }>
   | Readonly<{ kind: "knowledgeEntry"; entry: KnowledgeEntry }>
+  | Readonly<{ kind: "clinicAvailabilityBusinesses"; catalogue: ClinicAvailabilityBusinessCatalogue }>
+  | Readonly<{ kind: "clinicAvailabilitySelection"; snapshot: ClinicAvailabilitySelectionSnapshot }>
+  | Readonly<{ kind: "clinicAvailabilityApprovalState"; state: ClinicAvailabilityApprovalState }>
   | Readonly<{ kind: "availabilityAnswer"; progress: CallCommandProgress }>
   | Readonly<{ kind: "appointmentAnswer"; progress: CallCommandProgress }>
   | Readonly<{ kind: "callSummary"; call: CallSummary }>
@@ -71,7 +82,8 @@ export type GatewayReply =
   | Readonly<{ kind: "staffQueue"; page: StaffQueuePage }>
   | Readonly<{ kind: "staffChange"; taskKey: string; callVersion: number; status: StaffItem["status"]; pending: boolean; reviewRequired: boolean }>;
 
-export type GatewayFailure = PolicyFailure | TextReceptionFailure | TransitionFailure | KnowledgeFailure | Readonly<{ kind: "forbidden" | "invalid" | "commandOutcomeUnknown" | "responseContractViolation" }>;
+export type GatewayFailure = PolicyFailure | TextReceptionFailure | TransitionFailure | KnowledgeFailure | ClinicAvailabilitySetupFailure |
+  Readonly<{ kind: "forbidden" | "invalid" | "commandOutcomeUnknown" | "responseContractViolation" }>;
 
 export class CommandGateway {
   private readonly actor: HostActor;
@@ -82,9 +94,10 @@ export class CommandGateway {
   private readonly outcomeReport: CallOutcomeReport | undefined;
   private readonly writeStopLedger: LedgerStore | undefined;
   private readonly knowledgeCatalogue: KnowledgeCatalogue | undefined;
+  private readonly availabilitySetup: ClinicAvailabilitySetup | undefined;
 
   constructor(actor: HostActor, policy: PolicyStore, reception: TextReception, review?: CallReview, staffQueue?: StaffQueue, outcomeReport?: CallOutcomeReport, writeStopLedger?: LedgerStore,
-              knowledgeCatalogue?: KnowledgeCatalogue) {
+              knowledgeCatalogue?: KnowledgeCatalogue, availabilitySetup?: ClinicAvailabilitySetup) {
     if (!actor || typeof actor.actorRef !== "string" || !actor.actorRef.trim() || actor.actorRef.length > 256 ||
         !["clinicAdmin", "staff", "agent"].includes(actor.role) || !actor.scope ||
         [actor.scope.tenantId, actor.scope.clinicId, actor.scope.locationId]
@@ -97,6 +110,7 @@ export class CommandGateway {
     this.outcomeReport = outcomeReport;
     this.writeStopLedger = writeStopLedger;
     this.knowledgeCatalogue = knowledgeCatalogue;
+    this.availabilitySetup = availabilitySetup;
   }
 
   listPermitted(): readonly CapabilityDescriptor[] {
@@ -110,6 +124,8 @@ export class CommandGateway {
     if (this.actor.role !== "agent" && this.reception.staffLifecycleEnabled()) permitted.push("staff.change.v1");
     if (this.actor.role === "clinicAdmin") {
       if (this.knowledgeCatalogue) permitted.push("knowledge.list.v1", "knowledge.draft.save.v1", "knowledge.approve.v1", "knowledge.revoke.v1");
+      if (this.availabilitySetup) permitted.push("clinic.availability.businesses.list.v1", "clinic.availability.selection.inspect.v1",
+        "clinic.availability.approval.read.v1", "clinic.availability.approval.change.v1", "clinic.availability.approval.revoke.v1");
       permitted.push("settings.automation.enabled.change.v1", "settings.automation.audit.v1",
         "settings.appointments.booking.enabled.change.v1", "settings.appointments.booking.audit.v1");
       if (this.writeStopLedger) permitted.push("calls.writes.stop.v1", "calls.writes.stop.read.v1",
@@ -216,6 +232,31 @@ export class CommandGateway {
         if (!this.knowledgeCatalogue) return err({ kind: "forbidden" });
         const result = await this.knowledgeCatalogue.revoke(this.actor.scope, command.sourceRef, command.expectedVersion, this.actor.actorRef);
         return result.ok ? ok({ kind: "knowledgeEntry", entry: result.value }) : result;
+      }
+      case "clinic.availability.businesses.list.v1": {
+        if (!this.availabilitySetup) return err({ kind: "forbidden" });
+        const result = await this.availabilitySetup.businesses(this.actor);
+        return result.ok ? ok({ kind: "clinicAvailabilityBusinesses", catalogue: result.value }) : result;
+      }
+      case "clinic.availability.selection.inspect.v1": {
+        if (!this.availabilitySetup) return err({ kind: "forbidden" });
+        const result = await this.availabilitySetup.inspect(this.actor, command.selection);
+        return result.ok ? ok({ kind: "clinicAvailabilitySelection", snapshot: result.value }) : result;
+      }
+      case "clinic.availability.approval.read.v1": {
+        if (!this.availabilitySetup) return err({ kind: "forbidden" });
+        const result = await this.availabilitySetup.current(this.actor);
+        return result.ok ? ok({ kind: "clinicAvailabilityApprovalState", state: result.value }) : result;
+      }
+      case "clinic.availability.approval.change.v1": {
+        if (!this.availabilitySetup) return err({ kind: "forbidden" });
+        const result = await this.availabilitySetup.approve(this.actor, command.route, command.selection, command.expectedVersion);
+        return result.ok ? ok({ kind: "clinicAvailabilityApprovalState", state: result.value }) : result;
+      }
+      case "clinic.availability.approval.revoke.v1": {
+        if (!this.availabilitySetup) return err({ kind: "forbidden" });
+        const result = await this.availabilitySetup.revoke(this.actor, command.expectedVersion);
+        return result.ok ? ok({ kind: "clinicAvailabilityApprovalState", state: result.value }) : result;
       }
       case "availability.read.v2": {
         if (!command.turn || !command.turn.turnId || !command.turn.callId || !command.turn.text ||

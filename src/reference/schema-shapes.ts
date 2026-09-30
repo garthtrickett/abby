@@ -2,7 +2,7 @@
 export type JsonSchema = Readonly<{
   $schema?: string;
   type?: "object" | "array" | "string" | "integer" | "boolean";
-  const?: string | number | boolean;
+  const?: string | number | boolean | null;
   enum?: readonly (string | number | boolean)[];
   properties?: Readonly<Record<string, JsonSchema>>;
   required?: readonly string[];
