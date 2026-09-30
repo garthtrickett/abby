@@ -111,17 +111,13 @@ export class ConnectedVoiceCall {
         return started;
       }
       this.begun = true;
-      if (started.value.kind === "locationChoice") return ok(started.value);
+      if (started.value.kind === "locationChoice") {
+        const delivered = await this.checkedDelivery(ok(started.value.prompt), now);
+        return delivered.ok ? ok(started.value) : delivered;
+      }
       this.scope = started.value.receipt.scope;
-      const delivered = await this.call.dispatchPending(now);
-      if (!delivered.ok) {
-        await this.close(now, "sessionClosed");
-        return delivered;
-      }
-      if (deliveryLost(delivered.value)) {
-        await this.close(now, "sessionClosed");
-        return err({ kind: "transportUnavailable" });
-      }
+      const delivered = await this.checkedDelivery(await this.call.dispatchPending(now), now);
+      if (!delivered.ok) return delivered;
       return ok({ ...started.value, delivery: delivered.value });
     } catch {
       if (!this.closing) await this.close(now, "sessionClosed");
@@ -129,6 +125,15 @@ export class ConnectedVoiceCall {
     } finally {
       this.starting = false;
     }
+  }
+
+  private async checkedDelivery<T extends DispatchResult | PrelocationPromptResult>(
+    delivered: Result<T, SharedVoiceFailure>, now: string): Promise<Result<T, ConnectedVoiceFailure>> {
+    if (!delivered.ok || deliveryLost(delivered.value)) {
+      await this.close(now, "sessionClosed");
+      return delivered.ok ? err({ kind: "transportUnavailable" }) : delivered;
+    }
+    return delivered;
   }
 
   private fatalFailure(kind: string): boolean {
@@ -157,15 +162,8 @@ export class ConnectedVoiceCall {
         }
       }
       if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
-      const delivery = await this.call.dispatchPending(frame.capturedAt);
-      if (!delivery.ok) {
-        await this.close(frame.capturedAt, "sessionClosed");
-        return delivery;
-      }
-      if (deliveryLost(delivery.value)) {
-        await this.close(frame.capturedAt, "sessionClosed");
-        return err({ kind: "transportUnavailable" });
-      }
+      const delivery = await this.checkedDelivery(await this.call.dispatchPending(frame.capturedAt), frame.capturedAt);
+      if (!delivery.ok) return delivery;
       return ok({ kind: "turnCompleted", turn, delivery: delivery.value });
     } catch {
       await this.close(frame.capturedAt, "sessionClosed");
@@ -184,12 +182,8 @@ export class ConnectedVoiceCall {
       const drained = await this.call.drainEffects(now);
       if (!drained.ok) { await this.close(now, "sessionClosed"); return drained; }
       if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
-      const delivery = await this.call.dispatchPending(now);
-      if (!delivery.ok) { await this.close(now, "sessionClosed"); return delivery; }
-      if (deliveryLost(delivery.value)) {
-        await this.close(now, "sessionClosed");
-        return err({ kind: "transportUnavailable" });
-      }
+      const delivery = await this.checkedDelivery(await this.call.dispatchPending(now), now);
+      if (!delivery.ok) return delivery;
       return ok({ kind: "turnCompleted", turn: turn.value, delivery: delivery.value });
     } catch {
       await this.close(now, "sessionClosed");

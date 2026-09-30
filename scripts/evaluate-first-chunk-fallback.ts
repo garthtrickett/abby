@@ -88,7 +88,7 @@ async function main(): Promise<void> {
     primary: results.filter(item => item.selected === "primary").length,
     fallback: results.filter(item => item.selected === "fallback").length,
     firstChunkMisses: results.filter(item => item.firstChunkMs === null || item.firstChunkMs > 5_000).length };
-  const candidateGate = assessSyntheticSpeechLatency(results);
+  const candidateGate = assessSyntheticSpeechLatency(results, corpus.cases.map(item => item.id));
   const sourcePaths = ["src/voice/openai-speech-synthesis.ts", "src/voice/first-chunk-fallback-speech.ts",
     "src/voice/streamed-playback-port.ts", "src/voice/speech-latency-gate.ts",
     "scripts/evaluate-first-chunk-fallback.ts"];
