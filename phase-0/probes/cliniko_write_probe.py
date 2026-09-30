@@ -185,16 +185,54 @@ def main() -> int:
                           "unverified_no_protected_read": True, "disposed_no_protected_read": True,
                           "protected_reads": 1}))
 
-        if len(offers) > 1 and isinstance(offers[1].get("appointment_start"), str):
-            second_start = offers[1]["appointment_start"]
-            status, moved = request(base, headers, "PATCH", f"/individual_appointments/{quote(appointment_id, safe='')}", {"starts_at": second_start, "ends_at": None})
-            read_status, current = request(base, headers, "GET", f"/individual_appointments/{quote(appointment_id, safe='')}")
-            moved_ok = status == 200 and read_status == 200 and moved.get("starts_at") == second_start and current.get("starts_at") == second_start
-            print(json.dumps({"step": "reschedule", "patch_status": status, "read_status": read_status, "verified": moved_ok}))
-            if not moved_ok:
-                failed = True
-
+        if len(offers) < 2 or not isinstance(offers[1].get("appointment_start"), str):
+            raise ProbeError("no_second_offer_for_reschedule")
         appointment_path = f"/individual_appointments/{quote(appointment_id, safe='')}"
+        before_status, before = request(base, headers, "GET", appointment_path)
+        if before_status != 200 or str(before.get("id")) != appointment_id or\
+                not isinstance(before.get("starts_at"), str) or not isinstance(before.get("ends_at"), str):
+            raise ProbeError("reschedule_target_unavailable")
+        second_start = offers[1]["appointment_start"]
+        old_start_at = datetime.fromisoformat(before["starts_at"].replace("Z", "+00:00"))
+        old_end_at = datetime.fromisoformat(before["ends_at"].replace("Z", "+00:00"))
+        new_start_at = datetime.fromisoformat(second_start.replace("Z", "+00:00"))
+        new_end_at = new_start_at + (old_end_at - old_start_at)
+        move_input = {
+            "apiKey": key, "contactEmail": contact, "businessId": business_id,
+            "practitionerId": practitioner_id, "appointmentTypeId": offer_type,
+            "patientId": patient_id, "appointmentId": appointment_id,
+            "startsAt": before["starts_at"], "endsAt": before["ends_at"],
+            "newStartsAt": second_start, "newEndsAt": new_end_at.isoformat(),
+        }
+        try:
+            movement = subprocess.run(
+                ["node", str(Path(__file__).with_name("cliniko_reschedule_writer_probe.ts"))],
+                input=json.dumps(move_input), text=True, capture_output=True,
+                cwd=repo_root, timeout=60, check=False,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            raise ProbeError("reschedule_writer_unavailable") from None
+        try:
+            movement_result = json.loads(movement.stdout)
+        except ValueError:
+            raise ProbeError("reschedule_writer_output_invalid") from None
+        read_status, current = request(base, headers, "GET", appointment_path)
+        conflict_status, conflict = request(base, headers, "GET", appointment_path + "/conflicts")
+        moved_ok = read_status == 200 and str(current.get("id")) == appointment_id and\
+            datetime.fromisoformat(current["starts_at"].replace("Z", "+00:00")) == new_start_at and\
+            datetime.fromisoformat(current["ends_at"].replace("Z", "+00:00")) == new_end_at and\
+            conflict_status == 200 and conflict.get("conflicts", {}).get("exist") is False
+        print(json.dumps({"step": "typescript_reschedule_writer",
+                          "write_kind": movement_result.get("writeKind"),
+                          "observation_kind": movement_result.get("observationKind"),
+                          "repeated_attempt_rejected": movement_result.get("repeatedAttemptRejected") is True,
+                          "injected_move_response_loss": movement_result.get("injectedMoveResponseLoss") is True,
+                          "independent_moved_read": moved_ok}))
+        injected_move_loss = env_mode and os.environ.get("ABBY_PROBE_LOSE_MOVE_RESPONSE") == "1"
+        if (movement.returncode != 0 or movement_result.get("ok") is not True or not moved_ok or
+                movement_result.get("injectedMoveResponseLoss") is not injected_move_loss):
+            failed = True
+
         target_status, target = request(base, headers, "GET", appointment_path)
         if target_status != 200 or str(target.get("id")) != appointment_id or\
                 not isinstance(target.get("starts_at"), str) or not isinstance(target.get("ends_at"), str):
