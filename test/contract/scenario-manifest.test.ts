@@ -36,9 +36,9 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
   assert.equal(manifest.version, "1.5");
   assert.equal(manifest.source, "TECHNICAL_DESIGN.md Section 11");
   assert.equal(manifest.fixtureIdPattern, "fixture-{lowercase scenario id}");
-  assert.equal(rows.length, 203);
+  assert.equal(rows.length, 204);
   assert.deepEqual(manifest.scenarios.map(scenario => scenario.id),
-    Array.from({ length: 203 }, (_, index) => `E2E-${String(index + 1).padStart(3, "0")}`));
+    Array.from({ length: 204 }, (_, index) => `E2E-${String(index + 1).padStart(3, "0")}`));
   const ids = new Set(manifest.scenarios.map(scenario => scenario.id));
   for (const [index, scenario] of manifest.scenarios.entries()) {
     const row = rows[index]!;
