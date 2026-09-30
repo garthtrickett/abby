@@ -8,6 +8,7 @@ import { unprovenReadiness } from "../src/core/readiness.ts";
 import { ReferenceNumberRoutingHost } from "../src/reference/clinic-number-routing.ts";
 import { referenceDefaultPolicy } from "../src/reference/policy-store.ts";
 import { createStandaloneClinikoVoiceServer } from "../src/standalone/cliniko-voice-server.ts";
+import type { OperationalCounterSink } from "../src/standalone/operational-counters.ts";
 import { connectPostgres } from "../src/storage/connect.ts";
 import { PostgresActiveCallClaims } from "../src/storage/postgres-active-call-claims.ts";
 import { PostgresClinikoRequestBudget } from "../src/storage/postgres-cliniko-request-budget.ts";
@@ -51,6 +52,7 @@ export type VoiceRunnerPorts = Readonly<{
   clinikoFetch?: typeof fetch;
   openaiFetch?: typeof fetch;
   transcriptionSocketFactory?: NonNullable<ClinikoVoiceServerConfig["openai"]["transcriptionSocketFactory"]>;
+  operationalCounters?: OperationalCounterSink;
 }>;
 
 export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<void> {
@@ -128,6 +130,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       admitWebhook: async event => !!testCaller && !!event && event.key.accountRef === accountSid &&
         event.dialedNumber === dialedNumber && event.presentedCallerNumber === testCaller && await healthy(),
       health: healthy,
+      ...(ports.operationalCounters ? { operationalCounters: ports.operationalCounters } : {}),
     });
     if (!prepared.ok) throw new Error(`standalone storage unavailable: ${prepared.error.kind}`);
     const server = prepared.value;

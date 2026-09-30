@@ -65,7 +65,7 @@ type Call = { socket: WebSocket; messages: Record<string, unknown>[];
 type Fixture = { port: number; child: ReturnType<typeof spawn>;
   admin: ReturnType<typeof connectPostgres>; databaseName: string;
   speech: string[]; clinikoMethods: string[]; clinikoPaths: string[]; clinikoQueries: string[];
-  openCall: () => Promise<Call> };
+  openCall: () => Promise<Call>; operationalSnapshot: () => Promise<Record<string, number>> };
 
 async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void>,
                            weekApproved = false, alternativeApproved = false,
@@ -170,7 +170,20 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
           customParameters: { abbyBinding: binding } } }));
       return { socket, messages, closed, streamSid };
     };
-    await run({ port, child, admin, databaseName, speech, clinikoMethods, clinikoPaths, clinikoQueries, openCall });
+    const operationalSnapshot = async (): Promise<Record<string, number>> => bounded(new Promise((resolve, reject) => {
+      const listener = (message: unknown) => {
+        if (typeof message !== "object" || message === null || !("kind" in message) ||
+            message.kind !== "operationalSnapshot" || !("counts" in message)) return;
+        child?.off("message", listener);
+        resolve(message.counts as Record<string, number>);
+      };
+      child!.on("message", listener);
+      child!.send({ kind: "operationalSnapshot" }, error => {
+        if (error) { child?.off("message", listener); reject(error); }
+      });
+    }), "operational snapshot");
+    await run({ port, child, admin, databaseName, speech, clinikoMethods, clinikoPaths, clinikoQueries,
+      openCall, operationalSnapshot });
   } finally {
     let restored = true;
     try { if (created) await sql.raw(`alter database "${databaseName}" with allow_connections true`).execute(admin); }
@@ -248,6 +261,11 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
       assert.equal((await bounded(call.closed, "speech failure close"))[0], 1008);
       assert.deepEqual(call.messages, []);
       assert.equal(fixture.speech.length, 1);
+      const counts = await fixture.operationalSnapshot();
+      assert.equal(counts.callOwnerStarted, 1);
+      assert.equal(counts.voiceFailure, 1);
+      assert.equal(counts.callEnded, 1);
+      assert.equal(JSON.stringify(counts).includes(caller), false);
     })),
     t.test("E2E-196 transcription failure closes the signed stream without a new claim", async () =>
       withFixture("openai-transcription", async fixture => {
