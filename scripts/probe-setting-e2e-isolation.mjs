@@ -20,7 +20,8 @@ for (const { id, file } of cases) {
 
 async function run(files, pattern, concurrency) {
   const args = ["--test", `--test-concurrency=${concurrency}`, `--test-name-pattern=${pattern}`, ...files];
-  const child = spawn(process.execPath, args, { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(process.execPath, args, { cwd: root, stdio: ["ignore", "pipe", "pipe"],
+    signal: AbortSignal.timeout(120_000) });
   let output = "";
   for (const stream of [child.stdout, child.stderr]) stream.on("data", chunk => { output += chunk.toString(); });
   const exitCode = await new Promise((resolve, reject) => {
