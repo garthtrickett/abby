@@ -110,3 +110,18 @@ The same adapter can now select OpenAI's documented `gpt-transcribe` committed-t
 These patient-free runs used two repeats and two concurrent sessions per corpus, with the same 20 ms media-frame pacing and no context hints. The noisy result improves on the earlier `gpt-live-transcribe` run's 8 critical misses, but five misses still block promotion of natural-language caller turns. Turn duration includes paced fixture replay and connection setup, and cannot establish audible response latency. This small synthetic sample cannot select a production model or determine a pilot quality threshold.
 
 The owner-only reports are `eval/results/2026-09-29-clean-realtime-gpt-transcribe-v1.json`, `eval/results/2026-09-29-telephone-realtime-gpt-transcribe-v1.json`, and `eval/results/2026-09-29-noisy-realtime-gpt-transcribe-v1.json`. They pin adapter SHA-256 `65104bd11ce1466bee5c367b2f11fee5f90dabcc63e61d92a4deddcd3243f3b2`. All finals remain `needsClarification`, and every report retains `releaseGate: unverified`.
+
+## Declared synthetic speech gate — 2026-09-30
+
+The [version 1 gate](SPEECH_QUALITY_GATE.md) was fixed before these final candidate runs. The same `gpt-live-transcribe` production adapter ran three repeats per case with four concurrent sessions. The speech path ran forty fixed patient-free synthesis jobs with four concurrent requests. The owner-only reports are ignored under `eval/results/`; no API key, patient audio, or caller record was saved in the repository.
+
+| Check | Jobs | Candidate result | Accuracy or queue result | Measured latency |
+| --- | ---: | --- | --- | --- |
+| Telephone-band clean | 9 | Pass | 9 matches; 0 critical; WER 0% | Post-commit final p95 767 ms |
+| 10 dB noisy, two synthetic voices | 18 | Fail | 12 critical misses; WER 43.2% | Post-commit final p95 837 ms |
+| New 20 dB safety corpus, two synthetic voices | 24 | Fail | 11 critical misses; WER 27.2% | Post-commit final p95 866 ms |
+| First queued speech chunk | 40 | Fail | 39 queued; 1 uncertain | Successful-job first-chunk p95 2,391 ms; utterance p95 2,944 ms |
+
+The aggregate `eval:speech-gate` command returned nonzero. The successful-job speech p95 stayed below its threshold, but the uncertain job independently failed the gate. No noisy or safety transcript was promoted to `clear`; natural-language availability and patient actions remain disabled. The earlier same-day diagnostic reports became stale when gate source changed, so this table uses only the final, source-matched reports. The reports are `2026-09-30-transcription-telephony-final.json`, `2026-09-30-transcription-noise-final.json`, `2026-09-30-transcription-safety-final.json`, and `2026-09-30-first-chunk-final.json` inside the ignored `eval/results/` directory.
+
+The transcription reports pin adapter/source SHA-256 `37064ad69bf3ff91df19923aa97039521864e512f48333dfc2b9cf9542ac0e4b`; their corpus hashes are respectively `65645afaeeaca6c91342b8e690c184affd58e004f3438cfa0cccfdd18e3f8e1a`, `ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2`, and `fb261dfa87cfd036307346874b439b63596a7b9390109cc3d22965f5fda795da`. The speech report pins source SHA-256 `41fc6737cb726a8bac104db9828a688a0f0e614adbe065fe0a677f472c5773f4` and corpus SHA-256 `b02fc915affa082502d417bf3eaaecb4435c14c00947c40ecda3e57ee7578857`. Human listening and the representative carrier-call gate remain unrun. Every report retains `releaseGate: unverified`.

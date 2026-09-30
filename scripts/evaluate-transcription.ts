@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { OpenAIRealtimeTranscription } from "../src/voice/openai-realtime-transcription.ts";
+import { assessSyntheticTranscription } from "../src/voice/transcription-evaluation-gate.ts";
 import { parseTranscriptionEvaluationCorpus, runTranscriptionEvaluation } from "../src/voice/transcription-evaluation.ts";
 import type { TranscriptionEvaluationCase } from "../src/voice/transcription-evaluation.ts";
 
@@ -32,7 +33,7 @@ async function main(): Promise<void> {
   if (!apiKey) throw new Error("ABBY_OPENAI_API_KEY is required");
   const corpusName = args.corpus ?? "transcription-v1";
   if (corpusName !== "transcription-v1" && corpusName !== "transcription-telephony-v1" &&
-      corpusName !== "transcription-noise-v1") {
+      corpusName !== "transcription-noise-v1" && corpusName !== "transcription-safety-v1") {
     throw new Error("unsupported transcription evaluation corpus");
   }
   const model = args.model ?? "gpt-live-transcribe";
@@ -53,19 +54,23 @@ async function main(): Promise<void> {
     sessionId => new OpenAIRealtimeTranscription({ apiKey, sessionId, model }), repeats, concurrency);
   const counts = { match: 0, mismatch: 0, critical: 0, providerFailure: 0 };
   for (const result of results) counts[result.verdict] += 1;
+  const candidateGate = assessSyntheticTranscription(cases, results);
   const sourcePaths = ["src/voice/openai-realtime-transcription.ts", "src/voice/transcription-evaluation.ts",
-    "scripts/evaluate-transcription.ts"];
+    "src/voice/transcription-evaluation-gate.ts", "scripts/evaluate-transcription.ts"];
   const sourceBytes = await Promise.all(sourcePaths.map(path => readFile(resolve(path))));
   const report = { schemaVersion: 1, kind: "realtime-transcription-evaluation", runAt: new Date().toISOString(),
     configuration: { provider: "openai-realtime", model, corpusVersion: corpus.version,
       corpusSha256: digest(corpusBytes), adapterSha256: digest(Buffer.concat(sourceBytes)), nodeVersion: process.version,
       repeats, concurrency, audioFormat: corpus.audioFormat },
-    counts, results, humanReviewStatus: "pending", liveCallStatus: "notRun", releaseGate: "unverified" };
+    counts, candidateGate, results, humanReviewStatus: "pending", liveCallStatus: "notRun",
+    releaseGate: "unverified" };
   const output = resolve(args.out!);
   await mkdir(dirname(output), { recursive: true });
   await writeFile(output, `${JSON.stringify(report, null, 2)}\n`, { flag: "wx", mode: 0o600 });
-  process.stdout.write(`${JSON.stringify({ counts, output, releaseGate: report.releaseGate })}\n`);
-  if (counts.critical || counts.mismatch || counts.providerFailure) process.exitCode = 1;
+  process.stdout.write(`${JSON.stringify({ counts, candidateGate: { status: candidateGate.status,
+    failures: candidateGate.failures, metrics: candidateGate.metrics }, output,
+  releaseGate: report.releaseGate })}\n`);
+  if (candidateGate.status !== "pass") process.exitCode = 1;
 }
 
 main().catch(() => {

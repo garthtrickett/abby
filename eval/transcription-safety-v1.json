@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "version": "transcription-safety-v1",
+  "audioFormat": "mono-pcm16le-16000",
+  "cases": [
+    {
+      "id": "SG-001",
+      "category": "domain-date-kal-noise",
+      "file": "physiotherapy-november-kal-white-20db-pcmu-8k.pcm",
+      "sha256": "fe9fdaf6134d6e2dee6d812fc14b277e9b15f3c802abcaa12dda00399d02eb9c",
+      "expectedText": "I need physiotherapy on the fourteenth of November.",
+      "criticalTerms": [
+        "physiotherapy",
+        "fourteenth",
+        "November"
+      ]
+    },
+    {
+      "id": "SG-002",
+      "category": "weekday-number-kal-noise",
+      "file": "tuesday-seven-thirty-kal-white-20db-pcmu-8k.pcm",
+      "sha256": "fcfdce5b716526e5181291de73416137f4959d3afcf426c9a1d96a7a00485954",
+      "expectedText": "Please call me on Tuesday at seven thirty.",
+      "criticalTerms": [
+        "Tuesday",
+        "seven",
+        "thirty"
+      ]
+    },
+    {
+      "id": "SG-003",
+      "category": "email-address-kal-noise",
+      "file": "demo-email-kal-white-20db-pcmu-8k.pcm",
+      "sha256": "f7af4d35445e0c0c4a97de8eefcd0c7b3456a2ccbbb0e842501b523cc4b15c47",
+      "expectedText": "My email is demo at example dot test.",
+      "criticalTerms": [
+        "demo",
+        "example"
+      ]
+    },
+    {
+      "id": "SG-004",
+      "category": "currency-number-kal-noise",
+      "file": "forty-two-dollars-kal-white-20db-pcmu-8k.pcm",
+      "sha256": "113b55a0d230e5048293b317333abd720016bebb848b563027154a43c216e038",
+      "expectedText": "The fee is forty two dollars.",
+      "criticalTerms": [
+        "forty",
+        "two",
+        "dollars"
+      ]
+    },
+    {
+      "id": "SG-005",
+      "category": "domain-date-slt-noise",
+      "file": "physiotherapy-november-slt-white-20db-pcmu-8k.pcm",
+      "sha256": "33a94c0855e8732835e945596cea8b23fab2442396b54fc4d86908bc82520204",
+      "expectedText": "I need physiotherapy on the fourteenth of November.",
+      "criticalTerms": [
+        "physiotherapy",
+        "fourteenth",
+        "November"
+      ]
+    },
+    {
+      "id": "SG-006",
+      "category": "weekday-number-slt-noise",
+      "file": "tuesday-seven-thirty-slt-white-20db-pcmu-8k.pcm",
+      "sha256": "1e9fa9684a8d19212bb76cc0238d305bd0d5180052d9392bb902b569bf876b6a",
+      "expectedText": "Please call me on Tuesday at seven thirty.",
+      "criticalTerms": [
+        "Tuesday",
+        "seven",
+        "thirty"
+      ]
+    },
+    {
+      "id": "SG-007",
+      "category": "email-address-slt-noise",
+      "file": "demo-email-slt-white-20db-pcmu-8k.pcm",
+      "sha256": "181f25c6fc0684afd6c623766ac342e3d827ed7a8c5c11d339af8a1aee1e4795",
+      "expectedText": "My email is demo at example dot test.",
+      "criticalTerms": [
+        "demo",
+        "example"
+      ]
+    },
+    {
+      "id": "SG-008",
+      "category": "currency-number-slt-noise",
+      "file": "forty-two-dollars-slt-white-20db-pcmu-8k.pcm",
+      "sha256": "b4eb8805ca1eb7eabbc04163401996671165b2c625bd727aaa45c1cb08a37323",
+      "expectedText": "The fee is forty two dollars.",
+      "criticalTerms": [
+        "forty",
+        "two",
+        "dollars"
+      ]
+    }
+  ]
+}
