@@ -77,6 +77,62 @@ test("E2E-131 local transport: a signed webhook and upgrade reach one authentica
   }
 });
 
+test("E2E-164 graceful shutdown closes an active signed stream and releases its call owner",
+  { timeout: 10_000 }, async () => {
+  const ingress = new TwilioSignedIngress({ accountSid, authToken, publicWebhookUrl: webhookUrl,
+    publicStreamUrl: streamUrl, fallbackNumbers: { "+6125550199": "+6125550188" },
+    bindingKey: Buffer.alloc(32, 0x40),
+    now: () => new Date("2026-09-29T10:00:00.000Z") });
+  let started!: () => void;
+  const callStarted = new Promise<void>(resolve => { started = resolve; });
+  let released!: () => void;
+  const ownerReleased = new Promise<void>(resolve => { released = resolve; });
+  let disconnected = 0;
+  const server = createTwilioIngressServer({ ingress, async createCall() {
+    return { async receive(raw) {
+      if (JSON.parse(raw).event === "start") started();
+      return { ok: true };
+    }, async disconnect() { disconnected += 1; released(); } };
+  } });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  let socket: WebSocket | undefined;
+  let serverClosed = false;
+  try {
+    const form = { AccountSid: accountSid, CallSid: callSid, To: "+6125550199", From: "+6145550101" };
+    const response = await fetch(`http://127.0.0.1:${address.port}/twilio/inbound`, { method: "POST", headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, webhookUrl, form),
+    }, body: new URLSearchParams(form).toString() });
+    assert.equal(response.status, 200);
+    const binding = (await response.text()).match(/<Parameter name="abbyBinding" value="([^"]+)"\/>/)?.[1];
+    assert.ok(binding);
+    socket = new WebSocket(`ws://127.0.0.1:${address.port}/twilio/media/`, { headers: {
+      "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, streamUrl, {}),
+    } });
+    await once(socket, "open");
+    socket.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
+    socket.send(JSON.stringify({ event: "start", sequenceNumber: "1", streamSid,
+      start: { accountSid, callSid, streamSid, tracks: ["inbound"],
+        mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 },
+        customParameters: { abbyBinding: binding } } }));
+    await callStarted;
+    const socketClosed = once(socket, "close");
+    const closing = once(server, "close");
+    server.close();
+    serverClosed = true;
+    assert.equal((await socketClosed)[0], 1001);
+    await ownerReleased;
+    await closing;
+    assert.equal(disconnected, 1);
+  } finally {
+    socket?.terminate();
+    if (!serverClosed) { server.close(); await once(server, "close"); }
+  }
+});
+
 test("E2E-135 local transport: concurrent and later replays cannot construct a second call owner",
   { timeout: 15_000 }, async () => {
   let clockMs = Date.parse("2026-09-29T10:00:00.000Z");

@@ -172,6 +172,14 @@ export function createTwilioIngressServer(config: TwilioIngressServerConfig): Se
     if (!authorized.ok) { refuseUpgrade(socket); return; }
     websocket.handleUpgrade(request, socket, head, connection => runStream(connection, request, config, claims));
   });
-  server.on("close", () => { for (const client of websocket.clients) client.close(1001); websocket.close(); claims.clear(); });
+  const closeHttp = server.close.bind(server);
+  server.close = callback => {
+    // Upgraded sockets can keep the HTTP server open, so its "close" event is
+    // too late to start draining live calls. Close them before waiting for HTTP.
+    for (const client of websocket.clients) client.close(1001);
+    websocket.close();
+    return closeHttp(callback);
+  };
+  server.on("close", () => claims.clear());
   return server;
 }
