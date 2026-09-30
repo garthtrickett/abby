@@ -167,12 +167,17 @@ export class SharedNumberVoiceCall {
   }
 
   async acceptKeypadAvailability(date: string, now: string): Promise<Result<SharedVoiceTurn, SharedVoiceFailure>> {
+    return this.acceptKeypadAvailabilityRange(date, date, now);
+  }
+
+  async acceptKeypadAvailabilityRange(from: string, to: string, now: string):
+    Promise<Result<SharedVoiceTurn, SharedVoiceFailure>> {
     if (this.closing || this.terminal) return err({ kind: "disconnected" });
     if (this.inFlight) return err({ kind: "deliveryBlocked" });
     if (!this.full) return err({ kind: "sessionUnknown" });
     const done = this.trackTransition();
     try {
-      const turn = await this.full.acceptKeypadAvailability(date, now);
+      const turn = await this.full.acceptKeypadAvailabilityRange(from, to, now);
       return turn.ok ? ok({ kind: "callerTurn", state: turn.value }) : turn;
     } finally { done(); }
   }

@@ -14,7 +14,7 @@ import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-s
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 
 type Fault = "openai-speech" | "openai-transcription" | "cliniko-rate-limit" | "cliniko-timeout" | "cliniko-partial-page" |
-  "cliniko-business-type-removed" | undefined;
+  "cliniko-business-type-removed" | "week-alternative" | undefined;
 const fallbackScenarios = [
   { fault: "cliniko-rate-limit", id: "E2E-174" },
   { fault: "cliniko-timeout", id: "E2E-175" },
@@ -28,6 +28,7 @@ const authToken = "synthetic-token";
 const webhookUrl = "https://calls.example.test/twilio/inbound";
 const streamUrl = "wss://calls.example.test/twilio/media/";
 const noStaffNotice = "I can't send a staff request from this call. Please contact the clinic directly.";
+const weekInstruction = "Press 3 for possible times over the next week.";
 const root = new URL("../../", import.meta.url);
 
 async function bounded<T>(promise: Promise<T>, label: string): Promise<T> {
@@ -60,9 +61,10 @@ type Call = { socket: WebSocket; messages: Record<string, unknown>[];
   closed: Promise<[number, Buffer]>; streamSid: string };
 type Fixture = { port: number; child: ReturnType<typeof spawn>;
   admin: ReturnType<typeof connectPostgres>; databaseName: string;
-  speech: string[]; clinikoMethods: string[]; clinikoPaths: string[]; openCall: () => Promise<Call> };
+  speech: string[]; clinikoMethods: string[]; clinikoPaths: string[]; clinikoQueries: string[];
+  openCall: () => Promise<Call> };
 
-async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void>): Promise<void> {
+async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void>, weekApproved = false): Promise<void> {
   const adminUrl = process.env.DATABASE_URL;
   assert.ok(adminUrl);
   const admin = connectPostgres(adminUrl);
@@ -86,7 +88,8 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
     ABBY_TWILIO_BINDING_KEY_HEX: "66".repeat(32), ABBY_VOICE_ROUTE_VERSION: "fault-test-v1",
     ABBY_TEST_OPERATOR_REF: "synthetic-operator", ABBY_AUTOMATION_EXPECTED_VERSION: "0",
     ABBY_GREETING_VERSION: "fault-test-v1", ABBY_GREETING_APPROVAL_OWNER_REF: "synthetic-approval",
-    ABBY_GREETING_APPROVED_TEXT: "This is an Abby test call. Press 1 for possible times today. Press 2 for possible times tomorrow.",
+    ABBY_GREETING_APPROVED_TEXT: `This is an Abby test call. Press 1 for possible times today. Press 2 for possible times tomorrow.${weekApproved ? ` ${weekInstruction}` : ""}`,
+    ABBY_SEVEN_DAY_AVAILABILITY_ENABLED: weekApproved ? "1" : "0",
     ABBY_OPENAI_API_KEY: "synthetic-openai", ABBY_OPENAI_INTENT_MODEL: "synthetic-model",
   };
   let created = false;
@@ -95,6 +98,7 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
   const speech: string[] = [];
   const clinikoMethods: string[] = [];
   const clinikoPaths: string[] = [];
+  const clinikoQueries: string[] = [];
   let processOutput = "";
   try {
     await sql.raw(`create database "${databaseName}"`).execute(admin);
@@ -118,6 +122,7 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
           message.kind === "clinikoMethod" && "method" in message && typeof message.method === "string") {
         clinikoMethods.push(message.method);
         if ("path" in message && typeof message.path === "string") clinikoPaths.push(message.path);
+        if ("query" in message && typeof message.query === "string") clinikoQueries.push(message.query);
       }
     });
     child.stdout?.on("data", data => { processOutput += String(data); });
@@ -156,7 +161,7 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
           customParameters: { abbyBinding: binding } } }));
       return { socket, messages, closed, streamSid };
     };
-    await run({ port, child, admin, databaseName, speech, clinikoMethods, clinikoPaths, openCall });
+    await run({ port, child, admin, databaseName, speech, clinikoMethods, clinikoPaths, clinikoQueries, openCall });
   } finally {
     let restored = true;
     try { if (created) await sql.raw(`alter database "${databaseName}" with allow_connections true`).execute(admin); }
@@ -242,6 +247,48 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         ]);
         assert.deepEqual(fixture.clinikoMethods, []);
       })),
+    t.test("E2E-199 an unapproved week option and invalid digit cannot widen a caller's read", async () =>
+      withFixture("week-alternative", async fixture => {
+        const call = await fixture.openCall();
+        await markGreeting(call);
+        for (const [digit, sequenceNumber] of [["3", "3"], ["9", "4"], ["1", "5"]]) {
+          call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber, streamSid: call.streamSid,
+            dtmf: { track: "inbound_track", digit } }));
+        }
+        await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "single-day response");
+        assert.deepEqual(call.messages.map(item => item.event), ["media", "mark", "media", "mark"]);
+        assert.match(fixture.speech[1]!, /couldn't find a possible appointment time/);
+        assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
+        const readIndex = fixture.clinikoPaths.findIndex(path => path.endsWith("/available_times"));
+        const query = new URLSearchParams(fixture.clinikoQueries[readIndex]);
+        assert.equal(query.get("from"), query.get("to"));
+        assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
+        await closeCaller(call);
+      })),
+    t.test("E2E-199 an approved week option speaks only a bounded provisional alternative", async () =>
+      withFixture("week-alternative", async fixture => {
+        const call = await fixture.openCall();
+        await markGreeting(call);
+        assert.ok(fixture.speech[0]?.includes(weekInstruction));
+        call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
+          dtmf: { track: "inbound_track", digit: "3" } }));
+        await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "week alternative response");
+        assert.deepEqual(call.messages.map(item => item.event), ["media", "mark", "media", "mark"]);
+        assert.match(fixture.speech[1]!, /possible times/);
+        assert.match(fixture.speech[1]!, /These may change/);
+        assert.match(fixture.speech[1]!, /can't reserve or confirm/);
+        assert.ok(!fixture.speech[1]!.includes(noStaffNotice));
+        const readIndex = fixture.clinikoPaths.findIndex(path => path.endsWith("/available_times"));
+        assert.ok(readIndex >= 0);
+        const query = new URLSearchParams(fixture.clinikoQueries[readIndex]);
+        const from = query.get("from");
+        const to = query.get("to");
+        assert.ok(from && to);
+        assert.equal(Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`), 6 * 86_400_000);
+        assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
+        assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
+        await closeCaller(call);
+      }, true)),
     t.test("E2E-176 database loss closes active stream and health fails", async () => withFixture(undefined, async fixture => {
       const call = await fixture.openCall();
       await markGreeting(call);

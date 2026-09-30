@@ -172,12 +172,17 @@ export class ConnectedVoiceCall {
   }
 
   async acceptKeypadAvailability(date: string, now: string): Promise<Result<ConnectedVoiceProgress, ConnectedVoiceFailure>> {
+    return this.acceptKeypadAvailabilityRange(date, date, now);
+  }
+
+  async acceptKeypadAvailabilityRange(from: string, to: string, now: string):
+    Promise<Result<ConnectedVoiceProgress, ConnectedVoiceFailure>> {
     if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
     if (!this.begun) return err({ kind: "notStarted" });
     if (!this.scope) return err({ kind: "locationUnbound" });
     if (!this.media.idle()) return err({ kind: "deliveryBlocked" });
     try {
-      const turn = await this.call.acceptKeypadAvailability(date, now);
+      const turn = await this.call.acceptKeypadAvailabilityRange(from, to, now);
       if (!turn.ok) return turn;
       const drained = await this.call.drainEffects(now);
       if (!drained.ok) { await this.close(now, "sessionClosed"); return drained; }

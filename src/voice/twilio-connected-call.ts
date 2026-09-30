@@ -12,7 +12,8 @@ export type TwilioConnectedCallConfig = Omit<ConnectedVoiceCallConfig, "output">
   streamStartedAt: string;
   send: TwilioStreamConfig["send"];
   now?: () => string;
-  keypadAvailabilityDate?: (digit: string) => string | undefined;
+  /** Null means the option is intentionally disabled; undefined means its clock failed. */
+  keypadAvailabilityRange?: (digit: string) => Readonly<{ from: string; to: string }> | null | undefined;
   leaseTimer?: TimerPort;
   closeTransport?: () => void;
   /** PHI-free diagnostic: never exposes the renewed call state. */
@@ -33,7 +34,7 @@ export class TwilioConnectedCall {
   readonly stream: TwilioMediaStream;
   private readonly call: ConnectedVoiceCall;
   private readonly now: () => string;
-  private readonly keypadAvailabilityDate: ((digit: string) => string | undefined) | undefined;
+  private readonly keypadAvailabilityRange: ((digit: string) => Readonly<{ from: string; to: string }> | null | undefined) | undefined;
   private readonly lease: VoiceLeaseLoop<PendingLocationCall | CallState, ConnectedVoiceFailure>;
   private readonly closeTransport: (() => void) | undefined;
   private tail: Promise<void> = Promise.resolve();
@@ -54,7 +55,7 @@ export class TwilioConnectedCall {
       ...(config.callerCandidateLookup ? { callerCandidateLookup: config.callerCandidateLookup } : {}),
     });
     this.now = config.now ?? (() => new Date().toISOString());
-    this.keypadAvailabilityDate = config.keypadAvailabilityDate;
+    this.keypadAvailabilityRange = config.keypadAvailabilityRange;
     this.closeTransport = config.closeTransport;
     this.lease = new VoiceLeaseLoop({ renew: now => this.renew(now) }, outcome => {
       try { config.onLeaseAttempt?.(outcome.ok ? { kind: "renewed" } :
@@ -105,10 +106,11 @@ export class TwilioConnectedCall {
       return ok({ kind: "media", value: progressed.value });
     }
     if (event.kind === "dtmf") {
-      if (!this.keypadAvailabilityDate || (event.digit !== "1" && event.digit !== "2")) return ok({ kind: "ignored" });
-      const date = this.keypadAvailabilityDate(event.digit);
-      if (!date) { await this.failSession(); return err({ kind: "keypadUnavailable" }); }
-      const progressed = await this.call.acceptKeypadAvailability(date, this.now());
+      if (!this.keypadAvailabilityRange || !["1", "2", "3"].includes(event.digit)) return ok({ kind: "ignored" });
+      const range = this.keypadAvailabilityRange(event.digit);
+      if (range === null) return ok({ kind: "ignored" });
+      if (!range) { await this.failSession(); return err({ kind: "keypadUnavailable" }); }
+      const progressed = await this.call.acceptKeypadAvailabilityRange(range.from, range.to, this.now());
       if (!progressed.ok && progressed.error.kind === "deliveryBlocked") return ok({ kind: "ignored" });
       if (!progressed.ok) { await this.failSession(); return progressed; }
       return ok({ kind: "keypad", value: progressed.value });

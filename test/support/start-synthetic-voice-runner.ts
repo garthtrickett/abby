@@ -6,7 +6,7 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     process.env.ABBY_CLINIKO_API_KEY !== "synthetic-key-au5" ||
     process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}` ||
     !process.env.DATABASE_URL?.includes("/abby_test_voice_") ||
-    ![undefined, "openai-speech", "openai-transcription", "cliniko-rate-limit", "cliniko-timeout", "cliniko-partial-page", "cliniko-business-type-removed"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
+    ![undefined, "openai-speech", "openai-transcription", "cliniko-rate-limit", "cliniko-timeout", "cliniko-partial-page", "cliniko-business-type-removed", "week-alternative"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
   throw new Error("synthetic voice runner requires an isolated fixture");
 }
 const fault = process.env.ABBY_SYNTHETIC_VOICE_FAULT;
@@ -36,7 +36,7 @@ class SyntheticTranscriptionSocket extends EventEmitter {
 
 const clinikoFetch: typeof fetch = async (input, init) => {
   const url = new URL(String(input));
-  process.send?.({ kind: "clinikoMethod", method: init?.method, path: url.pathname });
+  process.send?.({ kind: "clinikoMethod", method: init?.method, path: url.pathname, query: url.search });
   if (init?.method !== "GET") throw new Error("synthetic Cliniko write refused");
   if (url.pathname === "/v1/businesses/11") return Response.json({ id: "11", business_name: "Synthetic clinic",
     show_in_online_bookings: true, appointment_type_ids: [fault === "cliniko-business-type-removed" ? "44" : "33"],
@@ -53,6 +53,16 @@ const clinikoFetch: typeof fetch = async (input, init) => {
     if (fault === "cliniko-rate-limit") return new Response(null, { status: 429 });
     if (fault === "cliniko-timeout") throw new DOMException("synthetic timeout", "TimeoutError");
     const date = url.searchParams.get("from");
+    if (fault === "week-alternative") {
+      const end = url.searchParams.get("to");
+      const startMs = Date.parse(`${date}T00:00:00.000Z`);
+      const endMs = Date.parse(`${end}T00:00:00.000Z`);
+      if (endMs - startMs !== 6 * 86_400_000) return Response.json({ total_entries: 0, available_times: [] });
+      const later = new Date(startMs + 2 * 86_400_000).toISOString().slice(0, 10);
+      return Response.json({ total_entries: 1, available_times: [
+        { appointment_start: `${later}T10:00:00+10:00`, appointment_id: "synthetic-only" },
+      ] });
+    }
     if (fault === "cliniko-partial-page") return Response.json({ total_entries: 2,
       available_times: [{ appointment_start: `${date}T${url.searchParams.get("page") === "1" ? "10" : "11"}:00:00+10:00`,
         appointment_id: "synthetic-only" }] });

@@ -41,7 +41,7 @@ export type TransientVoiceConfig = Readonly<{
   readiness?: AutomationReadiness;
   availability?: ClinikoAvailabilityReader;
   approvedGreeting?: ApprovedGreeting;
-  keypadAvailabilityDate?: (digit: string) => string | undefined;
+  keypadAvailabilityRange?: (digit: string) => Readonly<{ from: string; to: string }> | null | undefined;
   closeTransport?: () => void;
   callerCandidateLookup?: CallerCandidateLookup;
   mediaOptions?: MediaTurnOptions;
@@ -62,7 +62,7 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
   if (config.availability && !(config.availability instanceof ClinikoAvailabilityReader)) {
     throw new TypeError("standalone availability requires a Cliniko reader");
   }
-  if (config.keypadAvailabilityDate && (!config.availability || !config.approvedGreeting)) {
+  if (config.keypadAvailabilityRange && (!config.availability || !config.approvedGreeting)) {
     throw new TypeError("keypad availability requires a Cliniko reader and approved greeting");
   }
   const sessionId = randomUUID();
@@ -92,7 +92,7 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
     sessionId, ledger, intake, transcription,
     synthesis: config.synthesis, send: config.send, now,
     ...(config.closeTransport ? { closeTransport: config.closeTransport } : {}),
-    ...(config.keypadAvailabilityDate ? { keypadAvailabilityDate: config.keypadAvailabilityDate } : {}),
+    ...(config.keypadAvailabilityRange ? { keypadAvailabilityRange: config.keypadAvailabilityRange } : {}),
     ...(config.callerCandidateLookup ? { callerCandidateLookup: config.callerCandidateLookup } : {}),
     ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}),
     ...(config.playbackOptions ? { playbackOptions: config.playbackOptions } : {}),

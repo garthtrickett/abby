@@ -203,6 +203,7 @@ async function main() {
       ABBY_TEST_OPERATOR_REF: "synthetic-operator", ABBY_AUTOMATION_EXPECTED_VERSION: "0",
       ABBY_GREETING_VERSION: "public-probe-v1", ABBY_GREETING_APPROVAL_OWNER_REF: "synthetic-approval",
       ABBY_GREETING_APPROVED_TEXT: "This is an Abby test call. Press 1 for possible times today. Press 2 for possible times tomorrow.",
+      ABBY_SEVEN_DAY_AVAILABILITY_ENABLED: "0",
       ABBY_OPENAI_API_KEY: "synthetic-openai", ABBY_OPENAI_INTENT_MODEL: "synthetic-model",
     };
     const enable = spawnSync(process.execPath, ["scripts/set-voice-test-automation.ts", "enable"],

@@ -688,6 +688,18 @@ for (const kind of kinds) {
     assert.equal(Object.keys(state.actions).length, 0);
   });
 
+  test(`${kind}: keypad range validation refuses an eighth date before any availability read`, async () => {
+    let reads = 0;
+    const app = await fixture(kind, `${kind}-keypad-range-boundary`, false, "requestOnly", undefined, undefined,
+      { availability: () => ({ list: async () => { reads += 1; throw new Error("out-of-range read"); } }) });
+    for (const [from, to] of [
+      ["2026-10-01", "2026-10-08"], ["2026-10-02", "2026-10-01"], ["2026-02-29", "2026-03-01"],
+    ]) {
+      failure(await app.session.acceptKeypadAvailabilityRange(from!, to!, at(2)), "invalidTransition");
+    }
+    assert.equal(reads, 0);
+  });
+
   test(`${kind}: a provider claiming a reservable time cannot bypass the availability evidence boundary`, async () => {
     const app = await fixture(kind, `${kind}-cliniko-false-reservation`, false, "requestOnly", undefined, undefined,
       { availability: scope => ({ list: async () => ok({ kind: "times", scope, sourceRef: "untrusted-reservation",
