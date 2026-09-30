@@ -194,14 +194,38 @@ def main() -> int:
             if not moved_ok:
                 failed = True
 
-        status, _ = request(base, headers, "PATCH", f"/individual_appointments/{quote(appointment_id, safe='')}/cancel", {
-            "cancellation_reason": 50, "cancellation_note": "Abby synthetic probe cleanup", "apply_to_repeats": False,
-        })
+        appointment_path = f"/individual_appointments/{quote(appointment_id, safe='')}"
+        target_status, target = request(base, headers, "GET", appointment_path)
+        if target_status != 200 or str(target.get("id")) != appointment_id or\
+                not isinstance(target.get("starts_at"), str) or not isinstance(target.get("ends_at"), str):
+            raise ProbeError("cancellation_target_unavailable")
+        cancel_input = {
+            "apiKey": key, "contactEmail": contact, "businessId": business_id,
+            "practitionerId": practitioner_id, "appointmentTypeId": offer_type,
+            "patientId": patient_id, "appointmentId": appointment_id,
+            "startsAt": target["starts_at"], "endsAt": target["ends_at"],
+        }
+        try:
+            cancellation = subprocess.run(
+                ["node", str(Path(__file__).with_name("cliniko_cancellation_writer_probe.ts"))],
+                input=json.dumps(cancel_input), text=True, capture_output=True,
+                cwd=repo_root, timeout=60, check=False,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            raise ProbeError("cancellation_writer_unavailable") from None
+        try:
+            cancellation_result = json.loads(cancellation.stdout)
+        except ValueError:
+            raise ProbeError("cancellation_writer_output_invalid") from None
         cancelled_path = f"/individual_appointments/{quote(appointment_id, safe='')}?" + urlencode({"q[]": "cancelled_at:*"})
         read_status, cancelled = request(base, headers, "GET", cancelled_path)
-        cancelled_ok = status == 204 and read_status == 200 and bool(cancelled.get("cancelled_at"))
-        print(json.dumps({"step": "cancel_appointment", "patch_status": status, "read_status": read_status, "verified": cancelled_ok}))
-        if not cancelled_ok:
+        cancelled_ok = read_status == 200 and bool(cancelled.get("cancelled_at"))
+        print(json.dumps({"step": "typescript_cancellation_writer",
+                          "write_kind": cancellation_result.get("writeKind"),
+                          "observation_kind": cancellation_result.get("observationKind"),
+                          "repeated_attempt_rejected": cancellation_result.get("repeatedAttemptRejected") is True,
+                          "independent_cancelled_read": cancelled_ok}))
+        if cancellation.returncode != 0 or cancellation_result.get("ok") is not True or not cancelled_ok:
             failed = True
     except (ProbeError, URLError, TimeoutError, ValueError, KeyError) as error:
         failed = True
