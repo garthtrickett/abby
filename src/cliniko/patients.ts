@@ -1,6 +1,6 @@
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
-import { claimClinikoBudget, ClinikoReadBudget, isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
+import { claimClinikoBudget, ClinikoReadBudget, clinikoCredentialFingerprint, isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
 import type { ClinikoRequestBudget } from "./read-budget.ts";
 import { normalizePatientPhone } from "./phone-number.ts";
 
@@ -94,6 +94,7 @@ export class ClinikoPatientCandidateReader {
   private readonly fetchPort: typeof fetch;
   private readonly clock: () => string;
   private readonly rateBudget: ClinikoRequestBudget;
+  private readonly credentialHash: string;
 
   private constructor(config: ClinikoPatientConfig, shard: string, fetchPort: typeof fetch, clock: () => string) {
     this.scope = { tenantId: config.scope.tenantId, clinicId: config.scope.clinicId };
@@ -103,6 +104,7 @@ export class ClinikoPatientCandidateReader {
     this.fetchPort = fetchPort;
     this.clock = clock;
     this.rateBudget = config.rateBudget ?? new ClinikoReadBudget();
+    this.credentialHash = clinikoCredentialFingerprint(config.apiKey);
   }
 
   static create(config: ClinikoPatientConfig, fetchPort: typeof fetch = fetch,
@@ -115,6 +117,8 @@ export class ClinikoPatientCandidateReader {
     }
     return ok(new ClinikoPatientCandidateReader(config, shard, fetchPort, clock));
   }
+
+  credentialFingerprint(): string { return this.credentialHash; }
 
   /** Search by two documented exact filters; no phone or partial-name scan is attempted. */
   async findByEmailAndBirthDate(scope: ClinikoClinicScope, email: string, dateOfBirth: string):

@@ -12,6 +12,7 @@ import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts"
 import { PostgresPortabilityFence } from "../../src/storage/postgres-portability-fence.ts";
 import { PostgresTenantConfigArchiveImporter } from "../../src/storage/postgres-tenant-config-import.ts";
 
+const fingerprint = "a".repeat(64);
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
 const db = connectPostgres(url);
@@ -46,7 +47,7 @@ test("E2E-167 imported write-stop audit drift blocks number publication", async 
     { authorizeAndRecord: async () => ok({ auditRef: `stop-import-${suffix}` }) },
     { mapRef: (kind, ref) => `target:${kind}:${ref}` });
   assert.equal(imported.ok, true);
-  assert.equal((await new PostgresPatientPhoneIndex(db).publish(target, [], "61")).ok, true);
+  assert.equal((await new PostgresPatientPhoneIndex(db).publish(target, [], "61", fingerprint)).ok, true);
   const cutover = new PostgresConfigNumberCutover(db);
   const command = { accountRef, dialedNumber, actorRef: "route-admin" };
   let routeAudits = 0;

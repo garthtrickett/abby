@@ -34,6 +34,8 @@ export default interface PatientPhoneScanTable {
   updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
 
   normalization_version: ColumnType<number | null, number | null, number | null>;
+
+  credential_fingerprint: ColumnType<string | null, string | null, string | null>;
 }
 
 export type PatientPhoneScan = Selectable<PatientPhoneScanTable>;

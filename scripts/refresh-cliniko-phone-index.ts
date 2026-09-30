@@ -34,7 +34,8 @@ try {
   const lookupForSession = (session: typeof db) => new ClinikoPhoneLookup(reader.value,
     new PostgresPatientPhoneIndex(session), countryCallingCode, refreshEveryMs * 2,
     undefined, new PostgresPatientPhoneScan(session));
-  const worker = new PhoneIndexRefreshWorker(index, [{ scope, lookupForSession, countryCallingCode, refreshEveryMs }],
+  const worker = new PhoneIndexRefreshWorker(index, [{ scope, lookupForSession, countryCallingCode,
+    credentialFingerprint: reader.value.credentialFingerprint(), refreshEveryMs }],
     undefined, new PostgresPhoneRefreshGuard(connectionString));
   await worker.runLoop(stop.signal, pollEveryMs, results => {
     for (const result of results) process.stdout.write(`phone-index refresh: ${result.kind}\n`);
