@@ -83,12 +83,27 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
   }
   assert.deepEqual(Object.keys(manifest.capabilityMappings).sort(), Object.keys(capabilityCatalogue).sort());
   assert.deepEqual(Object.keys(manifest.settingMappings).sort(),
-    ["appointments.booking.enabled", "automation.enabled", "calls.writes.stop", "clinic.availability.approval"].sort());
+    ["appointments.booking.enabled", "automation.enabled", "calls.writes.stop",
+      "clinic.availability.approval", "knowledge.approval"].sort());
   for (const mappings of [manifest.capabilityMappings, manifest.settingMappings]) {
     for (const scenarios of Object.values(mappings)) {
       assert.ok(scenarios.length > 0);
       assert.equal(new Set(scenarios).size, scenarios.length);
       assert.ok(scenarios.every(id => ids.has(id)));
     }
+  }
+  const hasExecutableEvidence = (id: string): boolean => {
+    const scenario = manifest.scenarios.find(item => item.id === id);
+    return !!scenario && [scenario.fullCallEvidence, scenario.textEvidence, scenario.syntheticVoiceEvidence]
+      .some(evidence => evidence?.status === "passed" && evidence.testFiles.length > 0);
+  };
+  for (const [id, descriptor] of Object.entries(capabilityCatalogue)) {
+    if (descriptor.effect !== "policyChange") continue;
+    assert.ok(manifest.capabilityMappings[id]?.some(hasExecutableEvidence),
+      `${id} must map to a passing executable scenario before publication`);
+  }
+  for (const [setting, scenarios] of Object.entries(manifest.settingMappings)) {
+    assert.ok(scenarios.some(hasExecutableEvidence),
+      `${setting} must have a passing text, browser, voice or full-call scenario`);
   }
 });

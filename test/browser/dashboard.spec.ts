@@ -92,7 +92,7 @@ test("SET-001: browser reception switch needs readiness and gates the next call"
   } finally { await app.close(); }
 });
 
-test("emergency stop in the browser blocks a queued active-call write and survives reload", async ({ page, request }) => {
+test("E2E-074 emergency stop in the browser blocks a queued active-call write and survives reload", async ({ page, request }) => {
   let ready = false;
   const readiness: AutomationReadiness = async () => ready ? ok(true) : err({ kind: "readinessFailed", missing: ["mediaTestCall"] });
   const app = await localDashboard("clinicAdmin", undefined, readiness);
@@ -283,7 +283,7 @@ test("E2E-004: staff can review the approved answer source without seeing spoken
   }
 });
 
-test("FR-21: clinic admin drafts, approves and revokes a scoped answer", async ({ page, request }) => {
+test("E2E-004 FR-21: clinic admin drafts, approves and revokes a scoped answer", async ({ page, request }) => {
   const app = await localDashboard("clinicAdmin");
   try {
     await page.goto(app.url);
