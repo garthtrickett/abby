@@ -41,6 +41,24 @@ def appointments_for_patient(base: str, headers: dict[str, str], patient_id: str
     raise ProbeError("appointment_reconcile_incomplete")
 
 
+def type_practitioner_ids(base: str, headers: dict[str, str], type_id: str) -> list[str]:
+    found: list[str] = []
+    for suffix in ("", "/inactive"):
+        path = f"/appointment_types/{quote(type_id, safe='')}/practitioners{suffix}?per_page=100"
+        status, data = request(base, headers, "GET", path)
+        practitioners = data.get("practitioners")
+        total = data.get("total_entries")
+        if status != 200 or not isinstance(practitioners, list) or\
+                not isinstance(total, int) or total != len(practitioners) or total > 100 or\
+                any(not isinstance(item, dict) or not re.fullmatch(r"[1-9][0-9]*", str(item.get("id", "")))
+                    for item in practitioners):
+            raise ProbeError("type_practitioner_list_incomplete")
+        found.extend(str(item["id"]) for item in practitioners)
+    if len(found) != len(set(found)):
+        raise ProbeError("type_practitioner_duplicate")
+    return sorted(found)
+
+
 def main() -> int:
     env_mode = os.environ.get("ABBY_LIVE_CLINIKO_EVAL") == "1"
     if not env_mode and not sys.stdin.isatty():
@@ -73,8 +91,10 @@ def main() -> int:
     type_path = None
     original_flag = None
     original_type_flag = None
+    original_relationship_ids = None
     changed_business = False
     changed_type = False
+    changed_relationship = False
     failed = False
     cleanup_failed = False
     try:
@@ -133,6 +153,9 @@ def main() -> int:
         original_type_flag = type_detail.get("show_in_online_bookings")
         if original_type_flag is not True:
             raise ProbeError("selected_type_not_online_bookable")
+        original_relationship_ids = type_practitioner_ids(base, headers, selected_type)
+        if original_relationship_ids != [practitioner_id]:
+            raise ProbeError("type_relationship_not_isolated")
         patient_post_attempted = True
         status, patient = request(base, headers, "POST", "/patients", {
             "first_name": "Abby", "last_name": "SyntheticConcurrency" + reference_id,
@@ -252,12 +275,72 @@ def main() -> int:
             raise ProbeError("type_permission_drift_result_uncertain")
         print(json.dumps({"step": "type_permission_drift", "offer_after_disable_status": type_offer_after_status,
                           "write_status": type_drift_status, "exact_marker_matches": len(type_drift_matches)}))
+
+        status, enabled_type = request(base, headers, "PATCH", type_path, {"show_in_online_bookings": True})
+        type_verify_status, current_type = request(base, headers, "GET", type_path)
+        if status != 200 or enabled_type.get("show_in_online_bookings") is not True or\
+                type_verify_status != 200 or current_type.get("show_in_online_bookings") is not True:
+            raise ProbeError("reenable_type_online_booking_for_relationship_drift_failed")
+        relationship_offer_path = None
+        relationship_test_start = None
+        for offset in range(selected_offset + 1, selected_offset + 16):
+            relationship_test_date = (datetime.now(zone).date() + timedelta(days=offset)).isoformat()
+            path = (f"/businesses/{business_id}/practitioners/{practitioner_id}"
+                    f"/appointment_types/{selected_type}/available_times?"
+                    + urlencode({"from": relationship_test_date, "to": relationship_test_date, "per_page": 10}))
+            offer_status, offer_body = request(base, headers, "GET", path)
+            possible = offer_body.get("available_times")
+            if offer_status == 200 and isinstance(possible, list):
+                for offer in possible:
+                    if isinstance(offer, dict) and isinstance(offer.get("appointment_start"), str) and\
+                            offer["appointment_start"] not in (start, alternate_start, type_test_start):
+                        relationship_offer_path = path
+                        relationship_test_start = offer["appointment_start"]
+                        break
+            if relationship_offer_path:
+                break
+        if not relationship_offer_path or not relationship_test_start:
+            raise ProbeError("no_independent_relationship_drift_offer")
+
+        changed_relationship = True
+        relationship_status, _ = request(base, headers, "PATCH", type_path, {"practitioner_ids": []})
+        if relationship_status != 200 or type_practitioner_ids(base, headers, selected_type):
+            raise ProbeError(f"remove_type_practitioner_relationship_{relationship_status}")
+        relationship_offer_after_status, _ = request(base, headers, "GET", relationship_offer_path)
+        relationship_marker = run_marker + ":relationship"
+        relationship_write_status, relationship_body = request(base, headers, "POST", "/individual_appointments", {
+            "business_id": business_id, "practitioner_id": practitioner_id,
+            "appointment_type_id": selected_type, "patient_id": patient_id,
+            "starts_at": relationship_test_start, "notes": relationship_marker,
+        })
+        if relationship_write_status == 201 and relationship_body.get("id"):
+            created_ids.add(str(relationship_body["id"]))
+        relationship_matches = [row for row in appointments_for_patient(base, headers, patient_id)
+                                if row.get("notes") == relationship_marker]
+        if relationship_write_status not in (201, 403, 422) or\
+                (relationship_write_status == 201 and len(relationship_matches) != 1) or\
+                (relationship_write_status != 201 and relationship_matches):
+            raise ProbeError("relationship_drift_result_uncertain")
+        print(json.dumps({"step": "practitioner_type_relationship_drift",
+                          "offer_after_removal_status": relationship_offer_after_status,
+                          "write_status": relationship_write_status,
+                          "exact_marker_matches": len(relationship_matches)}))
     except (ProbeError, URLError, TimeoutError, ValueError, KeyError, ZoneInfoNotFoundError,
             threading.BrokenBarrierError) as error:
         failed = True
         label = str(error) if isinstance(error, ProbeError) else type(error).__name__
         print(json.dumps({"error": label}), file=sys.stderr)
     finally:
+        if changed_relationship and type_path is not None and original_relationship_ids is not None:
+            try:
+                status, _ = request(base, headers, "PATCH", type_path,
+                                    {"practitioner_ids": original_relationship_ids})
+                restored = status == 200 and\
+                    type_practitioner_ids(base, headers, selected_type) == original_relationship_ids
+                cleanup_failed |= not restored
+                print(json.dumps({"step": "restore_type_practitioners", "restored": restored}))
+            except (ProbeError, URLError, TimeoutError, ValueError):
+                cleanup_failed = True
         if not patient_id:
             try:
                 patient_id, count = exact_patient(base, headers, reference_id)
