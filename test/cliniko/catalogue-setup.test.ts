@@ -155,7 +155,7 @@ test("B1 revocation during call-time provider recheck wins before approval is re
   const app = fixture();
   assert.ok((await app.setup.approve(admin, route, selection, 0)).ok);
   app.onBusinessRead(async () => {
-    const revoked = await app.store.change(scope, 1, null);
+    const revoked = await app.store.change(scope, 1, null, "admin-1");
     assert.ok(revoked.ok);
   });
   assert.deepEqual(await app.setup.resolveForCall(scope, route),

@@ -17,6 +17,7 @@ import type { default as EffectCallLeasesTable } from './EffectCallLeases.js';
 import type { default as ClinicAutomationTable } from './ClinicAutomation.js';
 import type { default as ClinikoRequestBudgetsTable } from './ClinikoRequestBudgets.js';
 import type { default as PatientPhoneScanTable } from './PatientPhoneScan.js';
+import type { default as ClinikoCatalogueApprovalsTable } from './ClinikoCatalogueApprovals.js';
 import type { default as StaffItemsTable } from './StaffItems.js';
 import type { default as ClinicKnowledgeEventsTable } from './ClinicKnowledgeEvents.js';
 import type { default as CallsTable } from './Calls.js';
@@ -60,6 +61,8 @@ export default interface PublicSchema {
   cliniko_request_budgets: ClinikoRequestBudgetsTable;
 
   patient_phone_scan: PatientPhoneScanTable;
+
+  cliniko_catalogue_approvals: ClinikoCatalogueApprovalsTable;
 
   staff_items: StaffItemsTable;
 
