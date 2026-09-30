@@ -24,7 +24,7 @@ test("one provider 429 stops patient, availability, and appointment reads until 
       return new Response(null, { status: 429, headers: { "X-RateLimit-Reset": String(Date.parse(resetAt) / 1000) } });
     }
     if (url.pathname === "/v1/businesses/11") return Response.json({ id: "11", archived_at: null,
-      show_in_online_bookings: true, time_zone_identifier: "Australia/Sydney" });
+      show_in_online_bookings: true, appointment_type_ids: ["33"], time_zone_identifier: "Australia/Sydney" });
     if (url.pathname === "/v1/practitioners/22" || url.pathname === "/v1/appointment_types/33") {
       return Response.json({ id: url.pathname.split("/").at(-1), archived_at: null, active: true,
         show_in_online_bookings: true });

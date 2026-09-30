@@ -6,7 +6,7 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     process.env.ABBY_CLINIKO_API_KEY !== "synthetic-key-au5" ||
     process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}` ||
     !process.env.DATABASE_URL?.includes("/abby_test_voice_") ||
-    ![undefined, "openai-speech", "cliniko-rate-limit", "cliniko-timeout", "cliniko-partial-page"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
+    ![undefined, "openai-speech", "cliniko-rate-limit", "cliniko-timeout", "cliniko-partial-page", "cliniko-business-type-removed"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
   throw new Error("synthetic voice runner requires an isolated fixture");
 }
 const fault = process.env.ABBY_SYNTHETIC_VOICE_FAULT;
@@ -33,7 +33,8 @@ const clinikoFetch: typeof fetch = async (input, init) => {
   process.send?.({ kind: "clinikoMethod", method: init?.method, path: url.pathname });
   if (init?.method !== "GET") throw new Error("synthetic Cliniko write refused");
   if (url.pathname === "/v1/businesses/11") return Response.json({ id: "11", business_name: "Synthetic clinic",
-    show_in_online_bookings: true, appointment_type_ids: ["33"], time_zone_identifier: "Australia/Sydney" });
+    show_in_online_bookings: true, appointment_type_ids: [fault === "cliniko-business-type-removed" ? "44" : "33"],
+    time_zone_identifier: "Australia/Sydney" });
   if (url.pathname === "/v1/practitioners/22") return Response.json({ id: "22", display_name: "Synthetic practitioner", active: true,
     show_in_online_bookings: true });
   if (url.pathname === "/v1/appointment_types/33") return Response.json({ id: "33", name: "Consult",

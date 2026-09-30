@@ -68,7 +68,7 @@ async function runCase(composition: Composition, scenario: Case, adminUrl: strin
       assert.equal(init?.method, "GET");
       const path = new URL(String(input)).pathname;
       if (path === "/v1/businesses/11") return Response.json({ id: "11", show_in_online_bookings: true,
-        time_zone_identifier: "Australia/Sydney" });
+        appointment_type_ids: ["33"], time_zone_identifier: "Australia/Sydney" });
       if (path === "/v1/practitioners/22") return Response.json({ id: "22", active: true, show_in_online_bookings: true });
       if (path === "/v1/appointment_types/33") return Response.json({ id: "33", show_in_online_bookings: true });
       if (path === "/v1/businesses/11/practitioners") return Response.json({ total_entries: 1, practitioners: [{ id: "22" }] });

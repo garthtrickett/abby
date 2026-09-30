@@ -243,7 +243,7 @@ function fakeClinikoReader(scope: LocationScope, requests: URL[], options: { bus
     const path = url.pathname;
     let body: unknown;
     if (path === "/v1/businesses/11") body = { id: "11", show_in_online_bookings: options.businessOnline !== false,
-      time_zone_identifier: options.timeZone ?? "Australia/Sydney" };
+      appointment_type_ids: ["33"], time_zone_identifier: options.timeZone ?? "Australia/Sydney" };
     else if (path === "/v1/practitioners/22") body = { id: "22", active: true, show_in_online_bookings: true };
     else if (path === "/v1/appointment_types/33") body = { id: "33", show_in_online_bookings: true };
     else if (path === "/v1/businesses/11/practitioners") body = { total_entries: 1,

@@ -22,7 +22,7 @@ test("E2E-156 separate standalone Cliniko readers share one PostgreSQL request b
     const path = new URL(String(input)).pathname;
     if (path === "/v1/patients") return Response.json({ total_entries: 0, patients: [] });
     if (path === "/v1/businesses/11") return Response.json({ id: "11", archived_at: null,
-      show_in_online_bookings: true, time_zone_identifier: "Australia/Sydney" });
+      show_in_online_bookings: true, appointment_type_ids: ["33"], time_zone_identifier: "Australia/Sydney" });
     throw new Error("unexpected Cliniko read");
   };
   const patient = ClinikoPatientCandidateReader.create({ scope, apiKey,

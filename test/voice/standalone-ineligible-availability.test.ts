@@ -57,7 +57,7 @@ test("E2E-153 signed keypad call refuses availability when Cliniko business is n
       const url = new URL(String(input));
       if (url.pathname === "/v1/businesses/11") {
         businessReads += 1;
-        return Response.json({ id: "11", show_in_online_bookings: false });
+        return Response.json({ id: "11", show_in_online_bookings: false, appointment_type_ids: ["33"] });
       }
       if (url.pathname.endsWith("/available_times")) availableTimeReads += 1;
       throw new Error("ineligible business must stop Cliniko reads");

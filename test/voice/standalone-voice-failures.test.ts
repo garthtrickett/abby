@@ -13,7 +13,14 @@ import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 
-type Fault = "openai-speech" | "cliniko-rate-limit" | "cliniko-timeout" | "cliniko-partial-page" | undefined;
+type Fault = "openai-speech" | "cliniko-rate-limit" | "cliniko-timeout" | "cliniko-partial-page" |
+  "cliniko-business-type-removed" | undefined;
+const fallbackScenarios = [
+  { fault: "cliniko-rate-limit", id: "E2E-174" },
+  { fault: "cliniko-timeout", id: "E2E-175" },
+  { fault: "cliniko-partial-page", id: "E2E-190" },
+  { fault: "cliniko-business-type-removed", id: "E2E-193" },
+] as const;
 const number = "+6125550199";
 const caller = "+6145550101";
 const accountSid = `AC${"1".repeat(32)}`;
@@ -195,8 +202,8 @@ async function closeCaller(call: Call): Promise<void> {
 test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1",
   timeout: 90_000, concurrency: 5 }, async t => {
   await Promise.all([
-    ...(["cliniko-rate-limit", "cliniko-timeout", "cliniko-partial-page"] as const).map(fault =>
-      t.test(`${fault === "cliniko-rate-limit" ? "E2E-174" : fault === "cliniko-timeout" ? "E2E-175" : "E2E-190"} safe spoken fallback on ${fault}`,
+    ...fallbackScenarios.map(({ fault, id }) =>
+      t.test(`${id} safe spoken fallback on ${fault}`,
         async () => withFixture(fault, async fixture => {
         const call = await fixture.openCall();
         await markGreeting(call);
@@ -209,6 +216,9 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         assert.ok(fixture.clinikoMethods.length > 0 && fixture.clinikoMethods.every(method => method === "GET"));
         if (fault === "cliniko-partial-page") {
           assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
+        }
+        if (fault === "cliniko-business-type-removed") {
+          assert.deepEqual(fixture.clinikoPaths, ["/v1/businesses/11"]);
         }
         await closeCaller(call);
       }))),
