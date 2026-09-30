@@ -141,10 +141,13 @@ def main() -> int:
             writer_result = json.loads(writer.stdout)
         except ValueError:
             raise ProbeError("booking_writer_output_invalid") from None
+        injected_loss = env_mode and os.environ.get("ABBY_PROBE_LOSE_POST_RESPONSE") == "1"
         print(json.dumps({"step": "typescript_booking_writer", "write_kind": writer_result.get("writeKind"),
                           "observation_kind": writer_result.get("observationKind"),
-                          "exact_synthetic_appointment": writer_result.get("exact") is True}))
-        if writer.returncode != 0 or writer_result.get("ok") is not True:
+                          "exact_synthetic_appointment": writer_result.get("exact") is True,
+                          "injected_post_response_loss": writer_result.get("injectedPostResponseLoss") is True}))
+        if (writer.returncode != 0 or writer_result.get("ok") is not True or
+                writer_result.get("injectedPostResponseLoss") is not injected_loss):
             raise ProbeError("booking_writer_read_mismatch")
 
         reconciled_id, count = exact_appointment(base, headers, patient_id, marker)
