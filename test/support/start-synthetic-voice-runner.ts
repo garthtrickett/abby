@@ -6,7 +6,7 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     process.env.ABBY_CLINIKO_API_KEY !== "synthetic-key-au5" ||
     process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}` ||
     !process.env.DATABASE_URL?.includes("/abby_test_voice_") ||
-    ![undefined, "openai-speech", "cliniko-rate-limit", "cliniko-timeout"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
+    ![undefined, "openai-speech", "cliniko-rate-limit", "cliniko-timeout", "cliniko-partial-page"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
   throw new Error("synthetic voice runner requires an isolated fixture");
 }
 const fault = process.env.ABBY_SYNTHETIC_VOICE_FAULT;
@@ -29,9 +29,9 @@ class SyntheticTranscriptionSocket extends EventEmitter {
 }
 
 const clinikoFetch: typeof fetch = async (input, init) => {
-  process.send?.({ kind: "clinikoMethod", method: init?.method });
-  if (init?.method !== "GET") throw new Error("synthetic Cliniko write refused");
   const url = new URL(String(input));
+  process.send?.({ kind: "clinikoMethod", method: init?.method, path: url.pathname });
+  if (init?.method !== "GET") throw new Error("synthetic Cliniko write refused");
   if (url.pathname === "/v1/businesses/11") return Response.json({ id: "11", business_name: "Synthetic clinic",
     show_in_online_bookings: true, appointment_type_ids: ["33"], time_zone_identifier: "Australia/Sydney" });
   if (url.pathname === "/v1/practitioners/22") return Response.json({ id: "22", display_name: "Synthetic practitioner", active: true,
@@ -46,6 +46,9 @@ const clinikoFetch: typeof fetch = async (input, init) => {
     if (fault === "cliniko-rate-limit") return new Response(null, { status: 429 });
     if (fault === "cliniko-timeout") throw new DOMException("synthetic timeout", "TimeoutError");
     const date = url.searchParams.get("from");
+    if (fault === "cliniko-partial-page") return Response.json({ total_entries: 2,
+      available_times: [{ appointment_start: `${date}T${url.searchParams.get("page") === "1" ? "10" : "11"}:00:00+10:00`,
+        appointment_id: "synthetic-only" }] });
     return Response.json({ total_entries: 1,
       available_times: [{ appointment_start: `${date}T10:00:00+10:00`, appointment_id: "synthetic-only" }] });
   }

@@ -13,7 +13,7 @@ import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 
-type Fault = "openai-speech" | "cliniko-rate-limit" | "cliniko-timeout" | undefined;
+type Fault = "openai-speech" | "cliniko-rate-limit" | "cliniko-timeout" | "cliniko-partial-page" | undefined;
 const number = "+6125550199";
 const caller = "+6145550101";
 const accountSid = `AC${"1".repeat(32)}`;
@@ -53,7 +53,7 @@ type Call = { socket: WebSocket; messages: Record<string, unknown>[];
   closed: Promise<[number, Buffer]>; streamSid: string };
 type Fixture = { port: number; child: ReturnType<typeof spawn>;
   admin: ReturnType<typeof connectPostgres>; databaseName: string;
-  speech: string[]; clinikoMethods: string[]; openCall: () => Promise<Call> };
+  speech: string[]; clinikoMethods: string[]; clinikoPaths: string[]; openCall: () => Promise<Call> };
 
 async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void>): Promise<void> {
   const adminUrl = process.env.DATABASE_URL;
@@ -87,6 +87,7 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
   let socket: WebSocket | undefined;
   const speech: string[] = [];
   const clinikoMethods: string[] = [];
+  const clinikoPaths: string[] = [];
   let processOutput = "";
   try {
     await sql.raw(`create database "${databaseName}"`).execute(admin);
@@ -109,6 +110,7 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
       if (typeof message === "object" && message !== null && "kind" in message &&
           message.kind === "clinikoMethod" && "method" in message && typeof message.method === "string") {
         clinikoMethods.push(message.method);
+        if ("path" in message && typeof message.path === "string") clinikoPaths.push(message.path);
       }
     });
     child.stdout?.on("data", data => { processOutput += String(data); });
@@ -147,7 +149,7 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
           customParameters: { abbyBinding: binding } } }));
       return { socket, messages, closed, streamSid };
     };
-    await run({ port, child, admin, databaseName, speech, clinikoMethods, openCall });
+    await run({ port, child, admin, databaseName, speech, clinikoMethods, clinikoPaths, openCall });
   } finally {
     let restored = true;
     try { if (created) await sql.raw(`alter database "${databaseName}" with allow_connections true`).execute(admin); }
@@ -193,8 +195,8 @@ async function closeCaller(call: Call): Promise<void> {
 test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1",
   timeout: 90_000, concurrency: 5 }, async t => {
   await Promise.all([
-    ...(["cliniko-rate-limit", "cliniko-timeout"] as const).map(fault =>
-      t.test(`${fault === "cliniko-rate-limit" ? "E2E-174" : "E2E-175"} safe spoken fallback on ${fault}`,
+    ...(["cliniko-rate-limit", "cliniko-timeout", "cliniko-partial-page"] as const).map(fault =>
+      t.test(`${fault === "cliniko-rate-limit" ? "E2E-174" : fault === "cliniko-timeout" ? "E2E-175" : "E2E-190"} safe spoken fallback on ${fault}`,
         async () => withFixture(fault, async fixture => {
         const call = await fixture.openCall();
         await markGreeting(call);
@@ -205,6 +207,9 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         assert.equal(fixture.speech[1], noStaffNotice);
         assert.ok(!fixture.speech.some(text => text.includes("10:00") || text.includes("synthetic-only")));
         assert.ok(fixture.clinikoMethods.length > 0 && fixture.clinikoMethods.every(method => method === "GET"));
+        if (fault === "cliniko-partial-page") {
+          assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
+        }
         await closeCaller(call);
       }))),
     t.test("E2E-173 OpenAI greeting failure closes before audio", async () => withFixture("openai-speech", async fixture => {
