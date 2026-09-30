@@ -26,6 +26,7 @@ import type { TwilioSignedIngressConfig } from "../voice/twilio-signed-ingress.t
 import type { AuthenticatedInboundCall } from "../voice/admission.ts";
 import { createOpenAIAvailabilityIntentResolver } from "./openai-availability-intent.ts";
 import { keypadAvailabilityRange } from "./keypad-availability.ts";
+import type { OperationalCounterKind, OperationalCounterSink } from "./operational-counters.ts";
 import { createStandaloneTransientVoiceCall } from "./transient-voice-composition.ts";
 
 export type ClinikoVoiceRoute = Readonly<{
@@ -72,6 +73,8 @@ export type ClinikoVoiceServerConfig = Readonly<{
   playbackOptions?: StreamedPlaybackOptions;
   now?: () => string;
   monotonicNow?: () => number;
+  /** Aggregate fixed-code diagnostics; the owner controls who may read them. */
+  operationalCounters?: OperationalCounterSink;
 }>;
 
 /** Refuses unsafe standalone storage before a listener can accept calls. */
@@ -155,6 +158,10 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
   const openaiApiKey = config.openai.apiKey;
   const transcriptionSocketFactory = config.openai.transcriptionSocketFactory;
   const readiness = config.readiness;
+  const count = (scope: LocationScope, kind: OperationalCounterKind): void => {
+    try { config.operationalCounters?.record(scope, kind); }
+    catch { /* operational diagnostics cannot alter a call */ }
+  };
   // Validate provider configuration before exposing an HTTP listener.
   const primarySynthesis = new OpenAISpeechSynthesis({ apiKey: openaiApiKey,
     ...(config.openai.speechModel ? { model: config.openai.speechModel } : {}),
@@ -194,16 +201,25 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
   return ok(createTwilioIngressServer({ ingress, activeCallClaims: config.activeCallClaims,
     ...(config.health ? { health: config.health } : {}),
     admitWebhook: async event => {
-      if (config.admitWebhook && !await config.admitWebhook(event).catch(() => false)) return false;
       if (!event || event.key.accountRef !== twilio.accountSid) return false;
       const route = routes.get(event.dialedNumber);
-      return !!route && !!await approvedRoute(route);
+      if (!route) return false;
+      if (config.admitWebhook && !await config.admitWebhook(event).catch(() => false)) {
+        count(route.scope, "admissionDenied");
+        return false;
+      }
+      const approved = !!await approvedRoute(route);
+      if (!approved) count(route.scope, "admissionDenied");
+      return approved;
     },
     async createCall(stream, send, close) {
     const route = routes.get(stream.event.dialedNumber);
     if (!route || stream.event.key.accountRef !== twilio.accountSid) throw new Error("clinic route unavailable");
     const approved = await approvedRoute(route);
-    if (!approved) throw new Error("clinic catalogue approval unavailable");
+    if (!approved) {
+      count(route.scope, "admissionDenied");
+      throw new Error("clinic catalogue approval unavailable");
+    }
     const composed = await createStandaloneTransientVoiceCall({ db: config.db, routingHost,
       expectedPolicyVersion: approved.approval.selection.policyVersion,
       stream, send, closeTransport: close, synthesis,
@@ -224,6 +240,24 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       ...(config.monotonicNow ? { monotonicNow: config.monotonicNow } : {}),
     });
     if (!composed.ok) throw new Error("standalone voice storage unavailable");
-    return composed.value;
+    const call = composed.value;
+    count(route.scope, "callOwnerStarted");
+    let failed = false;
+    let ended = false;
+    const markEnded = () => {
+      if (!ended) { ended = true; count(route.scope, "callEnded"); }
+    };
+    return {
+      async receive(raw: string) {
+        const result = await call.receive(raw);
+        if (!result.ok && !failed) { failed = true; count(route.scope, "voiceFailure"); }
+        if (!result.ok) markEnded();
+        return result;
+      },
+      async disconnect() {
+        try { await call.disconnect(); }
+        finally { markEnded(); }
+      },
+    };
   } }));
 }

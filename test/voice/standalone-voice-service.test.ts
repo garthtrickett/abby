@@ -286,6 +286,25 @@ test("E2E-172 E2E-185 isolated voice runner enforces durable approval around sig
     const revoked = await webhook(callerNumber, `CA${"9".repeat(32)}`);
     assert.equal(revoked.status, 503);
     assert.doesNotMatch(await revoked.text(), /<Stream>/);
+    const counts = await new Promise<Record<string, number>>((resolve, reject) => {
+      const timer = setTimeout(() => { child?.off("message", onMessage); reject(new Error("operational snapshot timed out")); }, 5_000);
+      const onMessage = (message: unknown) => {
+        if (typeof message !== "object" || message === null || !("kind" in message) ||
+            message.kind !== "operationalSnapshot" || !("counts" in message)) return;
+        clearTimeout(timer);
+        child?.off("message", onMessage);
+        resolve(message.counts as Record<string, number>);
+      };
+      child!.on("message", onMessage);
+      child!.send({ kind: "operationalSnapshot" });
+    });
+    assert.deepEqual(Object.keys(counts).sort(),
+      ["admissionDenied", "callOwnerStarted", "voiceFailure", "callEnded"].sort());
+    assert.ok(counts.admissionDenied! >= 3);
+    assert.equal(counts.callOwnerStarted, 1);
+    assert.equal(counts.voiceFailure, 0);
+    assert.equal(JSON.stringify(counts).includes(callerNumber), false);
+    assert.equal(JSON.stringify(counts).includes(callSid), false);
     const closed = once(caller, "close");
     child.kill("SIGTERM");
     const [code] = await once(child, "exit");
