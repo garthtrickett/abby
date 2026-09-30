@@ -14,7 +14,7 @@ import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-s
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 
 type Fault = "openai-speech" | "openai-transcription" | "cliniko-rate-limit" | "cliniko-timeout" | "cliniko-partial-page" |
-  "cliniko-business-type-removed" | "week-alternative" | "practitioner-alternative" |
+  "cliniko-business-type-removed" | "cliniko-practitioner-type-removed" | "week-alternative" | "practitioner-alternative" |
   "practitioner-alternative-rate-limit" | "practitioner-alternative-malformed" |
   "practitioner-alternative-second" | undefined;
 const fallbackScenarios = [
@@ -22,6 +22,7 @@ const fallbackScenarios = [
   { fault: "cliniko-timeout", id: "E2E-175" },
   { fault: "cliniko-partial-page", id: "E2E-190" },
   { fault: "cliniko-business-type-removed", id: "E2E-193" },
+  { fault: "cliniko-practitioner-type-removed", id: "E2E-204" },
 ] as const;
 const number = "+6125550199";
 const caller = "+6145550101";
@@ -232,6 +233,13 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         }
         if (fault === "cliniko-business-type-removed") {
           assert.deepEqual(fixture.clinikoPaths, ["/v1/businesses/11"]);
+        }
+        if (fault === "cliniko-practitioner-type-removed") {
+          assert.deepEqual(fixture.clinikoPaths, [
+            "/v1/businesses/11", "/v1/practitioners/22", "/v1/appointment_types/33",
+            "/v1/businesses/11/practitioners", "/v1/practitioners/22/appointment_types",
+          ]);
+          assert.equal(fixture.clinikoPaths.some(path => path.endsWith("/available_times")), false);
         }
         await closeCaller(call);
       }))),

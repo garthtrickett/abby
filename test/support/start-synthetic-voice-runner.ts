@@ -6,7 +6,7 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     process.env.ABBY_CLINIKO_API_KEY !== "synthetic-key-au5" ||
     process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}` ||
     !process.env.DATABASE_URL?.includes("/abby_test_voice_") ||
-    ![undefined, "openai-speech", "openai-transcription", "cliniko-rate-limit", "cliniko-timeout", "cliniko-partial-page", "cliniko-business-type-removed", "week-alternative",
+    ![undefined, "openai-speech", "openai-transcription", "cliniko-rate-limit", "cliniko-timeout", "cliniko-partial-page", "cliniko-business-type-removed", "cliniko-practitioner-type-removed", "week-alternative",
       "practitioner-alternative", "practitioner-alternative-rate-limit",
       "practitioner-alternative-malformed", "practitioner-alternative-second"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
   throw new Error("synthetic voice runner requires an isolated fixture");
@@ -66,8 +66,9 @@ const clinikoFetch: typeof fetch = async (input, init) => {
     practitioners: fault === "practitioner-alternative-second"
       ? [{ id: "22" }, { id: "44" }, { id: "66" }]
       : alternativeFault ? [{ id: "22" }, { id: "44" }] : [{ id: "22" }] });
-  if (url.pathname === "/v1/practitioners/22/appointment_types") return Response.json({ total_entries: 1,
-    appointment_types: [{ id: "33" }] });
+  if (url.pathname === "/v1/practitioners/22/appointment_types") return Response.json({
+    total_entries: fault === "cliniko-practitioner-type-removed" ? 0 : 1,
+    appointment_types: fault === "cliniko-practitioner-type-removed" ? [] : [{ id: "33" }] });
   if (alternativeFault && url.pathname === "/v1/practitioners/44/appointment_types") return Response.json({
     total_entries: 1, appointment_types: [{ id: "55" }] });
   if (fault === "practitioner-alternative-second" && url.pathname === "/v1/practitioners/66/appointment_types") {
