@@ -15,6 +15,7 @@ type Scenario = {
   fullCallEvidence: Evidence;
   textEvidence?: Evidence;
   syntheticVoiceEvidence?: Evidence;
+  observableAssertions?: Readonly<{ caller: string; fault: string; privacy: string }>;
 };
 type Manifest = {
   version: string;
@@ -32,12 +33,12 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
   const manifest = JSON.parse(read("phase-0/SCENARIO_MANIFEST.json")) as Manifest;
   const design = read("TECHNICAL_DESIGN.md");
   const rows = [...design.matchAll(/^\| `(E2E-\d{3})` \| (.*?) \| (FR-\d{2}(?:, FR-\d{2})*) \|$/gm)];
-  assert.equal(manifest.version, "0.5");
+  assert.equal(manifest.version, "0.6");
   assert.equal(manifest.source, "TECHNICAL_DESIGN.md Section 11");
   assert.equal(manifest.fixtureIdPattern, "fixture-{lowercase scenario id}");
-  assert.equal(rows.length, 172);
+  assert.equal(rows.length, 177);
   assert.deepEqual(manifest.scenarios.map(scenario => scenario.id),
-    Array.from({ length: 172 }, (_, index) => `E2E-${String(index + 1).padStart(3, "0")}`));
+    Array.from({ length: 177 }, (_, index) => `E2E-${String(index + 1).padStart(3, "0")}`));
   const ids = new Set(manifest.scenarios.map(scenario => scenario.id));
   for (const [index, scenario] of manifest.scenarios.entries()) {
     const row = rows[index]!;
@@ -51,6 +52,12 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
       ["standalone", "embedded", "cutover"].includes(composition)));
     assert.equal(new Set(scenario.intendedCompositions).size, scenario.intendedCompositions.length);
     assert.ok(["reference", "cliniko"].includes(scenario.providerProfile));
+    if (index >= 170) {
+      assert.ok(scenario.observableAssertions);
+      for (const observation of Object.values(scenario.observableAssertions)) {
+        assert.ok(typeof observation === "string" && observation.length > 20);
+      }
+    }
     for (const evidence of [scenario.fullCallEvidence, scenario.textEvidence,
       scenario.syntheticVoiceEvidence].filter(Boolean) as Evidence[]) {
       assert.ok(["planned", "passed"].includes(evidence.status));

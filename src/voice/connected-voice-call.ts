@@ -41,6 +41,10 @@ export type ConnectedVoiceProgress =
   | Readonly<{ kind: "turnCompleted"; turn: SharedVoiceTurn;
     delivery: DispatchResult | PrelocationPromptResult }>;
 
+function deliveryLost(result: DispatchResult | PrelocationPromptResult): boolean {
+  return result.kind === "failed" || result.kind === "unproven";
+}
+
 /** Owns one authenticated call's synthetic media, durable playback evidence, and disconnect cleanup. */
 export class ConnectedVoiceCall {
   private readonly call: SharedNumberVoiceCall;
@@ -114,6 +118,10 @@ export class ConnectedVoiceCall {
         await this.close(now, "sessionClosed");
         return delivered;
       }
+      if (deliveryLost(delivered.value)) {
+        await this.close(now, "sessionClosed");
+        return err({ kind: "transportUnavailable" });
+      }
       return ok({ ...started.value, delivery: delivered.value });
     } catch {
       if (!this.closing) await this.close(now, "sessionClosed");
@@ -154,6 +162,10 @@ export class ConnectedVoiceCall {
         await this.close(frame.capturedAt, "sessionClosed");
         return delivery;
       }
+      if (deliveryLost(delivery.value)) {
+        await this.close(frame.capturedAt, "sessionClosed");
+        return err({ kind: "transportUnavailable" });
+      }
       return ok({ kind: "turnCompleted", turn, delivery: delivery.value });
     } catch {
       await this.close(frame.capturedAt, "sessionClosed");
@@ -174,6 +186,10 @@ export class ConnectedVoiceCall {
       if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
       const delivery = await this.call.dispatchPending(now);
       if (!delivery.ok) { await this.close(now, "sessionClosed"); return delivery; }
+      if (deliveryLost(delivery.value)) {
+        await this.close(now, "sessionClosed");
+        return err({ kind: "transportUnavailable" });
+      }
       return ok({ kind: "turnCompleted", turn: turn.value, delivery: delivery.value });
     } catch {
       await this.close(now, "sessionClosed");
