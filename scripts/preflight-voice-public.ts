@@ -17,21 +17,27 @@ function publicUrl(name: string, protocol: "https:" | "wss:"): URL {
   return url;
 }
 
+export function voiceTransportConfig(): Readonly<{ webhookUrl: URL; streamUrl: URL }> {
+  const webhookUrl = publicUrl("ABBY_TWILIO_PUBLIC_WEBHOOK_URL", "https:");
+  const streamUrl = publicUrl("ABBY_TWILIO_PUBLIC_STREAM_URL", "wss:");
+  if (webhookUrl.pathname !== "/twilio/inbound" || streamUrl.pathname !== "/twilio/media/" ||
+      webhookUrl.hostname !== streamUrl.hostname) throw new Error("invalid voice transport configuration");
+  return { webhookUrl, streamUrl };
+}
+
 export function voicePublicConfig(): Readonly<{
   webhookUrl: URL; streamUrl: URL; fallbackUrl: URL;
   testNumber: string; fallbackNumber: string; accountSid: string; authToken: string;
 }> {
   if (required("ABBY_VOICE_TEST_MODE") !== "1") throw new Error("invalid ABBY_VOICE_TEST_MODE");
-  const webhookUrl = publicUrl("ABBY_TWILIO_PUBLIC_WEBHOOK_URL", "https:");
-  const streamUrl = publicUrl("ABBY_TWILIO_PUBLIC_STREAM_URL", "wss:");
+  const { webhookUrl, streamUrl } = voiceTransportConfig();
   const fallbackUrl = publicUrl("ABBY_TWILIO_PUBLIC_FALLBACK_URL", "https:");
   const testNumber = required("ABBY_TWILIO_TEST_NUMBER");
   const callerNumber = required("ABBY_TWILIO_TEST_CALLER_NUMBER");
   const fallbackNumber = required("ABBY_TWILIO_FALLBACK_NUMBER");
   const accountSid = required("ABBY_TWILIO_ACCOUNT_SID");
   const authToken = required("ABBY_TWILIO_AUTH_TOKEN");
-  if (webhookUrl.pathname !== "/twilio/inbound" || streamUrl.pathname !== "/twilio/media/" ||
-      webhookUrl.hostname !== streamUrl.hostname || webhookUrl.hostname === fallbackUrl.hostname ||
+  if (webhookUrl.hostname === fallbackUrl.hostname ||
       !/^\+[1-9]\d{1,14}$/.test(testNumber) || !/^\+[1-9]\d{1,14}$/.test(fallbackNumber) ||
       !/^\+[1-9]\d{1,14}$/.test(callerNumber) ||
       new Set([testNumber, callerNumber, fallbackNumber]).size !== 3 ||
@@ -61,31 +67,40 @@ function unsignedStreamRejected(url: URL): Promise<boolean> {
 }
 
 async function check(): Promise<void> {
-  const config = voicePublicConfig();
-  if (process.argv[2] === "--config-only") {
+  const mode = process.argv[2];
+  if (process.argv.length > 3 ||
+      (mode !== undefined && mode !== "--config-only" && mode !== "--transport-only")) {
+    throw new Error("invalid preflight argument");
+  }
+  const full = mode === "--transport-only" ? undefined : voicePublicConfig();
+  const config = full ?? voiceTransportConfig();
+  if (mode === "--config-only") {
     process.stdout.write("voice public configuration valid\n");
     return;
   }
-  if (process.argv.length > 2) throw new Error("invalid preflight argument");
   const primary = await fetch(config.webhookUrl, { method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ AccountSid: config.accountSid }),
+    body: new URLSearchParams({ AccountSid: `AC${"0".repeat(32)}` }),
     signal: AbortSignal.timeout(5_000) });
   if (primary.status !== 403) throw new Error("public webhook did not reject unsigned traffic");
   if (!await unsignedStreamRejected(config.streamUrl)) {
     throw new Error("public WSS route did not reject unsigned traffic");
   }
-  const fallback = await fetch(config.fallbackUrl, { signal: AbortSignal.timeout(5_000) });
+  if (!full) {
+    process.stdout.write("public HTTPS/WSS routes reachable and reject unsigned traffic\n");
+    return;
+  }
+  const fallback = await fetch(full.fallbackUrl, { signal: AbortSignal.timeout(5_000) });
   const fallbackBody = await fallback.text();
   if (!fallback.ok || fallbackBody.length > 16_384 ||
-      !fallbackBody.includes(`<Dial>${config.fallbackNumber}</Dial>`)) {
+      !fallbackBody.includes(`<Dial>${full.fallbackNumber}</Dial>`)) {
     throw new Error("independent fallback TwiML unavailable");
   }
-  const numbers = await twilio(config.accountSid, config.authToken).incomingPhoneNumbers.list({
-    phoneNumber: config.testNumber, limit: 2,
+  const numbers = await twilio(full.accountSid, full.authToken).incomingPhoneNumbers.list({
+    phoneNumber: full.testNumber, limit: 2,
   });
-  if (numbers.length !== 1 || numbers[0]?.voiceUrl !== config.webhookUrl.href ||
-      numbers[0].voiceMethod !== "POST" || numbers[0].voiceFallbackUrl !== config.fallbackUrl.href ||
+  if (numbers.length !== 1 || numbers[0]?.voiceUrl !== full.webhookUrl.href ||
+      numbers[0].voiceMethod !== "POST" || numbers[0].voiceFallbackUrl !== full.fallbackUrl.href ||
       numbers[0].voiceFallbackMethod !== "POST" || numbers[0].voiceApplicationSid || numbers[0].trunkSid) {
     throw new Error("Twilio number voice and fallback routes do not match");
   }

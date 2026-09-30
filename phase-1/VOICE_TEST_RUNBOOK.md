@@ -11,6 +11,8 @@
 
 ## Prepare the endpoint and fallback
 
+`npm run voice:probe-tunnel` is an optional, self-contained transport smoke test before a number exists. It starts a synthetic signed ingress, opens a temporary ngrok tunnel, verifies unsigned HTTPS/WSS rejection and one signed webhook-to-stream binding, then closes both processes. It uses no clinic, OpenAI, or Twilio account credentials. A pass proves the tunnel path works for synthetic traffic; it does not prove the real runner or carrier.
+
 1. For a temporary test, run `ngrok http ABBY_VOICE_PORT` (replace the name with the port number) and use its public `https://` host for the webhook and the same host with `wss://` for the stream. Keep the tunnel running during calls. A changing tunnel URL requires updating Abby's exact public URLs and the Twilio number webhook before the next call. Twilio supports an ngrok tunnel for local Media Streams. [Twilio tunnel example](https://www.twilio.com/docs/voice/tutorials/consume-real-time-media-stream-using-websockets-python-and-flask). A stable deployment can instead use a dedicated DNS hostname, inbound 80/443, and [the Caddy template](../deploy/voice/Caddyfile.example) or an equivalent TLS proxy. Caddy is not installed by this repository. Proxy only `/twilio/inbound` and `/twilio/media/` to `127.0.0.1:ABBY_VOICE_PORT`; preserve paths, body, and `X-Twilio-Signature`. Twilio requires a public WSS endpoint on port 443 for Media Streams. [Caddy HTTPS](https://caddyserver.com/docs/quick-starts/reverse-proxy), [Twilio Media Streams](https://www.twilio.com/docs/voice/media-streams).
 2. Deploy [the independent Twilio Function](../deploy/voice/twilio-number-fallback.js) as a public Function in the test Twilio account. Set its `ABBY_FALLBACK_NUMBER` environment variable to a reachable number separate from the caller and Abby number. Fetch the Function URL and confirm it returns `<Dial>` to that destination. The Function contains no Abby database or endpoint dependency. [Twilio Function forwarding example](https://www.twilio.com/docs/serverless/functions-assets/quickstart/receive-call).
 3. On the dedicated Twilio number, configure **A call comes in** as webhook `POST https://<test-host>/twilio/inbound` and **Primary handler fails** as `POST <independent Function URL>`. Do not use a Voice Application or SIP trunk on that number; those can override number-level voice URLs. Set `ABBY_TWILIO_PUBLIC_WEBHOOK_URL`, `ABBY_TWILIO_PUBLIC_STREAM_URL=wss://<test-host>/twilio/media/`, and `ABBY_TWILIO_PUBLIC_FALLBACK_URL` to the exact configured URLs. [Incoming number properties](https://www.twilio.com/docs/phone-numbers/api/incomingphonenumber-resource).
@@ -25,7 +27,7 @@ npm run voice:test-policy -- enable
 npm run voice:local
 ```
 
-Run `npm run voice:preflight` after TLS, Function, and Twilio number configuration exist. It checks unsigned HTTPS and WSS rejection, the independent fallback TwiML, and the Twilio number's exact primary/fallback URL and `POST` methods. It does **not** prove that Twilio can connect a live call or dial the fallback.
+Run `npm run voice:preflight -- --transport-only` once the tunnel and local runner are up; it needs only the two public URL values and checks that both public routes reject unsigned traffic. Run `npm run voice:preflight` after TLS, Function, and Twilio number configuration exist. The full check also verifies independent fallback TwiML and the Twilio number's exact primary/fallback URL and `POST` methods. Neither check proves that Twilio can connect a live call or dial the fallback.
 
 ## Carrier rehearsal
 

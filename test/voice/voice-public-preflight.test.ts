@@ -33,3 +33,14 @@ test("public voice preflight validates distinct TLS, WSS and fallback routes wit
     assert.doesNotMatch(rejected.stdout + rejected.stderr, /synthetic-token/);
   }
 });
+
+test("transport-only preflight rejects mismatched public routes before Twilio provisioning", () => {
+  const result = spawnSync(process.execPath, ["scripts/preflight-voice-public.ts", "--transport-only"], {
+    cwd: new URL("../../", import.meta.url), encoding: "utf8",
+    env: { PATH: process.env.PATH,
+      ABBY_TWILIO_PUBLIC_WEBHOOK_URL: "https://voice.example.test/twilio/inbound",
+      ABBY_TWILIO_PUBLIC_STREAM_URL: "wss://other.example.test/twilio/media/" },
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /preflight failed/);
+});
