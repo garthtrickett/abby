@@ -75,6 +75,68 @@ test("Cliniko phone index stores only phone-to-ID links and rechecks shared cand
   assert.deepEqual(await lookup.candidates(scope, "withheld"), { ok: true, value: { kind: "noNumber", candidateIds: [] } });
 });
 
+test("E2E-187 staged phone refresh removes changed, archived and disappeared patient links", async () => {
+  const scope = { tenantId: "phone-lifecycle-tenant", clinicId: "phone-lifecycle-clinic" };
+  const originalPhone = "+61400111222";
+  const replacementPhone = "+61400999888";
+  type Patient = { id: string; archived_at: string | null;
+    patient_phone_numbers: { number: string; phone_type: string }[] };
+  let patients: Patient[] = [
+    { id: "701", archived_at: null,
+      patient_phone_numbers: [{ number: originalPhone, phone_type: "Mobile" }] },
+    { id: "702", archived_at: null,
+      patient_phone_numbers: [{ number: originalPhone, phone_type: "Home" }] },
+  ];
+  const fetchPort: typeof fetch = async input => {
+    const path = new URL(String(input)).pathname;
+    if (path === "/v1/patients") return Response.json({ total_entries: patients.length, patients });
+    const found = path.match(/^\/v1\/patients\/([1-9][0-9]*)$/);
+    if (found) {
+      const patient = patients.find(row => row.id === found[1]);
+      return patient ? Response.json(patient) : new Response(null, { status: 404 });
+    }
+    throw new Error("unexpected Cliniko request");
+  };
+  const reader = ClinikoPatientCandidateReader.create({ scope, apiKey: "synthetic-au5",
+    contactEmail: "test@example.com" }, fetchPort);
+  assert.ok(reader.ok);
+  const index = new PostgresPatientPhoneIndex(db);
+  const lookup = new ClinikoPhoneLookup(reader.value, index, "61", 60_000,
+    undefined, new PostgresPatientPhoneScan(db));
+  const savedLinks = async () => (await db.selectFrom("patient_phone_index")
+    .select(["normalized_phone", "patient_id"])
+    .where("tenant_id", "=", scope.tenantId as never)
+    .where("clinic_id", "=", scope.clinicId as never)
+    .orderBy("patient_id").execute())
+    .map(row => [String(row.normalized_phone), String(row.patient_id)]);
+
+  assert.deepEqual(await lookup.refresh(scope), { ok: true, value: 1 });
+  assert.deepEqual(await lookup.candidates(scope, originalPhone),
+    { ok: true, value: { kind: "multiple", candidateIds: ["701", "702"] } });
+  patients[1] = { ...patients[1]!, patient_phone_numbers: [{ number: replacementPhone, phone_type: "Home" }] };
+  assert.deepEqual(await lookup.candidates(scope, originalPhone),
+    { ok: true, value: { kind: "one", candidateIds: ["701"] } });
+  assert.deepEqual(await lookup.candidates(scope, replacementPhone),
+    { ok: true, value: { kind: "none", candidateIds: [] } });
+  assert.deepEqual(await lookup.refresh(scope), { ok: true, value: 2 });
+  assert.deepEqual(await savedLinks(), [[originalPhone, "701"], [replacementPhone, "702"]]);
+  assert.deepEqual(await lookup.candidates(scope, replacementPhone),
+    { ok: true, value: { kind: "one", candidateIds: ["702"] } });
+
+  patients[0] = { ...patients[0]!, archived_at: "2026-09-30T10:00:00Z" };
+  assert.deepEqual(await lookup.candidates(scope, originalPhone),
+    { ok: true, value: { kind: "none", candidateIds: [] } });
+  assert.deepEqual(await lookup.refresh(scope), { ok: true, value: 3 });
+  assert.deepEqual(await savedLinks(), [[replacementPhone, "702"]]);
+  patients = patients.filter(row => row.id !== "702");
+  assert.deepEqual(await lookup.candidates(scope, replacementPhone),
+    { ok: true, value: { kind: "none", candidateIds: [] } });
+  assert.deepEqual(await lookup.refresh(scope), { ok: true, value: 4 });
+  assert.deepEqual(await savedLinks(), []);
+  assert.deepEqual(await lookup.candidates(scope, replacementPhone),
+    { ok: true, value: { kind: "none", candidateIds: [] } });
+});
+
 test("candidate lookup discards IDs when disconnect, reconnect, or refresh wins during Cliniko recheck", async () => {
   for (const change of ["disconnect", "reconnect", "refresh"] as const) {
     const scope = { tenantId: `phone-candidate-race-${change}`, clinicId: "clinic" };
