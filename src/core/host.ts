@@ -37,6 +37,10 @@ export interface AvailabilityHost {
 
 export interface AppointmentHost {
   list(scope: LocationScope, verificationRef: string, from: string, to: string, now: string): Promise<Result<AppointmentRead, AppointmentReadFailure>>;
+  /** Optional one-time choice from a previously spoken list; the host rechecks the exact appointment. */
+  select?(scope: LocationScope, verificationRef: string, choice: 1 | 2 | 3, now: string): Promise<Result<Readonly<{
+    snapshot: AppointmentRead; from: string; to: string;
+  }>, AppointmentReadFailure>>;
 }
 
 export interface BookingEvidenceHost {

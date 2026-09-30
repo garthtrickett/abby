@@ -7,6 +7,7 @@ import type { LedgerStore } from "../core/ledger.ts";
 import { err } from "../core/model.ts";
 import type { CallState, FinalCallerTurn, LocationScope, Result, StaffChangeRequest, TransitionFailure, TurnInterpretation } from "../core/model.ts";
 import { CallRuntime } from "../core/runtime.ts";
+import { noticePresentationId } from "../core/transition.ts";
 import { modelTaskRef } from "../model/work.ts";
 import type { ModelWork } from "../model/work.ts";
 
@@ -215,6 +216,38 @@ export class TextReception {
         interpretation = read.ok
           ? { kind: "appointments", from, to, snapshot: read.value }
           : { kind: "appointmentsFailure", reason: read.error.kind };
+      } catch {
+        interpretation = { kind: "appointmentsFailure", reason: "unavailable" };
+      }
+    }
+    return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);
+  }
+
+  async selectAppointment(scope: LocationScope, turn: FinalCallerTurn, verificationRef: string, choice: 1 | 2 | 3,
+                          now: string, expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
+    const runtime = this.runtime(scope);
+    const current = await runtime.read(turn.callId);
+    if (!current.ok) return current;
+    if (current.value.lifecycle !== "active") return err({ kind: "invalidTransition" });
+    if (expectedConversationRevision !== undefined &&
+        current.value.conversationRevision !== expectedConversationRevision) return err({ kind: "staleTurn" });
+    const last = current.value.appointmentReads.at(-1);
+    const notice = last ? current.value.presentations[noticePresentationId(turn.callId, last.turnId)] : undefined;
+    let interpretation: TurnInterpretation;
+    if (turn.quality !== "clear" || !this.appointments?.select ||
+        !last || last.status !== "shown" || (last.shownCount ?? 0) < 2 ||
+        current.value.processedTurnIds.at(-1) !== last.turnId ||
+        current.value.pendingPresentationId || notice?.status !== "played" ||
+        ![1, 2, 3].includes(choice)) {
+      interpretation = { kind: "appointmentsFailure", reason: "notFound" };
+    } else {
+      try {
+        const selected = await this.appointments.select(scope, verificationRef, choice, now);
+        if (!selected.ok) interpretation = { kind: "appointmentsFailure", reason: selected.error.kind };
+        else if (selected.value.snapshot?.verificationRef !== verificationRef ||
+                 selected.value.snapshot.appointments?.length !== 1) {
+          interpretation = { kind: "appointmentsFailure", reason: "malformed" };
+        } else interpretation = { kind: "appointments", ...selected.value };
       } catch {
         interpretation = { kind: "appointmentsFailure", reason: "unavailable" };
       }

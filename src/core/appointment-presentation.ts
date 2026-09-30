@@ -41,8 +41,9 @@ export function appointmentPresentation(snapshot: AppointmentRead, scope: Locati
   times.sort((left, right) => left - right);
   if (times.length === 0) return ok({ text: "I couldn't find an appointment in that time range.", status: "empty", sourceRef: snapshot.sourceRef, shownCount: 0 });
   const shown = times.slice(0, 3).map(time => formatter.format(new Date(time)));
+  const numbered = shown.map((time, index) => `option ${["one", "two", "three"][index]}, ${time}`);
   const text = times.length === 1
     ? `I found an appointment on ${shown[0]}.`
-    : `I found ${times.length} appointments in that time range. The first ${shown.length} are ${shown.join("; ")}.`;
+    : `I found ${times.length} appointments in that time range. The first ${shown.length} are ${numbered.join("; ")}.`;
   return ok({ text, status: "shown", sourceRef: snapshot.sourceRef, shownCount: shown.length });
 }
