@@ -35,7 +35,7 @@ export type ClinikoApprovalState = Readonly<{
 /** Deploying hosts can implement this with their own clinic configuration store. */
 export interface ClinikoApprovalStore {
   read(scope: LocationScope): Promise<Result<ClinikoApprovalState, ClinikoSetupFailure>>;
-  change(scope: LocationScope, expectedVersion: number, approval: ClinikoSelectionApproval | null):
+  change(scope: LocationScope, expectedVersion: number, approval: ClinikoSelectionApproval | null, changedBy: string):
     Promise<Result<ClinikoApprovalState, ClinikoSetupFailure>>;
 }
 
@@ -60,7 +60,7 @@ const sameScope = (left: LocationScope, right: LocationScope): boolean =>
   left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
 const validInstant = (value: unknown): value is string =>
   typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value));
-const validState = (state: ClinikoApprovalState): boolean =>
+export const isClinikoApprovalState = (state: ClinikoApprovalState): boolean =>
   !!state && Number.isSafeInteger(state.version) && state.version >= 0 &&
   (state.approval === null || (!!state.approval && validScope(state.approval.scope) &&
     validRoute(state.approval.route) && validSelection(state.approval.selection) && validRef(state.approval.approvedBy) &&
@@ -78,10 +78,11 @@ export class MemoryClinikoApprovalStore implements ClinikoApprovalStore {
     return ok(structuredClone(this.states.get(this.key(scope)) ?? { version: 0, approval: null }));
   }
 
-  async change(scope: LocationScope, expectedVersion: number, approval: ClinikoSelectionApproval | null):
+  async change(scope: LocationScope, expectedVersion: number, approval: ClinikoSelectionApproval | null, changedBy: string):
     Promise<Result<ClinikoApprovalState, ClinikoSetupFailure>> {
-    if (!validScope(scope) || !Number.isSafeInteger(expectedVersion) || expectedVersion < 0 ||
-        (approval !== null && (!validState({ version: 1, approval }) || !sameScope(scope, approval.scope)))) {
+    if (!validScope(scope) || !validRef(changedBy) || !Number.isSafeInteger(expectedVersion) || expectedVersion < 0 ||
+        (approval !== null && (!isClinikoApprovalState({ version: 1, approval }) ||
+          !sameScope(scope, approval.scope) || approval.approvedBy !== changedBy))) {
       return err({ kind: "invalid" });
     }
     const key = this.key(scope);
@@ -179,14 +180,14 @@ export class ClinikoCatalogueSetup {
       catalogueObservedAt: bound.value.observedAt, approvedBy: actor.actorRef, approvedAt,
       patientActionMode: "unavailable", patientRequestMode: "unavailable",
     };
-    try { return await this.store.change(allowed.value, expectedVersion, approval); }
+    try { return await this.store.change(allowed.value, expectedVersion, approval, actor.actorRef); }
     catch { return err({ kind: "storageFailure" }); }
   }
 
   async revoke(actor: HostActor, expectedVersion: number): Promise<Result<ClinikoApprovalState, ClinikoSetupFailure>> {
     const allowed = this.authorize(actor);
     if (!allowed.ok) return allowed;
-    try { return await this.store.change(allowed.value, expectedVersion, null); }
+    try { return await this.store.change(allowed.value, expectedVersion, null, actor.actorRef); }
     catch { return err({ kind: "storageFailure" }); }
   }
 
@@ -198,7 +199,7 @@ export class ClinikoCatalogueSetup {
     try { stored = await this.store.read(scope); }
     catch { return err({ kind: "storageFailure" }); }
     if (!stored.ok) return stored;
-    if (!validState(stored.value)) return err({ kind: "storageFailure" });
+    if (!isClinikoApprovalState(stored.value)) return err({ kind: "storageFailure" });
     const approval = stored.value.approval;
     if (!approval) return err({ kind: "notApproved" });
     if (!sameScope(scope, approval.scope) || route.accountRef !== approval.route.accountRef ||
@@ -210,7 +211,7 @@ export class ClinikoCatalogueSetup {
     try { current = await this.store.read(scope); }
     catch { return err({ kind: "storageFailure" }); }
     if (!current.ok) return current;
-    if (!validState(current.value) || current.value.version !== stored.value.version || !current.value.approval) {
+    if (!isClinikoApprovalState(current.value) || current.value.version !== stored.value.version || !current.value.approval) {
       return err({ kind: "staleApproval" });
     }
     return ok(structuredClone(approval));

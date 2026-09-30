@@ -40,7 +40,7 @@ The [Cliniko availability adapter](../phase-2/CLINIKO_AVAILABILITY.md) reads sco
 
 `cliniko/catalogue.ts` reads bounded business and selected resource metadata for clinic setup. It reports scoped candidate or unavailable snapshots with explicit eligibility reasons and a short freshness check; these snapshots grant no call route, patient action, or staff-request permission. Clinic admin authentication, a recorded selection, and route binding are separate work.
 
-The [catalogue selection contract](../phase-2/CLINIKO_CATALOGUE_SETUP.md) adds a host-facing clinic-admin confirmation and read-only call-time recheck over that snapshot. Its approval store is in memory and is not connected to the standalone runner; a production identity source and durable store remain required.
+The [catalogue selection contract](../phase-2/CLINIKO_CATALOGUE_SETUP.md) adds a host-facing clinic-admin confirmation and read-only call-time recheck over that snapshot. It has reference memory and constrained PostgreSQL approval stores, but is not connected to the standalone runner; a production identity source remains required.
 
 Standalone Cliniko readers use a [PostgreSQL-coordinated request budget](../phase-2/CLINIKO_READ_BUDGET.md) across the text command, availability console, and phone-index refresh worker. The host can provide the same small budget interface inside a buyer monolith.
 
