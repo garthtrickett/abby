@@ -33,7 +33,8 @@ function fixture(overrides: Partial<Record<string, unknown>> = {}) {
     assert.equal(new Headers(init?.headers).get("Authorization"),
       `Basic ${Buffer.from("synthetic-key-au5:").toString("base64")}`);
     assert.equal(new Headers(init?.headers).get("User-Agent"), "Abby (test@example.com)");
-    const body = bodies[url.pathname];
+    const configured = bodies[url.pathname];
+    const body = typeof configured === "function" ? (configured as (url: URL) => unknown)(url) : configured;
     if (body instanceof Response) return body;
     if (body === undefined) throw new Error(`unexpected path ${url.pathname}`);
     return Response.json(body);
@@ -150,11 +151,19 @@ test("B1 credential denial and partial pages do not publish a catalogue", async 
   assert.ok(emptyCatalogue.ok);
   assert.deepEqual(emptyCatalogue.value.businesses, []);
   assert.equal(emptyCatalogue.value.status, "complete");
-  const partial = fixture({ "/v1/businesses": { total_entries: 2, businesses: [{ id: "11",
-    business_name: "Synthetic Clinic", show_in_online_bookings: true }] } });
+  const partial = fixture({ "/v1/businesses": (url: URL) => ({ total_entries: 2,
+    businesses: [{ id: url.searchParams.get("page") === "1" ? "11" : "12",
+      business_name: "Synthetic Clinic", show_in_online_bookings: true }] }) });
   const partialResult = await partial.reader.businesses(scope);
-  assert.deepEqual(partialResult, { ok: false, error: { kind: "malformed" } });
-  assert.ok(partial.seen.some(path => path.includes("page=2")));
+  assert.deepEqual(partialResult, { ok: false, error: { kind: "unavailable" } });
+  assert.equal(partial.seen.some(path => path.includes("page=2")), false);
+
+  const relationship = fixture({ "/v1/businesses/11/practitioners": (url: URL) => ({ total_entries: 2,
+    practitioners: [{ id: url.searchParams.get("page") === "1" ? "55" : "22" }] }) });
+  assert.deepEqual(await relationship.reader.inspect(scope, selection),
+    { ok: false, error: { kind: "unavailable" } });
+  assert.equal(relationship.seen.some(path => path.startsWith("/v1/businesses/11/practitioners?") &&
+    path.includes("page=2")), false);
   const oversized = fixture({ "/v1/businesses": { total_entries: 1001, businesses: [] } });
   assert.deepEqual(await oversized.reader.businesses(scope), { ok: false, error: { kind: "tooManyResults" } });
 });
