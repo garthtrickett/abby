@@ -152,6 +152,8 @@ export class ClinikoCatalogueReader {
 
   credentialFingerprint(): string { return this.credentialHash; }
 
+  matchesScope(scope: LocationScope): boolean { return validScope(scope) && sameScope(this.scope, scope); }
+
   private async get(path: string): Promise<Result<unknown, ClinikoCatalogueFailure>> {
     const denied = await claimClinikoBudget(this.budget);
     if (denied) return err(denied);
