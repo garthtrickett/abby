@@ -175,10 +175,15 @@ def main() -> int:
             raise ProbeError("appointment_adapter_output_invalid") from None
         if (adapter.returncode != 0 or adapter_result.get("ok") is not True or
                 adapter_result.get("exact") is not True or adapter_result.get("count") != 1 or
-                adapter_result.get("timeZone") != time_zone_identifier):
+                adapter_result.get("timeZone") != time_zone_identifier or
+                adapter_result.get("unverifiedNoRead") is not True or
+                adapter_result.get("disposedNoRead") is not True or
+                adapter_result.get("protectedReads") != 1):
             raise ProbeError("appointment_adapter_read_mismatch")
         print(json.dumps({"step": "typescript_appointment_adapter", "count": 1,
-                          "exact_synthetic_appointment": True, "timezone_match": True}))
+                          "exact_synthetic_appointment": True, "timezone_match": True,
+                          "unverified_no_protected_read": True, "disposed_no_protected_read": True,
+                          "protected_reads": 1}))
 
         if len(offers) > 1 and isinstance(offers[1].get("appointment_start"), str):
             second_start = offers[1]["appointment_start"]
