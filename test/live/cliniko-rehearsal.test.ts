@@ -138,7 +138,7 @@ test("C-LIVE-17 Cliniko phone refresh and provisional text availability preserve
         60 * 60_000, undefined, new PostgresPatientPhoneScan(session));
     };
     const worker = new PhoneIndexRefreshWorker(index, [{ scope: clinicScope, lookupForSession,
-      countryCallingCode: "61", refreshEveryMs: 15 * 60_000 }], undefined,
+      credentialFingerprint: patients.value.credentialFingerprint(), countryCallingCode: "61", refreshEveryMs: 15 * 60_000 }], undefined,
     new PostgresPhoneRefreshGuard(databaseUrl.toString()));
     assert.equal((await worker.runOnce())[0]?.kind, "refreshed");
     assert.equal((await worker.runOnce())[0]?.kind, "fresh");

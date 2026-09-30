@@ -22,6 +22,8 @@ export default interface PatientPhoneSyncTable {
   country_calling_code: ColumnType<string | null, string | null, string | null>;
 
   normalization_version: ColumnType<number | null, number | null, number | null>;
+
+  credential_fingerprint: ColumnType<string | null, string | null, string | null>;
 }
 
 export type PatientPhoneSync = Selectable<PatientPhoneSyncTable>;

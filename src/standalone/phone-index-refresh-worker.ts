@@ -8,8 +8,9 @@ import type { PhoneRefreshGuardResult } from "../storage/postgres-phone-refresh-
 
 export type PhoneIndexRefreshTarget = Readonly<{
   scope: ClinikoClinicScope;
-  lookup?: Pick<ClinikoPhoneLookup, "refresh">;
-  lookupForSession?: (db: Kysely<Database>) => Pick<ClinikoPhoneLookup, "refresh">;
+  lookup?: Pick<ClinikoPhoneLookup, "refresh" | "credentialFingerprint">;
+  lookupForSession?: (db: Kysely<Database>) => Pick<ClinikoPhoneLookup, "refresh" | "credentialFingerprint">;
+  credentialFingerprint: string;
   countryCallingCode: string;
   refreshEveryMs: number;
 }>;
@@ -37,6 +38,7 @@ export class PhoneIndexRefreshWorker {
       const { tenantId, clinicId } = target.scope;
       const key = JSON.stringify([tenantId, clinicId]);
       if (!tenantId || !clinicId || tenantId.length > 256 || clinicId.length > 256 || keys.has(key) ||
+          !/^[0-9a-f]{64}$/.test(target.credentialFingerprint) ||
           !/^[1-9][0-9]{0,2}$/.test(target.countryCallingCode) ||
           !Number.isSafeInteger(target.refreshEveryMs) || target.refreshEveryMs < 60_000 ||
           (guard ? typeof target.lookupForSession !== "function" : typeof target.lookup?.refresh !== "function")) {
@@ -56,8 +58,10 @@ export class PhoneIndexRefreshWorker {
       const attempt = async (session?: Kysely<Database>): Promise<PhoneIndexRefreshResult> => {
         const index = session ? new PostgresPatientPhoneIndex(session) : this.index;
         const lookup = session ? target.lookupForSession?.(session) : target.lookup;
-        if (!lookup || typeof lookup.refresh !== "function") return failed;
-        const completed = await index.completedAt(target.scope, target.countryCallingCode);
+        if (!lookup || typeof lookup.refresh !== "function" ||
+            lookup.credentialFingerprint() !== target.credentialFingerprint) return failed;
+        const completed = await index.completedAt(target.scope, target.countryCallingCode,
+          target.credentialFingerprint);
         if (!completed.ok) return failed;
         if (completed.value && now.getTime() >= completed.value.getTime() &&
             now.getTime() - completed.value.getTime() < target.refreshEveryMs) {
@@ -68,7 +72,8 @@ export class PhoneIndexRefreshWorker {
           refreshed.error.kind === "clinicDisconnected" ? { scope: target.scope, kind: "disabled" } : failed;
       };
       if (!this.guard) return attempt();
-      const initial = await this.index.completedAt(target.scope, target.countryCallingCode);
+      const initial = await this.index.completedAt(target.scope, target.countryCallingCode,
+        target.credentialFingerprint);
       if (!initial.ok) return failed;
       if (initial.value && now.getTime() >= initial.value.getTime() &&
           now.getTime() - initial.value.getTime() < target.refreshEveryMs) return { scope: target.scope, kind: "fresh" };

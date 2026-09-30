@@ -12,6 +12,7 @@ import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts"
 import { PostgresPortabilityFence } from "../../src/storage/postgres-portability-fence.ts";
 import { PostgresTenantConfigArchiveImporter } from "../../src/storage/postgres-tenant-config-import.ts";
 
+const fingerprint = "a".repeat(64);
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
 const db = connectPostgres(url);
@@ -59,16 +60,16 @@ test("E2E-166 target phone index must be fresh under the staged country and norm
   assert.deepEqual(await cutover.publish(command, routeAuthority),
     { ok: false, error: { kind: "targetPhoneIndexNotReady" } });
   const index = new PostgresPatientPhoneIndex(db);
-  assert.equal((await index.publish(target, [], "64")).ok, true);
+  assert.equal((await index.publish(target, [], "64", fingerprint)).ok, true);
   assert.deepEqual(await cutover.publish(command, routeAuthority),
     { ok: false, error: { kind: "targetPhoneIndexNotReady" } });
-  const current = await index.publish(target, [], "61");
+  const current = await index.publish(target, [], "61", fingerprint);
   assert.equal(current.ok, true);
   if (!current.ok) return;
   assert.equal((await index.markStale(target, current.value)).ok, true);
   assert.deepEqual(await cutover.publish(command, routeAuthority),
     { ok: false, error: { kind: "targetPhoneIndexNotReady" } });
-  assert.equal((await index.publish(target, [], "61")).ok, true);
+  assert.equal((await index.publish(target, [], "61", fingerprint)).ok, true);
   const published = await new PostgresConfigNumberCutover(db).publish(command, routeAuthority);
   assert.equal(published.ok && published.value.activeTenantId, target.tenantId, JSON.stringify(published));
   const route = await new PostgresNumberRoutingHost(db).identifyCall(accountRef, dialedNumber);

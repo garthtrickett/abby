@@ -16,6 +16,7 @@ import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts"
 import { PostgresPortabilityFence } from "../../src/storage/postgres-portability-fence.ts";
 import { PostgresTenantConfigArchiveImporter } from "../../src/storage/postgres-tenant-config-import.ts";
 
+const fingerprint = "a".repeat(64);
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
 const db = connectPostgres(url);
@@ -98,7 +99,7 @@ test("shared-number cutover stages, publishes once, and rolls back without losin
   await sql`update clinic_knowledge_events set answer_text = 'Parking is behind the clinic.'
     where tenant_id = ${targetA.tenantId} and clinic_id = ${targetA.clinicId}
     and location_id = ${targetA.locationId} and source_ref = 'parking' and version = 2`.execute(db);
-  assert.equal((await new PostgresPatientPhoneIndex(db).publish(targetA, [], targetPhoneIndex.countryCallingCode)).ok, true);
+  assert.equal((await new PostgresPatientPhoneIndex(db).publish(targetA, [], targetPhoneIndex.countryCallingCode, fingerprint)).ok, true);
   const [published, concurrentPublish] = await Promise.all([
     cutover.publish(command, routeAuthority), new PostgresConfigNumberCutover(db).publish(command, routeAuthority)]);
   assert.equal(published.ok && published.value.state === "published" && published.value.routeVersion === 2, true);
@@ -253,7 +254,7 @@ test("E2E-165 unlisted target configuration blocks publication and leaves the so
     { ok: false, error: { kind: "targetNotReady" } });
   await sql`delete from clinic_write_stop where tenant_id = ${target.tenantId}
     and clinic_id = ${extra.clinicId}`.execute(db);
-  assert.equal((await new PostgresPatientPhoneIndex(db).publish(target, [], targetPhoneIndex.countryCallingCode)).ok, true);
+  assert.equal((await new PostgresPatientPhoneIndex(db).publish(target, [], targetPhoneIndex.countryCallingCode, fingerprint)).ok, true);
   const published = await cutover.publish(command, routeAuthority);
   assert.equal(published.ok && published.value.activeTenantId, target.tenantId, JSON.stringify(published));
 });

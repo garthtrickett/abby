@@ -34,6 +34,7 @@ export type PhoneScanPage = Readonly<{
 const phonePattern = /^\+[1-9][0-9]{7,14}$/;
 const patientIdPattern = /^[1-9][0-9]{0,19}$/;
 const scanRefPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const fingerprintPattern = /^[0-9a-f]{64}$/;
 
 function validScope(scope: PatientPhoneClinicScope): boolean {
   return !!scope && [scope.tenantId, scope.clinicId].every(part =>
@@ -57,8 +58,9 @@ export class PostgresPatientPhoneScan {
 
   constructor(db: Kysely<Database>) { this.db = db; }
 
-  async begin(scope: PatientPhoneClinicScope, countryCallingCode: string): Promise<Result<PhoneScanCursor, PhoneScanFailure>> {
-    if (!validScope(scope) || !/^[1-9][0-9]{0,2}$/.test(countryCallingCode)) return err({ kind: "invalidInput" });
+  async begin(scope: PatientPhoneClinicScope, countryCallingCode: string, credentialFingerprint: string): Promise<Result<PhoneScanCursor, PhoneScanFailure>> {
+    if (!validScope(scope) || !/^[1-9][0-9]{0,2}$/.test(countryCallingCode) ||
+        !fingerprintPattern.test(credentialFingerprint)) return err({ kind: "invalidInput" });
     try {
       return await this.db.transaction().execute(async trx => {
         await sql`select pg_advisory_xact_lock(hashtext(${scope.tenantId}), hashtext(${scope.clinicId}))`.execute(trx);
@@ -74,6 +76,7 @@ export class PostgresPatientPhoneScan {
         const existing = await trx.selectFrom("patient_phone_scan").selectAll()
           .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).executeTakeFirst();
         if (existing && existing.country_calling_code === countryCallingCode &&
+            existing.credential_fingerprint === credentialFingerprint &&
             existing.normalization_version === PHONE_NORMALIZATION_VERSION &&
             existing.expected_generation === (head?.generation ?? null) &&
             existing.started_at instanceof Date && Date.now() - existing.started_at.getTime() < 86_400_000) {
@@ -86,6 +89,7 @@ export class PostgresPatientPhoneScan {
           expectedGeneration: head?.generation ?? null };
         await trx.insertInto("patient_phone_scan").values({ ...ids,
           scan_ref: fresh.scanRef, country_calling_code: countryCallingCode,
+          credential_fingerprint: credentialFingerprint,
           expected_generation: fresh.expectedGeneration, next_page: 1, total_entries: null,
           seen_count: 0, link_count: 0, normalization_version: PHONE_NORMALIZATION_VERSION }).execute();
         return ok(fresh);
@@ -209,6 +213,7 @@ export class PostgresPatientPhoneScan {
           .where("clinic_id", "=", scope.clinicId as PatientPhoneScanClinicId).forUpdate().executeTakeFirst();
         if (!row || row.scan_ref !== scanRef) return err({ kind: "staleScan" });
         if (row.normalization_version !== PHONE_NORMALIZATION_VERSION ||
+            !fingerprintPattern.test(row.credential_fingerprint ?? "") ||
             row.total_entries === null || row.seen_count !== row.total_entries ||
             row.next_page !== Math.max(1, Math.ceil(row.total_entries / 100)) + 1) return err({ kind: "sourceChanged" });
         const head = await trx.selectFrom("patient_phone_sync").select("generation")
@@ -225,10 +230,12 @@ export class PostgresPatientPhoneScan {
         await trx.insertInto("patient_phone_sync").values({ tenant_id: scope.tenantId as PatientPhoneSyncTenantId,
           clinic_id: scope.clinicId as PatientPhoneSyncClinicId, generation, completed_at: new Date(),
           country_calling_code: row.country_calling_code,
-          normalization_version: row.normalization_version })
+          normalization_version: row.normalization_version,
+          credential_fingerprint: row.credential_fingerprint })
           .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id"])
             .doUpdateSet({ generation, completed_at: new Date(), country_calling_code: row.country_calling_code,
-              normalization_version: row.normalization_version })).execute();
+              normalization_version: row.normalization_version,
+              credential_fingerprint: row.credential_fingerprint })).execute();
         await trx.deleteFrom("patient_phone_scan")
           .where("tenant_id", "=", scope.tenantId as PatientPhoneScanTenantId)
           .where("clinic_id", "=", scope.clinicId as PatientPhoneScanClinicId).execute();

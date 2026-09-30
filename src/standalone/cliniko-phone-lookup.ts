@@ -36,6 +36,8 @@ export class ClinikoPhoneLookup {
     this.scan = scan;
   }
 
+  credentialFingerprint(): string { return this.reader.credentialFingerprint(); }
+
   async refresh(scope: ClinikoClinicScope): Promise<Result<number, ClinikoPatientFailure | PhoneIndexFailure | PhoneScanFailure>> {
     if (this.scan) return this.refreshStaged(scope, this.scan);
     const head = await this.index.head(scope);
@@ -46,7 +48,8 @@ export class ClinikoPhoneLookup {
       const stale = await this.index.markStale(scope, generation);
       return stale.ok ? snapshot : stale;
     }
-    const published = await this.index.publish(scope, snapshot.value.links, this.countryCallingCode, generation);
+    const published = await this.index.publish(scope, snapshot.value.links, this.countryCallingCode,
+      this.credentialFingerprint(), generation);
     if (published.ok || published.error.kind === "generationChanged") return published;
     const stale = await this.index.markStale(scope, generation);
     return stale.ok ? published : stale;
@@ -54,7 +57,7 @@ export class ClinikoPhoneLookup {
 
   private async refreshStaged(scope: ClinikoClinicScope, scan: PostgresPatientPhoneScan):
     Promise<Result<number, ClinikoPatientFailure | PhoneIndexFailure | PhoneScanFailure>> {
-    const started = await scan.begin(scope, this.countryCallingCode);
+    const started = await scan.begin(scope, this.countryCallingCode, this.credentialFingerprint());
     if (!started.ok) return started;
     let cursor: PhoneScanCursor = started.value;
     if (cursor.totalEntries === null || cursor.seenCount < cursor.totalEntries) {
@@ -133,7 +136,8 @@ export class ClinikoPhoneLookup {
     Promise<Result<PhoneLookupResult, ClinikoPatientFailure | PhoneIndexFailure>> {
     const phone = normalizePatientPhone(presentedCallerNumber, this.countryCallingCode);
     if (!phone) return ok({ kind: "noNumber", candidateIds: [] });
-    const indexed = await this.index.find(scope, phone, this.maxIndexAgeMs, this.countryCallingCode);
+    const indexed = await this.index.find(scope, phone, this.maxIndexAgeMs, this.countryCallingCode,
+      this.credentialFingerprint());
     if (!indexed.ok) return indexed;
     if (indexed.value.kind === "stale") return ok({ kind: "indexStale", candidateIds: [] });
     if (indexed.value.kind === "tooMany") return ok({ kind: "tooMany", candidateIds: [] });
@@ -145,7 +149,8 @@ export class ClinikoPhoneLookup {
     }
     if (indexed.value.patientIds.length) {
       // Provider reads may outlive a clinic disconnect, failed scan, or replacement generation.
-      const latest = await this.index.find(scope, phone, this.maxIndexAgeMs, this.countryCallingCode);
+      const latest = await this.index.find(scope, phone, this.maxIndexAgeMs, this.countryCallingCode,
+        this.credentialFingerprint());
       if (!latest.ok) return latest;
       if (latest.value.kind === "stale" || latest.value.kind === "tooMany" ||
           latest.value.generation !== indexed.value.generation ||
