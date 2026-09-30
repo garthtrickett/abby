@@ -2,12 +2,13 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { OpenAIRealtimeTranscription } from "../src/voice/openai-realtime-transcription.ts";
+import type { TranscriptionContext } from "../src/voice/openai-realtime-transcription.ts";
 import { assessSyntheticTranscription } from "../src/voice/transcription-evaluation-gate.ts";
 import { parseTranscriptionEvaluationCorpus, runTranscriptionEvaluation } from "../src/voice/transcription-evaluation.ts";
 import type { TranscriptionEvaluationCase } from "../src/voice/transcription-evaluation.ts";
 
 function argsFrom(argv: readonly string[]): Record<string, string> {
-  const allowed = new Set(["out", "repeats", "concurrency", "corpus", "model"]);
+  const allowed = new Set(["out", "repeats", "concurrency", "corpus", "model", "context"]);
   const args: Record<string, string> = {};
   if (argv.length % 2 !== 0) throw new Error("invalid evaluation arguments");
   for (let index = 0; index < argv.length; index += 2) {
@@ -40,6 +41,12 @@ async function main(): Promise<void> {
   if (model !== "gpt-live-transcribe" && model !== "gpt-transcribe") {
     throw new Error("unsupported transcription evaluation model");
   }
+  if (args.context !== undefined && args.context !== "clinic-v1") {
+    throw new Error("unsupported transcription evaluation context");
+  }
+  const context: TranscriptionContext | undefined = args.context === "clinic-v1"
+    ? { prompt: "English physiotherapy clinic calls about appointments, booking, and urgent symptoms.",
+      languages: ["en"] } : undefined;
   const corpusBytes = await readFile(resolve(`eval/${corpusName}.json`));
   const corpus = parseTranscriptionEvaluationCorpus(JSON.parse(corpusBytes.toString("utf8")) as unknown);
   const cases: TranscriptionEvaluationCase[] = await Promise.all(corpus.cases.map(async item => {
@@ -51,7 +58,8 @@ async function main(): Promise<void> {
   const repeats = args.repeats === undefined ? 3 : Number(args.repeats);
   const concurrency = args.concurrency === undefined ? 2 : Number(args.concurrency);
   const results = await runTranscriptionEvaluation(cases,
-    sessionId => new OpenAIRealtimeTranscription({ apiKey, sessionId, model }), repeats, concurrency);
+    sessionId => new OpenAIRealtimeTranscription({ apiKey, sessionId, model,
+      ...(context ? { context } : {}) }), repeats, concurrency);
   const counts = { match: 0, mismatch: 0, critical: 0, providerFailure: 0 };
   for (const result of results) counts[result.verdict] += 1;
   const candidateGate = assessSyntheticTranscription(cases, results);
@@ -59,7 +67,8 @@ async function main(): Promise<void> {
     "src/voice/transcription-evaluation-gate.ts", "scripts/evaluate-transcription.ts"];
   const sourceBytes = await Promise.all(sourcePaths.map(path => readFile(resolve(path))));
   const report = { schemaVersion: 1, kind: "realtime-transcription-evaluation", runAt: new Date().toISOString(),
-    configuration: { provider: "openai-realtime", model, corpusVersion: corpus.version,
+    configuration: { provider: "openai-realtime", model,
+      ...(args.context ? { contextVersion: args.context, context } : {}), corpusVersion: corpus.version,
       corpusSha256: digest(corpusBytes), adapterSha256: digest(Buffer.concat(sourceBytes)), nodeVersion: process.version,
       repeats, concurrency, audioFormat: corpus.audioFormat },
     counts, candidateGate, results, humanReviewStatus: "pending", liveCallStatus: "notRun",

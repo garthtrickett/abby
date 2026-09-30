@@ -61,7 +61,8 @@ async function main(): Promise<void> {
     const corpus = parseTranscriptionEvaluationCorpus(JSON.parse(corpusBytes.toString("utf8")) as unknown);
     if (current.kind !== "realtime-transcription-evaluation" || config.corpusVersion !== corpusName ||
         config.corpusSha256 !== digest(corpusBytes) || config.adapterSha256 !== transcriptionHash ||
-        config.model !== "gpt-live-transcribe" || !Array.isArray(current.results)) {
+        config.model !== "gpt-live-transcribe" || config.contextVersion !== undefined ||
+        !Array.isArray(current.results)) {
       throw new Error(`${name} report does not match current candidate`);
     }
     const assessment = assessSyntheticTranscription(corpus.cases,
