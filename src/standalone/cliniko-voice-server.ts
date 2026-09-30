@@ -55,6 +55,8 @@ export type ClinikoVoiceServerConfig = Readonly<{
     transcriptionSocketFactory?: OpenAIRealtimeTranscriptionConfig["socketFactory"];
   }>;
   readiness: AutomationReadiness;
+  health?: () => Promise<boolean>;
+  admitWebhook?: () => Promise<boolean>;
   mediaOptions?: MediaTurnOptions;
   playbackOptions?: StreamedPlaybackOptions;
   now?: () => string;
@@ -143,6 +145,8 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
   }
 
   return ok(createTwilioIngressServer({ ingress, activeCallClaims: config.activeCallClaims,
+    ...(config.health ? { health: config.health } : {}),
+    ...(config.admitWebhook ? { admitWebhook: config.admitWebhook } : {}),
     async createCall(stream, send, close) {
     const route = routes.get(stream.event.dialedNumber);
     if (!route || stream.event.key.accountRef !== twilio.accountSid) throw new Error("clinic route unavailable");

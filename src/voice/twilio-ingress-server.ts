@@ -66,6 +66,10 @@ export type ActiveCallClaims = Readonly<{
 export type TwilioIngressServerConfig = Readonly<{
   ingress: TwilioSignedIngress;
   activeCallClaims?: ActiveCallClaims;
+  /** Optional operational probe; it cannot authorize a call. */
+  health?: () => Promise<boolean>;
+  /** Checked after signature verification and before returning stream TwiML. */
+  admitWebhook?: () => Promise<boolean>;
   /** Constructs a call owner only after the webhook, upgrade, and start have been authenticated. */
   createCall: (stream: AuthenticatedTwilioStream,
     send: (json: string) => "queued" | "notSent" | "uncertain",
@@ -174,11 +178,30 @@ export function createTwilioIngressServer(config: TwilioIngressServerConfig): Se
     perMessageDeflate: false });
   const server = createServer((request, response) => {
     void (async () => {
+      if (request.method === "GET" && request.url === "/healthz" && config.health) {
+        const healthy = await config.health().catch(() => false);
+        response.writeHead(healthy ? 200 : 503, { "content-type": "text/plain", "cache-control": "no-store" });
+        response.end(healthy ? "ok" : "unavailable");
+        return;
+      }
+      if (request.method === "GET" && request.url === "/readyz" &&
+          (config.health || config.admitWebhook)) {
+        const ready = (!config.health || await config.health().catch(() => false)) &&
+          (!config.admitWebhook || await config.admitWebhook().catch(() => false));
+        response.writeHead(ready ? 200 : 503, { "content-type": "text/plain", "cache-control": "no-store" });
+        response.end(ready ? "ready" : "unavailable");
+        return;
+      }
       const raw = await body(request);
       if (raw === undefined) { response.writeHead(413); response.end(); return; }
       const answered = config.ingress.answerWebhook({ method: request.method ?? "",
         requestTarget: request.url ?? "", contentType: header(request.headers["content-type"]),
         signature: header(request.headers["x-twilio-signature"]), body: raw });
+      if (answered.ok && config.admitWebhook && !await config.admitWebhook().catch(() => false)) {
+        response.writeHead(503, { "content-type": "text/plain", "cache-control": "no-store" });
+        response.end("Unavailable");
+        return;
+      }
       const status = answered.ok ? 200 : answered.error.kind === "fallbackNotConfigured" ? 503 : 403;
       response.writeHead(status, { "content-type": answered.ok ? "application/xml; charset=utf-8" : "text/plain",
         "cache-control": "no-store" });
