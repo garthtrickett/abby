@@ -18,6 +18,10 @@ const HOUR = 60 * 60 * 1000;
 const CLOSED_TRANSFER_NOTICE = "Staff aren't available for a live transfer now. I'll request follow-up, but I can't confirm they've received it yet.";
 const NO_STAFF_WORK_NOTICE = "I can't send a staff request from this call. Please contact the clinic directly.";
 
+export function noticePresentationId(callId: string, turnId: string): string {
+  return createHash("sha256").update(JSON.stringify([callId, turnId, "notice"])).digest("hex");
+}
+
 function staffFallbackText(state: CallState, whenAvailable: string): string {
   return state.policy.staffWorkEnabled === false ? NO_STAFF_WORK_NOTICE : whenAvailable;
 }
@@ -304,7 +308,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   }
   const newMessages = state.callerMessages.slice(messageCount);
   if (newMessages.length > 0 && !state.pendingPresentationId) {
-    const id = createHash("sha256").update(JSON.stringify([state.callId, turn.turnId, "notice"])).digest("hex");
+    const id = noticePresentationId(state.callId, turn.turnId);
     state.presentations[id] = { kind: "notice", id, approvedText: newMessages.join(" "), status: "pending" };
     state.pendingPresentationId = id;
   }

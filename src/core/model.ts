@@ -148,7 +148,7 @@ export type AvailabilityReadFailure = Readonly<{
 }>;
 
 export type AppointmentReadFailure = Readonly<{
-  kind: "invalidConfig" | "scopeMismatch" | "invalidProof" | "invalidRange" | "forbidden" | "rateLimited" |
+  kind: "invalidConfig" | "scopeMismatch" | "invalidProof" | "invalidRange" | "notFound" | "forbidden" | "rateLimited" |
     "unavailable" | "malformed" | "tooManyResults";
   resetAt?: string;
 }>;
