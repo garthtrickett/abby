@@ -66,13 +66,15 @@ def main() -> int:
             race_matches = [row for row in matches if str(row.get("notes", "")).endswith((":1", ":2"))]
             drift_matches = [row for row in matches if str(row.get("notes", "")).endswith(":permission")]
             type_drift_matches = [row for row in matches if str(row.get("notes", "")).endswith(":type-permission")]
+            relationship_matches = [row for row in matches if str(row.get("notes", "")).endswith(":relationship")]
             print(json.dumps({
                 "step": "synthetic_appointments", "view": label, "http_status": appointment_status,
                 "count": len(matches), "cancelled_count": sum(bool(row.get("cancelled_at")) for row in matches),
                 "archived_count": sum(bool(row.get("archived_at")) for row in matches),
                 **({"same_slot": len(race_matches) == 2 and len({slot_key(row) for row in race_matches}) == 1
                    and all(slot_key(race_matches[0])), "permission_drift_records": len(drift_matches),
-                   "type_permission_drift_records": len(type_drift_matches)}
+                   "type_permission_drift_records": len(type_drift_matches),
+                   "relationship_drift_records": len(relationship_matches)}
                    if label == "all_cancellation_states" and concurrency_patient and matches else {}),
             }))
             failed |= appointment_status != 200
@@ -86,7 +88,9 @@ def main() -> int:
                         failed = True
                     else:
                         failed |= (len(drift_matches) > 1 or len(type_drift_matches) > 1 or
-                                   len(matches) != len(race_matches) + len(drift_matches) + len(type_drift_matches) or
+                                   len(relationship_matches) > 1 or
+                                   len(matches) != len(race_matches) + len(drift_matches) +
+                                   len(type_drift_matches) + len(relationship_matches) or
                                    len({slot_key(row) for row in race_matches}) != 1 or
                                    not all(slot_key(race_matches[0])))
     print(json.dumps({"step": "synthetic_cleanup_summary", "archived_patients": len(patients),
