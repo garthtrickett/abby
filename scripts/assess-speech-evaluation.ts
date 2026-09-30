@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { assessSyntheticSpeechLatency } from "../src/voice/speech-latency-gate.ts";
 import type { SpeechLatencySample } from "../src/voice/speech-latency-gate.ts";
+import { parseSpeechLoopCorpus } from "../src/voice/speech-loop-evaluation.ts";
 import { assessSyntheticTranscription } from "../src/voice/transcription-evaluation-gate.ts";
 import { parseTranscriptionEvaluationCorpus } from "../src/voice/transcription-evaluation.ts";
 import type { TranscriptionEvaluationResult } from "../src/voice/transcription-evaluation.ts";
@@ -71,13 +72,15 @@ async function main(): Promise<void> {
   const current = await report(args.speech);
   const config = object(current.configuration);
   const speechCorpus = await readFile(resolve("eval/speech-loop-v1.json"));
+  const parsedSpeechCorpus = parseSpeechLoopCorpus(JSON.parse(speechCorpus.toString("utf8")) as unknown);
   if (current.kind !== "speech-first-chunk-fallback-evaluation" ||
       config.corpusVersion !== "speech-loop-v1" || config.corpusSha256 !== digest(speechCorpus) ||
       config.sourceSha256 !== speechHash || config.primaryModel !== "gpt-4o-mini-tts" ||
       config.fallbackModel !== "tts-1" || !Array.isArray(current.results)) {
     throw new Error("speech report does not match current candidate");
   }
-  const speech = assessSyntheticSpeechLatency(current.results as SpeechLatencySample[]);
+  const speech = assessSyntheticSpeechLatency(current.results as SpeechLatencySample[],
+    parsedSpeechCorpus.cases.map(item => item.id));
   summaries.push({ name: "speech", status: speech.status, failures: speech.failures, metrics: speech.metrics });
   const status = summaries.every(item => item.status === "pass") ? "pass" : "fail";
   process.stdout.write(`${JSON.stringify({ syntheticCandidateGate: status, checks: summaries,

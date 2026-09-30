@@ -539,6 +539,36 @@ for (const kind of kinds) {
     assert.equal(retry.error.kind, "disconnected");
   });
 
+  for (const outcome of ["failed", "unproven"] as const) {
+    test(`E2E-184 ${kind}: ${outcome} location-choice speech closes the connected call`, async () => {
+      const app = fixture(kind);
+      const inbound = app.event(app.sharedNumber, `choice-${outcome}`);
+      const call = new ConnectedVoiceCall({ event: inbound, sessionId: "session", ledger: app.ledger,
+        intake: app.intake, fullFactory: app.fullFactory,
+        transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
+        synthesis: { async *stream() {
+          if (outcome === "failed") throw new Error("synthetic speech failure");
+          yield new Uint8Array(640);
+        } },
+        output: {
+          async queueChunk() { return outcome === "unproven" ? "uncertain" : "queued"; },
+          async finishQueue() { return "queued"; },
+          async clear() { return true; },
+        },
+      });
+      const started = await call.begin(now);
+      assert.equal(started.ok, false);
+      if (!started.ok) assert.equal(started.error.kind, "transportUnavailable");
+      const pending = value(await app.ledger.findPendingLocation(callIdFor(inbound.key)));
+      assert.equal(pending?.status, "expired");
+      assert.equal(pending?.prompt?.status, outcome);
+      assert.equal(pending?.closeEvidence?.reason, "sessionClosed");
+      const retry = await call.begin(at(1));
+      assert.equal(retry.ok, false);
+      if (!retry.ok) assert.equal(retry.error.kind, "disconnected");
+    });
+  }
+
   test(`${kind}: synthesized chunk playback needs exact completion before a booking affirmation`, async () => {
     const sent: Array<{ id: string; sequence: number }> = [];
     const finished: Array<{ id: string; sequence: number }> = [];
