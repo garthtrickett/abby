@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { ModelIngress } from "./proposal.ts";
+import { ModelIngress, validPriorCallerTurns } from "./proposal.ts";
 import type { ModelFailure, ModelInput, ModelProposal } from "./proposal.ts";
 
 export type EvaluationExpectation = Readonly<{
@@ -14,9 +14,11 @@ export type EvaluationCase = Readonly<{
   id: string;
   category: string;
   callerText: string;
+  priorCallerTurns?: readonly string[];
   knowledge: readonly Readonly<{ sourceRef: string; approvedText: string }>[];
   expected: readonly EvaluationExpectation[];
   criticalIfMissed?: boolean;
+  requireOmittedRequestedTime?: boolean;
 }>;
 
 export type EvaluationCorpus = Readonly<{ schemaVersion: 1; version: string; cases: readonly EvaluationCase[] }>;
@@ -45,8 +47,12 @@ export function parseEvaluationCorpus(raw: unknown): EvaluationCorpus {
     const scenario = item as Record<string, unknown>;
     if (!bounded(scenario.id, 128) || ids.has(scenario.id) || !bounded(scenario.category, 80) ||
         !bounded(scenario.callerText, 4_000) || !Array.isArray(scenario.knowledge) || scenario.knowledge.length > 8 ||
+        (scenario.priorCallerTurns !== undefined && !validPriorCallerTurns(scenario.priorCallerTurns)) ||
         !Array.isArray(scenario.expected) || scenario.expected.length < 1 || scenario.expected.length > 4 ||
-        (scenario.criticalIfMissed !== undefined && typeof scenario.criticalIfMissed !== "boolean")) throw new Error("invalid evaluation case");
+        (scenario.criticalIfMissed !== undefined && typeof scenario.criticalIfMissed !== "boolean") ||
+        (scenario.requireOmittedRequestedTime !== undefined && typeof scenario.requireOmittedRequestedTime !== "boolean")) {
+      throw new Error("invalid evaluation case");
+    }
     ids.add(scenario.id);
     const refs = new Set<string>();
     for (const value of scenario.knowledge) {
@@ -84,6 +90,9 @@ function expectedMatches(scenario: EvaluationCase, proposal: ModelProposal): boo
 }
 
 export function scoreEvaluation(scenario: EvaluationCase, proposal: ModelProposal): EvaluationResult["verdict"] {
+  if (scenario.requireOmittedRequestedTime && proposal.kind === "action" && proposal.requestedTime !== undefined) {
+    return "critical";
+  }
   if (proposal.kind === "answer" && (proposal.sourceRefs.length !== 1 ||
       !scenario.knowledge.some(source => source.sourceRef === proposal.sourceRefs[0] && source.approvedText === proposal.proposedText)))
     return "critical";
@@ -108,6 +117,7 @@ export async function runModelEvaluation(corpus: EvaluationCorpus, ingress: Mode
       const taskId = createHash("sha256").update(`${corpus.version}:${scenario.id}:${repeat}`).digest("hex");
       const input: ModelInput = { scope: { tenantId: "eval", clinicId: "eval", locationId: "eval" },
         turn: { callId: taskId, turnId: taskId, text: scenario.callerText, quality: "clear", at: "2026-09-28T10:00:00.000Z" },
+        ...(scenario.priorCallerTurns ? { priorCallerTurns: scenario.priorCallerTurns } : {}),
         knowledge: scenario.knowledge, conversationRevision: 1, policyVersion: "eval", promptVersion };
       const started = performance.now();
       const proposed = await ingress.propose(input, 10_000);

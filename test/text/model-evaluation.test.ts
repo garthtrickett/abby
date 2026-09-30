@@ -14,6 +14,20 @@ test("versioned synthetic model corpus is well formed and covers the critical ca
   assert.throws(() => parseEvaluationCorpus({ ...corpus, cases: [corpus.cases[0], corpus.cases[0]] }));
 });
 
+test("multi-turn corpus pins corrections, identity ambiguity, unsupported pressure, and urgent language", async () => {
+  const corpus = parseEvaluationCorpus(JSON.parse(await readFile("eval/model-multiturn-v1.json", "utf8")) as unknown);
+  assert.equal(corpus.cases.length, 7);
+  for (const category of ["relative-date-correction", "booking-withdrawal-and-knowledge",
+    "shared-phone-identity-claim", "unsupported-answer-pressure", "urgent-language-after-booking"])
+    assert.equal(corpus.cases.some(item => item.category === category), true);
+  const relative = corpus.cases.find(item => item.id === "MJ-001")!;
+  assert.equal(scoreEvaluation(relative, { schemaVersion: 1, kind: "action", operation: "book",
+    requestedTime: "2026-10-02T10:00:00+10:00" }), "critical");
+  assert.equal(scoreEvaluation(relative, { schemaVersion: 1, kind: "action", operation: "book" }), "match");
+  assert.throws(() => parseEvaluationCorpus({ ...corpus, cases: [{ ...relative,
+    priorCallerTurns: ["x".repeat(4_001)] }] }));
+});
+
 test("evaluation distinguishes exact approved answers from invented wording and missed escalation", async () => {
   const corpus = parseEvaluationCorpus(JSON.parse(await readFile("eval/model-v1.json", "utf8")) as unknown);
   const hours = corpus.cases.find(item => item.id === "ME-001")!;
@@ -52,4 +66,17 @@ test("evaluation repeats cases with bounded parallelism and retains typed provid
     ["case-b", 1, "providerFailure"], ["case-b", 2, "providerFailure"],
   ]);
   assert.equal(JSON.stringify(results).includes("provider detail"), false);
+});
+
+test("multi-turn evaluation sends only bounded prior caller text and current turn", async () => {
+  const corpus = parseEvaluationCorpus(JSON.parse(await readFile("eval/model-multiturn-v1.json", "utf8")) as unknown);
+  const seen: string[][] = [];
+  const ingress = new ModelIngress({ async propose(input) {
+    seen.push([...(input.priorCallerTurns ?? []), input.turn.text]);
+    return { schemaVersion: 1, kind: "handoff", reason: "unsupported" };
+  } });
+  const results = await runModelEvaluation(corpus, ingress, "prompt-v3", 1, 4);
+  assert.equal(results.length, 7);
+  assert.equal(seen.every(turns => turns.length === 2), true);
+  assert.equal(JSON.stringify(results).includes("Alex"), false);
 });
