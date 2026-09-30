@@ -18,6 +18,7 @@ import { PostgresActiveCallClaims } from "../../src/storage/postgres-active-call
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
+import { syntheticCatalogueApproval } from "../support/synthetic-catalogue-approval.ts";
 
 test("E2E-163 opt-in signed local call recovers uncertain speech and charges keypad Cliniko reads to the shared budget",
   { skip: process.env.ABBY_LIVE_VOICE_EVAL !== "1" ||
@@ -88,6 +89,8 @@ test("E2E-163 opt-in signed local call recovers uncertain speech and charges key
         fallbackNumbers: { [number]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x48),
         now: () => new Date(now) },
       routes: [{ dialedNumber: number, scope, routeVersion: "v1", availability: availability.value, rateBudget,
+        approval: syntheticCatalogueApproval(availability.value, scope, { accountRef: accountSid,
+          dialedNumber: number, routeVersion: "v1" }),
         clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: { scope, version: "live-eval-keypad-v1",
           ownerRef: "synthetic-clinic-approval", approved: true,
           approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],

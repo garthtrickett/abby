@@ -77,6 +77,7 @@ test("B1 clinic admin confirms a scoped read-only candidate and every call repro
   assert.equal(approved.value.approval?.approvedBy, admin.actorRef);
   assert.equal(approved.value.approval?.patientActionMode, "unavailable");
   assert.equal(approved.value.approval?.patientRequestMode, "unavailable");
+  assert.ok((await app.setup.readApprovedRoute(scope, route)).ok);
   const resolved = await app.setup.resolveForCall(scope, route);
   assert.ok(resolved.ok);
   assert.equal(resolved.value.route.routeVersion, route.routeVersion);
@@ -125,12 +126,15 @@ test("B1 route or policy drift, rotation and concurrent approval do not reuse th
   assert.deepEqual(await app.setup.approve(admin, route, selection, 0),
     { ok: false, error: { kind: "versionConflict" } });
   app.setRouteVersion("route-2");
+  assert.deepEqual(await app.setup.readApprovedRoute(scope, route), { ok: false, error: { kind: "routeChanged" } });
   assert.deepEqual(await app.setup.resolveForCall(scope, route), { ok: false, error: { kind: "routeChanged" } });
   app.setRouteVersion(route.routeVersion);
   app.setPolicyVersion("1");
+  assert.deepEqual(await app.setup.readApprovedRoute(scope, route), { ok: false, error: { kind: "policyChanged" } });
   assert.deepEqual(await app.setup.resolveForCall(scope, route), { ok: false, error: { kind: "policyChanged" } });
   app.setPolicyVersion(selection.policyVersion);
   app.setBusinessEnabled(false);
+  assert.ok((await app.setup.readApprovedRoute(scope, route)).ok);
   assert.deepEqual(await app.setup.resolveForCall(scope, route),
     { ok: false, error: { kind: "selectionUnavailable" } });
   const rotated = ClinikoCatalogueReader.create({ scope, apiKey: "rotated-key-au5",
@@ -139,6 +143,21 @@ test("B1 route or policy drift, rotation and concurrent approval do not reuse th
   const otherSetup = new ClinikoCatalogueSetup(rotated.value, new ReferenceNumberRoutingHost([]),
     { async read() { return ok(referenceDefaultPolicy(scope)); } }, app.store, () => observedAt);
   assert.deepEqual(await otherSetup.resolveForCall(scope, route), { ok: false, error: { kind: "staleApproval" } });
+});
+
+test("B1 ingress approval is withdrawn by revocation and never reads Cliniko to authorize a route", async () => {
+  const app = fixture();
+  assert.deepEqual(await app.setup.readApprovedRoute(scope, route),
+    { ok: false, error: { kind: "notApproved" } });
+  assert.equal(app.requests.length, 0);
+  assert.ok((await app.setup.approve(admin, route, selection, 0)).ok);
+  const reads = app.requests.length;
+  assert.ok((await app.setup.readApprovedRoute(scope, route)).ok);
+  assert.equal(app.requests.length, reads);
+  assert.ok((await app.setup.revoke(admin, 1)).ok);
+  assert.deepEqual(await app.setup.readApprovedRoute(scope, route),
+    { ok: false, error: { kind: "notApproved" } });
+  assert.equal(app.requests.length, reads);
 });
 
 test("B1 route or policy changes during provider reads fail before recording approval", async () => {

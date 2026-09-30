@@ -14,6 +14,7 @@ import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { PostgresActiveCallClaims } from "../../src/storage/postgres-active-call-claims.ts";
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
+import { syntheticCatalogueApproval } from "../support/synthetic-catalogue-approval.ts";
 import { createTwilioIngressServer } from "../../src/voice/twilio-ingress-server.ts";
 import { TwilioSignedIngress } from "../../src/voice/twilio-signed-ingress.ts";
 
@@ -58,6 +59,8 @@ test("E2E-170 two signed servers share active call ownership and close on Postgr
       twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
         fallbackNumbers: { [dialedNumber]: "+6125550188" }, bindingKey },
       routes: [{ dialedNumber, scope, routeVersion: "v1", availability: availability.value, rateBudget,
+        approval: syntheticCatalogueApproval(availability.value, scope, { accountRef: accountSid,
+          dialedNumber, routeVersion: "v1" }),
         clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: { scope, version: "test-keypad-v1",
           ownerRef: "synthetic-approval", approved: true,
           approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],

@@ -8,6 +8,7 @@ import { sql } from "kysely";
 import twilio from "twilio";
 import WebSocket from "ws";
 import { connectPostgres } from "../../src/storage/connect.ts";
+import { seedSyntheticCatalogueApproval } from "../support/seed-synthetic-catalogue-approval.ts";
 import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
@@ -91,7 +92,12 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
     await sql.raw(`create database "${databaseName}"`).execute(admin);
     created = true;
     const db = connectPostgres(target.toString());
-    try { await migrate(db); } finally { await db.destroy(); }
+    try {
+      await migrate(db);
+      await seedSyntheticCatalogueApproval(db, { scope: { tenantId: "fault-test", clinicId: "clinic", locationId: "main" },
+        accountRef: accountSid, dialedNumber: number, routeVersion: "fault-test-v1",
+        apiKey: "synthetic-key-au5" });
+    } finally { await db.destroy(); }
     const enabled = spawnSync(process.execPath, ["scripts/set-voice-test-automation.ts", "enable"],
       { cwd: root, env, encoding: "utf8", timeout: 15_000 });
     assert.equal(enabled.status, 0, enabled.stderr);

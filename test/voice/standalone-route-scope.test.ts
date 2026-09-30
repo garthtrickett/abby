@@ -7,6 +7,7 @@ import type { ClinikoVoiceRoute } from "../../src/standalone/cliniko-voice-serve
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresActiveCallClaims } from "../../src/storage/postgres-active-call-claims.ts";
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
+import { syntheticCatalogueApproval } from "../support/synthetic-catalogue-approval.ts";
 
 test("E2E-154 standalone voice refuses a Cliniko reader bound to another clinic before opening a listener",
   async () => {
@@ -33,7 +34,10 @@ test("E2E-154 standalone voice refuses a Cliniko reader bound to another clinic 
             publicStreamUrl: "wss://calls.example.test/twilio/media/",
             fallbackNumbers: { "+6125550199": "+6125550188" }, bindingKey: Buffer.alloc(32, 0x46) },
           routes: [{ dialedNumber: "+6125550199", scope: routeScope, routeVersion: "v1",
-            availability: reader.value, rateBudget, clinicDate: () => "2026-09-29",
+            availability: reader.value, rateBudget,
+            approval: syntheticCatalogueApproval(reader.value, routeScope, {
+              accountRef: `AC${"1".repeat(32)}`, dialedNumber: "+6125550199", routeVersion: "v1" }),
+            clinicDate: () => "2026-09-29",
             keypadAvailabilityGreeting: { scope: routeScope, version: "route-keypad-v1",
               ownerRef: "synthetic-clinic-approval", approved: true,
               approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],
@@ -63,7 +67,10 @@ test("E2E-155 standalone voice refuses a missing or unapproved usable keypad rou
     try {
       for (const greeting of invalidGreetings) {
         const route = { dialedNumber: "+6125550199", scope, routeVersion: "v1",
-          availability: reader.value, rateBudget, clinicDate: () => "2026-09-29",
+          availability: reader.value, rateBudget,
+          approval: syntheticCatalogueApproval(reader.value, scope, {
+            accountRef: `AC${"1".repeat(32)}`, dialedNumber: "+6125550199", routeVersion: "v1" }),
+          clinicDate: () => "2026-09-29",
           keypadAvailabilityGreeting: greeting } as unknown as ClinikoVoiceRoute;
         await assert.rejects(createStandaloneClinikoVoiceServer({ db,
           activeCallClaims: new PostgresActiveCallClaims("postgresql://postgres@127.0.0.1:1/unused",
@@ -110,7 +117,10 @@ test("E2E-163 standalone voice refuses a process-local, wrong-key, or foreign Cl
         publicStreamUrl: "wss://calls.example.test/twilio/media/",
         fallbackNumbers: { "+6125550199": "+6125550188" }, bindingKey: Buffer.alloc(32, 0x46) },
       routes: [{ dialedNumber: "+6125550199", scope, routeVersion: "v1", availability,
-        rateBudget: budget, clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: greeting }],
+        rateBudget: budget,
+        approval: syntheticCatalogueApproval(availability, scope, {
+          accountRef: `AC${"1".repeat(32)}`, dialedNumber: "+6125550199", routeVersion: "v1" }),
+        clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: greeting }],
       openai: { apiKey: "synthetic-openai-key", intentModel: "configured-model" },
       readiness: async () => ok(true as const),
     });

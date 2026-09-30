@@ -1,6 +1,7 @@
 import type { Server } from "node:http";
 import type { Kysely } from "kysely";
 import { ClinikoAvailabilityReader } from "../cliniko/availability.ts";
+import type { ClinikoCatalogueSetup, ClinikoSelectionApproval, ClinikoSetupRoute } from "../cliniko/catalogue-setup.ts";
 import { err, ok } from "../core/model.ts";
 import type { ApprovedGreeting, LocationScope, Result } from "../core/model.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
@@ -29,6 +30,7 @@ export type ClinikoVoiceRoute = Readonly<{
   scope: LocationScope;
   routeVersion: string;
   availability: ClinikoAvailabilityReader;
+  approval: Pick<ClinikoCatalogueSetup, "readApprovedRoute">;
   rateBudget: PostgresClinikoRequestBudget;
   /** Today's YYYY-MM-DD date in this clinic's local time zone. */
   clinicDate: () => string;
@@ -79,6 +81,7 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     if (!route.scope.tenantId || !route.scope.clinicId || !route.scope.locationId ||
         !route.routeVersion?.trim() || !(route.availability instanceof ClinikoAvailabilityReader) ||
         !route.availability.matchesScope(route.scope) ||
+        !route.approval || typeof route.approval.readApprovedRoute !== "function" ||
         !(route.rateBudget instanceof PostgresClinikoRequestBudget) ||
         !route.rateBudget.matchesDatabase(config.db) || !route.availability.usesBudget(route.rateBudget) ||
         !route.rateBudget.matchesCredentialFingerprint(route.availability.credentialFingerprint()) ||
@@ -106,6 +109,24 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     accountRef: twilio.accountSid, dialedNumber: route.dialedNumber,
     ...route.scope, routeVersion: route.routeVersion,
   })));
+  const approvedRoute = async (route: ClinikoVoiceRoute): Promise<ClinikoSelectionApproval | null> => {
+    const binding: ClinikoSetupRoute = { accountRef: twilio.accountSid,
+      dialedNumber: route.dialedNumber, routeVersion: route.routeVersion };
+    try {
+      const result = await route.approval.readApprovedRoute(route.scope, binding);
+      if (!result.ok) return null;
+      const approval = result.value;
+      if (!approval || !approval.scope || approval.scope.tenantId !== route.scope.tenantId ||
+          approval.scope.clinicId !== route.scope.clinicId || approval.scope.locationId !== route.scope.locationId ||
+          !approval.route || approval.route.accountRef !== binding.accountRef ||
+          approval.route.dialedNumber !== binding.dialedNumber || approval.route.routeVersion !== binding.routeVersion ||
+          !approval.selection || !approval.selection.policyVersion?.trim() ||
+          approval.patientActionMode !== "unavailable" || approval.patientRequestMode !== "unavailable" ||
+          !route.availability.matchesSelection(route.scope, { ...approval.selection,
+            credentialFingerprint: approval.credentialFingerprint })) return null;
+      return approval;
+    } catch { return null; }
+  };
   const openaiApiKey = config.openai.apiKey;
   const transcriptionSocketFactory = config.openai.transcriptionSocketFactory;
   const readiness = config.readiness;
@@ -147,11 +168,19 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
 
   return ok(createTwilioIngressServer({ ingress, activeCallClaims: config.activeCallClaims,
     ...(config.health ? { health: config.health } : {}),
-    ...(config.admitWebhook ? { admitWebhook: config.admitWebhook } : {}),
+    admitWebhook: async event => {
+      if (config.admitWebhook && !await config.admitWebhook(event).catch(() => false)) return false;
+      if (!event || event.key.accountRef !== twilio.accountSid) return false;
+      const route = routes.get(event.dialedNumber);
+      return !!route && !!await approvedRoute(route);
+    },
     async createCall(stream, send, close) {
     const route = routes.get(stream.event.dialedNumber);
     if (!route || stream.event.key.accountRef !== twilio.accountSid) throw new Error("clinic route unavailable");
+    const approved = await approvedRoute(route);
+    if (!approved) throw new Error("clinic catalogue approval unavailable");
     const composed = await createStandaloneTransientVoiceCall({ db: config.db, routingHost,
+      expectedPolicyVersion: approved.selection.policyVersion,
       stream, send, closeTransport: close, synthesis, availability: route.availability,
       approvedGreeting: route.keypadAvailabilityGreeting,
       keypadAvailabilityDate: (digit: string) => keypadAvailabilityDate(route.clinicDate, digit),
