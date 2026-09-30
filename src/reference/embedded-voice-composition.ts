@@ -29,7 +29,7 @@ export type EmbeddedVoiceHostConfig = Readonly<{
   availability?: AvailabilityHost;
   appointments?: AppointmentHost;
   model?: ModelWork;
-  knowledge?: KnowledgeHost & Partial<ModelKnowledgeContextHost>;
+  knowledge?: KnowledgeHost & ModelKnowledgeContextHost;
   now?: () => string;
 }>;
 export type EmbeddedVoiceCompositionConfig = Omit<ConnectedVoiceCallConfig,
@@ -42,9 +42,12 @@ function hostVoiceServices(config: EmbeddedVoiceHostConfig &
   intake: SharedNumberIntakeService;
   fullFactory: FullVoiceSessionFactory;
 }> {
+  if (config.knowledge && typeof config.knowledge.listModelKnowledge !== "function") {
+    throw new TypeError("embedded voice knowledge requires a snapshot host");
+  }
   const now = config.now ?? (() => new Date().toISOString());
   const router = new ClinicPolicyRouter(config.routing, config.policy);
-  const admission = new CallAdmissionService(config.ledger, router.resolve, now, config.readiness);
+  const admission = new CallAdmissionService(config.ledger, router.resolve, now, config.readiness, config.knowledge);
   const intake = new SharedNumberIntakeService(config.ledger, router, admission, now);
   const reception = createEmbeddedTextComposition(config.ledger, config.policy, config.host,
     config.availability, config.appointments, config.model, config.knowledge);
