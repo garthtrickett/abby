@@ -6,7 +6,7 @@ The [execution plan](../PHASE_0_EXECUTION_PLAN.md) is the gate. These files are 
 | --- | --- | --- |
 | P0-01 call evidence | Source-flow inventory drafted; real-call corpus incomplete | [Call cases](CALL_CASES.md). Select de-identified calls and confirm source policy with clinic owners. |
 | P0-02 product decisions | Product owner fixed the patient-data boundary and disabled patient-specific handoff pending clinic approval; clinic-specific verification and workflow decisions remain open | [Decision register](DECISIONS.md). Obtain clinic approval and proof before enabling dependent behavior. |
-| P0-03 Cliniko | All 223 published operations inventoried; receptionist reads and controlled synthetic writes probed; execution still unapproved | [API inventory](CLINIKO_API_SURFACE.md) and [Cliniko evidence](CLINIKO_EVIDENCE.md). The demo business defaults to online booking off; safe lost-response and commit-time rules remain unproven. |
+| P0-03 Cliniko | All 223 published operations inventoried; receptionist reads and controlled synthetic writes probed; an opt-in live demo-account E2E now joins a guarded phone-index refresh to transient text availability and privacy scans; execution still unapproved | [API inventory](CLINIKO_API_SURFACE.md) and [Cliniko evidence](CLINIKO_EVIDENCE.md). The demo business defaults to online booking off; safe lost-response and commit-time rules remain unproven. |
 | P0-04 Splose | Unverified; no account available | [Draft support matrix](SUPPORT_MATRIX.md). Keep every Splose claim unverified until an account/profile can be probed. |
 | P0-05 media and fallback | Synthetic media, OpenAI speech/transcription, and signed Twilio local-socket tests exist; no live phone stream or provider-owned fallback has been proven | [Twilio protocol](../phase-1/TWILIO_MEDIA_STREAM.md) and [OpenAI transcription](../phase-1/OPENAI_REALTIME_TRANSCRIPTION.md). A real authenticated call, playback timing, interruption, transfer, and fallback remain required before full Phase 0 sign-off or live-call readiness. |
 | P0-06 to P0-10 | TXT-01 through TXT-09 run against memory and disposable PostgreSQL; a [reference host composition](REFERENCE_HOST_CONTRACT.md) exercises booking, one setting, and staff fallback in standalone and embedded forms. The [portable archive contract](PORTABLE_ARCHIVE_CONTRACT.md) has an executable configuration-only rehearsal, including omission of completed strict text calls. | Run `npm test` and `npm run probe:postgres`. Full retained-call migration, final contracts, and full-call E2E remain open. |
@@ -14,6 +14,15 @@ The [execution plan](../PHASE_0_EXECUTION_PLAN.md) is the gate. These files are 
 The [scenario manifest](SCENARIO_MANIFEST.md) tracks all current E2E IDs and maps the current agent catalogue and settings. E2E-125 has passing text-only availability evidence in standalone and embedded compositions, E2E-126 has passing standalone startup evidence, and E2E-127 covers strict text-call configuration portability; full-call evidence remains planned.
 
 The Cliniko [read-only probe](probes/cliniko_readonly.py) prompts for its key in a terminal. Credentials and provider response records are not committed. A 200 GET proves only that this key can perform that read; it does not prove safe automation or write permission.
+
+`C-LIVE-17` in `test/live/cliniko-rehearsal.test.ts` is an opt-in demo-account E2E. It creates one marked synthetic patient with a phone number, runs the guarded production phone-index refresh into a disposable PostgreSQL database, checks the live candidate re-read, and drives the standalone text availability path through the real Cliniko adapter. It temporarily enables the demo business's online-booking flag when needed, then verifies that the patient is archived and the original flag restored. It scans the disposable database and in-memory backup dump for synthetic names, email, caller text, and returned time canaries; patient phone and ID are checked only in the allowed index. The test prints no provider records or identifiers. Run it only against the sanctioned demo account, separately from other account probes:
+
+```sh
+work run "Abby live Cliniko rehearsal" -- bash scripts/with-postgres.sh env ABBY_LIVE_CLINIKO_EVAL=1 node --env-file=/absolute/path/to/owner-only.env --test test/live/cliniko-rehearsal.test.ts
+work wait "Abby live Cliniko rehearsal"
+```
+
+The test requires `ABBY_CLINIKO_API_KEY` and `ABBY_CLINIKO_CONTACT_EMAIL` in that file. A failed or killed process can leave a synthetic patient or changed demo setting; inspect and reconcile the demo account before another write probe if cleanup was not verified. A passing run does not approve caller identity, booking, patient-specific handoff, production backups, or live telephony.
 
 ## Local text availability entrypoint
 
