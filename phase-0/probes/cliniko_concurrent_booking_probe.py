@@ -70,8 +70,11 @@ def main() -> int:
     patient_post_attempted = False
     created_ids: set[str] = set()
     business_path = None
+    type_path = None
     original_flag = None
+    original_type_flag = None
     changed_business = False
+    changed_type = False
     failed = False
     cleanup_failed = False
     try:
@@ -95,26 +98,41 @@ def main() -> int:
             status, enabled = request(base, headers, "PATCH", business_path, {"show_in_online_bookings": True})
             if status != 200 or enabled.get("show_in_online_bookings") is not True:
                 raise ProbeError(f"enable_online_booking_{status}")
-        target_date = (datetime.now(zone).date() + timedelta(days=2)).isoformat()
         selected_type = None
         start = None
         alternate_start = None
         availability_path = None
-        for item in types:
-            type_id = str(item["id"])
-            path = (f"/businesses/{business_id}/practitioners/{practitioner_id}"
-                    f"/appointment_types/{type_id}/available_times?"
-                    + urlencode({"from": target_date, "to": target_date, "per_page": 10}))
-            status, data = request(base, headers, "GET", path)
-            if status == 200 and isinstance(data.get("available_times"), list) and data["available_times"]:
-                selected_type = type_id
-                start = data["available_times"][0].get("appointment_start")
-                alternate_start = (data["available_times"][1].get("appointment_start")
-                                   if len(data["available_times"]) > 1 else None)
-                availability_path = path
+        selected_offset = None
+        for offset in range(2, 16):
+            target_date = (datetime.now(zone).date() + timedelta(days=offset)).isoformat()
+            for item in types:
+                type_id = str(item["id"])
+                path = (f"/businesses/{business_id}/practitioners/{practitioner_id}"
+                        f"/appointment_types/{type_id}/available_times?"
+                        + urlencode({"from": target_date, "to": target_date, "per_page": 10}))
+                status, data = request(base, headers, "GET", path)
+                offered = data.get("available_times")
+                if status == 200 and isinstance(offered, list) and len(offered) >= 2 and\
+                        isinstance(offered[0], dict) and isinstance(offered[1], dict) and\
+                        isinstance(offered[0].get("appointment_start"), str) and\
+                        isinstance(offered[1].get("appointment_start"), str):
+                    selected_type = type_id
+                    start = offered[0]["appointment_start"]
+                    alternate_start = offered[1]["appointment_start"]
+                    availability_path = path
+                    selected_offset = offset
+                    break
+            if selected_type:
                 break
         if not selected_type or not isinstance(start, str) or not isinstance(alternate_start, str):
             raise ProbeError("no_bookable_offer")
+        type_path = f"/appointment_types/{quote(selected_type, safe='')}"
+        type_status, type_detail = request(base, headers, "GET", type_path)
+        if type_status != 200 or str(type_detail.get("id")) != selected_type or type_detail.get("archived_at"):
+            raise ProbeError("selected_type_detail_invalid")
+        original_type_flag = type_detail.get("show_in_online_bookings")
+        if original_type_flag is not True:
+            raise ProbeError("selected_type_not_online_bookable")
         patient_post_attempted = True
         status, patient = request(base, headers, "POST", "/patients", {
             "first_name": "Abby", "last_name": "SyntheticConcurrency" + reference_id,
@@ -188,6 +206,52 @@ def main() -> int:
             raise ProbeError("permission_drift_result_uncertain")
         print(json.dumps({"step": "permission_drift", "offer_after_disable_status": offer_after_status,
                           "write_status": drift_status, "exact_marker_matches": len(drift_matches)}))
+
+        status, enabled = request(base, headers, "PATCH", business_path, {"show_in_online_bookings": True})
+        verify_status, current_business = request(base, headers, "GET", business_path)
+        if status != 200 or enabled.get("show_in_online_bookings") is not True or\
+                verify_status != 200 or current_business.get("show_in_online_bookings") is not True:
+            raise ProbeError("reenable_online_booking_for_type_drift_failed")
+        type_offer_path = None
+        type_test_start = None
+        for offset in range(selected_offset + 1, selected_offset + 15):
+            type_test_date = (datetime.now(zone).date() + timedelta(days=offset)).isoformat()
+            path = (f"/businesses/{business_id}/practitioners/{practitioner_id}"
+                    f"/appointment_types/{selected_type}/available_times?"
+                    + urlencode({"from": type_test_date, "to": type_test_date, "per_page": 10}))
+            type_offer_status, type_offers = request(base, headers, "GET", path)
+            possible = type_offers.get("available_times")
+            if type_offer_status == 200 and isinstance(possible, list) and possible and\
+                    isinstance(possible[0], dict) and isinstance(possible[0].get("appointment_start"), str):
+                type_offer_path = path
+                type_test_start = possible[0]["appointment_start"]
+                break
+        if not type_offer_path or not type_test_start:
+            raise ProbeError("no_independent_type_drift_offer")
+
+        changed_type = True
+        status, disabled_type = request(base, headers, "PATCH", type_path, {"show_in_online_bookings": False})
+        type_verify_status, current_type = request(base, headers, "GET", type_path)
+        if status != 200 or disabled_type.get("show_in_online_bookings") is not False or\
+                type_verify_status != 200 or current_type.get("show_in_online_bookings") is not False:
+            raise ProbeError("disable_type_online_booking_failed")
+        type_offer_after_status, _ = request(base, headers, "GET", type_offer_path)
+        type_drift_marker = run_marker + ":type-permission"
+        type_drift_status, type_drift_body = request(base, headers, "POST", "/individual_appointments", {
+            "business_id": business_id, "practitioner_id": practitioner_id,
+            "appointment_type_id": selected_type, "patient_id": patient_id,
+            "starts_at": type_test_start, "notes": type_drift_marker,
+        })
+        if type_drift_status == 201 and type_drift_body.get("id"):
+            created_ids.add(str(type_drift_body["id"]))
+        type_drift_matches = [row for row in appointments_for_patient(base, headers, patient_id)
+                              if row.get("notes") == type_drift_marker]
+        if type_drift_status not in (201, 403, 422) or\
+                (type_drift_status == 201 and len(type_drift_matches) != 1) or\
+                (type_drift_status != 201 and type_drift_matches):
+            raise ProbeError("type_permission_drift_result_uncertain")
+        print(json.dumps({"step": "type_permission_drift", "offer_after_disable_status": type_offer_after_status,
+                          "write_status": type_drift_status, "exact_marker_matches": len(type_drift_matches)}))
     except (ProbeError, URLError, TimeoutError, ValueError, KeyError, ZoneInfoNotFoundError,
             threading.BrokenBarrierError) as error:
         failed = True
@@ -231,6 +295,16 @@ def main() -> int:
                 status, _ = request(base, headers, "POST", f"/patients/{quote(patient_id, safe='')}/archive")
                 cleanup_failed |= status != 204
                 print(json.dumps({"step": "archive_synthetic_patient", "http_status": status}))
+            except (ProbeError, URLError, TimeoutError, ValueError):
+                cleanup_failed = True
+        if changed_type and type_path is not None:
+            try:
+                status, _ = request(base, headers, "PATCH", type_path, {"show_in_online_bookings": original_type_flag})
+                verify_status, current_type = request(base, headers, "GET", type_path)
+                restored = status == 200 and verify_status == 200 and\
+                    current_type.get("show_in_online_bookings") is original_type_flag
+                cleanup_failed |= not restored
+                print(json.dumps({"step": "restore_type_online_booking", "restored": restored}))
             except (ProbeError, URLError, TimeoutError, ValueError):
                 cleanup_failed = True
         if changed_business and business_path is not None:
