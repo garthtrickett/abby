@@ -44,7 +44,7 @@ export function availabilityPresentation(snapshot: AvailabilitySnapshot, scope: 
   let spoken: Intl.DateTimeFormat;
   try {
     dates = new Intl.DateTimeFormat("en-CA", { timeZone: snapshot.timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
-    spoken = new Intl.DateTimeFormat("en-AU", { timeZone: snapshot.timeZone, weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit", hour12: true });
+    spoken = new Intl.DateTimeFormat("en-AU", { timeZone: snapshot.timeZone, weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "long" });
   } catch { return err({ kind: "invalidEvidence" }); }
 
   const startsAt: string[] = [];
