@@ -6,7 +6,7 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     process.env.ABBY_CLINIKO_API_KEY !== "synthetic-key-au5" ||
     process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}` ||
     !process.env.DATABASE_URL?.includes("/abby_test_voice_") ||
-    ![undefined, "openai-speech", "cliniko-rate-limit", "cliniko-timeout", "cliniko-partial-page", "cliniko-business-type-removed"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
+    ![undefined, "openai-speech", "openai-transcription", "cliniko-rate-limit", "cliniko-timeout", "cliniko-partial-page", "cliniko-business-type-removed"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
   throw new Error("synthetic voice runner requires an isolated fixture");
 }
 const fault = process.env.ABBY_SYNTHETIC_VOICE_FAULT;
@@ -14,8 +14,14 @@ const fault = process.env.ABBY_SYNTHETIC_VOICE_FAULT;
 class SyntheticTranscriptionSocket extends EventEmitter {
   readyState: number = WebSocket.CONNECTING;
   bufferedAmount = 0;
+  private failed = false;
 
-  send(): void { /* keypad test has no caller audio */ }
+  send(data: string): void {
+    if (fault === "openai-transcription" && !this.failed && data.includes('"input_audio_buffer.append"')) {
+      this.failed = true;
+      queueMicrotask(() => this.emit("message", Buffer.from(JSON.stringify({ type: "error" }))));
+    }
+  }
   terminate(): void { this.readyState = WebSocket.CLOSED; this.emit("close"); }
   close(): void { this.terminate(); }
   open(): void {
