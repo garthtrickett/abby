@@ -294,7 +294,8 @@ export class PostgresConfigNumberCutover {
             from tenant_config_imports where target_tenant_id = ${staged.target_tenant_id}`.execute(trx)).rows[0];
           if (!registry || registry.archive_id !== staged.archive_id ||
               registry.manifest_digest !== staged.manifest_digest ||
-              registry.receipt.sourceFenceVersion !== staged.source_fence_version) {
+              registry.receipt?.sourceFenceVersion !== staged.source_fence_version ||
+              !receiptMatches(registry, registry.source_history)) {
             return err({ kind: "targetImportMismatch" });
           }
           if (!await targetReady(trx, registry.source_history, registry)) return err({ kind: "targetNotReady" });

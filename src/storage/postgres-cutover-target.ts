@@ -3,6 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import { sql } from "kysely";
 import type { Transaction } from "kysely";
 import type { LocationScope } from "../core/model.ts";
+import { ARCHIVE_SECTIONS } from "../portability/archive-envelope.ts";
 import type { TenantConfigArchiveData } from "../portability/config-archive.ts";
 import { mapConfig } from "../reference/config-archive-import.ts";
 import type { ReferenceTenantImportReport } from "../reference/tenant-config-archive-import.ts";
@@ -12,14 +13,40 @@ export type TargetImportRow = { archive_id: string; manifest_digest: string; rec
   source_history: TenantConfigArchiveData };
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
-  return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
+  return !!left && !!right && left.tenantId === right.tenantId &&
+    left.clinicId === right.clinicId && left.locationId === right.locationId;
 }
 
 export function receiptMatches(row: TargetImportRow | undefined, data: TenantConfigArchiveData): boolean {
-  return !!row && row.archive_id === data.archiveId && row.manifest_digest === data.manifestDigest &&
-    row.receipt.status === "staged" && row.receipt.sourceTenantId === data.sourceTenantId &&
-    row.receipt.targetTenantId === data.targetTenantId && row.receipt.sourceFenceVersion === data.sourceFenceVersion &&
-    row.receipt.locations.length === data.locations.length && isDeepStrictEqual(row.source_history, data);
+  if (!row || !row.receipt || typeof row.receipt !== "object" || !data ||
+      !data.sectionManifests || !Array.isArray(data.locations) ||
+      row.archive_id !== data.archiveId ||
+      row.manifest_digest !== data.manifestDigest || !isDeepStrictEqual(row.source_history, data)) return false;
+  const receipt = row.receipt;
+  if (receipt.status !== "staged" || receipt.archiveId !== data.archiveId ||
+      receipt.manifestDigest !== data.manifestDigest || receipt.sourceTenantId !== data.sourceTenantId ||
+      receipt.targetTenantId !== data.targetTenantId || receipt.sourceSchemaVersion !== data.sourceSchemaVersion ||
+      receipt.sourceFenceVersion !== data.sourceFenceVersion ||
+      typeof receipt.auditRef !== "string" || !receipt.auditRef.trim() ||
+      receipt.bookingEnabled !== false || receipt.automationEnabled !== false || receipt.writesStopped !== true ||
+      !isDeepStrictEqual(receipt.omittedCalls, data.omittedCalls) ||
+      !receipt.recordCounts || !receipt.sectionDigests ||
+      Object.keys(receipt.recordCounts).length !== ARCHIVE_SECTIONS.length ||
+      Object.keys(receipt.sectionDigests).length !== ARCHIVE_SECTIONS.length ||
+      !Array.isArray(receipt.locations) || receipt.locations.length !== data.locations.length) return false;
+  for (const section of ARCHIVE_SECTIONS) {
+    const manifest = data.sectionManifests[section];
+    if (!manifest || receipt.recordCounts[section] !== manifest.recordCount ||
+        receipt.sectionDigests[section] !== manifest.sha256) return false;
+  }
+  return data.locations.every((location, index) => {
+    const reported = receipt.locations[index];
+    return !!reported && sameScope(reported.sourceScope, location.sourceScope) &&
+      sameScope(reported.targetScope, location.targetScope) &&
+      reported.policyVersions === location.policies.length &&
+      reported.publishedKnowledgeVersions === location.knowledge.length &&
+      reported.omittedTextCalls === location.omittedTextCalls;
+  });
 }
 
 type PolicyRow = { version: number; policy: unknown; changed_by: string | null;
