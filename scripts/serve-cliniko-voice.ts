@@ -1,12 +1,18 @@
 import { fileURLToPath } from "node:url";
 import { sql } from "kysely";
 import { ClinikoAvailabilityReader } from "../src/cliniko/availability.ts";
+import { ClinikoCatalogueReader } from "../src/cliniko/catalogue.ts";
+import { ClinikoCatalogueSetup } from "../src/cliniko/catalogue-setup.ts";
 import { ok } from "../src/core/model.ts";
 import { unprovenReadiness } from "../src/core/readiness.ts";
+import { ReferenceNumberRoutingHost } from "../src/reference/clinic-number-routing.ts";
+import { referenceDefaultPolicy } from "../src/reference/policy-store.ts";
 import { createStandaloneClinikoVoiceServer } from "../src/standalone/cliniko-voice-server.ts";
 import { connectPostgres } from "../src/storage/connect.ts";
 import { PostgresActiveCallClaims } from "../src/storage/postgres-active-call-claims.ts";
 import { PostgresClinikoRequestBudget } from "../src/storage/postgres-cliniko-request-budget.ts";
+import { PostgresClinikoApprovalStore } from "../src/storage/postgres-cliniko-approval-store.ts";
+import { PostgresPolicyStore } from "../src/storage/postgres-policy-store.ts";
 import type { ClinikoVoiceServerConfig } from "../src/standalone/cliniko-voice-server.ts";
 
 function required(name: string): string {
@@ -57,6 +63,8 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
   const dialedNumber = required("ABBY_TWILIO_TEST_NUMBER");
   const fallbackNumber = required("ABBY_TWILIO_FALLBACK_NUMBER");
   const accountSid = required("ABBY_TWILIO_ACCOUNT_SID");
+  const routeVersion = required("ABBY_VOICE_ROUTE_VERSION");
+  const contactEmail = required("ABBY_CLINIKO_CONTACT_EMAIL");
   const mode = process.env.ABBY_VOICE_TEST_MODE;
   if (mode !== undefined && mode !== "1") throw new RangeError("invalid ABBY_VOICE_TEST_MODE");
   const testCaller = mode === "1" ? required("ABBY_TWILIO_TEST_CALLER_NUMBER") : undefined;
@@ -76,11 +84,18 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       ...(process.env.ABBY_CLINIKO_BUDGET_USER_REF
         ? { sharedUserRef: process.env.ABBY_CLINIKO_BUDGET_USER_REF } : {}) });
     const availability = ClinikoAvailabilityReader.create({ scope, apiKey, rateBudget,
-      contactEmail: required("ABBY_CLINIKO_CONTACT_EMAIL"),
+      contactEmail,
       businessId: required("ABBY_CLINIKO_BUSINESS_ID"),
       practitionerId: required("ABBY_CLINIKO_PRACTITIONER_ID"),
       appointmentTypeId: required("ABBY_CLINIKO_APPOINTMENT_TYPE_ID") }, ports.clinikoFetch);
     if (!availability.ok) throw new RangeError(`invalid Cliniko availability configuration: ${availability.error.kind}`);
+    const catalogue = ClinikoCatalogueReader.create({ scope, apiKey, contactEmail, rateBudget }, ports.clinikoFetch);
+    if (!catalogue.ok) throw new RangeError(`invalid Cliniko catalogue configuration: ${catalogue.error.kind}`);
+    const approval = new ClinikoCatalogueSetup(catalogue.value,
+      new ReferenceNumberRoutingHost([{ accountRef: accountSid, dialedNumber,
+        ...scope, routeVersion }]),
+      new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable", unprovenReadiness,
+        false, "standaloneMinimal"), new PostgresClinikoApprovalStore(db));
     const prepared = await createStandaloneClinikoVoiceServer({ db,
       activeCallClaims: new PostgresActiveCallClaims(connectionString, key),
       twilio: { accountSid,
@@ -88,8 +103,8 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
         publicWebhookUrl: required("ABBY_TWILIO_PUBLIC_WEBHOOK_URL"),
         publicStreamUrl: required("ABBY_TWILIO_PUBLIC_STREAM_URL"),
         fallbackNumbers: { [dialedNumber]: fallbackNumber }, bindingKey: key },
-      routes: [{ dialedNumber, scope, routeVersion: required("ABBY_VOICE_ROUTE_VERSION"),
-        availability: availability.value, rateBudget, clinicDate,
+      routes: [{ dialedNumber, scope, routeVersion,
+        availability: availability.value, approval, rateBudget, clinicDate,
         keypadAvailabilityGreeting: { scope, version: required("ABBY_GREETING_VERSION"),
           ownerRef: required("ABBY_GREETING_APPROVAL_OWNER_REF"), approved: true,
           approvedText: required("ABBY_GREETING_APPROVED_TEXT") } }],

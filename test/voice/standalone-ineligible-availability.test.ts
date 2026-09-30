@@ -16,6 +16,7 @@ import { PostgresActiveCallClaims } from "../../src/storage/postgres-active-call
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
+import { syntheticCatalogueApproval } from "../support/synthetic-catalogue-approval.ts";
 
 test("E2E-153 signed keypad call refuses availability when Cliniko business is not online-booking eligible",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 20_000 }, async () => {
@@ -70,6 +71,8 @@ test("E2E-153 signed keypad call refuses availability when Cliniko business is n
         fallbackNumbers: { [dialedNumber]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x49),
         now: () => new Date(now) },
       routes: [{ dialedNumber, scope, routeVersion: "v1", availability: availability.value, rateBudget,
+        approval: syntheticCatalogueApproval(availability.value, scope, { accountRef: accountSid,
+          dialedNumber, routeVersion: "v1" }),
         clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: { scope, version: "ineligible-keypad-v1",
           ownerRef: "synthetic-clinic-approval", approved: true,
           approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],

@@ -9,8 +9,10 @@ import twilio from "twilio";
 import WebSocket from "ws";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { migrate } from "../../src/storage/migrate.ts";
+import { PostgresClinikoApprovalStore } from "../../src/storage/postgres-cliniko-approval-store.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
+import { seedSyntheticCatalogueApproval } from "../support/seed-synthetic-catalogue-approval.ts";
 
 async function freePort(): Promise<number> {
   const server = createServer();
@@ -109,7 +111,7 @@ test("E2E-171 local voice runner validates startup, reports unready, refuses inb
   }
 });
 
-test("E2E-172 isolated voice runner admits only signed allowlisted test calls and handles keypad, rejection and shutdown",
+test("E2E-172 E2E-185 isolated voice runner enforces durable approval around signed keypad calls and shutdown",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 60_000 }, async () => {
   const adminUrl = process.env.DATABASE_URL;
   assert.ok(adminUrl);
@@ -144,6 +146,7 @@ test("E2E-172 isolated voice runner admits only signed allowlisted test calls an
   let created = false;
   let child: ReturnType<typeof spawn> | undefined;
   let caller: WebSocket | undefined;
+  const clinikoMethods: string[] = [];
   try {
     await sql.raw(`create database "${name}"`).execute(admin);
     created = true;
@@ -154,7 +157,13 @@ test("E2E-172 isolated voice runner admits only signed allowlisted test calls an
     });
     assert.equal(enable.status, 0, enable.stderr);
     child = spawn(process.execPath, ["test/support/start-synthetic-voice-runner.ts"], {
-      cwd: new URL("../../", import.meta.url), env, stdio: ["ignore", "pipe", "pipe"] });
+      cwd: new URL("../../", import.meta.url), env, stdio: ["ignore", "pipe", "pipe", "ipc"] });
+    child.on("message", message => {
+      if (typeof message === "object" && message !== null && "kind" in message &&
+          message.kind === "clinikoMethod" && "method" in message && typeof message.method === "string") {
+        clinikoMethods.push(message.method);
+      }
+    });
     assert.equal((await healthy(port)).status, 200);
     assert.equal((await fetch(`http://127.0.0.1:${port}/readyz`)).status, 503);
 
@@ -170,6 +179,33 @@ test("E2E-172 isolated voice runner admits only signed allowlisted test calls an
     const rejected = await webhook("+6145550102", callSid);
     assert.equal(rejected.status, 503);
     assert.doesNotMatch(await rejected.text(), /<Stream>/);
+    const unapproved = await webhook(callerNumber, callSid);
+    assert.equal(unapproved.status, 503);
+    assert.doesNotMatch(await unapproved.text(), /<Stream>/);
+    assert.deepEqual(clinikoMethods, []);
+    const approvalDb = connectPostgres(target.toString());
+    try {
+      await seedSyntheticCatalogueApproval(approvalDb, { scope, accountRef: accountSid,
+        dialedNumber: number, routeVersion: "test-v1", apiKey: "synthetic-key-au5" });
+      const store = new PostgresClinikoApprovalStore(approvalDb);
+      const saved = await store.read(scope);
+      assert.ok(saved.ok && saved.value.approval);
+      assert.ok((await store.change(scope, 1, { ...saved.value.approval,
+        selection: { ...saved.value.approval.selection, businessId: "999" } }, "synthetic-admin")).ok);
+    }
+    finally { await approvalDb.destroy(); }
+    const wrongSelection = await webhook(callerNumber, `CA${"8".repeat(32)}`);
+    assert.equal(wrongSelection.status, 503);
+    assert.doesNotMatch(await wrongSelection.text(), /<Stream>/);
+    assert.deepEqual(clinikoMethods, []);
+    const correctedDb = connectPostgres(target.toString());
+    try {
+      const store = new PostgresClinikoApprovalStore(correctedDb);
+      const saved = await store.read(scope);
+      assert.ok(saved.ok && saved.value.approval);
+      assert.ok((await store.change(scope, 2, { ...saved.value.approval,
+        selection: { ...saved.value.approval.selection, businessId: "11" } }, "synthetic-admin")).ok);
+    } finally { await correctedDb.destroy(); }
     const accepted = await webhook(callerNumber, callSid);
     assert.equal(accepted.status, 200);
     const xml = await accepted.text();
@@ -227,6 +263,14 @@ test("E2E-172 isolated voice runner admits only signed allowlisted test calls an
     caller.send(JSON.stringify({ event: "mark", sequenceNumber: "7", streamSid,
       mark: { name: (received[4]!.mark as { name: string }).name } }));
     assert.equal(caller.readyState, WebSocket.OPEN);
+    const revocationDb = connectPostgres(target.toString());
+    try {
+      const store = new PostgresClinikoApprovalStore(revocationDb);
+      assert.ok((await store.change(scope, 3, null, "synthetic-admin")).ok);
+    } finally { await revocationDb.destroy(); }
+    const revoked = await webhook(callerNumber, `CA${"9".repeat(32)}`);
+    assert.equal(revoked.status, 503);
+    assert.doesNotMatch(await revoked.text(), /<Stream>/);
     const closed = once(caller, "close");
     child.kill("SIGTERM");
     const [code] = await once(child, "exit");

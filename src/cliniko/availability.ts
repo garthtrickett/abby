@@ -114,6 +114,14 @@ export class ClinikoAvailabilityReader {
     return sameScope(this.scope, scope);
   }
 
+  matchesSelection(scope: LocationScope, selected: Readonly<{
+    businessId: string; practitionerId: string; appointmentTypeId: string; credentialFingerprint: string;
+  }>): boolean {
+    return !!selected && sameScope(this.scope, scope) && selected.businessId === this.businessId &&
+      selected.practitionerId === this.practitionerId && selected.appointmentTypeId === this.appointmentTypeId &&
+      selected.credentialFingerprint === this.credentialHash;
+  }
+
   /** Let a standalone composition verify the exact budget used before opening a listener. */
   usesBudget(budget: ClinikoRequestBudget): boolean {
     return this.rateBudget === budget;

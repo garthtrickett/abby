@@ -191,6 +191,40 @@ export class ClinikoCatalogueSetup {
     catch { return err({ kind: "storageFailure" }); }
   }
 
+  /** Number ingress: prove the approved configuration without suppressing a truthful unavailable-times response. */
+  async readApprovedRoute(scope: LocationScope, route: ClinikoSetupRoute):
+    Promise<Result<ClinikoSelectionApproval, ClinikoSetupFailure>> {
+    if (!this.reader.matchesScope(scope) || !validRoute(route)) return err({ kind: "scopeMismatch" });
+    let first: Result<ClinikoApprovalState, ClinikoSetupFailure>;
+    try { first = await this.store.read(scope); }
+    catch { return err({ kind: "storageFailure" }); }
+    if (!first.ok) return first;
+    if (!isClinikoApprovalState(first.value)) return err({ kind: "storageFailure" });
+    const approval = first.value.approval;
+    if (!approval) return err({ kind: "notApproved" });
+    if (!sameScope(scope, approval.scope) || route.accountRef !== approval.route.accountRef ||
+        route.dialedNumber !== approval.route.dialedNumber || route.routeVersion !== approval.route.routeVersion ||
+        approval.credentialFingerprint !== this.reader.credentialFingerprint()) return err({ kind: "staleApproval" });
+    try {
+      const identified = await this.routing.identifyCall(route.accountRef, route.dialedNumber);
+      if (!identified.ok || identified.value.accountRef !== route.accountRef ||
+          identified.value.dialedNumber !== route.dialedNumber || identified.value.routeVersion !== route.routeVersion ||
+          identified.value.tenantId !== scope.tenantId || identified.value.clinicId !== scope.clinicId ||
+          identified.value.candidateLocationIds.length !== 1 ||
+          identified.value.candidateLocationIds[0] !== scope.locationId) return err({ kind: "routeChanged" });
+      const policy = await this.policy.read(scope);
+      if (!policy.ok || !validScope(policy.value.scope) || !sameScope(policy.value.scope, scope) ||
+          policy.value.policyVersion !== approval.selection.policyVersion) return err({ kind: "policyChanged" });
+    } catch { return err({ kind: "catalogueUnavailable" }); }
+    let current: Result<ClinikoApprovalState, ClinikoSetupFailure>;
+    try { current = await this.store.read(scope); }
+    catch { return err({ kind: "storageFailure" }); }
+    if (!current.ok) return current;
+    if (!isClinikoApprovalState(current.value) || current.value.version !== first.value.version ||
+        !current.value.approval) return err({ kind: "staleApproval" });
+    return ok(structuredClone(approval));
+  }
+
   /** Reproves the route, policy and provider selection before using an approval for a call. */
   async resolveForCall(scope: LocationScope, route: ClinikoSetupRoute):
     Promise<Result<ClinikoSelectionApproval, ClinikoSetupFailure>> {

@@ -33,6 +33,7 @@ type TranscriptionSource =
 export type TransientVoiceConfig = Readonly<{
   db: Kysely<Database>;
   routingHost: ClinicNumberRoutingHost;
+  expectedPolicyVersion?: string;
   stream: AuthenticatedTwilioStream;
   send: (json: string) => "queued" | "notSent" | "uncertain";
   synthesis: SpeechSynthesisPort;
@@ -77,6 +78,8 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
   let greeting: ApprovedGreeting | undefined;
   const router = new ClinicPolicyRouter(config.routingHost, { read: async scope => {
     const loaded = await policy.read(scope);
+    if (loaded.ok && config.expectedPolicyVersion !== undefined &&
+        loaded.value.policyVersion !== config.expectedPolicyVersion) return err({ kind: "versionConflict" });
     if (loaded.ok) greeting = loaded.value.greeting;
     return loaded;
   } });

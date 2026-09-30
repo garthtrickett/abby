@@ -12,6 +12,7 @@ import { connectPostgres } from "../src/storage/connect.ts";
 import { migrate } from "../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../src/storage/patient-data-canary-scan.ts";
 import { scanDisposableBackupCanaries } from "../test/storage/backup-canary-scan.ts";
+import { seedSyntheticCatalogueApproval } from "../test/support/seed-synthetic-catalogue-approval.ts";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const number = "+6125550199";
@@ -183,6 +184,12 @@ async function main() {
     const enable = spawnSync(process.execPath, ["scripts/set-voice-test-automation.ts", "enable"],
       { cwd: root, env, encoding: "utf8", timeout: 15_000 });
     assert.equal(enable.status, 0, "synthetic test policy could not be enabled");
+    const approvalDb = connectPostgres(target.toString());
+    try { await seedSyntheticCatalogueApproval(approvalDb, {
+      scope: { tenantId: "public-probe", clinicId: "synthetic-clinic", locationId: "synthetic-location" },
+      accountRef: accountSid, dialedNumber: number, routeVersion: "public-probe-v1",
+      apiKey: "synthetic-key-au5" }); }
+    finally { await approvalDb.destroy(); }
     runner = spawn(process.execPath, ["test/support/start-synthetic-voice-runner.ts"],
       { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
     runner.stdout.resume();
