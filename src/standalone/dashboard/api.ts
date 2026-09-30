@@ -2,7 +2,11 @@ import { CALL_TERMINAL_REASONS, err, ok } from "../../core/model.ts";
 import type { CallPolicy, Result, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import type { AutomationSettingAuditPage, BookingSettingAuditPage } from "../../core/host.ts";
 import type { CallSummary } from "../../reference/call-review.ts";
-import type { CapabilityDescriptor, GatewayFailure } from "../../reference/command-gateway.ts";
+import type { CapabilityDescriptor, GatewayCommand, GatewayFailure, GatewayReply } from "../../reference/command-gateway.ts";
+import { capabilityDescriptor } from "../../reference/capability-catalogue.ts";
+import { matchesSchema } from "../../reference/schema-shapes.ts";
+import type { ClinicAvailabilityApprovalState, ClinicAvailabilityBusinessCatalogue,
+  ClinicAvailabilityRoute, ClinicAvailabilitySelection, ClinicAvailabilitySelectionSnapshot } from "../../reference/clinic-availability-setup.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
 import type { WriteStopAuditPage, WriteStopStatus } from "../../core/write-stop.ts";
@@ -28,6 +32,12 @@ export type DashboardPort = Readonly<{
   callOutcomes(afterCallId?: string): Promise<Result<CallOutcomePage, DashboardFailure>>;
   staffQueue(afterTaskKey?: string): Promise<Result<StaffQueuePage, DashboardFailure>>;
   changeStaff(item: StaffQueueEntry, change: StaffChangeRequest): Promise<Result<void, DashboardFailure>>;
+  availabilityBusinesses(): Promise<Result<ClinicAvailabilityBusinessCatalogue, DashboardFailure>>;
+  availabilityInspect(selection: ClinicAvailabilitySelection): Promise<Result<ClinicAvailabilitySelectionSnapshot, DashboardFailure>>;
+  availabilityApproval(): Promise<Result<ClinicAvailabilityApprovalState, DashboardFailure>>;
+  approveAvailability(route: ClinicAvailabilityRoute, selection: ClinicAvailabilitySelection, expectedVersion: number):
+    Promise<Result<ClinicAvailabilityApprovalState, DashboardFailure>>;
+  revokeAvailability(expectedVersion: number): Promise<Result<ClinicAvailabilityApprovalState, DashboardFailure>>;
 }>;
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -67,6 +77,17 @@ async function request(path: string, init?: RequestInit): Promise<Result<unknown
   }
 }
 
+type AvailabilityCommand = Extract<GatewayCommand, { kind: `clinic.availability.${string}` }>;
+async function availabilityCommand<K extends GatewayReply["kind"]>(command: AvailabilityCommand, replyKind: K):
+  Promise<Result<Extract<GatewayReply, { kind: K }>, DashboardFailure>> {
+  const result = await request("/api/clinic-availability/command", { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(command) });
+  if (!result.ok) return result;
+  if (!matchesSchema(capabilityDescriptor(command.kind).resultSchema, { ok: true, value: result.value }) ||
+      record(result.value)?.kind !== replyKind) return err({ kind: "malformed" });
+  return ok(result.value as Extract<GatewayReply, { kind: K }>);
+}
+
 function policy(value: unknown): Result<CallPolicy, DashboardFailure> {
   const reply = record(value);
   const current = record(reply?.policy);
@@ -92,6 +113,34 @@ function writeStop(value: unknown): Result<WriteStopStatus, DashboardFailure> {
 }
 
 export class FetchDashboardPort implements DashboardPort {
+  async availabilityBusinesses(): Promise<Result<ClinicAvailabilityBusinessCatalogue, DashboardFailure>> {
+    const result = await availabilityCommand({ kind: "clinic.availability.businesses.list.v1" }, "clinicAvailabilityBusinesses");
+    return result.ok ? ok(result.value.catalogue) : result;
+  }
+
+  async availabilityInspect(selection: ClinicAvailabilitySelection): Promise<Result<ClinicAvailabilitySelectionSnapshot, DashboardFailure>> {
+    const result = await availabilityCommand({ kind: "clinic.availability.selection.inspect.v1", selection }, "clinicAvailabilitySelection");
+    return result.ok ? ok(result.value.snapshot) : result;
+  }
+
+  async availabilityApproval(): Promise<Result<ClinicAvailabilityApprovalState, DashboardFailure>> {
+    const result = await availabilityCommand({ kind: "clinic.availability.approval.read.v1" }, "clinicAvailabilityApprovalState");
+    return result.ok ? ok(result.value.state) : result;
+  }
+
+  async approveAvailability(route: ClinicAvailabilityRoute, selection: ClinicAvailabilitySelection, expectedVersion: number):
+    Promise<Result<ClinicAvailabilityApprovalState, DashboardFailure>> {
+    const result = await availabilityCommand({ kind: "clinic.availability.approval.change.v1", route, selection, expectedVersion },
+      "clinicAvailabilityApprovalState");
+    return result.ok ? ok(result.value.state) : result;
+  }
+
+  async revokeAvailability(expectedVersion: number): Promise<Result<ClinicAvailabilityApprovalState, DashboardFailure>> {
+    const result = await availabilityCommand({ kind: "clinic.availability.approval.revoke.v1", expectedVersion },
+      "clinicAvailabilityApprovalState");
+    return result.ok ? ok(result.value.state) : result;
+  }
+
   async knowledge(): Promise<Result<readonly KnowledgeEntry[], DashboardFailure>> {
     const result = await request("/api/knowledge");
     if (!result.ok) return result;

@@ -19,11 +19,11 @@
     "knowledge.draft.save.v1": ["E2E-004", "E2E-059"],
     "knowledge.approve.v1": ["E2E-004"],
     "knowledge.revoke.v1": ["E2E-059"],
-    "clinic.availability.businesses.list.v1": ["E2E-194"],
-    "clinic.availability.selection.inspect.v1": ["E2E-194"],
-    "clinic.availability.approval.read.v1": ["E2E-194"],
-    "clinic.availability.approval.change.v1": ["E2E-194"],
-    "clinic.availability.approval.revoke.v1": ["E2E-194"],
+    "clinic.availability.businesses.list.v1": ["E2E-194", "E2E-195"],
+    "clinic.availability.selection.inspect.v1": ["E2E-194", "E2E-195"],
+    "clinic.availability.approval.read.v1": ["E2E-194", "E2E-195"],
+    "clinic.availability.approval.change.v1": ["E2E-194", "E2E-195"],
+    "clinic.availability.approval.revoke.v1": ["E2E-194", "E2E-195"],
     "availability.read.v2": ["E2E-125"],
     "appointments.read.v1": ["E2E-003", "E2E-117"],
     "calls.read.v1": ["E2E-010", "E2E-014"],
@@ -35,7 +35,7 @@
     "appointments.booking.enabled": ["E2E-010"],
     "automation.enabled": ["E2E-018"],
     "calls.writes.stop": ["E2E-074"],
-    "clinic.availability.approval": ["E2E-194"]
+    "clinic.availability.approval": ["E2E-194", "E2E-195"]
   },
   "scenarios": [
     {"id": "E2E-001", "requirements": ["FR-01", "FR-20"], "fixtureFamily": "routing", "fixtureState": "planned", "intendedCompositions": ["standalone", "embedded"], "earliestPhase": 1, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}},
@@ -231,6 +231,7 @@
     {"id": "E2E-191", "requirements": ["FR-01", "FR-05", "FR-11", "FR-20"], "fixtureFamily": "catalogue-selection", "fixtureState": "textImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 1, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/cliniko/catalogue-setup.test.ts"]}, "observableAssertions": {"caller": "an incomplete provider relationship list never makes a clinic route newly eligible for caller availability", "fault": "short first pages fail before admin approval and fail the provider recheck of a previously approved route", "privacy": "no patient field or API key enters the approval record or failed result"}},
     {"id": "E2E-192", "requirements": ["FR-05", "FR-14", "FR-22"], "fixtureFamily": "availability", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone", "embedded"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/portability/shared-voice-availability.test.ts"]}, "observableAssertions": {"caller": "the two 2:30 am Sydney choices speak distinct daylight and standard time names without a booked claim", "fault": "a real Cliniko availability response is still provisional and grants no exclusive slot", "privacy": "signed standalone call and embedded host write no appointment; standalone database and backup contain no caller or slot canary"}},
     {"id": "E2E-193", "requirements": ["FR-01", "FR-05", "FR-14", "FR-22"], "fixtureFamily": "availability", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/standalone-voice-failures.test.ts"]}, "observableAssertions": {"caller": "signed keypad call speaks only the generic direct-contact fallback after business appointment type removal", "fault": "the adapter stops after one business GET with no available-time read or appointment write", "privacy": "caller, call and appointment canaries remain absent from isolated database, backup and runner output"}},
-    {"id": "E2E-194", "requirements": ["FR-01", "FR-17"], "fixtureFamily": "catalogue-selection", "fixtureState": "textImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/cliniko/catalogue-command-gateway.test.ts"]}, "observableAssertions": {"caller": "clinic admin can discover, inspect, approve, read and revoke one read-only availability selection", "fault": "invalid input, foreign scope, stale version, denied credential and rate limit cannot create an approval", "privacy": "the resulting approval contains clinic configuration only and omits provider secret and patient canary"}}
+    {"id": "E2E-194", "requirements": ["FR-01", "FR-17"], "fixtureFamily": "catalogue-selection", "fixtureState": "textImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/cliniko/catalogue-command-gateway.test.ts"]}, "observableAssertions": {"caller": "clinic admin can discover, inspect, approve, read and revoke one read-only availability selection", "fault": "invalid input, foreign scope, stale version, denied credential and rate limit cannot create an approval", "privacy": "the resulting approval contains clinic configuration only and omits provider secret and patient canary"}},
+    {"id": "E2E-195", "requirements": ["FR-01", "FR-17"], "fixtureFamily": "catalogue-selection", "fixtureState": "textImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/browser/availability-setup.spec.ts"]}, "observableAssertions": {"caller": "clinic admin sees the unapproved default, inspects one candidate, explicitly approves it, reloads and revokes it", "fault": "staff and foreign origins are denied; stale versions conflict; lost approval receipts reload the committed state", "privacy": "browser and stored approval reveal no provider secret or patient canary and grant no patient action"}}
   ]
 }

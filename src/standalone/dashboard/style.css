@@ -31,6 +31,10 @@ button {
 }
 button:disabled { opacity: .5; cursor: default; }
 input { border: 1px solid #98a7bd; border-radius: 8px; padding: 10px; font: inherit; min-width: 0; }
+select { border: 1px solid #98a7bd; border-radius: 8px; padding: 10px; font: inherit; max-width: 100%; }
+.card > label { display: block; margin: 12px 0; }
+.card > label > input:not([type="checkbox"]), .card > label > select { display: block; margin-top: 4px; }
+.confirmation { display: flex !important; align-items: center; gap: 8px; }
 .lookup { display: flex; gap: 8px; flex-wrap: wrap; }
 .status { font-weight: 600; }
 .error { color: #9b1c1c; }

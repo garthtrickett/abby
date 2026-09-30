@@ -4,7 +4,12 @@ import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import type { CommandGateway, GatewayCommand } from "../../reference/command-gateway.ts";
 
 const maxCommandBytes = 10_000;
-const document = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body><main id="app"></main><script type="module" src="/app.js"></script></body></html>`;
+const document = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body><main><div id="app"></div><div id="availability-setup"></div></main><script type="module" src="/app.js"></script></body></html>`;
+const setupCommands = new Set([
+  "clinic.availability.businesses.list.v1", "clinic.availability.selection.inspect.v1",
+  "clinic.availability.approval.read.v1", "clinic.availability.approval.change.v1",
+  "clinic.availability.approval.revoke.v1",
+]);
 
 function json(response: ServerResponse, status: number, value: unknown): void {
   response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
@@ -51,6 +56,22 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       return json(response, 200, { ok: true, value: gateway.listPermitted().filter(item => item.id !== "booking.propose.v2") });
     }
     let command: GatewayCommand | undefined;
+    if (request.method === "POST" && url.pathname === "/api/clinic-availability/command") {
+      const address = response.socket?.localAddress;
+      const port = response.socket?.localPort;
+      if (address !== "127.0.0.1" || request.headers.host !== `127.0.0.1:${port}` ||
+          request.headers.origin !== `http://127.0.0.1:${port}`) {
+        return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+      }
+      if (!request.headers["content-type"]?.startsWith("application/json")) {
+        return json(response, 415, { ok: false, error: { kind: "invalid" } });
+      }
+      const input = record(await body(request));
+      if (!input || typeof input.kind !== "string" || !setupCommands.has(input.kind)) {
+        return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      }
+      command = input as GatewayCommand;
+    }
     if (request.method === "GET" && url.pathname === "/api/knowledge") command = { kind: "knowledge.list.v1" };
     if (request.method === "GET" && url.pathname === "/api/settings") command = { kind: "settings.read.v1" };
     if (request.method === "GET" && url.pathname === "/api/writes/stop") {
