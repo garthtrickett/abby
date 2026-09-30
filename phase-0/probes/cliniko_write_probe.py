@@ -4,6 +4,7 @@
 import base64
 import getpass
 import json
+import os
 import re
 import subprocess
 import sys
@@ -35,14 +36,17 @@ def exact_patient(base: str, headers: dict[str, str], reference_id: str) -> tupl
 
 
 def main() -> int:
-    if not sys.stdin.isatty():
-        print("Run in a terminal so the API key is hidden.", file=sys.stderr)
+    env_mode = os.environ.get("ABBY_LIVE_CLINIKO_EVAL") == "1"
+    if not env_mode and not sys.stdin.isatty():
+        print("Run in a terminal so the API key is hidden, or use the opt-in owner-only environment.", file=sys.stderr)
         return 2
-    contact = input("Cliniko API contact email: ").strip()
+    contact = (os.environ.get("ABBY_CLINIKO_CONTACT_EMAIL", "") if env_mode
+               else input("Cliniko API contact email: ")).strip()
     if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", contact):
         print("Invalid contact email.", file=sys.stderr)
         return 2
-    key = getpass.getpass("Cliniko API key (hidden): ").strip()
+    key = (os.environ.get("ABBY_CLINIKO_API_KEY", "") if env_mode
+           else getpass.getpass("Cliniko API key (hidden): ")).strip()
     shard = key.rpartition("-")[2]
     if not re.fullmatch(r"[a-z]{2}[0-9]+", shard):
         print("Invalid key shard suffix.", file=sys.stderr)
@@ -55,7 +59,8 @@ def main() -> int:
         "User-Agent": f"Abby Phase 0 ({contact})",
     }
     reference_id = uuid.uuid4().hex
-    marker = "Abby synthetic probe " + reference_id
+    marker_token = str(uuid.uuid4())
+    marker = "Abby booking " + marker_token
     business_path = None
     original_flag = None
     changed_business = False
@@ -118,27 +123,41 @@ def main() -> int:
         patient_id = str(patient["id"])
         print(json.dumps({"step": "create_synthetic_patient", "http_status": status}))
 
-        appointment_body = {
-            "business_id": business_id, "practitioner_id": practitioner_id,
-            "appointment_type_id": offer_type, "patient_id": patient_id,
-            "starts_at": starts_at, "notes": marker,
+        writer_input = {
+            "apiKey": key, "contactEmail": contact, "businessId": business_id,
+            "practitionerId": practitioner_id, "appointmentTypeId": offer_type,
+            "patientId": patient_id, "startsAt": starts_at, "markerToken": marker_token,
         }
-        status, appointment = request(base, headers, "POST", "/individual_appointments", appointment_body)
-        if status != 201 or not appointment.get("id"):
-            raise ProbeError(f"create_appointment_{status}")
-        appointment_id = str(appointment["id"])
-        print(json.dumps({"step": "create_appointment", "http_status": status}))
+        repo_root = Path(__file__).resolve().parents[2]
+        try:
+            writer = subprocess.run(
+                ["node", str(Path(__file__).with_name("cliniko_booking_writer_probe.ts"))],
+                input=json.dumps(writer_input), text=True, capture_output=True,
+                cwd=repo_root, timeout=60, check=False,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            raise ProbeError("booking_writer_unavailable") from None
+        try:
+            writer_result = json.loads(writer.stdout)
+        except ValueError:
+            raise ProbeError("booking_writer_output_invalid") from None
+        print(json.dumps({"step": "typescript_booking_writer", "write_kind": writer_result.get("writeKind"),
+                          "observation_kind": writer_result.get("observationKind"),
+                          "exact_synthetic_appointment": writer_result.get("exact") is True}))
+        if writer.returncode != 0 or writer_result.get("ok") is not True:
+            raise ProbeError("booking_writer_read_mismatch")
 
         reconciled_id, count = exact_appointment(base, headers, patient_id, marker)
-        print(json.dumps({"step": "reconcile_without_post_response", "exact_matches": count, "same_appointment": reconciled_id == appointment_id}))
-        if reconciled_id != appointment_id:
+        appointment_id = reconciled_id
+        print(json.dumps({"step": "reconcile_without_post_response", "exact_matches": count,
+                          "same_appointment": reconciled_id is not None}))
+        if reconciled_id is None or count != 1:
             raise ProbeError("exact_reconciliation_unproven")
 
         adapter_input = {
             "apiKey": key, "contactEmail": contact, "businessId": business_id,
             "patientId": patient_id, "appointmentId": appointment_id,
         }
-        repo_root = Path(__file__).resolve().parents[2]
         try:
             adapter = subprocess.run(
                 ["node", str(Path(__file__).with_name("cliniko_appointment_adapter_probe.ts"))],
