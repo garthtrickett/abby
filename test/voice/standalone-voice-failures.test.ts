@@ -14,7 +14,9 @@ import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-s
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 
 type Fault = "openai-speech" | "openai-transcription" | "cliniko-rate-limit" | "cliniko-timeout" | "cliniko-partial-page" |
-  "cliniko-business-type-removed" | "week-alternative" | undefined;
+  "cliniko-business-type-removed" | "week-alternative" | "practitioner-alternative" |
+  "practitioner-alternative-rate-limit" | "practitioner-alternative-malformed" |
+  "practitioner-alternative-second" | undefined;
 const fallbackScenarios = [
   { fault: "cliniko-rate-limit", id: "E2E-174" },
   { fault: "cliniko-timeout", id: "E2E-175" },
@@ -64,7 +66,9 @@ type Fixture = { port: number; child: ReturnType<typeof spawn>;
   speech: string[]; clinikoMethods: string[]; clinikoPaths: string[]; clinikoQueries: string[];
   openCall: () => Promise<Call> };
 
-async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void>, weekApproved = false): Promise<void> {
+async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void>,
+                           weekApproved = false, alternativeApproved = false,
+                           secondAlternativeApproved = false): Promise<void> {
   const adminUrl = process.env.DATABASE_URL;
   assert.ok(adminUrl);
   const admin = connectPostgres(adminUrl);
@@ -108,7 +112,11 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
       await migrate(db);
       await seedSyntheticCatalogueApproval(db, { scope: { tenantId: "fault-test", clinicId: "clinic", locationId: "main" },
         accountRef: accountSid, dialedNumber: number, routeVersion: "fault-test-v1",
-        apiKey: "synthetic-key-au5" });
+        apiKey: "synthetic-key-au5",
+        ...(alternativeApproved ? { alternatives: [
+          { practitionerId: "44", appointmentTypeId: "55" },
+          ...(secondAlternativeApproved ? [{ practitionerId: "66", appointmentTypeId: "77" }] : []),
+        ] } : {}) });
     } finally { await db.destroy(); }
     const enabled = spawnSync(process.execPath, ["scripts/set-voice-test-automation.ts", "enable"],
       { cwd: root, env, encoding: "utf8", timeout: 15_000 });
@@ -289,6 +297,72 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
         await closeCaller(call);
       }, true)),
+    t.test("E2E-200 unapproved practitioner and type are never searched", async () =>
+      withFixture("practitioner-alternative", async fixture => {
+        const call = await fixture.openCall();
+        await markGreeting(call);
+        call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
+          dtmf: { track: "inbound_track", digit: "2" } }));
+        await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "default availability response");
+        assert.match(fixture.speech[1]!, /couldn't find a possible appointment time/);
+        assert.equal(fixture.clinikoPaths.some(path => path.includes("/44") || path.includes("/55")), false);
+        assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
+        await closeCaller(call);
+      })),
+    t.test("E2E-200 approved alternative is named and provisional in a signed call", async () =>
+      withFixture("practitioner-alternative", async fixture => {
+        const call = await fixture.openCall();
+        await markGreeting(call);
+        call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
+          dtmf: { track: "inbound_track", digit: "2" } }));
+        await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "approved alternative response");
+        assert.match(fixture.speech[1]!, /For Follow up with Dr Alternative, the clinic's schedule currently shows possible times/);
+        assert.match(fixture.speech[1]!, /These may change. I can't reserve or confirm/);
+        assert.deepEqual(fixture.clinikoPaths.filter(path => path.endsWith("/available_times"))
+          .map(path => path.includes("/practitioners/44/") ? "alternative" : "primary"),
+        ["primary", "alternative"]);
+        assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
+        await closeCaller(call);
+      }, false, true)),
+    t.test("E2E-200 the second ordered alternative is searched only after the first is empty", async () =>
+      withFixture("practitioner-alternative-second", async fixture => {
+        const call = await fixture.openCall();
+        await markGreeting(call);
+        call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
+          dtmf: { track: "inbound_track", digit: "2" } }));
+        await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "second alternative response");
+        assert.match(fixture.speech[1]!, /For Review with Dr Third, the clinic's schedule currently shows possible times/);
+        assert.match(fixture.speech[1]!, /can't reserve or confirm/);
+        assert.deepEqual(fixture.clinikoPaths.filter(path => path.endsWith("/available_times"))
+          .map(path => path.includes("/practitioners/66/") ? "second" :
+            path.includes("/practitioners/44/") ? "first" : "primary"),
+        ["primary", "first", "second"]);
+        await closeCaller(call);
+      }, false, true, true)),
+    t.test("E2E-200 alternative rate limit gives only the direct-contact fallback", async () =>
+      withFixture("practitioner-alternative-rate-limit", async fixture => {
+        const call = await fixture.openCall();
+        await markGreeting(call);
+        call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
+          dtmf: { track: "inbound_track", digit: "2" } }));
+        await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "alternative failure response");
+        assert.equal(fixture.speech[1], noStaffNotice);
+        assert.ok(!fixture.speech.some(text => text.includes("Dr Alternative") || text.includes("Follow up")));
+        assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 2);
+        await closeCaller(call);
+      }, false, true)),
+    t.test("E2E-200 malformed alternative name cannot be spoken", async () =>
+      withFixture("practitioner-alternative-malformed", async fixture => {
+        const call = await fixture.openCall();
+        await markGreeting(call);
+        call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
+          dtmf: { track: "inbound_track", digit: "2" } }));
+        await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "malformed alternative response");
+        assert.equal(fixture.speech[1], noStaffNotice);
+        assert.ok(!fixture.speech.some(text => text.includes("Dr Alternative") || text.includes("Follow up")));
+        assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
+        await closeCaller(call);
+      }, false, true)),
     t.test("E2E-176 database loss closes active stream and health fails", async () => withFixture(undefined, async fixture => {
       const call = await fixture.openCall();
       await markGreeting(call);

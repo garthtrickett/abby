@@ -108,7 +108,9 @@ const clinicAvailabilitySelectionSnapshot = object({ scope, selection: clinicAva
   appointmentTypeName: str, timeZone: nullable(str), status: choice("candidate", "unavailable"),
   reasons: array(str), patientActionMode: { const: "unavailable" }, patientRequestMode: { const: "unavailable" } });
 const clinicAvailabilityApproval = object({ scope, route: clinicAvailabilityRoute,
-  selection: clinicAvailabilitySelection, credentialFingerprint: key, catalogueObservedAt: str,
+  selection: clinicAvailabilitySelection,
+  alternatives: { type: "array", items: clinicAvailabilitySelection, maxItems: 2, uniqueItems: true },
+  credentialFingerprint: key, catalogueObservedAt: str,
   approvedBy: key, approvedAt: str, patientActionMode: { const: "unavailable" },
   patientRequestMode: { const: "unavailable" } });
 const clinicAvailabilityApprovalState = object({ version: uint, approval: nullable(clinicAvailabilityApproval) });
@@ -208,6 +210,13 @@ export const capabilityCatalogue = {
   "clinic.availability.approval.change.v1": entry("clinic.availability.approval.change.v1",
     object({ kind: { const: "clinic.availability.approval.change.v1" }, route: clinicAvailabilityRoute,
       selection: clinicAvailabilitySelection, expectedVersion: uint }),
+    reply("clinicAvailabilityApprovalState", "state", clinicAvailabilityApprovalState),
+    "policyChange", "clinicAdmin", "none", ["availabilitySetupAvailable", "expectedAvailabilityApprovalVersion"]),
+  "clinic.availability.approval.change.v2": entry("clinic.availability.approval.change.v2",
+    object({ kind: { const: "clinic.availability.approval.change.v2" }, route: clinicAvailabilityRoute,
+      selection: clinicAvailabilitySelection,
+      alternatives: { type: "array", items: clinicAvailabilitySelection, maxItems: 2, uniqueItems: true },
+      expectedVersion: uint }),
     reply("clinicAvailabilityApprovalState", "state", clinicAvailabilityApprovalState),
     "policyChange", "clinicAdmin", "none", ["availabilitySetupAvailable", "expectedAvailabilityApprovalVersion"]),
   "clinic.availability.approval.revoke.v1": entry("clinic.availability.approval.revoke.v1",

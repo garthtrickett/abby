@@ -50,6 +50,14 @@ export default interface ClinikoCatalogueApprovalsTable {
   changed_by: ColumnType<string, string, string>;
 
   changed_at: ColumnType<Date, Date | string | undefined, Date | string>;
+
+  alternative_1_practitioner_id: ColumnType<string | null, string | null, string | null>;
+
+  alternative_1_appointment_type_id: ColumnType<string | null, string | null, string | null>;
+
+  alternative_2_practitioner_id: ColumnType<string | null, string | null, string | null>;
+
+  alternative_2_appointment_type_id: ColumnType<string | null, string | null, string | null>;
 }
 
 export type ClinikoCatalogueApprovals = Selectable<ClinikoCatalogueApprovalsTable>;

@@ -4,7 +4,8 @@ import type { ClinicAvailabilityApprovalState, ClinicAvailabilityBusinessCatalog
   ClinicAvailabilityRoute, ClinicAvailabilitySelection, ClinicAvailabilitySelectionSnapshot } from "../../reference/clinic-availability-setup.ts";
 
 type SetupPort = Pick<DashboardPort, "capabilities" | "settings" | "availabilityBusinesses" |
-  "availabilityInspect" | "availabilityApproval" | "approveAvailability" | "revokeAvailability">;
+  "availabilityInspect" | "availabilityApproval" | "approveAvailability" |
+  "approveAvailabilityAlternatives" | "revokeAvailability">;
 type Field = keyof ClinicAvailabilityRoute | keyof ClinicAvailabilitySelection;
 
 function failureMessage(failure: DashboardFailure): string {
@@ -36,6 +37,10 @@ export class AvailabilitySetupPanel {
   private snapshot: ClinicAvailabilitySelectionSnapshot | undefined;
   private route: ClinicAvailabilityRoute = { accountRef: "", dialedNumber: "", routeVersion: "" };
   private selection: ClinicAvailabilitySelection = { businessId: "", practitionerId: "", appointmentTypeId: "", policyVersion: "" };
+  private alternativeIds: { practitionerId: string; appointmentTypeId: string }[] = [
+    { practitionerId: "", appointmentTypeId: "" }, { practitionerId: "", appointmentTypeId: "" },
+  ];
+  private alternativeSnapshots: readonly ClinicAvailabilitySelectionSnapshot[] = [];
   private confirmed = false;
   private notice: string | undefined;
   private error: string | undefined;
@@ -61,6 +66,10 @@ export class AvailabilitySetupPanel {
       if (approval.value.approval) {
         this.route = { ...approval.value.approval.route };
         this.selection = { ...approval.value.approval.selection };
+        this.alternativeIds = [0, 1].map(index => ({
+          practitionerId: approval.value.approval?.alternatives[index]?.practitionerId ?? "",
+          appointmentTypeId: approval.value.approval?.alternatives[index]?.appointmentTypeId ?? "",
+        }));
       }
     } else this.error = failureMessage(approval.error);
     if (!this.selection.businessId && this.catalogue?.businesses[0]) {
@@ -75,9 +84,57 @@ export class AvailabilitySetupPanel {
     } else {
       this.selection = { ...this.selection, [field]: value };
       this.snapshot = undefined;
+      this.alternativeSnapshots = [];
     }
     this.confirmed = false;
     this.draw();
+  }
+
+  private setAlternative(index: number, field: "practitionerId" | "appointmentTypeId", value: string): void {
+    this.alternativeIds[index] = { ...this.alternativeIds[index]!, [field]: value };
+    this.alternativeSnapshots = [];
+    this.confirmed = false;
+    this.draw();
+  }
+
+  private configuredAlternatives(): readonly ClinicAvailabilitySelection[] | null {
+    if (!this.alternativeIds[0]?.practitionerId && !this.alternativeIds[0]?.appointmentTypeId &&
+        (this.alternativeIds[1]?.practitionerId || this.alternativeIds[1]?.appointmentTypeId)) return null;
+    const configured = this.alternativeIds.filter(ids => ids.practitionerId || ids.appointmentTypeId);
+    if (configured.some(ids => !ids.practitionerId || !ids.appointmentTypeId)) return null;
+    const primaryKey = this.selection.practitionerId + ":" + this.selection.appointmentTypeId;
+    const keys = configured.map(ids => ids.practitionerId + ":" + ids.appointmentTypeId);
+    if (keys.includes(primaryKey) || new Set(keys).size !== keys.length) return null;
+    return configured.map(ids => ({ ...ids, businessId: this.selection.businessId,
+      policyVersion: this.selection.policyVersion }));
+  }
+
+  private alternativesReady(): boolean {
+    const configured = this.configuredAlternatives();
+    return !!configured && (configured.length === 0 ||
+      (this.alternativeSnapshots.length === configured.length &&
+        this.alternativeSnapshots.every((snapshot, index) => snapshot.status === "candidate" &&
+          snapshot.selection.businessId === configured[index]?.businessId &&
+          snapshot.selection.practitionerId === configured[index]?.practitionerId &&
+          snapshot.selection.appointmentTypeId === configured[index]?.appointmentTypeId &&
+          snapshot.selection.policyVersion === configured[index]?.policyVersion)));
+  }
+
+  private async inspectAlternatives(): Promise<void> {
+    if (this.busy || this.snapshot?.status !== "candidate") return;
+    const configured = this.configuredAlternatives();
+    if (!configured || configured.length === 0) return;
+    this.busy = true; this.error = undefined; this.alternativeSnapshots = []; this.draw();
+    const results = await Promise.all(configured.map(choice => this.port.availabilityInspect(choice)));
+    const failed = results.find(result => !result.ok);
+    if (failed && !failed.ok) this.error = failureMessage(failed.error);
+    else {
+      const snapshots = results.flatMap(result => result.ok ? [result.value] : []);
+      if (snapshots.some(snapshot => snapshot.status !== "candidate" ||
+          snapshot.timeZone !== this.snapshot?.timeZone)) this.error = "An alternative is not eligible in the primary clinic time zone.";
+      else this.alternativeSnapshots = snapshots;
+    }
+    this.busy = false; this.draw();
   }
 
   private async inspect(): Promise<void> {
@@ -90,10 +147,14 @@ export class AvailabilitySetupPanel {
   }
 
   private async change(action: "approve" | "revoke"): Promise<void> {
-    if (this.busy || !this.approval || (action === "approve" && (!this.confirmed || this.snapshot?.status !== "candidate"))) return;
+    if (this.busy || !this.approval || (action === "approve" &&
+        (!this.confirmed || this.snapshot?.status !== "candidate" || !this.alternativesReady()))) return;
     this.busy = true; this.error = undefined; this.notice = undefined; this.draw();
+    const alternatives = this.configuredAlternatives();
     const result = action === "approve"
-      ? await this.port.approveAvailability(this.route, this.selection, this.approval.version)
+      ? alternatives?.length
+        ? await this.port.approveAvailabilityAlternatives(this.route, this.selection, alternatives, this.approval.version)
+        : await this.port.approveAvailability(this.route, this.selection, this.approval.version)
       : await this.port.revokeAvailability(this.approval.version);
     if (result.ok) {
       this.approval = result.value;
@@ -115,9 +176,9 @@ export class AvailabilitySetupPanel {
     const approved = this.approval?.approval;
     render(html`<section class="card" aria-labelledby="availability-setup-title">
       <h2 id="availability-setup-title">Read-only availability setup</h2>
-      <p class="muted">Approve one clinic route for provisional times. Booking, patient details and staff requests stay unavailable.</p>
+      <p class="muted">Approve one clinic route and up to two ordered alternatives for provisional times. Booking, patient details and staff requests stay unavailable.</p>
       <p class="status" aria-label="Availability approval status">${approved
-        ? `Stored approval: ${approved.selection.businessId} / ${approved.selection.practitionerId} / ${approved.selection.appointmentTypeId} · version ${this.approval?.version}`
+        ? `Stored approval: ${approved.selection.businessId} / ${approved.selection.practitionerId} / ${approved.selection.appointmentTypeId} · version ${this.approval?.version} · ${approved.alternatives.length} alternatives`
         : `No approved availability route · version ${this.approval?.version ?? "unknown"}`}</p>
       ${approved ? html`<p class="muted">Number ${approved.route.dialedNumber} · route ${approved.route.routeVersion} · approved by ${approved.approvedBy}</p>` : ""}
       <label>Cliniko business <select aria-label="Cliniko business"
@@ -135,6 +196,22 @@ export class AvailabilitySetupPanel {
         <p>${this.snapshot.status === "candidate" ? "Eligible candidate for read-only availability" : `Unavailable: ${this.snapshot.reasons.join(", ")}`}</p>
         <p>Clinic time zone: ${this.snapshot.timeZone ?? "unknown"} · checked ${this.snapshot.observedAt}</p>
       </div>` : ""}
+      <details><summary>Optional approved alternatives</summary>
+        <p class="muted">Abby searches these in order only when the primary choice has no possible time. It names the practitioner and appointment type before an alternative time.</p>
+        ${this.alternativeIds.map((ids, index) => html`<div>
+          <label>Alternative ${index + 1} practitioner ID <input
+            aria-label=${"Alternative " + (index + 1) + " practitioner ID"} .value=${ids.practitionerId}
+            @input=${(event: Event) => this.setAlternative(index, "practitionerId", (event.target as HTMLInputElement).value)}></label>
+          <label>Alternative ${index + 1} appointment type ID <input
+            aria-label=${"Alternative " + (index + 1) + " appointment type ID"} .value=${ids.appointmentTypeId}
+            @input=${(event: Event) => this.setAlternative(index, "appointmentTypeId", (event.target as HTMLInputElement).value)}></label>
+        </div>`)}
+        <button type="button" ?disabled=${this.busy || !this.configuredAlternatives()?.length || this.snapshot?.status !== "candidate"}
+          @click=${() => { void this.inspectAlternatives(); }}>Inspect alternatives</button>
+        ${this.alternativeSnapshots.length ? html`<p aria-label="Alternative inspections">
+          ${this.alternativeSnapshots.map(item => item.practitionerName + " · " + item.appointmentTypeName).join("; ")}
+        </p>` : ""}
+      </details>
       <label>Route account reference <input aria-label="Route account reference" .value=${this.route.accountRef}
         @input=${(event: Event) => this.setField("accountRef", (event.target as HTMLInputElement).value)}></label>
       <label>Dialed number <input aria-label="Dialed number" .value=${this.route.dialedNumber}
@@ -144,7 +221,7 @@ export class AvailabilitySetupPanel {
       <label class="confirmation"><input type="checkbox" .checked=${this.confirmed}
         @change=${(event: Event) => { this.confirmed = (event.target as HTMLInputElement).checked; this.draw(); }}>
         I approve this route for provisional availability only.</label>
-      <div class="lookup"><button type="button" ?disabled=${this.busy || !this.confirmed || this.snapshot?.status !== "candidate" || !this.approval}
+      <div class="lookup"><button type="button" ?disabled=${this.busy || !this.confirmed || this.snapshot?.status !== "candidate" || !this.alternativesReady() || !this.approval}
         @click=${() => { void this.change("approve"); }}>Approve read-only route</button>
         <button type="button" ?disabled=${this.busy || !approved} @click=${() => { void this.change("revoke"); }}>Revoke availability route</button></div>
       ${this.notice ? html`<p role="status">${this.notice}</p>` : ""}

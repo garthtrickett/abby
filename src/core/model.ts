@@ -138,6 +138,8 @@ export type AvailabilitySnapshot = Readonly<{
   observedAt: string;
   startsAt: readonly string[];
   reservable: false;
+  /** Current provider metadata, required when an approved fallback choice supplies a time. */
+  offering?: Readonly<{ practitionerName: string; appointmentTypeName: string }>;
 }>;
 export type AvailabilityRead = AvailabilitySnapshot | Readonly<{ kind: "notEligible"; reason: "business" | "practitioner" | "appointmentType" }>;
 export type AvailabilityReadFailure = Readonly<{

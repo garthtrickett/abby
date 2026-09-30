@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Kysely } from "kysely";
 import { ClinikoAvailabilityReader } from "../cliniko/availability.ts";
+import { ClinikoApprovedAvailabilitySearch } from "../cliniko/approved-availability-search.ts";
 import { MemoryLedger } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
 import type { ApprovedGreeting, LocationScope, Result } from "../core/model.ts";
@@ -39,7 +40,7 @@ export type TransientVoiceConfig = Readonly<{
   synthesis: SpeechSynthesisPort;
   resolveIntent: IntentResolver;
   readiness?: AutomationReadiness;
-  availability?: ClinikoAvailabilityReader;
+  availability?: ClinikoAvailabilityReader | ClinikoApprovedAvailabilitySearch;
   approvedGreeting?: ApprovedGreeting;
   keypadAvailabilityRange?: (digit: string) => Readonly<{ from: string; to: string }> | null | undefined;
   closeTransport?: () => void;
@@ -59,7 +60,8 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
   Promise<Result<TwilioWireCall, StandalonePrivacyPreflightFailure>> {
   const safe = await checkStandaloneTextDatabase(config.db);
   if (!safe.ok) return safe;
-  if (config.availability && !(config.availability instanceof ClinikoAvailabilityReader)) {
+  if (config.availability && !(config.availability instanceof ClinikoAvailabilityReader) &&
+      !(config.availability instanceof ClinikoApprovedAvailabilitySearch)) {
     throw new TypeError("standalone availability requires a Cliniko reader");
   }
   if (config.keypadAvailabilityRange && (!config.availability || !config.approvedGreeting)) {

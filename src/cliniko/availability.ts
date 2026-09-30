@@ -38,6 +38,11 @@ function validDate(value: string): boolean {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
+function spokenName(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 120 &&
+    value.trim() === value && /^[\p{L}\p{M}\p{N} .,'()&/-]+$/u.test(value);
+}
+
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
@@ -152,14 +157,17 @@ export class ClinikoAvailabilityReader {
     return boundedJson(response);
   }
 
-  private async onlineFlag(id: string, path: string, requireActive = false): Promise<Result<boolean, ClinikoAvailabilityFailure>> {
+  private async onlineFlag(id: string, path: string, requireActive = false, nameField?: string):
+    Promise<Result<Readonly<{ eligible: boolean; name?: string }>, ClinikoAvailabilityFailure>> {
     const fetched = await this.get(path);
     if (!fetched.ok) return fetched;
     const body = record(fetched.value);
     if (!body || String(body.id) !== id || typeof body.show_in_online_bookings !== "boolean" ||
         (requireActive && body.active !== true && body.active !== false && body.active !== null)) return err({ kind: "malformed" });
-    if (body.archived_at !== undefined && body.archived_at !== null) return ok(false);
-    return ok(body.show_in_online_bookings && (!requireActive || body.active === true));
+    if (nameField && !spokenName(body[nameField])) return err({ kind: "malformed" });
+    const eligible = (body.archived_at === undefined || body.archived_at === null) &&
+      body.show_in_online_bookings && (!requireActive || body.active === true);
+    return ok({ eligible, ...(nameField ? { name: body[nameField] as string } : {}) });
   }
 
   /** Relationship lists, rather than an unscoped ID, prove this configured combination belongs together. */
@@ -212,6 +220,16 @@ export class ClinikoAvailabilityReader {
   }
 
   async list(scope: LocationScope, from: string, to: string): Promise<Result<ClinikoAvailability, ClinikoAvailabilityFailure>> {
+    return this.listInternal(scope, from, to, false);
+  }
+
+  /** Used only for an explicitly approved fallback choice; names are verified from this read. */
+  async listLabeled(scope: LocationScope, from: string, to: string): Promise<Result<ClinikoAvailability, ClinikoAvailabilityFailure>> {
+    return this.listInternal(scope, from, to, true);
+  }
+
+  private async listInternal(scope: LocationScope, from: string, to: string, withLabel: boolean):
+    Promise<Result<ClinikoAvailability, ClinikoAvailabilityFailure>> {
     if (!sameScope(this.scope, scope)) return err({ kind: "scopeMismatch" });
     if (!validDate(from) || !validDate(to) || Date.parse(`${to}T00:00:00Z`) < Date.parse(`${from}T00:00:00Z`) ||
         Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`) > 7 * 86_400_000) return err({ kind: "invalidRange" });
@@ -223,12 +241,14 @@ export class ClinikoAvailabilityReader {
     const clinicDate = new Intl.DateTimeFormat("en-US", { timeZone, calendar: "gregory", numberingSystem: "latn",
       year: "numeric", month: "2-digit", day: "2-digit" });
 
-    const practitioner = await this.onlineFlag(this.practitionerId, `/practitioners/${this.practitionerId}`, true);
+    const practitioner = await this.onlineFlag(this.practitionerId, `/practitioners/${this.practitionerId}`, true,
+      withLabel ? "display_name" : undefined);
     if (!practitioner.ok) return practitioner;
-    if (!practitioner.value) return ok({ kind: "notEligible", reason: "practitioner" });
-    const appointmentType = await this.onlineFlag(this.appointmentTypeId, `/appointment_types/${this.appointmentTypeId}`);
+    if (!practitioner.value.eligible) return ok({ kind: "notEligible", reason: "practitioner" });
+    const appointmentType = await this.onlineFlag(this.appointmentTypeId, `/appointment_types/${this.appointmentTypeId}`,
+      false, withLabel ? "name" : undefined);
     if (!appointmentType.ok) return appointmentType;
-    if (!appointmentType.value) return ok({ kind: "notEligible", reason: "appointmentType" });
+    if (!appointmentType.value.eligible) return ok({ kind: "notEligible", reason: "appointmentType" });
     const businessPractitioner = await this.includesRelated(`/businesses/${this.businessId}/practitioners`,
       "practitioners", this.practitionerId);
     if (!businessPractitioner.ok) return businessPractitioner;
@@ -278,6 +298,8 @@ export class ClinikoAvailabilityReader {
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(observedAt) || !Number.isFinite(Date.parse(observedAt))) return err({ kind: "unavailable" });
     return ok({ kind: "times", scope: structuredClone(this.scope), sourceRef: `cliniko:${this.businessId}:${this.practitionerId}:${this.appointmentTypeId}`,
       timeZone, observedAt, businessRef: this.businessId, practitionerRef: this.practitionerId,
-      appointmentTypeRef: this.appointmentTypeId, startsAt, reservable: false });
+      appointmentTypeRef: this.appointmentTypeId, startsAt, reservable: false,
+      ...(withLabel ? { offering: { practitionerName: practitioner.value.name!,
+        appointmentTypeName: appointmentType.value.name! } } : {}) });
   }
 }

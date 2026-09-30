@@ -46,6 +46,7 @@ export type ClinicAvailabilityApprovalState = Readonly<{
     scope: LocationScope;
     route: ClinicAvailabilityRoute;
     selection: ClinicAvailabilitySelection;
+    alternatives: readonly ClinicAvailabilitySelection[];
     credentialFingerprint: string;
     catalogueObservedAt: string;
     approvedBy: string;
@@ -65,6 +66,9 @@ export interface ClinicAvailabilitySetup {
     Promise<Result<ClinicAvailabilitySelectionSnapshot, ClinicAvailabilitySetupFailure>>;
   current(actor: HostActor): Promise<Result<ClinicAvailabilityApprovalState, ClinicAvailabilitySetupFailure>>;
   approve(actor: HostActor, route: ClinicAvailabilityRoute, selection: ClinicAvailabilitySelection, expectedVersion: number):
+    Promise<Result<ClinicAvailabilityApprovalState, ClinicAvailabilitySetupFailure>>;
+  approveAlternatives(actor: HostActor, route: ClinicAvailabilityRoute, selection: ClinicAvailabilitySelection,
+    alternatives: readonly ClinicAvailabilitySelection[], expectedVersion: number):
     Promise<Result<ClinicAvailabilityApprovalState, ClinicAvailabilitySetupFailure>>;
   revoke(actor: HostActor, expectedVersion: number):
     Promise<Result<ClinicAvailabilityApprovalState, ClinicAvailabilitySetupFailure>>;

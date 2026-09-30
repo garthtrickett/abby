@@ -24,6 +24,8 @@ const emptyApproval = {
   account_ref: null, dialed_number: null, route_version: null, business_id: null,
   practitioner_id: null, appointment_type_id: null, policy_version: null,
   credential_fingerprint: null, catalogue_observed_at: null, approved_at: null,
+  alternative_1_practitioner_id: null, alternative_1_appointment_type_id: null,
+  alternative_2_practitioner_id: null, alternative_2_appointment_type_id: null,
 } as const;
 
 function decode(row: ClinikoCatalogueApprovals | undefined, scope: LocationScope):
@@ -44,11 +46,25 @@ function decode(row: ClinikoCatalogueApprovals | undefined, scope: LocationScope
       !(row.approved_at instanceof Date) || !Number.isFinite(row.approved_at.getTime())) {
     return err({ kind: "storageFailure" });
   }
+  if ((row.alternative_1_practitioner_id === null) !== (row.alternative_1_appointment_type_id === null) ||
+      (row.alternative_2_practitioner_id === null) !== (row.alternative_2_appointment_type_id === null) ||
+      (row.alternative_2_practitioner_id !== null && row.alternative_1_practitioner_id === null)) {
+    return err({ kind: "storageFailure" });
+  }
+  const alternatives: ClinikoSelectionApproval["alternatives"] = [
+    [row.alternative_1_practitioner_id, row.alternative_1_appointment_type_id],
+    [row.alternative_2_practitioner_id, row.alternative_2_appointment_type_id],
+  ].filter(([practitionerId, appointmentTypeId]) => practitionerId !== null && appointmentTypeId !== null)
+    .map(([practitionerId, appointmentTypeId]) => ({
+      businessId: row.business_id!, practitionerId: practitionerId!,
+      appointmentTypeId: appointmentTypeId!, policyVersion: row.policy_version!,
+    }));
   const approval: ClinikoSelectionApproval = {
     scope: { ...scope }, route: { accountRef: row.account_ref!, dialedNumber: row.dialed_number!,
       routeVersion: row.route_version! },
     selection: { businessId: row.business_id!, practitionerId: row.practitioner_id!,
       appointmentTypeId: row.appointment_type_id!, policyVersion: row.policy_version! },
+    alternatives,
     credentialFingerprint: row.credential_fingerprint!,
     catalogueObservedAt: row.catalogue_observed_at.toISOString(),
     approvedBy: row.changed_by, approvedAt: row.approved_at.toISOString(),
@@ -111,7 +127,12 @@ export class PostgresClinikoApprovalStore implements ClinikoApprovalStore {
             policy_version: approval.selection.policyVersion,
             credential_fingerprint: approval.credentialFingerprint,
             catalogue_observed_at: approval.catalogueObservedAt, approved_at: approval.approvedAt,
-          } : emptyApproval), changed_by: changedBy }).execute();
+            alternative_1_practitioner_id: approval.alternatives[0]?.practitionerId ?? null,
+            alternative_1_appointment_type_id: approval.alternatives[0]?.appointmentTypeId ?? null,
+            alternative_2_practitioner_id: approval.alternatives[1]?.practitionerId ?? null,
+            alternative_2_appointment_type_id: approval.alternatives[1]?.appointmentTypeId ?? null,
+          } : emptyApproval),
+          changed_by: changedBy }).execute();
         return ok({ version: latest.version + 1, approval: approval ? structuredClone(approval) : null });
       });
     } catch { return err({ kind: "storageFailure" }); }

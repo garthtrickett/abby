@@ -20,6 +20,8 @@ export type ClinikoSelectionApproval = Readonly<{
   scope: LocationScope;
   route: ClinikoSetupRoute;
   selection: ClinikoSelection;
+  /** Ordered fallback choices, each explicitly approved for the same business and policy. */
+  alternatives: readonly ClinikoSelection[];
   credentialFingerprint: string;
   catalogueObservedAt: string;
   approvedBy: string;
@@ -50,9 +52,14 @@ const validRoute = (value: unknown): value is ClinikoSetupRoute => {
 const validSelection = (value: unknown): value is ClinikoSelection => {
   const selection = value as Partial<ClinikoSelection> | null;
   return !!selection && [selection.businessId, selection.practitionerId, selection.appointmentTypeId]
-    .every(id => typeof id === "string" && /^[1-9][0-9]*$/.test(id)) &&
+    .every(id => typeof id === "string" && id.length <= 20 && /^[1-9][0-9]*$/.test(id)) &&
     typeof selection.policyVersion === "string" && /^[A-Za-z0-9._-]{1,128}$/.test(selection.policyVersion);
 };
+const validAlternatives = (primary: ClinikoSelection, alternatives: unknown): alternatives is readonly ClinikoSelection[] =>
+  Array.isArray(alternatives) && alternatives.length <= 2 &&
+  alternatives.every(choice => validSelection(choice) && choice.businessId === primary.businessId &&
+    choice.policyVersion === primary.policyVersion) &&
+  new Set([primary, ...alternatives].map(choice => `${choice.practitionerId}:${choice.appointmentTypeId}`)).size === alternatives.length + 1;
 const validScope = (value: unknown): value is LocationScope => {
   const scope = value as Partial<LocationScope> | null;
   return !!scope && validRef(scope.tenantId) && validRef(scope.clinicId) && validRef(scope.locationId);
@@ -68,9 +75,10 @@ const catalogueFailure = (failure: ClinikoCatalogueFailure): ClinikoSetupFailure
 export const isClinikoApprovalState = (state: ClinikoApprovalState): boolean =>
   !!state && Number.isSafeInteger(state.version) && state.version >= 0 &&
   (state.approval === null || (!!state.approval && validScope(state.approval.scope) &&
-    validRoute(state.approval.route) && validSelection(state.approval.selection) && validRef(state.approval.approvedBy) &&
+    validRoute(state.approval.route) && validSelection(state.approval.selection) &&
+    validAlternatives(state.approval.selection, state.approval.alternatives) && validRef(state.approval.approvedBy) &&
     validInstant(state.approval.approvedAt) && validInstant(state.approval.catalogueObservedAt) &&
-    validRef(state.approval.credentialFingerprint) &&
+    /^[0-9a-f]{64}$/.test(state.approval.credentialFingerprint) &&
     state.approval.patientActionMode === "unavailable" && state.approval.patientRequestMode === "unavailable"));
 
 /** Reference adapter: synchronous compare-and-swap, no patient fields, no restart persistence. */
@@ -188,19 +196,39 @@ export class ClinikoCatalogueSetup {
 
   async approve(actor: HostActor, route: ClinikoSetupRoute, selection: ClinikoSelection, expectedVersion: number):
     Promise<Result<ClinikoApprovalState, ClinikoSetupFailure>> {
+    return this.approveAlternatives(actor, route, selection, [], expectedVersion);
+  }
+
+  async approveAlternatives(actor: HostActor, route: ClinikoSetupRoute, selection: ClinikoSelection,
+                            alternatives: readonly ClinikoSelection[], expectedVersion: number):
+    Promise<Result<ClinikoApprovalState, ClinikoSetupFailure>> {
     const allowed = this.authorize(actor);
     if (!allowed.ok) return allowed;
-    if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 0) return err({ kind: "invalid" });
+    if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 0 ||
+        !validSelection(selection) || !validAlternatives(selection, alternatives)) return err({ kind: "invalid" });
     const bound = await this.bind(allowed.value, route, selection);
     if (!bound.ok) return bound;
+    const alternativeSnapshots: ClinikoSelectionSnapshot[] = [];
+    for (const alternative of alternatives) {
+      const next = await this.bind(allowed.value, route, alternative);
+      if (!next.ok) return next;
+      if (next.value.credentialFingerprint !== bound.value.credentialFingerprint ||
+          next.value.timeZone !== bound.value.timeZone) return err({ kind: "selectionUnavailable" });
+      alternativeSnapshots.push(next.value);
+    }
     let approvedAt: string;
     try { approvedAt = this.now(); }
     catch { return err({ kind: "staleCatalogue" }); }
     if (!this.reader.matchesCurrentSelection(bound.value, allowed.value, selection, 60_000, approvedAt)) {
       return err({ kind: "staleCatalogue" });
     }
+    for (let index = 0; index < alternatives.length; index += 1) {
+      if (!this.reader.matchesCurrentSelection(alternativeSnapshots[index]!, allowed.value,
+          alternatives[index]!, 60_000, approvedAt)) return err({ kind: "staleCatalogue" });
+    }
     const approval: ClinikoSelectionApproval = {
       scope: structuredClone(allowed.value), route: structuredClone(route), selection: { ...selection },
+      alternatives: alternatives.map(choice => ({ ...choice })),
       credentialFingerprint: bound.value.credentialFingerprint,
       catalogueObservedAt: bound.value.observedAt, approvedBy: actor.actorRef, approvedAt,
       patientActionMode: "unavailable", patientRequestMode: "unavailable",
@@ -266,6 +294,12 @@ export class ClinikoCatalogueSetup {
         approval.credentialFingerprint !== this.reader.credentialFingerprint()) return err({ kind: "staleApproval" });
     const bound = await this.bind(scope, route, approval.selection);
     if (!bound.ok) return bound;
+    for (const alternative of approval.alternatives) {
+      const next = await this.bind(scope, route, alternative);
+      if (!next.ok) return next;
+      if (next.value.credentialFingerprint !== bound.value.credentialFingerprint ||
+          next.value.timeZone !== bound.value.timeZone) return err({ kind: "selectionUnavailable" });
+    }
     let current: Result<ClinikoApprovalState, ClinikoSetupFailure>;
     try { current = await this.store.read(scope); }
     catch { return err({ kind: "storageFailure" }); }

@@ -60,6 +60,7 @@ test("E2E-194 provider-neutral setup commands bind clinic admin, version and rea
   assert.deepEqual(ids.filter(id => id.startsWith("clinic.availability.")), [
     "clinic.availability.businesses.list.v1", "clinic.availability.selection.inspect.v1",
     "clinic.availability.approval.read.v1", "clinic.availability.approval.change.v1",
+    "clinic.availability.approval.change.v2",
     "clinic.availability.approval.revoke.v1",
   ]);
   assert.equal(agent.listPermitted().some(item => item.id.startsWith("clinic.availability.")), false);
@@ -104,7 +105,7 @@ test("E2E-194 provider-neutral setup commands bind clinic admin, version and rea
 test("E2E-194 a mis-scoped approval store cannot disclose another clinic's configuration", async () => {
   const foreignStore: ClinikoApprovalStore = {
     async read() { return { ok: true, value: { version: 1, approval: {
-      scope: { ...scope, clinicId: "other-clinic" }, route, selection,
+      scope: { ...scope, clinicId: "other-clinic" }, route, selection, alternatives: [],
       credentialFingerprint: "fingerprint", catalogueObservedAt: now,
       approvedBy: "host-clinicAdmin", approvedAt: now,
       patientActionMode: "unavailable", patientRequestMode: "unavailable",

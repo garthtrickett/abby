@@ -12,6 +12,7 @@ const scope = { tenantId: "setup-tenant", clinicId: "setup-clinic", locationId: 
 const admin: HostActor = { actorRef: "admin-1", role: "clinicAdmin", scope };
 const route: ClinikoSetupRoute = { accountRef: "twilio-test-account", dialedNumber: "+61255501001", routeVersion: "route-1" };
 const selection = { businessId: "11", practitionerId: "22", appointmentTypeId: "33", policyVersion: "0" };
+const alternativeSelection = { businessId: "11", practitionerId: "44", appointmentTypeId: "55", policyVersion: "0" };
 const observedAt = "2026-09-30T14:00:00.000Z";
 
 function fixture() {
@@ -33,17 +34,23 @@ function fixture() {
       await onBusinessRead?.();
       return Response.json({ id: "11", business_name: "Demo practice",
       show_in_online_bookings: businessEnabled, archived_at: null,
-      appointment_type_ids: ["33"], time_zone_identifier: "Australia/Sydney" });
+      appointment_type_ids: ["33", "55"], time_zone_identifier: "Australia/Sydney" });
     }
     if (path === "/v1/practitioners/22") return Response.json({ id: "22", display_name: "Demo practitioner",
       active: true, show_in_online_bookings: true });
+    if (path === "/v1/practitioners/44") return Response.json({ id: "44", display_name: "Second practitioner",
+      active: true, show_in_online_bookings: true });
     if (path === "/v1/appointment_types/33") return Response.json({ id: "33", name: "Consult",
+      archived_at: null, show_in_online_bookings: true });
+    if (path === "/v1/appointment_types/55") return Response.json({ id: "55", name: "Follow up",
       archived_at: null, show_in_online_bookings: true });
     if (path === "/v1/businesses/11/practitioners") return partialPractitionerPage
       ? Response.json({ total_entries: 2, practitioners: [{ id: url.searchParams.get("page") === "1" ? "55" : "22" }] })
-      : Response.json({ total_entries: 1, practitioners: [{ id: "22" }] });
+      : Response.json({ total_entries: 2, practitioners: [{ id: "22" }, { id: "44" }] });
     if (path === "/v1/practitioners/22/appointment_types") return Response.json({ total_entries: 1,
       appointment_types: [{ id: "33" }] });
+    if (path === "/v1/practitioners/44/appointment_types") return Response.json({ total_entries: 1,
+      appointment_types: [{ id: "55" }] });
     throw new Error(`unexpected path ${path}`);
   };
   const reader = ClinikoCatalogueReader.create({ scope, apiKey: "synthetic-key-au5",
@@ -199,4 +206,27 @@ test("B1 revocation during call-time provider recheck wins before approval is re
   });
   assert.deepEqual(await app.setup.resolveForCall(scope, route),
     { ok: false, error: { kind: "staleApproval" } });
+});
+
+test("B4 clinic admin approves only bounded alternatives for the same business and policy", async () => {
+  const app = fixture();
+  for (const invalid of [
+    [selection], [alternativeSelection, alternativeSelection],
+    [{ ...alternativeSelection, businessId: "12" }],
+    [{ ...alternativeSelection, policyVersion: "other" }],
+    [alternativeSelection, alternativeSelection, alternativeSelection],
+  ]) {
+    assert.deepEqual(await app.setup.approveAlternatives(admin, route, selection, invalid, 0),
+      { ok: false, error: { kind: "invalid" } });
+  }
+  assert.deepEqual(await app.store.read(scope), { ok: true, value: { version: 0, approval: null } });
+  const approved = await app.setup.approveAlternatives(admin, route, selection, [alternativeSelection], 0);
+  assert.ok(approved.ok);
+  assert.deepEqual(approved.value.approval?.alternatives, [alternativeSelection]);
+  const current = await app.setup.resolveForCall(scope, route);
+  assert.ok(current.ok);
+  assert.deepEqual(current.value.alternatives, [alternativeSelection]);
+  const replaced = await app.setup.approve(admin, route, selection, 1);
+  assert.ok(replaced.ok);
+  assert.deepEqual(replaced.value.approval?.alternatives, []);
 });
