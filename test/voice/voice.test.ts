@@ -390,6 +390,42 @@ for (const kind of kinds) {
     value(await app.session.end(at(9), "callerDisconnected"));
   });
 
+  test(`${kind}: E2E-074 emergency stop blocks an active voice booking and speaks the unresolved outcome`, async () => {
+    const app = await fixture(kind, `${kind}-voice-write-stop`, true);
+    const planned = await bookTurn(app);
+    const action = Object.values(planned.actions)[0];
+    assert.ok(action);
+    const details = value(await app.session.dispatchPending(at(4)));
+    assert.equal(details.kind, "queued");
+    value(await app.session.acceptPlaybackResult(details.playbackId!, "played", at(4)));
+    const generation = value(await app.session.speechStarted(at(5)));
+    value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation,
+      utteranceId: "write-stop-affirm", text: "Yes book it", quality: "clear" }));
+    const confirmed = value(await app.session.finishTurn(at(6)));
+    assert.equal(confirmed.actions[action.key]?.status, "ready");
+    assert.equal(app.host.bookings(app.scope).length, 0);
+
+    const stop = value(await app.ledger.stopWrites(app.scope, "clinic-admin", "Clinic incident"));
+    assert.equal(stop.stopped, true);
+    const blocked = value(await app.session.drainEffects(at(7)));
+    assert.equal(blocked.actions[action.key]?.status, "unsupported");
+    assert.equal(blocked.effects[`${action.key}:write`]?.status, "canceled");
+    assert.equal(Object.values(blocked.staffItems)[0]?.reason, "emergencyStopped");
+    assert.equal(app.host.bookings(app.scope).length, 0);
+    assert.equal(blocked.presentations[blocked.pendingPresentationId!]?.kind, "notice");
+    const notice = value(await app.session.dispatchPending(at(7)));
+    assert.equal(notice.kind, "queued");
+    assert.equal(app.playback.queuedTexts.at(-1),
+      "I can't complete that action now. I'll request staff follow-up, but I can't confirm they've received it yet.");
+    assert.equal(app.playback.queuedTexts.some(text => text.includes("booking is confirmed")), false);
+    value(await app.session.acceptPlaybackResult(notice.playbackId!, "played", at(7)));
+    const staffOpened = value(await app.session.drainEffects(at(8)));
+    assert.equal(Object.values(staffOpened.staffItems)[0]?.status, "open");
+    assert.equal(app.host.tasks(app.scope).length, 1);
+    assert.equal(app.host.bookings(app.scope).length, 0, "processing staff work cannot replay the blocked booking");
+    value(await app.session.end(at(9), "callerDisconnected"));
+  });
+
   test(`${kind}: disabled booking setting avoids host reads and writes`, async () => {
     const app = await fixture(kind, `${kind}-disabled`, false);
     const state = await bookTurn(app);
