@@ -62,12 +62,16 @@ def main() -> int:
             rows = appointments.get("individual_appointments")
             matches = [row for row in rows if str(row.get("notes", "")).startswith((
                 "Abby synthetic probe ", "Abby concurrent synthetic ", "Abby booking "))] if isinstance(rows, list) else []
+            concurrency_patient = str(patient.get("last_name", "")).startswith("SyntheticConcurrency")
+            race_matches = [row for row in matches if str(row.get("notes", "")).endswith((":1", ":2"))]
+            drift_matches = [row for row in matches if str(row.get("notes", "")).endswith(":permission")]
             print(json.dumps({
                 "step": "synthetic_appointments", "view": label, "http_status": appointment_status,
                 "count": len(matches), "cancelled_count": sum(bool(row.get("cancelled_at")) for row in matches),
                 "archived_count": sum(bool(row.get("archived_at")) for row in matches),
-                **({"same_slot": len({slot_key(row) for row in matches}) == 1 and all(slot_key(matches[0]))}
-                   if label == "all_cancellation_states" and str(patient.get("last_name", "")).startswith("SyntheticConcurrency") and matches else {}),
+                **({"same_slot": len(race_matches) == 2 and len({slot_key(row) for row in race_matches}) == 1
+                   and all(slot_key(race_matches[0])), "permission_drift_records": len(drift_matches)}
+                   if label == "all_cancellation_states" and concurrency_patient and matches else {}),
             }))
             failed |= appointment_status != 200
             if label == "default":
@@ -75,8 +79,14 @@ def main() -> int:
             if label == "all_cancellation_states":
                 matched_appointments += len(matches)
                 failed |= any(not row.get("cancelled_at") for row in matches)
-                if str(patient.get("last_name", "")).startswith("SyntheticConcurrency"):
-                    failed |= len(matches) != 2 or len({slot_key(row) for row in matches}) != 1 or not all(slot_key(matches[0]))
+                if concurrency_patient:
+                    if len(race_matches) != 2:
+                        failed = True
+                    else:
+                        failed |= (len(drift_matches) > 1 or
+                                   len(matches) != len(race_matches) + len(drift_matches) or
+                                   len({slot_key(row) for row in race_matches}) != 1 or
+                                   not all(slot_key(race_matches[0])))
     print(json.dumps({"step": "synthetic_cleanup_summary", "archived_patients": len(patients),
                       "cancelled_appointments": matched_appointments}))
     failed |= matched_appointments == 0
