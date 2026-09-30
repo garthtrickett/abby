@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { createServer } from "node:net";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 import { sql } from "kysely";
 import twilio from "twilio";
+import WebSocket from "ws";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { migrate } from "../../src/storage/migrate.ts";
+import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
+import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 
 async function freePort(): Promise<number> {
   const server = createServer();
@@ -40,6 +43,7 @@ test("E2E-171 local voice runner validates startup, reports unready, refuses inb
   let created = false;
   const port = await freePort();
   const env = { ...process.env,
+    ABBY_VOICE_TEST_MODE: undefined, ABBY_TWILIO_TEST_CALLER_NUMBER: undefined,
     DATABASE_URL: target.toString(), ABBY_VOICE_PORT: String(port),
     ABBY_TENANT_ID: "local-test", ABBY_CLINIC_ID: "clinic", ABBY_LOCATION_ID: "main",
     ABBY_CLINIKO_API_KEY: "synthetic-key-au5", ABBY_CLINIKO_CONTACT_EMAIL: "test@example.com",
@@ -53,7 +57,7 @@ test("E2E-171 local voice runner validates startup, reports unready, refuses inb
     ABBY_GREETING_VERSION: "test-v1", ABBY_GREETING_APPROVAL_OWNER_REF: "synthetic-approval",
     ABBY_GREETING_APPROVED_TEXT: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow.",
     ABBY_OPENAI_API_KEY: "synthetic-openai", ABBY_OPENAI_INTENT_MODEL: "synthetic-model",
-  };
+  } satisfies NodeJS.ProcessEnv;
   let child: ReturnType<typeof spawn> | undefined;
   try {
     await sql.raw(`create database "${name}"`).execute(admin);
@@ -65,6 +69,10 @@ test("E2E-171 local voice runner validates startup, reports unready, refuses inb
       stdio: ["ignore", "pipe", "pipe"] });
     const [invalidCode] = await once(invalid, "exit");
     assert.equal(invalidCode, 1);
+    const invalidMode = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
+      cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_VOICE_TEST_MODE: "yes" },
+      stdio: ["ignore", "pipe", "pipe"] });
+    assert.equal((await once(invalidMode, "exit"))[0], 1);
     child = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
       cwd: new URL("../../", import.meta.url), env, stdio: ["ignore", "pipe", "pipe"] });
     const health = await healthy(port);
@@ -95,6 +103,154 @@ test("E2E-171 local voice runner validates startup, reports unready, refuses inb
     assert.equal(code, 0);
     child = undefined;
   } finally {
+    child?.kill("SIGKILL");
+    try { if (created) await sql.raw(`drop database "${name}"`).execute(admin); }
+    finally { await admin.destroy(); }
+  }
+});
+
+test("E2E-172 isolated voice runner admits only signed allowlisted test calls and handles keypad, rejection and shutdown",
+  { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 60_000 }, async () => {
+  const adminUrl = process.env.DATABASE_URL;
+  assert.ok(adminUrl);
+  const admin = connectPostgres(adminUrl);
+  const name = `abby_test_voice_${randomUUID().replaceAll("-", "")}`;
+  const target = new URL(adminUrl);
+  target.pathname = `/${name}`;
+  const port = await freePort();
+  const number = "+6125550199";
+  const callerNumber = "+6145550101";
+  const accountSid = `AC${"1".repeat(32)}`;
+  const authToken = "synthetic-token";
+  const webhookUrl = "https://calls.example.test/twilio/inbound";
+  const streamUrl = "wss://calls.example.test/twilio/media/";
+  const scope = { tenantId: "local-test", clinicId: "clinic", locationId: "main" };
+  const env: NodeJS.ProcessEnv = { ...process.env, DATABASE_URL: target.toString(),
+    ABBY_ISOLATED_POSTGRES_PROBE: "1", ABBY_VOICE_PORT: String(port), ABBY_VOICE_TEST_MODE: "1",
+    ABBY_TWILIO_TEST_CALLER_NUMBER: callerNumber,
+    ABBY_TENANT_ID: scope.tenantId, ABBY_CLINIC_ID: scope.clinicId, ABBY_LOCATION_ID: scope.locationId,
+    ABBY_CLINIKO_API_KEY: "synthetic-key-au5", ABBY_CLINIKO_CONTACT_EMAIL: "test@example.com",
+    ABBY_CLINIKO_BUSINESS_ID: "11", ABBY_CLINIKO_PRACTITIONER_ID: "22",
+    ABBY_CLINIKO_APPOINTMENT_TYPE_ID: "33", ABBY_CLINIKO_TIME_ZONE: "Australia/Sydney",
+    ABBY_TWILIO_TEST_NUMBER: number, ABBY_TWILIO_FALLBACK_NUMBER: "+6125550188",
+    ABBY_TWILIO_ACCOUNT_SID: accountSid, ABBY_TWILIO_AUTH_TOKEN: authToken,
+    ABBY_TWILIO_PUBLIC_WEBHOOK_URL: webhookUrl, ABBY_TWILIO_PUBLIC_STREAM_URL: streamUrl,
+    ABBY_TWILIO_BINDING_KEY_HEX: "66".repeat(32), ABBY_VOICE_ROUTE_VERSION: "test-v1",
+    ABBY_TEST_OPERATOR_REF: "synthetic-operator", ABBY_AUTOMATION_EXPECTED_VERSION: "0",
+    ABBY_GREETING_VERSION: "test-v1", ABBY_GREETING_APPROVAL_OWNER_REF: "synthetic-approval",
+    ABBY_GREETING_APPROVED_TEXT: "This is an Abby test call. Press 1 for possible times today. Press 2 for possible times tomorrow.",
+    ABBY_OPENAI_API_KEY: "synthetic-openai", ABBY_OPENAI_INTENT_MODEL: "synthetic-model",
+  };
+  let created = false;
+  let child: ReturnType<typeof spawn> | undefined;
+  let caller: WebSocket | undefined;
+  try {
+    await sql.raw(`create database "${name}"`).execute(admin);
+    created = true;
+    const db = connectPostgres(target.toString());
+    try { await migrate(db); } finally { await db.destroy(); }
+    const enable = spawnSync(process.execPath, ["scripts/set-voice-test-automation.ts", "enable"], {
+      cwd: new URL("../../", import.meta.url), env, encoding: "utf8",
+    });
+    assert.equal(enable.status, 0, enable.stderr);
+    child = spawn(process.execPath, ["test/support/start-synthetic-voice-runner.ts"], {
+      cwd: new URL("../../", import.meta.url), env, stdio: ["ignore", "pipe", "pipe"] });
+    assert.equal((await healthy(port)).status, 200);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/readyz`)).status, 503);
+
+    async function webhook(from: string, callSid: string, signed = true): Promise<Response> {
+      const form = { AccountSid: accountSid, CallSid: callSid, To: number, From: from };
+      return fetch(`http://127.0.0.1:${port}/twilio/inbound`, { method: "POST", headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        ...(signed ? { "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, webhookUrl, form) } : {}),
+      }, body: new URLSearchParams(form) });
+    }
+    const callSid = `CA${"2".repeat(32)}`;
+    assert.equal((await webhook(callerNumber, callSid, false)).status, 403);
+    const rejected = await webhook("+6145550102", callSid);
+    assert.equal(rejected.status, 503);
+    assert.doesNotMatch(await rejected.text(), /<Stream>/);
+    const accepted = await webhook(callerNumber, callSid);
+    assert.equal(accepted.status, 200);
+    const xml = await accepted.text();
+    assert.ok(xml.endsWith("</Connect><Dial>+6125550188</Dial></Response>"));
+    const binding = xml.match(/<Parameter name="abbyBinding" value="([^"]+)"\/>/)?.[1];
+    assert.ok(binding);
+
+    const forged = new WebSocket(`ws://127.0.0.1:${port}/twilio/media/`, { headers: {
+      "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, streamUrl, {}),
+    } });
+    await once(forged, "open");
+    const forgedClosed = once(forged, "close");
+    forged.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
+    forged.send(JSON.stringify({ event: "start", sequenceNumber: "1", streamSid: `MZ${"4".repeat(32)}`,
+      start: { accountSid, callSid, streamSid: `MZ${"4".repeat(32)}`,
+        mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 },
+        customParameters: { abbyBinding: `${binding.startsWith("A") ? "B" : "A"}${binding.slice(1)}` } } }));
+    assert.equal((await forgedClosed)[0], 1008);
+
+    caller = new WebSocket(`ws://127.0.0.1:${port}/twilio/media/`, { headers: {
+      "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, streamUrl, {}),
+    } });
+    await once(caller, "open");
+    const received: Record<string, unknown>[] = [];
+    const waitFor = (count: number) => new Promise<void>((resolve, reject) => {
+      if (received.length >= count) { resolve(); return; }
+      const timer = setTimeout(() => { caller?.off("message", onMessage); reject(new Error("voice output timed out")); }, 8_000);
+      const onMessage = () => {
+        if (received.length >= count) { clearTimeout(timer); caller?.off("message", onMessage); resolve(); }
+      };
+      caller!.on("message", onMessage);
+    });
+    caller.on("message", data => received.push(JSON.parse(data.toString()) as Record<string, unknown>));
+    const streamSid = `MZ${"3".repeat(32)}`;
+    caller.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
+    caller.send(JSON.stringify({ event: "start", sequenceNumber: "1", streamSid,
+      start: { accountSid, callSid, streamSid, tracks: ["inbound"],
+        mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 },
+        customParameters: { abbyBinding: binding } } }));
+    await waitFor(2);
+    assert.deepEqual(received.slice(0, 2).map(item => item.event), ["media", "mark"]);
+    caller.send(JSON.stringify({ event: "mark", sequenceNumber: "2", streamSid,
+      mark: { name: (received[1]!.mark as { name: string }).name } }));
+    caller.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid,
+      dtmf: { track: "inbound_track", digit: "1" } }));
+    await waitFor(4);
+    assert.deepEqual(received.slice(2, 4).map(item => item.event), ["media", "mark"]);
+    for (let index = 0; index < 2; index += 1) caller.send(JSON.stringify({ event: "media",
+      sequenceNumber: String(index + 4), streamSid, media: { track: "inbound", chunk: String(index + 1),
+        timestamp: String(index * 20), payload: Buffer.alloc(160, 0x9f).toString("base64") } }));
+    await waitFor(6);
+    assert.deepEqual(received.slice(4, 6).map(item => item.event), ["mark", "clear"]);
+    caller.send(JSON.stringify({ event: "mark", sequenceNumber: "6", streamSid,
+      mark: { name: (received[3]!.mark as { name: string }).name } }));
+    caller.send(JSON.stringify({ event: "mark", sequenceNumber: "7", streamSid,
+      mark: { name: (received[4]!.mark as { name: string }).name } }));
+    assert.equal(caller.readyState, WebSocket.OPEN);
+    const closed = once(caller, "close");
+    child.kill("SIGTERM");
+    const [code] = await once(child, "exit");
+    await closed;
+    assert.equal(code, 0);
+    child = undefined;
+    const privateDb = connectPostgres(target.toString());
+    try {
+      assert.deepEqual(await scanPatientDataCanaries(privateDb, [
+        { label: "caller", value: callerNumber }, { label: "provider_call", value: callSid },
+        { label: "appointment", value: "synthetic-only" },
+      ]), { ok: true, value: [] });
+    } finally { await privateDb.destroy(); }
+    assert.deepEqual(await scanDisposableBackupCanaries(target.toString(), [
+      { label: "caller", value: callerNumber }, { label: "provider_call", value: callSid },
+      { label: "appointment", value: "synthetic-only" },
+    ]), []);
+    const disable = spawnSync(process.execPath, ["scripts/set-voice-test-automation.ts", "disable"], {
+      cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_AUTOMATION_EXPECTED_VERSION: "1" },
+      encoding: "utf8",
+    });
+    assert.equal(disable.status, 0, disable.stderr);
+  } finally {
+    caller?.terminate();
     child?.kill("SIGKILL");
     try { if (created) await sql.raw(`drop database "${name}"`).execute(admin); }
     finally { await admin.destroy(); }

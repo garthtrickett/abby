@@ -13,6 +13,8 @@
     "phone-index:refresh": "node scripts/refresh-cliniko-phone-index.ts",
     "text:availability": "node scripts/ask-cliniko-availability.ts",
     "voice:local": "node scripts/serve-cliniko-voice.ts",
+    "voice:test-policy": "node scripts/set-voice-test-automation.ts",
+    "voice:preflight": "node scripts/preflight-voice-public.ts",
     "build:dashboard": "esbuild src/standalone/dashboard/main.ts --bundle --format=esm --platform=browser --outfile=dist/dashboard/app.js",
     "demo:dashboard": "npm run build:dashboard && node src/standalone/dashboard/demo.ts",
     "build:availability-console": "esbuild src/standalone/availability-console/main.ts --bundle --format=esm --platform=browser --outfile=dist/availability-console/app.js",

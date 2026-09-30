@@ -19,6 +19,7 @@ import type { StreamedPlaybackOptions } from "../voice/streamed-playback-port.ts
 import { createTwilioIngressServer } from "../voice/twilio-ingress-server.ts";
 import { TwilioSignedIngress } from "../voice/twilio-signed-ingress.ts";
 import type { TwilioSignedIngressConfig } from "../voice/twilio-signed-ingress.ts";
+import type { AuthenticatedInboundCall } from "../voice/admission.ts";
 import { createOpenAIAvailabilityIntentResolver } from "./openai-availability-intent.ts";
 import { keypadAvailabilityDate } from "./keypad-availability.ts";
 import { createStandaloneTransientVoiceCall } from "./transient-voice-composition.ts";
@@ -56,7 +57,7 @@ export type ClinikoVoiceServerConfig = Readonly<{
   }>;
   readiness: AutomationReadiness;
   health?: () => Promise<boolean>;
-  admitWebhook?: () => Promise<boolean>;
+  admitWebhook?: (event?: AuthenticatedInboundCall) => Promise<boolean>;
   mediaOptions?: MediaTurnOptions;
   playbackOptions?: StreamedPlaybackOptions;
   now?: () => string;

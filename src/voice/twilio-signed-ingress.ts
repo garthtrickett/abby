@@ -49,6 +49,10 @@ export type AuthenticatedTwilioStream = Readonly<{
   connected: string;
   start: string;
 }>;
+export type AuthenticatedTwilioWebhook = Readonly<{
+  event: AuthenticatedInboundCall;
+  twiml: string;
+}>;
 
 type Binding = readonly [1, string, string, string, string | null, string, number];
 
@@ -127,7 +131,7 @@ export class TwilioSignedIngress {
       ...(presentedCallerNumber ? { presentedCallerNumber } : {}), receivedAt });
   }
 
-  answerWebhook(request: SignedTwilioWebhook): Result<string, TwilioIngressFailure> {
+  authenticateWebhook(request: SignedTwilioWebhook): Result<AuthenticatedTwilioWebhook, TwilioIngressFailure> {
     if (request.method !== "POST" || request.requestTarget !== target(this.webhookUrl) ||
         request.contentType?.split(";")[0]?.trim().toLowerCase() !== "application/x-www-form-urlencoded" ||
         Buffer.byteLength(request.body) > maxBodyBytes || !request.signature) {
@@ -158,7 +162,14 @@ export class TwilioSignedIngress {
       name: "abbyBinding", value: token,
     });
     response.dial(fallback);
-    return ok(response.toString());
+    return ok({ event: { key: { accountRef: form.AccountSid, providerCallRef: form.CallSid! },
+      dialedNumber: form.To!, ...(from ? { presentedCallerNumber: from } : {}), receivedAt },
+      twiml: response.toString() });
+  }
+
+  answerWebhook(request: SignedTwilioWebhook): Result<string, TwilioIngressFailure> {
+    const answered = this.authenticateWebhook(request);
+    return answered.ok ? ok(answered.value.twiml) : answered;
   }
 
   authorizeUpgrade(request: SignedTwilioUpgrade): Result<true, TwilioIngressFailure> {
