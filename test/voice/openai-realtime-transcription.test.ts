@@ -162,6 +162,51 @@ test("E2E-162 committed-turn transcription candidate keeps only the matched fina
   assert.equal(wrongSocket.terminateCount, 1);
 });
 
+test("static clinic transcription context is bounded, acknowledged, and never makes a final trusted", async () => {
+  const context = { prompt: "English physiotherapy clinic calls about appointments.", languages: ["en"] };
+  const socket = new FakeSocket();
+  const transcription = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+    context, socketFactory: () => socket as unknown as WebSocket });
+  socket.open();
+  assert.deepEqual((socket.sent[0]?.session as { audio: { input: { transcription: unknown } } })
+    .audio.input.transcription, { model: "gpt-live-transcribe", ...context });
+  socket.receive({ type: "session.updated", session: { type: "transcription", audio: { input: {
+    format: { type: "audio/pcm", rate: 24000 },
+    transcription: { model: "gpt-live-transcribe", ...context }, turn_detection: null,
+  } } } });
+  assert.ok((await transcription.accept(frame(0, 2_000), 1, new AbortController().signal)).ok);
+  const pending = transcription.flush(1, new AbortController().signal);
+  await new Promise<void>(resolve => setImmediate(resolve));
+  socket.receive({ type: "input_audio_buffer.committed", item_id: "hinted-item" });
+  socket.receive({ type: "conversation.item.input_audio_transcription.completed", item_id: "hinted-item",
+    transcript: "Book physiotherapy" });
+  assert.deepEqual(await pending, { ok: true, value: [{ kind: "segmentFinal", sessionId: "session",
+    generation: 1, utteranceId: "hinted-item", text: "Book physiotherapy", quality: "needsClarification" }] });
+  await transcription.close();
+
+  const wrongSocket = new FakeSocket();
+  const wrong = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+    context, socketFactory: () => wrongSocket as unknown as WebSocket });
+  wrongSocket.open();
+  wrongSocket.receive({ type: "session.updated", session: { type: "transcription", audio: { input: {
+    format: { type: "audio/pcm", rate: 24000 }, transcription: { model: "gpt-live-transcribe",
+      prompt: "Different clinic context.", languages: ["en"] }, turn_detection: null,
+  } } } });
+  assert.deepEqual(await wrong.accept(frame(0, 2_000), 1, new AbortController().signal),
+    { ok: false, error: { kind: "transcriptionUnavailable" } });
+  assert.equal(wrongSocket.terminateCount, 1);
+
+  for (const invalid of [
+    { prompt: "patient\nname", languages: ["en"] },
+    { prompt: "clinic", languages: ["invalid-language"] },
+    { prompt: "", languages: ["en"] },
+  ]) {
+    assert.throws(() => new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+      context: invalid, socketFactory: () => new FakeSocket() as unknown as WebSocket }),
+    /invalid transcription configuration/);
+  }
+});
+
 test("E2E-129 synthetic voice: rejected session, malformed completion and caller stop fail closed", async () => {
   const rejectedSocket = new FakeSocket();
   const rejected = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",

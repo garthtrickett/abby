@@ -13,12 +13,35 @@ const maxEarlyCompletions = 8;
 
 type Socket = Pick<WebSocket, "on" | "send" | "close" | "terminate" | "bufferedAmount" | "readyState">;
 export type OpenAIRealtimeTranscriptionModel = "gpt-live-transcribe" | "gpt-transcribe";
+export type TranscriptionContext = Readonly<{
+  /** Static, patient-free clinic setting. Never put caller or patient data here. */
+  prompt: string;
+  languages: readonly string[];
+}>;
 export type OpenAIRealtimeTranscriptionConfig = Readonly<{
   apiKey: string;
   sessionId: string;
   model?: OpenAIRealtimeTranscriptionModel;
+  context?: TranscriptionContext;
   socketFactory?: (url: string, headers: Readonly<Record<string, string>>) => Socket;
 }>;
+
+function validContext(value: unknown): value is TranscriptionContext {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const context = value as Record<string, unknown>;
+  if (Object.keys(context).sort().join(",") !== "languages,prompt" ||
+      typeof context.prompt !== "string" || !context.prompt.trim() || context.prompt.length > 500 ||
+      /[\r\n\u0000-\u001f\u007f]/.test(context.prompt) ||
+      !Array.isArray(context.languages) || context.languages.length < 1 || context.languages.length > 4 ||
+      context.languages.some(code => typeof code !== "string" || !/^[a-z]{2,3}(?:-[a-z]{2})?$/.test(code)) ||
+      new Set(context.languages).size !== context.languages.length) return false;
+  return true;
+}
+
+function sameStrings(left: unknown, right: readonly string[]): boolean {
+  return Array.isArray(left) && left.length === right.length &&
+    left.every((value, index) => value === right[index]);
+}
 
 /** Keeps the 16 kHz to 24 kHz sample phase across Abby media frames. */
 class Pcm16To24 {
@@ -78,6 +101,7 @@ type PendingTurn = {
 export class OpenAIRealtimeTranscription implements TranscriptionPort {
   private readonly sessionId: string;
   private readonly model: OpenAIRealtimeTranscriptionModel;
+  private readonly context: TranscriptionContext | undefined;
   private readonly socket: Socket;
   private readonly converter = new Pcm16To24();
   private readonly ready: Promise<boolean>;
@@ -91,18 +115,21 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
     if (!config || typeof config.apiKey !== "string" || !config.apiKey.trim() || /[\r\n]/.test(config.apiKey) ||
         typeof config.sessionId !== "string" || !config.sessionId.trim() || config.sessionId.length > 256 ||
         (config.model !== undefined && config.model !== "gpt-live-transcribe" && config.model !== "gpt-transcribe") ||
+        (config.context !== undefined && !validContext(config.context)) ||
         (config.socketFactory !== undefined && typeof config.socketFactory !== "function")) {
       throw new RangeError("invalid transcription configuration");
     }
     this.sessionId = config.sessionId;
     this.model = config.model ?? "gpt-live-transcribe";
+    this.context = config.context ? { prompt: config.context.prompt,
+      languages: [...config.context.languages] } : undefined;
     this.ready = new Promise(resolve => { this.resolveReady = resolve; });
     const headers = { Authorization: `Bearer ${config.apiKey}` };
     this.socket = config.socketFactory?.(endpoint, headers) ?? new WebSocket(endpoint, { headers });
     this.socket.on("open", () => {
       this.send({ type: "session.update", session: { type: "transcription", audio: { input: {
         format: { type: "audio/pcm", rate: 24000 },
-        transcription: { model: this.model }, turn_detection: null,
+        transcription: { model: this.model, ...(this.context ? this.context : {}) }, turn_detection: null,
       } } } });
     });
     this.socket.on("message", data => this.message(data));
@@ -147,11 +174,16 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
     }
     if (event.type === "session.updated") {
       const session = event.session as { type?: unknown; audio?: { input?: {
-        format?: { type?: unknown; rate?: unknown }; transcription?: { model?: unknown }; turn_detection?: unknown;
+        format?: { type?: unknown; rate?: unknown }; transcription?: {
+          model?: unknown; prompt?: unknown; languages?: unknown;
+        }; turn_detection?: unknown;
       } } } | undefined;
       if (session?.type !== "transcription" || session.audio?.input?.format?.type !== "audio/pcm" ||
           session.audio.input.format.rate !== 24000 ||
           session.audio.input.transcription?.model !== this.model ||
+          (this.context !== undefined &&
+            (session.audio.input.transcription?.prompt !== this.context.prompt ||
+             !sameStrings(session.audio.input.transcription?.languages, this.context.languages))) ||
           session.audio.input.turn_detection !== null) { this.fail(); return; }
       this.configured = true;
       this.resolveReady(true);
