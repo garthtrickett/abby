@@ -37,6 +37,7 @@ function fakeProvider(options: {
   inactivePractitioner?: boolean;
   incompleteRelationship?: boolean;
   pagedRelationship?: boolean;
+  partialAvailablePage?: boolean;
 } = {}) {
   const requests: RequestRecord[] = [];
   const starts = options.starts ?? ["2026-10-01T09:00:00Z", "2026-10-01T10:00:00Z"];
@@ -62,7 +63,8 @@ function fakeProvider(options: {
       appointment_types: [{ id: options.unrelated === "appointmentType" ? "99" : "33" }] });
     if (path.endsWith("/available_times")) {
       const page = Number(url.searchParams.get("page"));
-      const slice = starts.slice((page - 1) * 100, page * 100).map(appointment_start => ({ appointment_start }));
+      const selected = options.partialAvailablePage ? starts.slice(page - 1, page) : starts.slice((page - 1) * 100, page * 100);
+      const slice = selected.map(appointment_start => ({ appointment_start }));
       return json({ total_entries: options.changingTotal && page === 2 ? starts.length + 1 : starts.length, available_times: slice });
     }
     return json({}, 404);
@@ -121,8 +123,20 @@ test("Cliniko refuses availability for an unrelated or inactive configured pract
 test("Cliniko incomplete relationship pagination fails closed before any offer read", async () => {
   const fake = fakeProvider({ incompleteRelationship: true });
   const reader = value(ClinikoAvailabilityReader.create(config, fake.port));
-  failure(await reader.list(scope, "2026-10-01", "2026-10-02"), "malformed");
+  failure(await reader.list(scope, "2026-10-01", "2026-10-02"), "unavailable");
   assert.equal(fake.requests.some(request => request.url.pathname.endsWith("/available_times")), false);
+});
+
+test("Cliniko short first availability page and out-of-order times cannot become a partial answer", async () => {
+  for (const options of [
+    { partialAvailablePage: true },
+    { starts: ["2026-10-01T10:00:00Z", "2026-10-01T09:00:00Z"] },
+  ]) {
+    const fake = fakeProvider(options);
+    const reader = value(ClinikoAvailabilityReader.create(config, fake.port));
+    failure(await reader.list(scope, "2026-10-01", "2026-10-02"), "unavailable");
+    assert.equal(fake.requests.filter(request => request.url.pathname.endsWith("/available_times")).length, 1);
+  }
 });
 
 test("Cliniko finds a configured practitioner on a later bounded relationship page", async () => {

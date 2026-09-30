@@ -178,6 +178,8 @@ export class ClinikoAvailabilityReader {
       if (Number(body.total_entries) > maxPages * perPage) return err({ kind: "tooManyResults" });
       if (total !== undefined && total !== body.total_entries) return err({ kind: "unavailable" });
       total = Number(body.total_entries);
+      const expected = Math.min(perPage, Math.max(0, total - (page - 1) * perPage));
+      if (body[collection].length !== expected) return err({ kind: "unavailable" });
       for (const value of body[collection]) {
         const item = record(value);
         if (!item || typeof item.id !== "string" || !validId(item.id) || seen.has(item.id)) return err({ kind: "malformed" });
@@ -231,6 +233,7 @@ export class ClinikoAvailabilityReader {
     const prefix = `/businesses/${this.businessId}/practitioners/${this.practitionerId}/appointment_types/${this.appointmentTypeId}/available_times`;
     const startsAt: string[] = [];
     let totalEntries: number | undefined;
+    let lastStart = -Infinity;
     for (let page = 1; page <= maxPages; page += 1) {
       const query = new URLSearchParams({ from, to, page: String(page), per_page: String(perPage) });
       const fetched = await this.get(`${prefix}?${query}`);
@@ -241,12 +244,16 @@ export class ClinikoAvailabilityReader {
       if (count > maxPages * perPage) return err({ kind: "tooManyResults" });
       if (totalEntries !== undefined && count !== totalEntries) return err({ kind: "unavailable" });
       totalEntries = count;
+      const expected = Math.min(perPage, Math.max(0, count - (page - 1) * perPage));
+      if (body.available_times.length !== expected) return err({ kind: "unavailable" });
       for (const candidate of body.available_times) {
         const row = record(candidate);
         if (!row || typeof row.appointment_start !== "string" ||
             !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(row.appointment_start) ||
             !Number.isFinite(Date.parse(row.appointment_start))) return err({ kind: "malformed" });
         const start = new Date(row.appointment_start);
+        if (start.getTime() <= lastStart) return err({ kind: "unavailable" });
+        lastStart = start.getTime();
         const parts = clinicDate.formatToParts(start);
         const field = (name: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === name)?.value;
         const localDate = `${field("year")}-${field("month")}-${field("day")}`;
