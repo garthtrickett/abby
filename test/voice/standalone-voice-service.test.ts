@@ -58,6 +58,7 @@ test("E2E-171 local voice runner validates startup, reports unready, refuses inb
     ABBY_TWILIO_BINDING_KEY_HEX: "66".repeat(32), ABBY_VOICE_ROUTE_VERSION: "test-v1",
     ABBY_GREETING_VERSION: "test-v1", ABBY_GREETING_APPROVAL_OWNER_REF: "synthetic-approval",
     ABBY_GREETING_APPROVED_TEXT: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow.",
+    ABBY_SEVEN_DAY_AVAILABILITY_ENABLED: "0",
     ABBY_OPENAI_API_KEY: "synthetic-openai", ABBY_OPENAI_INTENT_MODEL: "synthetic-model",
   } satisfies NodeJS.ProcessEnv;
   let child: ReturnType<typeof spawn> | undefined;
@@ -75,6 +76,19 @@ test("E2E-171 local voice runner validates startup, reports unready, refuses inb
       cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_VOICE_TEST_MODE: "yes" },
       stdio: ["ignore", "pipe", "pipe"] });
     assert.equal((await once(invalidMode, "exit"))[0], 1);
+    const invalidWeekMode = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
+      cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_SEVEN_DAY_AVAILABILITY_ENABLED: "yes" },
+      stdio: ["ignore", "pipe", "pipe"] });
+    assert.equal((await once(invalidWeekMode, "exit"))[0], 1);
+    const missingWeekInstruction = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
+      cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_SEVEN_DAY_AVAILABILITY_ENABLED: "1" },
+      stdio: ["ignore", "pipe", "pipe"] });
+    assert.equal((await once(missingWeekInstruction, "exit"))[0], 1);
+    const disabledWeekInstruction = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
+      cwd: new URL("../../", import.meta.url), env: { ...env,
+        ABBY_GREETING_APPROVED_TEXT: `${env.ABBY_GREETING_APPROVED_TEXT} Press 3 for possible times over the next week.` },
+      stdio: ["ignore", "pipe", "pipe"] });
+    assert.equal((await once(disabledWeekInstruction, "exit"))[0], 1);
     child = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
       cwd: new URL("../../", import.meta.url), env, stdio: ["ignore", "pipe", "pipe"] });
     const health = await healthy(port);
@@ -141,6 +155,7 @@ test("E2E-172 E2E-185 isolated voice runner enforces durable approval around sig
     ABBY_TEST_OPERATOR_REF: "synthetic-operator", ABBY_AUTOMATION_EXPECTED_VERSION: "0",
     ABBY_GREETING_VERSION: "test-v1", ABBY_GREETING_APPROVAL_OWNER_REF: "synthetic-approval",
     ABBY_GREETING_APPROVED_TEXT: "This is an Abby test call. Press 1 for possible times today. Press 2 for possible times tomorrow.",
+    ABBY_SEVEN_DAY_AVAILABILITY_ENABLED: "0",
     ABBY_OPENAI_API_KEY: "synthetic-openai", ABBY_OPENAI_INTENT_MODEL: "synthetic-model",
   };
   let created = false;

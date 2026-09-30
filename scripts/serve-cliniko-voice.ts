@@ -67,6 +67,10 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
   const contactEmail = required("ABBY_CLINIKO_CONTACT_EMAIL");
   const mode = process.env.ABBY_VOICE_TEST_MODE;
   if (mode !== undefined && mode !== "1") throw new RangeError("invalid ABBY_VOICE_TEST_MODE");
+  const weekMode = process.env.ABBY_SEVEN_DAY_AVAILABILITY_ENABLED;
+  if (weekMode !== undefined && weekMode !== "0" && weekMode !== "1") {
+    throw new RangeError("invalid ABBY_SEVEN_DAY_AVAILABILITY_ENABLED");
+  }
   const testCaller = mode === "1" ? required("ABBY_TWILIO_TEST_CALLER_NUMBER") : undefined;
   if (testCaller && (!/^\+[1-9]\d{1,14}$/.test(testCaller) ||
       testCaller === fallbackNumber || testCaller === dialedNumber)) {
@@ -107,7 +111,8 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
         availability: availability.value, approval, rateBudget, clinicDate,
         keypadAvailabilityGreeting: { scope, version: required("ABBY_GREETING_VERSION"),
           ownerRef: required("ABBY_GREETING_APPROVAL_OWNER_REF"), approved: true,
-          approvedText: required("ABBY_GREETING_APPROVED_TEXT") } }],
+          approvedText: required("ABBY_GREETING_APPROVED_TEXT") },
+        sevenDayAvailabilityEnabled: weekMode === "1" }],
       openai: { apiKey: required("ABBY_OPENAI_API_KEY"), intentModel: required("ABBY_OPENAI_INTENT_MODEL"),
         ...(ports.openaiFetch ? { fetch: ports.openaiFetch } : {}),
         ...(ports.transcriptionSocketFactory ? { transcriptionSocketFactory: ports.transcriptionSocketFactory } : {}) },

@@ -22,7 +22,7 @@ import { TwilioSignedIngress } from "../voice/twilio-signed-ingress.ts";
 import type { TwilioSignedIngressConfig } from "../voice/twilio-signed-ingress.ts";
 import type { AuthenticatedInboundCall } from "../voice/admission.ts";
 import { createOpenAIAvailabilityIntentResolver } from "./openai-availability-intent.ts";
-import { keypadAvailabilityDate } from "./keypad-availability.ts";
+import { keypadAvailabilityRange } from "./keypad-availability.ts";
 import { createStandaloneTransientVoiceCall } from "./transient-voice-composition.ts";
 
 export type ClinikoVoiceRoute = Readonly<{
@@ -36,9 +36,12 @@ export type ClinikoVoiceRoute = Readonly<{
   clinicDate: () => string;
   /** Required clinic approval: Realtime finals cannot yet authorize speech-led availability. */
   keypadAvailabilityGreeting: ApprovedGreeting;
+  /** Must agree with the approved keypad wording; absent means disabled. */
+  sevenDayAvailabilityEnabled?: boolean;
 }>;
 
 const keypadInstructions = "Press 1 for possible times today. Press 2 for possible times tomorrow.";
+const sevenDayInstructions = "Press 3 for possible times over the next week.";
 
 export type ClinikoVoiceServerConfig = Readonly<{
   db: Kysely<Database>;
@@ -97,7 +100,9 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
         !greeting.version?.trim() || greeting.version.length > 256 ||
         !greeting.ownerRef?.trim() || greeting.ownerRef.length > 256 ||
         typeof greeting.approvedText !== "string" || greeting.approvedText.length > 2_000 ||
-        !greeting.approvedText.includes(keypadInstructions)) {
+        !greeting.approvedText.includes(keypadInstructions) ||
+        (route.sevenDayAvailabilityEnabled !== undefined && typeof route.sevenDayAvailabilityEnabled !== "boolean") ||
+        greeting.approvedText.includes(sevenDayInstructions) !== (route.sevenDayAvailabilityEnabled === true)) {
       throw new RangeError("invalid keypad availability greeting");
     }
     routes.set(route.dialedNumber, { ...route, scope: structuredClone(route.scope),
@@ -183,7 +188,8 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       expectedPolicyVersion: approved.selection.policyVersion,
       stream, send, closeTransport: close, synthesis, availability: route.availability,
       approvedGreeting: route.keypadAvailabilityGreeting,
-      keypadAvailabilityDate: (digit: string) => keypadAvailabilityDate(route.clinicDate, digit),
+      keypadAvailabilityRange: (digit: string) => keypadAvailabilityRange(route.clinicDate, digit,
+        route.sevenDayAvailabilityEnabled === true),
       resolveIntent: resolvers.get(route.dialedNumber)!, readiness,
       transcriptionFactory: sessionId => new OpenAIRealtimeTranscription({
         apiKey: openaiApiKey, sessionId,
