@@ -54,8 +54,18 @@ export type TwilioWireCall = Readonly<{
   receive: (raw: string) => Promise<Readonly<{ ok: boolean }>>;
   disconnect: () => Promise<unknown>;
 }>;
+export type ActiveCallLease = Readonly<{
+  /** Resolves if the cross-process ownership session dies before release. */
+  lost: Promise<void>;
+  release: () => Promise<void>;
+}>;
+export type ActiveCallClaims = Readonly<{
+  /** A duplicate returns undefined; storage failure rejects and closes the stream. */
+  claim: (accountRef: string, providerCallRef: string) => Promise<ActiveCallLease | undefined>;
+}>;
 export type TwilioIngressServerConfig = Readonly<{
   ingress: TwilioSignedIngress;
+  activeCallClaims?: ActiveCallClaims;
   /** Constructs a call owner only after the webhook, upgrade, and start have been authenticated. */
   createCall: (stream: AuthenticatedTwilioStream,
     send: (json: string) => "queued" | "notSent" | "uncertain",
@@ -94,6 +104,7 @@ function runStream(socket: WebSocket, request: IncomingMessage, config: TwilioIn
   let pendingMessages = 0;
   let disconnected = false;
   let claimedKey: string | undefined;
+  let activeLease: ActiveCallLease | undefined;
   const deadline = setTimeout(() => socket.close(1008), startDeadlineMs);
   deadline.unref();
   const disconnect = () => {
@@ -101,6 +112,7 @@ function runStream(socket: WebSocket, request: IncomingMessage, config: TwilioIn
     disconnected = true;
     clearTimeout(deadline);
     if (claimedKey) claims.release(claimedKey);
+    if (activeLease) void activeLease.release().catch(() => undefined);
     if (call) void call.disconnect().catch(() => undefined);
   };
   socket.on("close", disconnect);
@@ -127,6 +139,14 @@ function runStream(socket: WebSocket, request: IncomingMessage, config: TwilioIn
         claimedKey = claims.claim(authenticated.value.event.key.accountRef,
           authenticated.value.event.key.providerCallRef);
         if (!claimedKey) { socket.close(1008); return; }
+        if (config.activeCallClaims) {
+          const lease = await config.activeCallClaims.claim(authenticated.value.event.key.accountRef,
+            authenticated.value.event.key.providerCallRef);
+          if (!lease) { socket.close(1008); return; }
+          if (socket.readyState !== WebSocket.OPEN) { await lease.release(); return; }
+          activeLease = lease;
+          void lease.lost.then(() => socket.close(1011), () => socket.close(1011));
+        }
         call = await config.createCall(authenticated.value, send, () => socket.close(1008));
         if (socket.readyState !== WebSocket.OPEN) { await call.disconnect(); return; }
         clearTimeout(deadline);

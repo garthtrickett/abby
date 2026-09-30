@@ -12,6 +12,7 @@ import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { createStandaloneClinikoVoiceServer } from "../../src/standalone/cliniko-voice-server.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { migrate } from "../../src/storage/migrate.ts";
+import { PostgresActiveCallClaims } from "../../src/storage/postgres-active-call-claims.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
@@ -67,6 +68,7 @@ test("E2E-143 standalone voice server refuses unsafe storage before opening a li
     async () => { throw new Error("blocked server must not call Cliniko"); });
     assert.ok(availability.ok);
     const prepared = await createStandaloneClinikoVoiceServer({ db,
+      activeCallClaims: new PostgresActiveCallClaims(target.toString(), Buffer.alloc(32, 0x51)),
       twilio: { accountSid: `AC${"1".repeat(32)}`, authToken: "synthetic-twilio-token",
         publicWebhookUrl: "https://calls.example.test/twilio/inbound",
         publicStreamUrl: "wss://calls.example.test/twilio/media/",
@@ -150,6 +152,7 @@ test("E2E-138, E2E-139, and E2E-140 local standalone server reads keypad availab
     let synthesisCalls = 0;
     const spoken: string[] = [];
     const prepared = await createStandaloneClinikoVoiceServer({ db,
+      activeCallClaims: new PostgresActiveCallClaims(target.toString(), Buffer.alloc(32, 0x51)),
       twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
         fallbackNumbers: { [number]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x46),
         now: () => new Date(now) },
@@ -319,6 +322,7 @@ test("E2E-151 signed standalone call switches speech models before the first out
     const models: string[] = [];
     let primaryAborted = false;
     const prepared = await createStandaloneClinikoVoiceServer({ db,
+      activeCallClaims: new PostgresActiveCallClaims(target.toString(), Buffer.alloc(32, 0x51)),
       twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
         fallbackNumbers: { [number]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x47),
         now: () => new Date(now) },

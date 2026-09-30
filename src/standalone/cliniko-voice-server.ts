@@ -6,6 +6,7 @@ import type { ApprovedGreeting, LocationScope, Result } from "../core/model.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
 import { ReferenceNumberRoutingHost } from "../reference/clinic-number-routing.ts";
 import type Database from "../storage/generated/Database.ts";
+import { PostgresActiveCallClaims } from "../storage/postgres-active-call-claims.ts";
 import { PostgresClinikoRequestBudget } from "../storage/postgres-cliniko-request-budget.ts";
 import { checkStandaloneTextDatabase } from "../storage/standalone-privacy-preflight.ts";
 import type { StandalonePrivacyPreflightFailure } from "../storage/standalone-privacy-preflight.ts";
@@ -38,6 +39,8 @@ const keypadInstructions = "Press 1 for possible times today. Press 2 for possib
 
 export type ClinikoVoiceServerConfig = Readonly<{
   db: Kysely<Database>;
+  /** Must use the same PostgreSQL database and key on every serving instance. */
+  activeCallClaims: PostgresActiveCallClaims;
   twilio: TwilioSignedIngressConfig;
   routes: readonly ClinikoVoiceRoute[];
   openai: Readonly<{
@@ -62,6 +65,9 @@ export type ClinikoVoiceServerConfig = Readonly<{
 export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceServerConfig):
   Promise<Result<Server, StandalonePrivacyPreflightFailure>> {
   if (!config.routes.length || config.routes.length > 1_000) throw new RangeError("invalid clinic voice routes");
+  if (!(config.activeCallClaims instanceof PostgresActiveCallClaims)) {
+    throw new RangeError("cross-process active call ownership required");
+  }
   const twilio = { ...config.twilio, bindingKey: new Uint8Array(config.twilio.bindingKey),
     fallbackNumbers: { ...config.twilio.fallbackNumbers } };
   const fallbackNumbers = Object.keys(twilio.fallbackNumbers);
@@ -132,8 +138,12 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
 
   const privacy = await checkStandaloneTextDatabase(config.db);
   if (!privacy.ok) return err(privacy.error);
+  if (!await config.activeCallClaims.matchesDatabase(config.db)) {
+    throw new RangeError("active-call ownership database mismatch");
+  }
 
-  return ok(createTwilioIngressServer({ ingress, async createCall(stream, send, close) {
+  return ok(createTwilioIngressServer({ ingress, activeCallClaims: config.activeCallClaims,
+    async createCall(stream, send, close) {
     const route = routes.get(stream.event.dialedNumber);
     if (!route || stream.event.key.accountRef !== twilio.accountSid) throw new Error("clinic route unavailable");
     const composed = await createStandaloneTransientVoiceCall({ db: config.db, routingHost,
