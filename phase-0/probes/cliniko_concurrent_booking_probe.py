@@ -4,6 +4,7 @@
 import base64
 import getpass
 import json
+import os
 import re
 import sys
 import threading
@@ -41,14 +42,17 @@ def appointments_for_patient(base: str, headers: dict[str, str], patient_id: str
 
 
 def main() -> int:
-    if not sys.stdin.isatty():
-        print("Run in a terminal so the API key is hidden.", file=sys.stderr)
+    env_mode = os.environ.get("ABBY_LIVE_CLINIKO_EVAL") == "1"
+    if not env_mode and not sys.stdin.isatty():
+        print("Run in a terminal so the API key is hidden, or use the opt-in owner-only environment.", file=sys.stderr)
         return 2
-    contact = input("Cliniko API contact email: ").strip()
+    contact = (os.environ.get("ABBY_CLINIKO_CONTACT_EMAIL", "") if env_mode
+               else input("Cliniko API contact email: ")).strip()
     if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", contact):
         print("Invalid contact email.", file=sys.stderr)
         return 2
-    key = getpass.getpass("Cliniko API key (hidden): ").strip()
+    key = (os.environ.get("ABBY_CLINIKO_API_KEY", "") if env_mode
+           else getpass.getpass("Cliniko API key (hidden): ")).strip()
     shard = key.rpartition("-")[2]
     if not re.fullmatch(r"[a-z]{2}[0-9]+", shard):
         print("Invalid key shard suffix.", file=sys.stderr)
@@ -94,6 +98,8 @@ def main() -> int:
         target_date = (datetime.now(zone).date() + timedelta(days=2)).isoformat()
         selected_type = None
         start = None
+        alternate_start = None
+        availability_path = None
         for item in types:
             type_id = str(item["id"])
             path = (f"/businesses/{business_id}/practitioners/{practitioner_id}"
@@ -103,8 +109,11 @@ def main() -> int:
             if status == 200 and isinstance(data.get("available_times"), list) and data["available_times"]:
                 selected_type = type_id
                 start = data["available_times"][0].get("appointment_start")
+                alternate_start = (data["available_times"][1].get("appointment_start")
+                                   if len(data["available_times"]) > 1 else None)
+                availability_path = path
                 break
-        if not selected_type or not isinstance(start, str):
+        if not selected_type or not isinstance(start, str) or not isinstance(alternate_start, str):
             raise ProbeError("no_bookable_offer")
         patient_post_attempted = True
         status, patient = request(base, headers, "POST", "/patients", {
@@ -139,11 +148,46 @@ def main() -> int:
                   ((row.get("practitioner") or {}).get("links") or {}).get("self"),
                   ((row.get("appointment_type") or {}).get("links") or {}).get("self")) for row in matches}
         same_slot = len(matches) == 2 and len(slots) == 1 and all(next(iter(slots)))
+        conflict_results = []
+        for row in matches:
+            appointment_id = str(row["id"])
+            conflict_status, conflict_body = request(base, headers, "GET",
+                f"/individual_appointments/{quote(appointment_id, safe='')}/conflicts")
+            conflicts = conflict_body.get("conflicts")
+            if conflict_status != 200 or not isinstance(conflicts, dict) or not isinstance(conflicts.get("exist"), bool):
+                raise ProbeError(f"conflict_read_{conflict_status}")
+            conflict_results.append(conflicts["exist"])
         print(json.dumps({"probe": "cliniko_concurrent_booking_v1", "shard": shard,
                           "response_statuses": sorted(status for status, _ in outcomes),
-                          "exact_marker_matches": len(matches), "same_slot_both_created": same_slot}))
+                          "exact_marker_matches": len(matches), "same_slot_both_created": same_slot,
+                          "conflict_reads": len(conflict_results),
+                          "conflicts_exist_count": sum(conflict_results)}))
         if any(status not in (201, 422) for status, _ in outcomes):
             failed = True
+
+        changed_business = True
+        status, disabled = request(base, headers, "PATCH", business_path, {"show_in_online_bookings": False})
+        verify_status, current_business = request(base, headers, "GET", business_path)
+        if status != 200 or disabled.get("show_in_online_bookings") is not False or\
+                verify_status != 200 or current_business.get("show_in_online_bookings") is not False:
+            raise ProbeError("disable_online_booking_for_drift_failed")
+        offer_after_status, _ = request(base, headers, "GET", availability_path)
+        drift_marker = run_marker + ":permission"
+        drift_status, drift_body = request(base, headers, "POST", "/individual_appointments", {
+            "business_id": business_id, "practitioner_id": practitioner_id,
+            "appointment_type_id": selected_type, "patient_id": patient_id,
+            "starts_at": alternate_start, "notes": drift_marker,
+        })
+        if drift_status == 201 and drift_body.get("id"):
+            created_ids.add(str(drift_body["id"]))
+        drift_matches = [row for row in appointments_for_patient(base, headers, patient_id)
+                         if row.get("notes") == drift_marker]
+        if drift_status not in (201, 403, 422) or\
+                (drift_status == 201 and len(drift_matches) != 1) or\
+                (drift_status != 201 and drift_matches):
+            raise ProbeError("permission_drift_result_uncertain")
+        print(json.dumps({"step": "permission_drift", "offer_after_disable_status": offer_after_status,
+                          "write_status": drift_status, "exact_marker_matches": len(drift_matches)}))
     except (ProbeError, URLError, TimeoutError, ValueError, KeyError, ZoneInfoNotFoundError,
             threading.BrokenBarrierError) as error:
         failed = True
