@@ -13,7 +13,7 @@ import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 
-type Fault = "openai-speech" | "cliniko-rate-limit" | "cliniko-timeout" | "cliniko-partial-page" |
+type Fault = "openai-speech" | "openai-transcription" | "cliniko-rate-limit" | "cliniko-timeout" | "cliniko-partial-page" |
   "cliniko-business-type-removed" | undefined;
 const fallbackScenarios = [
   { fault: "cliniko-rate-limit", id: "E2E-174" },
@@ -228,6 +228,20 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
       assert.deepEqual(call.messages, []);
       assert.equal(fixture.speech.length, 1);
     })),
+    t.test("E2E-196 transcription failure closes the signed stream without a new claim", async () =>
+      withFixture("openai-transcription", async fixture => {
+        const call = await fixture.openCall();
+        await markGreeting(call);
+        for (let index = 0; index < 3; index += 1) call.socket.send(JSON.stringify({ event: "media",
+          sequenceNumber: String(index + 3), streamSid: call.streamSid,
+          media: { track: "inbound", chunk: String(index + 1), timestamp: String(index * 20),
+            payload: Buffer.alloc(160, 0x9f).toString("base64") } }));
+        assert.equal((await bounded(call.closed, "transcription failure close"))[0], 1008);
+        assert.deepEqual(fixture.speech, [
+          "This is an Abby test call. Press 1 for possible times today. Press 2 for possible times tomorrow.",
+        ]);
+        assert.deepEqual(fixture.clinikoMethods, []);
+      })),
     t.test("E2E-176 database loss closes active stream and health fails", async () => withFixture(undefined, async fixture => {
       const call = await fixture.openCall();
       await markGreeting(call);
@@ -236,7 +250,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
       assert.equal((await bounded(call.closed, "database loss close"))[0], 1011);
       assert.equal((await fetch(`http://127.0.0.1:${fixture.port}/healthz`)).status, 503);
     })),
-    t.test("E2E-177 abrupt exit drops stream without a fallback claim", async () => withFixture(undefined, async fixture => {
+    t.test("E2E-177 E2E-197 abrupt exit drops the stream and refuses the next ingress", async () => withFixture(undefined, async fixture => {
       const call = await fixture.openCall();
       await markGreeting(call);
       const exited = once(fixture.child, "exit");
@@ -246,6 +260,15 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
       assert.equal(signal, "SIGKILL");
       assert.equal((await bounded(call.closed, "abrupt stream close"))[0], 1006);
       await assert.rejects(fetch(`http://127.0.0.1:${fixture.port}/healthz`, { signal: AbortSignal.timeout(1_000) }));
+      const nextForm = { AccountSid: accountSid, CallSid: `CA${randomUUID().replaceAll("-", "")}`, To: number, From: caller };
+      await assert.rejects(fetch(`http://127.0.0.1:${fixture.port}/twilio/inbound`, { method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded",
+          "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, webhookUrl, nextForm) },
+        body: new URLSearchParams(nextForm), signal: AbortSignal.timeout(1_000) }));
+      const rejected = new WebSocket(`ws://127.0.0.1:${fixture.port}/twilio/media/`, { headers: {
+        "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, streamUrl, {}),
+      } });
+      await assert.rejects(bounded(once(rejected, "open"), "runner-down socket refusal"));
     })),
   ]);
 });

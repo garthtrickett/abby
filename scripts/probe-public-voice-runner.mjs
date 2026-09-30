@@ -132,6 +132,30 @@ async function wrongStreamSignature(url) {
   }), "incorrect WSS signature rejection");
 }
 
+async function runnerDownWebhook(url) {
+  let response;
+  try { response = await webhook(url, callerNumber, `CA${randomUUID().replaceAll("-", "")}`); }
+  catch { return "network failure"; }
+  assert.ok(response.status >= 500, `stopped runner returned HTTP ${response.status}`);
+  assert.doesNotMatch(await response.text(), /<Stream\b/);
+  return `HTTP ${response.status}`;
+}
+
+async function runnerDownStream(url) {
+  return deadline(new Promise((resolve, reject) => {
+    const socket = stream(url);
+    socket.once("unexpected-response", (_request, response) => {
+      response.resume();
+      socket.terminate();
+      if (response.statusCode >= 500) resolve(`HTTP ${response.statusCode}`);
+      else reject(new Error(`stopped runner accepted WSS route with HTTP ${response.statusCode}`));
+    });
+    socket.once("error", () => resolve("network failure"));
+    socket.once("close", () => resolve("closed before handshake"));
+    socket.once("open", () => { socket.terminate(); reject(new Error("stopped runner accepted a WSS stream")); });
+  }), "runner-down WSS refusal");
+}
+
 function start(socket, binding, sid) {
   socket.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
   socket.send(JSON.stringify({ event: "start", sequenceNumber: "1", streamSid: sid,
@@ -254,6 +278,11 @@ async function main() {
     await deadline(closed, "caller stream close");
     caller = undefined;
     process.stdout.write("signed call admitted; greeting, keypad availability, interruption and disconnect observed\n");
+
+    const [webhookFailure, streamFailure] = await Promise.all([
+      runnerDownWebhook(webhookUrl), runnerDownStream(streamUrl),
+    ]);
+    process.stdout.write(`stopped runner refused new public ingress: HTTPS ${webhookFailure}; WSS ${streamFailure}\n`);
 
     const privateDb = connectPostgres(target.toString());
     try {
