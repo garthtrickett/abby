@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
+import { createServer } from "node:http";
 import test from "node:test";
 import { ClinikoCancellationWriter } from "../../src/cliniko/cancellation-write.ts";
 import { ClinikoRescheduleWriter } from "../../src/cliniko/reschedule-write.ts";
@@ -59,7 +61,7 @@ class ChangePolicyStore extends MemoryPolicyStore {
 }
 
 async function fixture(kind: Kind, scenario: Scenario, writerBusinessId = "11",
-                       writerApiKey = "synthetic-key-au5") {
+                       writerApiKey = "synthetic-key-au5", providerFetch?: typeof fetch) {
   const event = { key: { accountRef: "synthetic-provider", providerCallRef: `change-${crypto.randomUUID()}` },
     dialedNumber: "+6125550199", presentedCallerNumber: "+61400111222", receivedAt: now };
   const callId = callIdFor(event.key);
@@ -125,8 +127,8 @@ async function fixture(kind: Kind, scenario: Scenario, writerBusinessId = "11",
   };
   const writerConfig = { scope, apiKey: writerApiKey,
     contactEmail: "dev@example.test", businessId: writerBusinessId };
-  const cancellation = ClinikoCancellationWriter.create(writerConfig, provider, () => now);
-  const rescheduling = ClinikoRescheduleWriter.create(writerConfig, provider, () => now);
+  const cancellation = ClinikoCancellationWriter.create(writerConfig, providerFetch ?? provider, () => now);
+  const rescheduling = ClinikoRescheduleWriter.create(writerConfig, providerFetch ?? provider, () => now);
   assert.ok(cancellation.ok && rescheduling.ok);
   const staff = new ReferenceClinicHost([], []);
   let authorityReads = 0;
@@ -313,6 +315,84 @@ for (const kind of ["cancel", "reschedule"] as const) {
     assert.equal(Object.values(settled.value.actions)[0]?.status, "committed");
     assert.equal(app.patchCount, 1);
     await app.close();
+  });
+
+  test(`E2E-${kind === "cancel" ? "007" : "066"} ${kind} TCP reset after PATCH stays uncertain until exact observation`, async () => {
+    let patches = 0;
+    let readsAfterPatch = 0;
+    let conflictReads = 0;
+    let cancelled = false;
+    let moved = false;
+    const server = createServer(async (request, response) => {
+      const path = new URL(request.url!, "http://localhost").pathname;
+      if (request.method === "PATCH") {
+        patches += 1;
+        assert.equal(path, kind === "cancel" ? "/v1/individual_appointments/91/cancel"
+          : "/v1/individual_appointments/91");
+        const chunks: Buffer[] = [];
+        for await (const chunk of request) chunks.push(Buffer.from(chunk as Uint8Array));
+        if (kind === "cancel") cancelled = true;
+        else {
+          const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
+          assert.deepEqual(body, { starts_at: newStart, ends_at: null });
+          moved = true;
+        }
+        response.destroy();
+        return;
+      }
+      assert.equal(request.method, "GET");
+      if (path.endsWith("/conflicts")) {
+        conflictReads += 1;
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ conflicts: { exist: false } }));
+        return;
+      }
+      assert.equal(path, "/v1/individual_appointments/91");
+      if (patches) readsAfterPatch += 1;
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ id: "91", starts_at: moved ? newStart : oldStart,
+        ends_at: moved ? "2026-10-08T12:30:00+07:00" : oldEnd,
+        cancelled_at: cancelled ? now : null, archived_at: null, deleted_at: null,
+        patient: { links: { self: `${base}/patients/42` } },
+        business: { links: { self: `${base}/businesses/11` } },
+        practitioner: { links: { self: `${base}/practitioners/22` } },
+        appointment_type: { links: { self: `${base}/appointment_types/33` } },
+        notes: "Private fixture note" }));
+    });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const providerFetch: typeof fetch = (input, init) => {
+      const original = new URL(String(input));
+      assert.equal(original.origin, "https://api.au5.cliniko.com");
+      return fetch(`http://127.0.0.1:${address.port}${original.pathname}${original.search}`, init);
+    };
+    let app: Awaited<ReturnType<typeof fixture>> | undefined;
+    try {
+      app = await fixture(kind, "success", "11", "synthetic-key-au5", providerFetch);
+      await app.begin();
+      await app.play((await app.speak()).delivery);
+      const uncertain = await app.speak();
+      assert.equal(patches, 1);
+      assert.equal(readsAfterPatch, 0, "observation must follow the uncertain caller notice");
+      assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review.");
+      assert.equal(Object.values((await app.state()).actions)[0]?.status, "uncertain");
+      await app.play(uncertain.delivery);
+      const settled = await app.drain();
+      assert.ok(settled.ok);
+      assert.equal(Object.values(settled.value.actions)[0]?.status, "committed");
+      assert.ok(readsAfterPatch > 0);
+      assert.equal(conflictReads, kind === "reschedule" ? 1 : 0);
+      assert.equal(patches, 1, "exact observation cannot replay the PATCH");
+      assert.equal(app.spoken.join(" ").includes("Private fixture note"), false);
+    } finally {
+      try { await app?.close(); }
+      finally {
+        server.closeAllConnections();
+        await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+      }
+    }
   });
 }
 
