@@ -1,4 +1,4 @@
-# Cliniko read-only availability adapter, version 0.1
+# Cliniko read-only availability adapter
 
 `ClinikoAvailabilityReader` binds a Cliniko API key, location scope, business, practitioner, and appointment type at construction. It derives the shard from the key suffix and sends authenticated HTTPS `GET` requests with Abby's contact User-Agent. It never sends a mutation request. A cross-scope call or invalid date range is rejected before HTTP.
 
@@ -11,3 +11,20 @@ For a composition that also uses patient or appointment reads under the same Cli
 The adapter runs through an [opt-in synthetic call path](CLINIKO_CALL_READ.md) with final-turn, playback, failure, and daylight-saving tests. [C-LIVE-10](../phase-0/CLINIKO_EVIDENCE.md) re-probed the current relationship-checking adapter against the demo account for both appointment types and verified restoration of the business's online-booking flag. [C-LIVE-18](../phase-0/CLINIKO_EVIDENCE.md) checked the current demo profile using GETs only, then injected empty, rate-limited, partial-page, and UTC-boundary slot responses through the real adapter and strict text runner. Its shared-phone and stale-index cases were also synthetic; the demo provider did not produce those faults. The demo business time zone was `Asia/Jakarta` at the earlier probe; caller wording must use the current value returned by the API. The adapter has not been invoked through live media. It does not verify a patient, issue a stable offer, reserve a slot, or implement Cliniko writes. Patient-specific booking and handoff remain unavailable in standalone mode under D-11. Before live caller-facing availability is enabled, the product still needs approved time-zone wording, a route and permission mapping, and a real media call that proves the spoken result and fallback.
 
 The request shape and online-booking behavior follow Cliniko's [API introduction](https://docs.api.cliniko.com/), [sharding guide](https://docs.api.cliniko.com/guides/sharding), [Available Time reference](https://docs.api.cliniko.com/openapi/available-time), [Business time-zone field](https://docs.api.cliniko.com/openapi/business), [business practitioner relationship](https://docs.api.cliniko.com/openapi/practitioner/listpractitionersforbusiness-get), and [practitioner appointment-type relationship](https://docs.api.cliniko.com/openapi/appointment-type).
+
+## B4 read-engineering exit
+
+The number-independent, read-only B4 exit is met for the synthetic/local composition. On 2026-10-01, the current-main focused PostgreSQL run of the adapter, approved-search, signed standalone, ineligible-business, and shared standalone/embedded availability suites passed 59/59 tests. The evidence is scoped as follows:
+
+| Requirement | Evidence |
+| --- | --- |
+| Route, catalogue, practitioner/type, online-booking, and policy binding | Adapter contract tests; signed `E2E-153`, `E2E-193`, `E2E-204`, `E2E-209`, `E2E-210`; durable approval composition `E2E-172/185/217` |
+| Bounded search and approved alternatives | Approved-search tests; signed `E2E-199` (one or seven clinic-local days) and `E2E-200` (primary plus at most two ordered approved alternatives) |
+| Empty, incomplete, changed, rate-limited, unavailable, and timed-out reads | Adapter contract tests; signed `E2E-190`, `E2E-193`, `E2E-200`, `E2E-204`, `E2E-207`, `E2E-208` and the 429 cases of `E2E-199/200` |
+| Clinic-zone/DST and provisional wording | Adapter contract tests; signed `E2E-192`, `E2E-199`, `E2E-200`, `E2E-209`; no reservation claim or standalone appointment-slot persistence |
+
+The controlled demo GET evidence in [C-LIVE-10 and C-LIVE-18](../phase-0/CLINIKO_EVIDENCE.md) anchors the adapter to one Cliniko account profile, but does not turn the synthetic faults into observed provider faults. Activation remains gated on the exact clinic route and wording approval and a real carrier call with spoken-result and fallback evidence. The speech-quality gate is independent and remains required for natural-language turns.
+
+### Offline-roster decision
+
+Offline-roster slot offering is **unavailable** in this reader. Cliniko's [Available Time reference](https://docs.api.cliniko.com/openapi/available-time/availabletime) says available-time results respect online-booking settings; its [Daily Availability reference](https://docs.api.cliniko.com/openapi/daily-availability) describes recurring practitioner schedules. [Availability Blocks](https://docs.api.cliniko.com/openapi/availability-block/availabilityblock) and [Unavailable Blocks](https://docs.api.cliniko.com/openapi/unavailable-block) are separate resources. We infer that a daily schedule alone cannot establish a free appointment slot. The demo observation in C-LIVE-03 is consistent with this boundary: enabling business online booking temporarily changed the selected available-time reads from 404 to 200, then the original setting was restored. A future offline-roster capability needs its own provider contract, conflict and eligibility proof, clinic approval, and caller-facing wording; it must not reuse the provisional available-time result as a hold or booking promise.
