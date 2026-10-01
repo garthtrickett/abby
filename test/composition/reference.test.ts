@@ -144,6 +144,8 @@ for (const kind of kinds) {
       listBookingChanges: (...args) => app.policy.listBookingChanges(...args),
       changeAfterHours: (...args) => app.policy.changeAfterHours(...args),
       listAfterHoursChanges: (...args) => app.policy.listAfterHoursChanges(...args),
+      changeUrgentResponse: (...args) => app.policy.changeUrgentResponse(...args),
+      listUrgentResponseChanges: (...args) => app.policy.listUrgentResponseChanges(...args),
       changeAutomationEnabled: (...args) => app.policy.changeAutomationEnabled(...args),
       listAutomationChanges: (...args) => app.policy.listAutomationChanges(...args),
     };
@@ -158,6 +160,8 @@ for (const kind of kinds) {
       listBookingChanges: (...args) => app.policy.listBookingChanges(...args),
       changeAfterHours: (...args) => app.policy.changeAfterHours(...args),
       listAfterHoursChanges: (...args) => app.policy.listAfterHoursChanges(...args),
+      changeUrgentResponse: (...args) => app.policy.changeUrgentResponse(...args),
+      listUrgentResponseChanges: (...args) => app.policy.listUrgentResponseChanges(...args),
       changeAutomationEnabled: (...args) => app.policy.changeAutomationEnabled(...args),
       listAutomationChanges: (...args) => app.policy.listAutomationChanges(...args),
     };
@@ -175,6 +179,8 @@ for (const kind of kinds) {
       listBookingChanges: (...args) => app.policy.listBookingChanges(...args),
       changeAfterHours: (...args) => app.policy.changeAfterHours(...args),
       listAfterHoursChanges: (...args) => app.policy.listAfterHoursChanges(...args),
+      changeUrgentResponse: (...args) => app.policy.changeUrgentResponse(...args),
+      listUrgentResponseChanges: (...args) => app.policy.listUrgentResponseChanges(...args),
     };
     const uncertainAdmin = new CommandGateway({ actorRef: "lost-response-admin", role: "clinicAdmin", scope: app.scope },
       lostResponsePolicy, app.reception);

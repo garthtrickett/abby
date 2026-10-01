@@ -1,4 +1,4 @@
-import type { ActionRequest, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedKnowledge, AppointmentRead, AppointmentReadFailure, AvailabilityRead, AvailabilityReadFailure, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, OperatorAlert, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
+import type { ActionRequest, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedUrgentResponse, ApprovedKnowledge, AppointmentRead, AppointmentReadFailure, AvailabilityRead, AvailabilityReadFailure, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, OperatorAlert, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
 import type { ReadinessFailure } from "./readiness.ts";
 
 export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable"; target: "patient" | "offer" | "appointment" }>;
@@ -30,6 +30,18 @@ export type AfterHoursSettingAuditEntry = Readonly<{
 }>;
 export type AfterHoursSettingAuditPage = Readonly<{
   entries: readonly AfterHoursSettingAuditEntry[];
+  nextAfterVersion?: number;
+}>;
+export type UrgentSettingAuditEntry = Readonly<{
+  version: string;
+  enabled: boolean;
+  previousEnabled: boolean;
+  scriptVersion?: string;
+  actorRef: string;
+  changedAt: string;
+}>;
+export type UrgentSettingAuditPage = Readonly<{
+  entries: readonly UrgentSettingAuditEntry[];
   nextAfterVersion?: number;
 }>;
 export type KnowledgeReadFailure = Readonly<{ kind: "invalidQuery" | "unavailable" }>;
@@ -118,4 +130,7 @@ export interface PolicyStore {
   changeAfterHours(scope: LocationScope, expectedVersion: string, mode: AfterHoursMode,
                    info: ApprovedAfterHoursInfo | undefined, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
   listAfterHoursChanges(scope: LocationScope, afterVersion?: number): Promise<Result<AfterHoursSettingAuditPage, PolicyFailure>>;
+  changeUrgentResponse(scope: LocationScope, expectedVersion: string, response: ApprovedUrgentResponse | undefined,
+                       actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
+  listUrgentResponseChanges(scope: LocationScope, afterVersion?: number): Promise<Result<UrgentSettingAuditPage, PolicyFailure>>;
 }

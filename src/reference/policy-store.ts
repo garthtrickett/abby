@@ -1,7 +1,8 @@
-import type { AfterHoursSettingAuditEntry, AfterHoursSettingAuditPage, AutomationSettingAuditEntry, AutomationSettingAuditPage, BookingSettingAuditEntry, BookingSettingAuditPage, PolicyStore, PolicyFailure } from "../core/host.ts";
+import type { AfterHoursSettingAuditEntry, AfterHoursSettingAuditPage, AutomationSettingAuditEntry, AutomationSettingAuditPage, BookingSettingAuditEntry, BookingSettingAuditPage, UrgentSettingAuditEntry, UrgentSettingAuditPage, PolicyStore, PolicyFailure } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
-import type { AfterHoursMode, ApprovedAfterHoursInfo, CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
+import type { AfterHoursMode, ApprovedAfterHoursInfo, ApprovedUrgentResponse, CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
 import { validAfterHoursSetting } from "../core/after-hours-policy.ts";
+import { validUrgentResponseShape } from "../core/urgent-response.ts";
 import { READINESS_REQUIREMENTS, unprovenReadiness } from "../core/readiness.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
 
@@ -34,6 +35,7 @@ export type ImportedReferenceLocationPolicy = Readonly<{
   policy: CallPolicy;
   bookingHistory: readonly BookingSettingAuditEntry[];
   afterHoursHistory?: readonly AfterHoursSettingAuditEntry[];
+  urgentHistory?: readonly UrgentSettingAuditEntry[];
 }>;
 
 export type ImportedReferenceClinicAutomation = Readonly<{
@@ -48,6 +50,7 @@ export class MemoryPolicyStore implements PolicyStore {
   private readonly clinicAutomation = new Map<string, Readonly<{ version: number; enabled: boolean }>>();
   private readonly bookingChanges = new Map<string, BookingSettingAuditEntry[]>();
   private readonly afterHoursChanges = new Map<string, AfterHoursSettingAuditEntry[]>();
+  private readonly urgentChanges = new Map<string, UrgentSettingAuditEntry[]>();
   private readonly automationChanges = new Map<string, AutomationSettingAuditEntry[]>();
   private readonly hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly">;
   private readonly clock: () => string;
@@ -63,9 +66,10 @@ export class MemoryPolicyStore implements PolicyStore {
   static fromImported(scope: LocationScope, sourceHead: CallPolicy, bookingHistory: readonly BookingSettingAuditEntry[],
                       afterHoursHistory: readonly AfterHoursSettingAuditEntry[],
                       automationHistory: readonly AutomationSettingAuditEntry[], sourceAutomationVersion: number,
-                      sourceAutomationEnabled: boolean, importActorRef: string, importedAt: string): MemoryPolicyStore {
+                      sourceAutomationEnabled: boolean, importActorRef: string, importedAt: string,
+                      urgentHistory: readonly UrgentSettingAuditEntry[] = []): MemoryPolicyStore {
     return MemoryPolicyStore.fromImportedMany(
-      [{ scope, policy: sourceHead, bookingHistory, afterHoursHistory }],
+      [{ scope, policy: sourceHead, bookingHistory, afterHoursHistory, urgentHistory }],
       [{ scope, history: automationHistory, sourceVersion: sourceAutomationVersion, sourceEnabled: sourceAutomationEnabled }],
       importActorRef, importedAt);
   }
@@ -89,6 +93,7 @@ export class MemoryPolicyStore implements PolicyStore {
       }
       store.bookingChanges.set(key, changes);
       store.afterHoursChanges.set(key, structuredClone([...(location.afterHoursHistory ?? [])]));
+      store.urgentChanges.set(key, structuredClone([...(location.urgentHistory ?? [])]));
     }
     for (const clinic of clinics) {
       const key = clinicKey(clinic.scope);
@@ -201,6 +206,36 @@ export class MemoryPolicyStore implements PolicyStore {
   async listAfterHoursChanges(scope: LocationScope, afterVersion?: number): Promise<Result<AfterHoursSettingAuditPage, PolicyFailure>> {
     if (afterVersion !== undefined && (!Number.isSafeInteger(afterVersion) || afterVersion < 0)) return err({ kind: "invalidValue" });
     const entries = (this.afterHoursChanges.get(scopeKey(scope)) ?? [])
+      .filter(item => Number(item.version) > (afterVersion ?? 0)).slice(0, 50);
+    return ok({ entries: structuredClone(entries),
+      ...(entries.length === 50 ? { nextAfterVersion: Number(entries[49]!.version) } : {}) });
+  }
+
+  async changeUrgentResponse(scope: LocationScope, expectedVersion: string,
+                             response: ApprovedUrgentResponse | undefined, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+    if ((response !== undefined && (!validUrgentResponseShape(response, scope) || response.ownerRef !== actorRef)) ||
+        typeof actorRef !== "string" || !actorRef.trim() || actorRef.length > 256) return err({ kind: "invalidValue" });
+    const current = this.policies.get(scopeKey(scope)) ?? referenceDefaultPolicy(scope);
+    if (current.policyVersion !== expectedVersion) return err({ kind: "versionConflict" });
+    let changedAt: string;
+    try { changedAt = this.clock(); }
+    catch { return err({ kind: "storageFailure" }); }
+    if (!Number.isFinite(Date.parse(changedAt))) return err({ kind: "storageFailure" });
+    const { urgentResponse: previousResponse, ...base } = current;
+    const next: CallPolicy = { ...base, policyVersion: String(Number(current.policyVersion) + 1),
+      ...(response === undefined ? {} : { urgentResponse: structuredClone(response) }) };
+    this.policies.set(scopeKey(scope), structuredClone(next));
+    const history = this.urgentChanges.get(scopeKey(scope)) ?? [];
+    history.push({ version: next.policyVersion, enabled: response !== undefined,
+      previousEnabled: previousResponse !== undefined,
+      ...(response === undefined ? {} : { scriptVersion: response.version }), actorRef, changedAt });
+    this.urgentChanges.set(scopeKey(scope), history);
+    return ok(structuredClone(this.effective(next)));
+  }
+
+  async listUrgentResponseChanges(scope: LocationScope, afterVersion?: number): Promise<Result<UrgentSettingAuditPage, PolicyFailure>> {
+    if (afterVersion !== undefined && (!Number.isSafeInteger(afterVersion) || afterVersion < 0)) return err({ kind: "invalidValue" });
+    const entries = (this.urgentChanges.get(scopeKey(scope)) ?? [])
       .filter(item => Number(item.version) > (afterVersion ?? 0)).slice(0, 50);
     return ok({ entries: structuredClone(entries),
       ...(entries.length === 50 ? { nextAfterVersion: Number(entries[49]!.version) } : {}) });

@@ -27,10 +27,12 @@ function minimalHistory(data: TenantConfigArchiveData): boolean {
 
 function storedPolicy(scope: LocationScope, version: number, policy: CallPolicy):
   Readonly<{ scope: LocationScope; policyVersion: string; bookingEnabled: boolean;
-    afterHoursMode: NonNullable<CallPolicy["afterHoursMode"]>; afterHoursInfo?: NonNullable<CallPolicy["afterHoursInfo"]> }> {
+    afterHoursMode: NonNullable<CallPolicy["afterHoursMode"]>; afterHoursInfo?: NonNullable<CallPolicy["afterHoursInfo"]>;
+    urgentResponse?: NonNullable<CallPolicy["urgentResponse"]> }> {
   return { scope: { ...scope }, policyVersion: String(version), bookingEnabled: policy.bookingEnabled,
     afterHoursMode: policy.afterHoursMode ?? "staffRequest",
-    ...(policy.afterHoursInfo ? { afterHoursInfo: policy.afterHoursInfo } : {}) };
+    ...(policy.afterHoursInfo ? { afterHoursInfo: policy.afterHoursInfo } : {}),
+    ...(policy.urgentResponse ? { urgentResponse: policy.urgentResponse } : {}) };
 }
 
 const minimalMapper: ReferenceImportMapper = { mapRef: () => "disabled" };

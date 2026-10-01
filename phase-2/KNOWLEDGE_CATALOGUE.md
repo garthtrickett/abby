@@ -4,6 +4,8 @@ The standalone composition now uses a PostgreSQL knowledge catalog by default. I
 
 Clinic-admin agent commands can list the catalog, save a draft, approve its latest draft, and revoke its current approval. Each command has a versioned input/result schema. The direct lit-html dashboard uses those commands. Staff and caller agents cannot mutate or list the catalog. A draft never becomes answer evidence; a replacement draft keeps the preceding approval in force until approval. Revocation removes the effective approval immediately, including when a newer draft exists. The full event history retains actor and database timestamp in PostgreSQL.
 
+Urgent request wording has its own location policy setting and audit. It is not a general answer source in this catalog or transient model context.
+
 `TextReception` uses the injected catalog for direct answers and transient model context. Its model effect worker re-reads approved text before accepting a proposed answer. A recovering model worker must receive the same catalog through `EffectRecovery`'s knowledge lookup. The acceptor still checks scope, approval, effective dates, and exact answer text. PostgreSQL reads return a typed unavailable result on storage failure; no answer is produced from that failure.
 
 The browser scenario covers draft, approval, reload, stale version, revocation, a later draft, unauthorized staff access, and the actual caller statement. The PostgreSQL case covers concurrent writers, restart, location isolation, caller answers, and revocation. `npm run probe:postgres` also migrates up, down, and up again with regenerated Kanel types.

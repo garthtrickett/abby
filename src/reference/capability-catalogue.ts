@@ -49,6 +49,9 @@ const automationAuditPage = optional({ entries: array(object({ version: key, ena
 const afterHoursAuditPage = optional({ entries: array(optional({ version: key, mode: afterHoursMode,
   previousMode: afterHoursMode, infoVersion: key, actorRef: key, changedAt: str },
 ["version", "mode", "previousMode", "actorRef", "changedAt"])), nextAfterVersion: uint }, ["entries"]);
+const urgentAuditPage = optional({ entries: array(optional({ version: key, enabled: bool, previousEnabled: bool,
+  scriptVersion: key, actorRef: key, changedAt: str },
+["version", "enabled", "previousEnabled", "actorRef", "changedAt"])), nextAfterVersion: uint }, ["entries"]);
 const actionKind = choice("book", "cancel", "reschedule", "intake");
 const actionStatus = choice("awaitingConfirmation", "ready", "dispatched", "committed", "rejected",
   "unsupported", "uncertain", "needsReview", "canceled");
@@ -205,6 +208,16 @@ export const capabilityCatalogue = {
   "settings.routing.afterHours.audit.v1": entry("settings.routing.afterHours.audit.v1",
     optional({ kind: { const: "settings.routing.afterHours.audit.v1" }, afterVersion: uint }, ["kind"]),
     reply("afterHoursSettingAudit", "page", afterHoursAuditPage), "read", "clinicAdmin"),
+  "settings.routing.urgent.change.v1": entry("settings.routing.urgent.change.v1",
+    { oneOf: [
+      object({ kind: { const: "settings.routing.urgent.change.v1" }, expectedVersion: key, enabled: { const: false } }),
+      object({ kind: { const: "settings.routing.urgent.change.v1" }, expectedVersion: key, enabled: { const: true },
+        scriptVersion: { type: "string", minLength: 1, maxLength: 128 },
+        approvedText: { type: "string", minLength: 1, maxLength: 1_500 }, effectiveFrom: str, effectiveUntil: str }),
+    ] }, reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedPolicyVersion"]),
+  "settings.routing.urgent.audit.v1": entry("settings.routing.urgent.audit.v1",
+    optional({ kind: { const: "settings.routing.urgent.audit.v1" }, afterVersion: uint }, ["kind"]),
+    reply("urgentSettingAudit", "page", urgentAuditPage), "read", "clinicAdmin"),
   "booking.propose.v2": entry("booking.propose.v2",
     object({ kind: { const: "booking.propose.v2" }, turn, verificationRef: key, offerRef: key, now: str }),
     reply("bookingProposal", "progress", progress), "proposalOnly", "permittedActor", "callerConfirmation", ["activeCall", "bookingEnabledForExecution", "hostEvidenceForExecution"]),

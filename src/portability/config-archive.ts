@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { err, ok } from "../core/model.ts";
-import type { AfterHoursMode, ApprovedAfterHoursInfo, CallPolicy, LocationScope, Result, StaffDestination, StaffedInterval } from "../core/model.ts";
+import type { AfterHoursMode, ApprovedAfterHoursInfo, ApprovedUrgentResponse, CallPolicy, LocationScope, Result, StaffDestination, StaffedInterval } from "../core/model.ts";
 import { validAfterHoursSetting } from "../core/after-hours-policy.ts";
+import { validUrgentResponseShape } from "../core/urgent-response.ts";
 import { materializeVerifiedArchive } from "./archive-envelope.ts";
 import type { ArchiveEnvelope, ArchiveEnvelopeFailure, ArchiveSection, ArchiveSectionManifest } from "./archive-envelope.ts";
 
@@ -23,7 +24,7 @@ export type ConfigArchiveData = Readonly<{
     policy: CallPolicy; changedBy: string | null;
     previousBookingEnabled: boolean | null; changedAt: string | null;
     /** Absent on archives written before location settings had distinct audit kinds. */
-    settingKind?: "booking" | "afterHours";
+    settingKind?: "booking" | "afterHours" | "urgent";
     previousAfterHoursMode?: AfterHoursMode | null }>[];
   automation: readonly Readonly<{ version: number; isHead: boolean; enabled: boolean; changedBy: string | null;
     previousEnabled: boolean | null; changedAt: string | null }>[];
@@ -155,15 +156,27 @@ function afterHoursFields(row: Record<string, unknown>, sourceScope: LocationSco
   return { afterHoursMode: mode as AfterHoursMode, ...(info ? { afterHoursInfo: info } : {}) };
 }
 
+function urgentFields(row: Record<string, unknown>, sourceScope: LocationScope):
+  Pick<CallPolicy, "urgentResponse"> {
+  if (row.urgentResponse === undefined) return {};
+  const value = object(row.urgentResponse, "settings");
+  if (Object.keys(value).sort().join(",") !==
+      "approved,approvedText,effectiveFrom,effectiveUntil,ownerRef,version") throw new InvalidConfigArchive("settings");
+  const response = { ...value, scope: sourceScope };
+  if (!validUrgentResponseShape(response, sourceScope)) throw new InvalidConfigArchive("settings");
+  return { urgentResponse: response as ApprovedUrgentResponse };
+}
+
 function policy(value: unknown, sourceScope: LocationScope, version: number): CallPolicy {
   const row = object(value, "settings");
   if (row.shape === "standaloneMinimal") {
-    if (!["bookingEnabled,policyVersion,shape", "afterHoursMode,bookingEnabled,policyVersion,shape",
-          "afterHoursInfo,afterHoursMode,bookingEnabled,policyVersion,shape"].includes(Object.keys(row).sort().join(",")) ||
+    if (!["bookingEnabled", "policyVersion", "shape"].every(field => Object.hasOwn(row, field)) ||
+        Object.keys(row).some(field => !["bookingEnabled", "policyVersion", "shape", "afterHoursMode",
+          "afterHoursInfo", "urgentResponse"].includes(field)) ||
         row.policyVersion !== String(version)) throw new InvalidConfigArchive("settings");
     return { scope: sourceScope, policyVersion: String(version), automationVersion: "0", automationEnabled: false,
       bookingEnabled: flag(row.bookingEnabled, "settings"),
-      ...afterHoursFields(row, sourceScope),
+      ...afterHoursFields(row, sourceScope), ...urgentFields(row, sourceScope),
       capabilities: { book: "unavailable", cancel: "unavailable", reschedule: "unavailable", intake: "unavailable", transfer: "unavailable" },
       staffDestination: { kind: "queue", queueRef: "disabled" }, operatorQueue: { kind: "queue", queueRef: "disabled" } };
   }
@@ -176,7 +189,7 @@ function policy(value: unknown, sourceScope: LocationScope, version: number): Ca
   if (row.policyVersion !== String(version)) throw new InvalidConfigArchive("settings");
   const result: CallPolicy = { scope: sourceScope, policyVersion: String(version), automationVersion: "0", automationEnabled: false,
     bookingEnabled: flag(row.bookingEnabled, "settings"),
-    ...afterHoursFields(row, sourceScope),
+    ...afterHoursFields(row, sourceScope), ...urgentFields(row, sourceScope),
     capabilities: { book: capability("book"), cancel: capability("cancel"), reschedule: capability("reschedule"),
       intake: capability("intake"), transfer: capability("transfer") },
     staffDestination: destination(row.staffDestination), operatorQueue: destination(row.operatorQueue),
@@ -346,7 +359,7 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
         }
         const rawPolicy = object(row.policy, "settings");
         const settingKind = row.settingKind === undefined ? "booking" : row.settingKind;
-        if (settingKind !== "booking" && settingKind !== "afterHours") throw new InvalidConfigArchive("settings");
+        if (settingKind !== "booking" && settingKind !== "afterHours" && settingKind !== "urgent") throw new InvalidConfigArchive("settings");
         const previousAfterHoursMode = row.previousAfterHoursMode === undefined || row.previousAfterHoursMode === null
           ? null : row.previousAfterHoursMode;
         if (previousAfterHoursMode !== null && previousAfterHoursMode !== "staffRequest" &&
@@ -354,7 +367,9 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
         const previousBookingEnabled = row.previousBookingEnabled === null ? null : flag(row.previousBookingEnabled, "settings");
         const changedBy = optionalRef(row.changedBy, "settings");
         const changedAt = optionalInstant(row.changedAt, "settings");
-        if (settingKind === "afterHours" && (version === 0 || previousAfterHoursMode === null ||
+        if (settingKind === "urgent" && (version === 0 || previousAfterHoursMode !== null ||
+            previousBookingEnabled !== null || changedBy === null || changedAt === null) ||
+            settingKind === "afterHours" && (version === 0 || previousAfterHoursMode === null ||
             previousBookingEnabled !== null || changedBy === null || changedAt === null) ||
             settingKind === "booking" && previousAfterHoursMode !== null) throw new InvalidConfigArchive("settings");
         location.policies.push({ version, isHead,
@@ -386,11 +401,19 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
         const current = ordered[index]!;
         if (current.settingKind === "afterHours") {
           if (current.previousAfterHoursMode !== (previous.policy.afterHoursMode ?? "staffRequest") ||
-              current.policy.bookingEnabled !== previous.policy.bookingEnabled) throw new InvalidConfigArchive("settings");
+              current.policy.bookingEnabled !== previous.policy.bookingEnabled ||
+              JSON.stringify(current.policy.urgentResponse) !== JSON.stringify(previous.policy.urgentResponse))
+            throw new InvalidConfigArchive("settings");
+        } else if (current.settingKind === "urgent") {
+          if (current.policy.bookingEnabled !== previous.policy.bookingEnabled ||
+              current.policy.afterHoursMode !== previous.policy.afterHoursMode ||
+              JSON.stringify(current.policy.afterHoursInfo) !== JSON.stringify(previous.policy.afterHoursInfo))
+            throw new InvalidConfigArchive("settings");
         } else if ((current.previousBookingEnabled !== null &&
                     current.previousBookingEnabled !== previous.policy.bookingEnabled) ||
                    current.policy.afterHoursMode !== previous.policy.afterHoursMode ||
-                   JSON.stringify(current.policy.afterHoursInfo) !== JSON.stringify(previous.policy.afterHoursInfo)) {
+                   JSON.stringify(current.policy.afterHoursInfo) !== JSON.stringify(previous.policy.afterHoursInfo) ||
+                   JSON.stringify(current.policy.urgentResponse) !== JSON.stringify(previous.policy.urgentResponse)) {
           throw new InvalidConfigArchive("settings");
         }
       }

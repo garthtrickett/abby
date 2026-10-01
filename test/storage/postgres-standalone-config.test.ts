@@ -7,6 +7,7 @@ import { createStandaloneTextComposition } from "../../src/standalone/text-compo
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
+import { approvedUrgentText } from "../../src/core/urgent-response.ts";
 import type { Result } from "../../src/core/model.ts";
 
 const url = process.env.DATABASE_URL;
@@ -115,6 +116,43 @@ test("E2E-229 PostgreSQL after-hours edits are versioned separately from booking
   assert.deepEqual(value(await policy.listBookingChanges(scope)).entries.map(row => row.version), ["2"]);
   assert.equal(value(await new PostgresPolicyStore(db, referenceDefaultPolicy).read(scope)).afterHoursMode, "staffRequest");
   assert.equal(value(await policy.read(other)).afterHoursMode, "staffRequest");
+});
+
+test("E2E-232 PostgreSQL urgent script approval, disable and audit preserve only scoped public wording", async () => {
+  const scope = { tenantId: `urgent-${randomUUID()}`, clinicId: "clinic", locationId: "location" };
+  const other = { ...scope, locationId: "other" };
+  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy);
+  const script = { scope, version: "urgent-v1", ownerRef: "clinic-admin",
+    approvedText: "If you need immediate help, contact your local emergency service now.", approved: true as const,
+    effectiveFrom: "2026-09-28T00:00:00.000Z", effectiveUntil: "2027-09-28T00:00:00.000Z" };
+  assert.equal(value(await policy.read(scope)).urgentResponse, undefined);
+  assert.equal(value(await policy.changeUrgentResponse(scope, "0", script, "clinic-admin")).policyVersion, "1");
+  const stored = value(await new PostgresPolicyStore(db, referenceDefaultPolicy).read(scope));
+  assert.equal(approvedUrgentText(stored, "2026-09-29T00:00:00.000Z"), script.approvedText);
+  assert.equal(approvedUrgentText(stored, script.effectiveUntil), undefined);
+  assert.deepEqual(await policy.changeUrgentResponse(scope, "0", undefined, "clinic-admin"),
+    { ok: false, error: { kind: "versionConflict" } });
+  assert.deepEqual(await policy.changeUrgentResponse(scope, "1", { ...script, scope: other }, "clinic-admin"),
+    { ok: false, error: { kind: "invalidValue" } });
+  assert.deepEqual(await policy.changeUrgentResponse(scope, "1", { ...script, ownerRef: "forged-owner" }, "clinic-admin"),
+    { ok: false, error: { kind: "invalidValue" } });
+  assert.deepEqual(await policy.changeUrgentResponse(scope, "1", { ...script,
+    effectiveUntil: script.effectiveFrom }, "clinic-admin"),
+  { ok: false, error: { kind: "invalidValue" } });
+  assert.equal(value(await policy.changeBookingEnabled(scope, "1", false, "clinic-admin")).urgentResponse?.version, "urgent-v1");
+  assert.equal(value(await policy.changeUrgentResponse(scope, "2", undefined, "clinic-admin")).policyVersion, "3");
+  assert.equal(value(await policy.read(scope)).urgentResponse, undefined);
+  assert.equal(value(await policy.read(other)).urgentResponse, undefined);
+  assert.deepEqual(value(await policy.listUrgentResponseChanges(scope)).entries.map(row =>
+    [row.version, row.enabled, row.previousEnabled, row.scriptVersion]),
+  [["1", true, false, "urgent-v1"], ["3", false, true, undefined]]);
+  assert.deepEqual(value(await policy.listBookingChanges(scope)).entries.map(row => row.version), ["2"]);
+  assert.deepEqual(value(await policy.listAfterHoursChanges(scope)).entries, []);
+  const rows = await sql<{ setting_kind: string; policy: unknown }>`select setting_kind, policy from clinic_settings
+    where tenant_id = ${scope.tenantId} and clinic_id = ${scope.clinicId} and location_id = ${scope.locationId}
+    order by version`.execute(db);
+  assert.deepEqual(rows.rows.map(row => row.setting_kind), ["booking", "urgent", "booking", "urgent"]);
+  assert.equal(JSON.stringify(rows.rows).includes("patient"), false);
 });
 
 test("standalone settings reject a legacy full-policy row instead of importing its free text", async () => {

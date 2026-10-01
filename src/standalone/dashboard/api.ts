@@ -1,7 +1,8 @@
 import { CALL_TERMINAL_REASONS, err, ok } from "../../core/model.ts";
 import type { AfterHoursMode, CallPolicy, Result, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import { validAfterHoursSetting } from "../../core/after-hours-policy.ts";
-import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage } from "../../core/host.ts";
+import { validUrgentResponseShape } from "../../core/urgent-response.ts";
+import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
 import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor, GatewayCommand, GatewayFailure, GatewayReply } from "../../reference/command-gateway.ts";
 import { capabilityDescriptor } from "../../reference/capability-catalogue.ts";
@@ -32,6 +33,9 @@ export type DashboardPort = Readonly<{
   changeBookingEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   afterHoursAudit(afterVersion?: number): Promise<Result<AfterHoursSettingAuditPage, DashboardFailure>>;
   changeAfterHours(expectedVersion: string, mode: AfterHoursMode, infoVersion?: string, approvedText?: string): Promise<Result<CallPolicy, DashboardFailure>>;
+  urgentAudit(afterVersion?: number): Promise<Result<UrgentSettingAuditPage, DashboardFailure>>;
+  changeUrgentResponse(expectedVersion: string, script?: Readonly<{ version: string; approvedText: string;
+    effectiveFrom: string; effectiveUntil: string }>): Promise<Result<CallPolicy, DashboardFailure>>;
   callSummary(callId: string): Promise<Result<CallSummary, DashboardFailure>>;
   callOutcomes(afterCallId?: string): Promise<Result<CallOutcomePage, DashboardFailure>>;
   staffQueue(afterTaskKey?: string): Promise<Result<StaffQueuePage, DashboardFailure>>;
@@ -103,7 +107,8 @@ function policy(value: unknown): Result<CallPolicy, DashboardFailure> {
   const current = record(reply?.policy);
   return reply?.kind === "settings" && current && typeof current.policyVersion === "string" && typeof current.automationVersion === "string" && typeof current.automationEnabled === "boolean" && typeof current.bookingEnabled === "boolean" && record(current.capabilities)
     && record(current.scope) && validAfterHoursSetting(current.afterHoursMode ?? "staffRequest", current.afterHoursInfo,
-      current.scope as CallPolicy["scope"])
+      current.scope as CallPolicy["scope"]) &&
+      (current.urgentResponse === undefined || validUrgentResponseShape(current.urgentResponse, current.scope as CallPolicy["scope"]))
     ? ok(current as CallPolicy) : err({ kind: "malformed" });
 }
 
@@ -320,6 +325,26 @@ export class FetchDashboardPort implements DashboardPort {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ expectedVersion, mode, ...(infoVersion === undefined ? {} : { infoVersion }),
         ...(approvedText === undefined ? {} : { approvedText }) }) });
+    return result.ok ? policy(result.value) : result;
+  }
+
+  async urgentAudit(afterVersion?: number): Promise<Result<UrgentSettingAuditPage, DashboardFailure>> {
+    const result = await request(`/api/settings/urgent-audit${afterVersion === undefined ? "" : `?after=${afterVersion}`}`);
+    if (!result.ok) return result;
+    const valid = matchesSchema(capabilityDescriptor("settings.routing.urgent.audit.v1").resultSchema,
+      { ok: true, value: result.value });
+    const reply = record(result.value);
+    return valid && reply?.kind === "urgentSettingAudit" ? ok(reply.page as UrgentSettingAuditPage) : err({ kind: "malformed" });
+  }
+
+  async changeUrgentResponse(expectedVersion: string, script?: Readonly<{ version: string; approvedText: string;
+    effectiveFrom: string; effectiveUntil: string }>): Promise<Result<CallPolicy, DashboardFailure>> {
+    const result = await request("/api/settings/urgent", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expectedVersion, enabled: script !== undefined,
+        ...(script === undefined ? {} : { scriptVersion: script.version, approvedText: script.approvedText,
+          effectiveFrom: script.effectiveFrom, effectiveUntil: script.effectiveUntil }) }),
+    });
     return result.ok ? policy(result.value) : result;
   }
 

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import pg from "pg";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 assert.equal(process.env.ABBY_ISOLATED_POSTGRES_PROBE, "1", "isolated PostgreSQL is required");
@@ -31,9 +33,9 @@ for (const [setting, ids] of Object.entries(manifest.settingMappings)) {
 }
 assert.ok(nodeFiles.size > 0 && browserFiles.size > 0);
 
-async function execute(command, args, timeoutMs) {
+async function execute(command, args, timeoutMs, env = process.env) {
   const child = spawn(command, args, { cwd: root, stdio: ["ignore", "pipe", "pipe"],
-    signal: AbortSignal.timeout(timeoutMs), env: process.env });
+    signal: AbortSignal.timeout(timeoutMs), env });
   let output = "";
   for (const stream of [child.stdout, child.stderr]) stream.on("data", chunk => {
     output += chunk.toString();
@@ -53,6 +55,22 @@ async function execute(command, args, timeoutMs) {
 }
 
 function idsFor(entries) { return [...new Set(entries.flatMap(([, ids]) => [...ids]))]; }
+async function withFreshDatabase(run) {
+  const name = `abby_setting_${randomUUID().replaceAll("-", "")}`;
+  const url = new URL(process.env.DATABASE_URL);
+  url.pathname = `/${name}`;
+  const admin = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  await admin.connect();
+  try {
+    await admin.query(`create database "${name}"`);
+    const env = { ...process.env, DATABASE_URL: url.toString() };
+    await execute(process.execPath, ["scripts/migrate.ts"], 120_000, env);
+    return await run(env);
+  } finally {
+    try { await admin.query(`drop database if exists "${name}" with (force)`); }
+    finally { await admin.end(); }
+  }
+}
 function checkedNode(output, ids) {
   const count = name => Number(output.match(new RegExp(`^# ${name} (\\d+)$`, "m"))?.[1] ?? -1);
   assert.equal(count("fail"), 0);
@@ -68,8 +86,8 @@ function checkedNode(output, ids) {
 async function runNode(entries, concurrency) {
   const ids = idsFor(entries);
   // Run whole files: Node's name filter can skip a nested E2E when its parent suite has no ID.
-  const output = await execute(process.execPath, ["--test", `--test-concurrency=${concurrency}`,
-    ...entries.map(([file]) => file)], 360_000);
+  const output = await withFreshDatabase(env => execute(process.execPath, ["--test", `--test-concurrency=${concurrency}`,
+    ...entries.map(([file]) => file)], 360_000, env));
   return checkedNode(output, ids);
 }
 

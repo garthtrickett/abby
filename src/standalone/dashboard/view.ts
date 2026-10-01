@@ -4,7 +4,7 @@ import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor } from "../../reference/command-gateway.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
-import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage } from "../../core/host.ts";
+import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
 import type { WriteStopAuditPage, WriteStopStatus } from "../../core/write-stop.ts";
 import type { KnowledgeEntry } from "../../reference/knowledge-catalogue.ts";
 
@@ -27,6 +27,11 @@ export type DashboardState = {
   afterHoursAuditPage: AfterHoursSettingAuditPage | undefined;
   afterHoursInfoVersion: string;
   afterHoursApprovedText: string;
+  urgentAuditPage: UrgentSettingAuditPage | undefined;
+  urgentVersion: string;
+  urgentText: string;
+  urgentFrom: string;
+  urgentUntil: string;
   callIdInput: string;
   call: CallSummary | undefined;
   staffPage: StaffQueuePage | undefined;
@@ -55,6 +60,10 @@ export type DashboardActions = Readonly<{
   changeAfterHours(mode: "staffRequest" | "approvedInfoAndRequest"): void;
   loadAfterHoursAudit(): void;
   loadMoreAfterHoursAudit(): void;
+  setUrgentField(field: "urgentVersion" | "urgentText" | "urgentFrom" | "urgentUntil", value: string): void;
+  changeUrgentResponse(enabled: boolean): void;
+  loadUrgentAudit(): void;
+  loadMoreUrgentAudit(): void;
   setCallId(value: string): void;
   loadCall(): void;
   loadStaff(): void;
@@ -69,6 +78,7 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
   const canChange = state.capabilities.some(item => item.id === "settings.appointments.booking.enabled.change.v1");
   const canChangeAutomation = state.capabilities.some(item => item.id === "settings.automation.enabled.change.v1");
   const canChangeAfterHours = state.capabilities.some(item => item.id === "settings.routing.afterHours.change.v1");
+  const canChangeUrgent = state.capabilities.some(item => item.id === "settings.routing.urgent.change.v1");
   const enabled = state.policy?.bookingEnabled ?? false;
   const automationEnabled = state.policy?.automationEnabled ?? false;
   const canChangeStaff = state.capabilities.some(item => item.id === "staff.change.v1");
@@ -145,6 +155,35 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
         ${state.afterHoursAuditPage ? html`<div aria-label="After-hours setting audit">
           ${state.afterHoursAuditPage.entries.length ? html`<ul>${state.afterHoursAuditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.mode === "staffRequest" ? "staff request only" : "approved information"}${entry.infoVersion ? ` · information ${entry.infoVersion}` : ""} · ${entry.actorRef} · ${entry.changedAt}</li>`)}</ul>` : html`<p>No after-hours setting changes recorded.</p>`}
           ${state.afterHoursAuditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreAfterHoursAudit()}>Load more after-hours history</button>` : ""}
+        </div>` : html`<p class="muted">Setting history unavailable.</p>`}
+      </section>` : ""}
+      <section class="card" aria-labelledby="urgent-title">
+        <h2 id="urgent-title">Urgent request wording</h2>
+        <p class="status">${state.policy?.urgentResponse ? "Approved script saved" : "No approved script"}</p>
+        <p class="muted">A clinic admin approves this exact public wording for potentially urgent requests. Use only general clinic wording, with no patient details. It applies only to new calls while effective. Saving it does not enable natural-language calls or a staff route.</p>
+        ${canChangeUrgent && state.policy ? html`<div>
+          <label>Urgent script version <input aria-label="Urgent script version" .value=${state.urgentVersion}
+            @input=${(event: Event) => actions.setUrgentField("urgentVersion", (event.target as HTMLInputElement).value)}></label>
+          <label>Approved urgent request wording <textarea aria-label="Approved urgent request wording" .value=${state.urgentText}
+            @input=${(event: Event) => actions.setUrgentField("urgentText", (event.target as HTMLTextAreaElement).value)}></textarea></label>
+          <label>Effective from (UTC) <input aria-label="Urgent effective from" .value=${state.urgentFrom}
+            @input=${(event: Event) => actions.setUrgentField("urgentFrom", (event.target as HTMLInputElement).value)}></label>
+          <label>Effective until (UTC) <input aria-label="Urgent effective until" .value=${state.urgentUntil}
+            @input=${(event: Event) => actions.setUrgentField("urgentUntil", (event.target as HTMLInputElement).value)}></label>
+          <button type="button" ?disabled=${state.busy || !state.urgentVersion.trim() || !state.urgentText.trim() ||
+            !state.urgentFrom.trim() || !state.urgentUntil.trim()}
+            @click=${() => actions.changeUrgentResponse(true)}>Approve urgent request wording</button>
+          <button type="button" ?disabled=${state.busy || !state.policy.urgentResponse}
+            @click=${() => actions.changeUrgentResponse(false)}>Disable urgent request wording</button>
+        </div>` : html`<span class="pill">Admin only</span>`}
+        ${state.policy ? html`<p class="muted">Urgent setting revision ${state.policy.policyVersion}</p>` : ""}
+      </section>
+      ${state.capabilities.some(item => item.id === "settings.routing.urgent.audit.v1") ? html`<section class="card" aria-labelledby="urgent-audit-title">
+        <div class="row"><h2 id="urgent-audit-title">Urgent wording history</h2>
+          <button type="button" ?disabled=${state.busy} @click=${() => actions.loadUrgentAudit()}>Refresh urgent wording history</button></div>
+        ${state.urgentAuditPage ? html`<div aria-label="Urgent wording audit">
+          ${state.urgentAuditPage.entries.length ? html`<ul>${state.urgentAuditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.enabled ? "approved" : "disabled"}${entry.scriptVersion ? ` · script ${entry.scriptVersion}` : ""} · ${entry.actorRef} · ${entry.changedAt}</li>`)}</ul>` : html`<p>No urgent wording changes recorded.</p>`}
+          ${state.urgentAuditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreUrgentAudit()}>Load more urgent wording history</button>` : ""}
         </div>` : html`<p class="muted">Setting history unavailable.</p>`}
       </section>` : ""}
       ${state.capabilities.some(item => item.id === "knowledge.list.v1") ? html`<section class="card" aria-labelledby="knowledge-title">

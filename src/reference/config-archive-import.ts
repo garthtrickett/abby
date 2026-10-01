@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { MemoryLedger } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
 import type { CallPolicy, LocationScope, Result, StaffDestination } from "../core/model.ts";
-import type { AfterHoursSettingAuditEntry, AutomationSettingAuditEntry, BookingSettingAuditEntry } from "../core/host.ts";
+import type { AfterHoursSettingAuditEntry, AutomationSettingAuditEntry, BookingSettingAuditEntry, UrgentSettingAuditEntry } from "../core/host.ts";
 import type { ArchiveEnvelope } from "../portability/archive-envelope.ts";
 import { decodeConfigArchive } from "../portability/config-archive.ts";
 import type { ConfigArchiveData, ConfigArchiveDecodeFailure } from "../portability/config-archive.ts";
@@ -10,7 +10,7 @@ import { MemoryKnowledgeCatalogue } from "./knowledge-catalogue.ts";
 import type { KnowledgeEntry } from "./knowledge-catalogue.ts";
 import { MemoryPolicyStore, referenceDefaultPolicy } from "./policy-store.ts";
 
-export type ImportRefKind = "staffOwner" | "operatorQueue" | "transferDestination" | "knowledgeOwner" | "greetingOwner" | "afterHoursOwner";
+export type ImportRefKind = "staffOwner" | "operatorQueue" | "transferDestination" | "knowledgeOwner" | "greetingOwner" | "afterHoursOwner" | "urgentOwner";
 export type ReferenceImportMapper = Readonly<{
   mapRef(kind: ImportRefKind, sourceRef: string, sourceScope: LocationScope, targetScope: LocationScope): string | null;
 }>;
@@ -110,6 +110,9 @@ function mapImportedPolicy(source: CallPolicy, mapper: ReferenceImportMapper, so
     ...(source.afterHoursInfo === undefined ? {} : { afterHoursInfo: { ...source.afterHoursInfo,
       scope: structuredClone(targetScope),
       ownerRef: mappedRef(mapper, "afterHoursOwner", source.afterHoursInfo.ownerRef, sourceScope, targetScope) } }),
+    ...(source.urgentResponse === undefined ? {} : { urgentResponse: { ...source.urgentResponse,
+      scope: structuredClone(targetScope),
+      ownerRef: mappedRef(mapper, "urgentOwner", source.urgentResponse.ownerRef, sourceScope, targetScope) } }),
   };
 }
 
@@ -133,6 +136,18 @@ function afterHoursAudit(data: Pick<ConfigArchiveData, "policies">): AfterHoursS
   });
 }
 
+function urgentAudit(data: Pick<ConfigArchiveData, "policies">): UrgentSettingAuditEntry[] {
+  const ordered = [...data.policies].sort((left, right) => left.version - right.version);
+  return ordered.filter(row => row.version > 0 && row.settingKind === "urgent").map(row => {
+    const previous = ordered.find(item => item.version === row.version - 1);
+    if (!previous || !row.changedBy || !row.changedAt) throw new Error("invalid urgent audit");
+    return { version: String(row.version), enabled: row.policy.urgentResponse !== undefined,
+      previousEnabled: previous.policy.urgentResponse !== undefined,
+      ...(row.policy.urgentResponse ? { scriptVersion: row.policy.urgentResponse.version } : {}),
+      actorRef: row.changedBy, changedAt: row.changedAt };
+  });
+}
+
 function automationAudit(data: Pick<ConfigArchiveData, "automation">): AutomationSettingAuditEntry[] {
   return data.automation.filter(row => row.version > 0).map(row => {
     if (!row.changedBy || row.previousEnabled === null || !row.changedAt) throw new Error("invalid automation audit");
@@ -145,9 +160,10 @@ export type MappedConfig = Readonly<{
   policy: CallPolicy;
   policyRows: readonly Readonly<{ version: number; isHead: boolean; policy: CallPolicy; changedBy: string | null;
     previousBookingEnabled: boolean | null; changedAt: string | null;
-    settingKind?: "booking" | "afterHours"; previousAfterHoursMode?: CallPolicy["afterHoursMode"] | null }>[];
+    settingKind?: "booking" | "afterHours" | "urgent"; previousAfterHoursMode?: CallPolicy["afterHoursMode"] | null }>[];
   bookingHistory: readonly BookingSettingAuditEntry[];
   afterHoursHistory: readonly AfterHoursSettingAuditEntry[];
+  urgentHistory: readonly UrgentSettingAuditEntry[];
   automationHistory: readonly AutomationSettingAuditEntry[];
   knowledge: MemoryKnowledgeCatalogue;
   knowledgeEntries: readonly KnowledgeEntry[];
@@ -176,11 +192,12 @@ export function mapConfig(data: Pick<ConfigArchiveData, "sourceScope" | "policie
       mapImportedPolicy(referenceDefaultPolicy(data.sourceScope), recordingMapper, data.sourceScope, targetScope);
     const bookingHistory = bookingAudit(data);
     const afterHoursHistory = afterHoursAudit(data);
+    const urgentHistory = urgentAudit(data);
     const automationHistory = automationAudit(data);
     const knowledgeEntries = data.knowledge.map(entry => ({ ...entry,
       scope: structuredClone(targetScope), ownerRef: mappedRef(recordingMapper, "knowledgeOwner", entry.ownerRef, data.sourceScope, targetScope) }));
     const knowledge = MemoryKnowledgeCatalogue.fromPublishedHistory(knowledgeEntries);
-    return ok({ policy, policyRows, bookingHistory, afterHoursHistory, automationHistory,
+    return ok({ policy, policyRows, bookingHistory, afterHoursHistory, urgentHistory, automationHistory,
       knowledge, knowledgeEntries, mappings: [...decisions.values()] });
   } catch (cause) {
     return err({ kind: cause instanceof UnmappedRef ? "unmappedRef" : "invalidConfigArchive" });
@@ -265,7 +282,8 @@ export class ReferenceConfigArchiveImporter {
     const automationHead = data.automation.find(row => row.isHead);
     const policy = MemoryPolicyStore.fromImported(targetScope, mapped.value.policy, mapped.value.bookingHistory,
       mapped.value.afterHoursHistory,
-      mapped.value.automationHistory, automationHead?.version ?? 0, automationHead?.enabled ?? false, importActorRef, importedAt);
+      mapped.value.automationHistory, automationHead?.version ?? 0, automationHead?.enabled ?? false, importActorRef, importedAt,
+      mapped.value.urgentHistory);
     const knowledge = mapped.value.knowledge;
     const ledger = new MemoryLedger();
     const stop = await ledger.stopWrites(targetScope, importActorRef, "Imported configuration awaiting target readiness");
