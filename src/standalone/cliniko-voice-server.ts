@@ -245,7 +245,8 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
 
   return ok(createTwilioIngressServer({ ingress, activeCallClaims: config.activeCallClaims,
     ...(operationalRead ? { operationalRead: { tokenHex: operationalRead.tokenHex,
-      snapshot: () => operationalCounters.snapshot(operationalRead.scope) } } : {}),
+      snapshot: () => operationalCounters.snapshot(operationalRead.scope),
+      ...(operationalCounters.daily ? { daily: () => operationalCounters.daily!(operationalRead.scope) } : {}) } } : {}),
     ...(config.health ? { health: config.health } : {}),
     admitWebhook: async event => {
       if (!event || event.key.accountRef !== twilio.accountSid) return false;

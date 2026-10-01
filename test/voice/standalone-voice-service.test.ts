@@ -102,6 +102,7 @@ test("E2E-171 local voice runner validates startup, reports unready, refuses inb
     const readiness = await fetch(`http://127.0.0.1:${port}/readyz`);
     assert.equal(readiness.status, 503);
     assert.equal((await fetch(`http://127.0.0.1:${port}/internal/operations`)).status, 404);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/internal/operations/daily`)).status, 404);
     const unsigned = await fetch(`http://127.0.0.1:${port}/twilio/inbound`, {
       method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ AccountSid: env.ABBY_TWILIO_ACCOUNT_SID,
@@ -131,7 +132,7 @@ test("E2E-171 local voice runner validates startup, reports unready, refuses inb
   }
 });
 
-test("E2E-172 E2E-185 E2E-209 isolated voice runner enforces durable approval around signed keypad calls and shutdown",
+test("E2E-172 E2E-185 E2E-209 E2E-217 isolated voice runner enforces durable approval around signed keypad calls and shutdown",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 60_000 }, async () => {
   const adminUrl = process.env.DATABASE_URL;
   assert.ok(adminUrl);
@@ -326,11 +327,27 @@ test("E2E-172 E2E-185 E2E-209 isolated voice runner enforces durable approval ar
     assert.equal(counts.voiceFailure, 0);
     assert.equal(JSON.stringify(counts).includes(callerNumber), false);
     assert.equal(JSON.stringify(counts).includes(callSid), false);
+    const dailyUrl = `${operationalUrl}/daily`;
+    assert.equal((await fetch(dailyUrl)).status, 403);
+    const dailyResponse = await fetch(dailyUrl, { headers: {
+      authorization: `Bearer ${operationalTokenHex}` } });
+    assert.equal(dailyResponse.status, 200);
+    assert.equal(dailyResponse.headers.get("cache-control"), "no-store");
+    const daily = await dailyResponse.json() as { days: { date: string; counts: Record<string, number> }[] };
+    assert.equal(daily.days.length, 7);
+    for (const key of Object.keys(counts)) {
+      assert.equal(daily.days.reduce((sum, row) => sum + row.counts[key]!, 0), counts[key]);
+    }
+    assert.equal(JSON.stringify(daily).includes(callerNumber) || JSON.stringify(daily).includes(callSid), false);
     const operatorRead = spawnSync(process.execPath, ["scripts/read-voice-operations.ts"], {
       cwd: new URL("../../", import.meta.url), env, encoding: "utf8", timeout: 10_000 });
     assert.equal(operatorRead.status, 0, operatorRead.stderr);
     assert.deepEqual(JSON.parse(operatorRead.stdout), counts);
     assert.equal(operatorRead.stdout.includes(callerNumber) || operatorRead.stdout.includes(callSid), false);
+    const operatorDailyRead = spawnSync(process.execPath, ["scripts/read-voice-operations.ts", "--daily"], {
+      cwd: new URL("../../", import.meta.url), env, encoding: "utf8", timeout: 10_000 });
+    assert.equal(operatorDailyRead.status, 0, operatorDailyRead.stderr);
+    assert.deepEqual(JSON.parse(operatorDailyRead.stdout), daily);
     const closed = once(caller, "close");
     child.kill("SIGTERM");
     const [code] = await once(child, "exit");
