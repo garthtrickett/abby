@@ -29,6 +29,8 @@ export type ConnectedVoiceCallConfig = Readonly<{
   mediaOptions?: MediaTurnOptions;
   playbackOptions?: StreamedPlaybackOptions;
   callerCandidateLookup?: CallerCandidateLookup;
+  /** Synchronous host cleanup, such as aborting a call-scoped provider write, before awaiting media shutdown. */
+  onCallStop?: () => void;
 }>;
 
 export type ConnectedVoiceFailure = SharedVoiceFailure | MediaFailure | PlaybackEvidenceFailure |
@@ -54,6 +56,8 @@ export class ConnectedVoiceCall {
   private readonly callId: string;
   private readonly presentedCallerNumber: string | undefined;
   private readonly callerCandidateLookup: CallerCandidateLookup | undefined;
+  private readonly onCallStop: (() => void) | undefined;
+  private callStopDelivered = false;
   private scope: LocationScope | undefined;
   private begun = false;
   private starting = false;
@@ -66,6 +70,7 @@ export class ConnectedVoiceCall {
     this.callId = callIdFor(config.event.key);
     this.presentedCallerNumber = config.event.presentedCallerNumber;
     this.callerCandidateLookup = config.callerCandidateLookup;
+    this.onCallStop = config.onCallStop;
     const gatedOutput: AudioOutputPort = {
       queueChunk: (id, sequence, bytes, signal) => this.closing || this.stopped || this.terminal
         ? Promise.resolve("notSent") : config.output.queueChunk(id, sequence, bytes, signal),
@@ -139,6 +144,12 @@ export class ConnectedVoiceCall {
   private fatalFailure(kind: string): boolean {
     return !["invalidMedia", "mediaOutOfOrder", "mediaOverloaded",
       "noFinalSpeech", "confirmationMissing", "locationChoiceUnclear"].includes(kind);
+  }
+
+  private stopHost(): void {
+    if (this.callStopDelivered) return;
+    this.callStopDelivered = true;
+    try { this.onCallStop?.(); } catch { /* Host cleanup cannot prevent call closure. */ }
   }
 
   async acceptMedia(frame: MediaFrame): Promise<Result<ConnectedVoiceProgress, ConnectedVoiceFailure>> {
@@ -239,6 +250,7 @@ export class ConnectedVoiceCall {
     this.closing = true;
     this.stopped = true;
     try {
+      this.stopHost();
       await this.media.stop();
       const ended = await this.call.end(now, reason);
       if (ended.ok) this.terminal = ended.value;

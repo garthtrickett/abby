@@ -31,7 +31,9 @@ test("E2E-130 synthetic Twilio: ordered wire events start the call, prove greeti
   const reception = new TextReception(ledger, policy, new ReferenceClinicHost([], []));
   const event = { key: { accountRef: accountSid, providerCallRef: callSid }, dialedNumber: number, receivedAt: now };
   const sent: Record<string, unknown>[] = [];
+  let callStops = 0;
   const call = new TwilioConnectedCall({ event, sessionId: "session", ledger, intake,
+    onCallStop: () => { callStops += 1; },
     fullFactory: (receipt, sessionId, playback) => new VoiceSession(receipt.callId, sessionId, receipt.scope,
       ledger, reception, playback, async () => ok({ kind: "handoff", reason: "callerRequested" })),
     transcription: {
@@ -86,7 +88,55 @@ test("E2E-130 synthetic Twilio: ordered wire events start the call, prove greeti
   const stopped = await call.receive(JSON.stringify({ event: "stop", sequenceNumber: "11", streamSid,
     stop: { accountSid, callSid } }));
   assert.ok(stopped.ok && stopped.value.kind === "stopped");
+  assert.equal(callStops, 1);
+  await call.disconnect();
+  assert.equal(callStops, 1, "call-scoped cleanup runs once even if transport closure repeats");
   const ended = await ledger.read(callId, scope);
   assert.ok(ended.ok);
   assert.equal(ended.value.lifecycle, "ended");
+});
+
+test("E2E-130 Twilio disconnect aborts a call-scoped host before its pending event finishes", async () => {
+  const ledger = new MemoryLedger();
+  const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+  assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "admin")).ok);
+  const number = "+6125550199";
+  const router = new ClinicPolicyRouter(new ReferenceNumberRoutingHost([
+    { accountRef: accountSid, dialedNumber: number, ...scope, routeVersion: "v1" },
+  ]), policy);
+  let release!: () => void;
+  let readinessStarted = false;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const admission = new CallAdmissionService(ledger, router.resolve, () => now, async () => {
+    readinessStarted = true;
+    await held;
+    return ok(true);
+  });
+  const intake = new SharedNumberIntakeService(ledger, router, admission, () => now);
+  const reception = new TextReception(ledger, policy, new ReferenceClinicHost([], []));
+  const event = { key: { accountRef: accountSid, providerCallRef: callSid }, dialedNumber: number, receivedAt: now };
+  let stops = 0;
+  const call = new TwilioConnectedCall({ event, sessionId: "session", ledger, intake,
+    onCallStop: () => { stops += 1; },
+    fullFactory: (receipt, sessionId, playback) => new VoiceSession(receipt.callId, sessionId, receipt.scope,
+      ledger, reception, playback, async () => ok({ kind: "handoff", reason: "callerRequested" })),
+    transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
+    synthesis: { async *stream() { yield new Uint8Array(640); } },
+    streamStartedAt: now, now: () => now,
+    send() { return "queued"; },
+  });
+  assert.ok((await call.receive(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }))).ok);
+  const starting = call.receive(JSON.stringify({ event: "start", sequenceNumber: "1", streamSid,
+    start: { accountSid, callSid, streamSid, tracks: ["inbound"], mediaFormat: {
+      encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1,
+    } } }));
+  const deadline = Date.now() + 2_000;
+  while (!readinessStarted && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 1));
+  assert.equal(readinessStarted, true);
+  const closing = call.disconnect();
+  assert.equal(stops, 1, "host cleanup must precede the queued event drain");
+  release();
+  await starting;
+  await closing;
+  assert.equal(stops, 1);
 });

@@ -37,12 +37,19 @@ export class TwilioConnectedCall {
   private readonly keypadAvailabilityRange: ((digit: string) => Readonly<{ from: string; to: string }> | null | undefined) | undefined;
   private readonly lease: VoiceLeaseLoop<PendingLocationCall | CallState, ConnectedVoiceFailure>;
   private readonly closeTransport: (() => void) | undefined;
+  private readonly stopCall: () => void;
+  private callStopDelivered = false;
   private tail: Promise<void> = Promise.resolve();
   private outstanding = 0;
   private begun = false;
   private closed = false;
 
   constructor(config: TwilioConnectedCallConfig) {
+    this.stopCall = () => {
+      if (this.callStopDelivered) return;
+      this.callStopDelivered = true;
+      try { config.onCallStop?.(); } catch { /* Call shutdown remains required. */ }
+    };
     this.stream = new TwilioMediaStream({ accountSid: config.event.key.accountRef,
       callSid: config.event.key.providerCallRef, sessionId: config.sessionId,
       startedAt: config.streamStartedAt, send: config.send });
@@ -53,6 +60,7 @@ export class TwilioConnectedCall {
       ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}),
       ...(config.playbackOptions ? { playbackOptions: config.playbackOptions } : {}),
       ...(config.callerCandidateLookup ? { callerCandidateLookup: config.callerCandidateLookup } : {}),
+      onCallStop: this.stopCall,
     });
     this.now = config.now ?? (() => new Date().toISOString());
     this.keypadAvailabilityRange = config.keypadAvailabilityRange;
@@ -77,6 +85,7 @@ export class TwilioConnectedCall {
 
   private async failSession(): Promise<void> {
     this.closed = true;
+    this.stopCall();
     void this.lease.stop();
     this.stream.close();
     try { this.closeTransport?.(); } catch { /* call cleanup remains required */ }
@@ -122,6 +131,7 @@ export class TwilioConnectedCall {
     }
     if (event.kind === "stopped") {
       this.closed = true;
+      this.stopCall();
       void this.lease.stop();
       if (this.begun) {
         const ended = await this.call.disconnect(this.now());
@@ -137,9 +147,12 @@ export class TwilioConnectedCall {
     // Decode wire order immediately. A clear fence must be acknowledged while an earlier
     // media turn is awaiting that same fence; semantic call transitions stay serialized.
     const received = this.stream.receive(raw);
+    if (!received.ok) this.stopCall();
+    if (received.ok && received.value.kind === "stopped") this.stopCall();
     if (received.ok && received.value.kind === "ignoredMark") return Promise.resolve(ok({ kind: "ignored" }));
     if (this.outstanding >= 64) {
       this.closed = true;
+      this.stopCall();
       this.stream.close();
       return this.tail.then(async () => {
         await this.failSession();
@@ -157,6 +170,7 @@ export class TwilioConnectedCall {
 
   async disconnect(): Promise<Result<PendingLocationCall | CallState | undefined, TwilioConnectedFailure>> {
     this.closed = true;
+    this.stopCall();
     const stopped = this.lease.stop();
     this.stream.close();
     await this.tail;

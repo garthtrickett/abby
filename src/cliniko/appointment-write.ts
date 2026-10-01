@@ -1,6 +1,7 @@
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
-import { claimClinikoBudget, ClinikoReadBudget, isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
+import { claimClinikoBudget, ClinikoReadBudget, clinikoCredentialFingerprint,
+  isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
 import type { ClinikoRequestBudget } from "./read-budget.ts";
 
 export type ClinikoAppointmentWriteConfig = Readonly<{
@@ -140,6 +141,7 @@ function deadline(signal?: AbortSignal): AbortSignal {
 class ClinikoAppointmentWriter {
   readonly #scope: LocationScope;
   readonly #businessId: string;
+  readonly #credentialFingerprint: string;
   readonly #baseUrl: string;
   readonly #authorization: string;
   readonly #userAgent: string;
@@ -153,6 +155,7 @@ class ClinikoAppointmentWriter {
                       clock: () => string) {
     this.#scope = structuredClone(config.scope);
     this.#businessId = config.businessId;
+    this.#credentialFingerprint = clinikoCredentialFingerprint(config.apiKey);
     this.#baseUrl = `https://api.${shard}.cliniko.com/v1`;
     this.#authorization = `Basic ${Buffer.from(`${config.apiKey}:`).toString("base64")}`;
     this.#userAgent = `Abby (${config.contactEmail})`;
@@ -174,6 +177,11 @@ class ClinikoAppointmentWriter {
       return err({ kind: "invalidConfig" });
     }
     return ok(new ClinikoAppointmentWriter(config, shard, fetchPort, clock));
+  }
+
+  selection(): Readonly<{ scope: LocationScope; businessId: string; credentialFingerprint: string }> {
+    return { scope: structuredClone(this.#scope), businessId: this.#businessId,
+      credentialFingerprint: this.#credentialFingerprint };
   }
 
   async #read(request: ClinikoAppointmentTarget, signal: AbortSignal):
@@ -409,6 +417,10 @@ export class ClinikoCancellationWriter {
     return created.ok ? ok(new ClinikoCancellationWriter(created.value)) : created;
   }
 
+  selection(): Readonly<{ scope: LocationScope; businessId: string; credentialFingerprint: string }> {
+    return this.#inner.selection();
+  }
+
   observe(request: ClinikoCancellationRequest, signal?: AbortSignal):
     Promise<Result<ClinikoAppointmentObservation, ClinikoAppointmentWriteFailure>> {
     return this.#inner.observe(request, signal);
@@ -430,6 +442,10 @@ export class ClinikoRescheduleWriter {
     Result<ClinikoRescheduleWriter, ClinikoAppointmentWriteFailure> {
     const created = ClinikoAppointmentWriter.create(config, fetchPort, clock);
     return created.ok ? ok(new ClinikoRescheduleWriter(created.value)) : created;
+  }
+
+  selection(): Readonly<{ scope: LocationScope; businessId: string; credentialFingerprint: string }> {
+    return this.#inner.selection();
   }
 
   observeReschedule(request: ClinikoRescheduleRequest, signal?: AbortSignal):
