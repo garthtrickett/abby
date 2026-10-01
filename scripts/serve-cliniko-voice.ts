@@ -93,6 +93,11 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       catch { return false; }
     };
     const rateBudget = new PostgresClinikoRequestBudget(db, { apiKey,
+      onEvent: event => {
+        const kind = event === "claimRateLimited" ? "clinikoBudgetDenied" :
+          event === "claimUnavailable" ? "clinikoBudgetUnavailable" : "clinikoProvider429";
+        void Promise.resolve(operationalCounters.record(scope, kind)).catch(() => undefined);
+      },
       ...(process.env.ABBY_CLINIKO_BUDGET_USER_REF
         ? { sharedUserRef: process.env.ABBY_CLINIKO_BUDGET_USER_REF } : {}) });
     const availability = ClinikoAvailabilityReader.create({ scope, apiKey, rateBudget,

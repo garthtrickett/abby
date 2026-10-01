@@ -13,7 +13,8 @@ function scoped(scope: LocationScope) {
 }
 
 function empty(): Record<OperationalCounterKind, number> {
-  return { admissionDenied: 0, callOwnerStarted: 0, voiceFailure: 0, callEnded: 0 };
+  return { admissionDenied: 0, callOwnerStarted: 0, voiceFailure: 0, callEnded: 0,
+    clinikoBudgetDenied: 0, clinikoBudgetUnavailable: 0, clinikoProvider429: 0 };
 }
 
 /** Atomic shared totals with fixed codes and no per-call row or event timestamp. */

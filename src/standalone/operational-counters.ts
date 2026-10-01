@@ -3,7 +3,8 @@ import type { OperationalCounterKind, OperationalCounts, OperationalCounterStore
 export type { OperationalCounterKind, OperationalCounts, OperationalCounterStore } from "../voice/operational-counts.ts";
 
 function emptyCounts(): Record<OperationalCounterKind, number> {
-  return { admissionDenied: 0, callOwnerStarted: 0, voiceFailure: 0, callEnded: 0 };
+  return { admissionDenied: 0, callOwnerStarted: 0, voiceFailure: 0, callEnded: 0,
+    clinikoBudgetDenied: 0, clinikoBudgetUnavailable: 0, clinikoProvider429: 0 };
 }
 
 function scopeKey(scope: LocationScope): string {

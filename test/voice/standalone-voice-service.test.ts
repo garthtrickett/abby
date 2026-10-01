@@ -305,7 +305,8 @@ test("E2E-172 E2E-185 isolated voice runner enforces durable approval around sig
     assert.equal(operationalResponse.headers.get("cache-control"), "no-store");
     const counts = await operationalResponse.json() as Record<string, number>;
     assert.deepEqual(Object.keys(counts).sort(),
-      ["admissionDenied", "callOwnerStarted", "voiceFailure", "callEnded"].sort());
+      ["admissionDenied", "callOwnerStarted", "voiceFailure", "callEnded",
+        "clinikoBudgetDenied", "clinikoBudgetUnavailable", "clinikoProvider429"].sort());
     assert.ok(counts.admissionDenied! >= 3);
     assert.equal(counts.callOwnerStarted, 1);
     assert.equal(counts.voiceFailure, 0);

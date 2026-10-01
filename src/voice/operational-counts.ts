@@ -1,6 +1,7 @@
 import type { LocationScope } from "../core/model.ts";
 
-export type OperationalCounterKind = "admissionDenied" | "callOwnerStarted" | "voiceFailure" | "callEnded";
+export type OperationalCounterKind = "admissionDenied" | "callOwnerStarted" | "voiceFailure" | "callEnded" |
+  "clinikoBudgetDenied" | "clinikoBudgetUnavailable" | "clinikoProvider429";
 export type OperationalCounts = Readonly<Record<OperationalCounterKind, number>>;
 export type OperationalCounterStore = Readonly<{
   record: (scope: LocationScope, kind: OperationalCounterKind) => void | Promise<void>;
@@ -8,7 +9,8 @@ export type OperationalCounterStore = Readonly<{
   drain?: () => Promise<void>;
 }>;
 
-const keys = ["admissionDenied", "callOwnerStarted", "voiceFailure", "callEnded"] as const;
+const keys = ["admissionDenied", "callOwnerStarted", "voiceFailure", "callEnded",
+  "clinikoBudgetDenied", "clinikoBudgetUnavailable", "clinikoProvider429"] as const;
 
 export function validOperationalCounts(value: unknown): value is OperationalCounts {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
