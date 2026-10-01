@@ -10,6 +10,7 @@ import { CommandGateway } from "../reference/command-gateway.ts";
 import { TextReception } from "../reference/text-reception.ts";
 import type Database from "../storage/generated/Database.ts";
 import { PostgresClinikoRequestBudget } from "../storage/postgres-cliniko-request-budget.ts";
+import { PostgresOperationalCounters } from "../storage/postgres-operational-counters.ts";
 import { checkStandaloneTextDatabase } from "../storage/standalone-privacy-preflight.ts";
 import type { StandalonePrivacyPreflightFailure } from "../storage/standalone-privacy-preflight.ts";
 import { createStandaloneClinikoSetup } from "./cliniko-setup-composition.ts";
@@ -53,6 +54,7 @@ export async function createStandaloneClinikoAdminDashboard(config: ClinikoAdmin
   if (!configured.ok) return configured;
   const reception = new TextReception(new MemoryLedger(), configured.value.policy,
     new ReferenceClinicHost([], []));
+  const operationalDaily = new PostgresOperationalCounters(config.db);
   try {
     const server = await createHostAuthenticatedDashboardServer({ publicOrigin: config.publicOrigin,
       surface: "availabilitySetup",
@@ -64,7 +66,7 @@ export async function createStandaloneClinikoAdminDashboard(config: ClinikoAdmin
             actor.scope.clinicId !== scope.clinicId ||
             actor.scope.locationId !== scope.locationId) throw new RangeError("clinic admin scope unavailable");
         return new CommandGateway(actor, configured.value.policy, reception, undefined, undefined,
-          undefined, undefined, undefined, configured.value.setup);
+          undefined, undefined, undefined, configured.value.setup, operationalDaily);
       },
     }, config.bundlePath);
     return ok(server);

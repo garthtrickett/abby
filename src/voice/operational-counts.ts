@@ -7,6 +7,9 @@ export type OperationalCounts = Readonly<Record<OperationalCounterKind, number>>
 export type OperationalDailyCounts = Readonly<{ days: readonly Readonly<{
   date: string; counts: OperationalCounts;
 }>[] }>;
+export type OperationalDailyReader = Readonly<{
+  daily: (scope: LocationScope) => OperationalDailyCounts | Promise<OperationalDailyCounts>;
+}>;
 export type OperationalCounterStore = Readonly<{
   record: (scope: LocationScope, kind: OperationalCounterKind) => void | Promise<void>;
   snapshot: (scope: LocationScope) => OperationalCounts | Promise<OperationalCounts>;

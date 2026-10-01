@@ -40,6 +40,10 @@ select { border: 1px solid #98a7bd; border-radius: 8px; padding: 10px; font: inh
 .error { color: #9b1c1c; }
 .pill { display: inline-block; border-radius: 99px; padding: 4px 10px; background: #e9eef8; }
 ul { padding-left: 22px; }
+.table-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border-bottom: 1px solid #d8e0eb; padding: 8px; text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
 
 @media (max-width: 600px) {
   main { margin: 24px auto; }

@@ -105,6 +105,12 @@ const staffHealth = object({ observedAt: str, consistency: { const: "nonAtomicSc
   statuses: object({ requested: uint, open: uint, acknowledged: uint, resolved: uint,
     needsReview: uint, failed: uint }), overdue: uint, reviewRequired: uint, pendingChange: uint,
   alertPending: uint, alertUncertain: uint, alertFailed: uint });
+const operationalCounts = object({ admissionDenied: uint, callOwnerStarted: uint, voiceFailure: uint,
+  callEnded: uint, clinikoBudgetDenied: uint, clinikoBudgetUnavailable: uint,
+  clinikoProvider429: uint, clinikoProviderUnavailable: uint });
+const operationalDaily = object({ days: { type: "array", minItems: 7, maxItems: 7,
+  items: object({ date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+    counts: operationalCounts }) } });
 const staffChange = object({ kind: { const: "staffChange" }, taskKey: key, callVersion: uint,
   status: staffStatus, pending: bool, reviewRequired: bool });
 const turn = optional({ callId: key, sessionId: key, turnId: key, text: { type: "string", minLength: 1 },
@@ -156,7 +162,7 @@ export type CapabilityDescriptor = Readonly<{
 export type CapabilityPrecondition = "expectedPolicyVersion" | "expectedAutomationVersion" | "readinessForEnable" | "activeCall" | "bookingEnabledForExecution" |
   "hostEvidenceForExecution" | "approvedKnowledgeForAnswer" | "availabilityHostConfigured" |
   "appointmentHostConfigured" | "hostIssuedPatientProof" |
-  "callReviewAvailable" | "outcomeReportAvailable" | "staffQueueAvailable" |
+  "callReviewAvailable" | "outcomeReportAvailable" | "staffQueueAvailable" | "operationalDailyAvailable" |
   "hostConfirmedTask" | "expectedCallVersion" | "availabilitySetupAvailable" | "expectedAvailabilityApprovalVersion";
 
 function entry(id: string, input: JsonSchema, success: JsonSchema, effect: CapabilityDescriptor["effect"],
@@ -296,6 +302,8 @@ export const capabilityCatalogue = {
     reply("staffQueue", "page", staffPage), "read", "permittedActor", "none", ["staffQueueAvailable"]),
   "staff.health.v1": entry("staff.health.v1", object({ kind: { const: "staff.health.v1" } }),
     reply("staffQueueHealth", "health", staffHealth), "read", "permittedActor", "none", ["staffQueueAvailable"]),
+  "operations.daily.v1": entry("operations.daily.v1", object({ kind: { const: "operations.daily.v1" } }),
+    reply("operationalDaily", "daily", operationalDaily), "read", "clinicAdmin", "none", ["operationalDailyAvailable"]),
   "staff.change.v1": entry("staff.change.v1",
     object({ kind: { const: "staff.change.v1" }, callId: key, taskKey: key, expectedVersion: uint, change, now: str }),
     staffChange, "staffChange", "staffOrAdmin", "none", ["hostConfirmedTask", "expectedCallVersion"]),

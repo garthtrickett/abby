@@ -20,6 +20,8 @@ import type { ClinicAvailabilitySetup, ClinicAvailabilityApprovalState, ClinicAv
   ClinicAvailabilityRoute, ClinicAvailabilityBusinessCatalogue, ClinicAvailabilitySelection,
   ClinicAvailabilitySelectionSnapshot, ClinicAvailabilityPractitionerCatalogue,
   ClinicAvailabilityTypeCatalogue } from "./clinic-availability-setup.ts";
+import { validOperationalDailyCounts } from "../voice/operational-counts.ts";
+import type { OperationalDailyCounts, OperationalDailyReader } from "../voice/operational-counts.ts";
 
 export type { CapabilityDescriptor } from "./capability-catalogue.ts";
 
@@ -69,6 +71,7 @@ export type GatewayCommand =
   | Readonly<{ kind: "calls.outcomes.v1"; afterCallId?: string }>
   | Readonly<{ kind: "staff.list.v1"; afterTaskKey?: string }>
   | Readonly<{ kind: "staff.health.v1" }>
+  | Readonly<{ kind: "operations.daily.v1" }>
   | Readonly<{ kind: "staff.change.v1"; callId: string; taskKey: string; expectedVersion: number; change: StaffChangeRequest; now: string }>;
 
 type AssertNever<T extends never> = T;
@@ -100,6 +103,7 @@ export type GatewayReply =
   | Readonly<{ kind: "callOutcomes"; page: CallOutcomePage }>
   | Readonly<{ kind: "staffQueue"; page: StaffQueuePage }>
   | Readonly<{ kind: "staffQueueHealth"; health: StaffQueueHealth }>
+  | Readonly<{ kind: "operationalDaily"; daily: OperationalDailyCounts }>
   | Readonly<{ kind: "staffChange"; taskKey: string; callVersion: number; status: StaffItem["status"]; pending: boolean; reviewRequired: boolean }>;
 
 export type GatewayFailure = PolicyFailure | TextReceptionFailure | TransitionFailure | KnowledgeFailure | ClinicAvailabilitySetupFailure |
@@ -115,9 +119,11 @@ export class CommandGateway {
   private readonly writeStopLedger: LedgerStore | undefined;
   private readonly knowledgeCatalogue: KnowledgeCatalogue | undefined;
   private readonly availabilitySetup: ClinicAvailabilitySetup | undefined;
+  private readonly operationalDaily: OperationalDailyReader | undefined;
 
   constructor(actor: HostActor, policy: PolicyStore, reception: TextReception, review?: CallReview, staffQueue?: StaffQueue, outcomeReport?: CallOutcomeReport, writeStopLedger?: LedgerStore,
-              knowledgeCatalogue?: KnowledgeCatalogue, availabilitySetup?: ClinicAvailabilitySetup) {
+              knowledgeCatalogue?: KnowledgeCatalogue, availabilitySetup?: ClinicAvailabilitySetup,
+              operationalDaily?: OperationalDailyReader) {
     if (!actor || typeof actor.actorRef !== "string" || !actor.actorRef.trim() || actor.actorRef.length > 256 ||
         !["clinicAdmin", "staff", "agent"].includes(actor.role) || !actor.scope ||
         [actor.scope.tenantId, actor.scope.clinicId, actor.scope.locationId]
@@ -131,6 +137,7 @@ export class CommandGateway {
     this.writeStopLedger = writeStopLedger;
     this.knowledgeCatalogue = knowledgeCatalogue;
     this.availabilitySetup = availabilitySetup;
+    this.operationalDaily = operationalDaily;
   }
 
   /** A host transport can reject a gateway accidentally bound to another session. */
@@ -151,6 +158,7 @@ export class CommandGateway {
     if (this.staffQueue) permitted.push("staff.list.v1", "staff.health.v1");
     if (this.actor.role !== "agent" && this.reception.staffLifecycleEnabled()) permitted.push("staff.change.v1");
     if (this.actor.role === "clinicAdmin") {
+      if (this.operationalDaily) permitted.push("operations.daily.v1");
       if (this.knowledgeCatalogue) permitted.push("knowledge.list.v1", "knowledge.draft.save.v1", "knowledge.approve.v1", "knowledge.revoke.v1");
       if (this.availabilitySetup) permitted.push("clinic.availability.businesses.list.v1",
         "clinic.availability.practitioners.list.v1", "clinic.availability.types.list.v1", "clinic.availability.selection.inspect.v1",
@@ -378,6 +386,12 @@ export class CommandGateway {
         if (!this.staffQueue) return err({ kind: "forbidden" });
         const result = await this.staffQueue.health(this.actor.scope);
         return result.ok ? ok({ kind: "staffQueueHealth", health: result.value }) : result;
+      }
+      case "operations.daily.v1": {
+        if (!this.operationalDaily || this.actor.role !== "clinicAdmin") return err({ kind: "forbidden" });
+        const daily = await this.operationalDaily.daily(this.actor.scope);
+        return validOperationalDailyCounts(daily)
+          ? ok({ kind: "operationalDaily", daily }) : err({ kind: "responseContractViolation" });
       }
       case "staff.change.v1": {
         if (!command.callId || command.callId.length > 256 || !command.taskKey || command.taskKey.length > 256 ||
