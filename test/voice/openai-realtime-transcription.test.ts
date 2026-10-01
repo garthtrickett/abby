@@ -23,7 +23,7 @@ class FakeSocket extends EventEmitter {
   close(): void { this.terminate(); }
 }
 
-function configured(socket: FakeSocket, model: "gpt-live-transcribe" | "gpt-transcribe" = "gpt-live-transcribe"): void {
+function configured(socket: FakeSocket, model: "gpt-live-transcribe" | "gpt-transcribe" | "gpt-realtime-whisper" = "gpt-live-transcribe"): void {
   socket.open();
   assert.deepEqual(socket.sent[0], { type: "session.update", session: { type: "transcription", audio: { input: {
     format: { type: "audio/pcm", rate: 24000 }, transcription: { model },
@@ -160,6 +160,24 @@ test("E2E-162 committed-turn transcription candidate keeps only the matched fina
   assert.deepEqual(await wrong.accept(frame(0, 2_000), 1, new AbortController().signal),
     { ok: false, error: { kind: "transcriptionUnavailable" } });
   assert.equal(wrongSocket.terminateCount, 1);
+});
+
+test("Realtime Whisper candidate keeps the exact committed final untrusted", async () => {
+  const socket = new FakeSocket();
+  const transcription = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+    model: "gpt-realtime-whisper", socketFactory: () => socket as unknown as WebSocket });
+  configured(socket, "gpt-realtime-whisper");
+  assert.ok((await transcription.accept(frame(0, 2_000), 1, new AbortController().signal)).ok);
+  const pending = transcription.flush(1, new AbortController().signal);
+  await new Promise<void>(resolve => setImmediate(resolve));
+  socket.receive({ type: "conversation.item.input_audio_transcription.completed", item_id: "unrelated",
+    transcript: "Another caller" });
+  socket.receive({ type: "input_audio_buffer.committed", item_id: "selected" });
+  socket.receive({ type: "conversation.item.input_audio_transcription.completed", item_id: "selected",
+    transcript: "I need to speak to the clinic" });
+  assert.deepEqual(await pending, { ok: true, value: [{ kind: "segmentFinal", sessionId: "session", generation: 1,
+    utteranceId: "selected", text: "I need to speak to the clinic", quality: "needsClarification" }] });
+  await transcription.close();
 });
 
 test("static clinic transcription context is bounded, acknowledged, and never makes a final trusted", async () => {

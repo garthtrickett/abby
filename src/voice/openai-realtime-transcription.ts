@@ -12,7 +12,7 @@ const maxTranscriptChars = 4_096;
 const maxEarlyCompletions = 8;
 
 type Socket = Pick<WebSocket, "on" | "send" | "close" | "terminate" | "bufferedAmount" | "readyState">;
-export type OpenAIRealtimeTranscriptionModel = "gpt-live-transcribe" | "gpt-transcribe";
+export type OpenAIRealtimeTranscriptionModel = "gpt-live-transcribe" | "gpt-transcribe" | "gpt-realtime-whisper";
 export type TranscriptionDelay = "minimal" | "low" | "medium" | "high" | "xhigh";
 export type TranscriptionContext = Readonly<{
   /** Static, patient-free clinic setting. Never put caller or patient data here. */
@@ -124,7 +124,8 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
   constructor(config: OpenAIRealtimeTranscriptionConfig) {
     if (!config || typeof config.apiKey !== "string" || !config.apiKey.trim() || /[\r\n]/.test(config.apiKey) ||
         typeof config.sessionId !== "string" || !config.sessionId.trim() || config.sessionId.length > 256 ||
-        (config.model !== undefined && config.model !== "gpt-live-transcribe" && config.model !== "gpt-transcribe") ||
+        (config.model !== undefined && config.model !== "gpt-live-transcribe" && config.model !== "gpt-transcribe" &&
+          config.model !== "gpt-realtime-whisper") ||
         (config.context !== undefined && !validContext(config.context)) ||
         (config.delay !== undefined && !["minimal", "low", "medium", "high", "xhigh"].includes(config.delay)) ||
         (config.socketFactory !== undefined && typeof config.socketFactory !== "function")) {
