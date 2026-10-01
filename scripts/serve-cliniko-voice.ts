@@ -43,6 +43,8 @@ export type VoiceRunnerPorts = Readonly<{
   clinikoFetch?: typeof fetch;
   openaiFetch?: typeof fetch;
   transcriptionSocketFactory?: NonNullable<ClinikoVoiceServerConfig["openai"]["transcriptionSocketFactory"]>;
+  /** Isolated synthetic runner only; never selected from an environment variable. */
+  transcriptionFactory?: NonNullable<ClinikoVoiceServerConfig["transcriptionFactory"]>;
   operationalCounters?: OperationalCounterStore;
   /** Synthetic provider selection for the isolated voice runner. */
   speechModels?: Readonly<{ primary: string; fallback: string; primaryFirstChunkMs: number }>;
@@ -62,6 +64,11 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
   const contactEmail = required("ABBY_CLINIKO_CONTACT_EMAIL");
   const mode = process.env.ABBY_VOICE_TEST_MODE;
   if (mode !== undefined && mode !== "1") throw new RangeError("invalid ABBY_VOICE_TEST_MODE");
+  if (ports.transcriptionFactory && (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || mode !== "1" ||
+      apiKey !== "synthetic-key-au5" || !connectionString.includes("/abby_test_voice_") ||
+      ports.transcriptionSocketFactory)) {
+    throw new RangeError("synthetic transcription requires an isolated fixture");
+  }
   const operationalTokenHex = process.env.ABBY_VOICE_OPERATIONS_TOKEN_HEX;
   if (operationalTokenHex !== undefined && !/^[a-f0-9]{64}$/i.test(operationalTokenHex)) {
     throw new RangeError("invalid ABBY_VOICE_OPERATIONS_TOKEN_HEX");
@@ -120,6 +127,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
           speechFallbackModel: ports.speechModels.fallback,
           speechPrimaryFirstChunkMs: ports.speechModels.primaryFirstChunkMs } : {}),
         ...(ports.transcriptionSocketFactory ? { transcriptionSocketFactory: ports.transcriptionSocketFactory } : {}) },
+      ...(ports.transcriptionFactory ? { transcriptionFactory: ports.transcriptionFactory } : {}),
       readiness: testCaller ? async current => current.tenantId === scope.tenantId &&
         current.clinicId === scope.clinicId && current.locationId === scope.locationId
         ? ok(true) : unprovenReadiness(current) : unprovenReadiness,

@@ -14,7 +14,7 @@ import { PostgresActiveCallClaims } from "../storage/postgres-active-call-claims
 import { PostgresClinikoRequestBudget } from "../storage/postgres-cliniko-request-budget.ts";
 import { checkStandaloneTextDatabase } from "../storage/standalone-privacy-preflight.ts";
 import type { StandalonePrivacyPreflightFailure } from "../storage/standalone-privacy-preflight.ts";
-import type { MediaTurnOptions } from "../voice/media-turn-controller.ts";
+import type { MediaTurnOptions, TranscriptionPort } from "../voice/media-turn-controller.ts";
 import { FirstChunkFallbackSpeech } from "../voice/first-chunk-fallback-speech.ts";
 import { OpenAIRealtimeTranscription } from "../voice/openai-realtime-transcription.ts";
 import type { OpenAIRealtimeTranscriptionConfig } from "../voice/openai-realtime-transcription.ts";
@@ -84,6 +84,8 @@ export type ClinikoVoiceServerConfig = Readonly<{
     fetch?: typeof fetch;
     transcriptionSocketFactory?: OpenAIRealtimeTranscriptionConfig["socketFactory"];
   }>;
+  /** Host-supplied transcription; the runnable server permits this only in an isolated test fixture. */
+  transcriptionFactory?: (sessionId: string) => TranscriptionPort;
   readiness: AutomationReadiness;
   health?: () => Promise<boolean>;
   admitWebhook?: (event?: AuthenticatedInboundCall) => Promise<boolean>;
@@ -280,10 +282,10 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       resolveIntent: createOpenAIAvailabilityIntentResolver({ apiKey: openaiApiKey,
         model: config.openai.intentModel, clinicDate: approved.clinicDate,
         ...(config.openai.fetch ? { fetch: config.openai.fetch } : {}) }), readiness,
-      transcriptionFactory: sessionId => new OpenAIRealtimeTranscription({
+      transcriptionFactory: config.transcriptionFactory ?? (sessionId => new OpenAIRealtimeTranscription({
         apiKey: openaiApiKey, sessionId,
         ...(transcriptionSocketFactory ? { socketFactory: transcriptionSocketFactory } : {}),
-      }),
+      })),
       ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}),
       ...(playbackOptions ? { playbackOptions } : {}),
       ...(config.now ? { now: config.now } : {}),
