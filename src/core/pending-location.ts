@@ -114,13 +114,15 @@ function ownsPendingSession(pending: PendingLocationCall, sessionId: string, ver
 }
 
 export function startLocationPrompt(pending: PendingLocationCall, playbackId: string, sessionId: string,
-                                    version: number, now: string): Result<Readonly<{ pending: PendingLocationCall; newStart: boolean }>, TransitionFailure> {
+                                    version: number, now: string, afterPlayed = false): Result<Readonly<{ pending: PendingLocationCall; newStart: boolean }>, TransitionFailure> {
   if (!validRef(playbackId) || !validRef(sessionId) || !Number.isSafeInteger(version) || version < 1 ||
       !Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" });
   if (!ownsPendingSession(pending, sessionId, version, now)) return err({ kind: "leaseLost" });
   const previous = pending.prompt;
-  if (previous && previous.status !== "failed") return ok({ pending, newStart: false });
   if (previous?.playbackId === playbackId) return ok({ pending, newStart: false });
+  if (previous && previous.status !== "failed" && !(previous.status === "played" && afterPlayed === true)) {
+    return ok({ pending, newStart: false });
+  }
   const prompt: PendingLocationPrompt = { playbackId, sessionId, leaseVersion: version, status: "started", startedAt: now };
   return ok({ pending: { ...pending, prompt }, newStart: true });
 }

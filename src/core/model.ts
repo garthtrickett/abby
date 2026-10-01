@@ -383,6 +383,7 @@ export type TransitionAction =
   | Readonly<{ kind: "callEnded"; sessionId: string; reason: "callerDisconnected" | "sessionClosed" | "mediaFailure" | "localLeaseClosed"; now: string }>
   | Readonly<{ kind: "textPresentationWritten"; presentationId: string; now: string }>
   | Readonly<{ kind: "speechBegan"; sessionId: string; now: string }>
+  | Readonly<{ kind: "silenceTimeout"; sessionId: string; stage: "retry" | "final"; now: string }>
   | Readonly<{ kind: "callerTurn"; turn: FinalCallerTurn; interpretation: TurnInterpretation; now: string; expectedConversationRevision?: number }>
   | Readonly<{ kind: "modelResolved"; effectId: string; result: Result<import("../model/proposal.ts").ModelProposal, import("../model/proposal.ts").ModelFailure>; now: string }>
   | Readonly<{ kind: "modelKnowledgeResolved"; effectId: string; result: Result<readonly ApprovedKnowledge[], Readonly<{ kind: "invalidQuery" | "unavailable" }>>;

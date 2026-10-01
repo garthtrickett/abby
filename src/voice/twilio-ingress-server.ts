@@ -80,7 +80,7 @@ export type TwilioIngressServerConfig = Readonly<{
   /** Constructs a call owner only after the webhook, upgrade, and start have been authenticated. */
   createCall: (stream: AuthenticatedTwilioStream,
     send: (json: string) => "queued" | "notSent" | "uncertain",
-    close: () => void) => Promise<TwilioWireCall>;
+    close: (kind?: "normal" | "failure") => void) => Promise<TwilioWireCall>;
 }>;
 
 function header(value: string | string[] | undefined): string | undefined {
@@ -161,7 +161,7 @@ function runStream(socket: WebSocket, request: IncomingMessage, config: TwilioIn
           activeLease = lease;
           void lease.lost.then(() => socket.close(1011), () => socket.close(1011));
         }
-        call = await config.createCall(authenticated.value, send, () => socket.close(1008));
+        call = await config.createCall(authenticated.value, send, kind => socket.close(kind === "normal" ? 1000 : 1008));
         if (socket.readyState !== WebSocket.OPEN) { await call.disconnect(); return; }
         clearTimeout(deadline);
         const first = await call.receive(authenticated.value.connected);

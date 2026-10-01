@@ -19,7 +19,7 @@ export interface LedgerStore {
   reservePendingLocation(callId: string, route: PendingLocationRoute, admission: Admission): Promise<Result<PendingLocationResult, TransitionFailure>>;
   attachPendingLocationSession(callId: string, sessionId: string, now: string): Promise<Result<PendingLocationCall, TransitionFailure>>;
   renewPendingLocationSession(callId: string, sessionId: string, expectedVersion: number, now: string): Promise<Result<PendingLocationCall, TransitionFailure>>;
-  startPendingLocationPrompt(callId: string, playbackId: string, sessionId: string, expectedVersion: number, now: string):
+  startPendingLocationPrompt(callId: string, playbackId: string, sessionId: string, expectedVersion: number, now: string, afterPlayed?: boolean):
     Promise<Result<Readonly<{ pending: PendingLocationCall; newStart: boolean }>, TransitionFailure>>;
   resolvePendingLocationPrompt(callId: string, playbackId: string, sessionId: string, expectedVersion: number,
                                status: PendingLocationPrompt["status"], now: string): Promise<Result<PendingLocationCall, TransitionFailure>>;
@@ -228,11 +228,11 @@ export class MemoryLedger implements LedgerStore, EffectCallLeaseStore {
     return ok(structuredClone(renewed));
   }
 
-  async startPendingLocationPrompt(callId: string, playbackId: string, sessionId: string, expectedVersion: number, now: string):
+  async startPendingLocationPrompt(callId: string, playbackId: string, sessionId: string, expectedVersion: number, now: string, afterPlayed = false):
     Promise<Result<Readonly<{ pending: PendingLocationCall; newStart: boolean }>, TransitionFailure>> {
     const pending = this.pendingLocations.get(callId);
     if (!pending) return err({ kind: "callUnknown" });
-    const started = startLocationPrompt(pending, playbackId, sessionId, expectedVersion, now);
+    const started = startLocationPrompt(pending, playbackId, sessionId, expectedVersion, now, afterPlayed);
     if (!started.ok) return started;
     if (started.value.newStart) this.pendingLocations.set(callId, started.value.pending);
     return ok(structuredClone(started.value));

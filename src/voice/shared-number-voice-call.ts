@@ -120,6 +120,14 @@ export class SharedNumberVoiceCall {
     return Promise.resolve(err({ kind: "sessionUnknown" }));
   }
 
+  silenceTimeout(stage: "retry" | "final", now: string): Promise<Result<PrelocationPromptResult | DispatchResult, SharedVoiceFailure>> {
+    if (this.closing || this.terminal) return Promise.resolve(err({ kind: "disconnected" }));
+    if (this.inFlight) return Promise.resolve(err({ kind: "deliveryBlocked" }));
+    if (this.prelocation) return this.prelocation.silenceTimeout(stage, now);
+    if (this.full) return this.full.silenceTimeout(stage, now);
+    return Promise.resolve(err({ kind: "sessionUnknown" }));
+  }
+
   speechStarted(now: string): Promise<Result<number, SharedVoiceFailure>> {
     if (this.closing || this.terminal) return Promise.resolve(err({ kind: "disconnected" }));
     if (this.prelocation) return this.prelocation.speechStarted(now);

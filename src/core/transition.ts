@@ -4,6 +4,7 @@ import { availabilityPresentation } from "./availability-presentation.ts";
 import { appointmentPresentation } from "./appointment-presentation.ts";
 import { addStaffTask, planStaffChange } from "./staff-work.ts";
 import { staffedForTransfer } from "./staffed-window.ts";
+import { SILENCE_FINAL_NOTICE, SILENCE_RETRY_NOTICE } from "./silence-notices.ts";
 import { validCallKnowledgeSource } from "./knowledge-evidence.ts";
 import { acceptModelKnowledge, acceptModelResult, cancelModelWork } from "./model-result.ts";
 import { redactSettledContent } from "./presentation-retention.ts";
@@ -494,6 +495,27 @@ export function transition(current: CallState, action: TransitionAction): Result
       }
       state.conversationRevision += 1;
       cancelModelWork(state);
+      break;
+    }
+    case "silenceTimeout": {
+      const lease = state.sessionLease;
+      if (state.lifecycle !== "active" || !state.admission || !lease || lease.sessionId !== action.sessionId ||
+          Date.parse(action.now) >= Date.parse(lease.expiresAt)) return err({ kind: "leaseLost" });
+      if (action.stage !== "retry" && action.stage !== "final") return err({ kind: "invalidTransition" });
+      if (state.pendingPresentationId || Object.values(state.presentations).some(presentation =>
+        presentation.status === "started" || presentation.status === "possiblySent")) return err({ kind: "invalidTransition" });
+      const noticeId = (stage: "retry" | "final") => createHash("sha256").update(JSON.stringify([
+        state.callId, action.sessionId, state.conversationRevision, stage, "silence",
+      ])).digest("hex");
+      if (action.stage === "final" && state.presentations[noticeId("retry")]?.status !== "played") {
+        return err({ kind: "invalidTransition" });
+      }
+      const id = noticeId(action.stage);
+      if (state.presentations[id]) return err({ kind: "invalidTransition" });
+      const approvedText = action.stage === "retry" ? SILENCE_RETRY_NOTICE : SILENCE_FINAL_NOTICE;
+      state.presentations[id] = { kind: "notice", id, approvedText, status: "pending" };
+      state.pendingPresentationId = id;
+      state.callerMessages.push(approvedText);
       break;
     }
     case "callerTurn": {
