@@ -4,6 +4,7 @@
 import type { default as ClinicSettingsTable } from './ClinicSettings.js';
 import type { default as NumberCutoversTable } from './NumberCutovers.js';
 import type { default as ClinicOperationalCountsTable } from './ClinicOperationalCounts.js';
+import type { default as ClinicOperationalDailyCountsTable } from './ClinicOperationalDailyCounts.js';
 import type { default as PendingLocationCallsTable } from './PendingLocationCalls.js';
 import type { default as ClinicWriteStopTable } from './ClinicWriteStop.js';
 import type { default as NumberRouteEventsTable } from './NumberRouteEvents.js';
@@ -36,6 +37,8 @@ export default interface PublicSchema {
   number_cutovers: NumberCutoversTable;
 
   clinic_operational_counts: ClinicOperationalCountsTable;
+
+  clinic_operational_daily_counts: ClinicOperationalDailyCountsTable;
 
   pending_location_calls: PendingLocationCallsTable;
 

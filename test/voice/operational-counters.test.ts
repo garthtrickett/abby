@@ -18,3 +18,22 @@ test("standalone operational counters expose only fixed, clinic-scoped totals", 
     clinikoBudgetUnavailable: 0, clinikoProvider429: 0, clinikoProviderUnavailable: 0 });
   assert.doesNotMatch(JSON.stringify(counters.snapshot(first)), /caller-number-canary|tenant|first/);
 });
+
+test("volatile daily operations use UTC days, zero-fill gaps and isolate clinics", () => {
+  let now = "2026-09-30T23:59:59.000Z";
+  const counters = new StandaloneOperationalCounters(() => now);
+  const scope = { tenantId: "tenant", clinicId: "first", locationId: "main" };
+  counters.record(scope, "clinikoProvider429");
+  now = "2026-10-01T00:00:01.000Z";
+  counters.record(scope, "clinikoProviderUnavailable");
+  const daily = counters.daily(scope);
+  assert.equal(daily.days.length, 7);
+  assert.deepEqual(daily.days.slice(-2).map(row => [row.date, row.counts.clinikoProvider429,
+    row.counts.clinikoProviderUnavailable]), [
+    ["2026-09-30", 1, 0], ["2026-10-01", 0, 1],
+  ]);
+  assert.equal(counters.daily({ ...scope, clinicId: "other" }).days.at(-1)?.counts.clinikoProviderUnavailable, 0);
+  now = "2026-10-07T00:00:00.000Z";
+  assert.equal(counters.daily(scope).days[0]?.date, "2026-10-01");
+  assert.equal(counters.snapshot(scope).clinikoProvider429, 1, "the original lifetime total remains available");
+});

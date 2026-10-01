@@ -28,6 +28,7 @@ import { up as up025, down as down025 } from "./migrations/025_clinic_operationa
 import { up as up026, down as down026 } from "./migrations/026_cliniko_budget_operational_counts.ts";
 import { up as up027, down as down027 } from "./migrations/027_cliniko_provider_unavailable_count.ts";
 import { up as up028, down as down028 } from "./migrations/028_cliniko_approved_business_time_zone.ts";
+import { up as up029, down as down029 } from "./migrations/029_clinic_operational_daily_counts.ts";
 
 function createMigrator<DB>(db: Kysely<DB>): Migrator {
   return new Migrator({
@@ -61,6 +62,7 @@ function createMigrator<DB>(db: Kysely<DB>): Migrator {
       "026_cliniko_budget_operational_counts": { up: up026, down: down026 },
       "027_cliniko_provider_unavailable_count": { up: up027, down: down027 },
       "028_cliniko_approved_business_time_zone": { up: up028, down: down028 },
+      "029_clinic_operational_daily_counts": { up: up029, down: down029 },
     }) },
   });
 }

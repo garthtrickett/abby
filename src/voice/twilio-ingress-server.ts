@@ -5,8 +5,8 @@ import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
 import type { AuthenticatedInboundCall } from "./admission.ts";
 import type { AuthenticatedTwilioStream } from "./twilio-signed-ingress.ts";
-import { validOperationalCounts } from "./operational-counts.ts";
-import type { OperationalCounts } from "./operational-counts.ts";
+import { validOperationalCounts, validOperationalDailyCounts } from "./operational-counts.ts";
+import type { OperationalCounts, OperationalDailyCounts } from "./operational-counts.ts";
 import { TWILIO_BINDING_LIFETIME_MS, TwilioSignedIngress } from "./twilio-signed-ingress.ts";
 
 const maxBodyBytes = 16_384;
@@ -75,7 +75,8 @@ export type TwilioIngressServerConfig = Readonly<{
   /** Checked after signature verification and before returning stream TwiML. */
   /** No event means a general readiness probe, which a restricted test gate must refuse. */
   admitWebhook?: (event?: AuthenticatedInboundCall) => Promise<boolean>;
-  operationalRead?: Readonly<{ tokenHex: string; snapshot: () => OperationalCounts | Promise<OperationalCounts> }>;
+  operationalRead?: Readonly<{ tokenHex: string; snapshot: () => OperationalCounts | Promise<OperationalCounts>;
+    daily?: () => OperationalDailyCounts | Promise<OperationalDailyCounts> }>;
   /** Constructs a call owner only after the webhook, upgrade, and start have been authenticated. */
   createCall: (stream: AuthenticatedTwilioStream,
     send: (json: string) => "queued" | "notSent" | "uncertain",
@@ -191,7 +192,8 @@ export function createTwilioIngressServer(config: TwilioIngressServerConfig): Se
     perMessageDeflate: false });
   const server = createServer((request, response) => {
     void (async () => {
-      if (request.url === "/internal/operations") {
+      if (request.url === "/internal/operations" || request.url === "/internal/operations/daily") {
+        const daily = request.url === "/internal/operations/daily";
         const supplied = header(request.headers.authorization)?.match(/^Bearer ([a-f0-9]{64})$/i)?.[1];
         if (!operationalToken) {
           response.writeHead(404, { "cache-control": "no-store" }); response.end(); return;
@@ -200,12 +202,13 @@ export function createTwilioIngressServer(config: TwilioIngressServerConfig): Se
             !timingSafeEqual(Buffer.from(supplied, "hex"), operationalToken)) {
           response.writeHead(403, { "cache-control": "no-store" }); response.end(); return;
         }
-        const counts = await Promise.resolve().then(() => config.operationalRead!.snapshot()).catch(() => undefined);
-        if (!validOperationalCounts(counts)) {
+        const result = await Promise.resolve().then(() => daily
+          ? config.operationalRead!.daily?.() : config.operationalRead!.snapshot()).catch(() => undefined);
+        if (daily ? !validOperationalDailyCounts(result) : !validOperationalCounts(result)) {
           response.writeHead(503, { "cache-control": "no-store" }); response.end(); return;
         }
         response.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-        response.end(JSON.stringify(counts));
+        response.end(JSON.stringify(result));
         return;
       }
       if (request.method === "GET" && request.url === "/healthz" && config.health) {

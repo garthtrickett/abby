@@ -36,6 +36,10 @@ test("two worker processes atomically share scoped, patient-free operational tot
     clinikoBudgetDenied: 0, clinikoBudgetUnavailable: 0, clinikoProvider429: 0,
     clinikoProviderUnavailable: 1,
   });
+  const daily = await counters.daily(scope);
+  assert.equal(daily.days.length, 7);
+  assert.equal(daily.days.at(-1)?.counts.admissionDenied, 80);
+  assert.equal(daily.days.at(-1)?.counts.clinikoProviderUnavailable, 1);
   assert.deepEqual(await counters.snapshot({ ...scope, locationId: "other" }), {
     admissionDenied: 0, callOwnerStarted: 0, voiceFailure: 0, callEnded: 0,
     clinikoBudgetDenied: 0, clinikoBudgetUnavailable: 0, clinikoProvider429: 0,
@@ -51,8 +55,41 @@ test("two worker processes atomically share scoped, patient-free operational tot
     order by ordinal_position`.execute(db);
   assert.deepEqual(columns.rows.map(row => row.column_name),
     ["tenant_id", "clinic_id", "location_id", "kind", "count"]);
+  const dailyColumns = await sql<{ column_name: string }>`select column_name from information_schema.columns
+    where table_schema = current_schema() and table_name = 'clinic_operational_daily_counts'
+    order by ordinal_position`.execute(db);
+  assert.deepEqual(dailyColumns.rows.map(row => row.column_name),
+    ["tenant_id", "clinic_id", "location_id", "date", "kind", "count"]);
   const canary = `patient-private-ops-${randomUUID()}`;
   const probes = [{ label: "patient", value: canary }];
   assert.deepEqual(await scanPatientDataCanaries(db, probes), { ok: true, value: [] });
   assert.deepEqual(await scanDisposableBackupCanaries(url, probes), []);
+});
+
+test("daily aggregates roll over in UTC, omit other scopes and prune expired buckets", async () => {
+  const scope = { tenantId: `ops-days-${randomUUID()}`, clinicId: "clinic", locationId: "main" };
+  const other = { ...scope, tenantId: `ops-days-other-${randomUUID()}` };
+  let now = "2026-09-30T23:59:59.000Z";
+  const counters = new PostgresOperationalCounters(db, () => now);
+  await counters.record(scope, "clinikoProvider429");
+  await counters.record(other, "clinikoProvider429");
+  now = "2026-10-01T00:00:01.000Z";
+  await counters.record(scope, "clinikoProviderUnavailable");
+  const daily = await counters.daily(scope);
+  assert.deepEqual(daily.days.slice(-2).map(row => [row.date, row.counts.clinikoProvider429,
+    row.counts.clinikoProviderUnavailable]), [
+    ["2026-09-30", 1, 0], ["2026-10-01", 0, 1],
+  ]);
+  assert.equal((await counters.daily({ ...scope, clinicId: "other" })).days.at(-1)?.counts.clinikoProviderUnavailable, 0);
+  now = "2026-10-07T00:00:00.000Z";
+  const later = await counters.daily(scope);
+  assert.equal(later.days[0]?.date, "2026-10-01");
+  assert.equal(later.days[0]?.counts.clinikoProviderUnavailable, 1);
+  const older = await sql<{ count: string }>`select count(*)::text as count from clinic_operational_daily_counts
+    where tenant_id = ${scope.tenantId} and date < date '2026-10-01'`.execute(db);
+  assert.equal(older.rows[0]?.count, "0");
+  const otherScope = await sql<{ count: string }>`select count(*)::text as count from clinic_operational_daily_counts
+    where tenant_id = ${other.tenantId} and date = date '2026-09-30'`.execute(db);
+  assert.equal(otherScope.rows[0]?.count, "1", "reading one clinic cannot delete another clinic's counters");
+  assert.equal((await counters.snapshot(scope)).clinikoProvider429, 1);
 });
