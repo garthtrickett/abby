@@ -71,6 +71,7 @@ type Fixture = { port: number; child: ReturnType<typeof spawn>;
   admin: ReturnType<typeof connectPostgres>; databaseName: string;
   speech: string[]; speechRequests: { model: string; text: string }[];
   clinikoMethods: string[]; clinikoPaths: string[]; clinikoQueries: string[];
+  clinikoReadAborts: { at: number; reason: string }[];
   modelRequests: string[];
   openCall: (callSidOverride?: string) => Promise<Call>; restart: () => Promise<void>;
   operationalSnapshot: () => Promise<Record<string, number>> };
@@ -115,6 +116,7 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
   const clinikoMethods: string[] = [];
   const clinikoPaths: string[] = [];
   const clinikoQueries: string[] = [];
+  const clinikoReadAborts: { at: number; reason: string }[] = [];
   const modelRequests: string[] = [];
   let processOutput = "";
   try {
@@ -146,6 +148,9 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
         }
         if (typeof message === "object" && message !== null && "kind" in message &&
             message.kind === "intentModelRequest") modelRequests.push("request");
+        if (typeof message === "object" && message !== null && "kind" in message &&
+            message.kind === "clinikoReadAborted" && "reason" in message &&
+            typeof message.reason === "string") clinikoReadAborts.push({ at: Date.now(), reason: message.reason });
         if (typeof message === "object" && message !== null && "kind" in message &&
             message.kind === "clinikoMethod" && "method" in message && typeof message.method === "string") {
           clinikoMethods.push(message.method);
@@ -208,7 +213,7 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
       return await response.json() as Record<string, number>;
     };
     await run({ port, child: firstChild, admin, databaseName, speech, speechRequests, clinikoMethods, clinikoPaths,
-      clinikoQueries, modelRequests, openCall, restart, operationalSnapshot });
+      clinikoQueries, clinikoReadAborts, modelRequests, openCall, restart, operationalSnapshot });
   } finally {
     let restored = true;
     try { if (created) await sql.raw(`alter database "${databaseName}" with allow_connections true`).execute(admin); }
@@ -663,6 +668,32 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
       }
       assert.equal(health.status, 503);
     })),
+    t.test("E2E-234 caller hangup aborts an in-flight Cliniko read before its deadline", async () =>
+      withFixture("cliniko-slow-read", async fixture => {
+        const call = await fixture.openCall();
+        await markGreeting(call);
+        call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
+          dtmf: { track: "inbound_track", digit: "1" } }));
+        await waitFor(() => fixture.clinikoPaths.some(path => path.endsWith("/available_times")),
+          "in-flight availability read");
+        const disconnectedAt = Date.now();
+        await closeCaller(call);
+        await waitFor(() => fixture.clinikoReadAborts.length === 1, "call-scoped read abort");
+        assert.equal(fixture.clinikoReadAborts[0]!.reason, "AbortError");
+        assert.ok(fixture.clinikoReadAborts[0]!.at - disconnectedAt < 8_000);
+        let ended = false;
+        const until = Date.now() + 8_000;
+        while (!ended && Date.now() < until) {
+          ended = (await fixture.operationalSnapshot()).callEnded === 1;
+          if (!ended) await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        assert.equal(ended, true, "call owner must finish after the aborted read");
+        assert.deepEqual(call.messages.map(item => item.event), ["media", "mark"]);
+        assert.equal(fixture.speech.length, 1);
+        assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
+        const health = await fetch(`http://127.0.0.1:${fixture.port}/healthz`);
+        assert.equal(health.status, 200);
+      })),
     t.test("E2E-177 E2E-197 abrupt exit drops the stream and refuses the next ingress", async () => withFixture(undefined, async fixture => {
       const call = await fixture.openCall();
       await markGreeting(call);
