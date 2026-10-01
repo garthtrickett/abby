@@ -13,7 +13,7 @@ import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 
-type Fault = "openai-speech" | "openai-transcription" | "cliniko-rate-limit" | "cliniko-timeout" | "cliniko-partial-page" |
+type Fault = "openai-speech" | "openai-transcription" | "untrusted-transcript" | "cliniko-rate-limit" | "cliniko-timeout" | "cliniko-partial-page" |
   "cliniko-business-type-removed" | "cliniko-practitioner-type-removed" | "week-alternative" | "practitioner-alternative" |
   "practitioner-alternative-rate-limit" | "practitioner-alternative-malformed" |
   "practitioner-alternative-second" | undefined;
@@ -66,6 +66,7 @@ type Call = { socket: WebSocket; messages: Record<string, unknown>[];
 type Fixture = { port: number; child: ReturnType<typeof spawn>;
   admin: ReturnType<typeof connectPostgres>; databaseName: string;
   speech: string[]; clinikoMethods: string[]; clinikoPaths: string[]; clinikoQueries: string[];
+  modelRequests: string[];
   openCall: () => Promise<Call>; operationalSnapshot: () => Promise<Record<string, number>> };
 
 async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void>,
@@ -106,6 +107,7 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
   const clinikoMethods: string[] = [];
   const clinikoPaths: string[] = [];
   const clinikoQueries: string[] = [];
+  const modelRequests: string[] = [];
   let processOutput = "";
   try {
     await sql.raw(`create database "${databaseName}"`).execute(admin);
@@ -129,6 +131,8 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
     child.on("message", message => {
       if (typeof message === "object" && message !== null && "kind" in message &&
           message.kind === "speech" && "text" in message && typeof message.text === "string") speech.push(message.text);
+      if (typeof message === "object" && message !== null && "kind" in message &&
+          message.kind === "intentModelRequest") modelRequests.push("request");
       if (typeof message === "object" && message !== null && "kind" in message &&
           message.kind === "clinikoMethod" && "method" in message && typeof message.method === "string") {
         clinikoMethods.push(message.method);
@@ -179,6 +183,7 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
       return await response.json() as Record<string, number>;
     };
     await run({ port, child, admin, databaseName, speech, clinikoMethods, clinikoPaths, clinikoQueries,
+      modelRequests,
       openCall, operationalSnapshot });
   } finally {
     let restored = true;
@@ -196,6 +201,7 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
         const canaries = [
           { label: "caller", value: caller }, { label: "provider_call", value: callSid },
           { label: "appointment", value: "synthetic-only" },
+          { label: "transcript", value: "Do you have availability tomorrow?" },
         ];
         const db = connectPostgres(target.toString());
         try { assert.deepEqual(await scanPatientDataCanaries(db, canaries), { ok: true, value: [] }); }
@@ -283,6 +289,37 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
           "This is an Abby test call. Press 1 for possible times today. Press 2 for possible times tomorrow.",
         ]);
         assert.deepEqual(fixture.clinikoMethods, []);
+      })),
+    t.test("E2E-205 signed completed transcripts stay untrusted and never reach the intent model", async () =>
+      withFixture("untrusted-transcript", async fixture => {
+        const call = await fixture.openCall();
+        await markGreeting(call);
+        const priorClinikoReads = fixture.clinikoMethods.length;
+        const sendTurn = async (sequence: number, chunk: number): Promise<void> => {
+          for (let index = 0; index < 37; index += 1) {
+            call.socket.send(JSON.stringify({ event: "media", sequenceNumber: String(sequence + index),
+              streamSid: call.streamSid, media: { track: "inbound", chunk: String(chunk + index),
+                timestamp: String((chunk + index - 1) * 20),
+                payload: Buffer.alloc(160, index < 2 ? 0x9f : 0xff).toString("base64") } }));
+            await new Promise(resolve => setTimeout(resolve, 3));
+          }
+        };
+        await sendTurn(3, 1);
+        await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "unclear speech fallback");
+        assert.equal(fixture.speech[1], "Could you repeat that for me?");
+        assert.deepEqual(fixture.modelRequests, []);
+        assert.equal(fixture.clinikoMethods.length, priorClinikoReads);
+        call.socket.send(JSON.stringify({ event: "mark", sequenceNumber: "40", streamSid: call.streamSid,
+          mark: { name: (call.messages[3]!.mark as { name: string }).name } }));
+        await sendTurn(41, 38);
+        assert.equal((await bounded(call.closed, "second unclear turn close"))[0], 1008);
+        assert.deepEqual(fixture.modelRequests, []);
+        assert.equal(fixture.speech.length, 2);
+        assert.equal(fixture.clinikoMethods.length, priorClinikoReads);
+        const counts = await fixture.operationalSnapshot();
+        assert.equal(counts.callOwnerStarted, 1);
+        assert.equal(counts.voiceFailure, 1);
+        assert.equal(counts.callEnded, 1);
       })),
     t.test("E2E-199 an unapproved week option and invalid digit cannot widen a caller's read", async () =>
       withFixture("week-alternative", async fixture => {

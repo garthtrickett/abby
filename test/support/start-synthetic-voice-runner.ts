@@ -6,7 +6,7 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     process.env.ABBY_CLINIKO_API_KEY !== "synthetic-key-au5" ||
     process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}` ||
     !process.env.DATABASE_URL?.includes("/abby_test_voice_") ||
-    ![undefined, "openai-speech", "openai-transcription", "cliniko-rate-limit", "cliniko-timeout", "cliniko-partial-page", "cliniko-business-type-removed", "cliniko-practitioner-type-removed", "week-alternative",
+    ![undefined, "openai-speech", "openai-transcription", "untrusted-transcript", "cliniko-rate-limit", "cliniko-timeout", "cliniko-partial-page", "cliniko-business-type-removed", "cliniko-practitioner-type-removed", "week-alternative",
       "practitioner-alternative", "practitioner-alternative-rate-limit",
       "practitioner-alternative-malformed", "practitioner-alternative-second"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
   throw new Error("synthetic voice runner requires an isolated fixture");
@@ -20,11 +20,23 @@ class SyntheticTranscriptionSocket extends EventEmitter {
   readyState: number = WebSocket.CONNECTING;
   bufferedAmount = 0;
   private failed = false;
+  private committed = 0;
 
   send(data: string): void {
     if (fault === "openai-transcription" && !this.failed && data.includes('"input_audio_buffer.append"')) {
       this.failed = true;
       queueMicrotask(() => this.emit("message", Buffer.from(JSON.stringify({ type: "error" }))));
+    }
+    if (fault === "untrusted-transcript" && data.includes('"input_audio_buffer.commit"')) {
+      const itemId = `synthetic-intent-item-${++this.committed}`;
+      queueMicrotask(() => {
+        this.emit("message", Buffer.from(JSON.stringify({ type: "input_audio_buffer.committed",
+          item_id: itemId })));
+        this.emit("message", Buffer.from(JSON.stringify({
+          type: "conversation.item.input_audio_transcription.completed", item_id: itemId,
+          transcript: "Do you have availability tomorrow?",
+        })));
+      });
     }
   }
   terminate(): void { this.readyState = WebSocket.CLOSED; this.emit("close"); }
@@ -108,6 +120,10 @@ const clinikoFetch: typeof fetch = async (input, init) => {
 };
 
 const openaiFetch: typeof fetch = async (input, init) => {
+  if (String(input) === "https://api.openai.com/v1/responses" && fault === "untrusted-transcript") {
+    process.send?.({ kind: "intentModelRequest" });
+    return new Response(null, { status: 503 });
+  }
   if (String(input) !== "https://api.openai.com/v1/audio/speech") {
     throw new Error("unexpected OpenAI request");
   }
