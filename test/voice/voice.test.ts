@@ -140,7 +140,24 @@ function redactPresentationReads(ledger: LedgerStore): LedgerStore {
   } });
 }
 
-async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: boolean, transferMode: "execute" | "requestOnly" | "unavailable" = "requestOnly", transferDestinationRef?: string, clock?: { now: () => number; onPresentationStarted?: () => void; onSessionRenewed?: () => void }, options: { bookingMode?: "execute" | "requestOnly"; knowledge?: (scope: LocationScope) => readonly ApprovedKnowledge[]; availability?: (scope: LocationScope) => AvailabilityHost; staffedIntervals?: CallPolicy["staffedIntervals"]; model?: RawModelPort; modelDeadlineMs?: number; streamedPlayback?: PlaybackPort; transientPresentation?: boolean } = {}) {
+type VoiceFixtureOptions = {
+  bookingMode?: "execute" | "requestOnly";
+  knowledge?: (scope: LocationScope) => readonly ApprovedKnowledge[];
+  availability?: (scope: LocationScope) => AvailabilityHost;
+  staffedIntervals?: CallPolicy["staffedIntervals"];
+  afterHoursText?: string;
+  afterHoursOffBeforeAdmission?: boolean;
+  model?: RawModelPort;
+  modelDeadlineMs?: number;
+  streamedPlayback?: PlaybackPort;
+  transientPresentation?: boolean;
+};
+
+async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: boolean,
+                       transferMode: "execute" | "requestOnly" | "unavailable" = "requestOnly",
+                       transferDestinationRef?: string,
+                       clock?: { now: () => number; onPresentationStarted?: () => void; onSessionRenewed?: () => void },
+                       options: VoiceFixtureOptions = {}) {
   const scope: LocationScope = { tenantId: `voice-tenant-${id}`, clinicId: `voice-clinic-${id}`, locationId: `voice-location-${id}` };
   const patient = { scope, patientRef: `patient-${id}`, verificationRef: `proof-${id}`, expiresAt: at(86_400) };
   const offer = { scope, offerRef: `offer-${id}`, serviceRef: "physio", startsAt: at(90_000), expiresAt: at(86_400) };
@@ -160,6 +177,11 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
     reception = createEmbeddedTextComposition(ledger, policy, host, availability, undefined, model);
   }
   if (bookingEnabled) value(await policy.changeBookingEnabled(scope, "0", true, "voice-test-admin"));
+  if (options.afterHoursText) value(await policy.changeAfterHours(scope, bookingEnabled ? "1" : "0",
+    "approvedInfoAndRequest", { scope, version: "holiday-v1", ownerRef: "voice-test-admin",
+      approvedText: options.afterHoursText, approved: true }, "voice-test-admin"));
+  if (options.afterHoursOffBeforeAdmission) value(await policy.changeAfterHours(scope,
+    bookingEnabled ? "2" : "1", "staffRequest", undefined, "voice-test-admin"));
   const playback = new FakePlayback();
   const transfer = new FakeTransfer();
   const admission = new CallAdmissionService(ledger, async () => {
@@ -1062,6 +1084,51 @@ for (const kind of kinds) {
     assert.equal(app.playback.queuedTexts.at(-1), "We open at 9 am.");
     assert.equal(app.transfer.requested.length, 0);
     assert.equal(app.host.bookings(app.scope).length, 0);
+  });
+
+  test(`${kind}: E2E-229 SET-006 closed-transfer speech uses the captured after-hours setting`, async () => {
+    const approvedText = "The clinic reopens Tuesday at 9 am.";
+    const defaultCall = await fixture(kind, `${kind}-after-hours-default`, false, "execute", undefined, undefined,
+      { staffedIntervals: [] });
+    const defaultTurn = await transferTurn(defaultCall);
+    assert.equal(defaultTurn.callerMessages.at(-1)?.includes(approvedText), false);
+    assert.equal(value(await defaultCall.session.dispatchPending(at(4))).kind, "queued");
+    assert.equal(defaultCall.playback.queuedTexts.at(-1)?.includes(approvedText), false);
+
+    const enabledCall = await fixture(kind, `${kind}-after-hours-enabled`, false, "execute", undefined, undefined,
+      { staffedIntervals: [], afterHoursText: approvedText });
+    const policyAfterDisable = value(await enabledCall.policy.changeAfterHours(enabledCall.scope, "1", "staffRequest",
+      undefined, "voice-test-admin"));
+    assert.equal(policyAfterDisable.afterHoursInfo, undefined);
+    const captured = value(await enabledCall.ledger.read(enabledCall.callId, enabledCall.scope));
+    assert.equal(captured.policy.afterHoursMode, "approvedInfoAndRequest");
+    assert.equal(captured.policy.afterHoursInfo?.approvedText, approvedText);
+    const enabledTurn = await transferTurn(enabledCall);
+    assert.equal(enabledTurn.callerMessages.at(-1)?.includes(approvedText), true);
+    assert.equal(Object.values(enabledTurn.staffItems)[0]?.reason, "callerRequested");
+    assert.equal(value(await enabledCall.session.dispatchPending(at(4))).kind, "queued");
+    assert.equal(enabledCall.playback.queuedTexts.at(-1)?.includes(approvedText), true);
+    assert.equal(enabledCall.transfer.requested.length, 0);
+    assert.equal(value(await enabledCall.session.drainEffects(at(5))).staffItems[Object.keys(enabledTurn.staffItems)[0]!]?.status, "open");
+    assert.equal((await enabledCall.reception.startCall(`${kind}-after-hours-next`, enabledCall.scope)).ok, true);
+    const next = value(await enabledCall.ledger.read(`${kind}-after-hours-next`, enabledCall.scope));
+    assert.equal(next.policy.afterHoursMode, "staffRequest");
+    assert.equal(next.policy.afterHoursInfo, undefined);
+
+    const disabledCall = await fixture(kind, `${kind}-after-hours-disabled`, false, "execute", undefined, undefined,
+      { staffedIntervals: [], afterHoursText: approvedText, afterHoursOffBeforeAdmission: true });
+    const disabledTurn = await transferTurn(disabledCall);
+    assert.equal(disabledTurn.callerMessages.at(-1)?.includes(approvedText), false);
+    assert.equal(value(await disabledCall.session.dispatchPending(at(4))).kind, "queued");
+    assert.equal(disabledCall.playback.queuedTexts.at(-1)?.includes(approvedText), false);
+
+    const unknownHours = await fixture(kind, `${kind}-after-hours-unknown`, false, "execute", undefined, undefined,
+      { staffedIntervals: [{ startsAt: "bad-start", endsAt: "bad-end" }], afterHoursText: approvedText });
+    const unknownTurn = await transferTurn(unknownHours);
+    assert.equal(unknownTurn.callerMessages.at(-1)?.includes(approvedText), false,
+      "an invalid staffing snapshot cannot authorize time-specific clinic information");
+    assert.equal(value(await unknownHours.session.dispatchPending(at(4))).kind, "queued");
+    assert.equal(unknownHours.playback.queuedTexts.at(-1)?.includes(approvedText), false);
   });
 
   test(`${kind}: a staffed window closing before transfer send cancels and requests follow-up`, async () => {

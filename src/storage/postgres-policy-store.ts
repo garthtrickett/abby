@@ -1,8 +1,9 @@
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
-import type { AutomationSettingAuditEntry, AutomationSettingAuditPage, BookingSettingAuditEntry, BookingSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
+import type { AfterHoursSettingAuditEntry, AfterHoursSettingAuditPage, AutomationSettingAuditEntry, AutomationSettingAuditPage, BookingSettingAuditEntry, BookingSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
-import type { CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
+import type { AfterHoursMode, ApprovedAfterHoursInfo, CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
+import { validAfterHoursSetting } from "../core/after-hours-policy.ts";
 import { READINESS_REQUIREMENTS, unprovenReadiness } from "../core/readiness.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
 import type Database from "./generated/Database.ts";
@@ -13,28 +14,33 @@ function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
 }
 
-type StoredStandalonePolicy = Readonly<{ scope: LocationScope; policyVersion: string; bookingEnabled: boolean }>;
+type StoredStandalonePolicy = Readonly<{ scope: LocationScope; policyVersion: string; bookingEnabled: boolean;
+  afterHoursMode: AfterHoursMode; afterHoursInfo?: ApprovedAfterHoursInfo }>;
 const standaloneScopeId = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 
 function validStandaloneScope(scope: LocationScope): boolean {
   return [scope.tenantId, scope.clinicId, scope.locationId].every(value => typeof value === "string" && standaloneScopeId.test(value));
 }
 
-function standalonePolicy(scope: LocationScope, version: number, bookingEnabled: boolean): StoredStandalonePolicy {
+function standalonePolicy(scope: LocationScope, version: number, bookingEnabled: boolean,
+                          mode: AfterHoursMode = "staffRequest", info?: ApprovedAfterHoursInfo): StoredStandalonePolicy {
   return { scope: { tenantId: scope.tenantId, clinicId: scope.clinicId, locationId: scope.locationId },
-    policyVersion: String(version), bookingEnabled };
+    policyVersion: String(version), bookingEnabled, afterHoursMode: mode,
+    ...(info ? { afterHoursInfo: structuredClone(info) } : {}) };
 }
 
 export function isStoredStandalonePolicy(value: unknown, scope: LocationScope, version: number): boolean {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const stored = value as Record<string, unknown>;
-  if (Object.keys(stored).sort().join(",") !== "bookingEnabled,policyVersion,scope" ||
+  const keys = Object.keys(stored).sort().join(",");
+  if (!["bookingEnabled,policyVersion,scope", "afterHoursMode,bookingEnabled,policyVersion,scope",
+        "afterHoursInfo,afterHoursMode,bookingEnabled,policyVersion,scope"].includes(keys) ||
       typeof stored.bookingEnabled !== "boolean" || stored.policyVersion !== String(version) ||
       typeof stored.scope !== "object" || stored.scope === null || Array.isArray(stored.scope)) return false;
   const storedScope = stored.scope as Record<string, unknown>;
   if (Object.keys(storedScope).sort().join(",") !== "clinicId,locationId,tenantId" ||
       !sameScope(storedScope as LocationScope, scope)) return false;
-  return true;
+  return validAfterHoursSetting(stored.afterHoursMode ?? "staffRequest", stored.afterHoursInfo, scope);
 }
 
 function decodeStandalonePolicy(value: unknown, scope: LocationScope, version: number,
@@ -42,7 +48,11 @@ function decodeStandalonePolicy(value: unknown, scope: LocationScope, version: n
   if (!isStoredStandalonePolicy(value, scope, version)) return err({ kind: "storageFailure" });
   const stored = value as Record<string, unknown>;
   const base = defaultPolicy(scope);
-  return ok({ ...base, scope: { ...scope }, policyVersion: String(version), bookingEnabled: stored.bookingEnabled as boolean });
+  const { afterHoursInfo: defaultAfterHoursInfo, ...safeBase } = base;
+  void defaultAfterHoursInfo;
+  return ok({ ...safeBase, scope: { ...scope }, policyVersion: String(version),
+    bookingEnabled: stored.bookingEnabled as boolean, afterHoursMode: (stored.afterHoursMode ?? "staffRequest") as AfterHoursMode,
+    ...(stored.afterHoursInfo ? { afterHoursInfo: stored.afterHoursInfo as ApprovedAfterHoursInfo } : {}) });
 }
 
 function decodePolicy(value: unknown, scope: LocationScope, version: number): Result<CallPolicy, PolicyFailure> {
@@ -52,6 +62,7 @@ function decodePolicy(value: unknown, scope: LocationScope, version: number): Re
       (policy.automationEnabled !== undefined && typeof policy.automationEnabled !== "boolean") ||
       (policy.staffWorkEnabled !== undefined && typeof policy.staffWorkEnabled !== "boolean") ||
       typeof policy.bookingEnabled !== "boolean" || !policy.capabilities ||
+      !validAfterHoursSetting(policy.afterHoursMode ?? "staffRequest", policy.afterHoursInfo, scope) ||
       !["execute", "requestOnly", "unavailable"].includes(policy.capabilities.transfer) ||
       !policy.staffDestination || !policy.operatorQueue) return err({ kind: "storageFailure" });
   return ok(structuredClone({ ...policy, automationVersion: "0", automationEnabled: false }));
@@ -84,7 +95,7 @@ export class PostgresPolicyStore implements PolicyStore {
   private effective(policy: CallPolicy, automation?: Readonly<{ version: number; enabled: boolean }>): CallPolicy {
     const patientModes = this.hostBookingMode === "unavailable"
       ? { cancel: "unavailable", reschedule: "unavailable", intake: "unavailable" } as const : {};
-    return { ...policy, staffWorkEnabled: this.staffWorkEnabled,
+    return { ...policy, afterHoursMode: policy.afterHoursMode ?? "staffRequest", staffWorkEnabled: this.staffWorkEnabled,
       automationVersion: String(automation?.version ?? 0), automationEnabled: automation?.enabled ?? false,
       capabilities: { ...policy.capabilities, ...patientModes,
         book: policy.bookingEnabled ? this.hostBookingMode : "unavailable",
@@ -207,7 +218,8 @@ export class PostgresPolicyStore implements PolicyStore {
           capabilities: { ...decoded.value.capabilities, book: enabled ? this.hostBookingMode : "unavailable" },
         };
         await trx.insertInto("clinic_settings").values({ ...ids, version: latest.version + 1 as ClinicSettingsVersion,
-          policy: this.storageMode === "standaloneMinimal" ? standalonePolicy(scope, latest.version + 1, enabled) : next,
+          policy: this.storageMode === "standaloneMinimal" ? standalonePolicy(scope, latest.version + 1, enabled,
+            next.afterHoursMode ?? "staffRequest", next.afterHoursInfo) : next,
           changed_by: actorRef, previous_booking_enabled: decoded.value.bookingEnabled, changed_at: sql`clock_timestamp()` }).execute();
         const automation = await trx.selectFrom("clinic_automation").select(["version", "enabled"])
           .where("tenant_id", "=", scope.tenantId as ClinicAutomationTenantId)
@@ -228,6 +240,7 @@ export class PostgresPolicyStore implements PolicyStore {
         .where("tenant_id", "=", scope.tenantId as ClinicSettingsTenantId)
         .where("clinic_id", "=", scope.clinicId as ClinicSettingsClinicId)
         .where("location_id", "=", scope.locationId as ClinicSettingsLocationId)
+        .where("setting_kind", "=", "booking")
         .where("version", ">", (afterVersion ?? 0) as ClinicSettingsVersion)
         .orderBy("version", "asc").limit(50).execute();
       const entries: BookingSettingAuditEntry[] = [];
@@ -248,5 +261,78 @@ export class PostgresPolicyStore implements PolicyStore {
     } catch {
       return err({ kind: "storageFailure" });
     }
+  }
+
+  async changeAfterHours(scope: LocationScope, expectedVersion: string, mode: AfterHoursMode,
+                         info: ApprovedAfterHoursInfo | undefined, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+    if (!validAfterHoursSetting(mode, info, scope) || typeof actorRef !== "string" || !actorRef.trim() ||
+        actorRef.length > 256 || (this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope))) {
+      return err({ kind: "invalidValue" });
+    }
+    try {
+      return await this.db.transaction().execute(async trx => {
+        const ids = { tenant_id: scope.tenantId as ClinicSettingsTenantId,
+          clinic_id: scope.clinicId as ClinicSettingsClinicId,
+          location_id: scope.locationId as ClinicSettingsLocationId };
+        const initialPolicy = this.defaultPolicy(scope);
+        await trx.insertInto("clinic_settings").values({ ...ids, version: 0 as ClinicSettingsVersion,
+          policy: this.storageMode === "standaloneMinimal"
+            ? standalonePolicy(scope, 0, initialPolicy.bookingEnabled) : initialPolicy })
+          .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id", "location_id", "version"]).doNothing()).execute();
+        await trx.selectFrom("clinic_settings").select("version")
+          .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id)
+          .where("location_id", "=", ids.location_id).where("version", "=", 0 as ClinicSettingsVersion)
+          .forUpdate().executeTakeFirstOrThrow();
+        const latest = await trx.selectFrom("clinic_settings").select(["version", "policy"])
+          .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id)
+          .where("location_id", "=", ids.location_id).orderBy("version", "desc").limit(1).executeTakeFirstOrThrow();
+        const decoded = this.decode(latest.policy, scope, latest.version);
+        if (!decoded.ok) return decoded;
+        if (decoded.value.policyVersion !== expectedVersion) return err({ kind: "versionConflict" });
+        const { afterHoursInfo: previousInfo, ...base } = decoded.value;
+        void previousInfo;
+        const next: CallPolicy = { ...base, policyVersion: String(latest.version + 1),
+          afterHoursMode: mode,
+          ...(mode === "approvedInfoAndRequest" ? { afterHoursInfo: structuredClone(info!) } : {}) };
+        await trx.insertInto("clinic_settings").values({ ...ids,
+          version: latest.version + 1 as ClinicSettingsVersion,
+          policy: this.storageMode === "standaloneMinimal"
+            ? standalonePolicy(scope, latest.version + 1, next.bookingEnabled, mode, next.afterHoursInfo) : next,
+          setting_kind: "afterHours", previous_after_hours_mode: decoded.value.afterHoursMode ?? "staffRequest",
+          changed_by: actorRef, changed_at: sql`clock_timestamp()` }).execute();
+        const automation = await trx.selectFrom("clinic_automation").select(["version", "enabled"])
+          .where("tenant_id", "=", scope.tenantId as ClinicAutomationTenantId)
+          .where("clinic_id", "=", scope.clinicId as ClinicAutomationClinicId)
+          .orderBy("version", "desc").limit(1).executeTakeFirst();
+        return ok(this.effective(next, automation));
+      });
+    } catch { return err({ kind: "storageFailure" }); }
+  }
+
+  async listAfterHoursChanges(scope: LocationScope, afterVersion?: number): Promise<Result<AfterHoursSettingAuditPage, PolicyFailure>> {
+    if (afterVersion !== undefined && (!Number.isSafeInteger(afterVersion) || afterVersion < 0)) return err({ kind: "invalidValue" });
+    try {
+      const rows = await this.db.selectFrom("clinic_settings")
+        .select(["version", "policy", "previous_after_hours_mode", "changed_by", "changed_at"])
+        .where("tenant_id", "=", scope.tenantId as ClinicSettingsTenantId)
+        .where("clinic_id", "=", scope.clinicId as ClinicSettingsClinicId)
+        .where("location_id", "=", scope.locationId as ClinicSettingsLocationId)
+        .where("setting_kind", "=", "afterHours")
+        .where("version", ">", (afterVersion ?? 0) as ClinicSettingsVersion)
+        .orderBy("version", "asc").limit(50).execute();
+      const entries: AfterHoursSettingAuditEntry[] = [];
+      for (const row of rows) {
+        const decoded = this.decode(row.policy, scope, row.version);
+        if (!decoded.ok) return decoded;
+        if ((row.previous_after_hours_mode !== "staffRequest" && row.previous_after_hours_mode !== "approvedInfoAndRequest") ||
+            typeof row.changed_by !== "string" || !row.changed_by.trim() ||
+            !(row.changed_at instanceof Date) || !Number.isFinite(row.changed_at.getTime())) return err({ kind: "storageFailure" });
+        entries.push({ version: String(row.version), mode: decoded.value.afterHoursMode ?? "staffRequest",
+          previousMode: row.previous_after_hours_mode,
+          ...(decoded.value.afterHoursInfo ? { infoVersion: decoded.value.afterHoursInfo.version } : {}),
+          actorRef: row.changed_by, changedAt: row.changed_at.toISOString() });
+      }
+      return ok({ entries, ...(entries.length === 50 ? { nextAfterVersion: Number(entries[49]!.version) } : {}) });
+    } catch { return err({ kind: "storageFailure" }); }
   }
 }

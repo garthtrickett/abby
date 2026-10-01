@@ -21,7 +21,11 @@ const scope = object({ tenantId: nonEmpty, clinicId: nonEmpty, locationId: nonEm
 const destination = { oneOf: [object({ kind: { const: "owner" }, ownerRef: nonEmpty }),
   object({ kind: { const: "queue" }, queueRef: nonEmpty })] } satisfies JsonSchema;
 const capabilityMode = choice("execute", "requestOnly", "unavailable");
+const afterHoursMode = choice("staffRequest", "approvedInfoAndRequest");
+const afterHoursInfo = object({ scope, version: key, ownerRef: key,
+  approvedText: { type: "string", minLength: 1, maxLength: 1_500 }, approved: { const: true } });
 const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: nonEmpty, automationEnabled: bool, bookingEnabled: bool,
+  afterHoursMode, afterHoursInfo,
   capabilities: object({ book: capabilityMode, cancel: capabilityMode, reschedule: capabilityMode,
     intake: capabilityMode, transfer: capabilityMode }), transferDestinationRef: str,
   staffedIntervals: { type: "array", items: object({ startsAt: str, endsAt: str }), maxItems: 512 },
@@ -38,6 +42,9 @@ const auditEntry = { oneOf: [
 const auditPage = optional({ entries: array(auditEntry), nextAfterVersion: uint }, ["entries"]);
 const automationAuditPage = optional({ entries: array(object({ version: key, enabled: bool, previousEnabled: bool,
   actorRef: key, changedAt: str })), nextAfterVersion: uint }, ["entries"]);
+const afterHoursAuditPage = optional({ entries: array(optional({ version: key, mode: afterHoursMode,
+  previousMode: afterHoursMode, infoVersion: key, actorRef: key, changedAt: str },
+["version", "mode", "previousMode", "actorRef", "changedAt"])), nextAfterVersion: uint }, ["entries"]);
 const actionKind = choice("book", "cancel", "reschedule", "intake");
 const actionStatus = choice("awaitingConfirmation", "ready", "dispatched", "committed", "rejected",
   "unsupported", "uncertain", "needsReview", "canceled");
@@ -183,6 +190,18 @@ export const capabilityCatalogue = {
   "settings.appointments.booking.audit.v1": entry("settings.appointments.booking.audit.v1",
     optional({ kind: { const: "settings.appointments.booking.audit.v1" }, afterVersion: uint }, ["kind"]),
     reply("bookingSettingAudit", "page", auditPage), "read", "clinicAdmin"),
+  "settings.routing.afterHours.change.v1": entry("settings.routing.afterHours.change.v1",
+    { oneOf: [
+      object({ kind: { const: "settings.routing.afterHours.change.v1" }, expectedVersion: key,
+        mode: { const: "staffRequest" } }),
+      object({ kind: { const: "settings.routing.afterHours.change.v1" }, expectedVersion: key,
+        mode: { const: "approvedInfoAndRequest" }, infoVersion: { type: "string", minLength: 1, maxLength: 128 },
+        approvedText: { type: "string", minLength: 1, maxLength: 1_500 } }),
+    ] },
+    reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedPolicyVersion"]),
+  "settings.routing.afterHours.audit.v1": entry("settings.routing.afterHours.audit.v1",
+    optional({ kind: { const: "settings.routing.afterHours.audit.v1" }, afterVersion: uint }, ["kind"]),
+    reply("afterHoursSettingAudit", "page", afterHoursAuditPage), "read", "clinicAdmin"),
   "booking.propose.v2": entry("booking.propose.v2",
     object({ kind: { const: "booking.propose.v2" }, turn, verificationRef: key, offerRef: key, now: str }),
     reply("bookingProposal", "progress", progress), "proposalOnly", "permittedActor", "callerConfirmation", ["activeCall", "bookingEnabledForExecution", "hostEvidenceForExecution"]),

@@ -43,6 +43,21 @@ test("E2E-126 text: standalone CLI refuses known legacy patient-data surfaces be
       fallback.value.pendingPresentationId)).ok, true);
     assert.equal((await app.policy.changeBookingEnabled(scope, "0", true, "clinic-admin")).ok, true);
     assert.deepEqual(await checkStandaloneTextDatabase(db), { ok: true, value: true });
+    assert.ok((await app.policy.changeAfterHours(scope, "1", "approvedInfoAndRequest",
+      { scope, version: "hours-v1", ownerRef: "clinic-admin", approvedText: "We reopen at 9 am.", approved: true },
+      "clinic-admin")).ok);
+    assert.deepEqual(await checkStandaloneTextDatabase(db), { ok: true, value: true });
+    const nestedPatientText = `nested-patient-note-${randomUUID()}`;
+    await sql`update clinic_settings set policy = jsonb_set(policy,
+      '{afterHoursInfo,patientNote}', to_jsonb(${nestedPatientText}::text))
+      where tenant_id = ${scope.tenantId} and clinic_id = ${scope.clinicId}
+        and location_id = ${scope.locationId} and version = 2`.execute(db);
+    assert.deepEqual(await checkStandaloneTextDatabase(db),
+      { ok: false, error: { kind: "unsafeExistingData", areas: ["settings"] } });
+    await sql`update clinic_settings set policy = policy #- '{afterHoursInfo,patientNote}'
+      where tenant_id = ${scope.tenantId} and clinic_id = ${scope.clinicId}
+        and location_id = ${scope.locationId} and version = 2`.execute(db);
+    assert.deepEqual(await checkStandaloneTextDatabase(db), { ok: true, value: true });
 
     const privateText = `private-patient-note-${randomUUID()}`;
     await sql`insert into call_events (call_id, tenant_id, sequence, kind, payload)

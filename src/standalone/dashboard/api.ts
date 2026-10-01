@@ -1,6 +1,7 @@
 import { CALL_TERMINAL_REASONS, err, ok } from "../../core/model.ts";
-import type { CallPolicy, Result, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
-import type { AutomationSettingAuditPage, BookingSettingAuditPage } from "../../core/host.ts";
+import type { AfterHoursMode, CallPolicy, Result, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
+import { validAfterHoursSetting } from "../../core/after-hours-policy.ts";
+import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage } from "../../core/host.ts";
 import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor, GatewayCommand, GatewayFailure, GatewayReply } from "../../reference/command-gateway.ts";
 import { capabilityDescriptor } from "../../reference/capability-catalogue.ts";
@@ -29,6 +30,8 @@ export type DashboardPort = Readonly<{
   writeStopAudit(afterVersion?: number): Promise<Result<WriteStopAuditPage, DashboardFailure>>;
   bookingAudit(afterVersion?: number): Promise<Result<BookingSettingAuditPage, DashboardFailure>>;
   changeBookingEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
+  afterHoursAudit(afterVersion?: number): Promise<Result<AfterHoursSettingAuditPage, DashboardFailure>>;
+  changeAfterHours(expectedVersion: string, mode: AfterHoursMode, infoVersion?: string, approvedText?: string): Promise<Result<CallPolicy, DashboardFailure>>;
   callSummary(callId: string): Promise<Result<CallSummary, DashboardFailure>>;
   callOutcomes(afterCallId?: string): Promise<Result<CallOutcomePage, DashboardFailure>>;
   staffQueue(afterTaskKey?: string): Promise<Result<StaffQueuePage, DashboardFailure>>;
@@ -99,6 +102,8 @@ function policy(value: unknown): Result<CallPolicy, DashboardFailure> {
   const reply = record(value);
   const current = record(reply?.policy);
   return reply?.kind === "settings" && current && typeof current.policyVersion === "string" && typeof current.automationVersion === "string" && typeof current.automationEnabled === "boolean" && typeof current.bookingEnabled === "boolean" && record(current.capabilities)
+    && record(current.scope) && validAfterHoursSetting(current.afterHoursMode ?? "staffRequest", current.afterHoursInfo,
+      current.scope as CallPolicy["scope"])
     ? ok(current as CallPolicy) : err({ kind: "malformed" });
 }
 
@@ -287,6 +292,34 @@ export class FetchDashboardPort implements DashboardPort {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ expectedVersion, enabled }),
     });
+    return result.ok ? policy(result.value) : result;
+  }
+
+  async afterHoursAudit(afterVersion?: number): Promise<Result<AfterHoursSettingAuditPage, DashboardFailure>> {
+    const result = await request(`/api/settings/after-hours-audit${afterVersion === undefined ? "" : `?after=${afterVersion}`}`);
+    if (!result.ok) return result;
+    const reply = record(result.value);
+    const page = record(reply?.page);
+    if (reply?.kind !== "afterHoursSettingAudit" || !page || !Array.isArray(page.entries) ||
+        (page.nextAfterVersion !== undefined && (!Number.isSafeInteger(page.nextAfterVersion) || Number(page.nextAfterVersion) < 0)) ||
+        !page.entries.every(value => {
+          const entry = record(value);
+          return entry && typeof entry.version === "string" && /^(0|[1-9][0-9]*)$/.test(entry.version) &&
+            ["staffRequest", "approvedInfoAndRequest"].includes(String(entry.mode)) &&
+            ["staffRequest", "approvedInfoAndRequest"].includes(String(entry.previousMode)) &&
+            (entry.infoVersion === undefined || (typeof entry.infoVersion === "string" && !!entry.infoVersion)) &&
+            typeof entry.actorRef === "string" && !!entry.actorRef &&
+            typeof entry.changedAt === "string" && Number.isFinite(Date.parse(entry.changedAt));
+        })) return err({ kind: "malformed" });
+    return ok(page as AfterHoursSettingAuditPage);
+  }
+
+  async changeAfterHours(expectedVersion: string, mode: AfterHoursMode, infoVersion?: string,
+                         approvedText?: string): Promise<Result<CallPolicy, DashboardFailure>> {
+    const result = await request("/api/settings/after-hours", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expectedVersion, mode, ...(infoVersion === undefined ? {} : { infoVersion }),
+        ...(approvedText === undefined ? {} : { approvedText }) }) });
     return result.ok ? policy(result.value) : result;
   }
 

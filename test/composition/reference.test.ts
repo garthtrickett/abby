@@ -142,6 +142,8 @@ for (const kind of kinds) {
         staffedIntervals: [{ startsAt: now, endsAt: expiresAt }] } }),
       changeBookingEnabled: (...args) => app.policy.changeBookingEnabled(...args),
       listBookingChanges: (...args) => app.policy.listBookingChanges(...args),
+      changeAfterHours: (...args) => app.policy.changeAfterHours(...args),
+      listAfterHoursChanges: (...args) => app.policy.listAfterHoursChanges(...args),
       changeAutomationEnabled: (...args) => app.policy.changeAutomationEnabled(...args),
       listAutomationChanges: (...args) => app.policy.listAutomationChanges(...args),
     };
@@ -154,6 +156,8 @@ for (const kind of kinds) {
       read: async () => ({ ok: true, value: { ...referenceDefaultPolicy(app.scope), capabilities: { book: "execute" } } as unknown as CallState["policy"] }),
       changeBookingEnabled: (...args) => app.policy.changeBookingEnabled(...args),
       listBookingChanges: (...args) => app.policy.listBookingChanges(...args),
+      changeAfterHours: (...args) => app.policy.changeAfterHours(...args),
+      listAfterHoursChanges: (...args) => app.policy.listAfterHoursChanges(...args),
       changeAutomationEnabled: (...args) => app.policy.changeAutomationEnabled(...args),
       listAutomationChanges: (...args) => app.policy.listAutomationChanges(...args),
     };
@@ -169,6 +173,8 @@ for (const kind of kinds) {
         throw new Error("acknowledgment lost after commit");
       },
       listBookingChanges: (...args) => app.policy.listBookingChanges(...args),
+      changeAfterHours: (...args) => app.policy.changeAfterHours(...args),
+      listAfterHoursChanges: (...args) => app.policy.listAfterHoursChanges(...args),
     };
     const uncertainAdmin = new CommandGateway({ actorRef: "lost-response-admin", role: "clinicAdmin", scope: app.scope },
       lostResponsePolicy, app.reception);

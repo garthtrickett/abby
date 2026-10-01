@@ -1,4 +1,4 @@
-import type { ActionRequest, ApprovedKnowledge, AppointmentRead, AppointmentReadFailure, AvailabilityRead, AvailabilityReadFailure, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, OperatorAlert, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
+import type { ActionRequest, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedKnowledge, AppointmentRead, AppointmentReadFailure, AvailabilityRead, AvailabilityReadFailure, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, OperatorAlert, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
 import type { ReadinessFailure } from "./readiness.ts";
 
 export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable"; target: "patient" | "offer" | "appointment" }>;
@@ -20,6 +20,18 @@ export type BookingSettingAuditEntry = Readonly<{
   changedAt?: string;
 }>;
 export type BookingSettingAuditPage = Readonly<{ entries: readonly BookingSettingAuditEntry[]; nextAfterVersion?: number }>;
+export type AfterHoursSettingAuditEntry = Readonly<{
+  version: string;
+  mode: AfterHoursMode;
+  previousMode: AfterHoursMode;
+  infoVersion?: string;
+  actorRef: string;
+  changedAt: string;
+}>;
+export type AfterHoursSettingAuditPage = Readonly<{
+  entries: readonly AfterHoursSettingAuditEntry[];
+  nextAfterVersion?: number;
+}>;
 export type KnowledgeReadFailure = Readonly<{ kind: "invalidQuery" | "unavailable" }>;
 
 export interface KnowledgeHost {
@@ -103,4 +115,7 @@ export interface PolicyStore {
   listAutomationChanges(scope: LocationScope, afterVersion?: number): Promise<Result<AutomationSettingAuditPage, PolicyFailure>>;
   changeBookingEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
   listBookingChanges(scope: LocationScope, afterVersion?: number): Promise<Result<BookingSettingAuditPage, PolicyFailure>>;
+  changeAfterHours(scope: LocationScope, expectedVersion: string, mode: AfterHoursMode,
+                   info: ApprovedAfterHoursInfo | undefined, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
+  listAfterHoursChanges(scope: LocationScope, afterVersion?: number): Promise<Result<AfterHoursSettingAuditPage, PolicyFailure>>;
 }

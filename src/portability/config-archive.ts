@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { err, ok } from "../core/model.ts";
-import type { CallPolicy, LocationScope, Result, StaffDestination, StaffedInterval } from "../core/model.ts";
+import type { AfterHoursMode, ApprovedAfterHoursInfo, CallPolicy, LocationScope, Result, StaffDestination, StaffedInterval } from "../core/model.ts";
+import { validAfterHoursSetting } from "../core/after-hours-policy.ts";
 import { materializeVerifiedArchive } from "./archive-envelope.ts";
 import type { ArchiveEnvelope, ArchiveEnvelopeFailure, ArchiveSection, ArchiveSectionManifest } from "./archive-envelope.ts";
 
@@ -20,7 +21,10 @@ export type ConfigArchiveData = Readonly<{
   mappingProvenance: string;
   policies: readonly Readonly<{ version: number; isHead: boolean; storageShape: "standaloneMinimal" | "unsafeReference";
     policy: CallPolicy; changedBy: string | null;
-    previousBookingEnabled: boolean | null; changedAt: string | null }>[];
+    previousBookingEnabled: boolean | null; changedAt: string | null;
+    /** Absent on archives written before location settings had distinct audit kinds. */
+    settingKind?: "booking" | "afterHours";
+    previousAfterHoursMode?: AfterHoursMode | null }>[];
   automation: readonly Readonly<{ version: number; isHead: boolean; enabled: boolean; changedBy: string | null;
     previousEnabled: boolean | null; changedAt: string | null }>[];
   writeStops: readonly Readonly<{ version: number; isHead: boolean; stopped: boolean; actorRef: string;
@@ -132,13 +136,34 @@ function destination(value: unknown): StaffDestination {
   throw new InvalidConfigArchive("settings");
 }
 
+function afterHoursInfo(value: unknown, sourceScope: LocationScope): ApprovedAfterHoursInfo {
+  const row = object(value, "settings");
+  if (Object.keys(row).sort().join(",") !== "approved,approvedText,ownerRef,version") {
+    throw new InvalidConfigArchive("settings");
+  }
+  const info = { scope: sourceScope, version: ref(row.version, "settings"),
+    ownerRef: ref(row.ownerRef, "settings"), approvedText: row.approvedText, approved: row.approved };
+  if (!validAfterHoursSetting("approvedInfoAndRequest", info, sourceScope)) throw new InvalidConfigArchive("settings");
+  return info as ApprovedAfterHoursInfo;
+}
+
+function afterHoursFields(row: Record<string, unknown>, sourceScope: LocationScope):
+  Pick<CallPolicy, "afterHoursMode" | "afterHoursInfo"> {
+  const mode = row.afterHoursMode ?? "staffRequest";
+  const info = row.afterHoursInfo === undefined ? undefined : afterHoursInfo(row.afterHoursInfo, sourceScope);
+  if (!validAfterHoursSetting(mode, info, sourceScope)) throw new InvalidConfigArchive("settings");
+  return { afterHoursMode: mode as AfterHoursMode, ...(info ? { afterHoursInfo: info } : {}) };
+}
+
 function policy(value: unknown, sourceScope: LocationScope, version: number): CallPolicy {
   const row = object(value, "settings");
   if (row.shape === "standaloneMinimal") {
-    if (Object.keys(row).sort().join(",") !== "bookingEnabled,policyVersion,shape" ||
+    if (!["bookingEnabled,policyVersion,shape", "afterHoursMode,bookingEnabled,policyVersion,shape",
+          "afterHoursInfo,afterHoursMode,bookingEnabled,policyVersion,shape"].includes(Object.keys(row).sort().join(",")) ||
         row.policyVersion !== String(version)) throw new InvalidConfigArchive("settings");
     return { scope: sourceScope, policyVersion: String(version), automationVersion: "0", automationEnabled: false,
       bookingEnabled: flag(row.bookingEnabled, "settings"),
+      ...afterHoursFields(row, sourceScope),
       capabilities: { book: "unavailable", cancel: "unavailable", reschedule: "unavailable", intake: "unavailable", transfer: "unavailable" },
       staffDestination: { kind: "queue", queueRef: "disabled" }, operatorQueue: { kind: "queue", queueRef: "disabled" } };
   }
@@ -151,6 +176,7 @@ function policy(value: unknown, sourceScope: LocationScope, version: number): Ca
   if (row.policyVersion !== String(version)) throw new InvalidConfigArchive("settings");
   const result: CallPolicy = { scope: sourceScope, policyVersion: String(version), automationVersion: "0", automationEnabled: false,
     bookingEnabled: flag(row.bookingEnabled, "settings"),
+    ...afterHoursFields(row, sourceScope),
     capabilities: { book: capability("book"), cancel: capability("cancel"), reschedule: capability("reschedule"),
       intake: capability("intake"), transfer: capability("transfer") },
     staffDestination: destination(row.staffDestination), operatorQueue: destination(row.operatorQueue),
@@ -319,12 +345,23 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
           throw new InvalidConfigArchive("settings");
         }
         const rawPolicy = object(row.policy, "settings");
+        const settingKind = row.settingKind === undefined ? "booking" : row.settingKind;
+        if (settingKind !== "booking" && settingKind !== "afterHours") throw new InvalidConfigArchive("settings");
+        const previousAfterHoursMode = row.previousAfterHoursMode === undefined || row.previousAfterHoursMode === null
+          ? null : row.previousAfterHoursMode;
+        if (previousAfterHoursMode !== null && previousAfterHoursMode !== "staffRequest" &&
+            previousAfterHoursMode !== "approvedInfoAndRequest") throw new InvalidConfigArchive("settings");
+        const previousBookingEnabled = row.previousBookingEnabled === null ? null : flag(row.previousBookingEnabled, "settings");
+        const changedBy = optionalRef(row.changedBy, "settings");
+        const changedAt = optionalInstant(row.changedAt, "settings");
+        if (settingKind === "afterHours" && (version === 0 || previousAfterHoursMode === null ||
+            previousBookingEnabled !== null || changedBy === null || changedAt === null) ||
+            settingKind === "booking" && previousAfterHoursMode !== null) throw new InvalidConfigArchive("settings");
         location.policies.push({ version, isHead,
           storageShape: rawPolicy.shape === "standaloneMinimal" ? "standaloneMinimal" : "unsafeReference",
           policy: policy(rawPolicy, location.sourceScope, version),
-          changedBy: optionalRef(row.changedBy, "settings"),
-          previousBookingEnabled: row.previousBookingEnabled === null ? null : flag(row.previousBookingEnabled, "settings"),
-          changedAt: optionalInstant(row.changedAt, "settings") });
+          changedBy, previousBookingEnabled, changedAt,
+          settingKind, previousAfterHoursMode });
       } else if (row.kind === "clinicAutomation") {
         if (row.recordId !== expectedId("automation", sourceClinicId, version)) throw new InvalidConfigArchive("settings");
         clinic.automation.push({ version, isHead, enabled: flag(row.enabled, "settings"),
@@ -341,7 +378,23 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
           changedAt: instant(row.changedAt, "settings") });
       } else throw new InvalidConfigArchive("settings");
     }
-    for (const location of locations.values()) assertHeads(location.policies, "settings", 0);
+    for (const location of locations.values()) {
+      assertHeads(location.policies, "settings", 0);
+      const ordered = [...location.policies].sort((left, right) => left.version - right.version);
+      for (let index = 1; index < ordered.length; index += 1) {
+        const previous = ordered[index - 1]!;
+        const current = ordered[index]!;
+        if (current.settingKind === "afterHours") {
+          if (current.previousAfterHoursMode !== (previous.policy.afterHoursMode ?? "staffRequest") ||
+              current.policy.bookingEnabled !== previous.policy.bookingEnabled) throw new InvalidConfigArchive("settings");
+        } else if ((current.previousBookingEnabled !== null &&
+                    current.previousBookingEnabled !== previous.policy.bookingEnabled) ||
+                   current.policy.afterHoursMode !== previous.policy.afterHoursMode ||
+                   JSON.stringify(current.policy.afterHoursInfo) !== JSON.stringify(previous.policy.afterHoursInfo)) {
+          throw new InvalidConfigArchive("settings");
+        }
+      }
+    }
     for (const clinic of clinics.values()) {
       assertHeads(clinic.automation, "settings", 0);
       assertHeads(clinic.writeStops, "settings", 1);
