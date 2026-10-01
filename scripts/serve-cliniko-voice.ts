@@ -8,7 +8,7 @@ import { unprovenReadiness } from "../src/core/readiness.ts";
 import { ReferenceNumberRoutingHost } from "../src/reference/clinic-number-routing.ts";
 import { referenceDefaultPolicy } from "../src/reference/policy-store.ts";
 import { createStandaloneClinikoVoiceServer } from "../src/standalone/cliniko-voice-server.ts";
-import type { OperationalCounterSink } from "../src/standalone/operational-counters.ts";
+import type { OperationalCounterStore } from "../src/voice/operational-counts.ts";
 import { connectPostgres } from "../src/storage/connect.ts";
 import { PostgresActiveCallClaims } from "../src/storage/postgres-active-call-claims.ts";
 import { PostgresClinikoRequestBudget } from "../src/storage/postgres-cliniko-request-budget.ts";
@@ -47,12 +47,12 @@ function clinicToday(timeZone: string): () => string {
   };
 }
 
-/** Injectable provider ports are used only by the isolated process E2E harness. */
+/** Test provider ports and an optional host-owned operational store. */
 export type VoiceRunnerPorts = Readonly<{
   clinikoFetch?: typeof fetch;
   openaiFetch?: typeof fetch;
   transcriptionSocketFactory?: NonNullable<ClinikoVoiceServerConfig["openai"]["transcriptionSocketFactory"]>;
-  operationalCounters?: OperationalCounterSink;
+  operationalCounters?: OperationalCounterStore;
 }>;
 
 export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<void> {
@@ -69,6 +69,10 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
   const contactEmail = required("ABBY_CLINIKO_CONTACT_EMAIL");
   const mode = process.env.ABBY_VOICE_TEST_MODE;
   if (mode !== undefined && mode !== "1") throw new RangeError("invalid ABBY_VOICE_TEST_MODE");
+  const operationalTokenHex = process.env.ABBY_VOICE_OPERATIONS_TOKEN_HEX;
+  if (operationalTokenHex !== undefined && !/^[a-f0-9]{64}$/i.test(operationalTokenHex)) {
+    throw new RangeError("invalid ABBY_VOICE_OPERATIONS_TOKEN_HEX");
+  }
   const weekMode = process.env.ABBY_SEVEN_DAY_AVAILABILITY_ENABLED;
   if (weekMode !== undefined && weekMode !== "0" && weekMode !== "1") {
     throw new RangeError("invalid ABBY_SEVEN_DAY_AVAILABILITY_ENABLED");
@@ -131,6 +135,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
         event.dialedNumber === dialedNumber && event.presentedCallerNumber === testCaller && await healthy(),
       health: healthy,
       ...(ports.operationalCounters ? { operationalCounters: ports.operationalCounters } : {}),
+      ...(operationalTokenHex ? { operationalRead: { tokenHex: operationalTokenHex, scope } } : {}),
     });
     if (!prepared.ok) throw new Error(`standalone storage unavailable: ${prepared.error.kind}`);
     const server = prepared.value;

@@ -46,6 +46,7 @@ test("E2E-171 local voice runner validates startup, reports unready, refuses inb
   const port = await freePort();
   const env = { ...process.env,
     ABBY_VOICE_TEST_MODE: undefined, ABBY_TWILIO_TEST_CALLER_NUMBER: undefined,
+    ABBY_VOICE_OPERATIONS_TOKEN_HEX: undefined,
     DATABASE_URL: target.toString(), ABBY_VOICE_PORT: String(port),
     ABBY_TENANT_ID: "local-test", ABBY_CLINIC_ID: "clinic", ABBY_LOCATION_ID: "main",
     ABBY_CLINIKO_API_KEY: "synthetic-key-au5", ABBY_CLINIKO_CONTACT_EMAIL: "test@example.com",
@@ -76,6 +77,10 @@ test("E2E-171 local voice runner validates startup, reports unready, refuses inb
       cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_VOICE_TEST_MODE: "yes" },
       stdio: ["ignore", "pipe", "pipe"] });
     assert.equal((await once(invalidMode, "exit"))[0], 1);
+    const invalidOperationalToken = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
+      cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_VOICE_OPERATIONS_TOKEN_HEX: "short" },
+      stdio: ["ignore", "pipe", "pipe"] });
+    assert.equal((await once(invalidOperationalToken, "exit"))[0], 1);
     const invalidWeekMode = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
       cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_SEVEN_DAY_AVAILABILITY_ENABLED: "yes" },
       stdio: ["ignore", "pipe", "pipe"] });
@@ -96,6 +101,7 @@ test("E2E-171 local voice runner validates startup, reports unready, refuses inb
     assert.equal(await health.text(), "ok");
     const readiness = await fetch(`http://127.0.0.1:${port}/readyz`);
     assert.equal(readiness.status, 503);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/internal/operations`)).status, 404);
     const unsigned = await fetch(`http://127.0.0.1:${port}/twilio/inbound`, {
       method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ AccountSid: env.ABBY_TWILIO_ACCOUNT_SID,
@@ -138,6 +144,7 @@ test("E2E-172 E2E-185 isolated voice runner enforces durable approval around sig
   const callerNumber = "+6145550101";
   const accountSid = `AC${"1".repeat(32)}`;
   const authToken = "synthetic-token";
+  const operationalTokenHex = "a".repeat(64);
   const webhookUrl = "https://calls.example.test/twilio/inbound";
   const streamUrl = "wss://calls.example.test/twilio/media/";
   const scope = { tenantId: "local-test", clinicId: "clinic", locationId: "main" };
@@ -150,6 +157,7 @@ test("E2E-172 E2E-185 isolated voice runner enforces durable approval around sig
     ABBY_CLINIKO_APPOINTMENT_TYPE_ID: "33", ABBY_CLINIKO_TIME_ZONE: "Australia/Sydney",
     ABBY_TWILIO_TEST_NUMBER: number, ABBY_TWILIO_FALLBACK_NUMBER: "+6125550188",
     ABBY_TWILIO_ACCOUNT_SID: accountSid, ABBY_TWILIO_AUTH_TOKEN: authToken,
+    ABBY_VOICE_OPERATIONS_TOKEN_HEX: operationalTokenHex,
     ABBY_TWILIO_PUBLIC_WEBHOOK_URL: webhookUrl, ABBY_TWILIO_PUBLIC_STREAM_URL: streamUrl,
     ABBY_TWILIO_BINDING_KEY_HEX: "66".repeat(32), ABBY_VOICE_ROUTE_VERSION: "test-v1",
     ABBY_TEST_OPERATOR_REF: "synthetic-operator", ABBY_AUTOMATION_EXPECTED_VERSION: "0",
@@ -181,6 +189,11 @@ test("E2E-172 E2E-185 isolated voice runner enforces durable approval around sig
     });
     assert.equal((await healthy(port)).status, 200);
     assert.equal((await fetch(`http://127.0.0.1:${port}/readyz`)).status, 503);
+    const operationalUrl = `http://127.0.0.1:${port}/internal/operations`;
+    assert.equal((await fetch(operationalUrl)).status, 403);
+    assert.equal((await fetch(operationalUrl, { headers: { authorization: `Bearer ${"b".repeat(64)}` } })).status, 403);
+    assert.equal((await fetch(operationalUrl, { method: "POST", headers: {
+      authorization: `Bearer ${operationalTokenHex}` } })).status, 403);
 
     async function webhook(from: string, callSid: string, signed = true): Promise<Response> {
       const form = { AccountSid: accountSid, CallSid: callSid, To: number, From: from };
@@ -286,18 +299,11 @@ test("E2E-172 E2E-185 isolated voice runner enforces durable approval around sig
     const revoked = await webhook(callerNumber, `CA${"9".repeat(32)}`);
     assert.equal(revoked.status, 503);
     assert.doesNotMatch(await revoked.text(), /<Stream>/);
-    const counts = await new Promise<Record<string, number>>((resolve, reject) => {
-      const timer = setTimeout(() => { child?.off("message", onMessage); reject(new Error("operational snapshot timed out")); }, 5_000);
-      const onMessage = (message: unknown) => {
-        if (typeof message !== "object" || message === null || !("kind" in message) ||
-            message.kind !== "operationalSnapshot" || !("counts" in message)) return;
-        clearTimeout(timer);
-        child?.off("message", onMessage);
-        resolve(message.counts as Record<string, number>);
-      };
-      child!.on("message", onMessage);
-      child!.send({ kind: "operationalSnapshot" });
-    });
+    const operationalResponse = await fetch(operationalUrl, { headers: {
+      authorization: `Bearer ${operationalTokenHex}` } });
+    assert.equal(operationalResponse.status, 200);
+    assert.equal(operationalResponse.headers.get("cache-control"), "no-store");
+    const counts = await operationalResponse.json() as Record<string, number>;
     assert.deepEqual(Object.keys(counts).sort(),
       ["admissionDenied", "callOwnerStarted", "voiceFailure", "callEnded"].sort());
     assert.ok(counts.admissionDenied! >= 3);
@@ -305,6 +311,11 @@ test("E2E-172 E2E-185 isolated voice runner enforces durable approval around sig
     assert.equal(counts.voiceFailure, 0);
     assert.equal(JSON.stringify(counts).includes(callerNumber), false);
     assert.equal(JSON.stringify(counts).includes(callSid), false);
+    const operatorRead = spawnSync(process.execPath, ["scripts/read-voice-operations.ts"], {
+      cwd: new URL("../../", import.meta.url), env, encoding: "utf8", timeout: 10_000 });
+    assert.equal(operatorRead.status, 0, operatorRead.stderr);
+    assert.deepEqual(JSON.parse(operatorRead.stdout), counts);
+    assert.equal(operatorRead.stdout.includes(callerNumber) || operatorRead.stdout.includes(callSid), false);
     const closed = once(caller, "close");
     child.kill("SIGTERM");
     const [code] = await once(child, "exit");

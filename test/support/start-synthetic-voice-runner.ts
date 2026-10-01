@@ -1,7 +1,6 @@
 import { EventEmitter } from "node:events";
 import WebSocket from "ws";
 import { serveClinikoVoice } from "../../scripts/serve-cliniko-voice.ts";
-import { StandaloneOperationalCounters } from "../../src/standalone/operational-counters.ts";
 
 if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
     process.env.ABBY_CLINIKO_API_KEY !== "synthetic-key-au5" ||
@@ -16,15 +15,6 @@ const fault = process.env.ABBY_SYNTHETIC_VOICE_FAULT;
 const alternativeFault = fault === "practitioner-alternative" ||
   fault === "practitioner-alternative-rate-limit" || fault === "practitioner-alternative-malformed" ||
   fault === "practitioner-alternative-second";
-const operationalCounters = new StandaloneOperationalCounters();
-process.on("message", message => {
-  if (typeof message !== "object" || message === null || !("kind" in message) ||
-      message.kind !== "operationalSnapshot") return;
-  const scope = { tenantId: process.env.ABBY_TENANT_ID!, clinicId: process.env.ABBY_CLINIC_ID!,
-    locationId: process.env.ABBY_LOCATION_ID! };
-  process.send?.({ kind: "operationalSnapshot", counts: operationalCounters.snapshot(scope) });
-});
-process.channel?.unref();
 
 class SyntheticTranscriptionSocket extends EventEmitter {
   readyState: number = WebSocket.CONNECTING;
@@ -128,7 +118,7 @@ const openaiFetch: typeof fetch = async (input, init) => {
   return new Response(Buffer.alloc(960), { headers: { "content-type": "audio/pcm" } });
 };
 
-await serveClinikoVoice({ clinikoFetch, openaiFetch, operationalCounters, transcriptionSocketFactory: () => {
+await serveClinikoVoice({ clinikoFetch, openaiFetch, transcriptionSocketFactory: () => {
   const socket = new SyntheticTranscriptionSocket();
   queueMicrotask(() => socket.open());
   return socket as unknown as WebSocket;

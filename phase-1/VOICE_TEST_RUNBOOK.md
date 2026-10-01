@@ -25,6 +25,8 @@ Before changing the number route, set `ABBY_TWILIO_TEST_NUMBER`, `ABBY_TWILIO_TE
 
 Use an owner-only `.env` or an equivalent secret store, and load it into the process environment before running the commands below; the npm scripts do not load `.env` automatically. Set the existing [voice runner variables](VOICE_SERVICE_RUNNER.md) plus `ABBY_VOICE_TEST_MODE=1`, `ABBY_TWILIO_TEST_CALLER_NUMBER`, `ABBY_TWILIO_PUBLIC_FALLBACK_URL`, `ABBY_TEST_OPERATOR_REF`, and `ABBY_AUTOMATION_EXPECTED_VERSION=0` for a new isolated clinic. The greeting must explicitly identify the call as a test and include both keypad instructions. The route must use a privacy-safe migrated database and a distinct test scope. Keep credentials out of shell history, logs, and Git.
 
+For local aggregate diagnostics, optionally set a separate owner-only `ABBY_VOICE_OPERATIONS_TOKEN_HEX` and run `npm run voice:ops` while the listener is up. This prints only four volatile counters. It does not expose a patient-specific call report or prove that a fallback or staff task was delivered.
+
 ```sh
 npm run voice:preflight -- --config-only
 npm run voice:test-policy -- enable

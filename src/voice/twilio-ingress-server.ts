@@ -1,9 +1,12 @@
+import { timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
 import type { AuthenticatedInboundCall } from "./admission.ts";
 import type { AuthenticatedTwilioStream } from "./twilio-signed-ingress.ts";
+import { validOperationalCounts } from "./operational-counts.ts";
+import type { OperationalCounts } from "./operational-counts.ts";
 import { TWILIO_BINDING_LIFETIME_MS, TwilioSignedIngress } from "./twilio-signed-ingress.ts";
 
 const maxBodyBytes = 16_384;
@@ -72,6 +75,7 @@ export type TwilioIngressServerConfig = Readonly<{
   /** Checked after signature verification and before returning stream TwiML. */
   /** No event means a general readiness probe, which a restricted test gate must refuse. */
   admitWebhook?: (event?: AuthenticatedInboundCall) => Promise<boolean>;
+  operationalRead?: Readonly<{ tokenHex: string; snapshot: () => OperationalCounts }>;
   /** Constructs a call owner only after the webhook, upgrade, and start have been authenticated. */
   createCall: (stream: AuthenticatedTwilioStream,
     send: (json: string) => "queued" | "notSent" | "uncertain",
@@ -178,11 +182,32 @@ function runStream(socket: WebSocket, request: IncomingMessage, config: TwilioIn
 
 /** Node HTTP/WebSocket transport; the caller supplies its privacy-safe voice call composition. */
 export function createTwilioIngressServer(config: TwilioIngressServerConfig): Server {
+  if (config.operationalRead && !/^[a-f0-9]{64}$/i.test(config.operationalRead.tokenHex)) {
+    throw new RangeError("invalid operational read token");
+  }
+  const operationalToken = config.operationalRead ? Buffer.from(config.operationalRead.tokenHex, "hex") : undefined;
   const claims = new LiveCallClaims();
   const websocket = new WebSocketServer({ noServer: true, maxPayload: maxBodyBytes,
     perMessageDeflate: false });
   const server = createServer((request, response) => {
     void (async () => {
+      if (request.url === "/internal/operations") {
+        const supplied = header(request.headers.authorization)?.match(/^Bearer ([a-f0-9]{64})$/i)?.[1];
+        if (!operationalToken) {
+          response.writeHead(404, { "cache-control": "no-store" }); response.end(); return;
+        }
+        if (request.method !== "GET" || !supplied ||
+            !timingSafeEqual(Buffer.from(supplied, "hex"), operationalToken)) {
+          response.writeHead(403, { "cache-control": "no-store" }); response.end(); return;
+        }
+        const counts = await Promise.resolve().then(() => config.operationalRead!.snapshot()).catch(() => undefined);
+        if (!validOperationalCounts(counts)) {
+          response.writeHead(503, { "cache-control": "no-store" }); response.end(); return;
+        }
+        response.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+        response.end(JSON.stringify(counts));
+        return;
+      }
       if (request.method === "GET" && request.url === "/healthz" && config.health) {
         const healthy = await config.health().catch(() => false);
         response.writeHead(healthy ? 200 : 503, { "content-type": "text/plain", "cache-control": "no-store" });

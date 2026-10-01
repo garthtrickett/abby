@@ -26,7 +26,8 @@ import type { TwilioSignedIngressConfig } from "../voice/twilio-signed-ingress.t
 import type { AuthenticatedInboundCall } from "../voice/admission.ts";
 import { createOpenAIAvailabilityIntentResolver } from "./openai-availability-intent.ts";
 import { keypadAvailabilityRange } from "./keypad-availability.ts";
-import type { OperationalCounterKind, OperationalCounterSink } from "./operational-counters.ts";
+import { StandaloneOperationalCounters } from "./operational-counters.ts";
+import type { OperationalCounterKind, OperationalCounterStore } from "../voice/operational-counts.ts";
 import { createStandaloneTransientVoiceCall } from "./transient-voice-composition.ts";
 
 export type ClinikoVoiceRoute = Readonly<{
@@ -74,7 +75,9 @@ export type ClinikoVoiceServerConfig = Readonly<{
   now?: () => string;
   monotonicNow?: () => number;
   /** Aggregate fixed-code diagnostics; the owner controls who may read them. */
-  operationalCounters?: OperationalCounterSink;
+  operationalCounters?: OperationalCounterStore;
+  /** One configured clinic's aggregate counters, readable only with this token. */
+  operationalRead?: Readonly<{ tokenHex: string; scope: LocationScope }>;
 }>;
 
 /** Refuses unsafe standalone storage before a listener can accept calls. */
@@ -118,6 +121,15 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       keypadAvailabilityGreeting: structuredClone(greeting) });
   }
   if (routes.size !== fallbackNumbers.length) throw new RangeError("incomplete clinic voice routes");
+  const operationalRead = config.operationalRead ? { tokenHex: config.operationalRead.tokenHex,
+    scope: structuredClone(config.operationalRead.scope) } : undefined;
+  if (operationalRead && ![...routes.values()].some(route =>
+      route.scope.tenantId === operationalRead.scope.tenantId &&
+      route.scope.clinicId === operationalRead.scope.clinicId &&
+      route.scope.locationId === operationalRead.scope.locationId)) {
+    throw new RangeError("operational read scope unavailable");
+  }
+  const operationalCounters = config.operationalCounters ?? new StandaloneOperationalCounters();
   const ingress = new TwilioSignedIngress(twilio);
   const routingHost = new ReferenceNumberRoutingHost([...routes.values()].map(route => ({
     accountRef: twilio.accountSid, dialedNumber: route.dialedNumber,
@@ -159,7 +171,7 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
   const transcriptionSocketFactory = config.openai.transcriptionSocketFactory;
   const readiness = config.readiness;
   const count = (scope: LocationScope, kind: OperationalCounterKind): void => {
-    try { config.operationalCounters?.record(scope, kind); }
+    try { operationalCounters.record(scope, kind); }
     catch { /* operational diagnostics cannot alter a call */ }
   };
   // Validate provider configuration before exposing an HTTP listener.
@@ -199,6 +211,8 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
   }
 
   return ok(createTwilioIngressServer({ ingress, activeCallClaims: config.activeCallClaims,
+    ...(operationalRead ? { operationalRead: { tokenHex: operationalRead.tokenHex,
+      snapshot: () => operationalCounters.snapshot(operationalRead.scope) } } : {}),
     ...(config.health ? { health: config.health } : {}),
     admitWebhook: async event => {
       if (!event || event.key.accountRef !== twilio.accountSid) return false;

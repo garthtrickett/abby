@@ -28,6 +28,7 @@ const number = "+6125550199";
 const caller = "+6145550101";
 const accountSid = `AC${"1".repeat(32)}`;
 const authToken = "synthetic-token";
+const operationalTokenHex = "a".repeat(64);
 const webhookUrl = "https://calls.example.test/twilio/inbound";
 const streamUrl = "wss://calls.example.test/twilio/media/";
 const noStaffNotice = "I can't send a staff request from this call. Please contact the clinic directly.";
@@ -89,6 +90,7 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
     ABBY_CLINIKO_APPOINTMENT_TYPE_ID: "33", ABBY_CLINIKO_TIME_ZONE: "Australia/Sydney",
     ABBY_TWILIO_TEST_NUMBER: number, ABBY_TWILIO_FALLBACK_NUMBER: "+6125550188",
     ABBY_TWILIO_ACCOUNT_SID: accountSid, ABBY_TWILIO_AUTH_TOKEN: authToken,
+    ABBY_VOICE_OPERATIONS_TOKEN_HEX: operationalTokenHex,
     ABBY_TWILIO_PUBLIC_WEBHOOK_URL: webhookUrl, ABBY_TWILIO_PUBLIC_STREAM_URL: streamUrl,
     ABBY_TWILIO_BINDING_KEY_HEX: "66".repeat(32), ABBY_VOICE_ROUTE_VERSION: "fault-test-v1",
     ABBY_TEST_OPERATOR_REF: "synthetic-operator", ABBY_AUTOMATION_EXPECTED_VERSION: "0",
@@ -170,18 +172,12 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
           customParameters: { abbyBinding: binding } } }));
       return { socket, messages, closed, streamSid };
     };
-    const operationalSnapshot = async (): Promise<Record<string, number>> => bounded(new Promise((resolve, reject) => {
-      const listener = (message: unknown) => {
-        if (typeof message !== "object" || message === null || !("kind" in message) ||
-            message.kind !== "operationalSnapshot" || !("counts" in message)) return;
-        child?.off("message", listener);
-        resolve(message.counts as Record<string, number>);
-      };
-      child!.on("message", listener);
-      child!.send({ kind: "operationalSnapshot" }, error => {
-        if (error) { child?.off("message", listener); reject(error); }
-      });
-    }), "operational snapshot");
+    const operationalSnapshot = async (): Promise<Record<string, number>> => {
+      const response = await bounded(fetch(`http://127.0.0.1:${port}/internal/operations`, { headers: {
+        authorization: `Bearer ${operationalTokenHex}` } }), "operational snapshot");
+      assert.equal(response.status, 200);
+      return await response.json() as Record<string, number>;
+    };
     await run({ port, child, admin, databaseName, speech, clinikoMethods, clinikoPaths, clinikoQueries,
       openCall, operationalSnapshot });
   } finally {
