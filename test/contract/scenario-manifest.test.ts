@@ -33,7 +33,7 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
   const manifest = JSON.parse(read("phase-0/SCENARIO_MANIFEST.json")) as Manifest;
   const design = read("TECHNICAL_DESIGN.md");
   const rows = [...design.matchAll(/^\| `(E2E-\d{3})` \| (.*?) \| (FR-\d{2}(?:, FR-\d{2})*) \|$/gm)];
-  assert.equal(manifest.version, "1.27");
+  assert.equal(manifest.version, "1.28");
   assert.equal(manifest.source, "TECHNICAL_DESIGN.md Section 11");
   assert.equal(manifest.fixtureIdPattern, "fixture-{lowercase scenario id}");
   assert.equal(rows.length, 227);
