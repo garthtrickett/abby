@@ -13,6 +13,7 @@ import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 import { PostgresClinikoApprovalStore } from "../../src/storage/postgres-cliniko-approval-store.ts";
+import type { OperationalDailyCounts } from "../../src/voice/operational-counts.ts";
 
 type Fault = "openai-speech" | "speech-primary-stall" | "openai-transcription" | "untrusted-transcript" | "clear-availability" | "clear-unsupported" | "clear-model-failure" | "cliniko-rate-limit" | "cliniko-server-error" | "cliniko-timeout" | "cliniko-slow-read" | "cliniko-zone-changed" | "cliniko-partial-page" | "cliniko-empty" |
   "cliniko-business-type-removed" | "cliniko-practitioner-type-removed" | "week-alternative" | "practitioner-alternative" |
@@ -74,7 +75,8 @@ type Fixture = { port: number; child: ReturnType<typeof spawn>;
   clinikoReadAborts: { at: number; reason: string }[];
   modelRequests: string[];
   openCall: (callSidOverride?: string) => Promise<Call>; restart: () => Promise<void>;
-  operationalSnapshot: () => Promise<Record<string, number>> };
+  operationalSnapshot: () => Promise<Record<string, number>>;
+  operationalDaily: () => Promise<OperationalDailyCounts> };
 
 async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void>,
                            weekApproved: boolean | "default" = false, alternativeApproved = false,
@@ -212,8 +214,14 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
       assert.equal(response.status, 200);
       return await response.json() as Record<string, number>;
     };
+    const operationalDaily = async (): Promise<OperationalDailyCounts> => {
+      const response = await bounded(fetch(`http://127.0.0.1:${port}/internal/operations/daily`, { headers: {
+        authorization: `Bearer ${operationalTokenHex}` } }), "operational daily");
+      assert.equal(response.status, 200);
+      return await response.json() as OperationalDailyCounts;
+    };
     await run({ port, child: firstChild, admin, databaseName, speech, speechRequests, clinikoMethods, clinikoPaths,
-      clinikoQueries, clinikoReadAborts, modelRequests, openCall, restart, operationalSnapshot });
+      clinikoQueries, clinikoReadAborts, modelRequests, openCall, restart, operationalSnapshot, operationalDaily });
   } finally {
     let restored = true;
     try { if (created) await sql.raw(`alter database "${databaseName}" with allow_connections true`).execute(admin); }
@@ -279,7 +287,7 @@ async function closeCaller(call: Call): Promise<void> {
 test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1",
   timeout: 240_000, concurrency: 5 }, async t => {
   await Promise.all([
-    t.test("E2E-236 signed clear availability turn reads provisional Cliniko times", async () =>
+    t.test("E2E-236 E2E-237 signed clear availability does not count classifier failure", async () =>
       withFixture("clear-availability", async fixture => {
         const call = await fixture.openCall();
         await markGreeting(call);
@@ -287,13 +295,14 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "clear availability response");
         assertResponseAudio(call);
         assert.deepEqual(fixture.modelRequests, ["request"]);
+        assert.equal((await fixture.operationalSnapshot()).intentClassificationUnavailable, 0);
         assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
         assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
         assert.match(fixture.speech[1]!, /possible|available/i);
         assert.doesNotMatch(fixture.speech[1]!, /booked|reserved|confirmed/i);
         await closeCaller(call);
       })),
-    t.test("E2E-236 signed clear booking request cannot read times or make a write", async () =>
+    t.test("E2E-236 E2E-237 signed clear unsupported request does not count classifier failure", async () =>
       withFixture("clear-unsupported", async fixture => {
         const call = await fixture.openCall();
         await markGreeting(call);
@@ -301,13 +310,14 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "unsupported fallback");
         assertResponseAudio(call);
         assert.deepEqual(fixture.modelRequests, ["request"]);
+        assert.equal((await fixture.operationalSnapshot()).intentClassificationUnavailable, 0);
         assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 0);
         assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
         assert.match(fixture.speech[1]!, /contact the clinic directly/i);
         assert.doesNotMatch(fixture.speech[1]!, /booked|reserved|confirmed/i);
         await closeCaller(call);
       })),
-    t.test("E2E-236 signed clear model failure speaks direct contact without a Cliniko read or claim", async () =>
+    t.test("E2E-236 E2E-237 signed clear model failure speaks fallback and counts once", async () =>
       withFixture("clear-model-failure", async fixture => {
         const call = await fixture.openCall();
         await markGreeting(call);
@@ -319,6 +329,12 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
         assert.equal(fixture.speech[1], noStaffNotice);
         assert.doesNotMatch(fixture.speech[1]!, /booked|reserved|confirmed/i);
+        const lifetime = await fixture.operationalSnapshot();
+        const daily = await fixture.operationalDaily();
+        assert.equal(lifetime.intentClassificationUnavailable, 1);
+        assert.equal(daily.days.at(-1)?.counts.intentClassificationUnavailable, 1);
+        assert.equal(JSON.stringify({ lifetime, daily }).includes(caller), false);
+        assert.equal(JSON.stringify({ lifetime, daily }).includes("Do you have availability tomorrow?"), false);
         await closeCaller(call);
       })),
     ...[false, true].map(alternativeApproved =>

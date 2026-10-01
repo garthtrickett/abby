@@ -272,6 +272,9 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     }
     const availability = new ClinikoApprovedAvailabilitySearch(approved.readers,
       config.now, approved.approval.businessTimeZone);
+    const classifyIntent = createOpenAIAvailabilityIntentResolver({ apiKey: openaiApiKey,
+      model: config.openai.intentModel, clinicDate: approved.clinicDate,
+      ...(config.openai.fetch ? { fetch: config.openai.fetch } : {}) });
     const composed = await createStandaloneTransientVoiceCall({ db: config.db, routingHost,
       expectedPolicyVersion: approved.approval.selection.policyVersion,
       stream, send, closeTransport: close, synthesis,
@@ -279,9 +282,16 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       approvedGreeting: route.keypadAvailabilityGreeting,
       keypadAvailabilityRange: (digit: string) => keypadAvailabilityRange(approved.clinicDate, digit,
         route.sevenDayAvailabilityEnabled === true),
-      resolveIntent: createOpenAIAvailabilityIntentResolver({ apiKey: openaiApiKey,
-        model: config.openai.intentModel, clinicDate: approved.clinicDate,
-        ...(config.openai.fetch ? { fetch: config.openai.fetch } : {}) }), readiness,
+      resolveIntent: async turn => {
+        try {
+          const result = await classifyIntent(turn);
+          if (!result.ok) count(route.scope, "intentClassificationUnavailable");
+          return result;
+        } catch {
+          count(route.scope, "intentClassificationUnavailable");
+          return err({ kind: "intentUnavailable" });
+        }
+      }, readiness,
       transcriptionFactory: config.transcriptionFactory ?? (sessionId => new OpenAIRealtimeTranscription({
         apiKey: openaiApiKey, sessionId,
         ...(transcriptionSocketFactory ? { socketFactory: transcriptionSocketFactory } : {}),

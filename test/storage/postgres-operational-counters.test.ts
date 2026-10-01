@@ -28,30 +28,32 @@ async function runWorker(tenantId: string): Promise<void> {
   assert.equal(code, 0, Buffer.concat(errors).toString("utf8"));
 }
 
-test("two worker processes atomically share scoped, patient-free operational totals", async () => {
+test("E2E-237 two worker processes atomically share scoped, patient-free operational totals", async () => {
   const tenantId = `ops-${randomUUID()}`;
   const scope = { tenantId, clinicId: "clinic", locationId: "main" };
   const counters = new PostgresOperationalCounters(db);
   await Promise.all([runWorker(tenantId), runWorker(tenantId)]);
   await counters.record(scope, "clinikoProviderUnavailable");
+  await counters.record(scope, "intentClassificationUnavailable");
   assert.deepEqual(await counters.snapshot(scope), {
     admissionDenied: 80, callOwnerStarted: 0, voiceFailure: 0, callEnded: 0,
     clinikoBudgetDenied: 0, clinikoBudgetUnavailable: 0, clinikoProvider429: 0,
-    clinikoProviderUnavailable: 1,
+    clinikoProviderUnavailable: 1, intentClassificationUnavailable: 1,
   });
   const daily = await counters.daily(scope);
   assert.equal(daily.days.length, 7);
   assert.equal(daily.days.at(-1)?.counts.admissionDenied, 80);
   assert.equal(daily.days.at(-1)?.counts.clinikoProviderUnavailable, 1);
+  assert.equal(daily.days.at(-1)?.counts.intentClassificationUnavailable, 1);
   assert.deepEqual(await counters.snapshot({ ...scope, locationId: "other" }), {
     admissionDenied: 0, callOwnerStarted: 0, voiceFailure: 0, callEnded: 0,
     clinikoBudgetDenied: 0, clinikoBudgetUnavailable: 0, clinikoProvider429: 0,
-    clinikoProviderUnavailable: 0,
+    clinikoProviderUnavailable: 0, intentClassificationUnavailable: 0,
   });
   assert.deepEqual(await counters.snapshot({ ...scope, clinicId: "other" }), {
     admissionDenied: 0, callOwnerStarted: 0, voiceFailure: 0, callEnded: 0,
     clinikoBudgetDenied: 0, clinikoBudgetUnavailable: 0, clinikoProvider429: 0,
-    clinikoProviderUnavailable: 0,
+    clinikoProviderUnavailable: 0, intentClassificationUnavailable: 0,
   });
   const columns = await sql<{ column_name: string }>`select column_name from information_schema.columns
     where table_schema = current_schema() and table_name = 'clinic_operational_counts'
@@ -117,13 +119,14 @@ test("E2E-218 one-shot retention command deletes expired rows without revealing 
   assert.equal(left.rows[0]?.count, "0");
 });
 
-test("E2E-219 owner threshold command enables selected fixed codes and isolates its clinic", async () => {
+test("E2E-219 E2E-237 owner threshold command enables selected fixed codes and isolates its clinic", async () => {
   const tenantId = `ops-threshold-${randomUUID()}`;
   const otherTenantId = `ops-threshold-other-${randomUUID()}`;
   const today = new Date().toISOString().slice(0, 10);
   await sql`insert into clinic_operational_daily_counts
     (tenant_id, clinic_id, location_id, date, kind, count) values
     (${tenantId}, 'clinic', 'main', ${today}::date, 'clinikoProvider429', 2),
+    (${tenantId}, 'clinic', 'main', ${today}::date, 'intentClassificationUnavailable', 1),
     (${tenantId}, 'clinic', 'main', ${today}::date, 'voiceFailure', 1),
     (${otherTenantId}, 'clinic', 'main', ${today}::date, 'clinikoProvider429', 99)`.execute(db);
   const env = { ...process.env, ABBY_TENANT_ID: tenantId, ABBY_CLINIC_ID: "clinic",
@@ -137,6 +140,10 @@ test("E2E-219 owner threshold command enables selected fixed codes and isolates 
   assert.equal(crossed.stderr, "");
   assert.deepEqual(JSON.parse(crossed.stdout), { date: today,
     alerts: [{ kind: "clinikoProvider429", count: 2, threshold: 2 }] });
+  const classifierCrossed = run('{"intentClassificationUnavailable":1}');
+  assert.equal(classifierCrossed.status, 2, classifierCrossed.stderr);
+  assert.deepEqual(JSON.parse(classifierCrossed.stdout), { date: today,
+    alerts: [{ kind: "intentClassificationUnavailable", count: 1, threshold: 1 }] });
   const clear = run('{"clinikoProvider429":3}');
   assert.equal(clear.status, 0, clear.stderr);
   assert.deepEqual(JSON.parse(clear.stdout), { date: today, alerts: [] });
@@ -148,7 +155,7 @@ test("E2E-219 owner threshold command enables selected fixed codes and isolates 
   }
 });
 
-test("E2E-220 owner webhook accepts redacted alerts and never follows a credentialed redirect", async () => {
+test("E2E-220 E2E-237 owner webhook accepts redacted classifier alerts and refuses redirects", async () => {
   const tenantId = `ops-alert-${randomUUID()}`;
   const otherTenantId = `ops-alert-other-${randomUUID()}`;
   const patientCanary = `patient-alert-${randomUUID()}`;
@@ -156,6 +163,7 @@ test("E2E-220 owner webhook accepts redacted alerts and never follows a credenti
   await sql`insert into clinic_operational_daily_counts
     (tenant_id, clinic_id, location_id, date, kind, count) values
     (${tenantId}, 'clinic', 'main', ${today}::date, 'clinikoProvider429', 2),
+    (${tenantId}, 'clinic', 'main', ${today}::date, 'intentClassificationUnavailable', 1),
     (${tenantId}, 'clinic', 'main', ${today}::date, 'voiceFailure', 1),
     (${otherTenantId}, 'clinic', 'main', ${today}::date, 'clinikoProvider429', 99)`.execute(db);
   const requests: { path: string; authorization: string; key: string; body: string }[] = [];
@@ -208,6 +216,12 @@ test("E2E-220 owner webhook accepts redacted alerts and never follows a credenti
       ABBY_VOICE_ALERT_WEBHOOK_URL: `https://example.invalid/alerts?patient=${patientCanary}` }),
       /invalid operational alert destination/);
     assert.equal(requests.length, 4);
+    assert.deepEqual(await sendVoiceOperationalAlerts({ ...env,
+      ABBY_VOICE_OPS_THRESHOLDS_JSON: '{"intentClassificationUnavailable":1}' }, ports),
+    { date: today, accepted: 1 });
+    assert.equal(requests.length, 5);
+    assert.equal(JSON.parse(requests[4]!.body).kind, "intentClassificationUnavailable");
+    assert.equal(requests[4]!.body.includes(patientCanary), false);
   } finally {
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
