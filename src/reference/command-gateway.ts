@@ -48,6 +48,7 @@ export type GatewayCommand =
   | Readonly<{ kind: "clinic.availability.businesses.list.v1" }>
   | Readonly<{ kind: "clinic.availability.selection.inspect.v1"; selection: ClinicAvailabilitySelection }>
   | Readonly<{ kind: "clinic.availability.approval.read.v1" }>
+  | Readonly<{ kind: "clinic.availability.route.check.v1" }>
   | Readonly<{ kind: "clinic.availability.approval.change.v1"; route: ClinicAvailabilityRoute; selection: ClinicAvailabilitySelection; expectedVersion: number }>
   | Readonly<{ kind: "clinic.availability.approval.change.v2"; route: ClinicAvailabilityRoute; selection: ClinicAvailabilitySelection;
     alternatives: readonly ClinicAvailabilitySelection[]; expectedVersion: number }>
@@ -77,6 +78,7 @@ export type GatewayReply =
   | Readonly<{ kind: "clinicAvailabilityBusinesses"; catalogue: ClinicAvailabilityBusinessCatalogue }>
   | Readonly<{ kind: "clinicAvailabilitySelection"; snapshot: ClinicAvailabilitySelectionSnapshot }>
   | Readonly<{ kind: "clinicAvailabilityApprovalState"; state: ClinicAvailabilityApprovalState }>
+  | Readonly<{ kind: "clinicAvailabilityRouteCheck"; eligible: true }>
   | Readonly<{ kind: "availabilityAnswer"; progress: CallCommandProgress }>
   | Readonly<{ kind: "appointmentAnswer"; progress: CallCommandProgress }>
   | Readonly<{ kind: "callSummary"; call: CallSummary }>
@@ -135,7 +137,7 @@ export class CommandGateway {
     if (this.actor.role === "clinicAdmin") {
       if (this.knowledgeCatalogue) permitted.push("knowledge.list.v1", "knowledge.draft.save.v1", "knowledge.approve.v1", "knowledge.revoke.v1");
       if (this.availabilitySetup) permitted.push("clinic.availability.businesses.list.v1", "clinic.availability.selection.inspect.v1",
-        "clinic.availability.approval.read.v1", "clinic.availability.approval.change.v1",
+        "clinic.availability.approval.read.v1", "clinic.availability.route.check.v1", "clinic.availability.approval.change.v1",
         "clinic.availability.approval.change.v2", "clinic.availability.approval.revoke.v1");
       permitted.push("settings.automation.enabled.change.v1", "settings.automation.audit.v1",
         "settings.appointments.booking.enabled.change.v1", "settings.appointments.booking.audit.v1");
@@ -258,6 +260,11 @@ export class CommandGateway {
         if (!this.availabilitySetup) return err({ kind: "forbidden" });
         const result = await this.availabilitySetup.current(this.actor);
         return result.ok ? ok({ kind: "clinicAvailabilityApprovalState", state: result.value }) : result;
+      }
+      case "clinic.availability.route.check.v1": {
+        if (!this.availabilitySetup) return err({ kind: "forbidden" });
+        const result = await this.availabilitySetup.checkApprovedRoute(this.actor);
+        return result.ok ? ok({ kind: "clinicAvailabilityRouteCheck", eligible: true }) : result;
       }
       case "clinic.availability.approval.change.v1": {
         if (!this.availabilitySetup) return err({ kind: "forbidden" });

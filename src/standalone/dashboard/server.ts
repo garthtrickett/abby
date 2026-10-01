@@ -9,6 +9,7 @@ const document = `<!doctype html><html lang="en"><head><meta charset="utf-8"><me
 const setupCommands = new Set([
   "clinic.availability.businesses.list.v1", "clinic.availability.selection.inspect.v1",
   "clinic.availability.approval.read.v1", "clinic.availability.approval.change.v1",
+  "clinic.availability.route.check.v1",
   "clinic.availability.approval.change.v2",
   "clinic.availability.approval.revoke.v1",
 ]);

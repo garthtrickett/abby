@@ -4,7 +4,7 @@ import type { ClinicAvailabilityApprovalState, ClinicAvailabilityBusinessCatalog
   ClinicAvailabilityRoute, ClinicAvailabilitySelection, ClinicAvailabilitySelectionSnapshot } from "../../reference/clinic-availability-setup.ts";
 
 type SetupPort = Pick<DashboardPort, "capabilities" | "settings" | "availabilityBusinesses" |
-  "availabilityInspect" | "availabilityApproval" | "approveAvailability" |
+  "availabilityInspect" | "availabilityApproval" | "checkAvailabilityRoute" | "approveAvailability" |
   "approveAvailabilityAlternatives" | "revokeAvailability">;
 type Field = keyof ClinicAvailabilityRoute | keyof ClinicAvailabilitySelection;
 
@@ -26,6 +26,20 @@ function failureMessage(failure: DashboardFailure): string {
   }
 }
 
+function routeCheckMessage(failure: DashboardFailure): string {
+  switch (failure.kind) {
+    case "notApproved": return "No route approved for new calls.";
+    case "staleApproval": return "Reapproval required: the route or Cliniko credential changed.";
+    case "routeChanged": return "The number route changed; new calls cannot use this approval.";
+    case "policyChanged": return "The clinic policy changed; reapproval is required.";
+    case "selectionUnavailable": return "An approved Cliniko selection is no longer eligible.";
+    case "credentialForbidden": return "Cliniko denied this connection.";
+    case "catalogueRateLimited": return "Cliniko rate limited the eligibility check.";
+    case "catalogueUnavailable": return "Cliniko eligibility could not be checked.";
+    default: return "The route could not be verified for a new call.";
+  }
+}
+
 /** Browser-only reference setup. The host must authenticate the actor before constructing its gateway. */
 export class AvailabilitySetupPanel {
   private readonly root: HTMLElement;
@@ -34,6 +48,7 @@ export class AvailabilitySetupPanel {
   private busy = false;
   private catalogue: ClinicAvailabilityBusinessCatalogue | undefined;
   private approval: ClinicAvailabilityApprovalState | undefined;
+  private routeCheck: Awaited<ReturnType<SetupPort["checkAvailabilityRoute"]>> | undefined;
   private snapshot: ClinicAvailabilitySelectionSnapshot | undefined;
   private route: ClinicAvailabilityRoute = { accountRef: "", dialedNumber: "", routeVersion: "" };
   private selection: ClinicAvailabilitySelection = { businessId: "", practitionerId: "", appointmentTypeId: "", policyVersion: "" };
@@ -54,9 +69,11 @@ export class AvailabilitySetupPanel {
     const capabilities = await this.port.capabilities();
     this.permitted = capabilities.ok && capabilities.value.some(item => item.id === "clinic.availability.approval.change.v1");
     if (!this.permitted) return;
-    const [settings, catalogue, approval] = await Promise.all([
+    const [settings, catalogue, approval, routeCheck] = await Promise.all([
       this.port.settings(), this.port.availabilityBusinesses(), this.port.availabilityApproval(),
+      this.port.checkAvailabilityRoute(),
     ]);
+    this.routeCheck = routeCheck;
     if (settings.ok) this.selection = { ...this.selection, policyVersion: settings.value.policyVersion };
     else this.error = failureMessage(settings.error);
     if (catalogue.ok) this.catalogue = catalogue.value;
@@ -149,7 +166,7 @@ export class AvailabilitySetupPanel {
   private async change(action: "approve" | "revoke"): Promise<void> {
     if (this.busy || !this.approval || (action === "approve" &&
         (!this.confirmed || this.snapshot?.status !== "candidate" || !this.alternativesReady()))) return;
-    this.busy = true; this.error = undefined; this.notice = undefined; this.draw();
+    this.busy = true; this.error = undefined; this.notice = undefined; this.routeCheck = undefined; this.draw();
     const alternatives = this.configuredAlternatives();
     const result = action === "approve"
       ? alternatives?.length
@@ -168,24 +185,30 @@ export class AvailabilitySetupPanel {
         this.error += " The approval state could not be refreshed; reload the page before continuing.";
       }
     }
+    this.routeCheck = await this.port.checkAvailabilityRoute();
     this.confirmed = false; this.snapshot = undefined; this.busy = false; this.draw();
+  }
+
+  private async recheckRoute(): Promise<void> {
+    if (this.busy) return;
+    this.busy = true; this.routeCheck = undefined; this.draw();
+    this.routeCheck = await this.port.checkAvailabilityRoute();
+    this.busy = false; this.draw();
   }
 
   private draw(): void {
     if (!this.permitted) return;
     const approved = this.approval?.approval;
-    const credentialChanged = !!approved && !!this.catalogue &&
-      approved.credentialFingerprint !== this.catalogue.credentialFingerprint;
-    const routeReadiness = !approved ? "No route approved for new calls." :
-      !this.catalogue ? "Route readiness cannot be checked while Cliniko is unavailable." :
-      credentialChanged ? "Reapproval required: the Cliniko credential changed. New calls cannot use this route." :
-      "Stored route matches this Cliniko credential. Each call still rechecks current eligibility.";
+    const routeReadiness = !this.routeCheck ? "Checking the approved route..." :
+      this.routeCheck.ok ? "Eligible at the last route check. Each call rechecks current eligibility." :
+      routeCheckMessage(this.routeCheck.error);
     render(html`<section class="card" aria-labelledby="availability-setup-title">
       <h2 id="availability-setup-title">Read-only availability setup</h2>
       <p class="muted">Approve one clinic route and up to two ordered alternatives for provisional times. Booking, patient details and staff requests stay unavailable.</p>
       <p class="status" aria-label="Cliniko connection status">${this.catalogue
         ? `Cliniko catalogue checked at ${this.catalogue.observedAt}.` : "Cliniko catalogue could not be checked."}</p>
       <p class="status" aria-label="Availability route readiness">${routeReadiness}</p>
+      <button type="button" ?disabled=${this.busy} @click=${() => { void this.recheckRoute(); }}>Recheck route</button>
       <p class="status" aria-label="Availability approval status">${approved
         ? `Stored approval: ${approved.selection.businessId} / ${approved.selection.practitionerId} / ${approved.selection.appointmentTypeId} · version ${this.approval?.version} · ${approved.alternatives.length} alternatives`
         : `No approved availability route · version ${this.approval?.version ?? "unknown"}`}</p>

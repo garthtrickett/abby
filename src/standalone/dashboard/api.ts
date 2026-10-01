@@ -35,6 +35,7 @@ export type DashboardPort = Readonly<{
   availabilityBusinesses(): Promise<Result<ClinicAvailabilityBusinessCatalogue, DashboardFailure>>;
   availabilityInspect(selection: ClinicAvailabilitySelection): Promise<Result<ClinicAvailabilitySelectionSnapshot, DashboardFailure>>;
   availabilityApproval(): Promise<Result<ClinicAvailabilityApprovalState, DashboardFailure>>;
+  checkAvailabilityRoute(): Promise<Result<true, DashboardFailure>>;
   approveAvailability(route: ClinicAvailabilityRoute, selection: ClinicAvailabilitySelection, expectedVersion: number):
     Promise<Result<ClinicAvailabilityApprovalState, DashboardFailure>>;
   approveAvailabilityAlternatives(route: ClinicAvailabilityRoute, selection: ClinicAvailabilitySelection,
@@ -129,6 +130,11 @@ export class FetchDashboardPort implements DashboardPort {
   async availabilityApproval(): Promise<Result<ClinicAvailabilityApprovalState, DashboardFailure>> {
     const result = await availabilityCommand({ kind: "clinic.availability.approval.read.v1" }, "clinicAvailabilityApprovalState");
     return result.ok ? ok(result.value.state) : result;
+  }
+
+  async checkAvailabilityRoute(): Promise<Result<true, DashboardFailure>> {
+    const result = await availabilityCommand({ kind: "clinic.availability.route.check.v1" }, "clinicAvailabilityRouteCheck");
+    return result.ok ? ok(result.value.eligible) : result;
   }
 
   async approveAvailability(route: ClinicAvailabilityRoute, selection: ClinicAvailabilitySelection, expectedVersion: number):

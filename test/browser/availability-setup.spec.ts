@@ -20,10 +20,11 @@ async function fixture(role: "clinicAdmin" | "staff", uncertainApproval = false,
                        options: Readonly<{ apiKey?: string; store?: MemoryClinikoApprovalStore;
                          providerForbidden?: boolean }> = {}) {
   const calls: string[] = [];
+  let practitionerActive = true;
   const fetchPort: typeof fetch = async input => {
     const path = new URL(String(input)).pathname;
     calls.push(path);
-    if (options.providerForbidden && path === "/v1/businesses") return new Response(null, { status: 403 });
+    if (options.providerForbidden) return new Response(null, { status: 403 });
     if (path === "/v1/businesses") return Response.json({ total_entries: 2, businesses: [{
       id: "44", business_name: "Other location", archived_at: null, show_in_online_bookings: true,
       time_zone_identifier: "Australia/Sydney" }, {
@@ -33,7 +34,7 @@ async function fixture(role: "clinicAdmin" | "staff", uncertainApproval = false,
       id: "11", business_name: "Demo clinic", archived_at: null, show_in_online_bookings: true,
       time_zone_identifier: "Australia/Sydney", appointment_type_ids: ["33", "55", "77"] });
     if (path === "/v1/practitioners/22") return Response.json({
-      id: "22", display_name: "Practitioner", active: true, show_in_online_bookings: true });
+      id: "22", display_name: "Practitioner", active: practitionerActive, show_in_online_bookings: true });
     if (path === "/v1/practitioners/44") return Response.json({
       id: "44", display_name: "Second practitioner", active: true, show_in_online_bookings: true });
     if (path === "/v1/practitioners/66") return Response.json({
@@ -78,6 +79,7 @@ async function fixture(role: "clinicAdmin" | "staff", uncertainApproval = false,
   const address = server.address();
   assert.ok(address && typeof address !== "string");
   return { url: `http://127.0.0.1:${address.port}`, setup, calls,
+    setPractitionerActive(value: boolean) { practitionerActive = value; },
     close: () => new Promise<void>((done, reject) => {
       server.close(error => error ? reject(error) : done());
       server.closeAllConnections();
@@ -135,11 +137,56 @@ test("E2E-195 staff and foreign-origin requests cannot use availability setup", 
       headers: { Origin: app.url }, data: { kind: "clinic.availability.businesses.list.v1" },
     });
     assert.equal(denied.status(), 403);
+    const checkDenied = await request.post(`${app.url}/api/clinic-availability/command`, {
+      headers: { Origin: app.url }, data: { kind: "clinic.availability.route.check.v1" },
+    });
+    assert.equal(checkDenied.status(), 403);
     const foreign = await request.post(`${app.url}/api/clinic-availability/command`, {
       headers: { Origin: "https://foreign.example" }, data: { kind: "clinic.availability.approval.read.v1" },
     });
     assert.equal(foreign.status(), 403);
     assert.deepEqual(app.calls, []);
+  } finally { await app.close(); }
+});
+
+test("E2E-216 clinic admin rechecks current route eligibility without changing the approval", async ({ page, request }) => {
+  const app = await fixture("clinicAdmin");
+  try {
+    await page.goto(app.url);
+    await expect(page.getByLabel("Availability route readiness")).toContainText("No route approved");
+    await page.getByLabel("Cliniko business").selectOption("11");
+    await page.getByLabel("Practitioner ID", { exact: true }).fill("22");
+    await page.getByLabel("Appointment type ID", { exact: true }).fill("33");
+    await page.getByRole("button", { name: "Inspect selection" }).click();
+    await page.getByLabel("Route account reference").fill(route.accountRef);
+    await page.getByLabel("Dialed number").fill(route.dialedNumber);
+    await page.getByLabel("Route version").fill(route.routeVersion);
+    await page.getByRole("checkbox", { name: "I approve this route for provisional availability only." }).check();
+    await page.getByRole("button", { name: "Approve read-only route" }).click();
+    await expect(page.getByLabel("Availability route readiness")).toContainText("Eligible at the last route check");
+    const version = await app.setup.current({ actorRef: "browser-clinicAdmin", role: "clinicAdmin", scope });
+    assert.ok(version.ok);
+    assert.equal(version.value.version, 1);
+
+    app.setPractitionerActive(false);
+    await page.getByRole("button", { name: "Recheck route" }).click();
+    await expect(page.getByLabel("Availability route readiness")).toContainText("no longer eligible");
+    const blocked = await request.post(`${app.url}/api/clinic-availability/command`, {
+      headers: { Origin: app.url }, data: { kind: "clinic.availability.route.check.v1" },
+    });
+    assert.equal(blocked.status(), 400);
+    assert.deepEqual(await blocked.json(), { ok: false, error: { kind: "selectionUnavailable" } });
+    app.setPractitionerActive(true);
+    await page.getByRole("button", { name: "Recheck route" }).click();
+    await expect(page.getByLabel("Availability route readiness")).toContainText("Eligible at the last route check");
+    const unchanged = await app.setup.current({ actorRef: "browser-clinicAdmin", role: "clinicAdmin", scope });
+    assert.ok(unchanged.ok);
+    assert.equal(unchanged.value.version, 1);
+    await page.getByRole("button", { name: "Revoke availability route" }).click();
+    await expect(page.getByLabel("Availability route readiness")).toContainText("No route approved");
+    const body = await page.locator("body").innerText();
+    assert.equal(body.includes("secret-patient"), false);
+    assert.equal(body.includes("synthetic-key"), false);
   } finally { await app.close(); }
 });
 
@@ -229,7 +276,7 @@ test("E2E-215 rotated Cliniko credential makes a stored approval visibly require
     await page.getByLabel("Route version").fill(route.routeVersion);
     await page.getByRole("checkbox", { name: "I approve this route for provisional availability only." }).check();
     await page.getByRole("button", { name: "Approve read-only route" }).click();
-    await expect(page.getByLabel("Availability route readiness")).toContainText("Stored route matches");
+    await expect(page.getByLabel("Availability route readiness")).toContainText("Eligible at the last route check");
   } finally { await original.close(); }
 
   const rotated = await fixture("clinicAdmin", false, { store, apiKey: "synthetic-rotated-key-au5" });
@@ -244,7 +291,7 @@ test("E2E-215 rotated Cliniko credential makes a stored approval visibly require
     await page.getByRole("checkbox", { name: "I approve this route for provisional availability only." }).check();
     await page.getByRole("button", { name: "Approve read-only route" }).click();
     await expect(page.getByLabel("Availability approval status")).toContainText("version 2");
-    await expect(page.getByLabel("Availability route readiness")).toContainText("Stored route matches");
+    await expect(page.getByLabel("Availability route readiness")).toContainText("Eligible at the last route check");
     assert.ok((await rotated.setup.readApprovedRoute(scope, route)).ok);
   } finally { await rotated.close(); }
 
@@ -254,7 +301,7 @@ test("E2E-215 rotated Cliniko credential makes a stored approval visibly require
     await page.goto(denied.url);
     await expect(page.getByLabel("Availability approval status")).toContainText("version 2");
     await expect(page.getByLabel("Cliniko connection status")).toContainText("could not be checked");
-    await expect(page.getByLabel("Availability route readiness")).toContainText("cannot be checked");
+    await expect(page.getByLabel("Availability route readiness")).toContainText("Cliniko denied this connection");
     await expect(page.getByRole("alert")).toContainText("Cliniko rejected this connection");
   } finally { await denied.close(); }
 });

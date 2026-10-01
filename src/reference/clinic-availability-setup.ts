@@ -66,6 +66,8 @@ export interface ClinicAvailabilitySetup {
   inspect(actor: HostActor, selection: ClinicAvailabilitySelection):
     Promise<Result<ClinicAvailabilitySelectionSnapshot, ClinicAvailabilitySetupFailure>>;
   current(actor: HostActor): Promise<Result<ClinicAvailabilityApprovalState, ClinicAvailabilitySetupFailure>>;
+  /** Recheck the stored route and every approved selection against current provider metadata. */
+  checkApprovedRoute(actor: HostActor): Promise<Result<Readonly<{ eligible: true }>, ClinicAvailabilitySetupFailure>>;
   approve(actor: HostActor, route: ClinicAvailabilityRoute, selection: ClinicAvailabilitySelection, expectedVersion: number):
     Promise<Result<ClinicAvailabilityApprovalState, ClinicAvailabilitySetupFailure>>;
   approveAlternatives(actor: HostActor, route: ClinicAvailabilityRoute, selection: ClinicAvailabilitySelection,
