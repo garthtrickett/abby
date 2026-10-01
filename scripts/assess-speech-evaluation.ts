@@ -77,6 +77,7 @@ export async function assessSpeechReports(args: SpeechReportPaths & Readonly<{ s
     if (current.kind !== "realtime-transcription-evaluation" || config.corpusVersion !== corpusName ||
         config.corpusSha256 !== digest(corpusBytes) || config.adapterSha256 !== transcriptionHash ||
         config.model !== "gpt-live-transcribe" || config.contextVersion !== undefined ||
+        config.delay !== undefined || config.noiseReduction !== undefined ||
         !Array.isArray(current.results)) {
       throw new Error(`${name} report does not match current candidate`);
     }
