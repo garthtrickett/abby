@@ -38,7 +38,7 @@ async function main(): Promise<void> {
     throw new Error("unsupported transcription evaluation corpus");
   }
   const model = args.model ?? "gpt-live-transcribe";
-  if (model !== "gpt-live-transcribe" && model !== "gpt-transcribe") {
+  if (model !== "gpt-live-transcribe" && model !== "gpt-transcribe" && model !== "gpt-realtime-whisper") {
     throw new Error("unsupported transcription evaluation model");
   }
   if (args.context !== undefined && args.context !== "clinic-v1" && args.context !== "clinic-keywords-v1") {
