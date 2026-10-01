@@ -26,6 +26,7 @@ import { up as up023, down as down023 } from "./migrations/023_phone_index_crede
 import { up as up024, down as down024 } from "./migrations/024_cliniko_approval_alternatives.ts";
 import { up as up025, down as down025 } from "./migrations/025_clinic_operational_counts.ts";
 import { up as up026, down as down026 } from "./migrations/026_cliniko_budget_operational_counts.ts";
+import { up as up027, down as down027 } from "./migrations/027_cliniko_provider_unavailable_count.ts";
 
 function createMigrator<DB>(db: Kysely<DB>): Migrator {
   return new Migrator({
@@ -57,6 +58,7 @@ function createMigrator<DB>(db: Kysely<DB>): Migrator {
       "024_cliniko_approval_alternatives": { up: up024, down: down024 },
       "025_clinic_operational_counts": { up: up025, down: down025 },
       "026_cliniko_budget_operational_counts": { up: up026, down: down026 },
+      "027_cliniko_provider_unavailable_count": { up: up027, down: down027 },
     }) },
   });
 }

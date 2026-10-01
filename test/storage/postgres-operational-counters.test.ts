@@ -30,17 +30,21 @@ test("two worker processes atomically share scoped, patient-free operational tot
   const scope = { tenantId, clinicId: "clinic", locationId: "main" };
   const counters = new PostgresOperationalCounters(db);
   await Promise.all([runWorker(tenantId), runWorker(tenantId)]);
+  await counters.record(scope, "clinikoProviderUnavailable");
   assert.deepEqual(await counters.snapshot(scope), {
     admissionDenied: 80, callOwnerStarted: 0, voiceFailure: 0, callEnded: 0,
     clinikoBudgetDenied: 0, clinikoBudgetUnavailable: 0, clinikoProvider429: 0,
+    clinikoProviderUnavailable: 1,
   });
   assert.deepEqual(await counters.snapshot({ ...scope, locationId: "other" }), {
     admissionDenied: 0, callOwnerStarted: 0, voiceFailure: 0, callEnded: 0,
     clinikoBudgetDenied: 0, clinikoBudgetUnavailable: 0, clinikoProvider429: 0,
+    clinikoProviderUnavailable: 0,
   });
   assert.deepEqual(await counters.snapshot({ ...scope, clinicId: "other" }), {
     admissionDenied: 0, callOwnerStarted: 0, voiceFailure: 0, callEnded: 0,
     clinikoBudgetDenied: 0, clinikoBudgetUnavailable: 0, clinikoProvider429: 0,
+    clinikoProviderUnavailable: 0,
   });
   const columns = await sql<{ column_name: string }>`select column_name from information_schema.columns
     where table_schema = current_schema() and table_name = 'clinic_operational_counts'

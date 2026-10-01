@@ -12,7 +12,8 @@ test("operational HTTP read refuses malformed aggregate snapshots", async () => 
     fallbackNumbers: { "+6125550199": "+6125550188" }, bindingKey: Buffer.alloc(32, 0x44) });
   const tokenHex = "a".repeat(64);
   const counts = { admissionDenied: 1, callOwnerStarted: 1, voiceFailure: 0, callEnded: 0,
-    clinikoBudgetDenied: 0, clinikoBudgetUnavailable: 0, clinikoProvider429: 0 };
+    clinikoBudgetDenied: 0, clinikoBudgetUnavailable: 0, clinikoProvider429: 0,
+    clinikoProviderUnavailable: 0 };
   let snapshot: unknown = counts;
   const server = createTwilioIngressServer({ ingress,
     operationalRead: { tokenHex, snapshot: () => snapshot as OperationalCounts },

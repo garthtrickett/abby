@@ -101,6 +101,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       ...(process.env.ABBY_CLINIKO_BUDGET_USER_REF
         ? { sharedUserRef: process.env.ABBY_CLINIKO_BUDGET_USER_REF } : {}) });
     const availability = ClinikoAvailabilityReader.create({ scope, apiKey, rateBudget,
+      onProviderUnavailable: () => operationalCounters.record(scope, "clinikoProviderUnavailable"),
       contactEmail,
       businessId: required("ABBY_CLINIKO_BUSINESS_ID"),
       practitionerId: required("ABBY_CLINIKO_PRACTITIONER_ID"),
@@ -124,6 +125,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
         availability: availability.value, approval, rateBudget, clinicDate,
         alternativeAvailability: choice => {
           const reader = ClinikoAvailabilityReader.create({ scope, apiKey, rateBudget, contactEmail,
+            onProviderUnavailable: () => operationalCounters.record(scope, "clinikoProviderUnavailable"),
             businessId: choice.businessId, practitionerId: choice.practitionerId,
             appointmentTypeId: choice.appointmentTypeId }, ports.clinikoFetch);
           return reader.ok ? reader.value : null;

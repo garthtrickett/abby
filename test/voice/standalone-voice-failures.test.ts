@@ -251,10 +251,16 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
           assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
           const counts = await fixture.operationalSnapshot();
           assert.equal(counts.clinikoProvider429, 0);
+          assert.equal(counts.clinikoProviderUnavailable, 1);
+        }
+        if (fault === "cliniko-timeout") {
+          const counts = await fixture.operationalSnapshot();
+          assert.equal(counts.clinikoProviderUnavailable, 1);
         }
         if (fault === "cliniko-rate-limit") {
           const counts = await fixture.operationalSnapshot();
           assert.equal(counts.clinikoProvider429, 1);
+          assert.equal(counts.clinikoProviderUnavailable, 0);
           assert.equal(counts.clinikoBudgetDenied, 0);
           assert.equal(counts.clinikoBudgetUnavailable, 0);
           assert.equal(JSON.stringify(counts).includes(caller), false);

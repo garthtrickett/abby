@@ -12,6 +12,8 @@ export type ClinikoAvailabilityConfig = Readonly<{
   practitionerId: string;
   appointmentTypeId: string;
   rateBudget?: ClinikoRequestBudget;
+  /** Fixed-code operational signal for a failed provider request; never receives patient data. */
+  onProviderUnavailable?: () => void | Promise<void>;
 }>;
 
 export type ClinikoAvailabilityFailure = AvailabilityReadFailure;
@@ -90,6 +92,7 @@ export class ClinikoAvailabilityReader {
   private readonly observedClock: () => string;
   private readonly rateBudget: ClinikoRequestBudget;
   private readonly credentialHash: string;
+  private readonly onProviderUnavailable: (() => void | Promise<void>) | undefined;
 
   private constructor(config: ClinikoAvailabilityConfig, shard: string, fetchPort: typeof fetch, observedClock: () => string) {
     this.scope = structuredClone(config.scope);
@@ -103,6 +106,7 @@ export class ClinikoAvailabilityReader {
     this.observedClock = observedClock;
     this.rateBudget = config.rateBudget ?? new ClinikoReadBudget();
     this.credentialHash = clinikoCredentialFingerprint(config.apiKey);
+    this.onProviderUnavailable = config.onProviderUnavailable;
   }
 
   static create(config: ClinikoAvailabilityConfig, fetchPort: typeof fetch = fetch, observedClock: () => string = () => new Date().toISOString()): Result<ClinikoAvailabilityReader, ClinikoAvailabilityFailure> {
@@ -110,7 +114,10 @@ export class ClinikoAvailabilityReader {
     if (!shard || !config.apiKey.slice(0, -(shard.length + 1)) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.contactEmail) ||
         !config.scope.tenantId || !config.scope.clinicId || !config.scope.locationId ||
         !validId(config.businessId) || !validId(config.practitionerId) || !validId(config.appointmentTypeId) ||
-        (config.rateBudget !== undefined && !isClinikoRequestBudget(config.rateBudget))) return err({ kind: "invalidConfig" });
+        (config.rateBudget !== undefined && !isClinikoRequestBudget(config.rateBudget)) ||
+        (config.onProviderUnavailable !== undefined && typeof config.onProviderUnavailable !== "function")) {
+      return err({ kind: "invalidConfig" });
+    }
     return ok(new ClinikoAvailabilityReader(config, shard, fetchPort, observedClock));
   }
 
@@ -134,6 +141,11 @@ export class ClinikoAvailabilityReader {
 
   credentialFingerprint(): string { return this.credentialHash; }
 
+  private reportProviderUnavailable(): void {
+    try { void Promise.resolve(this.onProviderUnavailable?.()).catch(() => undefined); }
+    catch { /* Diagnostics cannot change caller wording or the provider decision. */ }
+  }
+
   private async get(path: string): Promise<Result<unknown, ClinikoAvailabilityFailure>> {
     const limited = await claimClinikoBudget(this.rateBudget);
     if (limited) return err(limited);
@@ -146,13 +158,17 @@ export class ClinikoAvailabilityReader {
         signal: AbortSignal.timeout(15_000),
       });
     } catch {
+      this.reportProviderUnavailable();
       return err({ kind: "unavailable" });
     }
     if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
     if (response.status === 404) return err({ kind: "notFound" });
     if (response.status === 429) return err(await observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset")));
     if (response.status === 422) return err({ kind: "invalidRange" });
-    if (response.status >= 500) return err({ kind: "unavailable" });
+    if (response.status >= 500) {
+      this.reportProviderUnavailable();
+      return err({ kind: "unavailable" });
+    }
     if (response.status !== 200) return err({ kind: "malformed" });
     return boundedJson(response);
   }
