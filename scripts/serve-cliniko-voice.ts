@@ -13,6 +13,7 @@ import { connectPostgres } from "../src/storage/connect.ts";
 import { PostgresActiveCallClaims } from "../src/storage/postgres-active-call-claims.ts";
 import { PostgresClinikoRequestBudget } from "../src/storage/postgres-cliniko-request-budget.ts";
 import { PostgresClinikoApprovalStore } from "../src/storage/postgres-cliniko-approval-store.ts";
+import { PostgresOperationalCounters } from "../src/storage/postgres-operational-counters.ts";
 import { PostgresPolicyStore } from "../src/storage/postgres-policy-store.ts";
 import type { ClinikoVoiceServerConfig } from "../src/standalone/cliniko-voice-server.ts";
 
@@ -85,6 +86,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
   const key = bindingKey();
   const clinicDate = clinicToday(required("ABBY_CLINIKO_TIME_ZONE"));
   const db = connectPostgres(connectionString);
+  const operationalCounters = ports.operationalCounters ?? new PostgresOperationalCounters(db);
   try {
     const healthy = async (): Promise<boolean> => {
       try { await sql`select 1`.execute(db); return true; }
@@ -134,7 +136,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       admitWebhook: async event => !!testCaller && !!event && event.key.accountRef === accountSid &&
         event.dialedNumber === dialedNumber && event.presentedCallerNumber === testCaller && await healthy(),
       health: healthy,
-      ...(ports.operationalCounters ? { operationalCounters: ports.operationalCounters } : {}),
+      operationalCounters,
       ...(operationalTokenHex ? { operationalRead: { tokenHex: operationalTokenHex, scope } } : {}),
     });
     if (!prepared.ok) throw new Error(`standalone storage unavailable: ${prepared.error.kind}`);
@@ -149,7 +151,10 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       process.once("SIGTERM", resolve);
     });
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
-  } finally { await db.destroy(); }
+  } finally {
+    await operationalCounters.drain?.().catch(() => undefined);
+    await db.destroy();
+  }
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
