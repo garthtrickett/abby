@@ -324,7 +324,33 @@ for (const kind of kinds) {
     assert.equal(ended.terminal?.reason, "mediaFailure");
   });
 
-  test(`${kind}: final turn and playback completion gate one booking`, async () => {
+  test(`E2E-019 ${kind}: partial, duplicate final and stale generation yield one caller turn`, async () => {
+    const app = await fixture(kind, `${kind}-final-turn-dedup`, true);
+    const generation = value(await app.session.speechStarted(at(2)));
+    value(app.session.acceptTranscript({ kind: "partial", sessionId: app.sessionId, generation,
+      utteranceId: "first", text: "Book" }));
+    assert.equal(Object.keys(value(await app.ledger.read(app.callId, app.scope)).actions).length, 0);
+    const final = { kind: "segmentFinal" as const, sessionId: app.sessionId, generation,
+      utteranceId: "first", text: "Book physio", quality: "clear" as const };
+    value(app.session.acceptTranscript(final));
+    value(app.session.acceptTranscript(final));
+    failure(app.session.acceptTranscript({ ...final, text: "Book another service" }), "keyMismatch");
+    const planned = value(await app.session.finishTurn(at(3)));
+    assert.equal(planned.processedTurnIds.length, 1);
+    assert.equal(Object.keys(planned.actions).length, 1);
+    assert.equal(app.host.bookings(app.scope).length, 0);
+
+    const nextGeneration = value(await app.session.speechStarted(at(4)));
+    assert.equal(nextGeneration, generation + 1);
+    failure(app.session.acceptTranscript(final), "staleGeneration");
+    const afterStale = value(await app.ledger.read(app.callId, app.scope));
+    assert.deepEqual(afterStale.processedTurnIds, planned.processedTurnIds);
+    assert.equal(Object.keys(afterStale.actions).length, 1);
+    assert.equal(app.host.bookings(app.scope).length, 0);
+    value(await app.session.end(at(5), "callerDisconnected"));
+  });
+
+  test(`E2E-020 ${kind}: final turn and playback completion gate one booking`, async () => {
     const app = await fixture(kind, `${kind}-confirmed`, true);
     const generation = value(await app.session.speechStarted(at(2)));
     const sessionId = `session-${kind}-confirmed`;
@@ -819,7 +845,7 @@ for (const kind of kinds) {
     assert.deepEqual(app.playback.queuedTexts, []);
   });
 
-  test(`${kind}: interruption and late playback ack cannot confirm booking`, async () => {
+  test(`E2E-021 ${kind}: interruption and late playback ack cannot confirm booking`, async () => {
     const app = await fixture(kind, `${kind}-interrupt`, true);
     const planned = await bookTurn(app);
     const action = Object.values(planned.actions)[0];
