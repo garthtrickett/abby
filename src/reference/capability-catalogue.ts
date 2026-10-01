@@ -110,6 +110,7 @@ const clinicAvailabilitySelectionSnapshot = object({ scope, selection: clinicAva
 const clinicAvailabilityApproval = object({ scope, route: clinicAvailabilityRoute,
   selection: clinicAvailabilitySelection,
   alternatives: { type: "array", items: clinicAvailabilitySelection, maxItems: 2, uniqueItems: true },
+  businessTimeZone: { type: "string", minLength: 1, maxLength: 128 },
   credentialFingerprint: key, catalogueObservedAt: str,
   approvedBy: key, approvedAt: str, patientActionMode: { const: "unavailable" },
   patientRequestMode: { const: "unavailable" } });

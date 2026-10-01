@@ -89,6 +89,7 @@ test("B4 PostgreSQL keeps only ordered alternative IDs and clears them on revoca
       { businessId: "11", practitionerId: "44", appointmentTypeId: "55", policyVersion: "0" },
       { businessId: "11", practitionerId: "66", appointmentTypeId: "77", policyVersion: "0" },
     ],
+    businessTimeZone: "Australia/Sydney",
     credentialFingerprint: "a".repeat(64), catalogueObservedAt: at,
     approvedBy: "clinic-admin", approvedAt: at,
     patientActionMode: "unavailable" as const, patientRequestMode: "unavailable" as const,
@@ -108,7 +109,7 @@ test("B4 PostgreSQL keeps only ordered alternative IDs and clears them on revoca
   assert.deepEqual(await store.read(scope), { ok: true, value: { version: 2, approval: null } });
 });
 
-test("B4 migration preserves a version 23 single-choice approval as an empty alternative list", async () => {
+test("B4 migration disables a legacy approval without a recorded business time zone and permits reapproval", async () => {
   const databaseName = `abby_test_approval_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(url!);
   target.pathname = "/" + databaseName;
@@ -129,10 +130,15 @@ test("B4 migration preserves a version 23 single-choice approval as an empty alt
     const result = await new PostgresClinikoApprovalStore(legacy).read(scope);
     assert.ok(result.ok);
     assert.equal(result.value.version, 1);
-    assert.deepEqual(result.value.approval?.alternatives, []);
-    assert.deepEqual(result.value.approval?.selection, {
-      businessId: "11", practitionerId: "22", appointmentTypeId: "33", policyVersion: "0",
-    });
+    assert.equal(result.value.approval, null);
+    const fresh = { scope, route: { accountRef: "ACsynthetic", dialedNumber: "+61255501001",
+      routeVersion: "route-1" }, selection: { businessId: "11", practitionerId: "22",
+      appointmentTypeId: "33", policyVersion: "0" }, alternatives: [],
+      businessTimeZone: "Australia/Sydney", credentialFingerprint: "a".repeat(64),
+      catalogueObservedAt: at, approvedAt: at, approvedBy: "clinic-admin",
+      patientActionMode: "unavailable" as const, patientRequestMode: "unavailable" as const };
+    assert.deepEqual(await new PostgresClinikoApprovalStore(legacy).change(scope, 1, fresh, "clinic-admin"),
+      { ok: true, value: { version: 2, approval: fresh } });
   } finally {
     await legacy.destroy();
     await sql.raw(`drop database "${databaseName}" with (force)`).execute(db);

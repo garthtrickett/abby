@@ -47,6 +47,7 @@ export type ClinicAvailabilityApprovalState = Readonly<{
     route: ClinicAvailabilityRoute;
     selection: ClinicAvailabilitySelection;
     alternatives: readonly ClinicAvailabilitySelection[];
+    businessTimeZone: string;
     credentialFingerprint: string;
     catalogueObservedAt: string;
     approvedBy: string;

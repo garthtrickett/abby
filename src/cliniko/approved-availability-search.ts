@@ -11,14 +11,17 @@ import { ClinikoAvailabilityReader, availabilityReadDeadlineMs } from "./availab
 export class ClinikoApprovedAvailabilitySearch implements AvailabilityHost {
   private readonly readers: readonly ClinikoAvailabilityReader[];
   private readonly now: () => string;
+  private readonly expectedTimeZone: string | undefined;
 
-  constructor(readers: readonly ClinikoAvailabilityReader[], now: () => string = () => new Date().toISOString()) {
+  constructor(readers: readonly ClinikoAvailabilityReader[], now: () => string = () => new Date().toISOString(),
+              expectedTimeZone?: string) {
     if (!Array.isArray(readers) || readers.length < 1 || readers.length > 3 ||
         readers.some(reader => !(reader instanceof ClinikoAvailabilityReader))) {
       throw new TypeError("one to three Cliniko readers required");
     }
     this.readers = [...readers];
     this.now = now;
+    this.expectedTimeZone = expectedTimeZone;
   }
 
   async list(scope: LocationScope, from: string, to: string, parentSignal?: AbortSignal):
@@ -41,6 +44,9 @@ export class ClinikoApprovedAvailabilitySearch implements AvailabilityHost {
       if (result.value.kind === "notEligible") {
         ineligible ??= result.value;
         continue;
+      }
+      if (this.expectedTimeZone && result.value.timeZone !== this.expectedTimeZone) {
+        return err({ kind: "unavailable" });
       }
       if (timeZone && result.value.timeZone !== timeZone) return err({ kind: "unavailable" });
       timeZone = result.value.timeZone;

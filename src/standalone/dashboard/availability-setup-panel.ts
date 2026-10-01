@@ -180,7 +180,7 @@ export class AvailabilitySetupPanel {
       <p class="status" aria-label="Availability approval status">${approved
         ? `Stored approval: ${approved.selection.businessId} / ${approved.selection.practitionerId} / ${approved.selection.appointmentTypeId} · version ${this.approval?.version} · ${approved.alternatives.length} alternatives`
         : `No approved availability route · version ${this.approval?.version ?? "unknown"}`}</p>
-      ${approved ? html`<p class="muted">Number ${approved.route.dialedNumber} · route ${approved.route.routeVersion} · approved by ${approved.approvedBy}</p>` : ""}
+      ${approved ? html`<p class="muted">Number ${approved.route.dialedNumber} · route ${approved.route.routeVersion} · clinic time zone ${approved.businessTimeZone} · approved by ${approved.approvedBy}</p>` : ""}
       <label>Cliniko business <select aria-label="Cliniko business"
         @change=${(event: Event) => this.setField("businessId", (event.target as HTMLSelectElement).value)}>
         ${this.catalogue?.businesses.map(business => html`<option value=${business.businessId} ?selected=${business.businessId === this.selection.businessId}>${business.name} (${business.businessId})${business.archived ? " · archived" : ""}${business.onlineBooking ? "" : " · online booking off"}</option>`) ?? ""}

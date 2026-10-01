@@ -22,6 +22,8 @@ export type ClinikoSelectionApproval = Readonly<{
   selection: ClinikoSelection;
   /** Ordered fallback choices, each explicitly approved for the same business and policy. */
   alternatives: readonly ClinikoSelection[];
+  /** Cliniko business time zone at approval; the caller's calendar date must use this zone. */
+  businessTimeZone: string;
   credentialFingerprint: string;
   catalogueObservedAt: string;
   approvedBy: string;
@@ -68,6 +70,11 @@ const sameScope = (left: LocationScope, right: LocationScope): boolean =>
   left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
 const validInstant = (value: unknown): value is string =>
   typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value));
+const validTimeZone = (value: unknown): value is string => {
+  if (typeof value !== "string" || value.length < 1 || value.length > 128) return false;
+  try { new Intl.DateTimeFormat("en-AU", { timeZone: value }); return true; }
+  catch { return false; }
+};
 const catalogueFailure = (failure: ClinikoCatalogueFailure): ClinikoSetupFailure => ({
   kind: failure.kind === "forbidden" ? "credentialForbidden" :
     failure.kind === "rateLimited" ? "catalogueRateLimited" : "catalogueUnavailable",
@@ -76,7 +83,8 @@ export const isClinikoApprovalState = (state: ClinikoApprovalState): boolean =>
   !!state && Number.isSafeInteger(state.version) && state.version >= 0 &&
   (state.approval === null || (!!state.approval && validScope(state.approval.scope) &&
     validRoute(state.approval.route) && validSelection(state.approval.selection) &&
-    validAlternatives(state.approval.selection, state.approval.alternatives) && validRef(state.approval.approvedBy) &&
+    validAlternatives(state.approval.selection, state.approval.alternatives) &&
+    validTimeZone(state.approval.businessTimeZone) && validRef(state.approval.approvedBy) &&
     validInstant(state.approval.approvedAt) && validInstant(state.approval.catalogueObservedAt) &&
     /^[0-9a-f]{64}$/.test(state.approval.credentialFingerprint) &&
     state.approval.patientActionMode === "unavailable" && state.approval.patientRequestMode === "unavailable"));
@@ -229,6 +237,7 @@ export class ClinikoCatalogueSetup {
     const approval: ClinikoSelectionApproval = {
       scope: structuredClone(allowed.value), route: structuredClone(route), selection: { ...selection },
       alternatives: alternatives.map(choice => ({ ...choice })),
+      businessTimeZone: bound.value.timeZone!,
       credentialFingerprint: bound.value.credentialFingerprint,
       catalogueObservedAt: bound.value.observedAt, approvedBy: actor.actorRef, approvedAt,
       patientActionMode: "unavailable", patientRequestMode: "unavailable",
@@ -294,6 +303,7 @@ export class ClinikoCatalogueSetup {
         approval.credentialFingerprint !== this.reader.credentialFingerprint()) return err({ kind: "staleApproval" });
     const bound = await this.bind(scope, route, approval.selection);
     if (!bound.ok) return bound;
+    if (bound.value.timeZone !== approval.businessTimeZone) return err({ kind: "selectionUnavailable" });
     for (const alternative of approval.alternatives) {
       const next = await this.bind(scope, route, alternative);
       if (!next.ok) return next;

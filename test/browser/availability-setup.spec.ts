@@ -81,7 +81,7 @@ async function fixture(role: "clinicAdmin" | "staff", uncertainApproval = false)
     }) };
 }
 
-test("E2E-195 clinic admin approves and revokes only a read-only availability route in the browser", async ({ page, request }) => {
+test("E2E-195 E2E-209 clinic admin approves and revokes only a read-only availability route in the browser", async ({ page, request }) => {
   const app = await fixture("clinicAdmin");
   try {
     await page.goto(app.url);
@@ -94,6 +94,7 @@ test("E2E-195 clinic admin approves and revokes only a read-only availability ro
     await page.getByLabel("Appointment type ID", { exact: true }).fill("33");
     await page.getByRole("button", { name: "Inspect selection" }).click();
     await expect(page.getByLabel("Availability selection inspection")).toContainText("Eligible candidate for read-only availability");
+    await expect(page.getByLabel("Availability selection inspection")).toContainText("Clinic time zone: Australia/Sydney");
     await page.getByLabel("Route account reference").fill(route.accountRef);
     await page.getByLabel("Dialed number").fill(route.dialedNumber);
     await page.getByLabel("Route version").fill(route.routeVersion);
@@ -102,10 +103,12 @@ test("E2E-195 clinic admin approves and revokes only a read-only availability ro
     await expect(page.getByLabel("Availability approval status")).toContainText("Stored approval: 11 / 22 / 33 · version 1");
     const admitted = await app.setup.readApprovedRoute(scope, route);
     assert.ok(admitted.ok);
+    assert.equal(admitted.value.businessTimeZone, "Australia/Sydney");
     assert.equal(admitted.value.patientActionMode, "unavailable");
     assert.equal(admitted.value.patientRequestMode, "unavailable");
     await page.reload();
     await expect(page.getByLabel("Availability approval status")).toContainText("Stored approval: 11 / 22 / 33 · version 1");
+    await expect(page.getByText("clinic time zone Australia/Sydney", { exact: false })).toBeVisible();
     await expect(page.getByLabel("Cliniko business")).toHaveValue("11");
     await page.getByRole("button", { name: "Revoke availability route" }).click();
     await expect(page.getByLabel("Availability approval status")).toContainText("No approved availability route · version 2");

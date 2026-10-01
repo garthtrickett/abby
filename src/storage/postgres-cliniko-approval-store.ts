@@ -24,6 +24,7 @@ const emptyApproval = {
   account_ref: null, dialed_number: null, route_version: null, business_id: null,
   practitioner_id: null, appointment_type_id: null, policy_version: null,
   credential_fingerprint: null, catalogue_observed_at: null, approved_at: null,
+  business_time_zone: null,
   alternative_1_practitioner_id: null, alternative_1_appointment_type_id: null,
   alternative_2_practitioner_id: null, alternative_2_appointment_type_id: null,
 } as const;
@@ -42,6 +43,9 @@ function decode(row: ClinikoCatalogueApprovals | undefined, scope: LocationScope
     }
     return ok({ version: row.version, approval: null });
   }
+  // Earlier approvals had no time-zone binding. Keep their version so an admin can reapprove,
+  // but never activate one as a caller route after this migration.
+  if (row.business_time_zone === null) return ok({ version: row.version, approval: null });
   if (!(row.catalogue_observed_at instanceof Date) || !Number.isFinite(row.catalogue_observed_at.getTime()) ||
       !(row.approved_at instanceof Date) || !Number.isFinite(row.approved_at.getTime())) {
     return err({ kind: "storageFailure" });
@@ -65,6 +69,7 @@ function decode(row: ClinikoCatalogueApprovals | undefined, scope: LocationScope
     selection: { businessId: row.business_id!, practitionerId: row.practitioner_id!,
       appointmentTypeId: row.appointment_type_id!, policyVersion: row.policy_version! },
     alternatives,
+    businessTimeZone: row.business_time_zone,
     credentialFingerprint: row.credential_fingerprint!,
     catalogueObservedAt: row.catalogue_observed_at.toISOString(),
     approvedBy: row.changed_by, approvedAt: row.approved_at.toISOString(),
@@ -125,6 +130,7 @@ export class PostgresClinikoApprovalStore implements ClinikoApprovalStore {
             practitioner_id: approval.selection.practitionerId,
             appointment_type_id: approval.selection.appointmentTypeId,
             policy_version: approval.selection.policyVersion,
+            business_time_zone: approval.businessTimeZone,
             credential_fingerprint: approval.credentialFingerprint,
             catalogue_observed_at: approval.catalogueObservedAt, approved_at: approval.approvedAt,
             alternative_1_practitioner_id: approval.alternatives[0]?.practitionerId ?? null,

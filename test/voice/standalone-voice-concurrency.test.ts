@@ -154,7 +154,7 @@ test("E2E-198 eight parallel signed calls isolate tenants and exhaust one Clinik
       const binding = { accountRef: accountSid, dialedNumber: route.number, routeVersion };
       return { dialedNumber: route.number, scope, routeVersion, availability: selection.value,
         rateBudget: budget, approval: syntheticCatalogueApproval(selection.value, scope, binding),
-        clinicDate: () => clinicDate,
+        timeZone: "Australia/Sydney", clinicDate: () => clinicDate,
         keypadAvailabilityGreeting: { scope, approved: true as const, version: "concurrent-greeting-v1",
           ownerRef: "synthetic-admin", approvedText: route.greeting } };
     });

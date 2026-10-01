@@ -78,7 +78,7 @@ test("E2E-143 standalone voice server refuses unsafe storage before opening a li
         availability: availability.value, rateBudget,
         approval: syntheticCatalogueApproval(availability.value, scope, {
           accountRef: `AC${"1".repeat(32)}`, dialedNumber: "+6125550199", routeVersion: "v1" }),
-        clinicDate: () => "2026-09-29",
+        timeZone: "Australia/Sydney", clinicDate: () => "2026-09-29",
         keypadAvailabilityGreeting: { scope, version: "startup-keypad-v1", ownerRef: "synthetic-clinic-approval",
           approved: true, approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],
       openai: { apiKey: "synthetic-openai-key", intentModel: "configured-model" },
@@ -163,7 +163,7 @@ test("E2E-138, E2E-139, and E2E-140 local standalone server reads keypad availab
       routes: [{ dialedNumber: number, scope, routeVersion: "v1", availability: availability.value, rateBudget,
         approval: syntheticCatalogueApproval(availability.value, scope, { accountRef: accountSid,
           dialedNumber: number, routeVersion: "v1" }),
-        clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: { scope, version: "keypad-v1",
+        timeZone: "Australia/Sydney", clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: { scope, version: "keypad-v1",
           ownerRef: "clinic-approval", approved: true,
           approvedText: "Hello. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],
       openai: { apiKey: "synthetic-openai-key", intentModel: "configured-model",
@@ -335,7 +335,7 @@ test("E2E-151 signed standalone call switches speech models before the first out
       routes: [{ dialedNumber: number, scope, routeVersion: "v1", availability: availability.value, rateBudget,
         approval: syntheticCatalogueApproval(availability.value, scope, { accountRef: accountSid,
           dialedNumber: number, routeVersion: "v1" }),
-        clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: expectedGreeting }],
+        timeZone: "Australia/Sydney", clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: expectedGreeting }],
       openai: { apiKey: "synthetic-openai-key", intentModel: "configured-model",
         speechFallbackModel: "tts-1", speechPrimaryFirstChunkMs: 100,
         fetch: (async (url, init) => {

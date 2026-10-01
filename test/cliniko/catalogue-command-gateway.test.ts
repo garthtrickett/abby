@@ -106,6 +106,7 @@ test("E2E-194 a mis-scoped approval store cannot disclose another clinic's confi
   const foreignStore: ClinikoApprovalStore = {
     async read() { return { ok: true, value: { version: 1, approval: {
       scope: { ...scope, clinicId: "other-clinic" }, route, selection, alternatives: [],
+      businessTimeZone: "Australia/Sydney",
       credentialFingerprint: "fingerprint", catalogueObservedAt: now,
       approvedBy: "host-clinicAdmin", approvedAt: now,
       patientActionMode: "unavailable", patientRequestMode: "unavailable",

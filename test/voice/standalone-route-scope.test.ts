@@ -37,7 +37,7 @@ test("E2E-154 standalone voice refuses a Cliniko reader bound to another clinic 
             availability: reader.value, rateBudget,
             approval: syntheticCatalogueApproval(reader.value, routeScope, {
               accountRef: `AC${"1".repeat(32)}`, dialedNumber: "+6125550199", routeVersion: "v1" }),
-            clinicDate: () => "2026-09-29",
+            timeZone: "Australia/Sydney", clinicDate: () => "2026-09-29",
             keypadAvailabilityGreeting: { scope: routeScope, version: "route-keypad-v1",
               ownerRef: "synthetic-clinic-approval", approved: true,
               approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],
@@ -70,7 +70,7 @@ test("E2E-155 standalone voice refuses a missing or unapproved usable keypad rou
           availability: reader.value, rateBudget,
           approval: syntheticCatalogueApproval(reader.value, scope, {
             accountRef: `AC${"1".repeat(32)}`, dialedNumber: "+6125550199", routeVersion: "v1" }),
-          clinicDate: () => "2026-09-29",
+          timeZone: "Australia/Sydney", clinicDate: () => "2026-09-29",
           keypadAvailabilityGreeting: greeting } as unknown as ClinikoVoiceRoute;
         await assert.rejects(createStandaloneClinikoVoiceServer({ db,
           activeCallClaims: new PostgresActiveCallClaims("postgresql://postgres@127.0.0.1:1/unused",
@@ -120,7 +120,7 @@ test("E2E-163 standalone voice refuses a process-local, wrong-key, or foreign Cl
         rateBudget: budget,
         approval: syntheticCatalogueApproval(availability, scope, {
           accountRef: `AC${"1".repeat(32)}`, dialedNumber: "+6125550199", routeVersion: "v1" }),
-        clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: greeting }],
+        timeZone: "Australia/Sydney", clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: greeting }],
       openai: { apiKey: "synthetic-openai-key", intentModel: "configured-model" },
       readiness: async () => ok(true as const),
     });
