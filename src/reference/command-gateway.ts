@@ -18,7 +18,8 @@ import type { WriteStopAuditPage, WriteStopStatus } from "../core/write-stop.ts"
 import type { KnowledgeCatalogue, KnowledgeEntry, KnowledgeFailure } from "./knowledge-catalogue.ts";
 import type { ClinicAvailabilitySetup, ClinicAvailabilityApprovalState, ClinicAvailabilitySetupFailure,
   ClinicAvailabilityRoute, ClinicAvailabilityBusinessCatalogue, ClinicAvailabilitySelection,
-  ClinicAvailabilitySelectionSnapshot } from "./clinic-availability-setup.ts";
+  ClinicAvailabilitySelectionSnapshot, ClinicAvailabilityPractitionerCatalogue,
+  ClinicAvailabilityTypeCatalogue } from "./clinic-availability-setup.ts";
 
 export type { CapabilityDescriptor } from "./capability-catalogue.ts";
 
@@ -46,6 +47,8 @@ export type GatewayCommand =
   | Readonly<{ kind: "knowledge.approve.v1"; sourceRef: string; expectedVersion: string }>
   | Readonly<{ kind: "knowledge.revoke.v1"; sourceRef: string; expectedVersion: string }>
   | Readonly<{ kind: "clinic.availability.businesses.list.v1" }>
+  | Readonly<{ kind: "clinic.availability.practitioners.list.v1"; businessId: string }>
+  | Readonly<{ kind: "clinic.availability.types.list.v1"; businessId: string; practitionerId: string }>
   | Readonly<{ kind: "clinic.availability.selection.inspect.v1"; selection: ClinicAvailabilitySelection }>
   | Readonly<{ kind: "clinic.availability.approval.read.v1" }>
   | Readonly<{ kind: "clinic.availability.route.check.v1" }>
@@ -77,6 +80,8 @@ export type GatewayReply =
   | Readonly<{ kind: "knowledgeList"; entries: readonly KnowledgeEntry[] }>
   | Readonly<{ kind: "knowledgeEntry"; entry: KnowledgeEntry }>
   | Readonly<{ kind: "clinicAvailabilityBusinesses"; catalogue: ClinicAvailabilityBusinessCatalogue }>
+  | Readonly<{ kind: "clinicAvailabilityPractitioners"; catalogue: ClinicAvailabilityPractitionerCatalogue }>
+  | Readonly<{ kind: "clinicAvailabilityTypes"; catalogue: ClinicAvailabilityTypeCatalogue }>
   | Readonly<{ kind: "clinicAvailabilitySelection"; snapshot: ClinicAvailabilitySelectionSnapshot }>
   | Readonly<{ kind: "clinicAvailabilityApprovalState"; state: ClinicAvailabilityApprovalState }>
   | Readonly<{ kind: "clinicAvailabilityRouteCheck"; eligible: true }>
@@ -138,7 +143,8 @@ export class CommandGateway {
     if (this.actor.role !== "agent" && this.reception.staffLifecycleEnabled()) permitted.push("staff.change.v1");
     if (this.actor.role === "clinicAdmin") {
       if (this.knowledgeCatalogue) permitted.push("knowledge.list.v1", "knowledge.draft.save.v1", "knowledge.approve.v1", "knowledge.revoke.v1");
-      if (this.availabilitySetup) permitted.push("clinic.availability.businesses.list.v1", "clinic.availability.selection.inspect.v1",
+      if (this.availabilitySetup) permitted.push("clinic.availability.businesses.list.v1",
+        "clinic.availability.practitioners.list.v1", "clinic.availability.types.list.v1", "clinic.availability.selection.inspect.v1",
         "clinic.availability.approval.read.v1", "clinic.availability.route.check.v1", "clinic.availability.approval.change.v1",
         "clinic.availability.approval.change.v2", "clinic.availability.approval.revoke.v1");
       permitted.push("settings.automation.enabled.change.v1", "settings.automation.audit.v1",
@@ -252,6 +258,16 @@ export class CommandGateway {
         if (!this.availabilitySetup) return err({ kind: "forbidden" });
         const result = await this.availabilitySetup.businesses(this.actor);
         return result.ok ? ok({ kind: "clinicAvailabilityBusinesses", catalogue: result.value }) : result;
+      }
+      case "clinic.availability.practitioners.list.v1": {
+        if (!this.availabilitySetup) return err({ kind: "forbidden" });
+        const result = await this.availabilitySetup.practitioners(this.actor, command.businessId);
+        return result.ok ? ok({ kind: "clinicAvailabilityPractitioners", catalogue: result.value }) : result;
+      }
+      case "clinic.availability.types.list.v1": {
+        if (!this.availabilitySetup) return err({ kind: "forbidden" });
+        const result = await this.availabilitySetup.appointmentTypes(this.actor, command.businessId, command.practitionerId);
+        return result.ok ? ok({ kind: "clinicAvailabilityTypes", catalogue: result.value }) : result;
       }
       case "clinic.availability.selection.inspect.v1": {
         if (!this.availabilitySetup) return err({ kind: "forbidden" });

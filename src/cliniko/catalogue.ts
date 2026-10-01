@@ -30,6 +30,25 @@ export type ClinikoBusinessCatalogue = Readonly<{
   status: "complete";
   businesses: readonly ClinikoBusinessOption[];
 }>;
+export type ClinikoPractitionerCatalogue = Readonly<{
+  scope: LocationScope;
+  businessId: string;
+  observedAt: string;
+  credentialFingerprint: string;
+  status: "complete";
+  practitioners: readonly Readonly<{ practitionerId: string; name: string; active: boolean; onlineBooking: boolean }>[];
+}>;
+export type ClinikoTypeCatalogue = Readonly<{
+  scope: LocationScope;
+  businessId: string;
+  practitionerId: string;
+  observedAt: string;
+  credentialFingerprint: string;
+  status: "complete";
+  appointmentTypes: readonly Readonly<{
+    appointmentTypeId: string; name: string; onlineBooking: boolean; archived: boolean; businessSelected: boolean;
+  }>[];
+}>;
 
 export type ClinikoSelection = Readonly<{
   businessId: string;
@@ -221,6 +240,60 @@ export class ClinikoCatalogueReader {
     const observedAt = this.observedAt();
     return observedAt.ok ? ok({ scope: structuredClone(this.scope), observedAt: observedAt.value,
       credentialFingerprint: this.credentialHash, status: "complete", businesses: options }) : observedAt;
+  }
+
+  /** Candidate metadata for an admin; relationship membership is rechecked at approval and call time. */
+  async practitioners(scope: LocationScope, businessId: string):
+    Promise<Result<ClinikoPractitionerCatalogue, ClinikoCatalogueFailure>> {
+    if (!validScope(scope) || !sameScope(this.scope, scope)) return err({ kind: "scopeMismatch" });
+    if (!validId(businessId)) return err({ kind: "invalidSelection" });
+    const fetched = await this.list(`/businesses/${businessId}/practitioners`, "practitioners");
+    if (!fetched.ok) return fetched;
+    const practitioners: ClinikoPractitionerCatalogue["practitioners"][number][] = [];
+    for (const row of fetched.value) {
+      if (!validId(row.id) || !(typeof row.active === "boolean" || row.active === null) ||
+          !(typeof row.show_in_online_bookings === "boolean" || row.show_in_online_bookings === null)) {
+        return err({ kind: "malformed" });
+      }
+      practitioners.push({ practitionerId: row.id, name: display(row.display_name),
+        active: row.active === true, onlineBooking: row.show_in_online_bookings === true });
+    }
+    const observedAt = this.observedAt();
+    return observedAt.ok ? ok({ scope: structuredClone(this.scope), businessId, observedAt: observedAt.value,
+      credentialFingerprint: this.credentialHash, status: "complete", practitioners }) : observedAt;
+  }
+
+  /** Lists a practitioner's types with the chosen business relationship, without granting approval. */
+  async appointmentTypes(scope: LocationScope, businessId: string, practitionerId: string):
+    Promise<Result<ClinikoTypeCatalogue, ClinikoCatalogueFailure>> {
+    if (!validScope(scope) || !sameScope(this.scope, scope)) return err({ kind: "scopeMismatch" });
+    if (!validId(businessId) || !validId(practitionerId)) return err({ kind: "invalidSelection" });
+    const [business, types] = await Promise.all([
+      this.get(`/businesses/${businessId}`),
+      this.list(`/practitioners/${practitionerId}/appointment_types`, "appointment_types"),
+    ]);
+    if (!business.ok) return business;
+    if (!types.ok) return types;
+    const businessRow = record(business.value);
+    const businessTypeIds = businessRow?.appointment_type_ids;
+    if (!businessRow || businessRow.id !== businessId ||
+        !(businessTypeIds === null || (Array.isArray(businessTypeIds) && businessTypeIds.every(validId)))) {
+      return err({ kind: "malformed" });
+    }
+    const appointmentTypes: ClinikoTypeCatalogue["appointmentTypes"][number][] = [];
+    for (const row of types.value) {
+      if (!validId(row.id) || !(typeof row.show_in_online_bookings === "boolean" || row.show_in_online_bookings === null) ||
+          !(row.archived_at === undefined || row.archived_at === null || typeof row.archived_at === "string")) {
+        return err({ kind: "malformed" });
+      }
+      appointmentTypes.push({ appointmentTypeId: row.id, name: display(row.name),
+        onlineBooking: row.show_in_online_bookings === true, archived: typeof row.archived_at === "string",
+        businessSelected: Array.isArray(businessTypeIds) && businessTypeIds.includes(row.id) });
+    }
+    const observedAt = this.observedAt();
+    return observedAt.ok ? ok({ scope: structuredClone(this.scope), businessId, practitionerId,
+      observedAt: observedAt.value, credentialFingerprint: this.credentialHash,
+      status: "complete", appointmentTypes }) : observedAt;
   }
 
   private observedAt(): Result<string, ClinikoCatalogueFailure> {

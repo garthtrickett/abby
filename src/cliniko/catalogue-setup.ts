@@ -77,7 +77,8 @@ const validTimeZone = (value: unknown): value is string => {
 };
 const catalogueFailure = (failure: ClinikoCatalogueFailure): ClinikoSetupFailure => ({
   kind: failure.kind === "forbidden" ? "credentialForbidden" :
-    failure.kind === "rateLimited" ? "catalogueRateLimited" : "catalogueUnavailable",
+    failure.kind === "rateLimited" ? "catalogueRateLimited" :
+      failure.kind === "invalidSelection" ? "invalid" : "catalogueUnavailable",
 });
 export const isClinikoApprovalState = (state: ClinikoApprovalState): boolean =>
   !!state && Number.isSafeInteger(state.version) && state.version >= 0 &&
@@ -146,6 +147,20 @@ export class ClinikoCatalogueSetup {
     const allowed = this.authorize(actor);
     if (!allowed.ok) return allowed;
     const result = await this.reader.businesses(allowed.value);
+    return result.ok ? result : err(catalogueFailure(result.error));
+  }
+
+  async practitioners(actor: HostActor, businessId: string) {
+    const allowed = this.authorize(actor);
+    if (!allowed.ok) return allowed;
+    const result = await this.reader.practitioners(allowed.value, businessId);
+    return result.ok ? result : err(catalogueFailure(result.error));
+  }
+
+  async appointmentTypes(actor: HostActor, businessId: string, practitionerId: string) {
+    const allowed = this.authorize(actor);
+    if (!allowed.ok) return allowed;
+    const result = await this.reader.appointmentTypes(allowed.value, businessId, practitionerId);
     return result.ok ? result : err(catalogueFailure(result.error));
   }
 

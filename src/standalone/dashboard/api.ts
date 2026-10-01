@@ -6,7 +6,8 @@ import type { CapabilityDescriptor, GatewayCommand, GatewayFailure, GatewayReply
 import { capabilityDescriptor } from "../../reference/capability-catalogue.ts";
 import { matchesSchema } from "../../reference/schema-shapes.ts";
 import type { ClinicAvailabilityApprovalState, ClinicAvailabilityBusinessCatalogue,
-  ClinicAvailabilityRoute, ClinicAvailabilitySelection, ClinicAvailabilitySelectionSnapshot } from "../../reference/clinic-availability-setup.ts";
+  ClinicAvailabilityRoute, ClinicAvailabilitySelection, ClinicAvailabilitySelectionSnapshot,
+  ClinicAvailabilityPractitionerCatalogue, ClinicAvailabilityTypeCatalogue } from "../../reference/clinic-availability-setup.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
 import type { WriteStopAuditPage, WriteStopStatus } from "../../core/write-stop.ts";
@@ -33,6 +34,8 @@ export type DashboardPort = Readonly<{
   staffQueue(afterTaskKey?: string): Promise<Result<StaffQueuePage, DashboardFailure>>;
   changeStaff(item: StaffQueueEntry, change: StaffChangeRequest): Promise<Result<void, DashboardFailure>>;
   availabilityBusinesses(): Promise<Result<ClinicAvailabilityBusinessCatalogue, DashboardFailure>>;
+  availabilityPractitioners(businessId: string): Promise<Result<ClinicAvailabilityPractitionerCatalogue, DashboardFailure>>;
+  availabilityTypes(businessId: string, practitionerId: string): Promise<Result<ClinicAvailabilityTypeCatalogue, DashboardFailure>>;
   availabilityInspect(selection: ClinicAvailabilitySelection): Promise<Result<ClinicAvailabilitySelectionSnapshot, DashboardFailure>>;
   availabilityApproval(): Promise<Result<ClinicAvailabilityApprovalState, DashboardFailure>>;
   checkAvailabilityRoute(): Promise<Result<true, DashboardFailure>>;
@@ -119,6 +122,16 @@ function writeStop(value: unknown): Result<WriteStopStatus, DashboardFailure> {
 export class FetchDashboardPort implements DashboardPort {
   async availabilityBusinesses(): Promise<Result<ClinicAvailabilityBusinessCatalogue, DashboardFailure>> {
     const result = await availabilityCommand({ kind: "clinic.availability.businesses.list.v1" }, "clinicAvailabilityBusinesses");
+    return result.ok ? ok(result.value.catalogue) : result;
+  }
+
+  async availabilityPractitioners(businessId: string): Promise<Result<ClinicAvailabilityPractitionerCatalogue, DashboardFailure>> {
+    const result = await availabilityCommand({ kind: "clinic.availability.practitioners.list.v1", businessId }, "clinicAvailabilityPractitioners");
+    return result.ok ? ok(result.value.catalogue) : result;
+  }
+
+  async availabilityTypes(businessId: string, practitionerId: string): Promise<Result<ClinicAvailabilityTypeCatalogue, DashboardFailure>> {
+    const result = await availabilityCommand({ kind: "clinic.availability.types.list.v1", businessId, practitionerId }, "clinicAvailabilityTypes");
     return result.ok ? ok(result.value.catalogue) : result;
   }
 
