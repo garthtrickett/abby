@@ -38,6 +38,8 @@ def exact_patient(base: str, headers: dict[str, str], reference_id: str) -> tupl
 def main() -> int:
     env_mode = os.environ.get("ABBY_LIVE_CLINIKO_EVAL") == "1"
     voice_change_mode = env_mode and os.environ.get("ABBY_PROBE_VOICE_CHANGE") == "1"
+    voice_drop_completed_response = voice_change_mode and os.environ.get(
+        "ABBY_PROBE_VOICE_DROP_PATCH_RESPONSE") == "1"
     if not env_mode and not sys.stdin.isatty():
         print("Run in a terminal so the API key is hidden, or use the opt-in owner-only environment.", file=sys.stderr)
         return 2
@@ -233,14 +235,23 @@ def main() -> int:
             datetime.fromisoformat(current["ends_at"].replace("Z", "+00:00")) == new_end_at and\
             conflict_status == 200 and conflict.get("conflicts", {}).get("exist") is False
         if voice_change_mode:
-            print(json.dumps({"step": "embedded_voice_reschedule_host",
-                              "voice_committed": movement_result.get("voiceCommitted") is True,
-                              "one_patch": movement_result.get("onePatch") is True,
-                              "confirmation_after_observation":
-                                  movement_result.get("confirmationAfterObservation") is True,
-                              "repeat_rejected": movement_result.get("repeatRejected") is True,
-                              "independent_moved_read": moved_ok}))
-            if (movement.returncode != 0 or movement_result.get("ok") is not True or not moved_ok):
+            voice_result = {"step": "embedded_voice_reschedule_host",
+                            "one_patch": movement_result.get("onePatch") is True,
+                            "repeat_rejected": movement_result.get("repeatRejected") is True,
+                            "independent_moved_read": moved_ok}
+            if voice_drop_completed_response:
+                voice_result.update({"dropped_completed_response":
+                                         movement_result.get("droppedCompletedResponse") is True,
+                                     "uncertainty_spoken": movement_result.get("uncertaintySpoken") is True,
+                                     "reconciled_exact": movement_result.get("reconciledExact") is True,
+                                     "no_premature_confirmation": movement_result.get("voiceCommitted") is False})
+            else:
+                voice_result.update({"voice_committed": movement_result.get("voiceCommitted") is True,
+                                     "confirmation_after_observation":
+                                         movement_result.get("confirmationAfterObservation") is True})
+            print(json.dumps(voice_result))
+            if (movement.returncode != 0 or movement_result.get("ok") is not True or not moved_ok or
+                    any(value is not True for key, value in voice_result.items() if key != "step")):
                 failed = True
         else:
             print(json.dumps({"step": "typescript_reschedule_writer",
@@ -285,14 +296,23 @@ def main() -> int:
         read_status, cancelled = request(base, headers, "GET", cancelled_path)
         cancelled_ok = read_status == 200 and bool(cancelled.get("cancelled_at"))
         if voice_change_mode:
-            print(json.dumps({"step": "embedded_voice_cancellation_host",
-                              "voice_committed": cancellation_result.get("voiceCommitted") is True,
-                              "one_patch": cancellation_result.get("onePatch") is True,
-                              "confirmation_after_observation":
-                                  cancellation_result.get("confirmationAfterObservation") is True,
-                              "repeat_rejected": cancellation_result.get("repeatRejected") is True,
-                              "independent_cancelled_read": cancelled_ok}))
-            if cancellation.returncode != 0 or cancellation_result.get("ok") is not True or not cancelled_ok:
+            voice_result = {"step": "embedded_voice_cancellation_host",
+                            "one_patch": cancellation_result.get("onePatch") is True,
+                            "repeat_rejected": cancellation_result.get("repeatRejected") is True,
+                            "independent_cancelled_read": cancelled_ok}
+            if voice_drop_completed_response:
+                voice_result.update({"dropped_completed_response":
+                                         cancellation_result.get("droppedCompletedResponse") is True,
+                                     "uncertainty_spoken": cancellation_result.get("uncertaintySpoken") is True,
+                                     "reconciled_exact": cancellation_result.get("reconciledExact") is True,
+                                     "no_premature_confirmation": cancellation_result.get("voiceCommitted") is False})
+            else:
+                voice_result.update({"voice_committed": cancellation_result.get("voiceCommitted") is True,
+                                     "confirmation_after_observation":
+                                         cancellation_result.get("confirmationAfterObservation") is True})
+            print(json.dumps(voice_result))
+            if (cancellation.returncode != 0 or cancellation_result.get("ok") is not True or not cancelled_ok or
+                    any(value is not True for key, value in voice_result.items() if key != "step")):
                 failed = True
         else:
             print(json.dumps({"step": "typescript_cancellation_writer",
