@@ -120,6 +120,22 @@ async function boundedJson(response: Response): Promise<Result<unknown, ClinikoA
   finally { reader.releaseLock(); }
 }
 
+/** Stop awaiting an uncooperative budget or provider after the call has ended. */
+async function untilAbort<Value>(pending: Promise<Value>, signal: AbortSignal): Promise<Value | undefined> {
+  if (signal.aborted) { void pending.catch(() => undefined); return undefined; }
+  let onAbort: () => void = () => undefined;
+  const aborted = new Promise<undefined>(resolve => {
+    onAbort = () => resolve(undefined);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try { return await Promise.race([pending, aborted]); }
+  finally { signal.removeEventListener("abort", onAbort); }
+}
+
+function deadline(signal?: AbortSignal): AbortSignal {
+  return signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000);
+}
+
 /** Provider edge only. It cannot authorize a caller, decide fees, or make writes atomic. */
 class ClinikoAppointmentWriter {
   readonly #scope: LocationScope;
@@ -160,8 +176,9 @@ class ClinikoAppointmentWriter {
     return ok(new ClinikoAppointmentWriter(config, shard, fetchPort, clock));
   }
 
-  async #read(request: ClinikoAppointmentTarget):
+  async #read(request: ClinikoAppointmentTarget, signal: AbortSignal):
     Promise<Result<ClinikoAppointmentObservation, ClinikoAppointmentWriteFailure>> {
+    if (signal.aborted) return err({ kind: "unavailable" });
     // Some Cliniko views require the explicit cancellation filter after a cancel.
     // Both views must fail before treating the target as unavailable.
     const path = `${this.#baseUrl}/individual_appointments/${request.appointmentId}`;
@@ -169,23 +186,32 @@ class ClinikoAppointmentWriter {
     let response: Response | undefined;
     let cancelledView = false;
     for (const view of views) {
+      if (signal.aborted) return err({ kind: "unavailable" });
       cancelledView = view !== path;
-      const limited = await claimClinikoBudget(this.#rateBudget);
+      const limited = await untilAbort(claimClinikoBudget(this.#rateBudget), signal);
+      if (signal.aborted || limited === undefined) return err({ kind: "unavailable" });
       if (limited) return err(limited);
       try {
-        response = await this.#fetchPort(view, {
+        const received = await untilAbort(this.#fetchPort(view, {
           method: "GET", headers: { Accept: "application/json", Authorization: this.#authorization,
-            "User-Agent": this.#userAgent }, redirect: "error", signal: AbortSignal.timeout(15_000),
-        });
+            "User-Agent": this.#userAgent }, redirect: "error", signal,
+        }), signal);
+        if (!received || signal.aborted) return err({ kind: "unavailable" });
+        response = received;
       } catch { return err({ kind: "unavailable" }); }
       if (response.status !== 404) break;
     }
     if (!response || response.status === 404) return err({ kind: "unavailable" });
     if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
-    if (response.status === 429) return err(await observeCliniko429(this.#rateBudget, response.headers.get("X-RateLimit-Reset")));
+    if (response.status === 429) {
+      const limited = await untilAbort(observeCliniko429(this.#rateBudget,
+        response.headers.get("X-RateLimit-Reset")), signal);
+      return err(signal.aborted || !limited ? { kind: "unavailable" } : limited);
+    }
     if (response.status >= 500) return err({ kind: "unavailable" });
     if (response.status !== 200) return err({ kind: "malformed" });
-    const parsed = await boundedJson(response);
+    const parsed = await untilAbort(boundedJson(response), signal);
+    if (!parsed || signal.aborted) return err({ kind: "unavailable" });
     if (!parsed.ok) return parsed;
     const row = record(parsed.value);
     const link = (name: string) => record(record(row?.[name])?.links)?.self;
@@ -198,6 +224,7 @@ class ClinikoAppointmentWriter {
     }
     if (cancelledView && !row.cancelled_at) return err({ kind: "malformed" });
     let observedAt: string;
+    if (signal.aborted) return err({ kind: "unavailable" });
     try { observedAt = this.#clock(); }
     catch { return err({ kind: "unavailable" }); }
     if (instant(observedAt) === undefined) return err({ kind: "unavailable" });
@@ -213,17 +240,17 @@ class ClinikoAppointmentWriter {
   }
 
   /** A caller must not infer a missed PATCH from an active observation. */
-  async observe(request: ClinikoAppointmentTarget):
+  async observe(request: ClinikoAppointmentTarget, signal?: AbortSignal):
     Promise<Result<ClinikoAppointmentObservation, ClinikoAppointmentWriteFailure>> {
     if (!validTarget(request) || ("cancellationReason" in request && !validCancellation(request))) {
       return err({ kind: "invalidQuery" });
     }
     if (!sameScope(request.scope, this.#scope)) return err({ kind: "scopeMismatch" });
-    return this.#read(request);
+    return this.#read(request, deadline(signal));
   }
 
   /** One send attempt per appointment through this writer instance. Never retries a possibly sent PATCH. */
-  async cancelOnce(request: ClinikoCancellationRequest):
+  async cancelOnce(request: ClinikoCancellationRequest, signal?: AbortSignal):
     Promise<Result<ClinikoCancellationOutcome, ClinikoAppointmentWriteFailure>> {
     if (!validCancellation(request)) return err({ kind: "invalidQuery" });
     if (!sameScope(request.scope, this.#scope)) return err({ kind: "scopeMismatch" });
@@ -231,72 +258,101 @@ class ClinikoAppointmentWriter {
       return err({ kind: "invalidQuery" });
     }
     if (this.#attempted.size >= maxAttempts) return err({ kind: "unavailable" });
+    const requestSignal = deadline(signal);
+    if (requestSignal.aborted) return err({ kind: "unavailable" });
     this.#inFlight.add(request.appointmentId);
     try {
-      const before = await this.#read(request);
+      const before = await this.#read(request, requestSignal);
       if (!before.ok) return before;
       if (before.value.kind !== "active") return err({ kind: "targetChanged" });
-      const limited = await claimClinikoBudget(this.#rateBudget);
+      if (requestSignal.aborted) return err({ kind: "unavailable" });
+      const limited = await untilAbort(claimClinikoBudget(this.#rateBudget), requestSignal);
+      if (requestSignal.aborted || limited === undefined) return err({ kind: "unavailable" });
       if (limited) return err(limited);
+      if (requestSignal.aborted) return err({ kind: "unavailable" });
       this.#attempted.add(request.appointmentId);
       let response: Response;
       try {
-        response = await this.#fetchPort(`${this.#baseUrl}/individual_appointments/${request.appointmentId}/cancel`, {
+        const received = await untilAbort(this.#fetchPort(`${this.#baseUrl}/individual_appointments/${request.appointmentId}/cancel`, {
           method: "PATCH", headers: { Accept: "application/json", Authorization: this.#authorization,
             "Content-Type": "application/json", "User-Agent": this.#userAgent },
           body: JSON.stringify({ cancellation_note: null,
             cancellation_reason: request.cancellationReason, apply_to_repeats: false }),
-          redirect: "error", signal: AbortSignal.timeout(15_000),
-        });
+          redirect: "error", signal: requestSignal,
+        }), requestSignal);
+        if (!received || requestSignal.aborted) return ok({ kind: "uncertain" });
+        response = received;
       } catch { return ok({ kind: "uncertain" }); }
-      if (response.status === 429) await observeCliniko429(this.#rateBudget, response.headers.get("X-RateLimit-Reset"));
+      if (response.status === 429) {
+        await untilAbort(observeCliniko429(this.#rateBudget, response.headers.get("X-RateLimit-Reset")), requestSignal);
+      }
+      if (requestSignal.aborted) return ok({ kind: "uncertain" });
       if (response.status !== 204) return ok({ kind: "uncertain" });
-      const after = await this.#read(request);
-      return ok({ kind: after.ok && after.value.kind === "cancelled" ? "cancelled" : "uncertain" });
+      const after = await this.#read(request, requestSignal);
+      return ok({ kind: !requestSignal.aborted && after.ok && after.value.kind === "cancelled"
+        ? "cancelled" : "uncertain" });
     } finally { this.#inFlight.delete(request.appointmentId); }
   }
 
-  async #conflicts(appointmentId: string): Promise<Result<boolean, ClinikoAppointmentWriteFailure>> {
-    const limited = await claimClinikoBudget(this.#rateBudget);
+  async #conflicts(appointmentId: string, signal: AbortSignal): Promise<Result<boolean, ClinikoAppointmentWriteFailure>> {
+    if (signal.aborted) return err({ kind: "unavailable" });
+    const limited = await untilAbort(claimClinikoBudget(this.#rateBudget), signal);
+    if (signal.aborted || limited === undefined) return err({ kind: "unavailable" });
     if (limited) return err(limited);
     let response: Response;
     try {
-      response = await this.#fetchPort(`${this.#baseUrl}/individual_appointments/${appointmentId}/conflicts`, {
+      const received = await untilAbort(this.#fetchPort(`${this.#baseUrl}/individual_appointments/${appointmentId}/conflicts`, {
         method: "GET", headers: { Accept: "application/json", Authorization: this.#authorization,
-          "User-Agent": this.#userAgent }, redirect: "error", signal: AbortSignal.timeout(15_000),
-      });
+          "User-Agent": this.#userAgent }, redirect: "error", signal,
+      }), signal);
+      if (!received || signal.aborted) return err({ kind: "unavailable" });
+      response = received;
     } catch { return err({ kind: "unavailable" }); }
     if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
-    if (response.status === 429) return err(await observeCliniko429(this.#rateBudget, response.headers.get("X-RateLimit-Reset")));
+    if (response.status === 429) {
+      const limited = await untilAbort(observeCliniko429(this.#rateBudget,
+        response.headers.get("X-RateLimit-Reset")), signal);
+      return err(signal.aborted || !limited ? { kind: "unavailable" } : limited);
+    }
     if (response.status >= 500 || response.status === 404) return err({ kind: "unavailable" });
     if (response.status !== 200) return err({ kind: "malformed" });
-    const parsed = await boundedJson(response);
+    const parsed = await untilAbort(boundedJson(response), signal);
+    if (!parsed || signal.aborted) return err({ kind: "unavailable" });
     if (!parsed.ok) return parsed;
     const exists = record(record(parsed.value)?.conflicts)?.exist;
     return typeof exists === "boolean" ? ok(exists) : err({ kind: "malformed" });
   }
 
   /** A fresh observation is current state, not proof that this writer caused the move. */
-  async observeReschedule(request: ClinikoRescheduleRequest):
+  async #observeReschedule(request: ClinikoRescheduleRequest, signal: AbortSignal):
     Promise<Result<ClinikoRescheduleObservation, ClinikoAppointmentWriteFailure>> {
+    if (signal.aborted) return err({ kind: "unavailable" });
     if (!validReschedule(request)) return err({ kind: "invalidQuery" });
     if (!sameScope(request.scope, this.#scope)) return err({ kind: "scopeMismatch" });
-    const moved = await this.#read({ ...request, startsAt: request.newStartsAt, endsAt: request.newEndsAt });
+    const moved = await this.#read({ ...request, startsAt: request.newStartsAt, endsAt: request.newEndsAt }, signal);
     if (!moved.ok) return moved;
+    if (signal.aborted) return err({ kind: "unavailable" });
     if (moved.value.kind === "active") {
-      const conflicts = await this.#conflicts(request.appointmentId);
+      const conflicts = await this.#conflicts(request.appointmentId, signal);
       if (!conflicts.ok) return conflicts;
+      if (signal.aborted) return err({ kind: "unavailable" });
       return ok({ kind: conflicts.value ? "newWithConflict" : "new", observedAt: moved.value.observedAt });
     }
     if (moved.value.kind === "cancelled") return ok({ kind: "cancelled", observedAt: moved.value.observedAt });
-    const old = await this.#read(request);
+    const old = await this.#read(request, signal);
     if (!old.ok) return old;
+    if (signal.aborted) return err({ kind: "unavailable" });
     return ok({ kind: old.value.kind === "active" ? "old" :
       old.value.kind === "cancelled" ? "cancelled" : "changed", observedAt: old.value.observedAt });
   }
 
+  async observeReschedule(request: ClinikoRescheduleRequest, signal?: AbortSignal):
+    Promise<Result<ClinikoRescheduleObservation, ClinikoAppointmentWriteFailure>> {
+    return this.#observeReschedule(request, deadline(signal));
+  }
+
   /** One in-place PATCH per appointment through this writer instance; no cancel-then-create or replay. */
-  async rescheduleOnce(request: ClinikoRescheduleRequest):
+  async rescheduleOnce(request: ClinikoRescheduleRequest, signal?: AbortSignal):
     Promise<Result<ClinikoRescheduleOutcome, ClinikoAppointmentWriteFailure>> {
     if (!validReschedule(request)) return err({ kind: "invalidQuery" });
     if (!sameScope(request.scope, this.#scope)) return err({ kind: "scopeMismatch" });
@@ -304,28 +360,38 @@ class ClinikoAppointmentWriter {
       return err({ kind: "invalidQuery" });
     }
     if (this.#attempted.size >= maxAttempts) return err({ kind: "unavailable" });
+    const requestSignal = deadline(signal);
+    if (requestSignal.aborted) return err({ kind: "unavailable" });
     this.#inFlight.add(request.appointmentId);
     try {
-      const before = await this.#read(request);
+      const before = await this.#read(request, requestSignal);
       if (!before.ok) return before;
       if (before.value.kind !== "active") return err({ kind: "targetChanged" });
-      const limited = await claimClinikoBudget(this.#rateBudget);
+      if (requestSignal.aborted) return err({ kind: "unavailable" });
+      const limited = await untilAbort(claimClinikoBudget(this.#rateBudget), requestSignal);
+      if (requestSignal.aborted || limited === undefined) return err({ kind: "unavailable" });
       if (limited) return err(limited);
+      if (requestSignal.aborted) return err({ kind: "unavailable" });
       this.#attempted.add(request.appointmentId);
       let response: Response;
       try {
-        response = await this.#fetchPort(`${this.#baseUrl}/individual_appointments/${request.appointmentId}`, {
+        const received = await untilAbort(this.#fetchPort(`${this.#baseUrl}/individual_appointments/${request.appointmentId}`, {
           method: "PATCH", headers: { Accept: "application/json", Authorization: this.#authorization,
             "Content-Type": "application/json", "User-Agent": this.#userAgent },
           body: JSON.stringify({ starts_at: request.newStartsAt, ends_at: null }),
-          redirect: "error", signal: AbortSignal.timeout(15_000),
-        });
+          redirect: "error", signal: requestSignal,
+        }), requestSignal);
+        if (!received || requestSignal.aborted) return ok({ kind: "uncertain" });
+        response = received;
       } catch { return ok({ kind: "uncertain" }); }
-      if (response.status === 429) await observeCliniko429(this.#rateBudget, response.headers.get("X-RateLimit-Reset"));
+      if (response.status === 429) {
+        await untilAbort(observeCliniko429(this.#rateBudget, response.headers.get("X-RateLimit-Reset")), requestSignal);
+      }
+      if (requestSignal.aborted) return ok({ kind: "uncertain" });
       if (response.status !== 200) return ok({ kind: "uncertain" });
       // The PATCH response alone cannot prove the appointment's current state or lack of overlap.
-      const after = await this.observeReschedule(request);
-      return ok({ kind: !after.ok ? "uncertain" : after.value.kind === "new" ? "moved" :
+      const after = await this.#observeReschedule(request, requestSignal);
+      return ok({ kind: requestSignal.aborted || !after.ok ? "uncertain" : after.value.kind === "new" ? "moved" :
         after.value.kind === "newWithConflict" ? "movedWithConflict" : "uncertain" });
     } finally { this.#inFlight.delete(request.appointmentId); }
   }
@@ -343,14 +409,14 @@ export class ClinikoCancellationWriter {
     return created.ok ? ok(new ClinikoCancellationWriter(created.value)) : created;
   }
 
-  observe(request: ClinikoCancellationRequest):
+  observe(request: ClinikoCancellationRequest, signal?: AbortSignal):
     Promise<Result<ClinikoAppointmentObservation, ClinikoAppointmentWriteFailure>> {
-    return this.#inner.observe(request);
+    return this.#inner.observe(request, signal);
   }
 
-  cancelOnce(request: ClinikoCancellationRequest):
+  cancelOnce(request: ClinikoCancellationRequest, signal?: AbortSignal):
     Promise<Result<ClinikoCancellationOutcome, ClinikoAppointmentWriteFailure>> {
-    return this.#inner.cancelOnce(request);
+    return this.#inner.cancelOnce(request, signal);
   }
 }
 
@@ -366,13 +432,13 @@ export class ClinikoRescheduleWriter {
     return created.ok ? ok(new ClinikoRescheduleWriter(created.value)) : created;
   }
 
-  observeReschedule(request: ClinikoRescheduleRequest):
+  observeReschedule(request: ClinikoRescheduleRequest, signal?: AbortSignal):
     Promise<Result<ClinikoRescheduleObservation, ClinikoAppointmentWriteFailure>> {
-    return this.#inner.observeReschedule(request);
+    return this.#inner.observeReschedule(request, signal);
   }
 
-  rescheduleOnce(request: ClinikoRescheduleRequest):
+  rescheduleOnce(request: ClinikoRescheduleRequest, signal?: AbortSignal):
     Promise<Result<ClinikoRescheduleOutcome, ClinikoAppointmentWriteFailure>> {
-    return this.#inner.rescheduleOnce(request);
+    return this.#inner.rescheduleOnce(request, signal);
   }
 }
