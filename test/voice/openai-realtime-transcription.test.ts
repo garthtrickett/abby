@@ -207,6 +207,48 @@ test("static clinic transcription context is bounded, acknowledged, and never ma
   }
 });
 
+test("opt-in patient-free keyword hints are bounded and remain untrusted when the provider omits the echo", async () => {
+  const context = { prompt: "English physiotherapy clinic calls.", languages: ["en"],
+    keywords: ["physiotherapy", "appointment"] };
+  const socket = new FakeSocket();
+  const transcription = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+    context, socketFactory: () => socket as unknown as WebSocket });
+  socket.open();
+  assert.deepEqual((socket.sent[0]?.session as { audio: { input: { transcription: unknown } } })
+    .audio.input.transcription, { model: "gpt-live-transcribe", ...context });
+  socket.receive({ type: "session.updated", session: { type: "transcription", audio: { input: {
+    format: { type: "audio/pcm", rate: 24000 }, transcription: { model: "gpt-live-transcribe",
+      prompt: context.prompt, languages: context.languages }, turn_detection: null,
+  } } } });
+  assert.ok((await transcription.accept(frame(0, 2_000), 1, new AbortController().signal)).ok);
+  const pending = transcription.flush(1, new AbortController().signal);
+  await new Promise<void>(resolve => setImmediate(resolve));
+  socket.receive({ type: "input_audio_buffer.committed", item_id: "keyword-item" });
+  socket.receive({ type: "conversation.item.input_audio_transcription.completed", item_id: "keyword-item",
+    transcript: "Book physiotherapy" });
+  assert.deepEqual(await pending, { ok: true, value: [{ kind: "segmentFinal", sessionId: "session",
+    generation: 1, utteranceId: "keyword-item", text: "Book physiotherapy", quality: "needsClarification" }] });
+  await transcription.close();
+
+  const wrongSocket = new FakeSocket();
+  const wrong = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+    context, socketFactory: () => wrongSocket as unknown as WebSocket });
+  wrongSocket.open();
+  wrongSocket.receive({ type: "session.updated", session: { type: "transcription", audio: { input: {
+    format: { type: "audio/pcm", rate: 24000 }, transcription: { model: "gpt-live-transcribe",
+      prompt: context.prompt, languages: context.languages, keywords: ["other"] }, turn_detection: null,
+  } } } });
+  assert.deepEqual(await wrong.accept(frame(0, 2_000), 1, new AbortController().signal),
+    { ok: false, error: { kind: "transcriptionUnavailable" } });
+
+  for (const keywords of [["patient\nname"], ["<patient>"], ["appointment", "appointment"], []]) {
+    assert.throws(() => new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+      context: { prompt: context.prompt, languages: ["en"], keywords },
+      socketFactory: () => new FakeSocket() as unknown as WebSocket }),
+    /invalid transcription configuration/);
+  }
+});
+
 test("opt-in transcription delay is bounded, tolerated when not echoed, and cannot make a final trusted", async () => {
   const socket = new FakeSocket();
   const transcription = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",

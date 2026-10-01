@@ -18,6 +18,7 @@ export type TranscriptionContext = Readonly<{
   /** Static, patient-free clinic setting. Never put caller or patient data here. */
   prompt: string;
   languages: readonly string[];
+  keywords?: readonly string[];
 }>;
 export type OpenAIRealtimeTranscriptionConfig = Readonly<{
   apiKey: string;
@@ -32,12 +33,17 @@ export type OpenAIRealtimeTranscriptionConfig = Readonly<{
 function validContext(value: unknown): value is TranscriptionContext {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const context = value as Record<string, unknown>;
-  if (Object.keys(context).sort().join(",") !== "languages,prompt" ||
+  if (!["languages,prompt", "keywords,languages,prompt"].includes(Object.keys(context).sort().join(",")) ||
       typeof context.prompt !== "string" || !context.prompt.trim() || context.prompt.length > 500 ||
       /[\r\n\u0000-\u001f\u007f]/.test(context.prompt) ||
       !Array.isArray(context.languages) || context.languages.length < 1 || context.languages.length > 4 ||
       context.languages.some(code => typeof code !== "string" || !/^[a-z]{2,3}(?:-[a-z]{2})?$/.test(code)) ||
-      new Set(context.languages).size !== context.languages.length) return false;
+      new Set(context.languages).size !== context.languages.length ||
+      (context.keywords !== undefined && (!Array.isArray(context.keywords) ||
+        context.keywords.length < 1 || context.keywords.length > 8 ||
+        context.keywords.some(keyword => typeof keyword !== "string" || !keyword.trim() ||
+          keyword.length > 80 || /[<>\r\n\u0000-\u001f\u007f]/.test(keyword)) ||
+        new Set(context.keywords).size !== context.keywords.length))) return false;
   return true;
 }
 
@@ -127,7 +133,8 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
     this.sessionId = config.sessionId;
     this.model = config.model ?? "gpt-live-transcribe";
     this.context = config.context ? { prompt: config.context.prompt,
-      languages: [...config.context.languages] } : undefined;
+      languages: [...config.context.languages],
+      ...(config.context.keywords ? { keywords: [...config.context.keywords] } : {}) } : undefined;
     this.delay = config.delay;
     this.ready = new Promise(resolve => { this.resolveReady = resolve; });
     const headers = { Authorization: `Bearer ${config.apiKey}` };
@@ -182,7 +189,7 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
     if (event.type === "session.updated") {
       const session = event.session as { type?: unknown; audio?: { input?: {
         format?: { type?: unknown; rate?: unknown }; transcription?: {
-          model?: unknown; prompt?: unknown; languages?: unknown;
+          model?: unknown; prompt?: unknown; languages?: unknown; keywords?: unknown;
         }; turn_detection?: unknown;
       } } } | undefined;
       if (session?.type !== "transcription" || session.audio?.input?.format?.type !== "audio/pcm" ||
@@ -190,7 +197,9 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
           session.audio.input.transcription?.model !== this.model ||
           (this.context !== undefined &&
             (session.audio.input.transcription?.prompt !== this.context.prompt ||
-             !sameStrings(session.audio.input.transcription?.languages, this.context.languages))) ||
+             !sameStrings(session.audio.input.transcription?.languages, this.context.languages) ||
+             (this.context.keywords !== undefined && session.audio.input.transcription?.keywords !== undefined &&
+              !sameStrings(session.audio.input.transcription.keywords, this.context.keywords)))) ||
           session.audio.input.turn_detection !== null) { this.fail(); return; }
       this.configured = true;
       this.resolveReady(true);
