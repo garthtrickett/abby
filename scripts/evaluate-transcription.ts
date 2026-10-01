@@ -41,12 +41,14 @@ async function main(): Promise<void> {
   if (model !== "gpt-live-transcribe" && model !== "gpt-transcribe") {
     throw new Error("unsupported transcription evaluation model");
   }
-  if (args.context !== undefined && args.context !== "clinic-v1") {
+  if (args.context !== undefined && args.context !== "clinic-v1" && args.context !== "clinic-keywords-v1") {
     throw new Error("unsupported transcription evaluation context");
   }
-  const context: TranscriptionContext | undefined = args.context === "clinic-v1"
+  const context: TranscriptionContext | undefined = args.context
     ? { prompt: "English physiotherapy clinic calls about appointments, booking, and urgent symptoms.",
-      languages: ["en"] } : undefined;
+      languages: ["en"],
+      ...(args.context === "clinic-keywords-v1"
+        ? { keywords: ["physiotherapy", "appointment", "booking", "urgent"] } : {}) } : undefined;
   const delay = args.delay;
   if (delay !== undefined && !["minimal", "low", "medium", "high", "xhigh"].includes(delay)) {
     throw new Error("unsupported transcription evaluation delay");
@@ -75,6 +77,8 @@ async function main(): Promise<void> {
   const report = { schemaVersion: 1, kind: "realtime-transcription-evaluation", runAt: new Date().toISOString(),
     configuration: { provider: "openai-realtime", model,
       ...(args.context ? { contextVersion: args.context, context } : {}),
+      ...(args.context === "clinic-keywords-v1"
+        ? { keywordsAcknowledgment: "providerDidNotEchoInProbe" } : {}),
       ...(delay ? { delay, delayAcknowledgment: "providerDoesNotEcho" } : {}),
       corpusVersion: corpus.version,
       corpusSha256: digest(corpusBytes), adapterSha256: digest(Buffer.concat(sourceBytes)), nodeVersion: process.version,
