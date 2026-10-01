@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { randomInt, randomUUID } from "node:crypto";
+import { once } from "node:events";
+import { createServer } from "node:http";
 import test from "node:test";
 import { ClinikoPatientIntakeEdge } from "../../src/cliniko/patient-intake.ts";
 import { digestActionRequest } from "../../src/core/digest.ts";
@@ -39,9 +41,9 @@ class IntakeThenFailedBookingHost extends ReferenceClinicHost {
   private readonly expectedCallId: string;
   private readonly expectedSessionId: string;
   private readonly invalidConsent: boolean;
-  private readonly createPatient: (() => Promise<string>) | undefined;
+  private readonly createPatient: (() => Promise<string | undefined>) | undefined;
   constructor(bookingOutcome: "rejected" | "uncertain", expectedCallId: string, expectedSessionId: string,
-              invalidConsent = false, createPatient?: () => Promise<string>) {
+              invalidConsent = false, createPatient?: () => Promise<string | undefined>) {
     super([{ scope, patientRef: "created-patient-1", verificationRef: "created-proof-1",
       expiresAt: "2026-09-29T11:00:00.000Z" }], [offer]);
     this.bookingOutcome = bookingOutcome;
@@ -84,6 +86,8 @@ class IntakeThenFailedBookingHost extends ReferenceClinicHost {
         return { kind: "rejected", actionKey: mutation.actionKey, reason: "invalid" };
       }
       this.createdRef = this.createPatient ? await this.createPatient() : "created-patient-1";
+      if (!this.createdRef) return { kind: "uncertain", actionKey: mutation.actionKey,
+        reconcileAfter: at, deadline: "2026-09-29T10:10:00.000Z" };
       return { kind: "committed", actionKey: mutation.actionKey, hostRef: this.createdRef };
     }
     if (mutation.kind === "book" && mutation.request.kind === "book") {
@@ -107,7 +111,8 @@ class IntakeThenFailedBookingHost extends ReferenceClinicHost {
 }
 
 async function runCall(bookingOutcome: "rejected" | "uncertain", invalidDraft = false,
-                       invalidConsent = false, createPatient?: () => Promise<string>) {
+                       invalidConsent = false, createPatient?: () => Promise<string | undefined>,
+                       uncertainIntake = false) {
   const event = { key: { accountRef: "buyer-provider", providerCallRef: `intake-${bookingOutcome}` },
     dialedNumber: "+6125550199", receivedAt: now };
   const callId = callIdFor(event.key);
@@ -191,6 +196,20 @@ async function runCall(bookingOutcome: "rejected" | "uncertain", invalidDraft = 
   }
   await speak();
   assert.equal(host.intakeWrites, 1);
+  if (uncertainIntake) {
+    const state = await ledger.read(callId, scope);
+    assert.ok(state.ok);
+    assert.equal(host.createdRef, undefined);
+    assert.equal(Object.values(state.value.actions).find(action => action.kind === "intake")?.status, "uncertain");
+    assert.equal(host.bookingWrites, 0);
+    assert.equal(spoken.at(-1), "I can't confirm that action yet. It is pending review.");
+    assert.equal(spoken.includes("Your details were saved. No appointment is confirmed yet."), false);
+    assert.equal(spoken.includes("Your booking is confirmed."), false);
+    assert.deepEqual(await host.resolveBooking(scope, "created-proof-1", offer.offerRef, now),
+      err({ kind: "notFound", target: "patient" }));
+    await call.disconnect(now);
+    return;
+  }
   assert.equal(spoken.at(-1), "Your details were saved. No appointment is confirmed yet.");
   await speak();
   assert.equal(host.bookingWrites, 0, "the booking confirmation must be played before a write");
@@ -225,6 +244,71 @@ test("E2E-016 embedded voice retains created patient after rejected booking", ()
 test("E2E-073 embedded voice retains created patient after uncertain booking", () => runCall("uncertain"));
 test("E2E-016 embedded voice rejects an unapproved intake draft without a write", () => runCall("rejected", true));
 test("E2E-016 embedded voice rejects incomplete host consent evidence without a write", () => runCall("rejected", false, true));
+
+test("E2E-016 a TCP reset after patient creation never claims saved details or replays the POST", async () => {
+  let posts = 0;
+  let created = false;
+  const server = createServer(async (request, response) => {
+    assert.equal(request.url?.split("?")[0], "/v1/patients");
+    if (request.method === "GET") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ total_entries: 0, patients: [] }));
+      return;
+    }
+    assert.equal(request.method, "POST");
+    posts += 1;
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) chunks.push(Buffer.from(chunk as Uint8Array));
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
+    assert.equal(body.first_name, "Synthetic");
+    assert.equal(body.last_name, "Caller");
+    created = true;
+    response.destroy();
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const providerFetch: typeof fetch = (input, init) => {
+    const original = new URL(String(input));
+    assert.equal(original.origin, "https://api.au5.cliniko.com");
+    return fetch(`http://127.0.0.1:${address.port}${original.pathname}${original.search}`, init);
+  };
+  try {
+    await runCall("rejected", false, false, async () => {
+      const callId = callIdFor({ accountRef: "buyer-provider", providerCallRef: "intake-rejected" });
+      const sessionId = "session-rejected";
+      const refs = { draftRef, consentRef: "consent:local-reset", authorityRef: "authority:local-reset" };
+      const evidence: HostIntakeEvidence = { scope, callId, sessionId, policyVersion: "1", ...refs,
+        draft: { firstName: "Synthetic", lastName: "Caller", email: "synthetic-caller@example.test",
+          dateOfBirth: "1990-05-21", patientPhone: "+61455500000", phoneType: "Mobile" },
+        caller: "patient", privacyAccepted: true, proxyAuthorized: false,
+        expiresAt: "2026-09-29T10:05:00.000Z" };
+      const authority = new TransientIntakeAuthority({ scope, callId, sessionId, policyVersion: "1",
+        clock: () => now, source: { async resolve(query) {
+          return query.callId === callId && query.sessionId === sessionId &&
+            query.draftRef === draftRef && query.consentRef === refs.consentRef &&
+            query.authorityRef === refs.authorityRef ? ok(evidence) : err({ kind: "denied" as const });
+        } } });
+      try {
+        const prepared = await authority.prepare(refs.draftRef, refs.consentRef, refs.authorityRef);
+        assert.ok(prepared.ok);
+        const edge = ClinikoPatientIntakeEdge.create({ scope, apiKey: "synthetic-key-au5",
+          contactEmail: "dev@example.test" }, authority, providerFetch, () => now);
+        assert.ok(edge.ok);
+        const first = await edge.value.createOnce(prepared.value);
+        assert.deepEqual(first, ok({ kind: "uncertain" }));
+        assert.deepEqual(await edge.value.createOnce(prepared.value), err({ kind: "invalidQuery" }));
+        return undefined;
+      } finally { authority.dispose(); }
+    }, true);
+    assert.equal(created, true, "the provider committed before dropping its response");
+    assert.equal(posts, 1, "uncertain intake cannot send a second patient POST");
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
+});
 
 test("C-LIVE-40 embedded voice keeps a real demo-created patient after synthetic booking rejection",
   { skip: process.env.ABBY_LIVE_CLINIKO_EVAL !== "1" || !process.env.ABBY_CLINIKO_API_KEY ||
