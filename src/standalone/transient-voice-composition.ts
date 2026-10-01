@@ -4,7 +4,7 @@ import { ClinikoAvailabilityReader } from "../cliniko/availability.ts";
 import { ClinikoApprovedAvailabilitySearch } from "../cliniko/approved-availability-search.ts";
 import { MemoryLedger } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
-import type { ApprovedGreeting, LocationScope, Result } from "../core/model.ts";
+import type { AdmissionReceipt, ApprovedGreeting, LocationScope, Result } from "../core/model.ts";
 import { unprovenReadiness } from "../core/readiness.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
 import { referenceDefaultPolicy } from "../reference/policy-store.ts";
@@ -14,6 +14,7 @@ import { checkStandaloneTextDatabase } from "../storage/standalone-privacy-prefl
 import type { StandalonePrivacyPreflightFailure } from "../storage/standalone-privacy-preflight.ts";
 import type Database from "../storage/generated/Database.ts";
 import { CallAdmissionService } from "../voice/admission.ts";
+import type { AuthenticatedInboundCall } from "../voice/admission.ts";
 import type { CallerCandidateLookup } from "../voice/caller-candidates.ts";
 import type { MediaTurnOptions, TranscriptionPort } from "../voice/media-turn-controller.ts";
 import { SharedNumberIntakeService } from "../voice/shared-number-intake.ts";
@@ -26,6 +27,7 @@ import type { IntentResolver } from "../voice/voice-session.ts";
 import type { ClinicNumberRoutingHost } from "../reference/clinic-number-routing.ts";
 import { ClinicPolicyRouter } from "../reference/clinic-number-routing.ts";
 import { DisabledStandaloneHost } from "./disabled-host.ts";
+import { VerifiedAppointmentReadSession } from "./verified-appointment-read-session.ts";
 
 type TranscriptionSource =
   | Readonly<{ transcription: TranscriptionPort; transcriptionFactory?: never }>
@@ -45,6 +47,9 @@ export type TransientVoiceConfig = Readonly<{
   keypadAvailabilityRange?: (digit: string) => Readonly<{ from: string; to: string }> | null | undefined;
   closeTransport?: () => void;
   callerCandidateLookup?: CallerCandidateLookup;
+  /** Trusted host seam for a clinic-approved verifier. The live runner leaves it unset. */
+  verifiedAppointmentRead?: (receipt: AdmissionReceipt, inbound: AuthenticatedInboundCall,
+    sessionId: string) => VerifiedAppointmentReadSession;
   mediaOptions?: MediaTurnOptions;
   playbackOptions?: StreamedPlaybackOptions;
   now?: () => string;
@@ -88,7 +93,7 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
   const admission = new CallAdmissionService(ledger, router.resolve, now, readiness);
   const intake = new SharedNumberIntakeService(ledger, router, admission, now);
   const host = new DisabledStandaloneHost();
-  const reception = new TextReception(ledger, policy, host, config.availability, undefined, undefined, host);
+  let verifiedRead: VerifiedAppointmentReadSession | undefined;
   let call: TwilioConnectedCall | undefined = new TwilioConnectedCall({
     event: config.stream.event, streamStartedAt: config.stream.streamStartedAt,
     sessionId, ledger, intake, transcription,
@@ -101,6 +106,15 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
     ...(config.monotonicNow ? { monotonicNow: config.monotonicNow } : {}),
     fullFactory: (receipt, sessionId, playback) => {
       if (!greeting || !sameScope(greeting.scope, receipt.scope)) throw new Error("approved greeting unavailable");
+      verifiedRead?.dispose();
+      verifiedRead = undefined;
+      const candidate = config.verifiedAppointmentRead?.(receipt, config.stream.event, sessionId);
+      if (candidate !== undefined && !(candidate instanceof VerifiedAppointmentReadSession)) {
+        throw new TypeError("invalid verified appointment reader");
+      }
+      verifiedRead = candidate;
+      const reception = new TextReception(ledger, policy, host, config.availability,
+        verifiedRead?.appointments, undefined, host);
       return new VoiceSession(receipt.callId, sessionId, receipt.scope, ledger, reception, playback,
         config.resolveIntent, undefined, config.monotonicNow, { greeting });
     },
@@ -110,7 +124,7 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
     const active = call;
     call = undefined;
     try { await active?.disconnect(); }
-    finally { ledger.dispose(); greeting = undefined; }
+    finally { verifiedRead?.dispose(); verifiedRead = undefined; ledger.dispose(); greeting = undefined; }
   })();
   return ok({
     async receive(raw) {
