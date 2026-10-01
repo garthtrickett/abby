@@ -38,6 +38,19 @@ test("overnight window crosses midnight and clips to the requested horizon", () 
   assert.deepEqual(result.value, [{ startsAt: "2026-10-04T11:30:30.000Z", endsAt: "2026-10-04T15:00:00.000Z" }]);
 });
 
+test("a closure on the shift's starting date also closes its after-midnight portion", () => {
+  const schedule = { timeZone: "Pacific/Honolulu",
+    weekly: [{ weekday: 0, startMinute: 22 * 60, endMinute: 120 }], closedDates: [] as string[] };
+  const from = "2026-09-28T10:00:00.000Z"; // Monday 00:00 locally, within Sunday's shift.
+  const to = "2026-09-28T11:00:00.000Z";
+  assert.deepEqual(expandStaffSchedule(schedule, from, to),
+    { ok: true, value: [{ startsAt: from, endsAt: to }] });
+  assert.deepEqual(expandStaffSchedule({ ...schedule, closedDates: ["2026-09-27"] }, from, to),
+    { ok: true, value: [] });
+  assert.deepEqual(expandStaffSchedule({ ...schedule, closedDates: ["2026-09-28"] }, from, to),
+    { ok: true, value: [] });
+});
+
 test("invalid schedule data fails before it can authorize a transfer", () => {
   const base = { timeZone: "Australia/Sydney", weekly: [sunday], closedDates: [] };
   const from = "2026-10-03T14:00:00.000Z";
