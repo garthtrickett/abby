@@ -46,10 +46,17 @@ async function fixture(role: "clinicAdmin" | "staff", uncertainApproval = false,
     if (path === "/v1/appointment_types/77") return Response.json({
       id: "77", name: "Review", archived_at: null, show_in_online_bookings: true });
     if (path === "/v1/businesses/11/practitioners") return Response.json({ total_entries: 3,
-      practitioners: [{ id: "22" }, { id: "44" }, { id: "66" }] });
-    if (path === "/v1/practitioners/22/appointment_types") return Response.json({ total_entries: 1, appointment_types: [{ id: "33" }] });
-    if (path === "/v1/practitioners/44/appointment_types") return Response.json({ total_entries: 1, appointment_types: [{ id: "55" }] });
-    if (path === "/v1/practitioners/66/appointment_types") return Response.json({ total_entries: 1, appointment_types: [{ id: "77" }] });
+      practitioners: [{ id: "22", display_name: "Practitioner", active: practitionerActive, show_in_online_bookings: true,
+        private_patient_note: "secret-patient" },
+      { id: "44", display_name: "Second practitioner", active: true, show_in_online_bookings: true },
+      { id: "66", display_name: "Third practitioner", active: true, show_in_online_bookings: true }] });
+    if (path === "/v1/practitioners/22/appointment_types") return Response.json({ total_entries: 1, appointment_types: [
+      { id: "33", name: "Consult", archived_at: null, show_in_online_bookings: true,
+        private_patient_note: "secret-patient" }] });
+    if (path === "/v1/practitioners/44/appointment_types") return Response.json({ total_entries: 1, appointment_types: [
+      { id: "55", name: "Follow up", archived_at: null, show_in_online_bookings: true }] });
+    if (path === "/v1/practitioners/66/appointment_types") return Response.json({ total_entries: 1, appointment_types: [
+      { id: "77", name: "Review", archived_at: null, show_in_online_bookings: true }] });
     throw new Error(`unexpected catalogue request ${path}`);
   };
   const reader = ClinikoCatalogueReader.create({ scope, apiKey: options.apiKey ?? "synthetic-key-au5",
@@ -85,6 +92,40 @@ async function fixture(role: "clinicAdmin" | "staff", uncertainApproval = false,
       server.closeAllConnections();
     }) };
 }
+
+test("E2E-227 clinic admin lists scoped candidate IDs before read-only approval", async ({ page, request }) => {
+  const app = await fixture("clinicAdmin");
+  try {
+    await page.goto(app.url);
+    await page.getByLabel("Cliniko business").selectOption("11");
+    await page.getByRole("button", { name: "List business practitioners" }).click();
+    await expect(page.getByLabel("Practitioner choices")).toContainText("3 practitioners");
+    await expect(page.locator("#available-practitioners option[value='22']")).toHaveText("Practitioner");
+    await page.getByLabel("Practitioner ID", { exact: true }).fill("22");
+    await page.getByRole("button", { name: "List practitioner appointment types" }).click();
+    await expect(page.getByLabel("Appointment type choices")).toContainText("1 types");
+    await expect(page.locator("#available-appointment-types option[value='33']")).toHaveText("Consult");
+    await expect(page.getByRole("button", { name: "Approve read-only route" })).toBeDisabled();
+    await page.getByLabel("Appointment type ID", { exact: true }).fill("33");
+    await page.getByRole("button", { name: "Inspect selection" }).click();
+    await expect(page.getByLabel("Availability selection inspection")).toContainText("Eligible candidate");
+    await page.getByLabel("Cliniko business").selectOption("44");
+    await expect(page.getByLabel("Practitioner ID", { exact: true })).toHaveValue("");
+    await expect(page.getByLabel("Appointment type ID", { exact: true })).toHaveValue("");
+    await expect(page.locator("#available-practitioners option")).toHaveCount(0);
+    await expect(page.locator("#available-appointment-types option")).toHaveCount(0);
+    const stored = await app.setup.current({ actorRef: "browser-clinicAdmin", role: "clinicAdmin", scope });
+    assert.ok(stored.ok);
+    assert.equal(stored.value.approval, null);
+    const malformed = await request.post(`${app.url}/api/clinic-availability/command`, {
+      headers: { Origin: app.url }, data: { kind: "clinic.availability.types.list.v1", businessId: "../11", practitionerId: "22" },
+    });
+    assert.equal(malformed.status(), 400);
+    const pageText = await page.locator("body").innerText();
+    assert.equal(pageText.includes("secret-patient"), false);
+    assert.equal(pageText.includes("synthetic-key"), false);
+  } finally { await app.close(); }
+});
 
 test("E2E-195 E2E-209 clinic admin approves and revokes only a read-only availability route in the browser", async ({ page, request }) => {
   const app = await fixture("clinicAdmin");
@@ -137,6 +178,10 @@ test("E2E-195 staff and foreign-origin requests cannot use availability setup", 
       headers: { Origin: app.url }, data: { kind: "clinic.availability.businesses.list.v1" },
     });
     assert.equal(denied.status(), 403);
+    const choicesDenied = await request.post(`${app.url}/api/clinic-availability/command`, {
+      headers: { Origin: app.url }, data: { kind: "clinic.availability.practitioners.list.v1", businessId: "11" },
+    });
+    assert.equal(choicesDenied.status(), 403);
     const checkDenied = await request.post(`${app.url}/api/clinic-availability/command`, {
       headers: { Origin: app.url }, data: { kind: "clinic.availability.route.check.v1" },
     });

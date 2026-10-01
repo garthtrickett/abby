@@ -60,7 +60,8 @@ test("E2E-194 E2E-216 provider-neutral setup commands bind clinic admin, version
   const staff = app.gateway("staff");
   const ids = admin.listPermitted().map(item => item.id);
   assert.deepEqual(ids.filter(id => id.startsWith("clinic.availability.")), [
-    "clinic.availability.businesses.list.v1", "clinic.availability.selection.inspect.v1",
+    "clinic.availability.businesses.list.v1", "clinic.availability.practitioners.list.v1",
+    "clinic.availability.types.list.v1", "clinic.availability.selection.inspect.v1",
     "clinic.availability.approval.read.v1", "clinic.availability.route.check.v1",
     "clinic.availability.approval.change.v1",
     "clinic.availability.approval.change.v2",

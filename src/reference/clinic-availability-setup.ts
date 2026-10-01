@@ -26,6 +26,25 @@ export type ClinicAvailabilityBusinessCatalogue = Readonly<{
     archived: boolean;
   }>[];
 }>;
+export type ClinicAvailabilityPractitionerCatalogue = Readonly<{
+  scope: LocationScope;
+  businessId: string;
+  observedAt: string;
+  credentialFingerprint: string;
+  status: "complete";
+  practitioners: readonly Readonly<{ practitionerId: string; name: string; active: boolean; onlineBooking: boolean }>[];
+}>;
+export type ClinicAvailabilityTypeCatalogue = Readonly<{
+  scope: LocationScope;
+  businessId: string;
+  practitionerId: string;
+  observedAt: string;
+  credentialFingerprint: string;
+  status: "complete";
+  appointmentTypes: readonly Readonly<{
+    appointmentTypeId: string; name: string; onlineBooking: boolean; archived: boolean; businessSelected: boolean;
+  }>[];
+}>;
 export type ClinicAvailabilitySelectionSnapshot = Readonly<{
   scope: LocationScope;
   selection: ClinicAvailabilitySelection;
@@ -63,6 +82,9 @@ export type ClinicAvailabilitySetupFailure = Readonly<{ kind: "forbidden" | "inv
 
 export interface ClinicAvailabilitySetup {
   businesses(actor: HostActor): Promise<Result<ClinicAvailabilityBusinessCatalogue, ClinicAvailabilitySetupFailure>>;
+  practitioners(actor: HostActor, businessId: string): Promise<Result<ClinicAvailabilityPractitionerCatalogue, ClinicAvailabilitySetupFailure>>;
+  appointmentTypes(actor: HostActor, businessId: string, practitionerId: string):
+    Promise<Result<ClinicAvailabilityTypeCatalogue, ClinicAvailabilitySetupFailure>>;
   inspect(actor: HostActor, selection: ClinicAvailabilitySelection):
     Promise<Result<ClinicAvailabilitySelectionSnapshot, ClinicAvailabilitySetupFailure>>;
   current(actor: HostActor): Promise<Result<ClinicAvailabilityApprovalState, ClinicAvailabilitySetupFailure>>;

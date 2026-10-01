@@ -7,7 +7,8 @@ import type { GatewayCommand, HostActor } from "../../reference/command-gateway.
 const maxCommandBytes = 10_000;
 const document = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body><main><div id="app"></div><div id="availability-setup"></div></main><script type="module" src="/app.js"></script></body></html>`;
 const setupCommands = new Set([
-  "clinic.availability.businesses.list.v1", "clinic.availability.selection.inspect.v1",
+  "clinic.availability.businesses.list.v1", "clinic.availability.practitioners.list.v1",
+  "clinic.availability.types.list.v1", "clinic.availability.selection.inspect.v1",
   "clinic.availability.approval.read.v1", "clinic.availability.approval.change.v1",
   "clinic.availability.route.check.v1",
   "clinic.availability.approval.change.v2",

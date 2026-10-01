@@ -1,9 +1,11 @@
 import { html, render } from "lit-html";
 import type { DashboardFailure, DashboardPort } from "./api.ts";
 import type { ClinicAvailabilityApprovalState, ClinicAvailabilityBusinessCatalogue,
-  ClinicAvailabilityRoute, ClinicAvailabilitySelection, ClinicAvailabilitySelectionSnapshot } from "../../reference/clinic-availability-setup.ts";
+  ClinicAvailabilityRoute, ClinicAvailabilitySelection, ClinicAvailabilitySelectionSnapshot,
+  ClinicAvailabilityPractitionerCatalogue, ClinicAvailabilityTypeCatalogue } from "../../reference/clinic-availability-setup.ts";
 
 type SetupPort = Pick<DashboardPort, "capabilities" | "settings" | "availabilityBusinesses" |
+  "availabilityPractitioners" | "availabilityTypes" |
   "availabilityInspect" | "availabilityApproval" | "checkAvailabilityRoute" | "approveAvailability" |
   "approveAvailabilityAlternatives" | "revokeAvailability">;
 type Field = keyof ClinicAvailabilityRoute | keyof ClinicAvailabilitySelection;
@@ -47,6 +49,8 @@ export class AvailabilitySetupPanel {
   private permitted = false;
   private busy = false;
   private catalogue: ClinicAvailabilityBusinessCatalogue | undefined;
+  private practitioners: ClinicAvailabilityPractitionerCatalogue | undefined;
+  private types: ClinicAvailabilityTypeCatalogue | undefined;
   private approval: ClinicAvailabilityApprovalState | undefined;
   private routeCheck: Awaited<ReturnType<SetupPort["checkAvailabilityRoute"]>> | undefined;
   private snapshot: ClinicAvailabilitySelectionSnapshot | undefined;
@@ -99,12 +103,47 @@ export class AvailabilitySetupPanel {
     if (field === "accountRef" || field === "dialedNumber" || field === "routeVersion") {
       this.route = { ...this.route, [field]: value };
     } else {
-      this.selection = { ...this.selection, [field]: value };
+      if (field === "businessId" && value !== this.selection.businessId) {
+        this.selection = { ...this.selection, businessId: value, practitionerId: "", appointmentTypeId: "" };
+        this.alternativeIds = [{ practitionerId: "", appointmentTypeId: "" },
+          { practitionerId: "", appointmentTypeId: "" }];
+        this.practitioners = undefined;
+        this.types = undefined;
+      } else {
+        this.selection = { ...this.selection, [field]: value };
+        if (field === "practitionerId") this.types = undefined;
+      }
       this.snapshot = undefined;
       this.alternativeSnapshots = [];
     }
     this.confirmed = false;
     this.draw();
+  }
+
+  private async listPractitioners(): Promise<void> {
+    if (this.busy || !this.selection.businessId) return;
+    const businessId = this.selection.businessId;
+    this.busy = true; this.error = undefined; this.practitioners = undefined; this.types = undefined; this.draw();
+    const result = await this.port.availabilityPractitioners(businessId);
+    if (this.selection.businessId === businessId) {
+      if (result.ok && result.value.businessId === businessId &&
+          result.value.credentialFingerprint === this.catalogue?.credentialFingerprint) this.practitioners = result.value;
+      else this.error = result.ok ? "The Cliniko connection changed; reload setup." : failureMessage(result.error);
+    }
+    this.busy = false; this.draw();
+  }
+
+  private async listTypes(): Promise<void> {
+    if (this.busy || !this.selection.businessId || !this.selection.practitionerId) return;
+    const { businessId, practitionerId } = this.selection;
+    this.busy = true; this.error = undefined; this.types = undefined; this.draw();
+    const result = await this.port.availabilityTypes(businessId, practitionerId);
+    if (this.selection.businessId === businessId && this.selection.practitionerId === practitionerId) {
+      if (result.ok && result.value.businessId === businessId && result.value.practitionerId === practitionerId &&
+          result.value.credentialFingerprint === this.catalogue?.credentialFingerprint) this.types = result.value;
+      else this.error = result.ok ? "The Cliniko connection changed; reload setup." : failureMessage(result.error);
+    }
+    this.busy = false; this.draw();
   }
 
   private setAlternative(index: number, field: "practitionerId" | "appointmentTypeId", value: string): void {
@@ -217,10 +256,16 @@ export class AvailabilitySetupPanel {
         @change=${(event: Event) => this.setField("businessId", (event.target as HTMLSelectElement).value)}>
         ${this.catalogue?.businesses.map(business => html`<option value=${business.businessId} ?selected=${business.businessId === this.selection.businessId}>${business.name} (${business.businessId})${business.archived ? " · archived" : ""}${business.onlineBooking ? "" : " · online booking off"}</option>`) ?? ""}
       </select></label>
-      <label>Practitioner ID <input aria-label="Practitioner ID" .value=${this.selection.practitionerId}
+      <label>Practitioner ID <input aria-label="Practitioner ID" list="available-practitioners" .value=${this.selection.practitionerId}
         @input=${(event: Event) => this.setField("practitionerId", (event.target as HTMLInputElement).value)}></label>
-      <label>Appointment type ID <input aria-label="Appointment type ID" .value=${this.selection.appointmentTypeId}
+      <button type="button" ?disabled=${this.busy || !this.selection.businessId} @click=${() => { void this.listPractitioners(); }}>List business practitioners</button>
+      <datalist id="available-practitioners">${this.practitioners?.practitioners.map(item => html`<option value=${item.practitionerId}>${item.name}${item.active && item.onlineBooking ? "" : " · unavailable for online booking"}</option>`) ?? ""}</datalist>
+      ${this.practitioners ? html`<p aria-label="Practitioner choices">${this.practitioners.practitioners.length} practitioners checked at ${this.practitioners.observedAt}; inspect the final choice before approval.</p>` : ""}
+      <label>Appointment type ID <input aria-label="Appointment type ID" list="available-appointment-types" .value=${this.selection.appointmentTypeId}
         @input=${(event: Event) => this.setField("appointmentTypeId", (event.target as HTMLInputElement).value)}></label>
+      <button type="button" ?disabled=${this.busy || !this.selection.businessId || !this.selection.practitionerId} @click=${() => { void this.listTypes(); }}>List practitioner appointment types</button>
+      <datalist id="available-appointment-types">${this.types?.appointmentTypes.map(item => html`<option value=${item.appointmentTypeId}>${item.name}${item.onlineBooking && !item.archived && item.businessSelected ? "" : " · unavailable for this business"}</option>`) ?? ""}</datalist>
+      ${this.types ? html`<p aria-label="Appointment type choices">${this.types.appointmentTypes.length} types checked at ${this.types.observedAt}; inspect the final choice before approval.</p>` : ""}
       <p class="muted">Clinic policy version ${this.selection.policyVersion || "unavailable"}</p>
       <button type="button" ?disabled=${this.busy || !this.catalogue || !this.selection.policyVersion} @click=${() => { void this.inspect(); }}>Inspect selection</button>
       ${this.snapshot ? html`<div aria-label="Availability selection inspection">

@@ -107,6 +107,12 @@ const clinicAvailabilityRoute = object({ accountRef: key,
 const clinicAvailabilityBusinessCatalogue = object({ scope, observedAt: str, credentialFingerprint: key,
   status: { const: "complete" }, businesses: array(object({ businessId: providerId,
     name: str, timeZone: nullable(str), onlineBooking: bool, archived: bool })) });
+const clinicAvailabilityPractitionerCatalogue = object({ scope, businessId: providerId, observedAt: str,
+  credentialFingerprint: key, status: { const: "complete" }, practitioners: array(object({
+    practitionerId: providerId, name: str, active: bool, onlineBooking: bool })) });
+const clinicAvailabilityTypeCatalogue = object({ scope, businessId: providerId, practitionerId: providerId,
+  observedAt: str, credentialFingerprint: key, status: { const: "complete" }, appointmentTypes: array(object({
+    appointmentTypeId: providerId, name: str, onlineBooking: bool, archived: bool, businessSelected: bool })) });
 const clinicAvailabilitySelectionSnapshot = object({ scope, selection: clinicAvailabilitySelection,
   observedAt: str, credentialFingerprint: key, businessName: str, practitionerName: str,
   appointmentTypeName: str, timeZone: nullable(str), status: choice("candidate", "unavailable"),
@@ -203,6 +209,14 @@ export const capabilityCatalogue = {
   "clinic.availability.businesses.list.v1": entry("clinic.availability.businesses.list.v1",
     object({ kind: { const: "clinic.availability.businesses.list.v1" } }),
     reply("clinicAvailabilityBusinesses", "catalogue", clinicAvailabilityBusinessCatalogue),
+    "read", "clinicAdmin", "none", ["availabilitySetupAvailable"]),
+  "clinic.availability.practitioners.list.v1": entry("clinic.availability.practitioners.list.v1",
+    object({ kind: { const: "clinic.availability.practitioners.list.v1" }, businessId: providerId }),
+    reply("clinicAvailabilityPractitioners", "catalogue", clinicAvailabilityPractitionerCatalogue),
+    "read", "clinicAdmin", "none", ["availabilitySetupAvailable"]),
+  "clinic.availability.types.list.v1": entry("clinic.availability.types.list.v1",
+    object({ kind: { const: "clinic.availability.types.list.v1" }, businessId: providerId, practitionerId: providerId }),
+    reply("clinicAvailabilityTypes", "catalogue", clinicAvailabilityTypeCatalogue),
     "read", "clinicAdmin", "none", ["availabilitySetupAvailable"]),
   "clinic.availability.selection.inspect.v1": entry("clinic.availability.selection.inspect.v1",
     object({ kind: { const: "clinic.availability.selection.inspect.v1" }, selection: clinicAvailabilitySelection }),

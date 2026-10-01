@@ -74,6 +74,36 @@ test("B1 selected Cliniko catalogue produces only a scoped, unapproved candidate
     null as unknown as typeof selection, 60_000, now), false);
 });
 
+test("E2E-227 practitioner and type choices stay scoped, bounded, and unapproved", async () => {
+  const app = fixture();
+  const practitioners = await app.reader.practitioners(scope, "11");
+  assert.ok(practitioners.ok);
+  assert.deepEqual(practitioners.value.practitioners, [{ practitionerId: "22", name: "Synthetic Practitioner",
+    active: true, onlineBooking: true }]);
+  const types = await app.reader.appointmentTypes(scope, "11", "22");
+  assert.ok(types.ok);
+  assert.deepEqual(types.value.appointmentTypes, [{ appointmentTypeId: "33", name: "Initial consult",
+    onlineBooking: true, archived: false, businessSelected: true }]);
+  assert.equal(JSON.stringify([practitioners, types]).includes("must-not-appear"), false);
+  assert.equal(JSON.stringify([practitioners, types]).includes("synthetic-key"), false);
+  assert.deepEqual(await app.reader.practitioners({ ...scope, tenantId: "other" }, "11"),
+    { ok: false, error: { kind: "scopeMismatch" } });
+  assert.deepEqual(await app.reader.appointmentTypes(scope, "../11", "22"),
+    { ok: false, error: { kind: "invalidSelection" } });
+  const partial = fixture({ "/v1/businesses/11/practitioners": { total_entries: 2,
+    practitioners: [{ id: "22", display_name: "Synthetic Practitioner", active: true,
+      show_in_online_bookings: true }] } });
+  assert.deepEqual(await partial.reader.practitioners(scope, "11"),
+    { ok: false, error: { kind: "unavailable" } });
+  const unavailableType = fixture({ "/v1/businesses/11": { id: "11", appointment_type_ids: null },
+    "/v1/practitioners/22/appointment_types": { total_entries: 1, appointment_types: [{ id: "33",
+      name: "Initial consult", archived_at: now, show_in_online_bookings: false }] } });
+  const candidate = await unavailableType.reader.appointmentTypes(scope, "11", "22");
+  assert.ok(candidate.ok);
+  assert.deepEqual(candidate.value.appointmentTypes, [{ appointmentTypeId: "33", name: "Initial consult",
+    onlineBooking: false, archived: true, businessSelected: false }]);
+});
+
 test("B1 wrong scope and invalid selection refuse before provider HTTP", async () => {
   const app = fixture();
   assert.deepEqual(await app.reader.businesses({ ...scope, tenantId: "other" }),
