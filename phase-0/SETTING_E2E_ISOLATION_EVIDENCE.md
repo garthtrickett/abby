@@ -70,3 +70,13 @@ Manifest version 1.19 maps `availability.sevenDay.enabled` to E2E-199. The signe
 `npm run test:settings-isolation:postgres` passed in the tracked run `Abby seven-day setting mapped PostgreSQL isolation` (8m28s, exit 0). It passed 111 Node cases across 13 files alone and in both four-worker file orders, plus 12 browser cases across four files alone and in both three-worker orders. The added cases use synthetic signed traffic, fake Cliniko responses and disposable PostgreSQL. They do not prove a real carrier call or clinic approval.
 
 The first full `npm run probe:postgres` run passed 791/792 cases but cancelled the existing E2E-171/E2E-218 startup and retention case at its 60-second test timeout under full-suite load; it had no assertion failure. That test starts several deliberately invalid runner processes before checking startup pruning. Its health fetch now has a 1.5-second bound and its overall allowance is 120 seconds; the assertions remain unchanged. The focused disposable-PostgreSQL file passed 2/2, and the final full `npm run probe:postgres` passed **792/792**, with zero failures, cancellations or skips (`Abby seven-day setting final PostgreSQL probe`, exit 0). `npm test` passed typecheck and 472 memory cases with 22 PostgreSQL-dependent skips.
+
+## Cross-mode agent conformance addition — 2026-10-01
+
+**Implementation revision tested:** `72e71e86bfc0a8677f44ea425b43df8f5d674673`.
+
+Manifest version 1.20 maps E2E-222 to the booking setting and write stop. One shared text/core command sequence now runs against strict transient standalone and an authorized embedded reference host with a durable call ledger, using separate disposable databases. It checks role and scope denial, the standalone `unavailable` mode despite an enabled booking setting, exact embedded confirmation before one write, emergency stop before a second write, and different call-state persistence. The standalone database and backup pass caller, patient, proof and call canary scans.
+
+`npm run test:settings-isolation:postgres` passed in `Abby final cross-mode mapped PostgreSQL isolation` (6m41s, exit 0): 112 Node cases across 14 files alone and in both four-worker orders, plus 12 browser cases across four files alone and in both three-worker orders. The new conformance case also passed its focused disposable-PostgreSQL run. This is shared text/core behavior; signed voice and a buyer monolith still need their own conformance proof.
+
+`npm test` passed typecheck and 472 memory cases with 23 PostgreSQL-only skips. `npm run probe:postgres` passed 793/793 cases with no failures, cancellations or skips (`Abby final cross-mode full PostgreSQL probe`, 4m58s, exit 0). The scenario-manifest contract and `git diff --check` also passed.
