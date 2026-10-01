@@ -144,7 +144,12 @@ const openaiFetch: typeof fetch = async (input, init) => {
   if (typeof request.input !== "string") throw new Error("invalid synthetic speech request");
   process.send?.({ kind: "speech", text: request.input });
   if (fault === "openai-speech") return new Response(null, { status: 503 });
-  return new Response(Buffer.alloc(960), { headers: { "content-type": "audio/pcm" } });
+  // Distinct PCM tones let signed tests distinguish greeting audio from the
+  // next utterance in the outbound stream, independently of IPC timing.
+  const sample = request.input.startsWith("This is an Abby test call.") ? 1_000 : 2_000;
+  const audio = Buffer.alloc(960);
+  for (let offset = 0; offset < audio.length; offset += 2) audio.writeInt16LE(sample, offset);
+  return new Response(audio, { headers: { "content-type": "audio/pcm" } });
 };
 
 await serveClinikoVoice({ clinikoFetch, openaiFetch, transcriptionSocketFactory: () => {
