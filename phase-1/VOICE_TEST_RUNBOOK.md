@@ -32,6 +32,8 @@ The local listener removes expired daily aggregate rows before accepting calls a
 
 For an owner-run daily threshold signal, set `ABBY_VOICE_OPS_THRESHOLDS_JSON` to a fixed-code map such as `{"clinikoProvider429":3,"clinikoProviderUnavailable":1}` and run `npm run voice:ops:check` with the same `DATABASE_URL` and clinic scope environment. Exit `2` means at least one configured threshold was crossed; the JSON output contains only date, code and counts. Exit `0` means clear, while exit `1` means the check was unavailable. This command does not send or acknowledge a notification.
 
+To send those crossings to an owner-controlled receiver, configure an HTTPS `ABBY_VOICE_ALERT_WEBHOOK_URL` without query parameters and a separate owner-only 64-character hex `ABBY_VOICE_ALERT_TOKEN_HEX`, then run `npm run voice:ops:send` with the same database, scope and thresholds. A successful run prints only the UTC date and count of accepted POSTs. Redirects, non-2xx responses and transport errors fail with a fixed message. The receiver should deduplicate the stable idempotency key; schedule this one-shot command outside the voice runner if alerts must continue during runner downtime. A receiver 2xx is not proof that a person saw the alert.
+
 ```sh
 npm run voice:preflight -- --config-only
 npm run voice:test-policy -- enable
