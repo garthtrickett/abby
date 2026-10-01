@@ -4,6 +4,7 @@ import { validCallKnowledgeSource } from "./knowledge-evidence.ts";
 import { err, ok } from "./model.ts";
 import type { CallState, Result, TransitionAction, TransitionFailure } from "./model.ts";
 import { addStaffTask } from "./staff-work.ts";
+import { staffFallbackText, staffRequestNotice } from "./staff-fallback.ts";
 
 function sourceDigest(refs: readonly string[]): string {
   return createHash("sha256").update(JSON.stringify(refs)).digest("hex");
@@ -43,17 +44,19 @@ export function acceptModelResult(state: CallState, action: Extract<TransitionAc
   state.effects[effect.id] = { ...effect, status: "completed" };
   if (!action.result.ok) {
     addStaffTask(state, "systemFailure", now);
-    effectNotice(state, effect.id, "I couldn't understand that safely. I'll request staff follow-up.");
+    effectNotice(state, effect.id, staffFallbackText(state,
+      "I couldn't understand that safely. I'll request staff follow-up."));
   } else if (proposal?.ok && proposal.value.kind === "handoff") {
     addStaffTask(state, proposal.value.reason, now);
-    effectNotice(state, effect.id, "I can request staff follow-up, but I can't confirm they have received it yet.");
+    effectNotice(state, effect.id, staffRequestNotice(state));
   } else if (proposal?.ok && proposal.value.kind === "answer") {
     const id = `${effect.id}:knowledge`;
     state.effects[id] = { kind: "modelKnowledge", schemaVersion: 1, id, taskRef: effect.taskRef, turnId: effect.turnId,
       conversationRevision: effect.conversationRevision, sourceRefsDigest: sourceDigest(proposal.value.sourceRefs), status: "pending" };
   } else {
     addStaffTask(state, "unsupported", now);
-    effectNotice(state, effect.id, "I can't complete that request automatically yet. I'll request staff follow-up.");
+    effectNotice(state, effect.id, staffFallbackText(state,
+      "I can't complete that request automatically yet. I'll request staff follow-up."));
   }
   return ok(true);
 }
@@ -81,7 +84,8 @@ export function acceptModelKnowledge(state: CallState, action: Extract<Transitio
     effectNotice(state, effect.id, source.approvedText);
   } else {
     addStaffTask(state, "systemFailure", now);
-    effectNotice(state, effect.id, "I can't verify that information right now. I'll request staff follow-up.");
+    effectNotice(state, effect.id, staffFallbackText(state,
+      "I can't verify that information right now. I'll request staff follow-up."));
   }
   return ok(true);
 }
