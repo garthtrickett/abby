@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { ClinikoAvailabilityReader } from "../../src/cliniko/availability.ts";
 import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
+import type { ClinikoBudgetOperationalEvent } from "../../src/cliniko/read-budget.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 
@@ -14,8 +15,11 @@ after(async () => { await Promise.all([firstDb.destroy(), secondDb.destroy()]); 
 test("E2E-156 separate standalone Cliniko readers share one PostgreSQL request budget", async () => {
   const scope = { tenantId: "budget-standalone", clinicId: "clinic", locationId: "main" };
   const apiKey = "synthetic-shared-budget-key-au5";
-  const first = new PostgresClinikoRequestBudget(firstDb, { apiKey, maxPerMinute: 1 });
-  const second = new PostgresClinikoRequestBudget(secondDb, { apiKey, maxPerMinute: 1 });
+  const events: ClinikoBudgetOperationalEvent[] = [];
+  const first = new PostgresClinikoRequestBudget(firstDb, { apiKey, maxPerMinute: 1,
+    onEvent: event => { events.push(event); } });
+  const second = new PostgresClinikoRequestBudget(secondDb, { apiKey, maxPerMinute: 1,
+    onEvent: event => { events.push(event); } });
   let outbound = 0;
   const port: typeof fetch = async input => {
     outbound += 1;
@@ -37,6 +41,7 @@ test("E2E-156 separate standalone Cliniko readers share one PostgreSQL request b
   ]);
   assert.equal(outbound, 1);
   assert.ok(results.some(result => !result.ok && result.error.kind === "rateLimited"));
+  assert.deepEqual(events, ["claimRateLimited"]);
   const rows = await firstDb.selectFrom("cliniko_request_budgets").selectAll().execute();
   assert.equal(rows.length, 1);
   assert.match(rows[0]!.budget_ref, /^[0-9a-f]{64}$/);
@@ -46,8 +51,11 @@ test("E2E-156 separate standalone Cliniko readers share one PostgreSQL request b
 
 test("E2E-157 a provider 429 fences a second standalone process", async () => {
   const apiKey = "synthetic-429-budget-key-au5";
-  const first = new PostgresClinikoRequestBudget(firstDb, { apiKey, maxPerMinute: 2 });
-  const second = new PostgresClinikoRequestBudget(secondDb, { apiKey, maxPerMinute: 2 });
+  const events: ClinikoBudgetOperationalEvent[] = [];
+  const first = new PostgresClinikoRequestBudget(firstDb, { apiKey, maxPerMinute: 2,
+    onEvent: event => { events.push(event); } });
+  const second = new PostgresClinikoRequestBudget(secondDb, { apiKey, maxPerMinute: 2,
+    onEvent: event => { events.push(event); } });
   const reset = String(Math.floor(Date.now() / 1_000) + 90);
   let outbound = 0;
   const port: typeof fetch = async () => {
@@ -67,13 +75,16 @@ test("E2E-157 a provider 429 fences a second standalone process", async () => {
   assert.equal(observed.error.kind, "rateLimited");
   assert.deepEqual(await availability.value.list(scope, "2026-09-30", "2026-09-30"), observed);
   assert.equal(outbound, 1);
+  assert.deepEqual(events, ["provider429", "claimRateLimited"]);
 });
 
 test("E2E-158 budget storage loss prevents a standalone Cliniko read", async () => {
   const apiKey = "synthetic-down-key-au5";
   const unavailableDb = connectPostgres("postgresql://postgres@127.0.0.1:1/unavailable");
   try {
-    const unavailable = new PostgresClinikoRequestBudget(unavailableDb, { apiKey });
+    const events: ClinikoBudgetOperationalEvent[] = [];
+    const unavailable = new PostgresClinikoRequestBudget(unavailableDb, { apiKey,
+      onEvent: event => { events.push(event); } });
     let outbound = 0;
     const reader = ClinikoPatientCandidateReader.create({ scope: { tenantId: "budget-down", clinicId: "clinic" },
       apiKey, contactEmail: "test@example.com", rateBudget: unavailable },
@@ -82,7 +93,25 @@ test("E2E-158 budget storage loss prevents a standalone Cliniko read", async () 
     assert.deepEqual(await reader.value.findByEmailAndBirthDate({ tenantId: "budget-down", clinicId: "clinic" },
       "test@example.com", "1990-01-01"), { ok: false, error: { kind: "unavailable" } });
     assert.equal(outbound, 0);
+    assert.deepEqual(events, ["claimUnavailable"]);
   } finally { await unavailableDb.destroy(); }
+});
+
+test("a diagnostic callback failure does not change budget outcomes", async () => {
+  const budget = new PostgresClinikoRequestBudget(firstDb, {
+    apiKey: "synthetic-callback-fault-au5", maxPerMinute: 1,
+    onEvent: () => { throw new Error("diagnostic failure"); },
+  });
+  assert.equal(await budget.claim(), null);
+  assert.equal((await budget.claim())?.kind, "rateLimited");
+  assert.equal((await budget.observe429(null)).kind, "rateLimited");
+  const asyncBudget = new PostgresClinikoRequestBudget(firstDb, {
+    apiKey: "synthetic-async-callback-fault-au5", maxPerMinute: 1,
+    onEvent: async () => { throw new Error("asynchronous diagnostic failure"); },
+  });
+  assert.equal(await asyncBudget.claim(), null);
+  assert.equal((await asyncBudget.claim())?.kind, "rateLimited");
+  assert.equal((await asyncBudget.observe429(null)).kind, "rateLimited");
 });
 
 test("E2E-159 one configured user group shares a budget across distinct keys", async () => {

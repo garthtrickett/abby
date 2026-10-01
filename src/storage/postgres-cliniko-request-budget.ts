@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
-import type { ClinikoBudgetDenial, ClinikoRateLimit, ClinikoRequestBudget } from "../cliniko/read-budget.ts";
+import type { ClinikoBudgetDenial, ClinikoBudgetOperationalEvent, ClinikoRateLimit,
+  ClinikoRequestBudget } from "../cliniko/read-budget.ts";
 import type Database from "./generated/Database.ts";
 import type { ClinikoRequestBudgetsBudgetRef } from "./generated/public/ClinikoRequestBudgets.ts";
 
@@ -32,23 +33,35 @@ export class PostgresClinikoRequestBudget implements ClinikoRequestBudget {
   private readonly budgetRef: ClinikoRequestBudgetsBudgetRef;
   private readonly maxPerMinute: number;
   private readonly credentialFingerprint: string;
+  private readonly onEvent: ((event: ClinikoBudgetOperationalEvent) => void | Promise<void>) | undefined;
 
   constructor(db: Kysely<Database>, config: Readonly<{
     apiKey: string;
     /** Supply the same non-patient reference when multiple keys belong to one Cliniko user. */
     sharedUserRef?: string;
     maxPerMinute?: number;
+    /** Fixed-code diagnostic only; callback failure never changes a provider decision. */
+    onEvent?: (event: ClinikoBudgetOperationalEvent) => void | Promise<void>;
   }>) {
     if (!config.apiKey?.trim() || config.apiKey.length > 2_000 ||
         (config.sharedUserRef !== undefined && (!config.sharedUserRef.trim() || config.sharedUserRef.length > 256)) ||
         !Number.isSafeInteger(config.maxPerMinute ?? 180) || (config.maxPerMinute ?? 180) < 1 ||
-        (config.maxPerMinute ?? 180) > 200) throw new RangeError("invalid Cliniko budget configuration");
+        (config.maxPerMinute ?? 180) > 200 ||
+        (config.onEvent !== undefined && typeof config.onEvent !== "function")) {
+      throw new RangeError("invalid Cliniko budget configuration");
+    }
     this.db = db;
     this.credentialFingerprint = clinikoCredentialFingerprint(config.apiKey);
     this.budgetRef = createHash("sha256")
       .update(`abby-cliniko-budget-v1\0${config.sharedUserRef ?? config.apiKey}`)
       .digest("hex") as ClinikoRequestBudgetsBudgetRef;
     this.maxPerMinute = config.maxPerMinute ?? 180;
+    this.onEvent = config.onEvent;
+  }
+
+  private report(event: ClinikoBudgetOperationalEvent): void {
+    try { void Promise.resolve(this.onEvent?.(event)).catch(() => undefined); }
+    catch { /* Diagnostics cannot authorize or suppress a Cliniko request. */ }
   }
 
   /** Standalone listeners must share their own database connection with this budget. */
@@ -75,7 +88,7 @@ export class PostgresClinikoRequestBudget implements ClinikoRequestBudget {
 
   async claim(): Promise<ClinikoBudgetDenial | null> {
     try {
-      return await this.locked(async (trx, now, row) => {
+      const result = await this.locked<ClinikoBudgetDenial | null>(async (trx, now, row) => {
         const cooldownUntil = millis(row.cooldown_until_ms);
         if (now < cooldownUntil) return { kind: "rateLimited", resetAt: new Date(cooldownUntil).toISOString() };
         const recent = sentTimes(row.sent_at_ms).filter(at => at > now - minuteMs);
@@ -88,10 +101,16 @@ export class PostgresClinikoRequestBudget implements ClinikoRequestBudget {
           .where("budget_ref", "=", this.budgetRef).execute();
         return null;
       });
-    } catch { return { kind: "unavailable" }; }
+      if (result?.kind === "rateLimited") this.report("claimRateLimited");
+      return result;
+    } catch {
+      this.report("claimUnavailable");
+      return { kind: "unavailable" };
+    }
   }
 
   async observe429(resetHeader: string | null): Promise<ClinikoRateLimit> {
+    this.report("provider429");
     try {
       return await this.locked(async (trx, now, row) => {
         const seconds = resetHeader && /^[0-9]+$/.test(resetHeader) ? Number(resetHeader) : NaN;

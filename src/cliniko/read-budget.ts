@@ -7,6 +7,7 @@ export function clinikoCredentialFingerprint(apiKey: string): string {
 
 export type ClinikoRateLimit = Readonly<{ kind: "rateLimited"; resetAt?: string }>;
 export type ClinikoBudgetDenial = ClinikoRateLimit | Readonly<{ kind: "unavailable" }>;
+export type ClinikoBudgetOperationalEvent = "claimRateLimited" | "claimUnavailable" | "provider429";
 
 /** The host owns one budget per Cliniko API user; adapters reserve before every request. */
 export type ClinikoRequestBudget = Readonly<{

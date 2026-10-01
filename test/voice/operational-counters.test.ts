@@ -11,8 +11,10 @@ test("standalone operational counters expose only fixed, clinic-scoped totals", 
   counters.record(first, "callEnded");
   counters.record(first, "caller-number-canary" as "voiceFailure");
   assert.deepEqual(counters.snapshot(first), { admissionDenied: 1, callOwnerStarted: 1,
-    voiceFailure: 0, callEnded: 1 });
+    voiceFailure: 0, callEnded: 1, clinikoBudgetDenied: 0,
+    clinikoBudgetUnavailable: 0, clinikoProvider429: 0 });
   assert.deepEqual(counters.snapshot(second), { admissionDenied: 0, callOwnerStarted: 0,
-    voiceFailure: 0, callEnded: 0 });
+    voiceFailure: 0, callEnded: 0, clinikoBudgetDenied: 0,
+    clinikoBudgetUnavailable: 0, clinikoProvider429: 0 });
   assert.doesNotMatch(JSON.stringify(counters.snapshot(first)), /caller-number-canary|tenant|first/);
 });
