@@ -75,7 +75,7 @@ type Fixture = { port: number; child: ReturnType<typeof spawn>;
   operationalSnapshot: () => Promise<Record<string, number>> };
 
 async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void>,
-                           weekApproved = false, alternativeApproved = false,
+                           weekApproved: boolean | "default" = false, alternativeApproved = false,
                            secondAlternativeApproved = false): Promise<void> {
   const adminUrl = process.env.DATABASE_URL;
   assert.ok(adminUrl);
@@ -102,8 +102,8 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
     ABBY_TWILIO_BINDING_KEY_HEX: "66".repeat(32), ABBY_VOICE_ROUTE_VERSION: "fault-test-v1",
     ABBY_TEST_OPERATOR_REF: "synthetic-operator", ABBY_AUTOMATION_EXPECTED_VERSION: "0",
     ABBY_GREETING_VERSION: "fault-test-v1", ABBY_GREETING_APPROVAL_OWNER_REF: "synthetic-approval",
-    ABBY_GREETING_APPROVED_TEXT: `This is an Abby test call. Press 1 for possible times today. Press 2 for possible times tomorrow.${weekApproved ? ` ${weekInstruction}` : ""}`,
-    ABBY_SEVEN_DAY_AVAILABILITY_ENABLED: weekApproved ? "1" : "0",
+    ABBY_GREETING_APPROVED_TEXT: `This is an Abby test call. Press 1 for possible times today. Press 2 for possible times tomorrow.${weekApproved === true ? ` ${weekInstruction}` : ""}`,
+    ABBY_SEVEN_DAY_AVAILABILITY_ENABLED: weekApproved === "default" ? undefined : weekApproved ? "1" : "0",
     ABBY_OPENAI_API_KEY: "synthetic-openai", ABBY_OPENAI_INTENT_MODEL: "synthetic-model",
   };
   let created = false;
@@ -376,6 +376,24 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
         await closeCaller(call);
       })),
+    t.test("E2E-199 omitted week setting defaults off for a signed caller", async () =>
+      withFixture("week-alternative", async fixture => {
+        const call = await fixture.openCall();
+        await markGreeting(call);
+        assert.ok(!fixture.speech[0]?.includes(weekInstruction));
+        call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
+          dtmf: { track: "inbound_track", digit: "3" } }));
+        call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "4", streamSid: call.streamSid,
+          dtmf: { track: "inbound_track", digit: "1" } }));
+        await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "default one-day response");
+        const readIndex = fixture.clinikoPaths.findIndex(path => path.endsWith("/available_times"));
+        assert.ok(readIndex >= 0);
+        const query = new URLSearchParams(fixture.clinikoQueries[readIndex]);
+        assert.equal(query.get("from"), query.get("to"));
+        assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
+        assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
+        await closeCaller(call);
+      }, "default")),
     t.test("E2E-199 an approved week option speaks only a bounded provisional alternative", async () =>
       withFixture("week-alternative", async fixture => {
         const call = await fixture.openCall();
@@ -398,6 +416,18 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         assert.equal(Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`), 6 * 86_400_000);
         assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
         assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
+        await closeCaller(call);
+      }, true)),
+    t.test("E2E-199 enabled week search speaks only direct contact after provider rate limit", async () =>
+      withFixture("cliniko-rate-limit", async fixture => {
+        const call = await fixture.openCall();
+        await markGreeting(call);
+        assert.ok(fixture.speech[0]?.includes(weekInstruction));
+        call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
+          dtmf: { track: "inbound_track", digit: "3" } }));
+        await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "week rate-limit fallback");
+        assert.equal(fixture.speech[1], noStaffNotice);
+        assert.ok(fixture.clinikoMethods.length > 0 && fixture.clinikoMethods.every(method => method === "GET"));
         await closeCaller(call);
       }, true)),
     t.test("E2E-200 unapproved practitioner and type are never searched", async () =>
