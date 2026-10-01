@@ -113,3 +113,34 @@ test("E2E-218 one-shot retention command deletes expired rows without revealing 
     where tenant_id = ${tenantId}`.execute(db);
   assert.equal(left.rows[0]?.count, "0");
 });
+
+test("E2E-219 owner threshold command enables selected fixed codes and isolates its clinic", async () => {
+  const tenantId = `ops-threshold-${randomUUID()}`;
+  const otherTenantId = `ops-threshold-other-${randomUUID()}`;
+  const today = new Date().toISOString().slice(0, 10);
+  await sql`insert into clinic_operational_daily_counts
+    (tenant_id, clinic_id, location_id, date, kind, count) values
+    (${tenantId}, 'clinic', 'main', ${today}::date, 'clinikoProvider429', 2),
+    (${tenantId}, 'clinic', 'main', ${today}::date, 'voiceFailure', 1),
+    (${otherTenantId}, 'clinic', 'main', ${today}::date, 'clinikoProvider429', 99)`.execute(db);
+  const env = { ...process.env, ABBY_TENANT_ID: tenantId, ABBY_CLINIC_ID: "clinic",
+    ABBY_LOCATION_ID: "main", ABBY_VOICE_OPS_THRESHOLDS_JSON: '{"clinikoProvider429":2}' };
+  const run = (thresholds: string) => spawnSync(process.execPath, ["scripts/check-voice-operations.ts"], {
+    cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_VOICE_OPS_THRESHOLDS_JSON: thresholds },
+    encoding: "utf8", timeout: 10_000,
+  });
+  const crossed = run('{"clinikoProvider429":2}');
+  assert.equal(crossed.status, 2, crossed.stderr);
+  assert.equal(crossed.stderr, "");
+  assert.deepEqual(JSON.parse(crossed.stdout), { date: today,
+    alerts: [{ kind: "clinikoProvider429", count: 2, threshold: 2 }] });
+  const clear = run('{"clinikoProvider429":3}');
+  assert.equal(clear.status, 0, clear.stderr);
+  assert.deepEqual(JSON.parse(clear.stdout), { date: today, alerts: [] });
+  for (const invalid of ['{}', '{"patientPhone":"+61400123456"}', '{"clinikoProvider429":0}']) {
+    const rejected = run(invalid);
+    assert.equal(rejected.status, 1);
+    assert.equal(rejected.stdout, "");
+    assert.equal(rejected.stderr, "operational threshold check unavailable\n");
+  }
+});
