@@ -1,5 +1,5 @@
 {
-  "version": "1.11",
+  "version": "1.12",
   "source": "TECHNICAL_DESIGN.md Section 11",
   "fixtureIdPattern": "fixture-{lowercase scenario id}",
   "capabilityMappings": {
@@ -19,10 +19,10 @@
     "knowledge.draft.save.v1": ["E2E-004", "E2E-059"],
     "knowledge.approve.v1": ["E2E-004"],
     "knowledge.revoke.v1": ["E2E-004", "E2E-059"],
-    "clinic.availability.businesses.list.v1": ["E2E-194", "E2E-195", "E2E-214"],
-    "clinic.availability.selection.inspect.v1": ["E2E-194", "E2E-195", "E2E-214"],
-    "clinic.availability.approval.read.v1": ["E2E-194", "E2E-195", "E2E-212", "E2E-214"],
-    "clinic.availability.approval.change.v1": ["E2E-194", "E2E-195", "E2E-211", "E2E-212", "E2E-214"],
+    "clinic.availability.businesses.list.v1": ["E2E-194", "E2E-195", "E2E-214", "E2E-215"],
+    "clinic.availability.selection.inspect.v1": ["E2E-194", "E2E-195", "E2E-214", "E2E-215"],
+    "clinic.availability.approval.read.v1": ["E2E-194", "E2E-195", "E2E-212", "E2E-214", "E2E-215"],
+    "clinic.availability.approval.change.v1": ["E2E-194", "E2E-195", "E2E-211", "E2E-212", "E2E-214", "E2E-215"],
     "clinic.availability.approval.change.v2": ["E2E-200", "E2E-201", "E2E-210"],
     "clinic.availability.approval.revoke.v1": ["E2E-194", "E2E-195", "E2E-212", "E2E-214"],
     "availability.read.v2": ["E2E-125"],
@@ -36,7 +36,7 @@
     "appointments.booking.enabled": ["E2E-010"],
     "automation.enabled": ["E2E-018"],
     "calls.writes.stop": ["E2E-074"],
-    "clinic.availability.approval": ["E2E-194", "E2E-195", "E2E-200", "E2E-201", "E2E-209", "E2E-210", "E2E-211", "E2E-212", "E2E-214"],
+    "clinic.availability.approval": ["E2E-194", "E2E-195", "E2E-200", "E2E-201", "E2E-209", "E2E-210", "E2E-211", "E2E-212", "E2E-214", "E2E-215"],
     "knowledge.approval": ["E2E-004"]
   },
   "scenarios": [
@@ -253,6 +253,7 @@
     {"id": "E2E-211", "requirements": ["FR-01", "FR-14", "FR-17", "FR-20"], "fixtureFamily": "settings", "fixtureState": "textImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/browser/host-dashboard-identity.spec.ts"]}, "observableAssertions": {"caller": "host-authenticated clinic admin can approve a read-only route in the browser", "fault": "missing, staff, foreign-scope, actor-mismatched and forged-header sessions plus wrong Host or POST Origin cannot approve", "privacy": "denied sessions make no Cliniko request and no patient record or provider secret reaches browser output"}},
     {"id": "E2E-212", "requirements": ["FR-01", "FR-05", "FR-11", "FR-14", "FR-17", "FR-20", "FR-22"], "fixtureFamily": "settings", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/standalone-admin-approval-voice.test.ts"]}, "observableAssertions": {"caller": "a host-authenticated admin approves a read-only route and an already admitted signed call still speaks provisional times after revocation", "fault": "anonymous admin requests are denied, a stale revocation conflicts, and revocation blocks the next signed call after admin server and database recomposition", "privacy": "the isolated database, backup and runner output contain no caller, call ID or appointment canary"}},
     {"id": "E2E-213", "requirements": ["FR-01", "FR-05", "FR-11", "FR-14", "FR-20", "FR-22"], "fixtureFamily": "admission-and-lease", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/standalone-voice-failures.test.ts"]}, "observableAssertions": {"caller": "the interrupted stream drops and a new signed call after process restart speaks only provisional availability", "fault": "a SIGKILLed runner is replaced against the same isolated database and persisted approval without replaying the old call", "privacy": "both call IDs, the caller and appointment canaries stay out of database, backup and runner output"}},
-    {"id": "E2E-214", "requirements": ["FR-01", "FR-14", "FR-17", "FR-20"], "fixtureFamily": "settings", "fixtureState": "textImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/cliniko/local-admin-listener.test.ts", "test/browser/local-cliniko-admin.spec.ts"]}, "observableAssertions": {"caller": "an owner-only loopback browser shows read-only availability setup and a restart preserves its approved route", "fault": "missing or wrong Basic credentials and foreign POST origin cannot reach Cliniko or change approval", "privacy": "the clinic key and admin token stay out of isolated storage, backup and output, and patient text stays out of the browser"}}
+    {"id": "E2E-214", "requirements": ["FR-01", "FR-14", "FR-17", "FR-20"], "fixtureFamily": "settings", "fixtureState": "textImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/cliniko/local-admin-listener.test.ts", "test/browser/local-cliniko-admin.spec.ts"]}, "observableAssertions": {"caller": "an owner-only loopback browser shows read-only availability setup and a restart preserves its approved route", "fault": "missing or wrong Basic credentials and foreign POST origin cannot reach Cliniko or change approval", "privacy": "the clinic key and admin token stay out of isolated storage, backup and output, and patient text stays out of the browser"}},
+    {"id": "E2E-215", "requirements": ["FR-01", "FR-05", "FR-14", "FR-17", "FR-20", "FR-22"], "fixtureFamily": "settings", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/browser/availability-setup.spec.ts"]}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/standalone-credential-rotation.test.ts"]}, "observableAssertions": {"caller": "the browser requires reapproval after key rotation and a signed call speaks provisional times only after a fresh approval", "fault": "a rotated credential makes the stored approval stale; the signed webhook refuses without a stream or Cliniko read until an admin records versioned reapproval", "privacy": "caller, call IDs and both synthetic credentials are absent from disposable database, backup and runner output"}}
   ]
 }
