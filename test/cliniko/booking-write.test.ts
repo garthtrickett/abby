@@ -49,6 +49,8 @@ test("one marked booking POST produces a bounded receipt and exact patient-scope
     return Response.json({ total_entries: 1, individual_appointments: [appointment("91")] });
   };
   const adapter = writer(fetchPort);
+  assert.deepEqual(adapter.selection(), { scope, businessId: "11", practitionerId: "22",
+    appointmentTypeId: "33" });
   assert.deepEqual(await adapter.writeOnce(request),
     { ok: true, value: { kind: "accepted", appointmentRef: "cliniko:appointment:91" } });
   assert.deepEqual(await adapter.observe(request), { ok: true, value: { kind: "one", scope, observedAt,
