@@ -21,6 +21,16 @@ export type ClinikoRecallConfig = Readonly<{
   rateBudget?: ClinikoRequestBudget;
 }>;
 export type ClinikoRecallExpectation = Readonly<{ notes: string; recallTypeId: string; recallAt: string }>;
+/** Counts only; no recall, patient, note, or marker leaves this read boundary. */
+export type ClinikoRecallQueuePulse = Readonly<{
+  scope: ClinikoClinicScope;
+  observedAt: string;
+  throughDate: string;
+  scanned: number;
+  pending: number;
+  overdue: number;
+  markedRecalled: number;
+}>;
 
 const idPattern = /^[1-9][0-9]*$/;
 const emailPattern = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
@@ -185,5 +195,83 @@ export class ClinikoRecallReader {
     }
     return ok({ ...base, kind: "one", recallRef: `cliniko:recall:${matches[0]!.id}`,
       recalled: matches[0]!.recalled, archived: matches[0]!.archived });
+  }
+
+  /** Read-only account scan for one configured recall type. Incomplete scans never yield partial counts. */
+  async queuePulse(scope: ClinikoClinicScope, recallTypeId: string, throughDate: string):
+    Promise<Result<ClinikoRecallQueuePulse, ClinikoRecallFailure>> {
+    if (!validScope(scope) || scope.tenantId !== this.scope.tenantId || scope.clinicId !== this.scope.clinicId) {
+      return err({ kind: "scopeMismatch" });
+    }
+    if (typeof recallTypeId !== "string" || !idPattern.test(recallTypeId) || recallTypeId.length > 19 ||
+        !validRecallDate(throughDate)) return err({ kind: "invalidQuery" });
+    let observedAt: string;
+    try { observedAt = this.clock(); }
+    catch { return err({ kind: "unavailable" }); }
+    if (typeof observedAt !== "string" || !Number.isFinite(Date.parse(observedAt))) {
+      return err({ kind: "unavailable" });
+    }
+
+    let totalEntries: number | undefined;
+    let scanned = 0;
+    let pending = 0;
+    let overdue = 0;
+    let markedRecalled = 0;
+    let lastId = 0n;
+    for (let page = 1; page <= maxPages; page += 1) {
+      const limited = await claimClinikoBudget(this.rateBudget);
+      if (limited) return err(limited);
+      const query = new URLSearchParams({ page: String(page), per_page: String(pageSize), sort: "id:asc" });
+      let response: Response;
+      try {
+        response = await this.fetchPort(`${this.baseUrl}/recalls?${query}`, {
+          method: "GET", headers: { Accept: "application/json", Authorization: this.authorization,
+            "User-Agent": this.userAgent }, redirect: "error", signal: AbortSignal.timeout(15_000),
+        });
+      } catch { return err({ kind: "unavailable" }); }
+      if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
+      if (response.status === 429) {
+        return err(await observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset")));
+      }
+      if (response.status >= 500 || response.status === 404) return err({ kind: "unavailable" });
+      if (response.status !== 200) return err({ kind: "malformed" });
+      const parsed = await boundedRecallJson(response);
+      if (!parsed.ok) return parsed;
+      const body = record(parsed.value);
+      if (!body || !Number.isSafeInteger(body.total_entries) || Number(body.total_entries) < 0 ||
+          Number(body.total_entries) > pageSize * maxPages || !Array.isArray(body.recalls) ||
+          (totalEntries !== undefined && totalEntries !== body.total_entries)) return err({ kind: "tooManyResults" });
+      totalEntries = Number(body.total_entries);
+      const expected = Math.min(pageSize, Math.max(0, totalEntries - (page - 1) * pageSize));
+      if (body.recalls.length !== expected) return err({ kind: "malformed" });
+      for (const item of body.recalls) {
+        const recall = record(item);
+        const patientLink = record(record(recall?.patient)?.links)?.self;
+        const typeLink = record(record(recall?.recall_type)?.links)?.self;
+        if (!recall || typeof recall.id !== "string" || !idPattern.test(recall.id) ||
+            recall.id.length > 19 || BigInt(recall.id) <= lastId ||
+            typeof patientLink !== "string" ||
+            !patientLink.startsWith(`${this.baseUrl}/patients/`) ||
+            !idPattern.test(patientLink.slice(`${this.baseUrl}/patients/`.length)) ||
+            typeof typeLink !== "string" || !typeLink.startsWith(`${this.baseUrl}/recall_types/`) ||
+            !idPattern.test(typeLink.slice(`${this.baseUrl}/recall_types/`.length)) ||
+            recall.archived_at !== null || !validRecallDate(recall.recall_at) ||
+            (recall.recalled !== true && recall.recalled !== false && recall.recalled !== null)) {
+          return err({ kind: "malformed" });
+        }
+        lastId = BigInt(recall.id);
+        scanned += 1;
+        if (typeLink !== `${this.baseUrl}/recall_types/${recallTypeId}`) continue;
+        if (recall.recalled === true) markedRecalled += 1;
+        else {
+          pending += 1;
+          if (recall.recall_at < throughDate) overdue += 1;
+        }
+      }
+      if (scanned === totalEntries) break;
+    }
+    if (scanned !== totalEntries) return err({ kind: "tooManyResults" });
+    return ok({ scope: structuredClone(this.scope), observedAt, throughDate,
+      scanned, pending, overdue, markedRecalled });
   }
 }
