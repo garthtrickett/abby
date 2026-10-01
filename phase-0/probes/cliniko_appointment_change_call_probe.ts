@@ -8,6 +8,7 @@ import { MemoryLedger } from "../../src/core/ledger.ts";
 import { ok } from "../../src/core/model.ts";
 import type { LocationScope } from "../../src/core/model.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
+import { createEmbeddedTextComposition } from "../../src/reference/embedded-composition.ts";
 import { ReferenceNumberRoutingHost } from "../../src/reference/clinic-number-routing.ts";
 import { createEmbeddedVoiceComposition } from "../../src/reference/embedded-voice-composition.ts";
 import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
@@ -52,9 +53,10 @@ class ChangePolicyStore extends MemoryPolicyStore {
   }
 }
 
-/** The owning Python fixture independently checks the mutation and archives patient and appointment. */
+/** The owning Python fixture independently checks the mutation, cancellation and patient archive. */
 async function run(): Promise<void> {
   const input = inputFromStdin();
+  const dropCompletedPatchResponse = process.env.ABBY_PROBE_VOICE_DROP_PATCH_RESPONSE === "1";
   const now = new Date().toISOString();
   const expiresAt = new Date(Date.parse(now) + 4 * 60_000).toISOString();
   const event = { key: { accountRef: "synthetic-demo", providerCallRef: `change-${randomUUID()}` },
@@ -75,13 +77,20 @@ async function run(): Promise<void> {
   });
   let patchCount = 0;
   let postPatchTargetReads = 0;
-  const provider: typeof fetch = (url, init) => {
+  let discardedPatchResponses = 0;
+  const provider: typeof fetch = async (url, init) => {
     if (init?.method === "PATCH") patchCount += 1;
     if (patchCount && init?.method === "GET" &&
         new URL(String(url)).pathname.endsWith(`/individual_appointments/${input.appointmentId}`)) {
       postPatchTargetReads += 1;
     }
-    return fetch(url, init);
+    const response = await fetch(url, init);
+    if (dropCompletedPatchResponse && init?.method === "PATCH" && response.ok) {
+      discardedPatchResponses += 1;
+      await response.body?.cancel();
+      throw new Error("synthetic response loss after completed appointment change");
+    }
+    return response;
   };
   const writer = { scope, apiKey: input.apiKey, contactEmail: input.contactEmail,
     businessId: input.businessId };
@@ -160,6 +169,7 @@ async function run(): Promise<void> {
     assert.ok(result?.ok && result.value.kind === "turnCompleted");
     return result.value.delivery;
   }
+  let result: Record<string, boolean | Kind> | undefined;
   try {
     const begun = await call.begin(now);
     assert.ok(begun.ok && begun.value.kind === "admitted");
@@ -175,20 +185,35 @@ async function run(): Promise<void> {
     const state = await ledger.read(callId, scope);
     assert.ok(state.ok);
     const action = Object.values(state.value.actions)[0];
-    const committed = action?.status === "committed";
     assert.equal(patchCount, 1);
-    assert.ok(committed && postPatchTargetReads > 0 && spoken.at(-1)?.includes("is confirmed"));
     assert.ok(spoken.every(text => !text.includes(input.markerToken)));
     await play(outcome);
     assert.ok(action);
+    if (dropCompletedPatchResponse) {
+      assert.equal(discardedPatchResponses, 1);
+      assert.equal(action.status, "uncertain");
+      assert.equal(spoken.at(-1), "I can't confirm that action yet. It is pending review.");
+      const settled = await createEmbeddedTextComposition(ledger, policy, host).drain(scope, callId, now);
+      assert.ok(settled.ok);
+      assert.equal(settled.value.actions[action.key]?.status, "committed");
+      assert.ok(postPatchTargetReads > 0);
+      result = { ok: true, kind: input.kind, voiceCommitted: false, uncertaintySpoken: true,
+        reconciledExact: true, onePatch: true, repeatRejected: true, droppedCompletedResponse: true };
+    } else {
+      assert.equal(discardedPatchResponses, 0);
+      assert.ok(action.status === "committed" && postPatchTargetReads > 0 &&
+        spoken.at(-1)?.includes("is confirmed"));
+      result = { ok: true, kind: input.kind, voiceCommitted: true,
+        onePatch: true, confirmationAfterObservation: true, repeatRejected: true };
+    }
     assert.equal((await host.write(action.mutation, now)).kind, "rejected");
     assert.equal(patchCount, 1);
-    process.stdout.write(JSON.stringify({ ok: true, kind: input.kind, voiceCommitted: true,
-      onePatch: true, confirmationAfterObservation: true, repeatRejected: true }));
   } finally {
     await call.disconnect(now);
     host.dispose();
   }
+  assert.ok(result);
+  process.stdout.write(JSON.stringify(result));
 }
 
 run().catch(() => {
