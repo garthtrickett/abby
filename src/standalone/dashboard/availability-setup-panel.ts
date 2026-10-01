@@ -174,9 +174,18 @@ export class AvailabilitySetupPanel {
   private draw(): void {
     if (!this.permitted) return;
     const approved = this.approval?.approval;
+    const credentialChanged = !!approved && !!this.catalogue &&
+      approved.credentialFingerprint !== this.catalogue.credentialFingerprint;
+    const routeReadiness = !approved ? "No route approved for new calls." :
+      !this.catalogue ? "Route readiness cannot be checked while Cliniko is unavailable." :
+      credentialChanged ? "Reapproval required: the Cliniko credential changed. New calls cannot use this route." :
+      "Stored route matches this Cliniko credential. Each call still rechecks current eligibility.";
     render(html`<section class="card" aria-labelledby="availability-setup-title">
       <h2 id="availability-setup-title">Read-only availability setup</h2>
       <p class="muted">Approve one clinic route and up to two ordered alternatives for provisional times. Booking, patient details and staff requests stay unavailable.</p>
+      <p class="status" aria-label="Cliniko connection status">${this.catalogue
+        ? `Cliniko catalogue checked at ${this.catalogue.observedAt}.` : "Cliniko catalogue could not be checked."}</p>
+      <p class="status" aria-label="Availability route readiness">${routeReadiness}</p>
       <p class="status" aria-label="Availability approval status">${approved
         ? `Stored approval: ${approved.selection.businessId} / ${approved.selection.practitionerId} / ${approved.selection.appointmentTypeId} · version ${this.approval?.version} · ${approved.alternatives.length} alternatives`
         : `No approved availability route · version ${this.approval?.version ?? "unknown"}`}</p>

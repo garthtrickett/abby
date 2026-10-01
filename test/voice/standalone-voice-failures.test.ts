@@ -150,13 +150,14 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
       child.stdout?.on("data", data => { processOutput += String(data); });
       child.stderr?.on("data", data => { processOutput += String(data); });
       const healthUrl = `http://127.0.0.1:${port}/healthz`;
-      const until = Date.now() + 15_000;
+      const until = Date.now() + 30_000;
       let healthy = false;
       while (!healthy && Date.now() < until) {
+        if (child.exitCode !== null || child.signalCode !== null) break;
         try { healthy = (await fetch(healthUrl, { signal: AbortSignal.timeout(500) })).status === 200; }
         catch { await new Promise(resolve => setTimeout(resolve, 50)); }
       }
-      assert.ok(healthy, "voice runner did not start");
+      assert.ok(healthy, `voice runner did not start (exit=${child.exitCode ?? "running"}, signal=${child.signalCode ?? "none"})`);
     };
     await launch();
     const firstChild = child;

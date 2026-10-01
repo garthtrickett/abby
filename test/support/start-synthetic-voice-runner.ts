@@ -3,7 +3,7 @@ import WebSocket from "ws";
 import { serveClinikoVoice } from "../../scripts/serve-cliniko-voice.ts";
 
 if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
-    process.env.ABBY_CLINIKO_API_KEY !== "synthetic-key-au5" ||
+    !["synthetic-key-au5", "synthetic-rotated-key-au5"].includes(process.env.ABBY_CLINIKO_API_KEY ?? "") ||
     process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}` ||
     !process.env.DATABASE_URL?.includes("/abby_test_voice_") ||
     ![undefined, "openai-speech", "openai-transcription", "untrusted-transcript", "cliniko-rate-limit", "cliniko-server-error", "cliniko-timeout", "cliniko-slow-read", "cliniko-zone-changed", "cliniko-partial-page", "cliniko-business-type-removed", "cliniko-practitioner-type-removed", "week-alternative",

@@ -16,11 +16,14 @@ const scope = { tenantId: "browser-tenant", clinicId: "browser-clinic", location
 const route = { accountRef: "browser-account", dialedNumber: "+6125550199", routeVersion: "route-1" };
 const now = "2026-09-30T10:00:00.000Z";
 
-async function fixture(role: "clinicAdmin" | "staff", uncertainApproval = false) {
+async function fixture(role: "clinicAdmin" | "staff", uncertainApproval = false,
+                       options: Readonly<{ apiKey?: string; store?: MemoryClinikoApprovalStore;
+                         providerForbidden?: boolean }> = {}) {
   const calls: string[] = [];
   const fetchPort: typeof fetch = async input => {
     const path = new URL(String(input)).pathname;
     calls.push(path);
+    if (options.providerForbidden && path === "/v1/businesses") return new Response(null, { status: 403 });
     if (path === "/v1/businesses") return Response.json({ total_entries: 2, businesses: [{
       id: "44", business_name: "Other location", archived_at: null, show_in_online_bookings: true,
       time_zone_identifier: "Australia/Sydney" }, {
@@ -48,11 +51,11 @@ async function fixture(role: "clinicAdmin" | "staff", uncertainApproval = false)
     if (path === "/v1/practitioners/66/appointment_types") return Response.json({ total_entries: 1, appointment_types: [{ id: "77" }] });
     throw new Error(`unexpected catalogue request ${path}`);
   };
-  const reader = ClinikoCatalogueReader.create({ scope, apiKey: "synthetic-key-au5",
+  const reader = ClinikoCatalogueReader.create({ scope, apiKey: options.apiKey ?? "synthetic-key-au5",
     contactEmail: "test@example.com" }, fetchPort, () => now);
   assert.ok(reader.ok);
   const policy = new MemoryPolicyStore();
-  const memory = new MemoryClinikoApprovalStore();
+  const memory = options.store ?? new MemoryClinikoApprovalStore();
   let loseApprovalReceipt = uncertainApproval;
   const store: ClinikoApprovalStore = {
     read: scoped => memory.read(scoped),
@@ -209,4 +212,49 @@ test("E2E-201 admin inspects, saves, reloads and removes ordered clinic-specific
     assert.ok(removed.ok);
     assert.deepEqual(removed.value.alternatives, []);
   } finally { await app.close(); }
+});
+
+test("E2E-215 rotated Cliniko credential makes a stored approval visibly require reapproval", async ({ page }) => {
+  const store = new MemoryClinikoApprovalStore();
+  const original = await fixture("clinicAdmin", false, { store });
+  try {
+    await page.goto(original.url);
+    await expect(page.getByLabel("Cliniko connection status")).toContainText("catalogue checked");
+    await page.getByLabel("Cliniko business").selectOption("11");
+    await page.getByLabel("Practitioner ID", { exact: true }).fill("22");
+    await page.getByLabel("Appointment type ID", { exact: true }).fill("33");
+    await page.getByRole("button", { name: "Inspect selection" }).click();
+    await page.getByLabel("Route account reference").fill(route.accountRef);
+    await page.getByLabel("Dialed number").fill(route.dialedNumber);
+    await page.getByLabel("Route version").fill(route.routeVersion);
+    await page.getByRole("checkbox", { name: "I approve this route for provisional availability only." }).check();
+    await page.getByRole("button", { name: "Approve read-only route" }).click();
+    await expect(page.getByLabel("Availability route readiness")).toContainText("Stored route matches");
+  } finally { await original.close(); }
+
+  const rotated = await fixture("clinicAdmin", false, { store, apiKey: "synthetic-rotated-key-au5" });
+  try {
+    await page.goto(rotated.url);
+    await expect(page.getByLabel("Availability approval status")).toContainText("version 1");
+    await expect(page.getByLabel("Availability route readiness")).toContainText("Reapproval required");
+    assert.deepEqual(await rotated.setup.readApprovedRoute(scope, route),
+      { ok: false, error: { kind: "staleApproval" } });
+    await page.getByRole("button", { name: "Inspect selection" }).click();
+    await expect(page.getByLabel("Availability selection inspection")).toContainText("Eligible candidate");
+    await page.getByRole("checkbox", { name: "I approve this route for provisional availability only." }).check();
+    await page.getByRole("button", { name: "Approve read-only route" }).click();
+    await expect(page.getByLabel("Availability approval status")).toContainText("version 2");
+    await expect(page.getByLabel("Availability route readiness")).toContainText("Stored route matches");
+    assert.ok((await rotated.setup.readApprovedRoute(scope, route)).ok);
+  } finally { await rotated.close(); }
+
+  const denied = await fixture("clinicAdmin", false, { store,
+    apiKey: "synthetic-rotated-key-au5", providerForbidden: true });
+  try {
+    await page.goto(denied.url);
+    await expect(page.getByLabel("Availability approval status")).toContainText("version 2");
+    await expect(page.getByLabel("Cliniko connection status")).toContainText("could not be checked");
+    await expect(page.getByLabel("Availability route readiness")).toContainText("cannot be checked");
+    await expect(page.getByRole("alert")).toContainText("Cliniko rejected this connection");
+  } finally { await denied.close(); }
 });
