@@ -3,6 +3,7 @@ import test from "node:test";
 import { ClinikoCancellationWriter } from "../../src/cliniko/cancellation-write.ts";
 import type { ClinikoCancellationRequest } from "../../src/cliniko/cancellation-write.ts";
 import { ClinikoReadBudget } from "../../src/cliniko/read-budget.ts";
+import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 
 const scope = { tenantId: "cancel-tenant", clinicId: "cancel-clinic", locationId: "cancel-location" };
 const base = "https://api.au5.cliniko.com/v1";
@@ -14,6 +15,12 @@ const request: ClinikoCancellationRequest = {
 };
 const observedAt = "2026-10-01T10:00:00.000Z";
 
+async function waitFor(check: () => boolean): Promise<void> {
+  const deadline = Date.now() + 1_000;
+  while (!check() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 1));
+  assert.ok(check(), "expected provider phase did not start");
+}
+
 function appointment(changes: Record<string, unknown> = {}) {
   return { id: "91", starts_at: "2026-10-08T04:00:00Z", ends_at: "2026-10-08T04:30:00Z",
     cancelled_at: null, archived_at: null, deleted_at: null,
@@ -24,7 +31,7 @@ function appointment(changes: Record<string, unknown> = {}) {
     patient_name: "Never disclose this", notes: "Private clinical note", ...changes };
 }
 
-function writer(fetchPort: typeof fetch, rateBudget?: ClinikoReadBudget): ClinikoCancellationWriter {
+function writer(fetchPort: typeof fetch, rateBudget?: ClinikoRequestBudget): ClinikoCancellationWriter {
   const created = ClinikoCancellationWriter.create({ ...config, ...(rateBudget ? { rateBudget } : {}) },
     fetchPort, () => observedAt);
   assert.ok(created.ok, created.ok ? "" : created.error.kind);
@@ -170,4 +177,87 @@ test("pre-read failure or shared budget exhaustion makes no cancellation attempt
     ok: false, error: { kind: "rateLimited", resetAt: new Date(Date.parse(observedAt) + 60_000).toISOString() },
   });
   assert.equal(writes, 0);
+});
+
+test("a hangup before or during the target read prevents a cancellation PATCH", async () => {
+  let reads = 0;
+  let writes = 0;
+  let release!: (response: Response) => void;
+  const held = new Promise<Response>(resolve => { release = resolve; });
+  const adapter = writer(async (_input, init) => {
+    if (init?.method === "PATCH") { writes += 1; throw new Error("unexpected PATCH"); }
+    reads += 1;
+    return held;
+  });
+  const alreadyAborted = new AbortController();
+  alreadyAborted.abort();
+  assert.deepEqual(await adapter.cancelOnce(request, alreadyAborted.signal),
+    { ok: false, error: { kind: "unavailable" } });
+  assert.equal(reads, 0);
+  const controller = new AbortController();
+  const pending = adapter.cancelOnce(request, controller.signal);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reads, 1);
+  controller.abort();
+  assert.deepEqual(await pending, { ok: false, error: { kind: "unavailable" } });
+  release(Response.json(appointment()));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(writes, 0);
+});
+
+test("a hangup during the pre-send budget claim prevents a cancellation PATCH", async () => {
+  let claims = 0;
+  let writes = 0;
+  const budget: ClinikoRequestBudget = { claim: () => {
+    claims += 1;
+    return claims === 1 ? null : new Promise<null>(() => undefined);
+  }, observe429: () => ({ kind: "rateLimited" }) };
+  const adapter = writer(async (_input, init) => {
+    if (init?.method === "PATCH") writes += 1;
+    return Response.json(appointment());
+  }, budget);
+  const controller = new AbortController();
+  const pending = adapter.cancelOnce(request, controller.signal);
+  await waitFor(() => claims === 2);
+  controller.abort();
+  assert.deepEqual(await pending, { ok: false, error: { kind: "unavailable" } });
+  assert.equal(writes, 0);
+});
+
+test("a hangup after the cancellation PATCH starts is uncertain even if its late 204 succeeds", async () => {
+  let release!: (response: Response) => void;
+  const held = new Promise<Response>(resolve => { release = resolve; });
+  let reads = 0;
+  let writes = 0;
+  let providerSignal: AbortSignal | undefined;
+  const adapter = writer(async (_input, init) => {
+    if (init?.method === "PATCH") { writes += 1; providerSignal = init.signal ?? undefined; return held; }
+    reads += 1;
+    return Response.json(appointment());
+  });
+  const controller = new AbortController();
+  const pending = adapter.cancelOnce(request, controller.signal);
+  await waitFor(() => writes === 1);
+  controller.abort();
+  assert.equal(providerSignal?.aborted, true);
+  assert.deepEqual(await pending, { ok: true, value: { kind: "uncertain" } });
+  release(new Response(null, { status: 204 }));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reads, 1, "late PATCH success must not trigger a post-write read");
+  assert.deepEqual(await adapter.cancelOnce(request), { ok: false, error: { kind: "invalidQuery" } });
+  assert.equal(writes, 1);
+});
+
+test("aborting cancellation observation ignores a late cancelled row", async () => {
+  let release!: (response: Response) => void;
+  const held = new Promise<Response>(resolve => { release = resolve; });
+  let reads = 0;
+  const adapter = writer(async () => { reads += 1; return held; });
+  const controller = new AbortController();
+  const pending = adapter.observe(request, controller.signal);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reads, 1);
+  controller.abort();
+  assert.deepEqual(await pending, { ok: false, error: { kind: "unavailable" } });
+  release(Response.json(appointment({ cancelled_at: observedAt })));
 });

@@ -6,6 +6,12 @@ import type { ClinikoRescheduleRequest } from "../../src/cliniko/reschedule-writ
 const scope = { tenantId: "move-tenant", clinicId: "move-clinic", locationId: "move-location" };
 const base = "https://api.au5.cliniko.com/v1";
 const observedAt = "2026-10-01T10:00:00.000Z";
+
+async function waitFor(check: () => boolean): Promise<void> {
+  const deadline = Date.now() + 1_000;
+  while (!check() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 1));
+  assert.ok(check(), "expected provider phase did not start");
+}
 const request: ClinikoRescheduleRequest = {
   scope, patientId: "42", appointmentId: "91", practitionerId: "22", appointmentTypeId: "33",
   startsAt: "2026-10-08T11:00:00+07:00", endsAt: "2026-10-08T11:30:00+07:00",
@@ -151,4 +157,72 @@ test("invalid new interval, scope and repeated simultaneous attempts are denied"
   release();
   assert.deepEqual(await first, { ok: true, value: { kind: "moved" } });
   assert.equal(writes, 1);
+});
+
+test("a hangup before or during the old-appointment read prevents a move PATCH", async () => {
+  let release!: (response: Response) => void;
+  const held = new Promise<Response>(resolve => { release = resolve; });
+  let reads = 0;
+  let writes = 0;
+  const adapter = writer(async (_input, init) => {
+    if (init?.method === "PATCH") { writes += 1; throw new Error("unexpected PATCH"); }
+    reads += 1;
+    return held;
+  });
+  const alreadyAborted = new AbortController();
+  alreadyAborted.abort();
+  assert.deepEqual(await adapter.rescheduleOnce(request, alreadyAborted.signal),
+    { ok: false, error: { kind: "unavailable" } });
+  assert.equal(reads, 0);
+  const controller = new AbortController();
+  const pending = adapter.rescheduleOnce(request, controller.signal);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reads, 1);
+  controller.abort();
+  assert.deepEqual(await pending, { ok: false, error: { kind: "unavailable" } });
+  release(Response.json(appointment()));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(writes, 0);
+});
+
+test("a hangup after the move PATCH starts is uncertain despite a late 200", async () => {
+  let release!: (response: Response) => void;
+  const held = new Promise<Response>(resolve => { release = resolve; });
+  let reads = 0;
+  let writes = 0;
+  let providerSignal: AbortSignal | undefined;
+  const adapter = writer(async (_input, init) => {
+    if (init?.method === "PATCH") { writes += 1; providerSignal = init.signal ?? undefined; return held; }
+    reads += 1;
+    return Response.json(appointment());
+  });
+  const controller = new AbortController();
+  const pending = adapter.rescheduleOnce(request, controller.signal);
+  await waitFor(() => writes === 1);
+  controller.abort();
+  assert.equal(providerSignal?.aborted, true);
+  assert.deepEqual(await pending, { ok: true, value: { kind: "uncertain" } });
+  release(Response.json(appointment({ starts_at: "2026-10-08T05:00:00Z",
+    ends_at: "2026-10-08T05:30:00Z" })));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reads, 1, "late PATCH success must not trigger a moved-state read");
+  assert.deepEqual(await adapter.rescheduleOnce(request), { ok: false, error: { kind: "invalidQuery" } });
+  assert.equal(writes, 1);
+});
+
+test("aborting move observation during a conflict read cannot report a clean move", async () => {
+  let release!: (response: Response) => void;
+  const held = new Promise<Response>(resolve => { release = resolve; });
+  let conflicts = 0;
+  const adapter = writer(async (input) => {
+    if (String(input).endsWith("/conflicts")) { conflicts += 1; return held; }
+    return Response.json(appointment({ starts_at: "2026-10-08T05:00:00Z",
+      ends_at: "2026-10-08T05:30:00Z" }));
+  });
+  const controller = new AbortController();
+  const pending = adapter.observeReschedule(request, controller.signal);
+  await waitFor(() => conflicts === 1);
+  controller.abort();
+  assert.deepEqual(await pending, { ok: false, error: { kind: "unavailable" } });
+  release(Response.json({ conflicts: { exist: false } }));
 });
