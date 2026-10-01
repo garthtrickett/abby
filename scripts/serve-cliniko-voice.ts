@@ -1,20 +1,15 @@
 import { fileURLToPath } from "node:url";
 import { sql } from "kysely";
 import { ClinikoAvailabilityReader } from "../src/cliniko/availability.ts";
-import { ClinikoCatalogueReader } from "../src/cliniko/catalogue.ts";
-import { ClinikoCatalogueSetup } from "../src/cliniko/catalogue-setup.ts";
 import { ok } from "../src/core/model.ts";
 import { unprovenReadiness } from "../src/core/readiness.ts";
-import { ReferenceNumberRoutingHost } from "../src/reference/clinic-number-routing.ts";
-import { referenceDefaultPolicy } from "../src/reference/policy-store.ts";
+import { createStandaloneClinikoSetup } from "../src/standalone/cliniko-setup-composition.ts";
 import { createStandaloneClinikoVoiceServer } from "../src/standalone/cliniko-voice-server.ts";
 import type { OperationalCounterStore } from "../src/voice/operational-counts.ts";
 import { connectPostgres } from "../src/storage/connect.ts";
 import { PostgresActiveCallClaims } from "../src/storage/postgres-active-call-claims.ts";
 import { PostgresClinikoRequestBudget } from "../src/storage/postgres-cliniko-request-budget.ts";
-import { PostgresClinikoApprovalStore } from "../src/storage/postgres-cliniko-approval-store.ts";
 import { PostgresOperationalCounters } from "../src/storage/postgres-operational-counters.ts";
-import { PostgresPolicyStore } from "../src/storage/postgres-policy-store.ts";
 import type { ClinikoVoiceServerConfig } from "../src/standalone/cliniko-voice-server.ts";
 import { boundedHealthCheck } from "../src/standalone/bounded-health-check.ts";
 import { clinikoCredentialFingerprint } from "../src/cliniko/read-budget.ts";
@@ -91,13 +86,10 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       },
       ...(process.env.ABBY_CLINIKO_BUDGET_USER_REF
         ? { sharedUserRef: process.env.ABBY_CLINIKO_BUDGET_USER_REF } : {}) });
-    const catalogue = ClinikoCatalogueReader.create({ scope, apiKey, contactEmail, rateBudget }, ports.clinikoFetch);
-    if (!catalogue.ok) throw new RangeError(`invalid Cliniko catalogue configuration: ${catalogue.error.kind}`);
-    const approval = new ClinikoCatalogueSetup(catalogue.value,
-      new ReferenceNumberRoutingHost([{ accountRef: accountSid, dialedNumber,
-        ...scope, routeVersion }]),
-      new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable", unprovenReadiness,
-        false, "standaloneMinimal"), new PostgresClinikoApprovalStore(db));
+    const configured = createStandaloneClinikoSetup({ db, scope, apiKey, contactEmail, rateBudget,
+      route: { accountRef: accountSid, dialedNumber, routeVersion },
+      ...(ports.clinikoFetch ? { fetch: ports.clinikoFetch } : {}) });
+    if (!configured.ok) throw new RangeError(`invalid Cliniko catalogue configuration: ${configured.error.kind}`);
     const prepared = await createStandaloneClinikoVoiceServer({ db,
       activeCallClaims: new PostgresActiveCallClaims(connectionString, key),
       twilio: { accountSid,
@@ -106,7 +98,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
         publicStreamUrl: required("ABBY_TWILIO_PUBLIC_STREAM_URL"),
         fallbackNumbers: { [dialedNumber]: fallbackNumber }, bindingKey: key },
       routes: [{ dialedNumber, scope, routeVersion,
-        approval, rateBudget, credentialFingerprint: clinikoCredentialFingerprint(apiKey),
+        approval: configured.value.setup, rateBudget, credentialFingerprint: clinikoCredentialFingerprint(apiKey),
         availabilityForSelection: choice => {
           const reader = ClinikoAvailabilityReader.create({ scope, apiKey, rateBudget, contactEmail,
             onProviderUnavailable: () => operationalCounters.record(scope, "clinikoProviderUnavailable"),
