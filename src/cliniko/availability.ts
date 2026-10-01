@@ -29,6 +29,7 @@ export type ClinikoAvailability =
 const maxBodyBytes = 1_000_000;
 const perPage = 100;
 const maxPages = 10;
+export const availabilityReadDeadlineMs = 15_000;
 
 function validId(value: string): boolean {
   return /^[1-9][0-9]*$/.test(value);
@@ -47,6 +48,18 @@ function spokenName(value: unknown): value is string {
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+async function settleBeforeAbort<T>(work: Promise<T>, signal: AbortSignal, unavailable: T): Promise<T> {
+  if (signal.aborted) return unavailable;
+  let onAbort = () => {};
+  const aborted = new Promise<T>(resolve => {
+    onAbort = () => resolve(unavailable);
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
+  try { return await Promise.race([work, aborted]); }
+  finally { signal.removeEventListener("abort", onAbort); }
 }
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
@@ -146,16 +159,18 @@ export class ClinikoAvailabilityReader {
     catch { /* Diagnostics cannot change caller wording or the provider decision. */ }
   }
 
-  private async get(path: string): Promise<Result<unknown, ClinikoAvailabilityFailure>> {
+  private async get(path: string, signal: AbortSignal): Promise<Result<unknown, ClinikoAvailabilityFailure>> {
+    if (signal.aborted) return err({ kind: "unavailable" });
     const limited = await claimClinikoBudget(this.rateBudget);
     if (limited) return err(limited);
+    if (signal.aborted) return err({ kind: "unavailable" });
     let response: Response;
     try {
       response = await this.fetchPort(`${this.baseUrl}${path}`, {
         method: "GET",
         headers: { Accept: "application/json", Authorization: this.authorization, "User-Agent": this.userAgent },
         redirect: "error",
-        signal: AbortSignal.timeout(15_000),
+        signal,
       });
     } catch {
       this.reportProviderUnavailable();
@@ -170,12 +185,13 @@ export class ClinikoAvailabilityReader {
       return err({ kind: "unavailable" });
     }
     if (response.status !== 200) return err({ kind: "malformed" });
-    return boundedJson(response);
+    const parsed = await boundedJson(response);
+    return signal.aborted ? err({ kind: "unavailable" }) : parsed;
   }
 
-  private async onlineFlag(id: string, path: string, requireActive = false, nameField?: string):
+  private async onlineFlag(id: string, path: string, signal: AbortSignal, requireActive = false, nameField?: string):
     Promise<Result<Readonly<{ eligible: boolean; name?: string }>, ClinikoAvailabilityFailure>> {
-    const fetched = await this.get(path);
+    const fetched = await this.get(path, signal);
     if (!fetched.ok) return fetched;
     const body = record(fetched.value);
     if (!body || String(body.id) !== id || typeof body.show_in_online_bookings !== "boolean" ||
@@ -187,13 +203,14 @@ export class ClinikoAvailabilityReader {
   }
 
   /** Relationship lists, rather than an unscoped ID, prove this configured combination belongs together. */
-  private async includesRelated(path: string, collection: "practitioners" | "appointment_types", id: string):
+  private async includesRelated(path: string, collection: "practitioners" | "appointment_types", id: string,
+                                signal: AbortSignal):
     Promise<Result<boolean, ClinikoAvailabilityFailure>> {
     const seen = new Set<string>();
     let total: number | undefined;
     for (let page = 1; page <= maxPages; page += 1) {
       const query = new URLSearchParams({ page: String(page), per_page: String(perPage) });
-      const fetched = await this.get(`${path}?${query}`);
+      const fetched = await this.get(`${path}?${query}`, signal);
       if (!fetched.ok) return fetched;
       const body = record(fetched.value);
       if (!body || !Number.isSafeInteger(body.total_entries) || Number(body.total_entries) < 0 ||
@@ -215,9 +232,9 @@ export class ClinikoAvailabilityReader {
     return err({ kind: "tooManyResults" });
   }
 
-  private async business(): Promise<Result<Readonly<{ eligible: false; reason: "business" | "appointmentType" }> |
+  private async business(signal: AbortSignal): Promise<Result<Readonly<{ eligible: false; reason: "business" | "appointmentType" }> |
     Readonly<{ eligible: true; timeZone: string }>, ClinikoAvailabilityFailure>> {
-    const fetched = await this.get(`/businesses/${this.businessId}`);
+    const fetched = await this.get(`/businesses/${this.businessId}`, signal);
     if (!fetched.ok) return fetched;
     const body = record(fetched.value);
     if (!body || String(body.id) !== this.businessId || typeof body.show_in_online_bookings !== "boolean" ||
@@ -235,42 +252,51 @@ export class ClinikoAvailabilityReader {
     return ok({ eligible: true, timeZone: body.time_zone_identifier });
   }
 
-  async list(scope: LocationScope, from: string, to: string): Promise<Result<ClinikoAvailability, ClinikoAvailabilityFailure>> {
-    return this.listInternal(scope, from, to, false);
+  async list(scope: LocationScope, from: string, to: string, parentSignal?: AbortSignal):
+    Promise<Result<ClinikoAvailability, ClinikoAvailabilityFailure>> {
+    const localSignal = AbortSignal.timeout(availabilityReadDeadlineMs);
+    const signal = parentSignal ? AbortSignal.any([parentSignal, localSignal]) : localSignal;
+    return settleBeforeAbort(this.listInternal(scope, from, to, false, signal), signal,
+      err({ kind: "unavailable" }));
   }
 
   /** Used only for an explicitly approved fallback choice; names are verified from this read. */
-  async listLabeled(scope: LocationScope, from: string, to: string): Promise<Result<ClinikoAvailability, ClinikoAvailabilityFailure>> {
-    return this.listInternal(scope, from, to, true);
+  async listLabeled(scope: LocationScope, from: string, to: string, parentSignal?: AbortSignal):
+    Promise<Result<ClinikoAvailability, ClinikoAvailabilityFailure>> {
+    const localSignal = AbortSignal.timeout(availabilityReadDeadlineMs);
+    const signal = parentSignal ? AbortSignal.any([parentSignal, localSignal]) : localSignal;
+    return settleBeforeAbort(this.listInternal(scope, from, to, true, signal), signal,
+      err({ kind: "unavailable" }));
   }
 
-  private async listInternal(scope: LocationScope, from: string, to: string, withLabel: boolean):
+  private async listInternal(scope: LocationScope, from: string, to: string, withLabel: boolean,
+                             signal: AbortSignal):
     Promise<Result<ClinikoAvailability, ClinikoAvailabilityFailure>> {
     if (!sameScope(this.scope, scope)) return err({ kind: "scopeMismatch" });
     if (!validDate(from) || !validDate(to) || Date.parse(`${to}T00:00:00Z`) < Date.parse(`${from}T00:00:00Z`) ||
         Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`) > 7 * 86_400_000) return err({ kind: "invalidRange" });
 
-    const business = await this.business();
+    const business = await this.business(signal);
     if (!business.ok) return business;
     if (!business.value.eligible) return ok({ kind: "notEligible", reason: business.value.reason });
     const timeZone = business.value.timeZone;
     const clinicDate = new Intl.DateTimeFormat("en-US", { timeZone, calendar: "gregory", numberingSystem: "latn",
       year: "numeric", month: "2-digit", day: "2-digit" });
 
-    const practitioner = await this.onlineFlag(this.practitionerId, `/practitioners/${this.practitionerId}`, true,
+    const practitioner = await this.onlineFlag(this.practitionerId, `/practitioners/${this.practitionerId}`, signal, true,
       withLabel ? "display_name" : undefined);
     if (!practitioner.ok) return practitioner;
     if (!practitioner.value.eligible) return ok({ kind: "notEligible", reason: "practitioner" });
     const appointmentType = await this.onlineFlag(this.appointmentTypeId, `/appointment_types/${this.appointmentTypeId}`,
-      false, withLabel ? "name" : undefined);
+      signal, false, withLabel ? "name" : undefined);
     if (!appointmentType.ok) return appointmentType;
     if (!appointmentType.value.eligible) return ok({ kind: "notEligible", reason: "appointmentType" });
     const businessPractitioner = await this.includesRelated(`/businesses/${this.businessId}/practitioners`,
-      "practitioners", this.practitionerId);
+      "practitioners", this.practitionerId, signal);
     if (!businessPractitioner.ok) return businessPractitioner;
     if (!businessPractitioner.value) return ok({ kind: "notEligible", reason: "practitioner" });
     const practitionerType = await this.includesRelated(`/practitioners/${this.practitionerId}/appointment_types`,
-      "appointment_types", this.appointmentTypeId);
+      "appointment_types", this.appointmentTypeId, signal);
     if (!practitionerType.ok) return practitionerType;
     if (!practitionerType.value) return ok({ kind: "notEligible", reason: "appointmentType" });
 
@@ -280,7 +306,7 @@ export class ClinikoAvailabilityReader {
     let lastStart = -Infinity;
     for (let page = 1; page <= maxPages; page += 1) {
       const query = new URLSearchParams({ from, to, page: String(page), per_page: String(perPage) });
-      const fetched = await this.get(`${prefix}?${query}`);
+      const fetched = await this.get(`${prefix}?${query}`, signal);
       if (!fetched.ok) return fetched;
       const body = record(fetched.value);
       if (!body || !Number.isInteger(body.total_entries) || Number(body.total_entries) < 0 || !Array.isArray(body.available_times)) return err({ kind: "malformed" });
@@ -307,7 +333,9 @@ export class ClinikoAvailabilityReader {
       if (startsAt.length >= count) break;
       if (body.available_times.length === 0) return err({ kind: "unavailable" });
     }
-    if (startsAt.length !== totalEntries || new Set(startsAt).size !== startsAt.length) return err({ kind: "unavailable" });
+    if (signal.aborted || startsAt.length !== totalEntries || new Set(startsAt).size !== startsAt.length) {
+      return err({ kind: "unavailable" });
+    }
     let observedAt: string;
     try { observedAt = this.observedClock(); }
     catch { return err({ kind: "unavailable" }); }

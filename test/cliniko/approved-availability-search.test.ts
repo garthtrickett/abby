@@ -8,12 +8,14 @@ const scope = { tenantId: "test-tenant", clinicId: "clinic", locationId: "frontd
 const date = "2026-10-01";
 const now = "2026-09-30T23:00:00.000Z";
 
-function fixture(mode: "times" | "rateLimit" | "badName" | "none" = "times") {
+function fixture(mode: "times" | "rateLimit" | "badName" | "none" = "times",
+                 onRequest?: (path: string) => void) {
   const paths: string[] = [];
   const fetchPort: typeof fetch = async input => {
     const url = new URL(String(input));
     const path = url.pathname;
     paths.push(path);
+    onRequest?.(path);
     if (path === "/v1/businesses/11") return Response.json({ id: "11",
       show_in_online_bookings: true, appointment_type_ids: ["33", "55"],
       time_zone_identifier: "Australia/Sydney" });
@@ -86,4 +88,15 @@ test("B4 an incomplete or unsafe alternative read cannot become a no-times or mi
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.error.kind, mode === "rateLimit" ? "rateLimited" : "malformed");
   }
+});
+
+test("B4 one aborted read deadline stops before an approved alternative can be queried", async () => {
+  const controller = new AbortController();
+  const app = fixture("none", path => {
+    if (path.includes("/practitioners/22/") && path.endsWith("/available_times")) controller.abort();
+  });
+  const search = new ClinikoApprovedAvailabilitySearch([app.primary, app.alternative], () => now);
+  assert.deepEqual(await search.list(scope, date, date, controller.signal),
+    { ok: false, error: { kind: "unavailable" } });
+  assert.equal(app.paths.some(path => path.includes("/practitioners/44")), false);
 });

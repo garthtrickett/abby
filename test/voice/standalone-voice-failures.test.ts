@@ -13,7 +13,7 @@ import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 
-type Fault = "openai-speech" | "openai-transcription" | "untrusted-transcript" | "cliniko-rate-limit" | "cliniko-server-error" | "cliniko-timeout" | "cliniko-partial-page" |
+type Fault = "openai-speech" | "openai-transcription" | "untrusted-transcript" | "cliniko-rate-limit" | "cliniko-server-error" | "cliniko-timeout" | "cliniko-slow-read" | "cliniko-partial-page" |
   "cliniko-business-type-removed" | "cliniko-practitioner-type-removed" | "week-alternative" | "practitioner-alternative" |
   "practitioner-alternative-rate-limit" | "practitioner-alternative-malformed" |
   "practitioner-alternative-second" | undefined;
@@ -21,6 +21,7 @@ const fallbackScenarios = [
   { fault: "cliniko-rate-limit", id: "E2E-174" },
   { fault: "cliniko-server-error", id: "E2E-207" },
   { fault: "cliniko-timeout", id: "E2E-175" },
+  { fault: "cliniko-slow-read", id: "E2E-208" },
   { fault: "cliniko-partial-page", id: "E2E-190" },
   { fault: "cliniko-business-type-removed", id: "E2E-193" },
   { fault: "cliniko-practitioner-type-removed", id: "E2E-204" },
@@ -45,8 +46,8 @@ async function bounded<T>(promise: Promise<T>, label: string): Promise<T> {
   } finally { if (timer) clearTimeout(timer); }
 }
 
-async function waitFor(check: () => boolean, label: string): Promise<void> {
-  const until = Date.now() + 8_000;
+async function waitFor(check: () => boolean, label: string, timeoutMs = 8_000): Promise<void> {
+  const until = Date.now() + timeoutMs;
   while (!check() && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 20));
   assert.ok(check(), `${label} timed out`);
 }
@@ -230,7 +231,7 @@ async function closeCaller(call: Call): Promise<void> {
 }
 
 test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1",
-  timeout: 90_000, concurrency: 5 }, async t => {
+  timeout: 120_000, concurrency: 5 }, async t => {
   await Promise.all([
     ...fallbackScenarios.map(({ fault, id }) =>
       t.test(`${id} safe spoken fallback on ${fault}`,
@@ -239,7 +240,8 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         await markGreeting(call);
         call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
           dtmf: { track: "inbound_track", digit: "1" } }));
-        await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "safe availability response");
+        await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2,
+          "safe availability response", fault === "cliniko-slow-read" ? 25_000 : 8_000);
         assert.deepEqual(call.messages.slice(2, 4).map(item => item.event), ["media", "mark"]);
         assert.equal(fixture.speech[1], noStaffNotice);
         assert.ok(!fixture.speech.some(text => text.includes("10:00") || text.includes("synthetic-only")));
@@ -253,9 +255,12 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
           assert.equal(counts.clinikoProvider429, 0);
           assert.equal(counts.clinikoProviderUnavailable, 1);
         }
-        if (fault === "cliniko-timeout") {
+        if (fault === "cliniko-timeout" || fault === "cliniko-slow-read") {
           const counts = await fixture.operationalSnapshot();
           assert.equal(counts.clinikoProviderUnavailable, 1);
+        }
+        if (fault === "cliniko-slow-read") {
+          assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
         }
         if (fault === "cliniko-rate-limit") {
           const counts = await fixture.operationalSnapshot();
