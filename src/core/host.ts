@@ -47,6 +47,19 @@ export interface BookingEvidenceHost {
   resolveBooking(scope: LocationScope, verificationRef: string, offerRef: string, now: string): Promise<Result<Extract<ActionRequest, { kind: "book" }>, HostReadFailure>>;
 }
 
+/** Only a trusted host may turn a call-scoped draft reference into approved intake evidence. */
+export type IntakeEvidenceQuery = Readonly<{
+  scope: LocationScope;
+  callId: string;
+  sessionId: string;
+  policyVersion: string;
+  draftRef: string;
+  now: string;
+}>;
+export interface IntakeEvidenceHost {
+  resolveIntake(query: IntakeEvidenceQuery): Promise<Result<Extract<ActionRequest, { kind: "intake" }>, HostReadFailure>>;
+}
+
 /** The host issues this proof after its own caller verification; a provider ID is never proof. */
 export interface PatientProofHost {
   verifyPatient(scope: LocationScope, verificationRef: string, now: string): Promise<Result<VerifiedPatient, HostReadFailure>>;

@@ -1,7 +1,7 @@
 import { EffectWorker } from "../core/effect-worker.ts";
 import { EffectCallLeaseCoordinator } from "../core/effect-call-lease.ts";
 import type { EffectCallLeaseStore } from "../core/effect-call-lease.ts";
-import type { AppointmentHost, AvailabilityHost, BookingEvidenceHost, HostEffects, KnowledgeHost, ModelKnowledgeContextHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
+import type { AppointmentHost, AvailabilityHost, BookingEvidenceHost, HostEffects, IntakeEvidenceHost, KnowledgeHost, ModelKnowledgeContextHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
 import { captureKnowledgeSnapshot, validCallKnowledgeSource, validKnowledgeSource } from "../core/knowledge-evidence.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err } from "../core/model.ts";
@@ -11,8 +11,12 @@ import { noticePresentationId } from "../core/transition.ts";
 import { modelTaskRef } from "../model/work.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
+
+function validIntakeRef(value: unknown): value is string {
+  return typeof value === "string" && !!value.trim() && value.length <= 256;
+}
 
 export class TextReception {
   private readonly ledger: LedgerStore;
@@ -151,6 +155,38 @@ export class TextReception {
         interpretation = { kind: "ambiguousTarget" };
       } else {
         interpretation = { kind: "readFailure", target: evidence.error.target, failure: evidence.error.kind === "unavailable" ? "unavailable" : "notFound" };
+      }
+    }
+    return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);
+  }
+
+  async proposeIntake(scope: LocationScope, turn: FinalCallerTurn, draftRef: string, now: string,
+                      expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
+    const runtime = this.runtime(scope);
+    const current = await runtime.read(turn.callId);
+    if (!current.ok) return current;
+    if (current.value.policy.capabilities.intake === "unavailable" || !this.host.resolveIntake) {
+      return runtime.acceptTurn(turn, { kind: "unavailableAction", actionKind: "intake" }, now, expectedConversationRevision);
+    }
+    let interpretation: TurnInterpretation;
+    if (turn.quality !== "clear" || typeof turn.sessionId !== "string" || !turn.sessionId.trim() ||
+        current.value.sessionLease?.sessionId !== turn.sessionId ||
+        !validIntakeRef(draftRef)) {
+      interpretation = { kind: "intakeFailure", reason: "missing" };
+    } else {
+      try {
+        const evidence = await this.host.resolveIntake({ scope, callId: turn.callId, sessionId: turn.sessionId,
+          policyVersion: current.value.policy.policyVersion, draftRef, now });
+        if (evidence.ok && evidence.value.kind === "intake" &&
+            evidence.value.scope.tenantId === scope.tenantId && evidence.value.scope.clinicId === scope.clinicId &&
+            evidence.value.scope.locationId === scope.locationId && evidence.value.approvedDraftRef === draftRef &&
+            validIntakeRef(evidence.value.consentRef) && validIntakeRef(evidence.value.duplicateCheckRef)) {
+          interpretation = { kind: "requestAction", request: evidence.value };
+        } else {
+          interpretation = { kind: "intakeFailure", reason: !evidence.ok && evidence.error.kind !== "unavailable" ? "missing" : "unavailable" };
+        }
+      } catch {
+        interpretation = { kind: "intakeFailure", reason: "unavailable" };
       }
     }
     return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);

@@ -254,6 +254,11 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
         state.callerMessages.push(interpretation.target === "patient" ? "I can't check patient records right now." : "I can't check available times right now.");
       }
       break;
+    case "intakeFailure":
+      state.callerMessages.push(interpretation.reason === "missing"
+        ? "I can't verify approved intake details for this call."
+        : "I can't check approved intake details right now.");
+      break;
     case "unavailableAction":
       state.callerMessages.push("I can't complete that request here.");
       break;
