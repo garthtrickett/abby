@@ -20,6 +20,7 @@
     "voice:ops:check": "node scripts/check-voice-operations.ts",
     "voice:ops:send": "node scripts/send-voice-operational-alerts.ts",
     "voice:ops:recalls": "node scripts/read-cliniko-recall-queue.ts",
+    "voice:ops:speech": "node scripts/read-speech-gate-status.ts",
     "voice:test-policy": "node scripts/set-voice-test-automation.ts",
     "voice:preflight": "node scripts/preflight-voice-public.ts",
     "voice:probe-tunnel": "node scripts/probe-voice-tunnel.mjs",

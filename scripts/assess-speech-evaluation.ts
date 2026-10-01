@@ -1,6 +1,7 @@
-import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
+import { readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { assessSyntheticSpeechLatency } from "../src/voice/speech-latency-gate.ts";
 import type { SpeechLatencySample } from "../src/voice/speech-latency-gate.ts";
 import { parseSpeechLoopCorpus } from "../src/voice/speech-loop-evaluation.ts";
@@ -13,6 +14,8 @@ const speechProfiles = {
   default: { primaryModel: "gpt-4o-mini-tts", fallbackModel: "tts-1", primaryFirstChunkMs: 1_500 },
   "tts-1-primary-v1": { primaryModel: "tts-1", fallbackModel: "tts-1", primaryFirstChunkMs: 2_500 },
 } as const;
+export type SpeechProfile = keyof typeof speechProfiles;
+export type SpeechReportPaths = Readonly<Record<typeof names[number], string>>;
 const transcriptionSources = ["src/voice/openai-realtime-transcription.ts",
   "src/voice/transcription-evaluation.ts", "src/voice/transcription-evaluation-gate.ts",
   "scripts/evaluate-transcription.ts"];
@@ -20,16 +23,16 @@ const speechSources = ["src/voice/openai-speech-synthesis.ts",
   "src/voice/first-chunk-fallback-speech.ts", "src/voice/streamed-playback-port.ts",
   "src/voice/speech-latency-gate.ts", "scripts/evaluate-first-chunk-fallback.ts"];
 
-function argsFrom(argv: readonly string[]): Record<typeof names[number], string> &
-    Readonly<{ speechProfile: keyof typeof speechProfiles }> {
-  if (argv.length !== names.length * 2 && argv.length !== names.length * 2 + 2) {
+function argsFrom(argv: readonly string[]): SpeechReportPaths & Readonly<{
+  speechProfile: SpeechProfile; recordCurrent?: string }> {
+  if (argv.length < names.length * 2 || argv.length > names.length * 2 + 4 || argv.length % 2 !== 0) {
     throw new Error("four report paths required");
   }
-  const args: Partial<Record<typeof names[number] | "speech-profile", string>> = {};
+  const args: Partial<Record<typeof names[number] | "speech-profile" | "record-current", string>> = {};
   for (let index = 0; index < argv.length; index += 2) {
-    const key = argv[index]?.replace(/^--/, "") as typeof names[number] | "speech-profile";
+    const key = argv[index]?.replace(/^--/, "") as typeof names[number] | "speech-profile" | "record-current";
     const path = argv[index + 1];
-    if (!argv[index]?.startsWith("--") || (key !== "speech-profile" && !names.includes(key)) ||
+    if (!argv[index]?.startsWith("--") || (key !== "speech-profile" && key !== "record-current" && !names.includes(key)) ||
         !path || args[key]) {
       throw new Error("invalid report argument");
     }
@@ -40,7 +43,8 @@ function argsFrom(argv: readonly string[]): Record<typeof names[number], string>
     throw new Error("missing report or invalid speech profile");
   }
   return { telephony: args.telephony!, noise: args.noise!, safety: args.safety!, speech: args.speech!,
-    speechProfile: (args["speech-profile"] ?? "default") as keyof typeof speechProfiles };
+    speechProfile: (args["speech-profile"] ?? "default") as SpeechProfile,
+    ...(args["record-current"] ? { recordCurrent: args["record-current"] } : {}) };
 }
 function digest(value: Uint8Array): string { return createHash("sha256").update(value).digest("hex"); }
 async function sourceHash(paths: readonly string[]): Promise<string> {
@@ -57,8 +61,7 @@ async function report(path: string): Promise<Record<string, unknown>> {
   return parsed;
 }
 
-async function main(): Promise<void> {
-  const args = argsFrom(process.argv.slice(2));
+export async function assessSpeechReports(args: SpeechReportPaths & Readonly<{ speechProfile: SpeechProfile }>) {
   const transcriptionHash = await sourceHash(transcriptionSources);
   const speechHash = await sourceHash(speechSources);
   const summaries = [];
@@ -103,12 +106,30 @@ async function main(): Promise<void> {
     parsedSpeechCorpus.cases.map(item => item.id));
   summaries.push({ name: "speech", status: speech.status, failures: speech.failures, metrics: speech.metrics });
   const status = summaries.every(item => item.status === "pass") ? "pass" : "fail";
-  process.stdout.write(`${JSON.stringify({ speechProfile: args.speechProfile,
+  return { speechProfile: args.speechProfile,
     syntheticCandidateGate: status, checks: summaries,
-    representativeCallGate: "notRun", releaseGate: "unverified" })}\n`);
-  if (status !== "pass") process.exitCode = 1;
+    representativeCallGate: "notRun" as const, releaseGate: "unverified" as const };
 }
-main().catch(() => {
-  process.stderr.write("Speech evaluation reports are missing, stale, or invalid.\n");
-  process.exitCode = 1;
-});
+
+async function main(): Promise<void> {
+  const args = argsFrom(process.argv.slice(2));
+  const summary = await assessSpeechReports(args);
+  if (args.recordCurrent) {
+    const target = resolve(args.recordCurrent);
+    const temporary = resolve(dirname(target), `.speech-gate-${randomUUID()}.tmp`);
+    try {
+      await writeFile(temporary, `${JSON.stringify({ schemaVersion: 1, speechProfile: args.speechProfile,
+        reports: Object.fromEntries(names.map(name => [name, resolve(args[name])])) })}\n`,
+      { flag: "wx", mode: 0o600 });
+      await rename(temporary, target);
+    } finally { await unlink(temporary).catch(() => undefined); }
+  }
+  process.stdout.write(`${JSON.stringify(summary)}\n`);
+  if (summary.syntheticCandidateGate !== "pass") process.exitCode = 1;
+}
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch(() => {
+    process.stderr.write("Speech evaluation reports are missing, stale, or invalid.\n");
+    process.exitCode = 1;
+  });
+}
