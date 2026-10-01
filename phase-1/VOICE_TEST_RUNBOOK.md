@@ -7,6 +7,7 @@
 - Use a dedicated Twilio number, one explicitly allowed test caller, the demo Cliniko account, and no real patient data. Caller ID is only a presented clue and can be spoofed; the allowlist limits accidental calls and does not authenticate a person.
 - `ABBY_VOICE_TEST_MODE=1` permits a call only when a signed Twilio webhook and signed stream binding identify the configured account, `ABBY_TWILIO_TEST_NUMBER`, and `ABBY_TWILIO_TEST_CALLER_NUMBER`. The runner rechecks PostgreSQL health at ingress. `/readyz` remains 503 because general clinic readiness is unproven. Without test mode, the runner refuses every call.
 - Standalone Abby stores no call, audio, transcript, appointment, or outcome record. The isolated test database may contain non-patient clinic settings and automation audit entries. Patient-specific handoff remains disabled. The provider may retain its own call metadata under the test account's settings.
+- E2E-213 proves a new signed local test call can use persisted approval after the runner is killed and restarted. The interrupted call is lost; its state is not replayed, and this synthetic check does not show what Twilio does with that call or its fallback.
 - The number's **Voice Fallback URL** must be independent of Abby and its HTTPS proxy. The post-stream `<Dial>` in Abby's TwiML covers a different failure point. [Twilio's fallback guidance](https://www.twilio.com/docs/voice/twilio-voice-failover-best-practices) distinguishes the two routes.
 
 ## Prepare the endpoint and fallback

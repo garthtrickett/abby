@@ -71,7 +71,8 @@ type Fixture = { port: number; child: ReturnType<typeof spawn>;
   admin: ReturnType<typeof connectPostgres>; databaseName: string;
   speech: string[]; clinikoMethods: string[]; clinikoPaths: string[]; clinikoQueries: string[];
   modelRequests: string[];
-  openCall: (callSidOverride?: string) => Promise<Call>; operationalSnapshot: () => Promise<Record<string, number>> };
+  openCall: (callSidOverride?: string) => Promise<Call>; restart: () => Promise<void>;
+  operationalSnapshot: () => Promise<Record<string, number>> };
 
 async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void>,
                            weekApproved = false, alternativeApproved = false,
@@ -84,6 +85,7 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
   target.pathname = `/${databaseName}`;
   const port = await freePort();
   const callSid = `CA${randomUUID().replaceAll("-", "")}`;
+  const providerCallRefs = new Set([callSid]);
   const env: NodeJS.ProcessEnv = {
     PATH: process.env.PATH, HOME: process.env.HOME, LANG: process.env.LANG,
     DATABASE_URL: target.toString(), ABBY_ISOLATED_POSTGRES_PROBE: "1",
@@ -130,31 +132,43 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
     const enabled = spawnSync(process.execPath, ["scripts/set-voice-test-automation.ts", "enable"],
       { cwd: root, env, encoding: "utf8", timeout: 15_000 });
     assert.equal(enabled.status, 0, enabled.stderr);
-    child = spawn(process.execPath, ["test/support/start-synthetic-voice-runner.ts"],
-      { cwd: root, env, stdio: ["ignore", "pipe", "pipe", "ipc"] });
-    child.on("message", message => {
-      if (typeof message === "object" && message !== null && "kind" in message &&
-          message.kind === "speech" && "text" in message && typeof message.text === "string") speech.push(message.text);
-      if (typeof message === "object" && message !== null && "kind" in message &&
-          message.kind === "intentModelRequest") modelRequests.push("request");
-      if (typeof message === "object" && message !== null && "kind" in message &&
-          message.kind === "clinikoMethod" && "method" in message && typeof message.method === "string") {
-        clinikoMethods.push(message.method);
-        if ("path" in message && typeof message.path === "string") clinikoPaths.push(message.path);
-        if ("query" in message && typeof message.query === "string") clinikoQueries.push(message.query);
+    const launch = async (): Promise<void> => {
+      child = spawn(process.execPath, ["test/support/start-synthetic-voice-runner.ts"],
+        { cwd: root, env, stdio: ["ignore", "pipe", "pipe", "ipc"] });
+      child.on("message", message => {
+        if (typeof message === "object" && message !== null && "kind" in message &&
+            message.kind === "speech" && "text" in message && typeof message.text === "string") speech.push(message.text);
+        if (typeof message === "object" && message !== null && "kind" in message &&
+            message.kind === "intentModelRequest") modelRequests.push("request");
+        if (typeof message === "object" && message !== null && "kind" in message &&
+            message.kind === "clinikoMethod" && "method" in message && typeof message.method === "string") {
+          clinikoMethods.push(message.method);
+          if ("path" in message && typeof message.path === "string") clinikoPaths.push(message.path);
+          if ("query" in message && typeof message.query === "string") clinikoQueries.push(message.query);
+        }
+      });
+      child.stdout?.on("data", data => { processOutput += String(data); });
+      child.stderr?.on("data", data => { processOutput += String(data); });
+      const healthUrl = `http://127.0.0.1:${port}/healthz`;
+      const until = Date.now() + 15_000;
+      let healthy = false;
+      while (!healthy && Date.now() < until) {
+        try { healthy = (await fetch(healthUrl, { signal: AbortSignal.timeout(500) })).status === 200; }
+        catch { await new Promise(resolve => setTimeout(resolve, 50)); }
       }
-    });
-    child.stdout?.on("data", data => { processOutput += String(data); });
-    child.stderr?.on("data", data => { processOutput += String(data); });
-    const healthUrl = `http://127.0.0.1:${port}/healthz`;
-    const until = Date.now() + 15_000;
-    let healthy = false;
-    while (!healthy && Date.now() < until) {
-      try { healthy = (await fetch(healthUrl, { signal: AbortSignal.timeout(500) })).status === 200; }
-      catch { await new Promise(resolve => setTimeout(resolve, 50)); }
-    }
-    assert.ok(healthy, "voice runner did not start");
+      assert.ok(healthy, "voice runner did not start");
+    };
+    await launch();
+    const firstChild = child;
+    assert.ok(firstChild);
+    const restart = async (): Promise<void> => {
+      if (!child || (child.exitCode === null && child.signalCode === null)) {
+        throw new Error("voice runner must exit before restart");
+      }
+      await launch();
+    };
     const openCall = async (callSidOverride = callSid): Promise<Call> => {
+      providerCallRefs.add(callSidOverride);
       const form = { AccountSid: accountSid, CallSid: callSidOverride, To: number, From: caller };
       const answer = await fetch(`http://127.0.0.1:${port}/twilio/inbound`, { method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded",
@@ -186,9 +200,8 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
       assert.equal(response.status, 200);
       return await response.json() as Record<string, number>;
     };
-    await run({ port, child, admin, databaseName, speech, clinikoMethods, clinikoPaths, clinikoQueries,
-      modelRequests,
-      openCall, operationalSnapshot });
+    await run({ port, child: firstChild, admin, databaseName, speech, clinikoMethods, clinikoPaths,
+      clinikoQueries, modelRequests, openCall, restart, operationalSnapshot });
   } finally {
     let restored = true;
     try { if (created) await sql.raw(`alter database "${databaseName}" with allow_connections true`).execute(admin); }
@@ -203,7 +216,8 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
       assert.ok(restored, "isolated database connections could not be restored");
       if (created) {
         const canaries = [
-          { label: "caller", value: caller }, { label: "provider_call", value: callSid },
+          { label: "caller", value: caller },
+          ...[...providerCallRefs].map((value, index) => ({ label: `provider_call_${index}`, value })),
           { label: "appointment", value: "synthetic-only" },
           { label: "transcript", value: "Do you have availability tomorrow?" },
         ];
@@ -522,6 +536,28 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, streamUrl, {}),
       } });
       await assert.rejects(bounded(once(rejected, "open"), "runner-down socket refusal"));
+    })),
+    t.test("E2E-213 a fresh runner accepts a new signed call after abrupt process loss", async () => withFixture(undefined, async fixture => {
+      const first = await fixture.openCall();
+      await markGreeting(first);
+      const exited = once(fixture.child, "exit");
+      fixture.child.kill("SIGKILL");
+      assert.deepEqual(await bounded(exited, "first runner exit"), [null, "SIGKILL"]);
+      assert.equal((await bounded(first.closed, "first stream loss"))[0], 1006);
+
+      const priorSpeech = fixture.speech.length;
+      await fixture.restart();
+      const second = await fixture.openCall(`CA${randomUUID().replaceAll("-", "")}`);
+      await markGreeting(second);
+      assert.match(fixture.speech[priorSpeech] ?? "", /Press 1 for possible times today/);
+      second.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: second.streamSid,
+        dtmf: { track: "inbound_track", digit: "2" } }));
+      await waitFor(() => second.messages.length >= 4 && fixture.speech.length >= priorSpeech + 2,
+        "availability after restart");
+      assert.match(fixture.speech[priorSpeech + 1]!, /possible times/);
+      assert.match(fixture.speech[priorSpeech + 1]!, /can't reserve or confirm/);
+      assert.ok(fixture.clinikoMethods.length > 0 && fixture.clinikoMethods.every(method => method === "GET"));
+      await closeCaller(second);
     })),
   ]);
 });
