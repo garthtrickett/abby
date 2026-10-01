@@ -1,10 +1,10 @@
 {
-  "version": "1.20",
+  "version": "1.21",
   "source": "TECHNICAL_DESIGN.md Section 11",
   "fixtureIdPattern": "fixture-{lowercase scenario id}",
   "capabilityMappings": {
     "settings.read.v1": ["E2E-010"],
-    "settings.automation.enabled.change.v1": ["E2E-018"],
+    "settings.automation.enabled.change.v1": ["E2E-018", "E2E-223"],
     "settings.automation.audit.v1": ["E2E-018"],
     "calls.writes.stop.v1": ["E2E-074", "E2E-222"],
     "calls.writes.stop.read.v1": ["E2E-074"],
@@ -14,10 +14,10 @@
     "settings.appointments.booking.audit.v1": ["E2E-010"],
     "booking.propose.v2": ["E2E-006", "E2E-064", "E2E-222"],
     "calls.turn.model.v1": ["E2E-030", "E2E-076", "E2E-077", "E2E-078"],
-    "knowledge.answer.v2": ["E2E-004", "E2E-058", "E2E-059", "E2E-060", "E2E-061"],
-    "knowledge.list.v1": ["E2E-004", "E2E-058"],
-    "knowledge.draft.save.v1": ["E2E-004", "E2E-059"],
-    "knowledge.approve.v1": ["E2E-004"],
+    "knowledge.answer.v2": ["E2E-004", "E2E-058", "E2E-059", "E2E-060", "E2E-061", "E2E-223"],
+    "knowledge.list.v1": ["E2E-004", "E2E-058", "E2E-223"],
+    "knowledge.draft.save.v1": ["E2E-004", "E2E-059", "E2E-223"],
+    "knowledge.approve.v1": ["E2E-004", "E2E-223"],
     "knowledge.revoke.v1": ["E2E-004", "E2E-059"],
     "clinic.availability.businesses.list.v1": ["E2E-194", "E2E-195", "E2E-214", "E2E-215"],
     "clinic.availability.selection.inspect.v1": ["E2E-194", "E2E-195", "E2E-214", "E2E-215"],
@@ -28,7 +28,7 @@
     "clinic.availability.approval.revoke.v1": ["E2E-194", "E2E-195", "E2E-212", "E2E-214"],
     "availability.read.v2": ["E2E-125"],
     "appointments.read.v1": ["E2E-003", "E2E-117"],
-    "calls.read.v1": ["E2E-010", "E2E-014"],
+    "calls.read.v1": ["E2E-010", "E2E-014", "E2E-223"],
     "calls.outcomes.v1": ["E2E-014"],
     "staff.list.v1": ["E2E-009", "E2E-068"],
     "staff.health.v1": ["E2E-221"],
@@ -37,10 +37,10 @@
   "settingMappings": {
     "availability.sevenDay.enabled": ["E2E-199"],
     "appointments.booking.enabled": ["E2E-010", "E2E-222"],
-    "automation.enabled": ["E2E-018"],
+    "automation.enabled": ["E2E-018", "E2E-223"],
     "calls.writes.stop": ["E2E-074", "E2E-222"],
     "clinic.availability.approval": ["E2E-194", "E2E-195", "E2E-200", "E2E-201", "E2E-209", "E2E-210", "E2E-211", "E2E-212", "E2E-214", "E2E-215"],
-    "knowledge.approval": ["E2E-004"]
+    "knowledge.approval": ["E2E-004", "E2E-223"]
   },
   "scenarios": [
     {"id": "E2E-001", "requirements": ["FR-01", "FR-20"], "fixtureFamily": "routing", "fixtureState": "planned", "intendedCompositions": ["standalone", "embedded"], "earliestPhase": 1, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}},
@@ -264,6 +264,7 @@
     {"id": "E2E-219", "requirements": ["FR-14", "FR-15", "FR-20", "FR-22"], "fixtureFamily": "reporting-and-agent", "fixtureState": "textImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/storage/postgres-operational-counters.test.ts"]}, "observableAssertions": {"caller": "an owner-run daily threshold signal identifies crossed fixed-code clinic counts without patient-specific outcomes", "fault": "configured threshold on and off, foreign clinic isolation, empty and patient-bearing configuration failure are distinct", "privacy": "command output contains only UTC date, fixed code, count and threshold; credentials and patient values are absent"}},
     {"id": "E2E-220", "requirements": ["FR-14", "FR-15", "FR-20", "FR-22"], "fixtureFamily": "reporting-and-agent", "fixtureState": "textImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/storage/postgres-operational-counters.test.ts"]}, "observableAssertions": {"caller": "one crossed fixed-code daily count is accepted by an owner-controlled receiver without patient-specific outcome claims", "fault": "clear thresholds cause no request and redirect or non-2xx responses do not count as accepted", "privacy": "webhook body omits clinic scope, caller, call, patient and credential fields; retry key is opaque and stable"}},
     {"id": "E2E-221", "requirements": ["FR-09", "FR-15", "FR-16", "FR-22"], "fixtureFamily": "reporting-and-agent", "fixtureState": "textImplemented", "intendedCompositions": ["embedded"], "earliestPhase": 2, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/text/staff-queue.test.ts", "test/text/operator-alert.test.ts", "test/storage/postgres.test.ts"]}, "observableAssertions": {"caller": "an authorized embedded agent sees bounded staff queue health counts rather than patient-specific tasks", "fault": "a foreign tenant sees zero and an over-limit queue returns a typed failure instead of partial totals", "privacy": "result contains no task key, call ID, destination, patient text or staff note"}},
-    {"id": "E2E-222", "requirements": ["FR-10", "FR-11", "FR-12", "FR-16", "FR-17", "FR-22"], "fixtureFamily": "conformance", "fixtureState": "textImplemented", "intendedCompositions": ["standalone", "embedded"], "earliestPhase": 2, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/composition/cross-mode-agent-conformance.test.ts"]}, "observableAssertions": {"caller": "the same agent booking proposal is unavailable in standalone and requires exact caller confirmation before an embedded host write", "fault": "agent policy changes, malformed commands and foreign-scope calls fail; an emergency write stop blocks a later ready embedded action", "privacy": "strict standalone PostgreSQL and backup contain no call, caller, patient or proof canaries while authorized embedded state survives reconnection"}}
+    {"id": "E2E-222", "requirements": ["FR-10", "FR-11", "FR-12", "FR-16", "FR-17", "FR-22"], "fixtureFamily": "conformance", "fixtureState": "textImplemented", "intendedCompositions": ["standalone", "embedded"], "earliestPhase": 2, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/composition/cross-mode-agent-conformance.test.ts"]}, "observableAssertions": {"caller": "the same agent booking proposal is unavailable in standalone and requires exact caller confirmation before an embedded host write", "fault": "agent policy changes, malformed commands and foreign-scope calls fail; an emergency write stop blocks a later ready embedded action", "privacy": "strict standalone PostgreSQL and backup contain no call, caller, patient or proof canaries while authorized embedded state survives reconnection"}},
+    {"id": "E2E-223", "requirements": ["FR-04", "FR-11", "FR-15", "FR-16", "FR-17", "FR-21"], "fixtureFamily": "conformance", "fixtureState": "textImplemented", "intendedCompositions": ["standalone", "embedded"], "earliestPhase": 2, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/composition/cross-mode-knowledge-review.test.ts"]}, "observableAssertions": {"caller": "both modes use a truthful fallback before knowledge approval; only a new authorized embedded call records an approved sourced answer", "fault": "agent approval, malformed input, unauthorized standalone review and foreign-scope embedded review are denied", "privacy": "standalone database and backup contain no call or knowledge canary and lose call state on disposal; embedded redacted review survives reconnect without caller text or approved speech"}}
   ]
 }
