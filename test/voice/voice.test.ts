@@ -1026,6 +1026,44 @@ for (const kind of kinds) {
     assert.equal(value(await closed.session.dispatchPending(at(4))).kind, "queued");
   });
 
+  test(`${kind}: E2E-017 an overnight holiday routes to approved information and staff request`, async () => {
+    const weekly = [{ weekday: 0, startMinute: 22 * 60, endMinute: 120 }];
+    const openIntervals = value(expandStaffSchedule({ timeZone: "Pacific/Honolulu", weekly,
+      closedDates: [] }, at(0), at(3_600)));
+    assert.equal(openIntervals.length, 1);
+    const open = await fixture(kind, `${kind}-overnight-open`, false, "execute", undefined, undefined,
+      { staffedIntervals: openIntervals });
+    const offered = await transferTurn(open);
+    assert.equal(offered.presentations[offered.pendingPresentationId!]?.kind, "transfer");
+    open.transfer.outcome = { kind: "connected", providerConnectionRef: "overnight-staff" };
+    assert.equal(value(await open.session.dispatchPending(at(4))).kind, "transferConnected");
+    assert.equal(open.transfer.requested.length, 1);
+    assert.equal(Object.keys(value(await new CallRuntime(open.ledger, open.scope).read(open.callId)).staffItems).length, 0);
+
+    const schedule = { timeZone: "Pacific/Honolulu", weekly, closedDates: ["2026-09-27"] };
+    const intervals = value(expandStaffSchedule(schedule, at(0), at(3_600)));
+    assert.deepEqual(intervals, [], "a closed Sunday must suppress the early Monday spillover");
+    const app = await fixture(kind, `${kind}-overnight-holiday`, false, "execute", undefined, undefined,
+      { staffedIntervals: intervals, knowledge: scope => [hoursSource(scope)] });
+    const requested = await transferTurn(app);
+    assert.equal(requested.presentations[requested.pendingPresentationId!]?.kind, "notice");
+    assert.equal(Object.values(requested.staffItems)[0]?.reason, "callerRequested");
+    assert.equal(app.transfer.requested.length, 0);
+    const notice = value(await app.session.dispatchPending(at(4)));
+    assert.equal(notice.kind, "queued");
+    assert.match(app.playback.queuedTexts.at(-1)!, /aren't available for a live transfer/);
+    value(await app.session.acceptPlaybackResult(notice.playbackId!, "played", at(5)));
+    const opened = value(await app.session.drainEffects(at(6)));
+    assert.equal(Object.values(opened.staffItems)[0]?.status, "open");
+    const answer = await answerTurn(app, "Hours?", 7);
+    assert.equal(answer.knowledgeAnswers.at(-1)?.sourceRef, "hours");
+    const delivery = value(await app.session.dispatchPending(at(9)));
+    assert.equal(delivery.kind, "queued");
+    assert.equal(app.playback.queuedTexts.at(-1), "We open at 9 am.");
+    assert.equal(app.transfer.requested.length, 0);
+    assert.equal(app.host.bookings(app.scope).length, 0);
+  });
+
   test(`${kind}: a staffed window closing before transfer send cancels and requests follow-up`, async () => {
     const app = await fixture(kind, `${kind}-closing-staffing`, false, "execute", undefined, undefined,
       { staffedIntervals: [{ startsAt: at(0), endsAt: at(4) }] });

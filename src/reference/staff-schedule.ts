@@ -35,10 +35,12 @@ function localMinute(formatter: Intl.DateTimeFormat, time: number): Readonly<{ d
 function staffed(windows: readonly LocalStaffWindow[], closed: ReadonlySet<string>, local: ReturnType<typeof localMinute>): boolean {
   if (closed.has(local.date)) return false;
   const previousWeekday = (local.weekday + 6) % 7;
+  const previousDate = new Date(Date.parse(`${local.date}T00:00:00.000Z`) - 24 * 60 * MINUTE_MS)
+    .toISOString().slice(0, 10);
   return windows.some(window => window.startMinute < window.endMinute
     ? window.weekday === local.weekday && window.startMinute <= local.minute && local.minute < window.endMinute
     : (window.weekday === local.weekday && local.minute >= window.startMinute) ||
-      (window.weekday === previousWeekday && local.minute < window.endMinute));
+      (window.weekday === previousWeekday && local.minute < window.endMinute && !closed.has(previousDate)));
 }
 
 /** Host-side expansion of local hours and holiday closures into a bounded call snapshot. */
