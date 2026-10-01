@@ -171,7 +171,7 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
   const transcriptionSocketFactory = config.openai.transcriptionSocketFactory;
   const readiness = config.readiness;
   const count = (scope: LocationScope, kind: OperationalCounterKind): void => {
-    try { operationalCounters.record(scope, kind); }
+    try { void Promise.resolve(operationalCounters.record(scope, kind)).catch(() => undefined); }
     catch { /* operational diagnostics cannot alter a call */ }
   };
   // Validate provider configuration before exposing an HTTP listener.

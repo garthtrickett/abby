@@ -3,8 +3,9 @@ import type { LocationScope } from "../core/model.ts";
 export type OperationalCounterKind = "admissionDenied" | "callOwnerStarted" | "voiceFailure" | "callEnded";
 export type OperationalCounts = Readonly<Record<OperationalCounterKind, number>>;
 export type OperationalCounterStore = Readonly<{
-  record: (scope: LocationScope, kind: OperationalCounterKind) => void;
-  snapshot: (scope: LocationScope) => OperationalCounts;
+  record: (scope: LocationScope, kind: OperationalCounterKind) => void | Promise<void>;
+  snapshot: (scope: LocationScope) => OperationalCounts | Promise<OperationalCounts>;
+  drain?: () => Promise<void>;
 }>;
 
 const keys = ["admissionDenied", "callOwnerStarted", "voiceFailure", "callEnded"] as const;

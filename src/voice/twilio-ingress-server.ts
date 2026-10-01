@@ -75,7 +75,7 @@ export type TwilioIngressServerConfig = Readonly<{
   /** Checked after signature verification and before returning stream TwiML. */
   /** No event means a general readiness probe, which a restricted test gate must refuse. */
   admitWebhook?: (event?: AuthenticatedInboundCall) => Promise<boolean>;
-  operationalRead?: Readonly<{ tokenHex: string; snapshot: () => OperationalCounts }>;
+  operationalRead?: Readonly<{ tokenHex: string; snapshot: () => OperationalCounts | Promise<OperationalCounts> }>;
   /** Constructs a call owner only after the webhook, upgrade, and start have been authenticated. */
   createCall: (stream: AuthenticatedTwilioStream,
     send: (json: string) => "queued" | "notSent" | "uncertain",

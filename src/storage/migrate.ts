@@ -24,6 +24,7 @@ import { up as up021, down as down021 } from "./migrations/021_cutover_phone_ind
 import { up as up022, down as down022 } from "./migrations/022_cliniko_catalogue_approvals.ts";
 import { up as up023, down as down023 } from "./migrations/023_phone_index_credentials.ts";
 import { up as up024, down as down024 } from "./migrations/024_cliniko_approval_alternatives.ts";
+import { up as up025, down as down025 } from "./migrations/025_clinic_operational_counts.ts";
 
 function createMigrator<DB>(db: Kysely<DB>): Migrator {
   return new Migrator({
@@ -53,6 +54,7 @@ function createMigrator<DB>(db: Kysely<DB>): Migrator {
       "022_cliniko_catalogue_approvals": { up: up022, down: down022 },
       "023_phone_index_credentials": { up: up023, down: down023 },
       "024_cliniko_approval_alternatives": { up: up024, down: down024 },
+      "025_clinic_operational_counts": { up: up025, down: down025 },
     }) },
   });
 }
