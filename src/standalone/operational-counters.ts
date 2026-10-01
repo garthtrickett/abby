@@ -1,10 +1,6 @@
 import type { LocationScope } from "../core/model.ts";
-
-export type OperationalCounterKind = "admissionDenied" | "callOwnerStarted" | "voiceFailure" | "callEnded";
-export type OperationalCounts = Readonly<Record<OperationalCounterKind, number>>;
-export type OperationalCounterSink = Readonly<{
-  record: (scope: LocationScope, kind: OperationalCounterKind) => void;
-}>;
+import type { OperationalCounterKind, OperationalCounts, OperationalCounterStore } from "../voice/operational-counts.ts";
+export type { OperationalCounterKind, OperationalCounts, OperationalCounterStore } from "../voice/operational-counts.ts";
 
 function emptyCounts(): Record<OperationalCounterKind, number> {
   return { admissionDenied: 0, callOwnerStarted: 0, voiceFailure: 0, callEnded: 0 };
@@ -15,7 +11,7 @@ function scopeKey(scope: LocationScope): string {
 }
 
 /** Volatile, fixed-code totals. No event time, call key, caller number or free text is retained. */
-export class StandaloneOperationalCounters implements OperationalCounterSink {
+export class StandaloneOperationalCounters implements OperationalCounterStore {
   readonly #counts = new Map<string, Record<OperationalCounterKind, number>>();
 
   record(scope: LocationScope, kind: OperationalCounterKind): void {
