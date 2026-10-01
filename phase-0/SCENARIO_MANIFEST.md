@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.34
+# Scenario manifest, version 1.35
 
 [SCENARIO_MANIFEST.json](SCENARIO_MANIFEST.json) tracks the 228 stable E2E IDs in [Technical Design Section 11](../TECHNICAL_DESIGN.md#11-verification-design). The design table owns each journey's wording; the registry adds its requirement mapping, fixture family, intended compositions, earliest implementation phase, and evidence status. Each scenario's fixture ID is `fixture-` plus its lowercase E2E ID. The capability and setting maps cover the current agent catalogue and its behavior settings. `test/contract/scenario-manifest.test.ts` checks the design and catalogue for drift, duplicate or missing IDs, and test-file references.
 
