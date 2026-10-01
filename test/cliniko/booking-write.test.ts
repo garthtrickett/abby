@@ -176,3 +176,82 @@ test("a shared budget blocks the write before send and the marker remains fenced
   assert.equal((await adapter.writeOnce(request)).ok, false);
   assert.equal(writes, 0);
 });
+
+test("a call abort before or during budget claim prevents the POST and fences the marker", async () => {
+  let claims = 0;
+  let writes = 0;
+  let releaseClaim!: (value: null) => void;
+  const budget = { claim() {
+    claims += 1;
+    return new Promise<null>(resolve => { releaseClaim = resolve; });
+  }, observe429() { return { kind: "rateLimited" as const }; } };
+  const adapter = writer(async () => { writes += 1; throw new Error("unexpected POST"); }, { rateBudget: budget });
+  const aborted = new AbortController();
+  aborted.abort();
+  assert.deepEqual(await adapter.writeOnce(request, aborted.signal),
+    { ok: false, error: { kind: "unavailable" } });
+  assert.equal(claims, 0);
+  assert.deepEqual(await adapter.writeOnce(request), { ok: false, error: { kind: "invalidQuery" } });
+
+  const second = writer(async () => { writes += 1; throw new Error("unexpected POST"); }, { rateBudget: budget });
+  const controller = new AbortController();
+  const pending = second.writeOnce(request, controller.signal);
+  assert.equal(claims, 1);
+  controller.abort();
+  assert.deepEqual(await pending, { ok: false, error: { kind: "unavailable" } });
+  releaseClaim(null);
+  await Promise.resolve();
+  assert.equal(writes, 0);
+  assert.deepEqual(await second.writeOnce(request), { ok: false, error: { kind: "invalidQuery" } });
+});
+
+test("an abort after the booking POST begins is uncertain even if a late response reports success", async () => {
+  let finish!: (response: Response) => void;
+  let began!: () => void;
+  const started = new Promise<void>(resolve => { began = resolve; });
+  const late = new Promise<Response>(resolve => { finish = resolve; });
+  let writes = 0;
+  let providerSignal: AbortSignal | null | undefined;
+  const adapter = writer(async (_input, init) => {
+    writes += 1;
+    assert.equal(init?.method, "POST");
+    providerSignal = init?.signal;
+    began();
+    return late;
+  });
+  const controller = new AbortController();
+  const pending = adapter.writeOnce(request, controller.signal);
+  await started;
+  controller.abort();
+  assert.equal(providerSignal?.aborted, true);
+  assert.deepEqual(await pending, { ok: true, value: { kind: "uncertain" } });
+  finish(Response.json(appointment("91"), { status: 201 }));
+  await Promise.resolve();
+  assert.equal(writes, 1);
+  assert.deepEqual(await adapter.writeOnce(request), { ok: false, error: { kind: "invalidQuery" } });
+});
+
+test("an abort while reading a successful booking body cannot become an accepted booking", async () => {
+  let beganReading!: () => void;
+  let releaseBody!: () => void;
+  const reading = new Promise<void>(resolve => { beganReading = resolve; });
+  const body = new ReadableStream<Uint8Array>({ pull(controller) {
+    beganReading();
+    return new Promise<void>(resolve => {
+      releaseBody = () => {
+        controller.enqueue(new TextEncoder().encode(JSON.stringify(appointment("91"))));
+        controller.close();
+        resolve();
+      };
+    });
+  } }, { highWaterMark: 0 });
+  const adapter = writer(async () => new Response(body, { status: 201 }));
+  const controller = new AbortController();
+  const pending = adapter.writeOnce(request, controller.signal);
+  await reading;
+  controller.abort();
+  assert.deepEqual(await pending, { ok: true, value: { kind: "uncertain" } });
+  releaseBody();
+  await Promise.resolve();
+  assert.deepEqual(await adapter.writeOnce(request), { ok: false, error: { kind: "invalidQuery" } });
+});

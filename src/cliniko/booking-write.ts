@@ -105,6 +105,19 @@ async function boundedJson(response: Response): Promise<Result<unknown, ClinikoB
   finally { reader.releaseLock(); }
 }
 
+/** Stop waiting when a host-supplied signal aborts; the underlying budget or provider may still settle later. */
+async function untilAbort<Value>(pending: Promise<Value>, signal?: AbortSignal): Promise<Value | undefined> {
+  if (!signal) return pending;
+  if (signal.aborted) { void pending.catch(() => undefined); return undefined; }
+  let onAbort: () => void = () => undefined;
+  const aborted = new Promise<undefined>(resolve => {
+    onAbort = () => resolve(undefined);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try { return await Promise.race([pending, aborted]); }
+  finally { signal.removeEventListener("abort", onAbort); }
+}
+
 /** A provider edge only. It cannot establish slot exclusivity or authorize live booking. */
 export class ClinikoBookingWriter {
   private readonly scope: LocationScope;
@@ -151,30 +164,39 @@ export class ClinikoBookingWriter {
       link("appointment_type") === `${this.baseUrl}/appointment_types/${this.config.appointmentTypeId}`;
   }
 
-  /** At most one POST per marker in this process; every uncertain response stays uncertain. */
-  async writeOnce(request: ClinikoBookingRequest): Promise<Result<ClinikoBookingWrite, ClinikoBookingFailure>> {
+  /** At most one POST per marker in this process; abort before send prevents the POST. */
+  async writeOnce(request: ClinikoBookingRequest, signal?: AbortSignal):
+    Promise<Result<ClinikoBookingWrite, ClinikoBookingFailure>> {
     if (!validRequest(request)) return err({ kind: "invalidQuery" });
     if (!sameScope(this.scope, request.scope)) return err({ kind: "scopeMismatch" });
     if (this.attempted.has(request.marker)) return err({ kind: "invalidQuery" });
     if (this.attempted.size >= maxProcessAttempts) return err({ kind: "unavailable" });
     this.attempted.add(request.marker);
-    const limited = await claimClinikoBudget(this.rateBudget);
+    if (signal?.aborted) return err({ kind: "unavailable" });
+    const limited = await untilAbort(claimClinikoBudget(this.rateBudget), signal);
+    if (signal?.aborted || limited === undefined) return err({ kind: "unavailable" });
     if (limited) return err(limited);
+    const requestSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000);
+    if (requestSignal.aborted) return err({ kind: "unavailable" });
     let response: Response;
     try {
-      response = await this.fetchPort(`${this.baseUrl}/individual_appointments`, {
+      const received = await untilAbort(this.fetchPort(`${this.baseUrl}/individual_appointments`, {
         method: "POST", headers: { Accept: "application/json", Authorization: this.authorization,
           "Content-Type": "application/json", "User-Agent": this.userAgent },
         body: JSON.stringify({ business_id: this.config.businessId, practitioner_id: this.config.practitionerId,
           appointment_type_id: this.config.appointmentTypeId, patient_id: request.patientId,
           starts_at: request.startsAt, notes: notes(request.marker) }),
-        redirect: "error", signal: AbortSignal.timeout(15_000),
-      });
+        redirect: "error", signal: requestSignal,
+      }), requestSignal);
+      if (!received || requestSignal.aborted) return ok({ kind: "uncertain" });
+      response = received;
     } catch { return ok({ kind: "uncertain" }); }
-    if (response.status === 429) await observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset"));
+    if (response.status === 429) {
+      await untilAbort(observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset")), requestSignal);
+    }
     if (response.status !== 201) return ok({ kind: "uncertain" });
-    const parsed = await boundedJson(response);
-    if (!parsed.ok) return ok({ kind: "uncertain" });
+    const parsed = await untilAbort(boundedJson(response), requestSignal);
+    if (!parsed?.ok || requestSignal.aborted) return ok({ kind: "uncertain" });
     const row = record(parsed.value);
     if (!row || typeof row.id !== "string" || !idPattern.test(row.id) ||
         !this.matches(row, request) || !validStatus(row) ||
