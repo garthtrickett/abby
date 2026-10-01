@@ -12,11 +12,12 @@ import { seedSyntheticCatalogueApproval } from "../support/seed-synthetic-catalo
 import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
+import { PostgresClinikoApprovalStore } from "../../src/storage/postgres-cliniko-approval-store.ts";
 
 type Fault = "openai-speech" | "openai-transcription" | "untrusted-transcript" | "cliniko-rate-limit" | "cliniko-server-error" | "cliniko-timeout" | "cliniko-slow-read" | "cliniko-zone-changed" | "cliniko-partial-page" |
   "cliniko-business-type-removed" | "cliniko-practitioner-type-removed" | "week-alternative" | "practitioner-alternative" |
   "practitioner-alternative-rate-limit" | "practitioner-alternative-malformed" |
-  "practitioner-alternative-second" | undefined;
+  "practitioner-alternative-second" | "primary-selection-change" | undefined;
 const fallbackScenarios = [
   { fault: "cliniko-rate-limit", id: "E2E-174" },
   { fault: "cliniko-server-error", id: "E2E-207" },
@@ -70,7 +71,7 @@ type Fixture = { port: number; child: ReturnType<typeof spawn>;
   admin: ReturnType<typeof connectPostgres>; databaseName: string;
   speech: string[]; clinikoMethods: string[]; clinikoPaths: string[]; clinikoQueries: string[];
   modelRequests: string[];
-  openCall: () => Promise<Call>; operationalSnapshot: () => Promise<Record<string, number>> };
+  openCall: (callSidOverride?: string) => Promise<Call>; operationalSnapshot: () => Promise<Record<string, number>> };
 
 async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void>,
                            weekApproved = false, alternativeApproved = false,
@@ -90,8 +91,8 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
     ABBY_SYNTHETIC_VOICE_FAULT: fault, ABBY_TWILIO_TEST_CALLER_NUMBER: caller,
     ABBY_TENANT_ID: "fault-test", ABBY_CLINIC_ID: "clinic", ABBY_LOCATION_ID: "main",
     ABBY_CLINIKO_API_KEY: "synthetic-key-au5", ABBY_CLINIKO_CONTACT_EMAIL: "test@example.com",
-    ABBY_CLINIKO_BUSINESS_ID: "11", ABBY_CLINIKO_PRACTITIONER_ID: "22",
-    ABBY_CLINIKO_APPOINTMENT_TYPE_ID: "33", ABBY_CLINIKO_TIME_ZONE: "Australia/Sydney",
+    ABBY_CLINIKO_BUSINESS_ID: undefined, ABBY_CLINIKO_PRACTITIONER_ID: undefined,
+    ABBY_CLINIKO_APPOINTMENT_TYPE_ID: undefined, ABBY_CLINIKO_TIME_ZONE: undefined,
     ABBY_TWILIO_TEST_NUMBER: number, ABBY_TWILIO_FALLBACK_NUMBER: "+6125550188",
     ABBY_TWILIO_ACCOUNT_SID: accountSid, ABBY_TWILIO_AUTH_TOKEN: authToken,
     ABBY_VOICE_OPERATIONS_TOKEN_HEX: operationalTokenHex,
@@ -153,8 +154,8 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
       catch { await new Promise(resolve => setTimeout(resolve, 50)); }
     }
     assert.ok(healthy, "voice runner did not start");
-    const openCall = async (): Promise<Call> => {
-      const form = { AccountSid: accountSid, CallSid: callSid, To: number, From: caller };
+    const openCall = async (callSidOverride = callSid): Promise<Call> => {
+      const form = { AccountSid: accountSid, CallSid: callSidOverride, To: number, From: caller };
       const answer = await fetch(`http://127.0.0.1:${port}/twilio/inbound`, { method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded",
           "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, webhookUrl, form) },
@@ -174,7 +175,7 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
       const streamSid = `MZ${randomUUID().replaceAll("-", "")}`;
       socket.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
       socket.send(JSON.stringify({ event: "start", sequenceNumber: "1", streamSid,
-        start: { accountSid, callSid, streamSid, tracks: ["inbound"],
+        start: { accountSid, callSid: callSidOverride, streamSid, tracks: ["inbound"],
           mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 },
           customParameters: { abbyBinding: binding } } }));
       return { socket, messages, closed, streamSid };
@@ -450,6 +451,50 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
         await closeCaller(call);
       }, false, true)),
+    t.test("E2E-210 next signed call follows a changed approved primary without runner restart", async () =>
+      withFixture("primary-selection-change", async fixture => {
+        const first = await fixture.openCall();
+        await markGreeting(first);
+        first.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: first.streamSid,
+          dtmf: { track: "inbound_track", digit: "2" } }));
+        await waitFor(() => first.messages.length >= 4 && fixture.speech.length >= 2, "first primary response");
+        assert.match(fixture.speech[1]!, /couldn't find a possible appointment time/);
+        assert.deepEqual(fixture.clinikoPaths.filter(path => path.endsWith("/available_times"))
+          .map(path => path.includes("/practitioners/22/") ? "old" : "unexpected"), ["old"]);
+        await closeCaller(first);
+
+        const target = new URL(process.env.DATABASE_URL!);
+        target.pathname = `/${fixture.databaseName}`;
+        const db = connectPostgres(target.toString());
+        try {
+          const store = new PostgresClinikoApprovalStore(db);
+          const current = await store.read({ tenantId: "fault-test", clinicId: "clinic", locationId: "main" });
+          assert.ok(current.ok && current.value.approval);
+          assert.ok((await store.change(current.value.approval.scope, current.value.version,
+            { ...current.value.approval, selection: { ...current.value.approval.selection,
+              practitionerId: "44", appointmentTypeId: "55" } }, "synthetic-admin")).ok);
+        } finally { await db.destroy(); }
+
+        const secondCallSid = `CA${randomUUID().replaceAll("-", "")}`;
+        const second = await fixture.openCall(secondCallSid);
+        await markGreeting(second);
+        second.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: second.streamSid,
+          dtmf: { track: "inbound_track", digit: "2" } }));
+        await waitFor(() => second.messages.length >= 4 && fixture.speech.length >= 4, "new primary response");
+        assert.match(fixture.speech[3]!, /possible times/);
+        assert.match(fixture.speech[3]!, /can't reserve or confirm/);
+        assert.deepEqual(fixture.clinikoPaths.filter(path => path.endsWith("/available_times"))
+          .map(path => path.includes("/practitioners/44/") ? "new" : "old"), ["old", "new"]);
+        assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
+        await closeCaller(second);
+        const privacyDb = connectPostgres(target.toString());
+        try {
+          assert.deepEqual(await scanPatientDataCanaries(privacyDb,
+            [{ label: "new_provider_call", value: secondCallSid }]), { ok: true, value: [] });
+        } finally { await privacyDb.destroy(); }
+        assert.deepEqual(await scanDisposableBackupCanaries(target.toString(),
+          [{ label: "new_provider_call", value: secondCallSid }]), []);
+      })),
     t.test("E2E-176 database loss closes active stream and health fails", async () => withFixture(undefined, async fixture => {
       const call = await fixture.openCall();
       await markGreeting(call);

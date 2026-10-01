@@ -25,29 +25,44 @@ import { TwilioSignedIngress } from "../voice/twilio-signed-ingress.ts";
 import type { TwilioSignedIngressConfig } from "../voice/twilio-signed-ingress.ts";
 import type { AuthenticatedInboundCall } from "../voice/admission.ts";
 import { createOpenAIAvailabilityIntentResolver } from "./openai-availability-intent.ts";
+import { clinicDateAt } from "./clinic-clock.ts";
 import { keypadAvailabilityRange } from "./keypad-availability.ts";
 import { StandaloneOperationalCounters } from "./operational-counters.ts";
 import type { OperationalCounterKind, OperationalCounterStore } from "../voice/operational-counts.ts";
 import { createStandaloneTransientVoiceCall } from "./transient-voice-composition.ts";
 
-export type ClinikoVoiceRoute = Readonly<{
+type ClinikoVoiceRouteBase = Readonly<{
   dialedNumber: string;
   scope: LocationScope;
   routeVersion: string;
-  availability: ClinikoAvailabilityReader;
-  /** Builds only the currently approved choice, using this route's credential and shared budget. */
-  alternativeAvailability?: (selection: ClinikoSelection) => ClinikoAvailabilityReader | null;
   approval: Pick<ClinikoCatalogueSetup, "readApprovedRoute">;
   rateBudget: PostgresClinikoRequestBudget;
-  /** Today's YYYY-MM-DD date in this clinic's local time zone. */
-  clinicDate: () => string;
-  /** The configured clock zone must match the approved Cliniko business zone. */
-  timeZone: string;
   /** Required clinic approval: Realtime finals cannot yet authorize speech-led availability. */
   keypadAvailabilityGreeting: ApprovedGreeting;
   /** Must agree with the approved keypad wording; absent means disabled. */
   sevenDayAvailabilityEnabled?: boolean;
 }>;
+
+export type ClinikoVoiceRoute = ClinikoVoiceRouteBase & (
+  Readonly<{
+    /** The live runner binds every call to the current approved primary and alternatives. */
+    credentialFingerprint: string;
+    availabilityForSelection: (selection: ClinikoSelection) => ClinikoAvailabilityReader | null;
+  }> |
+  Readonly<{
+    /** Legacy fixed-reader composition retained for isolated synthetic callers. */
+    availability: ClinikoAvailabilityReader;
+    alternativeAvailability?: (selection: ClinikoSelection) => ClinikoAvailabilityReader | null;
+    clinicDate: () => string;
+    timeZone: string;
+  }>
+);
+
+function isDynamicRoute(route: ClinikoVoiceRoute): route is ClinikoVoiceRouteBase &
+    Readonly<{ credentialFingerprint: string;
+      availabilityForSelection: (selection: ClinikoSelection) => ClinikoAvailabilityReader | null }> {
+  return "availabilityForSelection" in route;
+}
 
 const keypadInstructions = "Press 1 for possible times today. Press 2 for possible times tomorrow.";
 const sevenDayInstructions = "Press 3 for possible times over the next week.";
@@ -94,16 +109,25 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
   const fallbackNumbers = Object.keys(twilio.fallbackNumbers);
   const routes = new Map<string, ClinikoVoiceRoute>();
   for (const route of config.routes) {
+    if (!(route.rateBudget instanceof PostgresClinikoRequestBudget)) {
+      throw new RangeError("invalid clinic voice route");
+    }
+    const dynamic = isDynamicRoute(route);
+    const readerBindingValid = dynamic
+      ? typeof route.availabilityForSelection === "function" &&
+        typeof route.credentialFingerprint === "string" &&
+        route.rateBudget.matchesCredentialFingerprint(route.credentialFingerprint) &&
+        !("availability" in route) && !("clinicDate" in route) && !("timeZone" in route)
+      : route.availability instanceof ClinikoAvailabilityReader &&
+        route.availability.matchesScope(route.scope) &&
+        route.availability.usesBudget(route.rateBudget) &&
+        route.rateBudget.matchesCredentialFingerprint(route.availability.credentialFingerprint()) &&
+        (route.alternativeAvailability === undefined || typeof route.alternativeAvailability === "function") &&
+        typeof route.clinicDate === "function" && typeof route.timeZone === "string" && !!route.timeZone;
     if (!route.scope.tenantId || !route.scope.clinicId || !route.scope.locationId ||
-        !route.routeVersion?.trim() || !(route.availability instanceof ClinikoAvailabilityReader) ||
-        !route.availability.matchesScope(route.scope) ||
+        !route.routeVersion?.trim() || !readerBindingValid ||
         !route.approval || typeof route.approval.readApprovedRoute !== "function" ||
-        !(route.rateBudget instanceof PostgresClinikoRequestBudget) ||
-        !route.rateBudget.matchesDatabase(config.db) || !route.availability.usesBudget(route.rateBudget) ||
-        !route.rateBudget.matchesCredentialFingerprint(route.availability.credentialFingerprint()) ||
-        (route.alternativeAvailability !== undefined && typeof route.alternativeAvailability !== "function") ||
-        typeof route.clinicDate !== "function" || typeof route.timeZone !== "string" ||
-        !route.timeZone || routes.has(route.dialedNumber) ||
+        !route.rateBudget.matchesDatabase(config.db) || routes.has(route.dialedNumber) ||
         !Object.hasOwn(twilio.fallbackNumbers, route.dialedNumber)) {
       throw new RangeError("invalid clinic voice route");
     }
@@ -140,6 +164,7 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
   })));
   const approvedRoute = async (route: ClinikoVoiceRoute): Promise<Readonly<{
     approval: ClinikoSelectionApproval; readers: readonly ClinikoAvailabilityReader[];
+    clinicDate: () => string;
   }> | null> => {
     const binding: ClinikoSetupRoute = { accountRef: twilio.accountSid,
       dialedNumber: route.dialedNumber, routeVersion: route.routeVersion };
@@ -147,28 +172,37 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       const result = await route.approval.readApprovedRoute(route.scope, binding);
       if (!result.ok) return null;
       const approval = result.value;
+      const dynamic = isDynamicRoute(route);
       if (!isClinikoApprovalState({ version: 1, approval }) ||
           !approval.scope || approval.scope.tenantId !== route.scope.tenantId ||
           approval.scope.clinicId !== route.scope.clinicId || approval.scope.locationId !== route.scope.locationId ||
           !approval.route || approval.route.accountRef !== binding.accountRef ||
           approval.route.dialedNumber !== binding.dialedNumber || approval.route.routeVersion !== binding.routeVersion ||
           !approval.selection || !approval.selection.policyVersion?.trim() ||
-          approval.businessTimeZone !== route.timeZone ||
           approval.patientActionMode !== "unavailable" || approval.patientRequestMode !== "unavailable" ||
+          !Array.isArray(approval.alternatives) || approval.alternatives.length > 2) return null;
+      if (!dynamic && (approval.businessTimeZone !== route.timeZone ||
           !route.availability.matchesSelection(route.scope, { ...approval.selection,
             credentialFingerprint: approval.credentialFingerprint }) ||
-          !Array.isArray(approval.alternatives) || approval.alternatives.length > 2 ||
-          (approval.alternatives.length > 0 && !route.alternativeAvailability)) return null;
+          (approval.alternatives.length > 0 && !route.alternativeAvailability))) return null;
+      if (dynamic && approval.credentialFingerprint !== route.credentialFingerprint) return null;
       const readers: ClinikoAvailabilityReader[] = [];
-      for (const choice of approval.alternatives) {
-        const reader = route.alternativeAvailability?.(choice);
+      const choices = dynamic
+        ? [approval.selection, ...approval.alternatives] : approval.alternatives;
+      for (const choice of choices) {
+        const reader = dynamic
+          ? route.availabilityForSelection(choice) : route.alternativeAvailability?.(choice);
         if (!(reader instanceof ClinikoAvailabilityReader) ||
             !reader.matchesSelection(route.scope, { ...choice,
               credentialFingerprint: approval.credentialFingerprint }) ||
-            !reader.usesBudget(route.rateBudget)) return null;
+            !reader.usesBudget(route.rateBudget) ||
+            !route.rateBudget.matchesCredentialFingerprint(reader.credentialFingerprint())) return null;
         readers.push(reader);
       }
-      return { approval, readers };
+      return { approval, readers: dynamic ? readers : [route.availability, ...readers],
+        clinicDate: dynamic
+          ? () => clinicDateAt(approval.businessTimeZone, new Date(config.now?.() ?? Date.now()))
+          : route.clinicDate };
     } catch { return null; }
   };
   const openaiApiKey = config.openai.apiKey;
@@ -203,11 +237,6 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
         ...(config.openai.fetch ? { fetchPort: config.openai.fetch } : {}) }),
       primaryFirstChunkMs })
     : primarySynthesis;
-  const resolvers = new Map([...routes].map(([number, route]) => [number,
-    createOpenAIAvailabilityIntentResolver({ apiKey: openaiApiKey,
-      model: config.openai.intentModel, clinicDate: route.clinicDate,
-      ...(config.openai.fetch ? { fetch: config.openai.fetch } : {}) })] as const));
-
   const privacy = await checkStandaloneTextDatabase(config.db);
   if (!privacy.ok) return err(privacy.error);
   if (!await config.activeCallClaims.matchesDatabase(config.db)) {
@@ -238,16 +267,18 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       count(route.scope, "admissionDenied");
       throw new Error("clinic catalogue approval unavailable");
     }
-    const availability = new ClinikoApprovedAvailabilitySearch([route.availability, ...approved.readers],
+    const availability = new ClinikoApprovedAvailabilitySearch(approved.readers,
       config.now, approved.approval.businessTimeZone);
     const composed = await createStandaloneTransientVoiceCall({ db: config.db, routingHost,
       expectedPolicyVersion: approved.approval.selection.policyVersion,
       stream, send, closeTransport: close, synthesis,
       availability,
       approvedGreeting: route.keypadAvailabilityGreeting,
-      keypadAvailabilityRange: (digit: string) => keypadAvailabilityRange(route.clinicDate, digit,
+      keypadAvailabilityRange: (digit: string) => keypadAvailabilityRange(approved.clinicDate, digit,
         route.sevenDayAvailabilityEnabled === true),
-      resolveIntent: resolvers.get(route.dialedNumber)!, readiness,
+      resolveIntent: createOpenAIAvailabilityIntentResolver({ apiKey: openaiApiKey,
+        model: config.openai.intentModel, clinicDate: approved.clinicDate,
+        ...(config.openai.fetch ? { fetch: config.openai.fetch } : {}) }), readiness,
       transcriptionFactory: sessionId => new OpenAIRealtimeTranscription({
         apiKey: openaiApiKey, sessionId,
         ...(transcriptionSocketFactory ? { socketFactory: transcriptionSocketFactory } : {}),
