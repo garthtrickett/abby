@@ -4,7 +4,7 @@ import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor } from "../../reference/command-gateway.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
-import type { AutomationSettingAuditPage, BookingSettingAuditPage } from "../../core/host.ts";
+import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage } from "../../core/host.ts";
 import type { WriteStopAuditPage, WriteStopStatus } from "../../core/write-stop.ts";
 import type { KnowledgeEntry } from "../../reference/knowledge-catalogue.ts";
 
@@ -24,6 +24,9 @@ export type DashboardState = {
   stopReasonInput: string;
   automationAuditPage: AutomationSettingAuditPage | undefined;
   auditPage: BookingSettingAuditPage | undefined;
+  afterHoursAuditPage: AfterHoursSettingAuditPage | undefined;
+  afterHoursInfoVersion: string;
+  afterHoursApprovedText: string;
   callIdInput: string;
   call: CallSummary | undefined;
   staffPage: StaffQueuePage | undefined;
@@ -48,6 +51,10 @@ export type DashboardActions = Readonly<{
   toggleBooking(): void;
   loadAudit(): void;
   loadMoreAudit(): void;
+  setAfterHoursField(field: "afterHoursInfoVersion" | "afterHoursApprovedText", value: string): void;
+  changeAfterHours(mode: "staffRequest" | "approvedInfoAndRequest"): void;
+  loadAfterHoursAudit(): void;
+  loadMoreAfterHoursAudit(): void;
   setCallId(value: string): void;
   loadCall(): void;
   loadStaff(): void;
@@ -61,6 +68,7 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
   const knowledgeCurrent = state.knowledge?.filter((entry, index, rows) => !rows.slice(index + 1).some(row => row.sourceRef === entry.sourceRef)) ?? [];
   const canChange = state.capabilities.some(item => item.id === "settings.appointments.booking.enabled.change.v1");
   const canChangeAutomation = state.capabilities.some(item => item.id === "settings.automation.enabled.change.v1");
+  const canChangeAfterHours = state.capabilities.some(item => item.id === "settings.routing.afterHours.change.v1");
   const enabled = state.policy?.bookingEnabled ?? false;
   const automationEnabled = state.policy?.automationEnabled ?? false;
   const canChangeStaff = state.capabilities.some(item => item.id === "staff.change.v1");
@@ -111,6 +119,34 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
         </div>
         ${state.policy ? html`<p class="muted">Policy version ${state.policy.policyVersion} · Booking capability: ${state.policy.capabilities.book}</p>` : ""}
       </section>
+      <section class="card" aria-labelledby="after-hours-title">
+        <h2 id="after-hours-title">After-hours information</h2>
+        <p class="status">${state.policy?.afterHoursMode === "approvedInfoAndRequest" ? "Approved information enabled" : "Staff request only"}</p>
+        <p class="muted">Applies to new calls when a live transfer is attempted outside staffed hours and staff follow-up is available. The approved text is spoken after the follow-up notice.</p>
+        ${state.policy?.capabilities.transfer !== "execute" || state.policy.staffWorkEnabled === false ?
+          html`<p class="muted">This clinic cannot currently attempt live transfers with follow-up; saved information will be inactive until that capability is available.</p>` : ""}
+        ${canChangeAfterHours && state.policy ? html`<div>
+          <label>Approved information version <input aria-label="Approved after-hours information version"
+            .value=${state.afterHoursInfoVersion}
+            @input=${(event: Event) => actions.setAfterHoursField("afterHoursInfoVersion", (event.target as HTMLInputElement).value)}></label>
+          <label>Approved after-hours information <textarea aria-label="Approved after-hours information"
+            .value=${state.afterHoursApprovedText}
+            @input=${(event: Event) => actions.setAfterHoursField("afterHoursApprovedText", (event.target as HTMLTextAreaElement).value)}></textarea></label>
+          <button type="button" ?disabled=${state.busy || !state.afterHoursInfoVersion.trim() || !state.afterHoursApprovedText.trim()}
+            @click=${() => actions.changeAfterHours("approvedInfoAndRequest")}>Save approved after-hours information</button>
+          <button type="button" ?disabled=${state.busy || state.policy.afterHoursMode !== "approvedInfoAndRequest"}
+            @click=${() => actions.changeAfterHours("staffRequest")}>Use staff request only</button>
+        </div>` : html`<span class="pill">Admin only</span>`}
+        ${state.policy ? html`<p class="muted">After-hours version ${state.policy.policyVersion}</p>` : ""}
+      </section>
+      ${state.capabilities.some(item => item.id === "settings.routing.afterHours.audit.v1") ? html`<section class="card" aria-labelledby="after-hours-audit-title">
+        <div class="row"><h2 id="after-hours-audit-title">After-hours setting history</h2>
+          <button type="button" ?disabled=${state.busy} @click=${() => actions.loadAfterHoursAudit()}>Refresh after-hours history</button></div>
+        ${state.afterHoursAuditPage ? html`<div aria-label="After-hours setting audit">
+          ${state.afterHoursAuditPage.entries.length ? html`<ul>${state.afterHoursAuditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.mode === "staffRequest" ? "staff request only" : "approved information"}${entry.infoVersion ? ` · information ${entry.infoVersion}` : ""} · ${entry.actorRef} · ${entry.changedAt}</li>`)}</ul>` : html`<p>No after-hours setting changes recorded.</p>`}
+          ${state.afterHoursAuditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreAfterHoursAudit()}>Load more after-hours history</button>` : ""}
+        </div>` : html`<p class="muted">Setting history unavailable.</p>`}
+      </section>` : ""}
       ${state.capabilities.some(item => item.id === "knowledge.list.v1") ? html`<section class="card" aria-labelledby="knowledge-title">
         <h2 id="knowledge-title">Approved clinic information</h2>
         <p class="muted">Save a draft, then approve it before Abby can use the text. Revocation blocks future answers immediately.</p>

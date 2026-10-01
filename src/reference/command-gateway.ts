@@ -1,6 +1,6 @@
-import type { AutomationSettingAuditPage, BookingSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
+import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
-import type { CallPolicy, FinalCallerTurn, LocationScope, Result, StaffChangeRequest, StaffItem, TransitionFailure } from "../core/model.ts";
+import type { AfterHoursMode, ApprovedAfterHoursInfo, CallPolicy, FinalCallerTurn, LocationScope, Result, StaffChangeRequest, StaffItem, TransitionFailure } from "../core/model.ts";
 import { TextReception } from "./text-reception.ts";
 import type { TextReceptionFailure } from "./text-reception.ts";
 import type { CallSummary } from "./call-review.ts";
@@ -39,6 +39,9 @@ export type GatewayCommand =
   | Readonly<{ kind: "calls.writes.stop.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "settings.appointments.booking.enabled.change.v1"; expectedVersion: string; enabled: boolean }>
   | Readonly<{ kind: "settings.appointments.booking.audit.v1"; afterVersion?: number }>
+  | Readonly<{ kind: "settings.routing.afterHours.change.v1"; expectedVersion: string;
+    mode: AfterHoursMode; infoVersion?: string; approvedText?: string }>
+  | Readonly<{ kind: "settings.routing.afterHours.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "booking.propose.v2"; turn: FinalCallerTurn; verificationRef: string; offerRef: string; now: string }>
   | Readonly<{ kind: "calls.turn.model.v1"; turn: FinalCallerTurn; now: string }>
   | Readonly<{ kind: "knowledge.answer.v2"; turn: FinalCallerTurn; sourceRefs: readonly string[]; proposedText: string; now: string }>
@@ -74,6 +77,7 @@ export type GatewayReply =
   | Readonly<{ kind: "writeStop"; status: WriteStopStatus }>
   | Readonly<{ kind: "writeStopAudit"; page: WriteStopAuditPage }>
   | Readonly<{ kind: "bookingSettingAudit"; page: BookingSettingAuditPage }>
+  | Readonly<{ kind: "afterHoursSettingAudit"; page: AfterHoursSettingAuditPage }>
   | Readonly<{ kind: "bookingProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "modelTurn"; progress: CallCommandProgress }>
   | Readonly<{ kind: "knowledgeAnswer"; progress: CallCommandProgress }>
@@ -148,7 +152,8 @@ export class CommandGateway {
         "clinic.availability.approval.read.v1", "clinic.availability.route.check.v1", "clinic.availability.approval.change.v1",
         "clinic.availability.approval.change.v2", "clinic.availability.approval.revoke.v1");
       permitted.push("settings.automation.enabled.change.v1", "settings.automation.audit.v1",
-        "settings.appointments.booking.enabled.change.v1", "settings.appointments.booking.audit.v1");
+        "settings.appointments.booking.enabled.change.v1", "settings.appointments.booking.audit.v1",
+        "settings.routing.afterHours.change.v1", "settings.routing.afterHours.audit.v1");
       if (this.writeStopLedger) permitted.push("calls.writes.stop.v1", "calls.writes.stop.read.v1",
         "calls.writes.resume.v1", "calls.writes.stop.audit.v1");
     }
@@ -213,6 +218,22 @@ export class CommandGateway {
         if (command.afterVersion !== undefined && (!Number.isSafeInteger(command.afterVersion) || command.afterVersion < 0)) return err({ kind: "invalid" });
         const result = await this.policy.listBookingChanges(this.actor.scope, command.afterVersion);
         return result.ok ? ok({ kind: "bookingSettingAudit", page: result.value }) : result;
+      }
+      case "settings.routing.afterHours.change.v1": {
+        if (command.mode === "staffRequest" &&
+            (command.infoVersion !== undefined || command.approvedText !== undefined)) return err({ kind: "invalid" });
+        const info: ApprovedAfterHoursInfo | undefined = command.mode === "approvedInfoAndRequest" ? {
+          scope: this.actor.scope, version: command.infoVersion ?? "", ownerRef: this.actor.actorRef,
+          approvedText: command.approvedText ?? "", approved: true,
+        } : undefined;
+        const result = await this.policy.changeAfterHours(this.actor.scope, command.expectedVersion,
+          command.mode, info, this.actor.actorRef);
+        return result.ok ? ok({ kind: "settings", policy: result.value }) : result;
+      }
+      case "settings.routing.afterHours.audit.v1": {
+        if (command.afterVersion !== undefined && (!Number.isSafeInteger(command.afterVersion) || command.afterVersion < 0)) return err({ kind: "invalid" });
+        const result = await this.policy.listAfterHoursChanges(this.actor.scope, command.afterVersion);
+        return result.ok ? ok({ kind: "afterHoursSettingAudit", page: result.value }) : result;
       }
       case "booking.propose.v2": {
         if (!command.turn.turnId || !command.turn.callId || !command.turn.text || !command.verificationRef || !command.offerRef) return err({ kind: "invalid" });

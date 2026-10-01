@@ -39,9 +39,9 @@ test("default tenant importer writes only minimal policy rows and a strict write
   const rows = await sql<{ version: number; policy: Record<string, unknown> }>`select version, policy
     from clinic_settings where tenant_id = ${target.tenantId} order by version`.execute(db);
   assert.deepEqual(rows.rows.map(row => [row.version, row.policy]), [
-    [0, { scope: target, policyVersion: "0", bookingEnabled: false }],
-    [1, { scope: target, policyVersion: "1", bookingEnabled: true }],
-    [2, { scope: target, policyVersion: "2", bookingEnabled: false }],
+    [0, { scope: target, policyVersion: "0", bookingEnabled: false, afterHoursMode: "staffRequest" }],
+    [1, { scope: target, policyVersion: "1", bookingEnabled: true, afterHoursMode: "staffRequest" }],
+    [2, { scope: target, policyVersion: "2", bookingEnabled: false, afterHoursMode: "staffRequest" }],
   ]);
   const policy = await store.read(target);
   assert.ok(policy.ok);
@@ -57,6 +57,39 @@ test("default tenant importer writes only minimal policy rows and a strict write
     ["standaloneMinimal", "standaloneMinimal"]);
   const canaries = await scanPatientDataCanaries(db, [{ label: "mapper", value: canary }]);
   assert.deepEqual(canaries, ok([]));
+});
+
+test("E2E-229 durable minimal import preserves after-hours text and audit without enabling booking", async () => {
+  const source = { tenantId: "minimal-after-hours-source", clinicId: "clinic", locationId: "location" };
+  const target = { tenantId: "minimal-after-hours-target", clinicId: "buyer", locationId: "location" };
+  const store = new PostgresPolicyStore(db, referenceDefaultPolicy);
+  const info = { scope: source, version: "holiday-v1", ownerRef: "clinic-admin",
+    approvedText: "The clinic reopens Tuesday at 9 am.", approved: true as const };
+  assert.ok((await store.changeAfterHours(source, "0", "approvedInfoAndRequest", info, "clinic-admin")).ok);
+  assert.ok((await store.changeBookingEnabled(source, "1", true, "clinic-admin")).ok);
+  const archive = await buildPostgresTenantConfigArchive(db, {
+    sourceTenantId: source.tenantId, archiveId: "minimal-after-hours-archive", actorRef: "clinic-admin",
+    createdAt: "2026-09-29T05:00:00Z", locations: [
+      { sourceScope: source, targetScope: target, timeZone: "UTC", mappingProvenance: "reviewed" },
+    ],
+  }, { authorizeAndRecord: async () => ok({ requestRef: "minimal-after-hours-export-audit" }) });
+  assert.ok(archive.ok, archive.ok ? "" : archive.error.kind);
+  const importer = new PostgresTenantConfigArchiveImporter(db, () => "2026-09-29T05:05:00Z");
+  const authority = { authorizeAndRecord: async () => ok({ auditRef: "minimal-after-hours-import-audit" }) };
+  const staged = await importer.stage(archive.value, target.tenantId, "buyer-admin", authority,
+    { mapRef: () => "disabled" });
+  assert.ok(staged.ok, staged.ok ? "" : staged.error.kind);
+  const imported = await store.read(target);
+  assert.ok(imported.ok);
+  assert.equal(imported.value.bookingEnabled, false);
+  assert.equal(imported.value.afterHoursMode, "approvedInfoAndRequest");
+  assert.equal(imported.value.afterHoursInfo?.approvedText, info.approvedText);
+  const afterHours = await store.listAfterHoursChanges(target);
+  assert.ok(afterHours.ok);
+  assert.deepEqual(afterHours.value.entries.map(row => row.version), ["1"]);
+  const booking = await store.listBookingChanges(target);
+  assert.ok(booking.ok);
+  assert.deepEqual(booking.value.entries.map(row => row.version), ["2", "3"]);
 });
 
 test("default tenant importer rejects rich reference archives before persistence", async () => {

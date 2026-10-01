@@ -32,6 +32,10 @@ export default interface ClinicSettingsTable {
   previous_booking_enabled: ColumnType<boolean | null, boolean | null, boolean | null>;
 
   changed_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
+
+  setting_kind: ColumnType<string, string | undefined, string>;
+
+  previous_after_hours_mode: ColumnType<string | null, string | null, string | null>;
 }
 
 export type ClinicSettings = Selectable<ClinicSettingsTable>;

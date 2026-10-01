@@ -2,9 +2,9 @@ import { render } from "lit-html";
 import type { DashboardFailure, DashboardPort } from "./api.ts";
 import { dashboardView } from "./view.ts";
 import type { DashboardState } from "./view.ts";
-import type { StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
+import type { AfterHoursMode, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
-import type { BookingSettingAuditPage } from "../../core/host.ts";
+import type { AfterHoursSettingAuditPage, BookingSettingAuditPage } from "../../core/host.ts";
 import type { AutomationSettingAuditPage } from "../../core/host.ts";
 import { READINESS_REQUIREMENTS } from "../../core/readiness.ts";
 import type { ReadinessRequirement } from "../../core/readiness.ts";
@@ -12,6 +12,12 @@ import type { WriteStopAuditPage, WriteStopStatus } from "../../core/write-stop.
 import type { KnowledgeEntry } from "../../reference/knowledge-catalogue.ts";
 
 function appendAudit(previous: BookingSettingAuditPage, next: BookingSettingAuditPage): BookingSettingAuditPage {
+  return { entries: [...previous.entries, ...next.entries],
+    ...(next.nextAfterVersion === undefined ? {} : { nextAfterVersion: next.nextAfterVersion }) };
+}
+
+function appendAfterHoursAudit(previous: AfterHoursSettingAuditPage,
+                               next: AfterHoursSettingAuditPage): AfterHoursSettingAuditPage {
   return { entries: [...previous.entries, ...next.entries],
     ...(next.nextAfterVersion === undefined ? {} : { nextAfterVersion: next.nextAfterVersion }) };
 }
@@ -65,6 +71,7 @@ export class DashboardController {
     knowledge: undefined, knowledgeSourceRef: "", knowledgeOwnerRef: "", knowledgeText: "",
     knowledgeFrom: new Date().toISOString(), knowledgeUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
     writeStop: undefined, stopReasonInput: "", auditPage: undefined,
+    afterHoursAuditPage: undefined, afterHoursInfoVersion: "", afterHoursApprovedText: "",
     writeStopAuditPage: undefined, automationAuditPage: undefined, callIdInput: "", call: undefined, staffPage: undefined, outcomePage: undefined, notice: undefined, error: undefined };
 
   constructor(root: HTMLElement, port: DashboardPort) {
@@ -90,6 +97,10 @@ export class DashboardController {
       toggleBooking: () => { void this.toggleBooking(); },
       loadAudit: () => { void this.loadAudit(); },
       loadMoreAudit: () => { void this.loadMoreAudit(); },
+      setAfterHoursField: (field, value) => { this.state[field] = value; this.draw(); },
+      changeAfterHours: mode => { void this.changeAfterHours(mode); },
+      loadAfterHoursAudit: () => { void this.loadAfterHoursAudit(); },
+      loadMoreAfterHoursAudit: () => { void this.loadMoreAfterHoursAudit(); },
       setCallId: value => { this.state.callIdInput = value; },
       loadCall: () => { void this.loadCall(); },
       loadStaff: () => { void this.loadStaff(); },
@@ -103,7 +114,11 @@ export class DashboardController {
   async load(): Promise<void> {
     const [capabilities, settings] = await Promise.all([this.port.capabilities(), this.port.settings()]);
     if (capabilities.ok) this.state.capabilities = capabilities.value;
-    if (settings.ok) this.state.policy = settings.value;
+    if (settings.ok) {
+      this.state.policy = settings.value;
+      this.state.afterHoursInfoVersion = settings.value.afterHoursInfo?.version ?? "";
+      this.state.afterHoursApprovedText = settings.value.afterHoursInfo?.approvedText ?? "";
+    }
     this.state.error = !settings.ok ? message(settings.error) : !capabilities.ok ? message(capabilities.error) : undefined;
     if (capabilities.ok && capabilities.value.some(item => item.id === "knowledge.list.v1")) {
       const knowledge = await this.port.knowledge();
@@ -128,6 +143,11 @@ export class DashboardController {
     if (capabilities.ok && capabilities.value.some(item => item.id === "settings.appointments.booking.audit.v1")) {
       const audit = await this.port.bookingAudit();
       if (audit.ok) this.state.auditPage = audit.value;
+      else this.state.error = message(audit.error);
+    }
+    if (capabilities.ok && capabilities.value.some(item => item.id === "settings.routing.afterHours.audit.v1")) {
+      const audit = await this.port.afterHoursAudit();
+      if (audit.ok) this.state.afterHoursAuditPage = audit.value;
       else this.state.error = message(audit.error);
     }
     if (capabilities.ok && capabilities.value.some(item => item.id === "staff.list.v1")) {
@@ -191,6 +211,18 @@ export class DashboardController {
     this.draw();
     const result = await this.port.bookingAudit();
     if (result.ok) this.state.auditPage = result.value;
+    else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async loadAfterHoursAudit(): Promise<void> {
+    if (this.state.busy) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.afterHoursAudit();
+    if (result.ok) this.state.afterHoursAuditPage = result.value;
     else this.state.error = message(result.error);
     this.state.busy = false;
     this.draw();
@@ -313,6 +345,19 @@ export class DashboardController {
     this.draw();
   }
 
+  private async loadMoreAfterHoursAudit(): Promise<void> {
+    const previous = this.state.afterHoursAuditPage;
+    if (this.state.busy || previous?.nextAfterVersion === undefined) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.afterHoursAudit(previous.nextAfterVersion);
+    if (result.ok) this.state.afterHoursAuditPage = appendAfterHoursAudit(previous, result.value);
+    else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
   private async loadOutcomes(): Promise<void> {
     if (this.state.busy) return;
     this.state.busy = true;
@@ -394,6 +439,45 @@ export class DashboardController {
       this.state.notice = result.value.bookingEnabled ? "Booking enabled for new calls." : "Booking disabled for new calls.";
       const audit = await this.port.bookingAudit();
       if (audit.ok) this.state.auditPage = audit.value;
+      else this.state.error = message(audit.error);
+    } else {
+      this.state.error = message(result.error);
+      if (result.error.kind === "versionConflict") {
+        const reloaded = await this.port.settings();
+        if (reloaded.ok) this.state.policy = reloaded.value;
+      }
+    }
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async changeAfterHours(mode: AfterHoursMode): Promise<void> {
+    const current = this.state.policy;
+    if (this.state.busy || !current || !this.state.capabilities.some(item => item.id === "settings.routing.afterHours.change.v1")) return;
+    if (mode === "approvedInfoAndRequest" &&
+        (!this.state.afterHoursInfoVersion.trim() || !this.state.afterHoursApprovedText.trim())) {
+      this.state.error = "Enter the approved information version and text.";
+      this.draw();
+      return;
+    }
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.state.notice = undefined;
+    this.draw();
+    const result = mode === "staffRequest"
+      ? await this.port.changeAfterHours(current.policyVersion, mode)
+      : await this.port.changeAfterHours(current.policyVersion, mode,
+        this.state.afterHoursInfoVersion.trim(), this.state.afterHoursApprovedText.trim());
+    if (result.ok) {
+      this.state.policy = result.value;
+      this.state.notice = mode === "staffRequest" ? "After-hours information disabled for new calls." :
+        "Approved after-hours information saved for new calls.";
+      if (mode === "staffRequest") {
+        this.state.afterHoursInfoVersion = "";
+        this.state.afterHoursApprovedText = "";
+      }
+      const audit = await this.port.afterHoursAudit();
+      if (audit.ok) this.state.afterHoursAuditPage = audit.value;
       else this.state.error = message(audit.error);
     } else {
       this.state.error = message(result.error);

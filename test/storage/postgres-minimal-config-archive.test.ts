@@ -53,6 +53,42 @@ test("standalone minimal settings export and stage without granting buyer capabi
   assert.equal(policy.value.greeting, undefined);
 });
 
+test("E2E-229 minimal archive carries approved after-hours text and its separate audit into an embedded host", async () => {
+  const scope = { tenantId: "after-hours-export-source", clinicId: "clinic", locationId: "location" };
+  const targetScope = { tenantId: "after-hours-export-buyer", clinicId: "buyer", locationId: "location" };
+  const app = createStandaloneTextComposition(db);
+  const info = { scope, version: "holiday-v1", ownerRef: "clinic-admin",
+    approvedText: "The clinic reopens Tuesday at 9 am.", approved: true as const };
+  assert.equal((await app.policy.changeAfterHours(scope, "0", "approvedInfoAndRequest", info, "clinic-admin")).ok, true);
+  assert.equal((await app.policy.changeBookingEnabled(scope, "1", true, "clinic-admin")).ok, true);
+  const archive = await buildPostgresConfigArchive(db, { scope, targetScope, timeZone: "UTC",
+    mappingProvenance: "reviewed-map", archiveId: "after-hours-settings-archive", actorRef: "clinic-admin",
+    createdAt: "2026-09-29T04:00:00Z" }, authority);
+  assert.ok(archive.ok, archive.ok ? "" : archive.error.kind);
+  const decoded = await decodeConfigArchive(archive.value, targetScope);
+  assert.ok(decoded.ok, decoded.ok ? "" : decoded.error.kind);
+  assert.deepEqual(decoded.value.policies.map(row => [row.version, row.settingKind]),
+    [[0, "booking"], [1, "afterHours"], [2, "booking"]]);
+  assert.equal(decoded.value.policies[2]?.policy.afterHoursInfo?.approvedText, info.approvedText);
+  const importer = new ReferenceConfigArchiveImporter(() => "2026-09-29T04:05:00Z");
+  const staged = await importer.stage(archive.value, targetScope, "buyer-admin",
+    { authorizeAndRecord: async () => ok({ auditRef: "audited-after-hours-import" }) },
+    { mapRef: (kind: string, ref: string) => `buyer:${kind}:${ref}` });
+  assert.ok(staged.ok, staged.ok ? "" : staged.error.kind);
+  const imported = await staged.value.policy.read(targetScope);
+  assert.ok(imported.ok);
+  assert.equal(imported.value.bookingEnabled, false);
+  assert.equal(imported.value.afterHoursMode, "approvedInfoAndRequest");
+  assert.equal(imported.value.afterHoursInfo?.ownerRef, "buyer:afterHoursOwner:clinic-admin");
+  assert.equal(imported.value.afterHoursInfo?.approvedText, info.approvedText);
+  const history = await staged.value.policy.listAfterHoursChanges(targetScope);
+  assert.ok(history.ok);
+  assert.deepEqual(history.value.entries.map(row => row.version), ["1"]);
+  const bookingHistory = await staged.value.policy.listBookingChanges(targetScope);
+  assert.ok(bookingHistory.ok);
+  assert.deepEqual(bookingHistory.value.entries.map(row => row.version), ["2", "3"]);
+});
+
 test("default archive rejects rich policy and any standalone knowledge draft", async () => {
   const richScope = { tenantId: "minimal-export-rich", clinicId: "clinic", locationId: "location" };
   const targetScope = { ...richScope, tenantId: "buyer-rich" };

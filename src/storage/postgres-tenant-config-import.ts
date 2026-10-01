@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { sql } from "kysely";
 import type { Kysely, Transaction } from "kysely";
 import { err, ok } from "../core/model.ts";
-import type { LocationScope, Result } from "../core/model.ts";
+import type { CallPolicy, LocationScope, Result } from "../core/model.ts";
 import type { ArchiveEnvelope } from "../portability/archive-envelope.ts";
 import { decodeTenantConfigArchive } from "../portability/config-archive.ts";
 import type { ConfigArchiveData, TenantConfigArchiveData } from "../portability/config-archive.ts";
@@ -25,9 +25,12 @@ function minimalHistory(data: TenantConfigArchiveData): boolean {
     Array.isArray(location.knowledge) && location.knowledge.length === 0);
 }
 
-function storedPolicy(scope: LocationScope, version: number, bookingEnabled: boolean):
-  Readonly<{ scope: LocationScope; policyVersion: string; bookingEnabled: boolean }> {
-  return { scope: { ...scope }, policyVersion: String(version), bookingEnabled };
+function storedPolicy(scope: LocationScope, version: number, policy: CallPolicy):
+  Readonly<{ scope: LocationScope; policyVersion: string; bookingEnabled: boolean;
+    afterHoursMode: NonNullable<CallPolicy["afterHoursMode"]>; afterHoursInfo?: NonNullable<CallPolicy["afterHoursInfo"]> }> {
+  return { scope: { ...scope }, policyVersion: String(version), bookingEnabled: policy.bookingEnabled,
+    afterHoursMode: policy.afterHoursMode ?? "staffRequest",
+    ...(policy.afterHoursInfo ? { afterHoursInfo: policy.afterHoursInfo } : {}) };
 }
 
 const minimalMapper: ReferenceImportMapper = { mapRef: () => "disabled" };
@@ -84,16 +87,18 @@ async function writeLocation(trx: Transaction<Database>, location: TenantConfigA
     { version: 0, isHead: true, policy: mapped.value.policy, changedBy: null,
       previousBookingEnabled: null, changedAt: null }];
   for (const row of policyRows) {
-    const value = mode === "standaloneMinimal" ? storedPolicy(scope, row.version, row.policy.bookingEnabled) : row.policy;
+    const value = mode === "standaloneMinimal" ? storedPolicy(scope, row.version, row.policy) : row.policy;
     await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy,
-      changed_by, previous_booking_enabled, changed_at) values
+      setting_kind, previous_after_hours_mode, changed_by, previous_booking_enabled, changed_at) values
       (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, ${row.version},
-       ${JSON.stringify(value)}::jsonb, ${row.changedBy}, ${row.previousBookingEnabled},
+       ${JSON.stringify(value)}::jsonb, ${row.settingKind ?? "booking"}, ${row.previousAfterHoursMode ?? null},
+       ${row.changedBy}, ${row.previousBookingEnabled},
        ${row.changedAt}::timestamptz)`.execute(trx);
   }
   const head = policyRows.find(row => row.isHead)!;
   if (head.policy.bookingEnabled) {
-    const next = mode === "standaloneMinimal" ? storedPolicy(scope, head.version + 1, false) :
+    const next = mode === "standaloneMinimal" ? storedPolicy(scope, head.version + 1,
+      { ...head.policy, bookingEnabled: false }) :
       { ...head.policy, policyVersion: String(head.version + 1), bookingEnabled: false,
         capabilities: { ...head.policy.capabilities, book: "unavailable" as const } };
     await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy,

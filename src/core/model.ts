@@ -64,6 +64,14 @@ export type ApprovedGreeting = Readonly<{
   approvedText: string;
   approved: true;
 }>;
+export type AfterHoursMode = "staffRequest" | "approvedInfoAndRequest";
+export type ApprovedAfterHoursInfo = Readonly<{
+  scope: LocationScope;
+  version: string;
+  ownerRef: string;
+  approvedText: string;
+  approved: true;
+}>;
 
 export type CallPolicy = Readonly<{
   scope: LocationScope;
@@ -71,6 +79,9 @@ export type CallPolicy = Readonly<{
   automationVersion: string;
   automationEnabled: boolean;
   bookingEnabled: boolean;
+  /** Absent on legacy snapshots; the effective default is staffRequest. */
+  afterHoursMode?: AfterHoursMode;
+  afterHoursInfo?: ApprovedAfterHoursInfo;
   capabilities: Readonly<Record<CapabilityId, CapabilityMode>>;
   transferDestinationRef?: string;
   staffedIntervals?: readonly StaffedInterval[];

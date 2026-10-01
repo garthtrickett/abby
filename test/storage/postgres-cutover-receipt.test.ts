@@ -75,6 +75,14 @@ test("E2E-168 altered import receipt counts, digests, or location omissions cann
     ({ ...location, omittedTextCalls: (location.omittedTextCalls ?? 0) + 1 })) });
   await sql`update tenant_config_imports set receipt = ${JSON.stringify(original)}::jsonb
     where target_tenant_id = ${target.tenantId}`.execute(db);
+  await sql`update clinic_settings set setting_kind = 'afterHours', previous_booking_enabled = null,
+    previous_after_hours_mode = 'staffRequest' where tenant_id = ${target.tenantId}
+      and clinic_id = ${target.clinicId} and location_id = ${target.locationId} and version = 1`.execute(db);
+  assert.deepEqual(await cutover.publish(command, routeAuthority),
+    { ok: false, error: { kind: "targetNotReady" } });
+  await sql`update clinic_settings set setting_kind = 'booking', previous_booking_enabled = false,
+    previous_after_hours_mode = null where tenant_id = ${target.tenantId}
+      and clinic_id = ${target.clinicId} and location_id = ${target.locationId} and version = 1`.execute(db);
   const published = await cutover.publish(command, routeAuthority);
   assert.equal(published.ok && published.value.activeTenantId, target.tenantId, JSON.stringify(published));
 });

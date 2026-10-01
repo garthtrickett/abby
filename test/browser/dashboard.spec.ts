@@ -185,6 +185,51 @@ test("E2E-010: dashboard toggle persists default, enabled and disabled policy fo
   }
 });
 
+test("E2E-229 SET-006: approved after-hours text follows versioned admin changes and new-call snapshots", async ({ page, request }) => {
+  const app = await localDashboard("clinicAdmin");
+  try {
+    await page.goto(app.url);
+    await expect(page.getByRole("heading", { name: "After-hours information" })).toBeVisible();
+    await expect(page.getByText("Staff request only", { exact: true })).toBeVisible();
+    assert.equal((await request.post(`${app.url}/api/settings/after-hours`, { data: {
+      expectedVersion: "0", mode: "approvedInfoAndRequest", infoVersion: "v1",
+      approvedText: "", ownerRef: "forged-approver" } })).status(), 400);
+    await page.getByRole("textbox", { name: "Approved after-hours information version", exact: true }).fill("holiday-v1");
+    await page.getByRole("textbox", { name: "Approved after-hours information", exact: true }).fill("The clinic reopens Tuesday at 9 am.");
+    await page.getByRole("button", { name: "Save approved after-hours information" }).click();
+    await expect(page.getByText("Approved after-hours information saved for new calls.")).toBeVisible();
+    const active = await app.ledger.read("before-setting", app.scope);
+    assert.ok(active.ok);
+    assert.equal(active.value.policy.afterHoursMode, "staffRequest");
+    assert.equal((await app.reception.startCall("after-hours-enabled", app.scope)).ok, true);
+    const enabled = await app.ledger.read("after-hours-enabled", app.scope);
+    assert.ok(enabled.ok);
+    assert.equal(enabled.value.policy.afterHoursMode, "approvedInfoAndRequest");
+    assert.equal(enabled.value.policy.afterHoursInfo?.ownerRef, "browser-clinicAdmin");
+    assert.equal(enabled.value.policy.afterHoursInfo?.approvedText, "The clinic reopens Tuesday at 9 am.");
+    assert.equal((await request.post(`${app.url}/api/settings/after-hours`, { data: {
+      expectedVersion: "0", mode: "staffRequest" } })).status(), 409);
+    await page.reload();
+    await expect(page.getByRole("textbox", { name: "Approved after-hours information", exact: true })).toHaveValue("The clinic reopens Tuesday at 9 am.");
+    await expect(page.getByLabel("After-hours setting audit")).toContainText("Version 1 · approved information · information holiday-v1 · browser-clinicAdmin");
+    await page.getByRole("button", { name: "Use staff request only" }).click();
+    await expect(page.getByText("After-hours information disabled for new calls.")).toBeVisible();
+    assert.equal((await app.reception.startCall("after-hours-disabled", app.scope)).ok, true);
+    const disabled = await app.ledger.read("after-hours-disabled", app.scope);
+    assert.ok(disabled.ok);
+    assert.equal(disabled.value.policy.afterHoursMode, "staffRequest");
+    assert.equal(disabled.value.policy.afterHoursInfo, undefined);
+    await expect(page.getByLabel("After-hours setting audit")).toContainText("Version 2 · staff request only · browser-clinicAdmin");
+    await expect(page.getByLabel("Booking setting audit")).toContainText("No booking setting changes recorded.");
+    assert.equal((await request.post(`${app.url}/api/settings/after-hours`, { data: {
+      expectedVersion: "2", mode: "approvedInfoAndRequest", infoVersion: "api-v1",
+      approvedText: "The clinic reopens Wednesday at 9 am.", ownerRef: "forged-approver" } })).status(), 200);
+    const actorBound = await app.policy.read(app.scope);
+    assert.ok(actorBound.ok);
+    assert.equal(actorBound.value.afterHoursInfo?.ownerRef, "browser-clinicAdmin");
+  } finally { await app.close(); }
+});
+
 test("agent capability endpoint publishes versioned schemas without exposing internal call state", async ({ request }) => {
   const app = await localDashboard("clinicAdmin");
   try {
@@ -196,6 +241,10 @@ test("agent capability endpoint publishes versioned schemas without exposing int
     const setting = payload.value.find(item => item.id === "settings.appointments.booking.enabled.change.v1");
     assert.equal(setting?.inputSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
     assert.equal(setting?.resultSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
+    const afterHours = payload.value.find(item => item.id === "settings.routing.afterHours.change.v1");
+    assert.equal(afterHours?.inputSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
+    assert.equal(JSON.stringify(afterHours?.inputSchema).includes('"oneOf"'), true);
+    assert.equal(JSON.stringify(afterHours?.inputSchema).includes("ownerRef"), false);
     assert.equal(JSON.stringify(payload).includes("browser-tenant"), false);
   } finally { await app.close(); }
 });
@@ -209,6 +258,8 @@ test("E2E-010 E2E-069: view-only staff can review a call but cannot change booki
     await expect(page.getByRole("button", { name: "Enable reception" })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Emergency write stop" })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Booking setting history" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "After-hours setting history" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save approved after-hours information" })).toHaveCount(0);
     await page.getByRole("textbox", { name: "Call ID" }).fill("before-setting");
     await page.getByRole("button", { name: "Load call" }).click();
     await expect(page.getByLabel("Call summary")).toContainText("before-setting · active");
@@ -222,6 +273,9 @@ test("E2E-010 E2E-069: view-only staff can review a call but cannot change booki
     assert.equal((await request.get(`${app.url}/api/writes/stop-audit`)).status(), 403);
     const auditForbidden = await request.get(`${app.url}/api/settings/booking-audit`);
     assert.equal(auditForbidden.status(), 403);
+    assert.equal((await request.post(`${app.url}/api/settings/after-hours`, { data: {
+      expectedVersion: "0", mode: "staffRequest" } })).status(), 403);
+    assert.equal((await request.get(`${app.url}/api/settings/after-hours-audit`)).status(), 403);
     const policy = await app.policy.read(app.scope);
     assert.ok(policy.ok);
     assert.equal(policy.value.bookingEnabled, false);

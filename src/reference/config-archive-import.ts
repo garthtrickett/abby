@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { MemoryLedger } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
 import type { CallPolicy, LocationScope, Result, StaffDestination } from "../core/model.ts";
-import type { AutomationSettingAuditEntry, BookingSettingAuditEntry } from "../core/host.ts";
+import type { AfterHoursSettingAuditEntry, AutomationSettingAuditEntry, BookingSettingAuditEntry } from "../core/host.ts";
 import type { ArchiveEnvelope } from "../portability/archive-envelope.ts";
 import { decodeConfigArchive } from "../portability/config-archive.ts";
 import type { ConfigArchiveData, ConfigArchiveDecodeFailure } from "../portability/config-archive.ts";
@@ -10,7 +10,7 @@ import { MemoryKnowledgeCatalogue } from "./knowledge-catalogue.ts";
 import type { KnowledgeEntry } from "./knowledge-catalogue.ts";
 import { MemoryPolicyStore, referenceDefaultPolicy } from "./policy-store.ts";
 
-export type ImportRefKind = "staffOwner" | "operatorQueue" | "transferDestination" | "knowledgeOwner" | "greetingOwner";
+export type ImportRefKind = "staffOwner" | "operatorQueue" | "transferDestination" | "knowledgeOwner" | "greetingOwner" | "afterHoursOwner";
 export type ReferenceImportMapper = Readonly<{
   mapRef(kind: ImportRefKind, sourceRef: string, sourceScope: LocationScope, targetScope: LocationScope): string | null;
 }>;
@@ -107,16 +107,29 @@ function mapImportedPolicy(source: CallPolicy, mapper: ReferenceImportMapper, so
       mappedRef(mapper, "transferDestination", source.transferDestinationRef, sourceScope, targetScope) }),
     ...(source.greeting === undefined ? {} : { greeting: { ...source.greeting, scope: structuredClone(targetScope),
       ownerRef: mappedRef(mapper, "greetingOwner", source.greeting.ownerRef, sourceScope, targetScope) } }),
+    ...(source.afterHoursInfo === undefined ? {} : { afterHoursInfo: { ...source.afterHoursInfo,
+      scope: structuredClone(targetScope),
+      ownerRef: mappedRef(mapper, "afterHoursOwner", source.afterHoursInfo.ownerRef, sourceScope, targetScope) } }),
   };
 }
 
 function bookingAudit(data: Pick<ConfigArchiveData, "policies">): BookingSettingAuditEntry[] {
-  return data.policies.filter(row => row.version > 0).map(row => {
+  return data.policies.filter(row => row.version > 0 && (row.settingKind ?? "booking") === "booking").map(row => {
     const metadata = [row.changedBy, row.previousBookingEnabled, row.changedAt];
     if (metadata.every(value => value === null)) return { version: String(row.version), enabled: row.policy.bookingEnabled, provenance: "legacyUnattributed" };
     if (!row.changedBy || row.previousBookingEnabled === null || !row.changedAt) throw new Error("invalid booking audit");
     return { version: String(row.version), enabled: row.policy.bookingEnabled, provenance: "recorded",
       actorRef: row.changedBy, previousEnabled: row.previousBookingEnabled, changedAt: row.changedAt };
+  });
+}
+
+function afterHoursAudit(data: Pick<ConfigArchiveData, "policies">): AfterHoursSettingAuditEntry[] {
+  return data.policies.filter(row => row.version > 0 && row.settingKind === "afterHours").map(row => {
+    if (!row.changedBy || !row.changedAt || !row.previousAfterHoursMode) throw new Error("invalid after-hours audit");
+    return { version: String(row.version), mode: row.policy.afterHoursMode ?? "staffRequest",
+      previousMode: row.previousAfterHoursMode,
+      ...(row.policy.afterHoursInfo ? { infoVersion: row.policy.afterHoursInfo.version } : {}),
+      actorRef: row.changedBy, changedAt: row.changedAt };
   });
 }
 
@@ -131,8 +144,10 @@ function automationAudit(data: Pick<ConfigArchiveData, "automation">): Automatio
 export type MappedConfig = Readonly<{
   policy: CallPolicy;
   policyRows: readonly Readonly<{ version: number; isHead: boolean; policy: CallPolicy; changedBy: string | null;
-    previousBookingEnabled: boolean | null; changedAt: string | null }>[];
+    previousBookingEnabled: boolean | null; changedAt: string | null;
+    settingKind?: "booking" | "afterHours"; previousAfterHoursMode?: CallPolicy["afterHoursMode"] | null }>[];
   bookingHistory: readonly BookingSettingAuditEntry[];
+  afterHoursHistory: readonly AfterHoursSettingAuditEntry[];
   automationHistory: readonly AutomationSettingAuditEntry[];
   knowledge: MemoryKnowledgeCatalogue;
   knowledgeEntries: readonly KnowledgeEntry[];
@@ -160,11 +175,13 @@ export function mapConfig(data: Pick<ConfigArchiveData, "sourceScope" | "policie
     const policy = policyRows.find(row => row.isHead)?.policy ??
       mapImportedPolicy(referenceDefaultPolicy(data.sourceScope), recordingMapper, data.sourceScope, targetScope);
     const bookingHistory = bookingAudit(data);
+    const afterHoursHistory = afterHoursAudit(data);
     const automationHistory = automationAudit(data);
     const knowledgeEntries = data.knowledge.map(entry => ({ ...entry,
       scope: structuredClone(targetScope), ownerRef: mappedRef(recordingMapper, "knowledgeOwner", entry.ownerRef, data.sourceScope, targetScope) }));
     const knowledge = MemoryKnowledgeCatalogue.fromPublishedHistory(knowledgeEntries);
-    return ok({ policy, policyRows, bookingHistory, automationHistory, knowledge, knowledgeEntries, mappings: [...decisions.values()] });
+    return ok({ policy, policyRows, bookingHistory, afterHoursHistory, automationHistory,
+      knowledge, knowledgeEntries, mappings: [...decisions.values()] });
   } catch (cause) {
     return err({ kind: cause instanceof UnmappedRef ? "unmappedRef" : "invalidConfigArchive" });
   }
@@ -247,6 +264,7 @@ export class ReferenceConfigArchiveImporter {
     const importActorRef = `import:${createHash("sha256").update(data.archiveId).digest("hex").slice(0, 32)}`;
     const automationHead = data.automation.find(row => row.isHead);
     const policy = MemoryPolicyStore.fromImported(targetScope, mapped.value.policy, mapped.value.bookingHistory,
+      mapped.value.afterHoursHistory,
       mapped.value.automationHistory, automationHead?.version ?? 0, automationHead?.enabled ?? false, importActorRef, importedAt);
     const knowledge = mapped.value.knowledge;
     const ledger = new MemoryLedger();

@@ -164,6 +164,11 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       if (cursor !== null && (!/^(0|[1-9][0-9]*)$/.test(cursor) || !Number.isSafeInteger(Number(cursor)))) return json(response, 400, { ok: false, error: { kind: "invalid" } });
       command = { kind: "settings.appointments.booking.audit.v1", ...(cursor === null ? {} : { afterVersion: Number(cursor) }) };
     }
+    if (request.method === "GET" && url.pathname === "/api/settings/after-hours-audit") {
+      const cursor = url.searchParams.get("after");
+      if (cursor !== null && (!/^(0|[1-9][0-9]*)$/.test(cursor) || !Number.isSafeInteger(Number(cursor)))) return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      command = { kind: "settings.routing.afterHours.audit.v1", ...(cursor === null ? {} : { afterVersion: Number(cursor) }) };
+    }
     if (request.method === "GET" && url.pathname === "/api/staff") {
       const afterTaskKey = url.searchParams.get("after");
       if (afterTaskKey !== null && (!afterTaskKey || afterTaskKey.length > 256)) return json(response, 400, { ok: false, error: { kind: "invalid" } });
@@ -188,6 +193,21 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
         return json(response, 400, { ok: false, error: { kind: "invalid" } });
       }
       command = { kind: "settings.appointments.booking.enabled.change.v1", expectedVersion: input.expectedVersion, enabled: input.enabled };
+    }
+    if (request.method === "POST" && url.pathname === "/api/settings/after-hours") {
+      const origin = request.headers.origin;
+      if (origin && origin !== `http://${request.headers.host}`) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+      if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
+      const input = record(await body(request));
+      if (!input || typeof input.expectedVersion !== "string" ||
+          (input.mode !== "staffRequest" && input.mode !== "approvedInfoAndRequest") ||
+          (input.infoVersion !== undefined && typeof input.infoVersion !== "string") ||
+          (input.approvedText !== undefined && typeof input.approvedText !== "string")) {
+        return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      }
+      command = { kind: "settings.routing.afterHours.change.v1", expectedVersion: input.expectedVersion,
+        mode: input.mode, ...(input.infoVersion === undefined ? {} : { infoVersion: input.infoVersion }),
+        ...(input.approvedText === undefined ? {} : { approvedText: input.approvedText }) };
     }
     if (request.method === "POST" && ["/api/knowledge/draft", "/api/knowledge/approve", "/api/knowledge/revoke"].includes(url.pathname)) {
       const origin = request.headers.origin;

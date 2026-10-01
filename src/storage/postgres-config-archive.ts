@@ -3,6 +3,7 @@ import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result, StaffDestination } from "../core/model.ts";
+import { validAfterHoursSetting } from "../core/after-hours-policy.ts";
 import { ARCHIVE_SECTIONS } from "../portability/archive-envelope.ts";
 import type { ArchiveEnvelope, ArchiveSection } from "../portability/archive-envelope.ts";
 import type Database from "./generated/Database.ts";
@@ -53,7 +54,9 @@ export type ConfigArchiveFailure = Readonly<{
     "unresolvedWork" | "fenceMismatch" | "storageCorrupt" | "storageFailure" | "tooLarge";
 }>;
 
-type SettingRow = { clinic_id: string; location_id: string; version: number; policy: unknown; changed_by: string | null; previous_booking_enabled: boolean | null; changed_at: Date | null };
+type SettingRow = { clinic_id: string; location_id: string; version: number; policy: unknown;
+  setting_kind: string; previous_after_hours_mode: string | null;
+  changed_by: string | null; previous_booking_enabled: boolean | null; changed_at: Date | null };
 type AutomationRow = { clinic_id: string; version: number; enabled: boolean; changed_by: string | null; previous_enabled: boolean | null; changed_at: Date | null };
 type StopRow = { clinic_id: string; version: number; stopped: boolean; actor_ref: string; reason: string; changed_at: Date };
 type KnowledgeRow = { clinic_id: string; location_id: string; source_ref: string; version: number; status: string; owner_ref: string; answer_text: string;
@@ -80,18 +83,30 @@ function destination(value: unknown): StaffDestination {
   throw new ExportAbort("storageCorrupt");
 }
 
+function afterHoursFields(row: Record<string, unknown>, scope: LocationScope): Record<string, unknown> {
+  const mode = row.afterHoursMode ?? "staffRequest";
+  if (!validAfterHoursSetting(mode, row.afterHoursInfo, scope)) throw new ExportAbort("storageCorrupt");
+  const info = object(row.afterHoursInfo);
+  return { afterHoursMode: mode,
+    ...(info ? { afterHoursInfo: { version: info.version, ownerRef: info.ownerRef,
+      approvedText: info.approvedText, approved: true } } : {}) };
+}
+
 /** Export only known policy fields; extra JSONB keys never cross the archive boundary. */
 function policyFields(value: unknown, scope: LocationScope, version: number,
                       mode: "standaloneMinimal" | "unsafeReference"): Record<string, unknown> {
   const row = object(value);
   const storedScope = object(row?.scope);
   if (mode === "standaloneMinimal") {
-    if (!row || !storedScope || Object.keys(row).sort().join(",") !== "bookingEnabled,policyVersion,scope" ||
+    if (!row || !storedScope || !["bookingEnabled,policyVersion,scope",
+          "afterHoursMode,bookingEnabled,policyVersion,scope",
+          "afterHoursInfo,afterHoursMode,bookingEnabled,policyVersion,scope"].includes(Object.keys(row).sort().join(",")) ||
         Object.keys(storedScope).sort().join(",") !== "clinicId,locationId,tenantId" ||
         storedScope.tenantId !== scope.tenantId || storedScope.clinicId !== scope.clinicId ||
         storedScope.locationId !== scope.locationId || row.policyVersion !== String(version) ||
         typeof row.bookingEnabled !== "boolean") throw new ExportAbort("storageCorrupt");
-    return { shape: "standaloneMinimal", policyVersion: row.policyVersion, bookingEnabled: row.bookingEnabled };
+    return { shape: "standaloneMinimal", policyVersion: row.policyVersion, bookingEnabled: row.bookingEnabled,
+      ...afterHoursFields(row, scope) };
   }
   const caps = object(row?.capabilities);
   if (!row || !storedScope || storedScope.tenantId !== scope.tenantId || storedScope.clinicId !== scope.clinicId ||
@@ -103,7 +118,8 @@ function policyFields(value: unknown, scope: LocationScope, version: number,
     capabilities[name] = caps[name];
   }
   const policy: Record<string, unknown> = { policyVersion: row.policyVersion, bookingEnabled: row.bookingEnabled, capabilities,
-    staffDestination: destination(row.staffDestination), operatorQueue: destination(row.operatorQueue) };
+    staffDestination: destination(row.staffDestination), operatorQueue: destination(row.operatorQueue),
+    ...afterHoursFields(row, scope) };
   if (row.transferDestinationRef !== undefined) {
     if (!validRef(row.transferDestinationRef)) throw new ExportAbort("storageCorrupt");
     policy.transferDestinationRef = row.transferDestinationRef;
@@ -233,7 +249,8 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
         union select clinic_id from clinic_write_stop_events where tenant_id = ${sourceTenantId}`.execute(trx);
       if (observedLocations.rows.some(row => !byLocation.has(JSON.stringify([row.clinic_id, row.location_id]))) ||
           observedClinics.rows.some(row => !clinics.has(row.clinic_id))) throw new ExportAbort("scopeIncomplete");
-      const settings = await sql<SettingRow>`select clinic_id, location_id, version, policy, changed_by, previous_booking_enabled, changed_at
+      const settings = await sql<SettingRow>`select clinic_id, location_id, version, policy, setting_kind,
+        previous_after_hours_mode, changed_by, previous_booking_enabled, changed_at
         from clinic_settings where tenant_id = ${sourceTenantId} order by clinic_id, location_id, version`.execute(trx);
       const automation = await sql<AutomationRow>`select clinic_id, version, enabled, changed_by, previous_enabled, changed_at
         from clinic_automation where tenant_id = ${sourceTenantId} order by clinic_id, version`.execute(trx);
@@ -272,6 +289,7 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
             row.location_id === mapping.sourceScope.locationId)) continue;
         settingsRows.push({ clinic_id: mapping.sourceScope.clinicId, location_id: mapping.sourceScope.locationId,
           version: 0, policy: { scope: mapping.sourceScope, policyVersion: "0", bookingEnabled: false },
+          setting_kind: "booking", previous_after_hours_mode: null,
           changed_by: null, previous_booking_enabled: null, changed_at: null });
       }
     }
@@ -289,7 +307,9 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
           sourceClinicId: row.clinic_id, sourceLocationId: row.location_id, kind: "locationPolicy", version: row.version,
           isHead: policyHeads.get(mappingKey(mapping.sourceScope)) === row.version,
           policy: policyFields(row.policy, mapping.sourceScope, row.version, mode),
-          changedBy: row.changed_by, previousBookingEnabled: row.previous_booking_enabled, changedAt: instant(row.changed_at) };
+          changedBy: row.changed_by, previousBookingEnabled: row.previous_booking_enabled,
+          settingKind: row.setting_kind, previousAfterHoursMode: row.previous_after_hours_mode,
+          changedAt: instant(row.changed_at) };
       }),
       ...snapshot.automation.map(row => ({ ...common(recordId("automation", row.clinic_id, row.version)),
         sourceClinicId: row.clinic_id, kind: "clinicAutomation", version: row.version,

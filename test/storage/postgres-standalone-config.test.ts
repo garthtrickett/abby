@@ -32,8 +32,8 @@ test("default PostgreSQL policy store uses minimal rows and rejects legacy rich 
   const rows = await sql<{ version: number; policy: unknown }>`select version, policy from clinic_settings
     where tenant_id = ${scope.tenantId} order by version`.execute(db);
   assert.deepEqual(rows.rows, [
-    { version: 0, policy: { scope, policyVersion: "0", bookingEnabled: false } },
-    { version: 1, policy: { scope, policyVersion: "1", bookingEnabled: true } },
+    { version: 0, policy: { scope, policyVersion: "0", bookingEnabled: false, afterHoursMode: "staffRequest" } },
+    { version: 1, policy: { scope, policyVersion: "1", bookingEnabled: true, afterHoursMode: "staffRequest" } },
   ]);
   assert.equal(value(await new PostgresPolicyStore(db, defaultPolicy).read(scope)).policyVersion, "1");
   assert.deepEqual(await scanPatientDataCanaries(db, [{ label: "default_policy", value: canary }]),
@@ -65,9 +65,9 @@ test("standalone setting toggle stores only structured policy while knowledge st
     where tenant_id = ${scope.tenantId} and clinic_id = ${scope.clinicId} and location_id = ${scope.locationId}
     order by version`.execute(db);
   assert.deepEqual(rows.rows, [
-    { version: 0, policy: { scope, policyVersion: "0", bookingEnabled: false } },
-    { version: 1, policy: { scope, policyVersion: "1", bookingEnabled: true } },
-    { version: 2, policy: { scope, policyVersion: "2", bookingEnabled: false } },
+    { version: 0, policy: { scope, policyVersion: "0", bookingEnabled: false, afterHoursMode: "staffRequest" } },
+    { version: 1, policy: { scope, policyVersion: "1", bookingEnabled: true, afterHoursMode: "staffRequest" } },
+    { version: 2, policy: { scope, policyVersion: "2", bookingEnabled: false, afterHoursMode: "staffRequest" } },
   ]);
 
   const reloaded = createStandaloneTextComposition(db);
@@ -85,6 +85,36 @@ test("standalone setting toggle stores only structured policy while knowledge st
     where tenant_id = ${scope.tenantId} and clinic_id = ${scope.clinicId}`.execute(db);
   assert.equal(knowledgeRows.rows[0]?.count, "0");
   assert.deepEqual(await scanPatientDataCanaries(db, [{ label: "host_knowledge", value: canary }]), { ok: true, value: [] });
+});
+
+test("E2E-229 PostgreSQL after-hours edits are versioned separately from booking and fail closed on invalid values", async () => {
+  const scope = { tenantId: `after-hours-${randomUUID()}`, clinicId: "clinic", locationId: "location" };
+  const other = { ...scope, locationId: "other" };
+  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy);
+  const info = { scope, version: "holiday-v1", ownerRef: "clinic-admin",
+    approvedText: "The clinic reopens Tuesday at 9 am.", approved: true as const };
+  assert.equal(value(await policy.read(scope)).afterHoursMode, "staffRequest");
+  assert.equal(value(await policy.changeAfterHours(scope, "0", "approvedInfoAndRequest", info, "clinic-admin")).policyVersion, "1");
+  assert.equal(value(await policy.changeBookingEnabled(scope, "1", true, "clinic-admin")).policyVersion, "2");
+  const stale = await policy.changeAfterHours(scope, "1", "staffRequest", undefined, "clinic-admin");
+  assert.deepEqual(stale, { ok: false, error: { kind: "versionConflict" } });
+  const foreign = await policy.changeAfterHours(scope, "2", "approvedInfoAndRequest",
+    { ...info, scope: other }, "clinic-admin");
+  assert.deepEqual(foreign, { ok: false, error: { kind: "invalidValue" } });
+  const disabled = value(await policy.changeAfterHours(scope, "2", "staffRequest", undefined, "clinic-admin"));
+  assert.equal(disabled.policyVersion, "3");
+  assert.equal(disabled.afterHoursInfo, undefined);
+  const rows = await sql<{ setting_kind: string; previous_after_hours_mode: string | null }>`
+    select setting_kind, previous_after_hours_mode from clinic_settings
+    where tenant_id = ${scope.tenantId} and clinic_id = ${scope.clinicId} and location_id = ${scope.locationId}
+    order by version`.execute(db);
+  assert.deepEqual(rows.rows.map(row => [row.setting_kind, row.previous_after_hours_mode]),
+    [["booking", null], ["afterHours", "staffRequest"], ["booking", null], ["afterHours", "approvedInfoAndRequest"]]);
+  assert.deepEqual(value(await policy.listAfterHoursChanges(scope)).entries.map(row => [row.version, row.mode, row.previousMode]),
+    [["1", "approvedInfoAndRequest", "staffRequest"], ["3", "staffRequest", "approvedInfoAndRequest"]]);
+  assert.deepEqual(value(await policy.listBookingChanges(scope)).entries.map(row => row.version), ["2"]);
+  assert.equal(value(await new PostgresPolicyStore(db, referenceDefaultPolicy).read(scope)).afterHoursMode, "staffRequest");
+  assert.equal(value(await policy.read(other)).afterHoursMode, "staffRequest");
 });
 
 test("standalone settings reject a legacy full-policy row instead of importing its free text", async () => {

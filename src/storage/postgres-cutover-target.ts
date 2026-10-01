@@ -49,7 +49,8 @@ export function receiptMatches(row: TargetImportRow | undefined, data: TenantCon
   });
 }
 
-type PolicyRow = { version: number; policy: unknown; changed_by: string | null;
+type PolicyRow = { version: number; policy: unknown; setting_kind: string;
+  previous_after_hours_mode: string | null; changed_by: string | null;
   previous_booking_enabled: boolean | null; changed_at: Date | null };
 type AutomationRow = { version: number; enabled: boolean; changed_by: string | null;
   previous_enabled: boolean | null; changed_at: Date | null };
@@ -92,7 +93,8 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
     const expectedRows = mapped.value.policyRows.length ? mapped.value.policyRows : [
       { version: 0, isHead: true, policy: mapped.value.policy, changedBy: null,
         previousBookingEnabled: null, changedAt: null }];
-    const actualPolicies = (await sql<PolicyRow>`select version, policy, changed_by, previous_booking_enabled, changed_at
+    const actualPolicies = (await sql<PolicyRow>`select version, policy, setting_kind,
+      previous_after_hours_mode, changed_by, previous_booking_enabled, changed_at
       from clinic_settings where tenant_id = ${data.targetTenantId} and clinic_id = ${location.targetScope.clinicId}
       and location_id = ${location.targetScope.locationId} order by version`.execute(trx)).rows;
     const head = expectedRows.find(row => row.isHead)!;
@@ -101,6 +103,8 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
     for (const [index, expected] of expectedRows.entries()) {
       const actual = actualPolicies[index];
       if (!actual || actual.version !== expected.version || !isDeepStrictEqual(actual.policy, expected.policy) ||
+          actual.setting_kind !== (expected.settingKind ?? "booking") ||
+          actual.previous_after_hours_mode !== (expected.previousAfterHoursMode ?? null) ||
           actual.changed_by !== expected.changedBy ||
           actual.previous_booking_enabled !== expected.previousBookingEnabled ||
           !sameInstant(actual.changed_at, expected.changedAt)) return false;
@@ -110,6 +114,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       const disabled = { ...head.policy, policyVersion: String(head.version + 1), bookingEnabled: false,
         capabilities: { ...head.policy.capabilities, book: "unavailable" } };
       if (actual.version !== head.version + 1 || !isDeepStrictEqual(actual.policy, disabled) ||
+          actual.setting_kind !== "booking" || actual.previous_after_hours_mode !== null ||
           actual.changed_by !== actor || actual.previous_booking_enabled !== true ||
           !(actual.changed_at instanceof Date)) return false;
     }
