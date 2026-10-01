@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import test, { after } from "node:test";
 import { sql } from "kysely";
 import { ok } from "../../src/core/model.ts";
@@ -90,6 +91,39 @@ test("E2E-229 durable minimal import preserves after-hours text and audit withou
   const booking = await store.listBookingChanges(target);
   assert.ok(booking.ok);
   assert.deepEqual(booking.value.entries.map(row => row.version), ["2", "3"]);
+});
+
+test("E2E-232 durable minimal import preserves public urgent wording and audit without enabling calls", async () => {
+  const suffix = randomUUID();
+  const source = { tenantId: `minimal-urgent-source-${suffix}`, clinicId: "clinic", locationId: "location" };
+  const target = { tenantId: `minimal-urgent-target-${suffix}`, clinicId: "buyer", locationId: "location" };
+  const store = new PostgresPolicyStore(db, referenceDefaultPolicy);
+  const script = { scope: source, version: "urgent-v1", ownerRef: "clinic-admin",
+    approvedText: "If you need immediate help, contact your local emergency service now.", approved: true as const,
+    effectiveFrom: "2026-09-28T00:00:00.000Z", effectiveUntil: "2027-09-28T00:00:00.000Z" };
+  assert.ok((await store.changeUrgentResponse(source, "0", script, "clinic-admin")).ok);
+  const archive = await buildPostgresTenantConfigArchive(db, {
+    sourceTenantId: source.tenantId, archiveId: `minimal-urgent-archive-${suffix}`, actorRef: "clinic-admin",
+    createdAt: "2026-09-29T05:00:00Z", locations: [
+      { sourceScope: source, targetScope: target, timeZone: "UTC", mappingProvenance: "reviewed" },
+    ],
+  }, { authorizeAndRecord: async () => ok({ requestRef: "minimal-urgent-export-audit" }) });
+  assert.ok(archive.ok, archive.ok ? "" : archive.error.kind);
+  const importer = new PostgresTenantConfigArchiveImporter(db, () => "2026-09-29T05:05:00Z");
+  const authority = { authorizeAndRecord: async () => ok({ auditRef: "minimal-urgent-import-audit" }) };
+  const staged = await importer.stage(archive.value, target.tenantId, "buyer-admin", authority,
+    { mapRef: () => "disabled" });
+  assert.ok(staged.ok, staged.ok ? "" : staged.error.kind);
+  const imported = await store.read(target);
+  assert.ok(imported.ok);
+  assert.equal(imported.value.automationEnabled, false);
+  assert.deepEqual(imported.value.urgentResponse?.scope, target);
+  assert.equal(imported.value.urgentResponse?.approvedText, script.approvedText);
+  const history = await store.listUrgentResponseChanges(target);
+  assert.ok(history.ok);
+  assert.deepEqual(history.value.entries.map(row => [row.version, row.enabled]), [["1", true]]);
+  const stop = await new PostgresLedger(db).readWriteStop(target);
+  assert.ok(stop.ok && stop.value.stopped);
 });
 
 test("default tenant importer rejects rich reference archives before persistence", async () => {

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import test, { after } from "node:test";
 import { sql } from "kysely";
 import { MemoryLedger } from "../../src/core/ledger.ts";
@@ -153,6 +154,8 @@ type VoiceFixtureOptions = {
   urgentText?: string;
   urgentEffectiveUntil?: string;
   urgentWrongScope?: boolean;
+  urgentConfiguredByAdmin?: boolean;
+  urgentOffBeforeAdmission?: boolean;
   model?: RawModelPort;
   modelDeadlineMs?: number;
   streamedPlayback?: PlaybackPort;
@@ -188,6 +191,17 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
       approvedText: options.afterHoursText, approved: true }, "voice-test-admin"));
   if (options.afterHoursOffBeforeAdmission) value(await policy.changeAfterHours(scope,
     bookingEnabled ? "2" : "1", "staffRequest", undefined, "voice-test-admin"));
+  if (options.urgentConfiguredByAdmin && options.urgentText) {
+    const current = value(await policy.read(scope));
+    value(await policy.changeUrgentResponse(scope, current.policyVersion, {
+      scope, version: "urgent-script-v1", ownerRef: "voice-test-admin", approvedText: options.urgentText,
+      approved: true, effectiveFrom: at(0), effectiveUntil: options.urgentEffectiveUntil ?? at(3_600),
+    }, "voice-test-admin"));
+    if (options.urgentOffBeforeAdmission) {
+      const approved = value(await policy.read(scope));
+      value(await policy.changeUrgentResponse(scope, approved.policyVersion, undefined, "voice-test-admin"));
+    }
+  }
   const playback = new FakePlayback();
   const transfer = new FakeTransfer();
   const admission = new CallAdmissionService(ledger, async () => {
@@ -198,7 +212,7 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
       automationEnabled: true,
       capabilities: { ...result.value.capabilities, transfer: transferMode },
       ...(options.staffWorkEnabled === false ? { staffWorkEnabled: false } : {}),
-      ...(options.urgentText === undefined ? {} : { urgentResponse: {
+      ...(options.urgentConfiguredByAdmin || options.urgentText === undefined ? {} : { urgentResponse: {
         scope: options.urgentWrongScope ? { ...scope, locationId: `${scope.locationId}-other` } : scope,
         version: "urgent-script-v1", ownerRef: "synthetic-clinic-admin", approvedText: options.urgentText,
         approved: true as const, effectiveFrom: at(0), effectiveUntil: options.urgentEffectiveUntil ?? at(3_600),
@@ -737,6 +751,42 @@ for (const kind of kinds) {
     assert.equal(value(await app.session.dispatchPending(at(5))).kind, "queued");
     assert.equal(app.playback.queuedTexts.at(-1), state.callerMessages.at(-1));
     assert.equal(app.host.bookings(app.scope).length, 0);
+  });
+
+  test(`${kind}: E2E-232 admin urgent setting changes only the next call's captured voice script`, async () => {
+    const approvedText = "If you need immediate help, contact your local emergency service now.";
+    const app = await fixture(kind, `${kind}-urgent-setting-${randomUUID()}`, false, "requestOnly", undefined, undefined, {
+      urgentText: approvedText, urgentConfiguredByAdmin: true,
+      model: { async propose() { return { schemaVersion: 2, kind: "handoff", reason: "potentiallyUrgent" }; } },
+    });
+    const current = value(await app.policy.read(app.scope));
+    assert.equal(current.urgentResponse?.approvedText, approvedText);
+    const disabled = value(await app.policy.changeUrgentResponse(app.scope, current.policyVersion,
+      undefined, "voice-test-admin"));
+    assert.equal(disabled.urgentResponse, undefined);
+    const captured = value(await app.ledger.read(app.callId, app.scope));
+    assert.equal(captured.policy.urgentResponse?.approvedText, approvedText);
+    await modelTurn(app, "Ask model about urgent symptoms");
+    const state = value(await app.session.drainEffects(at(4)));
+    assert.equal(value(await app.session.dispatchPending(at(5))).kind, "queued");
+    assert.equal(app.playback.queuedTexts.at(-1),
+      `${approvedText} I can request staff follow-up, but I can't confirm they have received it yet.`);
+    assert.equal(Object.values(state.staffItems)[0]?.reason, "potentiallyUrgent");
+    assert.equal((await app.reception.startCall(`${kind}-urgent-next`, app.scope)).ok, true);
+    const next = value(await app.ledger.read(`${kind}-urgent-next`, app.scope));
+    assert.equal(next.policy.urgentResponse, undefined);
+    const audit = value(await app.policy.listUrgentResponseChanges(app.scope));
+    assert.deepEqual(audit.entries.map(row => [row.enabled, row.previousEnabled]), [[true, false], [false, true]]);
+
+    const off = await fixture(kind, `${kind}-urgent-setting-off-${randomUUID()}`, false, "requestOnly", undefined, undefined, {
+      urgentText: approvedText, urgentConfiguredByAdmin: true, urgentOffBeforeAdmission: true,
+      model: { async propose() { return { schemaVersion: 2, kind: "handoff", reason: "potentiallyUrgent" }; } },
+    });
+    await modelTurn(off, "Ask model about urgent symptoms");
+    value(await off.session.drainEffects(at(4)));
+    assert.equal(value(await off.session.dispatchPending(at(5))).kind, "queued");
+    assert.equal(off.playback.queuedTexts.at(-1),
+      "I can't give advice on that request. Please contact the clinic directly.");
   });
 
   for (const scenario of [

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import test, { after } from "node:test";
 import { ok } from "../../src/core/model.ts";
 import { ReferenceConfigArchiveImporter } from "../../src/reference/config-archive-import.ts";
@@ -87,6 +88,43 @@ test("E2E-229 minimal archive carries approved after-hours text and its separate
   const bookingHistory = await staged.value.policy.listBookingChanges(targetScope);
   assert.ok(bookingHistory.ok);
   assert.deepEqual(bookingHistory.value.entries.map(row => row.version), ["2", "3"]);
+});
+
+test("E2E-232 minimal archive maps the scoped urgent script and distinct audit into an embedded host", async () => {
+  const suffix = randomUUID();
+  const scope = { tenantId: `urgent-export-source-${suffix}`, clinicId: "clinic", locationId: "location" };
+  const targetScope = { tenantId: `urgent-export-buyer-${suffix}`, clinicId: "buyer", locationId: "location" };
+  const app = createStandaloneTextComposition(db);
+  const script = { scope, version: "urgent-v1", ownerRef: "clinic-admin",
+    approvedText: "If you need immediate help, contact your local emergency service now.", approved: true as const,
+    effectiveFrom: "2026-09-28T00:00:00.000Z", effectiveUntil: "2027-09-28T00:00:00.000Z" };
+  assert.equal((await app.policy.changeUrgentResponse(scope, "0", script, "clinic-admin")).ok, true);
+  assert.equal((await app.policy.changeBookingEnabled(scope, "1", false, "clinic-admin")).ok, true);
+  const archive = await buildPostgresConfigArchive(db, { scope, targetScope, timeZone: "UTC",
+    mappingProvenance: "reviewed-map", archiveId: `urgent-settings-archive-${suffix}`, actorRef: "clinic-admin",
+    createdAt: "2026-09-29T04:00:00Z" }, authority);
+  assert.ok(archive.ok, archive.ok ? "" : archive.error.kind);
+  const decoded = await decodeConfigArchive(archive.value, targetScope);
+  assert.ok(decoded.ok, decoded.ok ? "" : decoded.error.kind);
+  assert.deepEqual(decoded.value.policies.map(row => [row.version, row.settingKind]),
+    [[0, "booking"], [1, "urgent"], [2, "booking"]]);
+  assert.equal(decoded.value.policies[2]?.policy.urgentResponse?.approvedText, script.approvedText);
+  const staged = await new ReferenceConfigArchiveImporter(() => "2026-09-29T04:05:00Z").stage(
+    archive.value, targetScope, "buyer-admin",
+    { authorizeAndRecord: async () => ok({ auditRef: "audited-urgent-import" }) },
+    { mapRef: (kind: string, ref: string) => `buyer:${kind}:${ref}` });
+  assert.ok(staged.ok, staged.ok ? "" : staged.error.kind);
+  const imported = await staged.value.policy.read(targetScope);
+  assert.ok(imported.ok);
+  assert.deepEqual(imported.value.urgentResponse?.scope, targetScope);
+  assert.equal(imported.value.urgentResponse?.ownerRef, "buyer:urgentOwner:clinic-admin");
+  assert.equal(imported.value.urgentResponse?.approvedText, script.approvedText);
+  const history = await staged.value.policy.listUrgentResponseChanges(targetScope);
+  assert.ok(history.ok);
+  assert.deepEqual(history.value.entries.map(row => [row.version, row.enabled, row.previousEnabled]), [["1", true, false]]);
+  const booking = await staged.value.policy.listBookingChanges(targetScope);
+  assert.ok(booking.ok);
+  assert.deepEqual(booking.value.entries.map(row => row.version), ["2"]);
 });
 
 test("default archive rejects rich policy and any standalone knowledge draft", async () => {

@@ -207,7 +207,8 @@ export class ReferenceTenantConfigArchiveImporter {
       const locations: ImportedReferenceLocationPolicy[] = prepared.value.locations.map(location => ({
         scope: location.targetScope, policy: location.mapped.policy,
         bookingHistory: location.mapped.bookingHistory,
-        afterHoursHistory: location.mapped.afterHoursHistory }));
+        afterHoursHistory: location.mapped.afterHoursHistory,
+        urgentHistory: location.mapped.urgentHistory }));
       policy = MemoryPolicyStore.fromImportedMany(locations, prepared.value.clinics, importActorRef, importedAt);
     } catch { return err({ kind: "invalidConfigArchive" }); }
     const ledger = new MemoryLedger();

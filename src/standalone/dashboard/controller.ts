@@ -4,7 +4,7 @@ import { dashboardView } from "./view.ts";
 import type { DashboardState } from "./view.ts";
 import type { AfterHoursMode, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
-import type { AfterHoursSettingAuditPage, BookingSettingAuditPage } from "../../core/host.ts";
+import type { AfterHoursSettingAuditPage, BookingSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
 import type { AutomationSettingAuditPage } from "../../core/host.ts";
 import { READINESS_REQUIREMENTS } from "../../core/readiness.ts";
 import type { ReadinessRequirement } from "../../core/readiness.ts";
@@ -18,6 +18,11 @@ function appendAudit(previous: BookingSettingAuditPage, next: BookingSettingAudi
 
 function appendAfterHoursAudit(previous: AfterHoursSettingAuditPage,
                                next: AfterHoursSettingAuditPage): AfterHoursSettingAuditPage {
+  return { entries: [...previous.entries, ...next.entries],
+    ...(next.nextAfterVersion === undefined ? {} : { nextAfterVersion: next.nextAfterVersion }) };
+}
+
+function appendUrgentAudit(previous: UrgentSettingAuditPage, next: UrgentSettingAuditPage): UrgentSettingAuditPage {
   return { entries: [...previous.entries, ...next.entries],
     ...(next.nextAfterVersion === undefined ? {} : { nextAfterVersion: next.nextAfterVersion }) };
 }
@@ -72,6 +77,8 @@ export class DashboardController {
     knowledgeFrom: new Date().toISOString(), knowledgeUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
     writeStop: undefined, stopReasonInput: "", auditPage: undefined,
     afterHoursAuditPage: undefined, afterHoursInfoVersion: "", afterHoursApprovedText: "",
+    urgentAuditPage: undefined, urgentVersion: "", urgentText: "",
+    urgentFrom: new Date().toISOString(), urgentUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
     writeStopAuditPage: undefined, automationAuditPage: undefined, callIdInput: "", call: undefined, staffPage: undefined, outcomePage: undefined, notice: undefined, error: undefined };
 
   constructor(root: HTMLElement, port: DashboardPort) {
@@ -101,6 +108,10 @@ export class DashboardController {
       changeAfterHours: mode => { void this.changeAfterHours(mode); },
       loadAfterHoursAudit: () => { void this.loadAfterHoursAudit(); },
       loadMoreAfterHoursAudit: () => { void this.loadMoreAfterHoursAudit(); },
+      setUrgentField: (field, value) => { this.state[field] = value; this.draw(); },
+      changeUrgentResponse: enabled => { void this.changeUrgentResponse(enabled); },
+      loadUrgentAudit: () => { void this.loadUrgentAudit(); },
+      loadMoreUrgentAudit: () => { void this.loadMoreUrgentAudit(); },
       setCallId: value => { this.state.callIdInput = value; },
       loadCall: () => { void this.loadCall(); },
       loadStaff: () => { void this.loadStaff(); },
@@ -118,6 +129,10 @@ export class DashboardController {
       this.state.policy = settings.value;
       this.state.afterHoursInfoVersion = settings.value.afterHoursInfo?.version ?? "";
       this.state.afterHoursApprovedText = settings.value.afterHoursInfo?.approvedText ?? "";
+      this.state.urgentVersion = settings.value.urgentResponse?.version ?? "";
+      this.state.urgentText = settings.value.urgentResponse?.approvedText ?? "";
+      this.state.urgentFrom = settings.value.urgentResponse?.effectiveFrom ?? this.state.urgentFrom;
+      this.state.urgentUntil = settings.value.urgentResponse?.effectiveUntil ?? this.state.urgentUntil;
     }
     this.state.error = !settings.ok ? message(settings.error) : !capabilities.ok ? message(capabilities.error) : undefined;
     if (capabilities.ok && capabilities.value.some(item => item.id === "knowledge.list.v1")) {
@@ -148,6 +163,11 @@ export class DashboardController {
     if (capabilities.ok && capabilities.value.some(item => item.id === "settings.routing.afterHours.audit.v1")) {
       const audit = await this.port.afterHoursAudit();
       if (audit.ok) this.state.afterHoursAuditPage = audit.value;
+      else this.state.error = message(audit.error);
+    }
+    if (capabilities.ok && capabilities.value.some(item => item.id === "settings.routing.urgent.audit.v1")) {
+      const audit = await this.port.urgentAudit();
+      if (audit.ok) this.state.urgentAuditPage = audit.value;
       else this.state.error = message(audit.error);
     }
     if (capabilities.ok && capabilities.value.some(item => item.id === "staff.list.v1")) {
@@ -223,6 +243,18 @@ export class DashboardController {
     this.draw();
     const result = await this.port.afterHoursAudit();
     if (result.ok) this.state.afterHoursAuditPage = result.value;
+    else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async loadUrgentAudit(): Promise<void> {
+    if (this.state.busy) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.urgentAudit();
+    if (result.ok) this.state.urgentAuditPage = result.value;
     else this.state.error = message(result.error);
     this.state.busy = false;
     this.draw();
@@ -358,6 +390,19 @@ export class DashboardController {
     this.draw();
   }
 
+  private async loadMoreUrgentAudit(): Promise<void> {
+    const previous = this.state.urgentAuditPage;
+    if (this.state.busy || previous?.nextAfterVersion === undefined) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.urgentAudit(previous.nextAfterVersion);
+    if (result.ok) this.state.urgentAuditPage = appendUrgentAudit(previous, result.value);
+    else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
   private async loadOutcomes(): Promise<void> {
     if (this.state.busy) return;
     this.state.busy = true;
@@ -478,6 +523,42 @@ export class DashboardController {
       }
       const audit = await this.port.afterHoursAudit();
       if (audit.ok) this.state.afterHoursAuditPage = audit.value;
+      else this.state.error = message(audit.error);
+    } else {
+      this.state.error = message(result.error);
+      if (result.error.kind === "versionConflict") {
+        const reloaded = await this.port.settings();
+        if (reloaded.ok) this.state.policy = reloaded.value;
+      }
+    }
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async changeUrgentResponse(enabled: boolean): Promise<void> {
+    const current = this.state.policy;
+    if (this.state.busy || !current || !this.state.capabilities.some(item => item.id === "settings.routing.urgent.change.v1")) return;
+    if (enabled && (!this.state.urgentVersion.trim() || !this.state.urgentText.trim() ||
+        !this.state.urgentFrom.trim() || !this.state.urgentUntil.trim())) {
+      this.state.error = "Enter the script version, wording and effective dates.";
+      this.draw();
+      return;
+    }
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.state.notice = undefined;
+    this.draw();
+    const result = await this.port.changeUrgentResponse(current.policyVersion, enabled ? {
+      version: this.state.urgentVersion.trim(), approvedText: this.state.urgentText.trim(),
+      effectiveFrom: this.state.urgentFrom.trim(), effectiveUntil: this.state.urgentUntil.trim(),
+    } : undefined);
+    if (result.ok) {
+      this.state.policy = result.value;
+      this.state.notice = enabled ? "Urgent request wording approved for new calls." :
+        "Urgent request wording disabled for new calls.";
+      if (!enabled) { this.state.urgentVersion = ""; this.state.urgentText = ""; }
+      const audit = await this.port.urgentAudit();
+      if (audit.ok) this.state.urgentAuditPage = audit.value;
       else this.state.error = message(audit.error);
     } else {
       this.state.error = message(result.error);

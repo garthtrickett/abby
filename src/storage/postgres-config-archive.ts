@@ -4,6 +4,7 @@ import type { Kysely } from "kysely";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result, StaffDestination } from "../core/model.ts";
 import { validAfterHoursSetting } from "../core/after-hours-policy.ts";
+import { validUrgentResponseShape } from "../core/urgent-response.ts";
 import { ARCHIVE_SECTIONS } from "../portability/archive-envelope.ts";
 import type { ArchiveEnvelope, ArchiveSection } from "../portability/archive-envelope.ts";
 import type Database from "./generated/Database.ts";
@@ -92,21 +93,30 @@ function afterHoursFields(row: Record<string, unknown>, scope: LocationScope): R
       approvedText: info.approvedText, approved: true } } : {}) };
 }
 
+function urgentFields(row: Record<string, unknown>, scope: LocationScope): Record<string, unknown> {
+  if (row.urgentResponse === undefined) return {};
+  if (!validUrgentResponseShape(row.urgentResponse, scope)) throw new ExportAbort("storageCorrupt");
+  const response = row.urgentResponse;
+  return { urgentResponse: { version: response.version, ownerRef: response.ownerRef,
+    approvedText: response.approvedText, approved: true,
+    effectiveFrom: response.effectiveFrom, effectiveUntil: response.effectiveUntil } };
+}
+
 /** Export only known policy fields; extra JSONB keys never cross the archive boundary. */
 function policyFields(value: unknown, scope: LocationScope, version: number,
                       mode: "standaloneMinimal" | "unsafeReference"): Record<string, unknown> {
   const row = object(value);
   const storedScope = object(row?.scope);
   if (mode === "standaloneMinimal") {
-    if (!row || !storedScope || !["bookingEnabled,policyVersion,scope",
-          "afterHoursMode,bookingEnabled,policyVersion,scope",
-          "afterHoursInfo,afterHoursMode,bookingEnabled,policyVersion,scope"].includes(Object.keys(row).sort().join(",")) ||
+    if (!row || !storedScope || !["bookingEnabled", "policyVersion", "scope"].every(field => Object.hasOwn(row, field)) ||
+        Object.keys(row).some(field => !["bookingEnabled", "policyVersion", "scope", "afterHoursMode",
+          "afterHoursInfo", "urgentResponse"].includes(field)) ||
         Object.keys(storedScope).sort().join(",") !== "clinicId,locationId,tenantId" ||
         storedScope.tenantId !== scope.tenantId || storedScope.clinicId !== scope.clinicId ||
         storedScope.locationId !== scope.locationId || row.policyVersion !== String(version) ||
         typeof row.bookingEnabled !== "boolean") throw new ExportAbort("storageCorrupt");
     return { shape: "standaloneMinimal", policyVersion: row.policyVersion, bookingEnabled: row.bookingEnabled,
-      ...afterHoursFields(row, scope) };
+      ...afterHoursFields(row, scope), ...urgentFields(row, scope) };
   }
   const caps = object(row?.capabilities);
   if (!row || !storedScope || storedScope.tenantId !== scope.tenantId || storedScope.clinicId !== scope.clinicId ||
@@ -119,7 +129,7 @@ function policyFields(value: unknown, scope: LocationScope, version: number,
   }
   const policy: Record<string, unknown> = { policyVersion: row.policyVersion, bookingEnabled: row.bookingEnabled, capabilities,
     staffDestination: destination(row.staffDestination), operatorQueue: destination(row.operatorQueue),
-    ...afterHoursFields(row, scope) };
+    ...afterHoursFields(row, scope), ...urgentFields(row, scope) };
   if (row.transferDestinationRef !== undefined) {
     if (!validRef(row.transferDestinationRef)) throw new ExportAbort("storageCorrupt");
     policy.transferDestinationRef = row.transferDestinationRef;

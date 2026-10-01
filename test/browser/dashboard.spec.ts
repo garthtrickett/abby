@@ -230,6 +230,67 @@ test("E2E-229 SET-006: approved after-hours text follows versioned admin changes
   } finally { await app.close(); }
 });
 
+test("E2E-232: clinic admin approves, audits and disables urgent wording for new calls", async ({ page, request }) => {
+  const app = await localDashboard("clinicAdmin");
+  try {
+    await page.goto(app.url);
+    await expect(page.getByRole("heading", { name: "Urgent request wording" })).toBeVisible();
+    await expect(page.getByText("No approved script", { exact: true })).toBeVisible();
+    const text = "If you need immediate help, contact your local emergency service now.";
+    await page.getByRole("textbox", { name: "Urgent script version" }).fill("urgent-v1");
+    await page.getByRole("textbox", { name: "Approved urgent request wording" }).fill(text);
+    await page.getByRole("textbox", { name: "Urgent effective from" }).fill("2026-09-28T00:00:00.000Z");
+    await page.getByRole("textbox", { name: "Urgent effective until" }).fill("2027-09-28T00:00:00.000Z");
+    await page.getByRole("button", { name: "Approve urgent request wording" }).click();
+    await expect(page.getByText("Urgent request wording approved for new calls.")).toBeVisible();
+    const before = await app.ledger.read("before-setting", app.scope);
+    assert.ok(before.ok);
+    assert.equal(before.value.policy.urgentResponse, undefined);
+    assert.equal((await app.reception.startCall("urgent-enabled", app.scope)).ok, true);
+    const enabled = await app.ledger.read("urgent-enabled", app.scope);
+    assert.ok(enabled.ok);
+    assert.equal(enabled.value.policy.urgentResponse?.ownerRef, "browser-clinicAdmin");
+    assert.equal(enabled.value.policy.urgentResponse?.approvedText, text);
+    assert.equal((await request.post(`${app.url}/api/settings/urgent`, { data: {
+      expectedVersion: "0", enabled: false } })).status(), 409);
+    assert.equal((await request.post(`${app.url}/api/settings/urgent`, { data: {
+      expectedVersion: "1", enabled: true, scriptVersion: "invalid", approvedText: text,
+      effectiveFrom: "2027-09-28T00:00:00.000Z", effectiveUntil: "2026-09-28T00:00:00.000Z" } })).status(), 400);
+    assert.equal((await request.post(`${app.url}/api/settings/urgent`, { data: {
+      expectedVersion: "1", enabled: true, scriptVersion: "forged", approvedText: text,
+      effectiveFrom: "2026-09-28T00:00:00.000Z", effectiveUntil: "2027-09-28T00:00:00.000Z",
+      ownerRef: "forged-owner" } })).status(), 400);
+    await page.reload();
+    await expect(page.getByRole("textbox", { name: "Approved urgent request wording" })).toHaveValue(text);
+    await expect(page.getByLabel("Urgent wording audit")).toContainText("Version 1 · approved · script urgent-v1 · browser-clinicAdmin");
+    await page.getByRole("button", { name: "Disable urgent request wording" }).click();
+    await expect(page.getByText("Urgent request wording disabled for new calls.")).toBeVisible();
+    assert.equal((await app.reception.startCall("urgent-disabled", app.scope)).ok, true);
+    const disabled = await app.ledger.read("urgent-disabled", app.scope);
+    assert.ok(disabled.ok);
+    assert.equal(disabled.value.policy.urgentResponse, undefined);
+    const captured = await app.ledger.read("urgent-enabled", app.scope);
+    assert.ok(captured.ok);
+    assert.equal(captured.value.policy.urgentResponse?.approvedText, text);
+    await expect(page.getByLabel("Urgent wording audit")).toContainText("Version 2 · disabled · browser-clinicAdmin");
+    await expect(page.getByLabel("Booking setting audit")).toContainText("No booking setting changes recorded.");
+  } finally { await app.close(); }
+});
+
+test("E2E-232: staff cannot inspect urgent wording history or change the script", async ({ page, request }) => {
+  const app = await localDashboard("staff");
+  try {
+    await page.goto(app.url);
+    await expect(page.getByRole("button", { name: "Approve urgent request wording" })).toHaveCount(0);
+    assert.equal((await request.get(`${app.url}/api/settings/urgent-audit`)).status(), 403);
+    assert.equal((await request.post(`${app.url}/api/settings/urgent`, { data: {
+      expectedVersion: "0", enabled: false } })).status(), 403);
+    const current = await app.policy.read(app.scope);
+    assert.ok(current.ok);
+    assert.equal(current.value.urgentResponse, undefined);
+  } finally { await app.close(); }
+});
+
 test("agent capability endpoint publishes versioned schemas without exposing internal call state", async ({ request }) => {
   const app = await localDashboard("clinicAdmin");
   try {
@@ -245,6 +306,10 @@ test("agent capability endpoint publishes versioned schemas without exposing int
     assert.equal(afterHours?.inputSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
     assert.equal(JSON.stringify(afterHours?.inputSchema).includes('"oneOf"'), true);
     assert.equal(JSON.stringify(afterHours?.inputSchema).includes("ownerRef"), false);
+    const urgent = payload.value.find(item => item.id === "settings.routing.urgent.change.v1");
+    assert.equal(urgent?.inputSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
+    assert.equal(JSON.stringify(urgent?.inputSchema).includes('"oneOf"'), true);
+    assert.equal(JSON.stringify(urgent?.inputSchema).includes("ownerRef"), false);
     assert.equal(JSON.stringify(payload).includes("browser-tenant"), false);
   } finally { await app.close(); }
 });
