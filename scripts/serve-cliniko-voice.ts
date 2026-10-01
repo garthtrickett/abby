@@ -44,6 +44,8 @@ export type VoiceRunnerPorts = Readonly<{
   openaiFetch?: typeof fetch;
   transcriptionSocketFactory?: NonNullable<ClinikoVoiceServerConfig["openai"]["transcriptionSocketFactory"]>;
   operationalCounters?: OperationalCounterStore;
+  /** Synthetic provider selection for the isolated voice runner. */
+  speechModels?: Readonly<{ primary: string; fallback: string; primaryFirstChunkMs: number }>;
 }>;
 
 export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<void> {
@@ -114,6 +116,9 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
         sevenDayAvailabilityEnabled: weekMode === "1" }],
       openai: { apiKey: required("ABBY_OPENAI_API_KEY"), intentModel: required("ABBY_OPENAI_INTENT_MODEL"),
         ...(ports.openaiFetch ? { fetch: ports.openaiFetch } : {}),
+        ...(ports.speechModels ? { speechModel: ports.speechModels.primary,
+          speechFallbackModel: ports.speechModels.fallback,
+          speechPrimaryFirstChunkMs: ports.speechModels.primaryFirstChunkMs } : {}),
         ...(ports.transcriptionSocketFactory ? { transcriptionSocketFactory: ports.transcriptionSocketFactory } : {}) },
       readiness: testCaller ? async current => current.tenantId === scope.tenantId &&
         current.clinicId === scope.clinicId && current.locationId === scope.locationId

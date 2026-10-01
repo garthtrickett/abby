@@ -6,7 +6,7 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     !["synthetic-key-au5", "synthetic-rotated-key-au5"].includes(process.env.ABBY_CLINIKO_API_KEY ?? "") ||
     process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}` ||
     !process.env.DATABASE_URL?.includes("/abby_test_voice_") ||
-    ![undefined, "openai-speech", "openai-transcription", "untrusted-transcript", "cliniko-rate-limit", "cliniko-server-error", "cliniko-timeout", "cliniko-slow-read", "cliniko-zone-changed", "cliniko-partial-page", "cliniko-empty", "cliniko-business-type-removed", "cliniko-practitioner-type-removed", "week-alternative",
+    ![undefined, "openai-speech", "speech-primary-stall", "openai-transcription", "untrusted-transcript", "cliniko-rate-limit", "cliniko-server-error", "cliniko-timeout", "cliniko-slow-read", "cliniko-zone-changed", "cliniko-partial-page", "cliniko-empty", "cliniko-business-type-removed", "cliniko-practitioner-type-removed", "week-alternative",
       "practitioner-alternative", "practitioner-alternative-rate-limit",
       "practitioner-alternative-malformed", "practitioner-alternative-second",
       "primary-selection-change"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
@@ -140,9 +140,20 @@ const openaiFetch: typeof fetch = async (input, init) => {
   if (String(input) !== "https://api.openai.com/v1/audio/speech") {
     throw new Error("unexpected OpenAI request");
   }
-  const request = JSON.parse(String(init?.body)) as { input?: unknown };
-  if (typeof request.input !== "string") throw new Error("invalid synthetic speech request");
-  process.send?.({ kind: "speech", text: request.input });
+  const request = JSON.parse(String(init?.body)) as { input?: unknown; model?: unknown };
+  if (typeof request.input !== "string" || typeof request.model !== "string") {
+    throw new Error("invalid synthetic speech request");
+  }
+  process.send?.({ kind: "speech", text: request.input, model: request.model });
+  if (fault === "speech-primary-stall" && request.model === "synthetic-primary-stalled") {
+    await new Promise<never>((_resolve, reject) => {
+      const signal = init?.signal;
+      if (!signal) return reject(new Error("synthetic speech abort signal missing"));
+      if (signal.aborted) return reject(new DOMException("synthetic speech canceled", "AbortError"));
+      signal.addEventListener("abort", () => reject(new DOMException("synthetic speech canceled", "AbortError")),
+        { once: true });
+    });
+  }
   if (fault === "openai-speech") return new Response(null, { status: 503 });
   // Distinct PCM tones let signed tests distinguish greeting audio from the
   // next utterance in the outbound stream, independently of IPC timing.
@@ -152,8 +163,11 @@ const openaiFetch: typeof fetch = async (input, init) => {
   return new Response(audio, { headers: { "content-type": "audio/pcm" } });
 };
 
-await serveClinikoVoice({ clinikoFetch, openaiFetch, transcriptionSocketFactory: () => {
-  const socket = new SyntheticTranscriptionSocket();
-  queueMicrotask(() => socket.open());
-  return socket as unknown as WebSocket;
-} });
+await serveClinikoVoice({ clinikoFetch, openaiFetch,
+  ...(fault === "speech-primary-stall" ? { speechModels: { primary: "synthetic-primary-stalled",
+    fallback: "synthetic-fallback", primaryFirstChunkMs: 100 } } : {}),
+  transcriptionSocketFactory: () => {
+    const socket = new SyntheticTranscriptionSocket();
+    queueMicrotask(() => socket.open());
+    return socket as unknown as WebSocket;
+  } });
