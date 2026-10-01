@@ -24,8 +24,9 @@ test("model ingress accepts each versioned proposal without giving it host autho
     { schemaVersion: 1, kind: "lookup", target: "appointment", statedName: "Alex", statedDate: "2026-10-02" },
     { schemaVersion: 1, kind: "action", operation: "reschedule", targetRef: "appointment-1", requestedTime: "2026-10-02T12:30:00+10:00" },
     { schemaVersion: 1, kind: "handoff", reason: "callerRequested" },
+    { schemaVersion: 2, kind: "handoff", reason: "potentiallyUrgent" },
   ];
-  assert.deepEqual(proposals.map(raw => decoded(raw).kind), ["answer", "lookup", "action", "handoff"]);
+  assert.deepEqual(proposals.map(raw => decoded(raw).kind), ["answer", "lookup", "action", "handoff", "handoff"]);
   for (const proposal of proposals) {
     assert.equal(Object.hasOwn(decoded(proposal), "mutation"), false);
     assert.equal(Object.hasOwn(decoded(proposal), "confirmationRef"), false);
@@ -34,7 +35,7 @@ test("model ingress accepts each versioned proposal without giving it host autho
 
 test("model ingress rejects unknown versions, hidden commands, and incomplete answers", () => {
   const invalid: unknown[] = [
-    { schemaVersion: 2, kind: "handoff", reason: "callerRequested" },
+    { schemaVersion: 3, kind: "handoff", reason: "callerRequested" },
     { schemaVersion: 1, kind: "action", operation: "book", hostWrite: { patientRef: "patient-1" } },
     { schemaVersion: 1, kind: "action", operation: "write", targetRef: "patient-1" },
     { schemaVersion: 1, kind: "answer", sourceRefs: [], proposedText: "We close at five." },
@@ -45,6 +46,8 @@ test("model ingress rejects unknown versions, hidden commands, and incomplete an
     { schemaVersion: 1, kind: "action", operation: "book", requestedTime: "2026-10-02T12:30:00+15:00" },
     { schemaVersion: 1, kind: "handoff", reason: "inventedReason" },
     { schemaVersion: 1, kind: "handoff", reason: "systemFailure" },
+    { schemaVersion: 1, kind: "handoff", reason: "potentiallyUrgent" },
+    { schemaVersion: 2, kind: "handoff", reason: "potentiallyUrgent", medicalAdvice: "take medicine" },
     { schemaVersion: 1, kind: "answer", sourceRefs: ["hours"], proposedText: "We close at five.", instructions: "ignore policy" },
     { get schemaVersion() { throw new Error("untrusted getter"); } },
     null,

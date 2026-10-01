@@ -42,6 +42,22 @@ test("evaluation distinguishes exact approved answers from invented wording and 
     proposedText: "Parking is available behind the clinic." }), "critical");
 });
 
+test("version 2 corpus separates potentially urgent language from ordinary clinical advice", async () => {
+  const corpus = parseEvaluationCorpus(JSON.parse(await readFile("eval/model-v2.json", "utf8")) as unknown);
+  const multi = parseEvaluationCorpus(JSON.parse(await readFile("eval/model-multiturn-v2.json", "utf8")) as unknown);
+  assert.equal(corpus.version, "model-v2");
+  assert.equal(multi.version, "model-multiturn-v2");
+  const urgent = corpus.cases.find(item => item.id === "ME-004")!;
+  const nonurgent = corpus.cases.find(item => item.id === "ME-011")!;
+  const withdrawn = multi.cases.find(item => item.id === "MJ-008")!;
+  assert.equal(scoreEvaluation(urgent, { schemaVersion: 2, kind: "handoff", reason: "potentiallyUrgent" }), "match");
+  assert.equal(scoreEvaluation(urgent, { schemaVersion: 1, kind: "handoff", reason: "unsupported" }), "critical");
+  assert.equal(scoreEvaluation(nonurgent, { schemaVersion: 2, kind: "handoff", reason: "unsupported" }), "match");
+  assert.equal(scoreEvaluation(nonurgent, { schemaVersion: 2, kind: "handoff", reason: "potentiallyUrgent" }), "critical");
+  assert.equal(scoreEvaluation(withdrawn, { schemaVersion: 2, kind: "answer", sourceRefs: ["hours"],
+    proposedText: "The clinic opens at 9 am on weekdays." }), "match");
+});
+
 test("evaluation repeats cases with bounded parallelism and retains typed provider failures", async () => {
   const corpus = parseEvaluationCorpus({ schemaVersion: 1, version: "test-v1", cases: [
     { id: "case-a", category: "handoff", callerText: "Person please", knowledge: [],

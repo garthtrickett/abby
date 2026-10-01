@@ -1,5 +1,5 @@
 import type { LedgerStore } from "../core/ledger.ts";
-import { err, ok } from "../core/model.ts";
+import { STAFF_REASONS, err, ok } from "../core/model.ts";
 import type { LocationScope, Result, StaffItem, StaffQueueEntry, TransitionFailure } from "../core/model.ts";
 
 export type StaffQueuePage = Readonly<{
@@ -20,13 +20,12 @@ export type StaffQueueHealth = Readonly<{
   alertFailed: number;
 }>;
 
-const reasons = ["callerRequested", "verificationFailed", "unsupported", "uncertainAction", "partialIntake", "systemFailure", "transferFailed"];
 const statuses = ["requested", "open", "acknowledged", "resolved", "needsReview", "failed"];
 
 function valid(entry: StaffQueueEntry): boolean {
   return typeof entry.callId === "string" && !!entry.callId && Number.isSafeInteger(entry.callVersion) && entry.callVersion >= 0 &&
     typeof entry.taskKey === "string" && !!entry.taskKey &&
-    reasons.includes(entry.reason) && statuses.includes(entry.status) &&
+    STAFF_REASONS.includes(entry.reason) && statuses.includes(entry.status) &&
     typeof entry.dueAt === "string" && Number.isFinite(Date.parse(entry.dueAt)) &&
     !!entry.destination && (entry.destination.kind === "owner" ?
       typeof entry.destination.ownerRef === "string" && !!entry.destination.ownerRef :

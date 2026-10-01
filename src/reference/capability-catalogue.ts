@@ -1,6 +1,7 @@
 import { array, bool, choice, key, object, str, uint } from "./schema-shapes.ts";
 import type { JsonSchema } from "./schema-shapes.ts";
 import { READINESS_REQUIREMENTS } from "../core/readiness.ts";
+import { STAFF_REASONS } from "../core/model.ts";
 
 const schemaUri = "https://json-schema.org/draft/2020-12/schema";
 const root = (schema: JsonSchema): JsonSchema => ({ $schema: schemaUri, ...schema });
@@ -26,6 +27,9 @@ const afterHoursInfo = object({ scope, version: key, ownerRef: key,
   approvedText: { type: "string", minLength: 1, maxLength: 1_500 }, approved: { const: true } });
 const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: nonEmpty, automationEnabled: bool, bookingEnabled: bool,
   afterHoursMode, afterHoursInfo,
+  urgentResponse: object({ scope, version: key, ownerRef: key,
+    approvedText: { type: "string", minLength: 1, maxLength: 1_500 }, approved: { const: true },
+    effectiveFrom: str, effectiveUntil: str }),
   capabilities: object({ book: capabilityMode, cancel: capabilityMode, reschedule: capabilityMode,
     intake: capabilityMode, transfer: capabilityMode }), transferDestinationRef: str,
   staffedIntervals: { type: "array", items: object({ startsAt: str, endsAt: str }), maxItems: 512 },
@@ -48,8 +52,7 @@ const afterHoursAuditPage = optional({ entries: array(optional({ version: key, m
 const actionKind = choice("book", "cancel", "reschedule", "intake");
 const actionStatus = choice("awaitingConfirmation", "ready", "dispatched", "committed", "rejected",
   "unsupported", "uncertain", "needsReview", "canceled");
-const staffReason = choice("callerRequested", "verificationFailed", "unsupported", "uncertainAction",
-  "partialIntake", "systemFailure", "transferFailed", "emergencyStopped");
+const staffReason = choice(...STAFF_REASONS);
 const writeStop = optional({ stopped: bool, version: key, actorRef: key, reason: nonEmpty,
   changedAt: str, inFlight: array(object({ effectId: key, callId: key, actionKey: key,
     status: choice("possiblySent", "uncertain") })), nextAfterEffectId: key }, ["stopped", "version", "inFlight"]);

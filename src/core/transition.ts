@@ -6,6 +6,7 @@ import { addStaffTask, planStaffChange } from "./staff-work.ts";
 import { staffFallbackText, staffRequestNotice } from "./staff-fallback.ts";
 import { staffedForTransfer, staffingWindowStatus } from "./staffed-window.ts";
 import { approvedAfterHoursText } from "./after-hours-policy.ts";
+import { urgentHandoffNotice } from "./urgent-response.ts";
 import { SILENCE_FINAL_NOTICE, SILENCE_RETRY_NOTICE } from "./silence-notices.ts";
 import { validCallKnowledgeSource } from "./knowledge-evidence.ts";
 import { acceptModelKnowledge, acceptModelResult, cancelModelWork } from "./model-result.ts";
@@ -268,10 +269,14 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
     }
     case "handoff":
       addStaffTask(state, interpretation.reason, now);
-      state.callerMessages.push(staffRequestNotice(state));
+      state.callerMessages.push(interpretation.reason === "potentiallyUrgent"
+        ? urgentHandoffNotice(state, now) : staffRequestNotice(state));
       break;
     case "transfer": {
-      if (turn.quality !== "clear") {
+      if (interpretation.reason === "potentiallyUrgent") {
+        addStaffTask(state, interpretation.reason, now);
+        state.callerMessages.push(urgentHandoffNotice(state, now));
+      } else if (turn.quality !== "clear") {
         addStaffTask(state, "verificationFailed", now);
         state.callerMessages.push(staffFallbackText(state, "I can't confirm the transfer request safely. I'll request staff follow-up."));
       } else if (state.policy.capabilities.transfer === "execute" && state.policy.transferDestinationRef?.trim() && staffedForTransfer(state.policy, now)) {

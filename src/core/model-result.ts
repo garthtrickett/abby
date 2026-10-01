@@ -5,6 +5,7 @@ import { err, ok } from "./model.ts";
 import type { CallState, Result, TransitionAction, TransitionFailure } from "./model.ts";
 import { addStaffTask } from "./staff-work.ts";
 import { staffFallbackText, staffRequestNotice } from "./staff-fallback.ts";
+import { urgentHandoffNotice } from "./urgent-response.ts";
 
 function sourceDigest(refs: readonly string[]): string {
   return createHash("sha256").update(JSON.stringify(refs)).digest("hex");
@@ -48,7 +49,8 @@ export function acceptModelResult(state: CallState, action: Extract<TransitionAc
       "I couldn't understand that safely. I'll request staff follow-up."));
   } else if (proposal?.ok && proposal.value.kind === "handoff") {
     addStaffTask(state, proposal.value.reason, now);
-    effectNotice(state, effect.id, staffRequestNotice(state));
+    effectNotice(state, effect.id, proposal.value.reason === "potentiallyUrgent"
+      ? urgentHandoffNotice(state, now) : staffRequestNotice(state));
   } else if (proposal?.ok && proposal.value.kind === "answer") {
     const id = `${effect.id}:knowledge`;
     state.effects[id] = { kind: "modelKnowledge", schemaVersion: 1, id, taskRef: effect.taskRef, turnId: effect.turnId,

@@ -1,4 +1,4 @@
-import { CALL_TERMINAL_REASONS, err, ok } from "../core/model.ts";
+import { CALL_TERMINAL_REASONS, STAFF_REASONS, err, ok } from "../core/model.ts";
 import type { ActionState, CallState, CallTerminal, LocationScope, Result, StaffItem, TransitionFailure } from "../core/model.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 
@@ -16,7 +16,6 @@ export type CallSummary = Readonly<{
 
 const actionKinds = ["book", "cancel", "reschedule", "intake"] as const;
 const actionStatuses = ["awaitingConfirmation", "ready", "dispatched", "committed", "rejected", "unsupported", "uncertain", "needsReview", "canceled"] as const;
-const staffReasons = ["callerRequested", "verificationFailed", "unsupported", "uncertainAction", "partialIntake", "systemFailure", "transferFailed"] as const;
 const staffStatuses = ["requested", "open", "acknowledged", "resolved", "needsReview", "failed"] as const;
 
 function allowed(values: readonly string[], value: unknown): boolean {
@@ -30,7 +29,7 @@ export function summarizeCall(call: CallState): Result<CallSummary, TransitionFa
   if (actions.some(item => !item || !allowed(actionKinds, item.kind) || !allowed(actionStatuses, item.status)) ||
       (call.terminal !== undefined && (!call.terminal || call.lifecycle !== "ended" || !CALL_TERMINAL_REASONS.includes(call.terminal.reason) ||
         typeof call.terminal.at !== "string" || !Number.isFinite(Date.parse(call.terminal.at)))) ||
-      staffItems.some(item => !item || !allowed(staffReasons, item.reason) || !allowed(staffStatuses, item.status)) ||
+      staffItems.some(item => !item || !allowed(STAFF_REASONS, item.reason) || !allowed(staffStatuses, item.status)) ||
       !Array.isArray(call.knowledgeAnswers) || call.knowledgeAnswers.some(item => !item ||
         typeof item.sourceRef !== "string" || !item.sourceRef || typeof item.version !== "string" || !item.version ||
         typeof item.ownerRef !== "string" || !item.ownerRef) ||

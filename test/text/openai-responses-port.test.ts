@@ -21,9 +21,10 @@ function completed(proposal: unknown): Response {
   ] });
 }
 
-function port(fetchPort: typeof fetch): OpenAIResponsesPort {
+function port(fetchPort: typeof fetch, proposalVersion?: 1 | 2): OpenAIResponsesPort {
   return new OpenAIResponsesPort({ apiKey: "synthetic-key", model: "configured-model", promptVersion: "prompt-v1",
-    instructions: "Classify the request as a typed proposal. Never claim a booking is confirmed.", fetch: fetchPort });
+    instructions: "Classify the request as a typed proposal. Never claim a booking is confirmed.",
+    ...(proposalVersion === undefined ? {} : { proposalVersion }), fetch: fetchPort });
 }
 
 test("OpenAI Responses adapter sends minimal transient input and accepts one typed proposal", async () => {
@@ -41,6 +42,10 @@ test("OpenAI Responses adapter sends minimal transient input and accepts one typ
     assert.equal(body.text.format.strict, true);
     assert.equal(body.text.format.schema.type, "object");
     assert.equal(body.text.format.schema.properties.proposal.anyOf.length, 4);
+    assert.equal(body.text.format.name, "abby_model_proposal_v1");
+    assert.deepEqual(body.text.format.schema.properties.proposal.anyOf[3].properties.schemaVersion.enum, [1]);
+    assert.deepEqual(body.text.format.schema.properties.proposal.anyOf[3].properties.reason.enum,
+      ["callerRequested", "unsupported"]);
     assert.deepEqual(body.input.map((item: { role: string }) => item.role), ["system", "user"]);
     assert.match(body.input[0].content, /current caller turn supersedes them/);
     assert.deepEqual(JSON.parse(body.input[1].content), { callerText: input.turn.text, approvedKnowledge: input.knowledge });
@@ -51,6 +56,19 @@ test("OpenAI Responses adapter sends minimal transient input and accepts one typ
   const result = await new ModelIngress(port(fake)).propose(input, 1_000);
   assert.deepEqual(result, { ok: true, value: { schemaVersion: 1, kind: "handoff", reason: "callerRequested" } });
   assert.equal(calls, 1);
+});
+
+test("OpenAI Responses adapter opts into urgent proposal version 2 explicitly", async () => {
+  const fake = (async (_url: RequestInfo | URL, init?: RequestInit) => {
+    const format = JSON.parse(String(init?.body)).text.format;
+    assert.equal(format.name, "abby_model_proposal_v2");
+    assert.deepEqual(format.schema.properties.proposal.anyOf[3].properties.schemaVersion.enum, [2]);
+    assert.deepEqual(format.schema.properties.proposal.anyOf[3].properties.reason.enum,
+      ["callerRequested", "unsupported", "potentiallyUrgent"]);
+    return completed({ schemaVersion: 2, kind: "handoff", reason: "potentiallyUrgent" });
+  }) as typeof fetch;
+  assert.deepEqual(await new ModelIngress(port(fake, 2)).propose(input, 1_000),
+    { ok: true, value: { schemaVersion: 2, kind: "handoff", reason: "potentiallyUrgent" } });
 });
 
 test("prior caller turns are bounded transient context in the same unstored request", async () => {

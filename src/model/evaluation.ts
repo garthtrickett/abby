@@ -7,7 +7,7 @@ export type EvaluationExpectation = Readonly<{
   sourceRef?: string;
   target?: "patient" | "appointment" | "offer";
   operation?: "intake" | "book" | "cancel" | "reschedule";
-  reason?: "callerRequested" | "unsupported";
+  reason?: "callerRequested" | "unsupported" | "potentiallyUrgent";
 }>;
 
 export type EvaluationCase = Readonly<{
@@ -69,7 +69,7 @@ export function parseEvaluationCorpus(raw: unknown): EvaluationCorpus {
         throw new Error("invalid lookup expectation");
       if (value.kind === "action" && !["intake", "book", "cancel", "reschedule"].includes(value.operation))
         throw new Error("invalid action expectation");
-      if (value.kind === "handoff" && !["callerRequested", "unsupported"].includes(value.reason))
+      if (value.kind === "handoff" && !["callerRequested", "unsupported", "potentiallyUrgent"].includes(value.reason))
         throw new Error("invalid handoff expectation");
     }
   }

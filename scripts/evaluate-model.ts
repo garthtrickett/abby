@@ -6,7 +6,7 @@ import { OpenAIResponsesPort } from "../src/model/openai-responses-port.ts";
 import { ModelIngress } from "../src/model/proposal.ts";
 
 function argumentsFrom(argv: readonly string[]): Record<string, string> {
-  const allowed = new Set(["model", "prompt-version", "prompt", "corpus", "out", "repeats", "concurrency"]);
+  const allowed = new Set(["model", "prompt-version", "proposal-version", "prompt", "corpus", "out", "repeats", "concurrency"]);
   const values: Record<string, string> = {};
   for (let i = 0; i < argv.length; i += 2) {
     const key = argv[i]?.replace(/^--/, "");
@@ -30,6 +30,8 @@ async function main(): Promise<void> {
   const args = argumentsFrom(process.argv.slice(2));
   const apiKey = process.env.ABBY_OPENAI_API_KEY;
   if (!apiKey) throw new Error("ABBY_OPENAI_API_KEY is required for a live model evaluation");
+  const proposalVersion = args["proposal-version"] === undefined ? 1 : Number(args["proposal-version"]);
+  if (proposalVersion !== 1 && proposalVersion !== 2) throw new Error("invalid proposal version");
   const corpusPath = resolve(args.corpus ?? "eval/model-v1.json");
   const promptPath = resolve(args.prompt ?? `eval/${args["prompt-version"]}.txt`);
   const corpusBytes = await readFile(corpusPath);
@@ -40,7 +42,7 @@ async function main(): Promise<void> {
   const adapterPaths = ["src/model/openai-responses-port.ts", "src/model/proposal.ts", "src/model/evaluation.ts", "scripts/evaluate-model.ts"];
   const adapterBytes = await Promise.all(adapterPaths.map(path => readFile(resolve(path))));
   const ingress = new ModelIngress(new OpenAIResponsesPort({ apiKey, model: args.model!,
-    promptVersion: args["prompt-version"]!, instructions: prompt }));
+    promptVersion: args["prompt-version"]!, proposalVersion, instructions: prompt }));
   const repeats = args.repeats === undefined ? 3 : Number(args.repeats);
   const concurrency = args.concurrency === undefined ? 4 : Number(args.concurrency);
   const results = await runModelEvaluation(corpus, ingress, args["prompt-version"]!, repeats, concurrency);
@@ -50,7 +52,7 @@ async function main(): Promise<void> {
     schemaVersion: 1,
     kind: "model-only-evaluation",
     runAt: new Date().toISOString(),
-    configuration: { provider: "openai-responses", model: args.model, promptVersion: args["prompt-version"],
+    configuration: { provider: "openai-responses", model: args.model, promptVersion: args["prompt-version"], proposalVersion,
       promptSha256: hash([promptBytes]), corpusVersion: corpus.version, corpusSha256: hash([corpusBytes]),
       adapterSha256: hash(adapterBytes), nodeVersion: process.version, repeats, concurrency },
     counts,

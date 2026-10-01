@@ -5,41 +5,43 @@ const ENDPOINT = "https://api.openai.com/v1/responses";
 const MAX_RESPONSE_BYTES = 64 * 1024;
 
 const nullableString = { type: ["string", "null"] } as const;
-const proposalSchema = {
+function proposalSchema(version: 1 | 2) { return {
   type: "object",
   properties: {
     proposal: {
       anyOf: [
         { type: "object", additionalProperties: false,
-          properties: { schemaVersion: { type: "integer", enum: [1] }, kind: { type: "string", enum: ["answer"] },
+          properties: { schemaVersion: { type: "integer", enum: [version] }, kind: { type: "string", enum: ["answer"] },
             sourceRefs: { type: "array", items: { type: "string" } }, proposedText: { type: "string" } },
           required: ["schemaVersion", "kind", "sourceRefs", "proposedText"] },
         { type: "object", additionalProperties: false,
-          properties: { schemaVersion: { type: "integer", enum: [1] }, kind: { type: "string", enum: ["lookup"] },
+          properties: { schemaVersion: { type: "integer", enum: [version] }, kind: { type: "string", enum: ["lookup"] },
             target: { type: "string", enum: ["patient", "appointment", "offer"] },
             statedName: nullableString, statedDate: nullableString, requestedService: nullableString,
             requestedLocationId: nullableString },
           required: ["schemaVersion", "kind", "target", "statedName", "statedDate", "requestedService", "requestedLocationId"] },
         { type: "object", additionalProperties: false,
-          properties: { schemaVersion: { type: "integer", enum: [1] }, kind: { type: "string", enum: ["action"] },
+          properties: { schemaVersion: { type: "integer", enum: [version] }, kind: { type: "string", enum: ["action"] },
             operation: { type: "string", enum: ["intake", "book", "cancel", "reschedule"] },
             targetRef: nullableString, requestedService: nullableString, requestedTime: nullableString },
           required: ["schemaVersion", "kind", "operation", "targetRef", "requestedService", "requestedTime"] },
         { type: "object", additionalProperties: false,
-          properties: { schemaVersion: { type: "integer", enum: [1] }, kind: { type: "string", enum: ["handoff"] },
-            reason: { type: "string", enum: ["callerRequested", "unsupported"] } },
+          properties: { schemaVersion: { type: "integer", enum: [version] }, kind: { type: "string", enum: ["handoff"] },
+            reason: { type: "string", enum: version === 2
+              ? ["callerRequested", "unsupported", "potentiallyUrgent"] : ["callerRequested", "unsupported"] } },
           required: ["schemaVersion", "kind", "reason"] },
       ],
     },
   },
   required: ["proposal"],
   additionalProperties: false,
-} as const;
+} as const; }
 
 export type OpenAIResponsesPortConfig = Readonly<{
   apiKey: string;
   model: string;
   promptVersion: string;
+  proposalVersion?: 1 | 2;
   instructions: string;
   fetch?: typeof fetch;
 }>;
@@ -100,7 +102,9 @@ export class OpenAIResponsesPort implements RawModelPort {
   constructor(config: OpenAIResponsesPortConfig) {
     if (!config.apiKey.trim() || /[\r\n]/.test(config.apiKey) || !config.model.trim() || config.model.length > 256 ||
         !config.promptVersion.trim() || config.promptVersion.length > 128 ||
-        !config.instructions.trim() || config.instructions.length > 10_000) throw new Error("invalid model port configuration");
+        !config.instructions.trim() || config.instructions.length > 10_000 ||
+        (config.proposalVersion !== undefined && config.proposalVersion !== 1 && config.proposalVersion !== 2))
+      throw new Error("invalid model port configuration");
     this.config = config;
     this.fetchPort = config.fetch ?? fetch;
   }
@@ -121,7 +125,8 @@ export class OpenAIResponsesPort implements RawModelPort {
             ...(input.priorCallerTurns?.length ? { priorCallerTurns: input.priorCallerTurns } : {}),
             callerText: input.turn.text, approvedKnowledge: input.knowledge }) },
         ],
-        text: { format: { type: "json_schema", name: "abby_model_proposal_v1", strict: true, schema: proposalSchema } },
+        text: { format: { type: "json_schema", name: `abby_model_proposal_v${this.config.proposalVersion ?? 1}`,
+          strict: true, schema: proposalSchema(this.config.proposalVersion ?? 1) } },
         store: false,
         max_output_tokens: 512,
         tool_choice: "none",
