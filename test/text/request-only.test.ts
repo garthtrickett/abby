@@ -4,8 +4,10 @@ import { now, setup } from "./fixture.ts";
 
 test("TXT-05 request-only reschedule and intake open staff tasks, never PMS writes", async () => {
   const app = await setup("request-only", { intake: "requestOnly" });
-  const target = { scope: app.scope, appointmentRef: "appointment-1", patientRef: app.patient.patientRef };
-  await app.turn("reschedule", "Move my appointment", { kind: "requestAction", request: { kind: "reschedule", patient: app.patient, target, offer: app.offer() } });
+  const target = { scope: app.scope, appointmentRef: "appointment-1", patientRef: app.patient.patientRef,
+    startsAt: "2026-09-29T10:00:00.000Z", endsAt: "2026-09-29T10:30:00.000Z", timeZone: "Australia/Sydney" };
+  const terms = { version: "terms-1", approvedText: "No rescheduling fee applies.", expiresAt: "2026-09-29T10:00:00.000Z" };
+  await app.turn("reschedule", "Move my appointment", { kind: "requestAction", request: { kind: "reschedule", patient: app.patient, target, offer: app.offer(), terms } });
   await app.turn("intake", "Register me", { kind: "requestAction", request: app.intake });
   assert.equal(Object.values((await app.state()).effects).filter(effect => effect.kind === "hostWrite").length, 0);
   const items = Object.values((await app.state()).staffItems);

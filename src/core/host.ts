@@ -1,7 +1,7 @@
 import type { ActionRequest, ApprovedKnowledge, AppointmentRead, AppointmentReadFailure, AvailabilityRead, AvailabilityReadFailure, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, OperatorAlert, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
 import type { ReadinessFailure } from "./readiness.ts";
 
-export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable"; target: "patient" | "offer" }>;
+export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable"; target: "patient" | "offer" | "appointment" }>;
 export type PolicyFailure = Readonly<{ kind: "versionConflict" | "invalidValue" | "storageFailure" }> | ReadinessFailure;
 export type AutomationSettingAuditEntry = Readonly<{
   version: string;
@@ -45,6 +45,21 @@ export interface AppointmentHost {
 
 export interface BookingEvidenceHost {
   resolveBooking(scope: LocationScope, verificationRef: string, offerRef: string, now: string): Promise<Result<Extract<ActionRequest, { kind: "book" }>, HostReadFailure>>;
+}
+
+/** Opaque selections and proof are resolved by the host; neither is a provider ID from the model. */
+export type AppointmentChangeSelection = Readonly<{ verificationRef: string; targetRef: string }> &
+  (Readonly<{ kind: "cancel" }> | Readonly<{ kind: "reschedule"; offerRef: string }>);
+export type AppointmentChangeEvidenceQuery = Readonly<{
+  scope: LocationScope;
+  callId: string;
+  sessionId: string;
+  policyVersion: string;
+  now: string;
+}> & AppointmentChangeSelection;
+export interface AppointmentChangeEvidenceHost {
+  resolveAppointmentChange(query: AppointmentChangeEvidenceQuery): Promise<Result<Extract<ActionRequest,
+    { kind: "cancel" | "reschedule" }>, HostReadFailure>>;
 }
 
 /** Only a trusted host may turn a call-scoped draft reference into approved intake evidence. */

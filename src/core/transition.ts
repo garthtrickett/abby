@@ -42,12 +42,26 @@ function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
 }
 
+function appointmentTime(instant: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-AU", { timeZone, weekday: "long", day: "numeric", month: "long",
+    hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "long" }).format(new Date(instant));
+}
+
 function describe(request: ActionRequest): string {
   switch (request.kind) {
     case "book": return `Please confirm the ${request.offer.serviceRef} appointment at ${request.offer.startsAt}.`;
-    case "cancel": return `Please confirm cancellation of appointment ${request.target.appointmentRef}.`;
-    case "reschedule": return `Please confirm moving appointment ${request.target.appointmentRef} to ${request.offer.startsAt}.`;
+    case "cancel": return `Please confirm cancellation of your appointment on ${appointmentTime(request.target.startsAt, request.target.timeZone)}. ${request.terms.approvedText}`;
+    case "reschedule": return `Please confirm moving your appointment on ${appointmentTime(request.target.startsAt, request.target.timeZone)} to ${appointmentTime(request.offer.startsAt, request.target.timeZone)}. ${request.terms.approvedText}`;
     case "intake": return "Please confirm that your approved intake details may be saved. This does not book an appointment.";
+  }
+}
+
+function confirmedActionText(kind: ActionRequest["kind"]): string {
+  switch (kind) {
+    case "book": return "Your booking is confirmed.";
+    case "cancel": return "Your appointment cancellation is confirmed.";
+    case "reschedule": return "Your appointment move is confirmed.";
+    case "intake": return "Your details were saved. No appointment is confirmed yet.";
   }
 }
 
@@ -55,21 +69,56 @@ function requestScope(request: ActionRequest): LocationScope {
   return request.kind === "intake" ? request.scope : request.patient.scope;
 }
 
+/** Shared check for a host-issued appointment change before speech and again before dispatch. */
+export function appointmentChangeEvidenceFailure(scope: LocationScope,
+  request: Extract<ActionRequest, { kind: "cancel" | "reschedule" }>, now: string): TransitionFailure | undefined {
+  if (!request.patient || !request.target || !request.terms ||
+      typeof request.patient !== "object" || typeof request.target !== "object" ||
+      typeof request.terms !== "object") return { kind: "invalidTransition" };
+  if (!request.patient.scope || !request.target.scope || !sameScope(scope, request.patient.scope) ||
+      !sameScope(scope, request.target.scope) || request.target.patientRef !== request.patient.patientRef ||
+      (request.kind === "reschedule" && (!request.offer?.scope || !sameScope(scope, request.offer.scope)))) {
+    return { kind: "scopeMismatch" };
+  }
+  const current = Date.parse(now);
+  const proofExpiry = Date.parse(request.patient.expiresAt);
+  const offerExpiry = request.kind === "reschedule" ? Date.parse(request.offer.expiresAt) : Infinity;
+  const termsExpiry = Date.parse(request.terms.expiresAt);
+  if (!Number.isFinite(current) || !Number.isFinite(proofExpiry) ||
+      (request.kind === "reschedule" && !Number.isFinite(offerExpiry)) || !Number.isFinite(termsExpiry)) {
+    return { kind: "invalidTransition" };
+  }
+  if (proofExpiry <= current || offerExpiry <= current || termsExpiry <= current) return { kind: "evidenceExpired" };
+  const start = Date.parse(request.target.startsAt);
+  const end = Date.parse(request.target.endsAt);
+  const newStart = request.kind === "reschedule" ? Date.parse(request.offer.startsAt) : undefined;
+  if (typeof request.target.appointmentRef !== "string" || !request.target.appointmentRef.trim() ||
+      !Number.isFinite(start) || !Number.isFinite(end) || end <= start ||
+      typeof request.target.timeZone !== "string" || !request.target.timeZone.trim() || request.target.timeZone.length > 128 ||
+      typeof request.terms.version !== "string" || !request.terms.version.trim() || request.terms.version.length > 256 ||
+      typeof request.terms.approvedText !== "string" || !request.terms.approvedText.trim() ||
+      request.terms.approvedText.length > 500 || /[\u0000-\u001f\u007f]/.test(request.terms.approvedText) ||
+      (request.kind === "reschedule" && (!Number.isFinite(newStart) || newStart === start))) {
+    return { kind: "invalidTransition" };
+  }
+  try { appointmentTime(request.target.startsAt, request.target.timeZone); }
+  catch { return { kind: "invalidTransition" }; }
+  return undefined;
+}
+
 function evidenceFailure(state: CallState, request: ActionRequest, now: string): TransitionFailure | undefined {
+  if (request.kind === "cancel" || request.kind === "reschedule") {
+    return appointmentChangeEvidenceFailure(state.policy.scope, request, now);
+  }
   if (!sameScope(state.policy.scope, requestScope(request))) return { kind: "scopeMismatch" };
   if (request.kind === "intake") {
     if (!request.approvedDraftRef || !request.consentRef || !request.duplicateCheckRef) return { kind: "invalidTransition" };
     return undefined;
   }
   if (Date.parse(request.patient.expiresAt) <= Date.parse(now)) return { kind: "evidenceExpired" };
-  if (request.kind === "book" || request.kind === "reschedule") {
+  if (request.kind === "book") {
     if (!sameScope(state.policy.scope, request.offer.scope)) return { kind: "scopeMismatch" };
     if (Date.parse(request.offer.expiresAt) <= Date.parse(now)) return { kind: "evidenceExpired" };
-  }
-  if (request.kind === "cancel" || request.kind === "reschedule") {
-    if (!sameScope(state.policy.scope, request.target.scope) || request.target.patientRef !== request.patient.patientRef) {
-      return { kind: "scopeMismatch" };
-    }
   }
   return undefined;
 }
@@ -214,7 +263,12 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       if (interpretation.digest !== action.digest) return err({ kind: "digestChanged" });
       if (state.presentations[action.presentationId]?.status !== "played") return err({ kind: "confirmationMissing" });
       const evidence = evidenceFailure(state, action.mutation.request, now);
-      if (evidence) return err(evidence);
+      if (evidence) {
+        if (action.kind !== "cancel" && action.kind !== "reschedule") return err(evidence);
+        state.actions[action.key] = { ...action, status: "canceled" };
+        state.callerMessages.push("I can't verify the appointment and fee details now. No change was made. Please contact the clinic.");
+        break;
+      }
       state.actions[action.key] = { ...action, status: "ready" };
       state.effects[`${action.key}:write`] = { kind: "hostWrite", id: `${action.key}:write`, actionKey: action.key, mutation: action.mutation, status: "pending" };
       break;
@@ -248,10 +302,14 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       break;
     case "readFailure":
       if (interpretation.failure === "notFound") {
-        state.callerMessages.push(interpretation.target === "patient" ? "I couldn't find a matching patient." : "I couldn't find an eligible time.");
+        state.callerMessages.push(interpretation.target === "patient" ? "I couldn't find a matching patient."
+          : interpretation.target === "appointment" ? "I couldn't identify that appointment safely."
+            : "I couldn't find an eligible time.");
       } else {
         addStaffTask(state, "systemFailure", now);
-        state.callerMessages.push(interpretation.target === "patient" ? "I can't check patient records right now." : "I can't check available times right now.");
+        state.callerMessages.push(interpretation.target === "patient" ? "I can't check patient records right now."
+          : interpretation.target === "appointment" ? "I can't check that appointment right now."
+            : "I can't check available times right now.");
       }
       break;
     case "intakeFailure":
@@ -342,9 +400,7 @@ function recordHostResult(state: CallState, effectId: string, receipt: import(".
     if (!receipt.hostRef) return err({ kind: "invalidTransition" });
     state.actions[action.key] = { ...action, status: "committed", hostRef: receipt.hostRef };
     state.effects[effectId] = { ...effect, status: "completed" };
-    hostOutcomeNotice(state, effectId, action.kind === "intake"
-      ? "Your details were saved. No appointment is confirmed yet."
-      : `Your ${action.kind === "book" ? "booking" : "appointment change"} is confirmed.`);
+    hostOutcomeNotice(state, effectId, confirmedActionText(action.kind));
   } else if (receipt.kind === "uncertain") {
     if (!Number.isFinite(Date.parse(receipt.reconcileAfter)) || !Number.isFinite(Date.parse(receipt.deadline)) || Date.parse(receipt.deadline) <= Date.parse(now)) return err({ kind: "invalidTransition" });
     state.actions[action.key] = { ...action, status: "uncertain", reconciliationDeadline: receipt.deadline };
@@ -577,9 +633,7 @@ export function transition(current: CallState, action: TransitionAction): Result
       if (action.observation.kind === "exactCommit") {
         if (!action.observation.hostRef) return err({ kind: "invalidTransition" });
         state.actions[linked.key] = { ...linked, status: "committed", hostRef: action.observation.hostRef };
-        hostOutcomeNotice(state, effect.id, linked.kind === "intake"
-          ? "Your details were saved. No appointment is confirmed yet."
-          : `Your ${linked.kind === "book" ? "booking" : "appointment change"} is confirmed.`);
+        hostOutcomeNotice(state, effect.id, confirmedActionText(linked.kind));
       } else if (action.observation.kind === "definitiveNonCommit") {
         state.actions[linked.key] = { ...linked, status: "rejected" };
         hostOutcomeNotice(state, effect.id, "That action was not completed.");

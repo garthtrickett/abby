@@ -21,7 +21,9 @@ test("database canary scan identifies current patient-data leaks without returni
   await app.confirm(pending.key);
   await app.turn("cancel-turn", "Please cancel", { kind: "requestAction", request: {
     kind: "cancel", patient: app.patient,
-    target: { scope: app.scope, patientRef: app.patient.patientRef, appointmentRef },
+    target: { scope: app.scope, patientRef: app.patient.patientRef, appointmentRef,
+      startsAt: "2026-09-29T11:00:00.000Z", endsAt: "2026-09-29T11:30:00.000Z", timeZone: "Australia/Sydney" },
+    terms: { version: "terms-1", approvedText: "No cancellation fee applies.", expiresAt: "2026-09-29T10:00:00.000Z" },
   } });
 
   const scan = await scanPatientDataCanaries(db, [

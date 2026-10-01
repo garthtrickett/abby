@@ -575,15 +575,16 @@ test("standalone patient actions stay unavailable without durable host work", { 
   assert.match(appointments.callerMessages.at(-1) ?? "", /contact the clinic directly/);
   const appointmentRef = "private-appointment-canary-3825";
   const draftRef = "private-intake-canary-4163";
+  const target = { scope, patientRef: patient.patientRef, appointmentRef,
+    startsAt: "2026-09-29T10:00:00.000Z", endsAt: "2026-09-29T10:30:00.000Z", timeZone: "Australia/Sydney" };
+  const terms = { version: "terms-1", approvedText: "No change fee applies.", expiresAt };
   const runtime = new CallRuntime(new PostgresLedger(db!, undefined, undefined, "standaloneText"), scope);
   const cancel = value(await runtime.acceptTurn(turn(callId, randomUUID(), "Cancel my appointment"), {
-    kind: "requestAction", request: { kind: "cancel", patient,
-      target: { scope, patientRef: patient.patientRef, appointmentRef } },
+    kind: "requestAction", request: { kind: "cancel", patient, target, terms },
   }, now));
   assert.deepEqual(Object.keys(cancel.staffItems), []);
   const reschedule = value(await runtime.acceptTurn(turn(callId, randomUUID(), "Move my appointment"), {
-    kind: "requestAction", request: { kind: "reschedule", patient,
-      target: { scope, patientRef: patient.patientRef, appointmentRef }, offer },
+    kind: "requestAction", request: { kind: "reschedule", patient, target, offer, terms },
   }, now));
   assert.deepEqual(Object.keys(reschedule.actions), []);
   const intake = value(await runtime.acceptTurn(turn(callId, randomUUID(), "I am a new patient"), {

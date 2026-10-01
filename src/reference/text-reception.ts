@@ -1,17 +1,17 @@
 import { EffectWorker } from "../core/effect-worker.ts";
 import { EffectCallLeaseCoordinator } from "../core/effect-call-lease.ts";
 import type { EffectCallLeaseStore } from "../core/effect-call-lease.ts";
-import type { AppointmentHost, AvailabilityHost, BookingEvidenceHost, HostEffects, IntakeEvidenceHost, KnowledgeHost, ModelKnowledgeContextHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
+import type { AppointmentChangeEvidenceHost, AppointmentChangeEvidenceQuery, AppointmentChangeSelection, AppointmentHost, AvailabilityHost, BookingEvidenceHost, HostEffects, IntakeEvidenceHost, KnowledgeHost, ModelKnowledgeContextHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
 import { captureKnowledgeSnapshot, validCallKnowledgeSource, validKnowledgeSource } from "../core/knowledge-evidence.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err } from "../core/model.ts";
 import type { CallState, FinalCallerTurn, LocationScope, Result, StaffChangeRequest, TransitionFailure, TurnInterpretation } from "../core/model.ts";
 import { CallRuntime } from "../core/runtime.ts";
-import { noticePresentationId } from "../core/transition.ts";
+import { appointmentChangeEvidenceFailure, noticePresentationId } from "../core/transition.ts";
 import { modelTaskRef } from "../model/work.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 function validIntakeRef(value: unknown): value is string {
@@ -155,6 +155,50 @@ export class TextReception {
         interpretation = { kind: "ambiguousTarget" };
       } else {
         interpretation = { kind: "readFailure", target: evidence.error.target, failure: evidence.error.kind === "unavailable" ? "unavailable" : "notFound" };
+      }
+    }
+    return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);
+  }
+
+  async proposeAppointmentChange(scope: LocationScope, turn: FinalCallerTurn,
+                                 selection: AppointmentChangeSelection,
+                                 now: string, expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
+    const runtime = this.runtime(scope);
+    const current = await runtime.read(turn.callId);
+    if (!current.ok) return current;
+    if (!selection || (selection.kind !== "cancel" && selection.kind !== "reschedule")) {
+      return runtime.acceptTurn(turn, { kind: "ambiguousTarget" }, now, expectedConversationRevision);
+    }
+    if (current.value.policy.capabilities[selection.kind] === "unavailable" || !this.host.resolveAppointmentChange) {
+      return runtime.acceptTurn(turn, { kind: "unavailableAction", actionKind: selection.kind }, now, expectedConversationRevision);
+    }
+    let interpretation: TurnInterpretation;
+    if (turn.quality !== "clear" || !turn.sessionId ||
+        current.value.sessionLease?.sessionId !== turn.sessionId ||
+        !validIntakeRef(selection.verificationRef) || !validIntakeRef(selection.targetRef) ||
+        (selection.kind === "reschedule" && !validIntakeRef(selection.offerRef))) {
+      interpretation = { kind: "ambiguousTarget" };
+    } else {
+      try {
+        const context = { scope, callId: turn.callId, sessionId: turn.sessionId,
+          policyVersion: current.value.policy.policyVersion, now };
+        const query: AppointmentChangeEvidenceQuery = selection.kind === "cancel"
+          ? { ...context, kind: "cancel", verificationRef: selection.verificationRef,
+            targetRef: selection.targetRef }
+          : { ...context, kind: "reschedule", verificationRef: selection.verificationRef,
+            targetRef: selection.targetRef, offerRef: selection.offerRef };
+        const evidence = await this.host.resolveAppointmentChange(query);
+        if (!evidence.ok) {
+          interpretation = evidence.error.kind === "ambiguous" || evidence.error.kind === "expired"
+            ? { kind: "ambiguousTarget" }
+            : { kind: "readFailure", target: evidence.error.target,
+              failure: evidence.error.kind === "unavailable" ? "unavailable" : "notFound" };
+        } else if (evidence.value.kind !== selection.kind ||
+                   appointmentChangeEvidenceFailure(scope, evidence.value, now)) {
+          interpretation = { kind: "readFailure", target: "appointment", failure: "unavailable" };
+        } else interpretation = { kind: "requestAction", request: evidence.value };
+      } catch {
+        interpretation = { kind: "readFailure", target: "appointment", failure: "unavailable" };
       }
     }
     return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);
