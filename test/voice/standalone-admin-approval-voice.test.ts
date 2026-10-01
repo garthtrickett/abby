@@ -44,7 +44,7 @@ async function waitFor(check: () => boolean, label: string): Promise<void> {
   assert.ok(check(), `${label} timed out`);
 }
 
-test("E2E-212 durable admin approval reaches a separate signed voice runner and revocation blocks the next call",
+test("E2E-212 durable admin approval pins an active signed call and revocation blocks the next call",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
     const adminUrl = process.env.DATABASE_URL;
     assert.ok(adminUrl);
@@ -196,16 +196,6 @@ test("E2E-212 durable admin approval reaches a separate signed voice runner and 
       await waitFor(() => messages.length >= 2, "approved greeting");
       socket.send(JSON.stringify({ event: "mark", sequenceNumber: "2", streamSid,
         mark: { name: (messages[1]!.mark as { name: string }).name } }));
-      socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid,
-        dtmf: { track: "inbound_track", digit: "2" } }));
-      await waitFor(() => messages.length >= 4 && speech.length >= 2, "approved availability");
-      assert.match(speech[1]!, /possible times/);
-      assert.match(speech[1]!, /can't reserve or confirm/);
-      assert.ok(methods.length >= 6 && methods.every(method => method === "GET"));
-      const socketClosed = once(socket, "close");
-      socket.close();
-      await socketClosed;
-      socket = undefined;
 
       const secondOrigin = await openAdmin();
       const current = await adminRequest(secondOrigin, { kind: "clinic.availability.approval.read.v1" });
@@ -214,8 +204,21 @@ test("E2E-212 durable admin approval reaches a separate signed voice runner and 
       assert.equal(state.value.state.version, 1);
       assert.ok(state.value.state.approval);
       assert.equal((await adminRequest(secondOrigin, { kind: "clinic.availability.approval.revoke.v1",
+        expectedVersion: 0 })).status, 409);
+      assert.equal((await adminRequest(secondOrigin, { kind: "clinic.availability.approval.revoke.v1",
         expectedVersion: 1 })).status, 200);
       await closeAdmin();
+      const methodsBeforeKeypad = methods.length;
+      socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid,
+        dtmf: { track: "inbound_track", digit: "2" } }));
+      await waitFor(() => messages.length >= 4 && speech.length >= 2, "approved availability");
+      assert.match(speech[1]!, /possible times/);
+      assert.match(speech[1]!, /can't reserve or confirm/);
+      assert.ok(methods.length > methodsBeforeKeypad && methods.every(method => method === "GET"));
+      const socketClosed = once(socket, "close");
+      socket.close();
+      await socketClosed;
+      socket = undefined;
       const readCount = methods.length;
       const rejected = await webhook(`CA${randomUUID().replaceAll("-", "")}`);
       assert.equal(rejected.status, 503);
