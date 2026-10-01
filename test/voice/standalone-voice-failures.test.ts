@@ -607,7 +607,17 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
       await sql.raw(`alter database "${fixture.databaseName}" with allow_connections false`).execute(fixture.admin);
       await sql`select pg_terminate_backend(pid) from pg_stat_activity where datname = ${fixture.databaseName}`.execute(fixture.admin);
       assert.equal((await bounded(call.closed, "database loss close"))[0], 1011);
-      assert.equal((await fetch(`http://127.0.0.1:${fixture.port}/healthz`)).status, 503);
+      let health: Response;
+      try {
+        health = await fetch(`http://127.0.0.1:${fixture.port}/healthz`,
+          { signal: AbortSignal.timeout(5_000) });
+      } catch (error) {
+        const cause = error instanceof Error && error.cause instanceof Error
+          ? error.cause as Error & { code?: string } : undefined;
+        throw new Error(`database-loss health request failed: runner exit=${fixture.child.exitCode ?? "running"}, ` +
+          `signal=${fixture.child.signalCode ?? "none"}, cause=${cause?.code ?? cause?.name ?? "unknown"}`);
+      }
+      assert.equal(health.status, 503);
     })),
     t.test("E2E-177 E2E-197 abrupt exit drops the stream and refuses the next ingress", async () => withFixture(undefined, async fixture => {
       const call = await fixture.openCall();

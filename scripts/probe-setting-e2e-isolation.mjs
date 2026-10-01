@@ -9,8 +9,10 @@ const cases = [
   { id: "E2E-004", file: "test/voice/embedded-knowledge-approval-call.test.ts" },
   { id: "E2E-004", file: "test/composition/embedded-knowledge-signed-voice.test.ts" },
   { id: "E2E-010", file: "test/voice/embedded-booking-setting-call.test.ts" },
+  { id: "E2E-074", file: "test/voice/embedded-booking-setting-call.test.ts" },
   { id: "E2E-018", file: "test/voice/automation-toggle-call.test.ts" },
   { id: "E2E-074", file: "test/voice/voice.test.ts" },
+  { id: "E2E-226", file: "test/voice/embedded-cliniko-booking-host-call.test.ts" },
 ];
 
 for (const { id, file } of cases) {
@@ -43,7 +45,7 @@ for (const { id, file } of cases) {
   process.stdout.write(`alone ${id} ${file}: ${result.pass} passed, ${result.fail} failed\n`);
 }
 
-const files = cases.map(item => item.file);
+const files = [...new Set(cases.map(item => item.file))];
 const pattern = [...new Set(cases.map(item => item.id))].join("|");
 for (const [label, order] of [["forward", files], ["reverse", [...files].reverse()]]) {
   const result = await run(order, pattern, 4);

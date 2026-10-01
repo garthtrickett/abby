@@ -13,6 +13,9 @@ export type ClinikoBookingConfig = Readonly<{
   rateBudget?: ClinikoRequestBudget;
 }>;
 
+export type ClinikoBookingSelection = Readonly<Pick<ClinikoBookingConfig,
+  "scope" | "businessId" | "practitionerId" | "appointmentTypeId">>;
+
 /** The host must resolve proof, offer, policy, and caller confirmation before constructing this request. */
 export type ClinikoBookingRequest = Readonly<{
   scope: LocationScope;
@@ -153,6 +156,11 @@ export class ClinikoBookingWriter {
         typeof fetchPort !== "function" || typeof clock !== "function" ||
         (config.rateBudget !== undefined && !isClinikoRequestBudget(config.rateBudget))) return err({ kind: "invalidConfig" });
     return ok(new ClinikoBookingWriter(config, shard, fetchPort, clock));
+  }
+
+  /** Public provider IDs only; the booking host binds its exact offer to this writer. */
+  selection(): ClinikoBookingSelection {
+    return { scope: structuredClone(this.scope), ...this.config };
   }
 
   private matches(row: Record<string, unknown>, request: ClinikoBookingRequest): boolean {
