@@ -9,6 +9,10 @@ import { parseTranscriptionEvaluationCorpus } from "../src/voice/transcription-e
 import type { TranscriptionEvaluationResult } from "../src/voice/transcription-evaluation.ts";
 
 const names = ["telephony", "noise", "safety", "speech"] as const;
+const speechProfiles = {
+  default: { primaryModel: "gpt-4o-mini-tts", fallbackModel: "tts-1", primaryFirstChunkMs: 1_500 },
+  "tts-1-primary-v1": { primaryModel: "tts-1", fallbackModel: "tts-1", primaryFirstChunkMs: 2_500 },
+} as const;
 const transcriptionSources = ["src/voice/openai-realtime-transcription.ts",
   "src/voice/transcription-evaluation.ts", "src/voice/transcription-evaluation-gate.ts",
   "scripts/evaluate-transcription.ts"];
@@ -16,19 +20,27 @@ const speechSources = ["src/voice/openai-speech-synthesis.ts",
   "src/voice/first-chunk-fallback-speech.ts", "src/voice/streamed-playback-port.ts",
   "src/voice/speech-latency-gate.ts", "scripts/evaluate-first-chunk-fallback.ts"];
 
-function argsFrom(argv: readonly string[]): Record<typeof names[number], string> {
-  if (argv.length !== names.length * 2) throw new Error("four report paths required");
-  const args: Partial<Record<typeof names[number], string>> = {};
+function argsFrom(argv: readonly string[]): Record<typeof names[number], string> &
+    Readonly<{ speechProfile: keyof typeof speechProfiles }> {
+  if (argv.length !== names.length * 2 && argv.length !== names.length * 2 + 2) {
+    throw new Error("four report paths required");
+  }
+  const args: Partial<Record<typeof names[number] | "speech-profile", string>> = {};
   for (let index = 0; index < argv.length; index += 2) {
-    const key = argv[index]?.replace(/^--/, "") as typeof names[number];
+    const key = argv[index]?.replace(/^--/, "") as typeof names[number] | "speech-profile";
     const path = argv[index + 1];
-    if (!argv[index]?.startsWith("--") || !names.includes(key) || !path || args[key]) {
+    if (!argv[index]?.startsWith("--") || (key !== "speech-profile" && !names.includes(key)) ||
+        !path || args[key]) {
       throw new Error("invalid report argument");
     }
     args[key] = path;
   }
-  if (names.some(name => !args[name])) throw new Error("missing report");
-  return args as Record<typeof names[number], string>;
+  if (names.some(name => !args[name]) ||
+      (args["speech-profile"] !== undefined && !Object.hasOwn(speechProfiles, args["speech-profile"]))) {
+    throw new Error("missing report or invalid speech profile");
+  }
+  return { telephony: args.telephony!, noise: args.noise!, safety: args.safety!, speech: args.speech!,
+    speechProfile: (args["speech-profile"] ?? "default") as keyof typeof speechProfiles };
 }
 function digest(value: Uint8Array): string { return createHash("sha256").update(value).digest("hex"); }
 async function sourceHash(paths: readonly string[]): Promise<string> {
@@ -72,19 +84,27 @@ async function main(): Promise<void> {
   }
   const current = await report(args.speech);
   const config = object(current.configuration);
+  const profile = speechProfiles[args.speechProfile];
   const speechCorpus = await readFile(resolve("eval/speech-loop-v1.json"));
   const parsedSpeechCorpus = parseSpeechLoopCorpus(JSON.parse(speechCorpus.toString("utf8")) as unknown);
   if (current.kind !== "speech-first-chunk-fallback-evaluation" ||
       config.corpusVersion !== "speech-loop-v1" || config.corpusSha256 !== digest(speechCorpus) ||
-      config.sourceSha256 !== speechHash || config.primaryModel !== "gpt-4o-mini-tts" ||
-      config.fallbackModel !== "tts-1" || !Array.isArray(current.results)) {
+      config.sourceSha256 !== speechHash || config.primaryModel !== profile.primaryModel ||
+      config.fallbackModel !== profile.fallbackModel ||
+      config.primaryFirstChunkMs !== profile.primaryFirstChunkMs ||
+      config.voice !== "coral" || config.combinedFirstChunkMs !== 5_000 ||
+      config.laterStepMs !== 2_000 || config.maxUtteranceMs !== 20_000 ||
+      config.repeats !== 20 || !Number.isSafeInteger(config.concurrency) ||
+      (config.concurrency as number) < 1 || (config.concurrency as number) > 4 ||
+      !Array.isArray(current.results)) {
     throw new Error("speech report does not match current candidate");
   }
   const speech = assessSyntheticSpeechLatency(current.results as SpeechLatencySample[],
     parsedSpeechCorpus.cases.map(item => item.id));
   summaries.push({ name: "speech", status: speech.status, failures: speech.failures, metrics: speech.metrics });
   const status = summaries.every(item => item.status === "pass") ? "pass" : "fail";
-  process.stdout.write(`${JSON.stringify({ syntheticCandidateGate: status, checks: summaries,
+  process.stdout.write(`${JSON.stringify({ speechProfile: args.speechProfile,
+    syntheticCandidateGate: status, checks: summaries,
     representativeCallGate: "notRun", releaseGate: "unverified" })}\n`);
   if (status !== "pass") process.exitCode = 1;
 }

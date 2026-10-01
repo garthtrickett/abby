@@ -12,6 +12,8 @@ Run the fixed two-message synthesis corpus for **20 distinct repeats per message
 
 `npm run eval:speech-gate -- --telephony <report> --noise <report> --safety <report> --speech <report>` recomputes all four checks from owner-only reports. It verifies the pinned corpus and current adapter source hashes, rejects stale reports, prints only aggregate metrics, and exits nonzero if any check fails. It always reports `releaseGate: unverified`.
 
+For the separate `tts-1` primary latency candidate, pass `--speech-profile tts-1-primary-v1` with a report produced by `npm run eval:speech-fallback -- --primary-model tts-1 --fallback-model tts-1 --primary-first-chunk-ms 2500 --repeats 20 --concurrency 4 --out <owner-only-report>`. The assessor pins those exact models, voice, deadlines, corpus, source hash and job count; the numerical thresholds above do not change. Omit `--speech-profile` to assess the default `gpt-4o-mini-tts` primary / `tts-1` fallback profile. Selecting a speech profile does not change the standalone voice runner.
+
 ## Representative call gate
 
 Before any patient call or natural-language availability is enabled, record a consented, patient-free evaluation over the intended carrier and clinic acoustic route. Predeclare at least **100 complete calls** from at least **10 speakers**, covering each intended locale and varied accents, quiet and noisy rooms, interruptions, numbers, dates, email, currency, clinic names, urgent language, and long turns. Keep source audio and review notes in a restricted evaluation store outside Abby's patient database. Compare final transcripts with human-labeled words and review all critical errors plus a predeclared sample of other calls.

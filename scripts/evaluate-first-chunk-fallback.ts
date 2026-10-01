@@ -12,7 +12,8 @@ type Sample = Readonly<{ caseId: string; repeat: number; selected: "primary" | "
   totalMs: number }>;
 
 function argsFrom(argv: readonly string[]): Record<string, string> {
-  const allowed = new Set(["out", "repeats", "concurrency"]);
+  const allowed = new Set(["out", "repeats", "concurrency", "primary-model", "fallback-model",
+    "primary-first-chunk-ms"]);
   const args: Record<string, string> = {};
   if (argv.length % 2 !== 0) throw new Error("invalid evaluation arguments");
   for (let index = 0; index < argv.length; index += 2) {
@@ -40,8 +41,16 @@ async function main(): Promise<void> {
   const corpus = parseSpeechLoopCorpus(JSON.parse(corpusBytes.toString("utf8")) as unknown);
   const repeats = args.repeats === undefined ? 20 : Number(args.repeats);
   const concurrency = args.concurrency === undefined ? 2 : Number(args.concurrency);
+  const primaryModel = args["primary-model"] ?? "gpt-4o-mini-tts";
+  const fallbackModel = args["fallback-model"] ?? "tts-1";
+  const primaryFirstChunkMs = args["primary-first-chunk-ms"] === undefined
+    ? 1_500 : Number(args["primary-first-chunk-ms"]);
   if (!Number.isSafeInteger(repeats) || repeats < 1 || repeats > 20 ||
-      !Number.isSafeInteger(concurrency) || concurrency < 1 || concurrency > 4) {
+      !Number.isSafeInteger(concurrency) || concurrency < 1 || concurrency > 4 ||
+      !["gpt-4o-mini-tts", "tts-1"].includes(primaryModel) ||
+      !["gpt-4o-mini-tts", "tts-1"].includes(fallbackModel) ||
+      !Number.isSafeInteger(primaryFirstChunkMs) ||
+      primaryFirstChunkMs < 50 || primaryFirstChunkMs > 5_000) {
     throw new Error("invalid evaluation limits");
   }
   const jobs = corpus.cases.flatMap(item => Array.from({ length: repeats }, (_, index) =>
@@ -60,9 +69,9 @@ async function main(): Promise<void> {
       let outcome: Sample["outcome"] = "notSent";
       try {
         const synthesis = new FirstChunkFallbackSpeech({
-          primary: new OpenAISpeechSynthesis({ apiKey }),
-          fallback: new OpenAISpeechSynthesis({ apiKey, model: "tts-1" }),
-          primaryFirstChunkMs: 1_500,
+          primary: new OpenAISpeechSynthesis({ apiKey, model: primaryModel }),
+          fallback: new OpenAISpeechSynthesis({ apiKey, model: fallbackModel }),
+          primaryFirstChunkMs,
           onSelection: source => { selected = source; },
         });
         const playback = new StreamedPlaybackPort(synthesis, {
@@ -94,8 +103,8 @@ async function main(): Promise<void> {
     "scripts/evaluate-first-chunk-fallback.ts"];
   const sourceBytes = await Promise.all(sourcePaths.map(path => readFile(resolve(path))));
   const report = { schemaVersion: 1, kind: "speech-first-chunk-fallback-evaluation",
-    runAt: new Date().toISOString(), configuration: { primaryModel: "gpt-4o-mini-tts",
-      fallbackModel: "tts-1", voice: "coral", primaryFirstChunkMs: 1_500,
+    runAt: new Date().toISOString(), configuration: { primaryModel,
+      fallbackModel, voice: "coral", primaryFirstChunkMs,
       combinedFirstChunkMs: 5_000, laterStepMs: 2_000, maxUtteranceMs: 20_000,
       corpusVersion: corpus.version, corpusSha256: digest(corpusBytes),
       sourceSha256: digest(Buffer.concat(sourceBytes)), repeats, concurrency,
