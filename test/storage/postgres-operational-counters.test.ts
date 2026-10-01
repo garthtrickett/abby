@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import test, { after } from "node:test";
@@ -66,7 +66,7 @@ test("two worker processes atomically share scoped, patient-free operational tot
   assert.deepEqual(await scanDisposableBackupCanaries(url, probes), []);
 });
 
-test("daily aggregates roll over in UTC, omit other scopes and prune expired buckets", async () => {
+test("E2E-218 daily aggregates roll over in UTC, isolate reads and prune idle clinics globally", async () => {
   const scope = { tenantId: `ops-days-${randomUUID()}`, clinicId: "clinic", locationId: "main" };
   const other = { ...scope, tenantId: `ops-days-other-${randomUUID()}` };
   let now = "2026-09-30T23:59:59.000Z";
@@ -91,5 +91,25 @@ test("daily aggregates roll over in UTC, omit other scopes and prune expired buc
   const otherScope = await sql<{ count: string }>`select count(*)::text as count from clinic_operational_daily_counts
     where tenant_id = ${other.tenantId} and date = date '2026-09-30'`.execute(db);
   assert.equal(otherScope.rows[0]?.count, "1", "reading one clinic cannot delete another clinic's counters");
+  await counters.pruneExpired();
+  const prunedOther = await sql<{ count: string }>`select count(*)::text as count from clinic_operational_daily_counts
+    where tenant_id = ${other.tenantId} and date = date '2026-09-30'`.execute(db);
+  assert.equal(prunedOther.rows[0]?.count, "0", "global retention clears an idle clinic");
   assert.equal((await counters.snapshot(scope)).clinikoProvider429, 1);
+});
+
+test("E2E-218 one-shot retention command deletes expired rows without revealing scope", async () => {
+  const tenantId = `ops-retention-${randomUUID()}`;
+  await sql`insert into clinic_operational_daily_counts
+    (tenant_id, clinic_id, location_id, date, kind, count)
+    values (${tenantId}, 'clinic', 'main', date '2020-01-01', 'voiceFailure', 1)`.execute(db);
+  const run = spawnSync(process.execPath, ["scripts/prune-voice-operations.ts"], {
+    cwd: new URL("../../", import.meta.url), env: process.env, encoding: "utf8", timeout: 10_000,
+  });
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(run.stdout, "");
+  assert.equal(run.stderr, "");
+  const left = await sql<{ count: string }>`select count(*)::text as count from clinic_operational_daily_counts
+    where tenant_id = ${tenantId}`.execute(db);
+  assert.equal(left.rows[0]?.count, "0");
 });

@@ -109,5 +109,11 @@ export class PostgresOperationalCounters implements OperationalCounterStore {
     return { days: days.map(date => ({ date, counts: countsByDay.get(date)! })) };
   }
 
+  /** Global expiry for idle clinics; invoke at startup and from an independent scheduler. */
+  async pruneExpired(): Promise<void> {
+    const cutoff = dateValue(operationalDays(this.#clock())[0]!);
+    await this.#db.deleteFrom("clinic_operational_daily_counts").where("date", "<", cutoff).execute();
+  }
+
   async drain(): Promise<void> { await Promise.allSettled([...this.#pending]); }
 }

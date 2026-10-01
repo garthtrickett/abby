@@ -28,6 +28,8 @@ Use an owner-only `.env` or an equivalent secret store, and load it into the pro
 
 For local aggregate diagnostics, optionally set a separate owner-only `ABBY_VOICE_OPERATIONS_TOKEN_HEX` and run `npm run voice:ops` while the listener is up. This prints eight fixed-code, clinic-scoped lifetime counts from the default PostgreSQL store, including local Cliniko budget denials, budget failures, provider 429 responses, and provider 5xx and fetch failures during availability reads. Run `npm run voice:ops -- --daily` for the same codes across seven UTC dates, including zero-filled days. Committed counts survive restart, but an uncommitted increment can be lost on abrupt exit. The reads do not expose a patient-specific call report or prove that a fallback or staff task was delivered.
 
+The local listener removes expired daily aggregate rows before accepting calls and repeats cleanup every six hours. An owner can run `npm run voice:ops:prune` with the same owner-only `DATABASE_URL` to clean idle clinic rows when the listener is stopped. It emits no clinic or patient data. A strict deletion deadline requires scheduling that one-shot command outside the runner; this repository does not install a host scheduler.
+
 ```sh
 npm run voice:preflight -- --config-only
 npm run voice:test-policy -- enable

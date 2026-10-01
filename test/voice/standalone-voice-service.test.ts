@@ -34,7 +34,7 @@ async function healthy(port: number): Promise<Response> {
   throw new Error("local voice service did not start");
 }
 
-test("E2E-171 local voice runner validates startup, reports unready, refuses inbound calls and drains",
+test("E2E-171 E2E-218 local voice runner prunes expired operations at startup and refuses unready calls",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 60_000 }, async () => {
   const adminUrl = process.env.DATABASE_URL;
   assert.ok(adminUrl);
@@ -67,7 +67,12 @@ test("E2E-171 local voice runner validates startup, reports unready, refuses inb
     await sql.raw(`create database "${name}"`).execute(admin);
     created = true;
     const db = connectPostgres(target.toString());
-    try { await migrate(db); } finally { await db.destroy(); }
+    try {
+      await migrate(db);
+      await sql`insert into clinic_operational_daily_counts
+        (tenant_id, clinic_id, location_id, date, kind, count)
+        values ('idle-clinic', 'clinic', 'main', date '2020-01-01', 'voiceFailure', 1)`.execute(db);
+    } finally { await db.destroy(); }
     const invalid = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
       cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_TWILIO_BINDING_KEY_HEX: "bad" },
       stdio: ["ignore", "pipe", "pipe"] });
@@ -99,6 +104,12 @@ test("E2E-171 local voice runner validates startup, reports unready, refuses inb
     const health = await healthy(port);
     assert.equal(health.status, 200);
     assert.equal(await health.text(), "ok");
+    const retentionDb = connectPostgres(target.toString());
+    try {
+      const expired = await sql<{ count: string }>`select count(*)::text as count
+        from clinic_operational_daily_counts where tenant_id = 'idle-clinic'`.execute(retentionDb);
+      assert.equal(expired.rows[0]?.count, "0", "startup removes expired buckets for an idle clinic");
+    } finally { await retentionDb.destroy(); }
     const readiness = await fetch(`http://127.0.0.1:${port}/readyz`);
     assert.equal(readiness.status, 503);
     assert.equal((await fetch(`http://127.0.0.1:${port}/internal/operations`)).status, 404);

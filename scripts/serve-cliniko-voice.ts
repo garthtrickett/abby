@@ -76,6 +76,8 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
   const key = bindingKey();
   const db = connectPostgres(connectionString);
   const operationalCounters = ports.operationalCounters ?? new PostgresOperationalCounters(db);
+  let retentionTimer: NodeJS.Timeout | undefined;
+  let retentionRun: Promise<void> | undefined;
   try {
     const healthy = boundedHealthCheck(() => sql`select 1`.execute(db));
     const rateBudget = new PostgresClinikoRequestBudget(db, { apiKey,
@@ -123,6 +125,16 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       ...(operationalTokenHex ? { operationalRead: { tokenHex: operationalTokenHex, scope } } : {}),
     });
     if (!prepared.ok) throw new Error(`standalone storage unavailable: ${prepared.error.kind}`);
+    if (operationalCounters instanceof PostgresOperationalCounters) {
+      await operationalCounters.pruneExpired();
+      retentionTimer = setInterval(() => {
+        if (retentionRun) return;
+        retentionRun = operationalCounters.pruneExpired()
+          .catch(() => { process.stderr.write("operational retention unavailable\n"); })
+          .finally(() => { retentionRun = undefined; });
+      }, 6 * 60 * 60 * 1000);
+      retentionTimer.unref();
+    }
     const server = prepared.value;
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
@@ -135,6 +147,8 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
     });
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   } finally {
+    if (retentionTimer) clearInterval(retentionTimer);
+    await retentionRun;
     await operationalCounters.drain?.().catch(() => undefined);
     await db.destroy();
   }
