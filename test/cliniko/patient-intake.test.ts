@@ -1,20 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ClinikoPatientIntakeEdge } from "../../src/cliniko/patient-intake.ts";
-import type { ClinikoIntakeRequest } from "../../src/cliniko/patient-intake.ts";
+import { ClinikoPatientIntakeEdge, clinikoIntakeDraftDigest } from "../../src/cliniko/patient-intake.ts";
+import type { ClinikoIntakeAttestation, ClinikoIntakeAuthority, ClinikoIntakeRequest } from "../../src/cliniko/patient-intake.ts";
 
 const scope = { tenantId: "intake-tenant", clinicId: "intake-clinic" };
 const config = { scope, apiKey: "synthetic-key-au5", contactEmail: "dev@example.test" };
 const request: ClinikoIntakeRequest = {
-  scope, attemptRef: "intake:one", firstName: "First", lastName: "Patient",
+  scope, attemptRef: "intake:one", policyVersion: "intake-policy:1", firstName: "First", lastName: "Patient",
   email: "patient@example.test", dateOfBirth: "1990-05-21", patientPhone: "0400 111 222",
   phoneType: "Mobile",
   caller: "patient", consentRef: "host:consent:one", authorityRef: "host:authority:one",
-  acceptedPrivacyPolicy: true,
 };
 
-function edge(fetchPort: typeof fetch): ClinikoPatientIntakeEdge {
-  const result = ClinikoPatientIntakeEdge.create(config, fetchPort);
+const now = "2026-10-01T10:00:00.000Z";
+function attestation(input: ClinikoIntakeRequest): ClinikoIntakeAttestation {
+  return { scope: input.scope, attemptRef: input.attemptRef, policyVersion: input.policyVersion,
+    draftDigest: clinikoIntakeDraftDigest(input), caller: input.caller,
+    consentRef: input.consentRef, authorityRef: input.authorityRef,
+    privacyAccepted: true, proxyAuthorized: input.caller === "proxy",
+    expiresAt: "2026-10-01T10:05:00.000Z" };
+}
+function edge(fetchPort: typeof fetch, authority: ClinikoIntakeAuthority = { attest: async input => attestation(input) }): ClinikoPatientIntakeEdge {
+  const result = ClinikoPatientIntakeEdge.create(config, authority, fetchPort, () => now);
   assert.equal(result.ok, true);
   return result.value;
 }
@@ -66,13 +73,13 @@ test("existing or ambiguous patients, including a household proxy, never trigger
   }
 });
 
-test("interrupted or absent consent, invalid identity, and foreign scope fail before HTTP", async () => {
+test("absent consent, invalid identity, and foreign scope fail before HTTP", async () => {
   let calls = 0;
   const adapter = edge(async () => { calls += 1; throw new Error("unexpected HTTP"); });
   for (const invalid of [
     { ...request, consentRef: "" },
     { ...request, authorityRef: "" },
-    { ...request, acceptedPrivacyPolicy: false },
+    { ...request, policyVersion: "" },
     { ...request, dateOfBirth: "1990-02-30" },
   ]) {
     const result = await adapter.createOnce(invalid as ClinikoIntakeRequest);
@@ -81,6 +88,67 @@ test("interrupted or absent consent, invalid identity, and foreign scope fail be
   const foreign = await adapter.createOnce({ ...request, scope: { ...scope, clinicId: "other" } });
   assert.deepEqual(foreign, { ok: false, error: { kind: "scopeMismatch" } });
   assert.equal(calls, 0);
+});
+
+test("trusted host must bind draft, consent, proxy authority, scope, policy and expiry before any Cliniko read", async () => {
+  const invalidAttestations = [
+    null,
+    { ...attestation(request), draftDigest: "0".repeat(64) },
+    { ...attestation(request), consentRef: "host:consent:other" },
+    { ...attestation(request), policyVersion: "intake-policy:old" },
+    { ...attestation(request), scope: { ...scope, clinicId: "other" } },
+    { ...attestation(request), expiresAt: now },
+    { ...attestation(request), privacyAccepted: false },
+    { ...attestation({ ...request, caller: "proxy" }), proxyAuthorized: false },
+  ];
+  let calls = 0;
+  for (const [index, proof] of invalidAttestations.entries()) {
+    const input = index === invalidAttestations.length - 1 ? { ...request, caller: "proxy" as const } : request;
+    const adapter = edge(async () => { calls += 1; throw new Error("unexpected HTTP"); },
+      { attest: async () => proof as ClinikoIntakeAttestation | null });
+    assert.deepEqual(await adapter.createOnce(input), { ok: false, error: { kind: "unauthorized" } });
+  }
+  assert.equal(calls, 0);
+});
+
+test("revoked consent after duplicate check stops before patient creation", async () => {
+  let checks = 0;
+  const methods: string[] = [];
+  const adapter = edge(async (_input, init) => {
+    methods.push(init?.method ?? "");
+    if (init?.method === "GET") return Response.json(candidateList(0));
+    throw new Error("unexpected create");
+  }, { attest: async input => ++checks === 1 ? attestation(input) : null });
+  assert.deepEqual(await adapter.createOnce(request), { ok: false, error: { kind: "unauthorized" } });
+  assert.equal(checks, 2);
+  assert.deepEqual(methods, ["GET"]);
+});
+
+test("changing the caller's draft during host attestation cannot alter the authorized POST", async () => {
+  let release!: () => void;
+  const waiting = new Promise<void>(resolve => { release = resolve; });
+  let entered!: () => void;
+  const enteredPromise = new Promise<void>(resolve => { entered = resolve; });
+  const mutable = structuredClone(request) as { -readonly [K in keyof ClinikoIntakeRequest]: ClinikoIntakeRequest[K] };
+  const postedNames: string[] = [];
+  const adapter = edge(async (_input, init) => {
+    if (init?.method === "GET") return Response.json(candidateList(0));
+    const body = JSON.parse(String(init?.body));
+    postedNames.push(body.first_name);
+    return Response.json({ id: "42", first_name: request.firstName, last_name: request.lastName,
+      email: request.email, date_of_birth: request.dateOfBirth,
+      accepted_privacy_policy: true, archived_at: null }, { status: 201 });
+  }, { attest: async input => {
+    entered();
+    await waiting;
+    return attestation(input);
+  } });
+  const pending = adapter.createOnce(mutable);
+  await enteredPromise;
+  mutable.firstName = "Changed";
+  release();
+  assert.deepEqual(await pending, { ok: true, value: { kind: "created", patientRef: "cliniko:patient:42" } });
+  assert.deepEqual(postedNames, ["First"]);
 });
 
 test("create timeout remains uncertain and cannot send again through the same edge", async () => {
