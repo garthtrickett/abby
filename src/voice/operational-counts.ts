@@ -2,7 +2,7 @@ import type { LocationScope } from "../core/model.ts";
 
 export type OperationalCounterKind = "admissionDenied" | "callOwnerStarted" | "voiceFailure" | "callEnded" |
   "clinikoBudgetDenied" | "clinikoBudgetUnavailable" | "clinikoProvider429" |
-  "clinikoProviderUnavailable";
+  "clinikoProviderUnavailable" | "intentClassificationUnavailable";
 export type OperationalCounts = Readonly<Record<OperationalCounterKind, number>>;
 export type OperationalDailyCounts = Readonly<{ days: readonly Readonly<{
   date: string; counts: OperationalCounts;
@@ -19,7 +19,7 @@ export type OperationalCounterStore = Readonly<{
 
 const keys = ["admissionDenied", "callOwnerStarted", "voiceFailure", "callEnded",
   "clinikoBudgetDenied", "clinikoBudgetUnavailable", "clinikoProvider429",
-  "clinikoProviderUnavailable"] as const;
+  "clinikoProviderUnavailable", "intentClassificationUnavailable"] as const;
 
 export function emptyOperationalCounts(): Record<OperationalCounterKind, number> {
   return Object.fromEntries(keys.map(key => [key, 0])) as Record<OperationalCounterKind, number>;

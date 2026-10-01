@@ -35,7 +35,7 @@ async function freePort(): Promise<number> {
   return address.port;
 }
 
-test("E2E-214 E2E-233 E2E-235 loopback admin reads only its clinic's daily counts",
+test("E2E-214 E2E-233 E2E-235 E2E-237 loopback admin reads only its clinic's daily counts",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
     const adminUrl = process.env.DATABASE_URL;
     assert.ok(adminUrl);
@@ -99,6 +99,7 @@ test("E2E-214 E2E-233 E2E-235 loopback admin reads only its clinic's daily count
         assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "synthetic-operator")).ok);
         const counters = new PostgresOperationalCounters(db);
         await counters.record(scope, "callOwnerStarted");
+        await counters.record(scope, "intentClassificationUnavailable");
         await counters.record({ ...scope, clinicId: "foreign" }, "voiceFailure");
       } finally { await db.destroy(); }
 
@@ -126,6 +127,7 @@ test("E2E-214 E2E-233 E2E-235 loopback admin reads only its clinic's daily count
       assert.equal(daily.value.daily.days.length, 7);
       assert.equal(daily.value.daily.days.at(-1)?.counts.callOwnerStarted, 1);
       assert.equal(daily.value.daily.days.at(-1)?.counts.voiceFailure, 0);
+      assert.equal(daily.value.daily.days.at(-1)?.counts.intentClassificationUnavailable, 1);
       const capabilities = await fetch(`${origin}/api/capabilities`, { headers: { Authorization: basic } });
       assert.equal(capabilities.status, 200);
       const listed = await capabilities.json() as { value: { id: string }[] };

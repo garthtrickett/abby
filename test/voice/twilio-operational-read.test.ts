@@ -14,7 +14,7 @@ test("operational HTTP read refuses malformed aggregate snapshots", async () => 
   const tokenHex = "a".repeat(64);
   const counts = { admissionDenied: 1, callOwnerStarted: 1, voiceFailure: 0, callEnded: 0,
     clinikoBudgetDenied: 0, clinikoBudgetUnavailable: 0, clinikoProvider429: 0,
-    clinikoProviderUnavailable: 0 };
+    clinikoProviderUnavailable: 0, intentClassificationUnavailable: 0 };
   let snapshot: unknown = counts;
   let dailySnapshot: unknown = { days: operationalDays("2026-10-01T12:00:00.000Z")
     .map(date => ({ date, counts })) };

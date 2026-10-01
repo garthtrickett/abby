@@ -31,7 +31,7 @@ async function freePort(): Promise<number> {
   return address.port;
 }
 
-test("E2E-214 E2E-233 E2E-235 local owner sees aggregate speech and operational status", async ({ page, request }) => {
+test("E2E-214 E2E-233 E2E-235 E2E-237 local owner sees aggregate speech and operational status", async ({ page, request }) => {
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
   const paths: string[] = [];
@@ -72,6 +72,7 @@ test("E2E-214 E2E-233 E2E-235 local owner sees aggregate speech and operational 
     ] };
   const operationalCounters = new StandaloneOperationalCounters(() => "2026-10-01T12:00:00.000Z");
   operationalCounters.record(scope, "callOwnerStarted");
+  operationalCounters.record(scope, "intentClassificationUnavailable");
   operationalCounters.record({ ...scope, clinicId: "foreign" }, "voiceFailure");
   let malformedOperations = false;
   const server = await createHostAuthenticatedDashboardServer({ publicOrigin: origin,
@@ -121,7 +122,9 @@ test("E2E-214 E2E-233 E2E-235 local owner sees aggregate speech and operational 
     const operationalBody = await operationalReply.json() as { value: { daily: OperationalDailyCounts } };
     assert.equal(operationalBody.value.daily.days.at(-1)?.counts.callOwnerStarted, 1);
     assert.equal(operationalBody.value.daily.days.at(-1)?.counts.voiceFailure, 0);
+    assert.equal(operationalBody.value.daily.days.at(-1)?.counts.intentClassificationUnavailable, 1);
     await expect(page.getByLabel("Operational counts")).toContainText("Call owners started");
+    await expect(page.getByLabel("Operational counts")).toContainText("Intent classification unavailable");
     await expect(page.getByLabel("Operational counts")).toContainText("2026-10-01");
     assert.equal((await request.post(`${origin}/api/operations/daily`, { headers: { Authorization: basic } })).status(), 404);
     assert.equal((await request.post(`${origin}/api/speech-gate`, { headers: { Authorization: basic } })).status(), 404);

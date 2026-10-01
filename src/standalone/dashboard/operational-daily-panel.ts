@@ -11,6 +11,7 @@ const columns: readonly Readonly<{ kind: OperationalCounterKind; label: string }
   { kind: "clinikoBudgetUnavailable", label: "Cliniko budget unavailable" },
   { kind: "clinikoProvider429", label: "Cliniko 429" },
   { kind: "clinikoProviderUnavailable", label: "Cliniko unavailable" },
+  { kind: "intentClassificationUnavailable", label: "Intent classification unavailable" },
 ];
 
 /** Read-only, location-scoped operational counters; these are not per-call outcomes. */

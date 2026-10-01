@@ -332,7 +332,7 @@ test("E2E-172 E2E-185 E2E-209 E2E-217 isolated voice runner enforces durable app
     assert.deepEqual(Object.keys(counts).sort(),
       ["admissionDenied", "callOwnerStarted", "voiceFailure", "callEnded",
         "clinikoBudgetDenied", "clinikoBudgetUnavailable", "clinikoProvider429",
-        "clinikoProviderUnavailable"].sort());
+        "clinikoProviderUnavailable", "intentClassificationUnavailable"].sort());
     assert.ok(counts.admissionDenied! >= 3);
     assert.equal(counts.callOwnerStarted, 1);
     assert.equal(counts.voiceFailure, 0);

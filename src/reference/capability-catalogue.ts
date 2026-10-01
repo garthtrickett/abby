@@ -107,7 +107,7 @@ const staffHealth = object({ observedAt: str, consistency: { const: "nonAtomicSc
   alertPending: uint, alertUncertain: uint, alertFailed: uint });
 const operationalCounts = object({ admissionDenied: uint, callOwnerStarted: uint, voiceFailure: uint,
   callEnded: uint, clinikoBudgetDenied: uint, clinikoBudgetUnavailable: uint,
-  clinikoProvider429: uint, clinikoProviderUnavailable: uint });
+  clinikoProvider429: uint, clinikoProviderUnavailable: uint, intentClassificationUnavailable: uint });
 const operationalDaily = object({ days: { type: "array", minItems: 7, maxItems: 7,
   items: object({ date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
     counts: operationalCounts }) } });
