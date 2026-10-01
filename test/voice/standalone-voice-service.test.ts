@@ -50,8 +50,8 @@ test("E2E-171 local voice runner validates startup, reports unready, refuses inb
     DATABASE_URL: target.toString(), ABBY_VOICE_PORT: String(port),
     ABBY_TENANT_ID: "local-test", ABBY_CLINIC_ID: "clinic", ABBY_LOCATION_ID: "main",
     ABBY_CLINIKO_API_KEY: "synthetic-key-au5", ABBY_CLINIKO_CONTACT_EMAIL: "test@example.com",
-    ABBY_CLINIKO_BUSINESS_ID: "11", ABBY_CLINIKO_PRACTITIONER_ID: "22",
-    ABBY_CLINIKO_APPOINTMENT_TYPE_ID: "33", ABBY_CLINIKO_TIME_ZONE: "Australia/Sydney",
+    ABBY_CLINIKO_BUSINESS_ID: undefined, ABBY_CLINIKO_PRACTITIONER_ID: undefined,
+    ABBY_CLINIKO_APPOINTMENT_TYPE_ID: undefined, ABBY_CLINIKO_TIME_ZONE: undefined,
     ABBY_TWILIO_TEST_NUMBER: "+6125550199", ABBY_TWILIO_FALLBACK_NUMBER: "+6125550188",
     ABBY_TWILIO_ACCOUNT_SID: `AC${"1".repeat(32)}`, ABBY_TWILIO_AUTH_TOKEN: "synthetic-token",
     ABBY_TWILIO_PUBLIC_WEBHOOK_URL: "https://calls.example.test/twilio/inbound",
@@ -153,8 +153,8 @@ test("E2E-172 E2E-185 E2E-209 isolated voice runner enforces durable approval ar
     ABBY_TWILIO_TEST_CALLER_NUMBER: callerNumber,
     ABBY_TENANT_ID: scope.tenantId, ABBY_CLINIC_ID: scope.clinicId, ABBY_LOCATION_ID: scope.locationId,
     ABBY_CLINIKO_API_KEY: "synthetic-key-au5", ABBY_CLINIKO_CONTACT_EMAIL: "test@example.com",
-    ABBY_CLINIKO_BUSINESS_ID: "11", ABBY_CLINIKO_PRACTITIONER_ID: "22",
-    ABBY_CLINIKO_APPOINTMENT_TYPE_ID: "33", ABBY_CLINIKO_TIME_ZONE: "Australia/Sydney",
+    ABBY_CLINIKO_BUSINESS_ID: undefined, ABBY_CLINIKO_PRACTITIONER_ID: undefined,
+    ABBY_CLINIKO_APPOINTMENT_TYPE_ID: undefined, ABBY_CLINIKO_TIME_ZONE: undefined,
     ABBY_TWILIO_TEST_NUMBER: number, ABBY_TWILIO_FALLBACK_NUMBER: "+6125550188",
     ABBY_TWILIO_ACCOUNT_SID: accountSid, ABBY_TWILIO_AUTH_TOKEN: authToken,
     ABBY_VOICE_OPERATIONS_TOKEN_HEX: operationalTokenHex,
@@ -223,8 +223,8 @@ test("E2E-172 E2E-185 E2E-209 isolated voice runner enforces durable approval ar
     }
     finally { await approvalDb.destroy(); }
     const wrongSelection = await webhook(callerNumber, `CA${"8".repeat(32)}`);
-    assert.equal(wrongSelection.status, 503);
-    assert.doesNotMatch(await wrongSelection.text(), /<Stream>/);
+    assert.equal(wrongSelection.status, 200);
+    assert.match(await wrongSelection.text(), /<Stream/);
     assert.deepEqual(clinikoMethods, []);
     const correctedDb = connectPostgres(target.toString());
     try {
@@ -236,8 +236,8 @@ test("E2E-172 E2E-185 E2E-209 isolated voice runner enforces durable approval ar
         businessTimeZone: "Etc/UTC" }, "synthetic-admin")).ok);
     } finally { await correctedDb.destroy(); }
     const wrongZone = await webhook(callerNumber, `CA${"7".repeat(32)}`);
-    assert.equal(wrongZone.status, 503);
-    assert.doesNotMatch(await wrongZone.text(), /<Stream>/);
+    assert.equal(wrongZone.status, 200);
+    assert.match(await wrongZone.text(), /<Stream/);
     assert.deepEqual(clinikoMethods, []);
     const zoneDb = connectPostgres(target.toString());
     try {

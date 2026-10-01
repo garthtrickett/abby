@@ -8,13 +8,14 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     !process.env.DATABASE_URL?.includes("/abby_test_voice_") ||
     ![undefined, "openai-speech", "openai-transcription", "untrusted-transcript", "cliniko-rate-limit", "cliniko-server-error", "cliniko-timeout", "cliniko-slow-read", "cliniko-zone-changed", "cliniko-partial-page", "cliniko-business-type-removed", "cliniko-practitioner-type-removed", "week-alternative",
       "practitioner-alternative", "practitioner-alternative-rate-limit",
-      "practitioner-alternative-malformed", "practitioner-alternative-second"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
+      "practitioner-alternative-malformed", "practitioner-alternative-second",
+      "primary-selection-change"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
   throw new Error("synthetic voice runner requires an isolated fixture");
 }
 const fault = process.env.ABBY_SYNTHETIC_VOICE_FAULT;
 const alternativeFault = fault === "practitioner-alternative" ||
   fault === "practitioner-alternative-rate-limit" || fault === "practitioner-alternative-malformed" ||
-  fault === "practitioner-alternative-second";
+  fault === "practitioner-alternative-second" || fault === "primary-selection-change";
 
 class SyntheticTranscriptionSocket extends EventEmitter {
   readyState: number = WebSocket.CONNECTING;
