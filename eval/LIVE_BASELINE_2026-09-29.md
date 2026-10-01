@@ -214,3 +214,18 @@ The ignored owner-only report is `eval/results/20261001-a3-gpt-keywords-noise-sc
 The unchanged six-case 10 dB noisy corpus ran once per case with two concurrent sessions and no context. One transcript matched exactly, one differed without a critical miss, and **four missed critical terms**. There were no provider failures, but word error rate was **40.9%** and post-commit final p95 was **770 ms**. The declared gate requires three repeats, zero critical misses and at most 10% WER. This screen already fails its accuracy conditions, so the safety corpus and full gate were not run for this candidate. The single repeat is diagnostic, not a model ranking or a passing gate.
 
 The ignored owner-only report is `eval/results/20261001-a3-whisper-noise-screen.json`, SHA-256 `fdd170c554de7bcd2f3a7c0e2a178c5dea83f9528d8c33369eea63d5e3978072`. It pins the noise corpus SHA-256 `ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2` and adapter/evaluator source SHA-256 `3434af7f123df04869af6797154e0b6a84f0fbb097fe688a66bf117ab48ef6b3`. The report has mode `0600`, contains only patient-free fixture audio results, and retains `releaseGate: unverified`. No natural-language caller capability changed.
+
+## Owner-status source-matched rerun — 2026-10-01
+
+The current unprompted production candidate was rerun on all four unchanged patient-free corpora after the opt-in candidate work. Node loaded `ABBY_OPENAI_API_KEY` from Abby's ignored `.env`; no key value was printed or committed. Three repeats per transcription case and twenty repeats per speech message used four concurrent provider jobs within each serial corpus run. The source-matched assessor accepted the four reports and recorded their absolute paths in an ignored, owner-only local report set. `npm run voice:ops:speech` then recomputed the aggregate checks from that set and exited `2` for a validated failing candidate.
+
+| Check | Runs | Critical misses or failed jobs | WER | Latency and result |
+| --- | ---: | ---: | ---: | --- |
+| Telephone-band clean | 9 | 0 | 4.55% | Final p95 798 ms; pass |
+| 10 dB noisy | 18 | 12 | 43.18% | Final p95 1,608 ms; fail |
+| 20 dB safety | 24 | 10 | 25.56% | Final p95 824 ms, one final beyond 5 seconds; fail |
+| First queued speech chunk | 40 | 0 failed or late jobs | — | First chunk p95 3,121 ms; utterance p95 3,872 ms; pass |
+
+The ignored owner-only report files are `eval/results/20261001-d3-current-{telephony,noise,safety,speech}.json`. Their SHA-256 values in that order are `d91c35a092adfc485ffb01d0939c9e26c8845a4ade1a92e3d57edd3228904bb7`, `4048e57031e34e2eae1d32a21c0d84b7e6d94f8dd2b9e318b8551ef602b259ac`, `7fa3b46bd1da44364a62b0a6b12295c74fd31d0bfc36381b212fc2e240e57e76`, and `0fd121d363f5e43d09156b7b4c7afdb8118b62ef52d79b444c7c0f514f9c734d`. The report set is `eval/results/current-speech-gate.json`, SHA-256 `d141b5e28ecdab59960647e2a0b2e1e4fb123c835d4fa3e34ddcf872d30085d3`. Its paths are local to this checkout; the tracked hash is the durable evidence reference.
+
+All three transcription reports pin current adapter/evaluator source SHA-256 `3434af7f123df04869af6797154e0b6a84f0fbb097fe688a66bf117ab48ef6b3` and the previously listed pinned corpus hashes. The speech report pins source SHA-256 `37d8cbd77d2f1819e8d960f04f336bed04d9af1b69636aee89e8ca2a4b1c1b16` and speech corpus SHA-256 `b02fc915affa082502d417bf3eaaecb4435c14c00947c40ecda3e57ee7578857`. This run changes the observed synthesis result, not the declared threshold or the failed combined gate. It does not include real carrier audio, human listening, a clinic decision, or patient calls. Every report retains `releaseGate: unverified`; the status says `representativeCallGate: notRun`.
