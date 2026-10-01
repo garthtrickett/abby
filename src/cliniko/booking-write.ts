@@ -207,9 +207,13 @@ export class ClinikoBookingWriter {
   }
 
   /** A miss or mismatch is only an observation; neither permits replay of a possible POST. */
-  async observe(request: ClinikoBookingRequest): Promise<Result<ClinikoBookingObservation, ClinikoBookingFailure>> {
+  async observe(request: ClinikoBookingRequest, signal?: AbortSignal):
+    Promise<Result<ClinikoBookingObservation, ClinikoBookingFailure>> {
     if (!validRequest(request)) return err({ kind: "invalidQuery" });
     if (!sameScope(this.scope, request.scope)) return err({ kind: "scopeMismatch" });
+    const observationSignal = signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000);
+    if (observationSignal.aborted) return err({ kind: "unavailable" });
     let observedAt: string;
     try { observedAt = this.clock(); }
     catch { return err({ kind: "unavailable" }); }
@@ -218,22 +222,30 @@ export class ClinikoBookingWriter {
     const matches: Record<string, unknown>[] = [];
     let total: number | undefined;
     for (let page = 1; page <= maxPages; page += 1) {
-      const limited = await claimClinikoBudget(this.rateBudget);
+      const limited = await untilAbort(claimClinikoBudget(this.rateBudget), observationSignal);
+      if (observationSignal.aborted || limited === undefined) return err({ kind: "unavailable" });
       if (limited) return err(limited);
       const query = new URLSearchParams({ page: String(page), per_page: String(pageSize), sort: "id:asc" });
       query.append("q[]", `patient_id:=${request.patientId}`);
       let response: Response;
       try {
-        response = await this.fetchPort(`${this.baseUrl}/individual_appointments?${query}`, {
+        const received = await untilAbort(this.fetchPort(`${this.baseUrl}/individual_appointments?${query}`, {
           method: "GET", headers: { Accept: "application/json", Authorization: this.authorization,
-            "User-Agent": this.userAgent }, redirect: "error", signal: AbortSignal.timeout(15_000),
-        });
+            "User-Agent": this.userAgent }, redirect: "error", signal: observationSignal,
+        }), observationSignal);
+        if (!received || observationSignal.aborted) return err({ kind: "unavailable" });
+        response = received;
       } catch { return err({ kind: "unavailable" }); }
       if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
-      if (response.status === 429) return err(await observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset")));
+      if (response.status === 429) {
+        const limited = await untilAbort(observeCliniko429(this.rateBudget,
+          response.headers.get("X-RateLimit-Reset")), observationSignal);
+        return err(observationSignal.aborted || !limited ? { kind: "unavailable" } : limited);
+      }
       if (response.status >= 500 || response.status === 404) return err({ kind: "unavailable" });
       if (response.status !== 200) return err({ kind: "malformed" });
-      const parsed = await boundedJson(response);
+      const parsed = await untilAbort(boundedJson(response), observationSignal);
+      if (observationSignal.aborted || !parsed) return err({ kind: "unavailable" });
       if (!parsed.ok) return parsed;
       const body = record(parsed.value);
       if (!body || !Number.isSafeInteger(body.total_entries) || Number(body.total_entries) < 0 ||
@@ -254,6 +266,7 @@ export class ClinikoBookingWriter {
       }
       if (seen.size === total) break;
     }
+    if (observationSignal.aborted) return err({ kind: "unavailable" });
     if (seen.size !== total) return err({ kind: "tooManyResults" });
     const base = { scope: structuredClone(this.scope), observedAt };
     if (matches.length === 0) return ok({ ...base, kind: "none" });

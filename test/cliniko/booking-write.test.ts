@@ -255,3 +255,106 @@ test("an abort while reading a successful booking body cannot become an accepted
   await Promise.resolve();
   assert.deepEqual(await adapter.writeOnce(request), { ok: false, error: { kind: "invalidQuery" } });
 });
+
+test("observation abort before or during the budget claim prevents a patient GET", async () => {
+  let claims = 0;
+  let gets = 0;
+  let releaseClaim!: (value: null) => void;
+  const budget = { claim() {
+    claims += 1;
+    return new Promise<null>(resolve => { releaseClaim = resolve; });
+  }, observe429() { return { kind: "rateLimited" as const }; } };
+  const adapter = writer(async () => { gets += 1; throw new Error("unexpected patient GET"); },
+    { rateBudget: budget });
+  const alreadyAborted = new AbortController();
+  alreadyAborted.abort();
+  assert.deepEqual(await adapter.observe(request, alreadyAborted.signal),
+    { ok: false, error: { kind: "unavailable" } });
+  assert.equal(claims, 0);
+
+  const controller = new AbortController();
+  const pending = adapter.observe(request, controller.signal);
+  assert.equal(claims, 1);
+  controller.abort();
+  assert.deepEqual(await pending, { ok: false, error: { kind: "unavailable" } });
+  releaseClaim(null);
+  await Promise.resolve();
+  assert.equal(gets, 0);
+});
+
+test("observation abort during an uncooperative patient GET ignores its late exact row", async () => {
+  let releaseGet!: (response: Response) => void;
+  let began!: () => void;
+  const started = new Promise<void>(resolve => { began = resolve; });
+  const late = new Promise<Response>(resolve => { releaseGet = resolve; });
+  let providerSignal: AbortSignal | null | undefined;
+  let gets = 0;
+  const adapter = writer(async (_input, init) => {
+    gets += 1;
+    providerSignal = init?.signal;
+    began();
+    return late;
+  });
+  const controller = new AbortController();
+  const pending = adapter.observe(request, controller.signal);
+  await started;
+  controller.abort();
+  assert.equal(providerSignal?.aborted, true);
+  assert.deepEqual(await pending, { ok: false, error: { kind: "unavailable" } });
+  releaseGet(Response.json({ total_entries: 1, individual_appointments: [appointment("91")] }));
+  await Promise.resolve();
+  assert.equal(gets, 1);
+});
+
+test("observation abort while reading a patient page cannot report an exact match", async () => {
+  let beganReading!: () => void;
+  let releaseBody!: () => void;
+  const reading = new Promise<void>(resolve => { beganReading = resolve; });
+  const body = new ReadableStream<Uint8Array>({ pull(controller) {
+    beganReading();
+    return new Promise<void>(resolve => {
+      releaseBody = () => {
+        controller.enqueue(new TextEncoder().encode(JSON.stringify({ total_entries: 1,
+          individual_appointments: [appointment("91")] })));
+        controller.close();
+        resolve();
+      };
+    });
+  } }, { highWaterMark: 0 });
+  const adapter = writer(async () => new Response(body, { status: 200 }));
+  const controller = new AbortController();
+  const pending = adapter.observe(request, controller.signal);
+  await reading;
+  controller.abort();
+  assert.deepEqual(await pending, { ok: false, error: { kind: "unavailable" } });
+  releaseBody();
+  await Promise.resolve();
+});
+
+test("observation abort between patient pages prevents the next GET", async () => {
+  let releaseSecondClaim!: (value: null) => void;
+  let secondClaimStarted!: () => void;
+  const waitingForSecondClaim = new Promise<void>(resolve => { secondClaimStarted = resolve; });
+  let claims = 0;
+  const budget = { claim() {
+    claims += 1;
+    if (claims === 1) return null;
+    secondClaimStarted();
+    return new Promise<null>(resolve => { releaseSecondClaim = resolve; });
+  }, observe429() { return { kind: "rateLimited" as const }; } };
+  let gets = 0;
+  const adapter = writer(async () => {
+    gets += 1;
+    assert.equal(gets, 1);
+    return Response.json({ total_entries: 101, individual_appointments:
+      Array.from({ length: 100 }, (_, index) => appointment(String(index + 1), { notes: "other booking" })) });
+  }, { rateBudget: budget });
+  const controller = new AbortController();
+  const pending = adapter.observe(request, controller.signal);
+  await waitingForSecondClaim;
+  controller.abort();
+  assert.deepEqual(await pending, { ok: false, error: { kind: "unavailable" } });
+  releaseSecondClaim(null);
+  await Promise.resolve();
+  assert.equal(gets, 1);
+});
