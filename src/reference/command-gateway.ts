@@ -6,7 +6,7 @@ import type { TextReceptionFailure } from "./text-reception.ts";
 import type { CallSummary } from "./call-review.ts";
 import { CallReview } from "./call-review.ts";
 import type { StaffQueue } from "./staff-queue.ts";
-import type { StaffQueuePage } from "./staff-queue.ts";
+import type { StaffQueueHealth, StaffQueuePage } from "./staff-queue.ts";
 import type { CallOutcomeReport, CallOutcomePage } from "./call-outcome-report.ts";
 import { commandProgress } from "./command-progress.ts";
 import type { CallCommandProgress } from "./command-progress.ts";
@@ -58,6 +58,7 @@ export type GatewayCommand =
   | Readonly<{ kind: "calls.read.v1"; callId: string }>
   | Readonly<{ kind: "calls.outcomes.v1"; afterCallId?: string }>
   | Readonly<{ kind: "staff.list.v1"; afterTaskKey?: string }>
+  | Readonly<{ kind: "staff.health.v1" }>
   | Readonly<{ kind: "staff.change.v1"; callId: string; taskKey: string; expectedVersion: number; change: StaffChangeRequest; now: string }>;
 
 type AssertNever<T extends never> = T;
@@ -84,6 +85,7 @@ export type GatewayReply =
   | Readonly<{ kind: "callSummary"; call: CallSummary }>
   | Readonly<{ kind: "callOutcomes"; page: CallOutcomePage }>
   | Readonly<{ kind: "staffQueue"; page: StaffQueuePage }>
+  | Readonly<{ kind: "staffQueueHealth"; health: StaffQueueHealth }>
   | Readonly<{ kind: "staffChange"; taskKey: string; callVersion: number; status: StaffItem["status"]; pending: boolean; reviewRequired: boolean }>;
 
 export type GatewayFailure = PolicyFailure | TextReceptionFailure | TransitionFailure | KnowledgeFailure | ClinicAvailabilitySetupFailure |
@@ -132,7 +134,7 @@ export class CommandGateway {
     if (this.reception.appointmentReadEnabled()) permitted.push("appointments.read.v1");
     if (this.review) permitted.push("calls.read.v1");
     if (this.outcomeReport) permitted.push("calls.outcomes.v1");
-    if (this.staffQueue) permitted.push("staff.list.v1");
+    if (this.staffQueue) permitted.push("staff.list.v1", "staff.health.v1");
     if (this.actor.role !== "agent" && this.reception.staffLifecycleEnabled()) permitted.push("staff.change.v1");
     if (this.actor.role === "clinicAdmin") {
       if (this.knowledgeCatalogue) permitted.push("knowledge.list.v1", "knowledge.draft.save.v1", "knowledge.approve.v1", "knowledge.revoke.v1");
@@ -314,6 +316,11 @@ export class CommandGateway {
             (typeof command.afterTaskKey !== "string" || !command.afterTaskKey || command.afterTaskKey.length > 256))) return err({ kind: "invalid" });
         const result = await this.staffQueue.list(this.actor.scope, command.afterTaskKey);
         return result.ok ? ok({ kind: "staffQueue", page: result.value }) : result;
+      }
+      case "staff.health.v1": {
+        if (!this.staffQueue) return err({ kind: "forbidden" });
+        const result = await this.staffQueue.health(this.actor.scope);
+        return result.ok ? ok({ kind: "staffQueueHealth", health: result.value }) : result;
       }
       case "staff.change.v1": {
         if (!command.callId || command.callId.length > 256 || !command.taskKey || command.taskKey.length > 256 ||

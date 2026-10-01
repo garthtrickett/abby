@@ -1,10 +1,23 @@
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
-import type { LocationScope, Result, StaffQueueEntry, TransitionFailure } from "../core/model.ts";
+import type { LocationScope, Result, StaffItem, StaffQueueEntry, TransitionFailure } from "../core/model.ts";
 
 export type StaffQueuePage = Readonly<{
   items: readonly Readonly<StaffQueueEntry & { overdue: boolean }>[];
   nextAfterTaskKey?: string;
+}>;
+
+export type StaffQueueHealth = Readonly<{
+  observedAt: string;
+  consistency: "nonAtomicScan";
+  scanned: number;
+  statuses: Readonly<Record<StaffItem["status"], number>>;
+  overdue: number;
+  reviewRequired: number;
+  pendingChange: number;
+  alertPending: number;
+  alertUncertain: number;
+  alertFailed: number;
 }>;
 
 const reasons = ["callerRequested", "verificationFailed", "unsupported", "uncertainAction", "partialIntake", "systemFailure", "transferFailed"];
@@ -48,5 +61,38 @@ export class StaffQueue {
         (index > 0 && entry.taskKey <= found.value[index - 1]!.taskKey))) return err({ kind: "storageCorrupt" });
     const items = found.value.map(entry => ({ ...entry, overdue: entry.status !== "resolved" && Date.parse(entry.dueAt) <= Date.parse(now) }));
     return ok({ items, ...(items.length === 50 ? { nextAfterTaskKey: items[49]!.taskKey } : {}) });
+  }
+
+  /** Count at most 5,000 scoped items. Paging is bounded and is not an atomic snapshot. */
+  async health(scope: LocationScope): Promise<Result<StaffQueueHealth, TransitionFailure>> {
+    let observedAt: string;
+    try { observedAt = this.clock(); }
+    catch { return err({ kind: "storageFailure" }); }
+    if (!Number.isFinite(Date.parse(observedAt))) return err({ kind: "storageFailure" });
+    const queue = new StaffQueue(this.ledger, () => observedAt);
+    const statuses = { requested: 0, open: 0, acknowledged: 0, resolved: 0, needsReview: 0, failed: 0 };
+    const health = { scanned: 0, statuses, overdue: 0, reviewRequired: 0, pendingChange: 0,
+      alertPending: 0, alertUncertain: 0, alertFailed: 0 };
+    let afterTaskKey: string | undefined;
+    for (let pageIndex = 0; pageIndex <= 100; pageIndex += 1) {
+      const page = await queue.list(scope, afterTaskKey);
+      if (!page.ok) return page;
+      if (pageIndex === 100 && page.value.items.length > 0) return err({ kind: "storageFailure" });
+      for (const item of page.value.items) {
+        health.scanned += 1;
+        health.statuses[item.status] += 1;
+        if (item.overdue) health.overdue += 1;
+        if (item.reviewRequired) health.reviewRequired += 1;
+        if (item.pendingChangeKey) health.pendingChange += 1;
+        for (const state of Object.values(item.alerts ?? {})) {
+          if (state === "pending") health.alertPending += 1;
+          if (state === "uncertain") health.alertUncertain += 1;
+          if (state === "failed") health.alertFailed += 1;
+        }
+      }
+      afterTaskKey = page.value.nextAfterTaskKey;
+      if (!afterTaskKey) return ok({ observedAt, consistency: "nonAtomicScan", ...health });
+    }
+    return err({ kind: "storageFailure" });
   }
 }

@@ -88,6 +88,10 @@ const staffEntry = optional({ callId: key, callVersion: uint, taskKey: key, reas
   dueAt: str, destination, linkedActionKey: key, pendingChangeKey: key, reviewRequired: bool, alerts, overdue: bool },
 ["callId", "callVersion", "taskKey", "reason", "status", "dueAt", "destination", "overdue"]);
 const staffPage = optional({ items: array(staffEntry), nextAfterTaskKey: key }, ["items"]);
+const staffHealth = object({ observedAt: str, consistency: { const: "nonAtomicScan" }, scanned: uint,
+  statuses: object({ requested: uint, open: uint, acknowledged: uint, resolved: uint,
+    needsReview: uint, failed: uint }), overdue: uint, reviewRequired: uint, pendingChange: uint,
+  alertPending: uint, alertUncertain: uint, alertFailed: uint });
 const staffChange = object({ kind: { const: "staffChange" }, taskKey: key, callVersion: uint,
   status: staffStatus, pending: bool, reviewRequired: bool });
 const turn = optional({ callId: key, sessionId: key, turnId: key, text: { type: "string", minLength: 1 },
@@ -241,6 +245,8 @@ export const capabilityCatalogue = {
     reply("callOutcomes", "page", outcomePage), "read", "permittedActor", "none", ["outcomeReportAvailable"]),
   "staff.list.v1": entry("staff.list.v1", optional({ kind: { const: "staff.list.v1" }, afterTaskKey: key }, ["kind"]),
     reply("staffQueue", "page", staffPage), "read", "permittedActor", "none", ["staffQueueAvailable"]),
+  "staff.health.v1": entry("staff.health.v1", object({ kind: { const: "staff.health.v1" } }),
+    reply("staffQueueHealth", "health", staffHealth), "read", "permittedActor", "none", ["staffQueueAvailable"]),
   "staff.change.v1": entry("staff.change.v1",
     object({ kind: { const: "staff.change.v1" }, callId: key, taskKey: key, expectedVersion: uint, change, now: str }),
     staffChange, "staffChange", "staffOrAdmin", "none", ["hostConfirmedTask", "expectedCallVersion"]),
