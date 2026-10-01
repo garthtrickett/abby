@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { err, ok } from "../core/model.ts";
-import type { Result } from "../core/model.ts";
+import type { LocationScope, Result } from "../core/model.ts";
 import { ClinikoPatientCandidateReader } from "./patients.ts";
 import type { ClinikoClinicScope, ClinikoPatientConfig } from "./patients.ts";
 import { claimClinikoBudget, ClinikoReadBudget, isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
@@ -8,7 +8,9 @@ import type { ClinikoRequestBudget } from "./read-budget.ts";
 
 /** Provider edge only. The caller runtime does not construct this adapter. */
 export type ClinikoIntakeRequest = Readonly<{
-  scope: ClinikoClinicScope;
+  scope: LocationScope;
+  callId: string;
+  sessionId: string;
   attemptRef: string;
   policyVersion: string;
   firstName: string;
@@ -24,7 +26,9 @@ export type ClinikoIntakeRequest = Readonly<{
 }>;
 
 export type ClinikoIntakeAttestation = Readonly<{
-  scope: ClinikoClinicScope;
+  scope: LocationScope;
+  callId: string;
+  sessionId: string;
   attemptRef: string;
   policyVersion: string;
   draftDigest: string;
@@ -38,7 +42,7 @@ export type ClinikoIntakeAttestation = Readonly<{
 
 /** The host resolves these references against its own call-scoped consent and authority records. */
 export type ClinikoIntakeAuthority = Readonly<{
-  attest(request: ClinikoIntakeRequest): Promise<ClinikoIntakeAttestation | null>;
+  attest(request: ClinikoIntakeRequest, phase: "read" | "send"): Promise<ClinikoIntakeAttestation | null>;
 }>;
 
 export type ClinikoIntakeOutcome =
@@ -74,11 +78,13 @@ function validName(value: unknown, max: number): value is string {
     !/[\u0000-\u001f\u007f]/.test(value);
 }
 
-function validRequest(value: unknown): value is ClinikoIntakeRequest {
+export function validClinikoIntakeRequest(value: unknown): value is ClinikoIntakeRequest {
   const request = record(value);
   const scope = record(request?.scope);
-  return !!request && !!scope && [scope.tenantId, scope.clinicId].every(value =>
+  return !!request && !!scope && [scope.tenantId, scope.clinicId, scope.locationId].every(value =>
     typeof value === "string" && value.trim().length > 0 && value.length <= 256) &&
+    typeof request.callId === "string" && refPattern.test(request.callId) &&
+    typeof request.sessionId === "string" && refPattern.test(request.sessionId) &&
     typeof request.attemptRef === "string" && refPattern.test(request.attemptRef) &&
     typeof request.policyVersion === "string" && refPattern.test(request.policyVersion) &&
     validName(request.firstName, 50) && validName(request.lastName, 255) &&
@@ -106,7 +112,9 @@ function validAttestation(value: unknown, request: ClinikoIntakeRequest, now: st
   const current = Date.parse(now);
   const expires = typeof proof?.expiresAt === "string" ? Date.parse(proof.expiresAt) : NaN;
   return !!proof && !!scope && scope.tenantId === request.scope.tenantId &&
-    scope.clinicId === request.scope.clinicId && proof.attemptRef === request.attemptRef &&
+    scope.clinicId === request.scope.clinicId && scope.locationId === request.scope.locationId &&
+    proof.callId === request.callId &&
+    proof.sessionId === request.sessionId && proof.attemptRef === request.attemptRef &&
     proof.policyVersion === request.policyVersion && proof.draftDigest === clinikoIntakeDraftDigest(request) &&
     proof.caller === request.caller && proof.consentRef === request.consentRef &&
     proof.authorityRef === request.authorityRef && proof.privacyAccepted === true &&
@@ -176,9 +184,9 @@ export class ClinikoPatientIntakeEdge {
     return reader.ok ? ok(new ClinikoPatientIntakeEdge(shared, reader.value, authority, fetchPort, clock)) : reader;
   }
 
-  private async authorized(input: ClinikoIntakeRequest): Promise<boolean> {
+  private async authorized(input: ClinikoIntakeRequest, phase: "read" | "send"): Promise<boolean> {
     try {
-      const attestation = await this.authority.attest(structuredClone(input));
+      const attestation = await this.authority.attest(structuredClone(input), phase);
       return validAttestation(attestation, input, this.clock());
     } catch { return false; }
   }
@@ -188,7 +196,7 @@ export class ClinikoPatientIntakeEdge {
     let input: ClinikoIntakeRequest;
     try { input = structuredClone(request); }
     catch { return err({ kind: "invalidQuery" }); }
-    if (!validRequest(input)) return err({ kind: "invalidQuery" });
+    if (!validClinikoIntakeRequest(input)) return err({ kind: "invalidQuery" });
     if (input.scope.tenantId !== this.scope.tenantId || input.scope.clinicId !== this.scope.clinicId) {
       return err({ kind: "scopeMismatch" });
     }
@@ -196,7 +204,7 @@ export class ClinikoPatientIntakeEdge {
     if (this.attempted.size >= maxAttempts) return err({ kind: "unavailable" });
     // Claim before any await so racing calls through this instance cannot both send.
     this.attempted.add(input.attemptRef);
-    if (!await this.authorized(input)) return err({ kind: "unauthorized" });
+    if (!await this.authorized(input, "read")) return err({ kind: "unauthorized" });
     const candidates = await this.reader.findByEmailAndBirthDate(input.scope, input.email, input.dateOfBirth);
     if (!candidates.ok) return err(candidates.error);
     if (candidates.value.kind === "one") return ok({ kind: "existingCandidate" });
@@ -204,7 +212,7 @@ export class ClinikoPatientIntakeEdge {
     const limited = await claimClinikoBudget(this.rateBudget);
     if (limited) return err(limited);
     // A host policy or consent can change while Cliniko is answering the duplicate check.
-    if (!await this.authorized(input)) return err({ kind: "unauthorized" });
+    if (!await this.authorized(input, "send")) return err({ kind: "unauthorized" });
     let response: Response;
     try {
       response = await this.fetchPort(`${this.baseUrl}/patients`, {

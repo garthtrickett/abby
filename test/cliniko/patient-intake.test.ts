@@ -3,10 +3,11 @@ import test from "node:test";
 import { ClinikoPatientIntakeEdge, clinikoIntakeDraftDigest } from "../../src/cliniko/patient-intake.ts";
 import type { ClinikoIntakeAttestation, ClinikoIntakeAuthority, ClinikoIntakeRequest } from "../../src/cliniko/patient-intake.ts";
 
-const scope = { tenantId: "intake-tenant", clinicId: "intake-clinic" };
+const scope = { tenantId: "intake-tenant", clinicId: "intake-clinic", locationId: "intake-location" };
 const config = { scope, apiKey: "synthetic-key-au5", contactEmail: "dev@example.test" };
 const request: ClinikoIntakeRequest = {
-  scope, attemptRef: "intake:one", policyVersion: "intake-policy:1", firstName: "First", lastName: "Patient",
+  scope, callId: "call:one", sessionId: "session:one", attemptRef: "intake:one",
+  policyVersion: "intake-policy:1", firstName: "First", lastName: "Patient",
   email: "patient@example.test", dateOfBirth: "1990-05-21", patientPhone: "0400 111 222",
   phoneType: "Mobile",
   caller: "patient", consentRef: "host:consent:one", authorityRef: "host:authority:one",
@@ -14,7 +15,8 @@ const request: ClinikoIntakeRequest = {
 
 const now = "2026-10-01T10:00:00.000Z";
 function attestation(input: ClinikoIntakeRequest): ClinikoIntakeAttestation {
-  return { scope: input.scope, attemptRef: input.attemptRef, policyVersion: input.policyVersion,
+  return { scope: input.scope, callId: input.callId, sessionId: input.sessionId,
+    attemptRef: input.attemptRef, policyVersion: input.policyVersion,
     draftDigest: clinikoIntakeDraftDigest(input), caller: input.caller,
     consentRef: input.consentRef, authorityRef: input.authorityRef,
     privacyAccepted: true, proxyAuthorized: input.caller === "proxy",
@@ -96,7 +98,10 @@ test("trusted host must bind draft, consent, proxy authority, scope, policy and 
     { ...attestation(request), draftDigest: "0".repeat(64) },
     { ...attestation(request), consentRef: "host:consent:other" },
     { ...attestation(request), policyVersion: "intake-policy:old" },
+    { ...attestation(request), callId: "call:other" },
+    { ...attestation(request), sessionId: "session:other" },
     { ...attestation(request), scope: { ...scope, clinicId: "other" } },
+    { ...attestation(request), scope: { ...scope, locationId: "other" } },
     { ...attestation(request), expiresAt: now },
     { ...attestation(request), privacyAccepted: false },
     { ...attestation({ ...request, caller: "proxy" }), proxyAuthorized: false },
