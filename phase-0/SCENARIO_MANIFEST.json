@@ -1,5 +1,5 @@
 {
-  "version": "1.21",
+  "version": "1.22",
   "source": "TECHNICAL_DESIGN.md Section 11",
   "fixtureIdPattern": "fixture-{lowercase scenario id}",
   "capabilityMappings": {
@@ -116,7 +116,7 @@
     {"id": "E2E-071", "requirements": ["FR-16"], "fixtureFamily": "settings-and-authority", "fixtureState": "planned", "intendedCompositions": ["standalone", "embedded"], "earliestPhase": 1, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}},
     {"id": "E2E-072", "requirements": ["FR-16"], "fixtureFamily": "settings-and-authority", "fixtureState": "planned", "intendedCompositions": ["standalone", "embedded"], "earliestPhase": 1, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}},
     {"id": "E2E-073", "requirements": ["FR-18"], "fixtureFamily": "appointment-actions", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone", "embedded"], "earliestPhase": 1, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/embedded-intake-booking-call.test.ts"]}},
-    {"id": "E2E-074", "requirements": ["FR-17", "FR-20"], "fixtureFamily": "settings-and-authority", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone", "embedded"], "earliestPhase": 1, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/browser/dashboard.spec.ts"]}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/voice.test.ts"]}},
+    {"id": "E2E-074", "requirements": ["FR-17", "FR-20"], "fixtureFamily": "settings-and-authority", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone", "embedded"], "earliestPhase": 1, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/browser/dashboard.spec.ts"]}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/voice.test.ts", "test/voice/embedded-booking-setting-call.test.ts"]}},
     {"id": "E2E-075", "requirements": ["FR-11", "FR-22"], "fixtureFamily": "media-and-presentation", "fixtureState": "planned", "intendedCompositions": ["standalone", "embedded"], "earliestPhase": 1, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}},
     {"id": "E2E-076", "requirements": ["FR-04", "FR-11", "FR-22"], "fixtureFamily": "effect-results", "fixtureState": "planned", "intendedCompositions": ["standalone", "embedded"], "earliestPhase": 1, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}},
     {"id": "E2E-077", "requirements": ["FR-04", "FR-11", "FR-22"], "fixtureFamily": "effect-results", "fixtureState": "planned", "intendedCompositions": ["standalone", "embedded"], "earliestPhase": 1, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}},
