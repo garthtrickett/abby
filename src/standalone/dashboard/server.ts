@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
-import type { CommandGateway, GatewayCommand } from "../../reference/command-gateway.ts";
+import { CommandGateway } from "../../reference/command-gateway.ts";
+import type { GatewayCommand, HostActor } from "../../reference/command-gateway.ts";
 
 const maxCommandBytes = 10_000;
 const document = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body><main><div id="app"></div><div id="availability-setup"></div></main><script type="module" src="/app.js"></script></body></html>`;
@@ -44,12 +45,61 @@ export async function createDashboardServer(gateway: CommandGateway, bundlePath:
   const [bundle, stylesheet] = await Promise.all([
     readFile(bundlePath, "utf8"), readFile(new URL("./style.css", import.meta.url), "utf8"),
   ]);
-  return createServer((request, response) => { void handle(request, response, gateway, bundle, stylesheet); });
+  return createServer((request, response) => {
+    if (request.socket.localAddress !== "127.0.0.1") {
+      return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+    }
+    void handle(request, response, gateway, bundle, stylesheet);
+  });
 }
 
-async function handle(request: IncomingMessage, response: ServerResponse, gateway: CommandGateway, bundle: string, stylesheet: string): Promise<void> {
+/** The embedding host authenticates each request and constructs its scoped gateway. */
+export type HostDashboardIdentity = Readonly<{
+  publicOrigin: string;
+  resolveActor: (request: IncomingMessage) => HostActor | null | Promise<HostActor | null>;
+  gatewayFor: (actor: HostActor) => CommandGateway | Promise<CommandGateway>;
+}>;
+
+export async function createHostAuthenticatedDashboardServer(identity: HostDashboardIdentity,
+                                                              bundlePath: string): Promise<Server> {
+  let origin: URL;
+  try { origin = new URL(identity.publicOrigin); }
+  catch { throw new RangeError("invalid dashboard origin"); }
+  if ((origin.protocol !== "https:" && !(origin.protocol === "http:" && origin.hostname === "127.0.0.1")) ||
+      origin.origin !== identity.publicOrigin || origin.username || origin.password ||
+      origin.pathname !== "/" || origin.search || origin.hash ||
+      typeof identity.resolveActor !== "function" || typeof identity.gatewayFor !== "function") {
+    throw new RangeError("invalid dashboard identity configuration");
+  }
+  const [bundle, stylesheet] = await Promise.all([
+    readFile(bundlePath, "utf8"), readFile(new URL("./style.css", import.meta.url), "utf8"),
+  ]);
+  return createServer((request, response) => { void (async () => {
+    try {
+      if (request.headers.host !== origin.host ||
+          (origin.protocol === "http:" && request.socket.localAddress !== "127.0.0.1")) {
+        return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+      }
+      const actor = await identity.resolveActor(request);
+      if (!actor) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+      const gateway = await identity.gatewayFor(actor);
+      if (!(gateway instanceof CommandGateway) || !gateway.matchesActor(actor)) {
+        return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+      }
+      return handle(request, response, gateway, bundle, stylesheet, origin.origin);
+    } catch { return json(response, 403, { ok: false, error: { kind: "forbidden" } }); }
+  })(); });
+}
+
+async function handle(request: IncomingMessage, response: ServerResponse, gateway: CommandGateway,
+                      bundle: string, stylesheet: string, authenticatedOrigin?: string): Promise<void> {
   try {
     const url = new URL(request.url ?? "/", "http://localhost");
+    if (authenticatedOrigin && request.method === "POST" && url.pathname.startsWith("/api/") &&
+        (request.headers.origin !== authenticatedOrigin ||
+          request.headers.host !== new URL(authenticatedOrigin).host)) {
+      return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+    }
     if (request.method === "GET" && url.pathname === "/") return asset(response, "text/html; charset=utf-8", document);
     if (request.method === "GET" && url.pathname === "/app.js") return asset(response, "text/javascript; charset=utf-8", bundle);
     if (request.method === "GET" && url.pathname === "/style.css") return asset(response, "text/css; charset=utf-8", stylesheet);
@@ -60,8 +110,9 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     if (request.method === "POST" && url.pathname === "/api/clinic-availability/command") {
       const address = response.socket?.localAddress;
       const port = response.socket?.localPort;
-      if (address !== "127.0.0.1" || request.headers.host !== `127.0.0.1:${port}` ||
-          request.headers.origin !== `http://127.0.0.1:${port}`) {
+      if (!authenticatedOrigin && (address !== "127.0.0.1" ||
+          request.headers.host !== `127.0.0.1:${port}` ||
+          request.headers.origin !== `http://127.0.0.1:${port}`)) {
         return json(response, 403, { ok: false, error: { kind: "forbidden" } });
       }
       if (!request.headers["content-type"]?.startsWith("application/json")) {
@@ -184,7 +235,8 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     }
     if (!command) return json(response, 404, { ok: false, error: { kind: "notFound" } });
     const result = await gateway.submit(command);
-    const status = result.ok ? 200 : result.error.kind === "forbidden" ? 403 : result.error.kind === "versionConflict" ? 409 : result.error.kind === "callUnknown" ? 404 : 400;
+    const status = result.ok ? 200 : ["forbidden", "scopeMismatch"].includes(result.error.kind) ? 403 :
+      result.error.kind === "versionConflict" ? 409 : result.error.kind === "callUnknown" ? 404 : 400;
     return json(response, status, result);
   } catch {
     return json(response, 400, { ok: false, error: { kind: "invalid" } });
