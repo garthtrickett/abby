@@ -14,6 +14,7 @@ const maxEarlyCompletions = 8;
 type Socket = Pick<WebSocket, "on" | "send" | "close" | "terminate" | "bufferedAmount" | "readyState">;
 export type OpenAIRealtimeTranscriptionModel = "gpt-live-transcribe" | "gpt-transcribe" | "gpt-realtime-whisper";
 export type TranscriptionDelay = "minimal" | "low" | "medium" | "high" | "xhigh";
+export type TranscriptionNoiseReduction = "near_field" | "far_field";
 export type TranscriptionContext = Readonly<{
   /** Static, patient-free clinic setting. Never put caller or patient data here. */
   prompt: string;
@@ -27,6 +28,8 @@ export type OpenAIRealtimeTranscriptionConfig = Readonly<{
   context?: TranscriptionContext;
   /** Opt-in Realtime accuracy/latency tradeoff; a candidate still needs the fixed speech gate. */
   delay?: TranscriptionDelay;
+  /** Opt-in input processing; candidate audio must pass the fixed speech gate before caller use. */
+  noiseReduction?: TranscriptionNoiseReduction;
   socketFactory?: (url: string, headers: Readonly<Record<string, string>>) => Socket;
 }>;
 
@@ -112,6 +115,7 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
   private readonly model: OpenAIRealtimeTranscriptionModel;
   private readonly context: TranscriptionContext | undefined;
   private readonly delay: OpenAIRealtimeTranscriptionConfig["delay"];
+  private readonly noiseReduction: OpenAIRealtimeTranscriptionConfig["noiseReduction"];
   private readonly socket: Socket;
   private readonly converter = new Pcm16To24();
   private readonly ready: Promise<boolean>;
@@ -128,6 +132,8 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
           config.model !== "gpt-realtime-whisper") ||
         (config.context !== undefined && !validContext(config.context)) ||
         (config.delay !== undefined && !["minimal", "low", "medium", "high", "xhigh"].includes(config.delay)) ||
+        (config.noiseReduction !== undefined && config.noiseReduction !== "near_field" &&
+          config.noiseReduction !== "far_field") ||
         (config.socketFactory !== undefined && typeof config.socketFactory !== "function")) {
       throw new RangeError("invalid transcription configuration");
     }
@@ -137,6 +143,7 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
       languages: [...config.context.languages],
       ...(config.context.keywords ? { keywords: [...config.context.keywords] } : {}) } : undefined;
     this.delay = config.delay;
+    this.noiseReduction = config.noiseReduction;
     this.ready = new Promise(resolve => { this.resolveReady = resolve; });
     const headers = { Authorization: `Bearer ${config.apiKey}` };
     this.socket = config.socketFactory?.(endpoint, headers) ?? new WebSocket(endpoint, { headers });
@@ -144,7 +151,9 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
       this.send({ type: "session.update", session: { type: "transcription", audio: { input: {
         format: { type: "audio/pcm", rate: 24000 },
         transcription: { model: this.model, ...(this.context ? this.context : {}),
-          ...(this.delay ? { delay: this.delay } : {}) }, turn_detection: null,
+          ...(this.delay ? { delay: this.delay } : {}) },
+        ...(this.noiseReduction ? { noise_reduction: { type: this.noiseReduction } } : {}),
+        turn_detection: null,
       } } } });
     });
     this.socket.on("message", data => this.message(data));

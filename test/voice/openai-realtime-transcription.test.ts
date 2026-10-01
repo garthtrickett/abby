@@ -293,6 +293,32 @@ test("opt-in transcription delay is bounded, tolerated when not echoed, and cann
   /invalid transcription configuration/);
 });
 
+test("opt-in transcription noise reduction is sent to the provider without changing final trust", async () => {
+  const socket = new FakeSocket();
+  const transcription = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+    noiseReduction: "near_field", socketFactory: () => socket as unknown as WebSocket });
+  socket.open();
+  assert.deepEqual((socket.sent[0]?.session as { audio: { input: { noise_reduction: unknown } } })
+    .audio.input.noise_reduction, { type: "near_field" });
+  socket.receive({ type: "session.updated", session: { type: "transcription", audio: { input: {
+    format: { type: "audio/pcm", rate: 24000 }, transcription: { model: "gpt-live-transcribe" },
+    noise_reduction: { type: "near_field" }, turn_detection: null,
+  } } } });
+  assert.ok((await transcription.accept(frame(0, 2_000), 1, new AbortController().signal)).ok);
+  const pending = transcription.flush(1, new AbortController().signal);
+  await new Promise<void>(resolve => setImmediate(resolve));
+  socket.receive({ type: "input_audio_buffer.committed", item_id: "noise-reduced" });
+  socket.receive({ type: "conversation.item.input_audio_transcription.completed", item_id: "noise-reduced",
+    transcript: "Book physiotherapy" });
+  assert.deepEqual(await pending, { ok: true, value: [{ kind: "segmentFinal", sessionId: "session",
+    generation: 1, utteranceId: "noise-reduced", text: "Book physiotherapy", quality: "needsClarification" }] });
+  await transcription.close();
+
+  assert.throws(() => new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+    noiseReduction: "invalid" as "near_field", socketFactory: () => new FakeSocket() as unknown as WebSocket }),
+  /invalid transcription configuration/);
+});
+
 test("E2E-129 synthetic voice: rejected session, malformed completion and caller stop fail closed", async () => {
   const rejectedSocket = new FakeSocket();
   const rejected = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",

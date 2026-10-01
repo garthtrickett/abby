@@ -72,6 +72,19 @@ test("E2E-233 owner speech-gate status is aggregate-only and refuses stale or pu
     assert.equal(failedGate.stdout.includes(canary), false);
     assert.equal(failedGate.stdout.includes(directory), false);
 
+    const noise = JSON.parse(await readFile(reports.noise!, "utf8")) as {
+      configuration: { noiseReduction?: string; delay?: string } };
+    noise.configuration.noiseReduction = "near_field";
+    await writePrivate(reports.noise!, noise);
+    assert.equal(cli(setPath).status, 1);
+    delete noise.configuration.noiseReduction;
+    noise.configuration.delay = "high";
+    await writePrivate(reports.noise!, noise);
+    assert.equal(cli(setPath).status, 1);
+    delete noise.configuration.delay;
+    await writePrivate(reports.noise!, noise);
+    assert.equal(cli(setPath).status, 2);
+
     await chmod(setPath, 0o644);
     const publicSet = cli(setPath);
     assert.equal(publicSet.status, 1);

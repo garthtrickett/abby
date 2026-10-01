@@ -229,3 +229,24 @@ The current unprompted production candidate was rerun on all four unchanged pati
 The ignored owner-only report files are `eval/results/20261001-d3-current-{telephony,noise,safety,speech}.json`. Their SHA-256 values in that order are `d91c35a092adfc485ffb01d0939c9e26c8845a4ade1a92e3d57edd3228904bb7`, `4048e57031e34e2eae1d32a21c0d84b7e6d94f8dd2b9e318b8551ef602b259ac`, `7fa3b46bd1da44364a62b0a6b12295c74fd31d0bfc36381b212fc2e240e57e76`, and `0fd121d363f5e43d09156b7b4c7afdb8118b62ef52d79b444c7c0f514f9c734d`. The report set is `eval/results/current-speech-gate.json`, SHA-256 `d141b5e28ecdab59960647e2a0b2e1e4fb123c835d4fa3e34ddcf872d30085d3`. Its paths are local to this checkout; the tracked hash is the durable evidence reference.
 
 All three transcription reports pin current adapter/evaluator source SHA-256 `3434af7f123df04869af6797154e0b6a84f0fbb097fe688a66bf117ab48ef6b3` and the previously listed pinned corpus hashes. The speech report pins source SHA-256 `37d8cbd77d2f1819e8d960f04f336bed04d9af1b69636aee89e8ca2a4b1c1b16` and speech corpus SHA-256 `b02fc915affa082502d417bf3eaaecb4435c14c00947c40ecda3e57ee7578857`. This run changes the observed synthesis result, not the declared threshold or the failed combined gate. It does not include real carrier audio, human listening, a clinic decision, or patient calls. Every report retains `releaseGate: unverified`; the status says `representativeCallGate: notRun`.
+
+## Opt-in input noise-reduction screens — 2026-10-01
+
+[OpenAI's Realtime session configuration](https://github.com/openai/openai-agents-python/blob/main/src/agents/realtime/config.py) exposes `audio.input.noise_reduction` with `near_field` and `far_field` modes. Abby's adapter and evaluation runner now accept either mode only when explicitly requested. The standalone caller runner still omits the setting, and every final transcript remains untrusted. The provider accepted both session updates and produced finals; the run did not independently prove that the requested audio processing was applied.
+
+The unchanged six-case 10 dB noisy corpus ran once per case at two concurrent sessions, without prompt, keywords or delay. `near_field` had two noncritical mismatches, **four critical misses**, 50.0% WER and 773 ms final p95. `far_field` had two noncritical mismatches, **four critical misses**, 34.1% WER and 711 ms final p95. Neither run had provider failures, but both already fail the fixed zero-critical and 10% WER requirements. The three-repeat gate and safety corpus were not run for either mode. The one-repeat results do not rank the modes or establish a reliable improvement over the default.
+
+The ignored owner-only reports are `eval/results/noise-{near,far}-field-screen-2026-10-01.json`, SHA-256 `6dc336c9b57c464c29a3dab8b16e462ada1dc61a63879e4a882d4e06e308da72` and `059abc9c03600a74cc7bb1fe9f54a5939e584dc23feed02fafed54b386d19d08`. Both pin corpus SHA-256 `ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2` and adapter/evaluator source SHA-256 `8f307ebb669b79d63509b0705bbd291100c48eb6c2272bd431f7f2e38c29e24d`. Each report retains `releaseGate: unverified`. Natural-language caller admission remains disabled.
+
+## Current-source operator status after noise-reduction screens — 2026-10-01
+
+After adding the opt-in evaluation control, the unchanged default `gpt-live-transcribe` candidate was rerun on all three patient-free transcription corpora, three repeats per case and four concurrent sessions. The assessor rejected opt-in delay or noise-reduction reports as default-profile evidence, then accepted the three fresh default reports plus the unchanged source-matched 40-job speech report. `npm run voice:ops:speech` exited `2` for a validated failing candidate:
+
+| Check | Runs | Critical misses or failed jobs | WER | Result |
+| --- | ---: | ---: | ---: | --- |
+| Telephone-band clean | 9 | 0 | 4.55% | Pass; final p95 780 ms |
+| 10 dB noisy | 18 | 12 | 42.42% | Fail; final p95 786 ms |
+| 20 dB safety | 24 | 10 | 24.44% | Fail; final p95 838 ms |
+| First queued speech chunk | 40 | 0 failed jobs | — | Pass; first-chunk p95 3,121 ms |
+
+The ignored owner-only reports are `eval/results/20261001-noise-option-source-{telephony,noise,safety}.json`, SHA-256 `7c0b61b1efd110b37282cc7229366ad831efc8980aea7355764aa6d24888dbbc`, `16ac666b9f86ae10ead88b384023bdf72e1d3e17790a533919a201a742c31bdc`, and `866a48fb5bb81c2075a0cbf070a3a50fc98f01f2193b0b08559a02ecef4dfc66`. All three pin adapter/evaluator source SHA-256 `8f307ebb669b79d63509b0705bbd291100c48eb6c2272bd431f7f2e38c29e24d`. The owner-only set is `eval/results/current-speech-gate.json`, SHA-256 `0fd2d268d6563f829447e371570e53665ebb9c1ba958c318f9fface8372fde42`; it points to the current reports and the existing source-matched `20261001-d3-current-speech.json` report. Natural-language caller admission and the representative-call gate remain closed.
