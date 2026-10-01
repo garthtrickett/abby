@@ -55,15 +55,18 @@ function messages(socket: WebSocket) {
   } };
 }
 
-/** E2E-222 uses one signed caller script through both real storage and composition modes. */
-test("E2E-222 signed booking stays unavailable in standalone and needs played confirmation in embedded",
-  { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
+/** E2E-222 and E2E-074 use one signed caller script across strict, enabled and emergency-stopped modes. */
+test("E2E-222 signed booking needs played confirmation across standalone and embedded modes",
+  { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async t => {
   const adminUrl = process.env.DATABASE_URL;
   assert.ok(adminUrl);
   const admin = connectPostgres(adminUrl);
   const names: string[] = [];
   try {
-    for (const mode of ["standalone", "embedded"] as const) {
+    for (const mode of ["standalone", "embedded", "embeddedStopped"] as const) {
+      await t.test(mode === "embeddedStopped" ? "E2E-074 signed emergency write stop after played booking details"
+        : `${mode} signed booking path`, async () => {
+      const embedded = mode !== "standalone";
       const name = `abby_signed_${mode}_${randomUUID().replaceAll("-", "")}`;
       const target: URL = new URL(adminUrl);
       target.pathname = `/${name}`;
@@ -76,15 +79,15 @@ test("E2E-222 signed booking stays unavailable in standalone and needs played co
         await migrate(db);
         const scope = { tenantId: `signed-${mode}`, clinicId: "clinic", locationId: "main" };
         const readiness = async () => ok(true as const);
-        const ledger = mode === "embedded" ? new PostgresLedger(db, suggested => suggested, readiness, "unsafeReference")
+        const ledger = embedded ? new PostgresLedger(db, suggested => suggested, readiness, "unsafeReference")
           : undefined;
         const policy = new PostgresPolicyStore(db, referenceDefaultPolicy,
-          mode === "embedded" ? "execute" : "unavailable", readiness,
-          mode === "embedded", mode === "embedded" ? "unsafeReference" : "standaloneMinimal");
+          embedded ? "execute" : "unavailable", readiness,
+          embedded, embedded ? "unsafeReference" : "standaloneMinimal");
         assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
         const booking = await policy.changeBookingEnabled(scope, "0", true, "clinic-admin");
         assert.ok(booking.ok);
-        assert.equal(booking.value.capabilities.book, mode === "embedded" ? "execute" : "unavailable");
+        assert.equal(booking.value.capabilities.book, embedded ? "execute" : "unavailable");
         const host = new ReferenceClinicHost([{ scope, patientRef, verificationRef,
           expiresAt: "2026-10-01T11:00:00.000Z" }],
         [{ scope, offerRef, serviceRef: "physio", startsAt, expiresAt: "2026-10-01T11:00:00.000Z" }]);
@@ -94,8 +97,8 @@ test("E2E-222 signed booking stays unavailable in standalone and needs played co
           publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
           fallbackNumbers: { [dialedNumber]: "+6125550188" },
           bindingKey: Buffer.alloc(32, 0x38), now: () => new Date(now) });
-        const callSid = mode === "standalone" ? `CA${"5".repeat(32)}` : `CA${"6".repeat(32)}`;
-        const streamSid = mode === "standalone" ? `MZ${"7".repeat(32)}` : `MZ${"8".repeat(32)}`;
+        const callSid = `CA${(mode === "standalone" ? "5" : mode === "embedded" ? "6" : "7").repeat(32)}`;
+        const streamSid = `MZ${(mode === "standalone" ? "7" : mode === "embedded" ? "8" : "9").repeat(32)}`;
         const spoken: string[] = [];
         const played = new EventEmitter();
         let constructed = 0;
@@ -201,11 +204,30 @@ test("E2E-222 signed booking stays unavailable in standalone and needs played co
         }
         await acknowledge(output.received.length - 1, 2);
         assert.equal(host.bookings(scope).length, 0);
-        if (mode === "embedded") {
+        let stoppedVersion: string | undefined;
+        if (mode === "embeddedStopped") {
+          const stopped = await ledger!.stopWrites(scope, "clinic-admin", "Synthetic clinic incident");
+          assert.ok(stopped.ok);
+          assert.equal(stopped.value.stopped, true);
+          stoppedVersion = stopped.value.version;
+        }
+        if (embedded) {
           await speak();
-          assert.equal(host.bookings(scope).length, 1);
-          assert.equal(spoken.at(-1), "Your booking is confirmed.");
+          if (mode === "embedded") {
+            assert.equal(host.bookings(scope).length, 1);
+            assert.equal(spoken.at(-1), "Your booking is confirmed.");
+          } else {
+            assert.equal(host.bookings(scope).length, 0);
+            assert.equal(spoken.at(-1),
+              "I can't complete that action now. I'll request staff follow-up, but I can't confirm they've received it yet.");
+            assert.equal(spoken.some(text => text.includes("booking is confirmed")), false);
+          }
           await acknowledge(output.received.length - 1, 3);
+          if (mode === "embeddedStopped") {
+            const resumed = await ledger!.resumeWrites(scope, stoppedVersion!, "clinic-admin", "Synthetic recovery");
+            assert.ok(resumed.ok);
+            assert.equal(host.bookings(scope).length, 0, "resume cannot replay the blocked action");
+          }
         } else {
           const closed = once(socket, "close");
           sendFrames();
@@ -220,7 +242,7 @@ test("E2E-222 signed booking stays unavailable in standalone and needs played co
           await closed;
         }
         const count = await sql<{ count: number }>`select count(*)::int as count from calls`.execute(db);
-        assert.equal(count.rows[0]?.count, mode === "embedded" ? 1 : 0);
+        assert.equal(count.rows[0]?.count, embedded ? 1 : 0);
         if (mode === "standalone") {
           const canaries = [callSid, callerPhone, patientRef, verificationRef].map((value, index) =>
             ({ label: `private_${index}`, value }));
@@ -232,7 +254,8 @@ test("E2E-222 signed booking stays unavailable in standalone and needs played co
             const recovered = await new PostgresLedger(reopened, undefined, readiness, "unsafeReference")
               .read(callIdFor({ accountRef: accountSid, providerCallRef: callSid }), scope);
             assert.ok(recovered.ok);
-            assert.equal(Object.values(recovered.value.actions)[0]?.status, "committed");
+            assert.equal(Object.values(recovered.value.actions)[0]?.status,
+              mode === "embedded" ? "committed" : "unsupported");
           } finally { await reopened.destroy(); }
         }
         assert.equal(constructed, 1);
@@ -241,6 +264,7 @@ test("E2E-222 signed booking stays unavailable in standalone and needs played co
         if (server) { const closed = once(server, "close"); server.close(); await closed; }
         await db.destroy();
       }
+      });
     }
   } finally {
     try { for (const name of names.reverse()) await sql.raw(`drop database "${name}" with (force)`).execute(admin); }
