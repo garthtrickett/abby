@@ -3,6 +3,7 @@ import { digestActionRequest } from "./digest.ts";
 import { availabilityPresentation } from "./availability-presentation.ts";
 import { appointmentPresentation } from "./appointment-presentation.ts";
 import { addStaffTask, planStaffChange } from "./staff-work.ts";
+import { staffFallbackText, staffRequestNotice } from "./staff-fallback.ts";
 import { staffedForTransfer, staffingWindowStatus } from "./staffed-window.ts";
 import { approvedAfterHoursText } from "./after-hours-policy.ts";
 import { SILENCE_FINAL_NOTICE, SILENCE_RETRY_NOTICE } from "./silence-notices.ts";
@@ -18,18 +19,8 @@ import type {
 
 const HOUR = 60 * 60 * 1000;
 const CLOSED_TRANSFER_NOTICE = "Staff aren't available for a live transfer now. I'll request follow-up, but I can't confirm they've received it yet.";
-const NO_STAFF_WORK_NOTICE = "I can't send a staff request from this call. Please contact the clinic directly.";
-
 export function noticePresentationId(callId: string, turnId: string): string {
   return createHash("sha256").update(JSON.stringify([callId, turnId, "notice"])).digest("hex");
-}
-
-function staffFallbackText(state: CallState, whenAvailable: string): string {
-  return state.policy.staffWorkEnabled === false ? NO_STAFF_WORK_NOTICE : whenAvailable;
-}
-
-function staffRequestNotice(state: CallState): string {
-  return staffFallbackText(state, "I can request staff follow-up, but I can't confirm they have received it yet.");
 }
 
 function hostOutcomeNotice(state: CallState, effectId: string, approvedText: string): void {

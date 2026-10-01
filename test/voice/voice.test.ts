@@ -147,6 +147,7 @@ type VoiceFixtureOptions = {
   staffedIntervals?: CallPolicy["staffedIntervals"];
   afterHoursText?: string;
   afterHoursOffBeforeAdmission?: boolean;
+  staffWorkEnabled?: false;
   model?: RawModelPort;
   modelDeadlineMs?: number;
   streamedPlayback?: PlaybackPort;
@@ -191,6 +192,7 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
       ...result.value,
       automationEnabled: true,
       capabilities: { ...result.value.capabilities, transfer: transferMode },
+      ...(options.staffWorkEnabled === false ? { staffWorkEnabled: false } : {}),
       ...(transferMode === "execute" ? { transferDestinationRef: transferDestinationRef ?? `destination-${id}`,
         staffedIntervals: options.staffedIntervals ?? [{ startsAt: at(0), endsAt: at(3_600) }] } : {}),
     };
@@ -667,6 +669,36 @@ for (const kind of kinds) {
       const delivery = value(await app.session.dispatchPending(at(5)));
       assert.equal(delivery.kind, "queued");
       assert.deepEqual(app.playback.queuedTexts, ["I couldn't understand that safely. I'll request staff follow-up."]);
+      assert.equal(app.host.bookings(app.scope).length, 0);
+    });
+  }
+
+  for (const scenario of [
+    { name: "provider failure", port: { async propose() { throw new Error("provider unavailable"); } }, drains: 1 },
+    { name: "model handoff", port: { async propose() {
+      return { schemaVersion: 1, kind: "handoff", reason: "callerRequested" };
+    } }, drains: 1 },
+    { name: "unsupported action", port: { async propose() {
+      return { schemaVersion: 1, kind: "action", operation: "book", requestedService: "physio" };
+    } }, drains: 1 },
+    { name: "unapproved answer", port: { async propose() {
+      return { schemaVersion: 1, kind: "answer", sourceRefs: ["unapproved"], proposedText: "Private answer" };
+    } }, drains: 2 },
+  ] as const) {
+    test(`${kind}: E2E-230 ${scenario.name} cannot promise staff work when its route is disabled`, async () => {
+      const app = await fixture(kind, `${kind}-model-no-staff-${scenario.name.replaceAll(" ", "-")}`,
+        false, "unavailable", undefined, undefined, { model: scenario.port, staffWorkEnabled: false });
+      await modelTurn(app, "Ask model about a private request");
+      let state = value(await app.session.drainEffects(at(4)));
+      if (scenario.drains === 2) state = value(await app.session.drainEffects(at(5)));
+      assert.deepEqual(Object.values(state.staffItems), []);
+      assert.equal(Object.values(state.effects).some(effect => effect.kind === "staffTask" || effect.kind === "hostWrite"), false);
+      assert.equal(state.callerMessages.at(-1), "I can't send a staff request from this call. Please contact the clinic directly.");
+      assert.equal(JSON.stringify(state).includes("Ask model about a private request"), false);
+      assert.equal(JSON.stringify(state).includes("Private answer"), false);
+      const delivery = value(await app.session.dispatchPending(at(6)));
+      assert.equal(delivery.kind, "queued");
+      assert.deepEqual(app.playback.queuedTexts, ["I can't send a staff request from this call. Please contact the clinic directly."]);
       assert.equal(app.host.bookings(app.scope).length, 0);
     });
   }
