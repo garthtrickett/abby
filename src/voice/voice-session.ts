@@ -386,6 +386,17 @@ export class VoiceSession {
     return resolved.ok ? ok({ kind: status }) : resolved;
   }
 
+  /** No caller turn is invented for an idle interval; the core issues only fixed notices. */
+  async silenceTimeout(stage: "retry" | "final", now: string): Promise<Result<DispatchResult, VoiceSessionFailure>> {
+    if (!this.attached) return err({ kind: "sessionUnknown" });
+    if (this.speechOpen || this.activePlayback) return err({ kind: "deliveryBlocked" });
+    if (!this.canSend()) return err({ kind: "leaseLost" });
+    const noticed = await this.runtime.silenceTimeout(this.callId, this.sessionId, stage, now);
+    if (!noticed.ok) return noticed;
+    this.rememberPending(noticed.value);
+    return this.dispatchPending(now);
+  }
+
   private async dispatchTransfer(presentation: Extract<Presentation, { kind: "transfer" }>, now: string): Promise<Result<DispatchResult, VoiceSessionFailure>> {
     if (!this.transfer) return err({ kind: "transportUnavailable" });
     const generation = this.assembler.currentGeneration();

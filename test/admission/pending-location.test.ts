@@ -221,6 +221,25 @@ for (const kind of kinds) {
       { sessionId: "session", leaseVersion: 2, turnId: "turn", selectedLocationId: app.scope.locationId, at: at(15) });
   });
 
+  test(`${kind}: E2E-070 a played location prompt repeats only for an explicit silence retry`, async () => {
+    const app = fixture(kind);
+    value(await app.ledger.reservePendingLocation(app.callId, app.route, app.admission));
+    value(await app.ledger.attachPendingLocationSession(app.callId, "session", now));
+    const first = value(await app.ledger.startPendingLocationPrompt(app.callId, "first", "session", 1, now));
+    assert.equal(first.newStart, true);
+    const whileQueued = value(await app.ledger.startPendingLocationPrompt(app.callId, "second", "session", 1, now, true));
+    assert.equal(whileQueued.newStart, false);
+    value(await app.ledger.resolvePendingLocationPrompt(app.callId, "first", "session", 1, "played", now));
+    const ordinaryDispatch = value(await app.ledger.startPendingLocationPrompt(app.callId, "second", "session", 1, now));
+    assert.equal(ordinaryDispatch.newStart, false);
+    assert.equal(ordinaryDispatch.pending.prompt?.playbackId, "first");
+    const silenceRetry = value(await app.ledger.startPendingLocationPrompt(app.callId, "second", "session", 1, now, true));
+    assert.equal(silenceRetry.newStart, true);
+    assert.equal(silenceRetry.pending.prompt?.playbackId, "second");
+    const duplicate = value(await app.ledger.startPendingLocationPrompt(app.callId, "second", "session", 1, now, true));
+    assert.equal(duplicate.newStart, false);
+  });
+
   test(`${kind}: expired pre-location lease ends the choice before its two-minute deadline`, async () => {
     const app = fixture(kind);
     value(await app.ledger.reservePendingLocation(app.callId, app.route, app.admission));

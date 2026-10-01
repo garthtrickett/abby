@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
+import { SILENCE_FINAL_NOTICE } from "../core/silence-notices.ts";
 import type { AdmissionResult, PendingLocationCall, Result, TransitionFailure } from "../core/model.ts";
 import { callIdFor } from "./admission.ts";
 import type { AuthenticatedInboundCall, RouteFailure } from "./admission.ts";
@@ -83,15 +84,16 @@ export class PrelocationVoiceSession {
     return renewed;
   }
 
-  async dispatchPrompt(now: string): Promise<Result<PrelocationPromptResult, PrelocationVoiceFailure>> {
+  async dispatchPrompt(now: string, notice?: "retrySilence" | "finalSilence"): Promise<Result<PrelocationPromptResult, PrelocationVoiceFailure>> {
     if (this.ending) return err({ kind: "deliveryBlocked" });
     if (!this.attached || !this.pending || this.leaseVersion === undefined) return err({ kind: "sessionUnknown" });
     if (this.speechOpen) return err({ kind: "deliveryBlocked" });
     if (!this.canSend()) return err({ kind: "leaseLost" });
-    const text = locationChoicePrompt(this.pending.route);
+    const text = notice === "finalSilence" ? SILENCE_FINAL_NOTICE : locationChoicePrompt(this.pending.route);
     if (!text) return err({ kind: "invalidTransition" });
     const playbackId = `${this.callId}:location:${randomUUID()}`;
-    const started = await this.ledger.startPendingLocationPrompt(this.callId, playbackId, this.sessionId, this.leaseVersion, now);
+    const started = await this.ledger.startPendingLocationPrompt(this.callId, playbackId, this.sessionId, this.leaseVersion,
+      now, notice !== undefined);
     if (!started.ok) return started;
     const prompt = started.value.pending.prompt!;
     this.pending = started.value.pending;
@@ -121,6 +123,11 @@ export class PrelocationVoiceSession {
     this.pending = resolved.value;
     if (status !== "queued") this.activePlaybackId = undefined;
     return ok({ kind: status, playbackId });
+  }
+
+  silenceTimeout(stage: "retry" | "final", now: string): Promise<Result<PrelocationPromptResult, PrelocationVoiceFailure>> {
+    if (this.activePlaybackId) return Promise.resolve(err({ kind: "deliveryBlocked" }));
+    return this.dispatchPrompt(now, stage === "final" ? "finalSilence" : "retrySilence");
   }
 
   async acceptPlaybackResult(playbackId: string, status: "played" | "failed", now: string): Promise<Result<PendingLocationCall, PrelocationVoiceFailure>> {

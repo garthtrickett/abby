@@ -67,6 +67,10 @@ export class CallRuntime {
     return this.update(callId, { kind: "speechBegan", sessionId, now });
   }
 
+  silenceTimeout(callId: string, sessionId: string, stage: "retry" | "final", now: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "silenceTimeout", sessionId, stage, now });
+  }
+
   read(callId: string): Promise<Result<CallState, TransitionFailure>> {
     return this.ledger.read(callId, this.scope);
   }

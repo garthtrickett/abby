@@ -71,6 +71,7 @@ function auditPayload(action: TransitionAction): Record<string, string> {
     case "sessionRenewed":
     case "sessionExpired":
     case "speechBegan": return { sessionId: action.sessionId };
+    case "silenceTimeout": return { sessionId: action.sessionId, stage: action.stage };
     case "callEnded": return { sessionId: action.sessionId, reason: action.reason };
     case "textPresentationWritten": return { presentationId: action.presentationId };
     case "admissionExpired": return {};
@@ -364,7 +365,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
     } catch { return err({ kind: "storageFailure" }); }
   }
 
-  async startPendingLocationPrompt(callId: string, playbackId: string, sessionId: string, expectedVersion: number, now: string):
+  async startPendingLocationPrompt(callId: string, playbackId: string, sessionId: string, expectedVersion: number, now: string, afterPlayed = false):
     Promise<Result<Readonly<{ pending: PendingLocationCall; newStart: boolean }>, TransitionFailure>> {
     if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
     try {
@@ -376,7 +377,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
         if (!validPendingLocation(row.state, callId) || row.status !== row.state.status ||
             row.tenant_id !== row.state.route.tenantId || row.clinic_id !== row.state.route.clinicId) return err({ kind: "storageCorrupt" });
         const ledgerNow = await this.trustedNow(trx, now);
-        const started = startLocationPrompt(row.state, playbackId, sessionId, expectedVersion, ledgerNow);
+        const started = startLocationPrompt(row.state, playbackId, sessionId, expectedVersion, ledgerNow, afterPlayed);
         if (!started.ok) return started;
         if (started.value.newStart) await trx.updateTable("pending_location_calls").set({ state: started.value.pending })
           .where("call_id", "=", callId as PendingLocationCallsCallId).execute();

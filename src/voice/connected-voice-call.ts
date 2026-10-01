@@ -186,6 +186,15 @@ export class ConnectedVoiceCall {
     return this.acceptKeypadAvailabilityRange(date, date, now);
   }
 
+  async silenceTimeout(stage: "retry" | "final", now: string):
+    Promise<Result<DispatchResult | PrelocationPromptResult, ConnectedVoiceFailure>> {
+    if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
+    if (!this.begun) return err({ kind: "notStarted" });
+    if (!this.media.idle()) return err({ kind: "deliveryBlocked" });
+    try { return this.checkedDelivery(await this.call.silenceTimeout(stage, now), now); }
+    catch { await this.close(now, "sessionClosed"); return err({ kind: "targetUnavailable" }); }
+  }
+
   async acceptKeypadAvailabilityRange(from: string, to: string, now: string):
     Promise<Result<ConnectedVoiceProgress, ConnectedVoiceFailure>> {
     if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
@@ -261,5 +270,9 @@ export class ConnectedVoiceCall {
 
   disconnect(now: string): Promise<Result<PendingLocationCall | CallState, ConnectedVoiceFailure>> {
     return this.close(now, "callerDisconnected");
+  }
+
+  finish(now: string): Promise<Result<PendingLocationCall | CallState, ConnectedVoiceFailure>> {
+    return this.close(now, "sessionClosed");
   }
 }
