@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import test, { after } from "node:test";
 import { sql } from "kysely";
+import { sendVoiceOperationalAlerts } from "../../scripts/send-voice-operational-alerts.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { PostgresOperationalCounters } from "../../src/storage/postgres-operational-counters.ts";
@@ -142,5 +145,70 @@ test("E2E-219 owner threshold command enables selected fixed codes and isolates 
     assert.equal(rejected.status, 1);
     assert.equal(rejected.stdout, "");
     assert.equal(rejected.stderr, "operational threshold check unavailable\n");
+  }
+});
+
+test("E2E-220 owner webhook accepts redacted alerts and never follows a credentialed redirect", async () => {
+  const tenantId = `ops-alert-${randomUUID()}`;
+  const otherTenantId = `ops-alert-other-${randomUUID()}`;
+  const patientCanary = `patient-alert-${randomUUID()}`;
+  const today = new Date().toISOString().slice(0, 10);
+  await sql`insert into clinic_operational_daily_counts
+    (tenant_id, clinic_id, location_id, date, kind, count) values
+    (${tenantId}, 'clinic', 'main', ${today}::date, 'clinikoProvider429', 2),
+    (${tenantId}, 'clinic', 'main', ${today}::date, 'voiceFailure', 1),
+    (${otherTenantId}, 'clinic', 'main', ${today}::date, 'clinikoProvider429', 99)`.execute(db);
+  const requests: { path: string; authorization: string; key: string; body: string }[] = [];
+  const server = createServer((request, response) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", chunk => { body += chunk; });
+    request.on("end", () => {
+      requests.push({ path: request.url ?? "", authorization: request.headers.authorization ?? "",
+        key: String(request.headers["idempotency-key"] ?? ""), body });
+      response.writeHead(request.url === "/redirect" ? 302 : request.url === "/fail" ? 503 : 202,
+        request.url === "/redirect" ? { location: "/must-not-follow" } : {});
+      response.end();
+    });
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const port = (server.address() as AddressInfo).port;
+    const token = "a".repeat(64);
+    const env = { ...process.env, ABBY_TENANT_ID: tenantId, ABBY_CLINIC_ID: "clinic",
+      ABBY_LOCATION_ID: "main", ABBY_VOICE_OPS_THRESHOLDS_JSON: '{"clinikoProvider429":2}',
+      ABBY_VOICE_ALERT_TOKEN_HEX: token, ABBY_VOICE_ALERT_WEBHOOK_URL: `http://127.0.0.1:${port}/alerts`,
+      ABBY_PATIENT_CANARY: patientCanary };
+    const ports = { allowTestLoopbackHttp: true };
+    assert.deepEqual(await sendVoiceOperationalAlerts(env, ports), { date: today, accepted: 1 });
+    assert.deepEqual(await sendVoiceOperationalAlerts(env, ports), { date: today, accepted: 1 });
+    assert.equal(requests.length, 2);
+    assert.equal(requests[0]?.authorization, `Bearer ${token}`);
+    assert.match(requests[0]!.key, /^[a-f0-9]{64}$/);
+    assert.equal(requests[0]?.key, requests[1]?.key, "retry uses a stable receiver deduplication key");
+    assert.deepEqual(JSON.parse(requests[0]!.body), { schemaVersion: 1, date: today,
+      kind: "clinikoProvider429", count: 2, threshold: 2, alertKey: requests[0]!.key });
+    assert.equal(requests[0]!.body.includes(patientCanary), false);
+    assert.equal(requests[0]!.body.includes(tenantId), false);
+    assert.equal(requests[0]!.body.includes(otherTenantId), false);
+    assert.deepEqual(await sendVoiceOperationalAlerts({ ...env,
+      ABBY_VOICE_OPS_THRESHOLDS_JSON: '{"clinikoProvider429":3}' }, ports), { date: today, accepted: 0 });
+    assert.equal(requests.length, 2, "clear threshold makes no network request");
+    await assert.rejects(sendVoiceOperationalAlerts(env), /invalid operational alert destination/);
+    await assert.rejects(sendVoiceOperationalAlerts({ ...env,
+      ABBY_VOICE_ALERT_WEBHOOK_URL: `http://127.0.0.1:${port}/redirect` }, ports),
+      /operational alert delivery unavailable/);
+    assert.equal(requests.length, 3);
+    assert.equal(requests[2]?.path, "/redirect", "redirect target receives no bearer token");
+    await assert.rejects(sendVoiceOperationalAlerts({ ...env,
+      ABBY_VOICE_ALERT_WEBHOOK_URL: `http://127.0.0.1:${port}/fail` }, ports),
+      /operational alert delivery unavailable/);
+    assert.equal(requests.length, 4, "a rejected webhook response is never reported as accepted");
+    await assert.rejects(sendVoiceOperationalAlerts({ ...env,
+      ABBY_VOICE_ALERT_WEBHOOK_URL: `https://example.invalid/alerts?patient=${patientCanary}` }),
+      /invalid operational alert destination/);
+    assert.equal(requests.length, 4);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
 });
