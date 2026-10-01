@@ -37,6 +37,7 @@ def exact_patient(base: str, headers: dict[str, str], reference_id: str) -> tupl
 
 def main() -> int:
     env_mode = os.environ.get("ABBY_LIVE_CLINIKO_EVAL") == "1"
+    voice_change_mode = env_mode and os.environ.get("ABBY_PROBE_VOICE_CHANGE") == "1"
     if not env_mode and not sys.stdin.isatty():
         print("Run in a terminal so the API key is hidden, or use the opt-in owner-only environment.", file=sys.stderr)
         return 2
@@ -96,18 +97,22 @@ def main() -> int:
                 raise ProbeError(f"enable_online_booking_{status}")
             print(json.dumps({"step": "enable_online_booking", "http_status": status}))
 
-        target_date = (datetime.now(timezone.utc).date() + timedelta(days=2)).isoformat()
         offer_type = None
         offers = []
-        for item in types:
-            type_id = str(item["id"])
-            path = (f"/businesses/{quote(business_id, safe='')}/practitioners/{quote(practitioner_id, safe='')}"
-                    f"/appointment_types/{quote(type_id, safe='')}/available_times?"
-                    + urlencode({"from": target_date, "to": target_date, "per_page": 10}))
-            status, data = request(base, headers, "GET", path)
-            if status == 200 and isinstance(data.get("available_times"), list) and data["available_times"]:
-                offer_type = type_id
-                offers = data["available_times"]
+        today = datetime.now(timezone.utc).date()
+        for first_day, last_day in ((1, 7), (8, 14)):
+            for item in types:
+                type_id = str(item["id"])
+                path = (f"/businesses/{quote(business_id, safe='')}/practitioners/{quote(practitioner_id, safe='')}"
+                        f"/appointment_types/{quote(type_id, safe='')}/available_times?"
+                        + urlencode({"from": (today + timedelta(days=first_day)).isoformat(),
+                                     "to": (today + timedelta(days=last_day)).isoformat(), "per_page": 100}))
+                status, data = request(base, headers, "GET", path)
+                if status == 200 and isinstance(data.get("available_times"), list) and len(data["available_times"]) >= 2:
+                    offer_type = type_id
+                    offers = data["available_times"]
+                    break
+            if offer_type is not None:
                 break
         if offer_type is None:
             raise ProbeError("no_bookable_offer")
@@ -204,9 +209,14 @@ def main() -> int:
             "startsAt": before["starts_at"], "endsAt": before["ends_at"],
             "newStartsAt": second_start, "newEndsAt": new_end_at.isoformat(),
         }
+        if voice_change_mode:
+            move_input.update({"kind": "reschedule", "timeZone": time_zone_identifier,
+                               "markerToken": marker_token})
         try:
             movement = subprocess.run(
-                ["node", str(Path(__file__).with_name("cliniko_reschedule_writer_probe.ts"))],
+                ["node", str(Path(__file__).with_name(
+                    "cliniko_appointment_change_call_probe.ts" if voice_change_mode
+                    else "cliniko_reschedule_writer_probe.ts"))],
                 input=json.dumps(move_input), text=True, capture_output=True,
                 cwd=repo_root, timeout=60, check=False,
             )
@@ -222,16 +232,27 @@ def main() -> int:
             datetime.fromisoformat(current["starts_at"].replace("Z", "+00:00")) == new_start_at and\
             datetime.fromisoformat(current["ends_at"].replace("Z", "+00:00")) == new_end_at and\
             conflict_status == 200 and conflict.get("conflicts", {}).get("exist") is False
-        print(json.dumps({"step": "typescript_reschedule_writer",
-                          "write_kind": movement_result.get("writeKind"),
-                          "observation_kind": movement_result.get("observationKind"),
-                          "repeated_attempt_rejected": movement_result.get("repeatedAttemptRejected") is True,
-                          "injected_move_response_loss": movement_result.get("injectedMoveResponseLoss") is True,
-                          "independent_moved_read": moved_ok}))
-        injected_move_loss = env_mode and os.environ.get("ABBY_PROBE_LOSE_MOVE_RESPONSE") == "1"
-        if (movement.returncode != 0 or movement_result.get("ok") is not True or not moved_ok or
-                movement_result.get("injectedMoveResponseLoss") is not injected_move_loss):
-            failed = True
+        if voice_change_mode:
+            print(json.dumps({"step": "embedded_voice_reschedule_host",
+                              "voice_committed": movement_result.get("voiceCommitted") is True,
+                              "one_patch": movement_result.get("onePatch") is True,
+                              "confirmation_after_observation":
+                                  movement_result.get("confirmationAfterObservation") is True,
+                              "repeat_rejected": movement_result.get("repeatRejected") is True,
+                              "independent_moved_read": moved_ok}))
+            if (movement.returncode != 0 or movement_result.get("ok") is not True or not moved_ok):
+                failed = True
+        else:
+            print(json.dumps({"step": "typescript_reschedule_writer",
+                              "write_kind": movement_result.get("writeKind"),
+                              "observation_kind": movement_result.get("observationKind"),
+                              "repeated_attempt_rejected": movement_result.get("repeatedAttemptRejected") is True,
+                              "injected_move_response_loss": movement_result.get("injectedMoveResponseLoss") is True,
+                              "independent_moved_read": moved_ok}))
+            injected_move_loss = env_mode and os.environ.get("ABBY_PROBE_LOSE_MOVE_RESPONSE") == "1"
+            if (movement.returncode != 0 or movement_result.get("ok") is not True or not moved_ok or
+                    movement_result.get("injectedMoveResponseLoss") is not injected_move_loss):
+                failed = True
 
         target_status, target = request(base, headers, "GET", appointment_path)
         if target_status != 200 or str(target.get("id")) != appointment_id or\
@@ -243,9 +264,14 @@ def main() -> int:
             "patientId": patient_id, "appointmentId": appointment_id,
             "startsAt": target["starts_at"], "endsAt": target["ends_at"],
         }
+        if voice_change_mode:
+            cancel_input.update({"kind": "cancel", "timeZone": time_zone_identifier,
+                                 "markerToken": marker_token})
         try:
             cancellation = subprocess.run(
-                ["node", str(Path(__file__).with_name("cliniko_cancellation_writer_probe.ts"))],
+                ["node", str(Path(__file__).with_name(
+                    "cliniko_appointment_change_call_probe.ts" if voice_change_mode
+                    else "cliniko_cancellation_writer_probe.ts"))],
                 input=json.dumps(cancel_input), text=True, capture_output=True,
                 cwd=repo_root, timeout=60, check=False,
             )
@@ -258,13 +284,24 @@ def main() -> int:
         cancelled_path = f"/individual_appointments/{quote(appointment_id, safe='')}?" + urlencode({"q[]": "cancelled_at:*"})
         read_status, cancelled = request(base, headers, "GET", cancelled_path)
         cancelled_ok = read_status == 200 and bool(cancelled.get("cancelled_at"))
-        print(json.dumps({"step": "typescript_cancellation_writer",
-                          "write_kind": cancellation_result.get("writeKind"),
-                          "observation_kind": cancellation_result.get("observationKind"),
-                          "repeated_attempt_rejected": cancellation_result.get("repeatedAttemptRejected") is True,
-                          "independent_cancelled_read": cancelled_ok}))
-        if cancellation.returncode != 0 or cancellation_result.get("ok") is not True or not cancelled_ok:
-            failed = True
+        if voice_change_mode:
+            print(json.dumps({"step": "embedded_voice_cancellation_host",
+                              "voice_committed": cancellation_result.get("voiceCommitted") is True,
+                              "one_patch": cancellation_result.get("onePatch") is True,
+                              "confirmation_after_observation":
+                                  cancellation_result.get("confirmationAfterObservation") is True,
+                              "repeat_rejected": cancellation_result.get("repeatRejected") is True,
+                              "independent_cancelled_read": cancelled_ok}))
+            if cancellation.returncode != 0 or cancellation_result.get("ok") is not True or not cancelled_ok:
+                failed = True
+        else:
+            print(json.dumps({"step": "typescript_cancellation_writer",
+                              "write_kind": cancellation_result.get("writeKind"),
+                              "observation_kind": cancellation_result.get("observationKind"),
+                              "repeated_attempt_rejected": cancellation_result.get("repeatedAttemptRejected") is True,
+                              "independent_cancelled_read": cancelled_ok}))
+            if cancellation.returncode != 0 or cancellation_result.get("ok") is not True or not cancelled_ok:
+                failed = True
     except (ProbeError, URLError, TimeoutError, ValueError, KeyError) as error:
         failed = True
         label = str(error) if isinstance(error, ProbeError) else type(error).__name__
@@ -299,8 +336,12 @@ def main() -> int:
         if patient_id:
             try:
                 status, _ = request(base, headers, "POST", f"/patients/{quote(patient_id, safe='')}/archive")
-                print(json.dumps({"step": "archive_patient", "http_status": status}))
-                cleanup_failed |= status != 204
+                verify_status, archived = request(base, headers, "GET",
+                    f"/patients/{quote(patient_id, safe='')}?" + urlencode({"q[]": "archived_at:*"}))
+                verified = status == 204 and verify_status == 200 and bool(archived.get("archived_at"))
+                print(json.dumps({"step": "archive_patient", "http_status": status,
+                                  "independent_archived_read": verified}))
+                cleanup_failed |= not verified
             except (URLError, TimeoutError, ValueError):
                 cleanup_failed = True
                 print(json.dumps({"step": "archive_patient", "verified": False}))
