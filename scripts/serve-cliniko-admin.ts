@@ -3,6 +3,7 @@ import type { ServerResponse } from "node:http";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createStandaloneClinikoAdminDashboard } from "../src/standalone/cliniko-admin-dashboard.ts";
+import { readSpeechGateStatus } from "./read-speech-gate-status.ts";
 import { connectPostgres } from "../src/storage/connect.ts";
 
 function required(name: string): string {
@@ -52,6 +53,7 @@ export async function serveClinikoAdmin(ports: ClinikoAdminRunnerPorts = {}): Pr
         return timingSafeEqual(supplied, expected) ? actor : null;
       },
       unauthorized,
+      readSpeechGate: () => readSpeechGateStatus(),
       bundlePath: ports.bundlePath ?? resolve("dist/dashboard/cliniko-admin.js"),
       ...(ports.clinikoFetch ? { fetch: ports.clinikoFetch } : {}),
     });
