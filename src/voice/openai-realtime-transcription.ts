@@ -13,6 +13,7 @@ const maxEarlyCompletions = 8;
 
 type Socket = Pick<WebSocket, "on" | "send" | "close" | "terminate" | "bufferedAmount" | "readyState">;
 export type OpenAIRealtimeTranscriptionModel = "gpt-live-transcribe" | "gpt-transcribe";
+export type TranscriptionDelay = "minimal" | "low" | "medium" | "high" | "xhigh";
 export type TranscriptionContext = Readonly<{
   /** Static, patient-free clinic setting. Never put caller or patient data here. */
   prompt: string;
@@ -23,6 +24,8 @@ export type OpenAIRealtimeTranscriptionConfig = Readonly<{
   sessionId: string;
   model?: OpenAIRealtimeTranscriptionModel;
   context?: TranscriptionContext;
+  /** Opt-in Realtime accuracy/latency tradeoff; a candidate still needs the fixed speech gate. */
+  delay?: TranscriptionDelay;
   socketFactory?: (url: string, headers: Readonly<Record<string, string>>) => Socket;
 }>;
 
@@ -102,6 +105,7 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
   private readonly sessionId: string;
   private readonly model: OpenAIRealtimeTranscriptionModel;
   private readonly context: TranscriptionContext | undefined;
+  private readonly delay: OpenAIRealtimeTranscriptionConfig["delay"];
   private readonly socket: Socket;
   private readonly converter = new Pcm16To24();
   private readonly ready: Promise<boolean>;
@@ -116,6 +120,7 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
         typeof config.sessionId !== "string" || !config.sessionId.trim() || config.sessionId.length > 256 ||
         (config.model !== undefined && config.model !== "gpt-live-transcribe" && config.model !== "gpt-transcribe") ||
         (config.context !== undefined && !validContext(config.context)) ||
+        (config.delay !== undefined && !["minimal", "low", "medium", "high", "xhigh"].includes(config.delay)) ||
         (config.socketFactory !== undefined && typeof config.socketFactory !== "function")) {
       throw new RangeError("invalid transcription configuration");
     }
@@ -123,13 +128,15 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
     this.model = config.model ?? "gpt-live-transcribe";
     this.context = config.context ? { prompt: config.context.prompt,
       languages: [...config.context.languages] } : undefined;
+    this.delay = config.delay;
     this.ready = new Promise(resolve => { this.resolveReady = resolve; });
     const headers = { Authorization: `Bearer ${config.apiKey}` };
     this.socket = config.socketFactory?.(endpoint, headers) ?? new WebSocket(endpoint, { headers });
     this.socket.on("open", () => {
       this.send({ type: "session.update", session: { type: "transcription", audio: { input: {
         format: { type: "audio/pcm", rate: 24000 },
-        transcription: { model: this.model, ...(this.context ? this.context : {}) }, turn_detection: null,
+        transcription: { model: this.model, ...(this.context ? this.context : {}),
+          ...(this.delay ? { delay: this.delay } : {}) }, turn_detection: null,
       } } } });
     });
     this.socket.on("message", data => this.message(data));
