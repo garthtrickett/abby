@@ -18,6 +18,7 @@ const now = "2026-09-30T10:00:00.000Z";
 function fixture(store: ClinikoApprovalStore = new MemoryClinikoApprovalStore()) {
   const calls: string[] = [];
   let providerStatus = 200;
+  let practitionerActive = true;
   const fetchPort: typeof fetch = async input => {
     const path = new URL(String(input)).pathname;
     calls.push(path);
@@ -29,7 +30,7 @@ function fixture(store: ClinikoApprovalStore = new MemoryClinikoApprovalStore())
       id: "11", business_name: "Demo clinic", archived_at: null, show_in_online_bookings: true,
       time_zone_identifier: "Australia/Sydney", appointment_type_ids: ["33"], private_patient_name: "secret-patient" });
     if (path === "/v1/practitioners/22") return Response.json({
-      id: "22", display_name: "Practitioner", active: true, show_in_online_bookings: true });
+      id: "22", display_name: "Practitioner", active: practitionerActive, show_in_online_bookings: true });
     if (path === "/v1/appointment_types/33") return Response.json({
       id: "33", name: "Consult", archived_at: null, show_in_online_bookings: true });
     if (path === "/v1/businesses/11/practitioners") return Response.json({
@@ -48,10 +49,11 @@ function fixture(store: ClinikoApprovalStore = new MemoryClinikoApprovalStore())
   const gateway = (role: "clinicAdmin" | "staff" | "agent", actorScope = scope) =>
     new CommandGateway({ actorRef: `host-${role}`, role, scope: actorScope }, policy, reception,
       undefined, undefined, undefined, undefined, undefined, setup);
-  return { gateway, setup, calls, setProviderStatus(value: number) { providerStatus = value; } };
+  return { gateway, setup, calls, setProviderStatus(value: number) { providerStatus = value; },
+    setPractitionerActive(value: boolean) { practitionerActive = value; } };
 }
 
-test("E2E-194 provider-neutral setup commands bind clinic admin, version and read-only capability", async () => {
+test("E2E-194 E2E-216 provider-neutral setup commands bind clinic admin, version and current read-only eligibility", async () => {
   const app = fixture();
   const admin = app.gateway("clinicAdmin");
   const agent = app.gateway("agent");
@@ -59,7 +61,8 @@ test("E2E-194 provider-neutral setup commands bind clinic admin, version and rea
   const ids = admin.listPermitted().map(item => item.id);
   assert.deepEqual(ids.filter(id => id.startsWith("clinic.availability.")), [
     "clinic.availability.businesses.list.v1", "clinic.availability.selection.inspect.v1",
-    "clinic.availability.approval.read.v1", "clinic.availability.approval.change.v1",
+    "clinic.availability.approval.read.v1", "clinic.availability.route.check.v1",
+    "clinic.availability.approval.change.v1",
     "clinic.availability.approval.change.v2",
     "clinic.availability.approval.revoke.v1",
   ]);
@@ -69,6 +72,8 @@ test("E2E-194 provider-neutral setup commands bind clinic admin, version and rea
     { ok: false, error: { kind: "forbidden" } });
   assert.deepEqual(await staff.submit({ kind: "clinic.availability.approval.read.v1" }),
     { ok: false, error: { kind: "forbidden" } });
+  assert.deepEqual(await staff.submit({ kind: "clinic.availability.route.check.v1" }),
+    { ok: false, error: { kind: "forbidden" } });
   assert.deepEqual(await agent.submit({ kind: "clinic.availability.approval.change.v1",
     route, selection, expectedVersion: 0 }), { ok: false, error: { kind: "forbidden" } });
   assert.deepEqual(app.calls, []);
@@ -76,6 +81,8 @@ test("E2E-194 provider-neutral setup commands bind clinic admin, version and rea
   const initial = await admin.submit({ kind: "clinic.availability.approval.read.v1" });
   assert.ok(initial.ok && initial.value.kind === "clinicAvailabilityApprovalState");
   assert.deepEqual(initial.value.state, { version: 0, approval: null });
+  assert.deepEqual(await admin.submit({ kind: "clinic.availability.route.check.v1" }),
+    { ok: false, error: { kind: "notApproved" } });
   const listed = await admin.submit({ kind: "clinic.availability.businesses.list.v1" });
   assert.ok(listed.ok && listed.value.kind === "clinicAvailabilityBusinesses");
   assert.equal(listed.value.catalogue.businesses[0]?.name, "Demo clinic");
@@ -91,6 +98,12 @@ test("E2E-194 provider-neutral setup commands bind clinic admin, version and rea
   assert.equal(approved.value.state.approval?.approvedBy, "host-clinicAdmin");
   assert.equal(approved.value.state.approval?.patientActionMode, "unavailable");
   assert.equal(approved.value.state.approval?.patientRequestMode, "unavailable");
+  assert.deepEqual(await admin.submit({ kind: "clinic.availability.route.check.v1" }),
+    { ok: true, value: { kind: "clinicAvailabilityRouteCheck", eligible: true } });
+  app.setPractitionerActive(false);
+  assert.deepEqual(await admin.submit({ kind: "clinic.availability.route.check.v1" }),
+    { ok: false, error: { kind: "selectionUnavailable" } });
+  app.setPractitionerActive(true);
   assert.equal(JSON.stringify([listed, inspected, approved]).includes("secret-patient"), false);
   assert.equal(JSON.stringify([listed, inspected, approved]).includes("synthetic-key"), false);
   assert.deepEqual(await admin.submit({ kind: "clinic.availability.approval.change.v1",
@@ -98,6 +111,8 @@ test("E2E-194 provider-neutral setup commands bind clinic admin, version and rea
   const revoked = await admin.submit({ kind: "clinic.availability.approval.revoke.v1", expectedVersion: 1 });
   assert.ok(revoked.ok && revoked.value.kind === "clinicAvailabilityApprovalState");
   assert.deepEqual(revoked.value.state, { version: 2, approval: null });
+  assert.deepEqual(await admin.submit({ kind: "clinic.availability.route.check.v1" }),
+    { ok: false, error: { kind: "notApproved" } });
   assert.deepEqual(await app.setup.readApprovedRoute(scope, route),
     { ok: false, error: { kind: "notApproved" } });
 });

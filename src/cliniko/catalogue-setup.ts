@@ -169,6 +169,14 @@ export class ClinikoCatalogueSetup {
     } catch { return err({ kind: "storageFailure" }); }
   }
 
+  async checkApprovedRoute(actor: HostActor): Promise<Result<Readonly<{ eligible: true }>, ClinikoSetupFailure>> {
+    const current = await this.current(actor);
+    if (!current.ok) return current;
+    if (!current.value.approval) return err({ kind: "notApproved" });
+    const checked = await this.resolveForCall(actor.scope, current.value.approval.route);
+    return checked.ok ? ok({ eligible: true }) : checked;
+  }
+
   private async bind(scope: LocationScope, route: ClinikoSetupRoute, selection: ClinikoSelection):
     Promise<Result<ClinikoSelectionSnapshot, ClinikoSetupFailure>> {
     if (!validRoute(route) || !validSelection(selection)) return err({ kind: "invalid" });
