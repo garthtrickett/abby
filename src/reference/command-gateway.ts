@@ -115,6 +115,14 @@ export class CommandGateway {
     this.availabilitySetup = availabilitySetup;
   }
 
+  /** A host transport can reject a gateway accidentally bound to another session. */
+  matchesActor(actor: HostActor): boolean {
+    return !!actor && this.actor.actorRef === actor.actorRef && this.actor.role === actor.role &&
+      this.actor.scope.tenantId === actor.scope?.tenantId &&
+      this.actor.scope.clinicId === actor.scope?.clinicId &&
+      this.actor.scope.locationId === actor.scope?.locationId;
+  }
+
   listPermitted(): readonly CapabilityDescriptor[] {
     const permitted: CapabilityId[] = ["settings.read.v1", "booking.propose.v2", "knowledge.answer.v2"];
     if (this.reception.modelEnabled()) permitted.push("calls.turn.model.v1");
