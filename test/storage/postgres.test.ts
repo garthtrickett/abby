@@ -90,7 +90,7 @@ test("emergency stop latches even when an in-flight outbox row has lost its acti
   assert.equal(success(await new PostgresLedger(db, undefined, undefined, "unsafeReference").readWriteStop(app.scope)).stopped, true);
 });
 
-test("PostgreSQL staff queue reads the indexed task projection within one clinic", async () => {
+test("E2E-221 PostgreSQL staff queue health reads only one clinic's indexed task projection", async () => {
   const app = await setup("pg-staff-queue");
   success(await app.runtime.acceptTurn({ callId: app.callId, turnId: "staff-request", text: "Need staff", quality: "clear", at: now },
     { kind: "handoff", reason: "callerRequested" }, now));
@@ -101,6 +101,14 @@ test("PostgreSQL staff queue reads the indexed task projection within one clinic
     { callId: app.callId, reason: "callerRequested", status: "requested", overdue: true });
   assert.equal(JSON.stringify(result).includes("Need staff"), false);
   assert.deepEqual(success(await queue.list({ ...app.scope, locationId: "other-location" })).items, []);
+  const health = success(await queue.health(app.scope));
+  assert.deepEqual(health.statuses, { requested: 1, open: 0, acknowledged: 0, resolved: 0,
+    needsReview: 0, failed: 0 });
+  assert.equal(health.scanned, 1);
+  assert.equal(health.overdue, 1);
+  assert.equal(JSON.stringify(health).includes(app.callId), false);
+  assert.equal(JSON.stringify(health).includes("Need staff"), false);
+  assert.equal(success(await queue.health({ ...app.scope, locationId: "other-location" })).scanned, 0);
 });
 
 test("host-confirmed staff resolution commits call, outbox, and queue projection together", async () => {

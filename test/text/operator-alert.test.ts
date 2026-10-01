@@ -13,7 +13,7 @@ import { now, setup, success } from "./fixture.ts";
 const overdueAt = "2026-09-29T10:00:01.000Z";
 const afterRecovery = "2026-09-29T10:01:02.000Z";
 
-test("overdue follow-up stages one durable operator alert and delivers through the outbox", async () => {
+test("E2E-221 overdue follow-up changes aggregate queue alert health after delivery", async () => {
   const app = await setup("operator-alert-overdue");
   await app.turn("handoff", "Private caller request", { kind: "handoff", reason: "callerRequested" });
   const item = Object.values((await app.state()).staffItems)[0];
@@ -25,12 +25,18 @@ test("overdue follow-up stages one durable operator alert and delivers through t
   const pending = await app.state();
   assert.equal(pending.effects[`${item.key}:alert:overdue`]?.kind, "operatorAlert");
   assert.equal(pending.staffItems[item.key]?.alerts?.overdue, "pending");
+  const pendingHealth = success(await new StaffQueue(app.ledger, () => overdueAt).health(app.scope));
+  assert.equal(pendingHealth.alertPending, 1);
+  assert.equal(pendingHealth.overdue, 1);
   const recovery = new EffectRecovery(app.ledger, () => host, app.scope);
   const delivered = success(await recovery.recover(overdueAt));
   assert.equal(delivered.failed.length, 0);
   assert.equal(host.alerts(app.scope).length, 1);
   assert.equal(host.alerts(app.scope)[0]?.destination.kind, "queue");
   assert.equal((await app.state()).staffItems[item.key]?.alerts?.overdue, "delivered");
+  const deliveredHealth = success(await new StaffQueue(app.ledger, () => overdueAt).health(app.scope));
+  assert.equal(deliveredHealth.alertPending, 0);
+  assert.equal(deliveredHealth.alertFailed, 0);
   assert.equal(success(await monitor.scan(overdueAt)), 0);
   success(await recovery.recover(overdueAt));
   assert.equal(host.alerts(app.scope).length, 1);
