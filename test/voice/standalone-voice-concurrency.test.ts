@@ -111,7 +111,16 @@ test("E2E-198 eight parallel signed calls isolate tenants and exhaust one Clinik
     }
     const apiKey = "synthetic-key-au5";
     const budget = new PostgresClinikoRequestBudget(db, { apiKey, maxPerMinute: 48 });
-    const clinicDate = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+    const future = new Date(Date.now() + 3 * 86_400_000);
+    const dateParts = new Intl.DateTimeFormat("en-GB", { timeZone: "Australia/Sydney",
+      year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(future);
+    const dateField = (type: string) => dateParts.find(part => part.type === type)?.value;
+    const clinicDate = `${dateField("year")}-${dateField("month")}-${dateField("day")}`;
+    const zoneName = new Intl.DateTimeFormat("en-GB", { timeZone: "Australia/Sydney",
+      timeZoneName: "longOffset" }).formatToParts(new Date(`${clinicDate}T12:00:00Z`))
+      .find(part => part.type === "timeZoneName")?.value;
+    const sydneyOffset = zoneName?.match(/^GMT([+-][0-9]{2}:[0-9]{2})$/)?.[1];
+    assert.ok(sydneyOffset);
     const voiceRoutes = routes.map(route => {
       const scope = { tenantId: route.tenantId, clinicId: "clinic", locationId: "main" };
       const selection = ClinikoAvailabilityReader.create({ scope, apiKey, rateBudget: budget,
@@ -136,7 +145,7 @@ test("E2E-198 eight parallel signed calls isolate tenants and exhaust one Clinik
           try {
             await new Promise(resolve => setTimeout(resolve, 40));
             return Response.json({ total_entries: 1,
-              available_times: [{ appointment_start: `${url.searchParams.get("from")}T${route.hour}:00:00+10:00` }] });
+              available_times: [{ appointment_start: `${url.searchParams.get("from")}T${route.hour}:00:00${sydneyOffset}` }] });
           } finally { availabilityReadsInFlight -= 1; }
         }
         throw new Error("unexpected Cliniko request");

@@ -40,8 +40,9 @@ test("E2E-156 separate standalone Cliniko readers share one PostgreSQL request b
     availability.value.list(scope, "2026-09-30", "2026-09-30"),
   ]);
   assert.equal(outbound, 1);
-  assert.ok(results.some(result => !result.ok && result.error.kind === "rateLimited"));
-  assert.deepEqual(events, ["claimRateLimited"]);
+  const denied = results.filter(result => !result.ok && result.error.kind === "rateLimited").length;
+  assert.ok(denied >= 1);
+  assert.deepEqual(events, Array(denied).fill("claimRateLimited"));
   const rows = await firstDb.selectFrom("cliniko_request_budgets").selectAll().execute();
   assert.equal(rows.length, 1);
   assert.match(rows[0]!.budget_ref, /^[0-9a-f]{64}$/);

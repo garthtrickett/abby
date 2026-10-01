@@ -172,15 +172,23 @@ test("Cliniko scope, configuration, and date bounds fail before an HTTP request"
 });
 
 test("Cliniko provider faults stay typed and never become an empty availability claim", async () => {
+  const signals: string[] = [];
   for (const [status, expected] of [[403, "forbidden"], [404, "notFound"], [429, "rateLimited"], [500, "unavailable"]] as const) {
     const fake = fakeProvider({ status });
-    const reader = value(ClinikoAvailabilityReader.create(config, fake.port));
+    const reader = value(ClinikoAvailabilityReader.create({ ...config,
+      onProviderUnavailable: () => { signals.push("unavailable"); } }, fake.port));
     const result = await reader.list(scope, "2026-10-01", "2026-10-02");
     failure(result, expected);
     if (!result.ok && result.error.kind === "rateLimited") assert.equal(result.error.resetAt, "2030-01-01T00:00:00.000Z");
   }
   const failedFetch = (async () => { throw new Error("network failure"); }) as typeof fetch;
-  failure(await value(ClinikoAvailabilityReader.create(config, failedFetch)).list(scope, "2026-10-01", "2026-10-02"), "unavailable");
+  failure(await value(ClinikoAvailabilityReader.create({ ...config,
+    onProviderUnavailable: () => { signals.push("unavailable"); } }, failedFetch))
+    .list(scope, "2026-10-01", "2026-10-02"), "unavailable");
+  assert.deepEqual(signals, ["unavailable", "unavailable"]);
+  failure(await value(ClinikoAvailabilityReader.create({ ...config,
+    onProviderUnavailable: () => { throw new Error("diagnostic offline"); } }, failedFetch))
+    .list(scope, "2026-10-01", "2026-10-02"), "unavailable");
 });
 
 test("Cliniko malformed, oversized, and changing responses cannot produce an offer", async () => {
