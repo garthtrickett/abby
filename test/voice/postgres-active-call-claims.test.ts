@@ -61,7 +61,7 @@ test("E2E-170 two signed servers share active call ownership and close on Postgr
       routes: [{ dialedNumber, scope, routeVersion: "v1", availability: availability.value, rateBudget,
         approval: syntheticCatalogueApproval(availability.value, scope, { accountRef: accountSid,
           dialedNumber, routeVersion: "v1" }),
-        clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: { scope, version: "test-keypad-v1",
+        timeZone: "Australia/Sydney", clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: { scope, version: "test-keypad-v1",
           ownerRef: "synthetic-approval", approved: true,
           approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],
       openai: { apiKey: "synthetic-openai-key", intentModel: "synthetic-model" },

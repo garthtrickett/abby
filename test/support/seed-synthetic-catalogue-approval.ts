@@ -29,6 +29,7 @@ export async function seedSyntheticCatalogueApproval(db: Kysely<Database>, input
       appointmentTypeId: choice.appointmentTypeId, policyVersion: input.policyVersion ?? "0",
     })),
     credentialFingerprint: clinikoCredentialFingerprint(input.apiKey),
+    businessTimeZone: "Australia/Sydney",
     catalogueObservedAt: at, approvedBy: "synthetic-admin", approvedAt: at,
     patientActionMode: "unavailable", patientRequestMode: "unavailable",
   }, "synthetic-admin");

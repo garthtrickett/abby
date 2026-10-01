@@ -58,6 +58,8 @@ export default interface ClinikoCatalogueApprovalsTable {
   alternative_2_practitioner_id: ColumnType<string | null, string | null, string | null>;
 
   alternative_2_appointment_type_id: ColumnType<string | null, string | null, string | null>;
+
+  business_time_zone: ColumnType<string | null, string | null, string | null>;
 }
 
 export type ClinikoCatalogueApprovals = Selectable<ClinikoCatalogueApprovalsTable>;

@@ -91,7 +91,7 @@ test("E2E-163 opt-in signed local call recovers uncertain speech and charges key
       routes: [{ dialedNumber: number, scope, routeVersion: "v1", availability: availability.value, rateBudget,
         approval: syntheticCatalogueApproval(availability.value, scope, { accountRef: accountSid,
           dialedNumber: number, routeVersion: "v1" }),
-        clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: { scope, version: "live-eval-keypad-v1",
+        timeZone: "Australia/Sydney", clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: { scope, version: "live-eval-keypad-v1",
           ownerRef: "synthetic-clinic-approval", approved: true,
           approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],
       openai: { apiKey, intentModel: "gpt-6-luna", speechFallbackModel: "tts-1",

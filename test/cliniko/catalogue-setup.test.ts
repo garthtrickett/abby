@@ -21,6 +21,7 @@ function fixture() {
   let routeVersion = route.routeVersion;
   let policyVersion = selection.policyVersion;
   let businessEnabled = true;
+  let businessTimeZone = "Australia/Sydney";
   let partialPractitionerPage = false;
   let onBusinessRead: (() => void | Promise<void>) | undefined;
   const fetchPort: typeof fetch = async input => {
@@ -34,7 +35,7 @@ function fixture() {
       await onBusinessRead?.();
       return Response.json({ id: "11", business_name: "Demo practice",
       show_in_online_bookings: businessEnabled, archived_at: null,
-      appointment_type_ids: ["33", "55"], time_zone_identifier: "Australia/Sydney" });
+      appointment_type_ids: ["33", "55"], time_zone_identifier: businessTimeZone });
     }
     if (path === "/v1/practitioners/22") return Response.json({ id: "22", display_name: "Demo practitioner",
       active: true, show_in_online_bookings: true });
@@ -72,6 +73,7 @@ function fixture() {
     setRouteVersion(value: string) { routeVersion = value; },
     setPolicyVersion(value: string) { policyVersion = value; },
     setBusinessEnabled(value: boolean) { businessEnabled = value; },
+    setBusinessTimeZone(value: string) { businessTimeZone = value; },
     setPartialPractitionerPage(value: boolean) { partialPractitionerPage = value; },
     onBusinessRead(callback: () => void | Promise<void>) { onBusinessRead = callback; } };
 }
@@ -86,6 +88,7 @@ test("B1 clinic admin confirms a scoped read-only candidate and every call repro
   assert.equal(approved.value.version, 1);
   assert.deepEqual(approved.value.approval?.selection, selection);
   assert.equal(approved.value.approval?.approvedBy, admin.actorRef);
+  assert.equal(approved.value.approval?.businessTimeZone, "Australia/Sydney");
   assert.equal(approved.value.approval?.patientActionMode, "unavailable");
   assert.equal(approved.value.approval?.patientRequestMode, "unavailable");
   assert.ok((await app.setup.readApprovedRoute(scope, route)).ok);
@@ -154,6 +157,14 @@ test("B1 route or policy drift, rotation and concurrent approval do not reuse th
   const otherSetup = new ClinikoCatalogueSetup(rotated.value, new ReferenceNumberRoutingHost([]),
     { async read() { return ok(referenceDefaultPolicy(scope)); } }, app.store, () => observedAt);
   assert.deepEqual(await otherSetup.resolveForCall(scope, route), { ok: false, error: { kind: "staleApproval" } });
+});
+
+test("B4 a Cliniko business time-zone change invalidates a previously approved selection", async () => {
+  const app = fixture();
+  assert.ok((await app.setup.approve(admin, route, selection, 0)).ok);
+  app.setBusinessTimeZone("Etc/UTC");
+  assert.deepEqual(await app.setup.resolveForCall(scope, route),
+    { ok: false, error: { kind: "selectionUnavailable" } });
 });
 
 test("B1 ingress approval is withdrawn by revocation and never reads Cliniko to authorize a route", async () => {

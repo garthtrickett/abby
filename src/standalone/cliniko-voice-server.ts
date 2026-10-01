@@ -41,6 +41,8 @@ export type ClinikoVoiceRoute = Readonly<{
   rateBudget: PostgresClinikoRequestBudget;
   /** Today's YYYY-MM-DD date in this clinic's local time zone. */
   clinicDate: () => string;
+  /** The configured clock zone must match the approved Cliniko business zone. */
+  timeZone: string;
   /** Required clinic approval: Realtime finals cannot yet authorize speech-led availability. */
   keypadAvailabilityGreeting: ApprovedGreeting;
   /** Must agree with the approved keypad wording; absent means disabled. */
@@ -100,7 +102,8 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
         !route.rateBudget.matchesDatabase(config.db) || !route.availability.usesBudget(route.rateBudget) ||
         !route.rateBudget.matchesCredentialFingerprint(route.availability.credentialFingerprint()) ||
         (route.alternativeAvailability !== undefined && typeof route.alternativeAvailability !== "function") ||
-        typeof route.clinicDate !== "function" || routes.has(route.dialedNumber) ||
+        typeof route.clinicDate !== "function" || typeof route.timeZone !== "string" ||
+        !route.timeZone || routes.has(route.dialedNumber) ||
         !Object.hasOwn(twilio.fallbackNumbers, route.dialedNumber)) {
       throw new RangeError("invalid clinic voice route");
     }
@@ -150,6 +153,7 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
           !approval.route || approval.route.accountRef !== binding.accountRef ||
           approval.route.dialedNumber !== binding.dialedNumber || approval.route.routeVersion !== binding.routeVersion ||
           !approval.selection || !approval.selection.policyVersion?.trim() ||
+          approval.businessTimeZone !== route.timeZone ||
           approval.patientActionMode !== "unavailable" || approval.patientRequestMode !== "unavailable" ||
           !route.availability.matchesSelection(route.scope, { ...approval.selection,
             credentialFingerprint: approval.credentialFingerprint }) ||
@@ -234,12 +238,12 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       count(route.scope, "admissionDenied");
       throw new Error("clinic catalogue approval unavailable");
     }
+    const availability = new ClinikoApprovedAvailabilitySearch([route.availability, ...approved.readers],
+      config.now, approved.approval.businessTimeZone);
     const composed = await createStandaloneTransientVoiceCall({ db: config.db, routingHost,
       expectedPolicyVersion: approved.approval.selection.policyVersion,
       stream, send, closeTransport: close, synthesis,
-      availability: approved.readers.length
-        ? new ClinikoApprovedAvailabilitySearch([route.availability, ...approved.readers], config.now)
-        : route.availability,
+      availability,
       approvedGreeting: route.keypadAvailabilityGreeting,
       keypadAvailabilityRange: (digit: string) => keypadAvailabilityRange(route.clinicDate, digit,
         route.sevenDayAvailabilityEnabled === true),

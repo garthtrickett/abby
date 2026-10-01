@@ -131,7 +131,7 @@ test("E2E-171 local voice runner validates startup, reports unready, refuses inb
   }
 });
 
-test("E2E-172 E2E-185 isolated voice runner enforces durable approval around signed keypad calls and shutdown",
+test("E2E-172 E2E-185 E2E-209 isolated voice runner enforces durable approval around signed keypad calls and shutdown",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 60_000 }, async () => {
   const adminUrl = process.env.DATABASE_URL;
   assert.ok(adminUrl);
@@ -232,8 +232,21 @@ test("E2E-172 E2E-185 isolated voice runner enforces durable approval around sig
       const saved = await store.read(scope);
       assert.ok(saved.ok && saved.value.approval);
       assert.ok((await store.change(scope, 2, { ...saved.value.approval,
-        selection: { ...saved.value.approval.selection, businessId: "11" } }, "synthetic-admin")).ok);
+        selection: { ...saved.value.approval.selection, businessId: "11" },
+        businessTimeZone: "Etc/UTC" }, "synthetic-admin")).ok);
     } finally { await correctedDb.destroy(); }
+    const wrongZone = await webhook(callerNumber, `CA${"7".repeat(32)}`);
+    assert.equal(wrongZone.status, 503);
+    assert.doesNotMatch(await wrongZone.text(), /<Stream>/);
+    assert.deepEqual(clinikoMethods, []);
+    const zoneDb = connectPostgres(target.toString());
+    try {
+      const store = new PostgresClinikoApprovalStore(zoneDb);
+      const saved = await store.read(scope);
+      assert.ok(saved.ok && saved.value.approval);
+      assert.ok((await store.change(scope, 3, { ...saved.value.approval,
+        businessTimeZone: "Australia/Sydney" }, "synthetic-admin")).ok);
+    } finally { await zoneDb.destroy(); }
     const accepted = await webhook(callerNumber, callSid);
     assert.equal(accepted.status, 200);
     const xml = await accepted.text();
@@ -294,7 +307,7 @@ test("E2E-172 E2E-185 isolated voice runner enforces durable approval around sig
     const revocationDb = connectPostgres(target.toString());
     try {
       const store = new PostgresClinikoApprovalStore(revocationDb);
-      assert.ok((await store.change(scope, 3, null, "synthetic-admin")).ok);
+      assert.ok((await store.change(scope, 4, null, "synthetic-admin")).ok);
     } finally { await revocationDb.destroy(); }
     const revoked = await webhook(callerNumber, `CA${"9".repeat(32)}`);
     assert.equal(revoked.status, 503);

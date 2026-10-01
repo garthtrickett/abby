@@ -13,7 +13,7 @@ import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 
-type Fault = "openai-speech" | "openai-transcription" | "untrusted-transcript" | "cliniko-rate-limit" | "cliniko-server-error" | "cliniko-timeout" | "cliniko-slow-read" | "cliniko-partial-page" |
+type Fault = "openai-speech" | "openai-transcription" | "untrusted-transcript" | "cliniko-rate-limit" | "cliniko-server-error" | "cliniko-timeout" | "cliniko-slow-read" | "cliniko-zone-changed" | "cliniko-partial-page" |
   "cliniko-business-type-removed" | "cliniko-practitioner-type-removed" | "week-alternative" | "practitioner-alternative" |
   "practitioner-alternative-rate-limit" | "practitioner-alternative-malformed" |
   "practitioner-alternative-second" | undefined;
@@ -22,6 +22,7 @@ const fallbackScenarios = [
   { fault: "cliniko-server-error", id: "E2E-207" },
   { fault: "cliniko-timeout", id: "E2E-175" },
   { fault: "cliniko-slow-read", id: "E2E-208" },
+  { fault: "cliniko-zone-changed", id: "E2E-209" },
   { fault: "cliniko-partial-page", id: "E2E-190" },
   { fault: "cliniko-business-type-removed", id: "E2E-193" },
   { fault: "cliniko-practitioner-type-removed", id: "E2E-204" },
@@ -260,6 +261,9 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
           assert.equal(counts.clinikoProviderUnavailable, 1);
         }
         if (fault === "cliniko-slow-read") {
+          assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
+        }
+        if (fault === "cliniko-zone-changed") {
           assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
         }
         if (fault === "cliniko-rate-limit") {

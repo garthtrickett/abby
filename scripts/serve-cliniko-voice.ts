@@ -40,12 +40,16 @@ function bindingKey(): Buffer {
   return Buffer.from(hex, "hex");
 }
 
-function clinicToday(timeZone: string): () => string {
+export function clinicDateAt(timeZone: string, instant: Date): string {
   const clock = new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
-  return () => {
-    const parts = Object.fromEntries(clock.formatToParts(new Date()).map(part => [part.type, part.value]));
-    return `${parts.year}-${parts.month}-${parts.day}`;
-  };
+  const parts = Object.fromEntries(clock.formatToParts(instant).map(part => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function clinicToday(timeZone: string): () => string {
+  // Validate the zone before the listener opens, then use the same zone for each call.
+  clinicDateAt(timeZone, new Date());
+  return () => clinicDateAt(timeZone, new Date());
 }
 
 /** Test provider ports and an optional host-owned operational store. */
@@ -84,7 +88,8 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
     throw new RangeError("invalid ABBY_TWILIO_TEST_CALLER_NUMBER");
   }
   const key = bindingKey();
-  const clinicDate = clinicToday(required("ABBY_CLINIKO_TIME_ZONE"));
+  const timeZone = required("ABBY_CLINIKO_TIME_ZONE");
+  const clinicDate = clinicToday(timeZone);
   const db = connectPostgres(connectionString);
   const operationalCounters = ports.operationalCounters ?? new PostgresOperationalCounters(db);
   try {
@@ -122,7 +127,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
         publicStreamUrl: required("ABBY_TWILIO_PUBLIC_STREAM_URL"),
         fallbackNumbers: { [dialedNumber]: fallbackNumber }, bindingKey: key },
       routes: [{ dialedNumber, scope, routeVersion,
-        availability: availability.value, approval, rateBudget, clinicDate,
+        availability: availability.value, approval, rateBudget, clinicDate, timeZone,
         alternativeAvailability: choice => {
           const reader = ClinikoAvailabilityReader.create({ scope, apiKey, rateBudget, contactEmail,
             onProviderUnavailable: () => operationalCounters.record(scope, "clinikoProviderUnavailable"),
