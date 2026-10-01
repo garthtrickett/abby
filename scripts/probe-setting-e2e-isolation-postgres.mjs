@@ -87,6 +87,7 @@ async function runBrowser(entries, workers) {
   return checkedBrowser(output, ids);
 }
 
+await execute("npm", ["run", "build:cliniko-admin"], 120_000);
 const nodeEntries = [...nodeFiles.entries()].sort(([left], [right]) => left.localeCompare(right));
 let nodeTotal = 0;
 for (const entry of nodeEntries) {
