@@ -14,7 +14,7 @@ import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-s
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 import { PostgresClinikoApprovalStore } from "../../src/storage/postgres-cliniko-approval-store.ts";
 
-type Fault = "openai-speech" | "openai-transcription" | "untrusted-transcript" | "cliniko-rate-limit" | "cliniko-server-error" | "cliniko-timeout" | "cliniko-slow-read" | "cliniko-zone-changed" | "cliniko-partial-page" |
+type Fault = "openai-speech" | "openai-transcription" | "untrusted-transcript" | "cliniko-rate-limit" | "cliniko-server-error" | "cliniko-timeout" | "cliniko-slow-read" | "cliniko-zone-changed" | "cliniko-partial-page" | "cliniko-empty" |
   "cliniko-business-type-removed" | "cliniko-practitioner-type-removed" | "week-alternative" | "practitioner-alternative" |
   "practitioner-alternative-rate-limit" | "practitioner-alternative-malformed" |
   "practitioner-alternative-second" | "primary-selection-change" | undefined;
@@ -250,6 +250,25 @@ async function closeCaller(call: Call): Promise<void> {
 test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1",
   timeout: 240_000, concurrency: 5 }, async t => {
   await Promise.all([
+    ...[false, true].map(alternativeApproved =>
+      t.test(`E2E-200 signed empty availability with approved alternative ${alternativeApproved}`, async () =>
+        withFixture("cliniko-empty", async fixture => {
+          const call = await fixture.openCall();
+          await markGreeting(call);
+          call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
+            dtmf: { track: "inbound_track", digit: "2" } }));
+          await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "empty availability response");
+          assert.deepEqual(call.messages.map(item => item.event), ["media", "mark", "media", "mark"]);
+          assert.equal(fixture.speech[1],
+            "I couldn't find a possible appointment time for those dates. Please contact the clinic directly.");
+          assert.ok(!fixture.speech.some(text => text.includes("10:00") || text.includes("synthetic-only") ||
+            text.includes("reserve") || text.includes("confirm")));
+          assert.deepEqual(fixture.clinikoPaths.filter(path => path.endsWith("/available_times"))
+            .map(path => path.includes("/practitioners/44/") ? "alternative" : "primary"),
+          alternativeApproved ? ["primary", "alternative"] : ["primary"]);
+          assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
+          await closeCaller(call);
+        }, false, alternativeApproved))),
     ...fallbackScenarios.map(({ fault, id }) =>
       t.test(`${id} safe spoken fallback on ${fault}`,
         async () => withFixture(fault, async fixture => {

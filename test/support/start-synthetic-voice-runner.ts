@@ -6,7 +6,7 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     !["synthetic-key-au5", "synthetic-rotated-key-au5"].includes(process.env.ABBY_CLINIKO_API_KEY ?? "") ||
     process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}` ||
     !process.env.DATABASE_URL?.includes("/abby_test_voice_") ||
-    ![undefined, "openai-speech", "openai-transcription", "untrusted-transcript", "cliniko-rate-limit", "cliniko-server-error", "cliniko-timeout", "cliniko-slow-read", "cliniko-zone-changed", "cliniko-partial-page", "cliniko-business-type-removed", "cliniko-practitioner-type-removed", "week-alternative",
+    ![undefined, "openai-speech", "openai-transcription", "untrusted-transcript", "cliniko-rate-limit", "cliniko-server-error", "cliniko-timeout", "cliniko-slow-read", "cliniko-zone-changed", "cliniko-partial-page", "cliniko-empty", "cliniko-business-type-removed", "cliniko-practitioner-type-removed", "week-alternative",
       "practitioner-alternative", "practitioner-alternative-rate-limit",
       "practitioner-alternative-malformed", "practitioner-alternative-second",
       "primary-selection-change"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
@@ -15,7 +15,8 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
 const fault = process.env.ABBY_SYNTHETIC_VOICE_FAULT;
 const alternativeFault = fault === "practitioner-alternative" ||
   fault === "practitioner-alternative-rate-limit" || fault === "practitioner-alternative-malformed" ||
-  fault === "practitioner-alternative-second" || fault === "primary-selection-change";
+  fault === "practitioner-alternative-second" || fault === "primary-selection-change" ||
+  fault === "cliniko-empty";
 
 class SyntheticTranscriptionSocket extends EventEmitter {
   readyState: number = WebSocket.CONNECTING;
@@ -88,6 +89,7 @@ const clinikoFetch: typeof fetch = async (input, init) => {
     return Response.json({ total_entries: 1, appointment_types: [{ id: "77" }] });
   }
   if (url.pathname.endsWith("/available_times")) {
+    if (fault === "cliniko-empty") return Response.json({ total_entries: 0, available_times: [] });
     if (fault === "cliniko-rate-limit") return new Response(null, { status: 429 });
     if (fault === "cliniko-server-error") return new Response(null, { status: 503 });
     if (fault === "cliniko-timeout") throw new DOMException("synthetic timeout", "TimeoutError");
