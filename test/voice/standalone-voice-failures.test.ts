@@ -307,16 +307,19 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         assert.doesNotMatch(fixture.speech[1]!, /booked|reserved|confirmed/i);
         await closeCaller(call);
       })),
-    t.test("E2E-236 signed clear model failure closes without a Cliniko read or claim", async () =>
+    t.test("E2E-236 signed clear model failure speaks direct contact without a Cliniko read or claim", async () =>
       withFixture("clear-model-failure", async fixture => {
         const call = await fixture.openCall();
         await markGreeting(call);
         await sendSyntheticSpokenTurn(call);
-        assert.equal((await bounded(call.closed, "model failure close"))[0], 1008);
+        await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "model failure fallback");
+        assertResponseAudio(call);
         assert.deepEqual(fixture.modelRequests, ["request"]);
         assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 0);
         assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
-        assert.equal(fixture.speech.length, 1);
+        assert.equal(fixture.speech[1], noStaffNotice);
+        assert.doesNotMatch(fixture.speech[1]!, /booked|reserved|confirmed/i);
+        await closeCaller(call);
       })),
     ...[false, true].map(alternativeApproved =>
       t.test(`E2E-200 signed empty availability with approved alternative ${alternativeApproved}`, async () =>
