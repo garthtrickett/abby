@@ -172,6 +172,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "handoff"; reason: StaffReason }>
   | Readonly<{ kind: "transfer"; reason: StaffReason }>
   | Readonly<{ kind: "readFailure"; target: "patient" | "offer"; failure: "unavailable" | "notFound" }>
+  | Readonly<{ kind: "intakeFailure"; reason: "missing" | "unavailable" }>
   | Readonly<{ kind: "unavailableAction"; actionKind: ActionKind }>
   | Readonly<{ kind: "answer"; sources: readonly ApprovedKnowledge[]; proposedText: string }>
   | Readonly<{ kind: "knowledgeFailure"; reason: "invalidQuery" | "unavailable" }>
