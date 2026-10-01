@@ -93,6 +93,12 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
   const admission = new CallAdmissionService(ledger, router.resolve, now, readiness);
   const intake = new SharedNumberIntakeService(ledger, router, admission, now);
   const host = new DisabledStandaloneHost();
+  const lifetime = new AbortController();
+  const providerAvailability = config.availability;
+  const availability = providerAvailability ? {
+    list: (scope: LocationScope, from: string, to: string) =>
+      providerAvailability.list(scope, from, to, lifetime.signal),
+  } : undefined;
   let verifiedRead: VerifiedAppointmentReadSession | undefined;
   let call: TwilioConnectedCall | undefined = new TwilioConnectedCall({
     event: config.stream.event, streamStartedAt: config.stream.streamStartedAt,
@@ -104,6 +110,7 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
     ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}),
     ...(config.playbackOptions ? { playbackOptions: config.playbackOptions } : {}),
     ...(config.monotonicNow ? { monotonicNow: config.monotonicNow } : {}),
+    onCallStop: () => lifetime.abort(),
     fullFactory: (receipt, sessionId, playback) => {
       if (!greeting || !sameScope(greeting.scope, receipt.scope)) throw new Error("approved greeting unavailable");
       verifiedRead?.dispose();
@@ -113,7 +120,7 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
         throw new TypeError("invalid verified appointment reader");
       }
       verifiedRead = candidate;
-      const reception = new TextReception(ledger, policy, host, config.availability,
+      const reception = new TextReception(ledger, policy, host, availability,
         verifiedRead?.appointments, undefined, host);
       return new VoiceSession(receipt.callId, sessionId, receipt.scope, ledger, reception, playback,
         config.resolveIntent, undefined, config.monotonicNow, { greeting });
@@ -124,7 +131,7 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
     const active = call;
     call = undefined;
     try { await active?.disconnect(); }
-    finally { verifiedRead?.dispose(); verifiedRead = undefined; ledger.dispose(); greeting = undefined; }
+    finally { lifetime.abort(); verifiedRead?.dispose(); verifiedRead = undefined; ledger.dispose(); greeting = undefined; }
   })();
   return ok({
     async receive(raw) {

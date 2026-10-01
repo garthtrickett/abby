@@ -152,6 +152,12 @@ export class ConnectedVoiceCall {
     try { this.onCallStop?.(); } catch { /* Host cleanup cannot prevent call closure. */ }
   }
 
+  /** Fence a pending provider read before the serialized call transition finishes. */
+  requestStop(): void {
+    this.stopped = true;
+    this.stopHost();
+  }
+
   async acceptMedia(frame: MediaFrame): Promise<Result<ConnectedVoiceProgress, ConnectedVoiceFailure>> {
     if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
     if (!this.begun) return err({ kind: "notStarted" });

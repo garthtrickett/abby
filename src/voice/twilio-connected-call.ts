@@ -69,6 +69,7 @@ export class TwilioConnectedCall {
     this.stopCall = () => {
       if (this.callStopDelivered) return;
       this.callStopDelivered = true;
+      this.call.requestStop();
       try { config.onCallStop?.(); } catch { /* Call shutdown remains required. */ }
     };
     this.stream = new TwilioMediaStream({ accountSid: config.event.key.accountRef,

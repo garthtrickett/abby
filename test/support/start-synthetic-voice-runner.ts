@@ -98,7 +98,11 @@ const clinikoFetch: typeof fetch = async (input, init) => {
       if (!signal) throw new Error("availability deadline missing");
       await new Promise<never>((_resolve, reject) => {
         if (signal.aborted) return reject(new DOMException("synthetic deadline", "AbortError"));
-        signal.addEventListener("abort", () => reject(new DOMException("synthetic deadline", "AbortError")),
+        signal.addEventListener("abort", () => {
+          process.send?.({ kind: "clinikoReadAborted",
+            reason: signal.reason instanceof Error ? signal.reason.name : "unknown" });
+          reject(new DOMException("synthetic deadline", "AbortError"));
+        },
           { once: true });
       });
     }
