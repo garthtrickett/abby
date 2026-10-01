@@ -33,7 +33,7 @@ async function freePort(): Promise<number> {
   return address.port;
 }
 
-test("E2E-214 loopback admin authenticates an owner and persists read-only approval across listener restart",
+test("E2E-214 E2E-233 loopback admin authenticates an owner and fails closed without speech evidence",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
     const adminUrl = process.env.DATABASE_URL;
     assert.ok(adminUrl);
@@ -109,6 +109,10 @@ test("E2E-214 loopback admin authenticates an owner and persists read-only appro
         basic, "http://foreign.example.test")).status, 403);
       assert.deepEqual(paths, []);
       assert.equal((await fetch(origin, { headers: { Authorization: basic } })).status, 200);
+      assert.equal((await fetch(`${origin}/api/speech-gate`)).status, 401);
+      const absentSpeech = await fetch(`${origin}/api/speech-gate`, { headers: { Authorization: basic } });
+      assert.equal(absentSpeech.status, 503);
+      assert.deepEqual(await absentSpeech.json(), { ok: false, error: { kind: "statusUnavailable" } });
       const capabilities = await fetch(`${origin}/api/capabilities`, { headers: { Authorization: basic } });
       assert.equal(capabilities.status, 200);
       const listed = await capabilities.json() as { value: { id: string }[] };

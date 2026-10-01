@@ -3,9 +3,10 @@ import { createServer } from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { CommandGateway } from "../../reference/command-gateway.ts";
 import type { GatewayCommand, HostActor } from "../../reference/command-gateway.ts";
+import { publicSpeechGateStatus } from "../speech-gate-public-status.ts";
 
 const maxCommandBytes = 10_000;
-const document = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body><main><div id="app"></div><div id="availability-setup"></div></main><script type="module" src="/app.js"></script></body></html>`;
+const document = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body><main><div id="app"></div><div id="availability-setup"></div><div id="speech-gate"></div></main><script type="module" src="/app.js"></script></body></html>`;
 const setupCommands = new Set([
   "clinic.availability.businesses.list.v1", "clinic.availability.practitioners.list.v1",
   "clinic.availability.types.list.v1", "clinic.availability.selection.inspect.v1",
@@ -62,6 +63,8 @@ export type HostDashboardIdentity = Readonly<{
   surface?: "full" | "availabilitySetup";
   resolveActor: (request: IncomingMessage) => HostActor | null | Promise<HostActor | null>;
   gatewayFor: (actor: HostActor) => CommandGateway | Promise<CommandGateway>;
+  /** Optional owner report reader; the response is reduced to fixed aggregate fields. */
+  readSpeechGate?: () => Promise<unknown>;
   /** The host may challenge an absent identity; other authorization failures remain forbidden. */
   unauthorized?: (response: ServerResponse) => void;
 }>;
@@ -76,7 +79,8 @@ export async function createHostAuthenticatedDashboardServer(identity: HostDashb
       origin.pathname !== "/" || origin.search || origin.hash ||
       typeof identity.resolveActor !== "function" || typeof identity.gatewayFor !== "function" ||
       (identity.surface !== undefined && !["full", "availabilitySetup"].includes(identity.surface)) ||
-      (identity.unauthorized !== undefined && typeof identity.unauthorized !== "function")) {
+      (identity.unauthorized !== undefined && typeof identity.unauthorized !== "function") ||
+      (identity.readSpeechGate !== undefined && typeof identity.readSpeechGate !== "function")) {
     throw new RangeError("invalid dashboard identity configuration");
   }
   const [bundle, stylesheet] = await Promise.all([
@@ -96,18 +100,21 @@ export async function createHostAuthenticatedDashboardServer(identity: HostDashb
       if (!(gateway instanceof CommandGateway) || !gateway.matchesActor(actor)) {
         return json(response, 403, { ok: false, error: { kind: "forbidden" } });
       }
-      return handle(request, response, gateway, bundle, stylesheet, origin.origin, identity.surface);
+      return handle(request, response, gateway, bundle, stylesheet, origin.origin, identity.surface,
+        identity.readSpeechGate, actor.role === "clinicAdmin");
     } catch { return json(response, 403, { ok: false, error: { kind: "forbidden" } }); }
   })(); });
 }
 
 async function handle(request: IncomingMessage, response: ServerResponse, gateway: CommandGateway,
                       bundle: string, stylesheet: string, authenticatedOrigin?: string,
-                      surface: "full" | "availabilitySetup" = "full"): Promise<void> {
+                      surface: "full" | "availabilitySetup" = "full",
+                      readSpeechGate?: () => Promise<unknown>, speechGateAdmin = false): Promise<void> {
   try {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (surface === "availabilitySetup" && !(
-      (request.method === "GET" && ["/", "/app.js", "/style.css", "/api/capabilities", "/api/settings"].includes(url.pathname)) ||
+      (request.method === "GET" && ["/", "/app.js", "/style.css", "/api/capabilities", "/api/settings",
+        "/api/speech-gate"].includes(url.pathname)) ||
       (request.method === "POST" && url.pathname === "/api/clinic-availability/command"))) {
       return json(response, 404, { ok: false, error: { kind: "notFound" } });
     }
@@ -119,6 +126,15 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     if (request.method === "GET" && url.pathname === "/") return asset(response, "text/html; charset=utf-8", document);
     if (request.method === "GET" && url.pathname === "/app.js") return asset(response, "text/javascript; charset=utf-8", bundle);
     if (request.method === "GET" && url.pathname === "/style.css") return asset(response, "text/css; charset=utf-8", stylesheet);
+    if (request.method === "GET" && url.pathname === "/api/speech-gate") {
+      if (!readSpeechGate) return json(response, 404, { ok: false, error: { kind: "notFound" } });
+      if (!speechGateAdmin) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+      const current = await Promise.resolve().then(readSpeechGate).catch(() => undefined);
+      const publicStatus = publicSpeechGateStatus(current);
+      return publicStatus
+        ? json(response, 200, { ok: true, value: publicStatus })
+        : json(response, 503, { ok: false, error: { kind: "statusUnavailable" } });
+    }
     if (request.method === "GET" && url.pathname === "/api/capabilities") {
       return json(response, 200, { ok: true, value: gateway.listPermitted().filter(item =>
         surface === "availabilitySetup" ? item.id === "settings.read.v1" || item.id.startsWith("clinic.availability.")

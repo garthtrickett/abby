@@ -29,7 +29,7 @@ async function freePort(): Promise<number> {
   return address.port;
 }
 
-test("E2E-214 local owner challenge opens only the read-only Cliniko setup panel", async ({ page, request }) => {
+test("E2E-214 E2E-233 local owner sees Cliniko setup and aggregate-only speech status", async ({ page, request }) => {
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
   const paths: string[] = [];
@@ -60,9 +60,19 @@ test("E2E-214 local owner challenge opens only the read-only Cliniko setup panel
     new MemoryClinikoApprovalStore(), () => "2026-09-30T10:00:00.000Z");
   const reception = new TextReception(new MemoryLedger(), policy, new ReferenceClinicHost([], []));
   const actor = { actorRef: "local-browser-owner", role: "clinicAdmin" as const, scope };
+  const transcriptCanary = "PRIVATE SYNTHETIC TRANSCRIPT CANARY";
+  let speechStatus: unknown = { kind: "speechGateStatus", syntheticCandidateGate: "fail",
+    representativeCallGate: "notRun", releaseGate: "unverified", rawTranscript: transcriptCanary,
+    checks: [
+      { name: "telephony", status: "pass", rawTranscript: transcriptCanary },
+      { name: "noise", status: "fail" }, { name: "safety", status: "fail" },
+      { name: "speech", status: "pass" },
+    ] };
   const server = await createHostAuthenticatedDashboardServer({ publicOrigin: origin,
     surface: "availabilitySetup",
-    resolveActor: incoming => incoming.headers.authorization === basic ? actor : null,
+    resolveActor: incoming => incoming.headers.authorization === basic ? actor
+      : incoming.headers.authorization === "Basic synthetic-staff" ? { ...actor, role: "staff" } : null,
+    readSpeechGate: async () => speechStatus,
     unauthorized: response => {
       response.writeHead(401, { "WWW-Authenticate": 'Basic realm="Abby local clinic admin"',
         "Cache-Control": "no-store" });
@@ -76,10 +86,25 @@ test("E2E-214 local owner challenge opens only the read-only Cliniko setup panel
     await once(server, "listening");
     assert.equal((await request.get(origin)).status(), 401);
     assert.equal((await request.get(origin, { headers: { Authorization: "Basic invalid" } })).status(), 401);
+    assert.equal((await request.get(`${origin}/api/speech-gate`)).status(), 401);
+    assert.equal((await request.get(`${origin}/api/speech-gate`, { headers: {
+      Authorization: "Basic synthetic-staff" } })).status(), 403);
     assert.equal(paths.length, 0);
     await page.context().setHTTPCredentials({ username: "abby-admin", password: token });
     await page.goto(origin);
+    const speechReply = await request.get(`${origin}/api/speech-gate`, { headers: { Authorization: basic } });
+    assert.equal(speechReply.status(), 200, await speechReply.text());
+    assert.equal((await speechReply.text()).includes(transcriptCanary), false);
+    const browserSpeech = await page.evaluate(async () => {
+      const response = await fetch("/api/speech-gate");
+      return { status: response.status, body: await response.json() as unknown };
+    });
+    assert.equal(browserSpeech.status, 200, JSON.stringify(browserSpeech.body));
     await expect(page.getByRole("heading", { name: "Read-only availability setup" })).toBeVisible();
+    await expect(page.getByLabel("Voice quality status")).toContainText("Voice quality is blocked");
+    await expect(page.getByLabel("Voice quality status")).toContainText("Noisy audio: fail");
+    await expect(page.getByLabel("Voice quality status")).toContainText("Release readiness: unverified");
+    assert.equal((await request.post(`${origin}/api/speech-gate`, { headers: { Authorization: basic } })).status(), 404);
     await expect(page.getByRole("button", { name: /booking/i })).toHaveCount(0);
     const capabilities = await request.get(`${origin}/api/capabilities`, { headers: { Authorization: basic } });
     assert.equal(capabilities.status(), 200);
@@ -104,8 +129,15 @@ test("E2E-214 local owner challenge opens only the read-only Cliniko setup panel
     await page.getByRole("button", { name: "Revoke availability route" }).click();
     await expect(page.getByLabel("Availability approval status")).toContainText("No approved availability route · version 2");
     const pageText = await page.locator("body").innerText();
-    assert.equal(pageText.includes("patient-canary-214") || pageText.includes("synthetic-key-au5"), false);
+    assert.equal(pageText.includes("patient-canary-214") || pageText.includes("synthetic-key-au5") ||
+      pageText.includes(transcriptCanary), false);
     assert.equal(paths.some(path => path.includes("patients")), false);
+    speechStatus = { kind: "speechGateStatus", syntheticCandidateGate: "pass",
+      representativeCallGate: "notRun", releaseGate: "unverified", checks: [] };
+    assert.equal((await request.get(`${origin}/api/speech-gate`, { headers: { Authorization: basic } })).status(), 503);
+    await page.reload();
+    await expect(page.getByLabel("Voice quality status")).toContainText("status is unavailable");
+    await expect(page.getByLabel("Voice quality status")).toContainText("unverified");
   } finally {
     server.closeAllConnections();
     await new Promise<void>((done, reject) => server.close(error => error ? reject(error) : done()));
