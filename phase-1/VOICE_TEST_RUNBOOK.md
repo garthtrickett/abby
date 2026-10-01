@@ -30,6 +30,8 @@ For local aggregate diagnostics, optionally set a separate owner-only `ABBY_VOIC
 
 The local listener removes expired daily aggregate rows before accepting calls and repeats cleanup every six hours. An owner can run `npm run voice:ops:prune` with the same owner-only `DATABASE_URL` to clean idle clinic rows when the listener is stopped. It emits no clinic or patient data. A strict deletion deadline requires scheduling that one-shot command outside the runner; this repository does not install a host scheduler.
 
+For an owner-run daily threshold signal, set `ABBY_VOICE_OPS_THRESHOLDS_JSON` to a fixed-code map such as `{"clinikoProvider429":3,"clinikoProviderUnavailable":1}` and run `npm run voice:ops:check` with the same `DATABASE_URL` and clinic scope environment. Exit `2` means at least one configured threshold was crossed; the JSON output contains only date, code and counts. Exit `0` means clear, while exit `1` means the check was unavailable. This command does not send or acknowledge a notification.
+
 ```sh
 npm run voice:preflight -- --config-only
 npm run voice:test-policy -- enable
