@@ -207,6 +207,32 @@ test("static clinic transcription context is bounded, acknowledged, and never ma
   }
 });
 
+test("opt-in transcription delay is bounded, tolerated when not echoed, and cannot make a final trusted", async () => {
+  const socket = new FakeSocket();
+  const transcription = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+    delay: "high", socketFactory: () => socket as unknown as WebSocket });
+  socket.open();
+  assert.deepEqual((socket.sent[0]?.session as { audio: { input: { transcription: unknown } } })
+    .audio.input.transcription, { model: "gpt-live-transcribe", delay: "high" });
+  socket.receive({ type: "session.updated", session: { type: "transcription", audio: { input: {
+    format: { type: "audio/pcm", rate: 24000 },
+    transcription: { model: "gpt-live-transcribe" }, turn_detection: null,
+  } } } });
+  assert.ok((await transcription.accept(frame(0, 2_000), 1, new AbortController().signal)).ok);
+  const pending = transcription.flush(1, new AbortController().signal);
+  await new Promise<void>(resolve => setImmediate(resolve));
+  socket.receive({ type: "input_audio_buffer.committed", item_id: "high-delay" });
+  socket.receive({ type: "conversation.item.input_audio_transcription.completed", item_id: "high-delay",
+    transcript: "Book physiotherapy" });
+  assert.deepEqual(await pending, { ok: true, value: [{ kind: "segmentFinal", sessionId: "session",
+    generation: 1, utteranceId: "high-delay", text: "Book physiotherapy", quality: "needsClarification" }] });
+  await transcription.close();
+
+  assert.throws(() => new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+    delay: "other" as "high", socketFactory: () => new FakeSocket() as unknown as WebSocket }),
+  /invalid transcription configuration/);
+});
+
 test("E2E-129 synthetic voice: rejected session, malformed completion and caller stop fail closed", async () => {
   const rejectedSocket = new FakeSocket();
   const rejected = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
