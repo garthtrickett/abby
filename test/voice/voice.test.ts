@@ -34,7 +34,7 @@ import { VoiceLeaseLoop } from "../../src/voice/voice-lease-loop.ts";
 import { VoiceWorkLoop } from "../../src/voice/voice-work-loop.ts";
 import { StreamedPlaybackPort } from "../../src/voice/streamed-playback-port.ts";
 import { VoiceSession } from "../../src/voice/voice-session.ts";
-import type { PlaybackPort, TransferOutcome, TransferPort } from "../../src/voice/voice-session.ts";
+import type { IntentResolver, PlaybackPort, TransferOutcome, TransferPort } from "../../src/voice/voice-session.ts";
 
 const now = "2026-09-28T10:00:00.000Z";
 const at = (seconds: number) => new Date(Date.parse(now) + seconds * 1000).toISOString();
@@ -160,6 +160,7 @@ type VoiceFixtureOptions = {
   modelDeadlineMs?: number;
   streamedPlayback?: PlaybackPort;
   transientPresentation?: boolean;
+  resolveIntent?: IntentResolver;
 };
 
 async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: boolean,
@@ -229,7 +230,7 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
   const sessionLedger = options.transientPresentation ? redactPresentationReads(baseSessionLedger) : baseSessionLedger;
   const greeting = options.transientPresentation ? value(await policy.read(scope)).greeting : undefined;
   if (options.transientPresentation) assert.ok(greeting);
-  const session = new VoiceSession(callId, sessionId, scope, sessionLedger, reception, options.streamedPlayback ?? playback, async turn =>
+  const resolveIntent: IntentResolver = options.resolveIntent ?? (async turn =>
     ok(turn.text.startsWith("Urgent transfer")
       ? { kind: "transfer" as const, reason: "potentiallyUrgent" as const }
       : turn.text.startsWith("Transfer")
@@ -243,7 +244,9 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
           to: turn.text.includes("DST") ? "2026-10-05" : "2026-10-02" }
       : turn.text.startsWith("Book")
       ? { kind: "book" as const, verificationRef: patient.verificationRef, offerRef: offer.offerRef }
-      : { kind: "affirm" as const }), transfer, clock?.now,
+      : { kind: "affirm" as const }));
+  const session = new VoiceSession(callId, sessionId, scope, sessionLedger, reception, options.streamedPlayback ?? playback,
+    resolveIntent, transfer, clock?.now,
     greeting ? { greeting } : undefined);
   value(await session.attach(at(1)));
   return { scope, patient, offer, host, ledger, sessionLedger, policy, reception, playback, transfer, session, sessionId, callId, model };
@@ -698,6 +701,45 @@ for (const kind of kinds) {
       assert.equal(app.host.bookings(app.scope).length, 0);
     });
   }
+
+  test(`${kind}: E2E-230 intent classifier exception speaks a truthful fallback without invoking the model`, async () => {
+    let modelCalls = 0;
+    const app = await fixture(kind, `${kind}-intent-classifier-failure`, false, "requestOnly", undefined, undefined, {
+      resolveIntent: async () => { throw new Error("synthetic classifier outage"); },
+      model: { async propose() { modelCalls += 1; return { schemaVersion: 1, kind: "handoff", reason: "callerRequested" }; } },
+    });
+    const state = await modelTurn(app, "Ask model about a private request");
+    assert.equal(modelCalls, 0);
+    assert.equal(Object.values(state.staffItems).some(item => item.reason === "systemFailure"), true);
+    assert.equal(Object.values(state.effects).some(effect => effect.kind === "hostWrite"), false);
+    assert.equal(JSON.stringify(state).includes("Ask model about a private request"), false);
+    assert.equal(value(await app.session.dispatchPending(at(4))).kind, "queued");
+    assert.deepEqual(app.playback.queuedTexts,
+      ["I can request staff follow-up, but I can't confirm they have received it yet."]);
+  });
+
+  test(`${kind}: E2E-230 a failed classifier cannot queue an older turn after caller correction`, async () => {
+    let entered!: () => void;
+    let release!: () => void;
+    const classifierEntered = new Promise<void>(resolve => { entered = resolve; });
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    const app = await fixture(kind, `${kind}-intent-classifier-corrected`, false, "requestOnly", undefined, undefined, {
+      staffWorkEnabled: false,
+      resolveIntent: async () => { entered(); await pending; return err({ kind: "intentUnavailable" }); },
+    });
+    const generation = value(await app.session.speechStarted(at(2)));
+    value(app.session.acceptTranscript({ kind: "segmentFinal", sessionId: app.sessionId, generation,
+      utteranceId: "old-request", text: "Ask model about old request", quality: "clear" }));
+    const first = app.session.finishTurn(at(3));
+    await classifierEntered;
+    value(await app.session.speechStarted(at(4)));
+    release();
+    failure(await first, "staleTurn");
+    const state = value(await app.ledger.read(app.callId, app.scope));
+    assert.deepEqual(state.processedTurnIds, []);
+    assert.deepEqual(Object.values(state.staffItems), []);
+    assert.deepEqual(app.playback.queuedTexts, []);
+  });
 
   for (const scenario of [
     { name: "provider failure", port: { async propose() { throw new Error("provider unavailable"); } }, drains: 1 },

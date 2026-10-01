@@ -257,9 +257,19 @@ export class VoiceSession {
     }
     if (!this.cachedIntent) {
       let intent: Result<VoiceIntent, Readonly<{ kind: "intentUnavailable" }>>;
-      try { intent = await this.resolveIntent(turn); } catch { return err({ kind: "intentUnavailable" }); }
-      if (!intent.ok) return intent;
+      try { intent = await this.resolveIntent(turn); }
+      catch { intent = err({ kind: "intentUnavailable" }); }
       if (generation !== this.assembler.currentGeneration()) return err({ kind: "staleTurn" });
+      if (!intent.ok) {
+        const fallback = await this.runtime.acceptTurn(turn, { kind: "modelFallback" }, now,
+          existing.value.conversationRevision);
+        if (fallback.ok && generation === this.assembler.currentGeneration()) {
+          this.rememberPending(fallback.value);
+          this.speechOpen = false;
+          this.unclearTurns = 0;
+        }
+        return fallback;
+      }
       this.cachedIntent = intent.value;
     }
     let result: Result<CallState, VoiceSessionFailure>;
