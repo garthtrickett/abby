@@ -1,16 +1,19 @@
 import { err, ok } from "../core/model.ts";
 import type { FinalCallerTurn, LocationScope, Result } from "../core/model.ts";
 
-export const MODEL_PROPOSAL_VERSION = 1 as const;
+export const MODEL_PROPOSAL_VERSION = 2 as const;
 
 /** A suggestion from a model. No variant is a host command or confirmation proof. */
-export type ModelProposal =
-  | Readonly<{ schemaVersion: 1; kind: "answer"; sourceRefs: readonly string[]; proposedText: string }>
-  | Readonly<{ schemaVersion: 1; kind: "lookup"; target: "patient" | "appointment" | "offer";
+type ProposalBody<HandoffReason extends string> =
+  | Readonly<{ kind: "answer"; sourceRefs: readonly string[]; proposedText: string }>
+  | Readonly<{ kind: "lookup"; target: "patient" | "appointment" | "offer";
       statedName?: string; statedDate?: string; requestedService?: string; requestedLocationId?: string }>
-  | Readonly<{ schemaVersion: 1; kind: "action"; operation: "intake" | "book" | "cancel" | "reschedule";
+  | Readonly<{ kind: "action"; operation: "intake" | "book" | "cancel" | "reschedule";
       targetRef?: string; requestedService?: string; requestedTime?: string }>
-  | Readonly<{ schemaVersion: 1; kind: "handoff"; reason: "callerRequested" | "unsupported" }>;
+  | Readonly<{ kind: "handoff"; reason: HandoffReason }>;
+export type ModelProposal =
+  | (Readonly<{ schemaVersion: 1 }> & ProposalBody<"callerRequested" | "unsupported">)
+  | (Readonly<{ schemaVersion: 2 }> & ProposalBody<"callerRequested" | "unsupported" | "potentiallyUrgent">);
 
 export type ModelFailure = Readonly<{ kind: "malformed" | "unavailable" | "deadlineExceeded" }>;
 
@@ -77,11 +80,13 @@ function validInstant(value: unknown): value is string {
   return true;
 }
 
-const handoffReasons = ["callerRequested", "unsupported"] as const;
+const handoffReasonsV1 = ["callerRequested", "unsupported"] as const;
+const handoffReasonsV2 = [...handoffReasonsV1, "potentiallyUrgent"] as const;
 
 function decodeShape(raw: unknown): Result<ModelProposal, ModelFailure> {
   const value = record(raw);
-  if (!value || value.schemaVersion !== MODEL_PROPOSAL_VERSION || typeof value.kind !== "string") return err({ kind: "malformed" });
+  if (!value || (value.schemaVersion !== 1 && value.schemaVersion !== MODEL_PROPOSAL_VERSION) ||
+      typeof value.kind !== "string") return err({ kind: "malformed" });
 
   switch (value.kind) {
     case "answer": {
@@ -89,7 +94,7 @@ function decodeShape(raw: unknown): Result<ModelProposal, ModelFailure> {
           !Array.isArray(value.sourceRefs) || value.sourceRefs.length < 1 || value.sourceRefs.length > 8 ||
           !value.sourceRefs.every(ref => bounded(ref, 256)) ||
           new Set(value.sourceRefs).size !== value.sourceRefs.length || !bounded(value.proposedText, 2_000)) return err({ kind: "malformed" });
-      return ok({ schemaVersion: 1, kind: "answer", sourceRefs: value.sourceRefs as string[], proposedText: value.proposedText });
+      return ok({ schemaVersion: value.schemaVersion, kind: "answer", sourceRefs: value.sourceRefs as string[], proposedText: value.proposedText } as ModelProposal);
     }
     case "lookup": {
       if (!keys(value, ["schemaVersion", "kind", "target"],
@@ -110,7 +115,8 @@ function decodeShape(raw: unknown): Result<ModelProposal, ModelFailure> {
     }
     case "handoff": {
       if (!keys(value, ["schemaVersion", "kind", "reason"]) ||
-          !handoffReasons.includes(value.reason as typeof handoffReasons[number])) return err({ kind: "malformed" });
+          !(value.schemaVersion === 1 ? handoffReasonsV1 : handoffReasonsV2)
+            .includes(value.reason as "callerRequested" | "unsupported")) return err({ kind: "malformed" });
       return ok(value as ModelProposal);
     }
     default:

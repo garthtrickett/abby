@@ -13,6 +13,8 @@ import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { createEmbeddedTextComposition } from "../../src/reference/embedded-composition.ts";
 import { MemoryPolicyStore, referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { expandStaffSchedule } from "../../src/reference/staff-schedule.ts";
+import { StaffQueue } from "../../src/reference/staff-queue.ts";
+import { summarizeCall } from "../../src/reference/call-review.ts";
 import type { TextReception } from "../../src/reference/text-reception.ts";
 import type { PolicyStore } from "../../src/core/host.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
@@ -148,6 +150,9 @@ type VoiceFixtureOptions = {
   afterHoursText?: string;
   afterHoursOffBeforeAdmission?: boolean;
   staffWorkEnabled?: false;
+  urgentText?: string;
+  urgentEffectiveUntil?: string;
+  urgentWrongScope?: boolean;
   model?: RawModelPort;
   modelDeadlineMs?: number;
   streamedPlayback?: PlaybackPort;
@@ -193,6 +198,11 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
       automationEnabled: true,
       capabilities: { ...result.value.capabilities, transfer: transferMode },
       ...(options.staffWorkEnabled === false ? { staffWorkEnabled: false } : {}),
+      ...(options.urgentText === undefined ? {} : { urgentResponse: {
+        scope: options.urgentWrongScope ? { ...scope, locationId: `${scope.locationId}-other` } : scope,
+        version: "urgent-script-v1", ownerRef: "synthetic-clinic-admin", approvedText: options.urgentText,
+        approved: true as const, effectiveFrom: at(0), effectiveUntil: options.urgentEffectiveUntil ?? at(3_600),
+      } }),
       ...(transferMode === "execute" ? { transferDestinationRef: transferDestinationRef ?? `destination-${id}`,
         staffedIntervals: options.staffedIntervals ?? [{ startsAt: at(0), endsAt: at(3_600) }] } : {}),
     };
@@ -206,7 +216,9 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
   const greeting = options.transientPresentation ? value(await policy.read(scope)).greeting : undefined;
   if (options.transientPresentation) assert.ok(greeting);
   const session = new VoiceSession(callId, sessionId, scope, sessionLedger, reception, options.streamedPlayback ?? playback, async turn =>
-    ok(turn.text.startsWith("Transfer")
+    ok(turn.text.startsWith("Urgent transfer")
+      ? { kind: "transfer" as const, reason: "potentiallyUrgent" as const }
+      : turn.text.startsWith("Transfer")
       ? { kind: "transfer" as const, reason: "callerRequested" as const }
       : turn.text.startsWith("Ask model")
       ? { kind: "model" as const }
@@ -702,6 +714,78 @@ for (const kind of kinds) {
       assert.equal(app.host.bookings(app.scope).length, 0);
     });
   }
+
+  test(`${kind}: E2E-231 an urgent model handoff speaks only the captured approved script and opens immediate staff work`, async () => {
+    const approvedText = "If you need immediate help, contact your local emergency service now.";
+    const app = await fixture(kind, `${kind}-urgent-approved`, false, "requestOnly", undefined, undefined, {
+      urgentText: approvedText,
+      model: { async propose() { return { schemaVersion: 2, kind: "handoff", reason: "potentiallyUrgent" }; } },
+    });
+    await modelTurn(app, "Ask model: I have chest pain and need advice");
+    const state = value(await app.session.drainEffects(at(4)));
+    const task = Object.values(state.staffItems)[0];
+    assert.equal(task?.reason, "potentiallyUrgent");
+    assert.equal(task.dueAt, at(4));
+    assert.equal(Object.values(state.effects).some(effect => effect.kind === "hostWrite"), false);
+    assert.equal(state.callerMessages.at(-1),
+      `${approvedText} I can request staff follow-up, but I can't confirm they have received it yet.`);
+    assert.equal(JSON.stringify(state).includes("chest pain"), false);
+    assert.equal(value(summarizeCall(state)).staffItems[0]?.reason, "potentiallyUrgent");
+    const queue = value(await new StaffQueue(app.ledger, () => at(4)).list(app.scope));
+    assert.equal(queue.items[0]?.reason, "potentiallyUrgent");
+    assert.equal(queue.items[0]?.overdue, true);
+    assert.equal(value(await app.session.dispatchPending(at(5))).kind, "queued");
+    assert.equal(app.playback.queuedTexts.at(-1), state.callerMessages.at(-1));
+    assert.equal(app.host.bookings(app.scope).length, 0);
+  });
+
+  for (const scenario of [
+    { name: "missing", options: {} },
+    { name: "expired", options: { urgentText: "Expired urgent words", urgentEffectiveUntil: at(1) } },
+    { name: "foreign scope", options: { urgentText: "Foreign clinic urgent words", urgentWrongScope: true } },
+  ] as const) {
+    test(`${kind}: E2E-231 ${scenario.name} urgent source cannot be spoken`, async () => {
+      const app = await fixture(kind, `${kind}-urgent-${scenario.name.replaceAll(" ", "-")}`, false,
+        "requestOnly", undefined, undefined, { ...scenario.options,
+          model: { async propose() { return { schemaVersion: 2, kind: "handoff", reason: "potentiallyUrgent" }; } },
+        });
+      await modelTurn(app, "Ask model about urgent symptoms");
+      const state = value(await app.session.drainEffects(at(4)));
+      assert.equal(Object.values(state.staffItems)[0]?.reason, "potentiallyUrgent");
+      assert.equal(state.callerMessages.at(-1), "I can't give advice on that request. Please contact the clinic directly.");
+      assert.equal(value(await app.session.dispatchPending(at(5))).kind, "queued");
+      assert.deepEqual(app.playback.queuedTexts, ["I can't give advice on that request. Please contact the clinic directly."]);
+      assert.equal(app.host.bookings(app.scope).length, 0);
+    });
+  }
+
+  test(`${kind}: E2E-231 an approved urgent script cannot claim an unavailable staff route`, async () => {
+    const approvedText = "If you need immediate help, contact your local emergency service now.";
+    const app = await fixture(kind, `${kind}-urgent-no-staff`, false, "unavailable", undefined, undefined, {
+      urgentText: approvedText, staffWorkEnabled: false,
+      model: { async propose() { return { schemaVersion: 2, kind: "handoff", reason: "potentiallyUrgent" }; } },
+    });
+    await modelTurn(app, "Ask model about urgent symptoms");
+    const state = value(await app.session.drainEffects(at(4)));
+    assert.deepEqual(Object.values(state.staffItems), []);
+    assert.equal(state.callerMessages.at(-1),
+      `${approvedText} I can't send a staff request from this call. Please contact the clinic directly.`);
+    assert.equal(value(await app.session.dispatchPending(at(5))).kind, "queued");
+    assert.equal(app.playback.queuedTexts.at(-1), state.callerMessages.at(-1));
+    assert.equal(app.host.bookings(app.scope).length, 0);
+  });
+
+  test(`${kind}: E2E-231 an urgent transfer cue does not bypass the approved script`, async () => {
+    const approvedText = "If you need immediate help, contact your local emergency service now.";
+    const app = await fixture(kind, `${kind}-urgent-transfer`, false, "execute", undefined, undefined,
+      { urgentText: approvedText });
+    const state = await modelTurn(app, "Urgent transfer: I need help now");
+    assert.equal(Object.values(state.staffItems)[0]?.reason, "potentiallyUrgent");
+    assert.equal(Object.values(state.presentations).some(item => item.kind === "transfer"), false);
+    assert.equal(state.callerMessages.at(-1)?.startsWith(approvedText), true);
+    assert.equal(value(await app.session.dispatchPending(at(4))).kind, "queued");
+    assert.equal(app.transfer.requested.length, 0);
+  });
 
   test(`E2E-188 ${kind}: a caller correction cancels older model work and clears transient history on end`, async () => {
     let modelCalls = 0;

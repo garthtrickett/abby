@@ -72,6 +72,15 @@ export type ApprovedAfterHoursInfo = Readonly<{
   approvedText: string;
   approved: true;
 }>;
+export type ApprovedUrgentResponse = Readonly<{
+  scope: LocationScope;
+  version: string;
+  ownerRef: string;
+  approvedText: string;
+  approved: true;
+  effectiveFrom: string;
+  effectiveUntil: string;
+}>;
 
 export type CallPolicy = Readonly<{
   scope: LocationScope;
@@ -82,6 +91,8 @@ export type CallPolicy = Readonly<{
   /** Absent on legacy snapshots; the effective default is staffRequest. */
   afterHoursMode?: AfterHoursMode;
   afterHoursInfo?: ApprovedAfterHoursInfo;
+  /** Host-approved, location-scoped public safety wording; absent means generic fallback. */
+  urgentResponse?: ApprovedUrgentResponse;
   capabilities: Readonly<Record<CapabilityId, CapabilityMode>>;
   transferDestinationRef?: string;
   staffedIntervals?: readonly StaffedInterval[];
@@ -203,9 +214,9 @@ export type TurnInterpretation =
   | Readonly<{ kind: "appointmentsFailure"; reason: AppointmentReadFailure["kind"] | "notConfigured" | "unclear" }>
   | Readonly<{ kind: "ambiguousTarget" }>;
 
-export type StaffReason =
-  | "callerRequested" | "verificationFailed" | "unsupported" | "uncertainAction"
-  | "partialIntake" | "systemFailure" | "transferFailed" | "emergencyStopped";
+export const STAFF_REASONS = ["callerRequested", "verificationFailed", "unsupported", "uncertainAction",
+  "partialIntake", "systemFailure", "transferFailed", "emergencyStopped", "potentiallyUrgent"] as const;
+export type StaffReason = typeof STAFF_REASONS[number];
 export type ActionStatus =
   | "awaitingConfirmation" | "ready" | "dispatched" | "committed"
   | "rejected" | "unsupported" | "uncertain" | "needsReview" | "canceled";
