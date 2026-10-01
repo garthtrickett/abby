@@ -242,6 +242,13 @@ async function markGreeting(call: Call): Promise<void> {
     mark: { name: (call.messages[1]!.mark as { name: string }).name } }));
 }
 
+function assertResponseAudio(call: Call): void {
+  const first = (call.messages[0]?.media as { payload?: string } | undefined)?.payload;
+  const second = (call.messages[2]?.media as { payload?: string } | undefined)?.payload;
+  assert.ok(first && second);
+  assert.notEqual(second, first, "the caller must hear a response, not the greeting again");
+}
+
 async function closeCaller(call: Call): Promise<void> {
   call.socket.close(1000);
   assert.equal((await bounded(call.closed, "caller close"))[0], 1000);
@@ -417,7 +424,8 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         }
         await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "single-day response");
         assert.deepEqual(call.messages.map(item => item.event), ["media", "mark", "media", "mark"]);
-        assert.match(fixture.speech[1]!, /couldn't find a possible appointment time/);
+        assertResponseAudio(call);
+        assert.match(fixture.speech.at(-1)!, /couldn't find a possible appointment time/);
         assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
         const readIndex = fixture.clinikoPaths.findIndex(path => path.endsWith("/available_times"));
         const query = new URLSearchParams(fixture.clinikoQueries[readIndex]);
@@ -435,6 +443,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "4", streamSid: call.streamSid,
           dtmf: { track: "inbound_track", digit: "1" } }));
         await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "default one-day response");
+        assertResponseAudio(call);
         const readIndex = fixture.clinikoPaths.findIndex(path => path.endsWith("/available_times"));
         assert.ok(readIndex >= 0);
         const query = new URLSearchParams(fixture.clinikoQueries[readIndex]);
@@ -452,10 +461,12 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
           dtmf: { track: "inbound_track", digit: "3" } }));
         await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "week alternative response");
         assert.deepEqual(call.messages.map(item => item.event), ["media", "mark", "media", "mark"]);
-        assert.match(fixture.speech[1]!, /possible times/);
-        assert.match(fixture.speech[1]!, /These may change/);
-        assert.match(fixture.speech[1]!, /can't reserve or confirm/);
-        assert.ok(!fixture.speech[1]!.includes(noStaffNotice));
+        assertResponseAudio(call);
+        const response = fixture.speech.at(-1)!;
+        assert.match(response, /possible times/);
+        assert.match(response, /These may change/);
+        assert.match(response, /can't reserve or confirm/);
+        assert.ok(!response.includes(noStaffNotice));
         const readIndex = fixture.clinikoPaths.findIndex(path => path.endsWith("/available_times"));
         assert.ok(readIndex >= 0);
         const query = new URLSearchParams(fixture.clinikoQueries[readIndex]);
@@ -475,7 +486,8 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
           dtmf: { track: "inbound_track", digit: "3" } }));
         await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "week rate-limit fallback");
-        assert.equal(fixture.speech[1], noStaffNotice);
+        assertResponseAudio(call);
+        assert.equal(fixture.speech.at(-1), noStaffNotice);
         assert.ok(fixture.clinikoMethods.length > 0 && fixture.clinikoMethods.every(method => method === "GET"));
         await closeCaller(call);
       }, true)),
