@@ -377,6 +377,36 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         assert.equal(counts.voiceFailure, 1);
         assert.equal(counts.callEnded, 1);
       })),
+    t.test("E2E-205 interrupted clarification ignores a late played mark and never speaks a stale turn", async () =>
+      withFixture("untrusted-transcript", async fixture => {
+        const call = await fixture.openCall();
+        await markGreeting(call);
+        const sendFrame = async (sequence: number, chunk: number, voiced: boolean): Promise<void> => {
+          call.socket.send(JSON.stringify({ event: "media", sequenceNumber: String(sequence), streamSid: call.streamSid,
+            media: { track: "inbound", chunk: String(chunk), timestamp: String((chunk - 1) * 20),
+              payload: Buffer.alloc(160, voiced ? 0x9f : 0xff).toString("base64") } }));
+          await new Promise(resolve => setTimeout(resolve, 3));
+        };
+        for (let index = 0; index < 37; index += 1) await sendFrame(3 + index, 1 + index, index < 2);
+        await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "unplayed clarification");
+        assert.equal(fixture.speech[1], "Could you repeat that for me?");
+        const staleMark = (call.messages[3]!.mark as { name: string }).name;
+        await sendFrame(40, 38, true);
+        await sendFrame(41, 39, true);
+        await waitFor(() => call.messages.length >= 6, "interruption clear");
+        assert.deepEqual(call.messages.slice(4, 6).map(item => item.event), ["mark", "clear"]);
+        const fenceMark = (call.messages[4]!.mark as { name: string }).name;
+        call.socket.send(JSON.stringify({ event: "mark", sequenceNumber: "42", streamSid: call.streamSid,
+          mark: { name: fenceMark } }));
+        call.socket.send(JSON.stringify({ event: "mark", sequenceNumber: "43", streamSid: call.streamSid,
+          mark: { name: staleMark } }));
+        for (let index = 0; index < 35; index += 1) await sendFrame(44 + index, 40 + index, false);
+        assert.equal((await bounded(call.closed, "second unclear turn close"))[0], 1008);
+        assert.deepEqual(call.messages.map(item => item.event), ["media", "mark", "media", "mark", "mark", "clear"]);
+        assert.deepEqual(fixture.modelRequests, []);
+        assert.equal(fixture.speech.length, 2);
+        assert.equal(fixture.clinikoMethods.length, 0);
+      })),
     t.test("E2E-199 an unapproved week option and invalid digit cannot widen a caller's read", async () =>
       withFixture("week-alternative", async fixture => {
         const call = await fixture.openCall();
