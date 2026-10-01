@@ -36,7 +36,7 @@
     "appointments.booking.enabled": ["E2E-010"],
     "automation.enabled": ["E2E-018"],
     "calls.writes.stop": ["E2E-074"],
-    "clinic.availability.approval": ["E2E-194", "E2E-195", "E2E-200", "E2E-201"],
+    "clinic.availability.approval": ["E2E-194", "E2E-195", "E2E-200", "E2E-201", "E2E-209"],
     "knowledge.approval": ["E2E-004"]
   },
   "scenarios": [

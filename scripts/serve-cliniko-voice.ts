@@ -16,6 +16,7 @@ import { PostgresClinikoApprovalStore } from "../src/storage/postgres-cliniko-ap
 import { PostgresOperationalCounters } from "../src/storage/postgres-operational-counters.ts";
 import { PostgresPolicyStore } from "../src/storage/postgres-policy-store.ts";
 import type { ClinikoVoiceServerConfig } from "../src/standalone/cliniko-voice-server.ts";
+import { boundedHealthCheck } from "../src/standalone/bounded-health-check.ts";
 
 function required(name: string): string {
   const value = process.env[name]?.trim();
@@ -93,10 +94,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
   const db = connectPostgres(connectionString);
   const operationalCounters = ports.operationalCounters ?? new PostgresOperationalCounters(db);
   try {
-    const healthy = async (): Promise<boolean> => {
-      try { await sql`select 1`.execute(db); return true; }
-      catch { return false; }
-    };
+    const healthy = boundedHealthCheck(() => sql`select 1`.execute(db));
     const rateBudget = new PostgresClinikoRequestBudget(db, { apiKey,
       onEvent: event => {
         const kind = event === "claimRateLimited" ? "clinikoBudgetDenied" :

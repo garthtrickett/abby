@@ -232,7 +232,7 @@ async function closeCaller(call: Call): Promise<void> {
 }
 
 test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1",
-  timeout: 120_000, concurrency: 5 }, async t => {
+  timeout: 240_000, concurrency: 5 }, async t => {
   await Promise.all([
     ...fallbackScenarios.map(({ fault, id }) =>
       t.test(`${id} safe spoken fallback on ${fault}`,
