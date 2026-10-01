@@ -102,12 +102,22 @@ export type AppointmentTarget = Readonly<{
   scope: LocationScope;
   appointmentRef: string;
   patientRef: string;
+  startsAt: string;
+  endsAt: string;
+  timeZone: string;
+}>;
+
+/** Host-approved wording is bound to the confirmed action digest and rechecked at commit. */
+export type AppointmentChangeTerms = Readonly<{
+  version: string;
+  approvedText: string;
+  expiresAt: string;
 }>;
 
 export type ActionRequest =
   | Readonly<{ kind: "book"; patient: VerifiedPatient; offer: BookableOffer }>
-  | Readonly<{ kind: "cancel"; patient: VerifiedPatient; target: AppointmentTarget }>
-  | Readonly<{ kind: "reschedule"; patient: VerifiedPatient; target: AppointmentTarget; offer: BookableOffer }>
+  | Readonly<{ kind: "cancel"; patient: VerifiedPatient; target: AppointmentTarget; terms: AppointmentChangeTerms }>
+  | Readonly<{ kind: "reschedule"; patient: VerifiedPatient; target: AppointmentTarget; offer: BookableOffer; terms: AppointmentChangeTerms }>
   | Readonly<{ kind: "intake"; scope: LocationScope; approvedDraftRef: string; consentRef: string; duplicateCheckRef: string }>;
 
 export type FinalCallerTurn = Readonly<{
@@ -171,7 +181,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "affirm"; actionKey: string; digest: string; affirmative: boolean }>
   | Readonly<{ kind: "handoff"; reason: StaffReason }>
   | Readonly<{ kind: "transfer"; reason: StaffReason }>
-  | Readonly<{ kind: "readFailure"; target: "patient" | "offer"; failure: "unavailable" | "notFound" }>
+  | Readonly<{ kind: "readFailure"; target: "patient" | "offer" | "appointment"; failure: "unavailable" | "notFound" }>
   | Readonly<{ kind: "intakeFailure"; reason: "missing" | "unavailable" }>
   | Readonly<{ kind: "unavailableAction"; actionKind: ActionKind }>
   | Readonly<{ kind: "answer"; sources: readonly ApprovedKnowledge[]; proposedText: string }>
