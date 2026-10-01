@@ -191,6 +191,38 @@ test("Cliniko provider faults stay typed and never become an empty availability 
     .list(scope, "2026-10-01", "2026-10-02"), "unavailable");
 });
 
+test("one availability deadline aborts a stalled provider read without another request", async () => {
+  let requests = 0;
+  const stalled: typeof fetch = async (_input, init) => {
+    requests += 1;
+    const signal = init?.signal;
+    assert.ok(signal);
+    return new Promise<Response>((_resolve, reject) => {
+      if (signal.aborted) return reject(new DOMException("deadline", "AbortError"));
+      signal.addEventListener("abort", () => reject(new DOMException("deadline", "AbortError")), { once: true });
+    });
+  };
+  const reader = value(ClinikoAvailabilityReader.create(config, stalled));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 40);
+  try { failure(await reader.list(scope, "2026-10-01", "2026-10-02", controller.signal), "unavailable"); }
+  finally { clearTimeout(timer); }
+  assert.equal(requests, 1);
+});
+
+test("caller read returns at its deadline even if the shared budget never settles", async () => {
+  let requests = 0;
+  const reader = value(ClinikoAvailabilityReader.create({ ...config, rateBudget: {
+    claim: () => new Promise<null>(() => {}),
+    observe429: () => ({ kind: "rateLimited" }),
+  } }, async () => { requests += 1; throw new Error("budget must block provider HTTP"); }));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 40);
+  try { failure(await reader.list(scope, "2026-10-01", "2026-10-02", controller.signal), "unavailable"); }
+  finally { clearTimeout(timer); }
+  assert.equal(requests, 0);
+});
+
 test("Cliniko malformed, oversized, and changing responses cannot produce an offer", async () => {
   for (const [options, expected] of [
     [{ malformed: true }, "malformed"],

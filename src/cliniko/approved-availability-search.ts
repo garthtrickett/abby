@@ -1,7 +1,7 @@
 import { err, ok } from "../core/model.ts";
 import type { AvailabilityRead, AvailabilityReadFailure, LocationScope, Result } from "../core/model.ts";
 import type { AvailabilityHost } from "../core/host.ts";
-import { ClinikoAvailabilityReader } from "./availability.ts";
+import { ClinikoAvailabilityReader, availabilityReadDeadlineMs } from "./availability.ts";
 
 /**
  * One bounded caller read. Try the approved primary first; only a no-time or
@@ -21,7 +21,10 @@ export class ClinikoApprovedAvailabilitySearch implements AvailabilityHost {
     this.now = now;
   }
 
-  async list(scope: LocationScope, from: string, to: string): Promise<Result<AvailabilityRead, AvailabilityReadFailure>> {
+  async list(scope: LocationScope, from: string, to: string, parentSignal?: AbortSignal):
+    Promise<Result<AvailabilityRead, AvailabilityReadFailure>> {
+    const localSignal = AbortSignal.timeout(availabilityReadDeadlineMs);
+    const signal = parentSignal ? AbortSignal.any([parentSignal, localSignal]) : localSignal;
     let empty: Extract<AvailabilityRead, { kind: "times" }> | undefined;
     let ineligible: Extract<AvailabilityRead, { kind: "notEligible" }> | undefined;
     let timeZone: string | undefined;
@@ -32,8 +35,8 @@ export class ClinikoApprovedAvailabilitySearch implements AvailabilityHost {
 
     for (let index = 0; index < this.readers.length; index += 1) {
       const result = index === 0
-        ? await this.readers[index]!.list(scope, from, to)
-        : await this.readers[index]!.listLabeled(scope, from, to);
+        ? await this.readers[index]!.list(scope, from, to, signal)
+        : await this.readers[index]!.listLabeled(scope, from, to, signal);
       if (!result.ok) return result;
       if (result.value.kind === "notEligible") {
         ineligible ??= result.value;
