@@ -12,6 +12,8 @@ import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
 import { TextReception } from "../../src/reference/text-reception.ts";
 import { createHostAuthenticatedDashboardServer } from "../../src/standalone/dashboard/server.ts";
+import { StandaloneOperationalCounters } from "../../src/standalone/operational-counters.ts";
+import type { OperationalDailyCounts } from "../../src/voice/operational-counts.ts";
 
 const scope = { tenantId: "local-browser", clinicId: "clinic", locationId: "main" };
 const route = { accountRef: "local-account", dialedNumber: "+6125550199", routeVersion: "v1" };
@@ -29,7 +31,7 @@ async function freePort(): Promise<number> {
   return address.port;
 }
 
-test("E2E-214 E2E-233 local owner sees Cliniko setup and aggregate-only speech status", async ({ page, request }) => {
+test("E2E-214 E2E-233 E2E-235 local owner sees aggregate speech and operational status", async ({ page, request }) => {
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
   const paths: string[] = [];
@@ -68,6 +70,10 @@ test("E2E-214 E2E-233 local owner sees Cliniko setup and aggregate-only speech s
       { name: "noise", status: "fail" }, { name: "safety", status: "fail" },
       { name: "speech", status: "pass" },
     ] };
+  const operationalCounters = new StandaloneOperationalCounters(() => "2026-10-01T12:00:00.000Z");
+  operationalCounters.record(scope, "callOwnerStarted");
+  operationalCounters.record({ ...scope, clinicId: "foreign" }, "voiceFailure");
+  let malformedOperations = false;
   const server = await createHostAuthenticatedDashboardServer({ publicOrigin: origin,
     surface: "availabilitySetup",
     resolveActor: incoming => incoming.headers.authorization === basic ? actor
@@ -79,7 +85,10 @@ test("E2E-214 E2E-233 local owner sees Cliniko setup and aggregate-only speech s
       response.end();
     },
     gatewayFor: bound => new CommandGateway(bound, policy, reception,
-      undefined, undefined, undefined, undefined, undefined, setup),
+      undefined, undefined, undefined, undefined, undefined, setup,
+      { daily: location => malformedOperations
+        ? { days: [], patientNote: "PRIVATE OPERATIONAL CANARY" } as unknown as OperationalDailyCounts
+        : operationalCounters.daily(location) }),
   }, resolve("dist/dashboard/cliniko-admin.js"));
   try {
     server.listen(port, "127.0.0.1");
@@ -88,6 +97,9 @@ test("E2E-214 E2E-233 local owner sees Cliniko setup and aggregate-only speech s
     assert.equal((await request.get(origin, { headers: { Authorization: "Basic invalid" } })).status(), 401);
     assert.equal((await request.get(`${origin}/api/speech-gate`)).status(), 401);
     assert.equal((await request.get(`${origin}/api/speech-gate`, { headers: {
+      Authorization: "Basic synthetic-staff" } })).status(), 403);
+    assert.equal((await request.get(`${origin}/api/operations/daily`)).status(), 401);
+    assert.equal((await request.get(`${origin}/api/operations/daily`, { headers: {
       Authorization: "Basic synthetic-staff" } })).status(), 403);
     assert.equal(paths.length, 0);
     await page.context().setHTTPCredentials({ username: "abby-admin", password: token });
@@ -104,13 +116,22 @@ test("E2E-214 E2E-233 local owner sees Cliniko setup and aggregate-only speech s
     await expect(page.getByLabel("Voice quality status")).toContainText("Voice quality is blocked");
     await expect(page.getByLabel("Voice quality status")).toContainText("Noisy audio: fail");
     await expect(page.getByLabel("Voice quality status")).toContainText("Release readiness: unverified");
+    const operationalReply = await request.get(`${origin}/api/operations/daily`, { headers: { Authorization: basic } });
+    assert.equal(operationalReply.status(), 200);
+    const operationalBody = await operationalReply.json() as { value: { daily: OperationalDailyCounts } };
+    assert.equal(operationalBody.value.daily.days.at(-1)?.counts.callOwnerStarted, 1);
+    assert.equal(operationalBody.value.daily.days.at(-1)?.counts.voiceFailure, 0);
+    await expect(page.getByLabel("Operational counts")).toContainText("Call owners started");
+    await expect(page.getByLabel("Operational counts")).toContainText("2026-10-01");
+    assert.equal((await request.post(`${origin}/api/operations/daily`, { headers: { Authorization: basic } })).status(), 404);
     assert.equal((await request.post(`${origin}/api/speech-gate`, { headers: { Authorization: basic } })).status(), 404);
     await expect(page.getByRole("button", { name: /booking/i })).toHaveCount(0);
     const capabilities = await request.get(`${origin}/api/capabilities`, { headers: { Authorization: basic } });
     assert.equal(capabilities.status(), 200);
     const listed = await capabilities.json() as { value: { id: string }[] };
     assert.ok(listed.value.length > 0);
-    assert.ok(listed.value.every(item => item.id === "settings.read.v1" || item.id.startsWith("clinic.availability.")));
+    assert.ok(listed.value.every(item => item.id === "settings.read.v1" || item.id === "operations.daily.v1" ||
+      item.id.startsWith("clinic.availability.")));
     assert.equal((await request.post(`${origin}/api/settings/booking-enabled`, { headers: {
       Authorization: basic, Origin: origin, "Content-Type": "application/json" },
     data: { expectedVersion: "0", enabled: true } })).status(), 404);
@@ -138,6 +159,12 @@ test("E2E-214 E2E-233 local owner sees Cliniko setup and aggregate-only speech s
     await page.reload();
     await expect(page.getByLabel("Voice quality status")).toContainText("status is unavailable");
     await expect(page.getByLabel("Voice quality status")).toContainText("unverified");
+    malformedOperations = true;
+    const malformedReply = await request.get(`${origin}/api/operations/daily`, { headers: { Authorization: basic } });
+    assert.equal(malformedReply.status(), 503);
+    assert.equal((await malformedReply.text()).includes("PRIVATE OPERATIONAL CANARY"), false);
+    await page.reload();
+    await expect(page.getByLabel("Operational counts")).toContainText("unavailable");
   } finally {
     server.closeAllConnections();
     await new Promise<void>((done, reject) => server.close(error => error ? reject(error) : done()));

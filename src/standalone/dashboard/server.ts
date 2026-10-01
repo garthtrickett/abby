@@ -6,7 +6,7 @@ import type { GatewayCommand, HostActor } from "../../reference/command-gateway.
 import { publicSpeechGateStatus } from "../speech-gate-public-status.ts";
 
 const maxCommandBytes = 10_000;
-const document = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body><main><div id="app"></div><div id="availability-setup"></div><div id="speech-gate"></div></main><script type="module" src="/app.js"></script></body></html>`;
+const document = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body><main><div id="app"></div><div id="availability-setup"></div><div id="speech-gate"></div><div id="operational-daily"></div></main><script type="module" src="/app.js"></script></body></html>`;
 const setupCommands = new Set([
   "clinic.availability.businesses.list.v1", "clinic.availability.practitioners.list.v1",
   "clinic.availability.types.list.v1", "clinic.availability.selection.inspect.v1",
@@ -114,7 +114,7 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     const url = new URL(request.url ?? "/", "http://localhost");
     if (surface === "availabilitySetup" && !(
       (request.method === "GET" && ["/", "/app.js", "/style.css", "/api/capabilities", "/api/settings",
-        "/api/speech-gate"].includes(url.pathname)) ||
+        "/api/speech-gate", "/api/operations/daily"].includes(url.pathname)) ||
       (request.method === "POST" && url.pathname === "/api/clinic-availability/command"))) {
       return json(response, 404, { ok: false, error: { kind: "notFound" } });
     }
@@ -160,6 +160,7 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     }
     if (request.method === "GET" && url.pathname === "/api/knowledge") command = { kind: "knowledge.list.v1" };
     if (request.method === "GET" && url.pathname === "/api/settings") command = { kind: "settings.read.v1" };
+    if (request.method === "GET" && url.pathname === "/api/operations/daily") command = { kind: "operations.daily.v1" };
     if (request.method === "GET" && url.pathname === "/api/writes/stop") {
       const afterEffectId = url.searchParams.get("after");
       if (afterEffectId !== null && (!afterEffectId || afterEffectId.length > 512)) return json(response, 400, { ok: false, error: { kind: "invalid" } });
@@ -313,6 +314,8 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     if (!command) return json(response, 404, { ok: false, error: { kind: "notFound" } });
     const result = await gateway.submit(command);
     const status = result.ok ? 200 : ["forbidden", "scopeMismatch"].includes(result.error.kind) ? 403 :
+      command.kind === "operations.daily.v1" &&
+        ["commandOutcomeUnknown", "responseContractViolation"].includes(result.error.kind) ? 503 :
       result.error.kind === "versionConflict" ? 409 : result.error.kind === "callUnknown" ? 404 : 400;
     return json(response, status, result);
   } catch {

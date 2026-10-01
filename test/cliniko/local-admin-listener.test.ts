@@ -11,6 +11,8 @@ import { connectPostgres } from "../../src/storage/connect.ts";
 import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
+import { PostgresOperationalCounters } from "../../src/storage/postgres-operational-counters.ts";
+import type { OperationalDailyCounts } from "../../src/voice/operational-counts.ts";
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 
 const root = new URL("../../", import.meta.url);
@@ -33,7 +35,7 @@ async function freePort(): Promise<number> {
   return address.port;
 }
 
-test("E2E-214 E2E-233 loopback admin authenticates an owner and fails closed without speech evidence",
+test("E2E-214 E2E-233 E2E-235 loopback admin reads only its clinic's daily counts",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
     const adminUrl = process.env.DATABASE_URL;
     assert.ok(adminUrl);
@@ -95,6 +97,9 @@ test("E2E-214 E2E-233 loopback admin authenticates an owner and fails closed wit
         const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable",
           async () => ok(true), false, "standaloneMinimal");
         assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "synthetic-operator")).ok);
+        const counters = new PostgresOperationalCounters(db);
+        await counters.record(scope, "callOwnerStarted");
+        await counters.record({ ...scope, clinicId: "foreign" }, "voiceFailure");
       } finally { await db.destroy(); }
 
       await launch();
@@ -113,11 +118,20 @@ test("E2E-214 E2E-233 loopback admin authenticates an owner and fails closed wit
       const absentSpeech = await fetch(`${origin}/api/speech-gate`, { headers: { Authorization: basic } });
       assert.equal(absentSpeech.status, 503);
       assert.deepEqual(await absentSpeech.json(), { ok: false, error: { kind: "statusUnavailable" } });
+      assert.equal((await fetch(`${origin}/api/operations/daily`)).status, 401);
+      const operational = await fetch(`${origin}/api/operations/daily`, { headers: { Authorization: basic } });
+      assert.equal(operational.status, 200);
+      const daily = await operational.json() as { value: { kind: string; daily: OperationalDailyCounts } };
+      assert.equal(daily.value.kind, "operationalDaily");
+      assert.equal(daily.value.daily.days.length, 7);
+      assert.equal(daily.value.daily.days.at(-1)?.counts.callOwnerStarted, 1);
+      assert.equal(daily.value.daily.days.at(-1)?.counts.voiceFailure, 0);
       const capabilities = await fetch(`${origin}/api/capabilities`, { headers: { Authorization: basic } });
       assert.equal(capabilities.status, 200);
       const listed = await capabilities.json() as { value: { id: string }[] };
       assert.ok(listed.value.length > 0);
-      assert.ok(listed.value.every(item => item.id === "settings.read.v1" || item.id.startsWith("clinic.availability.")));
+      assert.ok(listed.value.every(item => item.id === "settings.read.v1" || item.id === "operations.daily.v1" ||
+        item.id.startsWith("clinic.availability.")));
       assert.equal((await fetch(`${origin}/api/settings/booking-enabled`, { method: "POST", headers: {
         Authorization: basic, Origin: origin, "Content-Type": "application/json" },
       body: JSON.stringify({ expectedVersion: "0", enabled: true }) })).status, 404);
@@ -132,6 +146,10 @@ test("E2E-214 E2E-233 loopback admin authenticates an owner and fails closed wit
       await stop();
 
       await launch();
+      const persistedOperations = await fetch(`${origin}/api/operations/daily`, { headers: { Authorization: basic } });
+      assert.equal(persistedOperations.status, 200);
+      const persistedDaily = await persistedOperations.json() as { value: { daily: OperationalDailyCounts } };
+      assert.equal(persistedDaily.value.daily.days.at(-1)?.counts.callOwnerStarted, 1);
       const current = await command({ kind: "clinic.availability.approval.read.v1" });
       assert.equal(current.status, 200);
       const state = await current.json() as { value: { state: { version: number; approval: unknown } } };
