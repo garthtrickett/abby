@@ -25,6 +25,7 @@ export type ClinikoAdminDashboardConfig = Readonly<{
   sharedBudgetUserRef?: string;
   publicOrigin: string;
   resolveActor: HostDashboardIdentity["resolveActor"];
+  unauthorized?: HostDashboardIdentity["unauthorized"];
   bundlePath: string;
   fetch?: typeof fetch;
   now?: () => string;
@@ -53,7 +54,9 @@ export async function createStandaloneClinikoAdminDashboard(config: ClinikoAdmin
     new ReferenceClinicHost([], []));
   try {
     const server = await createHostAuthenticatedDashboardServer({ publicOrigin: config.publicOrigin,
+      surface: "availabilitySetup",
       resolveActor: config.resolveActor,
+      ...(config.unauthorized ? { unauthorized: config.unauthorized } : {}),
       gatewayFor: actor => {
         if (actor.role === "agent" || actor.scope.tenantId !== scope.tenantId ||
             actor.scope.clinicId !== scope.clinicId ||
