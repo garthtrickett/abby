@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
+import { createServer } from "node:http";
 import test from "node:test";
 import { ClinikoBookingWriter } from "../../src/cliniko/booking-write.ts";
 import { MemoryLedger } from "../../src/core/ledger.ts";
@@ -24,6 +26,7 @@ type Options = Readonly<{
   revokeProofAtCommit?: boolean;
   stopDuringCommit?: boolean;
   provider?: "accepted" | "lostAfterCommit" | "failedBeforeCommit" | "conflict";
+  providerFetch?: typeof fetch;
   patientId?: string;
   offsetStart?: boolean;
   wrongSelection?: boolean;
@@ -71,7 +74,7 @@ async function fixture(options: Options = {}) {
   };
   const writer = ClinikoBookingWriter.create({ scope, apiKey: "synthetic-key-au5",
     contactEmail: "dev@example.test", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
-  provider, () => now);
+  options.providerFetch ?? provider, () => now);
   assert.ok(writer.ok);
   let offerResolutions = 0;
   const host = new TransientClinikoBookingHost({ scope, callId, sessionId,
@@ -303,6 +306,67 @@ test("E2E-226 lost response after commit permits exact observation but no second
   assert.equal(app.posts.length, 1);
   assert.equal(Object.values(settled.value.actions)[0]?.status, "committed");
   await app.close();
+});
+
+test("E2E-226 a TCP reset after provider commit stays uncertain until exact observation", async () => {
+  let posts = 0;
+  let gets = 0;
+  let stored: Record<string, unknown> | undefined;
+  const server = createServer(async (request, response) => {
+    assert.equal(request.url?.split("?")[0], "/v1/individual_appointments");
+    if (request.method === "POST") {
+      posts += 1;
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(Buffer.from(chunk as Uint8Array));
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
+      stored = { id: "91", notes: body.notes, starts_at: body.starts_at,
+        cancelled_at: null, archived_at: null, deleted_at: null,
+        patient: { links: { self: `${base}/patients/${body.patient_id}` } },
+        business: { links: { self: `${base}/businesses/${body.business_id}` } },
+        practitioner: { links: { self: `${base}/practitioners/${body.practitioner_id}` } },
+        appointment_type: { links: { self: `${base}/appointment_types/${body.appointment_type_id}` } } };
+      response.destroy();
+      return;
+    }
+    assert.equal(request.method, "GET");
+    gets += 1;
+    assert.deepEqual(new URL(request.url!, "http://localhost").searchParams.getAll("q[]"), ["patient_id:=42"]);
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ total_entries: stored ? 1 : 0,
+      individual_appointments: stored ? [stored] : [] }));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const providerFetch: typeof fetch = (input, init) => {
+    const original = new URL(String(input));
+    assert.equal(original.origin, "https://api.au5.cliniko.com");
+    return fetch(`http://127.0.0.1:${address.port}${original.pathname}${original.search}`, init);
+  };
+  let app: Awaited<ReturnType<typeof fixture>> | undefined;
+  try {
+    app = await fixture({ providerFetch });
+    await app.begin();
+    await app.play((await app.speak()).delivery);
+    const uncertain = await app.speak();
+    assert.equal(posts, 1);
+    assert.equal(gets, 0);
+    assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review.");
+    assert.equal(Object.values((await app.state()).actions)[0]?.status, "uncertain");
+    await app.play(uncertain.delivery);
+    const settled = await app.drain();
+    assert.ok(settled.ok);
+    assert.equal(gets, 1);
+    assert.equal(posts, 1, "exact observation cannot replay the committed POST");
+    assert.equal(Object.values(settled.value.actions)[0]?.status, "committed");
+  } finally {
+    try { await app?.close(); }
+    finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }
+  }
 });
 
 test("E2E-226 turning booking off after an uncertain send still permits proof-checked exact observation", async () => {
