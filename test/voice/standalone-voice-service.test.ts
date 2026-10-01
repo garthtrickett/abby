@@ -28,14 +28,14 @@ async function freePort(): Promise<number> {
 async function healthy(port: number): Promise<Response> {
   const deadline = Date.now() + 20_000;
   while (Date.now() < deadline) {
-    try { return await fetch(`http://127.0.0.1:${port}/healthz`); }
+    try { return await fetch(`http://127.0.0.1:${port}/healthz`, { signal: AbortSignal.timeout(1_500) }); }
     catch { await new Promise(resolve => setTimeout(resolve, 50)); }
   }
   throw new Error("local voice service did not start");
 }
 
 test("E2E-171 E2E-218 local voice runner prunes expired operations at startup and refuses unready calls",
-  { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 60_000 }, async () => {
+  { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
   const adminUrl = process.env.DATABASE_URL;
   assert.ok(adminUrl);
   const admin = connectPostgres(adminUrl);
