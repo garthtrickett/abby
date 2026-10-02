@@ -4,6 +4,7 @@ import type { AfterHoursSettingAuditEntry, AfterHoursSettingAuditPage, Automatio
 import { err, ok } from "../core/model.ts";
 import type { AfterHoursMode, ApprovedAfterHoursInfo, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
 import { validAfterHoursSetting } from "../core/after-hours-policy.ts";
+import { validGreetingShape } from "../core/greeting.ts";
 import { validApprovedStaffSchedule } from "../core/staff-schedule.ts";
 import { validUrgentResponseShape } from "../core/urgent-response.ts";
 import { READINESS_REQUIREMENTS, unprovenReadiness } from "../core/readiness.ts";
@@ -76,6 +77,7 @@ function decodePolicy(value: unknown, scope: LocationScope, version: number): Re
       !validAfterHoursSetting(policy.afterHoursMode ?? "staffRequest", policy.afterHoursInfo, scope) ||
       (policy.urgentResponse !== undefined && !validUrgentResponseShape(policy.urgentResponse, scope)) ||
       (policy.staffSchedule !== undefined && !validApprovedStaffSchedule(policy.staffSchedule, scope)) ||
+      (policy.greeting !== undefined && !validGreetingShape(policy.greeting, scope)) ||
       !["execute", "requestOnly", "unavailable"].includes(policy.capabilities.transfer) ||
       !policy.staffDestination || !policy.operatorQueue) return err({ kind: "storageFailure" });
   return ok(structuredClone({ ...policy, automationVersion: "0", automationEnabled: false }));

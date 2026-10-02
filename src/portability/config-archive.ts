@@ -252,7 +252,10 @@ function approvedStaffSchedule(value: unknown, scope: LocationScope): ApprovedSt
 
 function greeting(value: unknown, sourceScope: LocationScope): NonNullable<CallPolicy["greeting"]> {
   const row = object(value, "settings");
-  if (row.approved !== true || typeof row.approvedText !== "string" || !row.approvedText.trim() || row.approvedText.length > 2_000) {
+  if (Object.keys(row).sort().join(",") !== "approved,approvedText,ownerRef,version" ||
+      row.approved !== true || typeof row.approvedText !== "string" || !row.approvedText.trim() ||
+      row.approvedText.length > 2_000 ||
+      /[\u0000-\u001f\u007f]/.test(String(row.version) + String(row.ownerRef) + row.approvedText)) {
     throw new InvalidConfigArchive("settings");
   }
   return { scope: sourceScope, version: ref(row.version, "settings"), ownerRef: ref(row.ownerRef, "settings"),
