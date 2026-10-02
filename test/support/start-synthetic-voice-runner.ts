@@ -11,12 +11,12 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     ![undefined, "openai-speech", "speech-primary-stall", "openai-transcription", "untrusted-transcript", "clear-availability", "clear-unsupported", "clear-model-failure", "cliniko-rate-limit", "cliniko-server-error", "cliniko-timeout", "cliniko-slow-read", "cliniko-zone-changed", "cliniko-partial-page", "cliniko-empty", "cliniko-business-type-removed", "cliniko-practitioner-type-removed", "week-alternative",
       "practitioner-alternative", "practitioner-alternative-rate-limit",
       "practitioner-alternative-malformed", "practitioner-alternative-second",
-    "primary-selection-change", "clear-correction"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
+    "primary-selection-change", "clear-correction", "clear-playback-correction"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
   throw new Error("synthetic voice runner requires an isolated fixture");
 }
 const fault = process.env.ABBY_SYNTHETIC_VOICE_FAULT;
 const clearTurn = fault === "clear-availability" || fault === "clear-unsupported" ||
-  fault === "clear-model-failure" || fault === "clear-correction";
+  fault === "clear-model-failure" || fault === "clear-correction" || fault === "clear-playback-correction";
 const alternativeFault = fault === "practitioner-alternative" ||
   fault === "practitioner-alternative-rate-limit" || fault === "practitioner-alternative-malformed" ||
   fault === "practitioner-alternative-second" || fault === "primary-selection-change" ||
@@ -147,7 +147,7 @@ const openaiFetch: typeof fetch = async (input, init) => {
     const firstText = "Do you have availability tomorrow?";
     const correctedText = "Actually, please have the clinic contact me.";
     const expectedText = fault === "clear-unsupported" ? "Please book my appointment tomorrow." : firstText;
-    if (request.store !== false || (fault === "clear-correction"
+    if (request.store !== false || (fault === "clear-correction" || fault === "clear-playback-correction"
       ? callerText !== JSON.stringify({ callerText: firstText }) &&
         callerText !== JSON.stringify({ callerText: correctedText })
       : callerText !== JSON.stringify({ callerText: expectedText }))) {
@@ -167,7 +167,7 @@ const openaiFetch: typeof fetch = async (input, init) => {
     }
     const today = clinicDateAt("Australia/Sydney", new Date());
     const tomorrow = new Date(Date.parse(`${today}T00:00:00.000Z`) + 86_400_000).toISOString().slice(0, 10);
-    const decision = fault === "clear-availability" || (fault === "clear-correction" &&
+    const decision = fault === "clear-availability" || ((fault === "clear-correction" || fault === "clear-playback-correction") &&
       callerText === JSON.stringify({ callerText: firstText }))
       ? { kind: "availability", from: tomorrow, to: tomorrow } :
       { kind: "unsupported", from: null, to: null };
@@ -196,9 +196,12 @@ const openaiFetch: typeof fetch = async (input, init) => {
     });
   }
   if (fault === "openai-speech") return new Response(null, { status: 503 });
-  // Distinct PCM tones let signed tests distinguish greeting audio from the
-  // next utterance in the outbound stream, independently of IPC timing.
-  const sample = request.input.startsWith("This is an Abby test call.") ? 1_000 : 2_000;
+  // Distinct PCM tones let signed tests distinguish the corrected response
+  // from both greeting and provisional audio independently of IPC timing.
+  const sample = request.input.startsWith("This is an Abby test call.") ? 1_000 :
+    fault === "clear-playback-correction" &&
+      request.input === "I can't send a staff request from this call. Please contact the clinic directly."
+      ? 3_000 : 2_000;
   const audio = Buffer.alloc(960);
   for (let offset = 0; offset < audio.length; offset += 2) audio.writeInt16LE(sample, offset);
   return new Response(audio, { headers: { "content-type": "audio/pcm" } });
@@ -212,7 +215,8 @@ function syntheticClearTranscription(sessionId: string): TranscriptionPort {
       turn += 1;
       return ok([{ kind: "segmentFinal", sessionId, generation, utteranceId: `fixture-${turn}`,
         text: fault === "clear-unsupported" ? "Please book my appointment tomorrow." :
-          fault === "clear-correction" && turn > 1 ? "Actually, please have the clinic contact me." :
+          (fault === "clear-correction" || fault === "clear-playback-correction") && turn > 1 ?
+            "Actually, please have the clinic contact me." :
             "Do you have availability tomorrow?", quality: "clear" }]);
     },
   };

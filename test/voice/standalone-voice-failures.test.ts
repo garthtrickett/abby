@@ -15,7 +15,7 @@ import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 import { PostgresClinikoApprovalStore } from "../../src/storage/postgres-cliniko-approval-store.ts";
 import type { OperationalDailyCounts } from "../../src/voice/operational-counts.ts";
 
-type Fault = "openai-speech" | "speech-primary-stall" | "openai-transcription" | "untrusted-transcript" | "clear-availability" | "clear-unsupported" | "clear-model-failure" | "clear-correction" | "cliniko-rate-limit" | "cliniko-server-error" | "cliniko-timeout" | "cliniko-slow-read" | "cliniko-zone-changed" | "cliniko-partial-page" | "cliniko-empty" |
+type Fault = "openai-speech" | "speech-primary-stall" | "openai-transcription" | "untrusted-transcript" | "clear-availability" | "clear-unsupported" | "clear-model-failure" | "clear-correction" | "clear-playback-correction" | "cliniko-rate-limit" | "cliniko-server-error" | "cliniko-timeout" | "cliniko-slow-read" | "cliniko-zone-changed" | "cliniko-partial-page" | "cliniko-empty" |
   "cliniko-business-type-removed" | "cliniko-practitioner-type-removed" | "week-alternative" | "practitioner-alternative" |
   "practitioner-alternative-rate-limit" | "practitioner-alternative-malformed" |
   "practitioner-alternative-second" | "primary-selection-change" | undefined;
@@ -369,6 +369,45 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         await new Promise(resolve => setTimeout(resolve, 200));
         assert.equal(fixture.speech.length, 2, "late first classifier result may not speak");
         assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 0);
+        await closeCaller(call);
+      })),
+    t.test("E2E-239 signed clear correction interrupts a queued provisional answer", async () =>
+      withFixture("clear-playback-correction", async fixture => {
+        const call = await fixture.openCall();
+        await markGreeting(call);
+        await sendSyntheticSpokenTurn(call);
+        await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "unplayed provisional answer");
+        assertResponseAudio(call);
+        assert.match(fixture.speech[1]!, /possible|available/i);
+        assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
+        const oldMark = (call.messages[3]!.mark as { name: string }).name;
+
+        sendSyntheticFrame(call, 40, 38, true);
+        sendSyntheticFrame(call, 41, 39, true);
+        await waitFor(() => call.messages.length >= 6, "provisional answer clear fence");
+        assert.deepEqual(call.messages.slice(4, 6).map(item => item.event), ["mark", "clear"]);
+        const fenceMark = (call.messages[4]!.mark as { name: string }).name;
+        call.socket.send(JSON.stringify({ event: "mark", sequenceNumber: "42", streamSid: call.streamSid,
+          mark: { name: fenceMark } }));
+        call.socket.send(JSON.stringify({ event: "mark", sequenceNumber: "43", streamSid: call.streamSid,
+          mark: { name: oldMark } }));
+        for (let index = 0; index < 35; index += 1) {
+          sendSyntheticFrame(call, 44 + index, 40 + index, false);
+          await new Promise(resolve => setTimeout(resolve, 3));
+        }
+        await waitFor(() => call.messages.length >= 8 && fixture.speech.length >= 3, "corrected direct-contact answer");
+        assert.deepEqual(call.messages.map(item => item.event),
+          ["media", "mark", "media", "mark", "mark", "clear", "media", "mark"]);
+        const provisionalAudio = (call.messages[2]!.media as { payload: string }).payload;
+        const correctedAudio = (call.messages[6]!.media as { payload: string }).payload;
+        assert.notEqual(correctedAudio, provisionalAudio, "the corrected response must replace the old audio");
+        assert.equal(fixture.speech[2], noStaffNotice);
+        assert.equal(fixture.modelRequests.length, 2);
+        assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
+        assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
+        assert.equal((await fixture.operationalSnapshot()).intentClassificationUnavailable, 0);
+        call.socket.send(JSON.stringify({ event: "mark", sequenceNumber: "79", streamSid: call.streamSid,
+          mark: { name: (call.messages[7]!.mark as { name: string }).name } }));
         await closeCaller(call);
       })),
     ...[false, true].map(alternativeApproved =>
