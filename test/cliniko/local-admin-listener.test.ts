@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { createServer } from "node:net";
 import { sql } from "kysely";
 import test from "node:test";
 import { ok } from "../../src/core/model.ts";
@@ -25,18 +24,7 @@ const token = "8".repeat(64);
 const apiKey = "synthetic-key-au5";
 const basic = `Basic ${Buffer.from(`abby-admin:${token}`).toString("base64")}`;
 
-async function freePort(): Promise<number> {
-  const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  const address = server.address();
-  assert.ok(address && typeof address !== "string");
-  server.close();
-  await once(server, "close");
-  return address.port;
-}
-
-test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 E2E-247 E2E-248 loopback admin retains scoped setup and usable greeting",
+test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 E2E-247 E2E-248 E2E-249 loopback admin retains scoped setup and usable greeting",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
     const adminUrl = process.env.DATABASE_URL;
     assert.ok(adminUrl);
@@ -44,11 +32,10 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 E2E-247 E2E-248 loopback admin ret
     const databaseName = `abby_test_admin_${randomUUID().replaceAll("-", "")}`;
     const target = new URL(adminUrl);
     target.pathname = `/${databaseName}`;
-    const port = await freePort();
-    const origin = `http://127.0.0.1:${port}`;
+    let origin = ""; // Set only by the currently launched child's bound-port message.
     const env: NodeJS.ProcessEnv = { PATH: process.env.PATH, HOME: process.env.HOME, LANG: process.env.LANG,
       DATABASE_URL: target.toString(), ABBY_ISOLATED_POSTGRES_PROBE: "1",
-      ABBY_ADMIN_PORT: String(port), ABBY_ADMIN_ACCESS_TOKEN_HEX: token,
+      ABBY_ADMIN_PORT: "0", ABBY_ADMIN_ACCESS_TOKEN_HEX: token,
       ABBY_ADMIN_ACTOR_REF: "synthetic-owner-214", ABBY_TENANT_ID: scope.tenantId,
       ABBY_CLINIC_ID: scope.clinicId, ABBY_LOCATION_ID: scope.locationId,
       ABBY_TWILIO_ACCOUNT_SID: accountSid, ABBY_TWILIO_TEST_NUMBER: number,
@@ -59,11 +46,17 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 E2E-247 E2E-248 loopback admin ret
     let output = "";
     const paths: string[] = [];
     const launch = async () => {
+      origin = "";
       child = spawn(process.execPath, ["test/support/start-synthetic-cliniko-admin.ts"],
         { cwd: root, env, stdio: ["ignore", "pipe", "pipe", "ipc"] });
       child.stdout?.on("data", data => { output += String(data); });
       child.stderr?.on("data", data => { output += String(data); });
       child.on("message", message => {
+        if (typeof message === "object" && message !== null && "kind" in message &&
+            message.kind === "listenerReady" && "port" in message && typeof message.port === "number" &&
+            Number.isSafeInteger(message.port) && message.port > 0 && message.port <= 65_535) {
+          origin = `http://127.0.0.1:${message.port}`;
+        }
         if (typeof message === "object" && message !== null && "kind" in message &&
             message.kind === "clinikoPath" && "path" in message && typeof message.path === "string") {
           paths.push(message.path);
@@ -72,10 +65,14 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 E2E-247 E2E-248 loopback admin ret
       const until = Date.now() + 15_000;
       let ready = false;
       while (!ready && Date.now() < until) {
+        if (!origin) {
+          await new Promise(resolve => setTimeout(resolve, 40));
+          continue;
+        }
         try { ready = (await fetch(origin, { signal: AbortSignal.timeout(500) })).status === 401; }
         catch { await new Promise(resolve => setTimeout(resolve, 40)); }
       }
-      assert.ok(ready, "local admin listener did not start");
+      assert.ok(ready && origin, "local admin listener did not start");
     };
     const stop = async () => {
       if (child && child.exitCode === null && child.signalCode === null) {

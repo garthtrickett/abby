@@ -60,6 +60,7 @@ export async function createDashboardServer(gateway: CommandGateway, bundlePath:
 
 /** The embedding host authenticates each request and constructs its scoped gateway. */
 export type HostDashboardIdentity = Readonly<{
+  /** http://127.0.0.1:0 resolves to this listener's bound loopback port, never a request header. */
   publicOrigin: string;
   /** Limit a local setup listener to the routes and capabilities its UI exposes. */
   surface?: "full" | "availabilitySetup";
@@ -81,6 +82,7 @@ export async function createHostAuthenticatedDashboardServer(identity: HostDashb
   if ((origin.protocol !== "https:" && !(origin.protocol === "http:" && origin.hostname === "127.0.0.1")) ||
       origin.origin !== identity.publicOrigin || origin.username || origin.password ||
       origin.pathname !== "/" || origin.search || origin.hash ||
+      (origin.port === "0" && origin.protocol !== "http:") ||
       typeof identity.resolveActor !== "function" || typeof identity.gatewayFor !== "function" ||
       (identity.surface !== undefined && !["full", "availabilitySetup"].includes(identity.surface)) ||
       (identity.unauthorized !== undefined && typeof identity.unauthorized !== "function") ||
@@ -93,8 +95,10 @@ export async function createHostAuthenticatedDashboardServer(identity: HostDashb
   ]);
   return createServer((request, response) => { void (async () => {
     try {
-      if (request.headers.host !== origin.host ||
-          (origin.protocol === "http:" && request.socket.localAddress !== "127.0.0.1")) {
+      const boundOrigin = origin.port === "0"
+        ? new URL(`http://127.0.0.1:${request.socket.localPort}`) : origin;
+      if (request.headers.host !== boundOrigin.host ||
+          (boundOrigin.protocol === "http:" && request.socket.localAddress !== "127.0.0.1")) {
         return json(response, 403, { ok: false, error: { kind: "forbidden" } });
       }
       const actor = await identity.resolveActor(request);
@@ -105,7 +109,7 @@ export async function createHostAuthenticatedDashboardServer(identity: HostDashb
       if (!(gateway instanceof CommandGateway) || !gateway.matchesActor(actor)) {
         return json(response, 403, { ok: false, error: { kind: "forbidden" } });
       }
-      return handle(request, response, gateway, bundle, stylesheet, origin.origin, identity.surface,
+      return handle(request, response, gateway, bundle, stylesheet, boundOrigin.origin, identity.surface,
         identity.readSpeechGate, actor.role === "clinicAdmin", identity.greetingTextValidator);
     } catch { return json(response, 403, { ok: false, error: { kind: "forbidden" } }); }
   })(); });

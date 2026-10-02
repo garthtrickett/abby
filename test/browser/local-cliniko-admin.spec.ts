@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import { once } from "node:events";
-import { createServer as createNetServer } from "node:net";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { ClinikoCatalogueReader } from "../../src/cliniko/catalogue.ts";
@@ -15,26 +13,14 @@ import { createHostAuthenticatedDashboardServer } from "../../src/standalone/das
 import { StandaloneOperationalCounters } from "../../src/standalone/operational-counters.ts";
 import { validKeypadGreetingText } from "../../src/standalone/keypad-greeting.ts";
 import type { OperationalDailyCounts } from "../../src/voice/operational-counts.ts";
+import { listenLoopbackServer } from "../support/listen-loopback-server.ts";
 
 const scope = { tenantId: "local-browser", clinicId: "clinic", locationId: "main" };
 const route = { accountRef: "local-account", dialedNumber: "+6125550199", routeVersion: "v1" };
 const token = "synthetic-browser-token";
 const basic = `Basic ${Buffer.from(`abby-admin:${token}`).toString("base64")}`;
 
-async function freePort(): Promise<number> {
-  const probe = createNetServer();
-  probe.listen(0, "127.0.0.1");
-  await once(probe, "listening");
-  const address = probe.address();
-  assert.ok(address && typeof address !== "string");
-  probe.close();
-  await once(probe, "close");
-  return address.port;
-}
-
 test("E2E-214 E2E-233 E2E-235 E2E-237 local owner sees aggregate speech and operational status", async ({ page, request }) => {
-  const port = await freePort();
-  const origin = `http://127.0.0.1:${port}`;
   const paths: string[] = [];
   const provider: typeof fetch = async input => {
     const path = new URL(String(input)).pathname;
@@ -76,7 +62,7 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 local owner sees aggregate speech and oper
   operationalCounters.record(scope, "intentClassificationUnavailable");
   operationalCounters.record({ ...scope, clinicId: "foreign" }, "voiceFailure");
   let malformedOperations = false;
-  const server = await createHostAuthenticatedDashboardServer({ publicOrigin: origin,
+  const server = await createHostAuthenticatedDashboardServer({ publicOrigin: "http://127.0.0.1:0",
     surface: "availabilitySetup",
     resolveActor: incoming => incoming.headers.authorization === basic ? actor
       : incoming.headers.authorization === "Basic synthetic-staff" ? { ...actor, role: "staff" } : null,
@@ -93,8 +79,7 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 local owner sees aggregate speech and oper
         : operationalCounters.daily(location) }),
   }, resolve("dist/dashboard/cliniko-admin.js"));
   try {
-    server.listen(port, "127.0.0.1");
-    await once(server, "listening");
+    const origin = await listenLoopbackServer(server);
     assert.equal((await request.get(origin)).status(), 401);
     assert.equal((await request.get(origin, { headers: { Authorization: "Basic invalid" } })).status(), 401);
     assert.equal((await request.get(`${origin}/api/speech-gate`)).status(), 401);
@@ -178,13 +163,11 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 local owner sees aggregate speech and oper
 });
 
 test("E2E-246 E2E-247 local Cliniko panel rejects unusable keypad text before approval", async ({ page, request }) => {
-  const port = await freePort();
-  const origin = `http://127.0.0.1:${port}`;
   const policy = new MemoryPolicyStore();
   assert.ok((await policy.changeGreeting(scope, "0", undefined, "setup-seed")).ok);
   const reception = new TextReception(new MemoryLedger(), policy, new ReferenceClinicHost([], []));
   const actor = { actorRef: "local-greeting-owner", role: "clinicAdmin" as const, scope };
-  const server = await createHostAuthenticatedDashboardServer({ publicOrigin: origin, surface: "availabilitySetup",
+  const server = await createHostAuthenticatedDashboardServer({ publicOrigin: "http://127.0.0.1:0", surface: "availabilitySetup",
     greetingTextValidator: text => validKeypadGreetingText(text, false),
     resolveActor: incoming => incoming.headers.authorization === basic ? actor
       : incoming.headers.authorization === "Basic synthetic-staff" ? { ...actor, role: "staff" } : null,
@@ -192,8 +175,7 @@ test("E2E-246 E2E-247 local Cliniko panel rejects unusable keypad text before ap
     gatewayFor: bound => new CommandGateway(bound, policy, reception),
   }, resolve("dist/dashboard/cliniko-admin.js"));
   try {
-    server.listen(port, "127.0.0.1");
-    await once(server, "listening");
+    const origin = await listenLoopbackServer(server);
     await page.context().setHTTPCredentials({ username: "abby-admin", password: token });
     await page.goto(origin);
     await expect(page.getByRole("heading", { name: "Approved greeting" })).toBeVisible();

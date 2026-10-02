@@ -3,7 +3,6 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import type { Server } from "node:http";
-import { createServer as createNetServer } from "node:net";
 import { sql } from "kysely";
 import test from "node:test";
 import twilio from "twilio";
@@ -16,6 +15,7 @@ import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts"
 import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { ok } from "../../src/core/model.ts";
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
+import { listenLoopbackServer } from "../support/listen-loopback-server.ts";
 
 const root = new URL("../../", import.meta.url);
 const scope = { tenantId: "admin-voice", clinicId: "clinic", locationId: "main" };
@@ -27,24 +27,13 @@ const webhookUrl = "https://calls.example.test/twilio/inbound";
 const streamUrl = "wss://calls.example.test/twilio/media/";
 const route = { accountRef: accountSid, dialedNumber: number, routeVersion: "admin-voice-v1" };
 
-async function freePort(): Promise<number> {
-  const probe = createNetServer();
-  probe.listen(0, "127.0.0.1");
-  await once(probe, "listening");
-  const address = probe.address();
-  assert.ok(address && typeof address !== "string");
-  probe.close();
-  await once(probe, "close");
-  return address.port;
-}
-
 async function waitFor(check: () => boolean, label: string): Promise<void> {
   const until = Date.now() + 10_000;
   while (!check() && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 30));
   assert.ok(check(), `${label} timed out`);
 }
 
-test("E2E-212 E2E-246 E2E-248 durable admin settings pin a signed call and revocation blocks the next call",
+test("E2E-212 E2E-246 E2E-248 E2E-249 durable admin settings pin a signed call and revocation blocks the next call",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
     const adminUrl = process.env.DATABASE_URL;
     assert.ok(adminUrl);
@@ -89,19 +78,15 @@ test("E2E-212 E2E-246 E2E-248 durable admin settings pin a signed call and revoc
         body: JSON.stringify(command) });
     const approvedGreetingText = "Welcome from this clinic's approved greeting. Press 1 for possible times today. Press 2 for possible times tomorrow.";
     const openAdmin = async () => {
-      const port = await freePort();
-      const origin = `http://127.0.0.1:${port}`;
       activeAdmin = connectPostgres(target.toString());
       const prepared = await createStandaloneClinikoAdminDashboard({ db: activeAdmin, scope, route,
-        apiKey: "synthetic-key-au5", contactEmail: "test@example.com", publicOrigin: origin,
+        apiKey: "synthetic-key-au5", contactEmail: "test@example.com", publicOrigin: "http://127.0.0.1:0",
         resolveActor: request => request.headers.cookie === `hostSession=${sessionToken}` ? actor : null,
         bundlePath: new URL("../../src/standalone/dashboard/main.ts", import.meta.url).pathname,
         fetch: provider, now: () => new Date().toISOString() });
       assert.ok(prepared.ok);
       activeServer = prepared.value;
-      activeServer.listen(port, "127.0.0.1");
-      await once(activeServer, "listening");
-      return origin;
+      return listenLoopbackServer(activeServer);
     };
     const closeAdmin = async () => {
       const server = activeServer;
@@ -140,10 +125,10 @@ test("E2E-212 E2E-246 E2E-248 durable admin settings pin a signed call and revoc
       assert.ok(providerPaths.length >= 5);
       await closeAdmin();
 
-      const voicePort = await freePort();
+      let voicePort: number | undefined;
       const env: NodeJS.ProcessEnv = { PATH: process.env.PATH, HOME: process.env.HOME, LANG: process.env.LANG,
         DATABASE_URL: target.toString(), ABBY_ISOLATED_POSTGRES_PROBE: "1",
-        ABBY_VOICE_PORT: String(voicePort), ABBY_VOICE_TEST_MODE: "1",
+        ABBY_VOICE_PORT: "0", ABBY_VOICE_TEST_MODE: "1",
         ABBY_TWILIO_TEST_CALLER_NUMBER: caller,
         ABBY_TENANT_ID: scope.tenantId, ABBY_CLINIC_ID: scope.clinicId,
         ABBY_LOCATION_ID: scope.locationId, ABBY_CLINIKO_API_KEY: "synthetic-key-au5",
@@ -162,6 +147,10 @@ test("E2E-212 E2E-246 E2E-248 durable admin settings pin a signed call and revoc
       child.stderr?.on("data", data => { runnerOutput += String(data); });
       child.on("message", message => {
         if (typeof message !== "object" || message === null || !("kind" in message)) return;
+        if (message.kind === "listenerReady" && "port" in message &&
+            typeof message.port === "number" && Number.isSafeInteger(message.port) && message.port > 0) {
+          voicePort = message.port;
+        }
         if (message.kind === "clinikoMethod" && "method" in message && typeof message.method === "string") {
           methods.push(message.method);
         }
@@ -172,6 +161,10 @@ test("E2E-212 E2E-246 E2E-248 durable admin settings pin a signed call and revoc
       let healthy = false;
       const until = Date.now() + 15_000;
       while (!healthy && Date.now() < until) {
+        if (voicePort === undefined) {
+          await new Promise(resolve => setTimeout(resolve, 40));
+          continue;
+        }
         try { healthy = (await fetch(`http://127.0.0.1:${voicePort}/healthz`,
           { signal: AbortSignal.timeout(500) })).status === 200; }
         catch { await new Promise(resolve => setTimeout(resolve, 40)); }

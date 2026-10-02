@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import { once } from "node:events";
-import { createServer } from "node:net";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
@@ -10,6 +8,7 @@ import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
 import { TextReception } from "../../src/reference/text-reception.ts";
 import { createHostAuthenticatedDashboardServer } from "../../src/standalone/dashboard/server.ts";
+import { listenLoopbackServer } from "../support/listen-loopback-server.ts";
 
 test("E2E-248 local automation preserves readiness, versions, authorization and uncertain writes", async ({ page, request }) => {
   const scope = { tenantId: "automation-browser", clinicId: "clinic", locationId: "main" };
@@ -18,22 +17,13 @@ test("E2E-248 local automation preserves readiness, versions, authorization and 
   const policy = new MemoryPolicyStore("execute", undefined, async () => ready
     ? ok(true) : err({ kind: "readinessFailed", missing: ["mediaTestCall"] }));
   const reception = new TextReception(new MemoryLedger(), policy, new ReferenceClinicHost([], []));
-  const probe = createServer();
-  probe.listen(0, "127.0.0.1");
-  await once(probe, "listening");
-  const address = probe.address();
-  assert.ok(address && typeof address !== "string");
-  probe.close();
-  await once(probe, "close");
-  const origin = `http://127.0.0.1:${address.port}`;
-  const server = await createHostAuthenticatedDashboardServer({ publicOrigin: origin, surface: "availabilitySetup",
+  const server = await createHostAuthenticatedDashboardServer({ publicOrigin: "http://127.0.0.1:0", surface: "availabilitySetup",
     resolveActor: incoming => incoming.headers.cookie === "session=owner" ? actor
       : incoming.headers.cookie === "session=staff" ? { ...actor, role: "staff" } : null,
     gatewayFor: bound => new CommandGateway(bound, policy, reception),
   }, resolve("dist/dashboard/cliniko-admin.js"));
   try {
-    server.listen(address.port, "127.0.0.1");
-    await once(server, "listening");
+    const origin = await listenLoopbackServer(server);
     await page.context().addCookies([{ name: "session", value: "owner", url: origin }]);
     await page.goto(origin);
     const panel = page.locator('section[aria-labelledby="local-automation-title"]');
