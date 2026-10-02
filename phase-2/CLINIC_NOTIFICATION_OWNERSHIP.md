@@ -2,9 +2,9 @@
 
 ## Status
 
-In implementation. Focused proofs now cover the owner policy, clinic audit storage, migration, captured-call policy, delivery barrier/recovery, authenticated admin gateway/HTTP/lit-html controls, complete synthetic memory/PostgreSQL calls, configuration carryover, embedded cutover and redacted delivery/review visibility. The branch has not been published. This document is not a release claim.
+Implemented and locally release-verified on source `15817fba675efe6936f6756847ff32c793aa25ce`. The full gate passed owner settings, audit storage, migration, captured-call authority, delivery barrier/recovery, authenticated gateway/HTTP/lit-html controls, complete synthetic memory/PostgreSQL calls, carryover, embedded cutover and redacted delivery/review discovery.
 
-Remaining release work: run isolated/parallel evidence and the full local release gate; then publish and merge. Real delivery providers and real telephone validation are separate gates.
+The evidence below is engineering proof. Actual delivery providers and real telephone validation remain separate gates. Production login provider integration and locale/voice settings remain outside this feature.
 
 ## Product contract
 
@@ -67,7 +67,7 @@ Standalone patient-data restrictions remain authoritative: migration 039 holds p
 - Carryover and setting regressions passed **21 checks, zero skips** after correcting archive fixture mode, preserving the declared target tenant and asserting the duplicate-record envelope rejection. Source freeze rejects API edits and raw mutations; unlisted source clinics block export. Job: `Abby notification explicit target clears and carryover fixture authority correction proof`.
 - Embedded number cutover and carryover regressions passed **9 checks, zero skips**. Wrong target clear metadata and unlisted notification rows block publication; restored exact history succeeds. The initial minimal composition fixture was rejected at target reconciliation; the corrected complete journey uses the existing synthetic embedded cutover composition. No standalone minimal publication proof is claimed. Job: `Abby notification embedded cutover composition correction focused proof`.
 - Manifest 1.68 registers `E2E-257`, the three typed notification commands and `notifications.owner`; full carrier evidence stays planned. The registered checkpoint passed actual Kanel regeneration without drift, typecheck, **80 Node checks and six browser journeys, zero skips**. Job: `Abby notification registered browser voice carryover and real Kanel focused checkpoint`.
-- Final review normalized accepted UTC timestamp spellings across adapters and added raw truncate-fence denial. Typecheck and **eight checks, zero skips** passed. Job: `Abby notification timestamp canonicalization and freeze truncate final focused proof`. Full regression and mapped isolation release gates remain outstanding.
+- Final review normalized accepted UTC timestamp spellings across adapters and added raw truncate-fence denial. Typecheck and **eight checks, zero skips** passed. Job: `Abby notification timestamp canonicalization and freeze truncate final focused proof`. The complete release evidence is recorded below.
 
 ## Redacted delivery review
 
@@ -75,4 +75,22 @@ The scoped call-review projection shows each original notification once, with on
 
 The scoped call-outcome report includes separate notification counts so staff can discover unconfirmed and review-required deliveries without knowing a call ID. Counts describe returned rows and accumulate across loaded pages; reconcile effects are not counted twice. Browser validation rejects extra private fields, contradictory status/outcome combinations and totals inconsistent with rows. A failed report refresh clears the previous report rather than showing stale delivery status as current. There is no manual notification resend command.
 
-Focused evidence: typecheck and **34 Node checks, zero skips**, passed in `Abby notification safe outcome refresh and paged review discovery focused proof`; its browser failure was an incorrect pagination button label. The corrected browser-only gate passed **10 journeys, zero skips**, in `Abby notification existing outcome pagination label correction browser proof`. These cover authenticated ownership edits, real runtime commit/send/observation, suppression review, staff and forged-scope access, redaction canaries, malformed replies and discovery on a second outcomes page. Earlier browser failures exposed an invalid test dispatch of a held effect, an extraction whitespace error and stale report display after malformed refresh; each was corrected without changing effect guards, retries, deadlines or worker counts. Full regression and mapped isolation remain required before publication.
+Focused evidence: typecheck and **34 Node checks, zero skips**, passed in `Abby notification safe outcome refresh and paged review discovery focused proof`; its browser failure was an incorrect pagination button label. The corrected browser-only gate passed **10 journeys, zero skips**, in `Abby notification existing outcome pagination label correction browser proof`. These cover authenticated ownership edits, real runtime commit/send/observation, suppression review, staff and forged-scope access, redaction canaries, malformed replies and discovery on a second outcomes page. Earlier browser failures exposed an invalid test dispatch of a held effect, an extraction whitespace error and stale report display after malformed refresh; each was corrected without changing effect guards, retries, deadlines or worker counts. The complete release evidence is recorded below.
+
+## Complete local release gate — 2026-10-02
+
+Implementation source: `15817fba675efe6936f6756847ff32c793aa25ce`. Tracked job `Abby notification source 15817fb full local and mapped isolation release` completed in **34m38s, exit 0**, inside an escaped user scope. No source changed during the gate; subsequent release-evidence edits are Markdown only.
+
+| Gate | Result |
+| --- | --- |
+| `npm test` | Typecheck and 662 passing cases; 34 PostgreSQL-only skips and one opt-in live Cliniko skip; zero failures |
+| Disposable PostgreSQL migration and `npm run db:generate` | Passed; actual Kanel/kanel-kysely generated types had no drift |
+| `ABBY_LEDGER=postgres npm run test:postgres` | 1,097 passing cases, zero failures; one opt-in live Cliniko skip |
+| `npm run test:browser` | 59 passing journeys, zero skips |
+| `npm run test:settings-isolation` | 18 selected cases passed in both parallel orders across six voice files |
+| `npm run test:settings-isolation:postgres` | 329 mapped Node cases across 46 files and 46 mapped browser journeys across nine files, alone and in both parallel orders; zero failures or skips |
+| `git diff --check` | Passed |
+
+The full test commands also passed their ordered-runner coordinator check. The manifest-wide sweep separately passed both Node and browser coordinators and observed actual overlap with four Node workers and three browser workers. No retry, deadline, skip policy or worker count was weakened. PostgreSQL migration/generation used `bash scripts/with-postgres.sh bash -c 'npm run db:migrate && npm run db:generate && git diff --exit-code -- src/storage/generated && ABBY_LEDGER=postgres npm run test:postgres'`.
+
+The product owner has authorized merge after local validation without waiting for GitHub CI. This evidence does not assert a GitHub CI pass, real notification delivery, carrier quality or clinic activation.
