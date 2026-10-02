@@ -152,9 +152,10 @@ export class ConnectedVoiceCall {
     try { this.onCallStop?.(); } catch { /* Host cleanup cannot prevent call closure. */ }
   }
 
-  /** Fence a pending provider read before the serialized call transition finishes. */
+  /** Fence pending provider and model work before the serialized call transition finishes. */
   requestStop(): void {
     this.stopped = true;
+    this.call.stopTransientWork();
     this.stopHost();
   }
 

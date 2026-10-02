@@ -143,6 +143,10 @@ export class SharedNumberVoiceCall {
     return !this.closing && !this.terminal && !!this.full?.supersedePendingModel();
   }
 
+  stopTransientWork(): void {
+    this.full?.stopTransientWork();
+  }
+
   pendingModelEffect(turn: SharedVoiceTurn): boolean {
     return turn.kind === "callerTurn" && Object.values(turn.state.effects).some(effect =>
       effect.kind === "model" && effect.status === "pending");
