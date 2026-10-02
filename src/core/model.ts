@@ -106,6 +106,8 @@ export type CallPolicy = Readonly<{
   automationVersion: string;
   automationEnabled: boolean;
   bookingEnabled: boolean;
+  /** Absent on legacy snapshots; policy-store default is false. */
+  cancellationEnabled?: boolean;
   /** Absent on legacy snapshots; the effective default is staffRequest. */
   afterHoursMode?: AfterHoursMode;
   afterHoursInfo?: ApprovedAfterHoursInfo;

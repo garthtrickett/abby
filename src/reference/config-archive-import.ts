@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { CancellationSettingAuditEntry } from "../core/host.ts";
 import { MemoryLedger } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
 import type { CallPolicy, LocationScope, Result, StaffDestination } from "../core/model.ts";
@@ -182,16 +183,27 @@ function automationAudit(data: Pick<ConfigArchiveData, "automation">): Automatio
   });
 }
 
+function cancellationAudit(data: Pick<ConfigArchiveData, "policies">): CancellationSettingAuditEntry[] {
+  return data.policies.filter(row => row.settingKind === "cancellation").sort((left, right) => left.version - right.version).map(row => {
+    if (!row.changedBy || typeof row.previousCancellationEnabled !== "boolean" || !row.changedAt ||
+        typeof row.policy.cancellationEnabled !== "boolean") throw new Error("invalid cancellation audit");
+    return { version: String(row.version), enabled: row.policy.cancellationEnabled, actorRef: row.changedBy,
+      previousEnabled: row.previousCancellationEnabled, changedAt: row.changedAt };
+  });
+}
+
 export type MappedConfig = Readonly<{
   policy: CallPolicy;
   policyRows: readonly Readonly<{ version: number; isHead: boolean; policy: CallPolicy; changedBy: string | null;
     previousBookingEnabled: boolean | null; changedAt: string | null;
-    settingKind?: "booking" | "afterHours" | "urgent" | "staffSchedule" | "greeting"; previousAfterHoursMode?: CallPolicy["afterHoursMode"] | null }>[];
+    settingKind?: "booking" | "afterHours" | "urgent" | "staffSchedule" | "greeting" | "cancellation";
+    previousCancellationEnabled?: boolean | null; previousAfterHoursMode?: CallPolicy["afterHoursMode"] | null }>[];
   bookingHistory: readonly BookingSettingAuditEntry[];
   afterHoursHistory: readonly AfterHoursSettingAuditEntry[];
   urgentHistory: readonly UrgentSettingAuditEntry[];
   staffScheduleHistory: readonly StaffScheduleSettingAuditEntry[];
   greetingHistory: readonly GreetingSettingAuditEntry[];
+  cancellationHistory: readonly CancellationSettingAuditEntry[];
   automationHistory: readonly AutomationSettingAuditEntry[];
   knowledge: MemoryKnowledgeCatalogue;
   knowledgeEntries: readonly KnowledgeEntry[];
@@ -223,11 +235,12 @@ export function mapConfig(data: Pick<ConfigArchiveData, "sourceScope" | "policie
     const urgentHistory = urgentAudit(data);
     const staffScheduleHistory = staffScheduleAudit(data);
     const greetingHistory = greetingAudit(data);
+    const cancellationHistory = cancellationAudit(data);
     const automationHistory = automationAudit(data);
     const knowledgeEntries = data.knowledge.map(entry => ({ ...entry,
       scope: structuredClone(targetScope), ownerRef: mappedRef(recordingMapper, "knowledgeOwner", entry.ownerRef, data.sourceScope, targetScope) }));
     const knowledge = MemoryKnowledgeCatalogue.fromPublishedHistory(knowledgeEntries);
-    return ok({ policy, policyRows, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, automationHistory,
+    return ok({ policy, policyRows, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, cancellationHistory, automationHistory,
       knowledge, knowledgeEntries, mappings: [...decisions.values()] });
   } catch (cause) {
     return err({ kind: cause instanceof UnmappedRef ? "unmappedRef" : "invalidConfigArchive" });
@@ -313,7 +326,7 @@ export class ReferenceConfigArchiveImporter {
     const policy = MemoryPolicyStore.fromImported(targetScope, mapped.value.policy, mapped.value.bookingHistory,
       mapped.value.afterHoursHistory,
       mapped.value.automationHistory, automationHead?.version ?? 0, automationHead?.enabled ?? false, importActorRef, importedAt,
-      mapped.value.urgentHistory, mapped.value.staffScheduleHistory, mapped.value.greetingHistory);
+      mapped.value.urgentHistory, mapped.value.staffScheduleHistory, mapped.value.greetingHistory, mapped.value.cancellationHistory);
     const knowledge = mapped.value.knowledge;
     const ledger = new MemoryLedger();
     const stop = await ledger.stopWrites(targetScope, importActorRef, "Imported configuration awaiting target readiness");

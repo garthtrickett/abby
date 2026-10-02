@@ -21,10 +21,11 @@ import { MemoryKnowledgeCatalogue } from "../../src/reference/knowledge-catalogu
 import { createDashboardServer } from "../../src/standalone/dashboard/server.ts";
 import { CallAdmissionService } from "../../src/voice/admission.ts";
 
-async function localDashboard(role: "clinicAdmin" | "staff", availability?: AvailabilityHost, readiness?: AutomationReadiness) {
+async function localDashboard(role: "clinicAdmin" | "staff", availability?: AvailabilityHost, readiness?: AutomationReadiness,
+                              cancellationMode: "execute" | "requestOnly" | "unavailable" = "requestOnly") {
   const scope: LocationScope = { tenantId: "browser-tenant", clinicId: "browser-clinic", locationId: "browser-location" };
   const ledger = new MemoryLedger(readiness);
-  const policy = new MemoryPolicyStore("execute", undefined, readiness);
+  const policy = new MemoryPolicyStore("execute", undefined, readiness, cancellationMode);
   const host = new ReferenceClinicHost([], [],
     [{ scope, sourceRef: "hours", version: "hours-v1", ownerRef: "clinic-owner", approvedText: "We open at 9 am.", approved: true,
       effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]);
@@ -48,6 +49,92 @@ async function localDashboard(role: "clinicAdmin" | "staff", availability?: Avai
     }),
   };
 }
+
+test("E2E-252 SET-003: cancellation setting has independent audit and captured call behavior", async ({ page, request }) => {
+  const app = await localDashboard("clinicAdmin", undefined, undefined, "execute");
+  try {
+    await page.goto(app.url);
+    await expect(page.getByText("Cancellation disabled", { exact: true })).toBeVisible();
+    await expect(page.getByText("Cancellation capability: unavailable", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Enable cancellation", exact: true }).click();
+    await expect(page.getByText("Cancellation setting enabled for new calls.")).toBeVisible();
+    await expect(page.getByText("Cancellation capability: execute", { exact: true })).toBeVisible();
+    const enabled = await app.reception.startCall("cancellation-enabled", app.scope, "2026-10-02T10:00:00.000Z");
+    assert.ok(enabled.ok);
+    assert.equal(enabled.value.policy.cancellationEnabled, true);
+    const before = await app.ledger.read("before-setting", app.scope);
+    assert.ok(before.ok);
+    assert.equal(before.value.policy.capabilities.cancel, "unavailable");
+    assert.equal((await request.post(`${app.url}/api/settings/cancellation-enabled`, { data: {
+      expectedVersion: "0", enabled: false } })).status(), 409);
+    for (const invalid of [{ expectedVersion: "1", enabled: "yes" },
+      { expectedVersion: "1", enabled: false, actorRef: "forged" }]) {
+      assert.equal((await request.post(`${app.url}/api/settings/cancellation-enabled`, { data: invalid })).status(), 400);
+    }
+    assert.equal((await request.post(`${app.url}/api/settings/cancellation-enabled`, {
+      headers: { origin: "https://foreign.example.test" }, data: { expectedVersion: "1", enabled: false } })).status(), 403);
+    await page.reload();
+    await page.getByRole("button", { name: "Disable cancellation", exact: true }).click();
+    await expect(page.getByText("Cancellation setting disabled for new calls.")).toBeVisible();
+    assert.equal(enabled.value.policy.capabilities.cancel, "execute");
+    const disabled = await app.reception.startCall("cancellation-disabled", app.scope, "2026-10-02T10:00:00.000Z");
+    assert.ok(disabled.ok);
+    assert.equal(disabled.value.policy.capabilities.cancel, "unavailable");
+    await expect(page.getByLabel("Cancellation setting audit")).toContainText("Version 1");
+    await expect(page.getByLabel("Cancellation setting audit")).toContainText("Version 2");
+    assert.equal((await app.policy.listBookingChanges(app.scope)).ok, true);
+    const audit = await app.policy.listBookingChanges(app.scope);
+    assert.ok(audit.ok);
+    assert.equal(audit.value.entries.length, 0);
+  } finally { await app.close(); }
+});
+
+test("E2E-252 SET-003: unsupported cancellation and staff edits stay blocked", async ({ page, request }) => {
+  const unsupported = await localDashboard("clinicAdmin", undefined, undefined, "unavailable");
+  try {
+    await page.goto(unsupported.url);
+    await page.getByRole("button", { name: "Enable cancellation", exact: true }).click();
+    await expect(page.getByText("Cancellation enabled", { exact: true })).toBeVisible();
+    await expect(page.getByText("Cancellation capability: unavailable", { exact: true })).toBeVisible();
+  } finally { await unsupported.close(); }
+  const staff = await localDashboard("staff");
+  try {
+    await page.goto(staff.url);
+    await expect(page.getByRole("button", { name: "Enable cancellation", exact: true })).toHaveCount(0);
+    assert.equal((await request.post(`${staff.url}/api/settings/cancellation-enabled`, {
+      data: { expectedVersion: "0", enabled: true } })).status(), 403);
+    assert.equal((await request.get(`${staff.url}/api/settings/cancellation-audit`)).status(), 403);
+  } finally { await staff.close(); }
+});
+
+test("E2E-252 SET-003: uncertain cancellation edit requires current state before another edit", async ({ page }) => {
+  const app = await localDashboard("clinicAdmin");
+  try {
+    await page.goto(app.url);
+    let changed = false;
+    await page.route("**/api/settings/cancellation-enabled", async route => {
+      const response = await route.fetch();
+      assert.equal(response.status(), 200);
+      changed = true;
+      await route.abort("failed");
+    });
+    await page.route("**/api/settings", async route => {
+      if (changed) await route.abort("failed");
+      else await route.continue();
+    });
+    await page.getByRole("button", { name: "Enable cancellation", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText("Reload to inspect current settings");
+    await expect(page.getByRole("button", { name: "Cancellation state unavailable", exact: true })).toBeDisabled();
+    const state = await app.policy.read(app.scope);
+    assert.ok(state.ok);
+    assert.equal(state.value.cancellationEnabled, true);
+    assert.equal(state.value.policyVersion, "1");
+    await page.unroute("**/api/settings");
+    await page.unroute("**/api/settings/cancellation-enabled");
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Disable cancellation", exact: true })).toBeEnabled();
+  } finally { await app.close(); }
+});
 
 test("SET-001: browser reception switch needs readiness and gates the next call", async ({ page, request }) => {
   let ready = false;
