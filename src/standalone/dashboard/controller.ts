@@ -1,5 +1,5 @@
 import { render } from "lit-html";
-import type { CancellationSettingAuditPage } from "../../core/host.ts";
+import type { CancellationSettingAuditPage, ReschedulingSettingAuditPage } from "../../core/host.ts";
 import type { DashboardFailure, DashboardPort } from "./api.ts";
 import { dashboardView } from "./view.ts";
 import type { DashboardState } from "./view.ts";
@@ -88,7 +88,7 @@ export class DashboardController {
   private readonly state: DashboardState = { loading: true, busy: false, capabilities: [], policy: undefined,
     knowledge: undefined, knowledgeSourceRef: "", knowledgeOwnerRef: "", knowledgeText: "",
     knowledgeFrom: new Date().toISOString(), knowledgeUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-    writeStop: undefined, stopReasonInput: "", auditPage: undefined, cancellationAuditPage: undefined,
+    writeStop: undefined, stopReasonInput: "", auditPage: undefined, cancellationAuditPage: undefined, reschedulingAuditPage: undefined,
     afterHoursAuditPage: undefined, afterHoursInfoVersion: "", afterHoursApprovedText: "",
     urgentAuditPage: undefined, urgentVersion: "", urgentText: "",
     urgentFrom: new Date().toISOString(), urgentUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
@@ -119,8 +119,11 @@ export class DashboardController {
       loadMoreAutomationAudit: () => { void this.loadMoreAutomationAudit(); },
       toggleBooking: () => { void this.toggleBooking(); },
       toggleCancellation: () => { void this.toggleCancellation(); },
+      toggleRescheduling: () => { void this.toggleRescheduling(); },
       loadCancellationAudit: () => { void this.loadCancellationAudit(); },
+      loadReschedulingAudit: () => { void this.loadReschedulingAudit(); },
       loadMoreCancellationAudit: () => { void this.loadCancellationAudit(true); },
+      loadMoreReschedulingAudit: () => { void this.loadReschedulingAudit(true); },
       loadAudit: () => { void this.loadAudit(); },
       loadMoreAudit: () => { void this.loadMoreAudit(); },
       setAfterHoursField: (field, value) => { this.state[field] = value; this.draw(); },
@@ -200,6 +203,11 @@ export class DashboardController {
     if (capabilities.ok && capabilities.value.some(item => item.id === "settings.appointments.cancellation.audit.v1")) {
       const audit = await this.port.cancellationAudit();
       if (audit.ok) this.state.cancellationAuditPage = audit.value;
+      else this.state.error = message(audit.error);
+    }
+    if (capabilities.ok && capabilities.value.some(item => item.id === "settings.appointments.rescheduling.audit.v1")) {
+      const audit = await this.port.reschedulingAudit();
+      if (audit.ok) this.state.reschedulingAuditPage = audit.value;
       else this.state.error = message(audit.error);
     }
     if (capabilities.ok && capabilities.value.some(item => item.id === "settings.routing.afterHours.audit.v1")) {
@@ -634,6 +642,47 @@ export class DashboardController {
       const page: CancellationSettingAuditPage = { ...result.value,
         entries: more && previous ? [...previous.entries, ...result.value.entries] : result.value.entries };
       this.state.cancellationAuditPage = page;
+    } else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async toggleRescheduling(): Promise<void> {
+    const current = this.state.policy;
+    if (this.state.busy || !current || !this.state.capabilities.some(item => item.id === "settings.appointments.rescheduling.enabled.change.v1")) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.state.notice = undefined;
+    this.draw();
+    const result = await this.port.changeReschedulingEnabled(current.policyVersion, current.reschedulingEnabled !== true);
+    if (result.ok) {
+      this.state.policy = result.value;
+      this.state.notice = result.value.reschedulingEnabled ? "Rescheduling setting enabled for new calls." : "Rescheduling setting disabled for new calls.";
+      const audit = await this.port.reschedulingAudit();
+      if (audit.ok) this.state.reschedulingAuditPage = audit.value;
+      else this.state.error = message(audit.error);
+    } else {
+      this.state.error = message(result.error);
+      // A lost or malformed reply may follow a committed edit. Never repeat from stale state.
+      this.state.policy = undefined;
+      const inspected = await this.port.settings();
+      if (inspected.ok) this.state.policy = inspected.value;
+      else this.state.error = "The setting could not be confirmed. Reload to inspect current settings before another edit.";
+    }
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async loadReschedulingAudit(more = false): Promise<void> {
+    const previous = this.state.reschedulingAuditPage;
+    if (this.state.busy || (more && previous?.nextAfterVersion === undefined)) return;
+    this.state.busy = true;
+    this.draw();
+    const result = await this.port.reschedulingAudit(more ? previous?.nextAfterVersion : undefined);
+    if (result.ok) {
+      const page: ReschedulingSettingAuditPage = { ...result.value,
+        entries: more && previous ? [...previous.entries, ...result.value.entries] : result.value.entries };
+      this.state.reschedulingAuditPage = page;
     } else this.state.error = message(result.error);
     this.state.busy = false;
     this.draw();

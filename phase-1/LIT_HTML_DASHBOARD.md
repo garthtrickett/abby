@@ -31,3 +31,7 @@ The reference/embedded dashboard exposes cancellation as a separate versioned pa
 ## HTTPS host command boundary
 
 All `/api/` POST routes share one Origin check before body parsing (`E2E-253`). Authenticated hosts require the exact configured scheme, Host and port; forwarding headers cannot substitute another Origin. The local reference server retains its documented optional Origin and loopback boundary. The restricted setup surface is checked separately and cannot expose booking, cancellation or staff actions. A real TLS browser journey checks booking enable/disable, reload, audit ownership, captured policies and staff/foreign-Origin refusal. The test generates and removes its own certificate; production identity, certificates and reverse-proxy deployment remain separate work.
+
+## Rescheduling control
+
+The full reference/embedded dashboard exposes `SET-004` through `settings.appointments.rescheduling.enabled.change.v1` and `settings.appointments.rescheduling.audit.v1` (`E2E-254`). The default is off. A saved value never supplies host permission: only an explicit host rescheduling mode can make it effective, and strict standalone Cliniko mode always reports unavailable. Controls and history use the authenticated admin actor/location. New calls capture edits; admitted calls retain the previous policy. An uncertain edit with an unavailable reread disables controls until reload. The shared HTTPS POST Origin check covers the new route, and the supervised Cliniko availability setup does not expose it.

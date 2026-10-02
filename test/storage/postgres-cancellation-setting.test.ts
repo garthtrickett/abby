@@ -65,7 +65,7 @@ test("E2E-252 cancellation edits have one concurrent winner, scoped durable hist
       and location_id = ${scope.locationId} order by version`.execute(db);
   assert.deepEqual(rows.rows.map(row => row.version), [0, 1, 2, 3]);
   assert.ok(rows.rows.every(row => Object.keys(row.policy).every(key =>
-    ["scope", "policyVersion", "bookingEnabled", "cancellationEnabled", "afterHoursMode", "greeting"].includes(key))));
+    ["scope", "policyVersion", "bookingEnabled", "cancellationEnabled", "reschedulingEnabled", "afterHoursMode", "greeting"].includes(key))));
   assert.equal(rows.rows.at(-1)?.policy.cancellationEnabled, true);
 });
 

@@ -145,7 +145,7 @@ test("E2E-253 every dashboard writer uses the configured HTTPS origin before par
   t.after(() => close(server));
   const origin = await listenLoopbackServer(server);
   const headers = { Host: "admin.example.test", Origin: "https://admin.example.test" };
-  const writers = ["/api/clinic-availability/command", "/api/settings/booking-enabled", "/api/settings/cancellation-enabled",
+  const writers = ["/api/clinic-availability/command", "/api/settings/booking-enabled", "/api/settings/cancellation-enabled", "/api/settings/rescheduling-enabled",
     "/api/settings/after-hours", "/api/settings/urgent", "/api/settings/staff-schedule", "/api/settings/greeting",
     "/api/settings/automation-enabled", "/api/knowledge/draft", "/api/knowledge/approve", "/api/knowledge/revoke",
     "/api/writes/stop", "/api/writes/resume", "/api/staff/change"];
@@ -195,7 +195,7 @@ test("E2E-253 local reference origin omission and supervised setup restrictions 
   t.after(() => close(setup));
   const setupOrigin = await listenLoopbackServer(setup);
   const headers = { Host: "setup.example.test", Origin: "https://setup.example.test" };
-  for (const path of ["/api/settings/booking-enabled", "/api/settings/cancellation-enabled", "/api/staff/change"]) {
+  for (const path of ["/api/settings/booking-enabled", "/api/settings/cancellation-enabled", "/api/settings/rescheduling-enabled", "/api/staff/change"]) {
     assert.equal((await send(setupOrigin, path, headers, { expectedVersion: "2", enabled: true })).status, 404);
   }
   assert.equal((await send(setupOrigin, "/api/settings/greeting", headers,

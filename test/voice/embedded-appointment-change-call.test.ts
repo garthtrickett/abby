@@ -8,7 +8,7 @@ import type { EffectCallLeaseStore } from "../../src/core/effect-call-lease.ts";
 import type { PolicyStore } from "../../src/core/host.ts";
 import { sql } from "kysely";
 import { connectPostgres } from "../../src/storage/connect.ts";
-import { migrate } from "../../src/storage/migrate.ts";
+import { migrate, migrateTo } from "../../src/storage/migrate.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
 import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
@@ -315,9 +315,62 @@ test("E2E-252 PostgreSQL cancellation setting gates complete voice calls after d
     const ready = async () => ok(true as const);
     await cancellationSettingCalls(new PostgresLedger(db, suggested => suggested, ready, "unsafeReference"),
       new PostgresPolicyStore(db, referenceDefaultPolicy, "execute", ready, true, "unsafeReference", false, "execute"));
-    await assert.rejects(migrate(db, "down"), /cancellation setting rows must be removed/);
+    await assert.rejects(migrateTo(db, "034_greeting_setting_audit"), /cancellation setting rows must be removed/);
     const retained = await new PostgresPolicyStore(db, referenceDefaultPolicy, undefined, undefined, false,
       "unsafeReference").listCancellationChanges(scope);
+    assert.ok(retained.ok, retained.ok ? "" : retained.error.kind);
+    assert.deepEqual(retained.value.entries.map(row => row.enabled), [true, false]);
+  } finally {
+    await db?.destroy();
+    if (created) await sql.raw(`drop database "${name}" with (force)`).execute(admin);
+    await admin.destroy();
+  }
+});
+
+async function reschedulingSettingCalls(ledger: LedgerStore & EffectCallLeaseStore, policy: PolicyStore) {
+  await run("reschedule", "unavailable", { ledger, policy });
+  const before = await policy.read(scope);
+  assert.ok(before.ok);
+  assert.ok((await policy.changeReschedulingEnabled(scope, before.value.policyVersion, true, "clinic-admin")).ok);
+  await run("reschedule", "success", { ledger, policy, afterAdmission: async () => {
+    const current = await policy.read(scope);
+    assert.ok(current.ok);
+    assert.ok((await policy.changeReschedulingEnabled(scope, current.value.policyVersion, false, "clinic-admin")).ok);
+  } });
+  await run("reschedule", "unavailable", { ledger, policy });
+  const audit = await policy.listReschedulingChanges(scope);
+  assert.ok(audit.ok);
+  assert.deepEqual(audit.value.entries.map(row => [row.enabled, row.previousEnabled]), [[true, false], [false, true]]);
+}
+
+test("E2E-254 rescheduling setting gates complete voice calls and preserves the admitted call", async () => {
+  const ready = async () => ok(true as const);
+  await reschedulingSettingCalls(new MemoryLedger(ready), new MemoryPolicyStore("execute", () => now, ready, { rescheduling: "execute" }));
+  const denied = new MemoryPolicyStore("execute", () => now, ready, { rescheduling: "unavailable" });
+  assert.ok((await denied.changeReschedulingEnabled(scope, "0", true, "clinic-admin")).ok);
+  await run("reschedule", "unavailable", { ledger: new MemoryLedger(ready), policy: denied });
+});
+
+test("E2E-254 PostgreSQL rescheduling setting gates complete voice calls after durable edits",
+  { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
+  assert.ok(process.env.DATABASE_URL);
+  const admin = connectPostgres(process.env.DATABASE_URL);
+  const name = `abby_reschedule_setting_${randomUUID().replaceAll("-", "")}`;
+  const target = new URL(process.env.DATABASE_URL);
+  target.pathname = `/${name}`;
+  let created = false;
+  let db: ReturnType<typeof connectPostgres> | undefined;
+  try {
+    await sql.raw(`create database "${name}"`).execute(admin);
+    created = true;
+    db = connectPostgres(target.toString());
+    await migrate(db);
+    const ready = async () => ok(true as const);
+    await reschedulingSettingCalls(new PostgresLedger(db, suggested => suggested, ready, "unsafeReference"),
+      new PostgresPolicyStore(db, referenceDefaultPolicy, "execute", ready, true, "unsafeReference", false, { rescheduling: "execute" }));
+    await assert.rejects(migrate(db, "down"), /rescheduling setting rows must be removed/);
+    const retained = await new PostgresPolicyStore(db, referenceDefaultPolicy, undefined, undefined, false,
+      "unsafeReference").listReschedulingChanges(scope);
     assert.ok(retained.ok, retained.ok ? "" : retained.error.kind);
     assert.deepEqual(retained.value.entries.map(row => row.enabled), [true, false]);
   } finally {

@@ -9,7 +9,7 @@ import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor, GatewayCommand, GatewayFailure, GatewayReply } from "../../reference/command-gateway.ts";
 import { capabilityDescriptor } from "../../reference/capability-catalogue.ts";
 import { matchesSchema } from "../../reference/schema-shapes.ts";
-import type { CancellationSettingAuditPage } from "../../core/host.ts";
+import type { CancellationSettingAuditPage, ReschedulingSettingAuditPage } from "../../core/host.ts";
 import type { ClinicAvailabilityApprovalState, ClinicAvailabilityBusinessCatalogue,
   ClinicAvailabilityRoute, ClinicAvailabilitySelection, ClinicAvailabilitySelectionSnapshot,
   ClinicAvailabilityPractitionerCatalogue, ClinicAvailabilityTypeCatalogue } from "../../reference/clinic-availability-setup.ts";
@@ -35,7 +35,9 @@ export type DashboardPort = Readonly<{
   bookingAudit(afterVersion?: number): Promise<Result<BookingSettingAuditPage, DashboardFailure>>;
   changeBookingEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   cancellationAudit(afterVersion?: number): Promise<Result<CancellationSettingAuditPage, DashboardFailure>>;
+  reschedulingAudit(afterVersion?: number): Promise<Result<ReschedulingSettingAuditPage, DashboardFailure>>;
   changeCancellationEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
+  changeReschedulingEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   afterHoursAudit(afterVersion?: number): Promise<Result<AfterHoursSettingAuditPage, DashboardFailure>>;
   changeAfterHours(expectedVersion: string, mode: AfterHoursMode, infoVersion?: string, approvedText?: string): Promise<Result<CallPolicy, DashboardFailure>>;
   urgentAudit(afterVersion?: number): Promise<Result<UrgentSettingAuditPage, DashboardFailure>>;
@@ -119,6 +121,7 @@ function policy(value: unknown): Result<CallPolicy, DashboardFailure> {
   const current = record(reply?.policy);
   return reply?.kind === "settings" && current && typeof current.policyVersion === "string" && typeof current.automationVersion === "string" && typeof current.automationEnabled === "boolean" && typeof current.bookingEnabled === "boolean" && record(current.capabilities)
     && (current.cancellationEnabled === undefined || typeof current.cancellationEnabled === "boolean")
+    && (current.reschedulingEnabled === undefined || typeof current.reschedulingEnabled === "boolean")
     && record(current.scope) && validAfterHoursSetting(current.afterHoursMode ?? "staffRequest", current.afterHoursInfo,
       current.scope as CallPolicy["scope"]) &&
       (current.urgentResponse === undefined || validUrgentResponseShape(current.urgentResponse, current.scope as CallPolicy["scope"])) &&
@@ -328,6 +331,23 @@ export class FetchDashboardPort implements DashboardPort {
 
   async changeCancellationEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>> {
     const result = await request("/api/settings/cancellation-enabled", { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion, enabled }) });
+    return result.ok ? policy(result.value) : result;
+  }
+
+  async reschedulingAudit(afterVersion?: number): Promise<Result<ReschedulingSettingAuditPage, DashboardFailure>> {
+    const result = await request(`/api/settings/rescheduling-audit${afterVersion === undefined ? "" : `?after=${afterVersion}`}`);
+    if (!result.ok) return result;
+    if (!matchesSchema(capabilityDescriptor("settings.appointments.rescheduling.audit.v1").resultSchema,
+      { ok: true, value: result.value })) return err({ kind: "malformed" });
+    const reply = result.value as Extract<GatewayReply, { kind: "reschedulingSettingAudit" }>;
+    if (reply.page.entries.some(entry => !/^(0|[1-9][0-9]*)$/.test(entry.version) ||
+        !Number.isFinite(Date.parse(entry.changedAt)))) return err({ kind: "malformed" });
+    return ok(reply.page);
+  }
+
+  async changeReschedulingEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>> {
+    const result = await request("/api/settings/rescheduling-enabled", { method: "POST",
       headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion, enabled }) });
     return result.ok ? policy(result.value) : result;
   }

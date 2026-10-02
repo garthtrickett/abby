@@ -31,6 +31,17 @@ export type CancellationSettingAuditPage = Readonly<{
   entries: readonly CancellationSettingAuditEntry[];
   nextAfterVersion?: number;
 }>;
+export type ReschedulingSettingAuditEntry = Readonly<{
+  version: string;
+  enabled: boolean;
+  previousEnabled: boolean;
+  actorRef: string;
+  changedAt: string;
+}>;
+export type ReschedulingSettingAuditPage = Readonly<{
+  entries: readonly ReschedulingSettingAuditEntry[];
+  nextAfterVersion?: number;
+}>;
 export type AfterHoursSettingAuditEntry = Readonly<{
   version: string;
   mode: AfterHoursMode;
@@ -165,6 +176,9 @@ export interface PolicyStore {
   changeCancellationEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean,
                             actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
   listCancellationChanges(scope: LocationScope, afterVersion?: number): Promise<Result<CancellationSettingAuditPage, PolicyFailure>>;
+  changeReschedulingEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean,
+                            actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
+  listReschedulingChanges(scope: LocationScope, afterVersion?: number): Promise<Result<ReschedulingSettingAuditPage, PolicyFailure>>;
   changeAfterHours(scope: LocationScope, expectedVersion: string, mode: AfterHoursMode,
                    info: ApprovedAfterHoursInfo | undefined, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
   listAfterHoursChanges(scope: LocationScope, afterVersion?: number): Promise<Result<AfterHoursSettingAuditPage, PolicyFailure>>;
