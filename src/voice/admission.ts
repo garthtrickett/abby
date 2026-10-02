@@ -6,6 +6,7 @@ import { err, ok } from "../core/model.ts";
 import type { Admission, AdmissionReceipt, AdmissionResult, CallPolicy, ProviderCallKey, Result, TransitionFailure } from "../core/model.ts";
 import { unprovenReadiness } from "../core/readiness.ts";
 import { validApprovedGreeting } from "../core/greeting.ts";
+import { expandStaffSchedule, validStaffScheduleApproval } from "../core/staff-schedule.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
 
 // The transport adapter authenticates the provider account before constructing this event.
@@ -63,6 +64,19 @@ export class CallAdmissionService {
     const acceptedAt = this.now();
     if (!Number.isFinite(Date.parse(acceptedAt))) return err({ kind: "invalidTransition" });
     let callPolicy = policy;
+    if (policy.staffSchedule !== undefined) {
+      const { staffSchedule, staffedCoverage: staleCoverage, staffedIntervals: staleIntervals, ...base } = policy;
+      void staleCoverage; void staleIntervals;
+      callPolicy = base;
+      try {
+        if (validStaffScheduleApproval(staffSchedule, policy.scope, acceptedAt)) {
+          const through = new Date(Math.min(Date.parse(acceptedAt) + 72 * 60 * 60 * 1_000,
+            Date.parse(staffSchedule.effectiveUntil))).toISOString();
+          const expanded = expandStaffSchedule(staffSchedule, acceptedAt, through);
+          if (expanded.ok) callPolicy = { ...base, staffSchedule: structuredClone(staffSchedule), ...expanded.value };
+        }
+      } catch { /* Invalid host hours leave transfer and closed-hours claims unavailable. */ }
+    }
     if (this.knowledge) {
       const captured = await captureKnowledgeSnapshot(this.knowledge, callPolicy.scope, acceptedAt);
       if (!captured.ok) return err({ kind: "routeUnavailable" });

@@ -115,6 +115,10 @@ type CallSnapshot = Readonly<{
     effectivePolicy: Readonly<{
       staffedCoverage: Readonly<{ startsAt: string; endsAt: string }>;
       staffedIntervals: readonly Readonly<{ startsAt: string; endsAt: string }>[];
+      staffSchedule?: Readonly<{ scope: LocationScope; version: string; ownerRef: string; approved: true;
+        effectiveFrom: string; effectiveUntil: string;
+        timeZone: string; weekly: readonly Readonly<{ weekday: number; startMinute: number; endMinute: number }>[];
+        closedDates: readonly string[] }>;
       capabilities: Readonly<Record<string, CapabilityDecision>>;
       afterHoursMode: "staffRequest" | "approvedInfoAndRequest";
       urgentResponse?: Readonly<{ scope: LocationScope; version: string; ownerRef: string;

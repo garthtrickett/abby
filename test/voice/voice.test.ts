@@ -149,6 +149,7 @@ type VoiceFixtureOptions = {
   availability?: (scope: LocationScope) => AvailabilityHost;
   staffedIntervals?: CallPolicy["staffedIntervals"];
   staffedCoverage?: CallPolicy["staffedCoverage"];
+  staffSchedule?: (scope: LocationScope) => NonNullable<CallPolicy["staffSchedule"]>;
   omitStaffedCoverage?: boolean;
   afterHoursText?: string;
   afterHoursOffBeforeAdmission?: boolean;
@@ -223,6 +224,7 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
       ...(transferMode === "execute" ? { transferDestinationRef: transferDestinationRef ?? `destination-${id}`,
         ...(options.omitStaffedCoverage ? {} : { staffedCoverage: options.staffedCoverage ?? { startsAt: at(0), endsAt: at(3_600) } }),
         staffedIntervals: options.staffedIntervals ?? [{ startsAt: at(0), endsAt: at(3_600) }] } : {}),
+      ...(options.staffSchedule ? { staffSchedule: options.staffSchedule(scope) } : {}),
     };
     return ok(snapshot);
   }, () => now, async () => ok(true));
@@ -1257,6 +1259,71 @@ for (const kind of kinds) {
     assert.equal(Object.values(routed.staffItems)[0]?.reason, "callerRequested");
     assert.equal(closed.transfer.requested.length, 0);
     assert.equal(value(await closed.session.dispatchPending(at(4))).kind, "queued");
+  });
+
+  test(`${kind}: E2E-017 approved local hours are expanded at admission and invalid hours fail closed`, async () => {
+    const approved = (scope: LocationScope): NonNullable<CallPolicy["staffSchedule"]> => ({ scope,
+      version: "hours-v1", ownerRef: "synthetic-clinic-admin", approved: true,
+      effectiveFrom: at(-86_400), effectiveUntil: at(86_400),
+      timeZone: "Australia/Sydney", weekly: [{ weekday: 1, startMinute: 19 * 60, endMinute: 21 * 60 }],
+      closedDates: [] });
+    const open = await fixture(kind, `${kind}-approved-hours-open`, false, "execute", undefined, undefined,
+      { staffSchedule: approved, staffedIntervals: [] });
+    const capturedOpen = value(await open.ledger.read(open.callId, open.scope));
+    assert.equal(capturedOpen.policy.staffSchedule?.version, "hours-v1");
+    assert.equal(capturedOpen.policy.staffedCoverage?.startsAt, at(0));
+    assert.equal(capturedOpen.policy.staffedIntervals?.length, 1);
+    const planned = await transferTurn(open);
+    assert.equal(planned.presentations[planned.pendingPresentationId!]?.kind, "transfer");
+    assert.equal(open.transfer.requested.length, 0);
+    open.transfer.outcome = { kind: "connected", providerConnectionRef: "approved-hours-connection" };
+    assert.equal(value(await open.session.dispatchPending(at(4))).kind, "transferConnected");
+    assert.equal(open.transfer.requested.length, 1);
+
+    const holiday = await fixture(kind, `${kind}-approved-hours-holiday`, false, "execute", undefined, undefined,
+      { staffSchedule: scope => ({ ...approved(scope), closedDates: ["2026-09-28"] }),
+        afterHoursText: "The clinic reopens Tuesday at 9 am." });
+    const capturedHoliday = value(await holiday.ledger.read(holiday.callId, holiday.scope));
+    assert.deepEqual(capturedHoliday.policy.staffedIntervals, []);
+    const closed = await transferTurn(holiday);
+    assert.match(closed.callerMessages.at(-1)!, /aren't available for a live transfer/);
+    assert.match(closed.callerMessages.at(-1)!, /reopens Tuesday/);
+    assert.equal(holiday.transfer.requested.length, 0);
+
+    const wrongScope = await fixture(kind, `${kind}-approved-hours-wrong-scope`, false, "execute", undefined, undefined,
+      { staffSchedule: scope => ({ ...approved(scope), scope: { ...scope, locationId: "other-location" } }),
+        afterHoursText: "The clinic reopens Tuesday at 9 am." });
+    const capturedWrong = value(await wrongScope.ledger.read(wrongScope.callId, wrongScope.scope));
+    assert.equal(capturedWrong.policy.staffSchedule, undefined);
+    assert.equal(capturedWrong.policy.staffedCoverage, undefined);
+    const unknown = await transferTurn(wrongScope);
+    assert.match(unknown.callerMessages.at(-1)!, /can't confirm whether staff are available/);
+    assert.equal(unknown.callerMessages.at(-1)?.includes("reopens Tuesday"), false);
+    assert.equal(wrongScope.transfer.requested.length, 0);
+
+    const invalid = await fixture(kind, `${kind}-approved-hours-invalid-window`, false, "execute", undefined, undefined,
+      { staffSchedule: scope => ({ ...approved(scope), weekly: [{ weekday: 1, startMinute: 90, endMinute: 90 }] }),
+        afterHoursText: "The clinic reopens Tuesday at 9 am." });
+    const failed = await transferTurn(invalid);
+    assert.match(failed.callerMessages.at(-1)!, /can't confirm whether staff are available/);
+    assert.equal(failed.callerMessages.at(-1)?.includes("reopens Tuesday"), false);
+    assert.equal(invalid.transfer.requested.length, 0);
+
+    const expired = await fixture(kind, `${kind}-approved-hours-expired`, false, "execute", undefined, undefined,
+      { staffSchedule: scope => ({ ...approved(scope), effectiveUntil: at(-1) }),
+        afterHoursText: "The clinic reopens Tuesday at 9 am." });
+    const expiredTurn = await transferTurn(expired);
+    assert.match(expiredTurn.callerMessages.at(-1)!, /can't confirm whether staff are available/);
+    assert.equal(expiredTurn.callerMessages.at(-1)?.includes("reopens Tuesday"), false);
+    assert.equal(expired.transfer.requested.length, 0);
+
+    const expiringDuringCall = await fixture(kind, `${kind}-approved-hours-expires-during-call`, false,
+      "execute", undefined, undefined, { staffSchedule: scope => ({ ...approved(scope), effectiveUntil: at(2) }) });
+    const expiringSnapshot = value(await expiringDuringCall.ledger.read(expiringDuringCall.callId, expiringDuringCall.scope));
+    assert.equal(expiringSnapshot.policy.staffedCoverage?.endsAt, at(2));
+    const afterExpiry = await transferTurn(expiringDuringCall);
+    assert.match(afterExpiry.callerMessages.at(-1)!, /can't confirm whether staff are available/);
+    assert.equal(expiringDuringCall.transfer.requested.length, 0);
   });
 
   test(`${kind}: E2E-017 an overnight holiday routes to approved information and staff request`, async () => {

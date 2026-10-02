@@ -57,6 +57,21 @@ export type ActionKind = "book" | "cancel" | "reschedule" | "intake";
 export type CapabilityId = ActionKind | "transfer";
 export type CapabilityMode = "execute" | "requestOnly" | "unavailable";
 export type StaffedInterval = Readonly<{ startsAt: string; endsAt: string }>;
+/** Sunday is 0; endMinute before startMinute crosses midnight. */
+export type LocalStaffWindow = Readonly<{ weekday: number; startMinute: number; endMinute: number }>;
+export type LocalStaffSchedule = Readonly<{
+  timeZone: string;
+  weekly: readonly LocalStaffWindow[];
+  closedDates: readonly string[];
+}>;
+export type ApprovedStaffSchedule = LocalStaffSchedule & Readonly<{
+  scope: LocationScope;
+  version: string;
+  ownerRef: string;
+  approved: true;
+  effectiveFrom: string;
+  effectiveUntil: string;
+}>;
 export type ApprovedGreeting = Readonly<{
   scope: LocationScope;
   version: string;
@@ -95,6 +110,8 @@ export type CallPolicy = Readonly<{
   urgentResponse?: ApprovedUrgentResponse;
   capabilities: Readonly<Record<CapabilityId, CapabilityMode>>;
   transferDestinationRef?: string;
+  /** Approved local schedule expanded at voice admission, never trusted as pre-expanded evidence. */
+  staffSchedule?: ApprovedStaffSchedule;
   /** UTC horizon over which staffedIntervals is a complete clinic-approved snapshot. */
   staffedCoverage?: StaffedInterval;
   staffedIntervals?: readonly StaffedInterval[];
