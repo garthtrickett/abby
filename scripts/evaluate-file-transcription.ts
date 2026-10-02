@@ -5,9 +5,13 @@ import { parseTranscriptionEvaluationCorpus } from "../src/voice/transcription-e
 
 type Model = "gpt-transcribe" | "gpt-4o-transcribe";
 type Verdict = "match" | "mismatch" | "critical" | "providerFailure";
+type Context = "none" | "clinic-v1";
+
+const clinicContext = { prompt: "English physiotherapy clinic calls about appointments, booking, and urgent symptoms.",
+  keywords: ["physiotherapy", "appointment", "booking", "urgent"], languages: ["en"] } as const;
 
 function argsFrom(argv: readonly string[]): Record<string, string> {
-  const allowed = new Set(["out", "corpus", "model", "repeats", "concurrency"]);
+  const allowed = new Set(["out", "corpus", "model", "context", "repeats", "concurrency"]);
   const args: Record<string, string> = {};
   if (argv.length % 2 !== 0) throw new Error("invalid evaluation arguments");
   for (let index = 0; index < argv.length; index += 2) {
@@ -56,10 +60,16 @@ function classify(actual: string, expected: string, criticalTerms: readonly stri
   return criticalTerms.some(term => !actualWords.includes(term.toLowerCase())) ? "critical" : "mismatch";
 }
 
-async function transcribe(apiKey: string, model: Model, wav: Uint8Array<ArrayBuffer>): Promise<string> {
+async function transcribe(apiKey: string, model: Model, context: Context,
+  wav: Uint8Array<ArrayBuffer>): Promise<string> {
   const form = new FormData();
   form.set("model", model);
   form.set("file", new Blob([wav], { type: "audio/wav" }), "synthetic.wav");
+  if (context === "clinic-v1") {
+    form.set("prompt", clinicContext.prompt);
+    for (const keyword of clinicContext.keywords) form.append("keywords[]", keyword);
+    for (const language of clinicContext.languages) form.append("languages[]", language);
+  }
   const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST", headers: { Authorization: `Bearer ${apiKey}` }, body: form,
     signal: AbortSignal.timeout(30_000),
@@ -78,11 +88,15 @@ async function main(): Promise<void> {
   const apiKey = process.env.ABBY_OPENAI_API_KEY;
   if (!apiKey) throw new Error("ABBY_OPENAI_API_KEY is required");
   const corpusName = args.corpus ?? "transcription-noise-v1";
-  if (!["transcription-v1", "transcription-telephony-v1", "transcription-noise-v1"].includes(corpusName)) {
+  if (!["transcription-v1", "transcription-telephony-v1", "transcription-noise-v1",
+    "transcription-safety-v1"].includes(corpusName)) {
     throw new Error("unsupported transcription evaluation corpus");
   }
   const model = args.model ?? "gpt-transcribe";
   if (model !== "gpt-transcribe" && model !== "gpt-4o-transcribe") throw new Error("unsupported model");
+  const context = args.context ?? "none";
+  if ((context !== "none" && context !== "clinic-v1") ||
+      (context === "clinic-v1" && model !== "gpt-transcribe")) throw new Error("unsupported context");
   const repeats = args.repeats === undefined ? 2 : Number(args.repeats);
   const concurrency = args.concurrency === undefined ? 2 : Number(args.concurrency);
   if (!Number.isSafeInteger(repeats) || repeats < 1 || repeats > 10 ||
@@ -112,7 +126,7 @@ async function main(): Promise<void> {
       let actualText = "";
       let verdict: Verdict = "providerFailure";
       try {
-        actualText = await transcribe(apiKey, model, job.wav);
+        actualText = await transcribe(apiKey, model, context, job.wav);
         verdict = classify(actualText, job.item.expectedText, job.item.criticalTerms);
       } catch { /* Keep provider failures separate from wrong words. */ }
       results[index] = { caseId: job.item.id, category: job.item.category, repeat: job.repeat,
@@ -124,7 +138,9 @@ async function main(): Promise<void> {
   const counts: Record<Verdict, number> = { match: 0, mismatch: 0, critical: 0, providerFailure: 0 };
   for (const result of results) counts[result.verdict] += 1;
   const report = { schemaVersion: 1, kind: "file-transcription-evaluation", runAt: new Date().toISOString(),
-    configuration: { provider: "openai-audio-transcriptions", model, corpusVersion: corpus.version,
+    configuration: { provider: "openai-audio-transcriptions", model, contextVersion: context,
+      contextSha256: digest(Buffer.from(context === "clinic-v1" ? JSON.stringify(clinicContext) : "none")),
+      corpusVersion: corpus.version,
       corpusSha256: digest(corpusBytes), runnerSha256: digest(await readFile(resolve("scripts/evaluate-file-transcription.ts"))),
       nodeVersion: process.version, repeats, concurrency, audioFormat: "mono-wav-pcm16le-16000" },
     counts, results, humanReviewStatus: "pending", liveCallStatus: "notRun", releaseGate: "unverified" };
