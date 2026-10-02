@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import { tmpdir, userInfo } from "node:os";
+import { join } from "node:path";
 import test, { after } from "node:test";
 import { sql } from "kysely";
 import { sendVoiceOperationalAlerts } from "../../scripts/send-voice-operational-alerts.ts";
@@ -117,6 +120,46 @@ test("E2E-218 one-shot retention command deletes expired rows without revealing 
   const left = await sql<{ count: string }>`select count(*)::text as count from clinic_operational_daily_counts
     where tenant_id = ${tenantId}`.execute(db);
   assert.equal(left.rows[0]?.count, "0");
+});
+
+test("E2E-218 rendered retention service runs independently and preserves current aggregates", async () => {
+  const tenantId = `ops-scheduled-retention-${randomUUID()}`;
+  const today = new Date().toISOString().slice(0, 10);
+  await sql`insert into clinic_operational_daily_counts
+    (tenant_id, clinic_id, location_id, date, kind, count) values
+    (${tenantId}, 'clinic', 'main', date '2020-01-01', 'voiceFailure', 2),
+    (${tenantId}, 'clinic', 'main', ${today}::date, 'voiceFailure', 3)`.execute(db);
+  await sql`insert into clinic_operational_counts
+    (tenant_id, clinic_id, location_id, kind, count)
+    values (${tenantId}, 'clinic', 'main', 'voiceFailure', 5)`.execute(db);
+  const root = await mkdtemp(join(tmpdir(), "abby-retention-e2e-"));
+  try {
+    const config = join(root, "retention.env");
+    await writeFile(config, `DATABASE_URL=${url}\n`, { mode: 0o600 });
+    const render = spawnSync(process.execPath, ["scripts/render-voice-ops-retention-systemd.mjs",
+      "--app-root", process.cwd(), "--node-bin", process.execPath, "--env-file", config,
+      "--service-user", userInfo().username, "--name", "abby-retention-e2e", "--out-dir", root,
+    ], { cwd: new URL("../../", import.meta.url), encoding: "utf8", timeout: 10_000 });
+    assert.equal(render.status, 0, render.stderr);
+    const rendered = JSON.parse(render.stdout) as { service: string; timer: string };
+    const service = await readFile(join(root, rendered.service), "utf8");
+    const command = service.match(/^ExecStart=(.*)$/m)?.[1]?.split(" ");
+    assert.ok(command);
+    const childEnv = { ...process.env };
+    delete childEnv.DATABASE_URL;
+    const run = spawnSync(command[0]!, command.slice(1), {
+      cwd: new URL("../../", import.meta.url), env: childEnv, encoding: "utf8", timeout: 10_000,
+    });
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.stdout, "");
+    assert.equal(run.stderr, "");
+    const daily = await sql<{ day: string; count: string }>`select date::text as day, count
+      from clinic_operational_daily_counts where tenant_id = ${tenantId}`.execute(db);
+    assert.deepEqual(daily.rows, [{ day: today, count: "3" }]);
+    const lifetime = await sql<{ count: string }>`select count from clinic_operational_counts
+      where tenant_id = ${tenantId}`.execute(db);
+    assert.deepEqual(lifetime.rows, [{ count: "5" }]);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("E2E-219 E2E-237 owner threshold command enables selected fixed codes and isolates its clinic", async () => {

@@ -33,7 +33,7 @@ test("aggregate alert units keep secrets out of systemd and refuse unsafe config
     await assert.rejects(renderVoiceOpsAlertSystemd(args), { code: "EEXIST" });
     await chmod(config, 0o644);
     await assert.rejects(renderVoiceOpsAlertSystemd([...args.slice(0, -2), "--out-dir", join(root, "other")]),
-      /systemd alert source unavailable/);
+      /systemd task source unavailable/);
     await assert.rejects(renderVoiceOpsAlertSystemd([...args.slice(0, 8), "--name", "bad/name", ...args.slice(10)]),
       /invalid systemd render arguments/);
   } finally { await rm(root, { recursive: true, force: true }); }
