@@ -20,6 +20,15 @@ import type {
 
 const HOUR = 60 * 60 * 1000;
 const CLOSED_TRANSFER_NOTICE = "Staff aren't available for a live transfer now. I'll request follow-up, but I can't confirm they've received it yet.";
+const UNKNOWN_TRANSFER_NOTICE = "I can't confirm whether staff are available for a live transfer now. I'll request follow-up, but I can't confirm they've received it yet.";
+
+function transferUnavailableNotice(state: CallState, now: string): string {
+  const status = staffingWindowStatus(state.policy, now);
+  const approvedInfo = status === "closed" ? approvedAfterHoursText(state.policy) : undefined;
+  const notice = status === "closed" ? CLOSED_TRANSFER_NOTICE : UNKNOWN_TRANSFER_NOTICE;
+  return staffFallbackText(state, approvedInfo ? `${notice} ${approvedInfo}` : notice);
+}
+
 export function noticePresentationId(callId: string, turnId: string): string {
   return createHash("sha256").update(JSON.stringify([callId, turnId, "notice"])).digest("hex");
 }
@@ -285,10 +294,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
         state.pendingPresentationId = id;
       } else if (state.policy.capabilities.transfer === "execute" && state.policy.transferDestinationRef?.trim()) {
         addStaffTask(state, interpretation.reason, now);
-        const approvedInfo = staffingWindowStatus(state.policy, now) === "closed"
-          ? approvedAfterHoursText(state.policy) : undefined;
-        state.callerMessages.push(staffFallbackText(state,
-          approvedInfo ? `${CLOSED_TRANSFER_NOTICE} ${approvedInfo}` : CLOSED_TRANSFER_NOTICE));
+        state.callerMessages.push(transferUnavailableNotice(state, now));
       } else if (state.policy.capabilities.transfer === "requestOnly") {
         addStaffTask(state, interpretation.reason, now);
         state.callerMessages.push(staffFallbackText(state, "I can request staff follow-up, but I can't confirm they've received it yet."));
@@ -557,10 +563,7 @@ export function transition(current: CallState, action: TransitionAction): Result
         state.presentations[presentation.id] = { ...presentation, status: "canceled" };
         addStaffTask(state, presentation.reason, now);
         const noticeId = `${presentation.id}:closedNotice`;
-        const afterHoursInfo = staffingWindowStatus(state.policy, now) === "closed"
-          ? approvedAfterHoursText(state.policy) : undefined;
-        const approvedText = staffFallbackText(state,
-          afterHoursInfo ? `${CLOSED_TRANSFER_NOTICE} ${afterHoursInfo}` : CLOSED_TRANSFER_NOTICE);
+        const approvedText = transferUnavailableNotice(state, now);
         state.presentations[noticeId] = { kind: "notice", id: noticeId, approvedText, status: "pending" };
         state.pendingPresentationId = noticeId;
         state.callerMessages.push(approvedText);
