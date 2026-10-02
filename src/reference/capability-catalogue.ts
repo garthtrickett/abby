@@ -57,6 +57,9 @@ const afterHoursAuditPage = optional({ entries: array(optional({ version: key, m
 const urgentAuditPage = optional({ entries: array(optional({ version: key, enabled: bool, previousEnabled: bool,
   scriptVersion: key, actorRef: key, changedAt: str },
 ["version", "enabled", "previousEnabled", "actorRef", "changedAt"])), nextAfterVersion: uint }, ["entries"]);
+const staffScheduleAuditPage = optional({ entries: array(optional({ version: key, enabled: bool,
+  previousEnabled: bool, scheduleVersion: key, actorRef: key, changedAt: str },
+["version", "enabled", "previousEnabled", "actorRef", "changedAt"])), nextAfterVersion: uint }, ["entries"]);
 const actionKind = choice("book", "cancel", "reschedule", "intake");
 const actionStatus = choice("awaitingConfirmation", "ready", "dispatched", "committed", "rejected",
   "unsupported", "uncertain", "needsReview", "canceled");
@@ -229,6 +232,17 @@ export const capabilityCatalogue = {
   "settings.routing.urgent.audit.v1": entry("settings.routing.urgent.audit.v1",
     optional({ kind: { const: "settings.routing.urgent.audit.v1" }, afterVersion: uint }, ["kind"]),
     reply("urgentSettingAudit", "page", urgentAuditPage), "read", "clinicAdmin"),
+  "settings.routing.staffSchedule.change.v1": entry("settings.routing.staffSchedule.change.v1",
+    { oneOf: [
+      object({ kind: { const: "settings.routing.staffSchedule.change.v1" }, expectedVersion: key, enabled: { const: false } }),
+      object({ kind: { const: "settings.routing.staffSchedule.change.v1" }, expectedVersion: key, enabled: { const: true },
+        scheduleVersion: key, effectiveFrom: str, effectiveUntil: str, timeZone: key,
+        weekly: { type: "array", items: object({ weekday: uint, startMinute: uint, endMinute: uint }), maxItems: 168 },
+        closedDates: { type: "array", items: str, maxItems: 90 } }),
+    ] }, reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedPolicyVersion"]),
+  "settings.routing.staffSchedule.audit.v1": entry("settings.routing.staffSchedule.audit.v1",
+    optional({ kind: { const: "settings.routing.staffSchedule.audit.v1" }, afterVersion: uint }, ["kind"]),
+    reply("staffScheduleSettingAudit", "page", staffScheduleAuditPage), "read", "clinicAdmin"),
   "booking.propose.v2": entry("booking.propose.v2",
     object({ kind: { const: "booking.propose.v2" }, turn, verificationRef: key, offerRef: key, now: str }),
     reply("bookingProposal", "progress", progress), "proposalOnly", "permittedActor", "callerConfirmation", ["activeCall", "bookingEnabledForExecution", "hostEvidenceForExecution"]),

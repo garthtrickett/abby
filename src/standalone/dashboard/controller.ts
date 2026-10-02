@@ -4,7 +4,8 @@ import { dashboardView } from "./view.ts";
 import type { DashboardState } from "./view.ts";
 import type { AfterHoursMode, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
-import type { AfterHoursSettingAuditPage, BookingSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
+import type { AfterHoursSettingAuditPage, BookingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
+import { formatWeeklyHours, parseWeeklyHours } from "./staff-hours-form.ts";
 import type { AutomationSettingAuditPage } from "../../core/host.ts";
 import { READINESS_REQUIREMENTS } from "../../core/readiness.ts";
 import type { ReadinessRequirement } from "../../core/readiness.ts";
@@ -23,6 +24,12 @@ function appendAfterHoursAudit(previous: AfterHoursSettingAuditPage,
 }
 
 function appendUrgentAudit(previous: UrgentSettingAuditPage, next: UrgentSettingAuditPage): UrgentSettingAuditPage {
+  return { entries: [...previous.entries, ...next.entries],
+    ...(next.nextAfterVersion === undefined ? {} : { nextAfterVersion: next.nextAfterVersion }) };
+}
+
+function appendStaffScheduleAudit(previous: StaffScheduleSettingAuditPage,
+                                  next: StaffScheduleSettingAuditPage): StaffScheduleSettingAuditPage {
   return { entries: [...previous.entries, ...next.entries],
     ...(next.nextAfterVersion === undefined ? {} : { nextAfterVersion: next.nextAfterVersion }) };
 }
@@ -79,6 +86,8 @@ export class DashboardController {
     afterHoursAuditPage: undefined, afterHoursInfoVersion: "", afterHoursApprovedText: "",
     urgentAuditPage: undefined, urgentVersion: "", urgentText: "",
     urgentFrom: new Date().toISOString(), urgentUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+    hoursAuditPage: undefined, hoursVersion: "", hoursTimeZone: "", hoursWeekly: "", hoursClosedDates: "",
+    hoursFrom: "", hoursUntil: "",
     writeStopAuditPage: undefined, automationAuditPage: undefined, callIdInput: "", call: undefined, staffPage: undefined, outcomePage: undefined, notice: undefined, error: undefined };
 
   constructor(root: HTMLElement, port: DashboardPort) {
@@ -112,6 +121,10 @@ export class DashboardController {
       changeUrgentResponse: enabled => { void this.changeUrgentResponse(enabled); },
       loadUrgentAudit: () => { void this.loadUrgentAudit(); },
       loadMoreUrgentAudit: () => { void this.loadMoreUrgentAudit(); },
+      setHoursField: (field, value) => { this.state[field] = value; this.draw(); },
+      changeStaffSchedule: enabled => { void this.changeStaffSchedule(enabled); },
+      loadHoursAudit: () => { void this.loadHoursAudit(); },
+      loadMoreHoursAudit: () => { void this.loadMoreHoursAudit(); },
       setCallId: value => { this.state.callIdInput = value; },
       loadCall: () => { void this.loadCall(); },
       loadStaff: () => { void this.loadStaff(); },
@@ -133,6 +146,12 @@ export class DashboardController {
       this.state.urgentText = settings.value.urgentResponse?.approvedText ?? "";
       this.state.urgentFrom = settings.value.urgentResponse?.effectiveFrom ?? this.state.urgentFrom;
       this.state.urgentUntil = settings.value.urgentResponse?.effectiveUntil ?? this.state.urgentUntil;
+      this.state.hoursVersion = settings.value.staffSchedule?.version ?? "";
+      this.state.hoursTimeZone = settings.value.staffSchedule?.timeZone ?? "";
+      this.state.hoursWeekly = settings.value.staffSchedule ? formatWeeklyHours(settings.value.staffSchedule.weekly) : "";
+      this.state.hoursClosedDates = settings.value.staffSchedule?.closedDates.join("\n") ?? "";
+      this.state.hoursFrom = settings.value.staffSchedule?.effectiveFrom ?? "";
+      this.state.hoursUntil = settings.value.staffSchedule?.effectiveUntil ?? "";
     }
     this.state.error = !settings.ok ? message(settings.error) : !capabilities.ok ? message(capabilities.error) : undefined;
     if (capabilities.ok && capabilities.value.some(item => item.id === "knowledge.list.v1")) {
@@ -168,6 +187,11 @@ export class DashboardController {
     if (capabilities.ok && capabilities.value.some(item => item.id === "settings.routing.urgent.audit.v1")) {
       const audit = await this.port.urgentAudit();
       if (audit.ok) this.state.urgentAuditPage = audit.value;
+      else this.state.error = message(audit.error);
+    }
+    if (capabilities.ok && capabilities.value.some(item => item.id === "settings.routing.staffSchedule.audit.v1")) {
+      const audit = await this.port.staffScheduleAudit();
+      if (audit.ok) this.state.hoursAuditPage = audit.value;
       else this.state.error = message(audit.error);
     }
     if (capabilities.ok && capabilities.value.some(item => item.id === "staff.list.v1")) {
@@ -255,6 +279,18 @@ export class DashboardController {
     this.draw();
     const result = await this.port.urgentAudit();
     if (result.ok) this.state.urgentAuditPage = result.value;
+    else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async loadHoursAudit(): Promise<void> {
+    if (this.state.busy) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.staffScheduleAudit();
+    if (result.ok) this.state.hoursAuditPage = result.value;
     else this.state.error = message(result.error);
     this.state.busy = false;
     this.draw();
@@ -398,6 +434,19 @@ export class DashboardController {
     this.draw();
     const result = await this.port.urgentAudit(previous.nextAfterVersion);
     if (result.ok) this.state.urgentAuditPage = appendUrgentAudit(previous, result.value);
+    else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async loadMoreHoursAudit(): Promise<void> {
+    const previous = this.state.hoursAuditPage;
+    if (this.state.busy || previous?.nextAfterVersion === undefined) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.staffScheduleAudit(previous.nextAfterVersion);
+    if (result.ok) this.state.hoursAuditPage = appendStaffScheduleAudit(previous, result.value);
     else this.state.error = message(result.error);
     this.state.busy = false;
     this.draw();
@@ -559,6 +608,52 @@ export class DashboardController {
       if (!enabled) { this.state.urgentVersion = ""; this.state.urgentText = ""; }
       const audit = await this.port.urgentAudit();
       if (audit.ok) this.state.urgentAuditPage = audit.value;
+      else this.state.error = message(audit.error);
+    } else {
+      this.state.error = message(result.error);
+      if (result.error.kind === "versionConflict") {
+        const reloaded = await this.port.settings();
+        if (reloaded.ok) this.state.policy = reloaded.value;
+      }
+    }
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async changeStaffSchedule(enabled: boolean): Promise<void> {
+    const current = this.state.policy;
+    if (this.state.busy || !current || !this.state.capabilities.some(item => item.id === "settings.routing.staffSchedule.change.v1")) return;
+    const weekly = enabled ? parseWeeklyHours(this.state.hoursWeekly) : [];
+    const closedDates = this.state.hoursClosedDates.split(/\r?\n/).map(date => date.trim()).filter(Boolean);
+    if (enabled && (!this.state.hoursVersion.trim() || !this.state.hoursTimeZone.trim() ||
+        !this.state.hoursFrom.trim() || !this.state.hoursUntil.trim() || weekly === undefined ||
+        closedDates.length > 90 || closedDates.some(date => !/^\d{4}-\d{2}-\d{2}$/.test(date)))) {
+      this.state.error = "Enter a version, time zone, effective dates and valid weekly hours (for example Mon 09:00-17:00).";
+      this.draw();
+      return;
+    }
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.state.notice = undefined;
+    this.draw();
+    const result = await this.port.changeStaffSchedule(current.policyVersion, enabled ? {
+      version: this.state.hoursVersion.trim(), effectiveFrom: this.state.hoursFrom.trim(),
+      effectiveUntil: this.state.hoursUntil.trim(), timeZone: this.state.hoursTimeZone.trim(),
+      weekly: weekly!, closedDates,
+    } : undefined);
+    if (result.ok) {
+      this.state.policy = result.value;
+      this.state.notice = enabled ? "Clinic hours approved for new calls." : "Clinic hours disabled for new calls.";
+      if (!enabled) {
+        this.state.hoursVersion = "";
+        this.state.hoursTimeZone = "";
+        this.state.hoursWeekly = "";
+        this.state.hoursClosedDates = "";
+        this.state.hoursFrom = "";
+        this.state.hoursUntil = "";
+      }
+      const audit = await this.port.staffScheduleAudit();
+      if (audit.ok) this.state.hoursAuditPage = audit.value;
       else this.state.error = message(audit.error);
     } else {
       this.state.error = message(result.error);

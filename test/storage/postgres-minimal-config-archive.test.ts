@@ -127,6 +127,42 @@ test("E2E-232 minimal archive maps the scoped urgent script and distinct audit i
   assert.deepEqual(booking.value.entries.map(row => row.version), ["2"]);
 });
 
+test("E2E-244 minimal archive maps approved hours and its distinct audit into an embedded host", async () => {
+  const suffix = randomUUID();
+  const scope = { tenantId: `hours-export-source-${suffix}`, clinicId: "clinic", locationId: "location" };
+  const targetScope = { tenantId: `hours-export-buyer-${suffix}`, clinicId: "buyer", locationId: "location" };
+  const app = createStandaloneTextComposition(db);
+  const schedule = { scope, version: "hours-v1", ownerRef: "clinic-admin", approved: true as const,
+    effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2027-09-01T00:00:00.000Z",
+    timeZone: "Australia/Sydney", weekly: [{ weekday: 1, startMinute: 1140, endMinute: 1260 }],
+    closedDates: ["2026-12-25"] };
+  assert.equal((await app.policy.changeStaffSchedule(scope, "0", schedule, "clinic-admin")).ok, true);
+  assert.equal((await app.policy.changeBookingEnabled(scope, "1", false, "clinic-admin")).ok, true);
+  const archive = await buildPostgresConfigArchive(db, { scope, targetScope, timeZone: "Australia/Sydney",
+    mappingProvenance: "reviewed-map", archiveId: `hours-settings-archive-${suffix}`, actorRef: "clinic-admin",
+    createdAt: "2026-09-29T04:00:00Z" }, authority);
+  assert.ok(archive.ok, archive.ok ? "" : archive.error.kind);
+  const decoded = await decodeConfigArchive(archive.value, targetScope);
+  assert.ok(decoded.ok, decoded.ok ? "" : decoded.error.kind);
+  assert.deepEqual(decoded.value.policies.map(row => [row.version, row.settingKind]),
+    [[0, "booking"], [1, "staffSchedule"], [2, "booking"]]);
+  assert.equal(decoded.value.policies[2]?.policy.staffSchedule?.version, "hours-v1");
+  const staged = await new ReferenceConfigArchiveImporter(() => "2026-09-29T04:05:00Z").stage(
+    archive.value, targetScope, "buyer-admin",
+    { authorizeAndRecord: async () => ok({ auditRef: "audited-hours-import" }) },
+    { mapRef: (kind: string, ref: string) => `buyer:${kind}:${ref}` });
+  assert.ok(staged.ok, staged.ok ? "" : staged.error.kind);
+  const imported = await staged.value.policy.read(targetScope);
+  assert.ok(imported.ok);
+  assert.deepEqual(imported.value.staffSchedule?.scope, targetScope);
+  assert.equal(imported.value.staffSchedule?.ownerRef, "buyer:scheduleOwner:clinic-admin");
+  assert.deepEqual(imported.value.staffSchedule?.closedDates, ["2026-12-25"]);
+  const history = await staged.value.policy.listStaffScheduleChanges(targetScope);
+  assert.ok(history.ok);
+  assert.deepEqual(history.value.entries.map(row => [row.version, row.enabled, row.previousEnabled]),
+    [["1", true, false]]);
+});
+
 test("default archive rejects rich policy and any standalone knowledge draft", async () => {
   const richScope = { tenantId: "minimal-export-rich", clinicId: "clinic", locationId: "location" };
   const targetScope = { ...richScope, tenantId: "buyer-rich" };

@@ -27,6 +27,18 @@ export function validStaffScheduleApproval(value: unknown, scope: LocationScope,
     bound.tenantId === scope.tenantId && bound.clinicId === scope.clinicId && bound.locationId === scope.locationId;
 }
 
+/** Validate the entire stored setting without requiring it to be active today. */
+export function validApprovedStaffSchedule(value: unknown, scope: LocationScope): value is ApprovedStaffSchedule {
+  if (!validStaffScheduleApproval(value, scope)) return false;
+  const keys = Object.keys(value).sort().join(",");
+  const scopeKeys = Object.keys(value.scope).sort().join(",");
+  if (keys !== "approved,closedDates,effectiveFrom,effectiveUntil,ownerRef,scope,timeZone,version,weekly" ||
+      scopeKeys !== "clinicId,locationId,tenantId" ||
+      !Array.isArray(value.weekly) || value.weekly.some(window => !window ||
+        Object.keys(window).sort().join(",") !== "endMinute,startMinute,weekday")) return false;
+  return expandStaffSchedule(value, "2026-01-01T00:00:00.000Z", "2026-01-01T00:01:00.000Z").ok;
+}
+
 function instant(value: string): number | undefined {
   const time = Date.parse(value);
   return Number.isFinite(time) && new Date(time).toISOString() === value ? time : undefined;

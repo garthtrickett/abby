@@ -291,6 +291,63 @@ test("E2E-232: staff cannot inspect urgent wording history or change the script"
   } finally { await app.close(); }
 });
 
+test("E2E-244: clinic admin approves, audits and disables staffed hours for new calls", async ({ page, request }) => {
+  test.setTimeout(60_000);
+  const app = await localDashboard("clinicAdmin");
+  try {
+    await page.goto(app.url);
+    await expect(page.getByRole("heading", { name: "Staffed transfer hours" })).toBeVisible();
+    await expect(page.getByText("No approved hours", { exact: true })).toBeVisible();
+    await page.getByRole("textbox", { name: "Hours version" }).fill("hours-v1");
+    await page.getByRole("textbox", { name: "Clinic time zone" }).fill("Australia/Sydney");
+    await page.getByRole("textbox", { name: "Weekly staffed hours" }).fill("Mon 19:00-21:00\nTue 09:00-17:00");
+    await page.getByRole("textbox", { name: "Closed dates" }).fill("2026-12-25");
+    await page.getByRole("textbox", { name: "Hours effective from" }).fill("2026-09-01T00:00:00.000Z");
+    await page.getByRole("textbox", { name: "Hours effective until" }).fill("2027-09-01T00:00:00.000Z");
+    await page.getByRole("button", { name: "Approve staffed hours" }).click();
+    await expect(page.getByText("Clinic hours approved for new calls.")).toBeVisible();
+    const before = await app.ledger.read("before-setting", app.scope);
+    assert.ok(before.ok);
+    assert.equal(before.value.policy.staffSchedule, undefined);
+    assert.equal((await app.reception.startCall("hours-enabled", app.scope)).ok, true);
+    const enabled = await app.ledger.read("hours-enabled", app.scope);
+    assert.ok(enabled.ok);
+    assert.equal(enabled.value.policy.staffSchedule?.ownerRef, "browser-clinicAdmin");
+    assert.deepEqual(enabled.value.policy.staffSchedule?.closedDates, ["2026-12-25"]);
+    const valid = { kind: "settings.routing.staffSchedule.change.v1", enabled: true, scheduleVersion: "hours-v2",
+      timeZone: "Australia/Sydney", weekly: [{ weekday: 1, startMinute: 1140, endMinute: 1260 }], closedDates: [],
+      effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2027-09-01T00:00:00.000Z" };
+    assert.equal((await request.post(`${app.url}/api/settings/staff-schedule`, { data: {
+      ...valid, expectedVersion: "0" } })).status(), 409);
+    assert.equal((await request.post(`${app.url}/api/settings/staff-schedule`, { data: {
+      ...valid, expectedVersion: "1", weekly: [{ weekday: 1, startMinute: 1140, endMinute: 1140 }] } })).status(), 400);
+    assert.equal((await request.post(`${app.url}/api/settings/staff-schedule`, { data: {
+      ...valid, expectedVersion: "1", ownerRef: "forged-owner" } })).status(), 400);
+    await page.reload();
+    await expect(page.getByRole("textbox", { name: "Weekly staffed hours" })).toHaveValue("Mon 19:00-21:00\nTue 09:00-17:00");
+    await expect(page.getByLabel("Staffed hours audit")).toContainText("Version 1 · approved · hours hours-v1 · browser-clinicAdmin");
+    await page.getByRole("button", { name: "Disable staffed hours" }).click();
+    await expect(page.getByText("Clinic hours disabled for new calls.")).toBeVisible();
+    assert.equal((await app.reception.startCall("hours-disabled", app.scope)).ok, true);
+    const disabled = await app.ledger.read("hours-disabled", app.scope);
+    assert.ok(disabled.ok);
+    assert.equal(disabled.value.policy.staffSchedule, undefined);
+    assert.equal((await app.ledger.read("hours-enabled", app.scope)).ok, true);
+    await expect(page.getByLabel("Staffed hours audit")).toContainText("Version 2 · disabled · browser-clinicAdmin");
+  } finally { await app.close(); }
+});
+
+test("E2E-244: staff cannot inspect or change staffed hours", async ({ page, request }) => {
+  const app = await localDashboard("staff");
+  try {
+    await page.goto(app.url);
+    await expect(page.getByRole("button", { name: "Approve staffed hours" })).toHaveCount(0);
+    assert.equal((await request.get(`${app.url}/api/settings/staff-schedule-audit`)).status(), 403);
+    assert.equal((await request.post(`${app.url}/api/settings/staff-schedule`, { data: {
+      kind: "settings.routing.staffSchedule.change.v1", expectedVersion: "0", enabled: false } })).status(), 403);
+  } finally { await app.close(); }
+});
+
 test("agent capability endpoint publishes versioned schemas without exposing internal call state", async ({ request }) => {
   const app = await localDashboard("clinicAdmin");
   try {
@@ -310,6 +367,9 @@ test("agent capability endpoint publishes versioned schemas without exposing int
     assert.equal(urgent?.inputSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
     assert.equal(JSON.stringify(urgent?.inputSchema).includes('"oneOf"'), true);
     assert.equal(JSON.stringify(urgent?.inputSchema).includes("ownerRef"), false);
+    const hours = payload.value.find(item => item.id === "settings.routing.staffSchedule.change.v1");
+    assert.equal(hours?.inputSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
+    assert.equal(JSON.stringify(hours?.inputSchema).includes("ownerRef"), false);
     assert.equal(JSON.stringify(payload).includes("browser-tenant"), false);
   } finally { await app.close(); }
 });

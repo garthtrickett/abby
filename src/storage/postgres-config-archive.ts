@@ -5,7 +5,7 @@ import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result, StaffDestination } from "../core/model.ts";
 import { validAfterHoursSetting } from "../core/after-hours-policy.ts";
 import { validUrgentResponseShape } from "../core/urgent-response.ts";
-import { expandStaffSchedule, validStaffScheduleApproval } from "../core/staff-schedule.ts";
+import { validApprovedStaffSchedule } from "../core/staff-schedule.ts";
 import { ARCHIVE_SECTIONS } from "../portability/archive-envelope.ts";
 import type { ArchiveEnvelope, ArchiveSection } from "../portability/archive-envelope.ts";
 import type Database from "./generated/Database.ts";
@@ -103,6 +103,16 @@ function urgentFields(row: Record<string, unknown>, scope: LocationScope): Recor
     effectiveFrom: response.effectiveFrom, effectiveUntil: response.effectiveUntil } };
 }
 
+function staffScheduleFields(row: Record<string, unknown>, scope: LocationScope): Record<string, unknown> {
+  if (row.staffSchedule === undefined) return {};
+  if (!validApprovedStaffSchedule(row.staffSchedule, scope)) throw new ExportAbort("storageCorrupt");
+  const schedule = row.staffSchedule;
+  return { staffSchedule: { version: schedule.version, ownerRef: schedule.ownerRef, approved: true,
+    effectiveFrom: schedule.effectiveFrom, effectiveUntil: schedule.effectiveUntil,
+    timeZone: schedule.timeZone, weekly: schedule.weekly.map(window => ({ weekday: window.weekday,
+      startMinute: window.startMinute, endMinute: window.endMinute })), closedDates: [...schedule.closedDates] } };
+}
+
 /** Export only known policy fields; extra JSONB keys never cross the archive boundary. */
 function policyFields(value: unknown, scope: LocationScope, version: number,
                       mode: "standaloneMinimal" | "unsafeReference"): Record<string, unknown> {
@@ -111,13 +121,13 @@ function policyFields(value: unknown, scope: LocationScope, version: number,
   if (mode === "standaloneMinimal") {
     if (!row || !storedScope || !["bookingEnabled", "policyVersion", "scope"].every(field => Object.hasOwn(row, field)) ||
         Object.keys(row).some(field => !["bookingEnabled", "policyVersion", "scope", "afterHoursMode",
-          "afterHoursInfo", "urgentResponse"].includes(field)) ||
+          "afterHoursInfo", "urgentResponse", "staffSchedule"].includes(field)) ||
         Object.keys(storedScope).sort().join(",") !== "clinicId,locationId,tenantId" ||
         storedScope.tenantId !== scope.tenantId || storedScope.clinicId !== scope.clinicId ||
         storedScope.locationId !== scope.locationId || row.policyVersion !== String(version) ||
         typeof row.bookingEnabled !== "boolean") throw new ExportAbort("storageCorrupt");
     return { shape: "standaloneMinimal", policyVersion: row.policyVersion, bookingEnabled: row.bookingEnabled,
-      ...afterHoursFields(row, scope), ...urgentFields(row, scope) };
+      ...afterHoursFields(row, scope), ...urgentFields(row, scope), ...staffScheduleFields(row, scope) };
   }
   const caps = object(row?.capabilities);
   if (!row || !storedScope || storedScope.tenantId !== scope.tenantId || storedScope.clinicId !== scope.clinicId ||
@@ -130,21 +140,10 @@ function policyFields(value: unknown, scope: LocationScope, version: number,
   }
   const policy: Record<string, unknown> = { policyVersion: row.policyVersion, bookingEnabled: row.bookingEnabled, capabilities,
     staffDestination: destination(row.staffDestination), operatorQueue: destination(row.operatorQueue),
-    ...afterHoursFields(row, scope), ...urgentFields(row, scope) };
+    ...afterHoursFields(row, scope), ...urgentFields(row, scope), ...staffScheduleFields(row, scope) };
   if (row.transferDestinationRef !== undefined) {
     if (!validRef(row.transferDestinationRef)) throw new ExportAbort("storageCorrupt");
     policy.transferDestinationRef = row.transferDestinationRef;
-  }
-  if (row.staffSchedule !== undefined) {
-    if (!validStaffScheduleApproval(row.staffSchedule, scope) ||
-        !expandStaffSchedule(row.staffSchedule, "2026-01-01T00:00:00.000Z", "2026-01-01T00:01:00.000Z").ok) {
-      throw new ExportAbort("storageCorrupt");
-    }
-    const schedule = row.staffSchedule;
-    policy.staffSchedule = { version: schedule.version, ownerRef: schedule.ownerRef, approved: true,
-      effectiveFrom: schedule.effectiveFrom, effectiveUntil: schedule.effectiveUntil,
-      timeZone: schedule.timeZone, weekly: schedule.weekly.map(window => ({ weekday: window.weekday,
-        startMinute: window.startMinute, endMinute: window.endMinute })), closedDates: [...schedule.closedDates] };
   }
   const coverage = object(row.staffedCoverage);
   let coverageBounds: Readonly<{ start: number; end: number }> | undefined;

@@ -1,4 +1,4 @@
-import type { ActionRequest, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedUrgentResponse, ApprovedKnowledge, AppointmentRead, AppointmentReadFailure, AvailabilityRead, AvailabilityReadFailure, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, OperatorAlert, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
+import type { ActionRequest, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedStaffSchedule, ApprovedUrgentResponse, ApprovedKnowledge, AppointmentRead, AppointmentReadFailure, AvailabilityRead, AvailabilityReadFailure, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, OperatorAlert, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
 import type { ReadinessFailure } from "./readiness.ts";
 
 export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable"; target: "patient" | "offer" | "appointment" }>;
@@ -42,6 +42,18 @@ export type UrgentSettingAuditEntry = Readonly<{
 }>;
 export type UrgentSettingAuditPage = Readonly<{
   entries: readonly UrgentSettingAuditEntry[];
+  nextAfterVersion?: number;
+}>;
+export type StaffScheduleSettingAuditEntry = Readonly<{
+  version: string;
+  enabled: boolean;
+  previousEnabled: boolean;
+  scheduleVersion?: string;
+  actorRef: string;
+  changedAt: string;
+}>;
+export type StaffScheduleSettingAuditPage = Readonly<{
+  entries: readonly StaffScheduleSettingAuditEntry[];
   nextAfterVersion?: number;
 }>;
 export type KnowledgeReadFailure = Readonly<{ kind: "invalidQuery" | "unavailable" }>;
@@ -133,4 +145,7 @@ export interface PolicyStore {
   changeUrgentResponse(scope: LocationScope, expectedVersion: string, response: ApprovedUrgentResponse | undefined,
                        actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
   listUrgentResponseChanges(scope: LocationScope, afterVersion?: number): Promise<Result<UrgentSettingAuditPage, PolicyFailure>>;
+  changeStaffSchedule(scope: LocationScope, expectedVersion: string, schedule: ApprovedStaffSchedule | undefined,
+                      actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
+  listStaffScheduleChanges(scope: LocationScope, afterVersion?: number): Promise<Result<StaffScheduleSettingAuditPage, PolicyFailure>>;
 }

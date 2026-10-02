@@ -32,6 +32,7 @@ import { up as up029, down as down029 } from "./migrations/029_clinic_operationa
 import { up as up030, down as down030 } from "./migrations/030_after_hours_setting_audit.ts";
 import { up as up031, down as down031 } from "./migrations/031_urgent_setting_audit.ts";
 import { up as up032, down as down032 } from "./migrations/032_intent_classification_unavailable_count.ts";
+import { up as up033, down as down033 } from "./migrations/033_staff_schedule_setting_audit.ts";
 
 function createMigrator<DB>(db: Kysely<DB>): Migrator {
   return new Migrator({
@@ -69,6 +70,7 @@ function createMigrator<DB>(db: Kysely<DB>): Migrator {
       "030_after_hours_setting_audit": { up: up030, down: down030 },
       "031_urgent_setting_audit": { up: up031, down: down031 },
       "032_intent_classification_unavailable_count": { up: up032, down: down032 },
+      "033_staff_schedule_setting_audit": { up: up033, down: down033 },
     }) },
   });
 }

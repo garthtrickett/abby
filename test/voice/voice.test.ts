@@ -13,6 +13,7 @@ import { CallRuntime } from "../../src/core/runtime.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { createEmbeddedTextComposition } from "../../src/reference/embedded-composition.ts";
 import { MemoryPolicyStore, referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
+import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { expandStaffSchedule } from "../../src/reference/staff-schedule.ts";
 import { StaffQueue } from "../../src/reference/staff-queue.ts";
 import { summarizeCall } from "../../src/reference/call-review.ts";
@@ -150,6 +151,8 @@ type VoiceFixtureOptions = {
   staffedIntervals?: CallPolicy["staffedIntervals"];
   staffedCoverage?: CallPolicy["staffedCoverage"];
   staffSchedule?: (scope: LocationScope) => NonNullable<CallPolicy["staffSchedule"]>;
+  approveStaffScheduleViaAdmin?: boolean;
+  disableStaffScheduleBeforeAdmission?: boolean;
   omitStaffedCoverage?: boolean;
   afterHoursText?: string;
   afterHoursOffBeforeAdmission?: boolean;
@@ -206,6 +209,18 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
       value(await policy.changeUrgentResponse(scope, approved.policyVersion, undefined, "voice-test-admin"));
     }
   }
+  const adminGateway = options.approveStaffScheduleViaAdmin ? new CommandGateway(
+    { actorRef: "voice-test-admin", role: "clinicAdmin", scope }, policy, reception) : undefined;
+  if (adminGateway && options.staffSchedule) {
+    const schedule = options.staffSchedule(scope);
+    const changed = value(await adminGateway.submit({ kind: "settings.routing.staffSchedule.change.v1",
+      expectedVersion: value(await policy.read(scope)).policyVersion, enabled: true,
+      scheduleVersion: schedule.version, effectiveFrom: schedule.effectiveFrom, effectiveUntil: schedule.effectiveUntil,
+      timeZone: schedule.timeZone, weekly: schedule.weekly, closedDates: schedule.closedDates }));
+    if (changed.kind !== "settings") throw new Error("expected settings reply");
+    if (options.disableStaffScheduleBeforeAdmission) value(await adminGateway.submit({
+      kind: "settings.routing.staffSchedule.change.v1", expectedVersion: changed.policy.policyVersion, enabled: false }));
+  }
   const playback = new FakePlayback();
   const transfer = new FakeTransfer();
   const admission = new CallAdmissionService(ledger, async () => {
@@ -224,7 +239,7 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
       ...(transferMode === "execute" ? { transferDestinationRef: transferDestinationRef ?? `destination-${id}`,
         ...(options.omitStaffedCoverage ? {} : { staffedCoverage: options.staffedCoverage ?? { startsAt: at(0), endsAt: at(3_600) } }),
         staffedIntervals: options.staffedIntervals ?? [{ startsAt: at(0), endsAt: at(3_600) }] } : {}),
-      ...(options.staffSchedule ? { staffSchedule: options.staffSchedule(scope) } : {}),
+      ...(options.staffSchedule && !options.approveStaffScheduleViaAdmin ? { staffSchedule: options.staffSchedule(scope) } : {}),
     };
     return ok(snapshot);
   }, () => now, async () => ok(true));
@@ -254,7 +269,8 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
     resolveIntent, transfer, clock?.now,
     greeting ? { greeting } : undefined);
   value(await session.attach(at(1)));
-  return { scope, patient, offer, host, ledger, sessionLedger, policy, reception, playback, transfer, session, sessionId, callId, model };
+  return { scope, patient, offer, host, ledger, sessionLedger, policy, reception, playback, transfer, session, sessionId, callId,
+    model, adminGateway };
 }
 
 async function bookTurn(app: Awaited<ReturnType<typeof fixture>>, text = "Book physio") {
@@ -1324,6 +1340,53 @@ for (const kind of kinds) {
     const afterExpiry = await transferTurn(expiringDuringCall);
     assert.match(afterExpiry.callerMessages.at(-1)!, /can't confirm whether staff are available/);
     assert.equal(expiringDuringCall.transfer.requested.length, 0);
+  });
+
+  test(`${kind}: E2E-244 admin hours approval controls whole-call transfer and audit`, async () => {
+    const approved = (scope: LocationScope): NonNullable<CallPolicy["staffSchedule"]> => ({ scope,
+      version: "hours-v1", ownerRef: "voice-test-admin", approved: true,
+      effectiveFrom: at(-86_400), effectiveUntil: at(86_400), timeZone: "Australia/Sydney",
+      weekly: [{ weekday: 1, startMinute: 19 * 60, endMinute: 21 * 60 }], closedDates: [] });
+    const app = await fixture(kind, `${kind}-admin-hours-${randomUUID()}`, false, "execute", undefined, undefined,
+      { staffSchedule: approved, approveStaffScheduleViaAdmin: true, staffedIntervals: [] });
+    const gateway = app.adminGateway!;
+    const active = value(await app.ledger.read(app.callId, app.scope));
+    assert.equal(active.policy.staffSchedule?.version, "hours-v1");
+    assert.equal(active.policy.staffedIntervals?.length, 1);
+    const before = value(await gateway.submit({ kind: "settings.read.v1" }));
+    if (before.kind !== "settings") throw new Error("expected settings reply");
+    assert.equal(before.policy.staffSchedule?.ownerRef, "voice-test-admin");
+    failure(await gateway.submit({ kind: "settings.routing.staffSchedule.change.v1", expectedVersion: "0",
+      enabled: false }), "versionConflict");
+    const disabled = value(await gateway.submit({ kind: "settings.routing.staffSchedule.change.v1",
+      expectedVersion: before.policy.policyVersion, enabled: false }));
+    if (disabled.kind !== "settings") throw new Error("expected settings reply");
+    assert.equal(disabled.policy.staffSchedule, undefined);
+    assert.equal(disabled.policy.staffedCoverage, undefined);
+    const planned = await transferTurn(app);
+    assert.equal(planned.presentations[planned.pendingPresentationId!]?.kind, "transfer",
+      "the active call keeps the admitted approval snapshot");
+    app.transfer.outcome = { kind: "connected", providerConnectionRef: "approved-hours-setting" };
+    assert.equal(value(await app.session.dispatchPending(at(4))).kind, "transferConnected");
+    assert.equal(app.transfer.requested.length, 1);
+    const audit = value(await gateway.submit({ kind: "settings.routing.staffSchedule.audit.v1" }));
+    if (audit.kind !== "staffScheduleSettingAudit") throw new Error("expected audit reply");
+    assert.deepEqual(audit.page.entries.map(entry => [entry.enabled, entry.previousEnabled]),
+      [[true, false], [false, true]]);
+
+    const off = await fixture(kind, `${kind}-admin-hours-off-${randomUUID()}`, false, "execute", undefined, undefined,
+      { staffSchedule: approved, approveStaffScheduleViaAdmin: true, disableStaffScheduleBeforeAdmission: true,
+        omitStaffedCoverage: true, staffedIntervals: [] });
+    const unavailable = await transferTurn(off);
+    assert.match(unavailable.callerMessages.at(-1)!, /can't confirm whether staff are available/);
+    assert.equal(off.transfer.requested.length, 0);
+    const otherScope = { ...app.scope, locationId: "different-location" };
+    const forged = { ...approved(otherScope), ownerRef: "forged-owner" };
+    failure(await app.policy.changeStaffSchedule(app.scope, disabled.policy.policyVersion, forged, "voice-test-admin"),
+      "invalidValue");
+    const contaminated = { ...approved(app.scope), unexpectedPatientNote: "PRIVATE_NOTE_MUST_NOT_PERSIST" };
+    failure(await app.policy.changeStaffSchedule(app.scope, disabled.policy.policyVersion, contaminated,
+      "voice-test-admin"), "invalidValue");
   });
 
   test(`${kind}: E2E-017 an overnight holiday routes to approved information and staff request`, async () => {

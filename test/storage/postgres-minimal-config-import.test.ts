@@ -126,6 +126,42 @@ test("E2E-232 durable minimal import preserves public urgent wording and audit w
   assert.ok(stop.ok && stop.value.stopped);
 });
 
+test("E2E-244 durable minimal import preserves hours and audit without enabling transfer", async () => {
+  const suffix = randomUUID();
+  const source = { tenantId: `minimal-hours-source-${suffix}`, clinicId: "clinic", locationId: "location" };
+  const target = { tenantId: `minimal-hours-target-${suffix}`, clinicId: "buyer", locationId: "location" };
+  const store = new PostgresPolicyStore(db, referenceDefaultPolicy);
+  const schedule = { scope: source, version: "hours-v1", ownerRef: "clinic-admin", approved: true as const,
+    effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2027-09-01T00:00:00.000Z",
+    timeZone: "Australia/Sydney", weekly: [{ weekday: 1, startMinute: 1140, endMinute: 1260 }],
+    closedDates: ["2026-12-25"] };
+  assert.ok((await store.changeStaffSchedule(source, "0", schedule, "clinic-admin")).ok);
+  const archive = await buildPostgresTenantConfigArchive(db, {
+    sourceTenantId: source.tenantId, archiveId: `minimal-hours-archive-${suffix}`, actorRef: "clinic-admin",
+    createdAt: "2026-09-29T05:00:00Z", locations: [
+      { sourceScope: source, targetScope: target, timeZone: "Australia/Sydney", mappingProvenance: "reviewed" },
+    ],
+  }, { authorizeAndRecord: async () => ok({ requestRef: "minimal-hours-export-audit" }) });
+  assert.ok(archive.ok, archive.ok ? "" : archive.error.kind);
+  const importer = new PostgresTenantConfigArchiveImporter(db, () => "2026-09-29T05:05:00Z");
+  const authority = { authorizeAndRecord: async () => ok({ auditRef: "minimal-hours-import-audit" }) };
+  const staged = await importer.stage(archive.value, target.tenantId, "buyer-admin", authority,
+    { mapRef: () => "ignored-by-minimal-import" });
+  assert.ok(staged.ok, staged.ok ? "" : staged.error.kind);
+  const imported = await store.read(target);
+  assert.ok(imported.ok);
+  assert.equal(imported.value.capabilities.transfer, "unavailable");
+  assert.deepEqual(imported.value.staffSchedule?.scope, target);
+  assert.equal(imported.value.staffSchedule?.ownerRef, "disabled");
+  assert.deepEqual(imported.value.staffSchedule?.closedDates, ["2026-12-25"]);
+  const history = await store.listStaffScheduleChanges(target);
+  assert.ok(history.ok);
+  assert.deepEqual(history.value.entries.map(row => [row.version, row.enabled, row.previousEnabled]),
+    [["1", true, false]]);
+  const stop = await new PostgresLedger(db).readWriteStop(target);
+  assert.ok(stop.ok && stop.value.stopped);
+});
+
 test("default tenant importer rejects rich reference archives before persistence", async () => {
   const source = { tenantId: "minimal-import-rich-source", clinicId: "clinic", locationId: "location" };
   const target = { tenantId: "minimal-import-rich-target", clinicId: "buyer", locationId: "location" };
