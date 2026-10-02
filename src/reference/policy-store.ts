@@ -1,7 +1,8 @@
-import type { AfterHoursSettingAuditEntry, AfterHoursSettingAuditPage, AutomationSettingAuditEntry, AutomationSettingAuditPage, BookingSettingAuditEntry, BookingSettingAuditPage, UrgentSettingAuditEntry, UrgentSettingAuditPage, PolicyStore, PolicyFailure } from "../core/host.ts";
+import type { AfterHoursSettingAuditEntry, AfterHoursSettingAuditPage, AutomationSettingAuditEntry, AutomationSettingAuditPage, BookingSettingAuditEntry, BookingSettingAuditPage, StaffScheduleSettingAuditEntry, StaffScheduleSettingAuditPage, UrgentSettingAuditEntry, UrgentSettingAuditPage, PolicyStore, PolicyFailure } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
-import type { AfterHoursMode, ApprovedAfterHoursInfo, ApprovedUrgentResponse, CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
+import type { AfterHoursMode, ApprovedAfterHoursInfo, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
 import { validAfterHoursSetting } from "../core/after-hours-policy.ts";
+import { validApprovedStaffSchedule } from "../core/staff-schedule.ts";
 import { validUrgentResponseShape } from "../core/urgent-response.ts";
 import { READINESS_REQUIREMENTS, unprovenReadiness } from "../core/readiness.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
@@ -36,6 +37,7 @@ export type ImportedReferenceLocationPolicy = Readonly<{
   bookingHistory: readonly BookingSettingAuditEntry[];
   afterHoursHistory?: readonly AfterHoursSettingAuditEntry[];
   urgentHistory?: readonly UrgentSettingAuditEntry[];
+  staffScheduleHistory?: readonly StaffScheduleSettingAuditEntry[];
 }>;
 
 export type ImportedReferenceClinicAutomation = Readonly<{
@@ -51,6 +53,7 @@ export class MemoryPolicyStore implements PolicyStore {
   private readonly bookingChanges = new Map<string, BookingSettingAuditEntry[]>();
   private readonly afterHoursChanges = new Map<string, AfterHoursSettingAuditEntry[]>();
   private readonly urgentChanges = new Map<string, UrgentSettingAuditEntry[]>();
+  private readonly staffScheduleChanges = new Map<string, StaffScheduleSettingAuditEntry[]>();
   private readonly automationChanges = new Map<string, AutomationSettingAuditEntry[]>();
   private readonly hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly">;
   private readonly clock: () => string;
@@ -67,9 +70,10 @@ export class MemoryPolicyStore implements PolicyStore {
                       afterHoursHistory: readonly AfterHoursSettingAuditEntry[],
                       automationHistory: readonly AutomationSettingAuditEntry[], sourceAutomationVersion: number,
                       sourceAutomationEnabled: boolean, importActorRef: string, importedAt: string,
-                      urgentHistory: readonly UrgentSettingAuditEntry[] = []): MemoryPolicyStore {
+                      urgentHistory: readonly UrgentSettingAuditEntry[] = [],
+                      staffScheduleHistory: readonly StaffScheduleSettingAuditEntry[] = []): MemoryPolicyStore {
     return MemoryPolicyStore.fromImportedMany(
-      [{ scope, policy: sourceHead, bookingHistory, afterHoursHistory, urgentHistory }],
+      [{ scope, policy: sourceHead, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory }],
       [{ scope, history: automationHistory, sourceVersion: sourceAutomationVersion, sourceEnabled: sourceAutomationEnabled }],
       importActorRef, importedAt);
   }
@@ -94,6 +98,7 @@ export class MemoryPolicyStore implements PolicyStore {
       store.bookingChanges.set(key, changes);
       store.afterHoursChanges.set(key, structuredClone([...(location.afterHoursHistory ?? [])]));
       store.urgentChanges.set(key, structuredClone([...(location.urgentHistory ?? [])]));
+      store.staffScheduleChanges.set(key, structuredClone([...(location.staffScheduleHistory ?? [])]));
     }
     for (const clinic of clinics) {
       const key = clinicKey(clinic.scope);
@@ -236,6 +241,36 @@ export class MemoryPolicyStore implements PolicyStore {
   async listUrgentResponseChanges(scope: LocationScope, afterVersion?: number): Promise<Result<UrgentSettingAuditPage, PolicyFailure>> {
     if (afterVersion !== undefined && (!Number.isSafeInteger(afterVersion) || afterVersion < 0)) return err({ kind: "invalidValue" });
     const entries = (this.urgentChanges.get(scopeKey(scope)) ?? [])
+      .filter(item => Number(item.version) > (afterVersion ?? 0)).slice(0, 50);
+    return ok({ entries: structuredClone(entries),
+      ...(entries.length === 50 ? { nextAfterVersion: Number(entries[49]!.version) } : {}) });
+  }
+
+  async changeStaffSchedule(scope: LocationScope, expectedVersion: string, schedule: ApprovedStaffSchedule | undefined,
+                            actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+    if ((schedule !== undefined && (!validApprovedStaffSchedule(schedule, scope) || schedule.ownerRef !== actorRef)) ||
+        typeof actorRef !== "string" || !actorRef.trim() || actorRef.length > 256) return err({ kind: "invalidValue" });
+    const current = this.policies.get(scopeKey(scope)) ?? referenceDefaultPolicy(scope);
+    if (current.policyVersion !== expectedVersion) return err({ kind: "versionConflict" });
+    let changedAt: string;
+    try { changedAt = this.clock(); }
+    catch { return err({ kind: "storageFailure" }); }
+    if (!Number.isFinite(Date.parse(changedAt))) return err({ kind: "storageFailure" });
+    const { staffSchedule: previous, staffedCoverage: oldCoverage, staffedIntervals: oldIntervals, ...base } = current;
+    void oldCoverage; void oldIntervals;
+    const next: CallPolicy = { ...base, policyVersion: String(Number(current.policyVersion) + 1),
+      ...(schedule === undefined ? {} : { staffSchedule: structuredClone(schedule) }) };
+    this.policies.set(scopeKey(scope), structuredClone(next));
+    const history = this.staffScheduleChanges.get(scopeKey(scope)) ?? [];
+    history.push({ version: next.policyVersion, enabled: schedule !== undefined, previousEnabled: previous !== undefined,
+      ...(schedule === undefined ? {} : { scheduleVersion: schedule.version }), actorRef, changedAt });
+    this.staffScheduleChanges.set(scopeKey(scope), history);
+    return ok(structuredClone(this.effective(next)));
+  }
+
+  async listStaffScheduleChanges(scope: LocationScope, afterVersion?: number): Promise<Result<StaffScheduleSettingAuditPage, PolicyFailure>> {
+    if (afterVersion !== undefined && (!Number.isSafeInteger(afterVersion) || afterVersion < 0)) return err({ kind: "invalidValue" });
+    const entries = (this.staffScheduleChanges.get(scopeKey(scope)) ?? [])
       .filter(item => Number(item.version) > (afterVersion ?? 0)).slice(0, 50);
     return ok({ entries: structuredClone(entries),
       ...(entries.length === 50 ? { nextAfterVersion: Number(entries[49]!.version) } : {}) });

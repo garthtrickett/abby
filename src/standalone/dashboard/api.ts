@@ -1,8 +1,9 @@
 import { CALL_TERMINAL_REASONS, err, ok } from "../../core/model.ts";
-import type { AfterHoursMode, CallPolicy, Result, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
+import type { AfterHoursMode, CallPolicy, LocalStaffWindow, Result, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import { validAfterHoursSetting } from "../../core/after-hours-policy.ts";
+import { validApprovedStaffSchedule } from "../../core/staff-schedule.ts";
 import { validUrgentResponseShape } from "../../core/urgent-response.ts";
-import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
+import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
 import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor, GatewayCommand, GatewayFailure, GatewayReply } from "../../reference/command-gateway.ts";
 import { capabilityDescriptor } from "../../reference/capability-catalogue.ts";
@@ -36,6 +37,10 @@ export type DashboardPort = Readonly<{
   urgentAudit(afterVersion?: number): Promise<Result<UrgentSettingAuditPage, DashboardFailure>>;
   changeUrgentResponse(expectedVersion: string, script?: Readonly<{ version: string; approvedText: string;
     effectiveFrom: string; effectiveUntil: string }>): Promise<Result<CallPolicy, DashboardFailure>>;
+  staffScheduleAudit(afterVersion?: number): Promise<Result<StaffScheduleSettingAuditPage, DashboardFailure>>;
+  changeStaffSchedule(expectedVersion: string, schedule?: Readonly<{ version: string; effectiveFrom: string;
+    effectiveUntil: string; timeZone: string; weekly: readonly LocalStaffWindow[]; closedDates: readonly string[] }>):
+    Promise<Result<CallPolicy, DashboardFailure>>;
   callSummary(callId: string): Promise<Result<CallSummary, DashboardFailure>>;
   callOutcomes(afterCallId?: string): Promise<Result<CallOutcomePage, DashboardFailure>>;
   staffQueue(afterTaskKey?: string): Promise<Result<StaffQueuePage, DashboardFailure>>;
@@ -108,7 +113,8 @@ function policy(value: unknown): Result<CallPolicy, DashboardFailure> {
   return reply?.kind === "settings" && current && typeof current.policyVersion === "string" && typeof current.automationVersion === "string" && typeof current.automationEnabled === "boolean" && typeof current.bookingEnabled === "boolean" && record(current.capabilities)
     && record(current.scope) && validAfterHoursSetting(current.afterHoursMode ?? "staffRequest", current.afterHoursInfo,
       current.scope as CallPolicy["scope"]) &&
-      (current.urgentResponse === undefined || validUrgentResponseShape(current.urgentResponse, current.scope as CallPolicy["scope"]))
+      (current.urgentResponse === undefined || validUrgentResponseShape(current.urgentResponse, current.scope as CallPolicy["scope"])) &&
+      (current.staffSchedule === undefined || validApprovedStaffSchedule(current.staffSchedule, current.scope as CallPolicy["scope"]))
     ? ok(current as CallPolicy) : err({ kind: "malformed" });
 }
 
@@ -344,6 +350,30 @@ export class FetchDashboardPort implements DashboardPort {
       body: JSON.stringify({ expectedVersion, enabled: script !== undefined,
         ...(script === undefined ? {} : { scriptVersion: script.version, approvedText: script.approvedText,
           effectiveFrom: script.effectiveFrom, effectiveUntil: script.effectiveUntil }) }),
+    });
+    return result.ok ? policy(result.value) : result;
+  }
+
+  async staffScheduleAudit(afterVersion?: number): Promise<Result<StaffScheduleSettingAuditPage, DashboardFailure>> {
+    const result = await request(`/api/settings/staff-schedule-audit${afterVersion === undefined ? "" : `?after=${afterVersion}`}`);
+    if (!result.ok) return result;
+    const valid = matchesSchema(capabilityDescriptor("settings.routing.staffSchedule.audit.v1").resultSchema,
+      { ok: true, value: result.value });
+    const reply = record(result.value);
+    return valid && reply?.kind === "staffScheduleSettingAudit"
+      ? ok(reply.page as StaffScheduleSettingAuditPage) : err({ kind: "malformed" });
+  }
+
+  async changeStaffSchedule(expectedVersion: string, schedule?: Readonly<{ version: string; effectiveFrom: string;
+    effectiveUntil: string; timeZone: string; weekly: readonly LocalStaffWindow[]; closedDates: readonly string[] }>):
+    Promise<Result<CallPolicy, DashboardFailure>> {
+    const result = await request("/api/settings/staff-schedule", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "settings.routing.staffSchedule.change.v1", expectedVersion,
+        enabled: schedule !== undefined,
+        ...(schedule === undefined ? {} : { scheduleVersion: schedule.version,
+          effectiveFrom: schedule.effectiveFrom, effectiveUntil: schedule.effectiveUntil,
+          timeZone: schedule.timeZone, weekly: schedule.weekly, closedDates: schedule.closedDates }) }),
     });
     return result.ok ? policy(result.value) : result;
   }

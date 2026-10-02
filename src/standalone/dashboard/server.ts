@@ -3,9 +3,11 @@ import { createServer } from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { CommandGateway } from "../../reference/command-gateway.ts";
 import type { GatewayCommand, HostActor } from "../../reference/command-gateway.ts";
+import { capabilityDescriptor } from "../../reference/capability-catalogue.ts";
+import { matchesSchema } from "../../reference/schema-shapes.ts";
 import { publicSpeechGateStatus } from "../speech-gate-public-status.ts";
 
-const maxCommandBytes = 10_000;
+const maxCommandBytes = 24_000;
 const document = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body><main><div id="app"></div><div id="availability-setup"></div><div id="speech-gate"></div><div id="operational-daily"></div></main><script type="module" src="/app.js"></script></body></html>`;
 const setupCommands = new Set([
   "clinic.availability.businesses.list.v1", "clinic.availability.practitioners.list.v1",
@@ -191,6 +193,12 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       if (cursor !== null && (!/^(0|[1-9][0-9]*)$/.test(cursor) || !Number.isSafeInteger(Number(cursor)))) return json(response, 400, { ok: false, error: { kind: "invalid" } });
       command = { kind: "settings.routing.urgent.audit.v1", ...(cursor === null ? {} : { afterVersion: Number(cursor) }) };
     }
+    if (request.method === "GET" && url.pathname === "/api/settings/staff-schedule-audit") {
+      const cursor = url.searchParams.get("after");
+      if (cursor !== null && (!/^(0|[1-9][0-9]*)$/.test(cursor) || !Number.isSafeInteger(Number(cursor)))) return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      command = { kind: "settings.routing.staffSchedule.audit.v1",
+        ...(cursor === null ? {} : { afterVersion: Number(cursor) }) };
+    }
     if (request.method === "GET" && url.pathname === "/api/staff") {
       const afterTaskKey = url.searchParams.get("after");
       if (afterTaskKey !== null && (!afterTaskKey || afterTaskKey.length > 256)) return json(response, 400, { ok: false, error: { kind: "invalid" } });
@@ -248,6 +256,16 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
           scriptVersion: input.scriptVersion as string, approvedText: input.approvedText as string,
           effectiveFrom: input.effectiveFrom as string, effectiveUntil: input.effectiveUntil as string }
         : { kind: "settings.routing.urgent.change.v1", expectedVersion: input.expectedVersion, enabled: false };
+    }
+    if (request.method === "POST" && url.pathname === "/api/settings/staff-schedule") {
+      const origin = request.headers.origin;
+      if (origin && origin !== `http://${request.headers.host}`) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+      if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
+      const input = record(await body(request));
+      if (!input || !matchesSchema(capabilityDescriptor("settings.routing.staffSchedule.change.v1").inputSchema, input)) {
+        return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      }
+      command = input as GatewayCommand;
     }
     if (request.method === "POST" && ["/api/knowledge/draft", "/api/knowledge/approve", "/api/knowledge/revoke"].includes(url.pathname)) {
       const origin = request.headers.origin;

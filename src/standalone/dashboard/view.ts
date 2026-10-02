@@ -4,7 +4,7 @@ import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor } from "../../reference/command-gateway.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
-import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
+import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
 import type { WriteStopAuditPage, WriteStopStatus } from "../../core/write-stop.ts";
 import type { KnowledgeEntry } from "../../reference/knowledge-catalogue.ts";
 
@@ -32,6 +32,13 @@ export type DashboardState = {
   urgentText: string;
   urgentFrom: string;
   urgentUntil: string;
+  hoursAuditPage: StaffScheduleSettingAuditPage | undefined;
+  hoursVersion: string;
+  hoursTimeZone: string;
+  hoursWeekly: string;
+  hoursClosedDates: string;
+  hoursFrom: string;
+  hoursUntil: string;
   callIdInput: string;
   call: CallSummary | undefined;
   staffPage: StaffQueuePage | undefined;
@@ -64,6 +71,10 @@ export type DashboardActions = Readonly<{
   changeUrgentResponse(enabled: boolean): void;
   loadUrgentAudit(): void;
   loadMoreUrgentAudit(): void;
+  setHoursField(field: "hoursVersion" | "hoursTimeZone" | "hoursWeekly" | "hoursClosedDates" | "hoursFrom" | "hoursUntil", value: string): void;
+  changeStaffSchedule(enabled: boolean): void;
+  loadHoursAudit(): void;
+  loadMoreHoursAudit(): void;
   setCallId(value: string): void;
   loadCall(): void;
   loadStaff(): void;
@@ -79,6 +90,7 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
   const canChangeAutomation = state.capabilities.some(item => item.id === "settings.automation.enabled.change.v1");
   const canChangeAfterHours = state.capabilities.some(item => item.id === "settings.routing.afterHours.change.v1");
   const canChangeUrgent = state.capabilities.some(item => item.id === "settings.routing.urgent.change.v1");
+  const canChangeHours = state.capabilities.some(item => item.id === "settings.routing.staffSchedule.change.v1");
   const enabled = state.policy?.bookingEnabled ?? false;
   const automationEnabled = state.policy?.automationEnabled ?? false;
   const canChangeStaff = state.capabilities.some(item => item.id === "staff.change.v1");
@@ -184,6 +196,38 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
         ${state.urgentAuditPage ? html`<div aria-label="Urgent wording audit">
           ${state.urgentAuditPage.entries.length ? html`<ul>${state.urgentAuditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.enabled ? "approved" : "disabled"}${entry.scriptVersion ? ` · script ${entry.scriptVersion}` : ""} · ${entry.actorRef} · ${entry.changedAt}</li>`)}</ul>` : html`<p>No urgent wording changes recorded.</p>`}
           ${state.urgentAuditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreUrgentAudit()}>Load more urgent wording history</button>` : ""}
+        </div>` : html`<p class="muted">Setting history unavailable.</p>`}
+      </section>` : ""}
+      <section class="card" aria-labelledby="clinic-hours-title">
+        <h2 id="clinic-hours-title">Staffed transfer hours</h2>
+        <p class="status">${state.policy?.staffSchedule ? "Approved hours saved" : "No approved hours"}</p>
+        <p class="muted">A clinic admin approves local weekly hours and closed dates. A window can cross midnight, such as Mon 19:00-02:00. Changes apply to new calls and cannot enable a transfer route by themselves.</p>
+        ${canChangeHours && state.policy ? html`<div>
+          <label>Hours version <input aria-label="Hours version" .value=${state.hoursVersion}
+            @input=${(event: Event) => actions.setHoursField("hoursVersion", (event.target as HTMLInputElement).value)}></label>
+          <label>Clinic time zone <input aria-label="Clinic time zone" placeholder="Australia/Sydney" .value=${state.hoursTimeZone}
+            @input=${(event: Event) => actions.setHoursField("hoursTimeZone", (event.target as HTMLInputElement).value)}></label>
+          <label>Weekly staffed hours <textarea aria-label="Weekly staffed hours" placeholder="Mon 09:00-17:00&#10;Tue 09:00-17:00" .value=${state.hoursWeekly}
+            @input=${(event: Event) => actions.setHoursField("hoursWeekly", (event.target as HTMLTextAreaElement).value)}></textarea></label>
+          <label>Closed dates, one per line <textarea aria-label="Closed dates" placeholder="2026-12-25" .value=${state.hoursClosedDates}
+            @input=${(event: Event) => actions.setHoursField("hoursClosedDates", (event.target as HTMLTextAreaElement).value)}></textarea></label>
+          <label>Approval effective from (UTC) <input aria-label="Hours effective from" .value=${state.hoursFrom}
+            @input=${(event: Event) => actions.setHoursField("hoursFrom", (event.target as HTMLInputElement).value)}></label>
+          <label>Approval effective until (UTC) <input aria-label="Hours effective until" .value=${state.hoursUntil}
+            @input=${(event: Event) => actions.setHoursField("hoursUntil", (event.target as HTMLInputElement).value)}></label>
+          <button type="button" ?disabled=${state.busy || !state.hoursVersion.trim() || !state.hoursTimeZone.trim() ||
+            !state.hoursWeekly.trim() || !state.hoursFrom.trim() || !state.hoursUntil.trim()}
+            @click=${() => actions.changeStaffSchedule(true)}>Approve staffed hours</button>
+          <button type="button" ?disabled=${state.busy || !state.policy.staffSchedule}
+            @click=${() => actions.changeStaffSchedule(false)}>Disable staffed hours</button>
+        </div>` : html`<span class="pill">Admin only</span>`}
+      </section>
+      ${state.capabilities.some(item => item.id === "settings.routing.staffSchedule.audit.v1") ? html`<section class="card" aria-labelledby="hours-audit-title">
+        <div class="row"><h2 id="hours-audit-title">Staffed hours history</h2>
+          <button type="button" ?disabled=${state.busy} @click=${() => actions.loadHoursAudit()}>Refresh staffed hours history</button></div>
+        ${state.hoursAuditPage ? html`<div aria-label="Staffed hours audit">
+          ${state.hoursAuditPage.entries.length ? html`<ul>${state.hoursAuditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.enabled ? "approved" : "disabled"}${entry.scheduleVersion ? ` · hours ${entry.scheduleVersion}` : ""} · ${entry.actorRef} · ${entry.changedAt}</li>`)}</ul>` : html`<p>No staffed hours changes recorded.</p>`}
+          ${state.hoursAuditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreHoursAudit()}>Load more staffed hours history</button>` : ""}
         </div>` : html`<p class="muted">Setting history unavailable.</p>`}
       </section>` : ""}
       ${state.capabilities.some(item => item.id === "knowledge.list.v1") ? html`<section class="card" aria-labelledby="knowledge-title">

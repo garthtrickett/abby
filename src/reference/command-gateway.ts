@@ -1,6 +1,6 @@
-import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, UrgentSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
+import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
-import type { AfterHoursMode, ApprovedAfterHoursInfo, ApprovedUrgentResponse, CallPolicy, FinalCallerTurn, LocationScope, Result, StaffChangeRequest, StaffItem, TransitionFailure } from "../core/model.ts";
+import type { AfterHoursMode, ApprovedAfterHoursInfo, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, FinalCallerTurn, LocalStaffWindow, LocationScope, Result, StaffChangeRequest, StaffItem, TransitionFailure } from "../core/model.ts";
 import { TextReception } from "./text-reception.ts";
 import type { TextReceptionFailure } from "./text-reception.ts";
 import type { CallSummary } from "./call-review.ts";
@@ -48,6 +48,11 @@ export type GatewayCommand =
   | Readonly<{ kind: "settings.routing.urgent.change.v1"; expectedVersion: string; enabled: true;
     scriptVersion: string; approvedText: string; effectiveFrom: string; effectiveUntil: string }>
   | Readonly<{ kind: "settings.routing.urgent.audit.v1"; afterVersion?: number }>
+  | Readonly<{ kind: "settings.routing.staffSchedule.change.v1"; expectedVersion: string; enabled: false }>
+  | Readonly<{ kind: "settings.routing.staffSchedule.change.v1"; expectedVersion: string; enabled: true;
+    scheduleVersion: string; effectiveFrom: string; effectiveUntil: string; timeZone: string;
+    weekly: readonly LocalStaffWindow[]; closedDates: readonly string[] }>
+  | Readonly<{ kind: "settings.routing.staffSchedule.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "booking.propose.v2"; turn: FinalCallerTurn; verificationRef: string; offerRef: string; now: string }>
   | Readonly<{ kind: "calls.turn.model.v1"; turn: FinalCallerTurn; now: string }>
   | Readonly<{ kind: "knowledge.answer.v2"; turn: FinalCallerTurn; sourceRefs: readonly string[]; proposedText: string; now: string }>
@@ -86,6 +91,7 @@ export type GatewayReply =
   | Readonly<{ kind: "bookingSettingAudit"; page: BookingSettingAuditPage }>
   | Readonly<{ kind: "afterHoursSettingAudit"; page: AfterHoursSettingAuditPage }>
   | Readonly<{ kind: "urgentSettingAudit"; page: UrgentSettingAuditPage }>
+  | Readonly<{ kind: "staffScheduleSettingAudit"; page: StaffScheduleSettingAuditPage }>
   | Readonly<{ kind: "bookingProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "modelTurn"; progress: CallCommandProgress }>
   | Readonly<{ kind: "knowledgeAnswer"; progress: CallCommandProgress }>
@@ -168,6 +174,7 @@ export class CommandGateway {
         "settings.appointments.booking.enabled.change.v1", "settings.appointments.booking.audit.v1",
         "settings.routing.afterHours.change.v1", "settings.routing.afterHours.audit.v1",
         "settings.routing.urgent.change.v1", "settings.routing.urgent.audit.v1");
+      permitted.push("settings.routing.staffSchedule.change.v1", "settings.routing.staffSchedule.audit.v1");
       if (this.writeStopLedger) permitted.push("calls.writes.stop.v1", "calls.writes.stop.read.v1",
         "calls.writes.resume.v1", "calls.writes.stop.audit.v1");
     }
@@ -262,6 +269,20 @@ export class CommandGateway {
       case "settings.routing.urgent.audit.v1": {
         const result = await this.policy.listUrgentResponseChanges(this.actor.scope, command.afterVersion);
         return result.ok ? ok({ kind: "urgentSettingAudit", page: result.value }) : result;
+      }
+      case "settings.routing.staffSchedule.change.v1": {
+        const schedule: ApprovedStaffSchedule | undefined = command.enabled ? {
+          scope: this.actor.scope, version: command.scheduleVersion, ownerRef: this.actor.actorRef, approved: true,
+          effectiveFrom: command.effectiveFrom, effectiveUntil: command.effectiveUntil,
+          timeZone: command.timeZone, weekly: command.weekly, closedDates: command.closedDates,
+        } : undefined;
+        const result = await this.policy.changeStaffSchedule(this.actor.scope, command.expectedVersion,
+          schedule, this.actor.actorRef);
+        return result.ok ? ok({ kind: "settings", policy: result.value }) : result;
+      }
+      case "settings.routing.staffSchedule.audit.v1": {
+        const result = await this.policy.listStaffScheduleChanges(this.actor.scope, command.afterVersion);
+        return result.ok ? ok({ kind: "staffScheduleSettingAudit", page: result.value }) : result;
       }
       case "booking.propose.v2": {
         if (!command.turn.turnId || !command.turn.callId || !command.turn.text || !command.verificationRef || !command.offerRef) return err({ kind: "invalid" });

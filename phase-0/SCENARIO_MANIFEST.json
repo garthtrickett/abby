@@ -1,5 +1,5 @@
 {
-  "version": "1.53",
+  "version": "1.54",
   "source": "TECHNICAL_DESIGN.md Section 11",
   "fixtureIdPattern": "fixture-{lowercase scenario id}",
   "capabilityMappings": {
@@ -16,6 +16,8 @@
     "settings.routing.afterHours.audit.v1": ["E2E-229"],
     "settings.routing.urgent.change.v1": ["E2E-232"],
     "settings.routing.urgent.audit.v1": ["E2E-232"],
+    "settings.routing.staffSchedule.change.v1": ["E2E-244"],
+    "settings.routing.staffSchedule.audit.v1": ["E2E-244"],
     "booking.propose.v2": ["E2E-006", "E2E-064", "E2E-222", "E2E-226"],
     "calls.turn.model.v1": ["E2E-030", "E2E-076", "E2E-077", "E2E-078", "E2E-230", "E2E-231"],
     "knowledge.answer.v2": ["E2E-004", "E2E-058", "E2E-059", "E2E-060", "E2E-061", "E2E-223"],
@@ -49,7 +51,8 @@
     "clinic.availability.approval": ["E2E-194", "E2E-195", "E2E-200", "E2E-201", "E2E-209", "E2E-210", "E2E-211", "E2E-212", "E2E-214", "E2E-215"],
     "knowledge.approval": ["E2E-004", "E2E-223"],
     "routing.afterHoursMode": ["E2E-229"],
-    "routing.urgentResponse": ["E2E-232"]
+    "routing.urgentResponse": ["E2E-232"],
+    "routing.staffSchedule": ["E2E-244"]
   },
   "scenarios": [
     {"id": "E2E-001", "requirements": ["FR-01", "FR-20"], "fixtureFamily": "routing", "fixtureState": "planned", "intendedCompositions": ["standalone", "embedded"], "earliestPhase": 1, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}},
@@ -294,6 +297,7 @@
     {"id": "E2E-240", "requirements": ["FR-05", "FR-11", "FR-13", "FR-17", "FR-22"], "fixtureFamily": "voice-failure", "fixtureState": "syntheticImplemented", "intendedCompositions": ["embedded"], "earliestPhase": 2, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/text/model-journey.test.ts"]}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/embedded-signed-model-correction.test.ts", "test/voice/media-turn-controller.test.ts"]}, "observableAssertions": {"caller": "a signed embedded model turn completes its approved knowledge effect and speaks once; a later signed call hears only its corrected approved answer while the first model request stalls", "fault": "a single voiced frame cannot cancel the model; qualified correction aborts it and prevents a late old answer, knowledge result or host write; memory and PostgreSQL cases separately cancel a held knowledge read", "privacy": "caller turns stay transient and out of durable call state; the reference host stores only approved public knowledge and call metadata"}},
     {"id": "E2E-241", "requirements": ["FR-05", "FR-11", "FR-13", "FR-17", "FR-22"], "fixtureFamily": "voice-failure", "fixtureState": "syntheticImplemented", "intendedCompositions": ["embedded"], "earliestPhase": 2, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/embedded-signed-model-stop.test.ts"]}, "observableAssertions": {"caller": "a signed embedded caller hangs up while its model proposal is held and hears no answer", "fault": "transport closure aborts the proposal and ends the call before the model deadline; a late old proposal cannot speak or write", "privacy": "caller text stays out of durable call state; the canceled task is forgotten"}},
     {"id": "E2E-242", "requirements": ["FR-05", "FR-11", "FR-13", "FR-17", "FR-22"], "fixtureFamily": "voice-failure", "fixtureState": "syntheticImplemented", "intendedCompositions": ["embedded"], "earliestPhase": 2, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/embedded-signed-model-stop.test.ts"]}, "observableAssertions": {"caller": "a signed embedded caller hangs up while approved knowledge is being read and hears no answer", "fault": "transport closure aborts the knowledge read and ends the call before its deadline; a late old read cannot create answer evidence", "privacy": "caller text stays out of durable call state; the canceled task is forgotten"}},
-    {"id": "E2E-243", "requirements": ["FR-05", "FR-11", "FR-13", "FR-17", "FR-22"], "fixtureFamily": "voice-failure", "fixtureState": "syntheticImplemented", "intendedCompositions": ["embedded"], "earliestPhase": 2, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/embedded-signed-model-stop.test.ts"]}, "observableAssertions": {"caller": "a signed embedded caller corrects a request during a held approved-knowledge read and hears only the corrected approved source", "fault": "qualified correction aborts the old read and prevents its late result, old speech or host write", "privacy": "both caller turns stay out of durable call state; the canceled task is forgotten"}}
+    {"id": "E2E-243", "requirements": ["FR-05", "FR-11", "FR-13", "FR-17", "FR-22"], "fixtureFamily": "voice-failure", "fixtureState": "syntheticImplemented", "intendedCompositions": ["embedded"], "earliestPhase": 2, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/embedded-signed-model-stop.test.ts"]}, "observableAssertions": {"caller": "a signed embedded caller corrects a request during a held approved-knowledge read and hears only the corrected approved source", "fault": "qualified correction aborts the old read and prevents its late result, old speech or host write", "privacy": "both caller turns stay out of durable call state; the canceled task is forgotten"}},
+    {"id": "E2E-244", "requirements": ["FR-17", "FR-20"], "fixtureFamily": "settings-and-authority", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone", "embedded"], "earliestPhase": 2, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/browser/dashboard.spec.ts", "test/storage/postgres-minimal-config-archive.test.ts", "test/storage/postgres-minimal-config-import.test.ts"]}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/voice.test.ts"]}, "observableAssertions": {"caller": "a synthetic call admitted with clinic-admin approved local staffed hours can offer a live transfer, while a call admitted after disable speaks staffing uncertainty", "fault": "stale versions, invalid schedules, wrong owners and extra fields are rejected; active calls keep their captured approval and imported configuration keeps a separate audit", "privacy": "only public clinic schedule fields enter settings and archives; a patient-note field is rejected before storage, and standalone transfer remains unavailable"}}
   ]
 }
