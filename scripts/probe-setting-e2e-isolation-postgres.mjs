@@ -103,8 +103,14 @@ function checkedNode(output, ids) {
 async function runNode(entries, concurrency) {
   const ids = idsFor(entries);
   // Run whole files: Node's name filter can skip a nested E2E when its parent suite has no ID.
-  const output = await withFreshDatabase(env => execute(process.execPath, ["--test", `--test-concurrency=${concurrency}`,
-    ...entries.map(([file]) => file)], 600_000, env));
+  const files = entries.map(([file]) => file);
+  const output = await withFreshDatabase(env => execute(process.execPath,
+    ["scripts/ordered-node-e2e.mjs", JSON.stringify({ files, concurrency })], 600_000, env));
+  const events = output.split("\n").filter(line => line.startsWith("ABBY_NODE_EVENT "))
+    .map(line => JSON.parse(line.slice("ABBY_NODE_EVENT ".length)));
+  assert.deepEqual(events.filter(event => event.kind === "dispatched").map(event => event.file), files);
+  if (concurrency > 1 && files.length > 1) assert.ok(events.some(event => event.activeFiles > 1), "Node files did not overlap");
+  process.stdout.write(`Node dispatch: ${events.filter(event => event.kind === "dispatched").map(event => event.file).join(", ")}\n`);
   return checkedNode(output, ids);
 }
 

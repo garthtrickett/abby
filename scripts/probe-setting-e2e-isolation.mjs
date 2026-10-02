@@ -23,7 +23,7 @@ for (const { id, file } of cases) {
 }
 
 async function run(files, pattern, concurrency) {
-  const args = ["--test", `--test-concurrency=${concurrency}`, `--test-name-pattern=${pattern}`, ...files];
+  const args = ["scripts/ordered-node-e2e.mjs", JSON.stringify({ files, pattern, concurrency })];
   const child = spawn(process.execPath, args, { cwd: root, stdio: ["ignore", "pipe", "pipe"],
     signal: AbortSignal.timeout(120_000) });
   let output = "";
@@ -37,6 +37,11 @@ async function run(files, pattern, concurrency) {
   if (exitCode !== 0 || result.pass < 1 || result.fail !== 0) {
     throw new Error(`node ${args.join(" ")} exited ${exitCode}:\n${output.split("\n").slice(-55).join("\n")}`);
   }
+  const events = output.split("\n").filter(line => line.startsWith("ABBY_NODE_EVENT "))
+    .map(line => JSON.parse(line.slice("ABBY_NODE_EVENT ".length)));
+  assert.deepEqual(events.filter(event => event.kind === "dispatched").map(event => event.file), files);
+  if (concurrency > 1 && files.length > 1) assert.ok(events.some(event => event.activeFiles > 1), "Node files did not overlap");
+  process.stdout.write(`Node dispatch: ${events.filter(event => event.kind === "dispatched").map(event => event.file).join(", ")}\n`);
   return result;
 }
 
