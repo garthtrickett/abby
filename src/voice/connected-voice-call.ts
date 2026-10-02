@@ -177,14 +177,21 @@ export class ConnectedVoiceCall {
     if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
     try {
       if (turn.kind === "locationBound") this.scope = turn.receipt.scope;
+      let corrected = false;
       if (turn.kind === "callerTurn") {
-        const drained = await this.call.drainEffects(frame.capturedAt);
-        if (!drained.ok) {
-          await this.close(frame.capturedAt, "sessionClosed");
-          return drained;
+        const pendingModel = this.call.pendingModelEffect(turn);
+        try {
+          const drained = await this.call.drainVoiceEffects(frame.capturedAt);
+          if (!drained.ok) {
+            await this.close(frame.capturedAt, "sessionClosed");
+            return drained;
+          }
+        } finally {
+          if (pendingModel) corrected = this.media.endPendingEffect();
         }
       }
       if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
+      if (corrected) return ok({ kind: "listening" });
       const delivery = await this.checkedDelivery(await this.call.dispatchPending(frame.capturedAt), frame.capturedAt);
       if (!delivery.ok) return delivery;
       return ok({ kind: "turnCompleted", turn, delivery: delivery.value });

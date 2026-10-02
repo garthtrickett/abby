@@ -73,8 +73,9 @@ export class EffectRecovery {
     catch { if (effect.kind === "modelKnowledge") return { effectId: ref.effectId, kind: "hostUnavailable" }; }
     if (effect.kind === "modelKnowledge" && this.knowledgeLookup && !knowledge) return { effectId: ref.effectId, kind: "hostUnavailable" };
     try {
-      await new EffectWorker(runtime, host, model, knowledge, { ...this.workerOptions, signal, leaseGuard: guard }).process(ref.callId, ref.effectId, now);
-      return "processed";
+      const outcome = await new EffectWorker(runtime, host, model, knowledge,
+        { ...this.workerOptions, signal, leaseGuard: guard }).process(ref.callId, ref.effectId, now);
+      return outcome === "canceled" ? "deferred" : "processed";
     } catch {
       const latest = await runtime.read(ref.callId);
       if (latest.ok && (effect.kind === "operatorAlert" || effect.kind === "operatorAlertReconcile") &&

@@ -16,6 +16,7 @@ export type ModelTaskFailure = Readonly<{ kind: "keyMismatch" | "capacityExceede
 type Task = {
   input: ModelInput;
   fingerprint: string;
+  cancel: AbortController;
   answer?: Extract<ModelProposal, { kind: "answer" }>;
   expiresAt: number;
   timer: ReturnType<typeof setTimeout>;
@@ -73,9 +74,9 @@ export class ModelWork {
     if (existing) return existing.fingerprint === fingerprint ? ok({ taskRef, created: false }) : err({ kind: "keyMismatch" });
     if (this.tasks.size >= this.maxTasks) return err({ kind: "capacityExceeded" });
     const expiresAt = Date.now() + TASK_TTL_MS;
-    const timer = setTimeout(() => this.tasks.delete(taskRef), TASK_TTL_MS);
+    const timer = setTimeout(() => this.forget(taskRef), TASK_TTL_MS);
     timer.unref();
-    this.tasks.set(taskRef, { input: structuredClone(input), fingerprint, expiresAt, timer });
+    this.tasks.set(taskRef, { input: structuredClone(input), fingerprint, cancel: new AbortController(), expiresAt, timer });
     return ok({ taskRef, created: true });
   }
 
@@ -114,6 +115,12 @@ export class ModelWork {
   }
 
   forgetCall(scope: ModelInput["scope"], callId: string): void {
+    for (const [taskRef, task] of this.tasks) {
+      if (task.input.turn.callId === callId && task.input.scope.tenantId === scope.tenantId &&
+          task.input.scope.clinicId === scope.clinicId && task.input.scope.locationId === scope.locationId) {
+        this.forget(taskRef);
+      }
+    }
     const key = callHistoryKey(scope, callId);
     const current = this.histories.get(key);
     if (current) clearTimeout(current.timer);
@@ -134,6 +141,23 @@ export class ModelWork {
     return task ? structuredClone(task.input) : undefined;
   }
 
+  signal(taskRef: string): AbortSignal | undefined {
+    return this.current(taskRef)?.cancel.signal;
+  }
+
+  /** A qualified caller correction stops only transient model work for this exact call. */
+  cancelCall(scope: ModelInput["scope"], callId: string): boolean {
+    let canceled = false;
+    for (const task of this.tasks.values()) {
+      if (task.input.turn.callId !== callId || task.input.scope.tenantId !== scope.tenantId ||
+          task.input.scope.clinicId !== scope.clinicId || task.input.scope.locationId !== scope.locationId ||
+          task.cancel.signal.aborted) continue;
+      task.cancel.abort();
+      canceled = true;
+    }
+    return canceled;
+  }
+
   rememberAnswer(taskRef: string, answer: Extract<ModelProposal, { kind: "answer" }>): boolean {
     const task = this.current(taskRef);
     if (!task) return false;
@@ -148,7 +172,10 @@ export class ModelWork {
 
   forget(taskRef: string): void {
     const task = this.tasks.get(taskRef);
-    if (task) clearTimeout(task.timer);
+    if (task) {
+      task.cancel.abort();
+      clearTimeout(task.timer);
+    }
     this.tasks.delete(taskRef);
   }
 }

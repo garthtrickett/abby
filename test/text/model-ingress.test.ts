@@ -83,3 +83,17 @@ test("model transport exception and deadline are typed failures", async () => {
   assert.deepEqual(await stalled.propose(input, 5), { ok: false, error: { kind: "deadlineExceeded" } });
   assert.equal(aborted, true);
 });
+
+test("a caller correction aborts a pending model request before its deadline", async () => {
+  const correction = new AbortController();
+  let providerAborted = false;
+  const ingress = new ModelIngress({ propose(_request, signal) {
+    signal.addEventListener("abort", () => { providerAborted = true; }, { once: true });
+    return new Promise(() => {});
+  } });
+  const pending = ingress.propose(input, 10_000, correction.signal);
+  await Promise.resolve();
+  correction.abort();
+  assert.deepEqual(await pending, { ok: false, error: { kind: "unavailable" } });
+  assert.equal(providerAborted, true);
+});

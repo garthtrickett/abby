@@ -83,6 +83,10 @@ export class VoiceSession {
     return true;
   }
 
+  supersedePendingModel(): boolean {
+    return this.attached && !this.speechOpen && this.reception.cancelPendingModel(this.scope, this.callId);
+  }
+
   constructor(callId: string, sessionId: string, scope: LocationScope, ledger: LedgerStore, reception: TextReception, playback: PlaybackPort, resolveIntent: IntentResolver, transfer?: TransferPort, monotonicNow: () => number = () => performance.now(), transient?: TransientPresentationConfig) {
     if (transient && (transient.greeting.approved !== true ||
         transient.greeting.scope.tenantId !== scope.tenantId ||
@@ -216,6 +220,7 @@ export class VoiceSession {
       } catch { /* no terminal transport evidence */ }
     }
     const began = await this.runtime.beginSpeech(this.callId, this.sessionId, now);
+    if (began.ok) this.reception.forgetCanceledModelTasks(began.value);
     await clear;
     if (!began.ok) {
       this.attached = false;
@@ -474,6 +479,14 @@ export class VoiceSession {
     const result = await this.reception.drain(this.scope, this.callId, now);
     if (result.ok) this.rememberPending(result.value);
     return result;
+  }
+
+  /** A model answer needs its separately validated knowledge effect before voice can present it. */
+  async drainVoiceEffects(now: string): Promise<Result<CallState, VoiceSessionFailure>> {
+    const first = await this.drainEffects(now);
+    return first.ok && Object.values(first.value.effects).some(effect =>
+      effect.kind === "modelKnowledge" && effect.status === "pending")
+      ? this.drainEffects(now) : first;
   }
 
   async end(now: string, reason: "callerDisconnected" | "sessionClosed" = "sessionClosed"): Promise<Result<CallState, VoiceSessionFailure>> {

@@ -135,8 +135,9 @@ export class ModelIngress {
 
   constructor(port: RawModelPort) { this.port = port; }
 
-  async propose(input: ModelInput, deadlineMs: number): Promise<Result<ModelProposal, ModelFailure>> {
+  async propose(input: ModelInput, deadlineMs: number, cancel?: AbortSignal): Promise<Result<ModelProposal, ModelFailure>> {
     if (!Number.isSafeInteger(deadlineMs) || deadlineMs < 1 || deadlineMs > 30_000) return err({ kind: "malformed" });
+    if (cancel?.aborted) return err({ kind: "unavailable" });
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const deadline = new Promise<Result<ModelProposal, ModelFailure>>(resolve => {
@@ -145,10 +146,24 @@ export class ModelIngress {
         controller.abort();
       }, deadlineMs);
     });
-    const proposal = Promise.resolve().then(() => this.port.propose(input, controller.signal))
+    let onCancel: (() => void) | undefined;
+    const canceled = new Promise<Result<ModelProposal, ModelFailure>>(resolve => {
+      onCancel = () => {
+        controller.abort();
+        resolve(err({ kind: "unavailable" }));
+      };
+      cancel?.addEventListener("abort", onCancel, { once: true });
+    });
+    const proposal = Promise.resolve().then(() => {
+      if (controller.signal.aborted) throw new Error("modelCanceled");
+      return this.port.propose(input, controller.signal);
+    })
       .then(decodeModelProposal)
       .catch(() => err({ kind: "unavailable" } as const));
-    try { return await Promise.race([proposal, deadline]); }
-    finally { if (timer) clearTimeout(timer); }
+    try { return await Promise.race([proposal, deadline, canceled]); }
+    finally {
+      if (timer) clearTimeout(timer);
+      if (cancel && onCancel) cancel.removeEventListener("abort", onCancel);
+    }
   }
 }

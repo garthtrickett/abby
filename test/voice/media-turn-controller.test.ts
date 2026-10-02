@@ -51,6 +51,40 @@ test("PCM frames trigger Abby speech onset and silence endpointing before a fina
   assert.equal((await media.acceptMedia(frame(7, 2_000))).ok, false);
 });
 
+test("E2E-240 qualified correction during transcript flush fences a newly committed model effect", async () => {
+  let releaseFlush!: () => void;
+  let reachedFlush!: () => void;
+  const flushGate = new Promise<void>(resolve => { releaseFlush = resolve; });
+  const flushing = new Promise<void>(resolve => { reachedFlush = resolve; });
+  let starts = 0;
+  let modelCanceled = 0;
+  const media = new MediaTurnController("session", {
+    async speechStarted() { return ok(++starts); },
+    acceptTranscript() { return ok(undefined); },
+    async finishTurn() { return ok({ kind: "model" as const }); },
+    pendingModelEffect(value) { return value.kind === "model"; },
+    supersedePendingIntent() { return false; },
+    supersedePendingModel() { modelCanceled += 1; return true; },
+  }, {
+    async accept() { return ok([]); },
+    async flush() { reachedFlush(); await flushGate; return ok([]); },
+  }, { silenceMs: 100 });
+  value(await media.acceptMedia(frame(0, 2_000)));
+  value(await media.acceptMedia(frame(1, 2_000)));
+  for (let sequence = 2; sequence < 6; sequence += 1) value(await media.acceptMedia(frame(sequence, 0)));
+  const finishing = media.acceptMedia(frame(6, 0));
+  await flushing;
+  media.observePendingCorrection(frame(7, 2_000));
+  media.observePendingCorrection(frame(8, 2_000));
+  releaseFlush();
+  assert.equal(value(await finishing).kind, "listening");
+  assert.equal(modelCanceled, 1);
+  value(await media.acceptMedia(frame(7, 2_000)));
+  assert.equal(value(await media.acceptMedia(frame(8, 2_000))).kind, "speaking");
+  assert.equal(starts, 2);
+  await media.stop();
+});
+
 function value<T>(result: { ok: true; value: T } | { ok: false; error: { kind: string } }): T {
   assert.ok(result.ok, result.ok ? "" : result.error.kind);
   return result.value;
