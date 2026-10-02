@@ -76,8 +76,19 @@ test("E2E-188 transient model history expires, stays scoped, and cannot survive 
   assert.deepEqual(model.priorCallerTurns(scope, "call"), []);
   model.recordAcceptedTurn(scope, "call", "Fresh request");
   assert.deepEqual(model.priorCallerTurns(scope, "call"), ["Fresh request"]);
+  const base = { turn: { callId: "call", turnId: "turn", text: "Private request", quality: "clear" as const,
+    at: now }, knowledge: [], conversationRevision: 1, policyVersion: "policy-v1", promptVersion: "prompt-v1" };
+  const own = value(model.prepare({ ...base, scope }));
+  const foreignScope = { ...scope, tenantId: "other-tenant" };
+  const foreign = value(model.prepare({ ...base, scope: foreignScope }));
+  assert.equal(model.cancelCall(scope, "call"), true);
+  assert.equal(model.signal(own.taskRef)?.aborted, true);
+  assert.equal(model.signal(foreign.taskRef)?.aborted, false);
   model.forgetCall(scope, "call");
   assert.deepEqual(model.priorCallerTurns(scope, "call"), []);
+  assert.equal(model.input(own.taskRef), undefined);
+  assert.ok(model.input(foreign.taskRef));
+  model.forgetCall(foreignScope, "call");
 });
 
 for (const kind of kinds) {
@@ -389,6 +400,44 @@ for (const kind of kinds) {
     assert.equal(state.callerMessages.includes("We open at 9 am."), false);
     assert.equal(Object.values(state.presentations).length, 0);
     assert.equal(app.host.bookings(app.scope).length, 0);
+  });
+
+  test(`E2E-240 ${kind}: correction during approved-knowledge lookup leaves the older model effect pending until SAM cancels it`, async () => {
+    const app = fixture(kind, { schemaVersion: 1, kind: "answer", sourceRefs: ["hours"],
+      proposedText: "We open at 9 am." });
+    await start(app);
+    const first = app.turn("knowledge-inflight", "What time do you open?");
+    value(await app.submit(first));
+    value(await app.reception.drain(app.scope, app.callId, now));
+    const effect = Object.values((await app.state()).effects).find(item => item.kind === "modelKnowledge" &&
+      item.status === "pending");
+    assert.ok(effect && effect.kind === "modelKnowledge");
+    const original = app.host.readKnowledge.bind(app.host);
+    let started!: () => void;
+    const reading = new Promise<void>(resolve => { started = resolve; });
+    let aborted = 0;
+    const knowledge = { readKnowledge: (scope: LocationScope, refs: readonly string[], signal?: AbortSignal) => new Promise<Awaited<ReturnType<typeof original>>>(resolve => {
+      started();
+      signal?.addEventListener("abort", () => {
+        aborted += 1;
+        setTimeout(() => { void original(scope, refs).then(resolve); }, 50);
+      }, { once: true });
+    }) };
+    const worker = new EffectWorker(new CallRuntime(app.ledger, app.scope), app.host, app.model, knowledge);
+    const work = worker.process(app.callId, effect.id, now);
+    await reading;
+    assert.equal(app.model.cancelCall(app.scope, app.callId), true);
+    assert.equal(await work, "canceled");
+    assert.equal(aborted, 1);
+    assert.equal((await app.state()).effects[effect.id]?.status, "pending");
+    value(await app.submit(app.turn("knowledge-correction", "Actually, ask about parking")));
+    await new Promise(resolve => setTimeout(resolve, 80));
+    const state = await app.state();
+    assert.equal(state.effects[effect.id]?.status, "canceled");
+    assert.deepEqual(state.knowledgeAnswers, []);
+    assert.equal(state.callerMessages.includes("We open at 9 am."), false);
+    assert.equal(app.model.input(effect.taskRef), undefined);
+    assert.equal(JSON.stringify(state).includes(first.text), false);
   });
 }
 

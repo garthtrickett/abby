@@ -23,7 +23,9 @@ export type MediaTurnTarget<T, F> = Readonly<{
   speechStarted(now: string): Promise<Result<number, F>>;
   acceptTranscript(event: TranscriptEvent): Result<void, F>;
   finishTurn(now: string): Promise<Result<T, F>>;
+  pendingModelEffect?(value: T): boolean;
   supersedePendingIntent?(): boolean;
+  supersedePendingModel?(): boolean;
 }>;
 
 export type MediaTurnOptions = Readonly<{
@@ -73,6 +75,7 @@ export class MediaTurnController<T, F> {
   private turnMs = 0;
   private trailingSilenceMs = 0;
   private pendingTurn = false;
+  private pendingEffect = false;
   private correctionMs = 0;
   private correctionRequested = false;
 
@@ -80,9 +83,24 @@ export class MediaTurnController<T, F> {
     return !this.closed && this.queuedFrames === 0 && this.generation === undefined && this.candidateMs === 0;
   }
 
-  /** Observe validated wire frames while a finished turn awaits its classifier. */
+  /** Keep wire-order media flowing while transient model work is being drained. */
+  private beginPendingEffect(): void {
+    this.pendingEffect = true;
+    this.correctionMs = 0;
+    this.correctionRequested = false;
+  }
+
+  endPendingEffect(): boolean {
+    const corrected = this.correctionRequested;
+    this.pendingEffect = false;
+    this.correctionMs = 0;
+    this.correctionRequested = false;
+    return corrected;
+  }
+
+  /** Observe validated wire frames while a finished turn awaits its classifier or model effect. */
   observePendingCorrection(frame: MediaFrame): void {
-    if (!this.pendingTurn || this.correctionRequested || this.closed) return;
+    if ((!this.pendingTurn && !this.pendingEffect) || this.correctionRequested || this.closed) return;
     const durationMs = decodedFrame(frame, this.sessionId);
     if (durationMs === undefined) return;
     if (averageAmplitude(frame.bytes) < this.speechThreshold) {
@@ -90,8 +108,14 @@ export class MediaTurnController<T, F> {
       return;
     }
     this.correctionMs += durationMs;
-    if (this.correctionMs >= this.speechStartMs && this.target.supersedePendingIntent?.()) {
-      this.correctionRequested = true;
+    if (this.correctionMs >= this.speechStartMs) {
+      if (this.pendingEffect) {
+        this.correctionRequested = true;
+        this.target.supersedePendingModel?.();
+      } else {
+        this.correctionRequested = true;
+        this.target.supersedePendingIntent?.();
+      }
     }
   }
 
@@ -198,18 +222,21 @@ export class MediaTurnController<T, F> {
     if (!accepted.ok) { this.closed = true; return accepted; }
     this.trailingSilenceMs = voiced ? 0 : this.trailingSilenceMs + durationMs;
     if (this.trailingSilenceMs < this.silenceMs) return ok({ kind: "speaking" });
-    const flushed = await this.transcriptionResult(signal => this.transcription.flush(this.generation!, signal));
-    if (!flushed?.ok) { this.closed = true; return err({ kind: "transcriptionUnavailable" }); }
-    const finals = await this.acceptEvents(flushed.value);
-    if (!finals.ok) { this.closed = true; return finals; }
-    let completed: Result<T, F>;
     this.pendingTurn = true;
     this.correctionMs = 0;
     this.correctionRequested = false;
-    try { completed = await this.target.finishTurn(frame.capturedAt); }
+    let completed: Result<T, F>;
+    try {
+      const flushed = await this.transcriptionResult(signal => this.transcription.flush(this.generation!, signal));
+      if (!flushed?.ok) { this.closed = true; return err({ kind: "transcriptionUnavailable" }); }
+      const finals = await this.acceptEvents(flushed.value);
+      if (!finals.ok) { this.closed = true; return finals; }
+      completed = await this.target.finishTurn(frame.capturedAt);
+    }
     catch { this.closed = true; return err({ kind: "targetUnavailable" }); }
     finally { this.pendingTurn = false; }
     const corrected = this.correctionRequested;
+    const pendingModel = completed.ok && this.target.pendingModelEffect?.(completed.value) === true;
     this.correctionRequested = false;
     this.correctionMs = 0;
     this.generation = undefined;
@@ -217,6 +244,13 @@ export class MediaTurnController<T, F> {
     this.trailingSilenceMs = 0;
     if (corrected && !completed.ok &&
         (completed.error as Readonly<{ kind?: unknown }>).kind === "staleTurn") return ok({ kind: "listening" });
+    if (pendingModel) {
+      if (corrected) {
+        this.target.supersedePendingModel?.();
+        return ok({ kind: "listening" });
+      }
+      this.beginPendingEffect();
+    }
     return completed.ok ? ok({ kind: "turnCompleted", value: completed.value }) : completed;
   }
 

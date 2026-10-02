@@ -45,6 +45,9 @@ export class TextReception {
   availabilityEnabled(): boolean { return this.availability !== undefined; }
   appointmentReadEnabled(): boolean { return this.appointments !== undefined; }
   modelEnabled(): boolean { return this.model !== undefined; }
+  cancelPendingModel(scope: LocationScope, callId: string): boolean {
+    return this.model?.cancelCall(scope, callId) ?? false;
+  }
   staffLifecycleEnabled(): boolean { return !!this.host.advanceTask && !!this.host.reconcileTaskChange; }
 
   private runtime(scope: LocationScope): CallRuntime {
@@ -130,6 +133,14 @@ export class TextReception {
     for (const effect of Object.values(before.effects)) {
       if ((effect.kind === "model" || effect.kind === "modelKnowledge") && effect.status === "pending" &&
           after.effects[effect.id]?.status === "canceled") this.model?.forget(effect.taskRef);
+    }
+  }
+
+  forgetCanceledModelTasks(state: CallState): void {
+    for (const effect of Object.values(state.effects)) {
+      if ((effect.kind === "model" || effect.kind === "modelKnowledge") && effect.status === "canceled") {
+        this.model?.forget(effect.taskRef);
+      }
     }
   }
 
@@ -359,7 +370,9 @@ export class TextReception {
         const worker = new EffectWorker(runtime, this.host, this.model, this.knowledge, { signal, leaseGuard: guard });
         for (const effect of Object.values(read.value.effects)) {
           if (effect.status !== "pending") continue;
-          try { await worker.process(callId, effect.id, now); }
+          try {
+            if (await worker.process(callId, effect.id, now) === "canceled") break;
+          }
           catch { return err({ kind: "effectFailure" as const }); }
         }
         return runtime.read(callId);

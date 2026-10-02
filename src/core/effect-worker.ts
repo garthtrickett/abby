@@ -32,8 +32,9 @@ export class EffectWorker {
     this.signal = options.signal;
   }
 
-  private async hostCall<Value>(work: (signal: AbortSignal) => Promise<Value>): Promise<Value> {
+  private async hostCall<Value>(work: (signal: AbortSignal) => Promise<Value>, cancel?: AbortSignal): Promise<Value> {
     if (this.signal?.aborted) throw new Error("effectLeaseLost");
+    if (cancel?.aborted) throw new Error("effectCanceled");
     let handle: unknown;
     const controller = new AbortController();
     const timeout = new Promise<never>((_, reject) => {
@@ -48,14 +49,24 @@ export class EffectWorker {
       onLeaseAbort = () => { controller.abort(); reject(new Error("effectLeaseLost")); };
       this.signal.addEventListener("abort", onLeaseAbort, { once: true });
     });
-    try { return await Promise.race([Promise.resolve().then(() => work(controller.signal)), timeout, leaseLost]); }
+    let onCancel: (() => void) | undefined;
+    const canceled = new Promise<never>((_, reject) => {
+      if (!cancel) return;
+      onCancel = () => { controller.abort(); reject(new Error("effectCanceled")); };
+      cancel.addEventListener("abort", onCancel, { once: true });
+    });
+    try { return await Promise.race([Promise.resolve().then(() => {
+      if (controller.signal.aborted) throw new Error("effectCanceled");
+      return work(controller.signal);
+    }), timeout, leaseLost, canceled]); }
     finally {
       this.timer.cancel(handle);
       if (this.signal && onLeaseAbort) this.signal.removeEventListener("abort", onLeaseAbort);
+      if (cancel && onCancel) cancel.removeEventListener("abort", onCancel);
     }
   }
 
-  async process(callId: string, effectId: string, now: string): Promise<void> {
+  async process(callId: string, effectId: string, now: string): Promise<void | "canceled"> {
     if (this.signal?.aborted) throw new Error("effectLeaseLost");
     const read = await this.runtime.read(callId);
     if (!read.ok) throw new Error(read.error.kind);
@@ -64,13 +75,16 @@ export class EffectWorker {
     if (effect.kind === "model") {
       if (effect.status !== "pending") throw new Error("invalidTransition");
       const input = this.model?.input(effect.taskRef);
+      const modelSignal = this.model?.signal(effect.taskRef);
+      if (modelSignal?.aborted) return "canceled";
       const valid = input && input.turn.callId === callId && input.turn.turnId === effect.turnId &&
         input.conversationRevision === effect.conversationRevision && input.policyVersion === read.value.policy.policyVersion &&
         input.scope.tenantId === read.value.policy.scope.tenantId && input.scope.clinicId === read.value.policy.scope.clinicId &&
         input.scope.locationId === read.value.policy.scope.locationId;
       const result = valid && this.model
-        ? await this.model.ingress.propose(input, this.model.deadlineMs)
+        ? await this.model.ingress.propose(input, this.model.deadlineMs, modelSignal)
         : err({ kind: "unavailable" as const });
+      if (modelSignal?.aborted) return "canceled";
       if (result.ok && result.value.kind === "answer") this.model?.rememberAnswer(effect.taskRef, result.value);
       const resolved = await this.runtime.acceptModelResult(callId, effectId, result, now);
       if (!resolved.ok) throw new Error(resolved.error.kind);
@@ -79,13 +93,19 @@ export class EffectWorker {
     }
     if (effect.kind === "modelKnowledge") {
       if (effect.status !== "pending") throw new Error("invalidTransition");
+      const modelSignal = this.model?.signal(effect.taskRef);
+      if (modelSignal?.aborted) return "canceled";
       const answer = this.model?.answer(effect.taskRef);
       const valid = answer && createHash("sha256").update(JSON.stringify(answer.sourceRefs)).digest("hex") === effect.sourceRefsDigest;
       let result: Awaited<ReturnType<KnowledgeHost["readKnowledge"]>> = err({ kind: "unavailable" });
       if (valid && this.knowledge) {
-        try { result = await this.hostCall(signal => this.knowledge!.readKnowledge(read.value.policy.scope, answer.sourceRefs, signal)); }
-        catch { result = err({ kind: "unavailable" }); }
+        try { result = await this.hostCall(signal => this.knowledge!.readKnowledge(read.value.policy.scope, answer.sourceRefs, signal), modelSignal); }
+        catch {
+          if (modelSignal?.aborted) return "canceled";
+          result = err({ kind: "unavailable" });
+        }
       }
+      if (modelSignal?.aborted) return "canceled";
       const resolved = await this.runtime.acceptModelKnowledge(callId, effectId, result, now, valid ? answer.proposedText : undefined);
       if (!resolved.ok) throw new Error(resolved.error.kind);
       this.model?.forget(effect.taskRef);

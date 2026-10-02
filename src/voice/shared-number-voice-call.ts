@@ -139,6 +139,15 @@ export class SharedNumberVoiceCall {
     return !this.closing && !this.terminal && !!this.full?.supersedePendingIntent();
   }
 
+  supersedePendingModel(): boolean {
+    return !this.closing && !this.terminal && !!this.full?.supersedePendingModel();
+  }
+
+  pendingModelEffect(turn: SharedVoiceTurn): boolean {
+    return turn.kind === "callerTurn" && Object.values(turn.state.effects).some(effect =>
+      effect.kind === "model" && effect.status === "pending");
+  }
+
   acceptTranscript(event: TranscriptEvent): Result<void, SharedVoiceFailure> {
     if (this.closing || this.terminal) return err({ kind: "disconnected" });
     if (this.prelocation) return this.prelocation.acceptTranscript(event);
@@ -204,6 +213,10 @@ export class SharedNumberVoiceCall {
 
   drainEffects(now: string): Promise<Result<CallState, SharedVoiceFailure>> {
     return this.full?.drainEffects(now) ?? Promise.resolve(err({ kind: "sessionUnknown" }));
+  }
+
+  drainVoiceEffects(now: string): Promise<Result<CallState, SharedVoiceFailure>> {
+    return this.full?.drainVoiceEffects(now) ?? Promise.resolve(err({ kind: "sessionUnknown" }));
   }
 
   async end(now: string, reason: "callerDisconnected" | "sessionClosed" = "sessionClosed"):
