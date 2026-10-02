@@ -12,30 +12,7 @@ import { PostgresClinikoApprovalStore } from "../../src/storage/postgres-cliniko
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 import { seedSyntheticCatalogueApproval } from "../support/seed-synthetic-catalogue-approval.ts";
-
-/** Wait for this exact child to bind before routing signed traffic to its assigned port. */
-function boundPort(child: ReturnType<typeof spawn>): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { cleanup(); reject(new Error("local voice listener did not bind")); }, 20_000);
-    const cleanup = () => {
-      clearTimeout(timer);
-      child.off("message", onMessage);
-      child.off("exit", onExit);
-    };
-    const onMessage = (message: unknown) => {
-      if (typeof message !== "object" || message === null || !("kind" in message) ||
-          message.kind !== "listenerReady" || !("port" in message) ||
-          typeof message.port !== "number" || !Number.isInteger(message.port) ||
-          message.port < 1 || message.port > 65_535) return;
-      cleanup();
-      resolve(message.port);
-    };
-    const onExit = () => { cleanup(); reject(new Error("local voice listener exited before binding")); };
-    child.on("message", onMessage);
-    child.on("exit", onExit);
-    if (child.exitCode !== null) onExit();
-  });
-}
+import { waitForVoiceListener } from "../support/child-voice-listener.ts";
 
 async function healthy(port: number): Promise<Response> {
   const deadline = Date.now() + 20_000;
@@ -118,7 +95,7 @@ test("E2E-171 E2E-218 local voice runner prunes expired operations at startup an
     assert.equal((await once(disabledWeekInstruction, "exit"))[0], 1);
     child = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
       cwd: new URL("../../", import.meta.url), env, stdio: ["ignore", "pipe", "pipe", "ipc"] });
-    port = await boundPort(child);
+    port = await waitForVoiceListener(child);
     const health = await healthy(port);
     assert.equal(health.status, 200);
     assert.equal(await health.text(), "ok");
@@ -217,7 +194,7 @@ test("E2E-172 E2E-185 E2E-209 E2E-217 isolated voice runner enforces durable app
         clinikoMethods.push(message.method);
       }
     });
-    port = await boundPort(child);
+    port = await waitForVoiceListener(child);
     assert.equal((await healthy(port)).status, 200);
     assert.equal((await fetch(`http://127.0.0.1:${port}/readyz`)).status, 503);
     const operationalUrl = `http://127.0.0.1:${port}/internal/operations`;
