@@ -39,6 +39,7 @@ for (const [setting, ids] of Object.entries(manifest.settingMappings)) {
 assert.ok(nodeFiles.size > 0 && browserFiles.size > 0);
 
 async function execute(command, args, timeoutMs, env = process.env) {
+  process.stdout.write(`command ${command} ${args.join(" ")} (deadline ${timeoutMs}ms)\n`);
   const child = spawn(command, args, { cwd: root, stdio: ["ignore", "pipe", "pipe"],
     signal: AbortSignal.timeout(timeoutMs), env });
   let output = "";
@@ -47,7 +48,9 @@ async function execute(command, args, timeoutMs, env = process.env) {
     if (output.length > 2_000_000) child.kill();
   });
   const code = await new Promise((resolve, reject) => {
-    child.once("error", reject);
+    child.once("error", error => reject(new Error(
+      `${command} ${args.join(" ")} failed: ${error.message}\n${output.split("\n").slice(-35).join("\n")}`,
+      { cause: error })));
     child.once("close", resolve);
   });
   if (code !== 0) {
