@@ -522,7 +522,8 @@ test("E2E-010 E2E-069: view-only staff can review a call but cannot change booki
   const app = await localDashboard("staff");
   try {
     await page.goto(app.url);
-    await expect(page.getByText("View only")).toBeVisible();
+    await expect(page.getByRole("region", { name: "Booking automation", exact: true }).getByText("View only", { exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Cancellation automation", exact: true }).getByText("View only", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Enable booking" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Enable reception" })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Emergency write stop" })).toHaveCount(0);
