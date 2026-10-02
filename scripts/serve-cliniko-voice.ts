@@ -24,7 +24,8 @@ function required(name: string): string {
 function localPort(): number {
   const raw = required("ABBY_VOICE_PORT");
   const port = Number(raw);
-  if (!/^[0-9]+$/.test(raw) || !Number.isInteger(port) || port < 1 || port > 65_535) {
+  if (!/^[0-9]+$/.test(raw) || !Number.isInteger(port) ||
+      port < 0 || port > 65_535 || (port === 0 && process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1")) {
     throw new RangeError("invalid ABBY_VOICE_PORT");
   }
   return port;
@@ -153,7 +154,10 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       server.once("error", reject);
       server.listen(port, "127.0.0.1", () => { server.off("error", reject); resolve(); });
     });
-    process.stdout.write(`Abby voice local listener ready on 127.0.0.1:${port}; ${testCaller ? "allowlisted test calls only" : "calls disabled"}\n`);
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("voice listener unavailable");
+    process.send?.({ kind: "listenerReady", port: address.port });
+    process.stdout.write(`Abby voice local listener ready on 127.0.0.1:${address.port}; ${testCaller ? "allowlisted test calls only" : "calls disabled"}\n`);
     await new Promise<void>(resolve => {
       process.once("SIGINT", resolve);
       process.once("SIGTERM", resolve);

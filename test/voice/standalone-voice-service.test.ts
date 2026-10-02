@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { createServer } from "node:net";
 import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 import { sql } from "kysely";
@@ -14,15 +13,28 @@ import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-s
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 import { seedSyntheticCatalogueApproval } from "../support/seed-synthetic-catalogue-approval.ts";
 
-async function freePort(): Promise<number> {
-  const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  const address = server.address();
-  assert.ok(address && typeof address !== "string");
-  server.close();
-  await once(server, "close");
-  return address.port;
+/** Wait for this exact child to bind before routing signed traffic to its assigned port. */
+function boundPort(child: ReturnType<typeof spawn>): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { cleanup(); reject(new Error("local voice listener did not bind")); }, 20_000);
+    const cleanup = () => {
+      clearTimeout(timer);
+      child.off("message", onMessage);
+      child.off("exit", onExit);
+    };
+    const onMessage = (message: unknown) => {
+      if (typeof message !== "object" || message === null || !("kind" in message) ||
+          message.kind !== "listenerReady" || !("port" in message) ||
+          typeof message.port !== "number" || !Number.isInteger(message.port) ||
+          message.port < 1 || message.port > 65_535) return;
+      cleanup();
+      resolve(message.port);
+    };
+    const onExit = () => { cleanup(); reject(new Error("local voice listener exited before binding")); };
+    child.on("message", onMessage);
+    child.on("exit", onExit);
+    if (child.exitCode !== null) onExit();
+  });
 }
 
 async function healthy(port: number): Promise<Response> {
@@ -43,11 +55,11 @@ test("E2E-171 E2E-218 local voice runner prunes expired operations at startup an
   const target = new URL(adminUrl);
   target.pathname = `/${name}`;
   let created = false;
-  const port = await freePort();
+  let port = 0;
   const env = { ...process.env,
     ABBY_VOICE_TEST_MODE: undefined, ABBY_TWILIO_TEST_CALLER_NUMBER: undefined,
     ABBY_VOICE_OPERATIONS_TOKEN_HEX: undefined,
-    DATABASE_URL: target.toString(), ABBY_VOICE_PORT: String(port),
+    DATABASE_URL: target.toString(), ABBY_VOICE_PORT: "0", ABBY_ISOLATED_POSTGRES_PROBE: "1",
     ABBY_TENANT_ID: "local-test", ABBY_CLINIC_ID: "clinic", ABBY_LOCATION_ID: "main",
     ABBY_CLINIKO_API_KEY: "synthetic-key-au5", ABBY_CLINIKO_CONTACT_EMAIL: "test@example.com",
     ABBY_CLINIKO_BUSINESS_ID: undefined, ABBY_CLINIKO_PRACTITIONER_ID: undefined,
@@ -82,6 +94,11 @@ test("E2E-171 E2E-218 local voice runner prunes expired operations at startup an
       cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_VOICE_TEST_MODE: "yes" },
       stdio: ["ignore", "pipe", "pipe"] });
     assert.equal((await once(invalidMode, "exit"))[0], 1);
+    const unisolatedEphemeral = spawnSync(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
+      cwd: new URL("../../", import.meta.url),
+      env: { ...env, ABBY_ISOLATED_POSTGRES_PROBE: undefined }, encoding: "utf8" });
+    assert.equal(unisolatedEphemeral.status, 1);
+    assert.equal(unisolatedEphemeral.stderr, "invalid ABBY_VOICE_PORT\n");
     const invalidOperationalToken = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
       cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_VOICE_OPERATIONS_TOKEN_HEX: "short" },
       stdio: ["ignore", "pipe", "pipe"] });
@@ -100,7 +117,8 @@ test("E2E-171 E2E-218 local voice runner prunes expired operations at startup an
       stdio: ["ignore", "pipe", "pipe"] });
     assert.equal((await once(disabledWeekInstruction, "exit"))[0], 1);
     child = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
-      cwd: new URL("../../", import.meta.url), env, stdio: ["ignore", "pipe", "pipe"] });
+      cwd: new URL("../../", import.meta.url), env, stdio: ["ignore", "pipe", "pipe", "ipc"] });
+    port = await boundPort(child);
     const health = await healthy(port);
     assert.equal(health.status, 200);
     assert.equal(await health.text(), "ok");
@@ -151,7 +169,7 @@ test("E2E-172 E2E-185 E2E-209 E2E-217 isolated voice runner enforces durable app
   const name = `abby_test_voice_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl);
   target.pathname = `/${name}`;
-  const port = await freePort();
+  let port = 0;
   const number = "+6125550199";
   const callerNumber = "+6145550101";
   const accountSid = `AC${"1".repeat(32)}`;
@@ -161,7 +179,7 @@ test("E2E-172 E2E-185 E2E-209 E2E-217 isolated voice runner enforces durable app
   const streamUrl = "wss://calls.example.test/twilio/media/";
   const scope = { tenantId: "local-test", clinicId: "clinic", locationId: "main" };
   const env: NodeJS.ProcessEnv = { ...process.env, DATABASE_URL: target.toString(),
-    ABBY_ISOLATED_POSTGRES_PROBE: "1", ABBY_VOICE_PORT: String(port), ABBY_VOICE_TEST_MODE: "1",
+    ABBY_ISOLATED_POSTGRES_PROBE: "1", ABBY_VOICE_PORT: "0", ABBY_VOICE_TEST_MODE: "1",
     ABBY_TWILIO_TEST_CALLER_NUMBER: callerNumber,
     ABBY_TENANT_ID: scope.tenantId, ABBY_CLINIC_ID: scope.clinicId, ABBY_LOCATION_ID: scope.locationId,
     ABBY_CLINIKO_API_KEY: "synthetic-key-au5", ABBY_CLINIKO_CONTACT_EMAIL: "test@example.com",
@@ -199,6 +217,7 @@ test("E2E-172 E2E-185 E2E-209 E2E-217 isolated voice runner enforces durable app
         clinikoMethods.push(message.method);
       }
     });
+    port = await boundPort(child);
     assert.equal((await healthy(port)).status, 200);
     assert.equal((await fetch(`http://127.0.0.1:${port}/readyz`)).status, 503);
     const operationalUrl = `http://127.0.0.1:${port}/internal/operations`;
@@ -351,12 +370,14 @@ test("E2E-172 E2E-185 E2E-209 E2E-217 isolated voice runner enforces durable app
     }
     assert.equal(JSON.stringify(daily).includes(callerNumber) || JSON.stringify(daily).includes(callSid), false);
     const operatorRead = spawnSync(process.execPath, ["scripts/read-voice-operations.ts"], {
-      cwd: new URL("../../", import.meta.url), env, encoding: "utf8", timeout: 10_000 });
+      cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_VOICE_PORT: String(port) },
+      encoding: "utf8", timeout: 10_000 });
     assert.equal(operatorRead.status, 0, operatorRead.stderr);
     assert.deepEqual(JSON.parse(operatorRead.stdout), counts);
     assert.equal(operatorRead.stdout.includes(callerNumber) || operatorRead.stdout.includes(callSid), false);
     const operatorDailyRead = spawnSync(process.execPath, ["scripts/read-voice-operations.ts", "--daily"], {
-      cwd: new URL("../../", import.meta.url), env, encoding: "utf8", timeout: 10_000 });
+      cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_VOICE_PORT: String(port) },
+      encoding: "utf8", timeout: 10_000 });
     assert.equal(operatorDailyRead.status, 0, operatorDailyRead.stderr);
     assert.deepEqual(JSON.parse(operatorDailyRead.stdout), daily);
     const closed = once(caller, "close");
