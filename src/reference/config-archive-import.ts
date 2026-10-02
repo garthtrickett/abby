@@ -363,7 +363,7 @@ export class ReferenceConfigArchiveImporter {
       mapped.value.automationHistory, automationHead?.version ?? 0, automationHead?.enabled ?? false, importActorRef, importedAt,
       mapped.value.urgentHistory, mapped.value.staffScheduleHistory, mapped.value.greetingHistory, mapped.value.cancellationHistory, mapped.value.reschedulingHistory,
       { history: mapped.value.clinicIntakeHistory, sourceVersion: intakeHead?.version ?? 0, sourceEnabled: intakeHead?.enabled ?? false },
-      mapped.value.staffedDestinationHistory);
+      mapped.value.staffedDestinationHistory, data.clinicNotifications ?? []);
     const knowledge = mapped.value.knowledge;
     const ledger = new MemoryLedger();
     const stop = await ledger.stopWrites(targetScope, importActorRef, "Imported configuration awaiting target readiness");

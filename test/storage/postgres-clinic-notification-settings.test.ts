@@ -14,9 +14,9 @@ import { notificationRegistry, notificationSettingsContract } from "../support/n
 assert.ok(process.env.DATABASE_URL, "DATABASE_URL is required");
 const db = connectPostgres(process.env.DATABASE_URL);
 after(async () => { await db.destroy(); });
-notificationSettingsContract("PostgreSQL", registry => new PostgresClinicNotificationSettingStore(db, registry));
+notificationSettingsContract("E2E-257 PostgreSQL", registry => new PostgresClinicNotificationSettingStore(db, registry));
 
-test("PostgreSQL notification preferences survive reconnection but cannot grant standalone send authority", async () => {
+test("E2E-257 PostgreSQL notification preferences survive reconnection but cannot grant standalone send authority", async () => {
   const first = { tenantId: `notification-minimal-${randomUUID()}`, clinicId: "clinic", locationId: "first" };
   const raw = new PostgresClinicNotificationSettingStore(db, notificationRegistry());
   assert.ok((await raw.changeOwner(first, "0", "bookingConfirmation", "abby", "owner")).ok);
@@ -55,7 +55,7 @@ test("PostgreSQL notification preferences survive reconnection but cannot grant 
     ["changed_at", "changed_by", "clinic_id", "notification_kind", "owner", "owners", "previous_owner", "tenant_id", "version"]);
 });
 
-test("notification migration upgrades populated schema and refuses to discard recorded clinic history", async () => {
+test("E2E-257 notification migration upgrades populated schema and refuses to discard recorded clinic history", async () => {
   const databaseName = `notification_upgrade_${randomUUID().replaceAll("-", "")}`;
   await sql`create database ${sql.id(databaseName)}`.execute(db);
   const url = new URL(process.env.DATABASE_URL!);

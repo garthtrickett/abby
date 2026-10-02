@@ -31,6 +31,12 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         and owners -> notification_kind = coalesce(to_jsonb(owner), 'null'::jsonb)
         and changed_by is not null and length(trim(changed_by)) between 1 and 256 and changed_at is not null)
     `).execute();
+  await sql`create trigger clinic_notification_settings_portability_guard
+    before insert or update or delete on clinic_notification_settings
+    for each row execute function abby_guard_portability_write()`.execute(db);
+  await sql`create trigger clinic_notification_settings_portability_truncate
+    before truncate on clinic_notification_settings
+    for each statement execute function abby_reject_portability_truncate()`.execute(db);
 }
 export async function down(db: Kysely<unknown>): Promise<void> {
   const rows = await sql<{ count: string }>`select count(*)::text as count from clinic_notification_settings where version > 0`.execute(db);

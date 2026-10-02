@@ -1,6 +1,8 @@
 import type { ClinicIntakeAuditPage } from "../../core/clinic-intake-setting.ts";
 import { html } from "lit-html";
 import { staffedDestinationView } from "./staffed-destination-control.ts";
+import { notificationOwnershipView } from "./notification-ownership-control.ts";
+import type { NotificationOwnershipControl, NotificationOwnershipState } from "./notification-ownership-control.ts";
 import type { StaffedDestinationControl, StaffedDestinationState } from "./staffed-destination-control.ts";
 import type { CancellationSettingAuditPage, ReschedulingSettingAuditPage } from "../../core/host.ts";
 import type { CallPolicy, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
@@ -14,6 +16,7 @@ import type { KnowledgeEntry } from "../../reference/knowledge-catalogue.ts";
 
 export type DashboardState = {
   staffedDestination: StaffedDestinationState;
+  notifications: NotificationOwnershipState;
   loading: boolean;
   busy: boolean;
   capabilities: readonly CapabilityDescriptor[];
@@ -62,6 +65,7 @@ export type DashboardState = {
 
 export type DashboardActions = Readonly<{
   staffedDestination: StaffedDestinationControl["actions"];
+  notifications: NotificationOwnershipControl["actions"];
   setKnowledgeField(field: "knowledgeSourceRef" | "knowledgeOwnerRef" | "knowledgeText" | "knowledgeFrom" | "knowledgeUntil", value: string): void;
   saveKnowledgeDraft(): void;
   approveKnowledge(entry: KnowledgeEntry): void;
@@ -181,6 +185,7 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
           ${state.policy.capabilities.cancel !== "execute" ? html`<p class="muted">This setting cannot grant cancellation permission the clinic's host does not support.</p>` : ""}` : ""}
       </section>
       ${staffedDestinationView(state, actions.staffedDestination)}
+      ${notificationOwnershipView(state, actions.notifications)}
       <section class="card" aria-labelledby="rescheduling-title">
         <div class="row"><div><h2 id="rescheduling-title">Rescheduling automation</h2>
           <p class="status">${state.policy ? state.policy.reschedulingEnabled === true ? "Rescheduling enabled" : "Rescheduling disabled" : "Rescheduling unavailable"}</p>

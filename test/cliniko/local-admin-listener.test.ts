@@ -24,7 +24,7 @@ const token = "8".repeat(64);
 const apiKey = "synthetic-key-au5";
 const basic = `Basic ${Buffer.from(`abby-admin:${token}`).toString("base64")}`;
 
-test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 E2E-247 E2E-248 E2E-249 loopback admin retains scoped setup and usable greeting",
+test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 E2E-247 E2E-248 E2E-249 E2E-257 loopback admin retains scoped setup and usable greeting",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
     const adminUrl = process.env.DATABASE_URL;
     assert.ok(adminUrl);
@@ -137,6 +137,12 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 E2E-247 E2E-248 E2E-249 loopback a
       assert.equal((await fetch(`${origin}/api/settings/booking-enabled`, { method: "POST", headers: {
         Authorization: basic, Origin: origin, "Content-Type": "application/json" },
       body: JSON.stringify({ expectedVersion: "0", enabled: true }) })).status, 404);
+      for (const path of ["notification-options", "notification-audit"]) {
+        assert.equal((await fetch(`${origin}/api/settings/${path}`, { headers: { Authorization: basic } })).status, 404);
+      }
+      assert.equal((await fetch(`${origin}/api/settings/notification-owner`, { method: "POST", headers: {
+        Authorization: basic, Origin: origin, "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedVersion: "0", notificationKind: "bookingConfirmation", owner: "abby" }) })).status, 404);
       const bundle = await fetch(`${origin}/app.js`, { headers: { Authorization: basic } });
       assert.equal(bundle.status, 200);
       assert.match(await bundle.text(), /Read-only availability setup/);

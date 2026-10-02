@@ -8,6 +8,14 @@ import type { TimerPort } from "./timer.ts";
 export const NOTIFICATION_KINDS = ["bookingConfirmation", "cancellationConfirmation", "reschedulingConfirmation"] as const;
 export type NotificationKind = typeof NOTIFICATION_KINDS[number];
 export type NotificationOwner = "host" | "abby";
+export const NOTIFICATION_LABELS: Readonly<Record<NotificationKind, string>> = {
+  bookingConfirmation: "Booking confirmation", cancellationConfirmation: "Cancellation confirmation",
+  reschedulingConfirmation: "Rescheduling confirmation",
+};
+export type NotificationCatalogue = Readonly<{
+  scope: LocationScope;
+  options: readonly Readonly<{ kind: NotificationKind; label: string; owners: readonly NotificationOwner[]; hostVersion?: string }>[];
+}>;
 export type NotificationClinicScope = Pick<LocationScope, "tenantId" | "clinicId">;
 export type NotificationSettings = Readonly<{
   version: string;
@@ -106,9 +114,9 @@ function validDeclaration(value: unknown, scope: LocationScope, kind: Notificati
 }
 
 /** A registry is trusted host code, but its reply still needs exact scope and contract validation. */
-export async function resolveNotification(registry: NotificationRegistry, scope: LocationScope, kind: NotificationKind,
-  owner: NotificationOwner, timer: TimerPort = systemTimer): Promise<Result<NotificationDeclaration, ReadinessFailure>> {
-  if (!validNotificationLocationScope(scope) || !validNotificationKind(kind) || owner !== "host" && owner !== "abby") return unready();
+async function readDeclaration(registry: NotificationRegistry, scope: LocationScope, kind: NotificationKind,
+  timer: TimerPort = systemTimer): Promise<Result<NotificationDeclaration, ReadinessFailure>> {
+  if (!validNotificationLocationScope(scope) || !validNotificationKind(kind)) return unready();
   const controller = new AbortController();
   let handle: unknown;
   try {
@@ -118,10 +126,50 @@ export async function resolveNotification(registry: NotificationRegistry, scope:
     });
     const result = await Promise.race([Promise.resolve().then(() =>
       registry.resolve(structuredClone(bound), kind, controller.signal)), timeout]);
-    return result.ok && validDeclaration(result.value, bound, kind) && result.value.owners.includes(owner)
+    return result.ok && validDeclaration(result.value, bound, kind)
       ? ok(structuredClone(result.value)) : unready();
   } catch { return unready(); }
   finally { if (handle !== undefined) timer.cancel(handle); }
+}
+
+export async function resolveNotification(registry: NotificationRegistry, scope: LocationScope, kind: NotificationKind,
+  owner: NotificationOwner, timer: TimerPort = systemTimer): Promise<Result<NotificationDeclaration, ReadinessFailure>> {
+  if (owner !== "host" && owner !== "abby") return unready();
+  const declaration = await readDeclaration(registry, scope, kind, timer);
+  return declaration.ok && declaration.value.owners.includes(owner) ? declaration : unready();
+}
+
+/** Public choices are independently resolved; they never substitute for host preflight on a change. */
+export async function listNotificationOptions(registry: NotificationRegistry, scope: LocationScope):
+  Promise<Result<NotificationCatalogue, PolicyFailure>> {
+  if (!validNotificationLocationScope(scope)) return err({ kind: "invalidValue" });
+  const bound = structuredClone(scope);
+  const options = await Promise.all(NOTIFICATION_KINDS.map(async kind => {
+    const declaration = await readDeclaration(registry, bound, kind);
+    return { kind, label: NOTIFICATION_LABELS[kind], owners: declaration.ok ? [...declaration.value.owners] : [],
+      ...(declaration.ok ? { hostVersion: declaration.value.hostVersion } : {}) };
+  }));
+  return ok({ scope: bound, options });
+}
+
+export function validNotificationCatalogue(value: unknown, scope: LocationScope): value is NotificationCatalogue {
+  const catalogue = record(value);
+  const bound = record(catalogue?.scope);
+  if (!catalogue || Object.keys(catalogue).sort().join(",") !== "options,scope" ||
+      !bound || Object.keys(bound).sort().join(",") !== "clinicId,locationId,tenantId" ||
+      bound.tenantId !== scope.tenantId || bound.clinicId !== scope.clinicId || bound.locationId !== scope.locationId ||
+      !Array.isArray(catalogue.options) || catalogue.options.length !== NOTIFICATION_KINDS.length) return false;
+  const kinds = new Set<NotificationKind>();
+  for (const value of catalogue.options) {
+    const option = record(value);
+    if (!option || !validNotificationKind(option.kind) || kinds.has(option.kind) || option.label !== NOTIFICATION_LABELS[option.kind] ||
+        !Array.isArray(option.owners) || option.owners.length > 2 || new Set(option.owners).size !== option.owners.length ||
+        option.owners.some(owner => owner !== "host" && owner !== "abby") ||
+        Object.keys(option).sort().join(",") !== (option.owners.length ? "hostVersion,kind,label,owners" : "kind,label,owners") ||
+        option.owners.length > 0 && !ref(option.hostVersion)) return false;
+    kinds.add(option.kind);
+  }
+  return true;
 }
 
 /** Only this admission composition turns raw clinic preferences into current host authority. */

@@ -68,7 +68,7 @@ async function fixture(id: string, owner: "host" | "abby" = "host", managed = tr
 
 for (const owner of ["host", "abby"] as const) {
   for (const kind of ["book", "cancel", "reschedule"] as const) {
-    test(`${owner} owns ${kind} confirmation: exact suppression receipt queues one captured notification after commit`, async () => {
+    test(`E2E-257 ${owner} owns ${kind} confirmation: exact suppression receipt queues one captured notification after commit`, async () => {
       const app = await fixture(`${owner}-${kind}`, owner);
       const action = await app.prepare(kind);
       assert.equal(Object.values((await app.state()).effects).some(effect => effect.kind === "notification"), false);
@@ -102,7 +102,7 @@ for (const owner of ["host", "abby"] as const) {
   }
 }
 
-test("unproven notification ownership does not add managed directives or send effects", async () => {
+test("E2E-257 unproven notification ownership does not add managed directives or send effects", async () => {
   const app = await fixture("unproven", "abby", false);
   const action = await app.prepare();
   assert.equal(action.mutation.notification, undefined);
@@ -113,7 +113,7 @@ test("unproven notification ownership does not add managed directives or send ef
 });
 
 for (const reply of ["missing", "wrongOwner", "wrongKey", "wrongVersion", "extraData"] as const) {
-  test(`a ${reply} suppression acknowledgement never permits a second notification send`, async () => {
+  test(`E2E-257 a ${reply} suppression acknowledgement never permits a second notification send`, async () => {
     const app = await fixture(`suppression-${reply}`, "abby");
     app.host.writeResult = mutation => {
       const notification = mutation.notification!;
@@ -132,7 +132,7 @@ for (const reply of ["missing", "wrongOwner", "wrongKey", "wrongVersion", "extra
   });
 }
 
-test("an uncertain appointment cannot notify until exact reconciliation proves commit and suppression", async () => {
+test("E2E-257 an uncertain appointment cannot notify until exact reconciliation proves commit and suppression", async () => {
   const app = await fixture("reconciled-booking");
   app.host.writeResult = mutation => ({ kind: "uncertain", actionKey: mutation.actionKey, reconcileAfter: now, deadline });
   const action = await app.prepare();
@@ -149,7 +149,7 @@ test("an uncertain appointment cannot notify until exact reconciliation proves c
   assert.equal(app.host.writes.length, 1);
 });
 
-test("a thrown notification send reconciles its captured owner without resending or changing the appointment result", async () => {
+test("E2E-257 a thrown notification send reconciles its captured owner without resending or changing the appointment result", async () => {
   const app = await fixture("send-unknown", "abby");
   const { action, notification } = await app.commit();
   app.host.dispatchNotification = async intent => { app.sends.push(structuredClone(intent)); throw new Error("reply lost after send"); };
@@ -168,7 +168,7 @@ test("a thrown notification send reconciles its captured owner without resending
   assert.equal(app.observations[0]!.owner, "abby");
 });
 
-test("a process loss after the notification barrier recovers to observation and never repeats the send", async () => {
+test("E2E-257 a process loss after the notification barrier recovers to observation and never repeats the send", async () => {
   const app = await fixture("barrier-process-loss");
   const { notification } = await app.commit();
   success(await app.runtime.notificationAction(app.callId, { kind: "markNotificationPossiblySent", effectId: notification.id, now }));
@@ -183,7 +183,7 @@ test("a process loss after the notification barrier recovers to observation and 
   assert.equal(app.observations.length, 1);
 });
 
-test("a persistently unknown notification becomes review-required at its deadline without a retry", async () => {
+test("E2E-257 a persistently unknown notification becomes review-required at its deadline without a retry", async () => {
   const app = await fixture("unknown-deadline");
   const { notification } = await app.commit();
   app.host.dispatchNotification = async intent => { app.sends.push(intent); return unknownNotification(intent); };
@@ -197,7 +197,7 @@ test("a persistently unknown notification becomes review-required at its deadlin
   assert.equal(app.sends.length, 1);
 });
 
-test("a wrong-owner delivery reply remains unknown; the host observes the original owner", async () => {
+test("E2E-257 a wrong-owner delivery reply remains unknown; the host observes the original owner", async () => {
   const app = await fixture("wrong-receipt", "abby");
   const { notification } = await app.commit();
   app.host.dispatchNotification = async intent => { app.sends.push(intent); return { ...unknownNotification(intent), owner: "host",
@@ -209,7 +209,7 @@ test("a wrong-owner delivery reply remains unknown; the host observes the origin
   assert.equal(app.sends.length, 1);
 });
 
-test("a proven unsent notification is terminal and leaves the appointment committed", async () => {
+test("E2E-257 a proven unsent notification is terminal and leaves the appointment committed", async () => {
   const app = await fixture("definitive-unsent");
   const { action, notification } = await app.commit();
   app.host.dispatchNotification = async intent => { app.sends.push(intent); return { ...unknownNotification(intent), kind: "definitiveUnsent" }; };
@@ -223,7 +223,7 @@ test("a proven unsent notification is terminal and leaves the appointment commit
   assert.equal(app.sends.length, 1);
 });
 
-test("emergency stop fences an unsent notification and records an already possible send", async () => {
+test("E2E-257 emergency stop fences an unsent notification and records an already possible send", async () => {
   const pending = await fixture("stop-pending");
   const { action, notification } = await pending.commit();
   assert.ok((await pending.ledger.stopWrites(pending.scope, "owner", "Stop new writes")).ok);
@@ -247,7 +247,7 @@ test("emergency stop fences an unsent notification and records an already possib
   assert.equal(sent.observations.length, 1);
 });
 
-test("concurrent recovery workers dispatch one notification through the call lease", async () => {
+test("E2E-257 concurrent recovery workers dispatch one notification through the call lease", async () => {
   const app = await fixture("concurrent-dispatch");
   const { notification } = await app.commit();
   let entered!: () => void;
@@ -272,7 +272,7 @@ test("concurrent recovery workers dispatch one notification through the call lea
 });
 
 for (const outcome of ["rejected", "unsupported"] as const) {
-  test(`a ${outcome} appointment cannot create a notification intent`, async () => {
+  test(`E2E-257 a ${outcome} appointment cannot create a notification intent`, async () => {
     const app = await fixture(`appointment-${outcome}`);
     app.host.writeResult = mutation => outcome === "rejected" ? { kind: outcome, actionKey: mutation.actionKey, reason: "conflict" }
       : { kind: outcome, actionKey: mutation.actionKey };
@@ -284,7 +284,7 @@ for (const outcome of ["rejected", "unsupported"] as const) {
   });
 }
 
-test("intake does not send a booking confirmation or add a notification directive", async () => {
+test("E2E-257 intake does not send a booking confirmation or add a notification directive", async () => {
   const app = await fixture("intake-no-notification");
   const proposed = success(await app.turn("intake-proposal", { kind: "requestAction", request: app.intake }));
   const action = Object.values(proposed.actions)[0]!;
@@ -298,7 +298,7 @@ test("intake does not send a booking confirmation or add a notification directiv
   assert.equal(Object.values((await app.state()).effects).some(effect => effect.kind === "notification"), false);
 });
 
-test("a missing sender cancels a notification before the barrier without undoing the appointment", async () => {
+test("E2E-257 a missing sender cancels a notification before the barrier without undoing the appointment", async () => {
   const app = await fixture("missing-sender");
   const { action, notification } = await app.commit();
   const host = { write: app.host.write.bind(app.host), reconcile: app.host.reconcile.bind(app.host),
@@ -313,7 +313,7 @@ test("a missing sender cancels a notification before the barrier without undoing
   assert.equal(app.sends.length, 0);
 });
 
-test("a notification provider deadline aborts the send and ignores a late receipt without replay", async () => {
+test("E2E-257 a notification provider deadline aborts the send and ignores a late receipt without replay", async () => {
   const app = await fixture("provider-deadline");
   const { notification } = await app.commit();
   let fire!: () => void;
@@ -348,7 +348,7 @@ test("a notification provider deadline aborts the send and ignores a late receip
 });
 
 for (const phase of ["send", "observe"] as const) {
-  test(`a corrupted ${phase} intent cannot reach a foreign host scope`, async () => {
+  test(`E2E-257 a corrupted ${phase} intent cannot reach a foreign host scope`, async () => {
     const app = await fixture(`corrupt-${phase}`);
     const { notification } = await app.commit();
     let effectId = notification.id;

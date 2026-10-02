@@ -26,6 +26,7 @@ const afterHoursMode = choice("staffRequest", "approvedInfoAndRequest");
 const afterHoursInfo = object({ scope, version: key, ownerRef: key,
   approvedText: { type: "string", minLength: 1, maxLength: 1_500 }, approved: { const: true } });
 const notificationOwner: JsonSchema = { oneOf: [choice("host", "abby"), { const: null }] };
+const notificationKind = choice("bookingConfirmation", "cancellationConfirmation", "reschedulingConfirmation");
 const notificationBinding = (kind: string): JsonSchema => object({ scope, kind: { const: kind },
   owner: choice("host", "abby"), settingsVersion: key, hostVersion: key });
 const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: nonEmpty, automationEnabled: bool, bookingEnabled: bool,
@@ -187,7 +188,8 @@ export type CapabilityDescriptor = Readonly<{
   requiresCallerConfirmation: boolean;
 }>;
 
-export type CapabilityPrecondition = "expectedPolicyVersion" | "expectedAutomationVersion" | "expectedClinicIntakeVersion" | "hostStaffedDestinationForSet" | "readinessForEnable" | "activeCall" | "bookingEnabledForExecution" |
+export type CapabilityPrecondition = "expectedPolicyVersion" | "expectedAutomationVersion" | "expectedClinicIntakeVersion" | "expectedClinicNotificationVersion" |
+  "hostManagedNotificationForSet" | "hostStaffedDestinationForSet" | "readinessForEnable" | "activeCall" | "bookingEnabledForExecution" |
   "hostEvidenceForExecution" | "approvedKnowledgeForAnswer" | "availabilityHostConfigured" |
   "appointmentHostConfigured" | "hostIssuedPatientProof" |
   "callReviewAvailable" | "outcomeReportAvailable" | "staffQueueAvailable" | "operationalDailyAvailable" |
@@ -251,6 +253,19 @@ export const capabilityCatalogue = {
   "settings.routing.staffedDestination.change.v1": entry("settings.routing.staffedDestination.change.v1",
     object({ kind: { const: "settings.routing.staffedDestination.change.v1" }, expectedVersion: key, destinationRef: nullableRouteRef }),
     reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedPolicyVersion", "hostStaffedDestinationForSet"]),
+  "settings.notifications.owner.change.v1": entry("settings.notifications.owner.change.v1",
+    object({ kind: { const: "settings.notifications.owner.change.v1" }, expectedVersion: key, notificationKind, owner: notificationOwner }),
+    reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedClinicNotificationVersion", "hostManagedNotificationForSet"]),
+  "settings.notifications.audit.v1": entry("settings.notifications.audit.v1",
+    optional({ kind: { const: "settings.notifications.audit.v1" }, afterVersion: uint }, ["kind"]),
+    reply("notificationSettingAudit", "page", optional({ entries: array(object({ version: key, kind: notificationKind,
+      owner: notificationOwner, previousOwner: notificationOwner, actorRef: key, changedAt: str })), nextAfterVersion: uint }, ["entries"])), "read", "clinicAdmin"),
+  "settings.notifications.options.v1": entry("settings.notifications.options.v1",
+    object({ kind: { const: "settings.notifications.options.v1" } }),
+    reply("notificationOptions", "catalogue", object({ scope,
+      options: { type: "array", minItems: 3, maxItems: 3, items: optional({ kind: notificationKind, label: key,
+        owners: { type: "array", items: choice("host", "abby"), maxItems: 2, uniqueItems: true }, hostVersion: key }, ["kind", "label", "owners"]) } })),
+    "read", "clinicAdmin"),
   "settings.routing.staffedDestination.audit.v1": entry("settings.routing.staffedDestination.audit.v1",
     optional({ kind: { const: "settings.routing.staffedDestination.audit.v1" }, afterVersion: uint }, ["kind"]),
     reply("staffedDestinationSettingAudit", "page", staffedDestinationAuditPage), "read", "clinicAdmin"),

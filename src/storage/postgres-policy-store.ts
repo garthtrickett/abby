@@ -1,7 +1,7 @@
 import { PostgresClinicIntakeSettingStore } from "./postgres-clinic-intake-setting.ts";
 import { PostgresClinicNotificationSettingStore } from "./postgres-clinic-notification-settings.ts";
-import { captureNotificationPolicy, unprovenNotificationRegistry } from "../core/notification-policy.ts";
-import type { NotificationAuditPage, NotificationKind, NotificationOwner, NotificationRegistry } from "../core/notification-policy.ts";
+import { captureNotificationPolicy, listNotificationOptions, unprovenNotificationRegistry } from "../core/notification-policy.ts";
+import type { NotificationAuditPage, NotificationCatalogue, NotificationKind, NotificationOwner, NotificationRegistry } from "../core/notification-policy.ts";
 import type { ClinicIntakeAuditPage, ClinicIntakeState } from "../core/clinic-intake-setting.ts";
 import { PostgresStaffedDestinationSettingStore } from "./postgres-staffed-destination-setting.ts";
 import { captureStaffedDestination, listStaffedDestinations, unprovenStaffedDestinationRegistry, validStaffedDestinationRef } from "../core/staffed-destination.ts";
@@ -216,6 +216,10 @@ export class PostgresPolicyStore implements PolicyStore {
     const changed = await new PostgresClinicNotificationSettingStore(this.db, this.notificationRegistry)
       .changeOwner(scope, expectedVersion, kind, owner, actorRef);
     return changed.ok ? this.read(scope) : changed;
+  }
+  async listNotificationOptions(scope: LocationScope): Promise<Result<NotificationCatalogue, PolicyFailure>> {
+    if (this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope)) return err({ kind: "invalidValue" });
+    return listNotificationOptions(this.notificationRegistry, scope);
   }
   async listNotificationChanges(scope: LocationScope, afterVersion?: number): Promise<Result<NotificationAuditPage, PolicyFailure>> {
     if (this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope)) return err({ kind: "invalidValue" });

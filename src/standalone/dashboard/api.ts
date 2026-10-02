@@ -1,5 +1,7 @@
 import type { ClinicIntakeAuditPage } from "../../core/clinic-intake-setting.ts";
 import { validStaffedDestinationCatalogue, validStaffedDestinationRef } from "../../core/staffed-destination.ts";
+import { validNotificationCatalogue, validNotificationVersion } from "../../core/notification-policy.ts";
+import type { NotificationAuditPage, NotificationCatalogue, NotificationKind, NotificationOwner } from "../../core/notification-policy.ts";
 import type { StaffedDestinationAuditPage, StaffedDestinationCatalogue } from "../../core/staffed-destination.ts";
 import { CALL_TERMINAL_REASONS, err, ok } from "../../core/model.ts";
 import type { AfterHoursMode, CallPolicy, LocalStaffWindow, Result, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
@@ -25,6 +27,9 @@ export type DashboardFailure = GatewayFailure | Readonly<{ kind: "transportUnava
 export type DashboardPort = Readonly<{
   capabilities(): Promise<Result<readonly CapabilityDescriptor[], DashboardFailure>>;
   settings(): Promise<Result<CallPolicy, DashboardFailure>>;
+  notificationOptions(): Promise<Result<NotificationCatalogue, DashboardFailure>>;
+  notificationAudit(afterVersion?: number): Promise<Result<NotificationAuditPage, DashboardFailure>>;
+  changeNotificationOwner(expectedVersion: string, notificationKind: NotificationKind, owner: NotificationOwner | null): Promise<Result<CallPolicy, DashboardFailure>>;
   staffedDestinations(): Promise<Result<StaffedDestinationCatalogue, DashboardFailure>>;
   staffedDestinationAudit(afterVersion?: number): Promise<Result<StaffedDestinationAuditPage, DashboardFailure>>;
   changeStaffedDestination(expectedVersion: string, destinationRef: string | null): Promise<Result<CallPolicy, DashboardFailure>>;
@@ -185,6 +190,37 @@ export class FetchDashboardPort implements DashboardPort {
   async changeStaffedDestination(expectedVersion: string, destinationRef: string | null): Promise<Result<CallPolicy, DashboardFailure>> {
     const result = await request("/api/settings/staffed-destination", { method: "POST",
       headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion, destinationRef }) });
+    return result.ok ? policy(result.value) : result;
+  }
+
+  async notificationOptions(): Promise<Result<NotificationCatalogue, DashboardFailure>> {
+    const result = await request("/api/settings/notification-options");
+    if (!result.ok) return result;
+    if (!matchesSchema(capabilityDescriptor("settings.notifications.options.v1").resultSchema,
+      { ok: true, value: result.value })) return err({ kind: "malformed" });
+    const reply = result.value as Extract<GatewayReply, { kind: "notificationOptions" }>;
+    return validNotificationCatalogue(reply.catalogue, reply.catalogue.scope) ? ok(reply.catalogue) : err({ kind: "malformed" });
+  }
+  async notificationAudit(afterVersion?: number): Promise<Result<NotificationAuditPage, DashboardFailure>> {
+    const result = await request(`/api/settings/notification-audit${afterVersion === undefined ? "" : `?after=${afterVersion}`}`);
+    if (!result.ok) return result;
+    if (!matchesSchema(capabilityDescriptor("settings.notifications.audit.v1").resultSchema,
+      { ok: true, value: result.value })) return err({ kind: "malformed" });
+    const reply = result.value as Extract<GatewayReply, { kind: "notificationSettingAudit" }>;
+    let previousVersion = afterVersion ?? 0;
+    for (const entry of reply.page.entries) {
+      if (!validNotificationVersion(entry.version) || Number(entry.version) <= previousVersion ||
+          !Number.isFinite(Date.parse(entry.changedAt))) return err({ kind: "malformed" });
+      previousVersion = Number(entry.version);
+    }
+    if (reply.page.entries.length > 50 || reply.page.nextAfterVersion !== undefined &&
+        (reply.page.entries.length !== 50 || reply.page.nextAfterVersion !== previousVersion)) return err({ kind: "malformed" });
+    return ok(reply.page);
+  }
+  async changeNotificationOwner(expectedVersion: string, notificationKind: NotificationKind,
+    owner: NotificationOwner | null): Promise<Result<CallPolicy, DashboardFailure>> {
+    const result = await request("/api/settings/notification-owner", { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion, notificationKind, owner }) });
     return result.ok ? policy(result.value) : result;
   }
 

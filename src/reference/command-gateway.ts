@@ -1,4 +1,5 @@
 import type { ClinicIntakeAuditPage } from "../core/clinic-intake-setting.ts";
+import type { NotificationAuditPage, NotificationCatalogue, NotificationKind, NotificationOwner } from "../core/notification-policy.ts";
 import type { StaffedDestinationAuditPage, StaffedDestinationCatalogue } from "../core/staffed-destination.ts";
 import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, GreetingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
@@ -36,6 +37,9 @@ export type HostActor = Readonly<{
 
 export type GatewayCommand =
   | Readonly<{ kind: "settings.read.v1" }>
+  | Readonly<{ kind: "settings.notifications.owner.change.v1"; expectedVersion: string; notificationKind: NotificationKind; owner: NotificationOwner | null }>
+  | Readonly<{ kind: "settings.notifications.audit.v1"; afterVersion?: number }>
+  | Readonly<{ kind: "settings.notifications.options.v1" }>
   | Readonly<{ kind: "settings.routing.staffedDestination.options.v1" }>
   | Readonly<{ kind: "settings.routing.staffedDestination.change.v1"; expectedVersion: string; destinationRef: string | null }>
   | Readonly<{ kind: "settings.routing.staffedDestination.audit.v1"; afterVersion?: number }>
@@ -102,6 +106,8 @@ type CommandMissingCatalogue = AssertNever<Exclude<CapabilityId, GatewayCommand[
 export type GatewayReply =
   | Readonly<{ kind: "settings"; policy: CallPolicy }>
   | Readonly<{ kind: "staffedDestinationOptions"; catalogue: StaffedDestinationCatalogue }>
+  | Readonly<{ kind: "notificationOptions"; catalogue: NotificationCatalogue }>
+  | Readonly<{ kind: "notificationSettingAudit"; page: NotificationAuditPage }>
   | Readonly<{ kind: "staffedDestinationSettingAudit"; page: StaffedDestinationAuditPage }>
   | Readonly<{ kind: "automationSettingAudit"; page: AutomationSettingAuditPage }>
   | Readonly<{ kind: "writeStop"; status: WriteStopStatus }>
@@ -195,6 +201,7 @@ export class CommandGateway {
       permitted.push("settings.automation.enabled.change.v1", "settings.automation.audit.v1",
         "settings.routing.staffedDestination.change.v1", "settings.routing.staffedDestination.audit.v1",
         "settings.routing.staffedDestination.options.v1",
+        "settings.notifications.owner.change.v1", "settings.notifications.audit.v1", "settings.notifications.options.v1",
         "settings.appointments.booking.enabled.change.v1", "settings.appointments.booking.audit.v1",
         "settings.appointments.cancellation.enabled.change.v1", "settings.appointments.cancellation.audit.v1",
         "settings.appointments.rescheduling.enabled.change.v1", "settings.appointments.rescheduling.audit.v1",
@@ -294,6 +301,19 @@ export class CommandGateway {
       case "settings.patients.firstTimeIntake.audit.v1": {
         const result = await this.policy.listFirstTimeIntakeChanges(this.actor.scope, command.afterVersion);
         return result.ok ? ok({ kind: "firstTimeIntakeSettingAudit", page: result.value }) : result;
+      }
+      case "settings.notifications.owner.change.v1": {
+        const result = await this.policy.changeNotificationOwner(this.actor.scope, command.expectedVersion,
+          command.notificationKind, command.owner, this.actor.actorRef);
+        return result.ok ? ok({ kind: "settings", policy: result.value }) : result;
+      }
+      case "settings.notifications.options.v1": {
+        const result = await this.policy.listNotificationOptions(this.actor.scope);
+        return result.ok ? ok({ kind: "notificationOptions", catalogue: result.value }) : result;
+      }
+      case "settings.notifications.audit.v1": {
+        const result = await this.policy.listNotificationChanges(this.actor.scope, command.afterVersion);
+        return result.ok ? ok({ kind: "notificationSettingAudit", page: result.value }) : result;
       }
       case "settings.routing.staffedDestination.change.v1": {
         const result = await this.policy.changeStaffedDestination(this.actor.scope, command.expectedVersion,

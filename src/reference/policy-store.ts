@@ -1,7 +1,9 @@
 import { MemoryClinicIntakeSettingStore } from "./clinic-intake-setting-store.ts";
+import { notificationArchiveSnapshot, notificationImportHistory } from "../portability/notification-history.ts";
+import type { ClinicNotificationArchiveRow } from "../portability/notification-history.ts";
 import { MemoryClinicNotificationSettingStore } from "./clinic-notification-setting-store.ts";
-import { captureNotificationPolicy, unprovenNotificationRegistry } from "../core/notification-policy.ts";
-import type { NotificationAuditPage, NotificationKind, NotificationOwner, NotificationRegistry } from "../core/notification-policy.ts";
+import { captureNotificationPolicy, listNotificationOptions, unprovenNotificationRegistry } from "../core/notification-policy.ts";
+import type { NotificationAuditPage, NotificationCatalogue, NotificationKind, NotificationOwner, NotificationRegistry } from "../core/notification-policy.ts";
 import type { ClinicIntakeAuditEntry, ClinicIntakeAuditPage } from "../core/clinic-intake-setting.ts";
 import { captureStaffedDestination, listStaffedDestinations, resolveStaffedDestination, unprovenStaffedDestinationRegistry, validStaffedDestinationChange, validStaffedDestinationScope } from "../core/staffed-destination.ts";
 import type { StaffedDestinationAuditEntry, StaffedDestinationAuditPage, StaffedDestinationCatalogue, StaffedDestinationRegistry } from "../core/staffed-destination.ts";
@@ -61,6 +63,7 @@ export type ImportedReferenceClinicAutomation = Readonly<{
   sourceVersion: number;
   sourceEnabled: boolean;
   intake?: Readonly<{ history: readonly ClinicIntakeAuditEntry[]; sourceVersion: number; sourceEnabled: boolean }>;
+  notifications?: readonly ClinicNotificationArchiveRow[];
 }>;
 
 export class MemoryPolicyStore implements PolicyStore {
@@ -113,10 +116,11 @@ export class MemoryPolicyStore implements PolicyStore {
                       cancellationHistory: readonly CancellationSettingAuditEntry[] = [],
                       reschedulingHistory: readonly ReschedulingSettingAuditEntry[] = [],
                       intake?: ImportedReferenceClinicAutomation["intake"],
-                      staffedDestinationHistory: readonly StaffedDestinationAuditEntry[] = []): MemoryPolicyStore {
+                      staffedDestinationHistory: readonly StaffedDestinationAuditEntry[] = [],
+                      notifications: readonly ClinicNotificationArchiveRow[] = []): MemoryPolicyStore {
     return MemoryPolicyStore.fromImportedMany(
       [{ scope, policy: sourceHead, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, cancellationHistory, reschedulingHistory, staffedDestinationHistory }],
-      [{ scope, history: automationHistory, sourceVersion: sourceAutomationVersion, sourceEnabled: sourceAutomationEnabled, ...(intake ? { intake } : {}) }],
+      [{ scope, history: automationHistory, sourceVersion: sourceAutomationVersion, sourceEnabled: sourceAutomationEnabled, notifications, ...(intake ? { intake } : {}) }],
       importActorRef, importedAt);
   }
 
@@ -178,6 +182,8 @@ export class MemoryPolicyStore implements PolicyStore {
       store.automationChanges.set(key, automation);
       store.intake.importDisabled(clinic.scope, { version: String(clinic.intake?.sourceVersion ?? 0),
         enabled: clinic.intake?.sourceEnabled ?? false }, clinic.intake?.history ?? [], importActorRef, importedAt);
+      const notifications = notificationArchiveSnapshot(notificationImportHistory(clinic.notifications, importActorRef, importedAt));
+      store.notifications.importSnapshot(clinic.scope, notifications.settings, notifications.history);
     }
     return store;
   }
@@ -206,6 +212,9 @@ export class MemoryPolicyStore implements PolicyStore {
     owner: NotificationOwner | null, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
     const changed = await this.notifications.changeOwner(scope, expectedVersion, kind, owner, actorRef);
     return changed.ok ? this.read(scope) : changed;
+  }
+  async listNotificationOptions(scope: LocationScope): Promise<Result<NotificationCatalogue, PolicyFailure>> {
+    return listNotificationOptions(this.notificationRegistry, scope);
   }
   async listNotificationChanges(scope: LocationScope, afterVersion?: number): Promise<Result<NotificationAuditPage, PolicyFailure>> {
     return this.notifications.listChanges(scope, afterVersion);

@@ -11,9 +11,9 @@ import type { TimerPort } from "../../src/core/timer.ts";
 
 const now = "2026-10-02T21:00:00.000Z";
 const scope = { tenantId: "notification-capture", clinicId: "clinic", locationId: "main" };
-notificationSettingsContract("memory", registry => new MemoryClinicNotificationSettingStore(() => now, registry));
+notificationSettingsContract("E2E-257 memory", registry => new MemoryClinicNotificationSettingStore(() => now, registry));
 
-test("notification admission captures the owner and host version without inheriting forged policy authority", async () => {
+test("E2E-257 notification admission captures the owner and host version without inheriting forged policy authority", async () => {
   let hostVersion = "host-v1";
   let supported = true;
   const policy = new MemoryPolicyStore(undefined, () => now, undefined, undefined, undefined, {
@@ -54,7 +54,7 @@ test("notification admission captures the owner and host version without inherit
   assert.deepEqual(cleared.value.notificationBindings, {});
 });
 
-test("notification capture resolves independent kinds in parallel and clones registry output", async () => {
+test("E2E-257 notification capture resolves independent kinds in parallel and clones registry output", async () => {
   const declarations: unknown[] = [];
   const pending: Array<() => void> = [];
   const settings = { version: "3", owners: { bookingConfirmation: "host", cancellationConfirmation: "abby", reschedulingConfirmation: "host" } } as const;
@@ -76,7 +76,7 @@ test("notification capture resolves independent kinds in parallel and clones reg
   assert.equal(captured.notificationBindings?.bookingConfirmation?.scope.tenantId, scope.tenantId);
 });
 
-test("a hung notification host lookup has a bounded deadline, abort and typed readiness failure", async () => {
+test("E2E-257 a hung notification host lookup has a bounded deadline, abort and typed readiness failure", async () => {
   let fire!: () => void;
   let observed: AbortSignal | undefined;
   let canceled = false;
@@ -93,7 +93,7 @@ test("a hung notification host lookup has a bounded deadline, abort and typed re
   assert.equal(canceled, true);
 });
 
-test("failed clinic audit clocks cannot commit a notification preference", async () => {
+test("E2E-257 failed clinic audit clocks cannot commit a notification preference", async () => {
   for (const clock of [() => { throw new Error("clock unavailable"); }, () => "not-a-date"]) {
     const store = new MemoryClinicNotificationSettingStore(clock, notificationRegistry());
     assert.deepEqual(await store.changeOwner(scope, "0", "bookingConfirmation", "host", "owner"),

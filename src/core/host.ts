@@ -179,6 +179,7 @@ export interface OperatorAlertHost {
 
 export interface PolicyStore {
   read(scope: LocationScope): Promise<Result<CallPolicy, PolicyFailure>>;
+  listNotificationOptions(scope: LocationScope): Promise<Result<import("./notification-policy.ts").NotificationCatalogue, PolicyFailure>>;
   changeNotificationOwner(scope: LocationScope, expectedVersion: string,
     kind: import("./notification-policy.ts").NotificationKind, owner: import("./notification-policy.ts").NotificationOwner | null,
     actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;

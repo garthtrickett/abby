@@ -20,6 +20,12 @@ export class MemoryClinicNotificationSettingStore implements ClinicNotificationS
   current(scope: NotificationClinicScope): NotificationSettings {
     return structuredClone(this.states.get(clinicKey(scope)) ?? defaultNotificationSettings());
   }
+  importSnapshot(scope: NotificationClinicScope, settings: NotificationSettings, history: readonly NotificationAuditEntry[]): void {
+    const key = clinicKey(scope);
+    if (this.states.has(key)) throw new Error("duplicate imported notification clinic");
+    this.states.set(key, structuredClone(settings));
+    this.histories.set(key, structuredClone([...history]));
+  }
   async read(scope: NotificationClinicScope): Promise<Result<NotificationSettings, PolicyFailure>> {
     return validNotificationClinicScope(scope) ? ok(this.current(scope)) : err({ kind: "invalidValue" });
   }
