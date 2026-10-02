@@ -132,7 +132,7 @@ test("E2E-252 cancellation edits use the configured HTTPS host origin exactly", 
     [row.actorRef, row.previousEnabled]), [["https-owner", false]]);
 });
 
-test("E2E-253 every dashboard writer uses the configured HTTPS origin before parsing input", async t => {
+test("E2E-253 E2E-254 every dashboard writer uses the configured HTTPS origin before parsing input", async t => {
   const scope = { tenantId: "all-writers-https", clinicId: "clinic", locationId: "main" };
   const policy = new MemoryPolicyStore();
   const reception = new TextReception(new MemoryLedger(), policy, new ReferenceClinicHost([], []));
@@ -174,7 +174,7 @@ test("E2E-253 every dashboard writer uses the configured HTTPS origin before par
     [["1", true, "https-owner"], ["2", false, "https-owner"]]);
 });
 
-test("E2E-253 local reference origin omission and supervised setup restrictions survive the shared guard", async t => {
+test("E2E-253 E2E-254 local reference origin omission and supervised setup restrictions survive the shared guard", async t => {
   const scope = { tenantId: "origin-profile-compat", clinicId: "clinic", locationId: "main" };
   const actor = { actorRef: "local-owner", role: "clinicAdmin" as const, scope };
   const policy = new MemoryPolicyStore();
