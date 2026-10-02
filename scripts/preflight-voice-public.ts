@@ -100,11 +100,14 @@ async function check(): Promise<void> {
     process.stdout.write("voice public configuration valid\n");
     return;
   }
-  const primary = await fetch(config.webhookUrl, { method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ AccountSid: `AC${"0".repeat(32)}` }),
-    signal: AbortSignal.timeout(5_000) });
-  if (primary.status !== 403) throw new Error("public webhook did not reject unsigned traffic");
+  let primary: Response;
+  try {
+    primary = await fetch(config.webhookUrl, { method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ AccountSid: `AC${"0".repeat(32)}` }),
+      signal: AbortSignal.timeout(5_000) });
+  } catch { throw new Error("public webhook unreachable"); }
+  if (primary.status !== 403) throw new Error(`public webhook returned HTTP ${primary.status} for unsigned traffic`);
   if (!await unsignedStreamRejected(config.streamUrl)) {
     throw new Error("public WSS route did not reject unsigned traffic");
   }
@@ -132,7 +135,10 @@ async function check(): Promise<void> {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   try { await check(); }
   catch (error) {
-    const message = error instanceof Error && /^(missing|invalid) ABBY_[A-Z0-9_]+$/.test(error.message)
+    const message = error instanceof Error &&
+      (/^(missing|invalid) ABBY_[A-Z0-9_]+$/.test(error.message) ||
+       (process.argv[2] === "--transport-only" &&
+        /^public (webhook (unreachable|returned HTTP [0-9]{3} for unsigned traffic)|WSS route did not reject unsigned traffic)$/.test(error.message)))
       ? error.message : "voice public preflight failed";
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
