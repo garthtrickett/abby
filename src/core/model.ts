@@ -56,6 +56,9 @@ export type StaffDestination =
 export type ActionKind = "book" | "cancel" | "reschedule" | "intake";
 export type CapabilityId = ActionKind | "transfer";
 export type CapabilityMode = "execute" | "requestOnly" | "unavailable";
+
+/** Host permissions are independent of saved clinic toggles. */
+export type AppointmentSettingModes = Readonly<{ cancellation?: CapabilityMode; rescheduling?: CapabilityMode }>;
 export type StaffedInterval = Readonly<{ startsAt: string; endsAt: string }>;
 /** Sunday is 0; endMinute before startMinute crosses midnight. */
 export type LocalStaffWindow = Readonly<{ weekday: number; startMinute: number; endMinute: number }>;
@@ -108,6 +111,8 @@ export type CallPolicy = Readonly<{
   bookingEnabled: boolean;
   /** Absent on legacy snapshots; policy-store default is false. */
   cancellationEnabled?: boolean;
+  /** Absent on legacy snapshots; policy-store default is false. */
+  reschedulingEnabled?: boolean;
   /** Absent on legacy snapshots; the effective default is staffRequest. */
   afterHoursMode?: AfterHoursMode;
   afterHoursInfo?: ApprovedAfterHoursInfo;

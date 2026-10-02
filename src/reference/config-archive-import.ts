@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { CancellationSettingAuditEntry } from "../core/host.ts";
+import type { CancellationSettingAuditEntry, ReschedulingSettingAuditEntry } from "../core/host.ts";
 import { MemoryLedger } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
 import type { CallPolicy, LocationScope, Result, StaffDestination } from "../core/model.ts";
@@ -192,18 +192,28 @@ function cancellationAudit(data: Pick<ConfigArchiveData, "policies">): Cancellat
   });
 }
 
+function reschedulingAudit(data: Pick<ConfigArchiveData, "policies">): ReschedulingSettingAuditEntry[] {
+  return data.policies.filter(row => row.settingKind === "rescheduling").sort((left, right) => left.version - right.version).map(row => {
+    if (!row.changedBy || typeof row.previousReschedulingEnabled !== "boolean" || !row.changedAt ||
+        typeof row.policy.reschedulingEnabled !== "boolean") throw new Error("invalid rescheduling audit");
+    return { version: String(row.version), enabled: row.policy.reschedulingEnabled, actorRef: row.changedBy,
+      previousEnabled: row.previousReschedulingEnabled, changedAt: row.changedAt };
+  });
+}
+
 export type MappedConfig = Readonly<{
   policy: CallPolicy;
   policyRows: readonly Readonly<{ version: number; isHead: boolean; policy: CallPolicy; changedBy: string | null;
     previousBookingEnabled: boolean | null; changedAt: string | null;
-    settingKind?: "booking" | "afterHours" | "urgent" | "staffSchedule" | "greeting" | "cancellation";
-    previousCancellationEnabled?: boolean | null; previousAfterHoursMode?: CallPolicy["afterHoursMode"] | null }>[];
+    settingKind?: "booking" | "afterHours" | "urgent" | "staffSchedule" | "greeting" | "cancellation" | "rescheduling";
+    previousCancellationEnabled?: boolean | null; previousReschedulingEnabled?: boolean | null; previousAfterHoursMode?: CallPolicy["afterHoursMode"] | null }>[];
   bookingHistory: readonly BookingSettingAuditEntry[];
   afterHoursHistory: readonly AfterHoursSettingAuditEntry[];
   urgentHistory: readonly UrgentSettingAuditEntry[];
   staffScheduleHistory: readonly StaffScheduleSettingAuditEntry[];
   greetingHistory: readonly GreetingSettingAuditEntry[];
   cancellationHistory: readonly CancellationSettingAuditEntry[];
+  reschedulingHistory: readonly ReschedulingSettingAuditEntry[];
   automationHistory: readonly AutomationSettingAuditEntry[];
   knowledge: MemoryKnowledgeCatalogue;
   knowledgeEntries: readonly KnowledgeEntry[];
@@ -236,11 +246,12 @@ export function mapConfig(data: Pick<ConfigArchiveData, "sourceScope" | "policie
     const staffScheduleHistory = staffScheduleAudit(data);
     const greetingHistory = greetingAudit(data);
     const cancellationHistory = cancellationAudit(data);
+    const reschedulingHistory = reschedulingAudit(data);
     const automationHistory = automationAudit(data);
     const knowledgeEntries = data.knowledge.map(entry => ({ ...entry,
       scope: structuredClone(targetScope), ownerRef: mappedRef(recordingMapper, "knowledgeOwner", entry.ownerRef, data.sourceScope, targetScope) }));
     const knowledge = MemoryKnowledgeCatalogue.fromPublishedHistory(knowledgeEntries);
-    return ok({ policy, policyRows, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, cancellationHistory, automationHistory,
+    return ok({ policy, policyRows, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, cancellationHistory, reschedulingHistory, automationHistory,
       knowledge, knowledgeEntries, mappings: [...decisions.values()] });
   } catch (cause) {
     return err({ kind: cause instanceof UnmappedRef ? "unmappedRef" : "invalidConfigArchive" });
@@ -326,7 +337,7 @@ export class ReferenceConfigArchiveImporter {
     const policy = MemoryPolicyStore.fromImported(targetScope, mapped.value.policy, mapped.value.bookingHistory,
       mapped.value.afterHoursHistory,
       mapped.value.automationHistory, automationHead?.version ?? 0, automationHead?.enabled ?? false, importActorRef, importedAt,
-      mapped.value.urgentHistory, mapped.value.staffScheduleHistory, mapped.value.greetingHistory, mapped.value.cancellationHistory);
+      mapped.value.urgentHistory, mapped.value.staffScheduleHistory, mapped.value.greetingHistory, mapped.value.cancellationHistory, mapped.value.reschedulingHistory);
     const knowledge = mapped.value.knowledge;
     const ledger = new MemoryLedger();
     const stop = await ledger.stopWrites(targetScope, importActorRef, "Imported configuration awaiting target readiness");

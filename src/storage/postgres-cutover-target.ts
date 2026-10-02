@@ -51,6 +51,7 @@ export function receiptMatches(row: TargetImportRow | undefined, data: TenantCon
 
 type PolicyRow = { version: number; policy: unknown; setting_kind: string;
   previous_cancellation_enabled: boolean | null;
+  previous_rescheduling_enabled: boolean | null;
   previous_after_hours_mode: string | null; changed_by: string | null;
   previous_booking_enabled: boolean | null; changed_at: Date | null };
 type AutomationRow = { version: number; enabled: boolean; changed_by: string | null;
@@ -60,8 +61,9 @@ function samePolicy(actual: unknown, expected: CallPolicy): boolean {
   if (!actual || typeof actual !== "object" || Array.isArray(actual)) return false;
   const policy = actual as Record<string, unknown>;
   if (policy.cancellationEnabled !== undefined && typeof policy.cancellationEnabled !== "boolean") return false;
-  return isDeepStrictEqual({ ...policy, cancellationEnabled: policy.cancellationEnabled ?? false },
-    { ...expected, cancellationEnabled: expected.cancellationEnabled ?? false });
+  if (policy.reschedulingEnabled !== undefined && typeof policy.reschedulingEnabled !== "boolean") return false;
+  return isDeepStrictEqual({ ...policy, cancellationEnabled: policy.cancellationEnabled ?? false, reschedulingEnabled: policy.reschedulingEnabled ?? false },
+    { ...expected, cancellationEnabled: expected.cancellationEnabled ?? false, reschedulingEnabled: expected.reschedulingEnabled ?? false });
 }
 type KnowledgeRow = { source_ref: string; version: number; status: string; owner_ref: string;
   answer_text: string; effective_from: Date; effective_until: Date; actor_ref: string; changed_at: Date };
@@ -103,12 +105,12 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       { version: 0, isHead: true, policy: mapped.value.policy, changedBy: null,
         previousBookingEnabled: null, changedAt: null }];
     const actualPolicies = (await sql<PolicyRow>`select version, policy, setting_kind,
-      previous_after_hours_mode, previous_cancellation_enabled, changed_by, previous_booking_enabled, changed_at
+      previous_after_hours_mode, previous_cancellation_enabled, previous_rescheduling_enabled, changed_by, previous_booking_enabled, changed_at
       from clinic_settings where tenant_id = ${data.targetTenantId} and clinic_id = ${location.targetScope.clinicId}
       and location_id = ${location.targetScope.locationId} order by version`.execute(trx)).rows;
     const head = expectedRows.find(row => row.isHead)!;
     if (actualPolicies.length !== expectedRows.length + Number(head.policy.bookingEnabled) +
-        Number(head.policy.cancellationEnabled === true)) return false;
+        Number(head.policy.cancellationEnabled === true) + Number(head.policy.reschedulingEnabled === true)) return false;
     expectedTotals.policies += actualPolicies.length;
     for (const [index, expected] of expectedRows.entries()) {
       const actual = actualPolicies[index];
@@ -116,6 +118,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
           actual.setting_kind !== (expected.settingKind ?? "booking") ||
           actual.previous_after_hours_mode !== (expected.previousAfterHoursMode ?? null) ||
           actual.previous_cancellation_enabled !== (expected.previousCancellationEnabled ?? null) ||
+          actual.previous_rescheduling_enabled !== (expected.previousReschedulingEnabled ?? null) ||
           actual.changed_by !== expected.changedBy ||
           actual.previous_booking_enabled !== expected.previousBookingEnabled ||
           !sameInstant(actual.changed_at, expected.changedAt)) return false;
@@ -129,19 +132,32 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
         capabilities: { ...current.capabilities, book: "unavailable" } };
       if (actual.version !== version || !samePolicy(actual.policy, disabled) ||
           actual.setting_kind !== "booking" || actual.previous_after_hours_mode !== null ||
-          actual.previous_cancellation_enabled !== null ||
+          actual.previous_cancellation_enabled !== null || actual.previous_rescheduling_enabled !== null ||
           actual.changed_by !== actor || actual.previous_booking_enabled !== true ||
           !(actual.changed_at instanceof Date)) return false;
       current = disabled;
     }
     if (current.cancellationEnabled === true) {
-      const actual = actualPolicies[extraIndex]!;
+      const actual = actualPolicies[extraIndex++]!;
       const disabled: CallPolicy = { ...current, policyVersion: String(++version), cancellationEnabled: false,
         capabilities: { ...current.capabilities, cancel: "unavailable" } };
       if (actual.version !== version || !samePolicy(actual.policy, disabled) ||
           actual.setting_kind !== "cancellation" || actual.previous_after_hours_mode !== null ||
           actual.previous_booking_enabled !== null || actual.previous_cancellation_enabled !== true ||
+          actual.previous_rescheduling_enabled !== null ||
           actual.changed_by !== actor || !(actual.changed_at instanceof Date)) return false;
+      current = disabled;
+    }
+    if (current.reschedulingEnabled === true) {
+      const actual = actualPolicies[extraIndex++]!;
+      const disabled: CallPolicy = { ...current, policyVersion: String(++version), reschedulingEnabled: false,
+        capabilities: { ...current.capabilities, reschedule: "unavailable" } };
+      if (actual.version !== version || !samePolicy(actual.policy, disabled) ||
+          actual.setting_kind !== "rescheduling" || actual.previous_after_hours_mode !== null ||
+          actual.previous_booking_enabled !== null || actual.previous_rescheduling_enabled !== true ||
+          actual.previous_cancellation_enabled !== null ||
+          actual.changed_by !== actor || !(actual.changed_at instanceof Date)) return false;
+      current = disabled;
     }
     const actualKnowledge = (await sql<KnowledgeRow>`select source_ref, version, status, owner_ref, answer_text,
       effective_from, effective_until, actor_ref, changed_at from clinic_knowledge_events

@@ -1,5 +1,5 @@
 import { html } from "lit-html";
-import type { CancellationSettingAuditPage } from "../../core/host.ts";
+import type { CancellationSettingAuditPage, ReschedulingSettingAuditPage } from "../../core/host.ts";
 import type { CallPolicy, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor } from "../../reference/command-gateway.ts";
@@ -26,6 +26,7 @@ export type DashboardState = {
   automationAuditPage: AutomationSettingAuditPage | undefined;
   auditPage: BookingSettingAuditPage | undefined;
   cancellationAuditPage: CancellationSettingAuditPage | undefined;
+  reschedulingAuditPage: ReschedulingSettingAuditPage | undefined;
   afterHoursAuditPage: AfterHoursSettingAuditPage | undefined;
   afterHoursInfoVersion: string;
   afterHoursApprovedText: string;
@@ -69,8 +70,11 @@ export type DashboardActions = Readonly<{
   loadMoreAutomationAudit(): void;
   toggleBooking(): void;
   toggleCancellation(): void;
+  toggleRescheduling(): void;
   loadCancellationAudit(): void;
+  loadReschedulingAudit(): void;
   loadMoreCancellationAudit(): void;
+  loadMoreReschedulingAudit(): void;
   loadAudit(): void;
   loadMoreAudit(): void;
   setAfterHoursField(field: "afterHoursInfoVersion" | "afterHoursApprovedText", value: string): void;
@@ -166,6 +170,17 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
         </div>
         ${state.policy ? html`<p class="muted">Cancellation capability: ${state.policy.capabilities.cancel}</p>
           ${state.policy.capabilities.cancel !== "execute" ? html`<p class="muted">This setting cannot grant cancellation permission the clinic's host does not support.</p>` : ""}` : ""}
+      </section>
+      <section class="card" aria-labelledby="rescheduling-title">
+        <div class="row"><div><h2 id="rescheduling-title">Rescheduling automation</h2>
+          <p class="status">${state.policy ? state.policy.reschedulingEnabled === true ? "Rescheduling enabled" : "Rescheduling disabled" : "Rescheduling unavailable"}</p>
+          <p class="muted">Changes apply to new calls. Current calls keep their captured setting.</p></div>
+          ${state.capabilities.some(item => item.id === "settings.appointments.rescheduling.enabled.change.v1")
+            ? html`<button type="button" ?disabled=${state.busy || !state.policy} @click=${() => actions.toggleRescheduling()}>${!state.policy ? "Rescheduling state unavailable" : state.policy.reschedulingEnabled ? "Disable rescheduling" : "Enable rescheduling"}</button>`
+            : html`<span class="pill">View only</span>`}
+        </div>
+        ${state.policy ? html`<p class="muted">Rescheduling capability: ${state.policy.capabilities.reschedule}</p>
+          ${state.policy.capabilities.reschedule !== "execute" ? html`<p class="muted">This setting cannot grant rescheduling permission the clinic's host does not support.</p>` : ""}` : ""}
       </section>
       <section class="card" aria-labelledby="after-hours-title">
         <h2 id="after-hours-title">After-hours information</h2>
@@ -320,6 +335,15 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
           ${state.cancellationAuditPage.entries.length ? html`<ul>${state.cancellationAuditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.enabled ? "enabled" : "disabled"} · ${entry.actorRef} · ${entry.changedAt}</li>`)}</ul>`
             : html`<p>No cancellation setting changes recorded.</p>`}
           ${state.cancellationAuditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreCancellationAudit()}>Load more cancellation history</button>` : ""}
+        </div>` : html`<p class="muted">Setting history unavailable.</p>`}
+      </section>` : ""}
+      ${state.capabilities.some(item => item.id === "settings.appointments.rescheduling.audit.v1") ? html`<section class="card" aria-labelledby="rescheduling-audit-title">
+        <div class="row"><h2 id="rescheduling-audit-title">Rescheduling setting history</h2>
+          <button type="button" ?disabled=${state.busy} @click=${() => actions.loadReschedulingAudit()}>Refresh rescheduling history</button></div>
+        ${state.reschedulingAuditPage ? html`<div aria-label="Rescheduling setting audit">
+          ${state.reschedulingAuditPage.entries.length ? html`<ul>${state.reschedulingAuditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.enabled ? "enabled" : "disabled"} · ${entry.actorRef} · ${entry.changedAt}</li>`)}</ul>`
+            : html`<p>No rescheduling setting changes recorded.</p>`}
+          ${state.reschedulingAuditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreReschedulingAudit()}>Load more rescheduling history</button>` : ""}
         </div>` : html`<p class="muted">Setting history unavailable.</p>`}
       </section>` : ""}
       <section class="card" aria-labelledby="review-title">

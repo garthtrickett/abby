@@ -19,7 +19,7 @@ if (!url) throw new Error("DATABASE_URL is required");
 const db = connectPostgres(url);
 after(async () => { await db.destroy(); });
 
-test("E2E-168 E2E-252 altered receipt or cancellation history cannot publish a route", async () => {
+test("E2E-168 E2E-252 E2E-254 altered receipt or appointment setting history cannot publish a route", async () => {
   const suffix = randomUUID().slice(0, 8);
   const source = { tenantId: `receipt-source-${suffix}`, clinicId: "clinic", locationId: "main" };
   const target = { tenantId: `receipt-target-${suffix}`, clinicId: "clinic", locationId: "main" };
@@ -32,6 +32,7 @@ test("E2E-168 E2E-252 altered receipt or cancellation history cannot publish a r
   const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference");
   assert.equal((await policy.changeBookingEnabled(source, "0", true, "source-admin")).ok, true);
   assert.equal((await policy.changeCancellationEnabled(source, "1", true, "source-admin")).ok, true);
+  assert.equal((await policy.changeReschedulingEnabled(source, "2", true, "source-admin")).ok, true);
   const fence = new PostgresPortabilityFence(db);
   const fenceAuthority = { authorizeAndRecord: async () => ok({ requestRef: `receipt-fence-${suffix}` }) };
   assert.equal((await fence.freeze({ tenantId: source.tenantId, actorRef: "source-admin",
@@ -78,21 +79,34 @@ test("E2E-168 E2E-252 altered receipt or cancellation history cannot publish a r
     where target_tenant_id = ${target.tenantId}`.execute(db);
   const targetPolicy = await policy.read(target);
   assert.ok(targetPolicy.ok);
-  assert.equal(targetPolicy.value.policyVersion, "4");
+  assert.equal(targetPolicy.value.policyVersion, "6");
   assert.equal(targetPolicy.value.bookingEnabled, false);
   assert.equal(targetPolicy.value.cancellationEnabled, false);
   const cancellation = await policy.listCancellationChanges(target);
   assert.ok(cancellation.ok);
   assert.deepEqual(cancellation.value.entries.map(row => [row.version, row.enabled, row.previousEnabled]),
-    [["2", true, false], ["4", false, true]]);
+    [["2", true, false], ["5", false, true]]);
   await sql`update clinic_settings set previous_cancellation_enabled = false
-    where tenant_id = ${target.tenantId} and version = 4`.execute(db);
+    where tenant_id = ${target.tenantId} and version = 5`.execute(db);
   assert.deepEqual(await cutover.publish(command, routeAuthority),
     { ok: false, error: { kind: "targetNotReady" } });
   const beforeRestore = await new PostgresNumberRoutingHost(db).identifyCall(accountRef, dialedNumber);
   assert.equal(beforeRestore.ok && beforeRestore.value.tenantId, source.tenantId);
   await sql`update clinic_settings set previous_cancellation_enabled = true
-    where tenant_id = ${target.tenantId} and version = 4`.execute(db);
+    where tenant_id = ${target.tenantId} and version = 5`.execute(db);
+  assert.equal(targetPolicy.value.reschedulingEnabled, false);
+  const rescheduling = await policy.listReschedulingChanges(target);
+  assert.ok(rescheduling.ok);
+  assert.deepEqual(rescheduling.value.entries.map(row => [row.version, row.enabled, row.previousEnabled]),
+    [["3", true, false], ["6", false, true]]);
+  await sql`update clinic_settings set previous_rescheduling_enabled = false
+    where tenant_id = ${target.tenantId} and version = 6`.execute(db);
+  assert.deepEqual(await cutover.publish(command, routeAuthority),
+    { ok: false, error: { kind: "targetNotReady" } });
+  const beforeReschedulingRestore = await new PostgresNumberRoutingHost(db).identifyCall(accountRef, dialedNumber);
+  assert.equal(beforeReschedulingRestore.ok && beforeReschedulingRestore.value.tenantId, source.tenantId);
+  await sql`update clinic_settings set previous_rescheduling_enabled = true
+    where tenant_id = ${target.tenantId} and version = 6`.execute(db);
   await sql`update clinic_settings set setting_kind = 'afterHours', previous_booking_enabled = null,
     previous_after_hours_mode = 'staffRequest' where tenant_id = ${target.tenantId}
       and clinic_id = ${target.clinicId} and location_id = ${target.locationId} and version = 1`.execute(db);

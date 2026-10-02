@@ -1,13 +1,13 @@
 import type { AfterHoursSettingAuditEntry, AfterHoursSettingAuditPage, AutomationSettingAuditEntry, AutomationSettingAuditPage, BookingSettingAuditEntry, BookingSettingAuditPage, GreetingSettingAuditEntry, GreetingSettingAuditPage, StaffScheduleSettingAuditEntry, StaffScheduleSettingAuditPage, UrgentSettingAuditEntry, UrgentSettingAuditPage, PolicyStore, PolicyFailure } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
-import type { AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
+import type { AppointmentSettingModes, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
 import { validAfterHoursSetting } from "../core/after-hours-policy.ts";
 import { validGreetingShape } from "../core/greeting.ts";
 import { validApprovedStaffSchedule } from "../core/staff-schedule.ts";
 import { validUrgentResponseShape } from "../core/urgent-response.ts";
 import { READINESS_REQUIREMENTS, unprovenReadiness } from "../core/readiness.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
-import type { CancellationSettingAuditEntry, CancellationSettingAuditPage } from "../core/host.ts";
+import type { CancellationSettingAuditEntry, CancellationSettingAuditPage, ReschedulingSettingAuditEntry, ReschedulingSettingAuditPage } from "../core/host.ts";
 
 export function referenceDefaultPolicy(scope: LocationScope): CallPolicy {
   return {
@@ -17,6 +17,7 @@ export function referenceDefaultPolicy(scope: LocationScope): CallPolicy {
     automationEnabled: false,
     bookingEnabled: false,
     cancellationEnabled: false,
+    reschedulingEnabled: false,
     afterHoursMode: "staffRequest",
     capabilities: { book: "unavailable", cancel: "requestOnly", reschedule: "requestOnly", intake: "requestOnly", transfer: "requestOnly" },
     staffDestination: { kind: "owner", ownerRef: `reference-staff:${scope.tenantId}:${scope.clinicId}` },
@@ -43,6 +44,7 @@ export type ImportedReferenceLocationPolicy = Readonly<{
   staffScheduleHistory?: readonly StaffScheduleSettingAuditEntry[];
   greetingHistory?: readonly GreetingSettingAuditEntry[];
   cancellationHistory?: readonly CancellationSettingAuditEntry[];
+  reschedulingHistory?: readonly ReschedulingSettingAuditEntry[];
 }>;
 
 export type ImportedReferenceClinicAutomation = Readonly<{
@@ -57,6 +59,7 @@ export class MemoryPolicyStore implements PolicyStore {
   private readonly clinicAutomation = new Map<string, Readonly<{ version: number; enabled: boolean }>>();
   private readonly bookingChanges = new Map<string, BookingSettingAuditEntry[]>();
   private readonly cancellationChanges = new Map<string, CancellationSettingAuditEntry[]>();
+  private readonly reschedulingChanges = new Map<string, ReschedulingSettingAuditEntry[]>();
   private readonly afterHoursChanges = new Map<string, AfterHoursSettingAuditEntry[]>();
   private readonly urgentChanges = new Map<string, UrgentSettingAuditEntry[]>();
   private readonly staffScheduleChanges = new Map<string, StaffScheduleSettingAuditEntry[]>();
@@ -66,13 +69,15 @@ export class MemoryPolicyStore implements PolicyStore {
   private readonly clock: () => string;
   private readonly readiness: AutomationReadiness;
   private readonly hostCancellationMode: CapabilityMode;
+  private readonly hostReschedulingMode: CapabilityMode;
 
   constructor(hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "execute", clock: () => string = () => new Date().toISOString(), readiness: AutomationReadiness = unprovenReadiness,
-              hostCancellationMode: CapabilityMode = "requestOnly") {
+              hostAppointmentModes: CapabilityMode | AppointmentSettingModes = "requestOnly") {
     this.hostBookingMode = hostBookingMode;
     this.clock = clock;
     this.readiness = readiness;
-    this.hostCancellationMode = hostCancellationMode;
+    this.hostCancellationMode = typeof hostAppointmentModes === "string" ? hostAppointmentModes : hostAppointmentModes.cancellation ?? "unavailable";
+    this.hostReschedulingMode = typeof hostAppointmentModes === "string" ? "unavailable" : hostAppointmentModes.rescheduling ?? "unavailable";
   }
 
   /** Builds a disabled, request-only target policy from a validated historical import. */
@@ -83,9 +88,10 @@ export class MemoryPolicyStore implements PolicyStore {
                       urgentHistory: readonly UrgentSettingAuditEntry[] = [],
                       staffScheduleHistory: readonly StaffScheduleSettingAuditEntry[] = [],
                       greetingHistory: readonly GreetingSettingAuditEntry[] = [],
-                      cancellationHistory: readonly CancellationSettingAuditEntry[] = []): MemoryPolicyStore {
+                      cancellationHistory: readonly CancellationSettingAuditEntry[] = [],
+                      reschedulingHistory: readonly ReschedulingSettingAuditEntry[] = []): MemoryPolicyStore {
     return MemoryPolicyStore.fromImportedMany(
-      [{ scope, policy: sourceHead, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, cancellationHistory }],
+      [{ scope, policy: sourceHead, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, cancellationHistory, reschedulingHistory }],
       [{ scope, history: automationHistory, sourceVersion: sourceAutomationVersion, sourceEnabled: sourceAutomationEnabled }],
       importActorRef, importedAt);
   }
@@ -118,6 +124,16 @@ export class MemoryPolicyStore implements PolicyStore {
           capabilities: { ...adjusted.capabilities, cancel: "unavailable" } });
       }
       store.cancellationChanges.set(key, cancellation);
+      const rescheduling = structuredClone([...(location.reschedulingHistory ?? [])]);
+      const reschedulingAdjusted = store.policies.get(key)!;
+      if (reschedulingAdjusted.reschedulingEnabled === true) {
+        const version = String(Number(reschedulingAdjusted.policyVersion) + 1);
+        rescheduling.push({ version, enabled: false, previousEnabled: true,
+          actorRef: importActorRef, changedAt: importedAt });
+        store.policies.set(key, { ...reschedulingAdjusted, policyVersion: version, reschedulingEnabled: false,
+          capabilities: { ...reschedulingAdjusted.capabilities, reschedule: "unavailable" } });
+      }
+      store.reschedulingChanges.set(key, rescheduling);
       store.afterHoursChanges.set(key, structuredClone([...(location.afterHoursHistory ?? [])]));
       store.urgentChanges.set(key, structuredClone([...(location.urgentHistory ?? [])]));
       store.staffScheduleChanges.set(key, structuredClone([...(location.staffScheduleHistory ?? [])]));
@@ -141,10 +157,11 @@ export class MemoryPolicyStore implements PolicyStore {
 
   private effective(policy: CallPolicy): CallPolicy {
     const automation = this.clinicAutomation.get(clinicKey(policy.scope));
-    return { ...policy, cancellationEnabled: policy.cancellationEnabled ?? false,
+    return { ...policy, cancellationEnabled: policy.cancellationEnabled ?? false, reschedulingEnabled: policy.reschedulingEnabled ?? false,
       automationVersion: String(automation?.version ?? 0), automationEnabled: automation?.enabled ?? false,
       capabilities: { ...policy.capabilities, book: policy.bookingEnabled ? this.hostBookingMode : "unavailable",
-        cancel: policy.cancellationEnabled === true ? this.hostCancellationMode : "unavailable" } };
+        cancel: policy.cancellationEnabled === true ? this.hostCancellationMode : "unavailable",
+        reschedule: policy.reschedulingEnabled === true ? this.hostReschedulingMode : "unavailable" } };
   }
 
   async read(scope: LocationScope): Promise<Result<CallPolicy, PolicyFailure>> {
@@ -210,11 +227,31 @@ export class MemoryPolicyStore implements PolicyStore {
     return ok({ entries: structuredClone(entries), ...(entries.length === 50 ? { nextAfterVersion: Number(entries[49]!.version) } : {}) });
   }
 
-  async changeCancellationEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean,
-                                  actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+  async changeCancellationEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+    return this.changeAppointmentEnabled("cancellation", scope, expectedVersion, enabled, actorRef);
+  }
+
+  async changeReschedulingEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+    return this.changeAppointmentEnabled("rescheduling", scope, expectedVersion, enabled, actorRef);
+  }
+
+  async listCancellationChanges(scope: LocationScope, afterVersion?: number): Promise<Result<CancellationSettingAuditPage, PolicyFailure>> {
+    return this.listAppointmentChanges("cancellation", scope, afterVersion);
+  }
+
+  async listReschedulingChanges(scope: LocationScope, afterVersion?: number): Promise<Result<ReschedulingSettingAuditPage, PolicyFailure>> {
+    return this.listAppointmentChanges("rescheduling", scope, afterVersion);
+  }
+
+  private async changeAppointmentEnabled(setting: "cancellation" | "rescheduling", scope: LocationScope,
+                                         expectedVersion: string, enabled: boolean, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
     if (typeof enabled !== "boolean" || typeof actorRef !== "string" || !actorRef.trim() || actorRef.length > 256) {
       return err({ kind: "invalidValue" });
     }
+    const field = setting === "cancellation" ? "cancellationEnabled" : "reschedulingEnabled";
+    const capability = setting === "cancellation" ? "cancel" : "reschedule";
+    const hostMode = setting === "cancellation" ? this.hostCancellationMode : this.hostReschedulingMode;
+    const changes = setting === "cancellation" ? this.cancellationChanges : this.reschedulingChanges;
     const key = scopeKey(scope);
     const current = this.policies.get(key) ?? referenceDefaultPolicy(scope);
     if (current.policyVersion !== expectedVersion) return err({ kind: "versionConflict" });
@@ -222,19 +259,20 @@ export class MemoryPolicyStore implements PolicyStore {
     try { changedAt = this.clock(); }
     catch { return err({ kind: "storageFailure" }); }
     if (!Number.isFinite(Date.parse(changedAt))) return err({ kind: "storageFailure" });
-    const next: CallPolicy = { ...current, policyVersion: String(Number(current.policyVersion) + 1), cancellationEnabled: enabled,
-      capabilities: { ...current.capabilities, cancel: enabled ? this.hostCancellationMode : "unavailable" } };
+    const next: CallPolicy = { ...current, policyVersion: String(Number(current.policyVersion) + 1), [field]: enabled,
+      capabilities: { ...current.capabilities, [capability]: enabled ? hostMode : "unavailable" } };
     this.policies.set(key, structuredClone(next));
-    const history = this.cancellationChanges.get(key) ?? [];
-    history.push({ version: next.policyVersion, enabled, previousEnabled: current.cancellationEnabled ?? false,
+    const history = changes.get(key) ?? [];
+    history.push({ version: next.policyVersion, enabled, previousEnabled: current[field] ?? false,
       actorRef, changedAt });
-    this.cancellationChanges.set(key, history);
+    changes.set(key, history);
     return ok(structuredClone(this.effective(next)));
   }
 
-  async listCancellationChanges(scope: LocationScope, afterVersion?: number): Promise<Result<CancellationSettingAuditPage, PolicyFailure>> {
+  private async listAppointmentChanges(setting: "cancellation" | "rescheduling", scope: LocationScope, afterVersion?: number): Promise<Result<CancellationSettingAuditPage, PolicyFailure>> {
     if (afterVersion !== undefined && (!Number.isSafeInteger(afterVersion) || afterVersion < 0)) return err({ kind: "invalidValue" });
-    const entries = (this.cancellationChanges.get(scopeKey(scope)) ?? [])
+    const changes = setting === "cancellation" ? this.cancellationChanges : this.reschedulingChanges;
+    const entries = (changes.get(scopeKey(scope)) ?? [])
       .filter(item => Number(item.version) > (afterVersion ?? 0)).slice(0, 50);
     return ok({ entries: structuredClone(entries), ...(entries.length === 50 ? { nextAfterVersion: Number(entries[49]!.version) } : {}) });
   }

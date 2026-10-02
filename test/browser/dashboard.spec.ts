@@ -5,7 +5,7 @@ import { MemoryLedger } from "../../src/core/ledger.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
 import { EffectWorker } from "../../src/core/effect-worker.ts";
 import { EffectRecovery } from "../../src/core/effect-recovery.ts";
-import type { LocationScope } from "../../src/core/model.ts";
+import type { AppointmentSettingModes, LocationScope } from "../../src/core/model.ts";
 import { err, ok } from "../../src/core/model.ts";
 import type { AutomationReadiness } from "../../src/core/readiness.ts";
 import type { AvailabilityHost } from "../../src/core/host.ts";
@@ -22,7 +22,7 @@ import { createDashboardServer } from "../../src/standalone/dashboard/server.ts"
 import { CallAdmissionService } from "../../src/voice/admission.ts";
 
 async function localDashboard(role: "clinicAdmin" | "staff", availability?: AvailabilityHost, readiness?: AutomationReadiness,
-                              cancellationMode: "execute" | "requestOnly" | "unavailable" = "requestOnly") {
+                              cancellationMode: "execute" | "requestOnly" | "unavailable" | AppointmentSettingModes = "requestOnly") {
   const scope: LocationScope = { tenantId: "browser-tenant", clinicId: "browser-clinic", locationId: "browser-location" };
   const ledger = new MemoryLedger(readiness);
   const policy = new MemoryPolicyStore("execute", undefined, readiness, cancellationMode);
@@ -133,6 +133,92 @@ test("E2E-252 SET-003: uncertain cancellation edit requires current state before
     await page.unroute("**/api/settings/cancellation-enabled");
     await page.reload();
     await expect(page.getByRole("button", { name: "Disable cancellation", exact: true })).toBeEnabled();
+  } finally { await app.close(); }
+});
+
+test("E2E-254 SET-004: rescheduling setting has independent audit and captured call behavior", async ({ page, request }) => {
+  const app = await localDashboard("clinicAdmin", undefined, undefined, { rescheduling: "execute" });
+  try {
+    await page.goto(app.url);
+    await expect(page.getByText("Rescheduling disabled", { exact: true })).toBeVisible();
+    await expect(page.getByText("Rescheduling capability: unavailable", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Enable rescheduling", exact: true }).click();
+    await expect(page.getByText("Rescheduling setting enabled for new calls.")).toBeVisible();
+    await expect(page.getByText("Rescheduling capability: execute", { exact: true })).toBeVisible();
+    const enabled = await app.reception.startCall("rescheduling-enabled", app.scope, "2026-10-02T10:00:00.000Z");
+    assert.ok(enabled.ok);
+    assert.equal(enabled.value.policy.reschedulingEnabled, true);
+    const before = await app.ledger.read("before-setting", app.scope);
+    assert.ok(before.ok);
+    assert.equal(before.value.policy.capabilities.reschedule, "unavailable");
+    assert.equal((await request.post(`${app.url}/api/settings/rescheduling-enabled`, { data: {
+      expectedVersion: "0", enabled: false } })).status(), 409);
+    for (const invalid of [{ expectedVersion: "1", enabled: "yes" },
+      { expectedVersion: "1", enabled: false, actorRef: "forged" }]) {
+      assert.equal((await request.post(`${app.url}/api/settings/rescheduling-enabled`, { data: invalid })).status(), 400);
+    }
+    assert.equal((await request.post(`${app.url}/api/settings/rescheduling-enabled`, {
+      headers: { origin: "https://foreign.example.test" }, data: { expectedVersion: "1", enabled: false } })).status(), 403);
+    await page.reload();
+    await page.getByRole("button", { name: "Disable rescheduling", exact: true }).click();
+    await expect(page.getByText("Rescheduling setting disabled for new calls.")).toBeVisible();
+    assert.equal(enabled.value.policy.capabilities.reschedule, "execute");
+    const disabled = await app.reception.startCall("rescheduling-disabled", app.scope, "2026-10-02T10:00:00.000Z");
+    assert.ok(disabled.ok);
+    assert.equal(disabled.value.policy.capabilities.reschedule, "unavailable");
+    await expect(page.getByLabel("Rescheduling setting audit")).toContainText("Version 1");
+    await expect(page.getByLabel("Rescheduling setting audit")).toContainText("Version 2");
+    assert.equal((await app.policy.listBookingChanges(app.scope)).ok, true);
+    const audit = await app.policy.listBookingChanges(app.scope);
+    assert.ok(audit.ok);
+    assert.equal(audit.value.entries.length, 0);
+  } finally { await app.close(); }
+});
+
+test("E2E-254 SET-004: unsupported rescheduling and staff edits stay blocked", async ({ page, request }) => {
+  const unsupported = await localDashboard("clinicAdmin", undefined, undefined, { rescheduling: "unavailable" });
+  try {
+    await page.goto(unsupported.url);
+    await page.getByRole("button", { name: "Enable rescheduling", exact: true }).click();
+    await expect(page.getByText("Rescheduling enabled", { exact: true })).toBeVisible();
+    await expect(page.getByText("Rescheduling capability: unavailable", { exact: true })).toBeVisible();
+  } finally { await unsupported.close(); }
+  const staff = await localDashboard("staff");
+  try {
+    await page.goto(staff.url);
+    await expect(page.getByRole("button", { name: "Enable rescheduling", exact: true })).toHaveCount(0);
+    assert.equal((await request.post(`${staff.url}/api/settings/rescheduling-enabled`, {
+      data: { expectedVersion: "0", enabled: true } })).status(), 403);
+    assert.equal((await request.get(`${staff.url}/api/settings/rescheduling-audit`)).status(), 403);
+  } finally { await staff.close(); }
+});
+
+test("E2E-254 SET-004: uncertain rescheduling edit requires current state before another edit", async ({ page }) => {
+  const app = await localDashboard("clinicAdmin");
+  try {
+    await page.goto(app.url);
+    let changed = false;
+    await page.route("**/api/settings/rescheduling-enabled", async route => {
+      const response = await route.fetch();
+      assert.equal(response.status(), 200);
+      changed = true;
+      await route.abort("failed");
+    });
+    await page.route("**/api/settings", async route => {
+      if (changed) await route.abort("failed");
+      else await route.continue();
+    });
+    await page.getByRole("button", { name: "Enable rescheduling", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText("Reload to inspect current settings");
+    await expect(page.getByRole("button", { name: "Rescheduling state unavailable", exact: true })).toBeDisabled();
+    const state = await app.policy.read(app.scope);
+    assert.ok(state.ok);
+    assert.equal(state.value.reschedulingEnabled, true);
+    assert.equal(state.value.policyVersion, "1");
+    await page.unroute("**/api/settings");
+    await page.unroute("**/api/settings/rescheduling-enabled");
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Disable rescheduling", exact: true })).toBeEnabled();
   } finally { await app.close(); }
 });
 

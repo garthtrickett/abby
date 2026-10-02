@@ -26,7 +26,7 @@ const afterHoursMode = choice("staffRequest", "approvedInfoAndRequest");
 const afterHoursInfo = object({ scope, version: key, ownerRef: key,
   approvedText: { type: "string", minLength: 1, maxLength: 1_500 }, approved: { const: true } });
 const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: nonEmpty, automationEnabled: bool, bookingEnabled: bool,
-  cancellationEnabled: bool, afterHoursMode, afterHoursInfo,
+  cancellationEnabled: bool, reschedulingEnabled: bool, afterHoursMode, afterHoursInfo,
   urgentResponse: object({ scope, version: key, ownerRef: key,
     approvedText: { type: "string", minLength: 1, maxLength: 1_500 }, approved: { const: true },
     effectiveFrom: str, effectiveUntil: str }),
@@ -223,6 +223,12 @@ export const capabilityCatalogue = {
   "settings.appointments.cancellation.audit.v1": entry("settings.appointments.cancellation.audit.v1",
     optional({ kind: { const: "settings.appointments.cancellation.audit.v1" }, afterVersion: uint }, ["kind"]),
     reply("cancellationSettingAudit", "page", automationAuditPage), "read", "clinicAdmin"),
+  "settings.appointments.rescheduling.enabled.change.v1": entry("settings.appointments.rescheduling.enabled.change.v1",
+    object({ kind: { const: "settings.appointments.rescheduling.enabled.change.v1" }, expectedVersion: key, enabled: bool }),
+    reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedPolicyVersion"]),
+  "settings.appointments.rescheduling.audit.v1": entry("settings.appointments.rescheduling.audit.v1",
+    optional({ kind: { const: "settings.appointments.rescheduling.audit.v1" }, afterVersion: uint }, ["kind"]),
+    reply("reschedulingSettingAudit", "page", automationAuditPage), "read", "clinicAdmin"),
   "settings.routing.afterHours.change.v1": entry("settings.routing.afterHours.change.v1",
     { oneOf: [
       object({ kind: { const: "settings.routing.afterHours.change.v1" }, expectedVersion: key,

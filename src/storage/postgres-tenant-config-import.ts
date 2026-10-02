@@ -26,13 +26,13 @@ function minimalHistory(data: TenantConfigArchiveData): boolean {
 }
 
 function storedPolicy(scope: LocationScope, version: number, policy: CallPolicy):
-  Readonly<{ scope: LocationScope; policyVersion: string; bookingEnabled: boolean; cancellationEnabled: boolean;
+  Readonly<{ scope: LocationScope; policyVersion: string; bookingEnabled: boolean; cancellationEnabled: boolean; reschedulingEnabled: boolean;
     afterHoursMode: NonNullable<CallPolicy["afterHoursMode"]>; afterHoursInfo?: NonNullable<CallPolicy["afterHoursInfo"]>;
     urgentResponse?: NonNullable<CallPolicy["urgentResponse"]>;
     staffSchedule?: NonNullable<CallPolicy["staffSchedule"]>;
     greeting: NonNullable<CallPolicy["greeting"]> | null }> {
   return { scope: { ...scope }, policyVersion: String(version), bookingEnabled: policy.bookingEnabled,
-    cancellationEnabled: policy.cancellationEnabled ?? false,
+    cancellationEnabled: policy.cancellationEnabled ?? false, reschedulingEnabled: policy.reschedulingEnabled ?? false,
     afterHoursMode: policy.afterHoursMode ?? "staffRequest",
     ...(policy.afterHoursInfo ? { afterHoursInfo: policy.afterHoursInfo } : {}),
     ...(policy.urgentResponse ? { urgentResponse: policy.urgentResponse } : {}),
@@ -96,9 +96,9 @@ async function writeLocation(trx: Transaction<Database>, location: TenantConfigA
   for (const row of policyRows) {
     const value = mode === "standaloneMinimal" ? storedPolicy(scope, row.version, row.policy) : row.policy;
     await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy,
-      setting_kind, previous_after_hours_mode, previous_cancellation_enabled, changed_by, previous_booking_enabled, changed_at) values
+      setting_kind, previous_after_hours_mode, previous_cancellation_enabled, previous_rescheduling_enabled, changed_by, previous_booking_enabled, changed_at) values
       (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, ${row.version},
-       ${JSON.stringify(value)}::jsonb, ${row.settingKind ?? "booking"}, ${row.previousAfterHoursMode ?? null}, ${row.previousCancellationEnabled ?? null},
+       ${JSON.stringify(value)}::jsonb, ${row.settingKind ?? "booking"}, ${row.previousAfterHoursMode ?? null}, ${row.previousCancellationEnabled ?? null}, ${row.previousReschedulingEnabled ?? null},
        ${row.changedBy}, ${row.previousBookingEnabled},
        ${row.changedAt}::timestamptz)`.execute(trx);
   }
@@ -126,6 +126,19 @@ async function writeLocation(trx: Transaction<Database>, location: TenantConfigA
       setting_kind, changed_by, previous_cancellation_enabled, changed_at) values
       (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, ${currentVersion + 1},
        ${JSON.stringify(value)}::jsonb, 'cancellation', ${actorRef}, true, ${importedAt}::timestamptz)`.execute(trx);
+    current = disabled;
+    currentVersion += 1;
+  }
+  if (current.reschedulingEnabled === true) {
+    const disabled: CallPolicy = { ...current, policyVersion: String(currentVersion + 1), reschedulingEnabled: false,
+      capabilities: { ...current.capabilities, reschedule: "unavailable" } };
+    const value = mode === "standaloneMinimal" ? storedPolicy(scope, currentVersion + 1, disabled) : disabled;
+    await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy,
+      setting_kind, changed_by, previous_rescheduling_enabled, changed_at) values
+      (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, ${currentVersion + 1},
+       ${JSON.stringify(value)}::jsonb, 'rescheduling', ${actorRef}, true, ${importedAt}::timestamptz)`.execute(trx);
+    current = disabled;
+    currentVersion += 1;
   }
   if (mode === "standaloneMinimal" && mapped.value.knowledgeEntries.length) throw new Error("minimal import contains knowledge");
   const bySource = new Map<string, typeof mapped.value.knowledgeEntries[number][]>();
