@@ -1,5 +1,5 @@
 import type { ClinicIntakeAuditPage } from "./clinic-intake-setting.ts";
-import type { StaffedDestinationAuditPage } from "./staffed-destination.ts";
+import type { StaffedDestinationAuditPage, StaffedDestinationCatalogue } from "./staffed-destination.ts";
 import type { ActionRequest, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, ApprovedKnowledge, AppointmentRead, AppointmentReadFailure, AvailabilityRead, AvailabilityReadFailure, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, OperatorAlert, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
 import type { ReadinessFailure } from "./readiness.ts";
 
@@ -171,6 +171,7 @@ export interface OperatorAlertHost {
 
 export interface PolicyStore {
   read(scope: LocationScope): Promise<Result<CallPolicy, PolicyFailure>>;
+  listStaffedDestinations(scope: LocationScope): Promise<Result<StaffedDestinationCatalogue, PolicyFailure>>;
   changeStaffedDestination(scope: LocationScope, expectedVersion: string, destinationRef: string | null,
                           actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
   listStaffedDestinationChanges(scope: LocationScope, afterVersion?: number): Promise<Result<StaffedDestinationAuditPage, PolicyFailure>>;

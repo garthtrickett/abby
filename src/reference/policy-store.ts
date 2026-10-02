@@ -1,7 +1,7 @@
 import { MemoryClinicIntakeSettingStore } from "./clinic-intake-setting-store.ts";
 import type { ClinicIntakeAuditEntry, ClinicIntakeAuditPage } from "../core/clinic-intake-setting.ts";
-import { captureStaffedDestination, resolveStaffedDestination, unprovenStaffedDestination, validStaffedDestinationChange, validStaffedDestinationScope } from "../core/staffed-destination.ts";
-import type { StaffedDestinationAuditEntry, StaffedDestinationAuditPage, StaffedDestinationHost } from "../core/staffed-destination.ts";
+import { captureStaffedDestination, listStaffedDestinations, resolveStaffedDestination, unprovenStaffedDestinationRegistry, validStaffedDestinationChange, validStaffedDestinationScope } from "../core/staffed-destination.ts";
+import type { StaffedDestinationAuditEntry, StaffedDestinationAuditPage, StaffedDestinationCatalogue, StaffedDestinationRegistry } from "../core/staffed-destination.ts";
 import type { AfterHoursSettingAuditEntry, AfterHoursSettingAuditPage, AutomationSettingAuditEntry, AutomationSettingAuditPage, BookingSettingAuditEntry, BookingSettingAuditPage, GreetingSettingAuditEntry, GreetingSettingAuditPage, StaffScheduleSettingAuditEntry, StaffScheduleSettingAuditPage, UrgentSettingAuditEntry, UrgentSettingAuditPage, PolicyStore, PolicyFailure } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { PatientSettingModes, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
@@ -77,12 +77,12 @@ export class MemoryPolicyStore implements PolicyStore {
   private readonly hostReschedulingMode: CapabilityMode;
   private readonly hostIntakeMode: CapabilityMode;
   private readonly intake: MemoryClinicIntakeSettingStore;
-  private readonly staffedDestinationHost: StaffedDestinationHost;
+  private readonly staffedDestinationRegistry: StaffedDestinationRegistry;
   private readonly staffedDestinationChanges = new Map<string, StaffedDestinationAuditEntry[]>();
 
   constructor(hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "execute", clock: () => string = () => new Date().toISOString(), readiness: AutomationReadiness = unprovenReadiness,
               hostPatientModes: CapabilityMode | PatientSettingModes = "requestOnly",
-              staffedDestinationHost: StaffedDestinationHost = unprovenStaffedDestination) {
+              staffedDestinationRegistry: StaffedDestinationRegistry = unprovenStaffedDestinationRegistry) {
     this.hostBookingMode = hostBookingMode;
     this.clock = clock;
     this.intake = new MemoryClinicIntakeSettingStore(clock);
@@ -90,7 +90,7 @@ export class MemoryPolicyStore implements PolicyStore {
     this.hostCancellationMode = typeof hostPatientModes === "string" ? hostPatientModes : hostPatientModes.cancellation ?? "unavailable";
     this.hostReschedulingMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.rescheduling ?? "unavailable";
     this.hostIntakeMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.intake ?? "unavailable";
-    this.staffedDestinationHost = staffedDestinationHost;
+    this.staffedDestinationRegistry = staffedDestinationRegistry;
   }
 
   /** Builds a disabled, request-only target policy from a validated historical import. */
@@ -185,7 +185,11 @@ export class MemoryPolicyStore implements PolicyStore {
 
   async read(scope: LocationScope): Promise<Result<CallPolicy, PolicyFailure>> {
     return ok(await captureStaffedDestination(this.effective(this.policies.get(scopeKey(scope)) ?? referenceDefaultPolicy(scope)),
-      this.staffedDestinationHost));
+      (bound, ref) => this.staffedDestinationRegistry.resolve(bound, ref)));
+  }
+
+  async listStaffedDestinations(scope: LocationScope): Promise<Result<StaffedDestinationCatalogue, PolicyFailure>> {
+    return listStaffedDestinations(this.staffedDestinationRegistry, scope);
   }
 
   async changeStaffedDestination(scope: LocationScope, expectedVersion: string, destinationRef: string | null,
@@ -195,7 +199,7 @@ export class MemoryPolicyStore implements PolicyStore {
     const current = this.policies.get(key) ?? referenceDefaultPolicy(scope);
     if (current.policyVersion !== expectedVersion) return err({ kind: "versionConflict" });
     if (destinationRef !== null) {
-      const evidence = await resolveStaffedDestination(this.staffedDestinationHost, scope, destinationRef);
+      const evidence = await resolveStaffedDestination((bound, ref) => this.staffedDestinationRegistry.resolve(bound, ref), scope, destinationRef);
       if (!evidence.ok) return evidence;
     }
     // Host validation may await. All location edits share this version, including booking and hours.

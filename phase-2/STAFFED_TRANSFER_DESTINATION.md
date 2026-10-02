@@ -2,15 +2,15 @@
 
 ## Status
 
-`SET-007` (`routing.staffedDestination`) is in progress on `codex/abby-staffed-destination-setting`, based on intake merge `cdfab65aa1ac5f00538578cebe7181b7e57320c0`. The scoped host boundary, memory/PostgreSQL setting stores, public audit and typed admin gateway have focused proof. `E2E-256` in manifest 1.67 is **textImplemented**; its browser, complete voice, carryover and release gates remain pending. This feature is not ready to publish or merge.
+`SET-007` (`routing.staffedDestination`) is in progress on `codex/abby-staffed-destination-setting`, based on intake merge `cdfab65aa1ac5f00538578cebe7181b7e57320c0`. The scoped host boundary, memory/PostgreSQL setting stores, public audit, typed admin gateway, HTTP routes and lit-html picker have focused proof. Four authenticated browser journeys passed with three workers. Complete synthetic calls passed with memory and PostgreSQL storage. `E2E-256` in manifest 1.67 is **syntheticImplemented**; carryover and release gates remain pending. This feature is not ready to publish or merge.
 
 ## Authority and scope
 
 The route is an opaque public host reference for one tenant, clinic and location. Its normal default is unset. `CallPolicy.transferDestinationRef` selects the live transfer route; `staffDestination` and `operatorQueue` select task ownership and are independent. Number-level carrier fallback is also independent and remains `SET-008`.
 
-`StaffedDestinationHost(scope, destinationRef)` resolves the host's current route registry and permissions. Success must contain exactly the requested scope and reference, a nonempty host version, an explicitly supported `execute` or `requestOnly` mode, and `ready: true`. The boundary rejects unknown or malformed references, wrong scope/reference, extra patient-bearing fields, missing readiness, unsupported modes and adapter exceptions. Inputs and results are cloned. Callers cannot submit this evidence through the setting command.
+`StaffedDestinationRegistry` bundles a scoped public-name catalogue and `StaffedDestinationHost(scope, destinationRef)`, which resolves the host's current route registry and permissions. Resolution must contain exactly the requested scope and reference, a nonempty host version, an explicitly supported `execute` or `requestOnly` mode, and `ready: true`. The boundary rejects unknown or malformed references, wrong scope/reference, extra patient-bearing fields, missing readiness, unsupported modes and adapter exceptions. Inputs and results are cloned. Callers cannot submit this evidence through the setting command. The catalogue has at most 50 unique references with public display names and cannot grant permission to transfer.
 
-`captureStaffedDestination` derives the transfer mode and captures `transferDestinationVersion` from this evidence. A stored mode or fabricated host version cannot authorize live transfer. The version is admission evidence, not setting authority. Normal edits affect subsequent snapshots; previously admitted calls retain their captured route and host version. Actual dispatch still uses the composed host transfer port and the existing staffed-hours, presentation and result contracts. This foundation does not prove a played transfer.
+`captureStaffedDestination` derives the transfer mode and captures `transferDestinationVersion` from this evidence. A stored mode or fabricated host version cannot authorize live transfer. The version is admission evidence, not setting authority. Normal edits affect subsequent snapshots; previously admitted calls retain their captured route and host version. Actual dispatch uses the composed host transfer port and the existing staffed-hours, presentation and result contracts. The port receives the captured scope, call ID, session ID, policy version and optional host version; the embedding host must validate this context against its admitted route contract. Legacy trusted snapshots may omit a host version. Complete memory/PostgreSQL synthetic calls assert the exact captured context and destination. Failed transfer drains its new staff effect and immediately dispatches the truthful fallback notice; no subsequent caller turn is needed. Unproven or thrown provider outcomes close without inventing connection or replay. This evidence does not prove a real carrier transfer.
 
 Missing route evidence cannot produce execute mode. Reference request-only fallback retains its existing host task route contract. Strict standalone PostgreSQL always keeps transfer unavailable, even when its constructor receives an execute-mode route resolver and staff-work permission; this setting does not enable patient-specific follow-up.
 
@@ -18,11 +18,12 @@ Missing route evidence cannot produce execute mode. Reference request-only fallb
 
 - `settings.routing.staffedDestination.change.v1` accepts `expectedVersion` and `destinationRef`, with `null` explicitly clearing the route.
 - `settings.routing.staffedDestination.audit.v1` accepts an optional nonnegative safe-integer `afterVersion`.
-- Both commands are clinic-admin only and bind location and audit actor to the trusted gateway identity. Caller-supplied scope, actor, mode or readiness fields are rejected.
+- `settings.routing.staffedDestination.options.v1` returns the scoped host catalogue with public display names.
+- All three commands are clinic-admin only and bind location and audit actor to the trusted gateway identity. Caller-supplied scope, actor, mode or readiness fields are rejected.
 - Route, booking, cancellation, rescheduling, hours and other location edits share the location policy version. Route validation may await the host; the store rechecks this version before committing. PostgreSQL serializes on the same version-zero location row used by existing settings.
 - Clearing remains available when the previous host route is no longer ready. Invalid or failed validation leaves the setting and audit unchanged.
 - Audit entries contain version, destination reference or null, previous reference or null, actor and change time. Pages contain at most 50 route entries; unrelated edits are excluded, so version gaps are expected.
-- A save may commit before its reply is lost. The gateway reports an unknown outcome; a caller must read current state rather than replay its stale command. Browser recovery is still pending.
+- A save may commit before its reply is lost. The gateway reports an unknown outcome; the picker reads current state rather than replaying its stale command. Failed reread locks settings editing until reload verifies the scope and version. Clear remains available if the saved host route has been withdrawn. The picker uses public display names; opaque references are carried in control values.
 
 ## PostgreSQL and privacy
 
@@ -40,6 +41,12 @@ No patient, appointment, call, transcript, task or patient-linked outcome field 
 | PostgreSQL generation, CAS, privacy and rollback foundation | Migration up/down/up, actual Kanel generation, typecheck and 23 focused cases passed; no failures/skips. Included existing patient-setting persistence and rollback cases. |
 | Gateway and manifest first run | Typecheck passed; 27 tests passed, one manifest expectation failed and three PostgreSQL composition cases skipped without a database. The expected ID list still stopped at 255. This invocation is not a passing gate. |
 | Manifest correction and gateway foundation | The expectation now requires all 256 IDs. All 10 focused gateway/setting and manifest cases passed with no failures/skips; diff check passed. |
+| Named catalogue and lit-html typing proof | Typecheck, 11 focused cases, dashboard bundle and diff check passed; no failures/skips. |
+| Authenticated picker and uncertain-save journeys | Typecheck, 17 Node checks, dashboard bundle and four browser cases with three workers passed. No test retries or failures; diff check passed. Cases include default/set/change/clear, shared-version stale edits, role/Origin/identity rejection, active versus next-call snapshots, malformed or lost replies and failed-reread locks. |
+| Complete call first proof | Typecheck passed. The unset/set/change/clear and blocked-transfer journeys passed, but the failed-transfer case showed the fallback notice was created without being queued. This invocation failed and is not a passing gate. |
+| Failed notice delivery correction first proof | Typecheck and existing shared-number voice cases passed. The new failure notice was queued and played; the test incorrectly counted the separately played greeting as a failure notice. This invocation failed. The assertion now identifies the exact transfer failure notice and still requires one played notice and one transfer attempt. |
+| Complete context and exact failure playback correction | All 24 memory/shared-number cases and 14 isolated PostgreSQL cases passed with no failures/skips. PostgreSQL includes existing signed urgent/closed-hours settings and the route persistence/CAS/rollback cases. New complete calls prove admission, streamed greeting/playback, PCM utterance closure, captured route context, connection/failure/unproven/throw outcomes, played failure notice, revoked host, closed/unknown hours and urgent denial. Diff check passed. |
+| Restricted setup boundary | All seven Origin/manifest cases passed with no failures/skips. Restricted Cliniko setup rejects the route POST and both catalogue/audit GETs. Diff check passed. |
 
 Owner-local logs, in the same order:
 
@@ -47,13 +54,19 @@ Owner-local logs, in the same order:
 - `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790967125977.log`
 - `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790967543597.log`
 - `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790967678389.log`
+- `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790968735060.log`
+- `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790969171953.log`
+- `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790970122884.log`
+- `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790970241952.log`
+- `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790970308851.log`
+- `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790970340440.log`
 
 These are foundation checks. The PostgreSQL pass predates the later gateway declarations and stable evidence labels; a final source-matched release must verify the complete feature.
 
 ## Required before publication
 
-1. Authenticated HTTP route and standalone lit-html control using the host's scoped catalogue of public destination names, with opaque references carried by the control rather than entered by the user. Prove default/set/change/clear, invalid/stale/role/Origin, reload, raw versus effective status, active-call versus next-call state, and uncertain-save reread/lock recovery. Restricted Cliniko setup must not expose an unsupported transfer setup route.
-2. Complete memory/PostgreSQL synthetic voice journeys: exact route, queued/played transfer behavior and one attempt; admitted old route versus subsequent changed/cleared route; unsupported host, closed/unknown staffed hours, failed/uncertain transfer and truthful fallback without claiming connection or staff delivery.
+1. Retain the passing authenticated HTTP/lit-html picker and browser proof in the final source-matched release. Restricted Cliniko setup must not expose an unsupported transfer setup route.
+2. Retain the passing complete memory/PostgreSQL synthetic voice journeys in the final source-matched release: exact route and one transfer attempt, admitted versus subsequent snapshots, blocked transfer cases and truthful played failure notice. Carrier connection is represented by explicit synthetic provider evidence; real carrier proof remains pending.
 3. Reference and PostgreSQL carryover: map current and historical route references, preserve the audit, keep unproven target execution disabled, accept safe legacy absence, and reject malformed history or target reconciliation before cutover.
 4. Full local type/text/PostgreSQL/browser gates and mapped settings isolation alone and both observed parallel orders, with unchanged assertions, deadlines and retry policy; generated-type drift and diff checks; evidence recorded for the exact source before ordinary matched-head publication/merge.
 

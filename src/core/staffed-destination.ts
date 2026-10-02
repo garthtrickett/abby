@@ -15,11 +15,24 @@ export type StaffedDestinationEvidence = Readonly<{
 export type StaffedDestinationHost = (scope: LocationScope, destinationRef: string) =>
   Promise<Result<StaffedDestinationEvidence, ReadinessFailure>>;
 
+export type StaffedDestinationCatalogue = Readonly<{
+  scope: LocationScope;
+  hostVersion: string;
+  options: readonly Readonly<{ destinationRef: string; label: string }>[];
+}>;
+export type StaffedDestinationRegistry = Readonly<{
+  resolve: StaffedDestinationHost;
+  list(scope: LocationScope): Promise<Result<StaffedDestinationCatalogue, ReadinessFailure>>;
+}>;
+
 function unready(): Result<never, ReadinessFailure> {
   return err({ kind: "readinessFailed", missing: ["staffDestination"] });
 }
 
 export const unprovenStaffedDestination: StaffedDestinationHost = async () => unready();
+export const unprovenStaffedDestinationRegistry: StaffedDestinationRegistry = {
+  resolve: unprovenStaffedDestination, list: async () => unready(),
+};
 
 export function validStaffedDestinationRef(value: unknown): value is string {
   return typeof value === "string" && !!value.trim() && value.length <= 256 &&
@@ -63,6 +76,37 @@ export async function resolveStaffedDestination(host: StaffedDestinationHost, sc
   } catch {
     return unready();
   }
+}
+
+export function validStaffedDestinationCatalogue(value: unknown, scope: LocationScope): value is StaffedDestinationCatalogue {
+  if (!validStaffedDestinationScope(scope) || !value || typeof value !== "object" || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  const bound = row.scope as Record<string, unknown> | undefined;
+  if (Object.keys(row).sort().join(",") !== "hostVersion,options,scope" ||
+      !bound || typeof bound !== "object" || Array.isArray(bound) || Object.keys(bound).sort().join(",") !== "clinicId,locationId,tenantId" ||
+      bound.tenantId !== scope.tenantId || bound.clinicId !== scope.clinicId || bound.locationId !== scope.locationId ||
+      !validStaffedDestinationRef(row.hostVersion) || !Array.isArray(row.options) || row.options.length > 50) return false;
+  const refs = new Set<string>();
+  for (const value of row.options) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const option = value as Record<string, unknown>;
+    if (Object.keys(option).sort().join(",") !== "destinationRef,label" ||
+        !validStaffedDestinationRef(option.destinationRef) || !validStaffedDestinationRef(option.label) || refs.has(option.destinationRef)) return false;
+    refs.add(option.destinationRef);
+  }
+  return true;
+}
+
+/** Public display names are scoped host data; the catalogue never grants execution permission. */
+export async function listStaffedDestinations(registry: StaffedDestinationRegistry, scope: LocationScope):
+    Promise<Result<StaffedDestinationCatalogue, ReadinessFailure>> {
+  if (!validStaffedDestinationScope(scope)) return unready();
+  try {
+    const bound = structuredClone(scope);
+    const result = await registry.list(structuredClone(bound));
+    if (!result.ok || !validStaffedDestinationCatalogue(result.value, bound)) return unready();
+    return { ok: true, value: structuredClone(result.value) };
+  } catch { return unready(); }
 }
 
 /** One admission snapshot captures the host decision; a saved reference cannot grant execute mode. */

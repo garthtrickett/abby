@@ -1,3 +1,4 @@
+import { staffedDestinationRegistry } from "../support/staffed-destination-registry.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test, { after } from "node:test";
@@ -18,7 +19,7 @@ const host: StaffedDestinationHost = async (scope, ref) => ["host/desk-a", "host
   ? ok({ scope: { ...scope }, destinationRef: ref, hostVersion: "host-route-v1", mode: "execute", ready: true })
   : err({ kind: "readinessFailed", missing: ["staffDestination"] });
 function rich(routeHost: StaffedDestinationHost = host) {
-  return new PostgresPolicyStore(db, referenceDefaultPolicy, "execute", undefined, true, "unsafeReference", false, undefined, routeHost);
+  return new PostgresPolicyStore(db, referenceDefaultPolicy, "execute", undefined, true, "unsafeReference", false, undefined, staffedDestinationRegistry(routeHost));
 }
 
 test("E2E-256 SET-007 PostgreSQL route settings and history survive reconstruction without persisting host permission", async () => {
@@ -53,7 +54,7 @@ test("E2E-256 SET-007 standalone persists only public route configuration and ke
   const scope = { tenantId: `route-minimal-${randomUUID()}`, clinicId: "clinic", locationId: "main" };
   const defaults = (bound: LocationScope) => ({ ...referenceDefaultPolicy(bound), transferDestinationRef: "forged-default-route",
     transferDestinationVersion: "forged-version", capabilities: { ...referenceDefaultPolicy(bound).capabilities, transfer: "execute" as const } });
-  const make = () => new PostgresPolicyStore(db, defaults, "execute", undefined, true, "standaloneMinimal", false, undefined, host);
+  const make = () => new PostgresPolicyStore(db, defaults, "execute", undefined, true, "standaloneMinimal", false, undefined, staffedDestinationRegistry(host));
   const policy = make();
   assert.equal(value(await policy.read(scope)).capabilities.transfer, "unavailable");
   const first = value(await policy.changeStaffedDestination(scope, "0", "host/desk-a", "owner"));
@@ -124,7 +125,7 @@ test("E2E-256 SET-007 route audit pages exclude unrelated changes and rollback r
     url.pathname = `/${name}`;
     fresh = connectPostgres(url.toString());
     await migrate(fresh);
-    const policy = new PostgresPolicyStore(fresh, referenceDefaultPolicy, "execute", undefined, true, "unsafeReference", false, undefined, host);
+    const policy = new PostgresPolicyStore(fresh, referenceDefaultPolicy, "execute", undefined, true, "unsafeReference", false, undefined, staffedDestinationRegistry(host));
     const scope = { tenantId: "route-audit", clinicId: "clinic", locationId: "main" };
     for (let index = 0; index < 51; index++) {
       const head = value(await policy.read(scope));

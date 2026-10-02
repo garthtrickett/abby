@@ -30,7 +30,16 @@ export type PlaybackPort = Readonly<{
   clear(playbackId: string): Promise<boolean>;
 }>;
 export type TransferOutcome = Readonly<{ kind: "connected"; providerConnectionRef: string }> | Readonly<{ kind: "failed" | "unproven" }>;
-export type TransferPort = Readonly<{ request(transferId: string, destinationRef: string): Promise<TransferOutcome> }>;
+export type TransferContext = Readonly<{
+  scope: LocationScope;
+  callId: string;
+  sessionId: string;
+  policyVersion: string;
+  /** Present for a route approved by StaffedDestinationRegistry; legacy host fixtures may omit it. */
+  hostVersion?: string;
+}>;
+/** The host must validate scope, call/session and the captured route version before initiating a transfer. */
+export type TransferPort = Readonly<{ request(transferId: string, destinationRef: string, context: TransferContext): Promise<TransferOutcome> }>;
 /** Speech content is kept in this live session; durable presentation rows may contain only status and opaque IDs. */
 export type TransientPresentationConfig = Readonly<{ greeting: ApprovedGreeting }>;
 export type VoiceSessionFailure = TransitionFailure | TextReceptionFailure | TranscriptFailure |
@@ -455,7 +464,11 @@ export class VoiceSession {
     }
     if (!this.canSend()) return this.closeAfterLeaseLoss(now);
     let outcome: TransferOutcome;
-    try { outcome = decodeTransferOutcome(await this.transfer.request(`${presentation.id}:transfer`, presentation.destinationRef)); }
+    try { outcome = decodeTransferOutcome(await this.transfer.request(`${presentation.id}:transfer`, presentation.destinationRef, {
+      scope: structuredClone(marked.value.policy.scope), callId: this.callId, sessionId: this.sessionId,
+      policyVersion: marked.value.policy.policyVersion,
+      ...(marked.value.policy.transferDestinationVersion === undefined ? {} : { hostVersion: marked.value.policy.transferDestinationVersion }),
+    })); }
     catch { outcome = { kind: "unproven" }; }
     const status = outcome.kind === "connected" ? "connected" : outcome.kind === "failed" ? "failed" : "unproven";
     const resolved = await this.runtime.resolvePresentation(this.callId, presentation.id, status, this.sessionId, now,

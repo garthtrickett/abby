@@ -1,4 +1,6 @@
 import type { ClinicIntakeAuditPage } from "../../core/clinic-intake-setting.ts";
+import { validStaffedDestinationCatalogue, validStaffedDestinationRef } from "../../core/staffed-destination.ts";
+import type { StaffedDestinationAuditPage, StaffedDestinationCatalogue } from "../../core/staffed-destination.ts";
 import { CALL_TERMINAL_REASONS, err, ok } from "../../core/model.ts";
 import type { AfterHoursMode, CallPolicy, LocalStaffWindow, Result, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import { validAfterHoursSetting } from "../../core/after-hours-policy.ts";
@@ -23,6 +25,9 @@ export type DashboardFailure = GatewayFailure | Readonly<{ kind: "transportUnava
 export type DashboardPort = Readonly<{
   capabilities(): Promise<Result<readonly CapabilityDescriptor[], DashboardFailure>>;
   settings(): Promise<Result<CallPolicy, DashboardFailure>>;
+  staffedDestinations(): Promise<Result<StaffedDestinationCatalogue, DashboardFailure>>;
+  staffedDestinationAudit(afterVersion?: number): Promise<Result<StaffedDestinationAuditPage, DashboardFailure>>;
+  changeStaffedDestination(expectedVersion: string, destinationRef: string | null): Promise<Result<CallPolicy, DashboardFailure>>;
   knowledge(): Promise<Result<readonly KnowledgeEntry[], DashboardFailure>>;
   saveKnowledgeDraft(input: Pick<KnowledgeEntry, "sourceRef" | "ownerRef" | "text" | "effectiveFrom" | "effectiveUntil"> & { expectedVersion: string }): Promise<Result<KnowledgeEntry, DashboardFailure>>;
   approveKnowledge(sourceRef: string, expectedVersion: string): Promise<Result<KnowledgeEntry, DashboardFailure>>;
@@ -125,6 +130,8 @@ function policy(value: unknown): Result<CallPolicy, DashboardFailure> {
   return reply?.kind === "settings" && current && typeof current.policyVersion === "string" && typeof current.automationVersion === "string" && typeof current.automationEnabled === "boolean" && typeof current.bookingEnabled === "boolean" && record(current.capabilities)
     && (current.cancellationEnabled === undefined || typeof current.cancellationEnabled === "boolean")
     && (current.reschedulingEnabled === undefined || typeof current.reschedulingEnabled === "boolean")
+    && (current.transferDestinationRef === undefined || validStaffedDestinationRef(current.transferDestinationRef))
+    && (current.transferDestinationVersion === undefined || validStaffedDestinationRef(current.transferDestinationVersion))
     && (current.firstTimeIntakeEnabled === undefined || typeof current.firstTimeIntakeEnabled === "boolean")
     && (current.firstTimeIntakeVersion === undefined || (typeof current.firstTimeIntakeVersion === "string" && /^(0|[1-9][0-9]*)$/.test(current.firstTimeIntakeVersion)))
     && record(current.scope) && validAfterHoursSetting(current.afterHoursMode ?? "staffRequest", current.afterHoursInfo,
@@ -153,6 +160,34 @@ function writeStop(value: unknown): Result<WriteStopStatus, DashboardFailure> {
 }
 
 export class FetchDashboardPort implements DashboardPort {
+  async staffedDestinations(): Promise<Result<StaffedDestinationCatalogue, DashboardFailure>> {
+    const result = await request("/api/settings/staffed-destination-options");
+    if (!result.ok) return result;
+    if (!matchesSchema(capabilityDescriptor("settings.routing.staffedDestination.options.v1").resultSchema,
+      { ok: true, value: result.value })) return err({ kind: "malformed" });
+    const reply = result.value as Extract<GatewayReply, { kind: "staffedDestinationOptions" }>;
+    return validStaffedDestinationCatalogue(reply.catalogue, reply.catalogue.scope) ? ok(reply.catalogue) : err({ kind: "malformed" });
+  }
+
+  async staffedDestinationAudit(afterVersion?: number): Promise<Result<StaffedDestinationAuditPage, DashboardFailure>> {
+    const result = await request(`/api/settings/staffed-destination-audit${afterVersion === undefined ? "" : `?after=${afterVersion}`}`);
+    if (!result.ok) return result;
+    if (!matchesSchema(capabilityDescriptor("settings.routing.staffedDestination.audit.v1").resultSchema,
+      { ok: true, value: result.value })) return err({ kind: "malformed" });
+    const reply = result.value as Extract<GatewayReply, { kind: "staffedDestinationSettingAudit" }>;
+    if (reply.page.entries.some(entry => !/^(0|[1-9][0-9]*)$/.test(entry.version) || !Number.isFinite(Date.parse(entry.changedAt)) ||
+        !validStaffedDestinationRef(entry.actorRef) ||
+        (entry.destinationRef !== null && !validStaffedDestinationRef(entry.destinationRef)) ||
+        (entry.previousDestinationRef !== null && !validStaffedDestinationRef(entry.previousDestinationRef)))) return err({ kind: "malformed" });
+    return ok(reply.page);
+  }
+
+  async changeStaffedDestination(expectedVersion: string, destinationRef: string | null): Promise<Result<CallPolicy, DashboardFailure>> {
+    const result = await request("/api/settings/staffed-destination", { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion, destinationRef }) });
+    return result.ok ? policy(result.value) : result;
+  }
+
   async availabilityBusinesses(): Promise<Result<ClinicAvailabilityBusinessCatalogue, DashboardFailure>> {
     const result = await availabilityCommand({ kind: "clinic.availability.businesses.list.v1" }, "clinicAvailabilityBusinesses");
     return result.ok ? ok(result.value.catalogue) : result;

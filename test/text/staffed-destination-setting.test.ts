@@ -1,10 +1,11 @@
+import { staffedDestinationRegistry } from "../support/staffed-destination-registry.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import { err, ok } from "../../src/core/model.ts";
 import type { LocationScope, Result } from "../../src/core/model.ts";
-import { captureStaffedDestination, resolveStaffedDestination } from "../../src/core/staffed-destination.ts";
-import type { StaffedDestinationEvidence, StaffedDestinationHost } from "../../src/core/staffed-destination.ts";
+import { captureStaffedDestination, listStaffedDestinations, resolveStaffedDestination } from "../../src/core/staffed-destination.ts";
+import type { StaffedDestinationCatalogue, StaffedDestinationEvidence, StaffedDestinationHost } from "../../src/core/staffed-destination.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { MemoryPolicyStore, referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { TextReception } from "../../src/reference/text-reception.ts";
@@ -70,7 +71,7 @@ test("E2E-256 SET-007 host boundary isolates caller and adapter objects and cann
 });
 
 test("E2E-256 SET-007 route edits preserve admitted snapshots, change subsequent calls and record only public audit", async () => {
-  const policy = new MemoryPolicyStore("execute", () => now, undefined, undefined, host);
+  const policy = new MemoryPolicyStore("execute", () => now, undefined, undefined, staffedDestinationRegistry(host));
   const reception = new TextReception(new MemoryLedger(), policy, new ReferenceClinicHost([], []));
   const before = value(await reception.startCall("route-before", scope, now));
   assert.equal(before.policy.transferDestinationRef, undefined);
@@ -105,7 +106,7 @@ test("E2E-256 SET-007 delayed host validation cannot overwrite a concurrent loca
     await held;
     return ok(evidence(bound, ref));
   };
-  const policy = new MemoryPolicyStore("execute", () => now, undefined, undefined, delayed);
+  const policy = new MemoryPolicyStore("execute", () => now, undefined, undefined, staffedDestinationRegistry(delayed));
   const pending = policy.changeStaffedDestination(scope, "0", "host/desk-a", "route-owner");
   await entered;
   value(await policy.changeBookingEnabled(scope, "0", true, "booking-owner"));
@@ -121,7 +122,7 @@ test("E2E-256 SET-007 failed or invalid route edits cannot leave a route or an a
   const policy = new MemoryPolicyStore("execute", () => {
     if (clock === "throw") throw new Error("synthetic clock failed");
     return clock === "invalid" ? "not a timestamp" : now;
-  }, undefined, undefined, host);
+  }, undefined, undefined, staffedDestinationRegistry(host));
   assert.deepEqual(await policy.changeStaffedDestination(scope, "0", "+61400111222", "owner"), unavailable);
   for (const ref of ["", " ", "host\nroute", "x".repeat(257)]) {
     assert.deepEqual(await policy.changeStaffedDestination(scope, "0", ref, "owner"),
@@ -148,7 +149,7 @@ test("E2E-256 SET-007 current host withdrawal affects new reads without changing
   let ready = true;
   const changing: StaffedDestinationHost = async (bound, ref) => ready ? ok(evidence(bound, ref)) :
     err({ kind: "readinessFailed", missing: ["staffDestination"] });
-  const policy = new MemoryPolicyStore("execute", () => now, undefined, undefined, changing);
+  const policy = new MemoryPolicyStore("execute", () => now, undefined, undefined, staffedDestinationRegistry(changing));
   const admitted = value(await policy.changeStaffedDestination(scope, "0", "host/desk-a", "owner"));
   ready = false;
   const next = value(await policy.read(scope));
@@ -164,7 +165,7 @@ test("E2E-256 SET-007 current host withdrawal affects new reads without changing
 });
 
 test("E2E-256 SET-007 route audit pages exclude unrelated edits, preserve clones and isolate locations", async () => {
-  const policy = new MemoryPolicyStore("execute", () => now, undefined, undefined, host);
+  const policy = new MemoryPolicyStore("execute", () => now, undefined, undefined, staffedDestinationRegistry(host));
   for (let index = 0; index < 51; index++) {
     const head = value(await policy.read(scope));
     value(await policy.changeStaffedDestination(scope, head.policyVersion, index % 2 ? null : "host/desk-a", "owner"));
@@ -185,7 +186,7 @@ test("E2E-256 SET-007 route audit pages exclude unrelated edits, preserve clones
 });
 
 test("E2E-256 SET-007 gateway binds route edits to clinic-admin identity and rejects caller-supplied authority", async () => {
-  const policy = new MemoryPolicyStore("execute", () => now, undefined, undefined, host);
+  const policy = new MemoryPolicyStore("execute", () => now, undefined, undefined, staffedDestinationRegistry(host));
   const reception = new TextReception(new MemoryLedger(), policy, new ReferenceClinicHost([], []));
   const change = "settings.routing.staffedDestination.change.v1" as const;
   const audit = "settings.routing.staffedDestination.audit.v1" as const;
@@ -195,11 +196,17 @@ test("E2E-256 SET-007 gateway binds route edits to clinic-admin identity and rej
   assert.deepEqual(descriptor.preconditions, ["expectedPolicyVersion", "hostStaffedDestinationForSet"]);
   for (const role of ["staff", "agent"] as const) {
     const denied = new CommandGateway({ actorRef: role, role, scope }, policy, reception);
-    assert.equal(denied.listPermitted().some(row => row.id === change || row.id === audit), false);
+    assert.equal(denied.listPermitted().some(row => row.id === change || row.id === audit || row.id === "settings.routing.staffedDestination.options.v1"), false);
     assert.deepEqual(await denied.submit({ kind: change, expectedVersion: "0", destinationRef: "host/desk-a" }),
       { ok: false, error: { kind: "forbidden" } });
     assert.deepEqual(await denied.submit({ kind: audit }), { ok: false, error: { kind: "forbidden" } });
+    assert.deepEqual(await denied.submit({ kind: "settings.routing.staffedDestination.options.v1" }), { ok: false, error: { kind: "forbidden" } });
   }
+  const options = value(await admin.submit({ kind: "settings.routing.staffedDestination.options.v1" }));
+  assert.equal(options.kind, "staffedDestinationOptions");
+  if (options.kind !== "staffedDestinationOptions") throw new Error("wrong options reply");
+  assert.deepEqual(options.catalogue.scope, scope);
+  assert.deepEqual(options.catalogue.options.map(row => row.label), ["Front desk", "Reception team"]);
   for (const malformed of [
     { kind: change, expectedVersion: "0", destinationRef: 123 },
     { kind: change, expectedVersion: "0" },
@@ -228,6 +235,34 @@ test("E2E-256 SET-007 gateway binds route edits to clinic-admin identity and rej
   assert.equal(value(await policy.read(scope)).transferDestinationRef, undefined);
 });
 
+test("E2E-256 SET-007 destination catalogue rejects foreign, private, duplicate and malformed host data", async () => {
+  const registry = staffedDestinationRegistry(host);
+  const good = value(await listStaffedDestinations(registry, scope));
+  assert.deepEqual(good.scope, scope);
+  const malformed: unknown[] = [
+    { ...good, scope: { ...scope, clinicId: "foreign" } },
+    { ...good, hostVersion: "" },
+    { ...good, patientNotes: "patient-canary" },
+    { ...good, options: [{ destinationRef: "host/desk-a", label: "Front desk", patientId: "patient-canary" }] },
+    { ...good, options: [good.options[0], good.options[0]] },
+    { ...good, options: [{ destinationRef: "host/desk-a", label: " " }] },
+    { ...good, options: Array.from({ length: 51 }, (_, index) => ({ destinationRef: `desk-${index}`, label: `Desk ${index}` })) },
+    Object.assign([], good),
+  ];
+  for (const candidate of malformed) {
+    assert.deepEqual(await listStaffedDestinations({ resolve: host, list: async () => ok(candidate as StaffedDestinationCatalogue) }, scope), unavailable);
+  }
+  assert.deepEqual(await listStaffedDestinations({ resolve: host, list: async () => { throw new Error("private adapter detail"); } }, scope), unavailable);
+  const returned = value(await listStaffedDestinations({ resolve: host, list: async () => ok(good) }, scope));
+  (returned.options[0] as { label: string }).label = "caller-mutated";
+  assert.equal(good.options[0]!.label, "Front desk");
+  const unsupported = new MemoryPolicyStore("execute", () => now, undefined, undefined,
+    { ...registry, resolve: async () => err({ kind: "readinessFailed", missing: ["staffDestination"] }) });
+  assert.ok((await unsupported.listStaffedDestinations(scope)).ok);
+  assert.deepEqual(await unsupported.changeStaffedDestination(scope, "0", "host/desk-a", "owner"), unavailable);
+  assert.equal(value(await unsupported.read(scope)).transferDestinationRef, undefined);
+});
+
 test("E2E-256 SET-007 a lost command reply requires current state instead of replaying the route edit", async () => {
   class LostRouteReply extends MemoryPolicyStore {
     override async changeStaffedDestination(...args: Parameters<MemoryPolicyStore["changeStaffedDestination"]>) {
@@ -236,7 +271,7 @@ test("E2E-256 SET-007 a lost command reply requires current state instead of rep
       return result;
     }
   }
-  const policy = new LostRouteReply("execute", () => now, undefined, undefined, host);
+  const policy = new LostRouteReply("execute", () => now, undefined, undefined, staffedDestinationRegistry(host));
   const admin = new CommandGateway({ actorRef: "owner", role: "clinicAdmin", scope }, policy,
     new TextReception(new MemoryLedger(), policy, new ReferenceClinicHost([], [])));
   const command = { kind: "settings.routing.staffedDestination.change.v1", expectedVersion: "0", destinationRef: "host/desk-a" } as const;

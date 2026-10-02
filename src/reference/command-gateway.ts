@@ -1,5 +1,5 @@
 import type { ClinicIntakeAuditPage } from "../core/clinic-intake-setting.ts";
-import type { StaffedDestinationAuditPage } from "../core/staffed-destination.ts";
+import type { StaffedDestinationAuditPage, StaffedDestinationCatalogue } from "../core/staffed-destination.ts";
 import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, GreetingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, FinalCallerTurn, LocalStaffWindow, LocationScope, Result, StaffChangeRequest, StaffItem, TransitionFailure } from "../core/model.ts";
@@ -36,6 +36,7 @@ export type HostActor = Readonly<{
 
 export type GatewayCommand =
   | Readonly<{ kind: "settings.read.v1" }>
+  | Readonly<{ kind: "settings.routing.staffedDestination.options.v1" }>
   | Readonly<{ kind: "settings.routing.staffedDestination.change.v1"; expectedVersion: string; destinationRef: string | null }>
   | Readonly<{ kind: "settings.routing.staffedDestination.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "settings.automation.enabled.change.v1"; expectedVersion: string; enabled: boolean }>
@@ -100,6 +101,7 @@ type CommandMissingCatalogue = AssertNever<Exclude<CapabilityId, GatewayCommand[
 
 export type GatewayReply =
   | Readonly<{ kind: "settings"; policy: CallPolicy }>
+  | Readonly<{ kind: "staffedDestinationOptions"; catalogue: StaffedDestinationCatalogue }>
   | Readonly<{ kind: "staffedDestinationSettingAudit"; page: StaffedDestinationAuditPage }>
   | Readonly<{ kind: "automationSettingAudit"; page: AutomationSettingAuditPage }>
   | Readonly<{ kind: "writeStop"; status: WriteStopStatus }>
@@ -192,6 +194,7 @@ export class CommandGateway {
         "clinic.availability.approval.change.v2", "clinic.availability.approval.revoke.v1");
       permitted.push("settings.automation.enabled.change.v1", "settings.automation.audit.v1",
         "settings.routing.staffedDestination.change.v1", "settings.routing.staffedDestination.audit.v1",
+        "settings.routing.staffedDestination.options.v1",
         "settings.appointments.booking.enabled.change.v1", "settings.appointments.booking.audit.v1",
         "settings.appointments.cancellation.enabled.change.v1", "settings.appointments.cancellation.audit.v1",
         "settings.appointments.rescheduling.enabled.change.v1", "settings.appointments.rescheduling.audit.v1",
@@ -296,6 +299,10 @@ export class CommandGateway {
         const result = await this.policy.changeStaffedDestination(this.actor.scope, command.expectedVersion,
           command.destinationRef, this.actor.actorRef);
         return result.ok ? ok({ kind: "settings", policy: result.value }) : result;
+      }
+      case "settings.routing.staffedDestination.options.v1": {
+        const result = await this.policy.listStaffedDestinations(this.actor.scope);
+        return result.ok ? ok({ kind: "staffedDestinationOptions", catalogue: result.value }) : result;
       }
       case "settings.routing.staffedDestination.audit.v1": {
         const result = await this.policy.listStaffedDestinationChanges(this.actor.scope, command.afterVersion);

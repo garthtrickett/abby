@@ -1,8 +1,8 @@
 import { PostgresClinicIntakeSettingStore } from "./postgres-clinic-intake-setting.ts";
 import type { ClinicIntakeAuditPage, ClinicIntakeState } from "../core/clinic-intake-setting.ts";
 import { PostgresStaffedDestinationSettingStore } from "./postgres-staffed-destination-setting.ts";
-import { captureStaffedDestination, unprovenStaffedDestination, validStaffedDestinationRef } from "../core/staffed-destination.ts";
-import type { StaffedDestinationAuditPage, StaffedDestinationHost } from "../core/staffed-destination.ts";
+import { captureStaffedDestination, listStaffedDestinations, unprovenStaffedDestinationRegistry, validStaffedDestinationRef } from "../core/staffed-destination.ts";
+import type { StaffedDestinationAuditPage, StaffedDestinationCatalogue, StaffedDestinationRegistry } from "../core/staffed-destination.ts";
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import type { AfterHoursSettingAuditEntry, AfterHoursSettingAuditPage, AutomationSettingAuditEntry, AutomationSettingAuditPage, BookingSettingAuditEntry, BookingSettingAuditPage, GreetingSettingAuditEntry, GreetingSettingAuditPage, StaffScheduleSettingAuditEntry, StaffScheduleSettingAuditPage, UrgentSettingAuditEntry, UrgentSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
@@ -123,13 +123,13 @@ export class PostgresPolicyStore implements PolicyStore {
   private readonly hostCancellationMode: CapabilityMode;
   private readonly hostReschedulingMode: CapabilityMode;
   private readonly hostIntakeMode: CapabilityMode;
-  private readonly staffedDestinationHost: StaffedDestinationHost;
+  private readonly staffedDestinationRegistry: StaffedDestinationRegistry;
 
   /** Rich policy storage is synthetic-only and requires the explicit unsafeReference mode. */
   constructor(db: Kysely<Database>, defaultPolicy: (scope: LocationScope) => CallPolicy, hostBookingMode: CapabilityMode = "unavailable", readiness: AutomationReadiness = unprovenReadiness,
               staffWorkEnabled = false, storageMode: "unsafeReference" | "standaloneMinimal" = "standaloneMinimal",
               allowDefaultGreeting = false, hostPatientModes: CapabilityMode | PatientSettingModes = "unavailable",
-              staffedDestinationHost: StaffedDestinationHost = unprovenStaffedDestination) {
+              staffedDestinationRegistry: StaffedDestinationRegistry = unprovenStaffedDestinationRegistry) {
     this.db = db;
     this.defaultPolicy = defaultPolicy;
     this.hostBookingMode = hostBookingMode;
@@ -140,7 +140,7 @@ export class PostgresPolicyStore implements PolicyStore {
     this.hostCancellationMode = typeof hostPatientModes === "string" ? hostPatientModes : hostPatientModes.cancellation ?? "unavailable";
     this.hostReschedulingMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.rescheduling ?? "unavailable";
     this.hostIntakeMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.intake ?? "unavailable";
-    this.staffedDestinationHost = staffedDestinationHost;
+    this.staffedDestinationRegistry = staffedDestinationRegistry;
   }
 
   private defaultFor(scope: LocationScope): CallPolicy {
@@ -185,7 +185,7 @@ export class PostgresPolicyStore implements PolicyStore {
       void transferDestinationVersion;
       return { ...safe, capabilities: { ...safe.capabilities, transfer: "unavailable" } };
     }
-    return captureStaffedDestination(composed, this.staffedDestinationHost);
+    return captureStaffedDestination(composed, (bound, ref) => this.staffedDestinationRegistry.resolve(bound, ref));
   }
 
   private staffedDestinationSettings(): PostgresStaffedDestinationSettingStore {
@@ -196,7 +196,12 @@ export class PostgresPolicyStore implements PolicyStore {
         ? standalonePolicy(policy.scope, Number(policy.policyVersion), policy.bookingEnabled,
           policy.afterHoursMode ?? "staffRequest", policy.afterHoursInfo, policy.urgentResponse, policy.staffSchedule,
           policy.greeting ?? null, policy.cancellationEnabled, policy.reschedulingEnabled, policy.transferDestinationRef) : policy,
-    }, this.staffedDestinationHost);
+    }, (bound, ref) => this.staffedDestinationRegistry.resolve(bound, ref));
+  }
+
+  async listStaffedDestinations(scope: LocationScope): Promise<Result<StaffedDestinationCatalogue, PolicyFailure>> {
+    if (this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope)) return err({ kind: "invalidValue" });
+    return listStaffedDestinations(this.staffedDestinationRegistry, scope);
   }
 
   async changeStaffedDestination(scope: LocationScope, expectedVersion: string, destinationRef: string | null,

@@ -246,6 +246,10 @@ export const capabilityCatalogue = {
   "settings.routing.staffedDestination.audit.v1": entry("settings.routing.staffedDestination.audit.v1",
     optional({ kind: { const: "settings.routing.staffedDestination.audit.v1" }, afterVersion: uint }, ["kind"]),
     reply("staffedDestinationSettingAudit", "page", staffedDestinationAuditPage), "read", "clinicAdmin"),
+  "settings.routing.staffedDestination.options.v1": entry("settings.routing.staffedDestination.options.v1",
+    object({ kind: { const: "settings.routing.staffedDestination.options.v1" } }),
+    reply("staffedDestinationOptions", "catalogue", object({ scope, hostVersion: key,
+      options: { type: "array", items: object({ destinationRef: key, label: key }), maxItems: 50 } })), "read", "clinicAdmin"),
   "settings.routing.afterHours.change.v1": entry("settings.routing.afterHours.change.v1",
     { oneOf: [
       object({ kind: { const: "settings.routing.afterHours.change.v1" }, expectedVersion: key,
