@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../support/browser-test.ts";
 import { ClinikoCatalogueReader } from "../../src/cliniko/catalogue.ts";
 import { ClinikoCatalogueSetup, MemoryClinikoApprovalStore } from "../../src/cliniko/catalogue-setup.ts";
 import type { ClinikoApprovalStore } from "../../src/cliniko/catalogue-setup.ts";
