@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { createServer } from "node:net";
 import test from "node:test";
 import { sql } from "kysely";
 import twilio from "twilio";
@@ -14,6 +13,7 @@ import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-s
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 import { PostgresClinikoApprovalStore } from "../../src/storage/postgres-cliniko-approval-store.ts";
 import type { OperationalDailyCounts } from "../../src/voice/operational-counts.ts";
+import { waitForVoiceListener } from "../support/child-voice-listener.ts";
 
 type Fault = "openai-speech" | "speech-primary-stall" | "openai-transcription" | "untrusted-transcript" | "clear-availability" | "clear-unsupported" | "clear-model-failure" | "clear-correction" | "clear-playback-correction" | "cliniko-rate-limit" | "cliniko-server-error" | "cliniko-timeout" | "cliniko-slow-read" | "cliniko-zone-changed" | "cliniko-partial-page" | "cliniko-empty" |
   "cliniko-business-type-removed" | "cliniko-practitioner-type-removed" | "week-alternative" | "practitioner-alternative" |
@@ -55,17 +55,6 @@ async function waitFor(check: () => boolean, label: string, timeoutMs = 8_000): 
   assert.ok(check(), `${label} timed out`);
 }
 
-async function freePort(): Promise<number> {
-  const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  const address = server.address();
-  assert.ok(address && typeof address !== "string");
-  server.close();
-  await once(server, "close");
-  return address.port;
-}
-
 type Call = { socket: WebSocket; messages: Record<string, unknown>[];
   closed: Promise<[number, Buffer]>; streamSid: string };
 type Fixture = { port: number; child: ReturnType<typeof spawn>;
@@ -88,13 +77,13 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
   const databaseName = `abby_test_voice_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl);
   target.pathname = `/${databaseName}`;
-  const port = await freePort();
+  let port = 0;
   const callSid = `CA${randomUUID().replaceAll("-", "")}`;
   const providerCallRefs = new Set([callSid]);
   const env: NodeJS.ProcessEnv = {
     PATH: process.env.PATH, HOME: process.env.HOME, LANG: process.env.LANG,
     DATABASE_URL: target.toString(), ABBY_ISOLATED_POSTGRES_PROBE: "1",
-    ABBY_VOICE_PORT: String(port), ABBY_VOICE_TEST_MODE: "1",
+    ABBY_VOICE_PORT: "0", ABBY_VOICE_TEST_MODE: "1",
     ABBY_SYNTHETIC_VOICE_FAULT: fault, ABBY_TWILIO_TEST_CALLER_NUMBER: caller,
     ABBY_TENANT_ID: "fault-test", ABBY_CLINIC_ID: "clinic", ABBY_LOCATION_ID: "main",
     ABBY_CLINIKO_API_KEY: "synthetic-key-au5", ABBY_CLINIKO_CONTACT_EMAIL: "test@example.com",
@@ -166,6 +155,11 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
       });
       child.stdout?.on("data", data => { processOutput += String(data); });
       child.stderr?.on("data", data => { processOutput += String(data); });
+      const boundPort = await waitForVoiceListener(child);
+      if (port === 0) {
+        port = boundPort;
+        env.ABBY_VOICE_PORT = String(port);
+      } else assert.equal(boundPort, port, "restarted runner must use its original listener port");
       const healthUrl = `http://127.0.0.1:${port}/healthz`;
       const until = Date.now() + 30_000;
       let healthy = false;
