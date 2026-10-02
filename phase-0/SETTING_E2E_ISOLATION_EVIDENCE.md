@@ -302,3 +302,13 @@ Focused proof:
 - `npm run typecheck && npm run build:dashboard && npx playwright test test/browser/https-dashboard.spec.ts --workers=2 --retries=0`: passed TypeScript and the real TLS browser journey. A freshly generated certificate and two actually owned loopback listeners exercise TLS-to-authenticated-dashboard routing. The browser verifies default/on/off, captured active versus new-call policy, reload, actor-bound history, foreign/downgraded/empty Origin and forged staff denial. Certificate trust is scoped to this test case; certificate/key files and both listeners are removed at teardown.
 
 The failing baseline is retained as a failure in its tracked owner log; no product Origin rule, test deadline, concurrency or retry was relaxed. Manifest 1.64 maps 253 design rows and the affected settings/commands to this request/browser evidence. Full carrier evidence remains planned, and actual deployed clinic identity and proxy/certificate configuration remain separate work. Final release results follow after their tracked gate finishes.
+
+Final release for source `beae0e26d2e27d503a8cceccac92885888fbda16` completed successfully in 22m21s (owner-local log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790952956052.log`):
+
+- `npm run typecheck`: passed.
+- `npm run test:text`: 584 passed, 33 PostgreSQL-only skips, zero failures; the separate Node ordering coordinator passed.
+- `npm run test:browser`: all 38 regular browser cases and the separate ordering coordinator passed.
+- `npm run test:settings-isolation`: all 18 representative cases passed alone and both observed four-worker dispatch orders.
+- `npm run test:settings-isolation:postgres`: all 208 Node cases across 27 files passed alone and both observed four-worker dispatch orders; both coordinators passed. All 25 mapped browser cases across six files passed alone and both observed three-worker release orders, with peak three concurrent lifecycles. No mapped case failed or skipped.
+
+No database schema, runtime dependency or production identity changed. Documentation-only result commits preserve the tested runtime inputs. The owner has authorized merging locally verified work without waiting for GitHub CI; carrier and deployed identity evidence remain separate.
