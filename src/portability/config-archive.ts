@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { err, ok } from "../core/model.ts";
-import type { AfterHoursMode, ApprovedAfterHoursInfo, ApprovedUrgentResponse, CallPolicy, LocationScope, Result, StaffDestination, StaffedInterval } from "../core/model.ts";
+import type { AfterHoursMode, ApprovedAfterHoursInfo, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, LocationScope, Result, StaffDestination, StaffedInterval } from "../core/model.ts";
 import { validAfterHoursSetting } from "../core/after-hours-policy.ts";
+import { expandStaffSchedule, validStaffScheduleApproval } from "../core/staff-schedule.ts";
 import { validUrgentResponseShape } from "../core/urgent-response.ts";
 import { materializeVerifiedArchive } from "./archive-envelope.ts";
 import type { ArchiveEnvelope, ArchiveEnvelopeFailure, ArchiveSection, ArchiveSectionManifest } from "./archive-envelope.ts";
@@ -193,6 +194,7 @@ function policy(value: unknown, sourceScope: LocationScope, version: number): Ca
     capabilities: { book: capability("book"), cancel: capability("cancel"), reschedule: capability("reschedule"),
       intake: capability("intake"), transfer: capability("transfer") },
     staffDestination: destination(row.staffDestination), operatorQueue: destination(row.operatorQueue),
+    ...(row.staffSchedule === undefined ? {} : { staffSchedule: approvedStaffSchedule(row.staffSchedule, sourceScope) }),
     ...(row.transferDestinationRef === undefined ? {} : { transferDestinationRef: ref(row.transferDestinationRef, "settings") }) };
   if (row.staffedCoverage !== undefined) {
     const coverage = object(row.staffedCoverage, "settings");
@@ -221,6 +223,30 @@ function policyWithStaffing(result: CallPolicy, row: Record<string, unknown>, so
     return { ...result, staffedIntervals: intervals, ...(row.greeting === undefined ? {} : { greeting: greeting(row.greeting, sourceScope) }) };
   }
   return { ...result, ...(row.greeting === undefined ? {} : { greeting: greeting(row.greeting, sourceScope) }) };
+}
+
+function approvedStaffSchedule(value: unknown, scope: LocationScope): ApprovedStaffSchedule {
+  const row = object(value, "settings");
+  if (Object.keys(row).sort().join(",") !== "approved,closedDates,effectiveFrom,effectiveUntil,ownerRef,timeZone,version,weekly" ||
+      row.approved !== true || typeof row.timeZone !== "string" ||
+      !Array.isArray(row.weekly) || row.weekly.length > 168 ||
+      !Array.isArray(row.closedDates) || row.closedDates.length > 90 ||
+      !row.closedDates.every(date => typeof date === "string")) throw new InvalidConfigArchive("settings");
+  const schedule: ApprovedStaffSchedule = { scope, version: ref(row.version, "settings"),
+    ownerRef: ref(row.ownerRef, "settings"), approved: true,
+    effectiveFrom: instant(row.effectiveFrom, "settings"), effectiveUntil: instant(row.effectiveUntil, "settings"),
+    timeZone: row.timeZone,
+    weekly: row.weekly.map(value => {
+      const window = object(value, "settings");
+      if (Object.keys(window).sort().join(",") !== "endMinute,startMinute,weekday") throw new InvalidConfigArchive("settings");
+      return { weekday: integer(window.weekday, "settings"), startMinute: integer(window.startMinute, "settings"),
+        endMinute: integer(window.endMinute, "settings") };
+    }), closedDates: [...row.closedDates] };
+  if (!validStaffScheduleApproval(schedule, scope) ||
+      !expandStaffSchedule(schedule, "2026-01-01T00:00:00.000Z", "2026-01-01T00:01:00.000Z").ok) {
+    throw new InvalidConfigArchive("settings");
+  }
+  return schedule;
 }
 
 function greeting(value: unknown, sourceScope: LocationScope): NonNullable<CallPolicy["greeting"]> {

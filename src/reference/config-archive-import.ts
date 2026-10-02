@@ -10,7 +10,7 @@ import { MemoryKnowledgeCatalogue } from "./knowledge-catalogue.ts";
 import type { KnowledgeEntry } from "./knowledge-catalogue.ts";
 import { MemoryPolicyStore, referenceDefaultPolicy } from "./policy-store.ts";
 
-export type ImportRefKind = "staffOwner" | "operatorQueue" | "transferDestination" | "knowledgeOwner" | "greetingOwner" | "afterHoursOwner" | "urgentOwner";
+export type ImportRefKind = "staffOwner" | "operatorQueue" | "transferDestination" | "knowledgeOwner" | "greetingOwner" | "afterHoursOwner" | "urgentOwner" | "scheduleOwner";
 export type ReferenceImportMapper = Readonly<{
   mapRef(kind: ImportRefKind, sourceRef: string, sourceScope: LocationScope, targetScope: LocationScope): string | null;
 }>;
@@ -105,6 +105,8 @@ function mapImportedPolicy(source: CallPolicy, mapper: ReferenceImportMapper, so
     operatorQueue: mappedDestination(mapper, source.operatorQueue, sourceScope, targetScope, "operatorQueue"),
     ...(source.transferDestinationRef === undefined ? {} : { transferDestinationRef:
       mappedRef(mapper, "transferDestination", source.transferDestinationRef, sourceScope, targetScope) }),
+    ...(source.staffSchedule === undefined ? {} : { staffSchedule: { ...source.staffSchedule, scope: structuredClone(targetScope),
+      ownerRef: mappedRef(mapper, "scheduleOwner", source.staffSchedule.ownerRef, sourceScope, targetScope) } }),
     ...(source.greeting === undefined ? {} : { greeting: { ...source.greeting, scope: structuredClone(targetScope),
       ownerRef: mappedRef(mapper, "greetingOwner", source.greeting.ownerRef, sourceScope, targetScope) } }),
     ...(source.afterHoursInfo === undefined ? {} : { afterHoursInfo: { ...source.afterHoursInfo,
