@@ -41,13 +41,14 @@ test("default tenant importer writes only minimal policy rows and a strict write
   const rows = await sql<{ version: number; policy: Record<string, unknown> }>`select version, policy
     from clinic_settings where tenant_id = ${target.tenantId} order by version`.execute(db);
   assert.deepEqual(rows.rows.map(row => [row.version, row.policy]), [
-    [0, { scope: target, policyVersion: "0", bookingEnabled: false, afterHoursMode: "staffRequest" }],
-    [1, { scope: target, policyVersion: "1", bookingEnabled: true, afterHoursMode: "staffRequest" }],
-    [2, { scope: target, policyVersion: "2", bookingEnabled: false, afterHoursMode: "staffRequest" }],
+    [0, { scope: target, policyVersion: "0", bookingEnabled: false, afterHoursMode: "staffRequest", greeting: null }],
+    [1, { scope: target, policyVersion: "1", bookingEnabled: true, afterHoursMode: "staffRequest", greeting: null }],
+    [2, { scope: target, policyVersion: "2", bookingEnabled: false, afterHoursMode: "staffRequest", greeting: null }],
   ]);
   const policy = await store.read(target);
   assert.ok(policy.ok);
   assert.equal(policy.value.bookingEnabled, false);
+  assert.equal(policy.value.greeting, undefined);
   const stop = await new PostgresLedger(db).readWriteStop(target);
   assert.ok(stop.ok && stop.value.stopped);
   const reasons = await sql<{ reason: string }>`select reason from clinic_write_stop_events

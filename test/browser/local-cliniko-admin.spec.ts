@@ -134,7 +134,8 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 local owner sees aggregate speech and oper
     const listed = await capabilities.json() as { value: { id: string }[] };
     assert.ok(listed.value.length > 0);
     assert.ok(listed.value.every(item => item.id === "settings.read.v1" || item.id === "operations.daily.v1" ||
-      item.id.startsWith("clinic.availability.")));
+      item.id.startsWith("clinic.availability.") || item.id === "settings.routing.greeting.change.v1" ||
+      item.id === "settings.routing.greeting.audit.v1"));
     assert.equal((await request.post(`${origin}/api/settings/booking-enabled`, { headers: {
       Authorization: basic, Origin: origin, "Content-Type": "application/json" },
     data: { expectedVersion: "0", enabled: true } })).status(), 404);
@@ -168,6 +169,66 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 local owner sees aggregate speech and oper
     assert.equal((await malformedReply.text()).includes("PRIVATE OPERATIONAL CANARY"), false);
     await page.reload();
     await expect(page.getByLabel("Operational counts")).toContainText("unavailable");
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((done, reject) => server.close(error => error ? reject(error) : done()));
+  }
+});
+
+test("E2E-246 local Cliniko panel approves, reloads and disables the greeting", async ({ page, request }) => {
+  const port = await freePort();
+  const origin = `http://127.0.0.1:${port}`;
+  const policy = new MemoryPolicyStore();
+  assert.ok((await policy.changeGreeting(scope, "0", undefined, "setup-seed")).ok);
+  const reception = new TextReception(new MemoryLedger(), policy, new ReferenceClinicHost([], []));
+  const actor = { actorRef: "local-greeting-owner", role: "clinicAdmin" as const, scope };
+  const server = await createHostAuthenticatedDashboardServer({ publicOrigin: origin, surface: "availabilitySetup",
+    resolveActor: incoming => incoming.headers.authorization === basic ? actor
+      : incoming.headers.authorization === "Basic synthetic-staff" ? { ...actor, role: "staff" } : null,
+    unauthorized: response => { response.writeHead(401, { "WWW-Authenticate": 'Basic realm="Abby clinic admin"' }); response.end(); },
+    gatewayFor: bound => new CommandGateway(bound, policy, reception),
+  }, resolve("dist/dashboard/cliniko-admin.js"));
+  try {
+    server.listen(port, "127.0.0.1");
+    await once(server, "listening");
+    await page.context().setHTTPCredentials({ username: "abby-admin", password: token });
+    await page.goto(origin);
+    await expect(page.getByRole("heading", { name: "Approved greeting" })).toBeVisible();
+    await expect(page.getByLabel("Greeting approval status")).toContainText("No approved greeting");
+    const headers = { Authorization: basic, Origin: origin, "Content-Type": "application/json" };
+    const change = { kind: "settings.routing.greeting.change.v1", expectedVersion: "1", enabled: true,
+      greetingVersion: "local-v1", approvedText: "Welcome to the clinic. How can I help?",
+      effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2027-09-01T00:00:00.000Z" };
+    assert.equal((await request.post(`${origin}/api/settings/greeting`, { headers,
+      data: { ...change, ownerRef: "forged-owner" } })).status(), 400);
+    assert.equal((await request.post(`${origin}/api/settings/greeting`, { headers: { ...headers,
+      Origin: "http://foreign.example.test" }, data: change })).status(), 403);
+    assert.equal((await request.post(`${origin}/api/settings/greeting`, { headers: {
+      ...headers, Authorization: "Basic synthetic-staff" }, data: change })).status(), 403);
+    assert.equal((await request.get(`${origin}/api/settings/greeting-audit`, { headers: {
+      Authorization: "Basic synthetic-staff" } })).status(), 403);
+    await page.getByLabel("Local greeting version").fill(change.greetingVersion);
+    await page.getByLabel("Local greeting text").fill(change.approvedText);
+    await page.getByLabel("Local greeting effective from").fill(change.effectiveFrom);
+    await page.getByLabel("Local greeting effective until").fill(change.effectiveUntil);
+    await page.getByRole("button", { name: "Approve greeting for new calls" }).click();
+    await expect(page.getByLabel("Greeting approval status")).toContainText("Greeting saved · policy version 2");
+    await expect(page.getByLabel("Greeting change history")).toContainText("greeting local-v1");
+    const saved = await policy.read(scope);
+    assert.ok(saved.ok);
+    assert.equal(saved.value.greeting?.ownerRef, actor.actorRef);
+    const stale = await request.post(`${origin}/api/settings/greeting`, { headers, data: change });
+    assert.equal(stale.status(), 409);
+    await page.reload();
+    await expect(page.getByLabel("Greeting approval status")).toContainText("Greeting saved · policy version 2");
+    await page.getByRole("button", { name: "Disable greeting for new calls" }).click();
+    await expect(page.getByLabel("Greeting approval status")).toContainText("No approved greeting · policy version 3");
+    await expect(page.getByLabel("Greeting change history")).toContainText("disabled");
+    const disabled = await policy.read(scope);
+    assert.ok(disabled.ok);
+    assert.equal(disabled.value.greeting, undefined);
+    assert.equal((await request.post(`${origin}/api/settings/booking-enabled`, { headers,
+      data: { expectedVersion: "3", enabled: true } })).status(), 404);
   } finally {
     server.closeAllConnections();
     await new Promise<void>((done, reject) => server.close(error => error ? reject(error) : done()));

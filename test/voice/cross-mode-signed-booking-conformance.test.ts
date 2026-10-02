@@ -88,6 +88,13 @@ test("E2E-222 signed booking needs played confirmation across standalone and emb
         const booking = await policy.changeBookingEnabled(scope, "0", true, "clinic-admin");
         assert.ok(booking.ok);
         assert.equal(booking.value.capabilities.book, embedded ? "execute" : "unavailable");
+        if (!embedded) {
+          const greeting = await policy.changeGreeting(scope, "1", { scope, version: "signed-booking-v1",
+            ownerRef: "clinic-admin", approved: true, approvedText: "Welcome to the clinic.",
+            effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2027-09-01T00:00:00.000Z" },
+          "clinic-admin");
+          assert.ok(greeting.ok);
+        }
         const host = new ReferenceClinicHost([{ scope, patientRef, verificationRef,
           expiresAt: "2026-10-01T11:00:00.000Z" }],
         [{ scope, offerRef, serviceRef: "physio", startsAt, expiresAt: "2026-10-01T11:00:00.000Z" }]);

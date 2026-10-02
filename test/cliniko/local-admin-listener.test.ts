@@ -35,7 +35,7 @@ async function freePort(): Promise<number> {
   return address.port;
 }
 
-test("E2E-214 E2E-233 E2E-235 E2E-237 loopback admin reads only its clinic's daily counts",
+test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 loopback admin retains scoped setup and greeting",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
     const adminUrl = process.env.DATABASE_URL;
     assert.ok(adminUrl);
@@ -133,7 +133,8 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 loopback admin reads only its clinic's dai
       const listed = await capabilities.json() as { value: { id: string }[] };
       assert.ok(listed.value.length > 0);
       assert.ok(listed.value.every(item => item.id === "settings.read.v1" || item.id === "operations.daily.v1" ||
-        item.id.startsWith("clinic.availability.")));
+        item.id.startsWith("clinic.availability.") || item.id === "settings.routing.greeting.change.v1" ||
+        item.id === "settings.routing.greeting.audit.v1"));
       assert.equal((await fetch(`${origin}/api/settings/booking-enabled`, { method: "POST", headers: {
         Authorization: basic, Origin: origin, "Content-Type": "application/json" },
       body: JSON.stringify({ expectedVersion: "0", enabled: true }) })).status, 404);
@@ -159,6 +160,38 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 loopback admin reads only its clinic's dai
       assert.ok(state.value.state.approval);
       assert.equal((await command({ kind: "clinic.availability.approval.revoke.v1",
         expectedVersion: 1 })).status, 200);
+      const greetingChange = (value: object, authorization = basic, requestOrigin = origin) =>
+        fetch(`${origin}/api/settings/greeting`, { method: "POST", headers: {
+          "Content-Type": "application/json", Authorization: authorization, Origin: requestOrigin },
+          body: JSON.stringify(value) });
+      const greeting = { kind: "settings.routing.greeting.change.v1", expectedVersion: "0", enabled: true,
+        greetingVersion: "local-v1", approvedText: "Welcome to the clinic. How can I help?",
+        effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2027-09-01T00:00:00.000Z" };
+      const before = await fetch(`${origin}/api/settings`, { headers: { Authorization: basic } });
+      assert.equal(before.status, 200);
+      assert.equal((await before.json() as { value: { policy: { greeting?: unknown } } }).value.policy.greeting, undefined);
+      assert.equal((await greetingChange({ ...greeting, ownerRef: "forged" })).status, 400);
+      assert.equal((await greetingChange(greeting, basic, "http://foreign.example.test")).status, 403);
+      assert.equal((await greetingChange(greeting, "")).status, 401);
+      assert.equal((await greetingChange(greeting)).status, 200);
+      const greetingAudit = await fetch(`${origin}/api/settings/greeting-audit`, { headers: { Authorization: basic } });
+      assert.equal(greetingAudit.status, 200);
+      assert.deepEqual((await greetingAudit.json() as { value: { page: { entries: { greetingVersion?: string }[] } } })
+        .value.page.entries.map(entry => entry.greetingVersion), ["local-v1"]);
+      await stop();
+      await launch();
+      const approved = await fetch(`${origin}/api/settings`, { headers: { Authorization: basic } });
+      assert.equal(approved.status, 200);
+      const approvedPolicy = (await approved.json() as { value: { policy: { policyVersion: string;
+        greeting?: { approvedText: string; ownerRef: string } } } }).value.policy;
+      assert.equal(approvedPolicy.greeting?.approvedText, greeting.approvedText);
+      assert.equal(approvedPolicy.greeting?.ownerRef, "synthetic-owner-214");
+      assert.equal((await greetingChange(greeting)).status, 409);
+      assert.equal((await greetingChange({ kind: "settings.routing.greeting.change.v1",
+        expectedVersion: approvedPolicy.policyVersion, enabled: false })).status, 200);
+      const disabled = await fetch(`${origin}/api/settings`, { headers: { Authorization: basic } });
+      assert.equal(disabled.status, 200);
+      assert.equal((await disabled.json() as { value: { policy: { greeting?: unknown } } }).value.policy.greeting, undefined);
       assert.equal(output.includes(token) || output.includes(apiKey), false);
       const privacy = connectPostgres(target.toString());
       try { assert.deepEqual(await scanPatientDataCanaries(privacy, [

@@ -44,7 +44,7 @@ async function waitFor(check: () => boolean, label: string): Promise<void> {
   assert.ok(check(), `${label} timed out`);
 }
 
-test("E2E-212 durable admin approval pins an active signed call and revocation blocks the next call",
+test("E2E-212 E2E-246 durable admin settings pin a signed call and revocation blocks the next call",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
     const adminUrl = process.env.DATABASE_URL;
     assert.ok(adminUrl);
@@ -83,6 +83,11 @@ test("E2E-212 durable admin approval pins an active signed call and revocation b
       fetch(`${origin}/api/clinic-availability/command`, { method: "POST", headers: {
         "Content-Type": "application/json", Origin: origin, Cookie: `hostSession=${sessionToken}` },
         body: JSON.stringify(command) });
+    const greetingRequest = async (origin: string, command: object): Promise<Response> =>
+      fetch(`${origin}/api/settings/greeting`, { method: "POST", headers: {
+        "Content-Type": "application/json", Origin: origin, Cookie: `hostSession=${sessionToken}` },
+        body: JSON.stringify(command) });
+    const approvedGreetingText = "Welcome from this clinic's approved greeting. Press 1 for possible times today. Press 2 for possible times tomorrow.";
     const openAdmin = async () => {
       const port = await freePort();
       const origin = `http://127.0.0.1:${port}`;
@@ -125,9 +130,13 @@ test("E2E-212 durable admin approval pins an active signed call and revocation b
         body: JSON.stringify({ kind: "clinic.availability.approval.read.v1" }) });
       assert.equal(anonymous.status, 403);
       assert.deepEqual(providerPaths, []);
+      assert.equal((await greetingRequest(firstOrigin, { kind: "settings.routing.greeting.change.v1",
+        expectedVersion: "0", enabled: true, greetingVersion: "clinic-approved-v1",
+        approvedText: approvedGreetingText, effectiveFrom: "2026-09-01T00:00:00.000Z",
+        effectiveUntil: "2027-09-01T00:00:00.000Z" })).status, 200);
       assert.equal((await adminRequest(firstOrigin, { kind: "clinic.availability.approval.change.v1",
         route, selection: { businessId: "11", practitionerId: "22", appointmentTypeId: "33",
-          policyVersion: "0" }, expectedVersion: 0 })).status, 200);
+          policyVersion: "1" }, expectedVersion: 0 })).status, 200);
       assert.ok(providerPaths.length >= 5);
       await closeAdmin();
 
@@ -194,6 +203,7 @@ test("E2E-212 durable admin approval pins an active signed call and revocation b
           mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 },
           customParameters: { abbyBinding: binding } } }));
       await waitFor(() => messages.length >= 2, "approved greeting");
+      assert.equal(speech[0], approvedGreetingText);
       socket.send(JSON.stringify({ event: "mark", sequenceNumber: "2", streamSid,
         mark: { name: (messages[1]!.mark as { name: string }).name } }));
 
@@ -223,6 +233,38 @@ test("E2E-212 durable admin approval pins an active signed call and revocation b
       const rejected = await webhook(`CA${randomUUID().replaceAll("-", "")}`);
       assert.equal(rejected.status, 503);
       assert.doesNotMatch(await rejected.text(), /<Stream/);
+      assert.equal(methods.length, readCount);
+      const thirdOrigin = await openAdmin();
+      assert.equal((await greetingRequest(thirdOrigin, { kind: "settings.routing.greeting.change.v1",
+        expectedVersion: "1", enabled: true, greetingVersion: "missing-keypad-v2",
+        approvedText: "Welcome to the clinic. How can I help?",
+        effectiveFrom: "2026-09-01T00:00:00.000Z",
+        effectiveUntil: "2027-09-01T00:00:00.000Z" })).status, 200);
+      assert.equal((await adminRequest(thirdOrigin, { kind: "clinic.availability.approval.change.v1",
+        route, selection: { businessId: "11", practitionerId: "22", appointmentTypeId: "33",
+          policyVersion: "2" }, expectedVersion: 2 })).status, 200);
+      await closeAdmin();
+      const refusedCallSid = `CA${randomUUID().replaceAll("-", "")}`;
+      const missingInstructions = await webhook(refusedCallSid);
+      assert.equal(missingInstructions.status, 200);
+      const missingXml = await missingInstructions.text();
+      const missingBinding = missingXml.match(/<Parameter name="abbyBinding" value="([^"]+)"\/>/)?.[1];
+      assert.ok(missingBinding);
+      socket = new WebSocket(`ws://127.0.0.1:${voicePort}/twilio/media/`, { headers: {
+        "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, streamUrl, {}),
+      } });
+      await once(socket, "open");
+      const refusedMessages: Record<string, unknown>[] = [];
+      socket.on("message", data => refusedMessages.push(JSON.parse(data.toString()) as Record<string, unknown>));
+      const refusedStreamSid = `MZ${randomUUID().replaceAll("-", "")}`;
+      socket.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
+      socket.send(JSON.stringify({ event: "start", sequenceNumber: "1", streamSid: refusedStreamSid,
+        start: { accountSid, callSid: refusedCallSid, streamSid: refusedStreamSid, tracks: ["inbound"],
+          mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 },
+          customParameters: { abbyBinding: missingBinding } } }));
+      await waitFor(() => socket?.readyState === WebSocket.CLOSED, "invalid stored greeting refusal");
+      assert.equal(refusedMessages.some(message => message.event === "media"), false);
+      socket = undefined;
       assert.equal(methods.length, readCount);
       assert.equal(runnerOutput.includes(caller) || runnerOutput.includes(callSid), false);
       const privacyDb = connectPostgres(target.toString());

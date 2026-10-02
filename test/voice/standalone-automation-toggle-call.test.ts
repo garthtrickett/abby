@@ -101,6 +101,10 @@ test("E2E-018 standalone signed calls use the automation toggle without durable 
       const enabled = await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin");
       assert.ok(enabled.ok);
       assert.equal(enabled.value.automationVersion, "1");
+      assert.ok((await policy.changeGreeting(scope, "0", { scope, version: "automation-greeting-v1",
+        ownerRef: "clinic-admin", approved: true, approvedText: "Hello. How can I help you?",
+        effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2027-09-01T00:00:00.000Z" },
+      "clinic-admin")).ok);
       const active = await signedCall(2);
       const started = await active.call.receive(active.start);
       assert.ok(started.ok);
