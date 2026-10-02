@@ -78,7 +78,7 @@ function message(failure: DashboardFailure): string {
         hostPermissions: "host permissions", selectedLocation: "a selected location", approvedKnowledge: "approved clinic information",
         approvedGreeting: "an approved greeting",
         bookableOffers: "booking setup", staffDestination: "staff destination", afterHoursDestination: "after-hours destination",
-        notificationOwner: "notification owner", fallbackRoute: "tested fallback route", mediaTestCall: "passed media test call",
+        notificationOwner: "notification owner", voiceProfile: "approved locale and voice", fallbackRoute: "tested fallback route", mediaTestCall: "passed media test call",
       };
       const missing = Array.isArray(failure.missing) ? failure.missing.filter((item): item is ReadinessRequirement =>
         READINESS_REQUIREMENTS.includes(item as ReadinessRequirement)) : [];

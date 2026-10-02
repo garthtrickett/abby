@@ -73,7 +73,7 @@ test("E2E-257 notification migration upgrades populated schema and refuses to di
     assert.deepEqual(await notifications.read(scope), { ok: true, value: defaultNotificationSettings() });
     assert.ok((await notifications.changeOwner(scope, "0", "bookingConfirmation", "host", "owner")).ok);
     const stored = await notifications.read(scope);
-    await assert.rejects(() => migrate(upgraded, "down"), /clinic notification setting history must be removed/);
+    await assert.rejects(() => migrateTo(upgraded, "038_staffed_destination_setting_audit"), /clinic notification setting history must be removed/);
     assert.deepEqual(await notifications.read(scope), stored);
     assert.deepEqual(await intake.listChanges(scope), before);
   } finally {
