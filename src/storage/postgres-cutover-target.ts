@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { reconcileNotificationCarryover } from "./postgres-notification-carryover.ts";
 import { isDeepStrictEqual } from "node:util";
 import { sql } from "kysely";
 import type { Transaction } from "kysely";
@@ -69,7 +70,7 @@ function samePolicy(actual: unknown, expected: CallPolicy): boolean {
 type KnowledgeRow = { source_ref: string; version: number; status: string; owner_ref: string;
   answer_text: string; effective_from: Date; effective_until: Date; actor_ref: string; changed_at: Date };
 type KnowledgeHead = { source_ref: string; version: number; effective_version: number | null };
-type TargetTotals = { policies: string; automation: string; clinicIntake: string; knowledgeEvents: string;
+type TargetTotals = { policies: string; automation: string; clinicIntake: string; clinicNotifications: string; knowledgeEvents: string;
   knowledgeHeads: string; writeStops: string; writeStopEvents: string };
 
 function sameInstant(actual: Date | null, expected: string | null): boolean {
@@ -94,7 +95,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       sameScope(item.sourceScope, sourceScope) && sameScope(item.targetScope, targetScope));
     return decisions.length === 1 ? decisions[0]!.targetRef : null;
   } };
-  const expectedTotals = { policies: 0, automation: 0, clinicIntake: 0, knowledgeEvents: 0, knowledgeHeads: 0,
+  const expectedTotals = { policies: 0, automation: 0, clinicIntake: 0, clinicNotifications: 0, knowledgeEvents: 0, knowledgeHeads: 0,
     writeStops: 0, writeStopEvents: 0 };
   for (const location of data.locations) {
     const clinic = data.clinics.find(item => item.sourceClinicId === location.sourceScope.clinicId);
@@ -242,6 +243,10 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
     if (!stop || stop.version !== 1 || !stop.stopped || stop.actor_ref !== actor ||
         !["cutover", "Imported configuration awaiting target readiness"].includes(stop.reason) ||
         !(stop.changed_at instanceof Date) || !Number.isFinite(stop.changed_at.getTime())) return false;
+    const notificationRows = await reconcileNotificationCarryover(trx, location.targetScope, clinic.clinicNotifications,
+      actor, stop.changed_at.toISOString());
+    if (notificationRows === undefined) return false;
+    expectedTotals.clinicNotifications += notificationRows;
     expectedTotals.writeStops += 1;
     const stopEvents = (await sql<{ version: number; stopped: boolean; actor_ref: string; reason: string;
       changed_at: Date }>`select version, stopped, actor_ref, reason, changed_at
@@ -259,6 +264,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
     (select count(*)::text from clinic_settings where tenant_id = ${data.targetTenantId}) as policies,
     (select count(*)::text from clinic_automation where tenant_id = ${data.targetTenantId}) as automation,
     (select count(*)::text from clinic_intake_settings where tenant_id = ${data.targetTenantId}) as "clinicIntake",
+    (select count(*)::text from clinic_notification_settings where tenant_id = ${data.targetTenantId}) as "clinicNotifications",
     (select count(*)::text from clinic_knowledge_events where tenant_id = ${data.targetTenantId}) as "knowledgeEvents",
     (select count(*)::text from clinic_knowledge_heads where tenant_id = ${data.targetTenantId}) as "knowledgeHeads",
     (select count(*)::text from clinic_write_stop where tenant_id = ${data.targetTenantId}) as "writeStops",

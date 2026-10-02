@@ -1,4 +1,5 @@
 import { validClinicIntakeArchiveHistory } from "../portability/clinic-intake-history.ts";
+import { readNotificationCarryover } from "./postgres-notification-carryover.ts";
 import { createHash } from "node:crypto";
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
@@ -297,6 +298,7 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
         where tenant_id = ${sourceTenantId}`.execute(trx);
       const observedClinics = await sql<{ clinic_id: string }>`select clinic_id from clinic_automation where tenant_id = ${sourceTenantId}
         union select clinic_id from clinic_intake_settings where tenant_id = ${sourceTenantId}
+        union select clinic_id from clinic_notification_settings where tenant_id = ${sourceTenantId}
         union select clinic_id from clinic_write_stop where tenant_id = ${sourceTenantId}
         union select clinic_id from clinic_write_stop_events where tenant_id = ${sourceTenantId}`.execute(trx);
       if (observedLocations.rows.some(row => !byLocation.has(JSON.stringify([row.clinic_id, row.location_id]))) ||
@@ -308,6 +310,9 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
         from clinic_automation where tenant_id = ${sourceTenantId} order by clinic_id, version`.execute(trx);
       const clinicIntake = await sql<AutomationRow>`select clinic_id, version, enabled, changed_by, previous_enabled, changed_at
         from clinic_intake_settings where tenant_id = ${sourceTenantId} order by clinic_id, version`.execute(trx);
+      let clinicNotifications: Awaited<ReturnType<typeof readNotificationCarryover>>;
+      try { clinicNotifications = await readNotificationCarryover(trx, sourceTenantId); }
+      catch { throw new ExportAbort("storageCorrupt"); }
       const stops = await sql<StopRow>`select clinic_id, version, stopped, actor_ref, reason, changed_at
         from clinic_write_stop_events where tenant_id = ${sourceTenantId} order by clinic_id, version`.execute(trx);
       if (mode === "standaloneMinimal") {
@@ -325,7 +330,7 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
           effective_from, effective_until, actor_ref, changed_at from clinic_knowledge_events
           where tenant_id = ${sourceTenantId} and status in ('approved', 'revoked')
           order by clinic_id, location_id, source_ref, version`.execute(trx)).rows;
-      return { schemaVersion, settings: settings.rows, automation: automation.rows, clinicIntake: clinicIntake.rows, stops: stops.rows,
+      return { schemaVersion, settings: settings.rows, automation: automation.rows, clinicIntake: clinicIntake.rows, clinicNotifications, stops: stops.rows,
         knowledge, omittedTextCalls: callScan.value.count,
         omittedTextCallsByLocation: callScan.value.countsByLocation,
         sourceFenceVersion: request.expectedFenceVersion };
@@ -384,6 +389,8 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
         sourceClinicId: row.clinic_id, kind: "clinicIntake", version: row.version,
         isHead: intakeHeads.get(row.clinic_id) === row.version, enabled: row.enabled,
         changedBy: row.changed_by, previousEnabled: row.previous_enabled, changedAt: instant(row.changed_at) })),
+      ...snapshot.clinicNotifications.map(row => ({ ...common(recordId("notifications", row.sourceClinicId, row.version)),
+        kind: "clinicNotifications", ...row })),
       ...snapshot.stops.map(row => ({ ...common(recordId("writeStop", row.clinic_id, row.version)),
         sourceClinicId: row.clinic_id, kind: "writeStop", version: row.version,
         isHead: stopHeads.get(row.clinic_id) === row.version, stopped: row.stopped,

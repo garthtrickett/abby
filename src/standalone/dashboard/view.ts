@@ -1,6 +1,9 @@
 import type { ClinicIntakeAuditPage } from "../../core/clinic-intake-setting.ts";
 import { html } from "lit-html";
 import { staffedDestinationView } from "./staffed-destination-control.ts";
+import { notificationOwnershipView } from "./notification-ownership-control.ts";
+import { notificationDeliveryView, notificationCountsView } from "./notification-delivery-view.ts";
+import type { NotificationOwnershipControl, NotificationOwnershipState } from "./notification-ownership-control.ts";
 import type { StaffedDestinationControl, StaffedDestinationState } from "./staffed-destination-control.ts";
 import type { CancellationSettingAuditPage, ReschedulingSettingAuditPage } from "../../core/host.ts";
 import type { CallPolicy, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
@@ -14,6 +17,7 @@ import type { KnowledgeEntry } from "../../reference/knowledge-catalogue.ts";
 
 export type DashboardState = {
   staffedDestination: StaffedDestinationState;
+  notifications: NotificationOwnershipState;
   loading: boolean;
   busy: boolean;
   capabilities: readonly CapabilityDescriptor[];
@@ -62,6 +66,7 @@ export type DashboardState = {
 
 export type DashboardActions = Readonly<{
   staffedDestination: StaffedDestinationControl["actions"];
+  notifications: NotificationOwnershipControl["actions"];
   setKnowledgeField(field: "knowledgeSourceRef" | "knowledgeOwnerRef" | "knowledgeText" | "knowledgeFrom" | "knowledgeUntil", value: string): void;
   saveKnowledgeDraft(): void;
   approveKnowledge(entry: KnowledgeEntry): void;
@@ -181,6 +186,7 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
           ${state.policy.capabilities.cancel !== "execute" ? html`<p class="muted">This setting cannot grant cancellation permission the clinic's host does not support.</p>` : ""}` : ""}
       </section>
       ${staffedDestinationView(state, actions.staffedDestination)}
+      ${notificationOwnershipView(state, actions.notifications)}
       <section class="card" aria-labelledby="rescheduling-title">
         <div class="row"><div><h2 id="rescheduling-title">Rescheduling automation</h2>
           <p class="status">${state.policy ? state.policy.reschedulingEnabled === true ? "Rescheduling enabled" : "Rescheduling disabled" : "Rescheduling unavailable"}</p>
@@ -384,6 +390,7 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
           ${state.call.terminal ? html`<p>End reason: ${state.call.terminal.reason}</p>` : ""}
           <p>${state.call.actions.length} appointment action(s); ${state.call.staffItems.length} staff follow-up item(s); ${state.call.knowledgeAnswers.length} sourced answer(s); ${state.call.availabilityReads.length} availability read(s).</p>
           ${state.call.actions.length ? html`<ul>${state.call.actions.map(action => html`<li>${action.kind}: ${action.status}</li>`)}</ul>` : ""}
+          ${notificationDeliveryView(state.call.notifications)}
           ${state.call.staffItems.length ? html`<ul>${state.call.staffItems.map(item => html`<li>Staff follow-up: ${item.reason} (${item.status})</li>`)}</ul>` : ""}
           ${state.call.knowledgeAnswers.length ? html`<h3>Answer sources</h3><ul>${state.call.knowledgeAnswers.map(item => html`<li>${item.sourceRef} · version ${item.version}</li>`)}</ul>` : ""}
           ${state.call.availabilityReads.length ? html`<h3>Availability reads</h3><ul>${state.call.availabilityReads.map(item => html`<li>${item.status}${item.sourceRef ? ` · ${item.sourceRef}` : ""}${item.timeZone ? ` · ${item.timeZone}` : ""} · ${item.shownCount} time(s)${item.reason ? ` · ${item.reason}` : ""}</li>`)}</ul>` : ""}
@@ -393,10 +400,12 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
         <div class="row"><div><h2 id="outcomes-title">Call outcomes</h2><p class="muted">Counts cover loaded calls in this clinic.</p></div>
           <button type="button" ?disabled=${state.busy} @click=${() => actions.loadOutcomes()}>Refresh outcomes</button></div>
         ${state.outcomePage ? html`<div aria-label="Call outcome report">
+          <p>${notificationCountsView(state.outcomePage.notificationDelivery)}</p>
           <p>${state.outcomePage.totals.calls} call(s) loaded · ${state.outcomePage.totals.committedActions} completed action(s) · ${state.outcomePage.totals.callsWithUnresolvedActions} call(s) with unresolved actions.</p>
           <p>${state.outcomePage.totals.callsWithStaffRequests} call(s) requested staff follow-up · ${state.outcomePage.totals.callsWithHostConfirmedTasks} call(s) have a host-confirmed task · ${state.outcomePage.totals.callsWithStaffNeedsReview} call(s) need staff review · ${state.outcomePage.totals.callsWithSystemFailure} call(s) recorded a system-failure task.</p>
           <p>${state.outcomePage.totals.callsWithCallerDisconnect} caller disconnect(s) · ${state.outcomePage.totals.callsWithMediaFailure} media failure(s) · ${state.outcomePage.totals.callsWithLeaseExpiry} lease closure(s) · ${state.outcomePage.totals.callsWithTransferConnected} connected transfer(s).</p>
-          ${state.outcomePage.rows.length ? html`<ul>${state.outcomePage.rows.map(row => html`<li>${row.callId} · ${row.lifecycle}${row.terminalReason ? ` (${row.terminalReason})` : ""} · ${row.committedActions} completed · ${row.unresolvedActions} unresolved · ${row.staffRequests} staff request(s)${row.staffNeedsReview ? " · needs review" : ""}</li>`)}</ul>` : html`<p>No calls in this clinic.</p>`}
+          ${state.outcomePage.rows.length ? html`<ul>${state.outcomePage.rows.map(row => html`<li>${row.callId} · ${row.lifecycle}${row.terminalReason ? ` (${row.terminalReason})` : ""} · ${row.committedActions} completed · ${row.unresolvedActions} unresolved · ${row.staffRequests} staff request(s)${row.staffNeedsReview ? " · needs review" : ""}
+            ${notificationCountsView(row.notificationDelivery)}</li>`)}</ul>` : html`<p>No calls in this clinic.</p>`}
           ${state.outcomePage.nextAfterCallId ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreOutcomes()}>Load more outcomes</button>` : ""}
         </div>` : html`<p class="muted">Outcome report unavailable.</p>`}
       </section>` : ""}

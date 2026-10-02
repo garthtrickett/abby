@@ -5,6 +5,7 @@ import { CommandGateway } from "../../reference/command-gateway.ts";
 import type { GatewayCommand, HostActor } from "../../reference/command-gateway.ts";
 import { capabilityDescriptor } from "../../reference/capability-catalogue.ts";
 import { matchesSchema } from "../../reference/schema-shapes.ts";
+import { validNotificationKind, validNotificationOwner } from "../../core/notification-policy.ts";
 import { publicSpeechGateStatus } from "../speech-gate-public-status.ts";
 
 const maxCommandBytes = 24_000;
@@ -226,6 +227,18 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       if (url.searchParams.size !== 0) return json(response, 400, { ok: false, error: { kind: "invalid" } });
       command = { kind: "settings.routing.staffedDestination.options.v1" };
     }
+    if (request.method === "GET" && url.pathname === "/api/settings/notification-options") {
+      if (url.searchParams.size !== 0) return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      command = { kind: "settings.notifications.options.v1" };
+    }
+    if (request.method === "GET" && url.pathname === "/api/settings/notification-audit") {
+      const cursor = url.searchParams.get("after");
+      if ([...url.searchParams.keys()].some(key => key !== "after") || url.searchParams.getAll("after").length > 1 ||
+          (cursor !== null && (!/^(0|[1-9][0-9]*)$/.test(cursor) || !Number.isSafeInteger(Number(cursor)) || Number(cursor) > 2_147_483_647))) {
+        return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      }
+      command = { kind: "settings.notifications.audit.v1", ...(cursor === null ? {} : { afterVersion: Number(cursor) }) };
+    }
     if (request.method === "GET" && url.pathname === "/api/settings/staffed-destination-audit") {
       const cursor = url.searchParams.get("after");
       if ([...url.searchParams.keys()].some(key => key !== "after") || url.searchParams.getAll("after").length > 1 ||
@@ -315,6 +328,16 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       }
       command = { kind: "settings.routing.staffedDestination.change.v1", expectedVersion: input.expectedVersion,
         destinationRef: input.destinationRef as string | null };
+    }
+    if (request.method === "POST" && url.pathname === "/api/settings/notification-owner") {
+      if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
+      const input = record(await body(request));
+      if (url.searchParams.size !== 0 || !input || Object.keys(input).sort().join(",") !== "expectedVersion,notificationKind,owner" ||
+          typeof input.expectedVersion !== "string" || !validNotificationKind(input.notificationKind) || !validNotificationOwner(input.owner)) {
+        return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      }
+      command = { kind: "settings.notifications.owner.change.v1", expectedVersion: input.expectedVersion,
+        notificationKind: input.notificationKind, owner: input.owner };
     }
     if (request.method === "POST" && url.pathname === "/api/settings/after-hours") {
       if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });

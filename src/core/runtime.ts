@@ -117,6 +117,11 @@ export class CallRuntime {
     return this.update(callId, { kind: "markHostPossiblySent", effectId, now });
   }
 
+  notificationAction(callId: string, action: import("./notification-effects.ts").NotificationTransitionAction):
+    Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, action);
+  }
+
   recoverHostPossiblySent(callId: string, effectId: string, now: string): Promise<Result<CallState, TransitionFailure>> {
     return this.update(callId, { kind: "recoverHostPossiblySent", effectId, now });
   }

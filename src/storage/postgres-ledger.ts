@@ -183,7 +183,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
               coalesce(nullif(effect_outbox.payload->>'actionKey', ''), 'unknown'), effect_outbox.status
             from effect_outbox join calls on calls.call_id = effect_outbox.call_id
             where calls.tenant_id = ${scope.tenantId} and calls.clinic_id = ${scope.clinicId}
-              and effect_outbox.tenant_id = calls.tenant_id and effect_outbox.kind = 'hostWrite'
+              and effect_outbox.tenant_id = calls.tenant_id and effect_outbox.kind in ('hostWrite', 'notification')
               and effect_outbox.status in ('possiblySent', 'uncertain')`.execute(trx);
         }
         const status = await this.stopStatus(trx, scope);
@@ -632,9 +632,9 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
       for (const row of rows) {
         const payload = row.payload as Record<string, unknown>;
         if (!payload || typeof payload !== "object" || payload.id !== row.effect_id || payload.kind !== row.kind || payload.status !== row.status ||
-            !(["model", "modelKnowledge", "hostWrite", "hostReconcile", "staffTask", "staffReconcile", "staffChange", "staffChangeReconcile", "operatorAlert", "operatorAlertReconcile"] as readonly string[]).includes(row.kind) ||
+            !(["model", "modelKnowledge", "hostWrite", "hostReconcile", "staffTask", "staffReconcile", "staffChange", "staffChangeReconcile", "operatorAlert", "operatorAlertReconcile", "notification", "notificationReconcile"] as readonly string[]).includes(row.kind) ||
             (row.status !== "pending" && row.status !== "possiblySent") ||
-            (row.status === "possiblySent" && row.kind !== "hostWrite" && row.kind !== "staffTask" && row.kind !== "staffChange" && row.kind !== "operatorAlert") ||
+            (row.status === "possiblySent" && row.kind !== "hostWrite" && row.kind !== "staffTask" && row.kind !== "staffChange" && row.kind !== "operatorAlert" && row.kind !== "notification") ||
             (row.status === "possiblySent" && (typeof payload.possiblySentAt !== "string" || !Number.isFinite(Date.parse(payload.possiblySentAt))))) return err({ kind: "storageCorrupt" });
         if ((row.kind === "model" || row.kind === "modelKnowledge") && !validModelEffect(payload, row.effect_id)) return err({ kind: "storageCorrupt" });
         refs.push({ callId: row.call_id, scope: { tenantId: row.tenant_id, clinicId: row.clinic_id, locationId: row.location_id },
@@ -866,13 +866,15 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
         if (!decoded.ok || decoded.value.version !== row.version) return err({ kind: "storageCorrupt" });
         if (this.mode === "standaloneText" && !isStoredStandaloneTextState(decoded.value)) return err({ kind: "storageCorrupt" });
         let effectiveAction = action;
-        if (action.kind === "markHostPossiblySent") {
+        if (action.kind === "markHostPossiblySent" || action.kind === "markNotificationPossiblySent") {
           const ids = this.stopIds(scope);
           await trx.insertInto("clinic_write_stop").values({ ...ids, version: 0, stopped: false, actor_ref: null, reason: null, changed_at: null })
             .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id"]).doNothing()).execute();
           const stop = await trx.selectFrom("clinic_write_stop").select("stopped")
             .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).forShare().executeTakeFirstOrThrow();
-          if (stop.stopped) effectiveAction = { kind: "hostWriteBlocked", effectId: action.effectId, now: action.now };
+          if (stop.stopped) effectiveAction = action.kind === "markHostPossiblySent"
+            ? { kind: "hostWriteBlocked", effectId: action.effectId, now: action.now }
+            : { kind: "notificationBlocked", effectId: action.effectId, reason: "emergencyStop", now: action.now };
         }
         const trustedAction = decoded.value.admission && "now" in effectiveAction && effectiveAction.now !== undefined
           ? { ...effectiveAction, now: await this.trustedNow(trx, effectiveAction.now) } as TransitionAction : effectiveAction;

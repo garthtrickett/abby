@@ -373,3 +373,18 @@ The corrected job **Abby intake corrected final text PostgreSQL browser and mapp
 | Generated source and diff | No Kanel-generated drift; `git diff --check` passed |
 
 The exact release command was `npm run typecheck && npm run test:text && npm run probe:postgres && npm run test:browser && npm run test:settings-isolation && npm run test:settings-isolation:postgres && git diff --exit-code -- src/storage/generated && git diff --check`. Later evidence-only commits preserve the tested runtime and test inputs. GitHub runs 37044334550 and 37044330604 for this source failed before any source steps ran; check 110961901491 cites failed payments or the account spending limit. The owner's authorization to merge locally verified work applies, without changing repository rules or weakening checks. Carrier, Splose, speech quality and standalone Cliniko intake authorization remain separate gates.
+
+## Notification ownership, review and outcome discovery — 2026-10-02
+
+Implementation revision: `15817fba675efe6936f6756847ff32c793aa25ce`; scenario manifest 1.68 with SET-009 / E2E-257. The tracked full release job `Abby notification source 15817fb full local and mapped isolation release` completed in 34m38s with exit 0. Subsequent evidence edits are Markdown only.
+
+| Mapped target | Files | Alone | Parallel forward | Parallel reverse |
+| --- | --- | --- | --- | --- |
+| Node | 46 | 329 pass | 329 pass, four workers | 329 pass, four workers |
+| Browser | 9 | 46 pass | 46 pass, three workers | 46 pass, three workers |
+
+All mapped runs had **zero failures and zero skips**. Both ordered-runner coordinators passed separately from these totals; the probe verified distinct requested orders and actual worker overlap. Commands: `npm run test:settings-isolation` and `npm run test:settings-isolation:postgres`. The smaller voice probe passed 18 selected cases in each parallel order across six files.
+
+The same source passed `npm test` (typecheck, 662 cases, 34 PostgreSQL-only skips and one opt-in live Cliniko skip), actual schema migration/Kanel generation with no drift, `ABBY_LEDGER=postgres npm run test:postgres` (1,097 cases, one opt-in live Cliniko skip), `npm run test:browser` (59 journeys) and `git diff --check`. Full-command ordered-runner checks also passed.
+
+Notification coverage includes both captured owners and all appointment actions, authenticated edits and lost-reply recovery, native suppression proof, send/observe recovery without replay, public history import/reset/freeze and embedded cutover. Redacted review and paginated outcome counts reject contradictory/private fields and keep appointment truth independent of delivery. Strict standalone Cliniko remains without a sender or notification endpoints. These synthetic results do not prove real provider delivery, a real carrier call, minimal standalone number publication, production login integration or clinic activation.

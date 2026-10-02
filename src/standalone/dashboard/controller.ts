@@ -3,10 +3,12 @@ import { render } from "lit-html";
 import type { CancellationSettingAuditPage, ReschedulingSettingAuditPage } from "../../core/host.ts";
 import type { DashboardFailure, DashboardPort } from "./api.ts";
 import { initialStaffedDestinationState, StaffedDestinationControl } from "./staffed-destination-control.ts";
+import { initialNotificationOwnershipState, NotificationOwnershipControl } from "./notification-ownership-control.ts";
 import { dashboardView } from "./view.ts";
 import type { DashboardState } from "./view.ts";
 import type { AfterHoursMode, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
+import { sumNotificationDeliveryCounts } from "../../reference/notification-delivery-counts.ts";
 import type { AfterHoursSettingAuditPage, BookingSettingAuditPage, GreetingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
 import { formatWeeklyHours, parseWeeklyHours } from "./staff-hours-form.ts";
 import type { AutomationSettingAuditPage } from "../../core/host.ts";
@@ -48,7 +50,9 @@ function appendAutomationAudit(previous: AutomationSettingAuditPage, next: Autom
 }
 
 function appendOutcomes(previous: CallOutcomePage, next: CallOutcomePage): CallOutcomePage {
-  return { rows: [...previous.rows, ...next.rows], totals: {
+  const rows = [...previous.rows, ...next.rows];
+  const notificationDelivery = sumNotificationDeliveryCounts(rows.map(row => row.notificationDelivery));
+  return { rows, ...(notificationDelivery ? { notificationDelivery } : {}), totals: {
     calls: previous.totals.calls + next.totals.calls,
     committedActions: previous.totals.committedActions + next.totals.committedActions,
     callsWithUnresolvedActions: previous.totals.callsWithUnresolvedActions + next.totals.callsWithUnresolvedActions,
@@ -88,8 +92,10 @@ export class DashboardController {
   private readonly root: HTMLElement;
   private readonly port: DashboardPort;
   private readonly staffedDestination: StaffedDestinationControl;
+  private readonly notifications: NotificationOwnershipControl;
   private readonly state: DashboardState = { loading: true, busy: false, capabilities: [], policy: undefined,
     staffedDestination: initialStaffedDestinationState(),
+    notifications: initialNotificationOwnershipState(),
     knowledge: undefined, knowledgeSourceRef: "", knowledgeOwnerRef: "", knowledgeText: "",
     knowledgeFrom: new Date().toISOString(), knowledgeUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
     writeStop: undefined, stopReasonInput: "", auditPage: undefined, cancellationAuditPage: undefined, reschedulingAuditPage: undefined, firstTimeIntakeAuditPage: undefined,
@@ -105,6 +111,7 @@ export class DashboardController {
     this.root = root;
     this.port = port;
     this.staffedDestination = new StaffedDestinationControl(this.state, port, () => this.draw(), message);
+    this.notifications = new NotificationOwnershipControl(this.state, port, () => this.draw(), message);
     this.draw();
   }
 
@@ -112,6 +119,7 @@ export class DashboardController {
     render(dashboardView(this.state, {
       setKnowledgeField: (field, value) => { this.state[field] = value; },
       staffedDestination: this.staffedDestination.actions,
+      notifications: this.notifications.actions,
       saveKnowledgeDraft: () => { void this.saveKnowledgeDraft(); },
       approveKnowledge: entry => { void this.changeKnowledgeApproval(entry, "approve"); },
       revokeKnowledge: entry => { void this.changeKnowledgeApproval(entry, "revoke"); },
@@ -185,6 +193,7 @@ export class DashboardController {
     }
     this.state.error = !settings.ok ? message(settings.error) : !capabilities.ok ? message(capabilities.error) : undefined;
     await this.staffedDestination.initialize();
+    await this.notifications.initialize();
     if (capabilities.ok && capabilities.value.some(item => item.id === "knowledge.list.v1")) {
       const knowledge = await this.port.knowledge();
       if (knowledge.ok) this.state.knowledge = knowledge.value;
@@ -530,6 +539,7 @@ export class DashboardController {
 
   private async loadOutcomes(): Promise<void> {
     if (this.state.busy) return;
+    this.state.outcomePage = undefined;
     this.state.busy = true;
     this.state.error = undefined;
     this.draw();

@@ -117,7 +117,7 @@ export class MemoryLedger implements LedgerStore, EffectCallLeaseStore {
       for (const state of this.calls.values()) {
         if (this.stopKey(state.policy.scope) !== key) continue;
         for (const effect of Object.values(state.effects)) {
-          if (effect.kind === "hostWrite" && (effect.status === "possiblySent" || effect.status === "uncertain")) {
+          if ((effect.kind === "hostWrite" || effect.kind === "notification") && (effect.status === "possiblySent" || effect.status === "uncertain")) {
             inFlight.push({ effectId: effect.id, callId: state.callId, actionKey: effect.actionKey, status: effect.status });
           }
         }
@@ -448,8 +448,11 @@ export class MemoryLedger implements LedgerStore, EffectCallLeaseStore {
       }
     }
     if (current.version !== expectedVersion) return err({ kind: "versionConflict" });
-    const effectiveAction = action.kind === "markHostPossiblySent" && this.writeStops.get(this.stopKey(scope))?.at(-1)?.stopped
-      ? { kind: "hostWriteBlocked" as const, effectId: action.effectId, now: action.now } : action;
+    const stopped = this.writeStops.get(this.stopKey(scope))?.at(-1)?.stopped;
+    const effectiveAction = action.kind === "markHostPossiblySent" && stopped
+      ? { kind: "hostWriteBlocked" as const, effectId: action.effectId, now: action.now }
+      : action.kind === "markNotificationPossiblySent" && stopped
+        ? { kind: "notificationBlocked" as const, effectId: action.effectId, reason: "emergencyStop" as const, now: action.now } : action;
     const result = transition(current, effectiveAction);
     if (!result.ok) return result;
     this.calls.set(callId, structuredClone(result.value));

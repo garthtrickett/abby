@@ -1,5 +1,7 @@
 import { validClinicIntakeArchiveHistory } from "./clinic-intake-history.ts";
 import type { ClinicIntakeArchiveRow } from "./clinic-intake-history.ts";
+import { validNotificationArchiveHistory } from "./notification-history.ts";
+import type { ClinicNotificationArchiveRow } from "./notification-history.ts";
 import { validStaffedDestinationHistory } from "./staffed-destination-history.ts";
 import { createHash } from "node:crypto";
 import { err, ok } from "../core/model.ts";
@@ -38,6 +40,7 @@ export type ConfigArchiveData = Readonly<{
     previousEnabled: boolean | null; changedAt: string | null }>[];
   /** Absent in legacy archives: clinic version zero, disabled, with no audit history. */
   clinicIntake?: readonly ClinicIntakeArchiveRow[];
+  clinicNotifications?: readonly ClinicNotificationArchiveRow[];
   writeStops: readonly Readonly<{ version: number; isHead: boolean; stopped: boolean; actorRef: string;
     reasonDigest: string; changedAt: string }>[];
   knowledge: readonly PortablePublishedKnowledge[];
@@ -67,6 +70,7 @@ export type TenantConfigArchiveData = Readonly<{
     sourceClinicId: string;
     automation: ConfigArchiveData["automation"];
     clinicIntake?: readonly ClinicIntakeArchiveRow[];
+    clinicNotifications?: readonly ClinicNotificationArchiveRow[];
     writeStops: ConfigArchiveData["writeStops"];
   }>[];
 }>;
@@ -180,7 +184,9 @@ function urgentFields(row: Record<string, unknown>, sourceScope: LocationScope):
 
 function policy(value: unknown, sourceScope: LocationScope, version: number): CallPolicy {
   const row = object(value, "settings");
-  if (row.transferDestinationVersion !== undefined) throw new InvalidConfigArchive("settings");
+  if (row.transferDestinationVersion !== undefined || row.notificationSettings !== undefined || row.notificationBindings !== undefined) {
+    throw new InvalidConfigArchive("settings");
+  }
   if (row.shape === "standaloneMinimal") {
     if (!["bookingEnabled", "policyVersion", "shape"].every(field => Object.hasOwn(row, field)) ||
         Object.keys(row).some(field => !["bookingEnabled", "cancellationEnabled", "reschedulingEnabled", "policyVersion", "shape", "afterHoursMode",
@@ -315,6 +321,7 @@ type MutableClinic = {
   sourceClinicId: string;
   automation: ConfigArchiveData["automation"][number][];
   clinicIntake: ConfigArchiveData["automation"][number][];
+  clinicNotifications: ClinicNotificationArchiveRow[];
   writeStops: ConfigArchiveData["writeStops"][number][];
 };
 
@@ -381,7 +388,7 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
       locations.set(key, { sourceScope, targetScope, timeZone, mappingProvenance, policies: [], knowledge: [] });
       targetScopes.add(targetKey);
       if (!clinics.has(sourceScope.clinicId)) clinics.set(sourceScope.clinicId,
-        { sourceClinicId: sourceScope.clinicId, automation: [], clinicIntake: [], writeStops: [] });
+        { sourceClinicId: sourceScope.clinicId, automation: [], clinicIntake: [], clinicNotifications: [], writeStops: [] });
     }
     if (locations.size !== declaredMappings.size) throw new InvalidConfigArchive("locations");
 
@@ -475,6 +482,16 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
           changedBy: optionalRef(row.changedBy, "settings"),
           previousEnabled: row.previousEnabled === null ? null : flag(row.previousEnabled, "settings"),
           changedAt: optionalInstant(row.changedAt, "settings") });
+      } else if (row.kind === "clinicNotifications") {
+        const fields = ["recordVersion", "recordId", "sourceTenantId", "sourceClinicId", "kind", "version", "isHead",
+          "owners", "notificationKind", "owner", "previousOwner", "changedBy", "changedAt"];
+        if (Object.keys(row).sort().join(",") !== fields.sort().join(",") ||
+          row.recordId !== expectedId("notifications", sourceClinicId, version)) throw new InvalidConfigArchive("settings");
+        clinic.clinicNotifications.push({ version, isHead, owners: row.owners as ClinicNotificationArchiveRow["owners"],
+          notificationKind: row.notificationKind as ClinicNotificationArchiveRow["notificationKind"],
+          owner: row.owner as ClinicNotificationArchiveRow["owner"], previousOwner: row.previousOwner as ClinicNotificationArchiveRow["previousOwner"],
+          changedBy: optionalRef(row.changedBy, "settings"),
+          changedAt: row.changedAt === null ? null : new Date(instant(row.changedAt, "settings")).toISOString() });
       } else if (row.kind === "writeStop") {
         if (row.recordId !== expectedId("writeStop", sourceClinicId, version) ||
             typeof row.reasonDigest !== "string" || !/^[a-f0-9]{64}$/.test(row.reasonDigest)) {
@@ -555,6 +572,7 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
     for (const clinic of clinics.values()) {
       assertHeads(clinic.automation, "settings", 0);
       if (!validClinicIntakeArchiveHistory(clinic.clinicIntake)) throw new InvalidConfigArchive("settings");
+      if (!validNotificationArchiveHistory(clinic.clinicNotifications)) throw new InvalidConfigArchive("settings");
       assertHeads(clinic.writeStops, "settings", 1);
     }
 
@@ -624,5 +642,6 @@ export async function decodeConfigArchive(input: ArchiveEnvelope, expectedTarget
     ...(location.omittedTextCalls === undefined ? {} : { omittedTextCalls: location.omittedTextCalls }),
     sourceScope: location.sourceScope, targetScope: location.targetScope, timeZone: location.timeZone,
     mappingProvenance: location.mappingProvenance, policies: location.policies, automation: clinic.automation, clinicIntake: clinic.clinicIntake ?? [],
+    clinicNotifications: clinic.clinicNotifications ?? [],
     writeStops: clinic.writeStops, knowledge: location.knowledge });
 }

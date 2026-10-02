@@ -1,4 +1,7 @@
 import { PostgresClinicIntakeSettingStore } from "./postgres-clinic-intake-setting.ts";
+import { PostgresClinicNotificationSettingStore } from "./postgres-clinic-notification-settings.ts";
+import { captureNotificationPolicy, listNotificationOptions, unprovenNotificationRegistry } from "../core/notification-policy.ts";
+import type { NotificationAuditPage, NotificationCatalogue, NotificationKind, NotificationOwner, NotificationRegistry } from "../core/notification-policy.ts";
 import type { ClinicIntakeAuditPage, ClinicIntakeState } from "../core/clinic-intake-setting.ts";
 import { PostgresStaffedDestinationSettingStore } from "./postgres-staffed-destination-setting.ts";
 import { captureStaffedDestination, listStaffedDestinations, unprovenStaffedDestinationRegistry, validStaffedDestinationRef } from "../core/staffed-destination.ts";
@@ -124,12 +127,14 @@ export class PostgresPolicyStore implements PolicyStore {
   private readonly hostReschedulingMode: CapabilityMode;
   private readonly hostIntakeMode: CapabilityMode;
   private readonly staffedDestinationRegistry: StaffedDestinationRegistry;
+  private readonly notificationRegistry: NotificationRegistry;
 
   /** Rich policy storage is synthetic-only and requires the explicit unsafeReference mode. */
   constructor(db: Kysely<Database>, defaultPolicy: (scope: LocationScope) => CallPolicy, hostBookingMode: CapabilityMode = "unavailable", readiness: AutomationReadiness = unprovenReadiness,
               staffWorkEnabled = false, storageMode: "unsafeReference" | "standaloneMinimal" = "standaloneMinimal",
               allowDefaultGreeting = false, hostPatientModes: CapabilityMode | PatientSettingModes = "unavailable",
-              staffedDestinationRegistry: StaffedDestinationRegistry = unprovenStaffedDestinationRegistry) {
+              staffedDestinationRegistry: StaffedDestinationRegistry = unprovenStaffedDestinationRegistry,
+              notificationRegistry: NotificationRegistry = unprovenNotificationRegistry) {
     this.db = db;
     this.defaultPolicy = defaultPolicy;
     this.hostBookingMode = hostBookingMode;
@@ -141,12 +146,15 @@ export class PostgresPolicyStore implements PolicyStore {
     this.hostReschedulingMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.rescheduling ?? "unavailable";
     this.hostIntakeMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.intake ?? "unavailable";
     this.staffedDestinationRegistry = staffedDestinationRegistry;
+    this.notificationRegistry = storageMode === "standaloneMinimal" ? unprovenNotificationRegistry : notificationRegistry;
   }
 
   private defaultFor(scope: LocationScope): CallPolicy {
-    const { firstTimeIntakeEnabled, firstTimeIntakeVersion, transferDestinationVersion, ...policy } = this.defaultPolicy(scope);
+    const { firstTimeIntakeEnabled, firstTimeIntakeVersion, transferDestinationVersion,
+      notificationSettings, notificationBindings, ...policy } = this.defaultPolicy(scope);
     void firstTimeIntakeEnabled; void firstTimeIntakeVersion;
     void transferDestinationVersion;
+    void notificationSettings; void notificationBindings;
     if (this.storageMode !== "standaloneMinimal" || this.allowDefaultGreeting) return policy;
     const { greeting, ...safe } = policy;
     void greeting;
@@ -179,7 +187,10 @@ export class PostgresPolicyStore implements PolicyStore {
                         db: Kysely<Database> = this.db): Promise<CallPolicy> {
     const intake = await new PostgresClinicIntakeSettingStore(db).read(policy.scope);
     if (!intake.ok) throw new Error("clinic intake configuration unavailable");
-    const composed = this.compose(policy, intake.value, automation);
+    const notifications = await new PostgresClinicNotificationSettingStore(db).read(policy.scope);
+    if (!notifications.ok) throw new Error("clinic notification configuration unavailable");
+    const composed = await captureNotificationPolicy(this.compose(policy, intake.value, automation),
+      notifications.value, this.notificationRegistry);
     if (this.storageMode === "standaloneMinimal" || !this.staffWorkEnabled) {
       const { transferDestinationVersion, ...safe } = composed;
       void transferDestinationVersion;
@@ -197,6 +208,22 @@ export class PostgresPolicyStore implements PolicyStore {
           policy.afterHoursMode ?? "staffRequest", policy.afterHoursInfo, policy.urgentResponse, policy.staffSchedule,
           policy.greeting ?? null, policy.cancellationEnabled, policy.reschedulingEnabled, policy.transferDestinationRef) : policy,
     }, (bound, ref) => this.staffedDestinationRegistry.resolve(bound, ref));
+  }
+
+  async changeNotificationOwner(scope: LocationScope, expectedVersion: string, kind: NotificationKind,
+    owner: NotificationOwner | null, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+    if (this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope)) return err({ kind: "invalidValue" });
+    const changed = await new PostgresClinicNotificationSettingStore(this.db, this.notificationRegistry)
+      .changeOwner(scope, expectedVersion, kind, owner, actorRef);
+    return changed.ok ? this.read(scope) : changed;
+  }
+  async listNotificationOptions(scope: LocationScope): Promise<Result<NotificationCatalogue, PolicyFailure>> {
+    if (this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope)) return err({ kind: "invalidValue" });
+    return listNotificationOptions(this.notificationRegistry, scope);
+  }
+  async listNotificationChanges(scope: LocationScope, afterVersion?: number): Promise<Result<NotificationAuditPage, PolicyFailure>> {
+    if (this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope)) return err({ kind: "invalidValue" });
+    return new PostgresClinicNotificationSettingStore(this.db).listChanges(scope, afterVersion);
   }
 
   async listStaffedDestinations(scope: LocationScope): Promise<Result<StaffedDestinationCatalogue, PolicyFailure>> {

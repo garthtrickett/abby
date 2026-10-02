@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { digestActionRequest } from "./digest.ts";
+import { notificationDirective, queueCommittedNotification, transitionNotification } from "./notification-effects.ts";
 import { availabilityPresentation } from "./availability-presentation.ts";
 import { appointmentPresentation } from "./appointment-presentation.ts";
 import { addStaffTask, planStaffChange } from "./staff-work.ts";
@@ -217,7 +218,9 @@ function handleRequest(state: CallState, turn: FinalCallerTurn, request: ActionR
   const digest = digestActionRequest(request);
   const key = createHash("sha256").update(`${state.policy.scope.tenantId}:${state.callId}:${turn.turnId}:${digest}`).digest("hex");
   const presentationId = `${key}:details`;
-  const mutation = { kind: request.kind, scope: state.policy.scope, actionKey: key, payloadDigest: digest, policyVersion: state.policy.policyVersion, request };
+  const notification = notificationDirective(state.policy, state.callId, key, request.kind);
+  const mutation = { kind: request.kind, scope: state.policy.scope, actionKey: key, payloadDigest: digest,
+    policyVersion: state.policy.policyVersion, request, ...(notification ? { notification } : {}) };
   const action: ActionState = { key, kind: request.kind, status: "awaitingConfirmation", digest, mutation, presentationId };
   const presentation: Presentation = { kind: "speech", id: presentationId, actionKey: key, digest, approvedText: describe(request), status: "pending" };
   state.actions[key] = action;
@@ -407,6 +410,7 @@ function recordHostResult(state: CallState, effectId: string, receipt: import(".
     if (!receipt.hostRef) return err({ kind: "invalidTransition" });
     state.actions[action.key] = { ...action, status: "committed", hostRef: receipt.hostRef };
     state.effects[effectId] = { ...effect, status: "completed" };
+    queueCommittedNotification(state, action, receipt.hostRef, receipt.notification);
     hostOutcomeNotice(state, effectId, confirmedActionText(action.kind));
   } else if (receipt.kind === "uncertain") {
     if (!Number.isFinite(Date.parse(receipt.reconcileAfter)) || !Number.isFinite(Date.parse(receipt.deadline)) || Date.parse(receipt.deadline) <= Date.parse(now)) return err({ kind: "invalidTransition" });
@@ -435,6 +439,15 @@ export function transition(current: CallState, action: TransitionAction): Result
   const now = "now" in action && action.now !== undefined ? action.now : new Date(0).toISOString();
 
   switch (action.kind) {
+    case "markNotificationPossiblySent":
+    case "recoverNotificationPossiblySent":
+    case "notificationBlocked":
+    case "notificationResolved":
+    case "notificationReconciled": {
+      const result = transitionNotification(state, action);
+      if (!result.ok) return result;
+      break;
+    }
     case "sessionActivated": {
       if (state.lifecycle !== "starting" || !state.admission || !action.sessionId) return err({ kind: "invalidTransition" });
       if (Date.parse(action.now) >= Date.parse(state.admission.deadline)) return err({ kind: "admissionExpired" });
@@ -661,6 +674,7 @@ export function transition(current: CallState, action: TransitionAction): Result
       if (action.observation.kind === "exactCommit") {
         if (!action.observation.hostRef) return err({ kind: "invalidTransition" });
         state.actions[linked.key] = { ...linked, status: "committed", hostRef: action.observation.hostRef };
+        queueCommittedNotification(state, linked, action.observation.hostRef, action.observation.notification);
         hostOutcomeNotice(state, effect.id, confirmedActionText(linked.kind));
       } else if (action.observation.kind === "definitiveNonCommit") {
         state.actions[linked.key] = { ...linked, status: "rejected" };
