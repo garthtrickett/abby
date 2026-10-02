@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.57
+# Scenario manifest, version 1.58
 
 [SCENARIO_MANIFEST.json](SCENARIO_MANIFEST.json) tracks the 247 stable E2E IDs in [Technical Design Section 11](../TECHNICAL_DESIGN.md#11-verification-design). The design table owns each journey's wording; the registry adds its requirement mapping, fixture family, intended compositions, earliest implementation phase, and evidence status. Each scenario's fixture ID is `fixture-` plus its lowercase E2E ID. The capability and setting maps cover the current agent catalogue and its behavior settings. `test/contract/scenario-manifest.test.ts` checks the design and catalogue for drift, duplicate or missing IDs, and test-file references.
 
@@ -93,6 +93,8 @@ E2E-245 adds a clinic-admin greeting setting with location scope, versioned appr
 E2E-246 adds the supervised Cliniko admin greeting panel and its restricted HTTP path. Browser and isolated PostgreSQL listener checks cover default, approval, reload, restart persistence, audit, disable, invalid/stale/forged updates, staff denial and foreign-origin refusal. A signed synthetic standalone call speaks the stored admin wording, while a later stored greeting that omits required keypad instructions closes a new stream without media. Carrier playback remains unproven.
 
 E2E-247 checks local admin approval against the same one-day and seven-day keypad wording used by voice admission. An invalid edit changes neither policy version nor audit, the browser keeps its form for correction, and restarting the listener with seven-day mode requires the third instruction. Direct policy writes still face the call-time check. Clinic wording approval and carrier playback remain open.
+
+E2E-176 also has a separate disposable PostgreSQL subprocess check for a reproducible checked-out pooled-client crash. Terminating that client cannot exit the process, and the next query must fail. The signed call fixture continues to check close code, health and privacy separately; other termination timing remains unproven.
 
 E2E-229 adds the `routing.afterHoursMode` browser and agent setting, with default, approval, disable, invalid value, stale version, staff denial and active-call versus next-call checks. A closed-transfer synthetic voice call runs in memory and PostgreSQL, speaks the clinic-approved text only from an enabled admission snapshot with valid hours, and opens staff work without claiming a live connection. Malformed hours suppress time-specific text. Minimal PostgreSQL settings keep booking and after-hours audit entries separate and export/import the approved public text and owner mapping. The standalone Cliniko voice profile still has no approved transfer or staff-follow-up capability, so this setting is inactive there until those routes are proven; real clinic wording and carrier behavior remain open.
 

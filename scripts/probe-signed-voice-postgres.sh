@@ -10,5 +10,6 @@ ABBY_LEDGER=postgres node --test --test-concurrency=4 \
   test/voice/embedded-signed-*.test.ts \
   test/voice/cross-mode-signed-*.test.ts \
   test/voice/postgres-active-call-claims.test.ts \
+  test/storage/postgres-checked-out-client-loss.test.ts \
   test/voice/twilio-ingress-server.test.ts \
   test/composition/embedded-knowledge-signed-voice.test.ts
