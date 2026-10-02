@@ -26,13 +26,14 @@ const callerPhone = "+6145550101";
 const webhookUrl = "https://urgent.example.test/twilio/inbound";
 const streamUrl = "wss://urgent.example.test/twilio/media/";
 const script = "If you need immediate help, contact your local emergency service now.";
+const afterHoursText = "The clinic reopens Tuesday at 9 am.";
 const fallback = "I can't give advice on that request. Please contact the clinic directly.";
 const symptom = "I have chest pain and need urgent help";
 
 type Outbound = { event: string; mark?: { name: string } };
 
-test("E2E-232 signed embedded call speaks only the urgent script captured at admission",
-  { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
+test("signed embedded routing settings pin approved wording at admission",
+  { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async t => {
   const adminUrl = process.env.DATABASE_URL;
   assert.ok(adminUrl);
   const admin = connectPostgres(adminUrl);
@@ -51,7 +52,11 @@ test("E2E-232 signed embedded call speaks only the urgent script captured at adm
     const scope = { tenantId: "signed-urgent", clinicId: "clinic", locationId: "main" };
     const readiness = async () => ok(true as const);
     const ledger = new PostgresLedger(db, suggested => suggested, readiness, "unsafeReference");
-    const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "requestOnly", readiness,
+    const policy = new PostgresPolicyStore(db, location => {
+      const baseline = referenceDefaultPolicy(location);
+      return { ...baseline, capabilities: { ...baseline.capabilities, transfer: "execute" },
+        transferDestinationRef: "synthetic-staff-desk", staffedIntervals: [] };
+    }, "requestOnly", readiness,
       true, "unsafeReference");
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
     const host = new ReferenceClinicHost([], []);
@@ -67,11 +72,13 @@ test("E2E-232 signed embedded call speaks only the urgent script captured at adm
     server = createTwilioIngressServer({ ingress, async createCall(stream, send, close) {
       constructed += 1;
       const callSid = stream.event.key.providerCallRef;
+      const transferCall = ["8", "9", "0"].some(digit => callSid === `CA${digit.repeat(32)}`);
       const sessionId = `session-${callSid}`;
       let playedCount = 0;
       const transcription = { async accept() { return ok([]); }, async flush(generation: number) {
         return ok([{ kind: "segmentFinal" as const, sessionId, generation,
-          utteranceId: "urgent-request", text: symptom, quality: "clear" as const }]);
+          utteranceId: "routing-request", text: transferCall ? "Please connect me to staff" : symptom,
+          quality: "clear" as const }]);
       } };
       const synthesis = { async *stream(text: string) {
         spoken.set(callSid, [...(spoken.get(callSid) ?? []), text]);
@@ -81,7 +88,9 @@ test("E2E-232 signed embedded call speaks only the urgent script captured at adm
         streamStartedAt: stream.streamStartedAt, send, closeTransport: close,
         ledger, policy, routing, host, readiness, now: () => now,
         mediaOptions: { silenceMs: 100 }, transcription, synthesis,
-        resolveIntent: async () => ok({ kind: "handoff" as const, reason: "potentiallyUrgent" as const }) });
+        resolveIntent: async () => transferCall
+          ? ok({ kind: "transfer" as const, reason: "callerRequested" as const })
+          : ok({ kind: "handoff" as const, reason: "potentiallyUrgent" as const }) });
       return { async receive(raw: string) {
         const inbound = JSON.parse(raw) as { event?: string };
         const result = await wire.receive(raw);
@@ -154,33 +163,61 @@ test("E2E-232 signed embedded call speaks only the urgent script captured at adm
       return { callSid, responseText };
     }
 
-    const unsigned = await fetch(`${base}/twilio/inbound`, { method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ AccountSid: accountSid, CallSid: `CA${"9".repeat(32)}`,
-        To: dialedNumber, From: callerPhone }).toString() });
-    assert.equal(unsigned.status, 403);
-    assert.equal(constructed, 0);
-    assert.equal((await signedCall(5)).responseText, fallback);
-    const approved = await policy.changeUrgentResponse(scope, "0", { scope,
-      version: "urgent-v1", ownerRef: "clinic-admin", approvedText: script, approved: true,
-      effectiveFrom: "2026-10-01T00:00:00.000Z", effectiveUntil: "2026-10-02T00:00:00.000Z",
-    }, "clinic-admin");
-    assert.ok(approved.ok);
-    const active = await signedCall(6, async () => {
-      const disabled = await policy.changeUrgentResponse(scope, "1", undefined, "clinic-admin");
-      assert.ok(disabled.ok);
+    await t.test("E2E-232 urgent wording follows the signed call's captured policy", async () => {
+      const unsigned = await fetch(`${base}/twilio/inbound`, { method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ AccountSid: accountSid, CallSid: `CA${"9".repeat(32)}`,
+          To: dialedNumber, From: callerPhone }).toString() });
+      assert.equal(unsigned.status, 403);
+      assert.equal(constructed, 0);
+      assert.equal((await signedCall(5)).responseText, fallback);
+      const approved = await policy.changeUrgentResponse(scope, "0", { scope,
+        version: "urgent-v1", ownerRef: "clinic-admin", approvedText: script, approved: true,
+        effectiveFrom: "2026-10-01T00:00:00.000Z", effectiveUntil: "2026-10-02T00:00:00.000Z",
+      }, "clinic-admin");
+      assert.ok(approved.ok);
+      const active = await signedCall(6, async () => {
+        const disabled = await policy.changeUrgentResponse(scope, "1", undefined, "clinic-admin");
+        assert.ok(disabled.ok);
+      });
+      assert.equal(active.responseText,
+        `${script} I can request staff follow-up, but I can't confirm they have received it yet.`);
+      const captured = await ledger.read(callIdFor({ accountRef: accountSid,
+        providerCallRef: active.callSid }), scope);
+      assert.ok(captured.ok);
+      assert.equal(captured.value.policy.urgentResponse?.approvedText, script);
+      assert.equal(Object.values(captured.value.staffItems)[0]?.reason, "potentiallyUrgent");
+      assert.equal(JSON.stringify(captured.value).includes(symptom), false);
+      assert.equal((await signedCall(7)).responseText, fallback);
+      assert.equal(constructed, 3);
     });
-    assert.equal(active.responseText,
-      `${script} I can request staff follow-up, but I can't confirm they have received it yet.`);
-    const captured = await ledger.read(callIdFor({ accountRef: accountSid,
-      providerCallRef: active.callSid }), scope);
-    assert.ok(captured.ok);
-    assert.equal(captured.value.policy.urgentResponse?.approvedText, script);
-    assert.equal(Object.values(captured.value.staffItems)[0]?.reason, "potentiallyUrgent");
-    assert.equal(JSON.stringify(captured.value).includes(symptom), false);
-    assert.equal((await signedCall(7)).responseText, fallback);
-    assert.equal(constructed, 3);
-    assert.equal(host.bookings(scope).length, 0);
+    await t.test("E2E-229 after-hours wording follows the signed call's captured policy", async () => {
+      const defaultClosed = await signedCall(8);
+      assert.ok(defaultClosed.responseText?.includes("aren't available for a live transfer"));
+      assert.equal(defaultClosed.responseText?.includes(afterHoursText), false);
+      const malformed = await policy.changeAfterHours(scope, "2", "approvedInfoAndRequest",
+        { scope, version: "hours-v1", ownerRef: "clinic-admin", approvedText: "", approved: true }, "clinic-admin");
+      assert.deepEqual(malformed, { ok: false, error: { kind: "invalidValue" } });
+      const approvedHours = await policy.changeAfterHours(scope, "2", "approvedInfoAndRequest",
+        { scope, version: "hours-v1", ownerRef: "clinic-admin", approvedText: afterHoursText,
+          approved: true }, "clinic-admin");
+      assert.ok(approvedHours.ok);
+      const activeHours = await signedCall(9, async () => {
+        const stale = await policy.changeAfterHours(scope, "2", "staffRequest", undefined, "clinic-admin");
+        assert.deepEqual(stale, { ok: false, error: { kind: "versionConflict" } });
+        const disabled = await policy.changeAfterHours(scope, "3", "staffRequest", undefined, "clinic-admin");
+        assert.ok(disabled.ok);
+      });
+      assert.ok(activeHours.responseText?.includes(afterHoursText));
+      const capturedHours = await ledger.read(callIdFor({ accountRef: accountSid,
+        providerCallRef: activeHours.callSid }), scope);
+      assert.ok(capturedHours.ok);
+      assert.equal(capturedHours.value.policy.afterHoursInfo?.approvedText, afterHoursText);
+      assert.equal(Object.values(capturedHours.value.staffItems)[0]?.reason, "callerRequested");
+      assert.equal((await signedCall(0)).responseText?.includes(afterHoursText), false);
+      assert.equal(constructed, 6);
+      assert.equal(host.bookings(scope).length, 0);
+    });
   } finally {
     for (const socket of sockets) socket.terminate();
     if (server) { const closed = once(server, "close"); server.close(); await closed; }
