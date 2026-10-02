@@ -3,6 +3,15 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { digestActionRequest } from "../../src/core/digest.ts";
 import { MemoryLedger } from "../../src/core/ledger.ts";
+import type { LedgerStore } from "../../src/core/ledger.ts";
+import type { EffectCallLeaseStore } from "../../src/core/effect-call-lease.ts";
+import type { PolicyStore } from "../../src/core/host.ts";
+import { sql } from "kysely";
+import { connectPostgres } from "../../src/storage/connect.ts";
+import { migrate } from "../../src/storage/migrate.ts";
+import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
+import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
+import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { err, ok } from "../../src/core/model.ts";
 import type { ActionRequest, HostMutation, HostWriteReceipt, LocationScope, ReconcileObservation } from "../../src/core/model.ts";
 import type { AppointmentChangeEvidenceQuery } from "../../src/core/host.ts";
@@ -46,6 +55,7 @@ class ChangeHost extends ReferenceClinicHost {
   readonly kind: Kind;
   readonly callId: string;
   readonly sessionId: string;
+  readonly policyVersion: string;
   feeVersion = "fee-1";
   currentStart = target.startsAt;
   resolved = 0;
@@ -57,18 +67,19 @@ class ChangeHost extends ReferenceClinicHost {
   missingTerms = false;
   termsExpiry = "2026-09-29T11:00:00.000Z";
 
-  constructor(kind: Kind, callId: string, sessionId: string) {
+  constructor(kind: Kind, callId: string, sessionId: string, policyVersion = "1") {
     super([patient], [offer]);
     this.kind = kind;
     this.callId = callId;
     this.sessionId = sessionId;
+    this.policyVersion = policyVersion;
   }
 
   async resolveAppointmentChange(query: AppointmentChangeEvidenceQuery) {
     this.resolved += 1;
     if (query.scope.tenantId !== scope.tenantId || query.scope.clinicId !== scope.clinicId ||
         query.scope.locationId !== scope.locationId || query.callId !== this.callId ||
-        query.sessionId !== this.sessionId || query.policyVersion !== "1") {
+        query.sessionId !== this.sessionId || query.policyVersion !== this.policyVersion) {
       return err({ kind: "notFound" as const, target: "appointment" as const });
     }
     if (query.verificationRef !== patient.verificationRef) {
@@ -96,7 +107,7 @@ class ChangeHost extends ReferenceClinicHost {
     const request = mutation.request;
     if (mutation.kind !== this.kind || request.kind !== this.kind ||
         mutation.scope.tenantId !== scope.tenantId || mutation.scope.clinicId !== scope.clinicId ||
-        mutation.scope.locationId !== scope.locationId || mutation.policyVersion !== "1" ||
+        mutation.scope.locationId !== scope.locationId || mutation.policyVersion !== this.policyVersion ||
         mutation.payloadDigest !== digestActionRequest(request) ||
         request.patient.verificationRef !== patient.verificationRef ||
         request.target.appointmentRef !== target.appointmentRef ||
@@ -116,17 +127,23 @@ class ChangeHost extends ReferenceClinicHost {
   }
 }
 
-async function run(kind: Kind, scenario: Scenario) {
+type CallFixture = Readonly<{ ledger: LedgerStore & EffectCallLeaseStore; policy: PolicyStore;
+  afterAdmission?: () => Promise<void> }>;
+
+async function run(kind: Kind, scenario: Scenario, configured?: CallFixture) {
   const event = { key: { accountRef: "buyer-provider", providerCallRef: randomUUID() },
     dialedNumber: "+6125550199", receivedAt: now };
   const callId = callIdFor(event.key);
   const sessionId = `session:${randomUUID()}`;
-  const ledger = new MemoryLedger();
-  const policy = new ChangePolicyStore(kind, scenario === "requestOnly" ? "requestOnly"
+  const ledger = configured?.ledger ?? new MemoryLedger();
+  const policy = configured?.policy ?? new ChangePolicyStore(kind, scenario === "requestOnly" ? "requestOnly"
     : scenario === "unavailable" ? "unavailable" : "execute");
-  assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
-  assert.ok((await policy.changeBookingEnabled(scope, "0", true, "clinic-admin")).ok);
-  const host = new ChangeHost(kind, callId, sessionId);
+  const current = await policy.read(scope);
+  assert.ok(current.ok);
+  assert.ok((await policy.changeAutomationEnabled(scope, current.value.automationVersion, true, "clinic-admin")).ok);
+  const prepared = await policy.changeBookingEnabled(scope, current.value.policyVersion, true, "clinic-admin");
+  assert.ok(prepared.ok);
+  const host = new ChangeHost(kind, callId, sessionId, prepared.value.policyVersion);
   host.uncertain = scenario === "uncertain";
   host.expiredTerms = scenario === "expiredTerms";
   host.missingTerms = scenario === "missingTerms";
@@ -193,6 +210,7 @@ async function run(kind: Kind, scenario: Scenario) {
   assert.ok(started.ok);
   assert.equal(started.value.kind, "admitted");
   await play(started.value.delivery);
+  await configured?.afterAdmission?.();
   await speak();
   assert.equal(host.hostWrites, 0, "confirmation must finish playback before a write");
   let state = await ledger.read(callId, scope);
@@ -255,6 +273,59 @@ async function run(kind: Kind, scenario: Scenario) {
   }
   await call.disconnect(clock);
 }
+
+async function cancellationSettingCalls(ledger: LedgerStore & EffectCallLeaseStore, policy: PolicyStore) {
+  await run("cancel", "unavailable", { ledger, policy });
+  const before = await policy.read(scope);
+  assert.ok(before.ok);
+  assert.ok((await policy.changeCancellationEnabled(scope, before.value.policyVersion, true, "clinic-admin")).ok);
+  await run("cancel", "success", { ledger, policy, afterAdmission: async () => {
+    const current = await policy.read(scope);
+    assert.ok(current.ok);
+    assert.ok((await policy.changeCancellationEnabled(scope, current.value.policyVersion, false, "clinic-admin")).ok);
+  } });
+  await run("cancel", "unavailable", { ledger, policy });
+  const audit = await policy.listCancellationChanges(scope);
+  assert.ok(audit.ok);
+  assert.deepEqual(audit.value.entries.map(row => [row.enabled, row.previousEnabled]), [[true, false], [false, true]]);
+}
+
+test("E2E-252 cancellation setting gates complete voice calls and preserves the admitted call", async () => {
+  const ready = async () => ok(true as const);
+  await cancellationSettingCalls(new MemoryLedger(ready), new MemoryPolicyStore("execute", () => now, ready, "execute"));
+  const denied = new MemoryPolicyStore("execute", () => now, ready, "unavailable");
+  assert.ok((await denied.changeCancellationEnabled(scope, "0", true, "clinic-admin")).ok);
+  await run("cancel", "unavailable", { ledger: new MemoryLedger(ready), policy: denied });
+});
+
+test("E2E-252 PostgreSQL cancellation setting gates complete voice calls after durable edits",
+  { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
+  assert.ok(process.env.DATABASE_URL);
+  const admin = connectPostgres(process.env.DATABASE_URL);
+  const name = `abby_cancel_setting_${randomUUID().replaceAll("-", "")}`;
+  const target = new URL(process.env.DATABASE_URL);
+  target.pathname = `/${name}`;
+  let created = false;
+  let db: ReturnType<typeof connectPostgres> | undefined;
+  try {
+    await sql.raw(`create database "${name}"`).execute(admin);
+    created = true;
+    db = connectPostgres(target.toString());
+    await migrate(db);
+    const ready = async () => ok(true as const);
+    await cancellationSettingCalls(new PostgresLedger(db, suggested => suggested, ready, "unsafeReference"),
+      new PostgresPolicyStore(db, referenceDefaultPolicy, "execute", ready, true, "unsafeReference", false, "execute"));
+    await assert.rejects(migrate(db, "down"), /cancellation setting rows must be removed/);
+    const retained = await new PostgresPolicyStore(db, referenceDefaultPolicy, undefined, undefined, false,
+      "unsafeReference").listCancellationChanges(scope);
+    assert.ok(retained.ok, retained.ok ? "" : retained.error.kind);
+    assert.deepEqual(retained.value.entries.map(row => row.enabled), [true, false]);
+  } finally {
+    await db?.destroy();
+    if (created) await sql.raw(`drop database "${name}" with (force)`).execute(admin);
+    await admin.destroy();
+  }
+});
 
 test("E2E-007 embedded cancellation confirms exact time and fee before one committed write", () => run("cancel", "success"));
 test("E2E-007 embedded cancellation denies wrong patient and ambiguous target", async () => {

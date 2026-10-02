@@ -22,6 +22,7 @@ import type { ClinicAvailabilitySetup, ClinicAvailabilityApprovalState, ClinicAv
   ClinicAvailabilityTypeCatalogue } from "./clinic-availability-setup.ts";
 import { validOperationalDailyCounts } from "../voice/operational-counts.ts";
 import type { OperationalDailyCounts, OperationalDailyReader } from "../voice/operational-counts.ts";
+import type { CancellationSettingAuditPage } from "../core/host.ts";
 
 export type { CapabilityDescriptor } from "./capability-catalogue.ts";
 
@@ -41,6 +42,8 @@ export type GatewayCommand =
   | Readonly<{ kind: "calls.writes.stop.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "settings.appointments.booking.enabled.change.v1"; expectedVersion: string; enabled: boolean }>
   | Readonly<{ kind: "settings.appointments.booking.audit.v1"; afterVersion?: number }>
+  | Readonly<{ kind: "settings.appointments.cancellation.enabled.change.v1"; expectedVersion: string; enabled: boolean }>
+  | Readonly<{ kind: "settings.appointments.cancellation.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "settings.routing.afterHours.change.v1"; expectedVersion: string;
     mode: AfterHoursMode; infoVersion?: string; approvedText?: string }>
   | Readonly<{ kind: "settings.routing.afterHours.audit.v1"; afterVersion?: number }>
@@ -93,6 +96,7 @@ export type GatewayReply =
   | Readonly<{ kind: "writeStop"; status: WriteStopStatus }>
   | Readonly<{ kind: "writeStopAudit"; page: WriteStopAuditPage }>
   | Readonly<{ kind: "bookingSettingAudit"; page: BookingSettingAuditPage }>
+  | Readonly<{ kind: "cancellationSettingAudit"; page: CancellationSettingAuditPage }>
   | Readonly<{ kind: "afterHoursSettingAudit"; page: AfterHoursSettingAuditPage }>
   | Readonly<{ kind: "urgentSettingAudit"; page: UrgentSettingAuditPage }>
   | Readonly<{ kind: "staffScheduleSettingAudit"; page: StaffScheduleSettingAuditPage }>
@@ -177,6 +181,7 @@ export class CommandGateway {
         "clinic.availability.approval.change.v2", "clinic.availability.approval.revoke.v1");
       permitted.push("settings.automation.enabled.change.v1", "settings.automation.audit.v1",
         "settings.appointments.booking.enabled.change.v1", "settings.appointments.booking.audit.v1",
+        "settings.appointments.cancellation.enabled.change.v1", "settings.appointments.cancellation.audit.v1",
         "settings.routing.afterHours.change.v1", "settings.routing.afterHours.audit.v1",
         "settings.routing.urgent.change.v1", "settings.routing.urgent.audit.v1");
       permitted.push("settings.routing.staffSchedule.change.v1", "settings.routing.staffSchedule.audit.v1");
@@ -245,6 +250,15 @@ export class CommandGateway {
         if (command.afterVersion !== undefined && (!Number.isSafeInteger(command.afterVersion) || command.afterVersion < 0)) return err({ kind: "invalid" });
         const result = await this.policy.listBookingChanges(this.actor.scope, command.afterVersion);
         return result.ok ? ok({ kind: "bookingSettingAudit", page: result.value }) : result;
+      }
+      case "settings.appointments.cancellation.enabled.change.v1": {
+        const result = await this.policy.changeCancellationEnabled(this.actor.scope, command.expectedVersion,
+          command.enabled, this.actor.actorRef);
+        return result.ok ? ok({ kind: "settings", policy: result.value }) : result;
+      }
+      case "settings.appointments.cancellation.audit.v1": {
+        const result = await this.policy.listCancellationChanges(this.actor.scope, command.afterVersion);
+        return result.ok ? ok({ kind: "cancellationSettingAudit", page: result.value }) : result;
       }
       case "settings.routing.afterHours.change.v1": {
         if (command.mode === "staffRequest" &&

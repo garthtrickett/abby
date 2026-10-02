@@ -1,4 +1,5 @@
 import { html } from "lit-html";
+import type { CancellationSettingAuditPage } from "../../core/host.ts";
 import type { CallPolicy, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor } from "../../reference/command-gateway.ts";
@@ -24,6 +25,7 @@ export type DashboardState = {
   stopReasonInput: string;
   automationAuditPage: AutomationSettingAuditPage | undefined;
   auditPage: BookingSettingAuditPage | undefined;
+  cancellationAuditPage: CancellationSettingAuditPage | undefined;
   afterHoursAuditPage: AfterHoursSettingAuditPage | undefined;
   afterHoursInfoVersion: string;
   afterHoursApprovedText: string;
@@ -66,6 +68,9 @@ export type DashboardActions = Readonly<{
   loadAutomationAudit(): void;
   loadMoreAutomationAudit(): void;
   toggleBooking(): void;
+  toggleCancellation(): void;
+  loadCancellationAudit(): void;
+  loadMoreCancellationAudit(): void;
   loadAudit(): void;
   loadMoreAudit(): void;
   setAfterHoursField(field: "afterHoursInfoVersion" | "afterHoursApprovedText", value: string): void;
@@ -150,6 +155,17 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
           ${canChange && state.policy ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.toggleBooking()}>${enabled ? "Disable booking" : "Enable booking"}</button>` : html`<span class="pill">View only</span>`}
         </div>
         ${state.policy ? html`<p class="muted">Policy version ${state.policy.policyVersion} · Booking capability: ${state.policy.capabilities.book}</p>` : ""}
+      </section>
+      <section class="card" aria-labelledby="cancellation-title">
+        <div class="row"><div><h2 id="cancellation-title">Cancellation automation</h2>
+          <p class="status">${state.policy ? state.policy.cancellationEnabled === true ? "Cancellation enabled" : "Cancellation disabled" : "Cancellation unavailable"}</p>
+          <p class="muted">Changes apply to new calls. Current calls keep their captured setting.</p></div>
+          ${state.capabilities.some(item => item.id === "settings.appointments.cancellation.enabled.change.v1")
+            ? html`<button type="button" ?disabled=${state.busy || !state.policy} @click=${() => actions.toggleCancellation()}>${!state.policy ? "Cancellation state unavailable" : state.policy.cancellationEnabled ? "Disable cancellation" : "Enable cancellation"}</button>`
+            : html`<span class="pill">View only</span>`}
+        </div>
+        ${state.policy ? html`<p class="muted">Cancellation capability: ${state.policy.capabilities.cancel}</p>
+          ${state.policy.capabilities.cancel !== "execute" ? html`<p class="muted">This setting cannot grant cancellation permission the clinic's host does not support.</p>` : ""}` : ""}
       </section>
       <section class="card" aria-labelledby="after-hours-title">
         <h2 id="after-hours-title">After-hours information</h2>
@@ -295,6 +311,15 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
         ${state.auditPage ? html`<div aria-label="Booking setting audit">
           ${state.auditPage.entries.length ? html`<ul>${state.auditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.enabled ? "enabled" : "disabled"} · ${entry.provenance === "recorded" ? html`${entry.actorRef} · ${entry.changedAt}` : "Earlier change; actor unavailable"}</li>`)}</ul>` : html`<p>No booking setting changes recorded.</p>`}
           ${state.auditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreAudit()}>Load more history</button>` : ""}
+        </div>` : html`<p class="muted">Setting history unavailable.</p>`}
+      </section>` : ""}
+      ${state.capabilities.some(item => item.id === "settings.appointments.cancellation.audit.v1") ? html`<section class="card" aria-labelledby="cancellation-audit-title">
+        <div class="row"><h2 id="cancellation-audit-title">Cancellation setting history</h2>
+          <button type="button" ?disabled=${state.busy} @click=${() => actions.loadCancellationAudit()}>Refresh cancellation history</button></div>
+        ${state.cancellationAuditPage ? html`<div aria-label="Cancellation setting audit">
+          ${state.cancellationAuditPage.entries.length ? html`<ul>${state.cancellationAuditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.enabled ? "enabled" : "disabled"} · ${entry.actorRef} · ${entry.changedAt}</li>`)}</ul>`
+            : html`<p>No cancellation setting changes recorded.</p>`}
+          ${state.cancellationAuditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreCancellationAudit()}>Load more cancellation history</button>` : ""}
         </div>` : html`<p class="muted">Setting history unavailable.</p>`}
       </section>` : ""}
       <section class="card" aria-labelledby="review-title">

@@ -210,7 +210,8 @@ export class ReferenceTenantConfigArchiveImporter {
         afterHoursHistory: location.mapped.afterHoursHistory,
         urgentHistory: location.mapped.urgentHistory,
         staffScheduleHistory: location.mapped.staffScheduleHistory,
-        greetingHistory: location.mapped.greetingHistory }));
+        greetingHistory: location.mapped.greetingHistory,
+        cancellationHistory: location.mapped.cancellationHistory }));
       policy = MemoryPolicyStore.fromImportedMany(locations, prepared.value.clinics, importActorRef, importedAt);
     } catch { return err({ kind: "invalidConfigArchive" }); }
     const ledger = new MemoryLedger();

@@ -36,6 +36,8 @@ export default interface ClinicSettingsTable {
   setting_kind: ColumnType<string, string | undefined, string>;
 
   previous_after_hours_mode: ColumnType<string | null, string | null, string | null>;
+
+  previous_cancellation_enabled: ColumnType<boolean | null, boolean | null, boolean | null>;
 }
 
 export type ClinicSettings = Selectable<ClinicSettingsTable>;

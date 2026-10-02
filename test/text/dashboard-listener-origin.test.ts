@@ -102,6 +102,36 @@ test("E2E-249 ephemeral origins are loopback HTTP only and fixed HTTPS host auth
     Host: "admin.example.test", Origin: "https://admin.example.test" }, command)).status, 200);
 });
 
+test("E2E-252 cancellation edits use the configured HTTPS host origin exactly", async t => {
+  const scope = { tenantId: "cancellation-https", clinicId: "clinic", locationId: "main" };
+  const actor = { actorRef: "https-owner", role: "clinicAdmin" as const, scope };
+  const policy = new MemoryPolicyStore();
+  const reception = new TextReception(new MemoryLedger(), policy, new ReferenceClinicHost([], []));
+  const server = await createHostAuthenticatedDashboardServer({ publicOrigin: "https://admin.example.test",
+    resolveActor: () => actor, gatewayFor: () => new CommandGateway(actor, policy, reception),
+  }, bundle);
+  t.after(() => close(server));
+  const origin = await listenLoopbackServer(server);
+  const path = "/api/settings/cancellation-enabled";
+  const command = { expectedVersion: "0", enabled: true };
+  for (const rejected of ["http://admin.example.test", "https://foreign.example.test", "null"]) {
+    assert.equal((await send(origin, path, { Host: "admin.example.test", Origin: rejected,
+      "X-Forwarded-Proto": "https" }, command)).status, 403);
+  }
+  assert.equal((await send(origin, path, { Host: "foreign.example.test",
+    Origin: "https://admin.example.test" }, command)).status, 403);
+  assert.equal((await send(origin, path, { Host: "admin.example.test",
+    Origin: "https://admin.example.test" }, command)).status, 200);
+  const current = await policy.read(scope);
+  assert.ok(current.ok);
+  assert.equal(current.value.policyVersion, "1");
+  assert.equal(current.value.cancellationEnabled, true);
+  const audit = await send(origin, "/api/settings/cancellation-audit", { Host: "admin.example.test" });
+  assert.equal(audit.status, 200);
+  assert.deepEqual(JSON.parse(audit.body).value.page.entries.map((row: { actorRef: string; previousEnabled: boolean }) =>
+    [row.actorRef, row.previousEnabled]), [["https-owner", false]]);
+});
+
 test("E2E-249 local admin port zero refuses startup outside the isolated probe", () => {
   const result = spawnSync(process.execPath, ["scripts/serve-cliniko-admin.ts"], {
     cwd: new URL("../../", import.meta.url),
