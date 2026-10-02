@@ -8,7 +8,7 @@ import { matchesSchema } from "../../reference/schema-shapes.ts";
 import { publicSpeechGateStatus } from "../speech-gate-public-status.ts";
 
 const maxCommandBytes = 24_000;
-const document = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body><main><div id="app"></div><div id="availability-setup"></div><div id="speech-gate"></div><div id="operational-daily"></div></main><script type="module" src="/app.js"></script></body></html>`;
+const document = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body><main><div id="app"></div><div id="availability-setup"></div><div id="greeting-setup"></div><div id="speech-gate"></div><div id="operational-daily"></div></main><script type="module" src="/app.js"></script></body></html>`;
 const setupCommands = new Set([
   "clinic.availability.businesses.list.v1", "clinic.availability.practitioners.list.v1",
   "clinic.availability.types.list.v1", "clinic.availability.selection.inspect.v1",
@@ -116,8 +116,8 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     const url = new URL(request.url ?? "/", "http://localhost");
     if (surface === "availabilitySetup" && !(
       (request.method === "GET" && ["/", "/app.js", "/style.css", "/api/capabilities", "/api/settings",
-        "/api/speech-gate", "/api/operations/daily"].includes(url.pathname)) ||
-      (request.method === "POST" && url.pathname === "/api/clinic-availability/command"))) {
+        "/api/speech-gate", "/api/operations/daily", "/api/settings/greeting-audit"].includes(url.pathname)) ||
+      (request.method === "POST" && ["/api/clinic-availability/command", "/api/settings/greeting"].includes(url.pathname)))) {
       return json(response, 404, { ok: false, error: { kind: "notFound" } });
     }
     if (authenticatedOrigin && request.method === "POST" && url.pathname.startsWith("/api/") &&
@@ -139,7 +139,8 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     }
     if (request.method === "GET" && url.pathname === "/api/capabilities") {
       return json(response, 200, { ok: true, value: gateway.listPermitted().filter(item =>
-        surface === "availabilitySetup" ? item.id === "settings.read.v1" || item.id.startsWith("clinic.availability.")
+        surface === "availabilitySetup" ? item.id === "settings.read.v1" || item.id.startsWith("clinic.availability.") ||
+          item.id === "settings.routing.greeting.change.v1" || item.id === "settings.routing.greeting.audit.v1"
           : item.id !== "booking.propose.v2") });
     }
     let command: GatewayCommand | undefined;

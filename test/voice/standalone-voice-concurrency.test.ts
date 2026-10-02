@@ -105,9 +105,13 @@ test("E2E-198 eight parallel signed calls isolate tenants and exhaust one Clinik
     const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable", async () => ok(true),
       false, "standaloneMinimal");
     for (const route of routes) {
-      const changed = await policy.changeAutomationEnabled({ tenantId: route.tenantId,
-        clinicId: "clinic", locationId: "main" }, "0", true, "synthetic-admin");
+      const scope = { tenantId: route.tenantId, clinicId: "clinic", locationId: "main" };
+      const changed = await policy.changeAutomationEnabled(scope, "0", true, "synthetic-admin");
       assert.ok(changed.ok);
+      assert.ok((await policy.changeGreeting(scope, "0", { scope, version: "concurrent-greeting-v1",
+        ownerRef: "synthetic-admin", approved: true, approvedText: route.greeting,
+        effectiveFrom: "2026-01-01T00:00:00.000Z", effectiveUntil: "2028-01-01T00:00:00.000Z" },
+      "synthetic-admin")).ok);
     }
     const apiKey = "synthetic-key-au5";
     const budget = new PostgresClinikoRequestBudget(db, { apiKey, maxPerMinute: 48 });
@@ -153,7 +157,7 @@ test("E2E-198 eight parallel signed calls isolate tenants and exhaust one Clinik
       assert.ok(selection.ok);
       const binding = { accountRef: accountSid, dialedNumber: route.number, routeVersion };
       return { dialedNumber: route.number, scope, routeVersion, availability: selection.value,
-        rateBudget: budget, approval: syntheticCatalogueApproval(selection.value, scope, binding),
+        rateBudget: budget, approval: syntheticCatalogueApproval(selection.value, scope, binding, "1"),
         timeZone: "Australia/Sydney", clinicDate: () => clinicDate,
         keypadAvailabilityGreeting: { scope, approved: true as const, version: "concurrent-greeting-v1",
           ownerRef: "synthetic-admin", approvedText: route.greeting } };

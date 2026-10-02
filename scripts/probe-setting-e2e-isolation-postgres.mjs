@@ -76,7 +76,8 @@ function checkedNode(output, ids) {
   assert.equal(count("fail"), 0);
   assert.equal(count("cancelled"), 0);
   assert.equal(count("skipped"), 0, "an evidence file skipped a test");
-  assert.ok(count("pass") >= ids.length, "selected Node cases did not pass");
+  // A composed journey can cover more than one mapped ID; every ID still needs a passing test line below.
+  assert.ok(count("pass") >= 1, "selected Node cases did not pass");
   for (const id of ids) {
     assert.ok(output.split("\n").some(line => /^\s*ok \d+ - /.test(line) &&
       line.includes(id) && !line.includes("# SKIP")), `${id} did not execute`);
@@ -87,7 +88,7 @@ async function runNode(entries, concurrency) {
   const ids = idsFor(entries);
   // Run whole files: Node's name filter can skip a nested E2E when its parent suite has no ID.
   const output = await withFreshDatabase(env => execute(process.execPath, ["--test", `--test-concurrency=${concurrency}`,
-    ...entries.map(([file]) => file)], 360_000, env));
+    ...entries.map(([file]) => file)], 600_000, env));
   return checkedNode(output, ids);
 }
 

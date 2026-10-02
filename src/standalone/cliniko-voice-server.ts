@@ -68,6 +68,11 @@ function isDynamicRoute(route: ClinikoVoiceRoute): route is ClinikoVoiceRouteBas
 const keypadInstructions = "Press 1 for possible times today. Press 2 for possible times tomorrow.";
 const sevenDayInstructions = "Press 3 for possible times over the next week.";
 
+function validKeypadGreeting(greeting: unknown, scope: LocationScope, sevenDayEnabled: boolean): greeting is ApprovedGreeting {
+  return validGreetingShape(greeting, scope) && greeting.approvedText.includes(keypadInstructions) &&
+    greeting.approvedText.includes(sevenDayInstructions) === sevenDayEnabled;
+}
+
 export type ClinikoVoiceServerConfig = Readonly<{
   db: Kysely<Database>;
   /** Must use the same PostgreSQL database and key on every serving instance. */
@@ -135,10 +140,8 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       throw new RangeError("invalid clinic voice route");
     }
     const greeting = route.keypadAvailabilityGreeting;
-    if (!validGreetingShape(greeting, route.scope) ||
-        !greeting.approvedText.includes(keypadInstructions) ||
-        (route.sevenDayAvailabilityEnabled !== undefined && typeof route.sevenDayAvailabilityEnabled !== "boolean") ||
-        greeting.approvedText.includes(sevenDayInstructions) !== (route.sevenDayAvailabilityEnabled === true)) {
+    if ((route.sevenDayAvailabilityEnabled !== undefined && typeof route.sevenDayAvailabilityEnabled !== "boolean") ||
+        !validKeypadGreeting(greeting, route.scope, route.sevenDayAvailabilityEnabled === true)) {
       throw new RangeError("invalid keypad availability greeting");
     }
     routes.set(route.dialedNumber, { ...route, scope: structuredClone(route.scope),
@@ -275,6 +278,8 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       stream, send, closeTransport: close, synthesis,
       availability,
       approvedGreeting: route.keypadAvailabilityGreeting,
+      greetingValidator: greeting => validKeypadGreeting(greeting, route.scope,
+        route.sevenDayAvailabilityEnabled === true),
       keypadAvailabilityRange: (digit: string) => keypadAvailabilityRange(approved.clinicDate, digit,
         route.sevenDayAvailabilityEnabled === true),
       resolveIntent: async (turn, signal) => {

@@ -44,6 +44,8 @@ export type TransientVoiceConfig = Readonly<{
   readiness?: AutomationReadiness;
   availability?: ClinikoAvailabilityReader | ClinikoApprovedAvailabilitySearch;
   approvedGreeting?: ApprovedGreeting;
+  /** The serving route checks the stored opening words against its offered keypad choices. */
+  greetingValidator?: (greeting: ApprovedGreeting | undefined) => boolean;
   keypadAvailabilityRange?: (digit: string) => Readonly<{ from: string; to: string }> | null | undefined;
   closeTransport?: () => void;
   callerCandidateLookup?: CallerCandidateLookup;
@@ -87,6 +89,9 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
     const loaded = await policy.read(scope);
     if (loaded.ok && config.expectedPolicyVersion !== undefined &&
         loaded.value.policyVersion !== config.expectedPolicyVersion) return err({ kind: "versionConflict" });
+    if (loaded.ok && config.greetingValidator && !config.greetingValidator(loaded.value.greeting)) {
+      return err({ kind: "invalidValue" });
+    }
     if (loaded.ok) greeting = loaded.value.greeting;
     return loaded;
   } });

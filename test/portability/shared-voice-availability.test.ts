@@ -114,9 +114,13 @@ async function runCase(composition: Composition, scenario: Case, adminUrl: strin
     if (composition === "standalone") {
       const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable", readiness, false, "standaloneMinimal");
       assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
+      assert.ok((await policy.changeGreeting(scope, "0", { scope, version: "portable-greeting-v1",
+        ownerRef: "test-operator", approved: true, approvedText: "Welcome to the clinic.",
+        effectiveFrom: "2026-01-01T00:00:00.000Z", effectiveUntil: "2027-01-01T00:00:00.000Z" },
+      "test-operator")).ok);
       call = value(await createStandaloneTransientVoiceCall({ db, routingHost: routing, stream,
         send, transcription, synthesis, resolveIntent, readiness, availability: reader,
-        approvedGreeting: referenceDefaultPolicy(scope).greeting!, now: () => now,
+        now: () => now,
         mediaOptions: { silenceMs: 100 } }));
     } else {
       const ledger = new MemoryLedger();

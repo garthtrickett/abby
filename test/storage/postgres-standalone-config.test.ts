@@ -33,8 +33,8 @@ test("default PostgreSQL policy store uses minimal rows and rejects legacy rich 
   const rows = await sql<{ version: number; policy: unknown }>`select version, policy from clinic_settings
     where tenant_id = ${scope.tenantId} order by version`.execute(db);
   assert.deepEqual(rows.rows, [
-    { version: 0, policy: { scope, policyVersion: "0", bookingEnabled: false, afterHoursMode: "staffRequest" } },
-    { version: 1, policy: { scope, policyVersion: "1", bookingEnabled: true, afterHoursMode: "staffRequest" } },
+    { version: 0, policy: { scope, policyVersion: "0", bookingEnabled: false, afterHoursMode: "staffRequest", greeting: null } },
+    { version: 1, policy: { scope, policyVersion: "1", bookingEnabled: true, afterHoursMode: "staffRequest", greeting: null } },
   ]);
   assert.equal(value(await new PostgresPolicyStore(db, defaultPolicy).read(scope)).policyVersion, "1");
   assert.deepEqual(await scanPatientDataCanaries(db, [{ label: "default_policy", value: canary }]),
@@ -66,9 +66,9 @@ test("standalone setting toggle stores only structured policy while knowledge st
     where tenant_id = ${scope.tenantId} and clinic_id = ${scope.clinicId} and location_id = ${scope.locationId}
     order by version`.execute(db);
   assert.deepEqual(rows.rows, [
-    { version: 0, policy: { scope, policyVersion: "0", bookingEnabled: false, afterHoursMode: "staffRequest" } },
-    { version: 1, policy: { scope, policyVersion: "1", bookingEnabled: true, afterHoursMode: "staffRequest" } },
-    { version: 2, policy: { scope, policyVersion: "2", bookingEnabled: false, afterHoursMode: "staffRequest" } },
+    { version: 0, policy: { scope, policyVersion: "0", bookingEnabled: false, afterHoursMode: "staffRequest", greeting: null } },
+    { version: 1, policy: { scope, policyVersion: "1", bookingEnabled: true, afterHoursMode: "staffRequest", greeting: null } },
+    { version: 2, policy: { scope, policyVersion: "2", bookingEnabled: false, afterHoursMode: "staffRequest", greeting: null } },
   ]);
 
   const reloaded = createStandaloneTextComposition(db);

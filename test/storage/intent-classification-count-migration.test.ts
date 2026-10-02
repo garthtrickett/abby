@@ -26,6 +26,9 @@ test("E2E-237 classifier count migration refuses a downgrade that would discard 
         await counters.record(scope, "intentClassificationUnavailable");
         assert.equal((await counters.snapshot(scope)).intentClassificationUnavailable, 1);
         assert.equal((await counters.daily(scope)).days.at(-1)?.counts.intentClassificationUnavailable, 1);
+        const newer = await sql<{ name: string }>`select name from kysely_migration
+          where name > '032_intent_classification_unavailable_count' order by name desc`.execute(db);
+        for (const _ of newer.rows) await migrate(db, "down");
         await assert.rejects(migrate(db, "down"), /intent classification counts prevent downgrade/);
         assert.equal((await counters.snapshot(scope)).intentClassificationUnavailable, 1);
         await db.deleteFrom("clinic_operational_daily_counts").execute();

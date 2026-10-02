@@ -95,6 +95,9 @@ test("E2E-223 signed knowledge answer requires embedded approval and remains pri
           const call = mode === "standalone"
             ? await createStandaloneTransientVoiceCall({ db, routingHost: routing, stream, send,
               closeTransport: close, readiness, now: () => now, mediaOptions: { silenceMs: 100 },
+              approvedGreeting: { scope, version: "knowledge-greeting-v1", ownerRef: "clinic-admin",
+                approved: true, approvedText: "Welcome to the clinic.",
+                effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2027-09-01T00:00:00.000Z" },
               transcriptionFactory: transcription, synthesis, resolveIntent })
             : ok(createEmbeddedTwilioVoiceComposition({ event: stream.event, sessionId,
               streamStartedAt: stream.streamStartedAt, send, closeTransport: close,

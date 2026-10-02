@@ -48,6 +48,10 @@ test("E2E-134 and E2E-137 standalone signed voice keeps the model decision and l
     const readiness = async () => ok(true as const);
     const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable", readiness, false, "standaloneMinimal");
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
+    assert.ok((await policy.changeGreeting(scope, "0", { scope, version: "transient-voice-greeting-v1",
+      ownerRef: "test-operator", approved: true, approvedText: "Welcome to the clinic.",
+      effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2027-09-01T00:00:00.000Z" },
+    "test-operator")).ok);
     const ingress = new TwilioSignedIngress({ accountSid, authToken, publicWebhookUrl: webhookUrl,
       publicStreamUrl: streamUrl, fallbackNumbers: { [dialedNumber]: "+6125550188" },
       bindingKey: Buffer.alloc(32, 0x34), now: () => new Date(now) });
