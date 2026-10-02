@@ -1335,8 +1335,12 @@ for (const kind of kinds) {
     const unknownTurn = await transferTurn(unknownHours);
     assert.equal(unknownTurn.callerMessages.at(-1)?.includes(approvedText), false,
       "an invalid staffing snapshot cannot authorize time-specific clinic information");
+    assert.match(unknownTurn.callerMessages.at(-1)!, /can't confirm whether staff are available/);
+    assert.equal(unknownTurn.callerMessages.at(-1)?.includes("aren't available for a live transfer"), false,
+      "unknown staffing evidence cannot be spoken as a confirmed closure");
     assert.equal(value(await unknownHours.session.dispatchPending(at(4))).kind, "queued");
     assert.equal(unknownHours.playback.queuedTexts.at(-1)?.includes(approvedText), false);
+    assert.match(unknownHours.playback.queuedTexts.at(-1)!, /can't confirm whether staff are available/);
   });
 
   test(`${kind}: a staffed window closing before transfer send cancels and requests follow-up`, async () => {
