@@ -263,9 +263,11 @@ test("postgres: ledger clock rejects forged intake, renewal, and expiry timestam
   const scope = { tenantId: "database-clock-tenant", clinicId: "database-clock-clinic", locationId: "database-clock-location" };
   const ledger = new PostgresLedger(db!, undefined, undefined, "unsafeReference");
   const basePolicy = referenceDefaultPolicy(scope);
+  const staffedCoverage = { startsAt: new Date(Date.now() - 60_000).toISOString(),
+    endsAt: new Date(Date.now() + 60_000).toISOString() };
   const policy: CallPolicy = { ...basePolicy, automationEnabled: true, capabilities: { ...basePolicy.capabilities, transfer: "execute" },
     transferDestinationRef: "database-clock-destination",
-    staffedIntervals: [{ startsAt: new Date(Date.now() - 60_000).toISOString(), endsAt: new Date(Date.now() + 60_000).toISOString() }] };
+    staffedCoverage, staffedIntervals: [staffedCoverage] };
   const before = await sql<{ current_time: Date }>`select clock_timestamp() as current_time`.execute(db!);
   const service = new CallAdmissionService(ledger, async () => ok(policy), () => "2000-01-01T00:00:00.000Z", async () => ok(true));
   const admitted = value(await service.begin({

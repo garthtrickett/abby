@@ -139,6 +139,7 @@ for (const kind of kinds) {
       read: async () => ({ ok: true, value: { ...referenceDefaultPolicy(app.scope),
         capabilities: { ...referenceDefaultPolicy(app.scope).capabilities, transfer: "execute" },
         transferDestinationRef: "staff-destination",
+        staffedCoverage: { startsAt: now, endsAt: expiresAt },
         staffedIntervals: [{ startsAt: now, endsAt: expiresAt }] } }),
       changeBookingEnabled: (...args) => app.policy.changeBookingEnabled(...args),
       listBookingChanges: (...args) => app.policy.listBookingChanges(...args),

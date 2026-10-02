@@ -95,6 +95,8 @@ export type CallPolicy = Readonly<{
   urgentResponse?: ApprovedUrgentResponse;
   capabilities: Readonly<Record<CapabilityId, CapabilityMode>>;
   transferDestinationRef?: string;
+  /** UTC horizon over which staffedIntervals is a complete clinic-approved snapshot. */
+  staffedCoverage?: StaffedInterval;
   staffedIntervals?: readonly StaffedInterval[];
   staffDestination: StaffDestination;
   operatorQueue: StaffDestination;

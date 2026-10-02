@@ -8,7 +8,8 @@ test("spring daylight-saving gap produces actual UTC staffed time", () => {
   const result = expandStaffSchedule({ timeZone: "Australia/Sydney", weekly: [sunday], closedDates: [] },
     "2026-10-03T14:00:00.000Z", "2026-10-03T18:00:00.000Z");
   assert.equal(result.ok, true);
-  assert.deepEqual(result.value, [{ startsAt: "2026-10-03T15:30:00.000Z", endsAt: "2026-10-03T16:30:00.000Z" }]);
+  assert.deepEqual(result.value, { staffedCoverage: { startsAt: "2026-10-03T14:00:00.000Z", endsAt: "2026-10-03T18:00:00.000Z" },
+    staffedIntervals: [{ startsAt: "2026-10-03T15:30:00.000Z", endsAt: "2026-10-03T16:30:00.000Z" }] });
 });
 
 test("fall daylight-saving overlap includes both local occurrences", () => {
@@ -16,10 +17,11 @@ test("fall daylight-saving overlap includes both local occurrences", () => {
     weekly: [{ weekday: 0, startMinute: 135, endMinute: 165 }], closedDates: [] },
   "2027-04-03T14:00:00.000Z", "2027-04-03T18:00:00.000Z");
   assert.equal(result.ok, true);
-  assert.deepEqual(result.value, [
-    { startsAt: "2027-04-03T15:15:00.000Z", endsAt: "2027-04-03T15:45:00.000Z" },
-    { startsAt: "2027-04-03T16:15:00.000Z", endsAt: "2027-04-03T16:45:00.000Z" },
-  ]);
+  assert.deepEqual(result.value, { staffedCoverage: { startsAt: "2027-04-03T14:00:00.000Z", endsAt: "2027-04-03T18:00:00.000Z" },
+    staffedIntervals: [
+      { startsAt: "2027-04-03T15:15:00.000Z", endsAt: "2027-04-03T15:45:00.000Z" },
+      { startsAt: "2027-04-03T16:15:00.000Z", endsAt: "2027-04-03T16:45:00.000Z" },
+    ] });
 });
 
 test("local holiday closes a weekly window", () => {
@@ -27,7 +29,8 @@ test("local holiday closes a weekly window", () => {
     weekly: [{ weekday: 1, startMinute: 540, endMinute: 1020 }], closedDates: ["2026-10-05"] },
   "2026-10-04T21:00:00.000Z", "2026-10-05T07:00:00.000Z");
   assert.equal(result.ok, true);
-  assert.deepEqual(result.value, []);
+  assert.deepEqual(result.value, { staffedCoverage: { startsAt: "2026-10-04T21:00:00.000Z", endsAt: "2026-10-05T07:00:00.000Z" },
+    staffedIntervals: [] });
 });
 
 test("overnight window crosses midnight and clips to the requested horizon", () => {
@@ -35,7 +38,8 @@ test("overnight window crosses midnight and clips to the requested horizon", () 
     weekly: [{ weekday: 0, startMinute: 1320, endMinute: 120 }], closedDates: [] },
   "2026-10-04T11:30:30.000Z", "2026-10-04T16:00:00.000Z");
   assert.equal(result.ok, true);
-  assert.deepEqual(result.value, [{ startsAt: "2026-10-04T11:30:30.000Z", endsAt: "2026-10-04T15:00:00.000Z" }]);
+  assert.deepEqual(result.value, { staffedCoverage: { startsAt: "2026-10-04T11:30:30.000Z", endsAt: "2026-10-04T16:00:00.000Z" },
+    staffedIntervals: [{ startsAt: "2026-10-04T11:30:30.000Z", endsAt: "2026-10-04T15:00:00.000Z" }] });
 });
 
 test("a closure on the shift's starting date also closes its after-midnight portion", () => {
@@ -44,11 +48,12 @@ test("a closure on the shift's starting date also closes its after-midnight port
   const from = "2026-09-28T10:00:00.000Z"; // Monday 00:00 locally, within Sunday's shift.
   const to = "2026-09-28T11:00:00.000Z";
   assert.deepEqual(expandStaffSchedule(schedule, from, to),
-    { ok: true, value: [{ startsAt: from, endsAt: to }] });
+    { ok: true, value: { staffedCoverage: { startsAt: from, endsAt: to },
+      staffedIntervals: [{ startsAt: from, endsAt: to }] } });
   assert.deepEqual(expandStaffSchedule({ ...schedule, closedDates: ["2026-09-27"] }, from, to),
-    { ok: true, value: [] });
+    { ok: true, value: { staffedCoverage: { startsAt: from, endsAt: to }, staffedIntervals: [] } });
   assert.deepEqual(expandStaffSchedule({ ...schedule, closedDates: ["2026-09-28"] }, from, to),
-    { ok: true, value: [] });
+    { ok: true, value: { staffedCoverage: { startsAt: from, endsAt: to }, staffedIntervals: [] } });
 });
 
 test("invalid schedule data fails before it can authorize a transfer", () => {

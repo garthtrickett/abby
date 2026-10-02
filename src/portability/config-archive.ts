@@ -194,13 +194,30 @@ function policy(value: unknown, sourceScope: LocationScope, version: number): Ca
       intake: capability("intake"), transfer: capability("transfer") },
     staffDestination: destination(row.staffDestination), operatorQueue: destination(row.operatorQueue),
     ...(row.transferDestinationRef === undefined ? {} : { transferDestinationRef: ref(row.transferDestinationRef, "settings") }) };
+  if (row.staffedCoverage !== undefined) {
+    const coverage = object(row.staffedCoverage, "settings");
+    const startsAt = instant(coverage.startsAt, "settings");
+    const endsAt = instant(coverage.endsAt, "settings");
+    if (Date.parse(endsAt) <= Date.parse(startsAt) || Date.parse(endsAt) - Date.parse(startsAt) > 72 * 60 * 60 * 1_000) {
+      throw new InvalidConfigArchive("settings");
+    }
+    return policyWithStaffing({ ...result, staffedCoverage: { startsAt, endsAt } }, row, sourceScope);
+  }
+  return policyWithStaffing(result, row, sourceScope);
+}
+
+function policyWithStaffing(result: CallPolicy, row: Record<string, unknown>, sourceScope: LocationScope): CallPolicy {
   if (row.staffedIntervals !== undefined) {
-    if (!Array.isArray(row.staffedIntervals)) throw new InvalidConfigArchive("settings");
+    if (!Array.isArray(row.staffedIntervals) || row.staffedIntervals.length > 512) throw new InvalidConfigArchive("settings");
     const intervals: StaffedInterval[] = row.staffedIntervals.map(value => {
       const item = object(value, "settings");
       return { startsAt: instant(item.startsAt, "settings"), endsAt: instant(item.endsAt, "settings") };
     });
-    for (const item of intervals) if (Date.parse(item.endsAt) <= Date.parse(item.startsAt)) throw new InvalidConfigArchive("settings");
+    for (const item of intervals) {
+      if (Date.parse(item.endsAt) <= Date.parse(item.startsAt) ||
+          (result.staffedCoverage && (Date.parse(item.startsAt) < Date.parse(result.staffedCoverage.startsAt) ||
+            Date.parse(item.endsAt) > Date.parse(result.staffedCoverage.endsAt)))) throw new InvalidConfigArchive("settings");
+    }
     return { ...result, staffedIntervals: intervals, ...(row.greeting === undefined ? {} : { greeting: greeting(row.greeting, sourceScope) }) };
   }
   return { ...result, ...(row.greeting === undefined ? {} : { greeting: greeting(row.greeting, sourceScope) }) };
