@@ -19,7 +19,7 @@ const manifest = JSON.parse(await readFile(new URL("../phase-0/SCENARIO_MANIFEST
 const scenarios = new Map(manifest.scenarios.map(row => [row.id, row]));
 const nodeFiles = new Map();
 const browserFiles = new Map();
-const browserCoordinatorFiles = new Map();
+const coordinatorFiles = new Map();
 
 for (const [setting, ids] of Object.entries(manifest.settingMappings)) {
   let mapped = 0;
@@ -30,8 +30,9 @@ for (const [setting, ids] of Object.entries(manifest.settingMappings)) {
       if (evidence?.status !== "passed") continue;
       for (const file of evidence.testFiles) {
         const override = manifest.executionOverrides[file];
-        assert.ok(override === undefined || override === "browserCoordinator", "unknown execution profile");
-        const target = override === "browserCoordinator" ? browserCoordinatorFiles :
+        assert.ok(override === undefined || override === "browserCoordinator" || override === "nodeCoordinator",
+          "unknown execution profile");
+        const target = override ? coordinatorFiles :
           file.endsWith(".spec.ts") ? browserFiles : nodeFiles;
         assert.match(file, /^test\/[a-z-]+\/[a-z0-9-]+\.(?:test|spec)\.ts$/);
         if (!target.has(file)) target.set(file, new Set());
@@ -144,13 +145,15 @@ if (!browserOnly) {
   }
 }
 
-// Coordinators launch Chromium themselves and prove their own parallel scheduling.
-// Keep them in the browser phase, as in CI, rather than inside four PostgreSQL file workers.
-for (const entry of [...browserCoordinatorFiles.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+// Coordinators launch their own parallel workers and verify the observed scheduling.
+// Run them after the PostgreSQL file pool, as in the normal test commands.
+for (const entry of [...coordinatorFiles.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+  const profile = manifest.executionOverrides[entry[0]];
+  if (browserOnly && profile !== "browserCoordinator") continue;
   const passed = browserOnly
     ? checkedNode(await execute(process.execPath, ["--test", entry[0]], 600_000), idsFor([entry]))
     : await runNode([entry], 1);
-  process.stdout.write(`browser coordinator ${entry[0]}: ${passed} passed\n`);
+  process.stdout.write(`${profile} ${entry[0]}: ${passed} passed\n`);
 }
 const browserEntries = [...browserFiles.entries()].sort(([left], [right]) => left.localeCompare(right));
 let browserTotal = 0;

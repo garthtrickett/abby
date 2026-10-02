@@ -18,7 +18,7 @@ async function execute(options: unknown): Promise<{ code: number | null; output:
   return { code, output };
 }
 
-test("E2E-251 setting Node files dispatch in observed forward and reverse orders with process overlap",
+test("E2E-251 setting Node files dispatch in observed forward and reverse orders with file lifecycle overlap",
   { timeout: 120_000 }, async () => {
   const files = ["test/voice/automation-toggle-call.test.ts", "test/voice/embedded-booking-setting-call.test.ts"];
   for (const concurrency of [1, 2]) {
