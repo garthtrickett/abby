@@ -1,5 +1,7 @@
 import { MemoryClinicIntakeSettingStore } from "./clinic-intake-setting-store.ts";
 import type { ClinicIntakeAuditEntry, ClinicIntakeAuditPage } from "../core/clinic-intake-setting.ts";
+import { captureStaffedDestination, listStaffedDestinations, resolveStaffedDestination, unprovenStaffedDestinationRegistry, validStaffedDestinationChange, validStaffedDestinationScope } from "../core/staffed-destination.ts";
+import type { StaffedDestinationAuditEntry, StaffedDestinationAuditPage, StaffedDestinationCatalogue, StaffedDestinationRegistry } from "../core/staffed-destination.ts";
 import type { AfterHoursSettingAuditEntry, AfterHoursSettingAuditPage, AutomationSettingAuditEntry, AutomationSettingAuditPage, BookingSettingAuditEntry, BookingSettingAuditPage, GreetingSettingAuditEntry, GreetingSettingAuditPage, StaffScheduleSettingAuditEntry, StaffScheduleSettingAuditPage, UrgentSettingAuditEntry, UrgentSettingAuditPage, PolicyStore, PolicyFailure } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { PatientSettingModes, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
@@ -47,6 +49,7 @@ export type ImportedReferenceLocationPolicy = Readonly<{
   greetingHistory?: readonly GreetingSettingAuditEntry[];
   cancellationHistory?: readonly CancellationSettingAuditEntry[];
   reschedulingHistory?: readonly ReschedulingSettingAuditEntry[];
+  staffedDestinationHistory?: readonly StaffedDestinationAuditEntry[];
 }>;
 
 export type ImportedReferenceClinicAutomation = Readonly<{
@@ -75,9 +78,12 @@ export class MemoryPolicyStore implements PolicyStore {
   private readonly hostReschedulingMode: CapabilityMode;
   private readonly hostIntakeMode: CapabilityMode;
   private readonly intake: MemoryClinicIntakeSettingStore;
+  private readonly staffedDestinationRegistry: StaffedDestinationRegistry;
+  private readonly staffedDestinationChanges = new Map<string, StaffedDestinationAuditEntry[]>();
 
   constructor(hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "execute", clock: () => string = () => new Date().toISOString(), readiness: AutomationReadiness = unprovenReadiness,
-              hostPatientModes: CapabilityMode | PatientSettingModes = "requestOnly") {
+              hostPatientModes: CapabilityMode | PatientSettingModes = "requestOnly",
+              staffedDestinationRegistry: StaffedDestinationRegistry = unprovenStaffedDestinationRegistry) {
     this.hostBookingMode = hostBookingMode;
     this.clock = clock;
     this.intake = new MemoryClinicIntakeSettingStore(clock);
@@ -85,6 +91,7 @@ export class MemoryPolicyStore implements PolicyStore {
     this.hostCancellationMode = typeof hostPatientModes === "string" ? hostPatientModes : hostPatientModes.cancellation ?? "unavailable";
     this.hostReschedulingMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.rescheduling ?? "unavailable";
     this.hostIntakeMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.intake ?? "unavailable";
+    this.staffedDestinationRegistry = staffedDestinationRegistry;
   }
 
   /** Builds a disabled, request-only target policy from a validated historical import. */
@@ -97,9 +104,10 @@ export class MemoryPolicyStore implements PolicyStore {
                       greetingHistory: readonly GreetingSettingAuditEntry[] = [],
                       cancellationHistory: readonly CancellationSettingAuditEntry[] = [],
                       reschedulingHistory: readonly ReschedulingSettingAuditEntry[] = [],
-                      intake?: ImportedReferenceClinicAutomation["intake"]): MemoryPolicyStore {
+                      intake?: ImportedReferenceClinicAutomation["intake"],
+                      staffedDestinationHistory: readonly StaffedDestinationAuditEntry[] = []): MemoryPolicyStore {
     return MemoryPolicyStore.fromImportedMany(
-      [{ scope, policy: sourceHead, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, cancellationHistory, reschedulingHistory }],
+      [{ scope, policy: sourceHead, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, cancellationHistory, reschedulingHistory, staffedDestinationHistory }],
       [{ scope, history: automationHistory, sourceVersion: sourceAutomationVersion, sourceEnabled: sourceAutomationEnabled, ...(intake ? { intake } : {}) }],
       importActorRef, importedAt);
   }
@@ -146,6 +154,7 @@ export class MemoryPolicyStore implements PolicyStore {
       store.urgentChanges.set(key, structuredClone([...(location.urgentHistory ?? [])]));
       store.staffScheduleChanges.set(key, structuredClone([...(location.staffScheduleHistory ?? [])]));
       store.greetingChanges.set(key, structuredClone([...(location.greetingHistory ?? [])]));
+      store.staffedDestinationChanges.set(key, structuredClone([...(location.staffedDestinationHistory ?? [])]));
     }
     for (const clinic of clinics) {
       const key = clinicKey(clinic.scope);
@@ -178,7 +187,48 @@ export class MemoryPolicyStore implements PolicyStore {
   }
 
   async read(scope: LocationScope): Promise<Result<CallPolicy, PolicyFailure>> {
-    return ok(structuredClone(this.effective(this.policies.get(scopeKey(scope)) ?? referenceDefaultPolicy(scope))));
+    return ok(await captureStaffedDestination(this.effective(this.policies.get(scopeKey(scope)) ?? referenceDefaultPolicy(scope)),
+      (bound, ref) => this.staffedDestinationRegistry.resolve(bound, ref)));
+  }
+
+  async listStaffedDestinations(scope: LocationScope): Promise<Result<StaffedDestinationCatalogue, PolicyFailure>> {
+    return listStaffedDestinations(this.staffedDestinationRegistry, scope);
+  }
+
+  async changeStaffedDestination(scope: LocationScope, expectedVersion: string, destinationRef: string | null,
+                                actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+    if (!validStaffedDestinationChange(scope, expectedVersion, destinationRef, actorRef)) return err({ kind: "invalidValue" });
+    const key = scopeKey(scope);
+    const current = this.policies.get(key) ?? referenceDefaultPolicy(scope);
+    if (current.policyVersion !== expectedVersion) return err({ kind: "versionConflict" });
+    if (destinationRef !== null) {
+      const evidence = await resolveStaffedDestination((bound, ref) => this.staffedDestinationRegistry.resolve(bound, ref), scope, destinationRef);
+      if (!evidence.ok) return evidence;
+    }
+    // Host validation may await. All location edits share this version, including booking and hours.
+    if ((this.policies.get(key)?.policyVersion ?? "0") !== expectedVersion) return err({ kind: "versionConflict" });
+    let changedAt: string;
+    try { changedAt = this.clock(); }
+    catch { return err({ kind: "storageFailure" }); }
+    if (!Number.isFinite(Date.parse(changedAt))) return err({ kind: "storageFailure" });
+    const { transferDestinationRef: previous, transferDestinationVersion: hostVersion, ...base } = current;
+    void hostVersion;
+    const next: CallPolicy = { ...base, policyVersion: String(Number(expectedVersion) + 1),
+      ...(destinationRef === null ? {} : { transferDestinationRef: destinationRef }) };
+    this.policies.set(key, structuredClone(next));
+    const history = this.staffedDestinationChanges.get(key) ?? [];
+    history.push({ version: next.policyVersion, destinationRef, previousDestinationRef: previous ?? null, actorRef, changedAt });
+    this.staffedDestinationChanges.set(key, history);
+    return this.read(scope);
+  }
+
+  async listStaffedDestinationChanges(scope: LocationScope, afterVersion?: number): Promise<Result<StaffedDestinationAuditPage, PolicyFailure>> {
+    if (!validStaffedDestinationScope(scope) ||
+        (afterVersion !== undefined && (!Number.isSafeInteger(afterVersion) || afterVersion < 0))) return err({ kind: "invalidValue" });
+    const entries = (this.staffedDestinationChanges.get(scopeKey(scope)) ?? [])
+      .filter(item => Number(item.version) > (afterVersion ?? 0)).slice(0, 50);
+    return ok({ entries: structuredClone(entries),
+      ...(entries.length === 50 ? { nextAfterVersion: Number(entries[49]!.version) } : {}) });
   }
 
   async changeAutomationEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
@@ -241,7 +291,7 @@ export class MemoryPolicyStore implements PolicyStore {
     history.push({ version: next.policyVersion, enabled, previousEnabled: current.bookingEnabled,
       actorRef, changedAt, provenance: "recorded" });
     this.bookingChanges.set(scopeKey(scope), history);
-    return ok(structuredClone(this.effective(next)));
+    return this.read(scope);
   }
 
   async listBookingChanges(scope: LocationScope, afterVersion?: number): Promise<Result<BookingSettingAuditPage, PolicyFailure>> {
@@ -289,7 +339,7 @@ export class MemoryPolicyStore implements PolicyStore {
     history.push({ version: next.policyVersion, enabled, previousEnabled: current[field] ?? false,
       actorRef, changedAt });
     changes.set(key, history);
-    return ok(structuredClone(this.effective(next)));
+    return this.read(scope);
   }
 
   private async listAppointmentChanges(setting: "cancellation" | "rescheduling", scope: LocationScope, afterVersion?: number): Promise<Result<CancellationSettingAuditPage, PolicyFailure>> {
@@ -320,7 +370,7 @@ export class MemoryPolicyStore implements PolicyStore {
     history.push({ version: next.policyVersion, mode, previousMode: current.afterHoursMode ?? "staffRequest",
       ...(info ? { infoVersion: info.version } : {}), actorRef, changedAt });
     this.afterHoursChanges.set(scopeKey(scope), history);
-    return ok(structuredClone(this.effective(next)));
+    return this.read(scope);
   }
 
   async listAfterHoursChanges(scope: LocationScope, afterVersion?: number): Promise<Result<AfterHoursSettingAuditPage, PolicyFailure>> {
@@ -350,7 +400,7 @@ export class MemoryPolicyStore implements PolicyStore {
       previousEnabled: previousResponse !== undefined,
       ...(response === undefined ? {} : { scriptVersion: response.version }), actorRef, changedAt });
     this.urgentChanges.set(scopeKey(scope), history);
-    return ok(structuredClone(this.effective(next)));
+    return this.read(scope);
   }
 
   async listUrgentResponseChanges(scope: LocationScope, afterVersion?: number): Promise<Result<UrgentSettingAuditPage, PolicyFailure>> {
@@ -380,7 +430,7 @@ export class MemoryPolicyStore implements PolicyStore {
     history.push({ version: next.policyVersion, enabled: schedule !== undefined, previousEnabled: previous !== undefined,
       ...(schedule === undefined ? {} : { scheduleVersion: schedule.version }), actorRef, changedAt });
     this.staffScheduleChanges.set(scopeKey(scope), history);
-    return ok(structuredClone(this.effective(next)));
+    return this.read(scope);
   }
 
   async listStaffScheduleChanges(scope: LocationScope, afterVersion?: number): Promise<Result<StaffScheduleSettingAuditPage, PolicyFailure>> {
@@ -410,7 +460,7 @@ export class MemoryPolicyStore implements PolicyStore {
     history.push({ version: next.policyVersion, enabled: greeting !== undefined, previousEnabled: previous !== undefined,
       ...(greeting === undefined ? {} : { greetingVersion: greeting.version }), actorRef, changedAt });
     this.greetingChanges.set(scopeKey(scope), history);
-    return ok(structuredClone(this.effective(next)));
+    return this.read(scope);
   }
 
   async listGreetingChanges(scope: LocationScope, afterVersion?: number): Promise<Result<GreetingSettingAuditPage, PolicyFailure>> {

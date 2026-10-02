@@ -31,7 +31,7 @@ const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: non
     approvedText: { type: "string", minLength: 1, maxLength: 1_500 }, approved: { const: true },
     effectiveFrom: str, effectiveUntil: str }),
   capabilities: object({ book: capabilityMode, cancel: capabilityMode, reschedule: capabilityMode,
-    intake: capabilityMode, transfer: capabilityMode }), transferDestinationRef: str,
+    intake: capabilityMode, transfer: capabilityMode }), transferDestinationRef: key, transferDestinationVersion: key,
   staffedIntervals: { type: "array", items: object({ startsAt: str, endsAt: str }), maxItems: 512 },
   staffedCoverage: object({ startsAt: str, endsAt: str }),
   staffSchedule: object({ scope, version: key, ownerRef: key, approved: { const: true },
@@ -49,6 +49,9 @@ const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: non
 ["scope", "policyVersion", "automationVersion", "automationEnabled", "bookingEnabled", "capabilities", "staffDestination", "operatorQueue"]);
 const clinicIntakeAuditPage = optional({ entries: array(object({ version: key, enabled: bool, previousEnabled: bool,
   actorRef: { type: "string", minLength: 1, maxLength: 256 }, changedAt: str })), nextAfterVersion: uint }, ["entries"]);
+const nullableRouteRef: JsonSchema = { oneOf: [key, { const: null }] };
+const staffedDestinationAuditPage = optional({ entries: array(object({ version: key, destinationRef: nullableRouteRef,
+  previousDestinationRef: nullableRouteRef, actorRef: key, changedAt: str })), nextAfterVersion: uint }, ["entries"]);
 const auditEntry = { oneOf: [
   object({ version: key, enabled: bool, provenance: { const: "recorded" }, actorRef: key,
     previousEnabled: bool, changedAt: str }),
@@ -176,7 +179,7 @@ export type CapabilityDescriptor = Readonly<{
   requiresCallerConfirmation: boolean;
 }>;
 
-export type CapabilityPrecondition = "expectedPolicyVersion" | "expectedAutomationVersion" | "expectedClinicIntakeVersion" | "readinessForEnable" | "activeCall" | "bookingEnabledForExecution" |
+export type CapabilityPrecondition = "expectedPolicyVersion" | "expectedAutomationVersion" | "expectedClinicIntakeVersion" | "hostStaffedDestinationForSet" | "readinessForEnable" | "activeCall" | "bookingEnabledForExecution" |
   "hostEvidenceForExecution" | "approvedKnowledgeForAnswer" | "availabilityHostConfigured" |
   "appointmentHostConfigured" | "hostIssuedPatientProof" |
   "callReviewAvailable" | "outcomeReportAvailable" | "staffQueueAvailable" | "operationalDailyAvailable" |
@@ -237,6 +240,16 @@ export const capabilityCatalogue = {
   "settings.patients.firstTimeIntake.audit.v1": entry("settings.patients.firstTimeIntake.audit.v1",
     optional({ kind: { const: "settings.patients.firstTimeIntake.audit.v1" }, afterVersion: uint }, ["kind"]),
     reply("firstTimeIntakeSettingAudit", "page", clinicIntakeAuditPage), "read", "clinicAdmin"),
+  "settings.routing.staffedDestination.change.v1": entry("settings.routing.staffedDestination.change.v1",
+    object({ kind: { const: "settings.routing.staffedDestination.change.v1" }, expectedVersion: key, destinationRef: nullableRouteRef }),
+    reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedPolicyVersion", "hostStaffedDestinationForSet"]),
+  "settings.routing.staffedDestination.audit.v1": entry("settings.routing.staffedDestination.audit.v1",
+    optional({ kind: { const: "settings.routing.staffedDestination.audit.v1" }, afterVersion: uint }, ["kind"]),
+    reply("staffedDestinationSettingAudit", "page", staffedDestinationAuditPage), "read", "clinicAdmin"),
+  "settings.routing.staffedDestination.options.v1": entry("settings.routing.staffedDestination.options.v1",
+    object({ kind: { const: "settings.routing.staffedDestination.options.v1" } }),
+    reply("staffedDestinationOptions", "catalogue", object({ scope, hostVersion: key,
+      options: { type: "array", items: object({ destinationRef: key, label: key }), maxItems: 50 } })), "read", "clinicAdmin"),
   "settings.routing.afterHours.change.v1": entry("settings.routing.afterHours.change.v1",
     { oneOf: [
       object({ kind: { const: "settings.routing.afterHours.change.v1" }, expectedVersion: key,

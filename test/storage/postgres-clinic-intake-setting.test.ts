@@ -6,7 +6,7 @@ import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresClinicIntakeSettingStore } from "../../src/storage/postgres-clinic-intake-setting.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
 import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
-import { migrate } from "../../src/storage/migrate.ts";
+import { migrate, migrateTo } from "../../src/storage/migrate.ts";
 
 assert.ok(process.env.DATABASE_URL, "DATABASE_URL is required");
 const db = connectPostgres(process.env.DATABASE_URL);
@@ -155,7 +155,7 @@ test("E2E-255 SET-005 PostgreSQL audit pagination and rollback refuse dropping r
     assert.ok(next.ok);
     assert.deepEqual(next.value.entries.map(row => row.version), ["51"]);
     assert.deepEqual(await store.listChanges(scope, -1), { ok: false, error: { kind: "invalidValue" } });
-    await assert.rejects(migrate(fresh, "down"), /clinic intake setting history must be removed/);
+    await assert.rejects(migrateTo(fresh, "036_rescheduling_setting_audit"), /clinic intake setting history must be removed/);
     assert.deepEqual(await new PostgresClinicIntakeSettingStore(fresh).read(scope),
       { ok: true, value: { version: "51", enabled: true } });
   } finally {

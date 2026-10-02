@@ -62,6 +62,7 @@ type SettingRow = { clinic_id: string; location_id: string; version: number; pol
   setting_kind: string; previous_after_hours_mode: string | null;
   previous_cancellation_enabled: boolean | null;
   previous_rescheduling_enabled: boolean | null;
+  previous_staffed_destination_ref: string | null;
   changed_by: string | null; previous_booking_enabled: boolean | null; changed_at: Date | null };
 type AutomationRow = { clinic_id: string; version: number; enabled: boolean; changed_by: string | null; previous_enabled: boolean | null; changed_at: Date | null };
 type StopRow = { clinic_id: string; version: number; stopped: boolean; actor_ref: string; reason: string; changed_at: Date };
@@ -135,17 +136,18 @@ function policyFields(value: unknown, scope: LocationScope, version: number,
   if (mode === "standaloneMinimal") {
     if (!row || !storedScope || !["bookingEnabled", "policyVersion", "scope"].every(field => Object.hasOwn(row, field)) ||
         Object.keys(row).some(field => !["bookingEnabled", "cancellationEnabled", "reschedulingEnabled", "policyVersion", "scope", "afterHoursMode",
-          "afterHoursInfo", "urgentResponse", "staffSchedule", "greeting"].includes(field)) ||
+          "afterHoursInfo", "urgentResponse", "staffSchedule", "greeting", "transferDestinationRef"].includes(field)) ||
         Object.keys(storedScope).sort().join(",") !== "clinicId,locationId,tenantId" ||
         storedScope.tenantId !== scope.tenantId || storedScope.clinicId !== scope.clinicId ||
         storedScope.locationId !== scope.locationId || row.policyVersion !== String(version) ||
         typeof row.bookingEnabled !== "boolean" ||
         (row.cancellationEnabled !== undefined && typeof row.cancellationEnabled !== "boolean") ||
-        (row.reschedulingEnabled !== undefined && typeof row.reschedulingEnabled !== "boolean")) throw new ExportAbort("storageCorrupt");
+        (row.reschedulingEnabled !== undefined && typeof row.reschedulingEnabled !== "boolean") ||
+        (row.transferDestinationRef !== undefined && !validRef(row.transferDestinationRef))) throw new ExportAbort("storageCorrupt");
     return { shape: "standaloneMinimal", policyVersion: row.policyVersion, bookingEnabled: row.bookingEnabled,
       cancellationEnabled: row.cancellationEnabled ?? false, reschedulingEnabled: row.reschedulingEnabled ?? false,
       ...afterHoursFields(row, scope), ...urgentFields(row, scope), ...staffScheduleFields(row, scope),
-      ...greetingFields(row, scope) };
+      ...greetingFields(row, scope), ...(row.transferDestinationRef === undefined ? {} : { transferDestinationRef: row.transferDestinationRef }) };
   }
   const caps = object(row?.capabilities);
   if (!row || !storedScope || storedScope.tenantId !== scope.tenantId || storedScope.clinicId !== scope.clinicId ||
@@ -300,7 +302,7 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
       if (observedLocations.rows.some(row => !byLocation.has(JSON.stringify([row.clinic_id, row.location_id]))) ||
           observedClinics.rows.some(row => !clinics.has(row.clinic_id))) throw new ExportAbort("scopeIncomplete");
       const settings = await sql<SettingRow>`select clinic_id, location_id, version, policy, setting_kind,
-        previous_after_hours_mode, previous_cancellation_enabled, previous_rescheduling_enabled, changed_by, previous_booking_enabled, changed_at
+        previous_after_hours_mode, previous_cancellation_enabled, previous_rescheduling_enabled, previous_staffed_destination_ref, changed_by, previous_booking_enabled, changed_at
         from clinic_settings where tenant_id = ${sourceTenantId} order by clinic_id, location_id, version`.execute(trx);
       const automation = await sql<AutomationRow>`select clinic_id, version, enabled, changed_by, previous_enabled, changed_at
         from clinic_automation where tenant_id = ${sourceTenantId} order by clinic_id, version`.execute(trx);
@@ -342,6 +344,7 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
         settingsRows.push({ clinic_id: mapping.sourceScope.clinicId, location_id: mapping.sourceScope.locationId,
           version: 0, policy: { scope: mapping.sourceScope, policyVersion: "0", bookingEnabled: false },
           setting_kind: "booking", previous_after_hours_mode: null, previous_cancellation_enabled: null, previous_rescheduling_enabled: null,
+          previous_staffed_destination_ref: null,
           changed_by: null, previous_booking_enabled: null, changed_at: null });
       }
     }
@@ -370,6 +373,7 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
           settingKind: row.setting_kind, previousAfterHoursMode: row.previous_after_hours_mode,
           previousCancellationEnabled: row.previous_cancellation_enabled,
           previousReschedulingEnabled: row.previous_rescheduling_enabled,
+          previousStaffedDestinationRef: row.previous_staffed_destination_ref,
           changedAt: instant(row.changed_at) };
       }),
       ...snapshot.automation.map(row => ({ ...common(recordId("automation", row.clinic_id, row.version)),

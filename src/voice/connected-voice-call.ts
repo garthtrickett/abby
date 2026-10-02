@@ -121,7 +121,7 @@ export class ConnectedVoiceCall {
         return delivered.ok ? ok(started.value) : delivered;
       }
       this.scope = started.value.receipt.scope;
-      const delivered = await this.checkedDelivery(await this.call.dispatchPending(now), now);
+      const delivered = await this.dispatchReady(now);
       if (!delivered.ok) return delivered;
       return ok({ ...started.value, delivery: delivered.value });
     } catch {
@@ -139,6 +139,19 @@ export class ConnectedVoiceCall {
       return delivered.ok ? err({ kind: "transportUnavailable" }) : delivered;
     }
     return delivered;
+  }
+
+  /** A failed transfer creates a notice in the same call; deliver it without waiting for another caller turn. */
+  private async dispatchReady(now: string): Promise<Result<DispatchResult | PrelocationPromptResult, ConnectedVoiceFailure>> {
+    const dispatched = await this.checkedDelivery(await this.call.dispatchPending(now), now);
+    if (!dispatched.ok || dispatched.value.kind !== "transferFailed") return dispatched;
+    const drained = await this.call.drainEffects(now);
+    if (!drained.ok) {
+      await this.close(now, "sessionClosed");
+      return drained;
+    }
+    if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
+    return this.checkedDelivery(await this.call.dispatchPending(now), now);
   }
 
   private fatalFailure(kind: string): boolean {
@@ -193,7 +206,7 @@ export class ConnectedVoiceCall {
       }
       if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
       if (corrected) return ok({ kind: "listening" });
-      const delivery = await this.checkedDelivery(await this.call.dispatchPending(frame.capturedAt), frame.capturedAt);
+      const delivery = await this.dispatchReady(frame.capturedAt);
       if (!delivery.ok) return delivery;
       return ok({ kind: "turnCompleted", turn, delivery: delivery.value });
     } catch {
@@ -227,7 +240,7 @@ export class ConnectedVoiceCall {
       const drained = await this.call.drainEffects(now);
       if (!drained.ok) { await this.close(now, "sessionClosed"); return drained; }
       if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
-      const delivery = await this.checkedDelivery(await this.call.dispatchPending(now), now);
+      const delivery = await this.dispatchReady(now);
       if (!delivery.ok) return delivery;
       return ok({ kind: "turnCompleted", turn: turn.value, delivery: delivery.value });
     } catch {

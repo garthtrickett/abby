@@ -40,6 +40,8 @@ export default interface ClinicSettingsTable {
   previous_cancellation_enabled: ColumnType<boolean | null, boolean | null, boolean | null>;
 
   previous_rescheduling_enabled: ColumnType<boolean | null, boolean | null, boolean | null>;
+
+  previous_staffed_destination_ref: ColumnType<string | null, string | null, string | null>;
 }
 
 export type ClinicSettings = Selectable<ClinicSettingsTable>;

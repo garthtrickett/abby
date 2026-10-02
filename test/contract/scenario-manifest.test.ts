@@ -34,12 +34,12 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
   const manifest = JSON.parse(read("phase-0/SCENARIO_MANIFEST.json")) as Manifest;
   const design = read("TECHNICAL_DESIGN.md");
   const rows = [...design.matchAll(/^\| `(E2E-\d{3})` \| (.*?) \| (FR-\d{2}(?:, FR-\d{2})*) \|$/gm)];
-  assert.equal(manifest.version, "1.66");
+  assert.equal(manifest.version, "1.67");
   assert.equal(manifest.source, "TECHNICAL_DESIGN.md Section 11");
   assert.equal(manifest.fixtureIdPattern, "fixture-{lowercase scenario id}");
-  assert.equal(rows.length, 255);
+  assert.equal(rows.length, 256);
   assert.deepEqual(manifest.scenarios.map(scenario => scenario.id),
-    Array.from({ length: 255 }, (_, index) => `E2E-${String(index + 1).padStart(3, "0")}`));
+    Array.from({ length: 256 }, (_, index) => `E2E-${String(index + 1).padStart(3, "0")}`));
   const ids = new Set(manifest.scenarios.map(scenario => scenario.id));
   for (const [file, profile] of Object.entries(manifest.executionOverrides)) {
     assert.ok(profile === "browserCoordinator" || profile === "nodeCoordinator");
@@ -94,7 +94,7 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
   assert.deepEqual(Object.keys(manifest.settingMappings).sort(),
     ["appointments.booking.enabled", "appointments.cancellation.enabled", "appointments.rescheduling.enabled", "automation.enabled", "availability.sevenDay.enabled", "calls.writes.stop",
       "clinic.availability.approval", "knowledge.approval", "routing.afterHoursMode", "routing.urgentResponse",
-      "routing.greeting", "routing.staffSchedule", "patients.firstTimeIntake.enabled"].sort());
+      "routing.greeting", "routing.staffSchedule", "routing.staffedDestination", "patients.firstTimeIntake.enabled"].sort());
   for (const mappings of [manifest.capabilityMappings, manifest.settingMappings]) {
     for (const scenarios of Object.values(mappings)) {
       assert.ok(scenarios.length > 0);

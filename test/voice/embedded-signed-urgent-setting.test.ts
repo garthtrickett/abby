@@ -5,7 +5,7 @@ import test from "node:test";
 import { sql } from "kysely";
 import twilio from "twilio";
 import WebSocket from "ws";
-import { ok } from "../../src/core/model.ts";
+import { err, ok } from "../../src/core/model.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { ReferenceNumberRoutingHost } from "../../src/reference/clinic-number-routing.ts";
 import { createEmbeddedTwilioVoiceComposition } from "../../src/reference/embedded-voice-composition.ts";
@@ -58,7 +58,12 @@ test("signed embedded routing settings pin approved wording at admission",
         transferDestinationRef: "synthetic-staff-desk",
         staffedCoverage: { startsAt: now, endsAt: "2026-10-01T11:00:00.000Z" }, staffedIntervals: [] };
     }, "requestOnly", readiness,
-      true, "unsafeReference");
+      true, "unsafeReference", false, undefined, {
+        resolve: async (bound, ref) => ref === "synthetic-staff-desk" ? ok({ scope: { ...bound }, destinationRef: ref,
+          hostVersion: "synthetic-staff-v1", mode: "execute", ready: true }) : err({ kind: "readinessFailed", missing: ["staffDestination"] }),
+        list: async bound => ok({ scope: { ...bound }, hostVersion: "synthetic-staff-v1",
+          options: [{ destinationRef: "synthetic-staff-desk", label: "Synthetic staff desk" }] }),
+      });
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
     const host = new ReferenceClinicHost([], []);
     const routing = new ReferenceNumberRoutingHost([{ ...scope, accountRef: accountSid,
