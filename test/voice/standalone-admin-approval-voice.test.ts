@@ -239,7 +239,17 @@ test("E2E-212 E2E-246 durable admin settings pin a signed call and revocation bl
         expectedVersion: "1", enabled: true, greetingVersion: "missing-keypad-v2",
         approvedText: "Welcome to the clinic. How can I help?",
         effectiveFrom: "2026-09-01T00:00:00.000Z",
-        effectiveUntil: "2027-09-01T00:00:00.000Z" })).status, 200);
+        effectiveUntil: "2027-09-01T00:00:00.000Z" })).status, 400);
+      const directDb = connectPostgres(target.toString());
+      try {
+        const directPolicy = new PostgresPolicyStore(directDb, referenceDefaultPolicy, "unavailable",
+          async () => ok(true), false, "standaloneMinimal");
+        assert.ok((await directPolicy.changeGreeting(scope, "1", { scope,
+          version: "missing-keypad-v2", ownerRef: actor.actorRef, approved: true,
+          approvedText: "Welcome to the clinic. How can I help?",
+          effectiveFrom: "2026-09-01T00:00:00.000Z",
+          effectiveUntil: "2027-09-01T00:00:00.000Z" }, actor.actorRef)).ok);
+      } finally { await directDb.destroy(); }
       assert.equal((await adminRequest(thirdOrigin, { kind: "clinic.availability.approval.change.v1",
         route, selection: { businessId: "11", practitionerId: "22", appointmentTypeId: "33",
           policyVersion: "2" }, expectedVersion: 2 })).status, 200);

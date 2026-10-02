@@ -31,6 +31,10 @@ export async function serveClinikoAdmin(ports: ClinikoAdminRunnerPorts = {}): Pr
     locationId: required("ABBY_LOCATION_ID") };
   const route = { accountRef: required("ABBY_TWILIO_ACCOUNT_SID"),
     dialedNumber: required("ABBY_TWILIO_TEST_NUMBER"), routeVersion: required("ABBY_VOICE_ROUTE_VERSION") };
+  const weekMode = process.env.ABBY_SEVEN_DAY_AVAILABILITY_ENABLED;
+  if (weekMode !== undefined && weekMode !== "0" && weekMode !== "1") {
+    throw new RangeError("invalid ABBY_SEVEN_DAY_AVAILABILITY_ENABLED");
+  }
   const actor = { actorRef, role: "clinicAdmin" as const, scope };
   const expected = createHash("sha256").update(`Basic ${Buffer.from(`abby-admin:${token}`).toString("base64")}`).digest();
   const unauthorized = (response: ServerResponse): void => {
@@ -43,6 +47,7 @@ export async function serveClinikoAdmin(ports: ClinikoAdminRunnerPorts = {}): Pr
   try {
     const prepared = await createStandaloneClinikoAdminDashboard({ db, scope, route,
       apiKey: required("ABBY_CLINIKO_API_KEY"), contactEmail: required("ABBY_CLINIKO_CONTACT_EMAIL"),
+      sevenDayAvailabilityEnabled: weekMode === "1",
       ...(process.env.ABBY_CLINIKO_BUDGET_USER_REF
         ? { sharedBudgetUserRef: process.env.ABBY_CLINIKO_BUDGET_USER_REF } : {}),
       publicOrigin: `http://127.0.0.1:${port}`,
