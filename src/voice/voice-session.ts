@@ -21,7 +21,8 @@ export type VoiceIntent =
   | Readonly<{ kind: "affirm" }>
   | Readonly<{ kind: "handoff"; reason: StaffReason }>
   | Readonly<{ kind: "transfer"; reason: StaffReason }>;
-export type IntentResolver = (turn: FinalCallerTurn) => Promise<Result<VoiceIntent, Readonly<{ kind: "intentUnavailable" }>>>;
+export type IntentResolver = (turn: FinalCallerTurn, signal?: AbortSignal) =>
+  Promise<Result<VoiceIntent, Readonly<{ kind: "intentUnavailable" }>>>;
 export type PlaybackPort = Readonly<{
   /** Check this gate immediately before each media chunk and the final queue marker. */
   enqueue(playbackId: string, approvedText: string, canSend: () => boolean): Promise<"queued" | "notSent" | "uncertain">;
@@ -72,7 +73,15 @@ export class VoiceSession {
   private speechOpen = false;
   private activePlayback: ActivePlayback | undefined;
   private cachedIntent: VoiceIntent | undefined;
+  private pendingIntent: Readonly<{ cancel: () => void }> | undefined;
   private unclearTurns = 0;
+
+  /** A qualified new speech onset may fence a still-pending classifier before wire-order work resumes. */
+  supersedePendingIntent(): boolean {
+    if (!this.attached || !this.pendingIntent) return false;
+    this.pendingIntent.cancel();
+    return true;
+  }
 
   constructor(callId: string, sessionId: string, scope: LocationScope, ledger: LedgerStore, reception: TextReception, playback: PlaybackPort, resolveIntent: IntentResolver, transfer?: TransferPort, monotonicNow: () => number = () => performance.now(), transient?: TransientPresentationConfig) {
     if (transient && (transient.greeting.approved !== true ||
@@ -194,6 +203,7 @@ export class VoiceSession {
     if (!this.attached) return err({ kind: "sessionUnknown" });
     if (!this.canSend()) return err({ kind: "leaseLost" });
     const generation = this.assembler.beginSpeech();
+    this.pendingIntent?.cancel();
     this.cachedIntent = undefined;
     this.speechOpen = true;
     const active = this.activePlayback;
@@ -257,9 +267,16 @@ export class VoiceSession {
     }
     if (!this.cachedIntent) {
       let intent: Result<VoiceIntent, Readonly<{ kind: "intentUnavailable" }>>;
-      try { intent = await this.resolveIntent(turn); }
+      const controller = new AbortController();
+      const pending = { cancel: () => controller.abort() };
+      const canceled = new Promise<Result<VoiceIntent, Readonly<{ kind: "intentUnavailable" }>>>(resolve => {
+        controller.signal.addEventListener("abort", () => resolve(err({ kind: "intentUnavailable" })), { once: true });
+      });
+      this.pendingIntent = pending;
+      try { intent = await Promise.race([this.resolveIntent(turn, controller.signal), canceled]); }
       catch { intent = err({ kind: "intentUnavailable" }); }
-      if (generation !== this.assembler.currentGeneration()) return err({ kind: "staleTurn" });
+      finally { if (this.pendingIntent === pending) this.pendingIntent = undefined; }
+      if (controller.signal.aborted || generation !== this.assembler.currentGeneration()) return err({ kind: "staleTurn" });
       if (!intent.ok) {
         const fallback = await this.runtime.acceptTurn(turn, { kind: "modelFallback" }, now,
           existing.value.conversationRevision);

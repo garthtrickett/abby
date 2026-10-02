@@ -11,11 +11,12 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     ![undefined, "openai-speech", "speech-primary-stall", "openai-transcription", "untrusted-transcript", "clear-availability", "clear-unsupported", "clear-model-failure", "cliniko-rate-limit", "cliniko-server-error", "cliniko-timeout", "cliniko-slow-read", "cliniko-zone-changed", "cliniko-partial-page", "cliniko-empty", "cliniko-business-type-removed", "cliniko-practitioner-type-removed", "week-alternative",
       "practitioner-alternative", "practitioner-alternative-rate-limit",
       "practitioner-alternative-malformed", "practitioner-alternative-second",
-      "primary-selection-change"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
+    "primary-selection-change", "clear-correction"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
   throw new Error("synthetic voice runner requires an isolated fixture");
 }
 const fault = process.env.ABBY_SYNTHETIC_VOICE_FAULT;
-const clearTurn = fault === "clear-availability" || fault === "clear-unsupported" || fault === "clear-model-failure";
+const clearTurn = fault === "clear-availability" || fault === "clear-unsupported" ||
+  fault === "clear-model-failure" || fault === "clear-correction";
 const alternativeFault = fault === "practitioner-alternative" ||
   fault === "practitioner-alternative-rate-limit" || fault === "practitioner-alternative-malformed" ||
   fault === "practitioner-alternative-second" || fault === "primary-selection-change" ||
@@ -142,16 +143,33 @@ const clinikoFetch: typeof fetch = async (input, init) => {
 const openaiFetch: typeof fetch = async (input, init) => {
   if (String(input) === "https://api.openai.com/v1/responses" && clearTurn) {
     const request = JSON.parse(String(init?.body)) as { store?: unknown; input?: { role: string; content: string }[] };
-    const expectedText = fault === "clear-unsupported" ? "Please book my appointment tomorrow." :
-      "Do you have availability tomorrow?";
-    if (request.store !== false || request.input?.[1]?.content !== JSON.stringify({ callerText: expectedText })) {
+    const callerText = request.input?.[1]?.content;
+    const firstText = "Do you have availability tomorrow?";
+    const correctedText = "Actually, please have the clinic contact me.";
+    const expectedText = fault === "clear-unsupported" ? "Please book my appointment tomorrow." : firstText;
+    if (request.store !== false || (fault === "clear-correction"
+      ? callerText !== JSON.stringify({ callerText: firstText }) &&
+        callerText !== JSON.stringify({ callerText: correctedText })
+      : callerText !== JSON.stringify({ callerText: expectedText }))) {
       throw new Error("unexpected synthetic intent request");
     }
     process.send?.({ kind: "intentModelRequest" });
     if (fault === "clear-model-failure") return new Response(null, { status: 503 });
+    if (fault === "clear-correction" && callerText === JSON.stringify({ callerText: firstText })) {
+      await new Promise<void>(resolve => {
+        const aborted = () => {
+          process.send?.({ kind: "intentModelAborted" });
+          setTimeout(resolve, 150);
+        };
+        if (init?.signal?.aborted) aborted();
+        else init?.signal?.addEventListener("abort", aborted, { once: true });
+      });
+    }
     const today = clinicDateAt("Australia/Sydney", new Date());
     const tomorrow = new Date(Date.parse(`${today}T00:00:00.000Z`) + 86_400_000).toISOString().slice(0, 10);
-    const decision = fault === "clear-availability" ? { kind: "availability", from: tomorrow, to: tomorrow } :
+    const decision = fault === "clear-availability" || (fault === "clear-correction" &&
+      callerText === JSON.stringify({ callerText: firstText }))
+      ? { kind: "availability", from: tomorrow, to: tomorrow } :
       { kind: "unsupported", from: null, to: null };
     return Response.json({ status: "completed", output: [{ type: "message", status: "completed",
       content: [{ type: "output_text", text: JSON.stringify(decision) }] }] });
@@ -194,7 +212,8 @@ function syntheticClearTranscription(sessionId: string): TranscriptionPort {
       turn += 1;
       return ok([{ kind: "segmentFinal", sessionId, generation, utteranceId: `fixture-${turn}`,
         text: fault === "clear-unsupported" ? "Please book my appointment tomorrow." :
-          "Do you have availability tomorrow?", quality: "clear" }]);
+          fault === "clear-correction" && turn > 1 ? "Actually, please have the clinic contact me." :
+            "Do you have availability tomorrow?", quality: "clear" }]);
     },
   };
 }

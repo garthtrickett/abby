@@ -158,6 +158,12 @@ export class ConnectedVoiceCall {
     this.stopHost();
   }
 
+  observePendingCorrection(frame: MediaFrame): void {
+    if (this.begun && !this.closing && !this.stopped && !this.terminal) {
+      this.media.observePendingCorrection(frame);
+    }
+  }
+
   async acceptMedia(frame: MediaFrame): Promise<Result<ConnectedVoiceProgress, ConnectedVoiceFailure>> {
     if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
     if (!this.begun) return err({ kind: "notStarted" });

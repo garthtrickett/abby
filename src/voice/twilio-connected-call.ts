@@ -270,6 +270,7 @@ export class TwilioConnectedCall {
     const received = this.stream.receive(raw);
     if (!received.ok) this.stopCall();
     if (received.ok && received.value.kind === "stopped") this.stopCall();
+    if (received.ok && received.value.kind === "media") this.call.observePendingCorrection(received.value.frame);
     if (received.ok && received.value.kind === "ignoredMark") return Promise.resolve(ok({ kind: "ignored" }));
     if (this.outstanding >= 64) {
       this.closed = true;
