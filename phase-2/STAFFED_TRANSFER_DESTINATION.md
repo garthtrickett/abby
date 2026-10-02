@@ -2,7 +2,7 @@
 
 ## Status
 
-`SET-007` (`routing.staffedDestination`) is in progress on `codex/abby-staffed-destination-setting`, based on intake merge `cdfab65aa1ac5f00538578cebe7181b7e57320c0`. The scoped host boundary, memory/PostgreSQL setting stores, public audit, typed admin gateway, HTTP routes and lit-html picker have focused proof. Four authenticated browser journeys passed with three workers. Complete synthetic calls passed with memory and PostgreSQL storage. Reference/PostgreSQL carryover and target cutover reconciliation also have focused proof. `E2E-256` in manifest 1.67 is **syntheticImplemented**; the final source-matched release gates remain pending. This feature is not ready to publish or merge.
+`SET-007` (`routing.staffedDestination`) is locally release-verified on source `19c0d68332ed33c65befd9fb37bdad7c55d60b02`, based on intake merge `cdfab65aa1ac5f00538578cebe7181b7e57320c0`. It includes the scoped host boundary, memory/PostgreSQL setting stores, public audit, typed admin/HTTP gateway, lit-html picker, complete synthetic calls and reference/PostgreSQL carryover/cutover checks. The full local release gate passed, including mapped evidence alone and both observed parallel orders. `E2E-256` in manifest 1.67 is **syntheticImplemented**. Real carrier proof and the separate production gates below remain open.
 
 ## Authority and scope
 
@@ -41,7 +41,7 @@ Each current and historical reference is mapped through the embedding host's `tr
 
 The durable source history and receipt retain the original archive data and mapping decisions. Before publishing a number route, target reconciliation compares the mapped destination, previous reference, audit actor/time, change kind, full policy and row counts. Altered metadata or unlisted target rows prevents publication; restoring the expected target permits publication. These are synthetic configuration cutover checks.
 
-## Focused evidence
+## Evidence
 
 | Tracked check | Result |
 | --- | --- |
@@ -60,6 +60,7 @@ The durable source history and receipt retain the original archive data and mapp
 | Multi-location/cutover first typing proof | Failed before test execution: fixture query literals did not satisfy generated Kanel identifier brands. The fixture now uses typed SQL for deliberate row inspection/tampering; generated types are unchanged. |
 | Branded fixture correction | Typecheck passed and six cases passed, including multi-location mapping. The extra-row fixture violated the existing policy-scope database constraint; this invocation failed. The fixture now updates its embedded scope to match its synthetic location. The constraint was retained. |
 | Scoped extra-row correction and final focused cutover | All seven isolated PostgreSQL cases passed with no failures/skips. Changed destination, previous reference, actor and unlisted row each prevented publication; restoration permitted publication. Existing appointment/intake receipt reconciliation also passed. Diff check passed. |
+| Full source-matched release | Source `19c0d68332ed33c65befd9fb37bdad7c55d60b02`: typecheck; 607 text passes plus 35 expected PostgreSQL-only skips; migration up/down/up, populated upgrades and actual Kanel generation; 1,017 PostgreSQL passes plus one opt-in live skip; 49 browser passes; all coordinator checks. Quick isolation passed 18 selected checks across six files alone and in both four-worker orders. Full mapped isolation passed 258 Node checks across 39 files and 36 browser checks across seven files alone and in both four-/three-worker orders. No mapped failures, cancellations or skips; deadlines/retries unchanged. Browser lifecycle overlap reached three. Generated types had no drift and diff check passed. Tracked gate finished in 32m03s, exit 0. |
 
 Owner-local logs, in the same order:
 
@@ -78,14 +79,12 @@ Owner-local logs, in the same order:
 - `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790971080941.log`
 - `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790971187775.log`
 - `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790971305466.log`
+- `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790971473625.log`
 
-These are foundation checks. The PostgreSQL pass predates the later gateway declarations and stable evidence labels; a final source-matched release must verify the complete feature.
+The earlier entries are focused development evidence, including failures and their corrections. The final release entry verifies the complete source. Its opt-in live skip does not provide carrier or live speech evidence.
 
-## Required before publication
+## Release gate
 
-1. Retain the passing authenticated HTTP/lit-html picker and browser proof in the final source-matched release. Restricted Cliniko setup must not expose an unsupported transfer setup route.
-2. Retain the passing complete memory/PostgreSQL synthetic voice journeys in the final source-matched release: exact route and one transfer attempt, admitted versus subsequent snapshots, blocked transfer cases and truthful played failure notice. Carrier connection is represented by explicit synthetic provider evidence; real carrier proof remains pending.
-3. Retain the passing reference/PostgreSQL carryover and target reconciliation proof in the final source-matched release.
-4. Full local type/text/PostgreSQL/browser gates and mapped settings isolation alone and both observed parallel orders, with unchanged assertions, deadlines and retry policy; generated-type drift and diff checks; evidence recorded for the exact source before ordinary matched-head publication/merge.
+The local publication gates passed for the source above. Subsequent evidence-document edits must leave production code, tests, scripts, packages and manifest JSON unchanged relative to that source. Publication uses an ordinary matched-head pull request and the owner's local-test CI waiver; no repository rule or check is bypassed.
 
 Real carrier transfer, clinic-approved live destination, deployed clinic identity, speech quality and standalone patient-specific follow-up remain separate product gates.
