@@ -343,6 +343,7 @@ For every package, record the exact code revision, scenario IDs, test command, r
 | `npm run test:settings-isolation` | Quick fixed reference/embedded voice-setting subset individually and with four workers in both CLI argument orders; Node scheduling reversal is not established. |
 | `npm run test:settings-isolation:postgres` | All current setting-mapped Node and browser files alone and in parallel; browser fixture releases follow recorded forward/reverse orders with three workers. Node CLI argument reversal does not prove reversed dispatch. Uses disposable PostgreSQL. |
 | `npm run test:browser-order` | Actual host identity and local automation browser cases with recorded forward/reverse fixture releases and overlapping execution; rejects missing discovery. |
+| `npm run test:settings-isolation:browser` | The same manifest-derived browser coordinator and all mapped browser cases alone and in both controlled parallel orders, without repeating PostgreSQL Node stages. This is browser-stage evidence, not a passing full PostgreSQL sweep. |
 | `npm run probe:postgres` | Disposable migrated PostgreSQL, generated Kanel types, storage/privacy and upgrade probes; requires Docker. |
 | `npm run test:browser` | Lit-html dashboard and availability-console browser journeys. |
 | `npm run voice:probe-runner-public` | Signed synthetic HTTPS/WSS through a temporary public tunnel into the actual runner; requires Docker and authenticated ngrok. |

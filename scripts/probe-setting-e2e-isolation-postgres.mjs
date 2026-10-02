@@ -7,8 +7,14 @@ import pg from "pg";
 import { runOrderedBrowserE2E } from "./ordered-browser-e2e.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-assert.equal(process.env.ABBY_ISOLATED_POSTGRES_PROBE, "1", "isolated PostgreSQL is required");
-assert.ok(process.env.DATABASE_URL, "isolated PostgreSQL connection is required");
+const args = process.argv.slice(2);
+assert.ok(args.length === 0 || (args.length === 1 && args[0] === "--browser-only"),
+  "expected no arguments or --browser-only");
+const browserOnly = args.length === 1;
+if (!browserOnly) {
+  assert.equal(process.env.ABBY_ISOLATED_POSTGRES_PROBE, "1", "isolated PostgreSQL is required");
+  assert.ok(process.env.DATABASE_URL, "isolated PostgreSQL connection is required");
+}
 const manifest = JSON.parse(await readFile(new URL("../phase-0/SCENARIO_MANIFEST.json", import.meta.url), "utf8"));
 const scenarios = new Map(manifest.scenarios.map(row => [row.id, row]));
 const nodeFiles = new Map();
@@ -118,22 +124,26 @@ await Promise.all([
   execute("npm", ["run", "build:dashboard"], 120_000),
 ]);
 const nodeEntries = [...nodeFiles.entries()].sort(([left], [right]) => left.localeCompare(right));
-let nodeTotal = 0;
-for (const entry of nodeEntries) {
-  const passed = await runNode([entry], 1);
-  nodeTotal += passed;
-  process.stdout.write(`alone Node ${entry[0]}: ${passed} passed\n`);
-}
-for (const [order, entries] of [["forward", nodeEntries], ["reverse", [...nodeEntries].reverse()]]) {
-  const passed = await runNode(entries, 4);
-  assert.equal(passed, nodeTotal, `${order} Node run lost or gained a case`);
-  process.stdout.write(`parallel Node ${order}: ${passed} passed across ${entries.length} files\n`);
+if (!browserOnly) {
+  let nodeTotal = 0;
+  for (const entry of nodeEntries) {
+    const passed = await runNode([entry], 1);
+    nodeTotal += passed;
+    process.stdout.write(`alone Node ${entry[0]}: ${passed} passed\n`);
+  }
+  for (const [order, entries] of [["forward", nodeEntries], ["reverse", [...nodeEntries].reverse()]]) {
+    const passed = await runNode(entries, 4);
+    assert.equal(passed, nodeTotal, `${order} Node run lost or gained a case`);
+    process.stdout.write(`parallel Node ${order}: ${passed} passed across ${entries.length} files\n`);
+  }
 }
 
 // Coordinators launch Chromium themselves and prove their own parallel scheduling.
 // Keep them in the browser phase, as in CI, rather than inside four PostgreSQL file workers.
 for (const entry of [...browserCoordinatorFiles.entries()].sort(([left], [right]) => left.localeCompare(right))) {
-  const passed = await runNode([entry], 1);
+  const passed = browserOnly
+    ? checkedNode(await execute(process.execPath, ["--test", entry[0]], 600_000), idsFor([entry]))
+    : await runNode([entry], 1);
   process.stdout.write(`browser coordinator ${entry[0]}: ${passed} passed\n`);
 }
 const browserEntries = [...browserFiles.entries()].sort(([left], [right]) => left.localeCompare(right));
