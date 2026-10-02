@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../support/browser-test.ts";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import { err, ok } from "../../src/core/model.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
