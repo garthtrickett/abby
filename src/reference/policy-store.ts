@@ -49,6 +49,7 @@ export type ImportedReferenceLocationPolicy = Readonly<{
   greetingHistory?: readonly GreetingSettingAuditEntry[];
   cancellationHistory?: readonly CancellationSettingAuditEntry[];
   reschedulingHistory?: readonly ReschedulingSettingAuditEntry[];
+  staffedDestinationHistory?: readonly StaffedDestinationAuditEntry[];
 }>;
 
 export type ImportedReferenceClinicAutomation = Readonly<{
@@ -103,9 +104,10 @@ export class MemoryPolicyStore implements PolicyStore {
                       greetingHistory: readonly GreetingSettingAuditEntry[] = [],
                       cancellationHistory: readonly CancellationSettingAuditEntry[] = [],
                       reschedulingHistory: readonly ReschedulingSettingAuditEntry[] = [],
-                      intake?: ImportedReferenceClinicAutomation["intake"]): MemoryPolicyStore {
+                      intake?: ImportedReferenceClinicAutomation["intake"],
+                      staffedDestinationHistory: readonly StaffedDestinationAuditEntry[] = []): MemoryPolicyStore {
     return MemoryPolicyStore.fromImportedMany(
-      [{ scope, policy: sourceHead, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, cancellationHistory, reschedulingHistory }],
+      [{ scope, policy: sourceHead, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, cancellationHistory, reschedulingHistory, staffedDestinationHistory }],
       [{ scope, history: automationHistory, sourceVersion: sourceAutomationVersion, sourceEnabled: sourceAutomationEnabled, ...(intake ? { intake } : {}) }],
       importActorRef, importedAt);
   }
@@ -152,6 +154,7 @@ export class MemoryPolicyStore implements PolicyStore {
       store.urgentChanges.set(key, structuredClone([...(location.urgentHistory ?? [])]));
       store.staffScheduleChanges.set(key, structuredClone([...(location.staffScheduleHistory ?? [])]));
       store.greetingChanges.set(key, structuredClone([...(location.greetingHistory ?? [])]));
+      store.staffedDestinationChanges.set(key, structuredClone([...(location.staffedDestinationHistory ?? [])]));
     }
     for (const clinic of clinics) {
       const key = clinicKey(clinic.scope);

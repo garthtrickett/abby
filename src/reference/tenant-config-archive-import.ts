@@ -213,7 +213,8 @@ export class ReferenceTenantConfigArchiveImporter {
         urgentHistory: location.mapped.urgentHistory,
         staffScheduleHistory: location.mapped.staffScheduleHistory,
         greetingHistory: location.mapped.greetingHistory,
-        cancellationHistory: location.mapped.cancellationHistory, reschedulingHistory: location.mapped.reschedulingHistory }));
+        cancellationHistory: location.mapped.cancellationHistory, reschedulingHistory: location.mapped.reschedulingHistory,
+        staffedDestinationHistory: location.mapped.staffedDestinationHistory }));
       policy = MemoryPolicyStore.fromImportedMany(locations, prepared.value.clinics, importActorRef, importedAt);
     } catch { return err({ kind: "invalidConfigArchive" }); }
     const ledger = new MemoryLedger();

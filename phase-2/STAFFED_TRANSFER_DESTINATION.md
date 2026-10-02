@@ -2,7 +2,7 @@
 
 ## Status
 
-`SET-007` (`routing.staffedDestination`) is in progress on `codex/abby-staffed-destination-setting`, based on intake merge `cdfab65aa1ac5f00538578cebe7181b7e57320c0`. The scoped host boundary, memory/PostgreSQL setting stores, public audit, typed admin gateway, HTTP routes and lit-html picker have focused proof. Four authenticated browser journeys passed with three workers. Complete synthetic calls passed with memory and PostgreSQL storage. `E2E-256` in manifest 1.67 is **syntheticImplemented**; carryover and release gates remain pending. This feature is not ready to publish or merge.
+`SET-007` (`routing.staffedDestination`) is in progress on `codex/abby-staffed-destination-setting`, based on intake merge `cdfab65aa1ac5f00538578cebe7181b7e57320c0`. The scoped host boundary, memory/PostgreSQL setting stores, public audit, typed admin gateway, HTTP routes and lit-html picker have focused proof. Four authenticated browser journeys passed with three workers. Complete synthetic calls passed with memory and PostgreSQL storage. Reference/PostgreSQL carryover and target cutover reconciliation also have focused proof. `E2E-256` in manifest 1.67 is **syntheticImplemented**; the final source-matched release gates remain pending. This feature is not ready to publish or merge.
 
 ## Authority and scope
 
@@ -33,6 +33,14 @@ The adapter uses actual Kanel/Kanel-Kysely generated types. The small `PostgresS
 
 No patient, appointment, call, transcript, task or patient-linked outcome field is introduced. Standalone patient storage remains limited to scoped phone-to-Cliniko-ID links.
 
+## Carryover and cutover
+
+Archives include the raw public destination reference, `staffedDestination` change kind and nullable `previousStaffedDestinationRef`. A route change must have an attributed actor/time, the exact preceding reference, and no unrelated policy change. Other setting kinds must retain the route and cannot carry route audit metadata. Missing legacy route fields and audit metadata remain safe when no route change is claimed. Missing versions, malformed references, forged captured permission and incorrect previous-reference chains are rejected before import writes.
+
+Each current and historical reference is mapped through the embedding host's `transferDestination` mapping for the exact source/target location. Minimal standalone import also requires this reviewed mapping; its disabled task destinations do not replace route mapping. Two locations may use the same source reference and receive different target references. Both reference import paths seed the mapped route audit, and PostgreSQL stores its previous reference with the original public actor/time. Booking/cancellation/rescheduling forced-disable rows preserve the route. Import keeps automation and patient actions disabled, and unproven target route permission cannot grant execution. Cleared routes stay cleared.
+
+The durable source history and receipt retain the original archive data and mapping decisions. Before publishing a number route, target reconciliation compares the mapped destination, previous reference, audit actor/time, change kind, full policy and row counts. Altered metadata or unlisted target rows prevents publication; restoring the expected target permits publication. These are synthetic configuration cutover checks.
+
 ## Focused evidence
 
 | Tracked check | Result |
@@ -47,6 +55,11 @@ No patient, appointment, call, transcript, task or patient-linked outcome field 
 | Failed notice delivery correction first proof | Typecheck and existing shared-number voice cases passed. The new failure notice was queued and played; the test incorrectly counted the separately played greeting as a failure notice. This invocation failed. The assertion now identifies the exact transfer failure notice and still requires one played notice and one transfer attempt. |
 | Complete context and exact failure playback correction | All 24 memory/shared-number cases and 14 isolated PostgreSQL cases passed with no failures/skips. PostgreSQL includes existing signed urgent/closed-hours settings and the route persistence/CAS/rollback cases. New complete calls prove admission, streamed greeting/playback, PCM utterance closure, captured route context, connection/failure/unproven/throw outcomes, played failure notice, revoked host, closed/unknown hours and urgent denial. Diff check passed. |
 | Restricted setup boundary | All seven Origin/manifest cases passed with no failures/skips. Restricted Cliniko setup rejects the route POST and both catalogue/audit GETs. Diff check passed. |
+| Carryover first typing proof | Typecheck, manifest and diff check passed. |
+| Mapped history and semantic rejection | Typecheck and all 21 isolated PostgreSQL cases passed with no failures/skips, including existing intake, minimal/archive and receipt checks. New cases prove both import modes, reference single/tenant import, resealed malformed-history denial, reviewed mapping, safe legacy absence and clear. |
+| Multi-location/cutover first typing proof | Failed before test execution: fixture query literals did not satisfy generated Kanel identifier brands. The fixture now uses typed SQL for deliberate row inspection/tampering; generated types are unchanged. |
+| Branded fixture correction | Typecheck passed and six cases passed, including multi-location mapping. The extra-row fixture violated the existing policy-scope database constraint; this invocation failed. The fixture now updates its embedded scope to match its synthetic location. The constraint was retained. |
+| Scoped extra-row correction and final focused cutover | All seven isolated PostgreSQL cases passed with no failures/skips. Changed destination, previous reference, actor and unlisted row each prevented publication; restoration permitted publication. Existing appointment/intake receipt reconciliation also passed. Diff check passed. |
 
 Owner-local logs, in the same order:
 
@@ -60,6 +73,11 @@ Owner-local logs, in the same order:
 - `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790970241952.log`
 - `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790970308851.log`
 - `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790970340440.log`
+- `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790970679715.log`
+- `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790970898697.log`
+- `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790971080941.log`
+- `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790971187775.log`
+- `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790971305466.log`
 
 These are foundation checks. The PostgreSQL pass predates the later gateway declarations and stable evidence labels; a final source-matched release must verify the complete feature.
 
@@ -67,7 +85,7 @@ These are foundation checks. The PostgreSQL pass predates the later gateway decl
 
 1. Retain the passing authenticated HTTP/lit-html picker and browser proof in the final source-matched release. Restricted Cliniko setup must not expose an unsupported transfer setup route.
 2. Retain the passing complete memory/PostgreSQL synthetic voice journeys in the final source-matched release: exact route and one transfer attempt, admitted versus subsequent snapshots, blocked transfer cases and truthful played failure notice. Carrier connection is represented by explicit synthetic provider evidence; real carrier proof remains pending.
-3. Reference and PostgreSQL carryover: map current and historical route references, preserve the audit, keep unproven target execution disabled, accept safe legacy absence, and reject malformed history or target reconciliation before cutover.
+3. Retain the passing reference/PostgreSQL carryover and target reconciliation proof in the final source-matched release.
 4. Full local type/text/PostgreSQL/browser gates and mapped settings isolation alone and both observed parallel orders, with unchanged assertions, deadlines and retry policy; generated-type drift and diff checks; evidence recorded for the exact source before ordinary matched-head publication/merge.
 
 Real carrier transfer, clinic-approved live destination, deployed clinic identity, speech quality and standalone patient-specific follow-up remain separate product gates.

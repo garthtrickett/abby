@@ -1,4 +1,5 @@
 import type { ClinicIntakeAuditEntry } from "../core/clinic-intake-setting.ts";
+import type { StaffedDestinationAuditEntry } from "../core/staffed-destination.ts";
 import { createHash } from "node:crypto";
 import type { CancellationSettingAuditEntry, ReschedulingSettingAuditEntry } from "../core/host.ts";
 import { MemoryLedger } from "../core/ledger.ts";
@@ -215,7 +216,8 @@ export type MappedConfig = Readonly<{
   policy: CallPolicy;
   policyRows: readonly Readonly<{ version: number; isHead: boolean; policy: CallPolicy; changedBy: string | null;
     previousBookingEnabled: boolean | null; changedAt: string | null;
-    settingKind?: "booking" | "afterHours" | "urgent" | "staffSchedule" | "greeting" | "cancellation" | "rescheduling";
+    settingKind?: "booking" | "afterHours" | "urgent" | "staffSchedule" | "greeting" | "cancellation" | "rescheduling" | "staffedDestination";
+    previousStaffedDestinationRef?: string | null;
     previousCancellationEnabled?: boolean | null; previousReschedulingEnabled?: boolean | null; previousAfterHoursMode?: CallPolicy["afterHoursMode"] | null }>[];
   bookingHistory: readonly BookingSettingAuditEntry[];
   afterHoursHistory: readonly AfterHoursSettingAuditEntry[];
@@ -224,6 +226,7 @@ export type MappedConfig = Readonly<{
   greetingHistory: readonly GreetingSettingAuditEntry[];
   cancellationHistory: readonly CancellationSettingAuditEntry[];
   reschedulingHistory: readonly ReschedulingSettingAuditEntry[];
+  staffedDestinationHistory: readonly StaffedDestinationAuditEntry[];
   automationHistory: readonly AutomationSettingAuditEntry[];
   clinicIntakeHistory: readonly ClinicIntakeAuditEntry[];
   knowledge: MemoryKnowledgeCatalogue;
@@ -248,7 +251,9 @@ export function mapConfig(data: Pick<ConfigArchiveData, "sourceScope" | "policie
   } };
   try {
     const policyRows = data.policies.map(row => ({ ...row,
-      policy: mapImportedPolicy(row.policy, recordingMapper, data.sourceScope, targetScope) }));
+      policy: mapImportedPolicy(row.policy, recordingMapper, data.sourceScope, targetScope),
+      ...(row.previousStaffedDestinationRef == null ? {} : { previousStaffedDestinationRef:
+        mappedRef(recordingMapper, "transferDestination", row.previousStaffedDestinationRef, data.sourceScope, targetScope) }) }));
     const policy = policyRows.find(row => row.isHead)?.policy ??
       mapImportedPolicy(referenceDefaultPolicy(data.sourceScope), recordingMapper, data.sourceScope, targetScope);
     const bookingHistory = bookingAudit(data);
@@ -258,12 +263,18 @@ export function mapConfig(data: Pick<ConfigArchiveData, "sourceScope" | "policie
     const greetingHistory = greetingAudit(data);
     const cancellationHistory = cancellationAudit(data);
     const reschedulingHistory = reschedulingAudit(data);
+    const staffedDestinationHistory: StaffedDestinationAuditEntry[] = policyRows.filter(row => row.settingKind === "staffedDestination")
+      .map(row => {
+        if (!row.changedBy || !row.changedAt || row.previousStaffedDestinationRef === undefined) throw new Error("invalid route audit");
+        return { version: String(row.version), destinationRef: row.policy.transferDestinationRef ?? null,
+          previousDestinationRef: row.previousStaffedDestinationRef, actorRef: row.changedBy, changedAt: row.changedAt };
+      });
     const automationHistory = automationAudit(data);
     const clinicIntakeHistory = clinicIntakeAudit(data);
     const knowledgeEntries = data.knowledge.map(entry => ({ ...entry,
       scope: structuredClone(targetScope), ownerRef: mappedRef(recordingMapper, "knowledgeOwner", entry.ownerRef, data.sourceScope, targetScope) }));
     const knowledge = MemoryKnowledgeCatalogue.fromPublishedHistory(knowledgeEntries);
-    return ok({ policy, policyRows, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, cancellationHistory, reschedulingHistory, automationHistory, clinicIntakeHistory,
+    return ok({ policy, policyRows, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, cancellationHistory, reschedulingHistory, staffedDestinationHistory, automationHistory, clinicIntakeHistory,
       knowledge, knowledgeEntries, mappings: [...decisions.values()] });
   } catch (cause) {
     return err({ kind: cause instanceof UnmappedRef ? "unmappedRef" : "invalidConfigArchive" });
@@ -351,7 +362,8 @@ export class ReferenceConfigArchiveImporter {
       mapped.value.afterHoursHistory,
       mapped.value.automationHistory, automationHead?.version ?? 0, automationHead?.enabled ?? false, importActorRef, importedAt,
       mapped.value.urgentHistory, mapped.value.staffScheduleHistory, mapped.value.greetingHistory, mapped.value.cancellationHistory, mapped.value.reschedulingHistory,
-      { history: mapped.value.clinicIntakeHistory, sourceVersion: intakeHead?.version ?? 0, sourceEnabled: intakeHead?.enabled ?? false });
+      { history: mapped.value.clinicIntakeHistory, sourceVersion: intakeHead?.version ?? 0, sourceEnabled: intakeHead?.enabled ?? false },
+      mapped.value.staffedDestinationHistory);
     const knowledge = mapped.value.knowledge;
     const ledger = new MemoryLedger();
     const stop = await ledger.stopWrites(targetScope, importActorRef, "Imported configuration awaiting target readiness");

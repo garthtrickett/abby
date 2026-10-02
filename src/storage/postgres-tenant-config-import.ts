@@ -32,6 +32,7 @@ function storedPolicy(scope: LocationScope, version: number, policy: CallPolicy)
     afterHoursMode: NonNullable<CallPolicy["afterHoursMode"]>; afterHoursInfo?: NonNullable<CallPolicy["afterHoursInfo"]>;
     urgentResponse?: NonNullable<CallPolicy["urgentResponse"]>;
     staffSchedule?: NonNullable<CallPolicy["staffSchedule"]>;
+    transferDestinationRef?: string;
     greeting: NonNullable<CallPolicy["greeting"]> | null }> {
   return { scope: { ...scope }, policyVersion: String(version), bookingEnabled: policy.bookingEnabled,
     cancellationEnabled: policy.cancellationEnabled ?? false, reschedulingEnabled: policy.reschedulingEnabled ?? false,
@@ -39,10 +40,14 @@ function storedPolicy(scope: LocationScope, version: number, policy: CallPolicy)
     ...(policy.afterHoursInfo ? { afterHoursInfo: policy.afterHoursInfo } : {}),
     ...(policy.urgentResponse ? { urgentResponse: policy.urgentResponse } : {}),
     ...(policy.staffSchedule ? { staffSchedule: policy.staffSchedule } : {}),
+    ...(policy.transferDestinationRef === undefined ? {} : { transferDestinationRef: policy.transferDestinationRef }),
     greeting: policy.greeting ?? null };
 }
 
-const minimalMapper: ReferenceImportMapper = { mapRef: () => "disabled" };
+/** Public route refs require reviewed host mapping even when patient work is unavailable. */
+function minimalMapper(mapper: ReferenceImportMapper): ReferenceImportMapper {
+  return { mapRef: (kind, ref, source, target) => kind === "transferDestination" ? mapper.mapRef(kind, ref, source, target) : "disabled" };
+}
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
@@ -99,10 +104,10 @@ async function writeLocation(trx: Transaction<Database>, location: TenantConfigA
   for (const row of policyRows) {
     const value = mode === "standaloneMinimal" ? storedPolicy(scope, row.version, row.policy) : row.policy;
     await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy,
-      setting_kind, previous_after_hours_mode, previous_cancellation_enabled, previous_rescheduling_enabled, changed_by, previous_booking_enabled, changed_at) values
+      setting_kind, previous_after_hours_mode, previous_cancellation_enabled, previous_rescheduling_enabled, previous_staffed_destination_ref, changed_by, previous_booking_enabled, changed_at) values
       (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, ${row.version},
        ${JSON.stringify(value)}::jsonb, ${row.settingKind ?? "booking"}, ${row.previousAfterHoursMode ?? null}, ${row.previousCancellationEnabled ?? null}, ${row.previousReschedulingEnabled ?? null},
-       ${row.changedBy}, ${row.previousBookingEnabled},
+       ${row.previousStaffedDestinationRef ?? null}, ${row.changedBy}, ${row.previousBookingEnabled},
        ${row.changedAt}::timestamptz)`.execute(trx);
   }
   const head = policyRows.find(row => row.isHead)!;
@@ -241,7 +246,7 @@ export class PostgresTenantConfigArchiveImporter {
                   authority: ReferenceTenantImportAuthority, mapper: ReferenceImportMapper):
     Promise<Result<ReferenceTenantImportReport, PostgresTenantImportFailure>> {
     const validated = await new ReferenceTenantConfigArchiveImporter().preflight(input, targetTenantId,
-      actorRef, authority, this.mode === "standaloneMinimal" ? minimalMapper : mapper);
+      actorRef, authority, this.mode === "standaloneMinimal" ? minimalMapper(mapper) : mapper);
     if (!validated.ok) return validated;
     if (this.mode === "standaloneMinimal") {
       const decoded = await decodeTenantConfigArchive(input, targetTenantId);
@@ -269,7 +274,7 @@ export class PostgresTenantConfigArchiveImporter {
     catch { return err({ kind: "invalidRequest" }); }
     if (!validInstant(importedAt)) return err({ kind: "invalidRequest" });
     const validated = await new ReferenceTenantConfigArchiveImporter(() => importedAt).stage(input, targetTenantId,
-      actorRef, authority, this.mode === "standaloneMinimal" ? minimalMapper : mapper);
+      actorRef, authority, this.mode === "standaloneMinimal" ? minimalMapper(mapper) : mapper);
     if (!validated.ok) return validated;
     const staged = validated.value;
     const data = staged.sourceHistory;
