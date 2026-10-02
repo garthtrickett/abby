@@ -226,3 +226,52 @@ test("E2E-220 E2E-237 owner webhook accepts redacted classifier alerts and refus
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
 });
+
+test("E2E-220 scheduled webhook catches up retained days with stable per-day keys", async () => {
+  const tenantId = `ops-catchup-${randomUUID()}`;
+  const foreignTenantId = `ops-catchup-foreign-${randomUUID()}`;
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.parse(`${today}T00:00:00.000Z`) - 86_400_000).toISOString().slice(0, 10);
+  const expired = new Date(Date.parse(`${today}T00:00:00.000Z`) - 7 * 86_400_000).toISOString().slice(0, 10);
+  await sql`insert into clinic_operational_daily_counts
+    (tenant_id, clinic_id, location_id, date, kind, count) values
+    (${tenantId}, 'clinic', 'main', ${yesterday}::date, 'voiceFailure', 3),
+    (${tenantId}, 'clinic', 'main', ${today}::date, 'voiceFailure', 4),
+    (${tenantId}, 'clinic', 'main', ${expired}::date, 'voiceFailure', 100),
+    (${foreignTenantId}, 'clinic', 'main', ${yesterday}::date, 'voiceFailure', 99)`.execute(db);
+  const requests: { key: string; body: string }[] = [];
+  const server = createServer((request, response) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", chunk => { body += chunk; });
+    request.on("end", () => {
+      requests.push({ key: String(request.headers["idempotency-key"] ?? ""), body });
+      response.writeHead(202).end();
+    });
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const port = (server.address() as AddressInfo).port;
+    const env = { ...process.env, ABBY_TENANT_ID: tenantId, ABBY_CLINIC_ID: "clinic",
+      ABBY_LOCATION_ID: "main", ABBY_VOICE_OPS_THRESHOLDS_JSON: '{"voiceFailure":2}',
+      ABBY_VOICE_ALERT_TOKEN_HEX: "b".repeat(64),
+      ABBY_VOICE_ALERT_WEBHOOK_URL: `http://127.0.0.1:${port}/alerts` };
+    assert.deepEqual(await sendVoiceOperationalAlerts(env, { allowTestLoopbackHttp: true }),
+      { date: today, accepted: 2 });
+    assert.deepEqual(await sendVoiceOperationalAlerts(env, { allowTestLoopbackHttp: true }),
+      { date: today, accepted: 2 });
+    assert.deepEqual(requests.map(request => JSON.parse(request.body).date),
+      [yesterday, today, yesterday, today]);
+    assert.deepEqual(requests.map(request => JSON.parse(request.body).count), [3, 4, 3, 4]);
+    assert.equal(requests[0]?.key, requests[2]?.key);
+    assert.equal(requests[1]?.key, requests[3]?.key);
+    assert.notEqual(requests[0]?.key, requests[1]?.key);
+    for (const request of requests) {
+      assert.equal(JSON.parse(request.body).alertKey, request.key);
+      assert.equal(request.body.includes(tenantId), false);
+      assert.equal(request.body.includes(foreignTenantId), false);
+    }
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
+});

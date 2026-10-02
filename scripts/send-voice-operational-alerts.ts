@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { checkVoiceOperations } from "./check-voice-operations.ts";
+import { checkVoiceOperationsWindow } from "./check-voice-operations.ts";
 
 type AlertDeliveryPorts = Readonly<{ fetch?: typeof fetch; allowTestLoopbackHttp?: boolean }>;
 
@@ -22,16 +22,17 @@ export async function sendVoiceOperationalAlerts(env: NodeJS.ProcessEnv,
     throw new RangeError("operational alert delivery unavailable");
   }
   const url = destination(rawUrl, ports.allowTestLoopbackHttp === true);
-  const result = await checkVoiceOperations(env);
+  const result = await checkVoiceOperationsWindow(env);
   const scope = [env.ABBY_TENANT_ID?.trim(), env.ABBY_CLINIC_ID?.trim(), env.ABBY_LOCATION_ID?.trim()];
   const send = ports.fetch ?? fetch;
-  const attempts = await Promise.allSettled(result.alerts.map(async alert => {
+  const crossed = result.days.flatMap(day => day.alerts.map(alert => ({ date: day.date, alert })));
+  const attempts = await Promise.allSettled(crossed.map(async ({ date, alert }) => {
     const alertKey = createHmac("sha256", Buffer.from(token, "hex"))
-      .update(JSON.stringify([scope, result.date, alert.kind, alert.threshold])).digest("hex");
+      .update(JSON.stringify([scope, date, alert.kind, alert.threshold])).digest("hex");
     const response = await send(url, { method: "POST", redirect: "manual", signal: AbortSignal.timeout(5_000),
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json",
         "idempotency-key": alertKey },
-      body: JSON.stringify({ schemaVersion: 1, date: result.date, kind: alert.kind,
+      body: JSON.stringify({ schemaVersion: 1, date, kind: alert.kind,
         count: alert.count, threshold: alert.threshold, alertKey }),
     });
     await response.body?.cancel();
