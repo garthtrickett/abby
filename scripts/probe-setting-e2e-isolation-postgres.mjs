@@ -19,7 +19,7 @@ const manifest = JSON.parse(await readFile(new URL("../phase-0/SCENARIO_MANIFEST
 const scenarios = new Map(manifest.scenarios.map(row => [row.id, row]));
 const nodeFiles = new Map();
 const browserFiles = new Map();
-const browserCoordinatorFiles = new Map();
+const coordinatorFiles = new Map();
 
 for (const [setting, ids] of Object.entries(manifest.settingMappings)) {
   let mapped = 0;
@@ -30,8 +30,9 @@ for (const [setting, ids] of Object.entries(manifest.settingMappings)) {
       if (evidence?.status !== "passed") continue;
       for (const file of evidence.testFiles) {
         const override = manifest.executionOverrides[file];
-        assert.ok(override === undefined || override === "browserCoordinator", "unknown execution profile");
-        const target = override === "browserCoordinator" ? browserCoordinatorFiles :
+        assert.ok(override === undefined || override === "browserCoordinator" || override === "nodeCoordinator",
+          "unknown execution profile");
+        const target = override ? coordinatorFiles :
           file.endsWith(".spec.ts") ? browserFiles : nodeFiles;
         assert.match(file, /^test\/[a-z-]+\/[a-z0-9-]+\.(?:test|spec)\.ts$/);
         if (!target.has(file)) target.set(file, new Set());
@@ -103,8 +104,14 @@ function checkedNode(output, ids) {
 async function runNode(entries, concurrency) {
   const ids = idsFor(entries);
   // Run whole files: Node's name filter can skip a nested E2E when its parent suite has no ID.
-  const output = await withFreshDatabase(env => execute(process.execPath, ["--test", `--test-concurrency=${concurrency}`,
-    ...entries.map(([file]) => file)], 600_000, env));
+  const files = entries.map(([file]) => file);
+  const output = await withFreshDatabase(env => execute(process.execPath,
+    ["scripts/ordered-node-e2e.mjs", JSON.stringify({ files, concurrency })], 600_000, env));
+  const events = output.split("\n").filter(line => line.startsWith("ABBY_NODE_EVENT "))
+    .map(line => JSON.parse(line.slice("ABBY_NODE_EVENT ".length)));
+  assert.deepEqual(events.filter(event => event.kind === "dispatched").map(event => event.file), files);
+  if (concurrency > 1 && files.length > 1) assert.ok(events.some(event => event.activeFiles > 1), "Node files did not overlap");
+  process.stdout.write(`Node dispatch: ${events.filter(event => event.kind === "dispatched").map(event => event.file).join(", ")}\n`);
   return checkedNode(output, ids);
 }
 
@@ -138,13 +145,15 @@ if (!browserOnly) {
   }
 }
 
-// Coordinators launch Chromium themselves and prove their own parallel scheduling.
-// Keep them in the browser phase, as in CI, rather than inside four PostgreSQL file workers.
-for (const entry of [...browserCoordinatorFiles.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+// Coordinators launch their own parallel workers and verify the observed scheduling.
+// Run them after the PostgreSQL file pool, as in the normal test commands.
+for (const entry of [...coordinatorFiles.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+  const profile = manifest.executionOverrides[entry[0]];
+  if (browserOnly && profile !== "browserCoordinator") continue;
   const passed = browserOnly
     ? checkedNode(await execute(process.execPath, ["--test", entry[0]], 600_000), idsFor([entry]))
     : await runNode([entry], 1);
-  process.stdout.write(`browser coordinator ${entry[0]}: ${passed} passed\n`);
+  process.stdout.write(`${profile} ${entry[0]}: ${passed} passed\n`);
 }
 const browserEntries = [...browserFiles.entries()].sort(([left], [right]) => left.localeCompare(right));
 let browserTotal = 0;

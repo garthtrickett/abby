@@ -21,7 +21,7 @@ type Manifest = {
   version: string;
   source: string;
   fixtureIdPattern: string;
-  executionOverrides: Record<string, "browserCoordinator">;
+  executionOverrides: Record<string, "browserCoordinator" | "nodeCoordinator">;
   capabilityMappings: Record<string, string[]>;
   settingMappings: Record<string, string[]>;
   scenarios: Scenario[];
@@ -34,19 +34,20 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
   const manifest = JSON.parse(read("phase-0/SCENARIO_MANIFEST.json")) as Manifest;
   const design = read("TECHNICAL_DESIGN.md");
   const rows = [...design.matchAll(/^\| `(E2E-\d{3})` \| (.*?) \| (FR-\d{2}(?:, FR-\d{2})*) \|$/gm)];
-  assert.equal(manifest.version, "1.61");
+  assert.equal(manifest.version, "1.62");
   assert.equal(manifest.source, "TECHNICAL_DESIGN.md Section 11");
   assert.equal(manifest.fixtureIdPattern, "fixture-{lowercase scenario id}");
-  assert.equal(rows.length, 250);
+  assert.equal(rows.length, 251);
   assert.deepEqual(manifest.scenarios.map(scenario => scenario.id),
-    Array.from({ length: 250 }, (_, index) => `E2E-${String(index + 1).padStart(3, "0")}`));
+    Array.from({ length: 251 }, (_, index) => `E2E-${String(index + 1).padStart(3, "0")}`));
   const ids = new Set(manifest.scenarios.map(scenario => scenario.id));
   for (const [file, profile] of Object.entries(manifest.executionOverrides)) {
-    assert.equal(profile, "browserCoordinator");
-    assert.match(file, /^test\/runner\/[a-z0-9-]*browser[a-z0-9-]*\.test\.ts$/);
+    assert.ok(profile === "browserCoordinator" || profile === "nodeCoordinator");
+    assert.match(file, /^test\/runner\/[a-z0-9-]+\.test\.ts$/);
     assert.ok(manifest.scenarios.some(scenario => scenario.textEvidence?.testFiles.includes(file)));
     const scripts = JSON.parse(read("package.json")).scripts as Record<string, string>;
-    assert.ok(scripts["test:browser"]?.includes(file), "browser coordinator must run in the regular browser gate");
+    const command = profile === "browserCoordinator" ? "test:browser" : "test:text";
+    assert.ok(scripts[command]?.includes(file), "coordinator must run in its normal test gate");
   }
   for (const [index, scenario] of manifest.scenarios.entries()) {
     const row = rows[index]!;
