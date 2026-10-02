@@ -10,6 +10,7 @@
     "test:text": "node --test --test-concurrency=4 test/text/*.test.ts test/composition/*.test.ts test/admission/*.test.ts test/voice/*.test.ts test/cliniko/*.test.ts test/portability/*.test.ts test/contract/*.test.ts",
     "test:settings-isolation": "node scripts/probe-setting-e2e-isolation.mjs",
     "test:settings-isolation:postgres": "bash scripts/with-postgres.sh node scripts/probe-setting-e2e-isolation-postgres.mjs",
+    "test:signed-voice:postgres": "bash scripts/with-postgres.sh bash scripts/probe-signed-voice-postgres.sh",
     "db:migrate": "node scripts/migrate.ts",
     "db:generate": "kanel --config .kanelrc.cjs",
     "phone-index:refresh": "node scripts/refresh-cliniko-phone-index.ts",
