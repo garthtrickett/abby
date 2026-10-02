@@ -315,6 +315,11 @@ test("E2E-252 PostgreSQL cancellation setting gates complete voice calls after d
     const ready = async () => ok(true as const);
     await cancellationSettingCalls(new PostgresLedger(db, suggested => suggested, ready, "unsafeReference"),
       new PostgresPolicyStore(db, referenceDefaultPolicy, "execute", ready, true, "unsafeReference", false, "execute"));
+    await assert.rejects(migrate(db, "down"), /cancellation setting rows must be removed/);
+    const retained = await new PostgresPolicyStore(db, referenceDefaultPolicy, undefined, undefined, false,
+      "unsafeReference").listCancellationChanges(scope);
+    assert.ok(retained.ok, retained.ok ? "" : retained.error.kind);
+    assert.deepEqual(retained.value.entries.map(row => row.enabled), [true, false]);
   } finally {
     await db?.destroy();
     if (created) await sql.raw(`drop database "${name}" with (force)`).execute(admin);
