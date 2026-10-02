@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { once } from "node:events";
-import { createServer as createNetServer } from "node:net";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { ClinikoCatalogueReader } from "../../src/cliniko/catalogue.ts";
@@ -14,24 +12,12 @@ import type { HostActor } from "../../src/reference/command-gateway.ts";
 import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
 import { TextReception } from "../../src/reference/text-reception.ts";
 import { createHostAuthenticatedDashboardServer } from "../../src/standalone/dashboard/server.ts";
+import { listenLoopbackServer } from "../support/listen-loopback-server.ts";
 
 const scope = { tenantId: "host-browser", clinicId: "clinic", locationId: "main" };
 const route = { accountRef: "host-account", dialedNumber: "+6125550199", routeVersion: "v1" };
 
-async function freePort(): Promise<number> {
-  const probe = createNetServer();
-  probe.listen(0, "127.0.0.1");
-  await once(probe, "listening");
-  const address = probe.address();
-  assert.ok(address && typeof address !== "string");
-  probe.close();
-  await once(probe, "close");
-  return address.port;
-}
-
-test("E2E-211 authenticated host sessions scope browser approval without trusting client role headers", async ({ page, request }) => {
-  const port = await freePort();
-  const origin = `http://127.0.0.1:${port}`;
+test("E2E-211 E2E-249 authenticated host sessions scope browser approval without trusting client role headers", async ({ page, request }) => {
   const adminToken = randomUUID();
   const staffToken = randomUUID();
   const foreignToken = randomUUID();
@@ -71,7 +57,7 @@ test("E2E-211 authenticated host sessions scope browser approval without trustin
   const gatewayFor = (actor: HostActor) => new CommandGateway(actor, policy, reception,
     undefined, undefined, undefined, undefined, undefined, setup);
   let mismatch = false;
-  const server = await createHostAuthenticatedDashboardServer({ publicOrigin: origin,
+  const server = await createHostAuthenticatedDashboardServer({ publicOrigin: "http://127.0.0.1:0",
     resolveActor: incoming => {
       const cookie = incoming.headers.cookie?.match(/(?:^|;\s*)hostSession=([^;]+)/)?.[1];
       if (cookie === failedIdentityToken) throw new Error("synthetic identity provider failure");
@@ -81,8 +67,7 @@ test("E2E-211 authenticated host sessions scope browser approval without trustin
       undefined, undefined, undefined, undefined, setup) : gatewayFor(actor),
   }, resolve("dist/dashboard/app.js"));
   try {
-    server.listen(port, "127.0.0.1");
-    await once(server, "listening");
+    const origin = await listenLoopbackServer(server);
     assert.equal((await request.get(`${origin}/api/capabilities`)).status(), 403);
     assert.equal((await request.get(origin)).status(), 403);
     assert.equal((await request.get(`${origin}/api/capabilities`, { headers: {

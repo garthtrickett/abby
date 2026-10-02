@@ -2,9 +2,6 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import type { ServerResponse } from "node:http";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createStandaloneClinikoAdminDashboard } from "../src/standalone/cliniko-admin-dashboard.ts";
-import { readSpeechGateStatus } from "./read-speech-gate-status.ts";
-import { connectPostgres } from "../src/storage/connect.ts";
 
 function required(name: string): string {
   const value = process.env[name]?.trim();
@@ -18,7 +15,8 @@ export type ClinikoAdminRunnerPorts = Readonly<{ clinikoFetch?: typeof fetch; bu
 export async function serveClinikoAdmin(ports: ClinikoAdminRunnerPorts = {}): Promise<void> {
   const portText = process.env.ABBY_ADMIN_PORT ?? "3401";
   const port = Number(portText);
-  if (!/^[0-9]+$/.test(portText) || !Number.isSafeInteger(port) || port < 1 || port > 65_535) {
+  if (!/^[0-9]+$/.test(portText) || !Number.isSafeInteger(port) || port < 0 || port > 65_535 ||
+      (port === 0 && process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1")) {
     throw new RangeError("invalid ABBY_ADMIN_PORT");
   }
   const token = required("ABBY_ADMIN_ACCESS_TOKEN_HEX");
@@ -43,10 +41,17 @@ export async function serveClinikoAdmin(ports: ClinikoAdminRunnerPorts = {}): Pr
       "X-Content-Type-Options": "nosniff" });
     response.end(JSON.stringify({ ok: false, error: { kind: "forbidden" } }));
   };
-  const db = connectPostgres(required("DATABASE_URL"));
+  const databaseUrl = required("DATABASE_URL");
+  const apiKey = required("ABBY_CLINIKO_API_KEY");
+  const contactEmail = required("ABBY_CLINIKO_CONTACT_EMAIL");
+  // Reject invalid startup configuration before loading the database/dashboard composition.
+  const [{ createStandaloneClinikoAdminDashboard }, { readSpeechGateStatus }, { connectPostgres }] =
+    await Promise.all([import("../src/standalone/cliniko-admin-dashboard.ts"),
+      import("./read-speech-gate-status.ts"), import("../src/storage/connect.ts")]);
+  const db = connectPostgres(databaseUrl);
   try {
     const prepared = await createStandaloneClinikoAdminDashboard({ db, scope, route,
-      apiKey: required("ABBY_CLINIKO_API_KEY"), contactEmail: required("ABBY_CLINIKO_CONTACT_EMAIL"),
+      apiKey, contactEmail,
       sevenDayAvailabilityEnabled: weekMode === "1",
       ...(process.env.ABBY_CLINIKO_BUDGET_USER_REF
         ? { sharedBudgetUserRef: process.env.ABBY_CLINIKO_BUDGET_USER_REF } : {}),
@@ -68,7 +73,12 @@ export async function serveClinikoAdmin(ports: ClinikoAdminRunnerPorts = {}): Pr
       server.once("error", reject);
       server.listen(port, "127.0.0.1", () => { server.off("error", reject); resolveListen(); });
     });
-    process.stdout.write(`Abby local clinic admin ready on http://127.0.0.1:${port}\n`);
+    const address = server.address();
+    if (!address || typeof address === "string" || address.address !== "127.0.0.1" || address.port < 1) {
+      throw new Error("local clinic admin listener address unavailable");
+    }
+    process.send?.({ kind: "listenerReady", port: address.port });
+    process.stdout.write(`Abby local clinic admin ready on http://127.0.0.1:${address.port}\n`);
     await new Promise<void>(resolveStop => {
       process.once("SIGINT", resolveStop);
       process.once("SIGTERM", resolveStop);
