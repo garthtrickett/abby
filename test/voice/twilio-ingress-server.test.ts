@@ -247,7 +247,7 @@ test("E2E-135 local transport: concurrent and later replays cannot construct a s
   }
 });
 
-test("E2E-136 local webhook: Twilio receives a distinct static post-stream clinic fallback", async () => {
+test("E2E-054 E2E-136 local webhook refuses another account or unlisted number before call ownership", async () => {
   const inboundA = "+6125550199";
   const inboundB = "+6125550177";
   const fallbackA = "+6125550188";
@@ -291,6 +291,15 @@ test("E2E-136 local webhook: Twilio receives a distinct static post-stream clini
     }, body: new URLSearchParams(unknown).toString() });
     assert.equal(refused.status, 503);
     assert.equal(await refused.text(), "Unavailable");
+    const foreignAccount = { ...unknown, AccountSid: `AC${"9".repeat(32)}`, To: inboundA };
+    const wrongAccount = await fetch(`http://127.0.0.1:${address.port}/twilio/inbound`, {
+      method: "POST", headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, webhookUrl, foreignAccount),
+      }, body: new URLSearchParams(foreignAccount).toString(),
+    });
+    assert.equal(wrongAccount.status, 403);
+    assert.equal(await wrongAccount.text(), "Forbidden");
     assert.equal(constructed, 0);
   } finally {
     server.close();
