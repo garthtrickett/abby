@@ -249,7 +249,9 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     }
     if (request.method === "POST" && url.pathname === "/api/settings/cancellation-enabled") {
       const origin = request.headers.origin;
-      if (origin && origin !== `http://${request.headers.host}`) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+      if (origin && origin !== (authenticatedOrigin ?? `http://${request.headers.host}`)) {
+        return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+      }
       if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
       const input = record(await body(request));
       if (!input || Object.keys(input).sort().join(",") !== "enabled,expectedVersion" ||
