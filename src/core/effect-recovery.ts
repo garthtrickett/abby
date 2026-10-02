@@ -3,14 +3,14 @@ import type { EffectWorkerOptions } from "./effect-worker.ts";
 import { EffectCallLeaseCoordinator } from "./effect-call-lease.ts";
 import type { EffectCallLeaseStore } from "./effect-call-lease.ts";
 import type { EffectCallLeaseGuard } from "./effect-call-lease.ts";
-import type { HostEffects, KnowledgeHost, OperatorAlertHost, StaffLifecycleHost } from "./host.ts";
+import type { HostEffects, KnowledgeHost, NotificationHost, OperatorAlertHost, StaffLifecycleHost } from "./host.ts";
 import type { LedgerStore } from "./ledger.ts";
 import { err, ok } from "./model.ts";
 import type { LocationScope, RecoverableEffectRef, Result, TransitionFailure } from "./model.ts";
 import { CallRuntime } from "./runtime.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type EffectHostLookup = (scope: LocationScope) => (HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost>) | undefined;
+export type EffectHostLookup = (scope: LocationScope) => (HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost & NotificationHost>) | undefined;
 export type ModelWorkLookup = (scope: LocationScope) => ModelWork | undefined;
 export type KnowledgeLookup = (scope: LocationScope) => KnowledgeHost | undefined;
 export type EffectRecoveryReport = Readonly<{
@@ -55,13 +55,15 @@ export class EffectRecovery {
         : effect.kind === "staffTask" ? await runtime.recoverStaffPossiblySent(ref.callId, effect.id, now)
         : effect.kind === "staffChange" ? await runtime.recoverStaffChangePossiblySent(ref.callId, effect.id, now)
         : effect.kind === "operatorAlert" ? await runtime.recoverOperatorAlertPossiblySent(ref.callId, effect.id, now)
+        : effect.kind === "notification" ? await runtime.notificationAction(ref.callId,
+          { kind: "recoverNotificationPossiblySent", effectId: effect.id, now })
         : err({ kind: "invalidTransition" as const });
       if (recovered.ok) return "recovered";
       const latest = await runtime.read(ref.callId);
       return latest.ok && latest.value.effects[ref.effectId]?.status !== "possiblySent" ? "deferred"
         : { effectId: ref.effectId, kind: "recoveryFailure" };
     }
-    let host: (HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost>) | undefined;
+    let host: (HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost & NotificationHost>) | undefined;
     try { host = this.hostLookup(ref.scope); }
     catch { return { effectId: ref.effectId, kind: "hostUnavailable" }; }
     if (!host) return { effectId: ref.effectId, kind: "hostUnavailable" };

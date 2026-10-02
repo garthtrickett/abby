@@ -25,8 +25,16 @@ const capabilityMode = choice("execute", "requestOnly", "unavailable");
 const afterHoursMode = choice("staffRequest", "approvedInfoAndRequest");
 const afterHoursInfo = object({ scope, version: key, ownerRef: key,
   approvedText: { type: "string", minLength: 1, maxLength: 1_500 }, approved: { const: true } });
+const notificationOwner: JsonSchema = { oneOf: [choice("host", "abby"), { const: null }] };
+const notificationBinding = (kind: string): JsonSchema => object({ scope, kind: { const: kind },
+  owner: choice("host", "abby"), settingsVersion: key, hostVersion: key });
 const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: nonEmpty, automationEnabled: bool, bookingEnabled: bool,
   cancellationEnabled: bool, reschedulingEnabled: bool, firstTimeIntakeEnabled: bool, firstTimeIntakeVersion: key, afterHoursMode, afterHoursInfo,
+  notificationSettings: object({ version: key, owners: object({ bookingConfirmation: notificationOwner,
+    cancellationConfirmation: notificationOwner, reschedulingConfirmation: notificationOwner }) }),
+  notificationBindings: optional({ bookingConfirmation: notificationBinding("bookingConfirmation"),
+    cancellationConfirmation: notificationBinding("cancellationConfirmation"),
+    reschedulingConfirmation: notificationBinding("reschedulingConfirmation") }, []),
   urgentResponse: object({ scope, version: key, ownerRef: key,
     approvedText: { type: "string", minLength: 1, maxLength: 1_500 }, approved: { const: true },
     effectiveFrom: str, effectiveUntil: str }),

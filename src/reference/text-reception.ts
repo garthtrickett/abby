@@ -1,7 +1,7 @@
 import { EffectWorker } from "../core/effect-worker.ts";
 import { EffectCallLeaseCoordinator } from "../core/effect-call-lease.ts";
 import type { EffectCallLeaseStore } from "../core/effect-call-lease.ts";
-import type { AppointmentChangeEvidenceHost, AppointmentChangeEvidenceQuery, AppointmentChangeSelection, AppointmentHost, AvailabilityHost, BookingEvidenceHost, HostEffects, IntakeEvidenceHost, KnowledgeHost, ModelKnowledgeContextHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
+import type { AppointmentChangeEvidenceHost, AppointmentChangeEvidenceQuery, AppointmentChangeSelection, AppointmentHost, AvailabilityHost, BookingEvidenceHost, HostEffects, IntakeEvidenceHost, KnowledgeHost, ModelKnowledgeContextHost, NotificationHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
 import { captureKnowledgeSnapshot, validCallKnowledgeSource, validKnowledgeSource } from "../core/knowledge-evidence.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err } from "../core/model.ts";
@@ -11,7 +11,7 @@ import { appointmentChangeEvidenceFailure, noticePresentationId } from "../core/
 import { modelTaskRef } from "../model/work.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 function validIntakeRef(value: unknown): value is string {

@@ -1,4 +1,7 @@
 import { MemoryClinicIntakeSettingStore } from "./clinic-intake-setting-store.ts";
+import { MemoryClinicNotificationSettingStore } from "./clinic-notification-setting-store.ts";
+import { captureNotificationPolicy, unprovenNotificationRegistry } from "../core/notification-policy.ts";
+import type { NotificationAuditPage, NotificationKind, NotificationOwner, NotificationRegistry } from "../core/notification-policy.ts";
 import type { ClinicIntakeAuditEntry, ClinicIntakeAuditPage } from "../core/clinic-intake-setting.ts";
 import { captureStaffedDestination, listStaffedDestinations, resolveStaffedDestination, unprovenStaffedDestinationRegistry, validStaffedDestinationChange, validStaffedDestinationScope } from "../core/staffed-destination.ts";
 import type { StaffedDestinationAuditEntry, StaffedDestinationAuditPage, StaffedDestinationCatalogue, StaffedDestinationRegistry } from "../core/staffed-destination.ts";
@@ -78,15 +81,20 @@ export class MemoryPolicyStore implements PolicyStore {
   private readonly hostReschedulingMode: CapabilityMode;
   private readonly hostIntakeMode: CapabilityMode;
   private readonly intake: MemoryClinicIntakeSettingStore;
+  private readonly notifications: MemoryClinicNotificationSettingStore;
+  private readonly notificationRegistry: NotificationRegistry;
   private readonly staffedDestinationRegistry: StaffedDestinationRegistry;
   private readonly staffedDestinationChanges = new Map<string, StaffedDestinationAuditEntry[]>();
 
   constructor(hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "execute", clock: () => string = () => new Date().toISOString(), readiness: AutomationReadiness = unprovenReadiness,
               hostPatientModes: CapabilityMode | PatientSettingModes = "requestOnly",
-              staffedDestinationRegistry: StaffedDestinationRegistry = unprovenStaffedDestinationRegistry) {
+              staffedDestinationRegistry: StaffedDestinationRegistry = unprovenStaffedDestinationRegistry,
+              notificationRegistry: NotificationRegistry = unprovenNotificationRegistry) {
     this.hostBookingMode = hostBookingMode;
     this.clock = clock;
     this.intake = new MemoryClinicIntakeSettingStore(clock);
+    this.notifications = new MemoryClinicNotificationSettingStore(clock, notificationRegistry);
+    this.notificationRegistry = notificationRegistry;
     this.readiness = readiness;
     this.hostCancellationMode = typeof hostPatientModes === "string" ? hostPatientModes : hostPatientModes.cancellation ?? "unavailable";
     this.hostReschedulingMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.rescheduling ?? "unavailable";
@@ -187,8 +195,20 @@ export class MemoryPolicyStore implements PolicyStore {
   }
 
   async read(scope: LocationScope): Promise<Result<CallPolicy, PolicyFailure>> {
-    return ok(await captureStaffedDestination(this.effective(this.policies.get(scopeKey(scope)) ?? referenceDefaultPolicy(scope)),
-      (bound, ref) => this.staffedDestinationRegistry.resolve(bound, ref)));
+    const notifications = await this.notifications.read(scope);
+    if (!notifications.ok) return notifications;
+    const routed = await captureStaffedDestination(this.effective(this.policies.get(scopeKey(scope)) ?? referenceDefaultPolicy(scope)),
+      (bound, ref) => this.staffedDestinationRegistry.resolve(bound, ref));
+    return ok(await captureNotificationPolicy(routed, notifications.value, this.notificationRegistry));
+  }
+
+  async changeNotificationOwner(scope: LocationScope, expectedVersion: string, kind: NotificationKind,
+    owner: NotificationOwner | null, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+    const changed = await this.notifications.changeOwner(scope, expectedVersion, kind, owner, actorRef);
+    return changed.ok ? this.read(scope) : changed;
+  }
+  async listNotificationChanges(scope: LocationScope, afterVersion?: number): Promise<Result<NotificationAuditPage, PolicyFailure>> {
+    return this.notifications.listChanges(scope, afterVersion);
   }
 
   async listStaffedDestinations(scope: LocationScope): Promise<Result<StaffedDestinationCatalogue, PolicyFailure>> {

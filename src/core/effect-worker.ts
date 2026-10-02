@@ -1,5 +1,7 @@
 import type { HostWriteReceipt, OperatorAlertReceipt, StaffChangeReceipt, StaffTaskReceipt } from "./model.ts";
-import type { HostEffects, KnowledgeHost, OperatorAlertHost, StaffLifecycleHost } from "./host.ts";
+import type { HostEffects, KnowledgeHost, NotificationHost, OperatorAlertHost, StaffLifecycleHost } from "./host.ts";
+import { processNotification } from "./notification-dispatch.ts";
+import { validNotificationEffectForCall } from "./notification-effects.ts";
 import { CallRuntime } from "./runtime.ts";
 import { err } from "./model.ts";
 import type { ModelWork } from "../model/work.ts";
@@ -12,14 +14,14 @@ export type EffectWorkerOptions = Readonly<{ hostDeadlineMs?: number; timer?: Ti
 
 export class EffectWorker {
   private readonly runtime: CallRuntime;
-  private readonly host: HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost>;
+  private readonly host: HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost & NotificationHost>;
   private readonly model: ModelWork | undefined;
   private readonly knowledge: KnowledgeHost | undefined;
   private readonly hostDeadlineMs: number;
   private readonly timer: TimerPort;
   private readonly signal: AbortSignal | undefined;
 
-  constructor(runtime: CallRuntime, host: HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost>, model?: ModelWork,
+  constructor(runtime: CallRuntime, host: HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost & NotificationHost>, model?: ModelWork,
               knowledge?: KnowledgeHost, options: EffectWorkerOptions = {}) {
     const deadline = options.hostDeadlineMs ?? 15_000;
     if (!Number.isSafeInteger(deadline) || deadline < 1 || deadline > 120_000) throw new RangeError("hostDeadlineMs must be 1..120000");
@@ -72,6 +74,10 @@ export class EffectWorker {
     if (!read.ok) throw new Error(read.error.kind);
     const effect = read.value.effects[effectId];
     if (!effect) throw new Error("effectUnknown");
+    if (effect.kind === "notification" || effect.kind === "notificationReconcile") {
+      if (!validNotificationEffectForCall(read.value, effect)) throw new Error("storageCorrupt");
+      return processNotification(this.runtime, this.host, effect, now, operation => this.hostCall(operation));
+    }
     if (effect.kind === "model") {
       if (effect.status !== "pending") throw new Error("invalidTransition");
       const input = this.model?.input(effect.taskRef);

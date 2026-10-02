@@ -117,6 +117,11 @@ export type CallPolicy = Readonly<{
   /** Clinic-wide; absent legacy snapshots are disabled at version 0. */
   firstTimeIntakeEnabled?: boolean;
   firstTimeIntakeVersion?: string;
+  /** Clinic preferences are public configuration; they are not host send authority. */
+  notificationSettings?: import("./notification-policy.ts").NotificationSettings;
+  /** Current scoped host declarations captured at admission; absent means no managed delivery. */
+  notificationBindings?: Readonly<Partial<Record<import("./notification-policy.ts").NotificationKind,
+    import("./notification-policy.ts").NotificationBinding>>>;
   /** Absent on legacy snapshots; the effective default is staffRequest. */
   afterHoursMode?: AfterHoursMode;
   afterHoursInfo?: ApprovedAfterHoursInfo;
@@ -262,6 +267,8 @@ export type HostMutation = Readonly<{
   payloadDigest: string;
   policyVersion: string;
   request: ActionRequest;
+  /** Host must suppress native notification sends and acknowledge this exact captured directive. */
+  notification?: import("./notification-effects.ts").NotificationDirective;
 }>;
 export type ActionState = Readonly<{
   key: string;
@@ -297,12 +304,14 @@ export type Presentation =
     providerConnectionRef?: string;
   }>;
 export type HostWriteReceipt =
-  | Readonly<{ kind: "committed"; actionKey: string; hostRef: string }>
+  | Readonly<{ kind: "committed"; actionKey: string; hostRef: string;
+    notification?: import("./notification-effects.ts").NotificationDirective }>
   | Readonly<{ kind: "rejected"; actionKey: string; reason: "conflict" | "invalid" | "forbidden" | "expiredOffer" }>
   | Readonly<{ kind: "unsupported"; actionKey: string }>
   | Readonly<{ kind: "uncertain"; actionKey: string; reconcileAfter: string; deadline: string }>;
 export type ReconcileObservation =
-  | Readonly<{ kind: "exactCommit"; actionKey: string; hostRef: string }>
+  | Readonly<{ kind: "exactCommit"; actionKey: string; hostRef: string;
+    notification?: import("./notification-effects.ts").NotificationDirective }>
   | Readonly<{ kind: "definitiveNonCommit"; actionKey: string }>
   | Readonly<{ kind: "stillUnknown"; actionKey: string }>;
 export type StaffTaskReceipt =
@@ -385,7 +394,8 @@ export type Effect =
   | Readonly<{ kind: "staffChange"; id: string; taskKey: string; change: StaffChange; status: "pending" | "possiblySent" | "completed" | "uncertain"; possiblySentAt?: string }>
   | Readonly<{ kind: "staffChangeReconcile"; id: string; taskKey: string; originalEffectId: string; change: StaffChange; status: "pending" | "completed" }>
   | Readonly<{ kind: "operatorAlert"; id: string; alert: OperatorAlert; status: "pending" | "possiblySent" | "completed" | "uncertain" | "canceled"; possiblySentAt?: string }>
-  | Readonly<{ kind: "operatorAlertReconcile"; id: string; alert: OperatorAlert; originalEffectId: string; status: "pending" | "completed" }>;
+  | Readonly<{ kind: "operatorAlertReconcile"; id: string; alert: OperatorAlert; originalEffectId: string; status: "pending" | "completed" }>
+  | import("./notification-effects.ts").NotificationEffect;
 export type RecoverableEffectRef = Readonly<{
   callId: string;
   scope: LocationScope;
@@ -433,6 +443,7 @@ export type TransitionFailure =
   | Readonly<{ kind: "callUnknown" | "callConflict" | "versionConflict" | "invalidTransition" | "scopeMismatch" | "evidenceExpired" | "confirmationMissing" | "digestChanged" | "effectUnknown" | "keyMismatch" | "storageFailure" | "storageCorrupt" | "admissionExpired" | "leaseLost" | "staleTurn" }>;
 
 export type TransitionAction =
+  | import("./notification-effects.ts").NotificationTransitionAction
   | Readonly<{ kind: "sessionActivated"; sessionId: string; now: string }>
   | Readonly<{ kind: "sessionRenewed"; sessionId: string; expectedLeaseVersion: number; now: string }>
   | Readonly<{ kind: "admissionExpired"; now: string }>

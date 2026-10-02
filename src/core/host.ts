@@ -159,6 +159,14 @@ export interface HostEffects {
   reconcileTask(item: StaffItem, signal?: AbortSignal): Promise<StaffTaskObservation>;
 }
 
+/** Both owners use a keyed host-approved delivery contract; implementations honor the captured owner/version. */
+export interface NotificationHost {
+  dispatchNotification(intent: import("./notification-effects.ts").NotificationIntent, signal?: AbortSignal):
+    Promise<import("./notification-effects.ts").NotificationObservation>;
+  observeNotification(intent: import("./notification-effects.ts").NotificationIntent, signal?: AbortSignal):
+    Promise<import("./notification-effects.ts").NotificationObservation>;
+}
+
 export interface StaffLifecycleHost {
   advanceTask(change: StaffChange, signal?: AbortSignal): Promise<StaffChangeReceipt>;
   reconcileTaskChange(change: StaffChange, signal?: AbortSignal): Promise<StaffChangeObservation>;
@@ -171,6 +179,11 @@ export interface OperatorAlertHost {
 
 export interface PolicyStore {
   read(scope: LocationScope): Promise<Result<CallPolicy, PolicyFailure>>;
+  changeNotificationOwner(scope: LocationScope, expectedVersion: string,
+    kind: import("./notification-policy.ts").NotificationKind, owner: import("./notification-policy.ts").NotificationOwner | null,
+    actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
+  listNotificationChanges(scope: LocationScope, afterVersion?: number):
+    Promise<Result<import("./notification-policy.ts").NotificationAuditPage, PolicyFailure>>;
   listStaffedDestinations(scope: LocationScope): Promise<Result<StaffedDestinationCatalogue, PolicyFailure>>;
   changeStaffedDestination(scope: LocationScope, expectedVersion: string, destinationRef: string | null,
                           actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
