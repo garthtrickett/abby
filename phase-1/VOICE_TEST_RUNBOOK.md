@@ -10,6 +10,8 @@
 - E2E-213 proves a new signed local test call can use persisted approval after the runner is killed and restarted. The interrupted call is lost; its state is not replayed, and this synthetic check does not show what Twilio does with that call or its fallback.
 - The number's **Voice Fallback URL** must be independent of Abby and its HTTPS proxy. The post-stream `<Dial>` in Abby's TwiML covers a different failure point. [Twilio's fallback guidance](https://www.twilio.com/docs/voice/twilio-voice-failover-best-practices) distinguishes the two routes.
 
+Before a public tunnel or number test, `npm run test:signed-voice:postgres` runs the current [signed synthetic voice sweep](SIGNED_VOICE_SWEEP.md) with disposable PostgreSQL and four Node workers. It builds the admin browser fixture before the credential-rotation case. The 2026-10-02 source-matched run passed 77/77 tests across 21 files. This gate checks local runner and embedded boundaries; it cannot replace audible carrier or speech-quality evaluation.
+
 ## Prepare the endpoint and fallback
 
 `npm run voice:probe-tunnel` is an optional, self-contained transport smoke test before a number exists. It starts a synthetic signed ingress, opens a temporary ngrok tunnel, verifies unsigned HTTPS/WSS rejection and one signed webhook-to-stream binding, then closes both processes. It uses no clinic, OpenAI, or Twilio account credentials. A pass proves the tunnel path works for synthetic traffic; it does not prove the real runner or carrier.
