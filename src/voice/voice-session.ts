@@ -87,6 +87,12 @@ export class VoiceSession {
     return this.attached && !this.speechOpen && this.reception.cancelPendingModel(this.scope, this.callId);
   }
 
+  /** Transport loss must release transient work before the serialized call owner can end. */
+  stopTransientWork(): void {
+    this.pendingIntent?.cancel();
+    this.reception.cancelPendingModel(this.scope, this.callId);
+  }
+
   constructor(callId: string, sessionId: string, scope: LocationScope, ledger: LedgerStore, reception: TextReception, playback: PlaybackPort, resolveIntent: IntentResolver, transfer?: TransferPort, monotonicNow: () => number = () => performance.now(), transient?: TransientPresentationConfig) {
     if (transient && (transient.greeting.approved !== true ||
         transient.greeting.scope.tenantId !== scope.tenantId ||
