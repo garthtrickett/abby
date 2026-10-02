@@ -8,6 +8,7 @@ import { dashboardView } from "./view.ts";
 import type { DashboardState } from "./view.ts";
 import type { AfterHoursMode, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
+import { sumNotificationDeliveryCounts } from "../../reference/notification-delivery-counts.ts";
 import type { AfterHoursSettingAuditPage, BookingSettingAuditPage, GreetingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
 import { formatWeeklyHours, parseWeeklyHours } from "./staff-hours-form.ts";
 import type { AutomationSettingAuditPage } from "../../core/host.ts";
@@ -49,7 +50,9 @@ function appendAutomationAudit(previous: AutomationSettingAuditPage, next: Autom
 }
 
 function appendOutcomes(previous: CallOutcomePage, next: CallOutcomePage): CallOutcomePage {
-  return { rows: [...previous.rows, ...next.rows], totals: {
+  const rows = [...previous.rows, ...next.rows];
+  const notificationDelivery = sumNotificationDeliveryCounts(rows.map(row => row.notificationDelivery));
+  return { rows, ...(notificationDelivery ? { notificationDelivery } : {}), totals: {
     calls: previous.totals.calls + next.totals.calls,
     committedActions: previous.totals.committedActions + next.totals.committedActions,
     callsWithUnresolvedActions: previous.totals.callsWithUnresolvedActions + next.totals.callsWithUnresolvedActions,
@@ -536,6 +539,7 @@ export class DashboardController {
 
   private async loadOutcomes(): Promise<void> {
     if (this.state.busy) return;
+    this.state.outcomePage = undefined;
     this.state.busy = true;
     this.state.error = undefined;
     this.draw();

@@ -1,38 +1,6 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
-import { resolve } from "node:path";
 import { expect, test } from "../support/browser-test.ts";
-import { MemoryLedger } from "../../src/core/ledger.ts";
-import { err } from "../../src/core/model.ts";
-import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
-import { TextReception } from "../../src/reference/text-reception.ts";
-import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
-import { CommandGateway } from "../../src/reference/command-gateway.ts";
-import { createHostAuthenticatedDashboardServer } from "../../src/standalone/dashboard/server.ts";
-import { notificationRegistry } from "../support/notification-settings-contract.ts";
-
-async function dashboard(ready = true) {
-  const scope = { tenantId: `notification-browser-${randomUUID()}`, clinicId: "clinic", locationId: "main" };
-  let hostReady = ready;
-  const supported = notificationRegistry();
-  const policy = new MemoryPolicyStore(undefined, undefined, undefined, undefined, undefined, {
-    resolve: (...args) => hostReady ? supported.resolve(...args)
-      : Promise.resolve(err({ kind: "readinessFailed", missing: ["notificationOwner"] })),
-  });
-  const reception = new TextReception(new MemoryLedger(), policy, new ReferenceClinicHost([], []));
-  const server = await createHostAuthenticatedDashboardServer({ publicOrigin: "http://127.0.0.1:0",
-    resolveActor: request => request.headers.cookie === "session=notification-owner" ? { actorRef: "notification-owner", role: "clinicAdmin", scope }
-      : request.headers.cookie === "session=notification-staff" ? { actorRef: "notification-staff", role: "staff", scope } : null,
-    gatewayFor: actor => new CommandGateway(actor, policy, reception),
-  }, resolve("dist/dashboard/app.js"));
-  await new Promise<void>(done => server.listen(0, "127.0.0.1", done));
-  const address = server.address();
-  assert.ok(address && typeof address !== "string");
-  const url = `http://127.0.0.1:${address.port}`;
-  return { scope, policy, reception, url, headers: { Cookie: "session=notification-owner", Origin: url },
-    setReady: (value: boolean) => { hostReady = value; },
-    close: () => new Promise<void>((done, reject) => { server.close(error => error ? reject(error) : done()); server.closeAllConnections(); }) };
-}
+import { dashboard } from "../support/notification-dashboard.ts";
 
 test("E2E-257 SET-009 owners set change and clear through authenticated admin while active calls retain their snapshot", async ({ page, request }) => {
   const app = await dashboard();

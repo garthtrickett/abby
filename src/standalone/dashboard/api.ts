@@ -1,4 +1,7 @@
 import type { ClinicIntakeAuditPage } from "../../core/clinic-intake-setting.ts";
+import { validNotificationReviewRow } from "../../reference/notification-review-shape.ts";
+import { NOTIFICATION_DELIVERY_KEYS, sumNotificationDeliveryCounts, validNotificationDeliveryCounts } from "../../reference/notification-delivery-counts.ts";
+import type { CallOutcomeRow } from "../../reference/call-outcome-report.ts";
 import { validStaffedDestinationCatalogue, validStaffedDestinationRef } from "../../core/staffed-destination.ts";
 import { validNotificationCatalogue, validNotificationVersion } from "../../core/notification-policy.ts";
 import type { NotificationAuditPage, NotificationCatalogue, NotificationKind, NotificationOwner } from "../../core/notification-policy.ts";
@@ -542,6 +545,7 @@ export class FetchDashboardPort implements DashboardPort {
   async callSummary(callId: string): Promise<Result<CallSummary, DashboardFailure>> {
     const result = await request(`/api/calls/${encodeURIComponent(callId)}`);
     if (!result.ok) return result;
+    if (!matchesSchema(capabilityDescriptor("calls.read.v1").resultSchema, { ok: true, value: result.value })) return err({ kind: "malformed" });
     const reply = record(result.value);
     const call = record(reply?.call);
     const terminal = record(call?.terminal);
@@ -551,12 +555,14 @@ export class FetchDashboardPort implements DashboardPort {
         CALL_TERMINAL_REASONS.includes(terminal.reason as typeof CALL_TERMINAL_REASONS[number]) &&
         typeof terminal.at === "string" && Number.isFinite(Date.parse(terminal.at)))) &&
       Array.isArray(call.actions) && Array.isArray(call.staffItems)
+      && (call.notifications === undefined || Array.isArray(call.notifications) && call.notifications.every(validNotificationReviewRow))
       ? ok(call as CallSummary) : err({ kind: "malformed" });
   }
 
   async callOutcomes(afterCallId?: string): Promise<Result<CallOutcomePage, DashboardFailure>> {
     const result = await request(`/api/call-outcomes${afterCallId === undefined ? "" : `?after=${encodeURIComponent(afterCallId)}`}`);
     if (!result.ok) return result;
+    if (!matchesSchema(capabilityDescriptor("calls.outcomes.v1").resultSchema, { ok: true, value: result.value })) return err({ kind: "malformed" });
     const reply = record(result.value);
     const page = record(reply?.page);
     const totals = record(page?.totals);
@@ -573,6 +579,14 @@ export class FetchDashboardPort implements DashboardPort {
             ["committedActions", "unresolvedActions", "staffRequests", "hostConfirmedTasks", "staffNeedsReview"]
               .every(key => Number.isSafeInteger(row[key]) && Number(row[key]) >= 0) && typeof row.systemFailure === "boolean";
         })) return err({ kind: "malformed" });
+    const expectedNotifications = sumNotificationDeliveryCounts((page.rows as CallOutcomeRow[]).map(row => row.notificationDelivery));
+    const actualNotifications = record(page.notificationDelivery);
+    if (!(page.rows as CallOutcomeRow[]).every(row => row.notificationDelivery === undefined || validNotificationDeliveryCounts(row.notificationDelivery)) ||
+      (expectedNotifications !== undefined && !validNotificationDeliveryCounts(expectedNotifications))) return err({ kind: "malformed" });
+    if (expectedNotifications === undefined ? page.notificationDelivery !== undefined
+      : !validNotificationDeliveryCounts(actualNotifications) || !NOTIFICATION_DELIVERY_KEYS.every(key => actualNotifications[key] === expectedNotifications[key])) {
+      return err({ kind: "malformed" });
+    }
     return ok(page as CallOutcomePage);
   }
 

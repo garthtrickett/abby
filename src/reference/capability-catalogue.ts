@@ -111,11 +111,16 @@ const progress = optional({ callId: key, traceKey: key, callVersion: uint, lifec
 const terminal = object({ reason: choice("callerDisconnected", "sessionClosed", "mediaFailure", "localLeaseClosed",
   "admissionExpired", "leaseExpired", "transferConnected", "transferUnproven"), at: str });
 const callSummary = optional({ callId: key, lifecycle, version: uint, terminal,
+  notifications: array(optional({ kind: choice("bookingConfirmation", "cancellationConfirmation", "reschedulingConfirmation"),
+    owner: choice("host", "abby"), status: choice("pending", "possiblySent", "completed", "uncertain", "needsReview", "canceled"),
+    outcome: choice("sent", "definitiveUnsent", "unknown"), blockedReason: choice("suppressionUnproven", "hostUnavailable", "emergencyStop") },
+  ["kind", "owner", "status"])),
   actions: array(object({ kind: actionKind, status: actionStatus })),
   staffItems: array(object({ reason: staffReason, status: staffStatus })), knowledgeAnswers: array(source),
   availabilityReads: array(availability), appointmentReads: array(appointments) },
 ["callId", "lifecycle", "version", "actions", "staffItems", "knowledgeAnswers", "availabilityReads", "appointmentReads"]);
-const outcomeRow = optional({ callId: key, lifecycle, terminalReason: terminal.properties!.reason!,
+const notificationCounts = object({ sent: uint, notSent: uint, pending: uint, unconfirmed: uint, needsReview: uint, canceled: uint });
+const outcomeRow = optional({ callId: key, lifecycle, terminalReason: terminal.properties!.reason!, notificationDelivery: notificationCounts,
   committedActions: uint, unresolvedActions: uint, staffRequests: uint, hostConfirmedTasks: uint,
   staffNeedsReview: uint, systemFailure: bool },
 ["callId", "lifecycle", "committedActions", "unresolvedActions", "staffRequests", "hostConfirmedTasks", "staffNeedsReview", "systemFailure"]);
@@ -123,7 +128,7 @@ const totals = object({ calls: uint, committedActions: uint, callsWithUnresolved
   callsWithStaffRequests: uint, callsWithHostConfirmedTasks: uint, callsWithStaffNeedsReview: uint,
   callsWithSystemFailure: uint, callsWithCallerDisconnect: uint, callsWithMediaFailure: uint,
   callsWithLeaseExpiry: uint, callsWithTransferConnected: uint });
-const outcomePage = optional({ rows: array(outcomeRow), totals, nextAfterCallId: key }, ["rows", "totals"]);
+const outcomePage = optional({ rows: array(outcomeRow), totals, nextAfterCallId: key, notificationDelivery: notificationCounts }, ["rows", "totals"]);
 const alerts = optional({ overdue: choice("pending", "delivered", "uncertain", "failed", "canceled"),
   needsReview: choice("pending", "delivered", "uncertain", "failed", "canceled") }, []);
 const staffEntry = optional({ callId: key, callVersion: uint, taskKey: key, reason: staffReason, status: staffStatus,

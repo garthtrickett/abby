@@ -1,12 +1,15 @@
 import { CALL_TERMINAL_REASONS, STAFF_REASONS, err, ok } from "../core/model.ts";
 import type { ActionState, CallState, CallTerminal, LocationScope, Result, StaffItem, TransitionFailure } from "../core/model.ts";
 import type { LedgerStore } from "../core/ledger.ts";
+import { reviewNotifications } from "./notification-review.ts";
+import type { NotificationReviewRow } from "./notification-review-shape.ts";
 
 export type CallSummary = Readonly<{
   callId: string;
   lifecycle: CallState["lifecycle"];
   version: number;
   terminal?: CallTerminal;
+  notifications?: readonly NotificationReviewRow[];
   actions: readonly Readonly<{ kind: ActionState["kind"]; status: ActionState["status"] }>[];
   staffItems: readonly Readonly<{ reason: StaffItem["reason"]; status: StaffItem["status"] }>[];
   knowledgeAnswers: readonly Readonly<{ sourceRef: string; version: string; ownerRef: string }>[];
@@ -26,6 +29,8 @@ function allowed(values: readonly string[], value: unknown): boolean {
 export function summarizeCall(call: CallState): Result<CallSummary, TransitionFailure> {
   const actions = Object.values(call.actions);
   const staffItems = Object.values(call.staffItems);
+  const notifications = reviewNotifications(call);
+  if (!notifications.ok) return notifications;
   if (actions.some(item => !item || !allowed(actionKinds, item.kind) || !allowed(actionStatuses, item.status)) ||
       (call.terminal !== undefined && (!call.terminal || call.lifecycle !== "ended" || !CALL_TERMINAL_REASONS.includes(call.terminal.reason) ||
         typeof call.terminal.at !== "string" || !Number.isFinite(Date.parse(call.terminal.at)))) ||
@@ -50,6 +55,7 @@ export function summarizeCall(call: CallState): Result<CallSummary, TransitionFa
     callId: call.callId,
     lifecycle: call.lifecycle,
     version: call.version,
+    ...(notifications.value.length ? { notifications: notifications.value } : {}),
     ...(call.terminal === undefined ? {} : { terminal: { reason: call.terminal.reason, at: call.terminal.at } }),
     actions: actions.map(({ kind, status }) => ({ kind, status })),
     staffItems: staffItems.map(({ reason, status }) => ({ reason, status })),

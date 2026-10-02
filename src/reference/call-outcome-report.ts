@@ -2,6 +2,8 @@ import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
 import type { CallTerminalReason, LocationScope, Result, TransitionFailure } from "../core/model.ts";
 import { summarizeCall } from "./call-review.ts";
+import { notificationDeliveryCounts, sumNotificationDeliveryCounts } from "./notification-delivery-counts.ts";
+import type { NotificationDeliveryCounts } from "./notification-delivery-counts.ts";
 
 export type CallOutcomeRow = Readonly<{
   callId: string;
@@ -13,6 +15,7 @@ export type CallOutcomeRow = Readonly<{
   hostConfirmedTasks: number;
   staffNeedsReview: number;
   systemFailure: boolean;
+  notificationDelivery?: NotificationDeliveryCounts;
 }>;
 
 export type CallOutcomePage = Readonly<{
@@ -31,6 +34,7 @@ export type CallOutcomePage = Readonly<{
     callsWithTransferConnected: number;
   }>;
   nextAfterCallId?: string;
+  notificationDelivery?: NotificationDeliveryCounts;
 }>;
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
@@ -59,6 +63,7 @@ export class CallOutcomeReport {
       if (!summary.ok) return summary;
       const actions = summary.value.actions;
       const items = summary.value.staffItems;
+      const notifications = notificationDeliveryCounts(summary.value.notifications);
       rows.push({ callId: summary.value.callId, lifecycle: summary.value.lifecycle,
         ...(summary.value.terminal ? { terminalReason: summary.value.terminal.reason } : {}),
         committedActions: actions.filter(item => item.status === "committed").length,
@@ -66,9 +71,11 @@ export class CallOutcomeReport {
         staffRequests: items.length,
         hostConfirmedTasks: items.filter(item => item.status === "open" || item.status === "acknowledged" || item.status === "resolved").length,
         staffNeedsReview: items.filter(item => item.status === "needsReview" || item.status === "failed").length,
-        systemFailure: items.some(item => item.reason === "systemFailure") });
+        systemFailure: items.some(item => item.reason === "systemFailure"),
+        ...(notifications ? { notificationDelivery: notifications } : {}) });
     }
-    return ok({ rows, totals: {
+    const notificationDelivery = sumNotificationDeliveryCounts(rows.map(row => row.notificationDelivery));
+    return ok({ rows, ...(notificationDelivery ? { notificationDelivery } : {}), totals: {
       calls: rows.length,
       committedActions: rows.reduce((sum, row) => sum + row.committedActions, 0),
       callsWithUnresolvedActions: rows.filter(row => row.unresolvedActions > 0).length,

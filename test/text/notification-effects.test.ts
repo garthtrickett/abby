@@ -9,9 +9,33 @@ import type { ActionKind, ActionRequest, TurnInterpretation } from "../../src/co
 import type { TimerPort } from "../../src/core/timer.ts";
 import { notificationRegistry } from "../support/notification-settings-contract.ts";
 import { deadline, now, setup, success } from "./fixture.ts";
+import { CallReview, summarizeCall } from "../../src/reference/call-review.ts";
+import { validNotificationReviewRow } from "../../src/reference/notification-review-shape.ts";
+import { capabilityDescriptor } from "../../src/reference/capability-catalogue.ts";
+import { matchesSchema } from "../../src/reference/schema-shapes.ts";
+import { CallOutcomeReport } from "../../src/reference/call-outcome-report.ts";
 
 const afterDelay = "2026-09-28T10:01:01.000Z";
 const afterDeadline = "2026-09-29T10:01:01.000Z";
+
+test("E2E-257 notification review wire shapes cannot turn missing or contradictory outcomes into delivery claims", () => {
+  const base = { kind: "bookingConfirmation", owner: "host" };
+  for (const row of [
+    { ...base, status: "pending" }, { ...base, status: "possiblySent" },
+    { ...base, status: "uncertain", outcome: "unknown" }, { ...base, status: "needsReview", outcome: "unknown" },
+    { ...base, status: "needsReview", blockedReason: "suppressionUnproven" },
+    { ...base, status: "completed", outcome: "sent" }, { ...base, status: "completed", outcome: "definitiveUnsent" },
+    { ...base, status: "canceled", blockedReason: "hostUnavailable" }, { ...base, status: "canceled", blockedReason: "emergencyStop" },
+  ]) assert.equal(validNotificationReviewRow(row), true);
+  for (const row of [
+    { ...base, status: "completed" }, { ...base, status: "completed", outcome: "unknown" },
+    { ...base, status: "pending", outcome: "sent" }, { ...base, status: "uncertain", outcome: "sent" },
+    { ...base, status: "canceled" }, { ...base, status: "needsReview" },
+    { ...base, owner: "both", status: "pending" }, { ...base, kind: "private-message", status: "pending" },
+    { ...base, status: "pending", recipient: "PRIVATE_RECIPIENT" },
+    { ...base, status: "needsReview", blockedReason: "PRIVATE_PROVIDER_ERROR" },
+  ]) assert.equal(validNotificationReviewRow(row), false);
+});
 
 async function fixture(id: string, owner: "host" | "abby" = "host", managed = true) {
   const app = await setup(`notification-${id}`, { cancel: "execute", reschedule: "execute" });
@@ -66,6 +90,24 @@ async function fixture(id: string, owner: "host" | "abby" = "host", managed = tr
   return { ...app, policy, callId, worker, host, sends, observations, prepare, commit, state, turn };
 }
 
+test("E2E-257 corrupt notification linkage and missing delivery outcomes fail scoped review without leaking payloads", async () => {
+  const app = await fixture("review-corruption");
+  const { notification } = await app.commit();
+  const state = await app.state();
+  for (const changed of [
+    { ...notification, intent: { ...notification.intent, scope: { ...app.scope, tenantId: "foreign" } } },
+    { ...notification, intent: { ...notification.intent, owner: "abby" } },
+    { ...notification, intent: undefined }, { ...notification, status: "completed" },
+    { ...notification, status: "needsReview", blockedReason: "PRIVATE_PROVIDER_FAILURE" },
+  ]) {
+    const corrupted = structuredClone(state);
+    corrupted.effects[notification.id] = changed as typeof notification;
+    assert.deepEqual(summarizeCall(corrupted), { ok: false, error: { kind: "storageCorrupt" } });
+  }
+  assert.deepEqual(await new CallReview(app.ledger).read(app.callId, { ...app.scope, tenantId: "foreign" }),
+    { ok: false, error: { kind: "callUnknown" } });
+});
+
 for (const owner of ["host", "abby"] as const) {
   for (const kind of ["book", "cancel", "reschedule"] as const) {
     test(`E2E-257 ${owner} owns ${kind} confirmation: exact suppression receipt queues one captured notification after commit`, async () => {
@@ -76,6 +118,8 @@ for (const owner of ["host", "abby"] as const) {
       const notification = Object.values((await app.state()).effects).find(effect => effect.kind === "notification");
       assert.ok(notification && notification.kind === "notification");
       assert.equal(notification.status, "pending");
+      assert.deepEqual(success(await new CallReview(app.ledger).read(app.callId, app.scope)).notifications,
+        [{ kind: notificationKind(kind), owner, status: "pending" }]);
       assert.deepEqual(notification.intent, { ...action.mutation.notification, callId: app.callId, actionKey: action.key,
         policyVersion: app.policy.policyVersion, hostRef: "host-booking" });
       assert.equal(notification.intent.owner, owner);
@@ -90,6 +134,21 @@ for (const owner of ["host", "abby"] as const) {
       assert.ok(delivered?.kind === "notification");
       assert.equal(delivered.status, "completed");
       assert.equal(delivered.observation?.kind, "sent");
+      const summary = success(await new CallReview(app.ledger).read(app.callId, app.scope));
+      assert.deepEqual(summary.notifications, [{ kind: notificationKind(kind), owner, status: "completed", outcome: "sent" }]);
+      const report = success(await new CallOutcomeReport(app.ledger).list(app.scope));
+      const row = report.rows.find(row => row.callId === app.callId)!;
+      assert.equal(row.committedActions, 1); assert.equal(row.unresolvedActions, 0);
+      assert.deepEqual(row.notificationDelivery, { sent: 1, notSent: 0, pending: 0, unconfirmed: 0, needsReview: 0, canceled: 0 });
+      assert.deepEqual(report.notificationDelivery, row.notificationDelivery);
+      assert.equal(matchesSchema(capabilityDescriptor("calls.outcomes.v1").resultSchema,
+        { ok: true, value: { kind: "callOutcomes", page: report } }), true);
+      assert.equal(matchesSchema(capabilityDescriptor("calls.read.v1").resultSchema,
+        { ok: true, value: { kind: "callSummary", call: summary } }), true);
+      const publicRows = JSON.stringify(summary.notifications);
+      for (const privateField of ["notificationKey", "hostRef", "hostVersion", "actionKey", "patientRef", "deliveryRef", "settingsVersion"]) {
+        assert.equal(publicRows.includes(privateField), false);
+      }
       assert.equal(app.sends.length, 1);
       success(await app.runtime.acceptHostResult(app.callId, `${action.key}:write`,
         { kind: "committed", actionKey: action.key, hostRef: "host-booking",
@@ -126,6 +185,11 @@ for (const reply of ["missing", "wrongOwner", "wrongKey", "wrongVersion", "extra
     const { action, notification } = await app.commit();
     assert.equal(notification.status, "needsReview");
     assert.equal(notification.blockedReason, "suppressionUnproven");
+    assert.deepEqual(success(await new CallReview(app.ledger).read(app.callId, app.scope)).notifications,
+      [{ kind: "bookingConfirmation", owner: "abby", status: "needsReview", blockedReason: "suppressionUnproven" }]);
+    const page = success(await new CallOutcomeReport(app.ledger).list(app.scope));
+    assert.equal(page.rows.find(row => row.callId === app.callId)!.committedActions, 1);
+    assert.equal(page.notificationDelivery?.needsReview, 1); assert.equal(page.notificationDelivery?.sent, 0);
     assert.equal((await app.state()).actions[action.key]!.status, "committed");
     assert.equal(success(await new EffectRecovery(app.ledger, () => app.host, app.scope).recover(now)).scanned, 0);
     assert.equal(app.sends.length, 0);
@@ -191,8 +255,15 @@ test("E2E-257 a persistently unknown notification becomes review-required at its
   await app.worker.process(app.callId, notification.id, now);
   await app.worker.process(app.callId, `${notification.id}:reconcile`, afterDelay);
   assert.equal((await app.state()).effects[notification.id]?.status, "uncertain");
+  assert.deepEqual(success(await new CallReview(app.ledger).read(app.callId, app.scope)).notifications,
+    [{ kind: "bookingConfirmation", owner: "host", status: "uncertain", outcome: "unknown" }]);
+  assert.equal(success(await new CallOutcomeReport(app.ledger).list(app.scope)).notificationDelivery?.unconfirmed, 1);
   await app.worker.process(app.callId, `${notification.id}:reconcile`, afterDeadline);
   assert.equal((await app.state()).effects[notification.id]?.status, "needsReview");
+  assert.deepEqual(success(await new CallReview(app.ledger).read(app.callId, app.scope)).notifications,
+    [{ kind: "bookingConfirmation", owner: "host", status: "needsReview", outcome: "unknown" }]);
+  const page = success(await new CallOutcomeReport(app.ledger).list(app.scope));
+  assert.equal(page.notificationDelivery?.needsReview, 1); assert.equal(page.notificationDelivery?.unconfirmed, 0);
   assert.equal(success(await new EffectRecovery(app.ledger, () => app.host, app.scope).recover(afterDeadline)).scanned, 0);
   assert.equal(app.sends.length, 1);
 });
@@ -218,6 +289,8 @@ test("E2E-257 a proven unsent notification is terminal and leaves the appointmen
   assert.ok(result?.kind === "notification");
   assert.equal(result.status, "completed");
   assert.equal(result.observation?.kind, "definitiveUnsent");
+  assert.deepEqual(success(await new CallReview(app.ledger).read(app.callId, app.scope)).notifications,
+    [{ kind: "bookingConfirmation", owner: "host", status: "completed", outcome: "definitiveUnsent" }]);
   assert.equal((await app.state()).actions[action.key]!.status, "committed");
   assert.equal(success(await new EffectRecovery(app.ledger, () => app.host, app.scope).recover(afterDelay)).scanned, 0);
   assert.equal(app.sends.length, 1);
@@ -232,6 +305,8 @@ test("E2E-257 emergency stop fences an unsent notification and records an alread
   assert.ok(blocked?.kind === "notification");
   assert.equal(blocked.status, "canceled");
   assert.equal(blocked.blockedReason, "emergencyStop");
+  assert.deepEqual(success(await new CallReview(pending.ledger).read(pending.callId, pending.scope)).notifications,
+    [{ kind: "bookingConfirmation", owner: "host", status: "canceled", blockedReason: "emergencyStop" }]);
   assert.equal((await pending.state()).actions[action.key]!.status, "committed");
   assert.equal(pending.sends.length, 0);
   const sent = await fixture("stop-possible");
