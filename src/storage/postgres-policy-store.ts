@@ -1,8 +1,10 @@
+import { PostgresClinicIntakeSettingStore } from "./postgres-clinic-intake-setting.ts";
+import type { ClinicIntakeAuditPage, ClinicIntakeState } from "../core/clinic-intake-setting.ts";
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import type { AfterHoursSettingAuditEntry, AfterHoursSettingAuditPage, AutomationSettingAuditEntry, AutomationSettingAuditPage, BookingSettingAuditEntry, BookingSettingAuditPage, GreetingSettingAuditEntry, GreetingSettingAuditPage, StaffScheduleSettingAuditEntry, StaffScheduleSettingAuditPage, UrgentSettingAuditEntry, UrgentSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
-import type { AppointmentSettingModes, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
+import type { PatientSettingModes, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
 import { validAfterHoursSetting } from "../core/after-hours-policy.ts";
 import { validGreetingShape } from "../core/greeting.ts";
 import { validApprovedStaffSchedule } from "../core/staff-schedule.ts";
@@ -94,7 +96,9 @@ function decodePolicy(value: unknown, scope: LocationScope, version: number): Re
       (policy.greeting !== undefined && !validGreetingShape(policy.greeting, scope)) ||
       !["execute", "requestOnly", "unavailable"].includes(policy.capabilities.transfer) ||
       !policy.staffDestination || !policy.operatorQueue) return err({ kind: "storageFailure" });
-  return ok(structuredClone({ ...policy, automationVersion: "0", automationEnabled: false }));
+  const { firstTimeIntakeEnabled, firstTimeIntakeVersion, ...local } = policy;
+  void firstTimeIntakeEnabled; void firstTimeIntakeVersion;
+  return ok(structuredClone({ ...local, automationVersion: "0", automationEnabled: false }));
 }
 
 export class PostgresPolicyStore implements PolicyStore {
@@ -107,11 +111,12 @@ export class PostgresPolicyStore implements PolicyStore {
   private readonly allowDefaultGreeting: boolean;
   private readonly hostCancellationMode: CapabilityMode;
   private readonly hostReschedulingMode: CapabilityMode;
+  private readonly hostIntakeMode: CapabilityMode;
 
   /** Rich policy storage is synthetic-only and requires the explicit unsafeReference mode. */
   constructor(db: Kysely<Database>, defaultPolicy: (scope: LocationScope) => CallPolicy, hostBookingMode: CapabilityMode = "unavailable", readiness: AutomationReadiness = unprovenReadiness,
               staffWorkEnabled = false, storageMode: "unsafeReference" | "standaloneMinimal" = "standaloneMinimal",
-              allowDefaultGreeting = false, hostAppointmentModes: CapabilityMode | AppointmentSettingModes = "unavailable") {
+              allowDefaultGreeting = false, hostPatientModes: CapabilityMode | PatientSettingModes = "unavailable") {
     this.db = db;
     this.defaultPolicy = defaultPolicy;
     this.hostBookingMode = hostBookingMode;
@@ -119,12 +124,14 @@ export class PostgresPolicyStore implements PolicyStore {
     this.staffWorkEnabled = staffWorkEnabled;
     this.storageMode = storageMode;
     this.allowDefaultGreeting = allowDefaultGreeting;
-    this.hostCancellationMode = typeof hostAppointmentModes === "string" ? hostAppointmentModes : hostAppointmentModes.cancellation ?? "unavailable";
-    this.hostReschedulingMode = typeof hostAppointmentModes === "string" ? "unavailable" : hostAppointmentModes.rescheduling ?? "unavailable";
+    this.hostCancellationMode = typeof hostPatientModes === "string" ? hostPatientModes : hostPatientModes.cancellation ?? "unavailable";
+    this.hostReschedulingMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.rescheduling ?? "unavailable";
+    this.hostIntakeMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.intake ?? "unavailable";
   }
 
   private defaultFor(scope: LocationScope): CallPolicy {
-    const policy = this.defaultPolicy(scope);
+    const { firstTimeIntakeEnabled, firstTimeIntakeVersion, ...policy } = this.defaultPolicy(scope);
+    void firstTimeIntakeEnabled; void firstTimeIntakeVersion;
     if (this.storageMode !== "standaloneMinimal" || this.allowDefaultGreeting) return policy;
     const { greeting, ...safe } = policy;
     void greeting;
@@ -136,19 +143,28 @@ export class PostgresPolicyStore implements PolicyStore {
       ? decodeStandalonePolicy(value, scope, version, scope => this.defaultFor(scope)) : decodePolicy(value, scope, version);
   }
 
-  private effective(policy: CallPolicy, automation?: Readonly<{ version: number; enabled: boolean }>): CallPolicy {
+  private compose(policy: CallPolicy, intake: ClinicIntakeState, automation?: Readonly<{ version: number; enabled: boolean }>): CallPolicy {
     const patientModes = this.hostBookingMode === "unavailable"
       ? { cancel: "unavailable", reschedule: "unavailable", intake: "unavailable" } as const : {};
     return { ...policy, cancellationEnabled: policy.cancellationEnabled ?? false, reschedulingEnabled: policy.reschedulingEnabled ?? false,
       afterHoursMode: policy.afterHoursMode ?? "staffRequest", staffWorkEnabled: this.staffWorkEnabled,
       automationVersion: String(automation?.version ?? 0), automationEnabled: automation?.enabled ?? false,
+      firstTimeIntakeVersion: intake.version, firstTimeIntakeEnabled: intake.enabled,
       capabilities: { ...policy.capabilities, ...patientModes,
         book: policy.bookingEnabled ? this.hostBookingMode : "unavailable",
         cancel: policy.cancellationEnabled === true && this.storageMode === "unsafeReference"
           ? this.hostCancellationMode : "unavailable",
         reschedule: policy.reschedulingEnabled === true && this.storageMode === "unsafeReference"
           ? this.hostReschedulingMode : "unavailable",
+        intake: intake.enabled && this.storageMode === "unsafeReference" ? this.hostIntakeMode : "unavailable",
         transfer: this.staffWorkEnabled ? policy.capabilities.transfer : "unavailable" } };
+  }
+
+  private async capture(policy: CallPolicy, automation?: Readonly<{ version: number; enabled: boolean }>,
+                        db: Kysely<Database> = this.db): Promise<CallPolicy> {
+    const intake = await new PostgresClinicIntakeSettingStore(db).read(policy.scope);
+    if (!intake.ok) throw new Error("clinic intake configuration unavailable");
+    return this.compose(policy, intake.value, automation);
   }
 
   async read(scope: LocationScope): Promise<Result<CallPolicy, PolicyFailure>> {
@@ -165,7 +181,7 @@ export class PostgresPolicyStore implements PolicyStore {
         .orderBy("version", "desc").limit(1).executeTakeFirst();
       const [row, automation] = await Promise.all([local, clinic]);
       const decoded = row ? this.decode(row.policy, scope, row.version) : ok(this.defaultFor(scope));
-      return decoded.ok ? ok(this.effective(decoded.value, automation)) : decoded;
+      return decoded.ok ? ok(await this.capture(decoded.value, automation)) : decoded;
     } catch {
       return err({ kind: "storageFailure" });
     }
@@ -212,7 +228,7 @@ export class PostgresPolicyStore implements PolicyStore {
         if (!decoded.ok) throw new Error("invalid location policy");
         await trx.insertInto("clinic_automation").values({ ...ids, version: latest.version + 1 as ClinicAutomationVersion,
           enabled, changed_by: actorRef, previous_enabled: latest.enabled, changed_at: sql`clock_timestamp()` }).execute();
-        return ok(this.effective(decoded.value, { version: latest.version + 1, enabled }));
+        return ok(await this.capture(decoded.value, { version: latest.version + 1, enabled }, trx));
       });
     } catch { return err({ kind: "storageFailure" }); }
   }
@@ -235,6 +251,18 @@ export class PostgresPolicyStore implements PolicyStore {
       }
       return ok({ entries, ...(entries.length === 50 ? { nextAfterVersion: Number(entries[49]!.version) } : {}) });
     } catch { return err({ kind: "storageFailure" }); }
+  }
+
+  async changeFirstTimeIntakeEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean,
+                                   actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+    if (this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope)) return err({ kind: "invalidValue" });
+    const changed = await new PostgresClinicIntakeSettingStore(this.db).changeEnabled(scope, expectedVersion, enabled, actorRef);
+    return changed.ok ? this.read(scope) : changed;
+  }
+
+  async listFirstTimeIntakeChanges(scope: LocationScope, afterVersion?: number): Promise<Result<ClinicIntakeAuditPage, PolicyFailure>> {
+    if (this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope)) return err({ kind: "invalidValue" });
+    return new PostgresClinicIntakeSettingStore(this.db).listChanges(scope, afterVersion);
   }
 
   async changeBookingEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
@@ -276,7 +304,7 @@ export class PostgresPolicyStore implements PolicyStore {
           .where("tenant_id", "=", scope.tenantId as ClinicAutomationTenantId)
           .where("clinic_id", "=", scope.clinicId as ClinicAutomationClinicId)
           .orderBy("version", "desc").limit(1).executeTakeFirst();
-        return ok(this.effective(next, automation));
+        return ok(await this.capture(next, automation, trx));
       });
     } catch {
       return err({ kind: "storageFailure" });
@@ -372,7 +400,7 @@ export class PostgresPolicyStore implements PolicyStore {
           .where("tenant_id", "=", scope.tenantId as ClinicAutomationTenantId)
           .where("clinic_id", "=", scope.clinicId as ClinicAutomationClinicId)
           .orderBy("version", "desc").limit(1).executeTakeFirst();
-        return ok(this.effective(next, automation));
+        return ok(await this.capture(next, automation, trx));
       });
     } catch { return err({ kind: "storageFailure" }); }
   }
@@ -447,7 +475,7 @@ export class PostgresPolicyStore implements PolicyStore {
           .where("tenant_id", "=", scope.tenantId as ClinicAutomationTenantId)
           .where("clinic_id", "=", scope.clinicId as ClinicAutomationClinicId)
           .orderBy("version", "desc").limit(1).executeTakeFirst();
-        return ok(this.effective(next, automation));
+        return ok(await this.capture(next, automation, trx));
       });
     } catch { return err({ kind: "storageFailure" }); }
   }
@@ -520,7 +548,7 @@ export class PostgresPolicyStore implements PolicyStore {
           .where("tenant_id", "=", scope.tenantId as ClinicAutomationTenantId)
           .where("clinic_id", "=", scope.clinicId as ClinicAutomationClinicId)
           .orderBy("version", "desc").limit(1).executeTakeFirst();
-        return ok(this.effective(next, automation));
+        return ok(await this.capture(next, automation, trx));
       });
     } catch { return err({ kind: "storageFailure" }); }
   }
@@ -600,7 +628,7 @@ export class PostgresPolicyStore implements PolicyStore {
           .where("tenant_id", "=", scope.tenantId as ClinicAutomationTenantId)
           .where("clinic_id", "=", scope.clinicId as ClinicAutomationClinicId)
           .orderBy("version", "desc").limit(1).executeTakeFirst();
-        return ok(this.effective(next, automation));
+        return ok(await this.capture(next, automation, trx));
       });
     } catch { return err({ kind: "storageFailure" }); }
   }
@@ -680,7 +708,7 @@ export class PostgresPolicyStore implements PolicyStore {
           .where("tenant_id", "=", scope.tenantId as ClinicAutomationTenantId)
           .where("clinic_id", "=", scope.clinicId as ClinicAutomationClinicId)
           .orderBy("version", "desc").limit(1).executeTakeFirst();
-        return ok(this.effective(next, automation));
+        return ok(await this.capture(next, automation, trx));
       });
     } catch { return err({ kind: "storageFailure" }); }
   }

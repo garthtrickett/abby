@@ -1,3 +1,4 @@
+import type { ClinicIntakeAuditPage } from "../core/clinic-intake-setting.ts";
 import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, GreetingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, FinalCallerTurn, LocalStaffWindow, LocationScope, Result, StaffChangeRequest, StaffItem, TransitionFailure } from "../core/model.ts";
@@ -44,8 +45,10 @@ export type GatewayCommand =
   | Readonly<{ kind: "settings.appointments.booking.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "settings.appointments.cancellation.enabled.change.v1"; expectedVersion: string; enabled: boolean }>
   | Readonly<{ kind: "settings.appointments.rescheduling.enabled.change.v1"; expectedVersion: string; enabled: boolean }>
+  | Readonly<{ kind: "settings.patients.firstTimeIntake.enabled.change.v1"; expectedVersion: string; enabled: boolean }>
   | Readonly<{ kind: "settings.appointments.cancellation.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "settings.appointments.rescheduling.audit.v1"; afterVersion?: number }>
+  | Readonly<{ kind: "settings.patients.firstTimeIntake.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "settings.routing.afterHours.change.v1"; expectedVersion: string;
     mode: AfterHoursMode; infoVersion?: string; approvedText?: string }>
   | Readonly<{ kind: "settings.routing.afterHours.audit.v1"; afterVersion?: number }>
@@ -100,6 +103,7 @@ export type GatewayReply =
   | Readonly<{ kind: "bookingSettingAudit"; page: BookingSettingAuditPage }>
   | Readonly<{ kind: "cancellationSettingAudit"; page: CancellationSettingAuditPage }>
   | Readonly<{ kind: "reschedulingSettingAudit"; page: ReschedulingSettingAuditPage }>
+  | Readonly<{ kind: "firstTimeIntakeSettingAudit"; page: ClinicIntakeAuditPage }>
   | Readonly<{ kind: "afterHoursSettingAudit"; page: AfterHoursSettingAuditPage }>
   | Readonly<{ kind: "urgentSettingAudit"; page: UrgentSettingAuditPage }>
   | Readonly<{ kind: "staffScheduleSettingAudit"; page: StaffScheduleSettingAuditPage }>
@@ -186,6 +190,7 @@ export class CommandGateway {
         "settings.appointments.booking.enabled.change.v1", "settings.appointments.booking.audit.v1",
         "settings.appointments.cancellation.enabled.change.v1", "settings.appointments.cancellation.audit.v1",
         "settings.appointments.rescheduling.enabled.change.v1", "settings.appointments.rescheduling.audit.v1",
+        "settings.patients.firstTimeIntake.enabled.change.v1", "settings.patients.firstTimeIntake.audit.v1",
         "settings.routing.afterHours.change.v1", "settings.routing.afterHours.audit.v1",
         "settings.routing.urgent.change.v1", "settings.routing.urgent.audit.v1");
       permitted.push("settings.routing.staffSchedule.change.v1", "settings.routing.staffSchedule.audit.v1");
@@ -272,6 +277,15 @@ export class CommandGateway {
       case "settings.appointments.rescheduling.audit.v1": {
         const result = await this.policy.listReschedulingChanges(this.actor.scope, command.afterVersion);
         return result.ok ? ok({ kind: "reschedulingSettingAudit", page: result.value }) : result;
+      }
+      case "settings.patients.firstTimeIntake.enabled.change.v1": {
+        const result = await this.policy.changeFirstTimeIntakeEnabled(this.actor.scope, command.expectedVersion,
+          command.enabled, this.actor.actorRef);
+        return result.ok ? ok({ kind: "settings", policy: result.value }) : result;
+      }
+      case "settings.patients.firstTimeIntake.audit.v1": {
+        const result = await this.policy.listFirstTimeIntakeChanges(this.actor.scope, command.afterVersion);
+        return result.ok ? ok({ kind: "firstTimeIntakeSettingAudit", page: result.value }) : result;
       }
       case "settings.routing.afterHours.change.v1": {
         if (command.mode === "staffRequest" &&

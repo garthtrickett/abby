@@ -1,3 +1,4 @@
+import type { ClinicIntakeAuditPage } from "../../core/clinic-intake-setting.ts";
 import { html } from "lit-html";
 import type { CancellationSettingAuditPage, ReschedulingSettingAuditPage } from "../../core/host.ts";
 import type { CallPolicy, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
@@ -27,6 +28,7 @@ export type DashboardState = {
   auditPage: BookingSettingAuditPage | undefined;
   cancellationAuditPage: CancellationSettingAuditPage | undefined;
   reschedulingAuditPage: ReschedulingSettingAuditPage | undefined;
+  firstTimeIntakeAuditPage: ClinicIntakeAuditPage | undefined;
   afterHoursAuditPage: AfterHoursSettingAuditPage | undefined;
   afterHoursInfoVersion: string;
   afterHoursApprovedText: string;
@@ -71,10 +73,13 @@ export type DashboardActions = Readonly<{
   toggleBooking(): void;
   toggleCancellation(): void;
   toggleRescheduling(): void;
+  toggleFirstTimeIntake(): void;
   loadCancellationAudit(): void;
   loadReschedulingAudit(): void;
+  loadFirstTimeIntakeAudit(): void;
   loadMoreCancellationAudit(): void;
   loadMoreReschedulingAudit(): void;
+  loadMoreFirstTimeIntakeAudit(): void;
   loadAudit(): void;
   loadMoreAudit(): void;
   setAfterHoursField(field: "afterHoursInfoVersion" | "afterHoursApprovedText", value: string): void;
@@ -181,6 +186,17 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
         </div>
         ${state.policy ? html`<p class="muted">Rescheduling capability: ${state.policy.capabilities.reschedule}</p>
           ${state.policy.capabilities.reschedule !== "execute" ? html`<p class="muted">This setting cannot grant rescheduling permission the clinic's host does not support.</p>` : ""}` : ""}
+      </section>
+      <section class="card" aria-labelledby="first-time-intake-title">
+        <div class="row"><div><h2 id="first-time-intake-title">First-time intake automation</h2>
+          <p class="status">${state.policy ? state.policy.firstTimeIntakeEnabled === true ? "First-time intake enabled" : "First-time intake disabled" : "First-time intake unavailable"}</p>
+          <p class="muted">Changes apply to new calls at every location in this clinic. Current calls keep their captured setting.</p></div>
+          ${state.capabilities.some(item => item.id === "settings.patients.firstTimeIntake.enabled.change.v1")
+            ? html`<button type="button" ?disabled=${state.busy || !state.policy} @click=${() => actions.toggleFirstTimeIntake()}>${!state.policy ? "First-time intake state unavailable" : state.policy.firstTimeIntakeEnabled ? "Disable first-time intake" : "Enable first-time intake"}</button>`
+            : html`<span class="pill">View only</span>`}
+        </div>
+        ${state.policy ? html`<p class="muted">First-time intake capability: ${state.policy.capabilities.intake}</p>
+          ${state.policy.capabilities.intake !== "execute" ? html`<p class="muted">This setting cannot grant patient creation permission the clinic's host does not support.</p>` : ""}` : ""}
       </section>
       <section class="card" aria-labelledby="after-hours-title">
         <h2 id="after-hours-title">After-hours information</h2>
@@ -344,6 +360,15 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
           ${state.reschedulingAuditPage.entries.length ? html`<ul>${state.reschedulingAuditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.enabled ? "enabled" : "disabled"} · ${entry.actorRef} · ${entry.changedAt}</li>`)}</ul>`
             : html`<p>No rescheduling setting changes recorded.</p>`}
           ${state.reschedulingAuditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreReschedulingAudit()}>Load more rescheduling history</button>` : ""}
+        </div>` : html`<p class="muted">Setting history unavailable.</p>`}
+      </section>` : ""}
+      ${state.capabilities.some(item => item.id === "settings.patients.firstTimeIntake.audit.v1") ? html`<section class="card" aria-labelledby="first-time-intake-audit-title">
+        <div class="row"><h2 id="first-time-intake-audit-title">First-time intake setting history</h2>
+          <button type="button" ?disabled=${state.busy} @click=${() => actions.loadFirstTimeIntakeAudit()}>Refresh first-time intake history</button></div>
+        ${state.firstTimeIntakeAuditPage ? html`<div aria-label="First-time intake setting audit">
+          ${state.firstTimeIntakeAuditPage.entries.length ? html`<ul>${state.firstTimeIntakeAuditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.enabled ? "enabled" : "disabled"} · ${entry.actorRef} · ${entry.changedAt}</li>`)}</ul>`
+            : html`<p>No first-time intake setting changes recorded.</p>`}
+          ${state.firstTimeIntakeAuditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreFirstTimeIntakeAudit()}>Load more first-time intake history</button>` : ""}
         </div>` : html`<p class="muted">Setting history unavailable.</p>`}
       </section>` : ""}
       <section class="card" aria-labelledby="review-title">

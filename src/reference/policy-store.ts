@@ -1,6 +1,8 @@
+import { MemoryClinicIntakeSettingStore } from "./clinic-intake-setting-store.ts";
+import type { ClinicIntakeAuditEntry, ClinicIntakeAuditPage } from "../core/clinic-intake-setting.ts";
 import type { AfterHoursSettingAuditEntry, AfterHoursSettingAuditPage, AutomationSettingAuditEntry, AutomationSettingAuditPage, BookingSettingAuditEntry, BookingSettingAuditPage, GreetingSettingAuditEntry, GreetingSettingAuditPage, StaffScheduleSettingAuditEntry, StaffScheduleSettingAuditPage, UrgentSettingAuditEntry, UrgentSettingAuditPage, PolicyStore, PolicyFailure } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
-import type { AppointmentSettingModes, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
+import type { PatientSettingModes, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
 import { validAfterHoursSetting } from "../core/after-hours-policy.ts";
 import { validGreetingShape } from "../core/greeting.ts";
 import { validApprovedStaffSchedule } from "../core/staff-schedule.ts";
@@ -52,6 +54,7 @@ export type ImportedReferenceClinicAutomation = Readonly<{
   history: readonly AutomationSettingAuditEntry[];
   sourceVersion: number;
   sourceEnabled: boolean;
+  intake?: Readonly<{ history: readonly ClinicIntakeAuditEntry[]; sourceVersion: number; sourceEnabled: boolean }>;
 }>;
 
 export class MemoryPolicyStore implements PolicyStore {
@@ -70,14 +73,18 @@ export class MemoryPolicyStore implements PolicyStore {
   private readonly readiness: AutomationReadiness;
   private readonly hostCancellationMode: CapabilityMode;
   private readonly hostReschedulingMode: CapabilityMode;
+  private readonly hostIntakeMode: CapabilityMode;
+  private readonly intake: MemoryClinicIntakeSettingStore;
 
   constructor(hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "execute", clock: () => string = () => new Date().toISOString(), readiness: AutomationReadiness = unprovenReadiness,
-              hostAppointmentModes: CapabilityMode | AppointmentSettingModes = "requestOnly") {
+              hostPatientModes: CapabilityMode | PatientSettingModes = "requestOnly") {
     this.hostBookingMode = hostBookingMode;
     this.clock = clock;
+    this.intake = new MemoryClinicIntakeSettingStore(clock);
     this.readiness = readiness;
-    this.hostCancellationMode = typeof hostAppointmentModes === "string" ? hostAppointmentModes : hostAppointmentModes.cancellation ?? "unavailable";
-    this.hostReschedulingMode = typeof hostAppointmentModes === "string" ? "unavailable" : hostAppointmentModes.rescheduling ?? "unavailable";
+    this.hostCancellationMode = typeof hostPatientModes === "string" ? hostPatientModes : hostPatientModes.cancellation ?? "unavailable";
+    this.hostReschedulingMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.rescheduling ?? "unavailable";
+    this.hostIntakeMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.intake ?? "unavailable";
   }
 
   /** Builds a disabled, request-only target policy from a validated historical import. */
@@ -89,10 +96,11 @@ export class MemoryPolicyStore implements PolicyStore {
                       staffScheduleHistory: readonly StaffScheduleSettingAuditEntry[] = [],
                       greetingHistory: readonly GreetingSettingAuditEntry[] = [],
                       cancellationHistory: readonly CancellationSettingAuditEntry[] = [],
-                      reschedulingHistory: readonly ReschedulingSettingAuditEntry[] = []): MemoryPolicyStore {
+                      reschedulingHistory: readonly ReschedulingSettingAuditEntry[] = [],
+                      intake?: ImportedReferenceClinicAutomation["intake"]): MemoryPolicyStore {
     return MemoryPolicyStore.fromImportedMany(
       [{ scope, policy: sourceHead, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, cancellationHistory, reschedulingHistory }],
-      [{ scope, history: automationHistory, sourceVersion: sourceAutomationVersion, sourceEnabled: sourceAutomationEnabled }],
+      [{ scope, history: automationHistory, sourceVersion: sourceAutomationVersion, sourceEnabled: sourceAutomationEnabled, ...(intake ? { intake } : {}) }],
       importActorRef, importedAt);
   }
 
@@ -151,17 +159,22 @@ export class MemoryPolicyStore implements PolicyStore {
       }
       store.clinicAutomation.set(key, { version, enabled: false });
       store.automationChanges.set(key, automation);
+      store.intake.importDisabled(clinic.scope, { version: String(clinic.intake?.sourceVersion ?? 0),
+        enabled: clinic.intake?.sourceEnabled ?? false }, clinic.intake?.history ?? [], importActorRef, importedAt);
     }
     return store;
   }
 
   private effective(policy: CallPolicy): CallPolicy {
     const automation = this.clinicAutomation.get(clinicKey(policy.scope));
+    const intake = this.intake.current(policy.scope);
     return { ...policy, cancellationEnabled: policy.cancellationEnabled ?? false, reschedulingEnabled: policy.reschedulingEnabled ?? false,
       automationVersion: String(automation?.version ?? 0), automationEnabled: automation?.enabled ?? false,
+      firstTimeIntakeVersion: intake.version, firstTimeIntakeEnabled: intake.enabled,
       capabilities: { ...policy.capabilities, book: policy.bookingEnabled ? this.hostBookingMode : "unavailable",
         cancel: policy.cancellationEnabled === true ? this.hostCancellationMode : "unavailable",
-        reschedule: policy.reschedulingEnabled === true ? this.hostReschedulingMode : "unavailable" } };
+        reschedule: policy.reschedulingEnabled === true ? this.hostReschedulingMode : "unavailable",
+        intake: intake.enabled ? this.hostIntakeMode : "unavailable" } };
   }
 
   async read(scope: LocationScope): Promise<Result<CallPolicy, PolicyFailure>> {
@@ -197,6 +210,16 @@ export class MemoryPolicyStore implements PolicyStore {
     if (afterVersion !== undefined && (!Number.isSafeInteger(afterVersion) || afterVersion < 0)) return err({ kind: "invalidValue" });
     const entries = (this.automationChanges.get(clinicKey(scope)) ?? []).filter(item => Number(item.version) > (afterVersion ?? 0)).slice(0, 50);
     return ok({ entries: structuredClone(entries), ...(entries.length === 50 ? { nextAfterVersion: Number(entries[49]!.version) } : {}) });
+  }
+
+  async changeFirstTimeIntakeEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean,
+                                   actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+    const changed = await this.intake.changeEnabled(scope, expectedVersion, enabled, actorRef);
+    return changed.ok ? this.read(scope) : changed;
+  }
+
+  async listFirstTimeIntakeChanges(scope: LocationScope, afterVersion?: number): Promise<Result<ClinicIntakeAuditPage, PolicyFailure>> {
+    return this.intake.listChanges(scope, afterVersion);
   }
 
   async changeBookingEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {

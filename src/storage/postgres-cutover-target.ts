@@ -68,7 +68,7 @@ function samePolicy(actual: unknown, expected: CallPolicy): boolean {
 type KnowledgeRow = { source_ref: string; version: number; status: string; owner_ref: string;
   answer_text: string; effective_from: Date; effective_until: Date; actor_ref: string; changed_at: Date };
 type KnowledgeHead = { source_ref: string; version: number; effective_version: number | null };
-type TargetTotals = { policies: string; automation: string; knowledgeEvents: string;
+type TargetTotals = { policies: string; automation: string; clinicIntake: string; knowledgeEvents: string;
   knowledgeHeads: string; writeStops: string; writeStopEvents: string };
 
 function sameInstant(actual: Date | null, expected: string | null): boolean {
@@ -93,7 +93,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       sameScope(item.sourceScope, sourceScope) && sameScope(item.targetScope, targetScope));
     return decisions.length === 1 ? decisions[0]!.targetRef : null;
   } };
-  const expectedTotals = { policies: 0, automation: 0, knowledgeEvents: 0, knowledgeHeads: 0,
+  const expectedTotals = { policies: 0, automation: 0, clinicIntake: 0, knowledgeEvents: 0, knowledgeHeads: 0,
     writeStops: 0, writeStopEvents: 0 };
   for (const location of data.locations) {
     const clinic = data.clinics.find(item => item.sourceClinicId === location.sourceScope.clinicId);
@@ -214,6 +214,26 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       if (actual.version !== head.version + 1 || actual.enabled || actual.changed_by !== actor ||
           actual.previous_enabled !== true || !(actual.changed_at instanceof Date)) return false;
     }
+    const expectedIntake = clinic.clinicIntake?.length ? clinic.clinicIntake : [
+      { version: 0, isHead: true, enabled: false, changedBy: null, previousEnabled: null, changedAt: null }];
+    const intakeHead = expectedIntake.find(row => row.isHead)!;
+    const actualIntake = (await sql<AutomationRow>`select version, enabled, changed_by, previous_enabled, changed_at
+      from clinic_intake_settings where tenant_id = ${data.targetTenantId} and clinic_id = ${location.targetScope.clinicId}
+      order by version`.execute(trx)).rows;
+    if (actualIntake.length !== expectedIntake.length + Number(intakeHead.enabled)) return false;
+    expectedTotals.clinicIntake += actualIntake.length;
+    for (const [index, expected] of expectedIntake.entries()) {
+      const actual = actualIntake[index];
+      if (!actual || actual.version !== expected.version || actual.enabled !== expected.enabled ||
+          actual.changed_by !== expected.changedBy || actual.previous_enabled !== expected.previousEnabled ||
+          !sameInstant(actual.changed_at, expected.changedAt)) return false;
+    }
+    if (intakeHead.enabled) {
+      const actual = actualIntake.at(-1)!;
+      if (actual.version !== intakeHead.version + 1 || actual.enabled || actual.changed_by !== actor ||
+          actual.previous_enabled !== true || !(actual.changed_at instanceof Date) ||
+          !Number.isFinite(actual.changed_at.getTime())) return false;
+    }
     const stop = (await sql<{ version: number; stopped: boolean; actor_ref: string; reason: string;
       changed_at: Date }>`select version, stopped, actor_ref, reason, changed_at
       from clinic_write_stop where tenant_id = ${data.targetTenantId} and clinic_id = ${location.targetScope.clinicId}`.execute(trx)).rows[0];
@@ -236,6 +256,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
   const totals = (await sql<TargetTotals>`select
     (select count(*)::text from clinic_settings where tenant_id = ${data.targetTenantId}) as policies,
     (select count(*)::text from clinic_automation where tenant_id = ${data.targetTenantId}) as automation,
+    (select count(*)::text from clinic_intake_settings where tenant_id = ${data.targetTenantId}) as "clinicIntake",
     (select count(*)::text from clinic_knowledge_events where tenant_id = ${data.targetTenantId}) as "knowledgeEvents",
     (select count(*)::text from clinic_knowledge_heads where tenant_id = ${data.targetTenantId}) as "knowledgeHeads",
     (select count(*)::text from clinic_write_stop where tenant_id = ${data.targetTenantId}) as "writeStops",

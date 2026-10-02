@@ -215,6 +215,13 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       }
       command = { kind: "settings.appointments.rescheduling.audit.v1", ...(cursor === null ? {} : { afterVersion: Number(cursor) }) };
     }
+    if (request.method === "GET" && url.pathname === "/api/settings/first-time-intake-audit") {
+      const cursor = url.searchParams.get("after");
+      if (cursor !== null && (!/^(0|[1-9][0-9]*)$/.test(cursor) || !Number.isSafeInteger(Number(cursor)))) {
+        return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      }
+      command = { kind: "settings.patients.firstTimeIntake.audit.v1", ...(cursor === null ? {} : { afterVersion: Number(cursor) }) };
+    }
     if (request.method === "GET" && url.pathname === "/api/settings/after-hours-audit") {
       const cursor = url.searchParams.get("after");
       if (cursor !== null && (!/^(0|[1-9][0-9]*)$/.test(cursor) || !Number.isSafeInteger(Number(cursor)))) return json(response, 400, { ok: false, error: { kind: "invalid" } });
@@ -277,6 +284,15 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
         return json(response, 400, { ok: false, error: { kind: "invalid" } });
       }
       command = { kind: "settings.appointments.rescheduling.enabled.change.v1", expectedVersion: input.expectedVersion, enabled: input.enabled };
+    }
+    if (request.method === "POST" && url.pathname === "/api/settings/first-time-intake-enabled") {
+      if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
+      const input = record(await body(request));
+      if (!input || Object.keys(input).sort().join(",") !== "enabled,expectedVersion" ||
+          typeof input.expectedVersion !== "string" || typeof input.enabled !== "boolean") {
+        return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      }
+      command = { kind: "settings.patients.firstTimeIntake.enabled.change.v1", expectedVersion: input.expectedVersion, enabled: input.enabled };
     }
     if (request.method === "POST" && url.pathname === "/api/settings/after-hours") {
       if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });

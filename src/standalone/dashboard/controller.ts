@@ -1,3 +1,4 @@
+import type { ClinicIntakeAuditPage } from "../../core/clinic-intake-setting.ts";
 import { render } from "lit-html";
 import type { CancellationSettingAuditPage, ReschedulingSettingAuditPage } from "../../core/host.ts";
 import type { DashboardFailure, DashboardPort } from "./api.ts";
@@ -88,7 +89,7 @@ export class DashboardController {
   private readonly state: DashboardState = { loading: true, busy: false, capabilities: [], policy: undefined,
     knowledge: undefined, knowledgeSourceRef: "", knowledgeOwnerRef: "", knowledgeText: "",
     knowledgeFrom: new Date().toISOString(), knowledgeUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-    writeStop: undefined, stopReasonInput: "", auditPage: undefined, cancellationAuditPage: undefined, reschedulingAuditPage: undefined,
+    writeStop: undefined, stopReasonInput: "", auditPage: undefined, cancellationAuditPage: undefined, reschedulingAuditPage: undefined, firstTimeIntakeAuditPage: undefined,
     afterHoursAuditPage: undefined, afterHoursInfoVersion: "", afterHoursApprovedText: "",
     urgentAuditPage: undefined, urgentVersion: "", urgentText: "",
     urgentFrom: new Date().toISOString(), urgentUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
@@ -120,10 +121,13 @@ export class DashboardController {
       toggleBooking: () => { void this.toggleBooking(); },
       toggleCancellation: () => { void this.toggleCancellation(); },
       toggleRescheduling: () => { void this.toggleRescheduling(); },
+      toggleFirstTimeIntake: () => { void this.toggleFirstTimeIntake(); },
       loadCancellationAudit: () => { void this.loadCancellationAudit(); },
       loadReschedulingAudit: () => { void this.loadReschedulingAudit(); },
+      loadFirstTimeIntakeAudit: () => { void this.loadFirstTimeIntakeAudit(); },
       loadMoreCancellationAudit: () => { void this.loadCancellationAudit(true); },
       loadMoreReschedulingAudit: () => { void this.loadReschedulingAudit(true); },
+      loadMoreFirstTimeIntakeAudit: () => { void this.loadFirstTimeIntakeAudit(true); },
       loadAudit: () => { void this.loadAudit(); },
       loadMoreAudit: () => { void this.loadMoreAudit(); },
       setAfterHoursField: (field, value) => { this.state[field] = value; this.draw(); },
@@ -208,6 +212,11 @@ export class DashboardController {
     if (capabilities.ok && capabilities.value.some(item => item.id === "settings.appointments.rescheduling.audit.v1")) {
       const audit = await this.port.reschedulingAudit();
       if (audit.ok) this.state.reschedulingAuditPage = audit.value;
+      else this.state.error = message(audit.error);
+    }
+    if (capabilities.ok && capabilities.value.some(item => item.id === "settings.patients.firstTimeIntake.audit.v1")) {
+      const audit = await this.port.firstTimeIntakeAudit();
+      if (audit.ok) this.state.firstTimeIntakeAuditPage = audit.value;
       else this.state.error = message(audit.error);
     }
     if (capabilities.ok && capabilities.value.some(item => item.id === "settings.routing.afterHours.audit.v1")) {
@@ -683,6 +692,47 @@ export class DashboardController {
       const page: ReschedulingSettingAuditPage = { ...result.value,
         entries: more && previous ? [...previous.entries, ...result.value.entries] : result.value.entries };
       this.state.reschedulingAuditPage = page;
+    } else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async toggleFirstTimeIntake(): Promise<void> {
+    const current = this.state.policy;
+    if (this.state.busy || !current || !this.state.capabilities.some(item => item.id === "settings.patients.firstTimeIntake.enabled.change.v1")) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.state.notice = undefined;
+    this.draw();
+    const result = await this.port.changeFirstTimeIntakeEnabled((current.firstTimeIntakeVersion ?? "0"), current.firstTimeIntakeEnabled !== true);
+    if (result.ok) {
+      this.state.policy = result.value;
+      this.state.notice = result.value.firstTimeIntakeEnabled ? "First-time intake enabled for new calls at every clinic location." : "First-time intake disabled for new calls at every clinic location.";
+      const audit = await this.port.firstTimeIntakeAudit();
+      if (audit.ok) this.state.firstTimeIntakeAuditPage = audit.value;
+      else this.state.error = message(audit.error);
+    } else {
+      this.state.error = message(result.error);
+      // A lost or malformed reply may follow a committed edit. Never repeat from stale state.
+      this.state.policy = undefined;
+      const inspected = await this.port.settings();
+      if (inspected.ok) this.state.policy = inspected.value;
+      else this.state.error = "The setting could not be confirmed. Reload to inspect current settings before another edit.";
+    }
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async loadFirstTimeIntakeAudit(more = false): Promise<void> {
+    const previous = this.state.firstTimeIntakeAuditPage;
+    if (this.state.busy || (more && previous?.nextAfterVersion === undefined)) return;
+    this.state.busy = true;
+    this.draw();
+    const result = await this.port.firstTimeIntakeAudit(more ? previous?.nextAfterVersion : undefined);
+    if (result.ok) {
+      const page: ClinicIntakeAuditPage = { ...result.value,
+        entries: more && previous ? [...previous.entries, ...result.value.entries] : result.value.entries };
+      this.state.firstTimeIntakeAuditPage = page;
     } else this.state.error = message(result.error);
     this.state.busy = false;
     this.draw();

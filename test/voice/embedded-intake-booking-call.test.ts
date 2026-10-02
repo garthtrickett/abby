@@ -6,14 +6,21 @@ import test from "node:test";
 import { ClinikoPatientIntakeEdge } from "../../src/cliniko/patient-intake.ts";
 import { digestActionRequest } from "../../src/core/digest.ts";
 import { MemoryLedger } from "../../src/core/ledger.ts";
+import type { LedgerStore } from "../../src/core/ledger.ts";
+import type { EffectCallLeaseStore } from "../../src/core/effect-call-lease.ts";
+import { sql } from "kysely";
+import { connectPostgres } from "../../src/storage/connect.ts";
+import { migrate } from "../../src/storage/migrate.ts";
+import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
+import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
 import { err, ok } from "../../src/core/model.ts";
-import type { IntakeEvidenceQuery } from "../../src/core/host.ts";
+import type { IntakeEvidenceQuery, PolicyStore } from "../../src/core/host.ts";
 import type { HostMutation, HostWriteReceipt, LocationScope, ReconcileObservation } from "../../src/core/model.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { ReferenceNumberRoutingHost } from "../../src/reference/clinic-number-routing.ts";
 import { createEmbeddedTextComposition } from "../../src/reference/embedded-composition.ts";
 import { createEmbeddedVoiceComposition } from "../../src/reference/embedded-voice-composition.ts";
-import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
+import { MemoryPolicyStore, referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { TransientIntakeAuthority } from "../../src/standalone/transient-intake-authority.ts";
 import type { HostIntakeEvidence } from "../../src/standalone/transient-intake-authority.ts";
 import { callIdFor } from "../../src/voice/admission.ts";
@@ -35,6 +42,7 @@ class IntakePolicyStore extends MemoryPolicyStore {
 class IntakeThenFailedBookingHost extends ReferenceClinicHost {
   createdRef: string | undefined;
   intakeWrites = 0;
+  intakeReads = 0;
   bookingWrites = 0;
   bookingReconciles = 0;
   readonly bookingOutcome: "rejected" | "uncertain";
@@ -54,6 +62,7 @@ class IntakeThenFailedBookingHost extends ReferenceClinicHost {
   }
 
   async resolveIntake(query: IntakeEvidenceQuery) {
+    this.intakeReads += 1;
     const { scope: location, callId, sessionId, policyVersion, draftRef: ref, now: at } = query;
     if (location.tenantId !== scope.tenantId || location.clinicId !== scope.clinicId ||
         location.locationId !== scope.locationId || callId !== this.expectedCallId ||
@@ -82,6 +91,9 @@ class IntakeThenFailedBookingHost extends ReferenceClinicHost {
   override async write(mutation: HostMutation, at: string): Promise<HostWriteReceipt> {
     if (mutation.kind === "intake" && mutation.request.kind === "intake") {
       this.intakeWrites += 1;
+      assert.equal(mutation.request.consentRef, "host-consent-1");
+      assert.equal(mutation.request.duplicateCheckRef, "host-duplicate-check-1");
+      assert.deepEqual(mutation.request.scope, scope);
       if (mutation.request.approvedDraftRef !== draftRef || mutation.payloadDigest !== digestActionRequest(mutation.request)) {
         return { kind: "rejected", actionKey: mutation.actionKey, reason: "invalid" };
       }
@@ -110,17 +122,23 @@ class IntakeThenFailedBookingHost extends ReferenceClinicHost {
   }
 }
 
+type IntakeCallFixture = Readonly<{ ledger: LedgerStore & EffectCallLeaseStore; policy: PolicyStore;
+  expected: Readonly<{ enabled: boolean; version: string; mode: "execute" | "unavailable" }>;
+  afterAdmission?: () => Promise<void> }>;
+
 async function runCall(bookingOutcome: "rejected" | "uncertain", invalidDraft = false,
                        invalidConsent = false, createPatient?: () => Promise<string | undefined>,
-                       uncertainIntake = false) {
-  const event = { key: { accountRef: "buyer-provider", providerCallRef: `intake-${bookingOutcome}` },
+                       uncertainIntake = false, configured?: IntakeCallFixture) {
+  const event = { key: { accountRef: "buyer-provider", providerCallRef: configured ? `intake-setting-${randomUUID()}` : `intake-${bookingOutcome}` },
     dialedNumber: "+6125550199", receivedAt: now };
   const callId = callIdFor(event.key);
   const sessionId = `session-${bookingOutcome}`;
-  const ledger = new MemoryLedger();
-  const policy = new IntakePolicyStore("execute", () => now, async () => ok(true));
-  assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
-  assert.ok((await policy.changeBookingEnabled(scope, "0", true, "clinic-admin")).ok);
+  const ledger = configured?.ledger ?? new MemoryLedger();
+  const policy = configured?.policy ?? new IntakePolicyStore("execute", () => now, async () => ok(true));
+  if (!configured) {
+    assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
+    assert.ok((await policy.changeBookingEnabled(scope, "0", true, "clinic-admin")).ok);
+  }
   const host = new IntakeThenFailedBookingHost(bookingOutcome, callId, sessionId, invalidConsent, createPatient);
   const routing = new ReferenceNumberRoutingHost([{ ...scope, accountRef: "buyer-provider",
     dialedNumber: event.dialedNumber, routeVersion: "host-route-v1" }]);
@@ -160,7 +178,7 @@ async function runCall(bookingOutcome: "rejected" | "uncertain", invalidDraft = 
     assert.ok(result.ok);
   }
 
-  async function speak() {
+  async function speak(expectedFailure?: "confirmationMissing") {
     let completed: Awaited<ReturnType<typeof call.acceptMedia>> | undefined;
     for (let frame = 0; frame < 7; frame += 1) {
       const bytes = new Uint8Array(640);
@@ -171,9 +189,14 @@ async function runCall(bookingOutcome: "rejected" | "uncertain", invalidDraft = 
       completed = await call.acceptMedia({ sessionId, sequence: mediaSequence,
         capturedAt: new Date(Date.parse(now) + mediaSequence * 20).toISOString(), bytes });
       mediaSequence += 1;
+      if (expectedFailure && !completed.ok) {
+        assert.equal(completed.error.kind, expectedFailure);
+        return;
+      }
       assert.ok(completed.ok, completed.ok ? "" : completed.error.kind);
     }
     assert.ok(completed?.ok);
+    assert.equal(expectedFailure, undefined, "an unrequested confirmation must be rejected");
     assert.equal(completed.value.kind, "turnCompleted");
     await play(completed.value.delivery);
   }
@@ -182,8 +205,29 @@ async function runCall(bookingOutcome: "rejected" | "uncertain", invalidDraft = 
   assert.ok(started.ok);
   assert.equal(started.value.kind, "admitted");
   await play(started.value.delivery);
+  if (configured) {
+    const captured = await ledger.read(callId, scope);
+    assert.ok(captured.ok);
+    assert.equal(captured.value.policy.firstTimeIntakeEnabled, configured.expected.enabled);
+    assert.equal(captured.value.policy.firstTimeIntakeVersion, configured.expected.version);
+    assert.equal(captured.value.policy.capabilities.intake, configured.expected.mode);
+    await configured.afterAdmission?.();
+  }
   await speak();
   assert.equal(host.intakeWrites, 0, "the intake confirmation must be played before a write");
+  if (configured?.expected.mode === "unavailable") {
+    assert.equal(spoken.at(-1), "I can't complete that request here.");
+    await speak("confirmationMissing");
+    const state = await ledger.read(callId, scope);
+    assert.ok(state.ok);
+    assert.deepEqual(Object.keys(state.value.actions), []);
+    assert.equal(host.intakeReads, 0);
+    assert.equal(host.intakeWrites, 0);
+    assert.equal(host.bookingWrites, 0);
+    assert.equal(spoken.includes("Your details were saved. No appointment is confirmed yet."), false);
+    await call.disconnect(now);
+    return;
+  }
   if (invalidDraft || invalidConsent) {
     const state = await ledger.read(callId, scope);
     assert.ok(state.ok);
@@ -194,6 +238,7 @@ async function runCall(bookingOutcome: "rejected" | "uncertain", invalidDraft = 
     await call.disconnect(now);
     return;
   }
+  assert.equal(spoken.at(-1), "Please confirm that your approved intake details may be saved. This does not book an appointment.");
   await speak();
   assert.equal(host.intakeWrites, 1);
   if (uncertainIntake) {
@@ -239,6 +284,71 @@ async function runCall(bookingOutcome: "rejected" | "uncertain", invalidDraft = 
   } else assert.equal(host.bookingReconciles, 0);
   await call.disconnect(now);
 }
+
+async function clinicIntakeSettingCalls(ledger: LedgerStore & EffectCallLeaseStore, policy: PolicyStore): Promise<void> {
+  assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
+  assert.ok((await policy.changeBookingEnabled(scope, "0", true, "clinic-admin")).ok);
+  await runCall("rejected", false, false, undefined, false,
+    { ledger, policy, expected: { enabled: false, version: "0", mode: "unavailable" } });
+  assert.ok((await policy.changeFirstTimeIntakeEnabled(scope, "0", true, "clinic-admin")).ok);
+  await runCall("rejected", false, false, undefined, false, {
+    ledger, policy, expected: { enabled: true, version: "1", mode: "execute" }, afterAdmission: async () => {
+      assert.ok((await policy.changeFirstTimeIntakeEnabled(scope, "1", false, "clinic-admin")).ok);
+    },
+  });
+  await runCall("rejected", false, false, undefined, false,
+    { ledger, policy, expected: { enabled: false, version: "2", mode: "unavailable" } });
+  assert.ok((await policy.changeFirstTimeIntakeEnabled(scope, "2", true, "clinic-admin")).ok);
+  await runCall("rejected", false, true, undefined, false,
+    { ledger, policy, expected: { enabled: true, version: "3", mode: "execute" } });
+  await runCall("rejected", true, false, undefined, false,
+    { ledger, policy, expected: { enabled: true, version: "3", mode: "execute" } });
+  const history = await policy.listFirstTimeIntakeChanges(scope);
+  assert.ok(history.ok);
+  assert.deepEqual(history.value.entries.map(row => [row.version, row.enabled, row.previousEnabled]),
+    [["1", true, false], ["2", false, true], ["3", true, false]]);
+}
+
+test("E2E-255 clinic intake setting gates complete voice calls and preserves the admitted call", async () => {
+  const ready = async () => ok(true as const);
+  await clinicIntakeSettingCalls(new MemoryLedger(ready),
+    new MemoryPolicyStore("execute", () => now, ready, { intake: "execute" }));
+  const denied = new MemoryPolicyStore("execute", () => now, ready, { intake: "unavailable" });
+  assert.ok((await denied.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
+  assert.ok((await denied.changeBookingEnabled(scope, "0", true, "clinic-admin")).ok);
+  assert.ok((await denied.changeFirstTimeIntakeEnabled(scope, "0", true, "clinic-admin")).ok);
+  await runCall("rejected", false, false, undefined, false,
+    { ledger: new MemoryLedger(ready), policy: denied, expected: { enabled: true, version: "1", mode: "unavailable" } });
+});
+
+test("E2E-255 PostgreSQL clinic intake setting gates complete voice calls after durable edits",
+  { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
+  assert.ok(process.env.DATABASE_URL);
+  const admin = connectPostgres(process.env.DATABASE_URL);
+  const name = `abby_intake_setting_${randomUUID().replaceAll("-", "")}`;
+  const target = new URL(process.env.DATABASE_URL);
+  target.pathname = `/${name}`;
+  let created = false;
+  let db: ReturnType<typeof connectPostgres> | undefined;
+  try {
+    await sql.raw(`create database "${name}"`).execute(admin);
+    created = true;
+    db = connectPostgres(target.toString());
+    await migrate(db);
+    const ready = async () => ok(true as const);
+    const ledger = new PostgresLedger(db, suggested => suggested, ready, "unsafeReference");
+    await clinicIntakeSettingCalls(ledger, new PostgresPolicyStore(db, referenceDefaultPolicy,
+      "execute", ready, true, "unsafeReference", false, { intake: "execute" }));
+    const denied = new PostgresPolicyStore(db, referenceDefaultPolicy,
+      "execute", ready, true, "unsafeReference", false, { intake: "unavailable" });
+    await runCall("rejected", false, false, undefined, false,
+      { ledger, policy: denied, expected: { enabled: true, version: "3", mode: "unavailable" } });
+  } finally {
+    await db?.destroy();
+    if (created) await sql.raw(`drop database "${name}" with (force)`).execute(admin);
+    await admin.destroy();
+  }
+});
 
 test("E2E-016 embedded voice retains created patient after rejected booking", () => runCall("rejected"));
 test("E2E-073 embedded voice retains created patient after uncertain booking", () => runCall("uncertain"));

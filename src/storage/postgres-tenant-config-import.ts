@@ -1,3 +1,4 @@
+import { validClinicIntakeArchiveHistory } from "../portability/clinic-intake-history.ts";
 import { createHash } from "node:crypto";
 import { sql } from "kysely";
 import type { Kysely, Transaction } from "kysely";
@@ -19,7 +20,8 @@ type RegistryRow = { archive_id: string; manifest_digest: string; receipt: Refer
   source_history: TenantConfigArchiveData };
 
 function minimalHistory(data: TenantConfigArchiveData): boolean {
-  return Array.isArray(data?.locations) && data.locations.length > 0 && data.locations.every(location =>
+  return Array.isArray(data?.clinics) && data.clinics.every(clinic => validClinicIntakeArchiveHistory(clinic.clinicIntake)) &&
+    Array.isArray(data?.locations) && data.locations.length > 0 && data.locations.every(location =>
     Array.isArray(location.policies) && location.policies.length > 0 &&
     location.policies.every((row: ConfigArchiveData["policies"][number]) => row.storageShape === "standaloneMinimal") &&
     Array.isArray(location.knowledge) && location.knowledge.length === 0);
@@ -64,6 +66,7 @@ async function occupied(db: Kysely<Database> | Transaction<Database>, tenantId: 
     exists(select 1 from tenant_portability_fences where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_settings where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_automation where tenant_id = ${tenantId}) or
+    exists(select 1 from clinic_intake_settings where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_knowledge_heads where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_write_stop where tenant_id = ${tenantId}) or
     exists(select 1 from calls where tenant_id = ${tenantId}) or
@@ -178,6 +181,21 @@ async function writeClinic(trx: Transaction<Database>, scope: LocationScope,
     await sql`insert into clinic_automation (tenant_id, clinic_id, version, enabled,
       changed_by, previous_enabled, changed_at) values
       (${scope.tenantId}, ${scope.clinicId}, ${head.version + 1}, false,
+       ${actorRef}, true, ${importedAt}::timestamptz)`.execute(trx);
+  }
+  const intake = clinic.clinicIntake?.length ? clinic.clinicIntake : [
+    { version: 0, isHead: true, enabled: false, changedBy: null, previousEnabled: null, changedAt: null }];
+  for (const row of intake) {
+    await sql`insert into clinic_intake_settings (tenant_id, clinic_id, version, enabled,
+      changed_by, previous_enabled, changed_at) values
+      (${scope.tenantId}, ${scope.clinicId}, ${row.version}, ${row.enabled},
+       ${row.changedBy}, ${row.previousEnabled}, ${row.changedAt}::timestamptz)`.execute(trx);
+  }
+  const intakeHead = intake.find(row => row.isHead)!;
+  if (intakeHead.enabled) {
+    await sql`insert into clinic_intake_settings (tenant_id, clinic_id, version, enabled,
+      changed_by, previous_enabled, changed_at) values
+      (${scope.tenantId}, ${scope.clinicId}, ${intakeHead.version + 1}, false,
        ${actorRef}, true, ${importedAt}::timestamptz)`.execute(trx);
   }
   const reason = mode === "standaloneMinimal" ? "cutover" : "Imported configuration awaiting target readiness";

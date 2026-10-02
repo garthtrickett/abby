@@ -1,3 +1,4 @@
+import type { ClinicIntakeAuditPage } from "../../core/clinic-intake-setting.ts";
 import { CALL_TERMINAL_REASONS, err, ok } from "../../core/model.ts";
 import type { AfterHoursMode, CallPolicy, LocalStaffWindow, Result, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import { validAfterHoursSetting } from "../../core/after-hours-policy.ts";
@@ -36,8 +37,10 @@ export type DashboardPort = Readonly<{
   changeBookingEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   cancellationAudit(afterVersion?: number): Promise<Result<CancellationSettingAuditPage, DashboardFailure>>;
   reschedulingAudit(afterVersion?: number): Promise<Result<ReschedulingSettingAuditPage, DashboardFailure>>;
+  firstTimeIntakeAudit(afterVersion?: number): Promise<Result<ClinicIntakeAuditPage, DashboardFailure>>;
   changeCancellationEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   changeReschedulingEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
+  changeFirstTimeIntakeEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   afterHoursAudit(afterVersion?: number): Promise<Result<AfterHoursSettingAuditPage, DashboardFailure>>;
   changeAfterHours(expectedVersion: string, mode: AfterHoursMode, infoVersion?: string, approvedText?: string): Promise<Result<CallPolicy, DashboardFailure>>;
   urgentAudit(afterVersion?: number): Promise<Result<UrgentSettingAuditPage, DashboardFailure>>;
@@ -122,6 +125,8 @@ function policy(value: unknown): Result<CallPolicy, DashboardFailure> {
   return reply?.kind === "settings" && current && typeof current.policyVersion === "string" && typeof current.automationVersion === "string" && typeof current.automationEnabled === "boolean" && typeof current.bookingEnabled === "boolean" && record(current.capabilities)
     && (current.cancellationEnabled === undefined || typeof current.cancellationEnabled === "boolean")
     && (current.reschedulingEnabled === undefined || typeof current.reschedulingEnabled === "boolean")
+    && (current.firstTimeIntakeEnabled === undefined || typeof current.firstTimeIntakeEnabled === "boolean")
+    && (current.firstTimeIntakeVersion === undefined || (typeof current.firstTimeIntakeVersion === "string" && /^(0|[1-9][0-9]*)$/.test(current.firstTimeIntakeVersion)))
     && record(current.scope) && validAfterHoursSetting(current.afterHoursMode ?? "staffRequest", current.afterHoursInfo,
       current.scope as CallPolicy["scope"]) &&
       (current.urgentResponse === undefined || validUrgentResponseShape(current.urgentResponse, current.scope as CallPolicy["scope"])) &&
@@ -348,6 +353,23 @@ export class FetchDashboardPort implements DashboardPort {
 
   async changeReschedulingEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>> {
     const result = await request("/api/settings/rescheduling-enabled", { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion, enabled }) });
+    return result.ok ? policy(result.value) : result;
+  }
+
+  async firstTimeIntakeAudit(afterVersion?: number): Promise<Result<ClinicIntakeAuditPage, DashboardFailure>> {
+    const result = await request(`/api/settings/first-time-intake-audit${afterVersion === undefined ? "" : `?after=${afterVersion}`}`);
+    if (!result.ok) return result;
+    if (!matchesSchema(capabilityDescriptor("settings.patients.firstTimeIntake.audit.v1").resultSchema,
+      { ok: true, value: result.value })) return err({ kind: "malformed" });
+    const reply = result.value as Extract<GatewayReply, { kind: "firstTimeIntakeSettingAudit" }>;
+    if (reply.page.entries.some(entry => !/^(0|[1-9][0-9]*)$/.test(entry.version) ||
+        !Number.isFinite(Date.parse(entry.changedAt)))) return err({ kind: "malformed" });
+    return ok(reply.page);
+  }
+
+  async changeFirstTimeIntakeEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>> {
+    const result = await request("/api/settings/first-time-intake-enabled", { method: "POST",
       headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion, enabled }) });
     return result.ok ? policy(result.value) : result;
   }

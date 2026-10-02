@@ -132,7 +132,7 @@ test("E2E-252 cancellation edits use the configured HTTPS host origin exactly", 
     [row.actorRef, row.previousEnabled]), [["https-owner", false]]);
 });
 
-test("E2E-253 E2E-254 every dashboard writer uses the configured HTTPS origin before parsing input", async t => {
+test("E2E-253 E2E-254 E2E-255 every dashboard writer uses the configured HTTPS origin before parsing input", async t => {
   const scope = { tenantId: "all-writers-https", clinicId: "clinic", locationId: "main" };
   const policy = new MemoryPolicyStore();
   const reception = new TextReception(new MemoryLedger(), policy, new ReferenceClinicHost([], []));
@@ -145,7 +145,7 @@ test("E2E-253 E2E-254 every dashboard writer uses the configured HTTPS origin be
   t.after(() => close(server));
   const origin = await listenLoopbackServer(server);
   const headers = { Host: "admin.example.test", Origin: "https://admin.example.test" };
-  const writers = ["/api/clinic-availability/command", "/api/settings/booking-enabled", "/api/settings/cancellation-enabled", "/api/settings/rescheduling-enabled",
+  const writers = ["/api/clinic-availability/command", "/api/settings/booking-enabled", "/api/settings/cancellation-enabled", "/api/settings/rescheduling-enabled", "/api/settings/first-time-intake-enabled",
     "/api/settings/after-hours", "/api/settings/urgent", "/api/settings/staff-schedule", "/api/settings/greeting",
     "/api/settings/automation-enabled", "/api/knowledge/draft", "/api/knowledge/approve", "/api/knowledge/revoke",
     "/api/writes/stop", "/api/writes/resume", "/api/staff/change"];
@@ -195,7 +195,7 @@ test("E2E-253 E2E-254 local reference origin omission and supervised setup restr
   t.after(() => close(setup));
   const setupOrigin = await listenLoopbackServer(setup);
   const headers = { Host: "setup.example.test", Origin: "https://setup.example.test" };
-  for (const path of ["/api/settings/booking-enabled", "/api/settings/cancellation-enabled", "/api/settings/rescheduling-enabled", "/api/staff/change"]) {
+  for (const path of ["/api/settings/booking-enabled", "/api/settings/cancellation-enabled", "/api/settings/rescheduling-enabled", "/api/settings/first-time-intake-enabled", "/api/staff/change"]) {
     assert.equal((await send(setupOrigin, path, headers, { expectedVersion: "2", enabled: true })).status, 404);
   }
   assert.equal((await send(setupOrigin, "/api/settings/greeting", headers,
