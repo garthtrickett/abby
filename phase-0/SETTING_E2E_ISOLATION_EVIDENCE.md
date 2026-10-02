@@ -312,3 +312,20 @@ Final release for source `beae0e26d2e27d503a8cceccac92885888fbda16` completed su
 - `npm run test:settings-isolation:postgres`: all 208 Node cases across 27 files passed alone and both observed four-worker dispatch orders; both coordinators passed. All 25 mapped browser cases across six files passed alone and both observed three-worker release orders, with peak three concurrent lifecycles. No mapped case failed or skipped.
 
 No database schema, runtime dependency or production identity changed. Documentation-only result commits preserve the tested runtime inputs. The owner has authorized merging locally verified work without waiting for GitHub CI; carrier and deployed identity evidence remain separate.
+
+## Rescheduling SET-004 focused evidence — 2026-10-02
+
+Runtime implementation: `55d0181b64b73a5b3c91f46f8bdb625dbc454f16`. Published candidate: `d42c32bd718889974d753f0ea8659eb7b408729d`; later commits at this point correct manifest formatting/evidence tags and add exact default/preservation assertions, with no production source difference from the implementation revision.
+
+Tracked job **Abby rescheduling combined carryover and shared setting final focused regression** completed with exit 0 in 1m00s. Its log is `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790955479947.log`.
+
+- `npm run typecheck` passed.
+- The cancellation/rescheduling command and HTTPS/profile contract files passed 10 tests, no failures/skips.
+- Disposable PostgreSQL migration and four-worker storage, complete voice-call and native cutover files passed 26 tests, no failures/skips.
+- Six cancellation/rescheduling browser journeys passed, including default/on/off, captured-call policy, invalid/stale/role/Origin and uncertain edit recovery.
+
+The new scenario is E2E-254 in manifest 1.65. The first broad release job **Abby rescheduling final text PostgreSQL browser and mapped isolation release** failed: its text stage passed 586 cases, failed one manifest evidence-tag assertion, and skipped 34 PostgreSQL-only cases. The new HTTP route was in the request matrix but the test name lacked E2E-254; the label was corrected while preserving the verifier and request assertions. Earlier schema/command and dashboard jobs passed their executed checks but subsequently failed typecheck on malformed gateway reply declarations, missing delegated policy-store methods, or an invariant Kysely migration parameter; those invocations are not passing release evidence. The cancellation rollback proof now explicitly migrates toward migration 034 and verifies the transactional refusal, rather than assuming cancellation is the latest migration.
+
+The replacement job **Abby rescheduling manifest correction and final release rerun** is still running at this record. Its manifest/Origin checks passed seven tests and its full text stage passed 587 with 34 PostgreSQL-only skips, followed by a passing Node scheduling coordinator. Full PostgreSQL, browser and mapped isolation release evidence is pending; no full release or merge is claimed yet. The job log is `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790955811414.log`.
+
+PR #352 remains draft. GitHub runs 37029318820 and 37029310949 for the published candidate did not execute any source steps; the primary check annotation cites failed payments or the spending limit. The owner's local-test merge authorization remains applicable after the local release gates pass. No repository billing/rules configuration is changed. Synthetic embedded/reference evidence does not enable standalone Cliniko patient rescheduling or establish a real carrier call.
