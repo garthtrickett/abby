@@ -4,6 +4,7 @@
 import base64
 import getpass
 import json
+import os
 import re
 import subprocess
 import sys
@@ -33,6 +34,20 @@ def matching_recalls(base: str, headers: dict[str, str], patient_id: str, marker
             (row.get("notes") == marker or
              isinstance(row.get("notes"), str) and
              row["notes"].startswith(f"Abby request {marker}\n"))]
+
+
+def matching_types(base: str, headers: dict[str, str], name: str,
+                   archived: bool = False) -> list[dict]:
+    filters = [("q[]", "archived_at:*")] if archived else []
+    query = urlencode([("per_page", 100), *filters])
+    status, body = request(base, headers, "GET", f"/recall_types?{query}")
+    rows = body.get("recall_types")
+    total = body.get("total_entries")
+    if (status != 200 or not isinstance(rows, list) or not isinstance(total, int)
+            or total < 0 or total > 100 or len(rows) != total):
+        raise ProbeError(f"recall_type_reconcile_read_{status}")
+    return [row for row in rows if isinstance(row, dict) and row.get("name") == name
+            and bool(row.get("archived_at")) == archived]
 
 
 def adapter_probe(key: str, contact: str, patient_id: str, recall_id: str, marker: str,
@@ -70,14 +85,17 @@ def writer_probe(key: str, contact: str, patient_id: str, recall_type_id: str,
 
 
 def main() -> int:
-    if not sys.stdin.isatty():
-        print("Run in a terminal so the API key is hidden.", file=sys.stderr)
+    env_mode = os.environ.get("ABBY_LIVE_CLINIKO_EVAL") == "1"
+    if not env_mode and not sys.stdin.isatty():
+        print("Run in a terminal so the API key is hidden, or use the opt-in owner-only environment.", file=sys.stderr)
         return 2
-    contact = input("Cliniko API contact email: ").strip()
+    contact = (os.environ.get("ABBY_CLINIKO_CONTACT_EMAIL", "") if env_mode
+               else input("Cliniko API contact email: ")).strip()
     if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", contact):
         print("Invalid contact email.", file=sys.stderr)
         return 2
-    key = getpass.getpass("Cliniko API key (hidden): ").strip()
+    key = (os.environ.get("ABBY_CLINIKO_API_KEY", "") if env_mode
+           else getpass.getpass("Cliniko API key (hidden): ")).strip()
     shard = key.rpartition("-")[2]
     if not re.fullmatch(r"[a-z]{2}[0-9]+", shard):
         print("Invalid key shard suffix.", file=sys.stderr)
@@ -91,15 +109,19 @@ def main() -> int:
     }
     reference_id = uuid.uuid4().hex
     marker = str(uuid.uuid4())
+    type_name = "Abby synthetic follow-up " + reference_id
+    type_id = None
     patient_id = None
     recall_id = None
+    archived_type = False
     archived_recall = False
     archived_patient = False
     failed = False
     cleanup_failed = False
     patient_create_uncertain = False
+    type_create_uncertain = False
     recall_create_uncertain = False
-    print(json.dumps({"probe": "cliniko_recall_work_v1", "shard": shard}))
+    print(json.dumps({"probe": "cliniko_recall_work_v2", "shard": shard}))
     try:
         status, body = request(base, headers, "GET", "/recall_types?per_page=100")
         types = body.get("recall_types")
@@ -107,10 +129,25 @@ def main() -> int:
         if status != 200 or not isinstance(types, list) or not isinstance(total, int) or len(types) != total or total > 100:
             raise ProbeError(f"recall_types_preflight_{status}")
         active = [item for item in types if isinstance(item, dict) and item.get("id") and not item.get("archived_at")]
-        if not active:
-            raise ProbeError("no_active_recall_type")
-        type_id = str(active[0]["id"])
         print(json.dumps({"step": "recall_type_preflight", "http_status": status, "active_types": len(active)}))
+
+        type_create_uncertain = True
+        status, created_type = request(base, headers, "POST", "/recall_types", {
+            "name": type_name, "default_duration": 1, "default_duration_type": 10,
+        })
+        if status in (401, 403, 422):
+            type_create_uncertain = False
+        if status != 201 or not isinstance(created_type, dict) or \
+                not re.fullmatch(r"[1-9][0-9]*", str(created_type.get("id", ""))) or \
+                created_type.get("name") != type_name or created_type.get("archived_at") is not None:
+            raise ProbeError(f"create_dedicated_recall_type_{status}")
+        type_id = str(created_type["id"])
+        type_create_uncertain = False
+        read_status, current_type = request(base, headers, "GET", f"/recall_types/{quote(type_id, safe='')}")
+        if read_status != 200 or not isinstance(current_type, dict) or \
+                current_type.get("name") != type_name or current_type.get("archived_at") is not None:
+            raise ProbeError("dedicated_recall_type_read_unproven")
+        print(json.dumps({"step": "create_dedicated_recall_type", "http_status": status, "verified": True}))
 
         patient_create_uncertain = True
         status, patient = request(base, headers, "POST", "/patients", {
@@ -213,6 +250,29 @@ def main() -> int:
             except (ProbeError, URLError, TimeoutError, ValueError, KeyError):
                 cleanup_failed = True
                 print(json.dumps({"step": "archive_patient", "verified": False}))
+        if not type_id and type_create_uncertain:
+            try:
+                types = matching_types(base, headers, type_name)
+                if len(types) == 1 and re.fullmatch(r"[1-9][0-9]*", str(types[0].get("id", ""))):
+                    type_id = str(types[0]["id"])
+                    type_create_uncertain = False
+                else:
+                    cleanup_failed = True
+                print(json.dumps({"step": "locate_recall_type_for_cleanup", "exact_matches": len(types)}))
+            except (ProbeError, URLError, TimeoutError, ValueError, KeyError):
+                cleanup_failed = True
+                print(json.dumps({"step": "locate_recall_type_for_cleanup", "verified": False}))
+        if type_id and (not recall_create_uncertain or archived_recall) and not cleanup_failed:
+            try:
+                path = f"/recall_types/{quote(type_id, safe='')}"
+                status, _ = request(base, headers, "POST", path + "/archive")
+                types = matching_types(base, headers, type_name, archived=True)
+                archived_type = status == 204 and len(types) == 1 and str(types[0].get("id")) == type_id
+                print(json.dumps({"step": "archive_recall_type", "http_status": status, "verified": archived_type}))
+                cleanup_failed |= not archived_type
+            except (ProbeError, URLError, TimeoutError, ValueError, KeyError):
+                cleanup_failed = True
+                print(json.dumps({"step": "archive_recall_type", "verified": False}))
         if cleanup_failed:
             print("Cleanup uncertain: inspect this demo account before another write probe.", file=sys.stderr)
     return 2 if cleanup_failed else 1 if failed else 0
