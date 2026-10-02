@@ -15,7 +15,7 @@ import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 import { PostgresClinikoApprovalStore } from "../../src/storage/postgres-cliniko-approval-store.ts";
 import type { OperationalDailyCounts } from "../../src/voice/operational-counts.ts";
 
-type Fault = "openai-speech" | "speech-primary-stall" | "openai-transcription" | "untrusted-transcript" | "clear-availability" | "clear-unsupported" | "clear-model-failure" | "cliniko-rate-limit" | "cliniko-server-error" | "cliniko-timeout" | "cliniko-slow-read" | "cliniko-zone-changed" | "cliniko-partial-page" | "cliniko-empty" |
+type Fault = "openai-speech" | "speech-primary-stall" | "openai-transcription" | "untrusted-transcript" | "clear-availability" | "clear-unsupported" | "clear-model-failure" | "clear-correction" | "cliniko-rate-limit" | "cliniko-server-error" | "cliniko-timeout" | "cliniko-slow-read" | "cliniko-zone-changed" | "cliniko-partial-page" | "cliniko-empty" |
   "cliniko-business-type-removed" | "cliniko-practitioner-type-removed" | "week-alternative" | "practitioner-alternative" |
   "practitioner-alternative-rate-limit" | "practitioner-alternative-malformed" |
   "practitioner-alternative-second" | "primary-selection-change" | undefined;
@@ -74,6 +74,7 @@ type Fixture = { port: number; child: ReturnType<typeof spawn>;
   clinikoMethods: string[]; clinikoPaths: string[]; clinikoQueries: string[];
   clinikoReadAborts: { at: number; reason: string }[];
   modelRequests: string[];
+  modelAborts: string[];
   openCall: (callSidOverride?: string) => Promise<Call>; restart: () => Promise<void>;
   operationalSnapshot: () => Promise<Record<string, number>>;
   operationalDaily: () => Promise<OperationalDailyCounts> };
@@ -120,6 +121,7 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
   const clinikoQueries: string[] = [];
   const clinikoReadAborts: { at: number; reason: string }[] = [];
   const modelRequests: string[] = [];
+  const modelAborts: string[] = [];
   let processOutput = "";
   try {
     await sql.raw(`create database "${databaseName}"`).execute(admin);
@@ -150,6 +152,8 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
         }
         if (typeof message === "object" && message !== null && "kind" in message &&
             message.kind === "intentModelRequest") modelRequests.push("request");
+        if (typeof message === "object" && message !== null && "kind" in message &&
+            message.kind === "intentModelAborted") modelAborts.push("aborted");
         if (typeof message === "object" && message !== null && "kind" in message &&
             message.kind === "clinikoReadAborted" && "reason" in message &&
             typeof message.reason === "string") clinikoReadAborts.push({ at: Date.now(), reason: message.reason });
@@ -221,7 +225,8 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
       return await response.json() as OperationalDailyCounts;
     };
     await run({ port, child: firstChild, admin, databaseName, speech, speechRequests, clinikoMethods, clinikoPaths,
-      clinikoQueries, clinikoReadAborts, modelRequests, openCall, restart, operationalSnapshot, operationalDaily });
+      clinikoQueries, clinikoReadAborts, modelRequests, modelAborts, openCall, restart, operationalSnapshot,
+      operationalDaily });
   } finally {
     let restored = true;
     try { if (created) await sql.raw(`alter database "${databaseName}" with allow_connections true`).execute(admin); }
@@ -241,6 +246,7 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
           { label: "appointment", value: "synthetic-only" },
           { label: "transcript", value: "Do you have availability tomorrow?" },
           { label: "unsupported_transcript", value: "Please book my appointment tomorrow." },
+          { label: "correction_transcript", value: "Actually, please have the clinic contact me." },
         ];
         const db = connectPostgres(target.toString());
         try { assert.deepEqual(await scanPatientDataCanaries(db, canaries), { ok: true, value: [] }); }
@@ -262,12 +268,16 @@ async function markGreeting(call: Call): Promise<void> {
     mark: { name: (call.messages[1]!.mark as { name: string }).name } }));
 }
 
-async function sendSyntheticSpokenTurn(call: Call): Promise<void> {
+function sendSyntheticFrame(call: Call, sequence: number, chunk: number, voiced: boolean): void {
+  call.socket.send(JSON.stringify({ event: "media", sequenceNumber: String(sequence),
+    streamSid: call.streamSid, media: { track: "inbound", chunk: String(chunk),
+      timestamp: String((chunk - 1) * 20),
+      payload: Buffer.alloc(160, voiced ? 0x9f : 0xff).toString("base64") } }));
+}
+
+async function sendSyntheticSpokenTurn(call: Call, firstSequence = 3, firstChunk = 1): Promise<void> {
   for (let index = 0; index < 37; index += 1) {
-    call.socket.send(JSON.stringify({ event: "media", sequenceNumber: String(3 + index),
-      streamSid: call.streamSid, media: { track: "inbound", chunk: String(1 + index),
-        timestamp: String(index * 20),
-        payload: Buffer.alloc(160, index < 2 ? 0x9f : 0xff).toString("base64") } }));
+    sendSyntheticFrame(call, firstSequence + index, firstChunk + index, index < 2);
     await new Promise(resolve => setTimeout(resolve, 3));
   }
 }
@@ -285,7 +295,7 @@ async function closeCaller(call: Call): Promise<void> {
 }
 
 test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1",
-  timeout: 240_000, concurrency: 5 }, async t => {
+  timeout: 360_000, concurrency: 5 }, async t => {
   await Promise.all([
     t.test("E2E-236 E2E-237 signed clear availability does not count classifier failure", async () =>
       withFixture("clear-availability", async fixture => {
@@ -335,6 +345,30 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         assert.equal(daily.days.at(-1)?.counts.intentClassificationUnavailable, 1);
         assert.equal(JSON.stringify({ lifetime, daily }).includes(caller), false);
         assert.equal(JSON.stringify({ lifetime, daily }).includes("Do you have availability tomorrow?"), false);
+        await closeCaller(call);
+      })),
+    t.test("E2E-238 signed caller correction aborts an in-flight classifier and suppresses stale speech", async () =>
+      withFixture("clear-correction", async fixture => {
+        const call = await fixture.openCall();
+        await markGreeting(call);
+        await sendSyntheticSpokenTurn(call);
+        await waitFor(() => fixture.modelRequests.length === 1, "first classifier request");
+        sendSyntheticFrame(call, 40, 38, true);
+        sendSyntheticFrame(call, 41, 39, false);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        assert.equal(fixture.modelAborts.length, 0, "a single voiced frame cannot cancel classification");
+        assert.equal(call.messages.length, 2, "the first request remains pending");
+        await sendSyntheticSpokenTurn(call, 42, 40);
+        await waitFor(() => fixture.modelAborts.length === 1 && fixture.modelRequests.length === 2 &&
+          call.messages.length >= 4 && fixture.speech.length >= 2, "corrected response");
+        assertResponseAudio(call);
+        assert.equal(fixture.speech[1], noStaffNotice);
+        assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 0);
+        assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
+        assert.equal((await fixture.operationalSnapshot()).intentClassificationUnavailable, 0);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        assert.equal(fixture.speech.length, 2, "late first classifier result may not speak");
+        assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 0);
         await closeCaller(call);
       })),
     ...[false, true].map(alternativeApproved =>
@@ -431,7 +465,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
           { model: "synthetic-fallback", text: greeting },
         ]);
         call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
-          dtmf: { track: "inbound_track", digit: "1" } }));
+          dtmf: { track: "inbound_track", digit: "2" } }));
         await waitFor(() => call.messages.length >= 4 && fixture.speechRequests.length >= 4,
           "fallback availability answer");
         assert.deepEqual(call.messages.map(item => item.event), ["media", "mark", "media", "mark"]);

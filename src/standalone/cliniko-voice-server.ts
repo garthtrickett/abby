@@ -282,13 +282,13 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       approvedGreeting: route.keypadAvailabilityGreeting,
       keypadAvailabilityRange: (digit: string) => keypadAvailabilityRange(approved.clinicDate, digit,
         route.sevenDayAvailabilityEnabled === true),
-      resolveIntent: async turn => {
+      resolveIntent: async (turn, signal) => {
         try {
-          const result = await classifyIntent(turn);
-          if (!result.ok) count(route.scope, "intentClassificationUnavailable");
+          const result = await classifyIntent(turn, signal);
+          if (!signal?.aborted && !result.ok) count(route.scope, "intentClassificationUnavailable");
           return result;
         } catch {
-          count(route.scope, "intentClassificationUnavailable");
+          if (!signal?.aborted) count(route.scope, "intentClassificationUnavailable");
           return err({ kind: "intentUnavailable" });
         }
       }, readiness,

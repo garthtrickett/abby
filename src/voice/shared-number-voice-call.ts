@@ -135,6 +135,10 @@ export class SharedNumberVoiceCall {
     return Promise.resolve(err({ kind: "sessionUnknown" }));
   }
 
+  supersedePendingIntent(): boolean {
+    return !this.closing && !this.terminal && !!this.full?.supersedePendingIntent();
+  }
+
   acceptTranscript(event: TranscriptEvent): Result<void, SharedVoiceFailure> {
     if (this.closing || this.terminal) return err({ kind: "disconnected" });
     if (this.prelocation) return this.prelocation.acceptTranscript(event);

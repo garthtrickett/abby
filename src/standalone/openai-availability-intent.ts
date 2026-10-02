@@ -85,12 +85,16 @@ export function createOpenAIAvailabilityIntentResolver(config: OpenAIAvailabilit
   if (!config.apiKey.trim() || /[\r\n]/.test(config.apiKey) || !config.model.trim() || config.model.length > 256 ||
       typeof config.clinicDate !== "function") throw new TypeError("invalid intent resolver configuration");
   const fetchPort = config.fetch ?? fetch;
-  return async (turn: FinalCallerTurn) => {
+  return async (turn: FinalCallerTurn, signal?: AbortSignal) => {
+    if (signal?.aborted) return err(unavailable);
     let localDate: string;
     try { localDate = config.clinicDate(); } catch { return err(unavailable); }
     const today = dateMillis(localDate);
     if (today === undefined || turn.quality !== "clear" || !turn.text.trim() || turn.text.length > 4_000) return err(unavailable);
     const controller = new AbortController();
+    const cancel = () => controller.abort();
+    signal?.addEventListener("abort", cancel, { once: true });
+    if (signal?.aborted) controller.abort();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetchPort(endpoint, {
@@ -118,6 +122,6 @@ export function createOpenAIAvailabilityIntentResolver(config: OpenAIAvailabilit
       if (!response.ok) return err(unavailable);
       return decode(await boundedJson(response), today);
     } catch { return err(unavailable); }
-    finally { clearTimeout(timer); }
+    finally { clearTimeout(timer); signal?.removeEventListener("abort", cancel); }
   };
 }

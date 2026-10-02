@@ -23,6 +23,7 @@ export type MediaTurnTarget<T, F> = Readonly<{
   speechStarted(now: string): Promise<Result<number, F>>;
   acceptTranscript(event: TranscriptEvent): Result<void, F>;
   finishTurn(now: string): Promise<Result<T, F>>;
+  supersedePendingIntent?(): boolean;
 }>;
 
 export type MediaTurnOptions = Readonly<{
@@ -71,9 +72,27 @@ export class MediaTurnController<T, F> {
   private generation: number | undefined;
   private turnMs = 0;
   private trailingSilenceMs = 0;
+  private pendingTurn = false;
+  private correctionMs = 0;
+  private correctionRequested = false;
 
   idle(): boolean {
     return !this.closed && this.queuedFrames === 0 && this.generation === undefined && this.candidateMs === 0;
+  }
+
+  /** Observe validated wire frames while a finished turn awaits its classifier. */
+  observePendingCorrection(frame: MediaFrame): void {
+    if (!this.pendingTurn || this.correctionRequested || this.closed) return;
+    const durationMs = decodedFrame(frame, this.sessionId);
+    if (durationMs === undefined) return;
+    if (averageAmplitude(frame.bytes) < this.speechThreshold) {
+      this.correctionMs = 0;
+      return;
+    }
+    this.correctionMs += durationMs;
+    if (this.correctionMs >= this.speechStartMs && this.target.supersedePendingIntent?.()) {
+      this.correctionRequested = true;
+    }
   }
 
   constructor(sessionId: string, target: MediaTurnTarget<T, F>, transcription: TranscriptionPort,
@@ -184,11 +203,20 @@ export class MediaTurnController<T, F> {
     const finals = await this.acceptEvents(flushed.value);
     if (!finals.ok) { this.closed = true; return finals; }
     let completed: Result<T, F>;
+    this.pendingTurn = true;
+    this.correctionMs = 0;
+    this.correctionRequested = false;
     try { completed = await this.target.finishTurn(frame.capturedAt); }
     catch { this.closed = true; return err({ kind: "targetUnavailable" }); }
+    finally { this.pendingTurn = false; }
+    const corrected = this.correctionRequested;
+    this.correctionRequested = false;
+    this.correctionMs = 0;
     this.generation = undefined;
     this.turnMs = 0;
     this.trailingSilenceMs = 0;
+    if (corrected && !completed.ok &&
+        (completed.error as Readonly<{ kind?: unknown }>).kind === "staleTurn") return ok({ kind: "listening" });
     return completed.ok ? ok({ kind: "turnCompleted", value: completed.value }) : completed;
   }
 
