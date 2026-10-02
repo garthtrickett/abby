@@ -67,6 +67,8 @@ export type HostDashboardIdentity = Readonly<{
   gatewayFor: (actor: HostActor) => CommandGateway | Promise<CommandGateway>;
   /** Optional owner report reader; the response is reduced to fixed aggregate fields. */
   readSpeechGate?: () => Promise<unknown>;
+  /** Optional host-specific wording constraint applied before the generic policy command. */
+  greetingTextValidator?: (text: string) => boolean;
   /** The host may challenge an absent identity; other authorization failures remain forbidden. */
   unauthorized?: (response: ServerResponse) => void;
 }>;
@@ -82,6 +84,7 @@ export async function createHostAuthenticatedDashboardServer(identity: HostDashb
       typeof identity.resolveActor !== "function" || typeof identity.gatewayFor !== "function" ||
       (identity.surface !== undefined && !["full", "availabilitySetup"].includes(identity.surface)) ||
       (identity.unauthorized !== undefined && typeof identity.unauthorized !== "function") ||
+      (identity.greetingTextValidator !== undefined && typeof identity.greetingTextValidator !== "function") ||
       (identity.readSpeechGate !== undefined && typeof identity.readSpeechGate !== "function")) {
     throw new RangeError("invalid dashboard identity configuration");
   }
@@ -103,7 +106,7 @@ export async function createHostAuthenticatedDashboardServer(identity: HostDashb
         return json(response, 403, { ok: false, error: { kind: "forbidden" } });
       }
       return handle(request, response, gateway, bundle, stylesheet, origin.origin, identity.surface,
-        identity.readSpeechGate, actor.role === "clinicAdmin");
+        identity.readSpeechGate, actor.role === "clinicAdmin", identity.greetingTextValidator);
     } catch { return json(response, 403, { ok: false, error: { kind: "forbidden" } }); }
   })(); });
 }
@@ -111,7 +114,8 @@ export async function createHostAuthenticatedDashboardServer(identity: HostDashb
 async function handle(request: IncomingMessage, response: ServerResponse, gateway: CommandGateway,
                       bundle: string, stylesheet: string, authenticatedOrigin?: string,
                       surface: "full" | "availabilitySetup" = "full",
-                      readSpeechGate?: () => Promise<unknown>, speechGateAdmin = false): Promise<void> {
+                      readSpeechGate?: () => Promise<unknown>, speechGateAdmin = false,
+                      greetingTextValidator?: (text: string) => boolean): Promise<void> {
   try {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (surface === "availabilitySetup" && !(
@@ -281,6 +285,10 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       const input = record(await body(request));
       if (!input || !matchesSchema(capabilityDescriptor("settings.routing.greeting.change.v1").inputSchema, input)) {
         return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      }
+      if (input.enabled === true && greetingTextValidator &&
+          (typeof input.approvedText !== "string" || !greetingTextValidator(input.approvedText))) {
+        return json(response, 400, { ok: false, error: { kind: "invalidValue" } });
       }
       command = input as GatewayCommand;
     }

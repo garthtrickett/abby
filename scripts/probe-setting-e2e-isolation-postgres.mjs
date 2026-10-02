@@ -47,8 +47,9 @@ async function execute(command, args, timeoutMs, env = process.env) {
   });
   if (code !== 0) {
     const lines = output.split("\n");
-    const first = lines.findIndex(line => /^\s*not ok \d+ - /.test(line));
-    const excerpt = first >= 0 ? lines.slice(Math.max(0, first - 3), first + 18) : lines.slice(-35);
+    const failures = lines.flatMap((line, index) => /^\s*not ok \d+ - /.test(line) ? [index] : []);
+    const excerpt = failures.length ? failures.flatMap(index =>
+      lines.slice(Math.max(0, index - 3), index + 18)) : lines.slice(-35);
     throw new Error(`${command} ${args.join(" ")} exited ${code}:\n${excerpt.join("\n")}\n${lines.slice(-10).join("\n")}`);
   }
   return output;
@@ -94,9 +95,11 @@ async function runNode(entries, concurrency) {
 
 function checkedBrowser(output, ids) {
   const passed = Number(output.match(/\b(\d+) passed \(/)?.[1] ?? -1);
-  assert.ok(passed >= ids.length, "selected browser cases did not pass");
+  // One browser journey may prove multiple mapped scenario IDs; each still has to appear in output.
+  assert.ok(passed >= 1, "selected browser cases did not pass");
   assert.doesNotMatch(output, /\b\d+ (?:failed|skipped)\b/);
-  for (const id of ids) assert.ok(output.includes(id), `${id} browser case did not execute`);
+  for (const id of ids) assert.ok(output.split("\n").some(line =>
+    line.includes("✓") && line.includes(id)), `${id} browser case did not pass`);
   return passed;
 }
 async function runBrowser(entries, workers) {

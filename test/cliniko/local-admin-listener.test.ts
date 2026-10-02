@@ -12,6 +12,7 @@ import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
 import { PostgresOperationalCounters } from "../../src/storage/postgres-operational-counters.ts";
+import { keypadInstructions, sevenDayInstructions } from "../../src/standalone/keypad-greeting.ts";
 import type { OperationalDailyCounts } from "../../src/voice/operational-counts.ts";
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 
@@ -35,7 +36,7 @@ async function freePort(): Promise<number> {
   return address.port;
 }
 
-test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 loopback admin retains scoped setup and greeting",
+test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 E2E-247 loopback admin retains scoped setup and usable greeting",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
     const adminUrl = process.env.DATABASE_URL;
     assert.ok(adminUrl);
@@ -165,7 +166,7 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 loopback admin retains scoped setu
           "Content-Type": "application/json", Authorization: authorization, Origin: requestOrigin },
           body: JSON.stringify(value) });
       const greeting = { kind: "settings.routing.greeting.change.v1", expectedVersion: "0", enabled: true,
-        greetingVersion: "local-v1", approvedText: "Welcome to the clinic. How can I help?",
+        greetingVersion: "local-v1", approvedText: `Welcome to the clinic. ${keypadInstructions}`,
         effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2027-09-01T00:00:00.000Z" };
       const before = await fetch(`${origin}/api/settings`, { headers: { Authorization: basic } });
       assert.equal(before.status, 200);
@@ -173,6 +174,14 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 loopback admin retains scoped setu
       assert.equal((await greetingChange({ ...greeting, ownerRef: "forged" })).status, 400);
       assert.equal((await greetingChange(greeting, basic, "http://foreign.example.test")).status, 403);
       assert.equal((await greetingChange(greeting, "")).status, 401);
+      const missingChoices = await greetingChange({ ...greeting, approvedText: "Welcome to the clinic." });
+      assert.equal(missingChoices.status, 400);
+      assert.deepEqual(await missingChoices.json(), { ok: false, error: { kind: "invalidValue" } });
+      assert.equal((await greetingChange({ ...greeting,
+        approvedText: `${greeting.approvedText} ${sevenDayInstructions}` })).status, 400);
+      const beforeValid = await fetch(`${origin}/api/settings`, { headers: { Authorization: basic } });
+      assert.equal((await beforeValid.json() as { value: { policy: { policyVersion: string } } })
+        .value.policy.policyVersion, "0");
       assert.equal((await greetingChange(greeting)).status, 200);
       const greetingAudit = await fetch(`${origin}/api/settings/greeting-audit`, { headers: { Authorization: basic } });
       assert.equal(greetingAudit.status, 200);
@@ -191,7 +200,23 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 loopback admin retains scoped setu
         expectedVersion: approvedPolicy.policyVersion, enabled: false })).status, 200);
       const disabled = await fetch(`${origin}/api/settings`, { headers: { Authorization: basic } });
       assert.equal(disabled.status, 200);
-      assert.equal((await disabled.json() as { value: { policy: { greeting?: unknown } } }).value.policy.greeting, undefined);
+      const disabledPolicy = (await disabled.json() as { value: { policy: { policyVersion: string;
+        greeting?: unknown } } }).value.policy;
+      assert.equal(disabledPolicy.greeting, undefined);
+      await stop();
+      env.ABBY_SEVEN_DAY_AVAILABILITY_ENABLED = "1";
+      await launch();
+      assert.equal((await greetingChange({ ...greeting,
+        expectedVersion: disabledPolicy.policyVersion })).status, 400);
+      const weekGreeting = { ...greeting, expectedVersion: disabledPolicy.policyVersion,
+        greetingVersion: "local-week-v1", approvedText: `${greeting.approvedText} ${sevenDayInstructions}` };
+      assert.equal((await greetingChange(weekGreeting)).status, 200);
+      const weekSaved = await fetch(`${origin}/api/settings`, { headers: { Authorization: basic } });
+      assert.equal((await weekSaved.json() as { value: { policy: { greeting?: { approvedText: string } } } })
+        .value.policy.greeting?.approvedText, weekGreeting.approvedText);
+      const weekAudit = await fetch(`${origin}/api/settings/greeting-audit`, { headers: { Authorization: basic } });
+      assert.deepEqual((await weekAudit.json() as { value: { page: { entries: { greetingVersion?: string }[] } } })
+        .value.page.entries.map(entry => entry.greetingVersion), ["local-v1", undefined, "local-week-v1"]);
       assert.equal(output.includes(token) || output.includes(apiKey), false);
       const privacy = connectPostgres(target.toString());
       try { assert.deepEqual(await scanPatientDataCanaries(privacy, [

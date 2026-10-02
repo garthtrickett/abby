@@ -9,7 +9,7 @@ type InputField = "version" | "text" | "from" | "until";
 function failureMessage(failure: DashboardFailure): string {
   if (failure.kind === "versionConflict") return "The greeting changed elsewhere. Review the current version and try again.";
   if (failure.kind === "forbidden") return "Clinic administrator access is required.";
-  if (failure.kind === "invalidValue" || failure.kind === "invalid") return "Check the greeting text, version and UTC effective dates.";
+  if (failure.kind === "invalidValue" || failure.kind === "invalid") return "Check the greeting text, exact keypad instructions, version and UTC effective dates.";
   return "The greeting outcome is uncertain. Review the current setting before trying again.";
 }
 
@@ -91,11 +91,14 @@ export class GreetingSetupPanel {
       this.notice = enabled ? "Greeting approved for new calls." : "Greeting disabled for new calls.";
     } else {
       this.error = failureMessage(result.error);
-      const current = await this.port.settings();
-      if (current.ok) {
-        this.policy = current.value;
-        this.fillFromPolicy();
-      } else this.error += " Current setting unavailable; reload before another change.";
+      if (result.error.kind !== "invalid" && result.error.kind !== "invalidValue" &&
+          result.error.kind !== "forbidden") {
+        const current = await this.port.settings();
+        if (current.ok) {
+          this.policy = current.value;
+          this.fillFromPolicy();
+        } else this.error += " Current setting unavailable; reload before another change.";
+      }
     }
     const audit = await this.port.greetingAudit();
     if (audit.ok) this.replaceHistory(audit.value);

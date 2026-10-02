@@ -13,6 +13,7 @@ import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
 import { TextReception } from "../../src/reference/text-reception.ts";
 import { createHostAuthenticatedDashboardServer } from "../../src/standalone/dashboard/server.ts";
 import { StandaloneOperationalCounters } from "../../src/standalone/operational-counters.ts";
+import { validKeypadGreetingText } from "../../src/standalone/keypad-greeting.ts";
 import type { OperationalDailyCounts } from "../../src/voice/operational-counts.ts";
 
 const scope = { tenantId: "local-browser", clinicId: "clinic", locationId: "main" };
@@ -175,7 +176,7 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 local owner sees aggregate speech and oper
   }
 });
 
-test("E2E-246 local Cliniko panel approves, reloads and disables the greeting", async ({ page, request }) => {
+test("E2E-246 E2E-247 local Cliniko panel rejects unusable keypad text before approval", async ({ page, request }) => {
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
   const policy = new MemoryPolicyStore();
@@ -183,6 +184,7 @@ test("E2E-246 local Cliniko panel approves, reloads and disables the greeting", 
   const reception = new TextReception(new MemoryLedger(), policy, new ReferenceClinicHost([], []));
   const actor = { actorRef: "local-greeting-owner", role: "clinicAdmin" as const, scope };
   const server = await createHostAuthenticatedDashboardServer({ publicOrigin: origin, surface: "availabilitySetup",
+    greetingTextValidator: text => validKeypadGreetingText(text, false),
     resolveActor: incoming => incoming.headers.authorization === basic ? actor
       : incoming.headers.authorization === "Basic synthetic-staff" ? { ...actor, role: "staff" } : null,
     unauthorized: response => { response.writeHead(401, { "WWW-Authenticate": 'Basic realm="Abby clinic admin"' }); response.end(); },
@@ -197,7 +199,8 @@ test("E2E-246 local Cliniko panel approves, reloads and disables the greeting", 
     await expect(page.getByLabel("Greeting approval status")).toContainText("No approved greeting");
     const headers = { Authorization: basic, Origin: origin, "Content-Type": "application/json" };
     const change = { kind: "settings.routing.greeting.change.v1", expectedVersion: "1", enabled: true,
-      greetingVersion: "local-v1", approvedText: "Welcome to the clinic. How can I help?",
+      greetingVersion: "local-v1",
+      approvedText: "Welcome to the clinic. Press 1 for possible times today. Press 2 for possible times tomorrow.",
       effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2027-09-01T00:00:00.000Z" };
     assert.equal((await request.post(`${origin}/api/settings/greeting`, { headers,
       data: { ...change, ownerRef: "forged-owner" } })).status(), 400);
@@ -208,9 +211,17 @@ test("E2E-246 local Cliniko panel approves, reloads and disables the greeting", 
     assert.equal((await request.get(`${origin}/api/settings/greeting-audit`, { headers: {
       Authorization: "Basic synthetic-staff" } })).status(), 403);
     await page.getByLabel("Local greeting version").fill(change.greetingVersion);
-    await page.getByLabel("Local greeting text").fill(change.approvedText);
+    await page.getByLabel("Local greeting text").fill("Welcome to the clinic.");
     await page.getByLabel("Local greeting effective from").fill(change.effectiveFrom);
     await page.getByLabel("Local greeting effective until").fill(change.effectiveUntil);
+    await page.getByRole("button", { name: "Approve greeting for new calls" }).click();
+    await expect(page.getByRole("alert")).toContainText("exact keypad instructions");
+    await expect(page.getByLabel("Greeting approval status")).toContainText("No approved greeting · policy version 1");
+    await expect(page.getByLabel("Greeting change history")).toContainText("setup-seed");
+    await expect(page.getByLabel("Greeting change history")).not.toContainText("local-v1");
+    await expect(page.getByLabel("Local greeting version")).toHaveValue(change.greetingVersion);
+    await expect(page.getByLabel("Local greeting effective from")).toHaveValue(change.effectiveFrom);
+    await page.getByLabel("Local greeting text").fill(change.approvedText);
     await page.getByRole("button", { name: "Approve greeting for new calls" }).click();
     await expect(page.getByLabel("Greeting approval status")).toContainText("Greeting saved · policy version 2");
     await expect(page.getByLabel("Greeting change history")).toContainText("greeting local-v1");

@@ -28,6 +28,7 @@ import type { AuthenticatedInboundCall } from "../voice/admission.ts";
 import { createOpenAIAvailabilityIntentResolver } from "./openai-availability-intent.ts";
 import { clinicDateAt } from "./clinic-clock.ts";
 import { keypadAvailabilityRange } from "./keypad-availability.ts";
+import { validKeypadGreetingText } from "./keypad-greeting.ts";
 import { StandaloneOperationalCounters } from "./operational-counters.ts";
 import type { OperationalCounterKind, OperationalCounterStore } from "../voice/operational-counts.ts";
 import { createStandaloneTransientVoiceCall } from "./transient-voice-composition.ts";
@@ -65,12 +66,8 @@ function isDynamicRoute(route: ClinikoVoiceRoute): route is ClinikoVoiceRouteBas
   return "availabilityForSelection" in route;
 }
 
-const keypadInstructions = "Press 1 for possible times today. Press 2 for possible times tomorrow.";
-const sevenDayInstructions = "Press 3 for possible times over the next week.";
-
 function validKeypadGreeting(greeting: unknown, scope: LocationScope, sevenDayEnabled: boolean): greeting is ApprovedGreeting {
-  return validGreetingShape(greeting, scope) && greeting.approvedText.includes(keypadInstructions) &&
-    greeting.approvedText.includes(sevenDayInstructions) === sevenDayEnabled;
+  return validGreetingShape(greeting, scope) && validKeypadGreetingText(greeting.approvedText, sevenDayEnabled);
 }
 
 export type ClinikoVoiceServerConfig = Readonly<{

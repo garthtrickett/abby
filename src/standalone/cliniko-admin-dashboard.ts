@@ -14,6 +14,7 @@ import { PostgresOperationalCounters } from "../storage/postgres-operational-cou
 import { checkStandaloneTextDatabase } from "../storage/standalone-privacy-preflight.ts";
 import type { StandalonePrivacyPreflightFailure } from "../storage/standalone-privacy-preflight.ts";
 import { createStandaloneClinikoSetup } from "./cliniko-setup-composition.ts";
+import { validKeypadGreetingText } from "./keypad-greeting.ts";
 import { createHostAuthenticatedDashboardServer } from "./dashboard/server.ts";
 import type { HostDashboardIdentity } from "./dashboard/server.ts";
 
@@ -23,6 +24,7 @@ export type ClinikoAdminDashboardConfig = Readonly<{
   route: ClinikoSetupRoute;
   apiKey: string;
   contactEmail: string;
+  sevenDayAvailabilityEnabled?: boolean;
   sharedBudgetUserRef?: string;
   publicOrigin: string;
   resolveActor: HostDashboardIdentity["resolveActor"];
@@ -39,6 +41,8 @@ export type ClinikoAdminDashboardFailure = ClinikoCatalogueFailure | StandaloneP
 /** The host owns identity and listener lifetime; this composition owns only clinic-safe configuration. */
 export async function createStandaloneClinikoAdminDashboard(config: ClinikoAdminDashboardConfig):
   Promise<Result<Server, ClinikoAdminDashboardFailure>> {
+  if (config.sevenDayAvailabilityEnabled !== undefined &&
+      typeof config.sevenDayAvailabilityEnabled !== "boolean") return err({ kind: "invalidConfig" });
   const scope = structuredClone(config.scope);
   const privacy = await checkStandaloneTextDatabase(config.db);
   if (!privacy.ok) return privacy;
@@ -58,6 +62,7 @@ export async function createStandaloneClinikoAdminDashboard(config: ClinikoAdmin
   try {
     const server = await createHostAuthenticatedDashboardServer({ publicOrigin: config.publicOrigin,
       surface: "availabilitySetup",
+      greetingTextValidator: text => validKeypadGreetingText(text, config.sevenDayAvailabilityEnabled === true),
       resolveActor: config.resolveActor,
       ...(config.readSpeechGate ? { readSpeechGate: config.readSpeechGate } : {}),
       ...(config.unauthorized ? { unauthorized: config.unauthorized } : {}),
