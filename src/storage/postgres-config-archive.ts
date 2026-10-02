@@ -4,6 +4,7 @@ import type { Kysely } from "kysely";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result, StaffDestination } from "../core/model.ts";
 import { validAfterHoursSetting } from "../core/after-hours-policy.ts";
+import { validGreetingShape } from "../core/greeting.ts";
 import { validUrgentResponseShape } from "../core/urgent-response.ts";
 import { validApprovedStaffSchedule } from "../core/staff-schedule.ts";
 import { ARCHIVE_SECTIONS } from "../portability/archive-envelope.ts";
@@ -169,12 +170,8 @@ function policyFields(value: unknown, scope: LocationScope, version: number,
     policy.staffedIntervals = row.staffedIntervals.map(item => ({ startsAt: item.startsAt, endsAt: item.endsAt }));
   }
   if (row.greeting !== undefined) {
-    const greeting = object(row.greeting);
-    const greetingScope = object(greeting?.scope);
-    if (!greeting || !greetingScope || greetingScope.tenantId !== scope.tenantId || greetingScope.clinicId !== scope.clinicId ||
-        greetingScope.locationId !== scope.locationId || greeting.approved !== true ||
-        !validRef(greeting.version) || !validRef(greeting.ownerRef) ||
-        typeof greeting.approvedText !== "string" || !greeting.approvedText.trim()) throw new ExportAbort("storageCorrupt");
+    if (!validGreetingShape(row.greeting, scope)) throw new ExportAbort("storageCorrupt");
+    const greeting = row.greeting;
     policy.greeting = { version: greeting.version, ownerRef: greeting.ownerRef, approvedText: greeting.approvedText, approved: true };
   }
   return policy;

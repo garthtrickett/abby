@@ -5,6 +5,7 @@ import { ClinikoApprovedAvailabilitySearch } from "../cliniko/approved-availabil
 import type { ClinikoSelection } from "../cliniko/catalogue.ts";
 import type { ClinikoCatalogueSetup, ClinikoSelectionApproval, ClinikoSetupRoute } from "../cliniko/catalogue-setup.ts";
 import { isClinikoApprovalState } from "../cliniko/catalogue-setup.ts";
+import { validGreetingShape } from "../core/greeting.ts";
 import { err, ok } from "../core/model.ts";
 import type { ApprovedGreeting, LocationScope, Result } from "../core/model.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
@@ -134,13 +135,7 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       throw new RangeError("invalid clinic voice route");
     }
     const greeting = route.keypadAvailabilityGreeting;
-    if (!greeting || greeting.approved !== true || !greeting.scope ||
-        greeting.scope.tenantId !== route.scope.tenantId ||
-        greeting.scope.clinicId !== route.scope.clinicId ||
-        greeting.scope.locationId !== route.scope.locationId ||
-        !greeting.version?.trim() || greeting.version.length > 256 ||
-        !greeting.ownerRef?.trim() || greeting.ownerRef.length > 256 ||
-        typeof greeting.approvedText !== "string" || greeting.approvedText.length > 2_000 ||
+    if (!validGreetingShape(greeting, route.scope) ||
         !greeting.approvedText.includes(keypadInstructions) ||
         (route.sevenDayAvailabilityEnabled !== undefined && typeof route.sevenDayAvailabilityEnabled !== "boolean") ||
         greeting.approvedText.includes(sevenDayInstructions) !== (route.sevenDayAvailabilityEnabled === true)) {
