@@ -7,11 +7,11 @@ import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
 import { unprovenReadiness } from "../core/readiness.ts";
 import { ReferenceNumberRoutingHost } from "../reference/clinic-number-routing.ts";
-import { referenceDefaultPolicy } from "../reference/policy-store.ts";
 import type Database from "../storage/generated/Database.ts";
 import { PostgresClinikoRequestBudget } from "../storage/postgres-cliniko-request-budget.ts";
 import { PostgresClinikoApprovalStore } from "../storage/postgres-cliniko-approval-store.ts";
 import { PostgresPolicyStore } from "../storage/postgres-policy-store.ts";
+import { standaloneDefaultPolicy } from "./default-policy.ts";
 
 export type StandaloneClinikoSetupConfig = Readonly<{
   db: Kysely<Database>;
@@ -36,7 +36,7 @@ export function createStandaloneClinikoSetup(config: StandaloneClinikoSetupConfi
     return err({ kind: "invalidConfig" });
   }
   try {
-    const policy = new PostgresPolicyStore(config.db, referenceDefaultPolicy, "unavailable",
+    const policy = new PostgresPolicyStore(config.db, standaloneDefaultPolicy, "unavailable",
       unprovenReadiness, false, "standaloneMinimal");
     const routing = new ReferenceNumberRoutingHost([{ ...config.scope, ...config.route }]);
     const setup = new ClinikoCatalogueSetup(catalogue.value, routing, policy,

@@ -14,6 +14,7 @@ const cases = [
   { id: "E2E-074", file: "test/voice/voice.test.ts" },
   { id: "E2E-226", file: "test/voice/embedded-cliniko-booking-host-call.test.ts" },
   { id: "E2E-244", file: "test/voice/voice.test.ts" },
+  { id: "E2E-245", file: "test/voice/voice.test.ts" },
 ];
 
 for (const { id, file } of cases) {

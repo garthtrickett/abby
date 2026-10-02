@@ -78,6 +78,9 @@ export type ApprovedGreeting = Readonly<{
   ownerRef: string;
   approvedText: string;
   approved: true;
+  /** New clinic-admin approvals are time bounded; absent only on legacy host-provided greetings. */
+  effectiveFrom?: string;
+  effectiveUntil?: string;
 }>;
 export type AfterHoursMode = "staffRequest" | "approvedInfoAndRequest";
 export type ApprovedAfterHoursInfo = Readonly<{

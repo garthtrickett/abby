@@ -4,7 +4,7 @@ import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor } from "../../reference/command-gateway.ts";
 import type { StaffQueuePage } from "../../reference/staff-queue.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
-import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
+import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, GreetingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
 import type { WriteStopAuditPage, WriteStopStatus } from "../../core/write-stop.ts";
 import type { KnowledgeEntry } from "../../reference/knowledge-catalogue.ts";
 
@@ -39,6 +39,11 @@ export type DashboardState = {
   hoursClosedDates: string;
   hoursFrom: string;
   hoursUntil: string;
+  greetingAuditPage: GreetingSettingAuditPage | undefined;
+  greetingVersion: string;
+  greetingText: string;
+  greetingFrom: string;
+  greetingUntil: string;
   callIdInput: string;
   call: CallSummary | undefined;
   staffPage: StaffQueuePage | undefined;
@@ -75,6 +80,10 @@ export type DashboardActions = Readonly<{
   changeStaffSchedule(enabled: boolean): void;
   loadHoursAudit(): void;
   loadMoreHoursAudit(): void;
+  setGreetingField(field: "greetingVersion" | "greetingText" | "greetingFrom" | "greetingUntil", value: string): void;
+  changeGreeting(enabled: boolean): void;
+  loadGreetingAudit(): void;
+  loadMoreGreetingAudit(): void;
   setCallId(value: string): void;
   loadCall(): void;
   loadStaff(): void;
@@ -90,6 +99,7 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
   const canChangeAutomation = state.capabilities.some(item => item.id === "settings.automation.enabled.change.v1");
   const canChangeAfterHours = state.capabilities.some(item => item.id === "settings.routing.afterHours.change.v1");
   const canChangeUrgent = state.capabilities.some(item => item.id === "settings.routing.urgent.change.v1");
+  const canChangeGreeting = state.capabilities.some(item => item.id === "settings.routing.greeting.change.v1");
   const canChangeHours = state.capabilities.some(item => item.id === "settings.routing.staffSchedule.change.v1");
   const enabled = state.policy?.bookingEnabled ?? false;
   const automationEnabled = state.policy?.automationEnabled ?? false;
@@ -196,6 +206,34 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
         ${state.urgentAuditPage ? html`<div aria-label="Urgent wording audit">
           ${state.urgentAuditPage.entries.length ? html`<ul>${state.urgentAuditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.enabled ? "approved" : "disabled"}${entry.scriptVersion ? ` · script ${entry.scriptVersion}` : ""} · ${entry.actorRef} · ${entry.changedAt}</li>`)}</ul>` : html`<p>No urgent wording changes recorded.</p>`}
           ${state.urgentAuditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreUrgentAudit()}>Load more urgent wording history</button>` : ""}
+        </div>` : html`<p class="muted">Setting history unavailable.</p>`}
+      </section>` : ""}
+      <section class="card" aria-labelledby="greeting-title">
+        <h2 id="greeting-title">Approved greeting</h2>
+        <p class="status">${state.policy?.greeting ? "Greeting saved" : "No approved greeting"}</p>
+        <p class="muted">A clinic admin approves the exact opening words and an effective period. A disabled or expired greeting blocks new voice calls.</p>
+        ${canChangeGreeting && state.policy ? html`<div>
+          <label>Greeting version <input aria-label="Greeting version" .value=${state.greetingVersion}
+            @input=${(event: Event) => actions.setGreetingField("greetingVersion", (event.target as HTMLInputElement).value)}></label>
+          <label>Greeting text <textarea aria-label="Greeting text" .value=${state.greetingText}
+            @input=${(event: Event) => actions.setGreetingField("greetingText", (event.target as HTMLTextAreaElement).value)}></textarea></label>
+          <label>Greeting effective from (UTC) <input aria-label="Greeting effective from" .value=${state.greetingFrom}
+            @input=${(event: Event) => actions.setGreetingField("greetingFrom", (event.target as HTMLInputElement).value)}></label>
+          <label>Greeting effective until (UTC) <input aria-label="Greeting effective until" .value=${state.greetingUntil}
+            @input=${(event: Event) => actions.setGreetingField("greetingUntil", (event.target as HTMLInputElement).value)}></label>
+          <button type="button" ?disabled=${state.busy || !state.greetingVersion.trim() || !state.greetingText.trim() ||
+            !state.greetingFrom.trim() || !state.greetingUntil.trim()}
+            @click=${() => actions.changeGreeting(true)}>Approve greeting</button>
+          <button type="button" ?disabled=${state.busy || !state.policy.greeting}
+            @click=${() => actions.changeGreeting(false)}>Disable greeting</button>
+        </div>` : html`<span class="pill">Admin only</span>`}
+      </section>
+      ${state.capabilities.some(item => item.id === "settings.routing.greeting.audit.v1") ? html`<section class="card" aria-labelledby="greeting-audit-title">
+        <div class="row"><h2 id="greeting-audit-title">Greeting history</h2>
+          <button type="button" ?disabled=${state.busy} @click=${() => actions.loadGreetingAudit()}>Refresh greeting history</button></div>
+        ${state.greetingAuditPage ? html`<div aria-label="Greeting audit">
+          ${state.greetingAuditPage.entries.length ? html`<ul>${state.greetingAuditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.enabled ? "approved" : "disabled"}${entry.greetingVersion ? ` · greeting ${entry.greetingVersion}` : ""} · ${entry.actorRef} · ${entry.changedAt}</li>`)}</ul>` : html`<p>No greeting changes recorded.</p>`}
+          ${state.greetingAuditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreGreetingAudit()}>Load more greeting history</button>` : ""}
         </div>` : html`<p class="muted">Setting history unavailable.</p>`}
       </section>` : ""}
       <section class="card" aria-labelledby="clinic-hours-title">

@@ -199,6 +199,12 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       command = { kind: "settings.routing.staffSchedule.audit.v1",
         ...(cursor === null ? {} : { afterVersion: Number(cursor) }) };
     }
+    if (request.method === "GET" && url.pathname === "/api/settings/greeting-audit") {
+      const cursor = url.searchParams.get("after");
+      if (cursor !== null && (!/^(0|[1-9][0-9]*)$/.test(cursor) || !Number.isSafeInteger(Number(cursor)))) return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      command = { kind: "settings.routing.greeting.audit.v1",
+        ...(cursor === null ? {} : { afterVersion: Number(cursor) }) };
+    }
     if (request.method === "GET" && url.pathname === "/api/staff") {
       const afterTaskKey = url.searchParams.get("after");
       if (afterTaskKey !== null && (!afterTaskKey || afterTaskKey.length > 256)) return json(response, 400, { ok: false, error: { kind: "invalid" } });
@@ -263,6 +269,16 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
       const input = record(await body(request));
       if (!input || !matchesSchema(capabilityDescriptor("settings.routing.staffSchedule.change.v1").inputSchema, input)) {
+        return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      }
+      command = input as GatewayCommand;
+    }
+    if (request.method === "POST" && url.pathname === "/api/settings/greeting") {
+      const origin = request.headers.origin;
+      if (origin && origin !== `http://${request.headers.host}`) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+      if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
+      const input = record(await body(request));
+      if (!input || !matchesSchema(capabilityDescriptor("settings.routing.greeting.change.v1").inputSchema, input)) {
         return json(response, 400, { ok: false, error: { kind: "invalid" } });
       }
       command = input as GatewayCommand;

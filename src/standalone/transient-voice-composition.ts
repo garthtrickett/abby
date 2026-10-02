@@ -7,7 +7,7 @@ import { err, ok } from "../core/model.ts";
 import type { AdmissionReceipt, ApprovedGreeting, LocationScope, Result } from "../core/model.ts";
 import { unprovenReadiness } from "../core/readiness.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
-import { referenceDefaultPolicy } from "../reference/policy-store.ts";
+import { standaloneDefaultPolicy } from "./default-policy.ts";
 import { TextReception } from "../reference/text-reception.ts";
 import { PostgresPolicyStore } from "../storage/postgres-policy-store.ts";
 import { checkStandaloneTextDatabase } from "../storage/standalone-privacy-preflight.ts";
@@ -79,9 +79,9 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
   const readiness = config.readiness ?? unprovenReadiness;
   const now = config.now ?? (() => new Date().toISOString());
   const ledger = new MemoryLedger(readiness);
-  const defaultPolicy = (scope: LocationScope) => ({ ...referenceDefaultPolicy(scope),
+  const defaultPolicy = (scope: LocationScope) => ({ ...standaloneDefaultPolicy(scope),
     ...(config.approvedGreeting ? { greeting: structuredClone(config.approvedGreeting) } : {}) });
-  const policy = new PostgresPolicyStore(config.db, defaultPolicy, "unavailable", readiness, false, "standaloneMinimal");
+  const policy = new PostgresPolicyStore(config.db, defaultPolicy, "unavailable", readiness, false, "standaloneMinimal", true);
   let greeting: ApprovedGreeting | undefined;
   const router = new ClinicPolicyRouter(config.routingHost, { read: async scope => {
     const loaded = await policy.read(scope);

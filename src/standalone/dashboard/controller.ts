@@ -4,7 +4,7 @@ import { dashboardView } from "./view.ts";
 import type { DashboardState } from "./view.ts";
 import type { AfterHoursMode, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import type { CallOutcomePage } from "../../reference/call-outcome-report.ts";
-import type { AfterHoursSettingAuditPage, BookingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
+import type { AfterHoursSettingAuditPage, BookingSettingAuditPage, GreetingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
 import { formatWeeklyHours, parseWeeklyHours } from "./staff-hours-form.ts";
 import type { AutomationSettingAuditPage } from "../../core/host.ts";
 import { READINESS_REQUIREMENTS } from "../../core/readiness.ts";
@@ -30,6 +30,11 @@ function appendUrgentAudit(previous: UrgentSettingAuditPage, next: UrgentSetting
 
 function appendStaffScheduleAudit(previous: StaffScheduleSettingAuditPage,
                                   next: StaffScheduleSettingAuditPage): StaffScheduleSettingAuditPage {
+  return { entries: [...previous.entries, ...next.entries],
+    ...(next.nextAfterVersion === undefined ? {} : { nextAfterVersion: next.nextAfterVersion }) };
+}
+
+function appendGreetingAudit(previous: GreetingSettingAuditPage, next: GreetingSettingAuditPage): GreetingSettingAuditPage {
   return { entries: [...previous.entries, ...next.entries],
     ...(next.nextAfterVersion === undefined ? {} : { nextAfterVersion: next.nextAfterVersion }) };
 }
@@ -88,6 +93,7 @@ export class DashboardController {
     urgentFrom: new Date().toISOString(), urgentUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
     hoursAuditPage: undefined, hoursVersion: "", hoursTimeZone: "", hoursWeekly: "", hoursClosedDates: "",
     hoursFrom: "", hoursUntil: "",
+    greetingAuditPage: undefined, greetingVersion: "", greetingText: "", greetingFrom: "", greetingUntil: "",
     writeStopAuditPage: undefined, automationAuditPage: undefined, callIdInput: "", call: undefined, staffPage: undefined, outcomePage: undefined, notice: undefined, error: undefined };
 
   constructor(root: HTMLElement, port: DashboardPort) {
@@ -125,6 +131,10 @@ export class DashboardController {
       changeStaffSchedule: enabled => { void this.changeStaffSchedule(enabled); },
       loadHoursAudit: () => { void this.loadHoursAudit(); },
       loadMoreHoursAudit: () => { void this.loadMoreHoursAudit(); },
+      setGreetingField: (field, value) => { this.state[field] = value; this.draw(); },
+      changeGreeting: enabled => { void this.changeGreeting(enabled); },
+      loadGreetingAudit: () => { void this.loadGreetingAudit(); },
+      loadMoreGreetingAudit: () => { void this.loadMoreGreetingAudit(); },
       setCallId: value => { this.state.callIdInput = value; },
       loadCall: () => { void this.loadCall(); },
       loadStaff: () => { void this.loadStaff(); },
@@ -152,6 +162,10 @@ export class DashboardController {
       this.state.hoursClosedDates = settings.value.staffSchedule?.closedDates.join("\n") ?? "";
       this.state.hoursFrom = settings.value.staffSchedule?.effectiveFrom ?? "";
       this.state.hoursUntil = settings.value.staffSchedule?.effectiveUntil ?? "";
+      this.state.greetingVersion = settings.value.greeting?.version ?? "";
+      this.state.greetingText = settings.value.greeting?.approvedText ?? "";
+      this.state.greetingFrom = settings.value.greeting?.effectiveFrom ?? "";
+      this.state.greetingUntil = settings.value.greeting?.effectiveUntil ?? "";
     }
     this.state.error = !settings.ok ? message(settings.error) : !capabilities.ok ? message(capabilities.error) : undefined;
     if (capabilities.ok && capabilities.value.some(item => item.id === "knowledge.list.v1")) {
@@ -192,6 +206,11 @@ export class DashboardController {
     if (capabilities.ok && capabilities.value.some(item => item.id === "settings.routing.staffSchedule.audit.v1")) {
       const audit = await this.port.staffScheduleAudit();
       if (audit.ok) this.state.hoursAuditPage = audit.value;
+      else this.state.error = message(audit.error);
+    }
+    if (capabilities.ok && capabilities.value.some(item => item.id === "settings.routing.greeting.audit.v1")) {
+      const audit = await this.port.greetingAudit();
+      if (audit.ok) this.state.greetingAuditPage = audit.value;
       else this.state.error = message(audit.error);
     }
     if (capabilities.ok && capabilities.value.some(item => item.id === "staff.list.v1")) {
@@ -291,6 +310,18 @@ export class DashboardController {
     this.draw();
     const result = await this.port.staffScheduleAudit();
     if (result.ok) this.state.hoursAuditPage = result.value;
+    else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async loadGreetingAudit(): Promise<void> {
+    if (this.state.busy) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.greetingAudit();
+    if (result.ok) this.state.greetingAuditPage = result.value;
     else this.state.error = message(result.error);
     this.state.busy = false;
     this.draw();
@@ -447,6 +478,19 @@ export class DashboardController {
     this.draw();
     const result = await this.port.staffScheduleAudit(previous.nextAfterVersion);
     if (result.ok) this.state.hoursAuditPage = appendStaffScheduleAudit(previous, result.value);
+    else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async loadMoreGreetingAudit(): Promise<void> {
+    const previous = this.state.greetingAuditPage;
+    if (this.state.busy || previous?.nextAfterVersion === undefined) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.draw();
+    const result = await this.port.greetingAudit(previous.nextAfterVersion);
+    if (result.ok) this.state.greetingAuditPage = appendGreetingAudit(previous, result.value);
     else this.state.error = message(result.error);
     this.state.busy = false;
     this.draw();
@@ -654,6 +698,46 @@ export class DashboardController {
       }
       const audit = await this.port.staffScheduleAudit();
       if (audit.ok) this.state.hoursAuditPage = audit.value;
+      else this.state.error = message(audit.error);
+    } else {
+      this.state.error = message(result.error);
+      if (result.error.kind === "versionConflict") {
+        const reloaded = await this.port.settings();
+        if (reloaded.ok) this.state.policy = reloaded.value;
+      }
+    }
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async changeGreeting(enabled: boolean): Promise<void> {
+    const current = this.state.policy;
+    if (this.state.busy || !current || !this.state.capabilities.some(item => item.id === "settings.routing.greeting.change.v1")) return;
+    if (enabled && (!this.state.greetingVersion.trim() || !this.state.greetingText.trim() ||
+        !this.state.greetingFrom.trim() || !this.state.greetingUntil.trim())) {
+      this.state.error = "Enter greeting text, a version and effective dates.";
+      this.draw();
+      return;
+    }
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.state.notice = undefined;
+    this.draw();
+    const result = await this.port.changeGreeting(current.policyVersion, enabled ? {
+      version: this.state.greetingVersion.trim(), approvedText: this.state.greetingText.trim(),
+      effectiveFrom: this.state.greetingFrom.trim(), effectiveUntil: this.state.greetingUntil.trim(),
+    } : undefined);
+    if (result.ok) {
+      this.state.policy = result.value;
+      this.state.notice = enabled ? "Greeting approved for new calls." : "Greeting disabled for new calls.";
+      if (!enabled) {
+        this.state.greetingVersion = "";
+        this.state.greetingText = "";
+        this.state.greetingFrom = "";
+        this.state.greetingUntil = "";
+      }
+      const audit = await this.port.greetingAudit();
+      if (audit.ok) this.state.greetingAuditPage = audit.value;
       else this.state.error = message(audit.error);
     } else {
       this.state.error = message(result.error);

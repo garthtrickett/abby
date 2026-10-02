@@ -1,7 +1,8 @@
-import type { AfterHoursSettingAuditEntry, AfterHoursSettingAuditPage, AutomationSettingAuditEntry, AutomationSettingAuditPage, BookingSettingAuditEntry, BookingSettingAuditPage, StaffScheduleSettingAuditEntry, StaffScheduleSettingAuditPage, UrgentSettingAuditEntry, UrgentSettingAuditPage, PolicyStore, PolicyFailure } from "../core/host.ts";
+import type { AfterHoursSettingAuditEntry, AfterHoursSettingAuditPage, AutomationSettingAuditEntry, AutomationSettingAuditPage, BookingSettingAuditEntry, BookingSettingAuditPage, GreetingSettingAuditEntry, GreetingSettingAuditPage, StaffScheduleSettingAuditEntry, StaffScheduleSettingAuditPage, UrgentSettingAuditEntry, UrgentSettingAuditPage, PolicyStore, PolicyFailure } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
-import type { AfterHoursMode, ApprovedAfterHoursInfo, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
+import type { AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, CapabilityMode, LocationScope, Result } from "../core/model.ts";
 import { validAfterHoursSetting } from "../core/after-hours-policy.ts";
+import { validGreetingShape } from "../core/greeting.ts";
 import { validApprovedStaffSchedule } from "../core/staff-schedule.ts";
 import { validUrgentResponseShape } from "../core/urgent-response.ts";
 import { READINESS_REQUIREMENTS, unprovenReadiness } from "../core/readiness.ts";
@@ -38,6 +39,7 @@ export type ImportedReferenceLocationPolicy = Readonly<{
   afterHoursHistory?: readonly AfterHoursSettingAuditEntry[];
   urgentHistory?: readonly UrgentSettingAuditEntry[];
   staffScheduleHistory?: readonly StaffScheduleSettingAuditEntry[];
+  greetingHistory?: readonly GreetingSettingAuditEntry[];
 }>;
 
 export type ImportedReferenceClinicAutomation = Readonly<{
@@ -54,6 +56,7 @@ export class MemoryPolicyStore implements PolicyStore {
   private readonly afterHoursChanges = new Map<string, AfterHoursSettingAuditEntry[]>();
   private readonly urgentChanges = new Map<string, UrgentSettingAuditEntry[]>();
   private readonly staffScheduleChanges = new Map<string, StaffScheduleSettingAuditEntry[]>();
+  private readonly greetingChanges = new Map<string, GreetingSettingAuditEntry[]>();
   private readonly automationChanges = new Map<string, AutomationSettingAuditEntry[]>();
   private readonly hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly">;
   private readonly clock: () => string;
@@ -71,9 +74,10 @@ export class MemoryPolicyStore implements PolicyStore {
                       automationHistory: readonly AutomationSettingAuditEntry[], sourceAutomationVersion: number,
                       sourceAutomationEnabled: boolean, importActorRef: string, importedAt: string,
                       urgentHistory: readonly UrgentSettingAuditEntry[] = [],
-                      staffScheduleHistory: readonly StaffScheduleSettingAuditEntry[] = []): MemoryPolicyStore {
+                      staffScheduleHistory: readonly StaffScheduleSettingAuditEntry[] = [],
+                      greetingHistory: readonly GreetingSettingAuditEntry[] = []): MemoryPolicyStore {
     return MemoryPolicyStore.fromImportedMany(
-      [{ scope, policy: sourceHead, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory }],
+      [{ scope, policy: sourceHead, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory }],
       [{ scope, history: automationHistory, sourceVersion: sourceAutomationVersion, sourceEnabled: sourceAutomationEnabled }],
       importActorRef, importedAt);
   }
@@ -99,6 +103,7 @@ export class MemoryPolicyStore implements PolicyStore {
       store.afterHoursChanges.set(key, structuredClone([...(location.afterHoursHistory ?? [])]));
       store.urgentChanges.set(key, structuredClone([...(location.urgentHistory ?? [])]));
       store.staffScheduleChanges.set(key, structuredClone([...(location.staffScheduleHistory ?? [])]));
+      store.greetingChanges.set(key, structuredClone([...(location.greetingHistory ?? [])]));
     }
     for (const clinic of clinics) {
       const key = clinicKey(clinic.scope);
@@ -271,6 +276,36 @@ export class MemoryPolicyStore implements PolicyStore {
   async listStaffScheduleChanges(scope: LocationScope, afterVersion?: number): Promise<Result<StaffScheduleSettingAuditPage, PolicyFailure>> {
     if (afterVersion !== undefined && (!Number.isSafeInteger(afterVersion) || afterVersion < 0)) return err({ kind: "invalidValue" });
     const entries = (this.staffScheduleChanges.get(scopeKey(scope)) ?? [])
+      .filter(item => Number(item.version) > (afterVersion ?? 0)).slice(0, 50);
+    return ok({ entries: structuredClone(entries),
+      ...(entries.length === 50 ? { nextAfterVersion: Number(entries[49]!.version) } : {}) });
+  }
+
+  async changeGreeting(scope: LocationScope, expectedVersion: string, greeting: ApprovedGreeting | undefined,
+                       actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+    if ((greeting !== undefined && (!validGreetingShape(greeting, scope) || greeting.ownerRef !== actorRef ||
+        greeting.effectiveFrom === undefined || greeting.effectiveUntil === undefined)) ||
+        typeof actorRef !== "string" || !actorRef.trim() || actorRef.length > 256) return err({ kind: "invalidValue" });
+    const current = this.policies.get(scopeKey(scope)) ?? referenceDefaultPolicy(scope);
+    if (current.policyVersion !== expectedVersion) return err({ kind: "versionConflict" });
+    let changedAt: string;
+    try { changedAt = this.clock(); }
+    catch { return err({ kind: "storageFailure" }); }
+    if (!Number.isFinite(Date.parse(changedAt))) return err({ kind: "storageFailure" });
+    const { greeting: previous, ...base } = current;
+    const next: CallPolicy = { ...base, policyVersion: String(Number(current.policyVersion) + 1),
+      ...(greeting === undefined ? {} : { greeting: structuredClone(greeting) }) };
+    this.policies.set(scopeKey(scope), structuredClone(next));
+    const history = this.greetingChanges.get(scopeKey(scope)) ?? [];
+    history.push({ version: next.policyVersion, enabled: greeting !== undefined, previousEnabled: previous !== undefined,
+      ...(greeting === undefined ? {} : { greetingVersion: greeting.version }), actorRef, changedAt });
+    this.greetingChanges.set(scopeKey(scope), history);
+    return ok(structuredClone(this.effective(next)));
+  }
+
+  async listGreetingChanges(scope: LocationScope, afterVersion?: number): Promise<Result<GreetingSettingAuditPage, PolicyFailure>> {
+    if (afterVersion !== undefined && (!Number.isSafeInteger(afterVersion) || afterVersion < 0)) return err({ kind: "invalidValue" });
+    const entries = (this.greetingChanges.get(scopeKey(scope)) ?? [])
       .filter(item => Number(item.version) > (afterVersion ?? 0)).slice(0, 50);
     return ok({ entries: structuredClone(entries),
       ...(entries.length === 50 ? { nextAfterVersion: Number(entries[49]!.version) } : {}) });
