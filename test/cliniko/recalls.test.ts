@@ -3,6 +3,7 @@ import test from "node:test";
 import { ClinikoRecallReader } from "../../src/cliniko/recalls.ts";
 import { ClinikoRecallWriter } from "../../src/cliniko/recall-write.ts";
 import { ClinikoReadBudget } from "../../src/cliniko/read-budget.ts";
+import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 import type { ClinikoRecallFailure, ClinikoRecallMatch } from "../../src/cliniko/recalls.ts";
 import type { Result } from "../../src/core/model.ts";
 
@@ -135,6 +136,57 @@ test("a lost or malformed create response stays uncertain and cannot send the ma
     failure(await created.value.openOnce(request), "invalidQuery");
     assert.equal(writes, 1);
   }
+});
+
+test("one recall marker is claimed before an asynchronous budget reservation", async () => {
+  let releaseClaim: ((result: null) => void) | undefined;
+  let claims = 0;
+  let writes = 0;
+  const budget: ClinikoRequestBudget = {
+    claim() {
+      claims += 1;
+      return claims === 1 ? new Promise<null>(resolve => { releaseClaim = resolve; }) : null;
+    },
+    observe429: () => ({ kind: "rateLimited" }),
+  };
+  const created = ClinikoRecallWriter.create({ ...config, rateBudget: budget }, async () => {
+    writes += 1;
+    throw new Error("response lost after send");
+  });
+  assert.ok(created.ok);
+  const request = { scope, patientId: "42", recallTypeId: "7", recallAt: "2026-10-01", marker,
+    summary: "Please contact the patient" };
+  const first = created.value.openOnce(request);
+  assert.equal(claims, 1);
+  failure(await created.value.openOnce(request), "invalidQuery");
+  assert.equal(claims, 1);
+  assert.equal(writes, 0);
+  assert.ok(releaseClaim);
+  releaseClaim(null);
+  assert.deepEqual(await first, { ok: true, value: { kind: "uncertain" } });
+  failure(await created.value.openOnce(request), "invalidQuery");
+  assert.equal(writes, 1);
+});
+
+test("a denied budget claim releases an unsent recall marker for a safe retry", async () => {
+  let claims = 0;
+  let writes = 0;
+  const budget: ClinikoRequestBudget = {
+    claim() { claims += 1; return claims === 1 ? { kind: "rateLimited" } : null; },
+    observe429: () => ({ kind: "rateLimited" }),
+  };
+  const created = ClinikoRecallWriter.create({ ...config, rateBudget: budget }, async () => {
+    writes += 1;
+    throw new Error("response lost after send");
+  });
+  assert.ok(created.ok);
+  const request = { scope, patientId: "42", recallTypeId: "7", recallAt: "2026-10-01", marker,
+    summary: "Please contact the patient" };
+  failure(await created.value.openOnce(request), "rateLimited");
+  assert.equal(writes, 0);
+  assert.deepEqual(await created.value.openOnce(request), { ok: true, value: { kind: "uncertain" } });
+  assert.equal(writes, 1);
+  failure(await created.value.openOnce(request), "invalidQuery");
 });
 
 test("invalid recall scope and fields fail before a provider write", async () => {

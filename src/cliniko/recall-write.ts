@@ -68,9 +68,15 @@ export class ClinikoRecallWriter {
     }
     if (this.attempted.has(request.marker)) return err({ kind: "invalidQuery" });
     if (this.attempted.size >= maxProcessAttempts) return err({ kind: "unavailable" });
-    const limited = await claimClinikoBudget(this.rateBudget);
-    if (limited) return err(limited);
+    // Claim before the asynchronous budget reservation so concurrent callers
+    // cannot both pass the marker check and send duplicate recalls.
     this.attempted.add(request.marker);
+    const limited = await claimClinikoBudget(this.rateBudget);
+    if (limited) {
+      // No provider request was sent; the caller may safely try again later.
+      this.attempted.delete(request.marker);
+      return err(limited);
+    }
     const notes = formatRecallNote(request.marker, request.summary);
     let response: Response;
     try {
