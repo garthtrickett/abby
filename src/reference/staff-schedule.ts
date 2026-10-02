@@ -11,6 +11,10 @@ export type LocalStaffSchedule = Readonly<{
   weekly: readonly LocalStaffWindow[];
   closedDates: readonly string[];
 }>;
+export type StaffedScheduleSnapshot = Readonly<{
+  staffedCoverage: StaffedInterval;
+  staffedIntervals: readonly StaffedInterval[];
+}>;
 export type ScheduleFailure = Readonly<{ kind: "invalidSchedule"; field: "timeZone" | "weekly" | "closedDates" | "horizon" | "output" }>;
 
 function instant(value: string): number | undefined {
@@ -44,7 +48,7 @@ function staffed(windows: readonly LocalStaffWindow[], closed: ReadonlySet<strin
 }
 
 /** Host-side expansion of local hours and holiday closures into a bounded call snapshot. */
-export function expandStaffSchedule(schedule: LocalStaffSchedule, from: string, to: string): Result<readonly StaffedInterval[], ScheduleFailure> {
+export function expandStaffSchedule(schedule: LocalStaffSchedule, from: string, to: string): Result<StaffedScheduleSnapshot, ScheduleFailure> {
   const start = instant(from);
   const end = instant(to);
   if (start === undefined || end === undefined || start >= end || end - start > MAX_HORIZON_MS) return err({ kind: "invalidSchedule", field: "horizon" });
@@ -80,5 +84,6 @@ export function expandStaffSchedule(schedule: LocalStaffSchedule, from: string, 
     }
   }
   if (activeStart !== undefined) intervals.push({ startsAt: new Date(activeStart).toISOString(), endsAt: new Date(activeEnd).toISOString() });
-  return intervals.length > 512 ? err({ kind: "invalidSchedule", field: "output" }) : ok(intervals);
+  return intervals.length > 512 ? err({ kind: "invalidSchedule", field: "output" }) :
+    ok({ staffedCoverage: { startsAt: from, endsAt: to }, staffedIntervals: intervals });
 }

@@ -55,7 +55,8 @@ test("signed embedded routing settings pin approved wording at admission",
     const policy = new PostgresPolicyStore(db, location => {
       const baseline = referenceDefaultPolicy(location);
       return { ...baseline, capabilities: { ...baseline.capabilities, transfer: "execute" },
-        transferDestinationRef: "synthetic-staff-desk", staffedIntervals: [] };
+        transferDestinationRef: "synthetic-staff-desk",
+        staffedCoverage: { startsAt: now, endsAt: "2026-10-01T11:00:00.000Z" }, staffedIntervals: [] };
     }, "requestOnly", readiness,
       true, "unsafeReference");
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);

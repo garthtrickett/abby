@@ -113,6 +113,7 @@ type CallSnapshot = Readonly<{
     approvedKnowledgeVersion: string;
     capabilityVersion: string;
     effectivePolicy: Readonly<{
+      staffedCoverage: Readonly<{ startsAt: string; endsAt: string }>;
       staffedIntervals: readonly Readonly<{ startsAt: string; endsAt: string }>[];
       capabilities: Readonly<Record<string, CapabilityDecision>>;
       afterHoursMode: "staffRequest" | "approvedInfoAndRequest";

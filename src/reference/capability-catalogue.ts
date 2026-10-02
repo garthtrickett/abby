@@ -33,6 +33,7 @@ const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: non
   capabilities: object({ book: capabilityMode, cancel: capabilityMode, reschedule: capabilityMode,
     intake: capabilityMode, transfer: capabilityMode }), transferDestinationRef: str,
   staffedIntervals: { type: "array", items: object({ startsAt: str, endsAt: str }), maxItems: 512 },
+  staffedCoverage: object({ startsAt: str, endsAt: str }),
   staffDestination: destination, operatorQueue: destination, staffWorkEnabled: bool, numberRouteVersion: key,
   greeting: object({ scope, version: key, ownerRef: key, approvedText: { type: "string", minLength: 1, maxLength: 2_000 },
     approved: { const: true } }),

@@ -50,7 +50,10 @@ test("PostgreSQL config archive takes a consistent scoped snapshot with an allow
   assert.equal((await catalogue.saveDraft(scope, "parking", "2", "clinic-owner", "Parking is near the entrance.",
     "2026-09-01T00:00:00Z", "2026-10-01T00:00:00Z", "archive-admin")).ok, true);
   assert.equal((await catalogue.approve(scope, "parking", "3", "archive-admin")).ok, true);
-  await sql`update clinic_settings set policy = jsonb_set(policy || jsonb_build_object('apiKey', ${"secret-canary-never-export"}::text),
+  await sql`update clinic_settings set policy = jsonb_set(policy || jsonb_build_object('apiKey', ${"secret-canary-never-export"}::text,
+    'staffedCoverage', jsonb_build_object('startsAt', '2026-09-28T22:00:00.000Z', 'endsAt', '2026-09-28T23:00:00.000Z'),
+    'staffedIntervals', jsonb_build_array(jsonb_build_object('startsAt', '2026-09-28T22:10:00.000Z',
+      'endsAt', '2026-09-28T22:20:00.000Z'))),
     '{capabilities,cancel}', '"execute"'::jsonb)
     where tenant_id = ${scope.tenantId} and clinic_id = ${scope.clinicId} and location_id = ${scope.locationId}`.execute(db);
 
@@ -66,6 +69,8 @@ test("PostgreSQL config archive takes a consistent scoped snapshot with an allow
   assert.equal((locations[0]?.targetScope as { locationId: string }).locationId, "target-location");
   assert.equal(settings.some(row => row.kind === "locationPolicy" && (row.policy as { bookingEnabled: boolean }).bookingEnabled), true);
   assert.equal(settings.filter(row => row.kind === "locationPolicy" && row.isHead).length, 1);
+  assert.deepEqual((settings.find(row => row.kind === "locationPolicy" && row.isHead)?.policy as Record<string, unknown>).staffedCoverage,
+    { startsAt: "2026-09-28T22:00:00.000Z", endsAt: "2026-09-28T23:00:00.000Z" });
   assert.equal(settings.filter(row => row.kind === "clinicAutomation" && row.isHead).length, 1);
   assert.deepEqual(knowledge.map(row => row.status), ["approved", "approved"]);
   assert.deepEqual(knowledge.map(row => row.version), [2, 4]);
@@ -109,6 +114,10 @@ test("PostgreSQL config archive takes a consistent scoped snapshot with an allow
   assert.equal(importedPolicy.value.capabilities.book, "unavailable");
   assert.equal(importedPolicy.value.capabilities.cancel, "requestOnly");
   assert.equal(importedPolicy.value.policyVersion, "4");
+  assert.deepEqual(importedPolicy.value.staffedCoverage,
+    { startsAt: "2026-09-28T22:00:00.000Z", endsAt: "2026-09-28T23:00:00.000Z" });
+  assert.deepEqual(importedPolicy.value.staffedIntervals,
+    [{ startsAt: "2026-09-28T22:10:00.000Z", endsAt: "2026-09-28T22:20:00.000Z" }]);
   assert.equal(importedPolicy.value.automationVersion, "2");
   const targetStop = await staged.value.ledger.readWriteStop(request.targetScope);
   assert.equal(targetStop.ok && targetStop.value.stopped, true);

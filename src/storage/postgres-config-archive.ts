@@ -134,11 +134,26 @@ function policyFields(value: unknown, scope: LocationScope, version: number,
     if (!validRef(row.transferDestinationRef)) throw new ExportAbort("storageCorrupt");
     policy.transferDestinationRef = row.transferDestinationRef;
   }
+  const coverage = object(row.staffedCoverage);
+  let coverageBounds: Readonly<{ start: number; end: number }> | undefined;
+  if (row.staffedCoverage !== undefined) {
+    if (!coverage || typeof coverage.startsAt !== "string" || typeof coverage.endsAt !== "string") throw new ExportAbort("storageCorrupt");
+    const start = Date.parse(coverage.startsAt);
+    const end = Date.parse(coverage.endsAt);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end || end - start > 72 * 60 * 60 * 1_000) {
+      throw new ExportAbort("storageCorrupt");
+    }
+    coverageBounds = { start, end };
+    policy.staffedCoverage = { startsAt: coverage.startsAt, endsAt: coverage.endsAt };
+  }
   if (row.staffedIntervals !== undefined) {
-    if (!Array.isArray(row.staffedIntervals) || row.staffedIntervals.some(item => {
+    if (!Array.isArray(row.staffedIntervals) || row.staffedIntervals.length > 512 || row.staffedIntervals.some(item => {
       const interval = object(item);
       return !interval || typeof interval.startsAt !== "string" || typeof interval.endsAt !== "string" ||
-        !Number.isFinite(Date.parse(interval.startsAt)) || !Number.isFinite(Date.parse(interval.endsAt));
+        !Number.isFinite(Date.parse(interval.startsAt)) || !Number.isFinite(Date.parse(interval.endsAt)) ||
+        Date.parse(interval.startsAt) >= Date.parse(interval.endsAt) ||
+        (coverageBounds !== undefined && (Date.parse(interval.startsAt) < coverageBounds.start ||
+          Date.parse(interval.endsAt) > coverageBounds.end));
     })) throw new ExportAbort("storageCorrupt");
     policy.staffedIntervals = row.staffedIntervals.map(item => ({ startsAt: item.startsAt, endsAt: item.endsAt }));
   }
