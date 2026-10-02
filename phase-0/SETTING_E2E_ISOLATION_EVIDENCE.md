@@ -291,3 +291,24 @@ Final release evidence for source `cdb545eb27cde0bc80aebc99e5d674f37ffe2801`:
 The tracked final release job completed successfully in 22m31s; its owner-local log is `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790950314214.log`. The earlier corrected `npm run probe:postgres` command passed migration up/down/up, upgrade probes, Kanel generation, 967 PostgreSQL cases (only the real-demo-account case skipped), and the Node ordering coordinator. Its failed parent invocation, which later hit the staff browser locator, remains recorded above. The production source and Node/PostgreSQL tests are unchanged since that PostgreSQL pass; the subsequent source difference is the scoped browser assertion, now verified by the final release. Documentation-only result commits do not change those runtime inputs.
 
 A separate owned-listener diagnostic confirmed an existing booking route rejects the correct configured HTTPS Origin (403), while the new cancellation route accepts it (200). That confirmed issue is recorded as a follow-up admin integration patch; this feature does not claim deployed identity or universal HTTPS settings readiness.
+
+## Shared HTTPS dashboard Origin contract — 2026-10-02
+
+`E2E-253` closes the confirmed legacy full-dashboard Origin rejection. The baseline request test failed because the booking writer returned 403 for the valid configured HTTPS Origin before reaching input validation. The correction moves the contract into one shared guard for all `/api/` POSTs and removes route copies. Authenticated hosts still require exact Origin and Host; local reference omission and the restricted setup surface retain their declared behavior.
+
+Focused proof:
+
+- `node --test test/text/dashboard-listener-origin.test.ts test/contract/scenario-manifest.test.ts`: seven cases passed with no skips. The new matrix covers all 14 POST routes, rejected Origins/Host/identity, actual HTTPS booking enable/disable and bound audit actor. The compatibility case proves local reference Origin omission works and supervised setup does not expose booking/cancellation/staff mutations.
+- `npm run typecheck && npm run build:dashboard && npx playwright test test/browser/https-dashboard.spec.ts --workers=2 --retries=0`: passed TypeScript and the real TLS browser journey. A freshly generated certificate and two actually owned loopback listeners exercise TLS-to-authenticated-dashboard routing. The browser verifies default/on/off, captured active versus new-call policy, reload, actor-bound history, foreign/downgraded/empty Origin and forged staff denial. Certificate trust is scoped to this test case; certificate/key files and both listeners are removed at teardown.
+
+The failing baseline is retained as a failure in its tracked owner log; no product Origin rule, test deadline, concurrency or retry was relaxed. Manifest 1.64 maps 253 design rows and the affected settings/commands to this request/browser evidence. Full carrier evidence remains planned, and actual deployed clinic identity and proxy/certificate configuration remain separate work. Final release results follow after their tracked gate finishes.
+
+Final release for source `beae0e26d2e27d503a8cceccac92885888fbda16` completed successfully in 22m21s (owner-local log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790952956052.log`):
+
+- `npm run typecheck`: passed.
+- `npm run test:text`: 584 passed, 33 PostgreSQL-only skips, zero failures; the separate Node ordering coordinator passed.
+- `npm run test:browser`: all 38 regular browser cases and the separate ordering coordinator passed.
+- `npm run test:settings-isolation`: all 18 representative cases passed alone and both observed four-worker dispatch orders.
+- `npm run test:settings-isolation:postgres`: all 208 Node cases across 27 files passed alone and both observed four-worker dispatch orders; both coordinators passed. All 25 mapped browser cases across six files passed alone and both observed three-worker release orders, with peak three concurrent lifecycles. No mapped case failed or skipped.
+
+No database schema, runtime dependency or production identity changed. Documentation-only result commits preserve the tested runtime inputs. The owner has authorized merging locally verified work without waiting for GitHub CI; carrier and deployed identity evidence remain separate.

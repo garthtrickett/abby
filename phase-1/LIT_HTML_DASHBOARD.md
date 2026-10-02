@@ -27,3 +27,7 @@ The supervised admin bundle also exposes clinic-wide automation state, enable/di
 ## Cancellation controls
 
 The reference/embedded dashboard exposes cancellation as a separate versioned panel and audit (`E2E-252`). The saved Boolean and effective host capability are shown separately. Only clinic admins may edit or read its history; scope and actor come from the authenticated gateway. Invalid, stale and foreign-origin requests cannot mutate it. If a write outcome and its subsequent reread are both unavailable, controls stay disabled until a reload recovers current state. Admitted calls retain their policy; new calls use the edited value. The supervised standalone Cliniko listener does not expose this patient-action setting, and strict standalone cancellation remains unavailable.
+
+## HTTPS host command boundary
+
+All `/api/` POST routes share one Origin check before body parsing (`E2E-253`). Authenticated hosts require the exact configured scheme, Host and port; forwarding headers cannot substitute another Origin. The local reference server retains its documented optional Origin and loopback boundary. The restricted setup surface is checked separately and cannot expose booking, cancellation or staff actions. A real TLS browser journey checks booking enable/disable, reload, audit ownership, captured policies and staff/foreign-Origin refusal. The test generates and removes its own certificate; production identity, certificates and reverse-proxy deployment remain separate work.

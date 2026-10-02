@@ -45,6 +45,15 @@ function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
+/** Authenticated hosts require their exact configured Origin; local reference requests may omit it. */
+function acceptsCommandOrigin(request: IncomingMessage, authenticatedOrigin?: string): boolean {
+  const supplied = request.headers.origin;
+  if (!supplied) return authenticatedOrigin === undefined;
+  const expected = authenticatedOrigin ?? `http://${request.headers.host}`;
+  return supplied === expected &&
+    (authenticatedOrigin === undefined || request.headers.host === new URL(authenticatedOrigin).host);
+}
+
 /** Local reference server. A deploying host must bind an authenticated actor before exposing these routes. */
 export async function createDashboardServer(gateway: CommandGateway, bundlePath: string): Promise<Server> {
   const [bundle, stylesheet] = await Promise.all([
@@ -128,9 +137,8 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       (request.method === "POST" && ["/api/clinic-availability/command", "/api/settings/greeting", "/api/settings/automation-enabled"].includes(url.pathname)))) {
       return json(response, 404, { ok: false, error: { kind: "notFound" } });
     }
-    if (authenticatedOrigin && request.method === "POST" && url.pathname.startsWith("/api/") &&
-        (request.headers.origin !== authenticatedOrigin ||
-          request.headers.host !== new URL(authenticatedOrigin).host)) {
+    if (request.method === "POST" && url.pathname.startsWith("/api/") &&
+        !acceptsCommandOrigin(request, authenticatedOrigin)) {
       return json(response, 403, { ok: false, error: { kind: "forbidden" } });
     }
     if (request.method === "GET" && url.pathname === "/") return asset(response, "text/html; charset=utf-8", document);
@@ -238,8 +246,6 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       command = { kind: "calls.read.v1", callId };
     }
     if (request.method === "POST" && url.pathname === "/api/settings/booking-enabled") {
-      const origin = request.headers.origin;
-      if (origin && origin !== `http://${request.headers.host}`) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
       if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
       const input = record(await body(request));
       if (!input || typeof input.expectedVersion !== "string" || typeof input.enabled !== "boolean") {
@@ -248,10 +254,6 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       command = { kind: "settings.appointments.booking.enabled.change.v1", expectedVersion: input.expectedVersion, enabled: input.enabled };
     }
     if (request.method === "POST" && url.pathname === "/api/settings/cancellation-enabled") {
-      const origin = request.headers.origin;
-      if (origin && origin !== (authenticatedOrigin ?? `http://${request.headers.host}`)) {
-        return json(response, 403, { ok: false, error: { kind: "forbidden" } });
-      }
       if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
       const input = record(await body(request));
       if (!input || Object.keys(input).sort().join(",") !== "enabled,expectedVersion" ||
@@ -261,8 +263,6 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       command = { kind: "settings.appointments.cancellation.enabled.change.v1", expectedVersion: input.expectedVersion, enabled: input.enabled };
     }
     if (request.method === "POST" && url.pathname === "/api/settings/after-hours") {
-      const origin = request.headers.origin;
-      if (origin && origin !== `http://${request.headers.host}`) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
       if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
       const input = record(await body(request));
       if (!input || typeof input.expectedVersion !== "string" ||
@@ -276,8 +276,6 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
         ...(input.approvedText === undefined ? {} : { approvedText: input.approvedText }) };
     }
     if (request.method === "POST" && url.pathname === "/api/settings/urgent") {
-      const origin = request.headers.origin;
-      if (origin && origin !== `http://${request.headers.host}`) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
       if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
       const input = record(await body(request));
       if (!input || typeof input.expectedVersion !== "string" || typeof input.enabled !== "boolean" ||
@@ -294,8 +292,6 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
         : { kind: "settings.routing.urgent.change.v1", expectedVersion: input.expectedVersion, enabled: false };
     }
     if (request.method === "POST" && url.pathname === "/api/settings/staff-schedule") {
-      const origin = request.headers.origin;
-      if (origin && origin !== `http://${request.headers.host}`) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
       if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
       const input = record(await body(request));
       if (!input || !matchesSchema(capabilityDescriptor("settings.routing.staffSchedule.change.v1").inputSchema, input)) {
@@ -304,8 +300,6 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       command = input as GatewayCommand;
     }
     if (request.method === "POST" && url.pathname === "/api/settings/greeting") {
-      const origin = request.headers.origin;
-      if (origin && origin !== `http://${request.headers.host}`) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
       if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
       const input = record(await body(request));
       if (!input || !matchesSchema(capabilityDescriptor("settings.routing.greeting.change.v1").inputSchema, input)) {
@@ -318,8 +312,6 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       command = input as GatewayCommand;
     }
     if (request.method === "POST" && ["/api/knowledge/draft", "/api/knowledge/approve", "/api/knowledge/revoke"].includes(url.pathname)) {
-      const origin = request.headers.origin;
-      if (origin && origin !== `http://${request.headers.host}`) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
       if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
       const input = record(await body(request));
       if (!input || typeof input.sourceRef !== "string" || typeof input.expectedVersion !== "string") return json(response, 400, { ok: false, error: { kind: "invalid" } });
@@ -332,8 +324,6 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
         sourceRef: input.sourceRef, expectedVersion: input.expectedVersion };
     }
     if (request.method === "POST" && url.pathname === "/api/settings/automation-enabled") {
-      const origin = request.headers.origin;
-      if (origin && origin !== (authenticatedOrigin ?? `http://${request.headers.host}`)) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
       if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
       const input = record(await body(request));
       const descriptor = capabilityDescriptor("settings.automation.enabled.change.v1");
@@ -344,8 +334,6 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       command = candidate as GatewayCommand;
     }
     if (request.method === "POST" && url.pathname === "/api/writes/stop") {
-      const origin = request.headers.origin;
-      if (origin && origin !== `http://${request.headers.host}`) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
       if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
       const input = record(await body(request));
       if (!input || typeof input.reason !== "string" || !input.reason.trim() || input.reason.length > 1_000) {
@@ -354,8 +342,6 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       command = { kind: "calls.writes.stop.v1", reason: input.reason };
     }
     if (request.method === "POST" && url.pathname === "/api/writes/resume") {
-      const origin = request.headers.origin;
-      if (origin && origin !== `http://${request.headers.host}`) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
       if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
       const input = record(await body(request));
       if (!input || typeof input.expectedVersion !== "string" || typeof input.reason !== "string" || !input.reason.trim() || input.reason.length > 1_000) {
@@ -364,8 +350,6 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       command = { kind: "calls.writes.resume.v1", expectedVersion: input.expectedVersion, reason: input.reason };
     }
     if (request.method === "POST" && url.pathname === "/api/staff/change") {
-      const origin = request.headers.origin;
-      if (origin && origin !== `http://${request.headers.host}`) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
       if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
       const input = record(await body(request));
       const change = record(input?.change);
