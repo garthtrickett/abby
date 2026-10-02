@@ -326,6 +326,19 @@ Tracked job **Abby rescheduling combined carryover and shared setting final focu
 
 The new scenario is E2E-254 in manifest 1.65. The first broad release job **Abby rescheduling final text PostgreSQL browser and mapped isolation release** failed: its text stage passed 586 cases, failed one manifest evidence-tag assertion, and skipped 34 PostgreSQL-only cases. The new HTTP route was in the request matrix but the test name lacked E2E-254; the label was corrected while preserving the verifier and request assertions. Earlier schema/command and dashboard jobs passed their executed checks but subsequently failed typecheck on malformed gateway reply declarations, missing delegated policy-store methods, or an invariant Kysely migration parameter; those invocations are not passing release evidence. The cancellation rollback proof now explicitly migrates toward migration 034 and verifies the transactional refusal, rather than assuming cancellation is the latest migration.
 
-The replacement job **Abby rescheduling manifest correction and final release rerun** is still running at this record. Its manifest/Origin checks passed seven tests and its full text stage passed 587 with 34 PostgreSQL-only skips, followed by a passing Node scheduling coordinator. Full PostgreSQL, browser and mapped isolation release evidence is pending; no full release or merge is claimed yet. The job log is `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790955811414.log`.
+The replacement job **Abby rescheduling manifest correction and final release rerun** completed with exit 0 in **27m17s**. Runtime, test and script source at the final candidate `d42c32bd718889974d753f0ea8659eb7b408729d` is unchanged from the worktree tested before this evidence-only update. Its job log is `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790955811414.log`.
 
-PR #352 remains draft. GitHub runs 37029318820 and 37029310949 for the published candidate did not execute any source steps; the primary check annotation cites failed payments or the spending limit. The owner's local-test merge authorization remains applicable after the local release gates pass. No repository billing/rules configuration is changed. Synthetic embedded/reference evidence does not enable standalone Cliniko patient rescheduling or establish a real carrier call.
+| Gate | Result |
+| --- | --- |
+| Manifest/Origin focused correction | 7 passed, 0 failed/skipped |
+| Typecheck | Passed |
+| Full text | 587 passed, 0 failed; 34 PostgreSQL-only skips; Node coordinator passed |
+| Full PostgreSQL probe | Migration up/down/up, populated upgrade probes and actual Kanel generation passed; 977 passed, 0 failed; one live-provider-only skip; Node coordinator passed |
+| Full browser | 41 passed, 0 failed; browser coordinator passed |
+| Representative settings probe | 18 passed across six files alone and in both observed four-worker orders |
+| Full mapped Node probe | 216 passed across 29 files alone and in both observed four-worker orders, with no mapped skips/failures; both separately scheduled coordinators passed |
+| Full mapped browser probe | 28 passed across six files alone and in both observed three-worker orders, with no mapped skips/failures; start/finish records show three overlapping cases |
+
+This proves local synthetic release and scheduling behavior for the mapped settings. It does not prove real carrier audio or standalone Cliniko intake, cancellation or rescheduling safety.
+
+PR #352 was published as a draft while the final local gate ran. GitHub runs 37029318820 and 37029310949 for the published candidate did not execute any source steps; the primary check annotation cites failed payments or the spending limit. The owner's local-test merge authorization remains applicable after the local release gates pass. No repository billing/rules configuration is changed. Synthetic embedded/reference evidence does not enable standalone Cliniko patient rescheduling or establish a real carrier call.
