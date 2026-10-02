@@ -9,16 +9,16 @@ import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
 import { TextReception } from "../../src/reference/text-reception.ts";
-import { createHostAuthenticatedDashboardServer } from "../../src/standalone/dashboard/server.ts";
+import { createDashboardServer, createHostAuthenticatedDashboardServer } from "../../src/standalone/dashboard/server.ts";
 import { listenLoopbackServer } from "../support/listen-loopback-server.ts";
 
 const bundle = new URL("../../src/standalone/dashboard/cliniko-admin-main.ts", import.meta.url).pathname;
 
-function send(origin: string, path: string, headers: Record<string, string> = {}, command?: object):
+function send(origin: string, path: string, headers: Record<string, string> = {}, command?: object, includeOrigin = true):
   Promise<Readonly<{ status: number; body: string }>> {
   return new Promise((resolve, reject) => {
     const pending = request(`${origin}${path}`, { method: command ? "POST" : "GET",
-      headers: { Cookie: "session=owner", ...(command ? { "Content-Type": "application/json", Origin: origin } : {}),
+      headers: { Cookie: "session=owner", ...(command ? { "Content-Type": "application/json", ...(includeOrigin ? { Origin: origin } : {}) } : {}),
         ...headers } }, response => {
       let body = "";
       response.on("data", chunk => { body += String(chunk); });
@@ -130,6 +130,81 @@ test("E2E-252 cancellation edits use the configured HTTPS host origin exactly", 
   assert.equal(audit.status, 200);
   assert.deepEqual(JSON.parse(audit.body).value.page.entries.map((row: { actorRef: string; previousEnabled: boolean }) =>
     [row.actorRef, row.previousEnabled]), [["https-owner", false]]);
+});
+
+test("E2E-253 every dashboard writer uses the configured HTTPS origin before parsing input", async t => {
+  const scope = { tenantId: "all-writers-https", clinicId: "clinic", locationId: "main" };
+  const policy = new MemoryPolicyStore();
+  const reception = new TextReception(new MemoryLedger(), policy, new ReferenceClinicHost([], []));
+  const server = await createHostAuthenticatedDashboardServer({ publicOrigin: "https://admin.example.test",
+    resolveActor: incoming => incoming.headers.cookie === "session=owner"
+      ? { actorRef: "https-owner", role: "clinicAdmin", scope }
+      : incoming.headers.cookie === "session=staff" ? { actorRef: "https-staff", role: "staff", scope } : null,
+    gatewayFor: actor => new CommandGateway(actor, policy, reception),
+  }, bundle);
+  t.after(() => close(server));
+  const origin = await listenLoopbackServer(server);
+  const headers = { Host: "admin.example.test", Origin: "https://admin.example.test" };
+  const writers = ["/api/clinic-availability/command", "/api/settings/booking-enabled", "/api/settings/cancellation-enabled",
+    "/api/settings/after-hours", "/api/settings/urgent", "/api/settings/staff-schedule", "/api/settings/greeting",
+    "/api/settings/automation-enabled", "/api/knowledge/draft", "/api/knowledge/approve", "/api/knowledge/revoke",
+    "/api/writes/stop", "/api/writes/resume", "/api/staff/change"];
+  for (const path of writers) {
+    for (const rejected of ["http://admin.example.test", "https://foreign.example.test", "null", ""]) {
+      assert.equal((await send(origin, path, { ...headers, Origin: rejected,
+        "X-Forwarded-Proto": "https" }, {})).status, 403, `${path}: rejected Origin`);
+    }
+    assert.equal((await send(origin, path, { ...headers, Host: "foreign.example.test" }, {})).status, 403);
+    assert.equal((await send(origin, path, { ...headers, Cookie: "" }, {})).status, 403);
+    assert.equal((await send(origin, path, headers, {})).status, 400,
+      `${path}: configured Origin must reach input validation`);
+  }
+  const command = { expectedVersion: "0", enabled: true };
+  assert.equal((await send(origin, "/api/settings/booking-enabled", { ...headers, Cookie: "session=staff" }, command)).status, 403);
+  assert.equal((await send(origin, "/api/settings/booking-enabled", headers, command)).status, 200);
+  const changed = await policy.read(scope);
+  assert.ok(changed.ok);
+  assert.equal(changed.value.policyVersion, "1");
+  assert.equal(changed.value.bookingEnabled, true);
+  assert.equal((await send(origin, "/api/settings/booking-enabled", headers,
+    { expectedVersion: "1", enabled: false })).status, 200);
+  const history = await policy.listBookingChanges(scope);
+  assert.ok(history.ok);
+  assert.deepEqual(history.value.entries.map(row => [row.version, row.enabled, row.actorRef]),
+    [["1", true, "https-owner"], ["2", false, "https-owner"]]);
+});
+
+test("E2E-253 local reference origin omission and supervised setup restrictions survive the shared guard", async t => {
+  const scope = { tenantId: "origin-profile-compat", clinicId: "clinic", locationId: "main" };
+  const actor = { actorRef: "local-owner", role: "clinicAdmin" as const, scope };
+  const policy = new MemoryPolicyStore();
+  const reception = new TextReception(new MemoryLedger(), policy, new ReferenceClinicHost([], []));
+  const gateway = new CommandGateway(actor, policy, reception);
+  const local = await createDashboardServer(gateway, bundle);
+  t.after(() => close(local));
+  const localOrigin = await listenLoopbackServer(local);
+  assert.equal((await send(localOrigin, "/api/settings/booking-enabled", {},
+    { expectedVersion: "0", enabled: true }, false)).status, 200);
+  assert.equal((await send(localOrigin, "/api/settings/booking-enabled", { Origin: "https://foreign.example.test" },
+    { expectedVersion: "1", enabled: false })).status, 403);
+  assert.equal((await send(localOrigin, "/api/settings/booking-enabled", {},
+    { expectedVersion: "1", enabled: false })).status, 200);
+  const setup = await createHostAuthenticatedDashboardServer({ publicOrigin: "https://setup.example.test",
+    surface: "availabilitySetup", resolveActor: () => actor, gatewayFor: () => gateway,
+  }, bundle);
+  t.after(() => close(setup));
+  const setupOrigin = await listenLoopbackServer(setup);
+  const headers = { Host: "setup.example.test", Origin: "https://setup.example.test" };
+  for (const path of ["/api/settings/booking-enabled", "/api/settings/cancellation-enabled", "/api/staff/change"]) {
+    assert.equal((await send(setupOrigin, path, headers, { expectedVersion: "2", enabled: true })).status, 404);
+  }
+  assert.equal((await send(setupOrigin, "/api/settings/greeting", headers,
+    { kind: "settings.routing.greeting.change.v1", expectedVersion: "2", enabled: false })).status, 200);
+  const current = await policy.read(scope);
+  assert.ok(current.ok);
+  assert.equal(current.value.policyVersion, "3");
+  assert.equal(current.value.bookingEnabled, false);
+  assert.equal(current.value.cancellationEnabled, false);
 });
 
 test("E2E-249 local admin port zero refuses startup outside the isolated probe", () => {
