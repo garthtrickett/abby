@@ -1,4 +1,5 @@
 import type { ClinicIntakeAuditPage } from "../core/clinic-intake-setting.ts";
+import type { StaffedDestinationAuditPage } from "../core/staffed-destination.ts";
 import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, GreetingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, FinalCallerTurn, LocalStaffWindow, LocationScope, Result, StaffChangeRequest, StaffItem, TransitionFailure } from "../core/model.ts";
@@ -35,6 +36,8 @@ export type HostActor = Readonly<{
 
 export type GatewayCommand =
   | Readonly<{ kind: "settings.read.v1" }>
+  | Readonly<{ kind: "settings.routing.staffedDestination.change.v1"; expectedVersion: string; destinationRef: string | null }>
+  | Readonly<{ kind: "settings.routing.staffedDestination.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "settings.automation.enabled.change.v1"; expectedVersion: string; enabled: boolean }>
   | Readonly<{ kind: "settings.automation.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "calls.writes.stop.v1"; reason: string }>
@@ -97,6 +100,7 @@ type CommandMissingCatalogue = AssertNever<Exclude<CapabilityId, GatewayCommand[
 
 export type GatewayReply =
   | Readonly<{ kind: "settings"; policy: CallPolicy }>
+  | Readonly<{ kind: "staffedDestinationSettingAudit"; page: StaffedDestinationAuditPage }>
   | Readonly<{ kind: "automationSettingAudit"; page: AutomationSettingAuditPage }>
   | Readonly<{ kind: "writeStop"; status: WriteStopStatus }>
   | Readonly<{ kind: "writeStopAudit"; page: WriteStopAuditPage }>
@@ -187,6 +191,7 @@ export class CommandGateway {
         "clinic.availability.approval.read.v1", "clinic.availability.route.check.v1", "clinic.availability.approval.change.v1",
         "clinic.availability.approval.change.v2", "clinic.availability.approval.revoke.v1");
       permitted.push("settings.automation.enabled.change.v1", "settings.automation.audit.v1",
+        "settings.routing.staffedDestination.change.v1", "settings.routing.staffedDestination.audit.v1",
         "settings.appointments.booking.enabled.change.v1", "settings.appointments.booking.audit.v1",
         "settings.appointments.cancellation.enabled.change.v1", "settings.appointments.cancellation.audit.v1",
         "settings.appointments.rescheduling.enabled.change.v1", "settings.appointments.rescheduling.audit.v1",
@@ -286,6 +291,15 @@ export class CommandGateway {
       case "settings.patients.firstTimeIntake.audit.v1": {
         const result = await this.policy.listFirstTimeIntakeChanges(this.actor.scope, command.afterVersion);
         return result.ok ? ok({ kind: "firstTimeIntakeSettingAudit", page: result.value }) : result;
+      }
+      case "settings.routing.staffedDestination.change.v1": {
+        const result = await this.policy.changeStaffedDestination(this.actor.scope, command.expectedVersion,
+          command.destinationRef, this.actor.actorRef);
+        return result.ok ? ok({ kind: "settings", policy: result.value }) : result;
+      }
+      case "settings.routing.staffedDestination.audit.v1": {
+        const result = await this.policy.listStaffedDestinationChanges(this.actor.scope, command.afterVersion);
+        return result.ok ? ok({ kind: "staffedDestinationSettingAudit", page: result.value }) : result;
       }
       case "settings.routing.afterHours.change.v1": {
         if (command.mode === "staffRequest" &&

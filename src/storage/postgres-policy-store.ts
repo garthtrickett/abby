@@ -1,5 +1,8 @@
 import { PostgresClinicIntakeSettingStore } from "./postgres-clinic-intake-setting.ts";
 import type { ClinicIntakeAuditPage, ClinicIntakeState } from "../core/clinic-intake-setting.ts";
+import { PostgresStaffedDestinationSettingStore } from "./postgres-staffed-destination-setting.ts";
+import { captureStaffedDestination, unprovenStaffedDestination, validStaffedDestinationRef } from "../core/staffed-destination.ts";
+import type { StaffedDestinationAuditPage, StaffedDestinationHost } from "../core/staffed-destination.ts";
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import type { AfterHoursSettingAuditEntry, AfterHoursSettingAuditPage, AutomationSettingAuditEntry, AutomationSettingAuditPage, BookingSettingAuditEntry, BookingSettingAuditPage, GreetingSettingAuditEntry, GreetingSettingAuditPage, StaffScheduleSettingAuditEntry, StaffScheduleSettingAuditPage, UrgentSettingAuditEntry, UrgentSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
@@ -22,7 +25,7 @@ function sameScope(left: LocationScope, right: LocationScope): boolean {
 
 type StoredStandalonePolicy = Readonly<{ scope: LocationScope; policyVersion: string; bookingEnabled: boolean; cancellationEnabled?: boolean; reschedulingEnabled?: boolean;
   afterHoursMode: AfterHoursMode; afterHoursInfo?: ApprovedAfterHoursInfo; urgentResponse?: ApprovedUrgentResponse;
-  staffSchedule?: ApprovedStaffSchedule; greeting?: ApprovedGreeting | null }>;
+  staffSchedule?: ApprovedStaffSchedule; greeting?: ApprovedGreeting | null; transferDestinationRef?: string }>;
 const standaloneScopeId = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 
 function validStandaloneScope(scope: LocationScope): boolean {
@@ -32,11 +35,13 @@ function validStandaloneScope(scope: LocationScope): boolean {
 function standalonePolicy(scope: LocationScope, version: number, bookingEnabled: boolean,
                           mode: AfterHoursMode = "staffRequest", info?: ApprovedAfterHoursInfo,
                           urgent?: ApprovedUrgentResponse, staffSchedule?: ApprovedStaffSchedule,
-                          greeting?: ApprovedGreeting | null, cancellationEnabled?: boolean, reschedulingEnabled?: boolean): StoredStandalonePolicy {
+                          greeting?: ApprovedGreeting | null, cancellationEnabled?: boolean, reschedulingEnabled?: boolean,
+                          transferDestinationRef?: string): StoredStandalonePolicy {
   return { scope: { tenantId: scope.tenantId, clinicId: scope.clinicId, locationId: scope.locationId },
     policyVersion: String(version), bookingEnabled, afterHoursMode: mode,
     ...(cancellationEnabled === undefined ? {} : { cancellationEnabled }),
     ...(reschedulingEnabled === undefined ? {} : { reschedulingEnabled }),
+    ...(transferDestinationRef === undefined ? {} : { transferDestinationRef }),
     ...(info ? { afterHoursInfo: structuredClone(info) } : {}),
     ...(urgent ? { urgentResponse: structuredClone(urgent) } : {}),
     ...(staffSchedule ? { staffSchedule: structuredClone(staffSchedule) } : {}),
@@ -46,12 +51,13 @@ function standalonePolicy(scope: LocationScope, version: number, bookingEnabled:
 export function isStoredStandalonePolicy(value: unknown, scope: LocationScope, version: number): boolean {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const stored = value as Record<string, unknown>;
-  const fields = new Set(["bookingEnabled", "cancellationEnabled", "reschedulingEnabled", "policyVersion", "scope", "afterHoursMode", "afterHoursInfo", "urgentResponse", "staffSchedule", "greeting"]);
+  const fields = new Set(["bookingEnabled", "cancellationEnabled", "reschedulingEnabled", "policyVersion", "scope", "afterHoursMode", "afterHoursInfo", "urgentResponse", "staffSchedule", "greeting", "transferDestinationRef"]);
   if (!["bookingEnabled", "policyVersion", "scope"].every(field => Object.hasOwn(stored, field)) ||
       Object.keys(stored).some(field => !fields.has(field)) ||
       typeof stored.bookingEnabled !== "boolean" || stored.policyVersion !== String(version) ||
       (stored.cancellationEnabled !== undefined && typeof stored.cancellationEnabled !== "boolean") ||
       (stored.reschedulingEnabled !== undefined && typeof stored.reschedulingEnabled !== "boolean") ||
+      (stored.transferDestinationRef !== undefined && !validStaffedDestinationRef(stored.transferDestinationRef)) ||
       typeof stored.scope !== "object" || stored.scope === null || Array.isArray(stored.scope)) return false;
   const storedScope = stored.scope as Record<string, unknown>;
   if (Object.keys(storedScope).sort().join(",") !== "clinicId,locationId,tenantId" ||
@@ -68,12 +74,15 @@ function decodeStandalonePolicy(value: unknown, scope: LocationScope, version: n
   const stored = value as Record<string, unknown>;
   const base = defaultPolicy(scope);
   const { afterHoursInfo: defaultAfterHoursInfo, urgentResponse: defaultUrgentResponse,
-    staffSchedule: defaultStaffSchedule, greeting: defaultGreeting, ...safeBase } = base;
+    staffSchedule: defaultStaffSchedule, greeting: defaultGreeting, transferDestinationRef: defaultRoute,
+    transferDestinationVersion: defaultRouteVersion, ...safeBase } = base;
   void defaultAfterHoursInfo; void defaultUrgentResponse; void defaultStaffSchedule;
+  void defaultRoute; void defaultRouteVersion;
   return ok({ ...safeBase, scope: { ...scope }, policyVersion: String(version),
     bookingEnabled: stored.bookingEnabled as boolean, afterHoursMode: (stored.afterHoursMode ?? "staffRequest") as AfterHoursMode,
     cancellationEnabled: (stored.cancellationEnabled ?? false) as boolean,
     reschedulingEnabled: (stored.reschedulingEnabled ?? false) as boolean,
+    ...(stored.transferDestinationRef === undefined ? {} : { transferDestinationRef: stored.transferDestinationRef as string }),
     ...(stored.afterHoursInfo ? { afterHoursInfo: stored.afterHoursInfo as ApprovedAfterHoursInfo } : {}),
     ...(stored.urgentResponse ? { urgentResponse: stored.urgentResponse as ApprovedUrgentResponse } : {}),
     ...(stored.staffSchedule ? { staffSchedule: stored.staffSchedule as ApprovedStaffSchedule } : {}),
@@ -90,14 +99,16 @@ function decodePolicy(value: unknown, scope: LocationScope, version: number): Re
       typeof policy.bookingEnabled !== "boolean" || !policy.capabilities ||
       (policy.cancellationEnabled !== undefined && typeof policy.cancellationEnabled !== "boolean") ||
       (policy.reschedulingEnabled !== undefined && typeof policy.reschedulingEnabled !== "boolean") ||
+      (policy.transferDestinationRef !== undefined && !validStaffedDestinationRef(policy.transferDestinationRef)) ||
       !validAfterHoursSetting(policy.afterHoursMode ?? "staffRequest", policy.afterHoursInfo, scope) ||
       (policy.urgentResponse !== undefined && !validUrgentResponseShape(policy.urgentResponse, scope)) ||
       (policy.staffSchedule !== undefined && !validApprovedStaffSchedule(policy.staffSchedule, scope)) ||
       (policy.greeting !== undefined && !validGreetingShape(policy.greeting, scope)) ||
       !["execute", "requestOnly", "unavailable"].includes(policy.capabilities.transfer) ||
       !policy.staffDestination || !policy.operatorQueue) return err({ kind: "storageFailure" });
-  const { firstTimeIntakeEnabled, firstTimeIntakeVersion, ...local } = policy;
+  const { firstTimeIntakeEnabled, firstTimeIntakeVersion, transferDestinationVersion, ...local } = policy;
   void firstTimeIntakeEnabled; void firstTimeIntakeVersion;
+  void transferDestinationVersion;
   return ok(structuredClone({ ...local, automationVersion: "0", automationEnabled: false }));
 }
 
@@ -112,11 +123,13 @@ export class PostgresPolicyStore implements PolicyStore {
   private readonly hostCancellationMode: CapabilityMode;
   private readonly hostReschedulingMode: CapabilityMode;
   private readonly hostIntakeMode: CapabilityMode;
+  private readonly staffedDestinationHost: StaffedDestinationHost;
 
   /** Rich policy storage is synthetic-only and requires the explicit unsafeReference mode. */
   constructor(db: Kysely<Database>, defaultPolicy: (scope: LocationScope) => CallPolicy, hostBookingMode: CapabilityMode = "unavailable", readiness: AutomationReadiness = unprovenReadiness,
               staffWorkEnabled = false, storageMode: "unsafeReference" | "standaloneMinimal" = "standaloneMinimal",
-              allowDefaultGreeting = false, hostPatientModes: CapabilityMode | PatientSettingModes = "unavailable") {
+              allowDefaultGreeting = false, hostPatientModes: CapabilityMode | PatientSettingModes = "unavailable",
+              staffedDestinationHost: StaffedDestinationHost = unprovenStaffedDestination) {
     this.db = db;
     this.defaultPolicy = defaultPolicy;
     this.hostBookingMode = hostBookingMode;
@@ -127,11 +140,13 @@ export class PostgresPolicyStore implements PolicyStore {
     this.hostCancellationMode = typeof hostPatientModes === "string" ? hostPatientModes : hostPatientModes.cancellation ?? "unavailable";
     this.hostReschedulingMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.rescheduling ?? "unavailable";
     this.hostIntakeMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.intake ?? "unavailable";
+    this.staffedDestinationHost = staffedDestinationHost;
   }
 
   private defaultFor(scope: LocationScope): CallPolicy {
-    const { firstTimeIntakeEnabled, firstTimeIntakeVersion, ...policy } = this.defaultPolicy(scope);
+    const { firstTimeIntakeEnabled, firstTimeIntakeVersion, transferDestinationVersion, ...policy } = this.defaultPolicy(scope);
     void firstTimeIntakeEnabled; void firstTimeIntakeVersion;
+    void transferDestinationVersion;
     if (this.storageMode !== "standaloneMinimal" || this.allowDefaultGreeting) return policy;
     const { greeting, ...safe } = policy;
     void greeting;
@@ -164,7 +179,36 @@ export class PostgresPolicyStore implements PolicyStore {
                         db: Kysely<Database> = this.db): Promise<CallPolicy> {
     const intake = await new PostgresClinicIntakeSettingStore(db).read(policy.scope);
     if (!intake.ok) throw new Error("clinic intake configuration unavailable");
-    return this.compose(policy, intake.value, automation);
+    const composed = this.compose(policy, intake.value, automation);
+    if (this.storageMode === "standaloneMinimal" || !this.staffWorkEnabled) {
+      const { transferDestinationVersion, ...safe } = composed;
+      void transferDestinationVersion;
+      return { ...safe, capabilities: { ...safe.capabilities, transfer: "unavailable" } };
+    }
+    return captureStaffedDestination(composed, this.staffedDestinationHost);
+  }
+
+  private staffedDestinationSettings(): PostgresStaffedDestinationSettingStore {
+    return new PostgresStaffedDestinationSettingStore(this.db, {
+      initial: scope => ({ ...this.defaultFor(scope), policyVersion: "0" }),
+      decode: (value, scope, version) => this.decode(value, scope, version),
+      encode: policy => this.storageMode === "standaloneMinimal"
+        ? standalonePolicy(policy.scope, Number(policy.policyVersion), policy.bookingEnabled,
+          policy.afterHoursMode ?? "staffRequest", policy.afterHoursInfo, policy.urgentResponse, policy.staffSchedule,
+          policy.greeting ?? null, policy.cancellationEnabled, policy.reschedulingEnabled, policy.transferDestinationRef) : policy,
+    }, this.staffedDestinationHost);
+  }
+
+  async changeStaffedDestination(scope: LocationScope, expectedVersion: string, destinationRef: string | null,
+                                actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+    if (this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope)) return err({ kind: "invalidValue" });
+    const changed = await this.staffedDestinationSettings().change(scope, expectedVersion, destinationRef, actorRef);
+    return changed.ok ? this.read(scope) : changed;
+  }
+
+  async listStaffedDestinationChanges(scope: LocationScope, afterVersion?: number): Promise<Result<StaffedDestinationAuditPage, PolicyFailure>> {
+    if (this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope)) return err({ kind: "invalidValue" });
+    return this.staffedDestinationSettings().listChanges(scope, afterVersion);
   }
 
   async read(scope: LocationScope): Promise<Result<CallPolicy, PolicyFailure>> {
@@ -278,7 +322,7 @@ export class PostgresPolicyStore implements PolicyStore {
         const initialPolicy = this.defaultFor(scope);
         await trx.insertInto("clinic_settings").values({ ...ids, version: 0 as ClinicSettingsVersion,
           policy: this.storageMode === "standaloneMinimal" ? standalonePolicy(scope, 0, initialPolicy.bookingEnabled, "staffRequest", undefined, undefined, undefined,
-                initialPolicy.greeting ?? null, initialPolicy.cancellationEnabled, initialPolicy.reschedulingEnabled) : initialPolicy })
+                initialPolicy.greeting ?? null, initialPolicy.cancellationEnabled, initialPolicy.reschedulingEnabled, initialPolicy.transferDestinationRef) : initialPolicy })
           .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id", "location_id", "version"]).doNothing()).execute();
         await trx.selectFrom("clinic_settings").select("version")
           .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).where("location_id", "=", ids.location_id)
@@ -298,7 +342,7 @@ export class PostgresPolicyStore implements PolicyStore {
         await trx.insertInto("clinic_settings").values({ ...ids, version: latest.version + 1 as ClinicSettingsVersion,
           policy: this.storageMode === "standaloneMinimal" ? standalonePolicy(scope, latest.version + 1, enabled,
             next.afterHoursMode ?? "staffRequest", next.afterHoursInfo, next.urgentResponse, next.staffSchedule,
-            next.greeting ?? null, next.cancellationEnabled, next.reschedulingEnabled) : next,
+            next.greeting ?? null, next.cancellationEnabled, next.reschedulingEnabled, next.transferDestinationRef) : next,
           changed_by: actorRef, previous_booking_enabled: decoded.value.bookingEnabled, changed_at: sql`clock_timestamp()` }).execute();
         const automation = await trx.selectFrom("clinic_automation").select(["version", "enabled"])
           .where("tenant_id", "=", scope.tenantId as ClinicAutomationTenantId)
@@ -371,7 +415,7 @@ export class PostgresPolicyStore implements PolicyStore {
         await trx.insertInto("clinic_settings").values({ ...ids, version: 0 as ClinicSettingsVersion,
           policy: this.storageMode === "standaloneMinimal"
             ? standalonePolicy(scope, 0, initial.bookingEnabled, "staffRequest", undefined, undefined, undefined,
-              initial.greeting ?? null, initial.cancellationEnabled, initial.reschedulingEnabled) : initial })
+              initial.greeting ?? null, initial.cancellationEnabled, initial.reschedulingEnabled, initial.transferDestinationRef) : initial })
           .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id", "location_id", "version"]).doNothing()).execute();
         await trx.selectFrom("clinic_settings").select("version")
           .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).where("location_id", "=", ids.location_id)
@@ -390,7 +434,7 @@ export class PostgresPolicyStore implements PolicyStore {
         await trx.insertInto("clinic_settings").values({ ...ids, version: latest.version + 1 as ClinicSettingsVersion,
           policy: this.storageMode === "standaloneMinimal"
             ? standalonePolicy(scope, latest.version + 1, next.bookingEnabled, next.afterHoursMode ?? "staffRequest",
-              next.afterHoursInfo, next.urgentResponse, next.staffSchedule, next.greeting ?? null, next.cancellationEnabled, next.reschedulingEnabled) : next,
+              next.afterHoursInfo, next.urgentResponse, next.staffSchedule, next.greeting ?? null, next.cancellationEnabled, next.reschedulingEnabled, next.transferDestinationRef) : next,
           setting_kind: setting,
           ...(setting === "cancellation"
             ? { previous_cancellation_enabled: decoded.value.cancellationEnabled ?? false }
@@ -447,7 +491,7 @@ export class PostgresPolicyStore implements PolicyStore {
         await trx.insertInto("clinic_settings").values({ ...ids, version: 0 as ClinicSettingsVersion,
           policy: this.storageMode === "standaloneMinimal"
             ? standalonePolicy(scope, 0, initialPolicy.bookingEnabled, "staffRequest", undefined, undefined, undefined,
-                initialPolicy.greeting ?? null, initialPolicy.cancellationEnabled, initialPolicy.reschedulingEnabled) : initialPolicy })
+                initialPolicy.greeting ?? null, initialPolicy.cancellationEnabled, initialPolicy.reschedulingEnabled, initialPolicy.transferDestinationRef) : initialPolicy })
           .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id", "location_id", "version"]).doNothing()).execute();
         await trx.selectFrom("clinic_settings").select("version")
           .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id)
@@ -468,7 +512,7 @@ export class PostgresPolicyStore implements PolicyStore {
           version: latest.version + 1 as ClinicSettingsVersion,
           policy: this.storageMode === "standaloneMinimal"
             ? standalonePolicy(scope, latest.version + 1, next.bookingEnabled, mode, next.afterHoursInfo, next.urgentResponse,
-              next.staffSchedule, next.greeting ?? null, next.cancellationEnabled, next.reschedulingEnabled) : next,
+              next.staffSchedule, next.greeting ?? null, next.cancellationEnabled, next.reschedulingEnabled, next.transferDestinationRef) : next,
           setting_kind: "afterHours", previous_after_hours_mode: decoded.value.afterHoursMode ?? "staffRequest",
           changed_by: actorRef, changed_at: sql`clock_timestamp()` }).execute();
         const automation = await trx.selectFrom("clinic_automation").select(["version", "enabled"])
@@ -521,7 +565,7 @@ export class PostgresPolicyStore implements PolicyStore {
         await trx.insertInto("clinic_settings").values({ ...ids, version: 0 as ClinicSettingsVersion,
           policy: this.storageMode === "standaloneMinimal"
             ? standalonePolicy(scope, 0, initialPolicy.bookingEnabled, "staffRequest", undefined, undefined, undefined,
-                initialPolicy.greeting ?? null, initialPolicy.cancellationEnabled, initialPolicy.reschedulingEnabled) : initialPolicy })
+                initialPolicy.greeting ?? null, initialPolicy.cancellationEnabled, initialPolicy.reschedulingEnabled, initialPolicy.transferDestinationRef) : initialPolicy })
           .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id", "location_id", "version"]).doNothing()).execute();
         await trx.selectFrom("clinic_settings").select("version")
           .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id)
@@ -542,7 +586,7 @@ export class PostgresPolicyStore implements PolicyStore {
           policy: this.storageMode === "standaloneMinimal"
             ? standalonePolicy(scope, latest.version + 1, next.bookingEnabled,
               next.afterHoursMode ?? "staffRequest", next.afterHoursInfo, next.urgentResponse, next.staffSchedule,
-              next.greeting ?? null, next.cancellationEnabled, next.reschedulingEnabled) : next,
+              next.greeting ?? null, next.cancellationEnabled, next.reschedulingEnabled, next.transferDestinationRef) : next,
           setting_kind: "urgent", changed_by: actorRef, changed_at: sql`clock_timestamp()` }).execute();
         const automation = await trx.selectFrom("clinic_automation").select(["version", "enabled"])
           .where("tenant_id", "=", scope.tenantId as ClinicAutomationTenantId)
@@ -601,7 +645,7 @@ export class PostgresPolicyStore implements PolicyStore {
         await trx.insertInto("clinic_settings").values({ ...ids, version: 0 as ClinicSettingsVersion,
           policy: this.storageMode === "standaloneMinimal"
             ? standalonePolicy(scope, 0, initialPolicy.bookingEnabled, "staffRequest", undefined, undefined, undefined,
-                initialPolicy.greeting ?? null, initialPolicy.cancellationEnabled, initialPolicy.reschedulingEnabled) : initialPolicy })
+                initialPolicy.greeting ?? null, initialPolicy.cancellationEnabled, initialPolicy.reschedulingEnabled, initialPolicy.transferDestinationRef) : initialPolicy })
           .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id", "location_id", "version"]).doNothing()).execute();
         await trx.selectFrom("clinic_settings").select("version")
           .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id)
@@ -622,7 +666,7 @@ export class PostgresPolicyStore implements PolicyStore {
           policy: this.storageMode === "standaloneMinimal"
             ? standalonePolicy(scope, latest.version + 1, next.bookingEnabled,
               next.afterHoursMode ?? "staffRequest", next.afterHoursInfo, next.urgentResponse, next.staffSchedule,
-              next.greeting ?? null, next.cancellationEnabled, next.reschedulingEnabled) : next,
+              next.greeting ?? null, next.cancellationEnabled, next.reschedulingEnabled, next.transferDestinationRef) : next,
           setting_kind: "staffSchedule", changed_by: actorRef, changed_at: sql`clock_timestamp()` }).execute();
         const automation = await trx.selectFrom("clinic_automation").select(["version", "enabled"])
           .where("tenant_id", "=", scope.tenantId as ClinicAutomationTenantId)
@@ -682,7 +726,7 @@ export class PostgresPolicyStore implements PolicyStore {
         await trx.insertInto("clinic_settings").values({ ...ids, version: 0 as ClinicSettingsVersion,
           policy: this.storageMode === "standaloneMinimal"
             ? standalonePolicy(scope, 0, initialPolicy.bookingEnabled, "staffRequest", undefined, undefined, undefined,
-                initialPolicy.greeting ?? null, initialPolicy.cancellationEnabled, initialPolicy.reschedulingEnabled) : initialPolicy })
+                initialPolicy.greeting ?? null, initialPolicy.cancellationEnabled, initialPolicy.reschedulingEnabled, initialPolicy.transferDestinationRef) : initialPolicy })
           .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id", "location_id", "version"]).doNothing()).execute();
         await trx.selectFrom("clinic_settings").select("version")
           .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id)
@@ -702,7 +746,7 @@ export class PostgresPolicyStore implements PolicyStore {
           policy: this.storageMode === "standaloneMinimal"
             ? standalonePolicy(scope, latest.version + 1, next.bookingEnabled,
               next.afterHoursMode ?? "staffRequest", next.afterHoursInfo, next.urgentResponse, next.staffSchedule,
-              next.greeting ?? null, next.cancellationEnabled, next.reschedulingEnabled) : next,
+              next.greeting ?? null, next.cancellationEnabled, next.reschedulingEnabled, next.transferDestinationRef) : next,
           setting_kind: "greeting", changed_by: actorRef, changed_at: sql`clock_timestamp()` }).execute();
         const automation = await trx.selectFrom("clinic_automation").select(["version", "enabled"])
           .where("tenant_id", "=", scope.tenantId as ClinicAutomationTenantId)

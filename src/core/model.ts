@@ -124,6 +124,8 @@ export type CallPolicy = Readonly<{
   urgentResponse?: ApprovedUrgentResponse;
   capabilities: Readonly<Record<CapabilityId, CapabilityMode>>;
   transferDestinationRef?: string;
+  /** Current host route declaration captured at admission, never setting authority. */
+  transferDestinationVersion?: string;
   /** Approved local schedule expanded at voice admission, never trusted as pre-expanded evidence. */
   staffSchedule?: ApprovedStaffSchedule;
   /** UTC horizon over which staffedIntervals is a complete clinic-approved snapshot. */
