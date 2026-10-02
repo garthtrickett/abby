@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { createServer } from "node:net";
+import { connect, createServer } from "node:net";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { sql } from "kysely";
@@ -13,6 +13,7 @@ import { migrate } from "../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../src/storage/patient-data-canary-scan.ts";
 import { scanDisposableBackupCanaries } from "../test/storage/backup-canary-scan.ts";
 import { seedSyntheticCatalogueApproval } from "../test/support/seed-synthetic-catalogue-approval.ts";
+import { waitForVoiceListener } from "../test/support/child-voice-listener.ts";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const number = "+6125550199";
@@ -41,14 +42,37 @@ async function deadline(promise, label, milliseconds = 10_000) {
   } finally { clearTimeout(timer); }
 }
 
-async function freePort() {
+async function forwardingListener() {
+  let targetPort = 0;
+  const sockets = new Set();
   const server = createServer();
+  server.on("connection", client => {
+    sockets.add(client);
+    client.on("close", () => sockets.delete(client));
+    if (targetPort === 0) { client.destroy(); return; }
+    const upstream = connect(targetPort, "127.0.0.1");
+    sockets.add(upstream);
+    upstream.on("close", () => sockets.delete(upstream));
+    client.on("error", () => upstream.destroy());
+    upstream.on("error", () => client.destroy());
+    client.on("close", () => upstream.destroy());
+    upstream.on("close", () => client.destroy());
+    client.pipe(upstream);
+    upstream.pipe(client);
+  });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const port = server.address().port;
-  server.close();
-  await once(server, "close");
-  return port;
+  return {
+    port,
+    forwardTo(boundPort) { targetPort = boundPort; },
+    async close() {
+      for (const socket of sockets) socket.destroy();
+      const closed = once(server, "close");
+      server.close();
+      await closed;
+    },
+  };
 }
 
 async function stop(child) {
@@ -94,13 +118,24 @@ async function healthy(port) {
 }
 
 async function transportPreflight(env) {
+  let lastFailure = "unknown";
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const check = spawnSync(process.execPath, ["scripts/preflight-voice-public.ts", "--transport-only"],
-      { cwd: root, env, stdio: "ignore", timeout: 15_000 });
-    if (check.status === 0) return;
+    // The TCP forwarder runs in this process; a synchronous child would block
+    // the event loop that must carry its public HTTPS and WSS probe traffic.
+    const check = spawn(process.execPath, ["scripts/preflight-voice-public.ts", "--transport-only"],
+      { cwd: root, env, stdio: ["ignore", "ignore", "pipe"] });
+    let stderr = "";
+    check.stderr.on("data", data => { stderr = (stderr + String(data)).slice(-120); });
+    let exitCode;
+    try { [exitCode] = await deadline(once(check, "exit"), "public transport preflight", 15_000); }
+    finally {
+      if (check.exitCode === null && check.signalCode === null) check.kill("SIGTERM");
+    }
+    if (exitCode === 0) return;
+    lastFailure = stderr.trim() || `exit ${exitCode ?? "unknown"}`;
     await new Promise(resolve => setTimeout(resolve, 500));
   }
-  throw new Error("public HTTPS/WSS unsigned transport preflight failed");
+  throw new Error(`public HTTPS/WSS unsigned transport preflight failed: ${lastFailure}`);
 }
 
 async function webhook(url, from, sid, signed = true, signatureUrl = url) {
@@ -169,7 +204,7 @@ async function main() {
   const name = `abby_test_voice_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl);
   target.pathname = `/${name}`;
-  const port = await freePort();
+  const forwarder = await forwardingListener();
   let created = false;
   let tunnel;
   let runner;
@@ -180,7 +215,7 @@ async function main() {
     const db = connectPostgres(target.toString());
     try { await migrate(db); } finally { await db.destroy(); }
 
-    tunnel = spawn("ngrok", ["http", String(port), "--log=stdout", "--log-format=json"],
+    tunnel = spawn("ngrok", ["http", String(forwarder.port), "--log=stdout", "--log-format=json"],
       { stdio: ["ignore", "pipe", "ignore"] });
     const base = await publicUrl(tunnel);
     const host = new URL(base).host;
@@ -190,7 +225,7 @@ async function main() {
     // not pass through any real provider credentials from the operator's shell.
     const env = { PATH: process.env.PATH, HOME: process.env.HOME, LANG: process.env.LANG,
       DATABASE_URL: target.toString(),
-      ABBY_ISOLATED_POSTGRES_PROBE: "1", ABBY_VOICE_PORT: String(port), ABBY_VOICE_TEST_MODE: "1",
+      ABBY_ISOLATED_POSTGRES_PROBE: "1", ABBY_VOICE_PORT: "0", ABBY_VOICE_TEST_MODE: "1",
       ABBY_TWILIO_TEST_CALLER_NUMBER: callerNumber,
       ABBY_TENANT_ID: "public-probe", ABBY_CLINIC_ID: "synthetic-clinic", ABBY_LOCATION_ID: "synthetic-location",
       ABBY_CLINIKO_API_KEY: "synthetic-key-au5", ABBY_CLINIKO_CONTACT_EMAIL: "test@example.com",
@@ -214,11 +249,14 @@ async function main() {
       apiKey: "synthetic-key-au5" }); }
     finally { await approvalDb.destroy(); }
     runner = spawn(process.execPath, ["test/support/start-synthetic-voice-runner.ts"],
-      { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
+      { cwd: root, env, stdio: ["ignore", "pipe", "pipe", "ipc"] });
     runner.stdout.resume();
     runner.stderr.resume();
-    await healthy(port);
-    assert.equal((await fetch(`http://127.0.0.1:${port}/readyz`)).status, 503);
+    const boundPort = await waitForVoiceListener(runner);
+    forwarder.forwardTo(boundPort);
+    await healthy(boundPort);
+    await healthy(forwarder.port);
+    assert.equal((await fetch(`http://127.0.0.1:${boundPort}/readyz`)).status, 503);
     await transportPreflight(env);
     process.stdout.write(`actual runner reachable at ${webhookUrl} and ${streamUrl}; unsigned traffic rejected\n`);
 
@@ -299,6 +337,7 @@ async function main() {
     caller?.terminate();
     try { await stop(runner); } catch { runner?.kill("SIGKILL"); }
     try { await stop(tunnel); } catch { tunnel?.kill("SIGKILL"); }
+    await forwarder.close();
     try { if (created) await sql.raw(`drop database "${name}" with (force)`).execute(admin); }
     finally { await admin.destroy(); }
   }
