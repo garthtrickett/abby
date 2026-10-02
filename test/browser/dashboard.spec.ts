@@ -5,7 +5,7 @@ import { MemoryLedger } from "../../src/core/ledger.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
 import { EffectWorker } from "../../src/core/effect-worker.ts";
 import { EffectRecovery } from "../../src/core/effect-recovery.ts";
-import type { AppointmentSettingModes, LocationScope } from "../../src/core/model.ts";
+import type { PatientSettingModes, LocationScope } from "../../src/core/model.ts";
 import { err, ok } from "../../src/core/model.ts";
 import type { AutomationReadiness } from "../../src/core/readiness.ts";
 import type { AvailabilityHost } from "../../src/core/host.ts";
@@ -22,10 +22,11 @@ import { createDashboardServer } from "../../src/standalone/dashboard/server.ts"
 import { CallAdmissionService } from "../../src/voice/admission.ts";
 
 async function localDashboard(role: "clinicAdmin" | "staff", availability?: AvailabilityHost, readiness?: AutomationReadiness,
-                              cancellationMode: "execute" | "requestOnly" | "unavailable" | AppointmentSettingModes = "requestOnly") {
-  const scope: LocationScope = { tenantId: "browser-tenant", clinicId: "browser-clinic", locationId: "browser-location" };
+                              cancellationMode: "execute" | "requestOnly" | "unavailable" | PatientSettingModes = "requestOnly",
+                              sharedClinic?: Readonly<{ policy: MemoryPolicyStore; locationId: string }>) {
+  const scope: LocationScope = { tenantId: "browser-tenant", clinicId: "browser-clinic", locationId: sharedClinic?.locationId ?? "browser-location" };
   const ledger = new MemoryLedger(readiness);
-  const policy = new MemoryPolicyStore("execute", undefined, readiness, cancellationMode);
+  const policy = sharedClinic?.policy ?? new MemoryPolicyStore("execute", undefined, readiness, cancellationMode);
   const host = new ReferenceClinicHost([], [],
     [{ scope, sourceRef: "hours", version: "hours-v1", ownerRef: "clinic-owner", approvedText: "We open at 9 am.", approved: true,
       effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]);
@@ -219,6 +220,145 @@ test("E2E-254 SET-004: uncertain rescheduling edit requires current state before
     await page.unroute("**/api/settings/rescheduling-enabled");
     await page.reload();
     await expect(page.getByRole("button", { name: "Disable rescheduling", exact: true })).toBeEnabled();
+  } finally { await app.close(); }
+});
+
+test("E2E-255 SET-005: intake changes every clinic location and retains captured active-call policy", async ({ page, request }) => {
+  const app = await localDashboard("clinicAdmin", undefined, undefined, { intake: "execute" });
+  const second = await localDashboard("clinicAdmin", undefined, undefined, "requestOnly",
+    { policy: app.policy, locationId: "second-location" });
+  const secondPage = await page.context().newPage();
+  try {
+    assert.ok((await app.policy.changeBookingEnabled(app.scope, "0", true, "booking-owner")).ok);
+    await page.goto(app.url);
+    await secondPage.goto(second.url);
+    await expect(page.getByText("First-time intake disabled", { exact: true })).toBeVisible();
+    await expect(page.getByText("First-time intake capability: unavailable", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Enable first-time intake", exact: true }).click();
+    await expect(page.getByText("First-time intake enabled for new calls at every clinic location.")).toBeVisible();
+    await expect(page.getByText("First-time intake capability: execute", { exact: true })).toBeVisible();
+    await secondPage.reload();
+    await expect(secondPage.getByText("First-time intake enabled", { exact: true })).toBeVisible();
+    const initial = await app.ledger.read("before-setting", app.scope);
+    assert.ok(initial.ok);
+    assert.equal(initial.value.policy.capabilities.intake, "unavailable");
+    const active = await second.reception.startCall("intake-enabled", second.scope, "2026-10-02T16:00:00.000Z");
+    assert.ok(active.ok);
+    assert.equal(active.value.policy.firstTimeIntakeVersion, "1");
+    assert.equal(active.value.policy.capabilities.intake, "execute");
+
+    assert.equal((await request.post(`${second.url}/api/settings/first-time-intake-enabled`, {
+      data: { expectedVersion: "0", enabled: false } })).status(), 409);
+    for (const invalid of [
+      { expectedVersion: "1", enabled: "yes" },
+      { expectedVersion: "1", enabled: false, actorRef: "forged" },
+      { expectedVersion: "1", enabled: false, scope: { ...app.scope, clinicId: "foreign" } },
+    ]) {
+      assert.equal((await request.post(`${app.url}/api/settings/first-time-intake-enabled`, { data: invalid })).status(), 400);
+    }
+    assert.equal((await request.get(`${app.url}/api/settings/first-time-intake-audit?after=-1`)).status(), 400);
+    assert.equal((await request.post(`${app.url}/api/settings/first-time-intake-enabled`, {
+      headers: { origin: "https://foreign.example.test" }, data: { expectedVersion: "1", enabled: false } })).status(), 403);
+    await secondPage.reload();
+    await secondPage.getByRole("button", { name: "Disable first-time intake", exact: true }).click();
+    await expect(secondPage.getByText("First-time intake disabled for new calls at every clinic location.")).toBeVisible();
+    await page.reload();
+    await expect(page.getByText("First-time intake disabled", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("First-time intake setting audit")).toContainText("Version 1");
+    await expect(page.getByLabel("First-time intake setting audit")).toContainText("Version 2");
+    const next = await app.reception.startCall("intake-disabled", app.scope, "2026-10-02T16:00:00.000Z");
+    assert.ok(next.ok);
+    assert.equal(next.value.policy.capabilities.intake, "unavailable");
+    assert.equal(active.value.policy.capabilities.intake, "execute");
+    const mainPolicy = await app.policy.read(app.scope);
+    const secondPolicy = await app.policy.read(second.scope);
+    assert.ok(mainPolicy.ok && secondPolicy.ok);
+    assert.equal(mainPolicy.value.policyVersion, "1");
+    assert.equal(secondPolicy.value.policyVersion, "0");
+    assert.equal(mainPolicy.value.firstTimeIntakeVersion, "2");
+    assert.equal(secondPolicy.value.firstTimeIntakeVersion, "2");
+    const foreign = await app.policy.read({ ...app.scope, clinicId: "foreign" });
+    assert.ok(foreign.ok);
+    assert.equal(foreign.value.firstTimeIntakeEnabled, false);
+    const changes = await app.policy.listFirstTimeIntakeChanges(app.scope);
+    assert.ok(changes.ok);
+    assert.equal(changes.value.entries.length, 2);
+  } finally { await secondPage.close(); await second.close(); await app.close(); }
+});
+
+test("E2E-255 SET-005: unsupported intake and staff edits stay blocked", async ({ page, request }) => {
+  const unsupported = await localDashboard("clinicAdmin", undefined, undefined, { intake: "unavailable" });
+  try {
+    await page.goto(unsupported.url);
+    await page.getByRole("button", { name: "Enable first-time intake", exact: true }).click();
+    await expect(page.getByText("First-time intake enabled", { exact: true })).toBeVisible();
+    await expect(page.getByText("First-time intake capability: unavailable", { exact: true })).toBeVisible();
+    const admitted = await unsupported.reception.startCall("intake-unsupported", unsupported.scope);
+    assert.ok(admitted.ok);
+    assert.equal(admitted.value.policy.capabilities.intake, "unavailable");
+  } finally { await unsupported.close(); }
+  const staff = await localDashboard("staff");
+  try {
+    await page.goto(staff.url);
+    await expect(page.getByRole("button", { name: "Enable first-time intake", exact: true })).toHaveCount(0);
+    assert.equal((await request.post(`${staff.url}/api/settings/first-time-intake-enabled`, {
+      data: { expectedVersion: "0", enabled: true } })).status(), 403);
+    assert.equal((await request.get(`${staff.url}/api/settings/first-time-intake-audit`)).status(), 403);
+  } finally { await staff.close(); }
+});
+
+test("E2E-255 SET-005: an uncertain intake edit locks controls until current settings can be read", async ({ page }) => {
+  const app = await localDashboard("clinicAdmin");
+  try {
+    await page.goto(app.url);
+    let changed = false;
+    await page.route("**/api/settings/first-time-intake-enabled", async route => {
+      const response = await route.fetch();
+      assert.equal(response.status(), 200);
+      changed = true;
+      await route.abort("failed");
+    });
+    await page.route("**/api/settings", async route => {
+      if (changed) await route.abort("failed");
+      else await route.continue();
+    });
+    await page.getByRole("button", { name: "Enable first-time intake", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText("Reload to inspect current settings");
+    await expect(page.getByRole("button", { name: "First-time intake state unavailable", exact: true })).toBeDisabled();
+    const current = await app.policy.read(app.scope);
+    assert.ok(current.ok);
+    assert.equal(current.value.firstTimeIntakeEnabled, true);
+    assert.equal(current.value.firstTimeIntakeVersion, "1");
+    assert.equal(current.value.policyVersion, "0");
+    await page.unroute("**/api/settings");
+    await page.unroute("**/api/settings/first-time-intake-enabled");
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Disable first-time intake", exact: true })).toBeEnabled();
+  } finally { await app.close(); }
+});
+
+test("E2E-255 SET-005: rereading a lost intake reply recovers the clinic version without replaying the edit", async ({ page }) => {
+  const app = await localDashboard("clinicAdmin");
+  try {
+    await page.goto(app.url);
+    const writes: unknown[] = [];
+    await page.route("**/api/settings/first-time-intake-enabled", async route => {
+      writes.push(route.request().postDataJSON());
+      if (writes.length === 1) {
+        const response = await route.fetch();
+        assert.equal(response.status(), 200);
+        await route.abort("failed");
+      } else await route.continue();
+    });
+    await page.getByRole("button", { name: "Enable first-time intake", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Disable first-time intake", exact: true })).toBeEnabled();
+    assert.deepEqual(writes, [{ expectedVersion: "0", enabled: true }]);
+    await page.getByRole("button", { name: "Disable first-time intake", exact: true }).click();
+    await expect(page.getByText("First-time intake disabled for new calls at every clinic location.")).toBeVisible();
+    assert.deepEqual(writes, [{ expectedVersion: "0", enabled: true }, { expectedVersion: "1", enabled: false }]);
+    const changes = await app.policy.listFirstTimeIntakeChanges(app.scope);
+    assert.ok(changes.ok);
+    assert.deepEqual(changes.value.entries.map(row => [row.version, row.enabled]), [["1", true], ["2", false]]);
   } finally { await app.close(); }
 });
 

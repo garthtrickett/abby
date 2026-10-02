@@ -368,7 +368,7 @@ test("E2E-254 PostgreSQL rescheduling setting gates complete voice calls after d
     const ready = async () => ok(true as const);
     await reschedulingSettingCalls(new PostgresLedger(db, suggested => suggested, ready, "unsafeReference"),
       new PostgresPolicyStore(db, referenceDefaultPolicy, "execute", ready, true, "unsafeReference", false, { rescheduling: "execute" }));
-    await assert.rejects(migrate(db, "down"), /rescheduling setting rows must be removed/);
+    await assert.rejects(migrateTo(db, "035_cancellation_setting_audit"), /rescheduling setting rows must be removed/);
     const retained = await new PostgresPolicyStore(db, referenceDefaultPolicy, undefined, undefined, false,
       "unsafeReference").listReschedulingChanges(scope);
     assert.ok(retained.ok, retained.ok ? "" : retained.error.kind);

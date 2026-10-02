@@ -19,7 +19,7 @@ if (!url) throw new Error("DATABASE_URL is required");
 const db = connectPostgres(url);
 after(async () => { await db.destroy(); });
 
-test("E2E-168 E2E-252 E2E-254 altered receipt or appointment setting history cannot publish a route", async () => {
+test("E2E-168 E2E-252 E2E-254 E2E-255 altered receipt or appointment setting history cannot publish a route", async () => {
   const suffix = randomUUID().slice(0, 8);
   const source = { tenantId: `receipt-source-${suffix}`, clinicId: "clinic", locationId: "main" };
   const target = { tenantId: `receipt-target-${suffix}`, clinicId: "clinic", locationId: "main" };
@@ -33,6 +33,7 @@ test("E2E-168 E2E-252 E2E-254 altered receipt or appointment setting history can
   assert.equal((await policy.changeBookingEnabled(source, "0", true, "source-admin")).ok, true);
   assert.equal((await policy.changeCancellationEnabled(source, "1", true, "source-admin")).ok, true);
   assert.equal((await policy.changeReschedulingEnabled(source, "2", true, "source-admin")).ok, true);
+  assert.ok((await policy.changeFirstTimeIntakeEnabled(source, "0", true, "source-admin")).ok);
   const fence = new PostgresPortabilityFence(db);
   const fenceAuthority = { authorizeAndRecord: async () => ok({ requestRef: `receipt-fence-${suffix}` }) };
   assert.equal((await fence.freeze({ tenantId: source.tenantId, actorRef: "source-admin",
@@ -115,6 +116,26 @@ test("E2E-168 E2E-252 E2E-254 altered receipt or appointment setting history can
   await sql`update clinic_settings set setting_kind = 'booking', previous_booking_enabled = false,
     previous_after_hours_mode = null where tenant_id = ${target.tenantId}
       and clinic_id = ${target.clinicId} and location_id = ${target.locationId} and version = 1`.execute(db);
+  const intake = await policy.listFirstTimeIntakeChanges(target);
+  assert.ok(intake.ok);
+  assert.deepEqual(intake.value.entries.map(row => [row.version, row.enabled, row.previousEnabled]),
+    [["1", true, false], ["2", false, true]]);
+  assert.equal(targetPolicy.value.firstTimeIntakeEnabled, false);
+  assert.equal(targetPolicy.value.firstTimeIntakeVersion, "2");
+  await sql`update clinic_intake_settings set previous_enabled = false
+    where tenant_id = ${target.tenantId} and clinic_id = ${target.clinicId} and version = 2`.execute(db);
+  assert.deepEqual(await cutover.publish(command, routeAuthority),
+    { ok: false, error: { kind: "targetNotReady" } });
+  const afterIntakeMismatch = await new PostgresNumberRoutingHost(db).identifyCall(accountRef, dialedNumber);
+  assert.equal(afterIntakeMismatch.ok && afterIntakeMismatch.value.tenantId, source.tenantId);
+  await sql`update clinic_intake_settings set previous_enabled = true
+    where tenant_id = ${target.tenantId} and clinic_id = ${target.clinicId} and version = 2`.execute(db);
+  await sql`insert into clinic_intake_settings (tenant_id, clinic_id, version, enabled)
+    values (${target.tenantId}, 'unlisted-clinic', 0, false)`.execute(db);
+  assert.deepEqual(await cutover.publish(command, routeAuthority),
+    { ok: false, error: { kind: "targetNotReady" } });
+  await sql`delete from clinic_intake_settings where tenant_id = ${target.tenantId}
+    and clinic_id = 'unlisted-clinic'`.execute(db);
   const published = await cutover.publish(command, routeAuthority);
   assert.equal(published.ok && published.value.activeTenantId, target.tenantId, JSON.stringify(published));
 });

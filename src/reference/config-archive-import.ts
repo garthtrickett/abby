@@ -1,3 +1,4 @@
+import type { ClinicIntakeAuditEntry } from "../core/clinic-intake-setting.ts";
 import { createHash } from "node:crypto";
 import type { CancellationSettingAuditEntry, ReschedulingSettingAuditEntry } from "../core/host.ts";
 import { MemoryLedger } from "../core/ledger.ts";
@@ -201,6 +202,15 @@ function reschedulingAudit(data: Pick<ConfigArchiveData, "policies">): Reschedul
   });
 }
 
+function clinicIntakeAudit(data: Pick<ConfigArchiveData, "clinicIntake">): ClinicIntakeAuditEntry[] {
+  return [...(data.clinicIntake ?? [])].filter(row => row.version > 0)
+    .sort((left, right) => left.version - right.version).map(row => {
+      if (!row.changedBy || typeof row.previousEnabled !== "boolean" || !row.changedAt) throw new Error("invalid intake audit");
+      return { version: String(row.version), enabled: row.enabled, previousEnabled: row.previousEnabled,
+        actorRef: row.changedBy, changedAt: row.changedAt };
+    });
+}
+
 export type MappedConfig = Readonly<{
   policy: CallPolicy;
   policyRows: readonly Readonly<{ version: number; isHead: boolean; policy: CallPolicy; changedBy: string | null;
@@ -215,12 +225,13 @@ export type MappedConfig = Readonly<{
   cancellationHistory: readonly CancellationSettingAuditEntry[];
   reschedulingHistory: readonly ReschedulingSettingAuditEntry[];
   automationHistory: readonly AutomationSettingAuditEntry[];
+  clinicIntakeHistory: readonly ClinicIntakeAuditEntry[];
   knowledge: MemoryKnowledgeCatalogue;
   knowledgeEntries: readonly KnowledgeEntry[];
   mappings: readonly ReferenceImportMapping[];
 }>;
 
-export function mapConfig(data: Pick<ConfigArchiveData, "sourceScope" | "policies" | "automation" | "knowledge">,
+export function mapConfig(data: Pick<ConfigArchiveData, "sourceScope" | "policies" | "automation" | "clinicIntake" | "knowledge">,
                           targetScope: LocationScope, mapper: ReferenceImportMapper):
   Result<MappedConfig, ReferenceImportFailure> {
   const decisions = new Map<string, ReferenceImportMapping>();
@@ -248,10 +259,11 @@ export function mapConfig(data: Pick<ConfigArchiveData, "sourceScope" | "policie
     const cancellationHistory = cancellationAudit(data);
     const reschedulingHistory = reschedulingAudit(data);
     const automationHistory = automationAudit(data);
+    const clinicIntakeHistory = clinicIntakeAudit(data);
     const knowledgeEntries = data.knowledge.map(entry => ({ ...entry,
       scope: structuredClone(targetScope), ownerRef: mappedRef(recordingMapper, "knowledgeOwner", entry.ownerRef, data.sourceScope, targetScope) }));
     const knowledge = MemoryKnowledgeCatalogue.fromPublishedHistory(knowledgeEntries);
-    return ok({ policy, policyRows, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, cancellationHistory, reschedulingHistory, automationHistory,
+    return ok({ policy, policyRows, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, cancellationHistory, reschedulingHistory, automationHistory, clinicIntakeHistory,
       knowledge, knowledgeEntries, mappings: [...decisions.values()] });
   } catch (cause) {
     return err({ kind: cause instanceof UnmappedRef ? "unmappedRef" : "invalidConfigArchive" });
@@ -263,7 +275,7 @@ function preflightReport(data: ConfigArchiveData, auditRef: string, mappings: re
   return { archiveId: data.archiveId, manifestDigest: data.manifestDigest, auditRef,
     sourceScope: data.sourceScope, targetScope: data.targetScope, sourceSchemaVersion: data.sourceSchemaVersion,
     ...(data.sourceFenceVersion === undefined ? {} : { sourceFenceVersion: data.sourceFenceVersion }),
-    recordCounts: { locations: 1, settings: data.policies.length + data.automation.length + data.writeStops.length,
+    recordCounts: { locations: 1, settings: data.policies.length + data.automation.length + (data.clinicIntake?.length ?? 0) + data.writeStops.length,
       knowledge: data.knowledge.length, calls: data.sectionManifests.calls.recordCount, staffWork: 0 },
     omittedCalls: data.omittedCalls,
     ...(data.omittedTextCalls === undefined ? {} : { omittedTextCalls: data.omittedTextCalls }),
@@ -334,16 +346,18 @@ export class ReferenceConfigArchiveImporter {
     }
     const importActorRef = `import:${createHash("sha256").update(data.archiveId).digest("hex").slice(0, 32)}`;
     const automationHead = data.automation.find(row => row.isHead);
+    const intakeHead = data.clinicIntake?.find(row => row.isHead);
     const policy = MemoryPolicyStore.fromImported(targetScope, mapped.value.policy, mapped.value.bookingHistory,
       mapped.value.afterHoursHistory,
       mapped.value.automationHistory, automationHead?.version ?? 0, automationHead?.enabled ?? false, importActorRef, importedAt,
-      mapped.value.urgentHistory, mapped.value.staffScheduleHistory, mapped.value.greetingHistory, mapped.value.cancellationHistory, mapped.value.reschedulingHistory);
+      mapped.value.urgentHistory, mapped.value.staffScheduleHistory, mapped.value.greetingHistory, mapped.value.cancellationHistory, mapped.value.reschedulingHistory,
+      { history: mapped.value.clinicIntakeHistory, sourceVersion: intakeHead?.version ?? 0, sourceEnabled: intakeHead?.enabled ?? false });
     const knowledge = mapped.value.knowledge;
     const ledger = new MemoryLedger();
     const stop = await ledger.stopWrites(targetScope, importActorRef, "Imported configuration awaiting target readiness");
     if (!stop.ok || !stop.value.stopped) return err({ kind: "invalidConfigArchive" });
     const effective = await policy.read(targetScope);
-    if (!effective.ok || effective.value.bookingEnabled || effective.value.automationEnabled) return err({ kind: "invalidConfigArchive" });
+    if (!effective.ok || effective.value.bookingEnabled || effective.value.automationEnabled || effective.value.firstTimeIntakeEnabled) return err({ kind: "invalidConfigArchive" });
     const receipt: ReferenceImportReceipt = { archiveId: data.archiveId, manifestDigest: data.manifestDigest,
       auditRef, sourceScope: data.sourceScope, targetScope: structuredClone(targetScope),
       sourceSchemaVersion: data.sourceSchemaVersion,

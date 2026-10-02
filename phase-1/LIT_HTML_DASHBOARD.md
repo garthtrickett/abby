@@ -35,3 +35,8 @@ All `/api/` POST routes share one Origin check before body parsing (`E2E-253`). 
 ## Rescheduling control
 
 The full reference/embedded dashboard exposes `SET-004` through `settings.appointments.rescheduling.enabled.change.v1` and `settings.appointments.rescheduling.audit.v1` (`E2E-254`). The default is off. A saved value never supplies host permission: only an explicit host rescheduling mode can make it effective, and strict standalone Cliniko mode always reports unavailable. Controls and history use the authenticated admin actor/location. New calls capture edits; admitted calls retain the previous policy. An uncertain edit with an unavailable reread disables controls until reload. The shared HTTPS POST Origin check covers the new route, and the supervised Cliniko availability setup does not expose it.
+
+
+## Clinic-wide first-time intake
+
+The full reference/embedded dashboard exposes `SET-005` through `settings.patients.firstTimeIntake.enabled.change.v1` and `settings.patients.firstTimeIntake.audit.v1` (`E2E-255`). It compares the clinic intake version, applies changes to new calls at every location of the bound clinic, and keeps location policy edits independent. The default is off. The screen displays raw state and effective host mode; strict standalone Cliniko cannot acquire patient-creation permission through this control. Four browser journeys cover cross-location updates and captured calls, invalid/stale/forged/Origin and role denial, unsupported hosts, and both successful and failed rereads after a lost committed response. The supervised Cliniko setup hides these patient routes. See [the intake contract](../phase-2/CLINIC_FIRST_TIME_INTAKE.md) for persistence and carryover rules and the outstanding release gate.

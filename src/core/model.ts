@@ -59,6 +59,7 @@ export type CapabilityMode = "execute" | "requestOnly" | "unavailable";
 
 /** Host permissions are independent of saved clinic toggles. */
 export type AppointmentSettingModes = Readonly<{ cancellation?: CapabilityMode; rescheduling?: CapabilityMode }>;
+export type PatientSettingModes = AppointmentSettingModes & Readonly<{ intake?: CapabilityMode }>;
 export type StaffedInterval = Readonly<{ startsAt: string; endsAt: string }>;
 /** Sunday is 0; endMinute before startMinute crosses midnight. */
 export type LocalStaffWindow = Readonly<{ weekday: number; startMinute: number; endMinute: number }>;
@@ -113,6 +114,9 @@ export type CallPolicy = Readonly<{
   cancellationEnabled?: boolean;
   /** Absent on legacy snapshots; policy-store default is false. */
   reschedulingEnabled?: boolean;
+  /** Clinic-wide; absent legacy snapshots are disabled at version 0. */
+  firstTimeIntakeEnabled?: boolean;
+  firstTimeIntakeVersion?: string;
   /** Absent on legacy snapshots; the effective default is staffRequest. */
   afterHoursMode?: AfterHoursMode;
   afterHoursInfo?: ApprovedAfterHoursInfo;

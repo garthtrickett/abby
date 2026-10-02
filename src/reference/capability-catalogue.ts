@@ -26,7 +26,7 @@ const afterHoursMode = choice("staffRequest", "approvedInfoAndRequest");
 const afterHoursInfo = object({ scope, version: key, ownerRef: key,
   approvedText: { type: "string", minLength: 1, maxLength: 1_500 }, approved: { const: true } });
 const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: nonEmpty, automationEnabled: bool, bookingEnabled: bool,
-  cancellationEnabled: bool, reschedulingEnabled: bool, afterHoursMode, afterHoursInfo,
+  cancellationEnabled: bool, reschedulingEnabled: bool, firstTimeIntakeEnabled: bool, firstTimeIntakeVersion: key, afterHoursMode, afterHoursInfo,
   urgentResponse: object({ scope, version: key, ownerRef: key,
     approvedText: { type: "string", minLength: 1, maxLength: 1_500 }, approved: { const: true },
     effectiveFrom: str, effectiveUntil: str }),
@@ -47,6 +47,8 @@ const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: non
   ] },
   knowledgeSnapshot: { type: "array", items: object({ sourceRef: key, version: key }), maxItems: 256, uniqueItems: true } },
 ["scope", "policyVersion", "automationVersion", "automationEnabled", "bookingEnabled", "capabilities", "staffDestination", "operatorQueue"]);
+const clinicIntakeAuditPage = optional({ entries: array(object({ version: key, enabled: bool, previousEnabled: bool,
+  actorRef: { type: "string", minLength: 1, maxLength: 256 }, changedAt: str })), nextAfterVersion: uint }, ["entries"]);
 const auditEntry = { oneOf: [
   object({ version: key, enabled: bool, provenance: { const: "recorded" }, actorRef: key,
     previousEnabled: bool, changedAt: str }),
@@ -174,7 +176,7 @@ export type CapabilityDescriptor = Readonly<{
   requiresCallerConfirmation: boolean;
 }>;
 
-export type CapabilityPrecondition = "expectedPolicyVersion" | "expectedAutomationVersion" | "readinessForEnable" | "activeCall" | "bookingEnabledForExecution" |
+export type CapabilityPrecondition = "expectedPolicyVersion" | "expectedAutomationVersion" | "expectedClinicIntakeVersion" | "readinessForEnable" | "activeCall" | "bookingEnabledForExecution" |
   "hostEvidenceForExecution" | "approvedKnowledgeForAnswer" | "availabilityHostConfigured" |
   "appointmentHostConfigured" | "hostIssuedPatientProof" |
   "callReviewAvailable" | "outcomeReportAvailable" | "staffQueueAvailable" | "operationalDailyAvailable" |
@@ -229,6 +231,12 @@ export const capabilityCatalogue = {
   "settings.appointments.rescheduling.audit.v1": entry("settings.appointments.rescheduling.audit.v1",
     optional({ kind: { const: "settings.appointments.rescheduling.audit.v1" }, afterVersion: uint }, ["kind"]),
     reply("reschedulingSettingAudit", "page", automationAuditPage), "read", "clinicAdmin"),
+  "settings.patients.firstTimeIntake.enabled.change.v1": entry("settings.patients.firstTimeIntake.enabled.change.v1",
+    object({ kind: { const: "settings.patients.firstTimeIntake.enabled.change.v1" }, expectedVersion: key, enabled: bool }),
+    reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedClinicIntakeVersion"]),
+  "settings.patients.firstTimeIntake.audit.v1": entry("settings.patients.firstTimeIntake.audit.v1",
+    optional({ kind: { const: "settings.patients.firstTimeIntake.audit.v1" }, afterVersion: uint }, ["kind"]),
+    reply("firstTimeIntakeSettingAudit", "page", clinicIntakeAuditPage), "read", "clinicAdmin"),
   "settings.routing.afterHours.change.v1": entry("settings.routing.afterHours.change.v1",
     { oneOf: [
       object({ kind: { const: "settings.routing.afterHours.change.v1" }, expectedVersion: key,
