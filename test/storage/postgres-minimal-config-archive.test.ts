@@ -19,6 +19,25 @@ after(async () => { await db.destroy(); });
 
 const authority = { authorizeAndRecord: async () => ok({ requestRef: "audited-minimal-export" }) };
 
+test("E2E-245 minimal policy retains a configured greeting across edits and a disabled tombstone", async () => {
+  const scope = { tenantId: `greeting-compat-${randomUUID()}`, clinicId: "clinic", locationId: "location" };
+  const initial = referenceDefaultPolicy(scope);
+  const policy = new PostgresPolicyStore(db, () => initial, "unavailable", undefined, false, "standaloneMinimal", true);
+  assert.equal((await policy.read(scope)).ok, true);
+  const changed = await policy.changeBookingEnabled(scope, "0", true, "clinic-admin");
+  assert.ok(changed.ok);
+  const edited = await policy.read(scope);
+  assert.ok(edited.ok);
+  assert.equal(edited.value.greeting?.version, initial.greeting?.version);
+  const disabled = await policy.changeGreeting(scope, "1", undefined, "clinic-admin");
+  assert.ok(disabled.ok);
+  assert.equal(disabled.value.greeting, undefined);
+  assert.ok((await policy.changeBookingEnabled(scope, "2", false, "clinic-admin")).ok);
+  const reloaded = await policy.read(scope);
+  assert.ok(reloaded.ok);
+  assert.equal(reloaded.value.greeting, undefined);
+});
+
 test("standalone minimal settings export and stage without granting buyer capabilities", async () => {
   const scope = { tenantId: "minimal-export-source", clinicId: "clinic", locationId: "location" };
   const targetScope = { tenantId: "minimal-export-buyer", clinicId: "buyer", locationId: "location" };
@@ -161,6 +180,61 @@ test("E2E-244 minimal archive maps approved hours and its distinct audit into an
   assert.ok(history.ok);
   assert.deepEqual(history.value.entries.map(row => [row.version, row.enabled, row.previousEnabled]),
     [["1", true, false]]);
+});
+
+test("E2E-245 minimal archive maps a time-bounded greeting and its distinct audit", async () => {
+  const suffix = randomUUID();
+  const scope = { tenantId: `greeting-export-source-${suffix}`, clinicId: "clinic", locationId: "location" };
+  const targetScope = { tenantId: `greeting-export-buyer-${suffix}`, clinicId: "buyer", locationId: "location" };
+  const app = createStandaloneTextComposition(db);
+  const greeting = { scope, version: "welcome-v1", ownerRef: "clinic-admin", approved: true as const,
+    approvedText: "Welcome to the clinic. How can I help?",
+    effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2027-09-01T00:00:00.000Z" };
+  assert.ok((await app.policy.changeGreeting(scope, "0", greeting, "clinic-admin")).ok);
+  assert.ok((await app.policy.changeBookingEnabled(scope, "1", false, "clinic-admin")).ok);
+  const archive = await buildPostgresConfigArchive(db, { scope, targetScope, timeZone: "Australia/Sydney",
+    mappingProvenance: "reviewed-map", archiveId: `greeting-settings-archive-${suffix}`, actorRef: "clinic-admin",
+    createdAt: "2026-09-29T04:00:00Z" }, authority);
+  assert.ok(archive.ok, archive.ok ? "" : archive.error.kind);
+  const decoded = await decodeConfigArchive(archive.value, targetScope);
+  assert.ok(decoded.ok, decoded.ok ? "" : decoded.error.kind);
+  assert.deepEqual(decoded.value.policies.map(row => [row.version, row.settingKind]),
+    [[0, "booking"], [1, "greeting"], [2, "booking"]]);
+  assert.equal(decoded.value.policies[2]?.policy.greeting?.approvedText, greeting.approvedText);
+  const staged = await new ReferenceConfigArchiveImporter(() => "2026-09-29T04:05:00Z").stage(
+    archive.value, targetScope, "buyer-admin",
+    { authorizeAndRecord: async () => ok({ auditRef: "audited-greeting-import" }) },
+    { mapRef: (kind: string, ref: string) => `buyer:${kind}:${ref}` });
+  assert.ok(staged.ok, staged.ok ? "" : staged.error.kind);
+  const imported = await staged.value.policy.read(targetScope);
+  assert.ok(imported.ok);
+  assert.deepEqual(imported.value.greeting?.scope, targetScope);
+  assert.equal(imported.value.greeting?.ownerRef, "buyer:greetingOwner:clinic-admin");
+  assert.equal(imported.value.greeting?.effectiveUntil, greeting.effectiveUntil);
+  const history = await staged.value.policy.listGreetingChanges(targetScope);
+  assert.ok(history.ok);
+  assert.deepEqual(history.value.entries.map(row => [row.version, row.enabled, row.previousEnabled]),
+    [["1", true, false]]);
+  assert.ok((await app.policy.changeGreeting(scope, "2", undefined, "clinic-admin")).ok);
+  assert.ok((await app.policy.changeBookingEnabled(scope, "3", false, "clinic-admin")).ok);
+  const disabledArchive = await buildPostgresConfigArchive(db, { scope, targetScope, timeZone: "Australia/Sydney",
+    mappingProvenance: "reviewed-map", archiveId: `greeting-disabled-archive-${suffix}`, actorRef: "clinic-admin",
+    createdAt: "2026-09-29T04:10:00Z" }, authority);
+  assert.ok(disabledArchive.ok, disabledArchive.ok ? "" : disabledArchive.error.kind);
+  const disabledDecoded = await decodeConfigArchive(disabledArchive.value, targetScope);
+  assert.ok(disabledDecoded.ok, disabledDecoded.ok ? "" : disabledDecoded.error.kind);
+  assert.equal(disabledDecoded.value.policies.at(-1)?.policy.greeting, undefined);
+  const disabledStage = await new ReferenceConfigArchiveImporter(() => "2026-09-29T04:15:00Z").stage(
+    disabledArchive.value, targetScope, "buyer-admin",
+    { authorizeAndRecord: async () => ok({ auditRef: "audited-disabled-greeting-import" }) },
+    { mapRef: (kind: string, ref: string) => `buyer:${kind}:${ref}` });
+  assert.ok(disabledStage.ok, disabledStage.ok ? "" : disabledStage.error.kind);
+  const disabledPolicy = await disabledStage.value.policy.read(targetScope);
+  assert.ok(disabledPolicy.ok);
+  assert.equal(disabledPolicy.value.greeting, undefined);
+  const disabledHistory = await disabledStage.value.policy.listGreetingChanges(targetScope);
+  assert.ok(disabledHistory.ok);
+  assert.deepEqual(disabledHistory.value.entries.map(row => row.enabled), [true, false]);
 });
 
 test("default archive rejects rich policy and any standalone knowledge draft", async () => {

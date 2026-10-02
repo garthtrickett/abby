@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { MemoryLedger } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
 import type { CallPolicy, LocationScope, Result, StaffDestination } from "../core/model.ts";
-import type { AfterHoursSettingAuditEntry, AutomationSettingAuditEntry, BookingSettingAuditEntry, StaffScheduleSettingAuditEntry, UrgentSettingAuditEntry } from "../core/host.ts";
+import type { AfterHoursSettingAuditEntry, AutomationSettingAuditEntry, BookingSettingAuditEntry, GreetingSettingAuditEntry, StaffScheduleSettingAuditEntry, UrgentSettingAuditEntry } from "../core/host.ts";
 import type { ArchiveEnvelope } from "../portability/archive-envelope.ts";
 import { decodeConfigArchive } from "../portability/config-archive.ts";
 import type { ConfigArchiveData, ConfigArchiveDecodeFailure } from "../portability/config-archive.ts";
@@ -162,6 +162,18 @@ function staffScheduleAudit(data: Pick<ConfigArchiveData, "policies">): StaffSch
   });
 }
 
+function greetingAudit(data: Pick<ConfigArchiveData, "policies">): GreetingSettingAuditEntry[] {
+  const ordered = [...data.policies].sort((left, right) => left.version - right.version);
+  return ordered.filter(row => row.version > 0 && row.settingKind === "greeting").map(row => {
+    const previous = ordered.find(item => item.version === row.version - 1);
+    if (!previous || !row.changedBy || !row.changedAt) throw new Error("invalid greeting audit");
+    return { version: String(row.version), enabled: row.policy.greeting !== undefined,
+      previousEnabled: previous.policy.greeting !== undefined,
+      ...(row.policy.greeting ? { greetingVersion: row.policy.greeting.version } : {}),
+      actorRef: row.changedBy, changedAt: row.changedAt };
+  });
+}
+
 function automationAudit(data: Pick<ConfigArchiveData, "automation">): AutomationSettingAuditEntry[] {
   return data.automation.filter(row => row.version > 0).map(row => {
     if (!row.changedBy || row.previousEnabled === null || !row.changedAt) throw new Error("invalid automation audit");
@@ -174,11 +186,12 @@ export type MappedConfig = Readonly<{
   policy: CallPolicy;
   policyRows: readonly Readonly<{ version: number; isHead: boolean; policy: CallPolicy; changedBy: string | null;
     previousBookingEnabled: boolean | null; changedAt: string | null;
-    settingKind?: "booking" | "afterHours" | "urgent" | "staffSchedule"; previousAfterHoursMode?: CallPolicy["afterHoursMode"] | null }>[];
+    settingKind?: "booking" | "afterHours" | "urgent" | "staffSchedule" | "greeting"; previousAfterHoursMode?: CallPolicy["afterHoursMode"] | null }>[];
   bookingHistory: readonly BookingSettingAuditEntry[];
   afterHoursHistory: readonly AfterHoursSettingAuditEntry[];
   urgentHistory: readonly UrgentSettingAuditEntry[];
   staffScheduleHistory: readonly StaffScheduleSettingAuditEntry[];
+  greetingHistory: readonly GreetingSettingAuditEntry[];
   automationHistory: readonly AutomationSettingAuditEntry[];
   knowledge: MemoryKnowledgeCatalogue;
   knowledgeEntries: readonly KnowledgeEntry[];
@@ -209,11 +222,12 @@ export function mapConfig(data: Pick<ConfigArchiveData, "sourceScope" | "policie
     const afterHoursHistory = afterHoursAudit(data);
     const urgentHistory = urgentAudit(data);
     const staffScheduleHistory = staffScheduleAudit(data);
+    const greetingHistory = greetingAudit(data);
     const automationHistory = automationAudit(data);
     const knowledgeEntries = data.knowledge.map(entry => ({ ...entry,
       scope: structuredClone(targetScope), ownerRef: mappedRef(recordingMapper, "knowledgeOwner", entry.ownerRef, data.sourceScope, targetScope) }));
     const knowledge = MemoryKnowledgeCatalogue.fromPublishedHistory(knowledgeEntries);
-    return ok({ policy, policyRows, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, automationHistory,
+    return ok({ policy, policyRows, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, automationHistory,
       knowledge, knowledgeEntries, mappings: [...decisions.values()] });
   } catch (cause) {
     return err({ kind: cause instanceof UnmappedRef ? "unmappedRef" : "invalidConfigArchive" });
@@ -299,7 +313,7 @@ export class ReferenceConfigArchiveImporter {
     const policy = MemoryPolicyStore.fromImported(targetScope, mapped.value.policy, mapped.value.bookingHistory,
       mapped.value.afterHoursHistory,
       mapped.value.automationHistory, automationHead?.version ?? 0, automationHead?.enabled ?? false, importActorRef, importedAt,
-      mapped.value.urgentHistory, mapped.value.staffScheduleHistory);
+      mapped.value.urgentHistory, mapped.value.staffScheduleHistory, mapped.value.greetingHistory);
     const knowledge = mapped.value.knowledge;
     const ledger = new MemoryLedger();
     const stop = await ledger.stopWrites(targetScope, importActorRef, "Imported configuration awaiting target readiness");

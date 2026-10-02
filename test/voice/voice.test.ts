@@ -153,6 +153,7 @@ type VoiceFixtureOptions = {
   staffSchedule?: (scope: LocationScope) => NonNullable<CallPolicy["staffSchedule"]>;
   approveStaffScheduleViaAdmin?: boolean;
   disableStaffScheduleBeforeAdmission?: boolean;
+  approveGreetingViaAdmin?: boolean;
   omitStaffedCoverage?: boolean;
   afterHoursText?: string;
   afterHoursOffBeforeAdmission?: boolean;
@@ -209,7 +210,7 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
       value(await policy.changeUrgentResponse(scope, approved.policyVersion, undefined, "voice-test-admin"));
     }
   }
-  const adminGateway = options.approveStaffScheduleViaAdmin ? new CommandGateway(
+  const adminGateway = options.approveStaffScheduleViaAdmin || options.approveGreetingViaAdmin ? new CommandGateway(
     { actorRef: "voice-test-admin", role: "clinicAdmin", scope }, policy, reception) : undefined;
   if (adminGateway && options.staffSchedule) {
     const schedule = options.staffSchedule(scope);
@@ -220,6 +221,13 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
     if (changed.kind !== "settings") throw new Error("expected settings reply");
     if (options.disableStaffScheduleBeforeAdmission) value(await adminGateway.submit({
       kind: "settings.routing.staffSchedule.change.v1", expectedVersion: changed.policy.policyVersion, enabled: false }));
+  }
+  if (adminGateway && options.approveGreetingViaAdmin) {
+    const changed = value(await adminGateway.submit({ kind: "settings.routing.greeting.change.v1",
+      expectedVersion: value(await policy.read(scope)).policyVersion, enabled: true,
+      greetingVersion: "welcome-v1", approvedText: "Hello from the clinic. How can I help?",
+      effectiveFrom: at(-86_400), effectiveUntil: at(86_400) }));
+    if (changed.kind !== "settings") throw new Error("expected settings reply");
   }
   const playback = new FakePlayback();
   const transfer = new FakeTransfer();
@@ -1387,6 +1395,55 @@ for (const kind of kinds) {
     const contaminated = { ...approved(app.scope), unexpectedPatientNote: "PRIVATE_NOTE_MUST_NOT_PERSIST" };
     failure(await app.policy.changeStaffSchedule(app.scope, disabled.policy.policyVersion, contaminated,
       "voice-test-admin"), "invalidValue");
+  });
+
+  test(`${kind}: E2E-245 admin greeting approval pins spoken opening and blocks disabled or expired new calls`, async () => {
+    const baseline = await fixture(kind, `${kind}-greeting-default-${randomUUID()}`, false);
+    const defaultGreeting = value(await baseline.session.dispatchPending(at(2)));
+    assert.equal(defaultGreeting.kind, "queued");
+    assert.equal(baseline.playback.queuedTexts[0], "Hello. How can I help you?");
+    value(await baseline.session.acceptPlaybackResult(defaultGreeting.playbackId!, "played", at(2)));
+
+    const app = await fixture(kind, `${kind}-greeting-admin-${randomUUID()}`, false, "requestOnly",
+      undefined, undefined, { approveGreetingViaAdmin: true });
+    const gateway = app.adminGateway!;
+    const active = value(await app.ledger.read(app.callId, app.scope));
+    assert.equal(active.policy.greeting?.version, "welcome-v1");
+    const before = value(await gateway.submit({ kind: "settings.read.v1" }));
+    if (before.kind !== "settings") throw new Error("expected settings reply");
+    assert.equal(before.policy.greeting?.ownerRef, "voice-test-admin");
+    failure(await gateway.submit({ kind: "settings.routing.greeting.change.v1", expectedVersion: "0",
+      enabled: false }), "versionConflict");
+    const disabled = value(await gateway.submit({ kind: "settings.routing.greeting.change.v1",
+      expectedVersion: before.policy.policyVersion, enabled: false }));
+    if (disabled.kind !== "settings") throw new Error("expected settings reply");
+    assert.equal(disabled.policy.greeting, undefined);
+    const spoken = value(await app.session.dispatchPending(at(2)));
+    assert.equal(spoken.kind, "queued");
+    assert.equal(app.playback.queuedTexts[0], "Hello from the clinic. How can I help?");
+    value(await app.session.acceptPlaybackResult(spoken.playbackId!, "played", at(2)));
+    const newCall = new CallAdmissionService(app.ledger, async () => ok({
+      ...value(await app.policy.read(app.scope)), automationEnabled: true }), () => now, async () => ok(true));
+    const event = (providerCallRef: string) => ({ key: { accountRef: "greeting-setting-account", providerCallRef },
+      dialedNumber: "+6125550100", receivedAt: now });
+    failure(await newCall.begin(event("after-disable")), "readinessFailed");
+    const audit = value(await gateway.submit({ kind: "settings.routing.greeting.audit.v1" }));
+    if (audit.kind !== "greetingSettingAudit") throw new Error("expected audit reply");
+    assert.deepEqual(audit.page.entries.map(entry => [entry.enabled, entry.previousEnabled]),
+      [[true, true], [false, true]]);
+    const expired = value(await gateway.submit({ kind: "settings.routing.greeting.change.v1",
+      expectedVersion: disabled.policy.policyVersion, enabled: true, greetingVersion: "expired-v1",
+      approvedText: "This greeting expired.", effectiveFrom: at(-86_400), effectiveUntil: at(-1) }));
+    if (expired.kind !== "settings") throw new Error("expected settings reply");
+    failure(await newCall.begin(event("after-expiry")), "readinessFailed");
+    const forged = { ...expired.policy.greeting!, scope: { ...app.scope, locationId: "foreign" } };
+    failure(await app.policy.changeGreeting(app.scope, expired.policy.policyVersion, forged, "voice-test-admin"),
+      "invalidValue");
+    failure(await app.policy.changeGreeting(app.scope, expired.policy.policyVersion,
+      { ...expired.policy.greeting!, patientNote: "PRIVATE_NOTE_MUST_NOT_PERSIST" } as unknown as NonNullable<CallPolicy["greeting"]>,
+      "voice-test-admin"),
+    "invalidValue");
+    assert.equal(value(await app.ledger.read(app.callId, app.scope)).policy.greeting?.version, "welcome-v1");
   });
 
   test(`${kind}: E2E-017 an overnight holiday routes to approved information and staff request`, async () => {

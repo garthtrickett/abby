@@ -39,8 +39,12 @@ const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: non
     weekly: { type: "array", items: object({ weekday: uint, startMinute: uint, endMinute: uint }), maxItems: 168 },
     closedDates: { type: "array", items: str, maxItems: 90 } }),
   staffDestination: destination, operatorQueue: destination, staffWorkEnabled: bool, numberRouteVersion: key,
-  greeting: object({ scope, version: key, ownerRef: key, approvedText: { type: "string", minLength: 1, maxLength: 2_000 },
-    approved: { const: true } }),
+  greeting: { oneOf: [
+    object({ scope, version: key, ownerRef: key, approvedText: { type: "string", minLength: 1, maxLength: 2_000 },
+      approved: { const: true } }),
+    object({ scope, version: key, ownerRef: key, approvedText: { type: "string", minLength: 1, maxLength: 2_000 },
+      approved: { const: true }, effectiveFrom: str, effectiveUntil: str }),
+  ] },
   knowledgeSnapshot: { type: "array", items: object({ sourceRef: key, version: key }), maxItems: 256, uniqueItems: true } },
 ["scope", "policyVersion", "automationVersion", "automationEnabled", "bookingEnabled", "capabilities", "staffDestination", "operatorQueue"]);
 const auditEntry = { oneOf: [
@@ -59,6 +63,9 @@ const urgentAuditPage = optional({ entries: array(optional({ version: key, enabl
 ["version", "enabled", "previousEnabled", "actorRef", "changedAt"])), nextAfterVersion: uint }, ["entries"]);
 const staffScheduleAuditPage = optional({ entries: array(optional({ version: key, enabled: bool,
   previousEnabled: bool, scheduleVersion: key, actorRef: key, changedAt: str },
+["version", "enabled", "previousEnabled", "actorRef", "changedAt"])), nextAfterVersion: uint }, ["entries"]);
+const greetingAuditPage = optional({ entries: array(optional({ version: key, enabled: bool,
+  previousEnabled: bool, greetingVersion: key, actorRef: key, changedAt: str },
 ["version", "enabled", "previousEnabled", "actorRef", "changedAt"])), nextAfterVersion: uint }, ["entries"]);
 const actionKind = choice("book", "cancel", "reschedule", "intake");
 const actionStatus = choice("awaitingConfirmation", "ready", "dispatched", "committed", "rejected",
@@ -243,6 +250,16 @@ export const capabilityCatalogue = {
   "settings.routing.staffSchedule.audit.v1": entry("settings.routing.staffSchedule.audit.v1",
     optional({ kind: { const: "settings.routing.staffSchedule.audit.v1" }, afterVersion: uint }, ["kind"]),
     reply("staffScheduleSettingAudit", "page", staffScheduleAuditPage), "read", "clinicAdmin"),
+  "settings.routing.greeting.change.v1": entry("settings.routing.greeting.change.v1",
+    { oneOf: [
+      object({ kind: { const: "settings.routing.greeting.change.v1" }, expectedVersion: key, enabled: { const: false } }),
+      object({ kind: { const: "settings.routing.greeting.change.v1" }, expectedVersion: key, enabled: { const: true },
+        greetingVersion: key, approvedText: { type: "string", minLength: 1, maxLength: 2_000 },
+        effectiveFrom: str, effectiveUntil: str }),
+    ] }, reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedPolicyVersion"]),
+  "settings.routing.greeting.audit.v1": entry("settings.routing.greeting.audit.v1",
+    optional({ kind: { const: "settings.routing.greeting.audit.v1" }, afterVersion: uint }, ["kind"]),
+    reply("greetingSettingAudit", "page", greetingAuditPage), "read", "clinicAdmin"),
   "booking.propose.v2": entry("booking.propose.v2",
     object({ kind: { const: "booking.propose.v2" }, turn, verificationRef: key, offerRef: key, now: str }),
     reply("bookingProposal", "progress", progress), "proposalOnly", "permittedActor", "callerConfirmation", ["activeCall", "bookingEnabledForExecution", "hostEvidenceForExecution"]),

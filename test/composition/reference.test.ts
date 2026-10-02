@@ -149,6 +149,8 @@ for (const kind of kinds) {
       listUrgentResponseChanges: (...args) => app.policy.listUrgentResponseChanges(...args),
       changeStaffSchedule: (...args) => app.policy.changeStaffSchedule(...args),
       listStaffScheduleChanges: (...args) => app.policy.listStaffScheduleChanges(...args),
+      changeGreeting: (...args) => app.policy.changeGreeting(...args),
+      listGreetingChanges: (...args) => app.policy.listGreetingChanges(...args),
       changeAutomationEnabled: (...args) => app.policy.changeAutomationEnabled(...args),
       listAutomationChanges: (...args) => app.policy.listAutomationChanges(...args),
     };
@@ -167,6 +169,8 @@ for (const kind of kinds) {
       listUrgentResponseChanges: (...args) => app.policy.listUrgentResponseChanges(...args),
       changeStaffSchedule: (...args) => app.policy.changeStaffSchedule(...args),
       listStaffScheduleChanges: (...args) => app.policy.listStaffScheduleChanges(...args),
+      changeGreeting: (...args) => app.policy.changeGreeting(...args),
+      listGreetingChanges: (...args) => app.policy.listGreetingChanges(...args),
       changeAutomationEnabled: (...args) => app.policy.changeAutomationEnabled(...args),
       listAutomationChanges: (...args) => app.policy.listAutomationChanges(...args),
     };
@@ -188,6 +192,8 @@ for (const kind of kinds) {
       listUrgentResponseChanges: (...args) => app.policy.listUrgentResponseChanges(...args),
       changeStaffSchedule: (...args) => app.policy.changeStaffSchedule(...args),
       listStaffScheduleChanges: (...args) => app.policy.listStaffScheduleChanges(...args),
+      changeGreeting: (...args) => app.policy.changeGreeting(...args),
+      listGreetingChanges: (...args) => app.policy.listGreetingChanges(...args),
     };
     const uncertainAdmin = new CommandGateway({ actorRef: "lost-response-admin", role: "clinicAdmin", scope: app.scope },
       lostResponsePolicy, app.reception);

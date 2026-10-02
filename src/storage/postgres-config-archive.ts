@@ -114,6 +114,16 @@ function staffScheduleFields(row: Record<string, unknown>, scope: LocationScope)
       startMinute: window.startMinute, endMinute: window.endMinute })), closedDates: [...schedule.closedDates] } };
 }
 
+function greetingFields(row: Record<string, unknown>, scope: LocationScope): Record<string, unknown> {
+  if (row.greeting === undefined || row.greeting === null) return {};
+  if (!validGreetingShape(row.greeting, scope)) throw new ExportAbort("storageCorrupt");
+  const greeting = row.greeting;
+  return { greeting: { version: greeting.version, ownerRef: greeting.ownerRef,
+    approvedText: greeting.approvedText, approved: true,
+    ...(greeting.effectiveFrom === undefined ? {} : { effectiveFrom: greeting.effectiveFrom,
+      effectiveUntil: greeting.effectiveUntil }) } };
+}
+
 /** Export only known policy fields; extra JSONB keys never cross the archive boundary. */
 function policyFields(value: unknown, scope: LocationScope, version: number,
                       mode: "standaloneMinimal" | "unsafeReference"): Record<string, unknown> {
@@ -122,13 +132,14 @@ function policyFields(value: unknown, scope: LocationScope, version: number,
   if (mode === "standaloneMinimal") {
     if (!row || !storedScope || !["bookingEnabled", "policyVersion", "scope"].every(field => Object.hasOwn(row, field)) ||
         Object.keys(row).some(field => !["bookingEnabled", "policyVersion", "scope", "afterHoursMode",
-          "afterHoursInfo", "urgentResponse", "staffSchedule"].includes(field)) ||
+          "afterHoursInfo", "urgentResponse", "staffSchedule", "greeting"].includes(field)) ||
         Object.keys(storedScope).sort().join(",") !== "clinicId,locationId,tenantId" ||
         storedScope.tenantId !== scope.tenantId || storedScope.clinicId !== scope.clinicId ||
         storedScope.locationId !== scope.locationId || row.policyVersion !== String(version) ||
         typeof row.bookingEnabled !== "boolean") throw new ExportAbort("storageCorrupt");
     return { shape: "standaloneMinimal", policyVersion: row.policyVersion, bookingEnabled: row.bookingEnabled,
-      ...afterHoursFields(row, scope), ...urgentFields(row, scope), ...staffScheduleFields(row, scope) };
+      ...afterHoursFields(row, scope), ...urgentFields(row, scope), ...staffScheduleFields(row, scope),
+      ...greetingFields(row, scope) };
   }
   const caps = object(row?.capabilities);
   if (!row || !storedScope || storedScope.tenantId !== scope.tenantId || storedScope.clinicId !== scope.clinicId ||
@@ -141,7 +152,8 @@ function policyFields(value: unknown, scope: LocationScope, version: number,
   }
   const policy: Record<string, unknown> = { policyVersion: row.policyVersion, bookingEnabled: row.bookingEnabled, capabilities,
     staffDestination: destination(row.staffDestination), operatorQueue: destination(row.operatorQueue),
-    ...afterHoursFields(row, scope), ...urgentFields(row, scope), ...staffScheduleFields(row, scope) };
+    ...afterHoursFields(row, scope), ...urgentFields(row, scope), ...staffScheduleFields(row, scope),
+    ...greetingFields(row, scope) };
   if (row.transferDestinationRef !== undefined) {
     if (!validRef(row.transferDestinationRef)) throw new ExportAbort("storageCorrupt");
     policy.transferDestinationRef = row.transferDestinationRef;
@@ -168,11 +180,6 @@ function policyFields(value: unknown, scope: LocationScope, version: number,
           Date.parse(interval.endsAt) > coverageBounds.end));
     })) throw new ExportAbort("storageCorrupt");
     policy.staffedIntervals = row.staffedIntervals.map(item => ({ startsAt: item.startsAt, endsAt: item.endsAt }));
-  }
-  if (row.greeting !== undefined) {
-    if (!validGreetingShape(row.greeting, scope)) throw new ExportAbort("storageCorrupt");
-    const greeting = row.greeting;
-    policy.greeting = { version: greeting.version, ownerRef: greeting.ownerRef, approvedText: greeting.approvedText, approved: true };
   }
   return policy;
 }

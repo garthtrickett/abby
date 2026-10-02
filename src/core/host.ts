@@ -1,4 +1,4 @@
-import type { ActionRequest, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedStaffSchedule, ApprovedUrgentResponse, ApprovedKnowledge, AppointmentRead, AppointmentReadFailure, AvailabilityRead, AvailabilityReadFailure, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, OperatorAlert, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
+import type { ActionRequest, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, ApprovedKnowledge, AppointmentRead, AppointmentReadFailure, AvailabilityRead, AvailabilityReadFailure, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, OperatorAlert, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
 import type { ReadinessFailure } from "./readiness.ts";
 
 export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable"; target: "patient" | "offer" | "appointment" }>;
@@ -54,6 +54,18 @@ export type StaffScheduleSettingAuditEntry = Readonly<{
 }>;
 export type StaffScheduleSettingAuditPage = Readonly<{
   entries: readonly StaffScheduleSettingAuditEntry[];
+  nextAfterVersion?: number;
+}>;
+export type GreetingSettingAuditEntry = Readonly<{
+  version: string;
+  enabled: boolean;
+  previousEnabled: boolean;
+  greetingVersion?: string;
+  actorRef: string;
+  changedAt: string;
+}>;
+export type GreetingSettingAuditPage = Readonly<{
+  entries: readonly GreetingSettingAuditEntry[];
   nextAfterVersion?: number;
 }>;
 export type KnowledgeReadFailure = Readonly<{ kind: "invalidQuery" | "unavailable" }>;
@@ -148,4 +160,7 @@ export interface PolicyStore {
   changeStaffSchedule(scope: LocationScope, expectedVersion: string, schedule: ApprovedStaffSchedule | undefined,
                       actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
   listStaffScheduleChanges(scope: LocationScope, afterVersion?: number): Promise<Result<StaffScheduleSettingAuditPage, PolicyFailure>>;
+  changeGreeting(scope: LocationScope, expectedVersion: string, greeting: ApprovedGreeting | undefined,
+                 actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
+  listGreetingChanges(scope: LocationScope, afterVersion?: number): Promise<Result<GreetingSettingAuditPage, PolicyFailure>>;
 }

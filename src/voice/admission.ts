@@ -5,7 +5,7 @@ import { captureKnowledgeSnapshot, validKnowledgeSnapshot } from "../core/knowle
 import { err, ok } from "../core/model.ts";
 import type { Admission, AdmissionReceipt, AdmissionResult, CallPolicy, ProviderCallKey, Result, TransitionFailure } from "../core/model.ts";
 import { unprovenReadiness } from "../core/readiness.ts";
-import { validApprovedGreeting } from "../core/greeting.ts";
+import { validApprovedGreeting, validGreetingAt } from "../core/greeting.ts";
 import { expandStaffSchedule, validApprovedStaffSchedule, validStaffScheduleApproval } from "../core/staff-schedule.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
 
@@ -63,6 +63,7 @@ export class CallAdmissionService {
     if (!ready) return err({ kind: "readinessFailed" });
     const acceptedAt = this.now();
     if (!Number.isFinite(Date.parse(acceptedAt))) return err({ kind: "invalidTransition" });
+    if (!validGreetingAt(policy.greeting, policy.scope, acceptedAt)) return err({ kind: "readinessFailed" });
     let callPolicy = policy;
     if (policy.staffSchedule !== undefined) {
       const { staffSchedule, staffedCoverage: staleCoverage, staffedIntervals: staleIntervals, ...base } = policy;

@@ -1,9 +1,10 @@
 import { CALL_TERMINAL_REASONS, err, ok } from "../../core/model.ts";
 import type { AfterHoursMode, CallPolicy, LocalStaffWindow, Result, StaffChangeRequest, StaffQueueEntry } from "../../core/model.ts";
 import { validAfterHoursSetting } from "../../core/after-hours-policy.ts";
+import { validGreetingShape } from "../../core/greeting.ts";
 import { validApprovedStaffSchedule } from "../../core/staff-schedule.ts";
 import { validUrgentResponseShape } from "../../core/urgent-response.ts";
-import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
+import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, GreetingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
 import type { CallSummary } from "../../reference/call-review.ts";
 import type { CapabilityDescriptor, GatewayCommand, GatewayFailure, GatewayReply } from "../../reference/command-gateway.ts";
 import { capabilityDescriptor } from "../../reference/capability-catalogue.ts";
@@ -41,6 +42,9 @@ export type DashboardPort = Readonly<{
   changeStaffSchedule(expectedVersion: string, schedule?: Readonly<{ version: string; effectiveFrom: string;
     effectiveUntil: string; timeZone: string; weekly: readonly LocalStaffWindow[]; closedDates: readonly string[] }>):
     Promise<Result<CallPolicy, DashboardFailure>>;
+  greetingAudit(afterVersion?: number): Promise<Result<GreetingSettingAuditPage, DashboardFailure>>;
+  changeGreeting(expectedVersion: string, greeting?: Readonly<{ version: string; approvedText: string;
+    effectiveFrom: string; effectiveUntil: string }>): Promise<Result<CallPolicy, DashboardFailure>>;
   callSummary(callId: string): Promise<Result<CallSummary, DashboardFailure>>;
   callOutcomes(afterCallId?: string): Promise<Result<CallOutcomePage, DashboardFailure>>;
   staffQueue(afterTaskKey?: string): Promise<Result<StaffQueuePage, DashboardFailure>>;
@@ -114,7 +118,8 @@ function policy(value: unknown): Result<CallPolicy, DashboardFailure> {
     && record(current.scope) && validAfterHoursSetting(current.afterHoursMode ?? "staffRequest", current.afterHoursInfo,
       current.scope as CallPolicy["scope"]) &&
       (current.urgentResponse === undefined || validUrgentResponseShape(current.urgentResponse, current.scope as CallPolicy["scope"])) &&
-      (current.staffSchedule === undefined || validApprovedStaffSchedule(current.staffSchedule, current.scope as CallPolicy["scope"]))
+      (current.staffSchedule === undefined || validApprovedStaffSchedule(current.staffSchedule, current.scope as CallPolicy["scope"])) &&
+      (current.greeting === undefined || validGreetingShape(current.greeting, current.scope as CallPolicy["scope"]))
     ? ok(current as CallPolicy) : err({ kind: "malformed" });
 }
 
@@ -374,6 +379,28 @@ export class FetchDashboardPort implements DashboardPort {
         ...(schedule === undefined ? {} : { scheduleVersion: schedule.version,
           effectiveFrom: schedule.effectiveFrom, effectiveUntil: schedule.effectiveUntil,
           timeZone: schedule.timeZone, weekly: schedule.weekly, closedDates: schedule.closedDates }) }),
+    });
+    return result.ok ? policy(result.value) : result;
+  }
+
+  async greetingAudit(afterVersion?: number): Promise<Result<GreetingSettingAuditPage, DashboardFailure>> {
+    const result = await request(`/api/settings/greeting-audit${afterVersion === undefined ? "" : `?after=${afterVersion}`}`);
+    if (!result.ok) return result;
+    const valid = matchesSchema(capabilityDescriptor("settings.routing.greeting.audit.v1").resultSchema,
+      { ok: true, value: result.value });
+    const reply = record(result.value);
+    return valid && reply?.kind === "greetingSettingAudit"
+      ? ok(reply.page as GreetingSettingAuditPage) : err({ kind: "malformed" });
+  }
+
+  async changeGreeting(expectedVersion: string, greeting?: Readonly<{ version: string; approvedText: string;
+    effectiveFrom: string; effectiveUntil: string }>): Promise<Result<CallPolicy, DashboardFailure>> {
+    const result = await request("/api/settings/greeting", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "settings.routing.greeting.change.v1", expectedVersion,
+        enabled: greeting !== undefined,
+        ...(greeting === undefined ? {} : { greetingVersion: greeting.version, approvedText: greeting.approvedText,
+          effectiveFrom: greeting.effectiveFrom, effectiveUntil: greeting.effectiveUntil }) }),
     });
     return result.ok ? policy(result.value) : result;
   }

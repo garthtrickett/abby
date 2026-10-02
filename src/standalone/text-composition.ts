@@ -4,10 +4,10 @@ import type { KnowledgeHost, ModelKnowledgeContextHost } from "../core/host.ts";
 import { ClinikoAvailabilityReader } from "../cliniko/availability.ts";
 import { PostgresLedger } from "../storage/postgres-ledger.ts";
 import { PostgresPolicyStore } from "../storage/postgres-policy-store.ts";
-import { referenceDefaultPolicy } from "../reference/policy-store.ts";
 import { TextReception } from "../reference/text-reception.ts";
 import { unprovenReadiness } from "../core/readiness.ts";
 import { DisabledStandaloneHost } from "./disabled-host.ts";
+import { standaloneDefaultPolicy } from "./default-policy.ts";
 
 /** Standalone patient-specific actions stay off until Cliniko-owned work is implemented and proven. */
 export function createStandaloneTextComposition(db: Kysely<Database>, availability?: ClinikoAvailabilityReader):
@@ -18,6 +18,6 @@ export function createStandaloneTextComposition(db: Kysely<Database>, availabili
   const ledger = new PostgresLedger(db, undefined, unprovenReadiness, "standaloneText");
   const host = new DisabledStandaloneHost();
   const knowledge = host;
-  const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable", unprovenReadiness, false, "standaloneMinimal");
+  const policy = new PostgresPolicyStore(db, standaloneDefaultPolicy, "unavailable", unprovenReadiness, false, "standaloneMinimal");
   return { reception: new TextReception(ledger, policy, host, availability, undefined, undefined, knowledge), policy, knowledge };
 }

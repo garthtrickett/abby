@@ -4,6 +4,7 @@ import test, { after } from "node:test";
 import { sql } from "kysely";
 import { ok } from "../../src/core/model.ts";
 import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
+import { standaloneDefaultPolicy } from "../../src/standalone/default-policy.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { buildPostgresTenantConfigArchive } from "../../src/storage/postgres-config-archive.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
@@ -155,6 +156,41 @@ test("E2E-244 durable minimal import preserves hours and audit without enabling 
   assert.equal(imported.value.staffSchedule?.ownerRef, "disabled");
   assert.deepEqual(imported.value.staffSchedule?.closedDates, ["2026-12-25"]);
   const history = await store.listStaffScheduleChanges(target);
+  assert.ok(history.ok);
+  assert.deepEqual(history.value.entries.map(row => [row.version, row.enabled, row.previousEnabled]),
+    [["1", true, false]]);
+  const stop = await new PostgresLedger(db).readWriteStop(target);
+  assert.ok(stop.ok && stop.value.stopped);
+});
+
+test("E2E-245 durable minimal import preserves the greeting and its audit", async () => {
+  const suffix = randomUUID();
+  const source = { tenantId: `minimal-greeting-source-${suffix}`, clinicId: "clinic", locationId: "location" };
+  const target = { tenantId: `minimal-greeting-target-${suffix}`, clinicId: "buyer", locationId: "location" };
+  const store = new PostgresPolicyStore(db, standaloneDefaultPolicy);
+  const greeting = { scope: source, version: "welcome-v1", ownerRef: "clinic-admin", approved: true as const,
+    approvedText: "Welcome to the clinic. How can I help?",
+    effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2027-09-01T00:00:00.000Z" };
+  assert.ok((await store.changeGreeting(source, "0", greeting, "clinic-admin")).ok);
+  const archive = await buildPostgresTenantConfigArchive(db, {
+    sourceTenantId: source.tenantId, archiveId: `minimal-greeting-archive-${suffix}`, actorRef: "clinic-admin",
+    createdAt: "2026-09-29T05:00:00Z", locations: [
+      { sourceScope: source, targetScope: target, timeZone: "Australia/Sydney", mappingProvenance: "reviewed" },
+    ],
+  }, { authorizeAndRecord: async () => ok({ requestRef: "minimal-greeting-export-audit" }) });
+  assert.ok(archive.ok, archive.ok ? "" : archive.error.kind);
+  const importer = new PostgresTenantConfigArchiveImporter(db, () => "2026-09-29T05:05:00Z");
+  const staged = await importer.stage(archive.value, target.tenantId, "buyer-admin",
+    { authorizeAndRecord: async () => ok({ auditRef: "minimal-greeting-import-audit" }) },
+    { mapRef: () => "ignored-by-minimal-import" });
+  assert.ok(staged.ok, staged.ok ? "" : staged.error.kind);
+  const imported = await store.read(target);
+  assert.ok(imported.ok);
+  assert.equal(imported.value.automationEnabled, false);
+  assert.deepEqual(imported.value.greeting?.scope, target);
+  assert.equal(imported.value.greeting?.ownerRef, "disabled");
+  assert.equal(imported.value.greeting?.approvedText, greeting.approvedText);
+  const history = await store.listGreetingChanges(target);
   assert.ok(history.ok);
   assert.deepEqual(history.value.entries.map(row => [row.version, row.enabled, row.previousEnabled]),
     [["1", true, false]]);

@@ -348,6 +348,63 @@ test("E2E-244: staff cannot inspect or change staffed hours", async ({ page, req
   } finally { await app.close(); }
 });
 
+test("E2E-245: clinic admin approves, audits and disables a time-bounded greeting", async ({ page, request }) => {
+  test.setTimeout(60_000);
+  const app = await localDashboard("clinicAdmin");
+  try {
+    await page.goto(app.url);
+    await expect(page.getByRole("heading", { name: "Approved greeting" })).toBeVisible();
+    await expect(page.getByLabel("Greeting audit")).toContainText("No greeting changes recorded.");
+    await page.getByRole("textbox", { name: "Greeting version" }).fill("welcome-v1");
+    await page.getByRole("textbox", { name: "Greeting text" }).fill("Hello from the clinic. How can I help?");
+    await page.getByRole("textbox", { name: "Greeting effective from" }).fill("2026-09-01T00:00:00.000Z");
+    await page.getByRole("textbox", { name: "Greeting effective until" }).fill("2027-09-01T00:00:00.000Z");
+    await page.getByRole("button", { name: "Approve greeting" }).click();
+    await expect(page.getByText("Greeting approved for new calls.")).toBeVisible();
+    const before = await app.ledger.read("before-setting", app.scope);
+    assert.ok(before.ok);
+    assert.equal(before.value.policy.greeting?.version, "reference-greeting-v1");
+    assert.equal((await app.reception.startCall("greeting-enabled", app.scope)).ok, true);
+    const enabled = await app.ledger.read("greeting-enabled", app.scope);
+    assert.ok(enabled.ok);
+    assert.equal(enabled.value.policy.greeting?.ownerRef, "browser-clinicAdmin");
+    assert.equal(enabled.value.policy.greeting?.version, "welcome-v1");
+    const valid = { kind: "settings.routing.greeting.change.v1", enabled: true,
+      greetingVersion: "welcome-v2", approvedText: "Welcome to the clinic.",
+      effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2027-09-01T00:00:00.000Z" };
+    assert.equal((await request.post(`${app.url}/api/settings/greeting`, { data: {
+      ...valid, expectedVersion: "0" } })).status(), 409);
+    assert.equal((await request.post(`${app.url}/api/settings/greeting`, { data: {
+      ...valid, expectedVersion: "1", effectiveUntil: "2025-09-01T00:00:00.000Z" } })).status(), 400);
+    assert.equal((await request.post(`${app.url}/api/settings/greeting`, { data: {
+      ...valid, expectedVersion: "1", ownerRef: "forged-owner" } })).status(), 400);
+    assert.equal((await request.post(`${app.url}/api/settings/greeting`, { data: {
+      ...valid, expectedVersion: "1", patientNote: "PRIVATE_NOTE_MUST_NOT_PERSIST" } })).status(), 400);
+    await page.reload();
+    await expect(page.getByRole("textbox", { name: "Greeting text" })).toHaveValue("Hello from the clinic. How can I help?");
+    await expect(page.getByLabel("Greeting audit")).toContainText("Version 1 · approved · greeting welcome-v1 · browser-clinicAdmin");
+    await page.getByRole("button", { name: "Disable greeting" }).click();
+    await expect(page.getByText("Greeting disabled for new calls.")).toBeVisible();
+    assert.equal((await app.reception.startCall("greeting-disabled", app.scope)).ok, true);
+    const disabled = await app.ledger.read("greeting-disabled", app.scope);
+    assert.ok(disabled.ok);
+    assert.equal(disabled.value.policy.greeting, undefined);
+    assert.equal((await app.ledger.read("greeting-enabled", app.scope)).ok, true);
+    await expect(page.getByLabel("Greeting audit")).toContainText("Version 2 · disabled · browser-clinicAdmin");
+  } finally { await app.close(); }
+});
+
+test("E2E-245: staff cannot inspect or change approved greeting", async ({ page, request }) => {
+  const app = await localDashboard("staff");
+  try {
+    await page.goto(app.url);
+    await expect(page.getByRole("button", { name: "Approve greeting" })).toHaveCount(0);
+    assert.equal((await request.get(`${app.url}/api/settings/greeting-audit`)).status(), 403);
+    assert.equal((await request.post(`${app.url}/api/settings/greeting`, { data: {
+      kind: "settings.routing.greeting.change.v1", expectedVersion: "0", enabled: false } })).status(), 403);
+  } finally { await app.close(); }
+});
+
 test("agent capability endpoint publishes versioned schemas without exposing internal call state", async ({ request }) => {
   const app = await localDashboard("clinicAdmin");
   try {
