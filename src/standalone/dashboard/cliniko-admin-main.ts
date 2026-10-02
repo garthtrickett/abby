@@ -1,3 +1,4 @@
+import { AutomationSetupPanel } from "./automation-setup-panel.ts";
 import { FetchDashboardPort } from "./api.ts";
 import { AvailabilitySetupPanel } from "./availability-setup-panel.ts";
 import { SpeechGatePanel } from "./speech-gate-panel.ts";
@@ -16,3 +17,7 @@ void new SpeechGatePanel(speechRoot).load();
 const operationalRoot = document.getElementById("operational-daily");
 if (!operationalRoot) throw new Error("operational daily root missing");
 void new OperationalDailyPanel(operationalRoot).load();
+
+const automationRoot = document.getElementById("automation-setup");
+if (!automationRoot) throw new Error("automation setup root missing");
+void new AutomationSetupPanel(automationRoot, new FetchDashboardPort()).load();

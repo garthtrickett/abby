@@ -44,7 +44,7 @@ async function waitFor(check: () => boolean, label: string): Promise<void> {
   assert.ok(check(), `${label} timed out`);
 }
 
-test("E2E-212 E2E-246 durable admin settings pin a signed call and revocation blocks the next call",
+test("E2E-212 E2E-246 E2E-248 durable admin settings pin a signed call and revocation blocks the next call",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
     const adminUrl = process.env.DATABASE_URL;
     assert.ok(adminUrl);
@@ -208,6 +208,36 @@ test("E2E-212 E2E-246 durable admin settings pin a signed call and revocation bl
         mark: { name: (messages[1]!.mark as { name: string }).name } }));
 
       const secondOrigin = await openAdmin();
+      const disabled = await fetch(`${secondOrigin}/api/settings/automation-enabled`, { method: "POST", headers: {
+        "Content-Type": "application/json", Origin: secondOrigin, Cookie: `hostSession=${sessionToken}` },
+        body: JSON.stringify({ expectedVersion: "1", enabled: false }) });
+      assert.equal(disabled.status, 200);
+      const disabledPolicy = (await disabled.json() as { value: { policy: {
+        automationEnabled: boolean; automationVersion: string } } }).value.policy;
+      assert.equal(disabledPolicy.automationEnabled, false);
+      assert.equal(disabledPolicy.automationVersion, "2");
+      const offCallSid = `CA${randomUUID().replaceAll("-", "")}`;
+      const offInbound = await webhook(offCallSid);
+      assert.equal(offInbound.status, 200);
+      const offBinding = (await offInbound.text()).match(/<Parameter name="abbyBinding" value="([^"]+)"\/>/)?.[1];
+      assert.ok(offBinding);
+      const offSocket = new WebSocket(`ws://127.0.0.1:${voicePort}/twilio/media/`, { headers: {
+        "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, streamUrl, {}),
+      } });
+      const offMessages: Record<string, unknown>[] = [];
+      try {
+        await once(offSocket, "open");
+        offSocket.on("message", data => offMessages.push(JSON.parse(data.toString()) as Record<string, unknown>));
+        const offStreamSid = `MZ${randomUUID().replaceAll("-", "")}`;
+        offSocket.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
+        offSocket.send(JSON.stringify({ event: "start", sequenceNumber: "1", streamSid: offStreamSid,
+          start: { accountSid, callSid: offCallSid, streamSid: offStreamSid, tracks: ["inbound"],
+            mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 },
+            customParameters: { abbyBinding: offBinding } } }));
+        await waitFor(() => offSocket.readyState === WebSocket.CLOSED, "automation-off call refusal");
+        assert.equal(offMessages.some(message => message.event === "media"), false);
+        assert.equal(speech.length, 1);
+      } finally { offSocket.terminate(); }
       const current = await adminRequest(secondOrigin, { kind: "clinic.availability.approval.read.v1" });
       assert.equal(current.status, 200);
       const state = await current.json() as { value: { state: { version: number; approval: unknown } } };
@@ -229,6 +259,14 @@ test("E2E-212 E2E-246 durable admin settings pin a signed call and revocation bl
       socket.close();
       await socketClosed;
       socket = undefined;
+      // Restore only the isolated test fixture's readiness-approved policy, so the existing
+      // route-revocation assertion remains independent of the automation refusal above.
+      const restoreDb = connectPostgres(target.toString());
+      try {
+        const restorePolicy = new PostgresPolicyStore(restoreDb, referenceDefaultPolicy, "unavailable",
+          async () => ok(true), false, "standaloneMinimal");
+        assert.ok((await restorePolicy.changeAutomationEnabled(scope, "2", true, "synthetic-operator")).ok);
+      } finally { await restoreDb.destroy(); }
       const readCount = methods.length;
       const rejected = await webhook(`CA${randomUUID().replaceAll("-", "")}`);
       assert.equal(rejected.status, 503);
@@ -279,11 +317,11 @@ test("E2E-212 E2E-246 durable admin settings pin a signed call and revocation bl
       assert.equal(runnerOutput.includes(caller) || runnerOutput.includes(callSid), false);
       const privacyDb = connectPostgres(target.toString());
       try { assert.deepEqual(await scanPatientDataCanaries(privacyDb, [
-        { label: "caller", value: caller }, { label: "provider_call", value: callSid },
+        { label: "caller", value: caller }, { label: "provider_call", value: callSid }, { label: "refused_call", value: offCallSid },
         { label: "appointment", value: "synthetic-only" }]), { ok: true, value: [] }); }
       finally { await privacyDb.destroy(); }
       assert.deepEqual(await scanDisposableBackupCanaries(target.toString(), [
-        { label: "caller", value: caller }, { label: "provider_call", value: callSid },
+        { label: "caller", value: caller }, { label: "provider_call", value: callSid }, { label: "refused_call", value: offCallSid },
         { label: "appointment", value: "synthetic-only" }]), []);
     } finally {
       socket?.terminate();

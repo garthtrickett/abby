@@ -36,7 +36,7 @@ async function freePort(): Promise<number> {
   return address.port;
 }
 
-test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 E2E-247 loopback admin retains scoped setup and usable greeting",
+test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 E2E-247 E2E-248 loopback admin retains scoped setup and usable greeting",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
     const adminUrl = process.env.DATABASE_URL;
     assert.ok(adminUrl);
@@ -135,7 +135,8 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 E2E-247 loopback admin retains sco
       assert.ok(listed.value.length > 0);
       assert.ok(listed.value.every(item => item.id === "settings.read.v1" || item.id === "operations.daily.v1" ||
         item.id.startsWith("clinic.availability.") || item.id === "settings.routing.greeting.change.v1" ||
-        item.id === "settings.routing.greeting.audit.v1"));
+        item.id === "settings.routing.greeting.audit.v1" ||
+        item.id === "settings.automation.enabled.change.v1" || item.id === "settings.automation.audit.v1"));
       assert.equal((await fetch(`${origin}/api/settings/booking-enabled`, { method: "POST", headers: {
         Authorization: basic, Origin: origin, "Content-Type": "application/json" },
       body: JSON.stringify({ expectedVersion: "0", enabled: true }) })).status, 404);
@@ -147,9 +148,38 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 E2E-246 E2E-247 loopback admin retains sco
       assert.equal((await command({ kind: "clinic.availability.approval.change.v1", route,
         selection: { businessId: "11", practitionerId: "22", appointmentTypeId: "33",
           policyVersion: "0" }, expectedVersion: 0 })).status, 200);
+      const automationChange = (value: object, authorization = basic, requestOrigin = origin) =>
+        fetch(`${origin}/api/settings/automation-enabled`, { method: "POST", headers: {
+          "Content-Type": "application/json", Authorization: authorization, Origin: requestOrigin },
+          body: JSON.stringify(value) });
+      assert.equal((await automationChange({ expectedVersion: "1", enabled: false }, "")).status, 401);
+      assert.equal((await automationChange({ expectedVersion: "1", enabled: false }, basic,
+        "http://foreign.example.test")).status, 403);
+      assert.equal((await automationChange({ expectedVersion: "1", enabled: "false" })).status, 400);
+      assert.equal((await automationChange({ expectedVersion: "1", enabled: false, actorRef: "forged" })).status, 400);
+      assert.equal((await automationChange({ expectedVersion: "0", enabled: false })).status, 409);
+      assert.equal((await automationChange({ expectedVersion: "1", enabled: false })).status, 200);
+      const blockedEnable = await automationChange({ expectedVersion: "2", enabled: true });
+      assert.equal(blockedEnable.status, 400);
+      assert.equal((await blockedEnable.json() as { error: { kind: string } }).error.kind, "readinessFailed");
       await stop();
 
       await launch();
+      const automationState = await fetch(`${origin}/api/settings`, { headers: { Authorization: basic } });
+      const savedAutomation = (await automationState.json() as { value: { policy: {
+        automationEnabled: boolean; automationVersion: string } } }).value.policy;
+      assert.equal(savedAutomation.automationEnabled, false);
+      assert.equal(savedAutomation.automationVersion, "2");
+      assert.equal((await fetch(`${origin}/api/settings/automation-audit`)).status, 401);
+      const automationAudit = await fetch(`${origin}/api/settings/automation-audit`, { headers: { Authorization: basic } });
+      assert.equal(automationAudit.status, 200);
+      const automationHistory = (await automationAudit.json() as { value: { page: { entries: {
+        version: string; actorRef: string; enabled: boolean }[] } } }).value.page.entries;
+      assert.deepEqual(automationHistory.map(entry => [entry.version, entry.enabled, entry.actorRef]),
+        [["1", true, "synthetic-operator"], ["2", false, "synthetic-owner-214"]]);
+      const laterAudit = await fetch(`${origin}/api/settings/automation-audit?after=1`, { headers: { Authorization: basic } });
+      assert.deepEqual((await laterAudit.json() as { value: { page: { entries: { version: string }[] } } })
+        .value.page.entries.map(entry => entry.version), ["2"]);
       const persistedOperations = await fetch(`${origin}/api/operations/daily`, { headers: { Authorization: basic } });
       assert.equal(persistedOperations.status, 200);
       const persistedDaily = await persistedOperations.json() as { value: { daily: OperationalDailyCounts } };

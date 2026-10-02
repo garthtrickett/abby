@@ -136,7 +136,8 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 local owner sees aggregate speech and oper
     assert.ok(listed.value.length > 0);
     assert.ok(listed.value.every(item => item.id === "settings.read.v1" || item.id === "operations.daily.v1" ||
       item.id.startsWith("clinic.availability.") || item.id === "settings.routing.greeting.change.v1" ||
-      item.id === "settings.routing.greeting.audit.v1"));
+      item.id === "settings.routing.greeting.audit.v1" ||
+        item.id === "settings.automation.enabled.change.v1" || item.id === "settings.automation.audit.v1"));
     assert.equal((await request.post(`${origin}/api/settings/booking-enabled`, { headers: {
       Authorization: basic, Origin: origin, "Content-Type": "application/json" },
     data: { expectedVersion: "0", enabled: true } })).status(), 404);
