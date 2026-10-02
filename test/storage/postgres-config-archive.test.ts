@@ -122,6 +122,8 @@ test("PostgreSQL config archive takes a consistent scoped snapshot with an allow
   assert.equal(importedPolicy.value.capabilities.book, "unavailable");
   assert.equal(importedPolicy.value.cancellationEnabled, false);
   assert.equal(importedPolicy.value.capabilities.cancel, "unavailable");
+  assert.equal(importedPolicy.value.reschedulingEnabled, false);
+  assert.equal(importedPolicy.value.capabilities.reschedule, "unavailable");
   assert.equal(importedPolicy.value.policyVersion, "4");
   assert.deepEqual(importedPolicy.value.staffedCoverage,
     { startsAt: "2026-09-28T22:00:00.000Z", endsAt: "2026-09-28T23:00:00.000Z" });
