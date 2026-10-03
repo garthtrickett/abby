@@ -250,7 +250,8 @@ for (const kind of kinds) {
 
   test(`${kind}: agent proposal requires caller delivery, affirmation, and keyed host commit`, async () => {
     const app = fixture(kind, `${kind}-booking`);
-    assert.deepEqual(app.agent.listPermitted().map(item => item.id), ["settings.read.v1", "booking.propose.v2", "knowledge.answer.v2"]);
+    assert.deepEqual(app.agent.listPermitted().map(item => item.id), ["settings.read.v1", "booking.propose.v2",
+      "appointments.change.propose.v1", "patients.intake.propose.v1", "knowledge.answer.v2"]);
     assert.equal(app.admin.listPermitted().some(item => item.id === "settings.appointments.booking.enabled.change.v1"), true);
     error(await app.agent.submit({ kind: "settings.appointments.booking.enabled.change.v1", expectedVersion: "0", enabled: true }), "forbidden");
     const enabled = settings(value(await app.admin.submit({ kind: "settings.appointments.booking.enabled.change.v1", expectedVersion: "0", enabled: true })));
