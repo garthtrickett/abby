@@ -133,7 +133,7 @@ test("standalone phone, setting, export, and text journey retains only patient p
     .where("tenant_id", "=", scope.tenantId as never).execute()).length, 0);
 });
 
-test("E2E-125 text: agent reads provisional times and gives truthful empty or failed fallback", async () => {
+test("E2E-125 E2E-263 text: agent reads provisional times and gives truthful empty or failed fallback", async () => {
   const suffix = randomUUID().slice(0, 8);
   const scope = { tenantId: `availability-${suffix}`, clinicId: "clinic", locationId: "frontdesk" };
   const now = "2026-10-01T00:00:00Z";
@@ -163,11 +163,17 @@ test("E2E-125 text: agent reads provisional times and gives truthful empty or fa
   const agent = new CommandGateway({ actorRef: "agent", role: "agent", scope }, app.policy, app.reception);
   assert.equal(agent.listPermitted().some(item => item.id === "availability.read.v2"), true);
   assert.equal(agent.listPermitted().some(item => item.id === "appointments.read.v1"), false);
+  assert.equal(agent.listPermitted().some(item => item.id === "staff.list.v1"), false);
+  assert.deepEqual(await agent.submit({ kind: "staff.list.v1" }), { ok: false, error: { kind: "forbidden" } });
   const withoutCliniko = createStandaloneTextComposition(db);
   assert.equal(new CommandGateway({ actorRef: "agent", role: "agent", scope }, withoutCliniko.policy,
     withoutCliniko.reception).listPermitted().some(item => item.id === "availability.read.v2"), false);
   const callId = randomUUID();
   value(await app.reception.startCall(callId, scope, now));
+  assert.deepEqual(await agent.submit({ kind: "appointments.read.v1", turn: {
+    callId, turnId: "denied-protected-read", text: callerText, quality: "clear", at: now },
+  verificationRef: "untrusted-proof", from: "2026-10-02", to: "2026-10-02", now }),
+  { ok: false, error: { kind: "forbidden" } });
   const shown = value(await app.reception.checkAvailability(scope,
     { callId, turnId: randomUUID(), text: callerText, quality: "clear", at: now },
     "2026-10-02", "2026-10-02", now));

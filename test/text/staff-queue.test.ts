@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import type { LedgerStore } from "../../src/core/ledger.ts";
-import { ok } from "../../src/core/model.ts";
+import { err, ok } from "../../src/core/model.ts";
 import type { LocationScope } from "../../src/core/model.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
@@ -13,7 +13,7 @@ import { TextReception } from "../../src/reference/text-reception.ts";
 const scope: LocationScope = { tenantId: "queue-tenant", clinicId: "queue-clinic", locationId: "queue-location" };
 const now = "2026-09-28T10:00:00.000Z";
 
-test("E2E-221 scoped staff queue paginates redacted follow-up and exposes aggregate health to agents", async () => {
+test("E2E-221 E2E-263 scoped staff queue paginates redacted follow-up and exposes aggregate health to agents", async () => {
   const ledger = new MemoryLedger();
   const policy = new MemoryPolicyStore();
   const reception = new TextReception(ledger, policy, new ReferenceClinicHost([], []));
@@ -56,6 +56,8 @@ test("E2E-221 scoped staff queue paginates redacted follow-up and exposes aggreg
   assert.ok(foreignHealth.ok && foreignHealth.value.kind === "staffQueueHealth");
   assert.equal(foreignHealth.value.health.scanned, 0);
   const noQueue = new CommandGateway({ actorRef: "no-queue-agent", role: "agent", scope }, policy, reception);
+  assert.equal(noQueue.listPermitted().some(item => item.id === "staff.list.v1"), false);
+  assert.deepEqual(await noQueue.submit({ kind: "staff.list.v1" }), { ok: false, error: { kind: "forbidden" } });
   assert.equal(noQueue.listPermitted().some(item => item.id === "staff.health.v1"), false);
   assert.deepEqual(await noQueue.submit({ kind: "staff.health.v1" }), { ok: false, error: { kind: "forbidden" } });
   assert.deepEqual(await agent.submit({ kind: "staff.health.v1", callId: "unexpected" } as never),
@@ -63,6 +65,15 @@ test("E2E-221 scoped staff queue paginates redacted follow-up and exposes aggreg
   const invalid = await agent.submit({ kind: "staff.list.v1", afterTaskKey: "" });
   assert.ok(!invalid.ok);
   if (!invalid.ok) assert.equal(invalid.error.kind, "invalid");
+});
+
+test("E2E-263 a staff list storage failure is unavailable rather than a successful empty queue", async () => {
+  const policy = new MemoryPolicyStore();
+  const reception = new TextReception(new MemoryLedger(), policy, new ReferenceClinicHost([], []));
+  const ledger = { listStaffItems: async () => err({ kind: "storageFailure" as const }) } as unknown as LedgerStore;
+  const gateway = new CommandGateway({ actorRef: "queue-agent", role: "agent", scope }, policy, reception,
+    undefined, new StaffQueue(ledger, () => now));
+  assert.deepEqual(await gateway.submit({ kind: "staff.list.v1" }), { ok: false, error: { kind: "storageFailure" } });
 });
 
 test("queue health refuses an incomplete scan instead of reporting partial counts", async () => {
