@@ -10,6 +10,7 @@ import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { createEmbeddedTextComposition } from "../../src/reference/embedded-composition.ts";
 import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
+import { TextReception } from "../../src/reference/text-reception.ts";
 import { createReferenceStandaloneTextComposition } from "../support/reference-standalone-composition.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
@@ -28,7 +29,7 @@ function value<T>(result: Result<T, { kind: string }>): T {
   return result.value;
 }
 
-async function fixture(kind: "memory" | "postgres", suffix: string, verified = true) {
+async function fixture(kind: "memory" | "postgres", suffix: string, verified = true, providerUnavailable = false) {
   const scope = { tenantId: `appointment-tenant-${suffix}`, clinicId: `appointment-clinic-${suffix}`, locationId: `appointment-location-${suffix}` };
   const patient = { scope, patientRef: "22", verificationRef: "host-proof", expiresAt: at(86_400) };
   const host = new ReferenceClinicHost(verified ? [patient] : [], []);
@@ -38,6 +39,7 @@ async function fixture(kind: "memory" | "postgres", suffix: string, verified = t
     requests.push(url);
     if (url.pathname === "/v1/businesses/11") return new Response(JSON.stringify({ id: "11", time_zone_identifier: "Australia/Sydney" }));
     assert.equal(url.pathname, "/v1/individual_appointments");
+    if (providerUnavailable) return new Response("", { status: 503 });
     return new Response(JSON.stringify({ total_entries: 1, individual_appointments: [{
       id: "33", starts_at: "2026-09-30T11:00:00Z", ends_at: "2026-09-30T11:30:00Z",
       patient: { links: { self: "https://api.au5.cliniko.com/v1/patients/22" } },
@@ -107,7 +109,7 @@ for (const kind of kinds) {
     assert.deepEqual(app.queued, ["I can't verify whose appointment to check. I'll request staff follow-up."]);
   });
 
-  test(`${kind}: agent command returns redacted progress through the same call transition`, async () => {
+  test(`E2E-263 ${kind}: agent command returns redacted progress through the same call transition`, async () => {
     const app = await fixture(kind, `${kind}-agent`);
     const gateway = new CommandGateway({ actorRef: "clinic-agent", role: "agent", scope: app.scope }, app.policy, app.reception,
       new CallReview(app.ledger));
@@ -122,5 +124,46 @@ for (const kind of kinds) {
     assert.equal(JSON.stringify(reply).includes("appointmentRef"), false);
     assert.equal(JSON.stringify(reply).includes("Private Patient"), false);
     assert.equal(app.requests.length, 2);
+  });
+
+  test(`E2E-263 ${kind}: appointment command denies absent capability, malformed input and foreign scope before protected reads`, async () => {
+    const app = await fixture(kind, `${kind}-agent-denied`);
+    const gateway = new CommandGateway({ actorRef: "clinic-agent", role: "agent", scope: app.scope }, app.policy, app.reception);
+    const callId = `agent-denied-${kind}`;
+    value(await app.reception.startCall(callId, app.scope));
+    const command = { kind: "appointments.read.v1" as const, turn: { callId, turnId: "agent-read",
+      text: "Private appointment question", quality: "clear" as const, at: at(3) },
+      verificationRef: "host-proof", from: at(3), to, now: at(3) };
+    assert.deepEqual(await gateway.submit({ ...command, verificationRef: "" }), { ok: false, error: { kind: "invalid" } });
+    const foreign = new CommandGateway({ actorRef: "foreign-agent", role: "agent",
+      scope: { ...app.scope, tenantId: "foreign" } }, app.policy, app.reception);
+    assert.deepEqual(await foreign.submit(command), { ok: false, error: { kind: "callUnknown" } });
+    const noReader = new CommandGateway({ actorRef: "no-reader", role: "agent", scope: app.scope }, app.policy,
+      new TextReception(app.ledger, app.policy, app.host));
+    assert.equal(noReader.listPermitted().some(item => item.id === "appointments.read.v1"), false);
+    assert.deepEqual(await noReader.submit(command), { ok: false, error: { kind: "forbidden" } });
+    assert.equal(app.requests.length, 0);
+    const failed = value(await gateway.submit({ ...command, verificationRef: "untrusted-proof" }));
+    assert.equal(failed.kind, "appointmentAnswer");
+    assert.deepEqual(failed.progress.appointments, { status: "failed", shownCount: 0, reason: "invalidProof" });
+    assert.equal(app.requests.length, 0);
+    assert.equal(JSON.stringify(failed).includes("Private"), false);
+  });
+
+  test(`E2E-263 ${kind}: unavailable appointment provider returns failed progress and truthful caller fallback`, async () => {
+    const app = await fixture(kind, `${kind}-agent-unavailable`, true, true);
+    const gateway = new CommandGateway({ actorRef: "clinic-agent", role: "agent", scope: app.scope }, app.policy, app.reception);
+    const callId = `agent-unavailable-${kind}`;
+    value(await app.reception.startCall(callId, app.scope));
+    const failed = value(await gateway.submit({ kind: "appointments.read.v1", turn: { callId, turnId: "failed-read",
+      text: "Private appointment question", quality: "clear", at: at(3) },
+      verificationRef: "host-proof", from: at(3), to, now: at(3) }));
+    assert.equal(failed.kind, "appointmentAnswer");
+    assert.deepEqual(failed.progress.appointments, { status: "failed", shownCount: 0, reason: "unavailable" });
+    assert.equal(app.requests.length, 2);
+    const state = value(await app.ledger.read(callId, app.scope));
+    assert.match(state.callerMessages.at(-1) ?? "", /can't|cannot/);
+    assert.equal(state.callerMessages.some(text => /Wednesday 30 September|Private Patient/.test(text)), false);
+    assert.equal(JSON.stringify(failed).includes("Private"), false);
   });
 }

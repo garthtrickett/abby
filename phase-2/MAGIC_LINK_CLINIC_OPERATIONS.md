@@ -2,7 +2,7 @@
 
 ## Status — 2026-10-03
 
-Local D1/D3 implementation connects the actual standalone Cliniko magic-link application to its existing aggregate and speech-status screens. Three new complete HTTPS browser journeys have focused proof; the final registered-source and parallel gates passed on `67ea968`. Publication remains pending. No email provider is selected. Messages, catalogue replies and speech reports in these journeys are synthetic.
+Local D1/D3 implementation connects the actual standalone Cliniko magic-link application to its existing aggregate and speech-status screens. Three new complete HTTPS browser journeys have focused proof; the final registered-source and parallel gates passed on `67ea968`. Published through [PR #359](https://github.com/garthtrickett/abby/pull/359), normally merged on 2026-10-03 as `918df0caa6165b9121b8524d5502d0c848527b9e`. The tested runtime and publication validation are distinguished below. No email provider is selected. Messages, catalogue replies and speech reports in these journeys are synthetic.
 
 ## Contract
 

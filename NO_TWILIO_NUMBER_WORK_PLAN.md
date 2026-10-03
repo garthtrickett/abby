@@ -6,6 +6,8 @@
 
 This plan covers the Cliniko standalone slice and the portable core. Splose remains unverified without an account, and no package below claims live Splose parity.
 
+**Latest local admin/E2E audit, 2026-10-03:** Sign-in, proposal conformance and operational identity are normally merged through PR #357–359. The [requirement audit](phase-2/LOCAL_ADMIN_E2E_AUDIT.md) checks A2 and D1–D4 against the 17 setting groups, exact local release evidence and external gates. It found two read-command evidence links pointing only at planned scenarios; E2E-263 corrects those links and supplies authorization/failure proof. Manifest 1.73 requires executable evidence for all 59 catalogue entries. The correction passed typecheck and all five affected files individually and in both recorded four-worker PostgreSQL orders, with 20 checks per grouping and no failures/skips. This establishes the local engineering checklist; real mail, provisioned/deployed clinic identity, operating alert schedules, speech-quality promotion, clinic/provider activation and carrier proof remain open. Earlier checkpoints below retain their historical limitations; the linked audit summarizes current local status.
+
 ## What “can do now” means
 
 There are three different kinds of completion:
