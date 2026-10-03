@@ -28,6 +28,8 @@ type Options = Readonly<{
   stopDuringCommit?: boolean;
   provider?: "accepted" | "lostAfterCommit" | "failedBeforeCommit" | "conflict";
   providerFetch?: typeof fetch;
+  conflictResults?: ReadonlyArray<"clear" | "present" | "malformed" | "unavailable">;
+  holdConflictRead?: () => Promise<Response>;
   patientId?: string;
   offsetStart?: boolean;
   wrongSelection?: boolean;
@@ -52,8 +54,21 @@ async function fixture(options: Options = {}) {
   });
   const posts: Array<Record<string, unknown>> = [];
   let gets = 0;
+  let conflictChecks = 0;
   let stored: Record<string, unknown> | undefined;
-  const provider: typeof fetch = async (_input, init) => {
+  const provider: typeof fetch = async (input, init) => {
+    if (new URL(String(input)).pathname.endsWith("/conflicts")) {
+      assert.equal(init?.method, "GET");
+      assert.equal(new URL(String(input)).pathname, "/v1/individual_appointments/91/conflicts");
+      const results = options.conflictResults ?? ["clear"];
+      const result = results[Math.min(conflictChecks, results.length - 1)];
+      conflictChecks += 1;
+      if (options.holdConflictRead) return options.holdConflictRead();
+      if (result === "unavailable") return new Response(null, { status: 503 });
+      if (result === "malformed") return Response.json({ conflicts: { exist: "false" } });
+      return Response.json({ conflicts: { exist: result === "present" },
+        private_note: "provider-conflict-note-canary" });
+    }
     if (init?.method === "POST") {
       const body = JSON.parse(String(init.body)) as Record<string, unknown>;
       posts.push(body);
@@ -168,7 +183,7 @@ async function fixture(options: Options = {}) {
   }
   return { begin, play, speak, call, host, proof, policy, ledger, callId, spoken, posts,
     get verificationRef() { return verificationRef; },
-    get gets() { return gets; }, get offerResolutions() { return offerResolutions; },
+    get gets() { return gets; }, get conflictChecks() { return conflictChecks; }, get offerResolutions() { return offerResolutions; },
     state: async () => {
       const read = await ledger.read(callId, scope);
       assert.ok(read.ok);
@@ -312,8 +327,15 @@ test("E2E-226 lost response after commit permits exact observation but no second
 test("E2E-226 a TCP reset after provider commit stays uncertain until exact observation", async () => {
   let posts = 0;
   let gets = 0;
+  let conflictChecks = 0;
   let stored: Record<string, unknown> | undefined;
   const server = createServer(async (request, response) => {
+    if (request.url === "/v1/individual_appointments/91/conflicts") {
+      assert.equal(request.method, "GET");
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ conflicts: { exist: false } }));
+      return;
+    }
     assert.equal(request.url?.split("?")[0], "/v1/individual_appointments");
     if (request.method === "POST") {
       posts += 1;
@@ -402,4 +424,90 @@ test("E2E-226 a 409 or 503 never turns an empty observation into a retry", async
     assert.notEqual(Object.values(settled.value.actions)[0]?.status, "committed");
     await app.close();
   }
+});
+
+
+test("E2E-266 confirmed booking requires a successful provider conflict read", async () => {
+  const app = await fixture();
+  try {
+    await app.begin();
+    await app.play((await app.speak()).delivery);
+    await app.play((await app.speak()).delivery);
+    assert.equal(app.posts.length, 1);
+    assert.equal(app.conflictChecks, 1);
+    assert.equal(app.spoken.at(-1), "Your booking is confirmed.");
+    assert.equal(Object.values((await app.state()).actions)[0]?.status, "committed");
+    assert.doesNotMatch(JSON.stringify({ spoken: app.spoken, state: await app.state() }),
+      /provider-conflict-note-canary/);
+  } finally { await app.close(); }
+});
+
+test("E2E-266 conflict-read errors stay uncertain and recover only by observation, never another write", async () => {
+  for (const failure of ["unavailable", "malformed"] as const) {
+    const app = await fixture({ conflictResults: [failure, failure, "clear"] });
+    try {
+      await app.begin();
+      await app.play((await app.speak()).delivery);
+      const pending = await app.speak();
+      assert.equal(app.posts.length, 1);
+      assert.equal(app.conflictChecks, 1);
+      assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review.");
+      assert.equal(Object.values((await app.state()).actions)[0]?.status, "uncertain");
+      await app.play(pending.delivery);
+      assert.ok((await app.drain()).ok);
+      assert.equal(Object.values((await app.state()).actions)[0]?.status, "uncertain");
+      assert.ok((await app.drain()).ok);
+      assert.equal(Object.values((await app.state()).actions)[0]?.status, "committed");
+      assert.equal(app.conflictChecks, 3);
+      assert.equal(app.posts.length, 1);
+      assert.equal(app.gets, 2);
+    } finally { await app.close(); }
+  }
+});
+
+test("E2E-266 a detected conflict cannot later become confirmed or trigger compensation", async () => {
+  for (const provider of ["accepted", "lostAfterCommit"] as const) {
+    const app = await fixture({ provider, conflictResults: ["present", "clear"] });
+    try {
+      await app.begin();
+      await app.play((await app.speak()).delivery);
+      const pending = await app.speak();
+      assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review.");
+      await app.play(pending.delivery);
+      assert.ok((await app.drain()).ok);
+      assert.ok((await app.drain()).ok);
+      assert.equal(app.conflictChecks, 1, "a known conflicting attempt cannot be silently upgraded later");
+      assert.equal(app.posts.length, 1);
+      assert.equal(Object.values((await app.state()).actions)[0]?.status, "uncertain");
+      assert.ok(!app.spoken.includes("Your booking is confirmed."));
+      assert.doesNotMatch(JSON.stringify({ spoken: app.spoken, state: await app.state() }),
+        /provider-conflict-note-canary/);
+    } finally { await app.close(); }
+  }
+});
+
+
+test("E2E-266 closing the host during a held conflict read cannot confirm a late clear response", { timeout: 5_000 }, async () => {
+  let began!: () => void;
+  const started = new Promise<void>(resolve => { began = resolve; });
+  let release!: (response: Response) => void;
+  const response = new Promise<Response>(resolve => { release = resolve; });
+  const app = await fixture({ holdConflictRead: async () => { began(); return response; } });
+  try {
+    await app.begin();
+    await app.play((await app.speak()).delivery);
+    const pending = app.speak();
+    await started;
+    assert.equal(app.posts.length, 1);
+    assert.equal(app.conflictChecks, 1);
+    app.host.dispose();
+    const unresolved = await pending;
+    assert.equal(Object.values((await app.state()).actions)[0]?.status, "uncertain");
+    assert.ok(!app.spoken.includes("Your booking is confirmed."));
+    release(Response.json({ conflicts: { exist: false } }));
+    await app.play(unresolved.delivery);
+    assert.ok((await app.drain()).ok);
+    assert.equal(app.posts.length, 1);
+    assert.equal(Object.values((await app.state()).actions)[0]?.status, "uncertain");
+  } finally { release(Response.json({ conflicts: { exist: false } })); await app.close(); }
 });

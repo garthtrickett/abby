@@ -360,3 +360,69 @@ test("observation abort between patient pages prevents the next GET", async () =
   await Promise.resolve();
   assert.equal(gets, 1);
 });
+
+
+test("E2E-266 booking conflict inspection uses the exact appointment route and rejects invalid references before reads", async () => {
+  let reads = 0;
+  const adapter = writer(async (input, init) => {
+    reads += 1;
+    assert.equal(String(input), `${baseUrl}/individual_appointments/91/conflicts`);
+    assert.equal(init?.method, "GET");
+    assert.equal(init.redirect, "error");
+    assert.equal(new Headers(init.headers).get("Authorization"),
+      `Basic ${Buffer.from("synthetic-key-au5:").toString("base64")}`);
+    return Response.json({ conflicts: { exist: reads === 2 } });
+  });
+  for (const invalid of ["91", "cliniko:appointment:0", "cliniko:appointment:91/../../patients", "https://foreign.test/91"]) {
+    assert.deepEqual(await adapter.inspectConflicts(invalid), { ok: false, error: { kind: "invalidQuery" } });
+  }
+  assert.equal(reads, 0);
+  assert.deepEqual(await adapter.inspectConflicts("cliniko:appointment:91"), { ok: true, value: false });
+  assert.deepEqual(await adapter.inspectConflicts("cliniko:appointment:91"), { ok: true, value: true });
+  assert.equal(reads, 2);
+});
+
+test("E2E-266 missing, failed, rate-limited and oversized conflict reads never mean clear", async () => {
+  const cases = [
+    { response: new Response(null, { status: 403 }), kind: "forbidden" },
+    { response: new Response(null, { status: 404 }), kind: "unavailable" },
+    { response: new Response(null, { status: 503 }), kind: "unavailable" },
+    { response: new Response(null, { status: 429 }), kind: "rateLimited" },
+    { response: Response.json({ conflicts: { exist: "false" } }), kind: "malformed" },
+    { response: Response.json({}), kind: "malformed" },
+    { response: new Response("x".repeat(1_000_001)), kind: "tooManyResults" },
+  ];
+  for (const { response, kind } of cases) {
+    const result = await writer(async () => response).inspectConflicts("cliniko:appointment:91");
+    assert.equal(result.ok, false);
+    assert.equal(result.error.kind, kind);
+  }
+  assert.deepEqual(await writer(async () => { throw new Error("lost conflict response"); })
+    .inspectConflicts("cliniko:appointment:91"), { ok: false, error: { kind: "unavailable" } });
+});
+
+test("E2E-266 conflict inspection shares the request budget and returns promptly when aborted", { timeout: 2_000 }, async () => {
+  let reads = 0;
+  const budget = new ClinikoReadBudget(1, () => Date.parse(observedAt));
+  assert.equal(budget.claim(), null);
+  const limited = await writer(async () => { reads += 1; throw new Error("unexpected read"); }, { rateBudget: budget })
+    .inspectConflicts("cliniko:appointment:91");
+  assert.equal(limited.ok, false);
+  assert.equal(limited.error.kind, "rateLimited");
+  assert.equal(reads, 0);
+  const controller = new AbortController();
+  let started!: () => void;
+  const entered = new Promise<void>(resolve => { started = resolve; });
+  let finish!: (response: Response) => void;
+  const late = new Promise<Response>(resolve => { finish = resolve; });
+  const adapter = writer(async () => { reads += 1; started(); return late; });
+  const pending = adapter.inspectConflicts("cliniko:appointment:91", controller.signal);
+  await entered;
+  controller.abort();
+  assert.deepEqual(await pending, { ok: false, error: { kind: "unavailable" } });
+  finish(Response.json({ conflicts: { exist: false } }));
+  assert.equal(reads, 1);
+  assert.deepEqual(await adapter.inspectConflicts("cliniko:appointment:91", controller.signal),
+    { ok: false, error: { kind: "unavailable" } });
+  assert.equal(reads, 1);
+});

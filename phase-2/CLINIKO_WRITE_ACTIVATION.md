@@ -53,6 +53,8 @@ A reservation must bind patient, clinic/business, practitioner, interval, servic
 
 **Alternatives evaluated:** an Abby-only lock does not coordinate Cliniko users or integrations; availability reread leaves a read/write window; conflict GET detects a collision after creation; deleting or cancelling a newly created appointment as compensation is another uncertain write and does not establish atomic booking. Unavailable blocks are a candidate for investigation, not an established reservation: the documented create contract supplies no atomic block-to-appointment consumption or exclusion guarantee. A human request workflow is a separate request-only capability and must satisfy section 2.
 
+**Post-write detection:** E2E-266 adds bounded conflict inspection to the synthetic embedded booking host before its existing committed receipt and during exact observation. Failed/malformed reads remain uncertain; a detected conflict cannot later be silently upgraded and triggers no automatic compensation. This does not prove exclusivity or cross-process recovery, supply an unresolved-work owner, or change standalone permissions.
+
 **Current evidence:** demo C-LIVE-07/27 accepted two same-slot appointments and observed conflict afterward. C-LIVE-28/32/33 accepted direct POSTs after eligibility settings removed offers. E2E-226 uses a synthetic `exclusiveCommitPermitted` host attestation; it does not prove a Cliniko reservation. E2E-264 shows independent real writer instances accept two synthetic same-slot creates with different markers. No standalone primitive currently satisfies either solution; booking remains unavailable.
 
 ## 5. Rescheduling — target protection plus new-slot protection
