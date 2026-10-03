@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import type { IncomingMessage, Server, ServerResponse } from "node:http";
+import type { IncomingMessage, RequestListener, Server, ServerResponse } from "node:http";
 import { CommandGateway } from "../../reference/command-gateway.ts";
 import type { GatewayCommand, HostActor } from "../../reference/command-gateway.ts";
 import { capabilityDescriptor } from "../../reference/capability-catalogue.ts";
@@ -87,6 +87,12 @@ export type HostDashboardIdentity = Readonly<{
 
 export async function createHostAuthenticatedDashboardServer(identity: HostDashboardIdentity,
                                                               bundlePath: string): Promise<Server> {
+  return createServer(await createHostAuthenticatedDashboardRequestHandler(identity, bundlePath));
+}
+
+/** Allows a standalone identity router to compose sign-in and the authenticated dashboard on one listener. */
+export async function createHostAuthenticatedDashboardRequestHandler(identity: HostDashboardIdentity,
+                                                                      bundlePath: string): Promise<RequestListener> {
   let origin: URL;
   try { origin = new URL(identity.publicOrigin); }
   catch { throw new RangeError("invalid dashboard origin"); }
@@ -104,7 +110,7 @@ export async function createHostAuthenticatedDashboardServer(identity: HostDashb
   const [bundle, stylesheet] = await Promise.all([
     readFile(bundlePath, "utf8"), readFile(new URL("./style.css", import.meta.url), "utf8"),
   ]);
-  return createServer((request, response) => { void (async () => {
+  return (request, response) => { void (async () => {
     try {
       const boundOrigin = origin.port === "0"
         ? new URL(`http://127.0.0.1:${request.socket.localPort}`) : origin;
@@ -123,7 +129,7 @@ export async function createHostAuthenticatedDashboardServer(identity: HostDashb
       return handle(request, response, gateway, bundle, stylesheet, boundOrigin.origin, identity.surface,
         identity.readSpeechGate, actor.role === "clinicAdmin", identity.greetingTextValidator);
     } catch { return json(response, 403, { ok: false, error: { kind: "forbidden" } }); }
-  })(); });
+  })(); };
 }
 
 async function handle(request: IncomingMessage, response: ServerResponse, gateway: CommandGateway,

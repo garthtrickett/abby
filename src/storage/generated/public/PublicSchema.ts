@@ -25,9 +25,12 @@ import type { default as ClinikoCatalogueApprovalsTable } from './ClinikoCatalog
 import type { default as StaffItemsTable } from './StaffItems.js';
 import type { default as ClinicKnowledgeEventsTable } from './ClinicKnowledgeEvents.js';
 import type { default as CallsTable } from './Calls.js';
+import type { default as AdminSignInChallengesTable } from './AdminSignInChallenges.js';
 import type { default as NumberRoutesTable } from './NumberRoutes.js';
+import type { default as AdminSignInRateLimitsTable } from './AdminSignInRateLimits.js';
 import type { default as ClinicWriteStopEventsTable } from './ClinicWriteStopEvents.js';
 import type { default as CallEventsTable } from './CallEvents.js';
+import type { default as AdminSignInSessionsTable } from './AdminSignInSessions.js';
 import type { default as PatientPhoneClinicStatusTable } from './PatientPhoneClinicStatus.js';
 import type { default as EffectOutboxTable } from './EffectOutbox.js';
 import type { default as ClinicVoiceSettingsTable } from './ClinicVoiceSettings.js';
@@ -83,11 +86,17 @@ export default interface PublicSchema {
 
   calls: CallsTable;
 
+  admin_sign_in_challenges: AdminSignInChallengesTable;
+
   number_routes: NumberRoutesTable;
+
+  admin_sign_in_rate_limits: AdminSignInRateLimitsTable;
 
   clinic_write_stop_events: ClinicWriteStopEventsTable;
 
   call_events: CallEventsTable;
+
+  admin_sign_in_sessions: AdminSignInSessionsTable;
 
   patient_phone_clinic_status: PatientPhoneClinicStatusTable;
 

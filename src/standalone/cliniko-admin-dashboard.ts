@@ -1,5 +1,6 @@
 import type { VoiceProfileRegistry } from "../core/voice-profile-registry.ts";
-import type { Server } from "node:http";
+import { createServer } from "node:http";
+import type { RequestListener, Server } from "node:http";
 import type { Kysely } from "kysely";
 import type { ClinikoCatalogueFailure } from "../cliniko/catalogue.ts";
 import type { ClinikoSetupRoute } from "../cliniko/catalogue-setup.ts";
@@ -16,7 +17,7 @@ import { checkStandaloneTextDatabase } from "../storage/standalone-privacy-prefl
 import type { StandalonePrivacyPreflightFailure } from "../storage/standalone-privacy-preflight.ts";
 import { createStandaloneClinikoSetup } from "./cliniko-setup-composition.ts";
 import { validKeypadGreetingText } from "./keypad-greeting.ts";
-import { createHostAuthenticatedDashboardServer } from "./dashboard/server.ts";
+import { createHostAuthenticatedDashboardRequestHandler } from "./dashboard/server.ts";
 import type { HostDashboardIdentity } from "./dashboard/server.ts";
 
 export type ClinikoAdminDashboardConfig = Readonly<{
@@ -43,6 +44,13 @@ export type ClinikoAdminDashboardFailure = ClinikoCatalogueFailure | StandaloneP
 /** The host owns identity and listener lifetime; this composition owns only clinic-safe configuration. */
 export async function createStandaloneClinikoAdminDashboard(config: ClinikoAdminDashboardConfig):
   Promise<Result<Server, ClinikoAdminDashboardFailure>> {
+  const handler = await createStandaloneClinikoAdminDashboardHandler(config);
+  return handler.ok ? ok(createServer(handler.value)) : handler;
+}
+
+/** Shares the real scoped composition with a standalone sign-in router, without altering server listeners. */
+export async function createStandaloneClinikoAdminDashboardHandler(config: ClinikoAdminDashboardConfig):
+  Promise<Result<RequestListener, ClinikoAdminDashboardFailure>> {
   if (config.sevenDayAvailabilityEnabled !== undefined &&
       typeof config.sevenDayAvailabilityEnabled !== "boolean") return err({ kind: "invalidConfig" });
   const scope = structuredClone(config.scope);
@@ -62,7 +70,7 @@ export async function createStandaloneClinikoAdminDashboard(config: ClinikoAdmin
     new ReferenceClinicHost([], []));
   const operationalDaily = new PostgresOperationalCounters(config.db);
   try {
-    const server = await createHostAuthenticatedDashboardServer({ publicOrigin: config.publicOrigin,
+    const handler = await createHostAuthenticatedDashboardRequestHandler({ publicOrigin: config.publicOrigin,
       surface: "availabilitySetup",
       greetingTextValidator: text => validKeypadGreetingText(text, config.sevenDayAvailabilityEnabled === true),
       resolveActor: config.resolveActor,
@@ -76,7 +84,7 @@ export async function createStandaloneClinikoAdminDashboard(config: ClinikoAdmin
           undefined, undefined, undefined, configured.value.setup, operationalDaily);
       },
     }, config.bundlePath);
-    return ok(server);
+    return ok(handler);
   } catch (error) {
     return err({ kind: error instanceof RangeError ? "invalidConfig" : "dashboardUnavailable" });
   }
