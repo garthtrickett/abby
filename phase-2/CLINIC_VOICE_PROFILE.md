@@ -41,6 +41,10 @@ The full objective includes authenticated controls, actual captured adapter beha
 | `CallSpeechBinding.bind` | Approved profile after intake | One pinned call binding; rejects changed metadata, closes malformed returned transcription and never creates a provider after shutdown |
 | `OpenAIVoiceProfileHost.resolve` / `create` | Clinic scope / captured profile and runtime | Catalogue and actual OpenAI adapters derived from the same versioned physical descriptor and scoped quality evidence |
 | `closeUnattachedCall` | Admitted receipt or pending event, session owner, time and close reason | Owned terminal call/pending state without provider construction; ownership failures remain typed |
+| `validVoiceArchiveHistory` / `voiceArchiveSnapshot` | Optional public archive rows | Validated contiguous targeted history / cloned raw preferences and audit; used by archive decoding and reference import |
+| `voiceImportHistory` | Validated source rows, import actor and UTC time | Preserved source chain plus one audited clear per configured field; used by reference and PostgreSQL imports |
+| `readVoiceCarryover` / `writeVoiceCarryover` | Generated Kysely database or transaction, tenant / clinic scope and source history | Validated public records / target rows inside the caller's import transaction; used by export and import |
+| `reconcileVoiceCarryover` | Import transaction, target clinic, source history, import actor/time | Exact expected history row count or rejection; used by target readiness before number publication |
 
 Registry lookup has a 1.5-second deadline and an abort signal. Throws, malformed/expanded replies, duplicate pairs, scope drift and invalid pinned metadata fail closed. Inputs and returned declaration values are cloned across the asynchronous lookup so later mutation cannot change the approved selection.
 
@@ -56,6 +60,16 @@ Migration `040_clinic_voice_settings` stores scalar public values/audit, enforce
 4. **Complete synthetic calls:** distinguish actual outgoing voices/adapter parameters and spoken locale presentation. Exercise each setting's default/set/change/clear, unsupported pair, stale quality/version/scope, role/Origin, old versus new calls, reply loss and a mid-resolution clinic-version change. Unset/partial/mismatched profiles must fail before transcription or patient reads/writes. No raw setting can authorize a clinical operation.
 5. **Carryover and cutover:** export one public history per clinic, preserve source events, and append independent audited target clears in locale-then-voice order. Import no executable binding or provider/quality authority. Reject occupied targets, unlisted source clinics, altered history and source writes after freeze. Reconcile the exact imported target state before number publication; no minimal standalone publication claim is implied by an embedded synthetic proof.
 6. **Scenario and release evidence:** allocate `E2E-258` / `E2E-259` for the two settings and register them only with truthful evidence status. Run full local regression, actual generation without drift, each mapped file alone and all mapped files in both parallel orders, with existing four Node/three browser workers and zero mapped skips. Real carrier and real provider quality remain separate gates.
+
+## Broad backend release and browser recovery — source `5edfe9e`
+
+The corrected tracked job `Abby clinic voice 5edfe9e complete local release and mapped parallel isolation` ran against `5edfe9e5dc0a08ca9df06972c6bc19fc70ed1742` and finished with exit 1 in **14 minutes 26 seconds**. Its log is `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790995011101.log`.
+
+Passed stages: migration up/down/up, both populated upgrade probes, actual Kanel generation without drift, **1,149 PostgreSQL checks with zero failures and one opt-in live-provider skip**, its separate ordered runner check with zero skips, typecheck, and **689 memory checks with zero failures and 37 PostgreSQL/live-only skips**, plus the separate memory ordered runner check with zero skips. The representative isolation probe passed **18 checks across six files alone and in both observed four-worker orders**.
+
+The broad browser stage passed **66 journeys and failed one**: the local owner's capability menu still asserted the old command allowlist. Its Node counterpart had been corrected; the browser assertion now independently requires all four new voice commands and retains its narrow allowlist and booking denial. `Abby local owner browser voice menu exact command recovery proof` passed both local-owner browser journeys with the existing two workers in **13 seconds**, including unusable keypad wording rejection. Command: `npm run build:cliniko-admin && npx playwright test test/browser/local-cliniko-admin.spec.ts && git diff --check`. Log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790996005765.log`.
+
+The recovery changes only this browser assertion and Markdown documentation. Runtime, scripts, generated types, Node tests and fixtures, manifest, dependencies and build configuration are byte-for-byte unchanged from the passing backend revision. The remaining release invocation will assert this relationship before rerunning typecheck, the complete browser command and the full mapped 52-Node-file / 10-browser-file sweep with its two coordinators. No complete release claim is made until those stages pass.
 
 ## Focused evidence — 2026-10-02
 

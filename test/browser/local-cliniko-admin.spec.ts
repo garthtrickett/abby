@@ -119,10 +119,14 @@ test("E2E-214 E2E-233 E2E-235 E2E-237 local owner sees aggregate speech and oper
     assert.equal(capabilities.status(), 200);
     const listed = await capabilities.json() as { value: { id: string }[] };
     assert.ok(listed.value.length > 0);
+    const voiceCommands = ["settings.voice.locale.change.v1", "settings.voice.voiceId.change.v1",
+      "settings.voice.options.v1", "settings.voice.audit.v1"];
+    assert.ok(voiceCommands.every(id => listed.value.some(item => item.id === id)));
     assert.ok(listed.value.every(item => item.id === "settings.read.v1" || item.id === "operations.daily.v1" ||
       item.id.startsWith("clinic.availability.") || item.id === "settings.routing.greeting.change.v1" ||
       item.id === "settings.routing.greeting.audit.v1" ||
-        item.id === "settings.automation.enabled.change.v1" || item.id === "settings.automation.audit.v1"));
+      item.id === "settings.automation.enabled.change.v1" || item.id === "settings.automation.audit.v1" ||
+      voiceCommands.includes(item.id)));
     assert.equal((await request.post(`${origin}/api/settings/booking-enabled`, { headers: {
       Authorization: basic, Origin: origin, "Content-Type": "application/json" },
     data: { expectedVersion: "0", enabled: true } })).status(), 404);
