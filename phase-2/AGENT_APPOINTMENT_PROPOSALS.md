@@ -2,7 +2,7 @@
 
 ## Status
 
-Local implementation closes a D2 gateway gap: cancellation, rescheduling and intake were supported by the reception core and voice composition, but had no schema-defined agent proposal commands. No new patient action is enabled in standalone Cliniko. Manifest 1.71 registers E2E-261. The complete local release on source `558b66aa9e1c79dbe4f0fd3158a71b7d8071031c` passed, including actual PostgreSQL, full browser and mapped parallel isolation; see the final evidence below. Publication remains pending.
+Local implementation closes a D2 gateway gap: cancellation, rescheduling and intake were supported by the reception core and voice composition, but had no schema-defined agent proposal commands. No new patient action is enabled in standalone Cliniko. Manifest 1.71 registers E2E-261. The complete local release on source `558b66aa9e1c79dbe4f0fd3158a71b7d8071031c` passed, including actual PostgreSQL, full browser and mapped parallel isolation; see the final evidence below. Published through normal merge PR #358 at `faff381eec34e4ce303b2bbda273885845a006a0`.
 
 ## Commands and authority
 

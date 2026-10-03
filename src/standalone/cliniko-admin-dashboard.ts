@@ -69,7 +69,7 @@ export async function createStandaloneClinikoAdminDashboardHandler(config: Clini
   if (!configured.ok) return configured;
   const reception = new TextReception(new MemoryLedger(), configured.value.policy,
     new ReferenceClinicHost([], []));
-  const operationalDaily = new PostgresOperationalCounters(config.db);
+  const operationalDaily = new PostgresOperationalCounters(config.db, config.now);
   try {
     const handler = await createHostAuthenticatedDashboardRequestHandler({ publicOrigin: config.publicOrigin,
       surface: "availabilitySetup",

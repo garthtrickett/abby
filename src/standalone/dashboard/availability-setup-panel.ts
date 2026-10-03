@@ -73,6 +73,8 @@ export class AvailabilitySetupPanel {
     const capabilities = await this.port.capabilities();
     this.permitted = capabilities.ok && capabilities.value.some(item => item.id === "clinic.availability.approval.change.v1");
     if (!this.permitted) return;
+    this.busy = true;
+    this.draw();
     const [settings, catalogue, approval, routeCheck] = await Promise.all([
       this.port.settings(), this.port.availabilityBusinesses(), this.port.availabilityApproval(),
       this.port.checkAvailabilityRoute(),
@@ -96,6 +98,7 @@ export class AvailabilitySetupPanel {
     if (!this.selection.businessId && this.catalogue?.businesses[0]) {
       this.selection = { ...this.selection, businessId: this.catalogue.businesses[0].businessId };
     }
+    this.busy = false;
     this.draw();
   }
 
@@ -244,11 +247,14 @@ export class AvailabilitySetupPanel {
     render(html`<section class="card" aria-labelledby="availability-setup-title">
       <h2 id="availability-setup-title">Read-only availability setup</h2>
       <p class="muted">Approve one clinic route and up to two ordered alternatives for provisional times. Booking, patient details and staff requests stay unavailable.</p>
+      ${this.busy && !this.approval ? html`<p role="status" aria-label="Availability setup loading">Loading clinic setup...</p>` : ""}
       <p class="status" aria-label="Cliniko connection status">${this.catalogue
-        ? `Cliniko catalogue checked at ${this.catalogue.observedAt}.` : "Cliniko catalogue could not be checked."}</p>
+        ? `Cliniko catalogue checked at ${this.catalogue.observedAt}.` : this.busy
+          ? "Cliniko catalogue is unverified." : "Cliniko catalogue could not be checked."}</p>
       <p class="status" aria-label="Availability route readiness">${routeReadiness}</p>
       <button type="button" ?disabled=${this.busy} @click=${() => { void this.recheckRoute(); }}>Recheck route</button>
-      <p class="status" aria-label="Availability approval status">${approved
+      <p class="status" aria-label="Availability approval status">${!this.approval
+        ? (this.busy ? "Checking current approval..." : "Current approval unavailable.") : approved
         ? `Stored approval: ${approved.selection.businessId} / ${approved.selection.practitionerId} / ${approved.selection.appointmentTypeId} · version ${this.approval?.version} · ${approved.alternatives.length} alternatives`
         : `No approved availability route · version ${this.approval?.version ?? "unknown"}`}</p>
       ${approved ? html`<p class="muted">Number ${approved.route.dialedNumber} · route ${approved.route.routeVersion} · clinic time zone ${approved.businessTimeZone} · approved by ${approved.approvedBy}</p>` : ""}
