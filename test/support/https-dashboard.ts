@@ -1,12 +1,12 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { request } from "node:http";
-import type { Server } from "node:http";
+import { request, createServer as createHttpServer } from "node:http";
+import type { RequestListener, Server } from "node:http";
 import { createServer } from "node:https";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
-import { createHostAuthenticatedDashboardServer } from "../../src/standalone/dashboard/server.ts";
+import { createHostAuthenticatedDashboardRequestHandler } from "../../src/standalone/dashboard/server.ts";
 import type { HostDashboardIdentity } from "../../src/standalone/dashboard/server.ts";
 import { listenLoopbackServer } from "./listen-loopback-server.ts";
 
@@ -19,10 +19,19 @@ async function close(server: Server | undefined): Promise<void> {
 /** Real local TLS into the authenticated dashboard, with a fresh synthetic certificate per case. */
 export async function withHttpsDashboard(identity: Omit<HostDashboardIdentity, "publicOrigin">,
                                          run: (origin: string) => Promise<void>): Promise<void> {
+  await withHttpsApplication(async origin => ({ handle: await createHostAuthenticatedDashboardRequestHandler(
+    { ...identity, publicOrigin: origin }, resolve("dist/dashboard/app.js")) }), run);
+}
+
+/** The application owns its handler and shutdown; the fixture owns TLS and both listeners. */
+export async function withHttpsApplication(create: (origin: string) => Promise<Readonly<{
+  handle: RequestListener; close?: () => Promise<void>;
+}>>, run: (origin: string) => Promise<void>): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), "abby-dashboard-tls-"));
   let proxy: Server | undefined;
   let backend: Server | undefined;
   let backendPort: number | undefined;
+  let application: Awaited<ReturnType<typeof create>> | undefined;
   try {
     const key = join(directory, "key.pem");
     const cert = join(directory, "cert.pem");
@@ -46,12 +55,15 @@ export async function withHttpsDashboard(identity: Omit<HostDashboardIdentity, "
     });
     const bound = await listenLoopbackServer(proxy);
     const origin = bound.replace("http:", "https:");
-    backend = await createHostAuthenticatedDashboardServer({ ...identity, publicOrigin: origin },
-      resolve("dist/dashboard/app.js"));
+    application = await create(origin);
+    backend = createHttpServer(application.handle);
     backendPort = Number(new URL(await listenLoopbackServer(backend)).port);
     await run(origin);
   } finally {
-    try { await Promise.all([close(proxy), close(backend)]); }
+    try {
+      await Promise.all([close(proxy), close(backend)]);
+      await application?.close?.();
+    }
     finally { await rm(directory, { recursive: true, force: true }); }
   }
 }

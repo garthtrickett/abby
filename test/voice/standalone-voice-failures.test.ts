@@ -1,9 +1,10 @@
 import { seedSyntheticVoicePreferences } from "../support/seed-synthetic-voice-preferences.ts";
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import test from "node:test";
+import { promisify } from "node:util";
 import { sql } from "kysely";
 import twilio from "twilio";
 import WebSocket from "ws";
@@ -40,6 +41,7 @@ const streamUrl = "wss://calls.example.test/twilio/media/";
 const noStaffNotice = "I can't send a staff request from this call. Please contact the clinic directly.";
 const weekInstruction = "Press 3 for possible times over the next week.";
 const root = new URL("../../", import.meta.url);
+const execFileAsync = promisify(execFile);
 
 async function bounded<T>(promise: Promise<T>, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -128,9 +130,8 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
           ...(secondAlternativeApproved ? [{ practitionerId: "66", appointmentTypeId: "77" }] : []),
         ] } : {}) });
     } finally { await db.destroy(); }
-    const enabled = spawnSync(process.execPath, ["scripts/set-voice-test-automation.ts", "enable"],
+    await execFileAsync(process.execPath, ["scripts/set-voice-test-automation.ts", "enable"],
       { cwd: root, env, encoding: "utf8", timeout: 15_000 });
-    assert.equal(enabled.status, 0, enabled.stderr);
     const launch = async (): Promise<void> => {
       child = spawn(process.execPath, ["test/support/start-synthetic-voice-runner.ts"],
         { cwd: root, env, stdio: ["ignore", "pipe", "pipe", "ipc"] });

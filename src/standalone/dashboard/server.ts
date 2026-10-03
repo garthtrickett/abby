@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import type { IncomingMessage, Server, ServerResponse } from "node:http";
+import type { IncomingMessage, RequestListener, Server, ServerResponse } from "node:http";
 import { CommandGateway } from "../../reference/command-gateway.ts";
 import type { GatewayCommand, HostActor } from "../../reference/command-gateway.ts";
 import { capabilityDescriptor } from "../../reference/capability-catalogue.ts";
@@ -10,7 +10,7 @@ import { validVoiceSettingValue } from "../../core/voice-profile.ts";
 import { publicSpeechGateStatus } from "../speech-gate-public-status.ts";
 
 const maxCommandBytes = 24_000;
-const document = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body><main><div id="app"></div><div id="availability-setup"></div><div id="greeting-setup"></div><div id="voice-setup"></div><div id="automation-setup"></div><div id="speech-gate"></div><div id="operational-daily"></div></main><script type="module" src="/app.js"></script></body></html>`;
+const document = (signOutPath?: string) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body>${signOutPath ? `<nav><a href="${signOutPath}">Sign out</a></nav>` : ""}<main><div id="app"></div><div id="availability-setup"></div><div id="greeting-setup"></div><div id="voice-setup"></div><div id="automation-setup"></div><div id="speech-gate"></div><div id="operational-daily"></div></main><script type="module" src="/app.js"></script></body></html>`;
 const setupCommands = new Set([
   "clinic.availability.businesses.list.v1", "clinic.availability.practitioners.list.v1",
   "clinic.availability.types.list.v1", "clinic.availability.selection.inspect.v1",
@@ -82,11 +82,19 @@ export type HostDashboardIdentity = Readonly<{
   /** Optional host-specific wording constraint applied before the generic policy command. */
   greetingTextValidator?: (text: string) => boolean;
   /** The host may challenge an absent identity; other authorization failures remain forbidden. */
-  unauthorized?: (response: ServerResponse) => void;
+  unauthorized?: (response: ServerResponse, request?: IncomingMessage) => void;
+  /** Optional host-owned internal sign-out page; session rules remain outside the domain gateway. */
+  signOutPath?: string;
 }>;
 
 export async function createHostAuthenticatedDashboardServer(identity: HostDashboardIdentity,
                                                               bundlePath: string): Promise<Server> {
+  return createServer(await createHostAuthenticatedDashboardRequestHandler(identity, bundlePath));
+}
+
+/** Allows a standalone identity router to compose sign-in and the authenticated dashboard on one listener. */
+export async function createHostAuthenticatedDashboardRequestHandler(identity: HostDashboardIdentity,
+                                                                      bundlePath: string): Promise<RequestListener> {
   let origin: URL;
   try { origin = new URL(identity.publicOrigin); }
   catch { throw new RangeError("invalid dashboard origin"); }
@@ -97,6 +105,8 @@ export async function createHostAuthenticatedDashboardServer(identity: HostDashb
       typeof identity.resolveActor !== "function" || typeof identity.gatewayFor !== "function" ||
       (identity.surface !== undefined && !["full", "availabilitySetup"].includes(identity.surface)) ||
       (identity.unauthorized !== undefined && typeof identity.unauthorized !== "function") ||
+      (identity.signOutPath !== undefined && (typeof identity.signOutPath !== "string" ||
+        !/^\/[A-Za-z0-9/_-]+$/.test(identity.signOutPath) || identity.signOutPath.startsWith("//"))) ||
       (identity.greetingTextValidator !== undefined && typeof identity.greetingTextValidator !== "function") ||
       (identity.readSpeechGate !== undefined && typeof identity.readSpeechGate !== "function")) {
     throw new RangeError("invalid dashboard identity configuration");
@@ -104,7 +114,7 @@ export async function createHostAuthenticatedDashboardServer(identity: HostDashb
   const [bundle, stylesheet] = await Promise.all([
     readFile(bundlePath, "utf8"), readFile(new URL("./style.css", import.meta.url), "utf8"),
   ]);
-  return createServer((request, response) => { void (async () => {
+  return (request, response) => { void (async () => {
     try {
       const boundOrigin = origin.port === "0"
         ? new URL(`http://127.0.0.1:${request.socket.localPort}`) : origin;
@@ -114,23 +124,23 @@ export async function createHostAuthenticatedDashboardServer(identity: HostDashb
       }
       const actor = await identity.resolveActor(request);
       if (!actor) return identity.unauthorized
-        ? identity.unauthorized(response)
+        ? identity.unauthorized(response, request)
         : json(response, 403, { ok: false, error: { kind: "forbidden" } });
       const gateway = await identity.gatewayFor(actor);
       if (!(gateway instanceof CommandGateway) || !gateway.matchesActor(actor)) {
         return json(response, 403, { ok: false, error: { kind: "forbidden" } });
       }
       return handle(request, response, gateway, bundle, stylesheet, boundOrigin.origin, identity.surface,
-        identity.readSpeechGate, actor.role === "clinicAdmin", identity.greetingTextValidator);
+        identity.readSpeechGate, actor.role === "clinicAdmin", identity.greetingTextValidator, identity.signOutPath);
     } catch { return json(response, 403, { ok: false, error: { kind: "forbidden" } }); }
-  })(); });
+  })(); };
 }
 
 async function handle(request: IncomingMessage, response: ServerResponse, gateway: CommandGateway,
                       bundle: string, stylesheet: string, authenticatedOrigin?: string,
                       surface: "full" | "availabilitySetup" = "full",
                       readSpeechGate?: () => Promise<unknown>, speechGateAdmin = false,
-                      greetingTextValidator?: (text: string) => boolean): Promise<void> {
+                      greetingTextValidator?: (text: string) => boolean, signOutPath?: string): Promise<void> {
   try {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (surface === "availabilitySetup" && !(
@@ -145,7 +155,7 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
         !acceptsCommandOrigin(request, authenticatedOrigin)) {
       return json(response, 403, { ok: false, error: { kind: "forbidden" } });
     }
-    if (request.method === "GET" && url.pathname === "/") return asset(response, "text/html; charset=utf-8", document);
+    if (request.method === "GET" && url.pathname === "/") return asset(response, "text/html; charset=utf-8", document(signOutPath));
     if (request.method === "GET" && url.pathname === "/app.js") return asset(response, "text/javascript; charset=utf-8", bundle);
     if (request.method === "GET" && url.pathname === "/style.css") return asset(response, "text/css; charset=utf-8", stylesheet);
     if (request.method === "GET" && url.pathname === "/api/speech-gate") {

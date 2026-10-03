@@ -40,6 +40,7 @@ import { up as up037, down as down037 } from "./migrations/037_clinic_intake_set
 import { up as up038, down as down038 } from "./migrations/038_staffed_destination_setting_audit.ts";
 import { up as up039, down as down039 } from "./migrations/039_clinic_notification_settings.ts";
 import { up as up040, down as down040 } from "./migrations/040_clinic_voice_settings.ts";
+import { up as up041, down as down041 } from "./migrations/041_admin_magic_link_identity.ts";
 
 function createMigrator<DB>(db: Kysely<DB>): Migrator {
   return new Migrator({
@@ -85,6 +86,7 @@ function createMigrator<DB>(db: Kysely<DB>): Migrator {
       "038_staffed_destination_setting_audit": { up: up038, down: down038 },
       "039_clinic_notification_settings": { up: up039, down: down039 },
       "040_clinic_voice_settings": { up: up040, down: down040 },
+      "041_admin_magic_link_identity": { up: up041, down: down041 },
     }) },
   });
 }
