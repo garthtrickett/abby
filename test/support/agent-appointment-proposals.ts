@@ -86,14 +86,14 @@ export function proposalHarness(scope: LocationScope, mode: "standalone" | "embe
     resultValue(await admin.submit({ kind: "settings.appointments.rescheduling.enabled.change.v1", expectedVersion: "1", enabled: true }));
     resultValue(await admin.submit({ kind: "settings.patients.firstTimeIntake.enabled.change.v1", expectedVersion: "0", enabled: true }));
   }
-  async function admit(operation: ProposalOperation, suffix = "first"): Promise<ProposalCommand> {
+  async function admit(operation: ProposalOperation, suffix = "first", activateSession = true): Promise<ProposalCommand> {
     const callId = `${scope.tenantId}-${operation}-${suffix}`, sessionId = `${callId}-session`;
     const captured = approvedSyntheticPolicy({ ...resultValue(await policy.read(scope)), greeting: {
       scope, version: "synthetic-greeting", ownerRef: "synthetic-owner", approved: true,
       approvedText: "Hello. How can I help you?" } });
     resultValue(await runtime.admit(callId, captured, { key: { accountRef: "synthetic-account", providerCallRef: callId },
       dialedNumber: "+6125550199", acceptedAt: proposalNow, deadline: "2026-10-03T10:00:30.000Z" }));
-    resultValue(await runtime.activate(callId, sessionId, proposalNow));
+    if (activateSession) resultValue(await runtime.activate(callId, sessionId, proposalNow));
     host.expected.set(callId, { sessionId, policyVersion: captured.policyVersion });
     const turn = { callId, sessionId, turnId: "proposal", text: proposalCanaries[3]!, quality: "clear" as const, at: proposalNow };
     return operation === "intake" ? { kind: "patients.intake.propose.v1", turn, draftRef: proposalCanaries[5]!, now: proposalNow }
