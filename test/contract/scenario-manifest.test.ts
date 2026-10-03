@@ -34,12 +34,12 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
   const manifest = JSON.parse(read("phase-0/SCENARIO_MANIFEST.json")) as Manifest;
   const design = read("TECHNICAL_DESIGN.md");
   const rows = [...design.matchAll(/^\| `(E2E-\d{3})` \| (.*?) \| (FR-\d{2}(?:, FR-\d{2})*) \|$/gm)];
-  assert.equal(manifest.version, "1.70");
+  assert.equal(manifest.version, "1.71");
   assert.equal(manifest.source, "TECHNICAL_DESIGN.md Section 11");
   assert.equal(manifest.fixtureIdPattern, "fixture-{lowercase scenario id}");
-  assert.equal(rows.length, 260);
+  assert.equal(rows.length, 261);
   assert.deepEqual(manifest.scenarios.map(scenario => scenario.id),
-    Array.from({ length: 260 }, (_, index) => `E2E-${String(index + 1).padStart(3, "0")}`));
+    Array.from({ length: 261 }, (_, index) => `E2E-${String(index + 1).padStart(3, "0")}`));
   const ids = new Set(manifest.scenarios.map(scenario => scenario.id));
   for (const [file, profile] of Object.entries(manifest.executionOverrides)) {
     assert.ok(profile === "browserCoordinator" || profile === "nodeCoordinator");
@@ -108,7 +108,7 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
       .some(evidence => evidence?.status === "passed" && evidence.testFiles.length > 0);
   };
   for (const [id, descriptor] of Object.entries(capabilityCatalogue)) {
-    if (descriptor.effect !== "policyChange") continue;
+    if (descriptor.effect !== "policyChange" && descriptor.effect !== "proposalOnly") continue;
     assert.ok(manifest.capabilityMappings[id]?.some(hasExecutableEvidence),
       `${id} must map to a passing executable scenario before publication`);
   }
