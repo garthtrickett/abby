@@ -21,7 +21,7 @@ import { callIdFor } from "../../src/voice/admission.ts";
 type Kind = "cancel" | "reschedule";
 type Scenario = "success" | "noProof" | "wrongPatient" | "ambiguous" |
   "changedTerms" | "changedTarget" | "changedProviderTarget" | "noStaff" |
-  "wrongCredential" | "lostResponse" | "moveConflict" | "heldPatch";
+  "wrongCredential" | "lostResponse" | "moveConflict" | "heldPatch" | "lateTargetChange";
 const now = "2026-10-01T10:00:00.000Z";
 const scope = { tenantId: "provider-change", clinicId: "clinic", locationId: "main" };
 const base = "https://api.au5.cliniko.com/v1";
@@ -100,6 +100,10 @@ async function fixture(kind: Kind, scenario: Scenario, writerBusinessId = "11",
       patchCount += 1;
       if (kind === "cancel") {
         assert.equal(url.pathname, "/v1/individual_appointments/91/cancel");
+        if (scenario === "lateTargetChange") {
+          appointmentStart = "2026-10-09T11:00:00+07:00";
+          appointmentEnd = "2026-10-09T11:30:00+07:00";
+        }
         cancelled = true;
         if (scenario === "lostResponse") throw new Error("response lost after cancellation");
         if (scenario === "heldPatch") return heldPatch;
@@ -243,6 +247,25 @@ async function fixture(kind: Kind, scenario: Scenario, writerBusinessId = "11",
     close: async () => { await call.disconnect(now); host.dispose(); },
   };
 }
+
+test("E2E-264 a cancellation target moved after the last read stays unconfirmed without replay", async () => {
+  const app = await fixture("cancel", "lateTargetChange");
+  try {
+    await app.begin();
+    await app.play((await app.speak()).delivery);
+    const uncertain = await app.speak();
+    assert.equal(app.patchCount, 1);
+    assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review.");
+    assert.equal(app.spoken.some(text => text.includes("is confirmed")), false);
+    assert.equal(Object.values((await app.state()).actions)[0]?.status, "uncertain");
+    await app.play(uncertain.delivery);
+    const settled = await app.drain();
+    assert.ok(settled.ok);
+    assert.equal(Object.values(settled.value.actions)[0]?.status, "uncertain");
+    assert.equal(app.patchCount, 1);
+    assert.equal(app.spoken.join(" ").includes("Private fixture note"), false);
+  } finally { await app.close(); }
+});
 
 for (const kind of ["cancel", "reschedule"] as const) {
   test(`E2E-007/066 provider-backed ${kind} call confirms only after exact Cliniko observation`, async () => {
