@@ -4,6 +4,13 @@ import type { ClinicNotificationArchiveRow } from "../portability/notification-h
 import { MemoryClinicNotificationSettingStore } from "./clinic-notification-setting-store.ts";
 import { captureNotificationPolicy, listNotificationOptions, unprovenNotificationRegistry } from "../core/notification-policy.ts";
 import type { NotificationAuditPage, NotificationCatalogue, NotificationKind, NotificationOwner, NotificationRegistry } from "../core/notification-policy.ts";
+import { MemoryClinicVoiceSettingStore } from "./clinic-voice-setting-store.ts";
+import { captureVoicePolicy } from "../core/voice-policy.ts";
+import { validVoiceLocationScope, voiceClinicScope } from "../core/voice-profile.ts";
+import type { VoiceCatalogue, VoiceSettingKind } from "../core/voice-profile.ts";
+import type { VoiceSettingAuditPage } from "../core/clinic-voice-setting.ts";
+import { listVoiceOptions, unprovenVoiceProfileRegistry } from "../core/voice-profile-registry.ts";
+import type { VoiceProfileRegistry } from "../core/voice-profile-registry.ts";
 import type { ClinicIntakeAuditEntry, ClinicIntakeAuditPage } from "../core/clinic-intake-setting.ts";
 import { captureStaffedDestination, listStaffedDestinations, resolveStaffedDestination, unprovenStaffedDestinationRegistry, validStaffedDestinationChange, validStaffedDestinationScope } from "../core/staffed-destination.ts";
 import type { StaffedDestinationAuditEntry, StaffedDestinationAuditPage, StaffedDestinationCatalogue, StaffedDestinationRegistry } from "../core/staffed-destination.ts";
@@ -86,18 +93,23 @@ export class MemoryPolicyStore implements PolicyStore {
   private readonly intake: MemoryClinicIntakeSettingStore;
   private readonly notifications: MemoryClinicNotificationSettingStore;
   private readonly notificationRegistry: NotificationRegistry;
+  private readonly voices: MemoryClinicVoiceSettingStore;
+  private readonly voiceRegistry: VoiceProfileRegistry;
   private readonly staffedDestinationRegistry: StaffedDestinationRegistry;
   private readonly staffedDestinationChanges = new Map<string, StaffedDestinationAuditEntry[]>();
 
   constructor(hostBookingMode: Extract<CapabilityMode, "execute" | "requestOnly"> = "execute", clock: () => string = () => new Date().toISOString(), readiness: AutomationReadiness = unprovenReadiness,
               hostPatientModes: CapabilityMode | PatientSettingModes = "requestOnly",
               staffedDestinationRegistry: StaffedDestinationRegistry = unprovenStaffedDestinationRegistry,
-              notificationRegistry: NotificationRegistry = unprovenNotificationRegistry) {
+              notificationRegistry: NotificationRegistry = unprovenNotificationRegistry,
+              voiceRegistry: VoiceProfileRegistry = unprovenVoiceProfileRegistry) {
     this.hostBookingMode = hostBookingMode;
     this.clock = clock;
     this.intake = new MemoryClinicIntakeSettingStore(clock);
     this.notifications = new MemoryClinicNotificationSettingStore(clock, notificationRegistry);
     this.notificationRegistry = notificationRegistry;
+    this.voices = new MemoryClinicVoiceSettingStore(voiceRegistry, clock);
+    this.voiceRegistry = voiceRegistry;
     this.readiness = readiness;
     this.hostCancellationMode = typeof hostPatientModes === "string" ? hostPatientModes : hostPatientModes.cancellation ?? "unavailable";
     this.hostReschedulingMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.rescheduling ?? "unavailable";
@@ -205,7 +217,26 @@ export class MemoryPolicyStore implements PolicyStore {
     if (!notifications.ok) return notifications;
     const routed = await captureStaffedDestination(this.effective(this.policies.get(scopeKey(scope)) ?? referenceDefaultPolicy(scope)),
       (bound, ref) => this.staffedDestinationRegistry.resolve(bound, ref));
-    return ok(await captureNotificationPolicy(routed, notifications.value, this.notificationRegistry));
+    const voice = await this.voices.read(voiceClinicScope(scope));
+    if (!voice.ok) return voice;
+    return captureVoicePolicy(await captureNotificationPolicy(routed, notifications.value, this.notificationRegistry),
+      voice.value, this.voiceRegistry);
+  }
+
+  async changeVoiceSetting(scope: LocationScope, expectedVersion: string, kind: VoiceSettingKind,
+    value: string | null, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+    if (!validVoiceLocationScope(scope)) return err({ kind: "invalidValue" });
+    const bound = structuredClone(scope);
+    const changed = await this.voices.change(voiceClinicScope(bound), expectedVersion, kind, value, actorRef);
+    return changed.ok ? this.read(bound) : changed;
+  }
+  async listVoiceOptions(scope: LocationScope): Promise<Result<VoiceCatalogue, PolicyFailure>> {
+    if (!validVoiceLocationScope(scope)) return err({ kind: "invalidValue" });
+    return listVoiceOptions(this.voiceRegistry, voiceClinicScope(scope));
+  }
+  async listVoiceChanges(scope: LocationScope, afterVersion?: number): Promise<Result<VoiceSettingAuditPage, PolicyFailure>> {
+    if (!validVoiceLocationScope(scope)) return err({ kind: "invalidValue" });
+    return this.voices.listChanges(voiceClinicScope(scope), afterVersion);
   }
 
   async changeNotificationOwner(scope: LocationScope, expectedVersion: string, kind: NotificationKind,

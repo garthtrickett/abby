@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test, { after } from "node:test";
 import { sql } from "kysely";
+import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
+import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
+import { defaultVoicePreferences } from "../../src/core/voice-profile.ts";
 import { ok } from "../../src/core/model.ts";
 import { captureVoiceProfile } from "../../src/core/voice-profile-registry.ts";
 import type { VoiceProfileRegistry } from "../../src/core/voice-profile-registry.ts";
@@ -9,7 +12,7 @@ import { PostgresClinicVoiceSettingStore } from "../../src/storage/postgres-clin
 import { PostgresClinicNotificationSettingStore } from "../../src/storage/postgres-clinic-notification-settings.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { migrate, migrateTo } from "../../src/storage/migrate.ts";
-import { voiceDeclaration, voiceRegistry, voiceScope, voiceSettingsContract, value } from "../support/voice-settings-contract.ts";
+import { voicePolicyMutationContract, voiceDeclaration, voiceRegistry, voiceScope, voiceSettingsContract, value } from "../support/voice-settings-contract.ts";
 
 assert.ok(process.env.DATABASE_URL, "DATABASE_URL is required");
 const db = connectPostgres(process.env.DATABASE_URL);
@@ -74,3 +77,44 @@ test("E2E-258 E2E-259 migration upgrades populated public history and refuses vo
     await sql`drop database ${sql.id(databaseName)}`.execute(db);
   }
 });
+
+for (const mode of ["standaloneMinimal", "unsafeReference"] as const) {
+  test(`E2E-258 E2E-259 ${mode} policy derives public speech authority from clinic preferences across locations`, async () => {
+    const scope = { ...voiceScope(), locationId: "first" }, second = { ...scope, locationId: "second" };
+    const defaults = (bound: typeof scope) => ({ ...referenceDefaultPolicy(bound),
+      voiceSettings: { version: "999", locale: "en-US", voiceId: "cedar" }, voiceProfile: {} as never });
+    const policy = new PostgresPolicyStore(db, defaults, undefined, undefined, false, mode, false,
+      undefined, undefined, undefined, voiceRegistry());
+    const initial = value(await policy.read(scope));
+    assert.deepEqual(initial.voiceSettings, defaultVoicePreferences()); assert.equal(initial.voiceProfile, undefined);
+    assert.ok((await policy.changeVoiceSetting(scope, "0", "locale", "en-AU", "voice-owner")).ok);
+    const admitted = value(await policy.changeVoiceSetting(second, "1", "voiceId", "coral", "voice-owner"));
+    assert.equal(admitted.voiceProfile?.settingsVersion, "2"); assert.equal(admitted.voiceProfile?.voiceId, "coral");
+    assert.equal(admitted.capabilities.book, "unavailable"); assert.equal(admitted.capabilities.cancel, "unavailable");
+    assert.equal(admitted.automationEnabled, false); assert.equal(admitted.policyVersion, "0");
+    assert.ok((await policy.changeBookingEnabled(scope, "0", true, "location-owner")).ok);
+    assert.equal(value(await policy.read(scope)).voiceSettings?.version, "2");
+    assert.equal(value(await policy.read(second)).policyVersion, "0");
+    assert.ok((await policy.changeVoiceSetting(scope, "2", "voiceId", "cedar", "voice-owner")).ok);
+    assert.deepEqual(await policy.changeVoiceSetting(second, "2", "locale", "en-US", "stale-owner"),
+      { ok: false, error: { kind: "versionConflict" } });
+    assert.equal(admitted.voiceProfile?.voiceId, "coral");
+    assert.equal(value(await policy.read(second)).voiceProfile?.voiceId, "cedar");
+    assert.ok((await policy.changeVoiceSetting(second, "3", "locale", null, "voice-owner")).ok);
+    assert.equal(value(await policy.read(scope)).voiceProfile, undefined);
+    assert.equal(value(await policy.listVoiceChanges(second)).entries.length, 4);
+    const rows = await sql<{ policy: Record<string, unknown> }>`select policy from clinic_settings where tenant_id = ${scope.tenantId}`.execute(db);
+    for (const row of rows.rows) for (const field of ["voiceSettings", "voiceProfile"]) assert.equal(Object.hasOwn(row.policy, field), false);
+    const other = { ...scope, clinicId: "other" };
+    assert.deepEqual(value(await policy.read(other)).voiceSettings, defaultVoicePreferences());
+    // A forged location row never substitutes for the separately versioned clinic authority.
+    await sql`update clinic_settings set policy = policy || ${JSON.stringify({ voiceSettings: admitted.voiceSettings, voiceProfile: admitted.voiceProfile })}::jsonb
+      where tenant_id = ${scope.tenantId} and clinic_id = ${scope.clinicId} and location_id = ${scope.locationId}`.execute(db);
+    assert.deepEqual(await policy.read(scope), { ok: false, error: { kind: "storageFailure" } });
+  });
+}
+
+for (const mode of ["standaloneMinimal", "unsafeReference"] as const) {
+  voicePolicyMutationContract(`PostgreSQL ${mode}`, registry => new PostgresPolicyStore(db, referenceDefaultPolicy,
+    undefined, undefined, false, mode, false, undefined, undefined, undefined, registry));
+}

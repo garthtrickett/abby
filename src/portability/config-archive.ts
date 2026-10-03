@@ -184,7 +184,8 @@ function urgentFields(row: Record<string, unknown>, sourceScope: LocationScope):
 
 function policy(value: unknown, sourceScope: LocationScope, version: number): CallPolicy {
   const row = object(value, "settings");
-  if (row.transferDestinationVersion !== undefined || row.notificationSettings !== undefined || row.notificationBindings !== undefined) {
+  if (row.transferDestinationVersion !== undefined || row.notificationSettings !== undefined || row.notificationBindings !== undefined ||
+      row.voiceSettings !== undefined || row.voiceProfile !== undefined) {
     throw new InvalidConfigArchive("settings");
   }
   if (row.shape === "standaloneMinimal") {

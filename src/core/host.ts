@@ -179,6 +179,11 @@ export interface OperatorAlertHost {
 
 export interface PolicyStore {
   read(scope: LocationScope): Promise<Result<CallPolicy, PolicyFailure>>;
+  listVoiceOptions(scope: LocationScope): Promise<Result<import("./voice-profile.ts").VoiceCatalogue, PolicyFailure>>;
+  changeVoiceSetting(scope: LocationScope, expectedVersion: string, kind: import("./voice-profile.ts").VoiceSettingKind,
+    value: string | null, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
+  listVoiceChanges(scope: LocationScope, afterVersion?: number):
+    Promise<Result<import("./clinic-voice-setting.ts").VoiceSettingAuditPage, PolicyFailure>>;
   listNotificationOptions(scope: LocationScope): Promise<Result<import("./notification-policy.ts").NotificationCatalogue, PolicyFailure>>;
   changeNotificationOwner(scope: LocationScope, expectedVersion: string,
     kind: import("./notification-policy.ts").NotificationKind, owner: import("./notification-policy.ts").NotificationOwner | null,

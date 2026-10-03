@@ -41,6 +41,11 @@ export function validVoiceScope(value: unknown): value is VoiceClinicScope {
   return !!scope && Object.keys(scope).sort().join(",") === "clinicId,tenantId" &&
     validVoiceRef(scope.tenantId) && validVoiceRef(scope.clinicId);
 }
+export function validVoiceLocationScope(value: unknown): value is LocationScope {
+  const scope = voiceRecord(value);
+  return !!scope && Object.keys(scope).sort().join(",") === "clinicId,locationId,tenantId" &&
+    validVoiceRef(scope.tenantId) && validVoiceRef(scope.clinicId) && validVoiceRef(scope.locationId);
+}
 export function sameVoiceScope(left: VoiceClinicScope, right: VoiceClinicScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId;
 }
@@ -77,6 +82,16 @@ export function validVoiceProfile(value: unknown, scope: VoiceClinicScope): valu
     validVoiceLocale(profile.locale) && validVoiceId(profile.voiceId) &&
     [profile.hostVersion, profile.transcriptionVersion, profile.synthesisVersion, profile.presentationVersion, profile.qualityVersion].every(validVoiceRef) &&
     typeof profile.configurationHash === "string" && /^[a-f0-9]{64}$/.test(profile.configurationHash);
+}
+/** Public settings and the optional captured binding must describe the same clinic revision. */
+export function validVoicePolicy(value: unknown, scope: LocationScope): boolean {
+  const policy = voiceRecord(value);
+  if (!validVoiceLocationScope(scope) || !policy || !validVoiceLocationScope(policy.scope) ||
+      !sameVoiceScope(policy.scope, scope) || policy.scope.locationId !== scope.locationId ||
+      !validVoicePreferences(policy.voiceSettings)) return false;
+  return policy.voiceProfile === undefined || validVoiceProfile(policy.voiceProfile, voiceClinicScope(scope)) &&
+    policy.voiceProfile.settingsVersion === policy.voiceSettings.version &&
+    policy.voiceProfile.locale === policy.voiceSettings.locale && policy.voiceProfile.voiceId === policy.voiceSettings.voiceId;
 }
 function validChoices(value: unknown, validId: (id: unknown) => boolean): value is readonly VoiceChoice[] {
   return Array.isArray(value) && value.length <= 64 && new Set(value.map(row => voiceRecord(row)?.id)).size === value.length &&

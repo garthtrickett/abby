@@ -1,3 +1,4 @@
+import type { PolicyStore } from "../../src/core/host.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
@@ -119,5 +120,28 @@ export function voiceSettingsContract(label: string, create: (registry: VoicePro
     (first.entries[0] as { actorRef: string }).actorRef = "forged";
     assert.equal(value(await store.listChanges(scope)).entries[0]?.actorRef, "owner");
     assert.deepEqual(await store.listChanges(scope, -1), { ok: false, error: { kind: "invalidValue" } });
+  });
+}
+
+export function voicePolicyMutationContract(label: string, create: (registry: VoiceProfileRegistry) => PolicyStore): void {
+  test(`E2E-258 E2E-259 ${label} policy change retains the authorized location across asynchronous host preflight`, async () => {
+    const scope = { ...voiceScope(), locationId: "first" }, original = structuredClone(scope);
+    let release: () => void = () => { throw new Error("preflight not entered"); };
+    let entered: () => void = () => {};
+    const seen = new Promise<void>(resolve => { entered = resolve; });
+    const registry: VoiceProfileRegistry = { resolve: async bound => {
+      await new Promise<void>(resolve => { release = resolve; entered(); });
+      return ok(voiceDeclaration(bound));
+    } };
+    const policy = create(registry);
+    const pending = policy.changeVoiceSetting(scope, "0", "locale", "en-AU", "owner");
+    await Promise.race([seen, pending.then(() => { throw new Error("edit ended before host preflight"); })]);
+    scope.tenantId += "-mutated"; scope.clinicId = "foreign"; scope.locationId = "other"; release();
+    const saved = value(await pending);
+    assert.deepEqual(saved.scope, original);
+    assert.deepEqual(saved.voiceSettings, { version: "1", locale: "en-AU", voiceId: null });
+    assert.deepEqual(value(await policy.read(original)).voiceSettings, saved.voiceSettings);
+    assert.deepEqual(value(await policy.read(scope)).voiceSettings, defaultVoicePreferences());
+    assert.deepEqual(await policy.listVoiceChanges(scope), ok({ entries: [] }));
   });
 }

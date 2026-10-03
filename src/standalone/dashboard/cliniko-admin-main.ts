@@ -1,3 +1,4 @@
+import { VoiceSetupPanel } from "./voice-setup-panel.ts";
 import { AutomationSetupPanel } from "./automation-setup-panel.ts";
 import { FetchDashboardPort } from "./api.ts";
 import { AvailabilitySetupPanel } from "./availability-setup-panel.ts";
@@ -21,3 +22,7 @@ void new OperationalDailyPanel(operationalRoot).load();
 const automationRoot = document.getElementById("automation-setup");
 if (!automationRoot) throw new Error("automation setup root missing");
 void new AutomationSetupPanel(automationRoot, new FetchDashboardPort()).load();
+
+const voiceRoot = document.getElementById("voice-setup");
+if (!voiceRoot) throw new Error("voice setup root missing");
+void new VoiceSetupPanel(voiceRoot, new FetchDashboardPort()).load();

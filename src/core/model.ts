@@ -122,6 +122,10 @@ export type CallPolicy = Readonly<{
   /** Current scoped host declarations captured at admission; absent means no managed delivery. */
   notificationBindings?: Readonly<Partial<Record<import("./notification-policy.ts").NotificationKind,
     import("./notification-policy.ts").NotificationBinding>>>;
+  /** Shared clinic preferences are public configuration, never speech authority. */
+  voiceSettings?: import("./voice-profile.ts").VoicePreferences;
+  /** Host-approved profile captured for this call; absent means voice is not ready. */
+  voiceProfile?: import("./voice-profile.ts").VoiceProfile;
   /** Absent on legacy snapshots; the effective default is staffRequest. */
   afterHoursMode?: AfterHoursMode;
   afterHoursInfo?: ApprovedAfterHoursInfo;

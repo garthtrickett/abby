@@ -1,3 +1,6 @@
+import { validVoiceCatalogue, validVoicePolicy, validVoiceVersion, validVoiceSettingKind, validVoiceSettingValue, validVoiceRef } from "../../core/voice-profile.ts";
+import type { VoiceCatalogue, VoiceSettingKind } from "../../core/voice-profile.ts";
+import type { VoiceSettingAuditPage } from "../../core/clinic-voice-setting.ts";
 import type { ClinicIntakeAuditPage } from "../../core/clinic-intake-setting.ts";
 import { validNotificationReviewRow } from "../../reference/notification-review-shape.ts";
 import { NOTIFICATION_DELIVERY_KEYS, sumNotificationDeliveryCounts, validNotificationDeliveryCounts } from "../../reference/notification-delivery-counts.ts";
@@ -30,6 +33,9 @@ export type DashboardFailure = GatewayFailure | Readonly<{ kind: "transportUnava
 export type DashboardPort = Readonly<{
   capabilities(): Promise<Result<readonly CapabilityDescriptor[], DashboardFailure>>;
   settings(): Promise<Result<CallPolicy, DashboardFailure>>;
+  voiceOptions(): Promise<Result<VoiceCatalogue, DashboardFailure>>;
+  voiceAudit(afterVersion?: number): Promise<Result<VoiceSettingAuditPage, DashboardFailure>>;
+  changeVoiceSetting(expectedVersion: string, kind: VoiceSettingKind, value: string | null): Promise<Result<CallPolicy, DashboardFailure>>;
   notificationOptions(): Promise<Result<NotificationCatalogue, DashboardFailure>>;
   notificationAudit(afterVersion?: number): Promise<Result<NotificationAuditPage, DashboardFailure>>;
   changeNotificationOwner(expectedVersion: string, notificationKind: NotificationKind, owner: NotificationOwner | null): Promise<Result<CallPolicy, DashboardFailure>>;
@@ -136,6 +142,8 @@ function policy(value: unknown): Result<CallPolicy, DashboardFailure> {
   const reply = record(value);
   const current = record(reply?.policy);
   return reply?.kind === "settings" && current && typeof current.policyVersion === "string" && typeof current.automationVersion === "string" && typeof current.automationEnabled === "boolean" && typeof current.bookingEnabled === "boolean" && record(current.capabilities)
+    && (current.voiceSettings === undefined ? current.voiceProfile === undefined
+      : validVoicePolicy(current, current.scope as CallPolicy["scope"]))
     && (current.cancellationEnabled === undefined || typeof current.cancellationEnabled === "boolean")
     && (current.reschedulingEnabled === undefined || typeof current.reschedulingEnabled === "boolean")
     && (current.transferDestinationRef === undefined || validStaffedDestinationRef(current.transferDestinationRef))
@@ -193,6 +201,39 @@ export class FetchDashboardPort implements DashboardPort {
   async changeStaffedDestination(expectedVersion: string, destinationRef: string | null): Promise<Result<CallPolicy, DashboardFailure>> {
     const result = await request("/api/settings/staffed-destination", { method: "POST",
       headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion, destinationRef }) });
+    return result.ok ? policy(result.value) : result;
+  }
+
+  async voiceOptions(): Promise<Result<VoiceCatalogue, DashboardFailure>> {
+    const result = await request("/api/settings/voice-options");
+    if (!result.ok) return result;
+    if (!matchesSchema(capabilityDescriptor("settings.voice.options.v1").resultSchema,
+      { ok: true, value: result.value })) return err({ kind: "malformed" });
+    const reply = result.value as Extract<GatewayReply, { kind: "voiceOptions" }>;
+    return validVoiceCatalogue(reply.catalogue, reply.catalogue.scope) ? ok(reply.catalogue) : err({ kind: "malformed" });
+  }
+  async voiceAudit(afterVersion?: number): Promise<Result<VoiceSettingAuditPage, DashboardFailure>> {
+    const result = await request(`/api/settings/voice-audit${afterVersion === undefined ? "" : `?after=${afterVersion}`}`);
+    if (!result.ok) return result;
+    if (!matchesSchema(capabilityDescriptor("settings.voice.audit.v1").resultSchema,
+      { ok: true, value: result.value })) return err({ kind: "malformed" });
+    const reply = result.value as Extract<GatewayReply, { kind: "voiceSettingAudit" }>;
+    let previous = afterVersion ?? 0;
+    for (const entry of reply.page.entries) {
+      if (!validVoiceVersion(entry.version) || Number(entry.version) <= previous || !validVoiceSettingKind(entry.kind) ||
+          !validVoiceSettingValue(entry.kind, entry.value) || !validVoiceSettingValue(entry.kind, entry.previousValue) ||
+          !validVoiceRef(entry.actorRef) || !Number.isFinite(Date.parse(entry.changedAt)) ||
+          new Date(entry.changedAt).toISOString() !== entry.changedAt) return err({ kind: "malformed" });
+      previous = Number(entry.version);
+    }
+    if (reply.page.entries.length > 50 || reply.page.nextAfterVersion !== undefined &&
+        (reply.page.entries.length !== 50 || reply.page.nextAfterVersion !== previous)) return err({ kind: "malformed" });
+    return ok(reply.page);
+  }
+  async changeVoiceSetting(expectedVersion: string, kind: VoiceSettingKind, value: string | null): Promise<Result<CallPolicy, DashboardFailure>> {
+    const route = kind === "locale" ? "voice-locale" : "voice-id";
+    const result = await request(`/api/settings/${route}`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expectedVersion, [kind]: value }) });
     return result.ok ? policy(result.value) : result;
   }
 
