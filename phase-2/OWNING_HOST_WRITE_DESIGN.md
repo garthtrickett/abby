@@ -10,6 +10,8 @@ This solves the appointment collision and outdated-target mechanisms **when the 
 
 Cliniko's reviewed public appointment writes and unavailable-block writes do not establish conditional updates or atomic reservation consumption. Its online-booking help describes unavailable blocks as hiding offered times; that does not establish that all direct API/UI mutations reject overlap. [Official appointment API](https://github.com/redguava/cliniko-api/blob/main/sections/individual_appointments.md), [official help](https://help.cliniko.com/en/articles/8412082-help-my-appointments-aren-t-showing-up-in-online-bookings).
 
+The appointment Markdown reference is in Cliniko's archived API repository; the current contract review used the dated official OpenAPI snapshot recorded in the activation contract. [A maintainer's 2015 response](https://github.com/redguava/cliniko-api/issues/108#issuecomment-157761727) explains why that API allowed overlaps and offered conflict inspection afterward. This historical evidence is not a current atomic-write guarantee or proof that no supported alternative exists; standalone still needs the current provider answers.
+
 ## 2. Invariants in the owning diary
 
 | Invariant | Mechanism in the proof | Integration requirement |

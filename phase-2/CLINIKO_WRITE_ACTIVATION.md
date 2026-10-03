@@ -98,6 +98,8 @@ The [official OpenAPI description](https://docs.api.cliniko.com/_bundle/openapi.
 
 A bounded demo test can falsify a candidate guarantee. A successful finite test alone cannot establish coverage of every editor or a provider guarantee. Promotion requires the owning provider/host's documented contract and adversarial evidence for the named deployment. No new live Cliniko mutation was run for this contract.
 
+**Historical provider explanation, verified 2026-10-03:** in [issue 108, maintainer response](https://github.com/redguava/cliniko-api/issues/108#issuecomment-157761727), Cliniko repository member JohnColvin wrote on 2015-11-18 that overlapping bookings were deliberately permitted and directed integrators to post-create conflict inspection. This corroborates the unsafe-overlap mechanism, but the archived repository and old response are not a current guarantee that no protected endpoint can exist. C-LIVE-07/27 provide the separate demo observations; C-DOC-11 records the current published contract review. A supported atomic alternative still requires a current provider contract, not an assumption that every product using Cliniko must accept this race.
+
 ## 9. Proof, release and next implementation
 
 E2E-264 uses the actual TypeScript provider edges with an adversarial synthetic provider; its six deterministic counterexamples distinguish instance-local fencing from provider/host guarantees for all five write kinds. The cancellation case also crosses the existing embedded media/voice, confirmation, effect and reconciliation interfaces. These are local synthetic evidence, not real Cliniko race observations or carrier proof. Full-call evidence remains planned.
