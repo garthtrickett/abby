@@ -2,7 +2,7 @@
 
 ## Status
 
-In implementation on `codex/abby-clinic-voice-profile`. The core preferences and profile contract now compose into both policy stores, the scoped agent gateway and authenticated HTTP routes. One lit-html control serves the full dashboard and supervised standalone admin. Focused policy, HTTP and browser proof has passed. Admission now requires a captured profile before provider construction. Complete transport-neutral synthetic calls check actual OpenAI adapter requests and spoken locale formatting. Signed standalone PostgreSQL server and runnable entrypoint regression now have focused proof. Public carryover/cutover and embedded PostgreSQL policy/ledger calls now have focused proof. The full release gate remains open; no live speech-quality or carrier claim is made here.
+Local release verified on `8e9ad1413281d4ead449751f5ae91136d80771d5`, branch `codex/abby-clinic-voice-profile`. The core preferences and profile contract compose into both policy stores, the scoped agent gateway and authenticated HTTP routes. One lit-html control serves the full dashboard and supervised standalone admin. Admission requires a captured profile before provider construction. Complete synthetic calls check actual OpenAI adapter requests and spoken locale formatting through standalone and embedded PostgreSQL compositions. Public carryover/cutover, full local regression and all mapped parallel setting sweeps passed. No live speech-quality, production identity or carrier claim is made here.
 
 Existing production composition defaults to an unproven voice registry. Merely displaying the standalone control does not advertise a provider-backed pair. Browser fixtures use an explicit synthetic registry; they are not production Cliniko/speech evidence.
 
@@ -70,6 +70,23 @@ Passed stages: migration up/down/up, both populated upgrade probes, actual Kanel
 The broad browser stage passed **66 journeys and failed one**: the local owner's capability menu still asserted the old command allowlist. Its Node counterpart had been corrected; the browser assertion now independently requires all four new voice commands and retains its narrow allowlist and booking denial. `Abby local owner browser voice menu exact command recovery proof` passed both local-owner browser journeys with the existing two workers in **13 seconds**, including unusable keypad wording rejection. Command: `npm run build:cliniko-admin && npx playwright test test/browser/local-cliniko-admin.spec.ts && git diff --check`. Log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790996005765.log`.
 
 The recovery changes only this browser assertion and Markdown documentation. Runtime, scripts, generated types, Node tests and fixtures, manifest, dependencies and build configuration are byte-for-byte unchanged from the passing backend revision. The remaining release invocation will assert this relationship before rerunning typecheck, the complete browser command and the full mapped 52-Node-file / 10-browser-file sweep with its two coordinators. No complete release claim is made until those stages pass.
+
+## Final local release — 2026-10-03
+
+`Abby clinic voice 8e9ad14 browser and mapped parallel release completion` completed with **exit 0 in 47m58s**. Its log is `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790996157090.log`. Before running, it verified the exact `8e9ad14` HEAD and compared the entire tracked tree with `5edfe9e`, allowing only the corrected `test/browser/local-cliniko-admin.spec.ts` and this Markdown contract to differ. It rechecked HEAD and runtime/scripts/tests/manifest cleanliness at completion. Subsequent release evidence edits are Markdown only.
+
+| Release component | Passing evidence |
+| --- | --- |
+| Schema and backend, source `5edfe9e` | Migration up/down/up, both populated upgrades, actual Kanel/kanel-kysely generation with no drift; 1,149 PostgreSQL checks, zero failures and one opt-in live-only skip; 689 memory checks, zero failures and 37 PostgreSQL/live-only skips; separate ordered Node checks passed |
+| Representative settings, source `5edfe9e` | 18 checks across six files alone and in both observed four-worker orders |
+| Final typecheck, source `8e9ad14` | Passed |
+| Full browser, source `8e9ad14` | 67 passed; separate ordered browser check passed; zero failures/skips |
+| All mapped Node files, source `8e9ad14` | 469 checks across 52 files alone and in both recorded four-worker orders; zero failures/skips |
+| All mapped browser files, source `8e9ad14` | 54 journeys across 10 files alone and in both recorded three-worker orders; zero failures/skips; actual start/finish records show three simultaneous cases |
+| Mapped coordinators | Browser and Node coordinators passed separately, one check each, with zero skips |
+| Source/diff verification | Byte comparison before the final run and source/HEAD/diff checks at completion passed |
+
+The earlier failed broad invocations remain recorded above; their complete commands are not claimed to have succeeded. Their passing unchanged backend stages plus the verified browser correction and final mapped run establish this local release. Broad command skips do not count as mapped, live-provider or carrier evidence. The [maintainability review](CLINIC_VOICE_PROFILE_REVIEW.md) found no substantive remaining structural issue. The owner's existing authorization permits merging locally verified work without waiting for GitHub CI; no repository rule or test gate is weakened.
 
 ## Focused evidence — 2026-10-02
 

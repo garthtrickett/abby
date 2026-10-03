@@ -388,3 +388,18 @@ All mapped runs had **zero failures and zero skips**. Both ordered-runner coordi
 The same source passed `npm test` (typecheck, 662 cases, 34 PostgreSQL-only skips and one opt-in live Cliniko skip), actual schema migration/Kanel generation with no drift, `ABBY_LEDGER=postgres npm run test:postgres` (1,097 cases, one opt-in live Cliniko skip), `npm run test:browser` (59 journeys) and `git diff --check`. Full-command ordered-runner checks also passed.
 
 Notification coverage includes both captured owners and all appointment actions, authenticated edits and lost-reply recovery, native suppression proof, send/observe recovery without replay, public history import/reset/freeze and embedded cutover. Redacted review and paginated outcome counts reject contradictory/private fields and keep appointment truth independent of delivery. Strict standalone Cliniko remains without a sender or notification endpoints. These synthetic results do not prove real provider delivery, a real carrier call, minimal standalone number publication, production login integration or clinic activation.
+
+## Clinic locale and voice — 2026-10-03
+
+Implementation source `8e9ad1413281d4ead449751f5ae91136d80771d5`; manifest 1.69 registers `SET-011/012` and `E2E-258/259`. The tracked job `Abby clinic voice 8e9ad14 browser and mapped parallel release completion` completed in **47m58s with exit 0**. Log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1790996157090.log`.
+
+| Mapped target | Files | Alone | Parallel forward | Parallel reverse |
+| --- | --- | --- | --- | --- |
+| Node | 52 | 469 pass | 469 pass, four workers | 469 pass, four workers |
+| Browser | 10 | 54 pass | 54 pass, three workers | 54 pass, three workers |
+
+Every mapped run has zero failures/skips. Node and browser coordinators passed separately, one check each. The probe verifies recorded dispatch orders and actual overlap; browser start/finish records reach three active cases. Command: `ABBY_LEDGER=postgres npm run test:settings-isolation:postgres`. Final typecheck, full browser (67 pass and its separate ordered check) and source/HEAD/diff verification also passed.
+
+The run first compared all tracked inputs with `5edfe9e5dc0a08ca9df06972c6bc19fc70ed1742`, permitting only the corrected local-owner browser assertion and feature-contract Markdown to differ. That unchanged backend source passed migration up/down/up, populated upgrades, actual Kanel generation without drift, 1,149 PostgreSQL checks (one opt-in live-only skip), 689 memory checks (37 PostgreSQL/live-only skips), both ordered Node checks and the representative 18-case/six-file isolation sweep. Its earlier broad command failed at the old browser menu assertion; the [feature contract](../phase-2/CLINIC_VOICE_PROFILE.md#final-local-release--2026-10-03) preserves that failure and correction. No failed invocation is described as a successful complete command. Later evidence edits are Markdown only.
+
+Coverage includes public shared-clinic CAS/audit, actual captured adapters and locale presentation, active versus future calls, signed standalone PostgreSQL privacy, embedded PostgreSQL policy/ledger calls, public acquisition history and independent target clears, freeze/occupation/tamper denial and exact embedded cutover reconciliation. These checks establish local synthetic release evidence. Provider quality approval, production login, actual telephone delivery, clinic activation and minimal standalone number publication remain separate gates.

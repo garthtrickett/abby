@@ -24,6 +24,10 @@ The actual supervised `admin:local` runner accepts `ABBY_ADMIN_PORT=0` only with
 
 The supervised admin bundle also exposes clinic-wide automation state, enable/disable and paginated audit through the restricted automation command/read routes (`E2E-248`). Local enable remains blocked by unproven readiness. Disabling applies to new calls; it leaves an admitted call's captured policy intact and grants no booking or patient-specific staff capability.
 
+## Clinic locale and voice
+
+The full dashboard and supervised Cliniko admin share one lit-html locale/voice control (`SET-011/012`, `E2E-258/259`). These are public clinic-wide preferences with one CAS version and targeted audit. Both default to unset. Compatible choices, separate saves/clears, paginated history, denied roles/Origins and uncertain-save rereads have browser proof. A failed reread locks edits until reload. New calls require an approved captured physical speech profile; active calls retain their earlier profile. The control cannot grant automation or patient permissions. Production defaults remain unproven. The local release passed 67 browser journeys and the mapped 54-journey sweep alone and in both three-worker orders; see [the feature contract](../phase-2/CLINIC_VOICE_PROFILE.md) for the full evidence and separate live gates.
+
 ## Cancellation controls
 
 The reference/embedded dashboard exposes cancellation as a separate versioned panel and audit (`E2E-252`). The saved Boolean and effective host capability are shown separately. Only clinic admins may edit or read its history; scope and actor come from the authenticated gateway. Invalid, stale and foreign-origin requests cannot mutate it. If a write outcome and its subsequent reread are both unavailable, controls stay disabled until a reload recovers current state. Admitted calls retain their policy; new calls use the edited value. The supervised standalone Cliniko listener does not expose this patient-action setting, and strict standalone cancellation remains unavailable.
