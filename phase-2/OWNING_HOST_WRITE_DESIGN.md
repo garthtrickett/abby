@@ -55,7 +55,16 @@ The revision trigger prevents a normal native edit from preserving an old appoin
 
 E2E-265 runs [the PostgreSQL contract test](../../test/storage/owning-host-write-contract.test.ts) through three distinct database backends. It holds the first transaction open, verifies the competing backend is blocked using `pg_blocking_pids`, then commits and inspects results independently. Cases cover partial overlap across businesses, adjacency, practitioner/tenant separation, equivalent UTC instants, invalid intervals, direct native insert refusal, identity removal/rename refusal, stale cancellation after a direct native edit, cancellation-versus-move, competing moves and booking-versus-move preserving the losing source, wrong target bindings, exact duplicate receipt binding, rollback, and observation-only receipt recovery.
 
-The receipt recovery case intentionally discards the caller result. It does **not** claim a TCP reset during commit, actual process restart, whole-call adapter integration, buyer authorization, staff delivery or carrier proof. The host SQL fixture is not wired into a runnable patient-facing composition. Final commands, revision, results and parallel-order evidence are recorded after verification.
+The receipt recovery case intentionally discards the caller result. It does **not** claim a TCP reset during commit, actual process restart, whole-call adapter integration, buyer authorization, staff delivery or carrier proof. The host SQL fixture is not wired into a runnable patient-facing composition.
+
+Final local validation on registered executable source `ae96e7d` passed:
+
+- `npm run build:availability-console`, `npm run typecheck` and `git diff --check`.
+- `node --test --test-concurrency=4 test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts test/cliniko/write-activation.test.ts`: eight passed, zero failures/skips.
+- `bash scripts/with-postgres.sh node --test test/storage/owning-host-write-contract.test.ts`: 14 passed (13 scenarios and the parent), zero failures/skips.
+- In each of two fresh disposable PostgreSQL instances, export `ABBY_LEDGER=postgres`, run `npm run db:migrate`, then `node scripts/ordered-node-e2e.mjs` with four-worker concurrency. The requested file order was `test/storage/owning-host-write-contract.test.ts`, `test/composition/cross-mode-agent-conformance.test.ts`, `test/composition/cross-mode-appointment-proposals.test.ts`, `test/storage/standalone-privacy-journey.test.ts`, and its reverse. The coordinator verified actual dispatch/completion, with 22 passed and zero failures/skips in each order. Existing strict-standalone database/backup privacy and disabled-write checks passed alongside the host proof.
+
+Logs: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791019378313.log` (typecheck/registered/isolated), `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791019378569.log` (forward) and `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791019379074.log` (reverse). Subsequent edits document the result and provider questions only; executable source is unchanged.
 
 ## 6. Activation consequence
 
