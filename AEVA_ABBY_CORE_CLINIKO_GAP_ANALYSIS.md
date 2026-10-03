@@ -1,5 +1,7 @@
 # Aeva → Abby gap analysis: receptionist core and Cliniko
 
+**Write-specific follow-up, 2026-10-03:** [The current reference write trace](docs/flows/cliniko-reference-write-trace.md) inspects committed `dev` at `60b3ba753ff5299d65262bb69676a5f4f6c1969b`, including direct and adapter rescheduling, retries, local ledgers and compensation actors. It supplements this document's older snapshot without advancing its other feature or production claims. The practical integration does not demonstrate atomic overlap exclusion, conditional cancellation or recovery under Abby's minimal patient-storage rule.
+
 **Snapshot:** 2026-09-30. **Purpose:** identify what Abby must prove or build to cover the useful Aeva receptionist and Cliniko behavior, while preserving Abby's standalone privacy rule and its ability to run inside a buyer's monolith.
 
 ## Evidence boundary
