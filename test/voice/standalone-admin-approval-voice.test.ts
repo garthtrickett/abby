@@ -1,3 +1,4 @@
+import { seedSyntheticVoicePreferences } from "../support/seed-synthetic-voice-preferences.ts";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -104,6 +105,7 @@ test("E2E-212 E2E-246 E2E-248 E2E-249 durable admin settings pin a signed call a
       const setupDb = connectPostgres(target.toString());
       try {
         await migrate(setupDb);
+        await seedSyntheticVoicePreferences(setupDb, { tenantId: scope.tenantId, clinicId: scope.clinicId });
         const policy = new PostgresPolicyStore(setupDb, referenceDefaultPolicy, "unavailable",
           async () => ok(true), false, "standaloneMinimal");
         assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "synthetic-operator")).ok);

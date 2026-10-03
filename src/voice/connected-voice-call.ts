@@ -1,15 +1,17 @@
+import { CallSpeechBinding } from "./call-speech-binding.ts";
+import type { SpeechAdapterFactory } from "./call-speech-binding.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
 import type { CallState, LocationScope, PendingLocationCall, Result } from "../core/model.ts";
 import { callIdFor } from "./admission.ts";
 import type { AuthenticatedInboundCall } from "./admission.ts";
 import { MediaTurnController } from "./media-turn-controller.ts";
-import type { MediaFailure, MediaFrame, MediaTurnOptions, TranscriptionPort } from "./media-turn-controller.ts";
+import type { MediaFailure, MediaFrame, MediaTurnOptions } from "./media-turn-controller.ts";
 import { SharedNumberIntakeService } from "./shared-number-intake.ts";
 import { SharedNumberVoiceCall } from "./shared-number-voice-call.ts";
 import type { FullVoiceSessionFactory, SharedVoiceFailure, SharedVoiceStart, SharedVoiceTurn } from "./shared-number-voice-call.ts";
 import { StreamedPlaybackPort } from "./streamed-playback-port.ts";
-import type { AudioOutputPort, PlaybackCompletion, PlaybackEvidenceFailure, SpeechSynthesisPort,
+import type { AudioOutputPort, PlaybackCompletion, PlaybackEvidenceFailure,
   StreamedPlaybackOptions } from "./streamed-playback-port.ts";
 import type { DispatchResult } from "./voice-session.ts";
 import type { PrelocationPromptResult } from "./prelocation-voice-session.ts";
@@ -22,8 +24,7 @@ export type ConnectedVoiceCallConfig = Readonly<{
   ledger: LedgerStore;
   intake: SharedNumberIntakeService;
   fullFactory: FullVoiceSessionFactory;
-  transcription: TranscriptionPort;
-  synthesis: SpeechSynthesisPort;
+  speech: SpeechAdapterFactory;
   output: AudioOutputPort;
   monotonicNow?: () => number;
   mediaOptions?: MediaTurnOptions;
@@ -78,10 +79,13 @@ export class ConnectedVoiceCall {
         ? Promise.resolve("notSent") : config.output.finishQueue(id, sequence, signal),
       clear: id => config.output.clear(id),
     };
-    this.playback = new StreamedPlaybackPort(config.synthesis, gatedOutput, config.playbackOptions);
+    const runtime = structuredClone({ ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}),
+      ...(config.playbackOptions ? { playbackOptions: config.playbackOptions } : {}) });
+    const speech = new CallSpeechBinding(config.speech, config.sessionId, runtime);
+    this.playback = new StreamedPlaybackPort(speech.synthesis, gatedOutput, runtime.playbackOptions);
     this.call = new SharedNumberVoiceCall(config.event, config.sessionId, config.ledger, config.intake,
-      this.playback, config.fullFactory, config.monotonicNow);
-    this.media = new MediaTurnController(config.sessionId, this.call, config.transcription, config.mediaOptions);
+      this.playback, config.fullFactory, profile => speech.bind(profile), config.monotonicNow);
+    this.media = new MediaTurnController(config.sessionId, this.call, speech.transcription, runtime.mediaOptions);
   }
 
   /** Runs only after clinic binding; the presented number and candidates remain in this live call. */

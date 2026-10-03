@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
@@ -86,11 +87,11 @@ function newCall(stores: Stores, kind: Kind, sendUnknown = false, suppression = 
       ? ok({ kind, verificationRef: patient.verificationRef, offerRef: offer.offerRef }) : kind === "cancel"
         ? ok({ kind, verificationRef: patient.verificationRef, targetRef: target.appointmentRef })
         : ok({ kind, verificationRef: patient.verificationRef, targetRef: target.appointmentRef, offerRef: offer.offerRef }),
-    transcription: { async accept() { return ok([]); }, async flush(generation) {
+    ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush(generation) {
       return ok([{ kind: "segmentFinal", sessionId, generation, utteranceId: `request-${++utterance}`,
         text: utterance === 1 ? "Please change my appointment" : "Yes", quality: "clear" }]);
-    } },
-    synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
+    } } }),
+
     output: { async queueChunk(playbackId, sequence) { chunks.set(playbackId, [...(chunks.get(playbackId) ?? []), sequence]); return "queued" as const; },
       async finishQueue() { return "queued" as const; }, async clear() { return true; } }, mediaOptions: { silenceMs: 100 },
   });
@@ -145,8 +146,8 @@ test("E2E-257 SET-009 complete embedded notification ownership calls", { timeout
           : err({ kind: "readinessFailed" as const, missing: ["notificationOwner"] as const }) };
         state.ledger = adapter === "memory" ? new MemoryLedger(readiness) : new PostgresLedger(db!, ref => ref, readiness, "unsafeReference");
         const modes = { cancellation: "execute", rescheduling: "execute" } as const;
-        state.policy = adapter === "memory" ? new MemoryPolicyStore("execute", () => now, readiness, modes, undefined, registry)
-          : new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", readiness, true, "unsafeReference", false, modes, undefined, registry);
+        state.policy = adapter === "memory" ? withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, readiness, modes, undefined, registry))
+          : withApprovedSyntheticVoice(new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", readiness, true, "unsafeReference", false, modes, undefined, registry));
         value(await state.policy.changeAutomationEnabled(scope, "0", true, "owner"));
         value(await state.policy.changeBookingEnabled(scope, "0", true, "owner"));
         value(await state.policy.changeCancellationEnabled(scope, "1", true, "owner"));

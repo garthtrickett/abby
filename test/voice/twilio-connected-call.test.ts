@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
@@ -19,7 +20,7 @@ const scope = { tenantId: "twilio-tenant", clinicId: "twilio-clinic", locationId
 
 test("E2E-130 synthetic Twilio: ordered wire events start the call, prove greeting playback, deliver caller media and disconnect", async () => {
   const ledger = new MemoryLedger();
-  const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+  const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
   const enabled = await policy.changeAutomationEnabled(scope, "0", true, "admin");
   assert.ok(enabled.ok);
   const number = "+6125550199";
@@ -36,12 +37,12 @@ test("E2E-130 synthetic Twilio: ordered wire events start the call, prove greeti
     onCallStop: () => { callStops += 1; },
     fullFactory: (receipt, sessionId, playback) => new VoiceSession(receipt.callId, sessionId, receipt.scope,
       ledger, reception, playback, async () => ok({ kind: "handoff", reason: "callerRequested" })),
-    transcription: {
+    ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); } }, transcription: {
       async accept() { return ok([]); },
       async flush(generation) { return ok([{ kind: "segmentFinal", sessionId: "session", generation,
         utteranceId: "one", text: "Please speak with staff", quality: "clear" }]); },
-    },
-    synthesis: { async *stream() { yield new Uint8Array(640); } },
+    } }),
+
     mediaOptions: { silenceMs: 100 },
     streamStartedAt: now, now: () => now,
     send(json) { sent.push(JSON.parse(json) as Record<string, unknown>); return "queued"; },
@@ -98,7 +99,7 @@ test("E2E-130 synthetic Twilio: ordered wire events start the call, prove greeti
 
 test("E2E-130 Twilio disconnect aborts a call-scoped host before its pending event finishes", async () => {
   const ledger = new MemoryLedger();
-  const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+  const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
   assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "admin")).ok);
   const number = "+6125550199";
   const router = new ClinicPolicyRouter(new ReferenceNumberRoutingHost([
@@ -120,8 +121,8 @@ test("E2E-130 Twilio disconnect aborts a call-scoped host before its pending eve
     onCallStop: () => { stops += 1; },
     fullFactory: (receipt, sessionId, playback) => new VoiceSession(receipt.callId, sessionId, receipt.scope,
       ledger, reception, playback, async () => ok({ kind: "handoff", reason: "callerRequested" })),
-    transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
-    synthesis: { async *stream() { yield new Uint8Array(640); } },
+    ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } } }),
+
     streamStartedAt: now, now: () => now,
     send() { return "queued"; },
   });

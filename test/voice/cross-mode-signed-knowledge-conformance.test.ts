@@ -1,3 +1,5 @@
+import { seedSyntheticVoicePreferences } from "../support/seed-synthetic-voice-preferences.ts";
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { EventEmitter, once } from "node:events";
@@ -56,12 +58,13 @@ test("E2E-223 signed knowledge answer requires embedded approval and remains pri
       try {
         await migrate(db);
         const scope = { tenantId: `knowledge-${mode}`, clinicId: "clinic", locationId: "main" };
+        if (mode === "standalone") await seedSyntheticVoicePreferences(db, { tenantId: scope.tenantId, clinicId: scope.clinicId });
         const readiness = async () => ok(true as const);
         const ledger = mode === "embedded" ? new PostgresLedger(db, suggested => suggested, readiness,
           "unsafeReference") : undefined;
-        const policy = new PostgresPolicyStore(db, referenceDefaultPolicy,
+        const policy = withApprovedSyntheticVoice(new PostgresPolicyStore(db, referenceDefaultPolicy,
           mode === "embedded" ? "execute" : "unavailable", readiness,
-          mode === "embedded", mode === "embedded" ? "unsafeReference" : "standaloneMinimal");
+          mode === "embedded", mode === "embedded" ? "unsafeReference" : "standaloneMinimal"));
         assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
         const knowledge = mode === "embedded" ? new MemoryKnowledgeCatalogue() : undefined;
         const routing = new ReferenceNumberRoutingHost([{ ...scope, accountRef: accountSid,
@@ -98,12 +101,12 @@ test("E2E-223 signed knowledge answer requires embedded approval and remains pri
               approvedGreeting: { scope, version: "knowledge-greeting-v1", ownerRef: "clinic-admin",
                 approved: true, approvedText: "Welcome to the clinic.",
                 effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2027-09-01T00:00:00.000Z" },
-              transcriptionFactory: transcription, synthesis, resolveIntent })
+              ...syntheticSpeech({ synthesis, transcriptionFactory: transcription }),  resolveIntent })
             : ok(createEmbeddedTwilioVoiceComposition({ event: stream.event, sessionId,
               streamStartedAt: stream.streamStartedAt, send, closeTransport: close,
               ledger: ledger!, policy, routing, host: new ReferenceClinicHost([], []), knowledge: knowledge!,
               readiness, now: () => now, mediaOptions: { silenceMs: 100 },
-              transcription: transcription(sessionId), synthesis, resolveIntent }));
+              ...syntheticSpeech({ synthesis, transcription: transcription(sessionId) }),  resolveIntent }));
           assert.ok(call.ok, call.ok ? "" : call.error.kind);
           return { async receive(raw: string) {
             const inbound = JSON.parse(raw) as { event?: string };

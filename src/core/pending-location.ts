@@ -1,3 +1,4 @@
+import { validVoiceProfile, validVoicePolicy, sameVoiceProfile } from "./voice-profile.ts";
 import { createHash } from "node:crypto";
 import { err, ok } from "./model.ts";
 import type { Admission, CallPolicy, PendingLocationCall, PendingLocationPrompt, PendingLocationRoute, Result, TransitionFailure } from "./model.ts";
@@ -31,6 +32,7 @@ export function validPendingRoute(route: unknown): route is PendingLocationRoute
   if (!route || typeof route !== "object") return false;
   const value = route as Partial<PendingLocationRoute>;
   return validRef(value.tenantId) && validRef(value.clinicId) && validRef(value.routeVersion) &&
+    (value.voiceProfile === undefined || validVoiceProfile(value.voiceProfile, { tenantId: value.tenantId, clinicId: value.clinicId })) &&
     Array.isArray(value.candidateLocationIds) && value.candidateLocationIds.length >= 2 &&
     value.candidateLocationIds.length <= 32 && value.candidateLocationIds.every(validRef) &&
     new Set(value.candidateLocationIds).size === value.candidateLocationIds.length &&
@@ -157,5 +159,7 @@ export function pendingMatchesAdmission(pending: PendingLocationCall, admission:
 export function policyMatchesPending(pending: PendingLocationCall, policy: CallPolicy): boolean {
   return policy.scope.tenantId === pending.route.tenantId && policy.scope.clinicId === pending.route.clinicId &&
     pending.route.candidateLocationIds.includes(policy.scope.locationId) &&
-    policy.numberRouteVersion === pending.route.routeVersion;
+    policy.numberRouteVersion === pending.route.routeVersion &&
+    (pending.route.voiceProfile === undefined || validVoicePolicy(policy, policy.scope) && !!policy.voiceProfile &&
+      sameVoiceProfile(pending.route.voiceProfile, policy.voiceProfile));
 }

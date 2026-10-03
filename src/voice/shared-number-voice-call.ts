@@ -1,3 +1,8 @@
+import { closeUnattachedCall } from "./unattached-call-close.ts";
+import { validVoicePresentation } from "../core/voice-presentation.ts";
+import { validVoiceProfile } from "../core/voice-profile.ts";
+import type { VoiceProfile } from "../core/voice-profile.ts";
+import type { ReadinessFailure } from "../core/readiness.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
 import type { AdmissionReceipt, CallState, PendingLocationCall, Result } from "../core/model.ts";
@@ -28,6 +33,7 @@ export class SharedNumberVoiceCall {
   private readonly intake: SharedNumberIntakeService;
   private readonly playback: PlaybackPort;
   private readonly fullFactory: FullVoiceSessionFactory;
+  private readonly bindSpeech: (profile: VoiceProfile) => Result<void, ReadinessFailure>;
   private readonly monotonicNow: () => number;
   private readonly callId: string;
   private prelocation: PrelocationVoiceSession | undefined;
@@ -42,6 +48,7 @@ export class SharedNumberVoiceCall {
   constructor(event: AuthenticatedInboundCall, sessionId: string,
               ledger: LedgerStore, intake: SharedNumberIntakeService,
               playback: PlaybackPort, fullFactory: FullVoiceSessionFactory,
+              bindSpeech: (profile: VoiceProfile) => Result<void, ReadinessFailure>,
               monotonicNow: () => number = () => performance.now()) {
     this.event = event;
     this.sessionId = sessionId;
@@ -49,6 +56,7 @@ export class SharedNumberVoiceCall {
     this.intake = intake;
     this.playback = playback;
     this.fullFactory = fullFactory;
+    this.bindSpeech = bindSpeech;
     this.monotonicNow = monotonicNow;
     this.callId = callIdFor(event.key);
   }
@@ -98,10 +106,21 @@ export class SharedNumberVoiceCall {
     try {
       const started = await this.intake.begin(this.event);
       if (!started.ok) return started;
+      let profile: VoiceProfile | undefined;
       if (started.value.kind === "admitted") {
         this.receipt = started.value.admission.receipt;
+        const state = await this.ledger.read(this.receipt.callId, this.receipt.scope);
+        if (!state.ok) return state;
+        profile = state.value.policy.voiceProfile;
+      } else profile = started.value.pending.route.voiceProfile;
+      const scope = started.value.kind === "admitted" ? started.value.admission.receipt.scope
+        : { tenantId: started.value.pending.route.tenantId, clinicId: started.value.pending.route.clinicId };
+      if (!validVoiceProfile(profile, { tenantId: scope.tenantId, clinicId: scope.clinicId }) || !validVoicePresentation(profile)) return err({ kind: "readinessFailed" });
+      const bound = this.bindSpeech(structuredClone(profile));
+      if (!bound.ok) return bound;
+      if (started.value.kind === "admitted") {
         const attached = await this.attachBound(now);
-        return attached.ok ? ok({ kind: "admitted", receipt: this.receipt, state: attached.value }) : attached;
+        return attached.ok ? ok({ kind: "admitted", receipt: started.value.admission.receipt, state: attached.value }) : attached;
       }
       const session = new PrelocationVoiceSession(this.event, this.sessionId, this.ledger, this.intake,
         this.playback, this.monotonicNow);
@@ -232,7 +251,8 @@ export class SharedNumberVoiceCall {
       await this.inFlight;
       const closed = this.full ? await this.full.end(now, reason)
         : this.prelocation ? await this.prelocation.end(now, reason)
-        : err({ kind: this.receipt ? "sessionUnavailable" as const : "sessionUnknown" as const });
+        : await closeUnattachedCall({ ledger: this.ledger, intake: this.intake, event: this.event,
+          ...(this.receipt ? { receipt: this.receipt } : {}), sessionId: this.sessionId, now, reason });
       if (closed.ok) this.terminal = closed.value;
       return closed;
     } finally { this.closing = false; }

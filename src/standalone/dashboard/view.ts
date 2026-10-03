@@ -1,3 +1,5 @@
+import { voiceProfileView } from "./voice-profile-control.ts";
+import type { VoiceProfileState, VoiceProfileControl } from "./voice-profile-control.ts";
 import type { ClinicIntakeAuditPage } from "../../core/clinic-intake-setting.ts";
 import { html } from "lit-html";
 import { staffedDestinationView } from "./staffed-destination-control.ts";
@@ -18,6 +20,7 @@ import type { KnowledgeEntry } from "../../reference/knowledge-catalogue.ts";
 export type DashboardState = {
   staffedDestination: StaffedDestinationState;
   notifications: NotificationOwnershipState;
+  voice: VoiceProfileState;
   loading: boolean;
   busy: boolean;
   capabilities: readonly CapabilityDescriptor[];
@@ -67,6 +70,7 @@ export type DashboardState = {
 export type DashboardActions = Readonly<{
   staffedDestination: StaffedDestinationControl["actions"];
   notifications: NotificationOwnershipControl["actions"];
+  voice: VoiceProfileControl["actions"];
   setKnowledgeField(field: "knowledgeSourceRef" | "knowledgeOwnerRef" | "knowledgeText" | "knowledgeFrom" | "knowledgeUntil", value: string): void;
   saveKnowledgeDraft(): void;
   approveKnowledge(entry: KnowledgeEntry): void;
@@ -187,6 +191,7 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
       </section>
       ${staffedDestinationView(state, actions.staffedDestination)}
       ${notificationOwnershipView(state, actions.notifications)}
+      ${voiceProfileView(state, actions.voice)}
       <section class="card" aria-labelledby="rescheduling-title">
         <div class="row"><div><h2 id="rescheduling-title">Rescheduling automation</h2>
           <p class="status">${state.policy ? state.policy.reschedulingEnabled === true ? "Rescheduling enabled" : "Rescheduling disabled" : "Rescheduling unavailable"}</p>

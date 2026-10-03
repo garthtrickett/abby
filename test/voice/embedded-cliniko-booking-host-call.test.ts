@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer } from "node:http";
@@ -37,7 +38,7 @@ async function fixture(options: Options = {}) {
     dialedNumber: "+6125550199", presentedCallerNumber: "+61400111222", receivedAt: now };
   const callId = callIdFor(event.key);
   const ledger = new MemoryLedger(async () => ok(true));
-  const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+  const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
   assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
   assert.ok((await policy.changeBookingEnabled(scope, "0", true, "clinic-admin")).ok);
   const proof = new TransientPatientProofHost({ scope, callId, sessionId,
@@ -107,13 +108,13 @@ async function fixture(options: Options = {}) {
     readiness: async () => ok(true), now: () => now,
     resolveIntent: async turn => ok(turn.text === "Book physiotherapy"
       ? { kind: "book", verificationRef, offerRef: offer.offerRef } : { kind: "affirm" }),
-    transcription: { async accept() { return ok([]); }, async flush(generation) {
+    ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush(generation) {
       utterance += 1;
       return ok([{ kind: "segmentFinal", sessionId, generation,
         utteranceId: `caller-${utterance}`, text: utterance === 1 ? "Book physiotherapy" : "Yes",
         quality: "clear" }]);
-    } },
-    synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
+    } } }),
+
     output: { async queueChunk(playbackId, sequence) {
       chunks.set(playbackId, [...(chunks.get(playbackId) ?? []), sequence]);
       return "queued" as const;

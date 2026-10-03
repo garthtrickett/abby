@@ -1,3 +1,4 @@
+import { supportedVoiceLocale } from "./voice-presentation.ts";
 import { createHash } from "node:crypto";
 import { digestActionRequest } from "./digest.ts";
 import { notificationDirective, queueCommittedNotification, transitionNotification } from "./notification-effects.ts";
@@ -46,16 +47,16 @@ function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
 }
 
-function appointmentTime(instant: string, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-AU", { timeZone, weekday: "long", day: "numeric", month: "long",
+function appointmentTime(instant: string, timeZone: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { timeZone, weekday: "long", day: "numeric", month: "long",
     hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "long" }).format(new Date(instant));
 }
 
-function describe(request: ActionRequest): string {
+function describe(request: ActionRequest, locale: string): string {
   switch (request.kind) {
     case "book": return `Please confirm the ${request.offer.serviceRef} appointment at ${request.offer.startsAt}.`;
-    case "cancel": return `Please confirm cancellation of your appointment on ${appointmentTime(request.target.startsAt, request.target.timeZone)}. ${request.terms.approvedText}`;
-    case "reschedule": return `Please confirm moving your appointment on ${appointmentTime(request.target.startsAt, request.target.timeZone)} to ${appointmentTime(request.offer.startsAt, request.target.timeZone)}. ${request.terms.approvedText}`;
+    case "cancel": return `Please confirm cancellation of your appointment on ${appointmentTime(request.target.startsAt, request.target.timeZone, locale)}. ${request.terms.approvedText}`;
+    case "reschedule": return `Please confirm moving your appointment on ${appointmentTime(request.target.startsAt, request.target.timeZone, locale)} to ${appointmentTime(request.offer.startsAt, request.target.timeZone, locale)}. ${request.terms.approvedText}`;
     case "intake": return "Please confirm that your approved intake details may be saved. This does not book an appointment.";
   }
 }
@@ -105,7 +106,7 @@ export function appointmentChangeEvidenceFailure(scope: LocationScope,
       (request.kind === "reschedule" && (!Number.isFinite(newStart) || newStart === start))) {
     return { kind: "invalidTransition" };
   }
-  try { appointmentTime(request.target.startsAt, request.target.timeZone); }
+  try { appointmentTime(request.target.startsAt, request.target.timeZone, "en-AU"); }
   catch { return { kind: "invalidTransition" }; }
   return undefined;
 }
@@ -215,6 +216,8 @@ function handleRequest(state: CallState, turn: FinalCallerTurn, request: ActionR
     return ok(undefined);
   }
 
+  const locale = state.policy.voiceProfile?.locale ?? "en-AU";
+  if (!supportedVoiceLocale(locale)) return err({ kind: "invalidTransition" });
   const digest = digestActionRequest(request);
   const key = createHash("sha256").update(`${state.policy.scope.tenantId}:${state.callId}:${turn.turnId}:${digest}`).digest("hex");
   const presentationId = `${key}:details`;
@@ -222,7 +225,7 @@ function handleRequest(state: CallState, turn: FinalCallerTurn, request: ActionR
   const mutation = { kind: request.kind, scope: state.policy.scope, actionKey: key, payloadDigest: digest,
     policyVersion: state.policy.policyVersion, request, ...(notification ? { notification } : {}) };
   const action: ActionState = { key, kind: request.kind, status: "awaitingConfirmation", digest, mutation, presentationId };
-  const presentation: Presentation = { kind: "speech", id: presentationId, actionKey: key, digest, approvedText: describe(request), status: "pending" };
+  const presentation: Presentation = { kind: "speech", id: presentationId, actionKey: key, digest, approvedText: describe(request, locale), status: "pending" };
   state.actions[key] = action;
   state.presentations[presentationId] = presentation;
   state.pendingPresentationId = presentationId;
@@ -349,7 +352,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       break;
     case "availability": {
       const presentation = availabilityPresentation(interpretation.snapshot, state.policy.scope, interpretation.from, interpretation.to,
-        now, state.policy.staffWorkEnabled !== false);
+        now, state.policy.staffWorkEnabled !== false, state.policy.voiceProfile?.locale ?? "en-AU");
       if (turn.quality !== "clear" || !presentation.ok) {
         addStaffTask(state, "systemFailure", now);
         state.callerMessages.push(staffFallbackText(state, "I can't check available times right now. I'll request staff follow-up."));
@@ -367,7 +370,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       state.availabilityReads.push({ turnId: turn.turnId, status: "failed", reason: interpretation.reason });
       break;
     case "appointments": {
-      const presentation = appointmentPresentation(interpretation.snapshot, state.policy.scope, interpretation.from, interpretation.to, now);
+      const presentation = appointmentPresentation(interpretation.snapshot, state.policy.scope, interpretation.from, interpretation.to, now, state.policy.voiceProfile?.locale ?? "en-AU");
       if (turn.quality !== "clear" || !presentation.ok) {
         addStaffTask(state, "systemFailure", now);
         state.callerMessages.push(staffFallbackText(state, "I can't check appointments right now. I'll request staff follow-up."));

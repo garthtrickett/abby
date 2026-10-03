@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { EventEmitter, once } from "node:events";
@@ -52,7 +53,7 @@ test("signed embedded routing settings pin approved wording at admission",
     const scope = { tenantId: "signed-urgent", clinicId: "clinic", locationId: "main" };
     const readiness = async () => ok(true as const);
     const ledger = new PostgresLedger(db, suggested => suggested, readiness, "unsafeReference");
-    const policy = new PostgresPolicyStore(db, location => {
+    const policy = withApprovedSyntheticVoice(new PostgresPolicyStore(db, location => {
       const baseline = referenceDefaultPolicy(location);
       return { ...baseline, capabilities: { ...baseline.capabilities, transfer: "execute" },
         transferDestinationRef: "synthetic-staff-desk",
@@ -63,7 +64,7 @@ test("signed embedded routing settings pin approved wording at admission",
           hostVersion: "synthetic-staff-v1", mode: "execute", ready: true }) : err({ kind: "readinessFailed", missing: ["staffDestination"] }),
         list: async bound => ok({ scope: { ...bound }, hostVersion: "synthetic-staff-v1",
           options: [{ destinationRef: "synthetic-staff-desk", label: "Synthetic staff desk" }] }),
-      });
+      }));
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
     const host = new ReferenceClinicHost([], []);
     const routing = new ReferenceNumberRoutingHost([{ ...scope, accountRef: accountSid,
@@ -93,7 +94,7 @@ test("signed embedded routing settings pin approved wording at admission",
       const wire = createEmbeddedTwilioVoiceComposition({ event: stream.event, sessionId,
         streamStartedAt: stream.streamStartedAt, send, closeTransport: close,
         ledger, policy, routing, host, readiness, now: () => now,
-        mediaOptions: { silenceMs: 100 }, transcription, synthesis,
+        mediaOptions: { silenceMs: 100 }, ...syntheticSpeech({ synthesis, transcription }),
         resolveIntent: async () => transferCall
           ? ok({ kind: "transfer" as const, reason: "callerRequested" as const })
           : ok({ kind: "handoff" as const, reason: "potentiallyUrgent" as const }) });

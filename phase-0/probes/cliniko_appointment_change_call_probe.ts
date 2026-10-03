@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../../test/support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -64,7 +65,7 @@ async function run(): Promise<void> {
   const callId = callIdFor(event.key);
   const sessionId = `session:${randomUUID()}`;
   const ledger = new MemoryLedger(async () => ok(true));
-  const policy = new ChangePolicyStore(input.kind, now);
+  const policy = withApprovedSyntheticVoice(new ChangePolicyStore(input.kind, now));
   assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
   assert.ok((await policy.changeBookingEnabled(scope, "0", true, "clinic-admin")).ok);
   const proof = new TransientPatientProofHost({ scope, callId, sessionId,
@@ -133,13 +134,13 @@ async function run(): Promise<void> {
         ? { kind: "cancel", verificationRef, targetRef: "selected-demo-appointment" }
         : { kind: "reschedule", verificationRef, targetRef: "selected-demo-appointment",
           offerRef: "selected-demo-time" }),
-    transcription: { async accept() { return ok([]); }, async flush(generation) {
+    ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush(generation) {
       utterance += 1;
       return ok([{ kind: "segmentFinal", sessionId, generation,
         utteranceId: `caller-${utterance}`, text: utterance === 1 ? "Change my appointment" : "Yes",
         quality: "clear" }]);
-    } },
-    synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
+    } } }),
+
     output: { async queueChunk(playbackId, index) {
       chunks.set(playbackId, [...(chunks.get(playbackId) ?? []), index]);
       return "queued" as const;

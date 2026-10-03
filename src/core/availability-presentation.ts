@@ -1,3 +1,4 @@
+import { supportedVoiceLocale } from "./voice-presentation.ts";
 import { err, ok } from "./model.ts";
 import type { AvailabilitySnapshot, LocationScope, Result } from "./model.ts";
 
@@ -32,8 +33,8 @@ function spokenName(value: unknown): value is string {
 }
 
 export function availabilityPresentation(snapshot: AvailabilitySnapshot, scope: LocationScope, from: string, to: string,
-                                         now: string, staffWorkEnabled = true): Result<AvailabilityPresentation, InvalidEvidence> {
-  if (!snapshot || snapshot.kind !== "times" || snapshot.reservable !== false || !snapshot.scope ||
+                                         now: string, staffWorkEnabled = true, locale = "en-AU"): Result<AvailabilityPresentation, InvalidEvidence> {
+  if (!supportedVoiceLocale(locale) || !snapshot || snapshot.kind !== "times" || snapshot.reservable !== false || !snapshot.scope ||
       snapshot.scope.tenantId !== scope.tenantId || snapshot.scope.clinicId !== scope.clinicId || snapshot.scope.locationId !== scope.locationId ||
       typeof snapshot.sourceRef !== "string" || !snapshot.sourceRef.trim() || snapshot.sourceRef.length > 256 ||
       typeof snapshot.timeZone !== "string" || !snapshot.timeZone.trim() || snapshot.timeZone.length > 128 ||
@@ -52,7 +53,7 @@ export function availabilityPresentation(snapshot: AvailabilitySnapshot, scope: 
   let spoken: Intl.DateTimeFormat;
   try {
     dates = new Intl.DateTimeFormat("en-CA", { timeZone: snapshot.timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
-    spoken = new Intl.DateTimeFormat("en-AU", { timeZone: snapshot.timeZone, weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "long" });
+    spoken = new Intl.DateTimeFormat(locale, { timeZone: snapshot.timeZone, weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "long" });
   } catch { return err({ kind: "invalidEvidence" }); }
 
   const startsAt: string[] = [];

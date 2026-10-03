@@ -1,3 +1,4 @@
+import { approvedSyntheticPolicy, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
@@ -31,8 +32,8 @@ function fixture(kind: "memory" | "postgres") {
   const foreign: LocationScope = { tenantId: `foreign-tenant-${id}`, clinicId: `foreign-clinic-${id}`, locationId: "foreign" };
   const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggested => suggested, undefined, "unsafeReference") : new MemoryLedger();
   const policy = kind === "postgres"
-    ? new PostgresPolicyStore(db!, referenceDefaultPolicy, "requestOnly", async () => ok(true), true, "unsafeReference")
-    : new MemoryPolicyStore("requestOnly", () => now, async () => ok(true));
+    ? withApprovedSyntheticVoice(new PostgresPolicyStore(db!, referenceDefaultPolicy, "requestOnly", async () => ok(true), true, "unsafeReference"))
+    : withApprovedSyntheticVoice(new MemoryPolicyStore("requestOnly", () => now, async () => ok(true)));
   const account = `account-${id}`;
   const number = "+6125550100";
   const sharedNumber = "+6125550101";
@@ -146,7 +147,7 @@ for (const kind of kinds) {
     const wrongPolicy = new ClinicPolicyRouter({ async identifyCall(accountRef, dialedNumber) {
       return ok({ accountRef, dialedNumber, tenantId: app.main.tenantId,
         clinicId: app.main.clinicId, candidateLocationIds: [app.main.locationId], routeVersion: "route-v1" });
-    } }, { async read() { return ok(referenceDefaultPolicy(app.foreign)); } });
+    } }, { async read() { return ok(approvedSyntheticPolicy(referenceDefaultPolicy(app.foreign))); } });
     const rejectedPolicyEvent = app.event("wrong-policy");
     const rejectedPolicy = await new CallAdmissionService(app.ledger, wrongPolicy.resolve, () => now,
       async () => ok(true)).begin(rejectedPolicyEvent);

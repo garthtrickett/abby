@@ -1,3 +1,5 @@
+import { seedSyntheticVoicePreferences } from "../support/seed-synthetic-voice-preferences.ts";
+import { syntheticSpeech } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
@@ -41,6 +43,7 @@ test("E2E-018 standalone signed calls use the automation toggle without durable 
       let ready = true;
       const readiness = async () => ready ? ok(true as const) :
         err({ kind: "readinessFailed" as const, missing: ["mediaTestCall"] as const });
+      await seedSyntheticVoicePreferences(db, { tenantId: scope.tenantId, clinicId: scope.clinicId });
       const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable", readiness,
         false, "standaloneMinimal");
       const routingHost = new ReferenceNumberRoutingHost([
@@ -76,12 +79,12 @@ test("E2E-018 standalone signed calls use the automation toggle without durable 
         const composed = await createStandaloneTransientVoiceCall({ db, routingHost,
           stream: authenticated.value, readiness, now: () => now,
           send(json) { sent.push(JSON.parse(json) as Record<string, unknown>); return "queued" as const; },
-          transcriptionFactory: sessionId => ({
+          ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } }, transcriptionFactory: sessionId => ({
             async accept() { return ok([]); },
             async flush(generation) { return ok([{ kind: "segmentFinal", sessionId,
               generation, utteranceId: "request", text: "Please speak with staff", quality: "clear" }]); },
-          }),
-          synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
+          }) }),
+
           resolveIntent: async () => ok({ kind: "handoff", reason: "callerRequested" }),
           mediaOptions: { silenceMs: 100 },
         });

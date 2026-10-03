@@ -1,5 +1,7 @@
 import type { ClinicIntakeAuditPage } from "../core/clinic-intake-setting.ts";
 import type { NotificationAuditPage, NotificationCatalogue, NotificationKind, NotificationOwner } from "../core/notification-policy.ts";
+import type { VoiceCatalogue } from "../core/voice-profile.ts";
+import type { VoiceSettingAuditPage } from "../core/clinic-voice-setting.ts";
 import type { StaffedDestinationAuditPage, StaffedDestinationCatalogue } from "../core/staffed-destination.ts";
 import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, GreetingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
@@ -36,6 +38,10 @@ export type HostActor = Readonly<{
 }>;
 
 export type GatewayCommand =
+  | Readonly<{ kind: "settings.voice.locale.change.v1"; expectedVersion: string; locale: string | null }>
+  | Readonly<{ kind: "settings.voice.voiceId.change.v1"; expectedVersion: string; voiceId: string | null }>
+  | Readonly<{ kind: "settings.voice.options.v1" }>
+  | Readonly<{ kind: "settings.voice.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "settings.read.v1" }>
   | Readonly<{ kind: "settings.notifications.owner.change.v1"; expectedVersion: string; notificationKind: NotificationKind; owner: NotificationOwner | null }>
   | Readonly<{ kind: "settings.notifications.audit.v1"; afterVersion?: number }>
@@ -104,6 +110,8 @@ type CatalogueMissingCommand = AssertNever<Exclude<GatewayCommand["kind"], Capab
 type CommandMissingCatalogue = AssertNever<Exclude<CapabilityId, GatewayCommand["kind"]>>;
 
 export type GatewayReply =
+  | Readonly<{ kind: "voiceOptions"; catalogue: VoiceCatalogue }>
+  | Readonly<{ kind: "voiceSettingAudit"; page: VoiceSettingAuditPage }>
   | Readonly<{ kind: "settings"; policy: CallPolicy }>
   | Readonly<{ kind: "staffedDestinationOptions"; catalogue: StaffedDestinationCatalogue }>
   | Readonly<{ kind: "notificationOptions"; catalogue: NotificationCatalogue }>
@@ -199,6 +207,7 @@ export class CommandGateway {
         "clinic.availability.approval.read.v1", "clinic.availability.route.check.v1", "clinic.availability.approval.change.v1",
         "clinic.availability.approval.change.v2", "clinic.availability.approval.revoke.v1");
       permitted.push("settings.automation.enabled.change.v1", "settings.automation.audit.v1",
+        "settings.voice.locale.change.v1", "settings.voice.voiceId.change.v1", "settings.voice.options.v1", "settings.voice.audit.v1",
         "settings.routing.staffedDestination.change.v1", "settings.routing.staffedDestination.audit.v1",
         "settings.routing.staffedDestination.options.v1",
         "settings.notifications.owner.change.v1", "settings.notifications.audit.v1", "settings.notifications.options.v1",
@@ -301,6 +310,22 @@ export class CommandGateway {
       case "settings.patients.firstTimeIntake.audit.v1": {
         const result = await this.policy.listFirstTimeIntakeChanges(this.actor.scope, command.afterVersion);
         return result.ok ? ok({ kind: "firstTimeIntakeSettingAudit", page: result.value }) : result;
+      }
+      case "settings.voice.locale.change.v1": {
+        const result = await this.policy.changeVoiceSetting(this.actor.scope, command.expectedVersion, "locale", command.locale, this.actor.actorRef);
+        return result.ok ? ok({ kind: "settings", policy: result.value }) : result;
+      }
+      case "settings.voice.voiceId.change.v1": {
+        const result = await this.policy.changeVoiceSetting(this.actor.scope, command.expectedVersion, "voiceId", command.voiceId, this.actor.actorRef);
+        return result.ok ? ok({ kind: "settings", policy: result.value }) : result;
+      }
+      case "settings.voice.options.v1": {
+        const result = await this.policy.listVoiceOptions(this.actor.scope);
+        return result.ok ? ok({ kind: "voiceOptions", catalogue: result.value }) : result;
+      }
+      case "settings.voice.audit.v1": {
+        const result = await this.policy.listVoiceChanges(this.actor.scope, command.afterVersion);
+        return result.ok ? ok({ kind: "voiceSettingAudit", page: result.value }) : result;
       }
       case "settings.notifications.owner.change.v1": {
         const result = await this.policy.changeNotificationOwner(this.actor.scope, command.expectedVersion,

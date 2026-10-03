@@ -1,3 +1,4 @@
+import { approvedSyntheticPolicy } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
@@ -28,7 +29,7 @@ function fixture(kind: "memory" | "postgres", suffix: string) {
   let automationEnabled = true;
   let ready = true;
   const admission = new CallAdmissionService(ledger, async dialedNumber =>
-    routeAvailable && dialedNumber === "+6125550100" ? ok({ ...referenceDefaultPolicy(scope), automationEnabled }) : err({ kind: "routeUnavailable" as const }), () => now,
+    routeAvailable && dialedNumber === "+6125550100" ? ok({ ...approvedSyntheticPolicy(referenceDefaultPolicy(scope)), automationEnabled }) : err({ kind: "routeUnavailable" as const }), () => now,
   async () => ready ? ok(true) : err({ kind: "readinessFailed", missing: ["mediaTestCall"] }));
   const attempts: FallbackRequest[] = [];
   const alerts: AdmissionFailureAlert[] = [];

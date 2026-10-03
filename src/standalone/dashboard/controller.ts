@@ -1,3 +1,4 @@
+import { initialVoiceProfileState, VoiceProfileControl } from "./voice-profile-control.ts";
 import type { ClinicIntakeAuditPage } from "../../core/clinic-intake-setting.ts";
 import { render } from "lit-html";
 import type { CancellationSettingAuditPage, ReschedulingSettingAuditPage } from "../../core/host.ts";
@@ -78,7 +79,7 @@ function message(failure: DashboardFailure): string {
         hostPermissions: "host permissions", selectedLocation: "a selected location", approvedKnowledge: "approved clinic information",
         approvedGreeting: "an approved greeting",
         bookableOffers: "booking setup", staffDestination: "staff destination", afterHoursDestination: "after-hours destination",
-        notificationOwner: "notification owner", fallbackRoute: "tested fallback route", mediaTestCall: "passed media test call",
+        notificationOwner: "notification owner", voiceProfile: "approved locale and voice", fallbackRoute: "tested fallback route", mediaTestCall: "passed media test call",
       };
       const missing = Array.isArray(failure.missing) ? failure.missing.filter((item): item is ReadinessRequirement =>
         READINESS_REQUIREMENTS.includes(item as ReadinessRequirement)) : [];
@@ -92,10 +93,12 @@ export class DashboardController {
   private readonly root: HTMLElement;
   private readonly port: DashboardPort;
   private readonly staffedDestination: StaffedDestinationControl;
+  private readonly voice: VoiceProfileControl;
   private readonly notifications: NotificationOwnershipControl;
   private readonly state: DashboardState = { loading: true, busy: false, capabilities: [], policy: undefined,
     staffedDestination: initialStaffedDestinationState(),
     notifications: initialNotificationOwnershipState(),
+    voice: initialVoiceProfileState(),
     knowledge: undefined, knowledgeSourceRef: "", knowledgeOwnerRef: "", knowledgeText: "",
     knowledgeFrom: new Date().toISOString(), knowledgeUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
     writeStop: undefined, stopReasonInput: "", auditPage: undefined, cancellationAuditPage: undefined, reschedulingAuditPage: undefined, firstTimeIntakeAuditPage: undefined,
@@ -111,6 +114,7 @@ export class DashboardController {
     this.root = root;
     this.port = port;
     this.staffedDestination = new StaffedDestinationControl(this.state, port, () => this.draw(), message);
+    this.voice = new VoiceProfileControl(this.state, port, () => this.draw(), message);
     this.notifications = new NotificationOwnershipControl(this.state, port, () => this.draw(), message);
     this.draw();
   }
@@ -120,6 +124,7 @@ export class DashboardController {
       setKnowledgeField: (field, value) => { this.state[field] = value; },
       staffedDestination: this.staffedDestination.actions,
       notifications: this.notifications.actions,
+      voice: this.voice.actions,
       saveKnowledgeDraft: () => { void this.saveKnowledgeDraft(); },
       approveKnowledge: entry => { void this.changeKnowledgeApproval(entry, "approve"); },
       revokeKnowledge: entry => { void this.changeKnowledgeApproval(entry, "revoke"); },
@@ -194,6 +199,7 @@ export class DashboardController {
     this.state.error = !settings.ok ? message(settings.error) : !capabilities.ok ? message(capabilities.error) : undefined;
     await this.staffedDestination.initialize();
     await this.notifications.initialize();
+    await this.voice.initialize();
     if (capabilities.ok && capabilities.value.some(item => item.id === "knowledge.list.v1")) {
       const knowledge = await this.port.knowledge();
       if (knowledge.ok) this.state.knowledge = knowledge.value;

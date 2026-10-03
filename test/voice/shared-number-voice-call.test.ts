@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
@@ -58,8 +59,8 @@ function fixture(kind: "memory" | "postgres", outputPort?: PlaybackPort) {
   ]);
   const ledger: LedgerStore & EffectCallLeaseStore = kind === "postgres" ? new PostgresLedger(db!, suggested => suggested, undefined, "unsafeReference") : new MemoryLedger();
   const policy = kind === "postgres"
-    ? new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true), true, "unsafeReference")
-    : new MemoryPolicyStore("execute", () => current, async () => ok(true));
+    ? withApprovedSyntheticVoice(new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true), true, "unsafeReference"))
+    : withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => current, async () => ok(true)));
   let policyReads = 0;
   let policyGate: Readonly<{ entered: () => void; release: Promise<void> }> | undefined;
   const router = new ClinicPolicyRouter(host, { async read(scope) {
@@ -91,8 +92,7 @@ function fixture(kind: "memory" | "postgres", outputPort?: PlaybackPort) {
           : turn.text.startsWith("Staff") ? { kind: "handoff" as const, reason: "callerRequested" as const }
           : { kind: "affirm" as const });
       });
-  const call = (inbound: ReturnType<typeof event>) => new SharedNumberVoiceCall(inbound, "session", ledger, intake, playback,
-    fullFactory);
+  const call = (inbound: ReturnType<typeof event>) => new SharedNumberVoiceCall(inbound, "session", ledger, intake, playback, fullFactory, () => ok(undefined));
   return { main, north, ledger, policy, clinic, queued, call, event, intake, fullFactory, sharedNumber, singleNumber, resolvedTurns,
     policyReads: () => policyReads, setWrongFactoryScope(value: boolean) { wrongFactoryScope = value; },
     setTime(value: string) { current = value; },
@@ -155,8 +155,8 @@ for (const kind of kinds) {
     const call = new ConnectedVoiceCall({ event: inbound, sessionId: "session", ledger: app.ledger,
       intake: app.intake, fullFactory: app.fullFactory,
       callerCandidateLookup: candidateLookup,
-      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
-      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } } }),
+
       output: { async queueChunk() { return "queued"; }, async finishQueue() { return "queued"; },
         async clear() { return true; } },
     });
@@ -192,8 +192,8 @@ for (const kind of kinds) {
         lookups += 1;
         return ok({ kind: "one", candidateIds: ["123"] });
       } },
-      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
-      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } } }),
+
       output: { async queueChunk() { return "queued"; }, async finishQueue() { return "queued"; },
         async clear() { return true; } },
     });
@@ -215,13 +215,13 @@ for (const kind of kinds) {
       const inbound = app.event(app.singleNumber, `codec-${encoding}`);
       const call = new ConnectedVoiceCall({ event: inbound, sessionId: "session", ledger: app.ledger,
         intake: app.intake, fullFactory: app.fullFactory,
-        transcription: {
+        ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); } }, transcription: {
           async accept(_frame, generation) { return ok([{ kind: "partial" as const, sessionId: "session", generation,
             utteranceId: "request", text: "Staff please" }]); },
           async flush(generation) { return ok([{ kind: "segmentFinal", sessionId: "session", generation,
             utteranceId: "request", text: "Staff please", quality: "clear" }]); },
-        },
-        synthesis: { async *stream() { yield new Uint8Array(640); } },
+        } }),
+
         output: { async queueChunk() { return "queued"; }, async finishQueue() { return "queued"; },
           async clear() { return true; } }, mediaOptions: { silenceMs: 100 } });
       const started = value(await call.begin(now));
@@ -268,8 +268,8 @@ for (const kind of kinds) {
     const synthesized: string[] = [];
     const call = new ConnectedVoiceCall({ event: app.event(app.singleNumber, "connected-single"),
       sessionId: "session", ledger: app.ledger, intake: app.intake, fullFactory: app.fullFactory,
-      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
-      synthesis: { async *stream(text) { synthesized.push(text); yield new Uint8Array(640); } },
+      ...syntheticSpeech({ synthesis: { async *stream(text) { synthesized.push(text); yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } } }),
+
       output: {
         async queueChunk(id) { queued.push(id); return "queued"; },
         async finishQueue() { return "queued"; },
@@ -319,8 +319,8 @@ for (const kind of kinds) {
     let finished = -1;
     const call = new ConnectedVoiceCall({ event: app.event(app.singleNumber, "openai-speech"),
       sessionId: "session", ledger: app.ledger, intake: app.intake, fullFactory: app.fullFactory,
-      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
-      synthesis, output: {
+      ...syntheticSpeech({ synthesis, transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } } }),
+       output: {
         async queueChunk(_id, sequence, bytes) {
           assert.equal(sequence, chunks.length);
           chunks.push(new Uint8Array(bytes));
@@ -356,8 +356,8 @@ for (const kind of kinds) {
     const sent: string[] = [];
     const call = new ConnectedVoiceCall({ event: app.event(app.singleNumber, "connected-start-race"),
       sessionId: "session", ledger: app.ledger, intake: app.intake, fullFactory: app.fullFactory,
-      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
-      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } } }),
+
       output: {
         async queueChunk(id) { sent.push(id); return "queued"; },
         async finishQueue() { return "queued"; },
@@ -388,8 +388,8 @@ for (const kind of kinds) {
     const cleared: string[] = [];
     const call = new ConnectedVoiceCall({ event: inbound, sessionId: "session", ledger: app.ledger,
       intake: app.intake, fullFactory: app.fullFactory,
-      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
-      synthesis: { async *stream() { yield new Uint8Array(640); await nextChunk; yield new Uint8Array(640); } },
+      ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); await nextChunk; yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } } }),
+
       output: {
         async queueChunk(_id, sequence) { sent.push(sequence); firstSent(); return "queued"; },
         async finishQueue() { throw new Error("disconnected prompt must not finish"); },
@@ -422,8 +422,8 @@ for (const kind of kinds) {
     };
     const queued: Array<{ id: string; sequence: number }> = [];
     const call = new ConnectedVoiceCall({ event: inbound, sessionId: "session", ledger: app.ledger,
-      intake: app.intake, fullFactory: app.fullFactory, transcription,
-      synthesis: { async *stream() { yield new Uint8Array(640); yield new Uint8Array(640); } },
+      intake: app.intake, fullFactory: app.fullFactory, ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); yield new Uint8Array(640); } }, transcription }),
+
       output: {
         async queueChunk(id, sequence) { queued.push({ id, sequence }); return "queued"; },
         async finishQueue() { return "queued"; },
@@ -489,11 +489,11 @@ for (const kind of kinds) {
     const inbound = app.event(app.sharedNumber, "connected-stt-failure");
     const call = new ConnectedVoiceCall({ event: inbound, sessionId: "session", ledger: app.ledger,
       intake: app.intake, fullFactory: app.fullFactory,
-      transcription: {
+      ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); } }, transcription: {
         async accept() { return err({ kind: "transcriptionUnavailable" as const }); },
         async flush() { return ok([]); },
-      },
-      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      } }),
+
       output: {
         async queueChunk() { return "queued"; },
         async finishQueue() { return "queued"; },
@@ -522,8 +522,8 @@ for (const kind of kinds) {
     } });
     const call = new ConnectedVoiceCall({ event: inbound, sessionId: "session", ledger: failingLedger,
       intake: app.intake, fullFactory: app.fullFactory,
-      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
-      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } } }),
+
       output: {
         async queueChunk() { throw new Error("prompt cannot reach output"); },
         async finishQueue() { throw new Error("prompt cannot finish"); },
@@ -545,11 +545,11 @@ for (const kind of kinds) {
       const inbound = app.event(app.sharedNumber, `choice-${outcome}`);
       const call = new ConnectedVoiceCall({ event: inbound, sessionId: "session", ledger: app.ledger,
         intake: app.intake, fullFactory: app.fullFactory,
-        transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
-        synthesis: { async *stream() {
+        ...syntheticSpeech({ synthesis: { async *stream() {
           if (outcome === "failed") throw new Error("synthetic speech failure");
           yield new Uint8Array(640);
-        } },
+        } }, transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } } }),
+
         output: {
           async queueChunk() { return outcome === "unproven" ? "uncertain" : "queued"; },
           async finishQueue() { return "queued"; },
@@ -642,7 +642,7 @@ for (const kind of kinds) {
     const started = value(await call.begin(now));
     assert.equal(started.kind, "locationChoice");
     assert.equal(app.queued[0]?.text, "Which location would you like? Please say Main Street or Northside.");
-    assert.equal(app.policyReads(), 0);
+    assert.equal(app.policyReads(), 2);
     assert.equal(app.clinic.bookingEvidenceReads(), 0);
     assert.equal((await call.dispatchPending(now)).ok, true);
     assert.equal(app.queued.length, 1);
@@ -712,7 +712,7 @@ for (const kind of kinds) {
     const rejected = await call.finishTurn(at(2));
     assert.ok(!rejected.ok);
     assert.equal(rejected.error.kind, "sessionUnavailable");
-    assert.equal(app.policyReads(), 1);
+    assert.equal(app.policyReads(), 3);
     app.setWrongFactoryScope(false);
     const active = value(await call.resumeBound(at(3)));
     assert.equal(active.lifecycle, "active");

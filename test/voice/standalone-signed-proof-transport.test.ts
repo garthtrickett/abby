@@ -1,3 +1,5 @@
+import { seedSyntheticVoicePreferences } from "../support/seed-synthetic-voice-preferences.ts";
+import { syntheticSpeech } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
@@ -76,6 +78,7 @@ test("E2E-203 E2E-225 signed appointment selection requires played options and c
     const suffix = randomUUID().slice(0, 8);
     const scope = { tenantId: `proof-wire-${suffix}`, clinicId: "clinic", locationId: "frontdesk" };
     const readiness = async () => ok(true as const);
+    await seedSyntheticVoicePreferences(db, { tenantId: scope.tenantId, clinicId: scope.clinicId });
     const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable", readiness, false, "standaloneMinimal");
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
     assert.ok((await policy.changeGreeting(scope, "0", { scope, version: "proof-transport-greeting-v1",
@@ -122,13 +125,13 @@ test("E2E-203 E2E-225 signed appointment selection requires played options and c
       let turnNumber = 0;
       const composed = await createStandaloneTransientVoiceCall({ db: db!, routingHost, stream, send,
         closeTransport: close, readiness, now: () => at, mediaOptions: { silenceMs: 100 },
-        transcriptionFactory: sessionId => ({
+        ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.get(callSid)!.push(text); yield new Uint8Array(640); } }, transcriptionFactory: sessionId => ({
           async accept() { return ok([]); },
           async flush(generation) { turnNumber += 1; return ok([{ kind: "segmentFinal", sessionId, generation,
             utteranceId: `request-${turnNumber}`,
             text: turnNumber === 1 ? "What are my appointments?" : "Choose second", quality: "clear" }]); },
-        }),
-        synthesis: { async *stream(text) { spoken.get(callSid)!.push(text); yield new Uint8Array(640); } },
+        }) }),
+
         resolveIntent: async turn => {
           assert.equal(JSON.stringify(turn).includes(callerPhone), false);
           assert.equal(JSON.stringify(turn).includes("PRIVATE"), false);

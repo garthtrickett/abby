@@ -1,3 +1,4 @@
+import { seedSyntheticVoicePreferences } from "../support/seed-synthetic-voice-preferences.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
@@ -221,6 +222,7 @@ test("E2E-172 E2E-185 E2E-209 E2E-217 isolated voice runner enforces durable app
     assert.deepEqual(clinikoMethods, []);
     const approvalDb = connectPostgres(target.toString());
     try {
+      await seedSyntheticVoicePreferences(approvalDb, { tenantId: scope.tenantId, clinicId: scope.clinicId });
       await seedSyntheticCatalogueApproval(approvalDb, { scope, accountRef: accountSid,
         dialedNumber: number, routeVersion: "test-v1", apiKey: "synthetic-key-au5" });
       const store = new PostgresClinikoApprovalStore(approvalDb);

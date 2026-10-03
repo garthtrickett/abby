@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
@@ -45,7 +46,7 @@ async function until(predicate: () => boolean): Promise<void> {
 
 function fixture(shared = false) {
   const ledger = new MemoryLedger();
-  const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+  const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
   const event = { key: { accountRef: accountSid, providerCallRef: callSid },
     dialedNumber: shared ? sharedNumber : number, receivedAt: now };
   const timer = manualTimer();
@@ -66,8 +67,7 @@ function fixture(shared = false) {
   const call = new TwilioConnectedCall({ event, sessionId: "session", ledger, intake,
     fullFactory: (receipt, sessionId, playback) => new VoiceSession(receipt.callId, sessionId, receipt.scope,
       ledger, reception, playback, async () => ok({ kind: "handoff", reason: "callerRequested" })),
-    transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
-    synthesis: { async *stream(text) {
+    ...syntheticSpeech({ synthesis: { async *stream(text) {
       spoken.push(text);
       const bytes = new Uint8Array(640);
       const samples = new DataView(bytes.buffer);
@@ -75,7 +75,8 @@ function fixture(shared = false) {
         samples.setInt16(index * 2, Math.round(Math.sin(index / 9) * (1_000 + spoken.length * 2_000)), true);
       }
       yield bytes;
-    } },
+    } }, transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } } }),
+
     streamStartedAt: now, now: () => now, silenceTimer: timer.timer,
     onCallStop: () => { stops += 1; }, closeTransport: kind => { closes += 1; closeKinds.push(kind); },
     send(json) { sent.push(JSON.parse(json) as Record<string, unknown>); return "queued"; },

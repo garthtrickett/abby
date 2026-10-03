@@ -1,3 +1,5 @@
+import { validVoiceArchiveHistory } from "../portability/voice-history.ts";
+import { writeVoiceCarryover } from "./postgres-voice-carryover.ts";
 import { validClinicIntakeArchiveHistory } from "../portability/clinic-intake-history.ts";
 import { validNotificationArchiveHistory } from "../portability/notification-history.ts";
 import { writeNotificationCarryover } from "./postgres-notification-carryover.ts";
@@ -22,7 +24,7 @@ type RegistryRow = { archive_id: string; manifest_digest: string; receipt: Refer
   source_history: TenantConfigArchiveData };
 
 function minimalHistory(data: TenantConfigArchiveData): boolean {
-  return Array.isArray(data?.clinics) && data.clinics.every(clinic => validClinicIntakeArchiveHistory(clinic.clinicIntake) && validNotificationArchiveHistory(clinic.clinicNotifications)) &&
+  return Array.isArray(data?.clinics) && data.clinics.every(clinic => validClinicIntakeArchiveHistory(clinic.clinicIntake) && validNotificationArchiveHistory(clinic.clinicNotifications) && validVoiceArchiveHistory(clinic.clinicVoice)) &&
     Array.isArray(data?.locations) && data.locations.length > 0 && data.locations.every(location =>
     Array.isArray(location.policies) && location.policies.length > 0 &&
     location.policies.every((row: ConfigArchiveData["policies"][number]) => row.storageShape === "standaloneMinimal") &&
@@ -75,6 +77,7 @@ async function occupied(db: Kysely<Database> | Transaction<Database>, tenantId: 
     exists(select 1 from clinic_automation where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_intake_settings where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_notification_settings where tenant_id = ${tenantId}) or
+    exists(select 1 from clinic_voice_settings where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_knowledge_heads where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_write_stop where tenant_id = ${tenantId}) or
     exists(select 1 from calls where tenant_id = ${tenantId}) or
@@ -208,6 +211,7 @@ async function writeClinic(trx: Transaction<Database>, scope: LocationScope,
   }
   const reason = mode === "standaloneMinimal" ? "cutover" : "Imported configuration awaiting target readiness";
   await writeNotificationCarryover(trx, scope, clinic.clinicNotifications, actorRef, importedAt);
+  await writeVoiceCarryover(trx, { tenantId: scope.tenantId, clinicId: scope.clinicId }, clinic.clinicVoice, actorRef, importedAt);
   await sql`insert into clinic_write_stop (tenant_id, clinic_id, version, stopped, actor_ref, reason, changed_at)
     values (${scope.tenantId}, ${scope.clinicId}, 1, true, ${actorRef}, ${reason}, ${importedAt}::timestamptz)`.execute(trx);
   await sql`insert into clinic_write_stop_events (tenant_id, clinic_id, version, stopped, actor_ref, reason, changed_at)

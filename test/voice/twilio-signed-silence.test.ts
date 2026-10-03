@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import test from "node:test";
@@ -35,7 +36,7 @@ async function until(predicate: () => boolean): Promise<void> {
 
 test("E2E-070 signed HTTPS and WSS silence retry ends with a normal WebSocket close", { timeout: 20_000 }, async () => {
   const ledger = new MemoryLedger();
-  const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+  const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
   assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "admin")).ok);
   const router = new ClinicPolicyRouter(new ReferenceNumberRoutingHost([
     { accountRef: accountSid, dialedNumber: number, ...scope, routeVersion: "v1" },
@@ -62,8 +63,8 @@ test("E2E-070 signed HTTPS and WSS silence retry ends with a normal WebSocket cl
     const call = new TwilioConnectedCall({ event: stream.event, sessionId: "session", ledger, intake,
       fullFactory: (receipt, sessionId, playback) => new VoiceSession(receipt.callId, sessionId, receipt.scope,
         ledger, reception, playback, async () => ok({ kind: "handoff", reason: "callerRequested" })),
-      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
-      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } } }),
+
       streamStartedAt: stream.streamStartedAt, now: () => now, send, closeTransport: close, silenceTimer,
     });
     return { receive: raw => call.receive(raw), disconnect: () => call.disconnect() };

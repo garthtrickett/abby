@@ -19,6 +19,13 @@ const result = (value: JsonSchema): JsonSchema => root({ oneOf: [
 ] });
 const reply = (kind: string, name: string, value: JsonSchema): JsonSchema => object({ kind: { const: kind }, [name]: value });
 const scope = object({ tenantId: nonEmpty, clinicId: nonEmpty, locationId: nonEmpty });
+const voiceClinic = object({ tenantId: key, clinicId: key });
+const voiceLocale = { oneOf: [{ type: "string", minLength: 1, maxLength: 80 }, { const: null }] } satisfies JsonSchema;
+const voiceId = { oneOf: [{ type: "string", minLength: 1, maxLength: 128 }, { const: null }] } satisfies JsonSchema;
+const voicePreferences = object({ version: key, locale: voiceLocale, voiceId });
+const voiceProfile = object({ scope: voiceClinic, settingsVersion: key, hostVersion: key, locale: key, voiceId: key,
+  transcriptionVersion: key, synthesisVersion: key, presentationVersion: key, qualityVersion: key,
+  configurationHash: { type: "string", minLength: 64, maxLength: 64 } });
 const destination = { oneOf: [object({ kind: { const: "owner" }, ownerRef: nonEmpty }),
   object({ kind: { const: "queue" }, queueRef: nonEmpty })] } satisfies JsonSchema;
 const capabilityMode = choice("execute", "requestOnly", "unavailable");
@@ -31,6 +38,7 @@ const notificationBinding = (kind: string): JsonSchema => object({ scope, kind: 
   owner: choice("host", "abby"), settingsVersion: key, hostVersion: key });
 const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: nonEmpty, automationEnabled: bool, bookingEnabled: bool,
   cancellationEnabled: bool, reschedulingEnabled: bool, firstTimeIntakeEnabled: bool, firstTimeIntakeVersion: key, afterHoursMode, afterHoursInfo,
+  voiceSettings: voicePreferences, voiceProfile,
   notificationSettings: object({ version: key, owners: object({ bookingConfirmation: notificationOwner,
     cancellationConfirmation: notificationOwner, reschedulingConfirmation: notificationOwner }) }),
   notificationBindings: optional({ bookingConfirmation: notificationBinding("bookingConfirmation"),
@@ -193,7 +201,7 @@ export type CapabilityDescriptor = Readonly<{
   requiresCallerConfirmation: boolean;
 }>;
 
-export type CapabilityPrecondition = "expectedPolicyVersion" | "expectedAutomationVersion" | "expectedClinicIntakeVersion" | "expectedClinicNotificationVersion" |
+export type CapabilityPrecondition = "expectedPolicyVersion" | "expectedAutomationVersion" | "expectedClinicIntakeVersion" | "expectedClinicNotificationVersion" | "expectedClinicVoiceVersion" | "hostVoiceProfileForSet" |
   "hostManagedNotificationForSet" | "hostStaffedDestinationForSet" | "readinessForEnable" | "activeCall" | "bookingEnabledForExecution" |
   "hostEvidenceForExecution" | "approvedKnowledgeForAnswer" | "availabilityHostConfigured" |
   "appointmentHostConfigured" | "hostIssuedPatientProof" |
@@ -210,6 +218,22 @@ function entry(id: string, input: JsonSchema, success: JsonSchema, effect: Capab
 }
 
 export const capabilityCatalogue = {
+  "settings.voice.locale.change.v1": entry("settings.voice.locale.change.v1",
+    object({ kind: { const: "settings.voice.locale.change.v1" }, expectedVersion: key, locale: voiceLocale }),
+    reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedClinicVoiceVersion", "hostVoiceProfileForSet"]),
+  "settings.voice.voiceId.change.v1": entry("settings.voice.voiceId.change.v1",
+    object({ kind: { const: "settings.voice.voiceId.change.v1" }, expectedVersion: key, voiceId }),
+    reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedClinicVoiceVersion", "hostVoiceProfileForSet"]),
+  "settings.voice.options.v1": entry("settings.voice.options.v1", object({ kind: { const: "settings.voice.options.v1" } }),
+    reply("voiceOptions", "catalogue", object({ scope: voiceClinic,
+      locales: { type: "array", maxItems: 64, items: object({ id: key, label: key }) },
+      voices: { type: "array", maxItems: 64, items: object({ id: key, label: key }) },
+      pairs: { type: "array", maxItems: 256, items: object({ locale: key, voiceId: key, ready: bool }) } })), "read", "clinicAdmin"),
+  "settings.voice.audit.v1": entry("settings.voice.audit.v1",
+    optional({ kind: { const: "settings.voice.audit.v1" }, afterVersion: uint }, ["kind"]),
+    reply("voiceSettingAudit", "page", optional({ entries: array(object({ version: key, kind: choice("locale", "voiceId"),
+      value: { oneOf: [key, { const: null }] }, previousValue: { oneOf: [key, { const: null }] }, actorRef: key, changedAt: str })),
+      nextAfterVersion: uint }, ["entries"])), "read", "clinicAdmin"),
   "settings.read.v1": entry("settings.read.v1", object({ kind: { const: "settings.read.v1" } }),
     reply("settings", "policy", policy), "read", "permittedActor"),
   "settings.automation.enabled.change.v1": entry("settings.automation.enabled.change.v1",

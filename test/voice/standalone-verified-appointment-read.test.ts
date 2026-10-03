@@ -1,3 +1,4 @@
+import { approvedSyntheticPolicy } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
@@ -26,7 +27,7 @@ function value<T, E extends { kind: string }>(result: Result<T, E>): T {
 
 class StandalonePolicy extends MemoryPolicyStore {
   override async read(requestScope: LocationScope) {
-    const policy: CallPolicy = { ...referenceDefaultPolicy(requestScope), automationEnabled: true,
+    const policy: CallPolicy = { ...approvedSyntheticPolicy(referenceDefaultPolicy(requestScope)), automationEnabled: true,
       staffWorkEnabled: false,
       capabilities: { book: "unavailable", cancel: "unavailable", reschedule: "unavailable",
         intake: "unavailable", transfer: "unavailable" } };

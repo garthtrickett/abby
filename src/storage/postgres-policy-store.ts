@@ -1,5 +1,12 @@
 import { PostgresClinicIntakeSettingStore } from "./postgres-clinic-intake-setting.ts";
 import { PostgresClinicNotificationSettingStore } from "./postgres-clinic-notification-settings.ts";
+import { PostgresClinicVoiceSettingStore } from "./postgres-clinic-voice-settings.ts";
+import { captureVoicePolicy } from "../core/voice-policy.ts";
+import { validVoiceLocationScope, voiceClinicScope } from "../core/voice-profile.ts";
+import type { VoiceCatalogue, VoiceSettingKind } from "../core/voice-profile.ts";
+import type { VoiceSettingAuditPage } from "../core/clinic-voice-setting.ts";
+import { listVoiceOptions, unprovenVoiceProfileRegistry } from "../core/voice-profile-registry.ts";
+import type { VoiceProfileRegistry } from "../core/voice-profile-registry.ts";
 import { captureNotificationPolicy, listNotificationOptions, unprovenNotificationRegistry } from "../core/notification-policy.ts";
 import type { NotificationAuditPage, NotificationCatalogue, NotificationKind, NotificationOwner, NotificationRegistry } from "../core/notification-policy.ts";
 import type { ClinicIntakeAuditPage, ClinicIntakeState } from "../core/clinic-intake-setting.ts";
@@ -96,6 +103,7 @@ function decodeStandalonePolicy(value: unknown, scope: LocationScope, version: n
 function decodePolicy(value: unknown, scope: LocationScope, version: number): Result<CallPolicy, PolicyFailure> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return err({ kind: "storageFailure" });
   const policy = value as CallPolicy;
+  if (Object.hasOwn(policy, "voiceSettings") || Object.hasOwn(policy, "voiceProfile")) return err({ kind: "storageFailure" });
   if (!policy.scope || !sameScope(policy.scope, scope) || policy.policyVersion !== String(version) ||
       (policy.automationEnabled !== undefined && typeof policy.automationEnabled !== "boolean") ||
       (policy.staffWorkEnabled !== undefined && typeof policy.staffWorkEnabled !== "boolean") ||
@@ -128,13 +136,15 @@ export class PostgresPolicyStore implements PolicyStore {
   private readonly hostIntakeMode: CapabilityMode;
   private readonly staffedDestinationRegistry: StaffedDestinationRegistry;
   private readonly notificationRegistry: NotificationRegistry;
+  private readonly voiceRegistry: VoiceProfileRegistry;
 
   /** Rich policy storage is synthetic-only and requires the explicit unsafeReference mode. */
   constructor(db: Kysely<Database>, defaultPolicy: (scope: LocationScope) => CallPolicy, hostBookingMode: CapabilityMode = "unavailable", readiness: AutomationReadiness = unprovenReadiness,
               staffWorkEnabled = false, storageMode: "unsafeReference" | "standaloneMinimal" = "standaloneMinimal",
               allowDefaultGreeting = false, hostPatientModes: CapabilityMode | PatientSettingModes = "unavailable",
               staffedDestinationRegistry: StaffedDestinationRegistry = unprovenStaffedDestinationRegistry,
-              notificationRegistry: NotificationRegistry = unprovenNotificationRegistry) {
+              notificationRegistry: NotificationRegistry = unprovenNotificationRegistry,
+              voiceRegistry: VoiceProfileRegistry = unprovenVoiceProfileRegistry) {
     this.db = db;
     this.defaultPolicy = defaultPolicy;
     this.hostBookingMode = hostBookingMode;
@@ -147,14 +157,16 @@ export class PostgresPolicyStore implements PolicyStore {
     this.hostIntakeMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.intake ?? "unavailable";
     this.staffedDestinationRegistry = staffedDestinationRegistry;
     this.notificationRegistry = storageMode === "standaloneMinimal" ? unprovenNotificationRegistry : notificationRegistry;
+    this.voiceRegistry = voiceRegistry;
   }
 
   private defaultFor(scope: LocationScope): CallPolicy {
     const { firstTimeIntakeEnabled, firstTimeIntakeVersion, transferDestinationVersion,
-      notificationSettings, notificationBindings, ...policy } = this.defaultPolicy(scope);
+      notificationSettings, notificationBindings, voiceSettings, voiceProfile, ...policy } = this.defaultPolicy(scope);
     void firstTimeIntakeEnabled; void firstTimeIntakeVersion;
     void transferDestinationVersion;
     void notificationSettings; void notificationBindings;
+    void voiceSettings; void voiceProfile;
     if (this.storageMode !== "standaloneMinimal" || this.allowDefaultGreeting) return policy;
     const { greeting, ...safe } = policy;
     void greeting;
@@ -189,8 +201,12 @@ export class PostgresPolicyStore implements PolicyStore {
     if (!intake.ok) throw new Error("clinic intake configuration unavailable");
     const notifications = await new PostgresClinicNotificationSettingStore(db).read(policy.scope);
     if (!notifications.ok) throw new Error("clinic notification configuration unavailable");
-    const composed = await captureNotificationPolicy(this.compose(policy, intake.value, automation),
-      notifications.value, this.notificationRegistry);
+    const voice = await new PostgresClinicVoiceSettingStore(db).read(voiceClinicScope(policy.scope));
+    if (!voice.ok) throw new Error("clinic voice configuration unavailable");
+    const captured = await captureVoicePolicy(await captureNotificationPolicy(this.compose(policy, intake.value, automation),
+      notifications.value, this.notificationRegistry), voice.value, this.voiceRegistry);
+    if (!captured.ok) throw new Error("clinic voice profile unavailable");
+    const composed = captured.value;
     if (this.storageMode === "standaloneMinimal" || !this.staffWorkEnabled) {
       const { transferDestinationVersion, ...safe } = composed;
       void transferDestinationVersion;
@@ -208,6 +224,23 @@ export class PostgresPolicyStore implements PolicyStore {
           policy.afterHoursMode ?? "staffRequest", policy.afterHoursInfo, policy.urgentResponse, policy.staffSchedule,
           policy.greeting ?? null, policy.cancellationEnabled, policy.reschedulingEnabled, policy.transferDestinationRef) : policy,
     }, (bound, ref) => this.staffedDestinationRegistry.resolve(bound, ref));
+  }
+
+  async changeVoiceSetting(scope: LocationScope, expectedVersion: string, kind: VoiceSettingKind,
+    value: string | null, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+    if (!validVoiceLocationScope(scope) || this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope)) return err({ kind: "invalidValue" });
+    const bound = structuredClone(scope);
+    const changed = await new PostgresClinicVoiceSettingStore(this.db, this.voiceRegistry)
+      .change(voiceClinicScope(bound), expectedVersion, kind, value, actorRef);
+    return changed.ok ? this.read(bound) : changed;
+  }
+  async listVoiceOptions(scope: LocationScope): Promise<Result<VoiceCatalogue, PolicyFailure>> {
+    if (!validVoiceLocationScope(scope) || this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope)) return err({ kind: "invalidValue" });
+    return listVoiceOptions(this.voiceRegistry, voiceClinicScope(scope));
+  }
+  async listVoiceChanges(scope: LocationScope, afterVersion?: number): Promise<Result<VoiceSettingAuditPage, PolicyFailure>> {
+    if (!validVoiceLocationScope(scope) || this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope)) return err({ kind: "invalidValue" });
+    return new PostgresClinicVoiceSettingStore(this.db).listChanges(voiceClinicScope(scope), afterVersion);
   }
 
   async changeNotificationOwner(scope: LocationScope, expectedVersion: string, kind: NotificationKind,

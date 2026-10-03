@@ -1,3 +1,5 @@
+import { seedSyntheticVoicePreferences } from "../support/seed-synthetic-voice-preferences.ts";
+import { syntheticSpeech } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
@@ -52,6 +54,7 @@ test("E2E-224 signed standalone appointment reads require a transient patient pr
     const dialedNumber = "+6125550199";
     const callerPhone = "+6145550101";
     const readiness = async () => ok(true as const);
+    await seedSyntheticVoicePreferences(db, { tenantId: scope.tenantId, clinicId: scope.clinicId });
     const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable", readiness, false, "standaloneMinimal");
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
     assert.ok((await policy.changeGreeting(scope, "0", { scope, version: "verified-read-greeting-v1",
@@ -170,12 +173,12 @@ test("E2E-224 signed standalone appointment reads require a transient patient pr
       const composed = await createStandaloneTransientVoiceCall({ db: db!, routingHost,
         stream: authenticated.value,
         send(json) { sent.push(JSON.parse(json) as Record<string, unknown>); return "queued"; },
-        transcriptionFactory: sessionId => ({
+        ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } }, transcriptionFactory: sessionId => ({
           async accept() { return ok([]); },
           async flush(generation) { return ok([{ kind: "segmentFinal", sessionId, generation,
             utteranceId: "request", text: "What is my appointment?", quality: "clear" }]); },
-        }),
-        synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
+        }) }),
+
         resolveIntent: async turn => {
           assert.equal(JSON.stringify(turn).includes(callerPhone), false);
           assert.equal(JSON.stringify(turn).includes("PRIVATE PATIENT CANARY"), false);

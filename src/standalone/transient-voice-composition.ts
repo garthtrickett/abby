@@ -1,3 +1,5 @@
+import type { VoiceProfileRegistry } from "../core/voice-profile-registry.ts";
+import type { SpeechAdapterFactory } from "../voice/call-speech-binding.ts";
 import { randomUUID } from "node:crypto";
 import type { Kysely } from "kysely";
 import { ClinikoAvailabilityReader } from "../cliniko/availability.ts";
@@ -16,9 +18,9 @@ import type Database from "../storage/generated/Database.ts";
 import { CallAdmissionService } from "../voice/admission.ts";
 import type { AuthenticatedInboundCall } from "../voice/admission.ts";
 import type { CallerCandidateLookup } from "../voice/caller-candidates.ts";
-import type { MediaTurnOptions, TranscriptionPort } from "../voice/media-turn-controller.ts";
+import type { MediaTurnOptions } from "../voice/media-turn-controller.ts";
 import { SharedNumberIntakeService } from "../voice/shared-number-intake.ts";
-import type { SpeechSynthesisPort, StreamedPlaybackOptions } from "../voice/streamed-playback-port.ts";
+import type { StreamedPlaybackOptions } from "../voice/streamed-playback-port.ts";
 import { TwilioConnectedCall } from "../voice/twilio-connected-call.ts";
 import type { TwilioWireCall } from "../voice/twilio-ingress-server.ts";
 import type { AuthenticatedTwilioStream } from "../voice/twilio-signed-ingress.ts";
@@ -29,17 +31,13 @@ import { ClinicPolicyRouter } from "../reference/clinic-number-routing.ts";
 import { DisabledStandaloneHost } from "./disabled-host.ts";
 import { VerifiedAppointmentReadSession } from "./verified-appointment-read-session.ts";
 
-type TranscriptionSource =
-  | Readonly<{ transcription: TranscriptionPort; transcriptionFactory?: never }>
-  | Readonly<{ transcription?: never; transcriptionFactory: (sessionId: string) => TranscriptionPort }>;
-
 export type TransientVoiceConfig = Readonly<{
   db: Kysely<Database>;
   routingHost: ClinicNumberRoutingHost;
   expectedPolicyVersion?: string;
   stream: AuthenticatedTwilioStream;
   send: (json: string) => "queued" | "notSent" | "uncertain";
-  synthesis: SpeechSynthesisPort;
+  voiceProfiles: VoiceProfileRegistry & SpeechAdapterFactory;
   resolveIntent: IntentResolver;
   readiness?: AutomationReadiness;
   availability?: ClinikoAvailabilityReader | ClinikoApprovedAvailabilitySearch;
@@ -56,7 +54,7 @@ export type TransientVoiceConfig = Readonly<{
   playbackOptions?: StreamedPlaybackOptions;
   now?: () => string;
   monotonicNow?: () => number;
-}> & TranscriptionSource;
+}>;
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
   return left.tenantId === right.tenantId && left.clinicId === right.clinicId && left.locationId === right.locationId;
@@ -75,15 +73,12 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
     throw new TypeError("keypad availability requires a Cliniko reader and approved greeting");
   }
   const sessionId = randomUUID();
-  const transcription = config.transcriptionFactory
-    ? config.transcriptionFactory(sessionId) : config.transcription;
-  if (!transcription) throw new TypeError("standalone transcription unavailable");
   const readiness = config.readiness ?? unprovenReadiness;
   const now = config.now ?? (() => new Date().toISOString());
   const ledger = new MemoryLedger(readiness);
   const defaultPolicy = (scope: LocationScope) => ({ ...standaloneDefaultPolicy(scope),
     ...(config.approvedGreeting ? { greeting: structuredClone(config.approvedGreeting) } : {}) });
-  const policy = new PostgresPolicyStore(config.db, defaultPolicy, "unavailable", readiness, false, "standaloneMinimal", true);
+  const policy = new PostgresPolicyStore(config.db, defaultPolicy, "unavailable", readiness, false, "standaloneMinimal", true, undefined, undefined, undefined, config.voiceProfiles);
   let greeting: ApprovedGreeting | undefined;
   const router = new ClinicPolicyRouter(config.routingHost, { read: async scope => {
     const loaded = await policy.read(scope);
@@ -107,8 +102,7 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
   let verifiedRead: VerifiedAppointmentReadSession | undefined;
   let call: TwilioConnectedCall | undefined = new TwilioConnectedCall({
     event: config.stream.event, streamStartedAt: config.stream.streamStartedAt,
-    sessionId, ledger, intake, transcription,
-    synthesis: config.synthesis, send: config.send, now,
+    sessionId, ledger, intake, speech: config.voiceProfiles, send: config.send, now,
     ...(config.closeTransport ? { closeTransport: config.closeTransport } : {}),
     ...(config.keypadAvailabilityRange ? { keypadAvailabilityRange: config.keypadAvailabilityRange } : {}),
     ...(config.callerCandidateLookup ? { callerCandidateLookup: config.callerCandidateLookup } : {}),

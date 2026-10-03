@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
@@ -16,7 +17,7 @@ const unavailableText = "I can't verify that information right now.";
 
 test("E2E-004 embedded voice speaks only currently approved, call-pinned clinic knowledge", async () => {
   const ledger = new MemoryLedger();
-  const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+  const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
   assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
   const host = new ReferenceClinicHost([], []);
   const knowledge = new MemoryKnowledgeCatalogue();
@@ -34,12 +35,12 @@ test("E2E-004 embedded voice speaks only currently approved, call-pinned clinic 
     const call = createEmbeddedVoiceComposition({ event, sessionId, ledger, policy, routing, host, knowledge,
       readiness: async () => ok(true),
       resolveIntent: async () => ok({ kind: "answer", sourceRefs: ["parking"], proposedText: approvedText }),
-      transcription: { async accept() { return ok([]); }, async flush(generation) {
+      ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush(generation) {
         utterance += 1;
         return ok([{ kind: "segmentFinal", sessionId, generation,
           utteranceId: `parking-${utterance}`, text: "Where is parking?", quality: "clear" }]);
-      } },
-      synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
+      } } }),
+
       output: { async queueChunk(playbackId, sequence) {
         chunks.set(playbackId, [...(chunks.get(playbackId) ?? []), sequence]);
         return "queued" as const;

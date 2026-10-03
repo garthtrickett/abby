@@ -6,10 +6,11 @@ import type { GatewayCommand, HostActor } from "../../reference/command-gateway.
 import { capabilityDescriptor } from "../../reference/capability-catalogue.ts";
 import { matchesSchema } from "../../reference/schema-shapes.ts";
 import { validNotificationKind, validNotificationOwner } from "../../core/notification-policy.ts";
+import { validVoiceSettingValue } from "../../core/voice-profile.ts";
 import { publicSpeechGateStatus } from "../speech-gate-public-status.ts";
 
 const maxCommandBytes = 24_000;
-const document = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body><main><div id="app"></div><div id="availability-setup"></div><div id="greeting-setup"></div><div id="automation-setup"></div><div id="speech-gate"></div><div id="operational-daily"></div></main><script type="module" src="/app.js"></script></body></html>`;
+const document = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body><main><div id="app"></div><div id="availability-setup"></div><div id="greeting-setup"></div><div id="voice-setup"></div><div id="automation-setup"></div><div id="speech-gate"></div><div id="operational-daily"></div></main><script type="module" src="/app.js"></script></body></html>`;
 const setupCommands = new Set([
   "clinic.availability.businesses.list.v1", "clinic.availability.practitioners.list.v1",
   "clinic.availability.types.list.v1", "clinic.availability.selection.inspect.v1",
@@ -134,8 +135,10 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     const url = new URL(request.url ?? "/", "http://localhost");
     if (surface === "availabilitySetup" && !(
       (request.method === "GET" && ["/", "/app.js", "/style.css", "/api/capabilities", "/api/settings",
-        "/api/speech-gate", "/api/operations/daily", "/api/settings/greeting-audit", "/api/settings/automation-audit"].includes(url.pathname)) ||
-      (request.method === "POST" && ["/api/clinic-availability/command", "/api/settings/greeting", "/api/settings/automation-enabled"].includes(url.pathname)))) {
+        "/api/speech-gate", "/api/operations/daily", "/api/settings/greeting-audit", "/api/settings/automation-audit",
+        "/api/settings/voice-options", "/api/settings/voice-audit"].includes(url.pathname)) ||
+      (request.method === "POST" && ["/api/clinic-availability/command", "/api/settings/greeting", "/api/settings/automation-enabled",
+        "/api/settings/voice-locale", "/api/settings/voice-id"].includes(url.pathname)))) {
       return json(response, 404, { ok: false, error: { kind: "notFound" } });
     }
     if (request.method === "POST" && url.pathname.startsWith("/api/") &&
@@ -158,7 +161,7 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       return json(response, 200, { ok: true, value: gateway.listPermitted().filter(item =>
         surface === "availabilitySetup" ? item.id === "settings.read.v1" || item.id.startsWith("clinic.availability.") ||
           item.id === "settings.routing.greeting.change.v1" || item.id === "settings.routing.greeting.audit.v1" ||
-          item.id === "settings.automation.enabled.change.v1" || item.id === "settings.automation.audit.v1"
+          item.id === "settings.automation.enabled.change.v1" || item.id === "settings.automation.audit.v1" || item.id.startsWith("settings.voice.")
           : item.id !== "booking.propose.v2") });
     }
     let command: GatewayCommand | undefined;
@@ -226,6 +229,18 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     if (request.method === "GET" && url.pathname === "/api/settings/staffed-destination-options") {
       if (url.searchParams.size !== 0) return json(response, 400, { ok: false, error: { kind: "invalid" } });
       command = { kind: "settings.routing.staffedDestination.options.v1" };
+    }
+    if (request.method === "GET" && url.pathname === "/api/settings/voice-options") {
+      if (url.searchParams.size !== 0) return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      command = { kind: "settings.voice.options.v1" };
+    }
+    if (request.method === "GET" && url.pathname === "/api/settings/voice-audit") {
+      const cursor = url.searchParams.get("after");
+      if ([...url.searchParams.keys()].some(key => key !== "after") || url.searchParams.getAll("after").length > 1 ||
+          (cursor !== null && (!/^(0|[1-9][0-9]*)$/.test(cursor) || !Number.isSafeInteger(Number(cursor)) || Number(cursor) > 2_147_483_647))) {
+        return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      }
+      command = { kind: "settings.voice.audit.v1", ...(cursor === null ? {} : { afterVersion: Number(cursor) }) };
     }
     if (request.method === "GET" && url.pathname === "/api/settings/notification-options") {
       if (url.searchParams.size !== 0) return json(response, 400, { ok: false, error: { kind: "invalid" } });
@@ -328,6 +343,17 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
       }
       command = { kind: "settings.routing.staffedDestination.change.v1", expectedVersion: input.expectedVersion,
         destinationRef: input.destinationRef as string | null };
+    }
+    if (request.method === "POST" && ["/api/settings/voice-locale", "/api/settings/voice-id"].includes(url.pathname)) {
+      if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
+      const input = record(await body(request));
+      const selection = url.pathname === "/api/settings/voice-locale" ? "locale" : "voiceId";
+      if (url.searchParams.size !== 0 || !input || Object.keys(input).sort().join(",") !== `expectedVersion,${selection}` ||
+          typeof input.expectedVersion !== "string" || !validVoiceSettingValue(selection, input[selection])) {
+        return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      }
+      command = selection === "locale" ? { kind: "settings.voice.locale.change.v1", expectedVersion: input.expectedVersion, locale: input.locale as string | null }
+        : { kind: "settings.voice.voiceId.change.v1", expectedVersion: input.expectedVersion, voiceId: input.voiceId as string | null };
     }
     if (request.method === "POST" && url.pathname === "/api/settings/notification-owner") {
       if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });

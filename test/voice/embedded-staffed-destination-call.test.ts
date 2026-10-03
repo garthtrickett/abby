@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
@@ -58,11 +59,11 @@ function newCall(stores: Stores, outcome: TransferOutcome | "throw" = { kind: "c
       if (outcome === "throw") throw new Error("synthetic unknown provider outcome");
       return outcome;
     } },
-    transcription: { async accept() { return ok([]); }, async flush(generation) {
+    ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush(generation) {
       return ok([{ kind: "segmentFinal", sessionId, generation, utteranceId: `request-${++utterance}`,
         text: intent === "urgent" ? "I need urgent help" : "Please connect me to staff", quality: "clear" }]);
-    } },
-    synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
+    } } }),
+
     output: { async queueChunk(playbackId, sequence) {
       chunks.set(playbackId, [...(chunks.get(playbackId) ?? []), sequence]);
       return "queued" as const;
@@ -128,8 +129,8 @@ test("E2E-256 SET-007 complete embedded transfer settings calls", { timeout: 120
         ? ok({ scope, destinationRef: ref, hostVersion: state.hostVersion, mode: "execute", ready: true })
         : err({ kind: "readinessFailed", missing: ["staffDestination"] }));
       state.ledger = kind === "memory" ? new MemoryLedger(readiness) : new PostgresLedger(db!, ref => ref, readiness, "unsafeReference");
-      state.policy = kind === "memory" ? new MemoryPolicyStore("execute", () => now, readiness, undefined, registry)
-        : new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", readiness, true, "unsafeReference", false, undefined, registry);
+      state.policy = kind === "memory" ? withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, readiness, undefined, registry))
+        : withApprovedSyntheticVoice(new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", readiness, true, "unsafeReference", false, undefined, registry));
       value(await state.policy.changeAutomationEnabled(state.scope, "0", true, "clinic-admin"));
       if (hours !== "unknown") value(await state.policy.changeStaffSchedule(state.scope, "0", {
         scope: state.scope, version: "approved-hours-v1", ownerRef: "clinic-admin", approved: true,

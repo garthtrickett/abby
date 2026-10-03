@@ -1,3 +1,4 @@
+import { withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { ClinikoAppointmentReader } from "../../src/cliniko/appointments.ts";
@@ -49,7 +50,7 @@ async function fixture(kind: "memory" | "postgres", suffix: string, verified = t
   const ledger = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt, undefined, "unsafeReference") : new MemoryLedger();
   const composed = kind === "postgres"
     ? createReferenceStandaloneTextComposition(db!, host, "execute", ledger, undefined, reader)
-    : { policy: new MemoryPolicyStore(), reception: undefined };
+    : { policy: withApprovedSyntheticVoice(new MemoryPolicyStore()), reception: undefined };
   const policy = composed.policy;
   const reception = kind === "postgres" ? composed.reception : createEmbeddedTextComposition(ledger, policy, host, undefined, reader);
   assert.ok(reception);
