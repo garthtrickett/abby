@@ -32,6 +32,7 @@ export type ClinikoAdminDashboardConfig = Readonly<{
   resolveActor: HostDashboardIdentity["resolveActor"];
   readSpeechGate?: HostDashboardIdentity["readSpeechGate"];
   unauthorized?: HostDashboardIdentity["unauthorized"];
+  signOutPath?: string;
   bundlePath: string;
   voiceProfiles?: VoiceProfileRegistry;
   fetch?: typeof fetch;
@@ -76,6 +77,7 @@ export async function createStandaloneClinikoAdminDashboardHandler(config: Clini
       resolveActor: config.resolveActor,
       ...(config.readSpeechGate ? { readSpeechGate: config.readSpeechGate } : {}),
       ...(config.unauthorized ? { unauthorized: config.unauthorized } : {}),
+      ...(config.signOutPath ? { signOutPath: config.signOutPath } : {}),
       gatewayFor: actor => {
         if (actor.role === "agent" || actor.scope.tenantId !== scope.tenantId ||
             actor.scope.clinicId !== scope.clinicId ||

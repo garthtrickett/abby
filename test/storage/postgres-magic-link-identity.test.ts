@@ -8,7 +8,9 @@ import { sql } from "kysely";
 import { ok, err } from "../../src/core/model.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresMagicLinkStore } from "../../src/storage/postgres-magic-link-store.ts";
-import { identityDigest } from "../../src/standalone/identity/magic-link.ts";
+import { identityDigest, MagicLinkIdentity } from "../../src/standalone/identity/magic-link.ts";
+import { syntheticAdminAccount } from "../support/magic-link-fixture.ts";
+import { scanDisposableBackupCanaries } from "./backup-canary-scan.ts";
 
 assert.equal(process.env.ABBY_ISOLATED_POSTGRES_PROBE, "1", "authentication tests require an isolated database");
 assert.ok(process.env.DATABASE_URL);
@@ -17,6 +19,24 @@ after(async () => { await db.destroy(); });
 const digest = () => identityDigest(randomUUID());
 const grant = () => ({ actorRef: `admin-${randomUUID()}`, membershipDigest: digest() });
 const keys = () => ({ recipient: digest(), client: digest(), global: digest() });
+
+test("E2E-260 real authentication delivery and session secrets are absent from a disposable PostgreSQL backup", async () => {
+  const account = { ...syntheticAdminAccount(), email: `backup-${randomUUID()}@example.test` };
+  let link = "";
+  const identity = new MagicLinkIdentity({ publicOrigin: "https://backup.example.test", rateKeyHex: "4".repeat(64), store,
+    directory: { findByEmail: async email => ok(email === account.email ? account : undefined),
+      findByRef: async ref => ok(ref === account.actor.actorRef ? account : undefined) },
+    delivery: { send: async (_email, value) => { link = value; return ok(undefined); } } });
+  const client = `peer-${randomUUID()}`;
+  await identity.requestLink(account.email, client); assert.ok(link);
+  const secret = new URL(link).hash.slice(1), signed = await identity.redeemLink(secret); assert.ok(signed.ok);
+  assert.deepEqual(await identity.resolveSession(signed.value), ok(account.actor));
+  assert.deepEqual(await scanDisposableBackupCanaries(process.env.DATABASE_URL!, [
+    { label: "admin_email", value: account.email }, { label: "peer_identifier", value: client },
+    { label: "link_secret", value: secret }, { label: "session_secret", value: signed.value },
+  ]), []);
+  assert.deepEqual(await identity.logout(signed.value), ok(undefined));
+});
 
 test("PostgreSQL single-use challenge and session survive new connections and an independent process", async () => {
   const input = grant(), challenge = digest(), session = digest();

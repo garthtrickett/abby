@@ -129,6 +129,7 @@ async function runBrowser(entries, workers) {
 await Promise.all([
   execute("npm", ["run", "build:cliniko-admin"], 120_000),
   execute("npm", ["run", "build:dashboard"], 120_000),
+  execute("npm", ["run", "build:sign-in"], 120_000),
 ]);
 const nodeEntries = [...nodeFiles.entries()].sort(([left], [right]) => left.localeCompare(right));
 if (!browserOnly) {

@@ -1,6 +1,6 @@
 import { ok } from "../../src/core/model.ts";
 import type { Result } from "../../src/core/model.ts";
-import type { AdminAccount, IdentityFailure, LoginGrant, MagicLinkDelivery, MagicLinkStore } from "../../src/standalone/identity/magic-link.ts";
+import type { AdminAccount, AdminDirectory, IdentityFailure, LoginGrant, MagicLinkDelivery, MagicLinkStore } from "../../src/standalone/identity/magic-link.ts";
 import { MagicLinkIdentity } from "../../src/standalone/identity/magic-link.ts";
 
 /** Deterministic port fixture, not production persistence or delivered-email evidence. */
@@ -13,11 +13,12 @@ export class MagicLinkFixture implements MagicLinkStore {
   readonly challenges = new Map<string, { grant: LoginGrant; expires: number }>();
   readonly sessions = new Map<string, { grant: LoginGrant; idle: number; absolute: number }>();
   readonly delivery: MagicLinkDelivery = { send: async (email, link) => { this.mail.push({ email, link }); return ok(undefined); } };
+  readonly directory: AdminDirectory = {
+    findByEmail: async email => ok(this.accounts.get(email)),
+    findByRef: async ref => ok([...this.accounts.values()].find(account => account.actor.actorRef === ref)),
+  };
   readonly identity = new MagicLinkIdentity({ publicOrigin: "https://admin.example.test", rateKeyHex: "4".repeat(64),
-    store: this, delivery: this.delivery, directory: {
-      findByEmail: async email => ok(this.accounts.get(email)),
-      findByRef: async ref => ok([...this.accounts.values()].find(account => account.actor.actorRef === ref)),
-    } });
+    store: this, delivery: this.delivery, directory: this.directory });
   async reserveRequest(keys: unknown): Promise<Result<boolean, IdentityFailure>> { this.rateKeys.push(keys); return ok(this.allowed); }
   async issue(digest: string, grant: LoginGrant): Promise<Result<void, IdentityFailure>> {
     this.challenges.set(digest, { grant: structuredClone(grant), expires: this.now + 600_000 }); return ok(undefined);

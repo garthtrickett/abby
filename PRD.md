@@ -40,7 +40,7 @@ Acquisition is a design objective, not a prediction. The buyer's internal langua
 8. Make new behavior and settings verifiable end to end before release, including both states of each toggle.
 9. Own the real-time voice controller that turns provider audio and speech events into caller turns and delivers Abby-approved responses, so a buyer can retain it while replacing providers.
 
-**Clinic-admin identity (D-14, accepted 2026-10-02):** Standalone Abby provides its own sign-in through a replaceable identity adapter. An embedded buyer supplies the authenticated user, clinic membership and roles through that adapter. Domain commands enforce authorization and tenant/clinic/location scope in both compositions. PMS connection credentials do not authenticate a dashboard user. Selection and implementation of the standalone login provider remain open.
+**Clinic-admin identity (D-14, accepted 2026-10-02):** Standalone Abby provides its own sign-in through a replaceable identity adapter. An embedded buyer supplies the authenticated user, clinic membership and roles through that adapter. Domain commands enforce authorization and tenant/clinic/location scope in both compositions. PMS connection credentials do not authenticate a dashboard user. Standalone implementation uses Abby-owned email magic links, explicit account confirmation and trusted preprovisioned membership. An external identity provider is optional. No email delivery service is selected; local synthetic delivery, PostgreSQL and HTTPS browser checks do not prove real mailbox delivery or production identity readiness. See [the sign-in contract](phase-2/STANDALONE_MAGIC_LINK_IDENTITY.md) for release and deployment gates.
 
 ### Non-goals for version 1
 

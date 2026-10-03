@@ -49,18 +49,24 @@ export function normalizeAdminEmail(value: unknown): string | undefined {
 function opaque(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= 256 && value === value.trim() && !/[\u0000-\u001f\u007f]/.test(value);
 }
-function validAccount(account: AdminAccount): boolean {
-  return !!account && normalizeAdminEmail(account.email) === account.email && opaque(account.membershipVersion) &&
-    !!account.actor && ["clinicAdmin", "staff"].includes(account.actor.role) &&
-    typeof account.actor.actorRef === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(account.actor.actorRef) &&
-    !!account.actor.scope && [account.actor.scope.tenantId, account.actor.scope.clinicId, account.actor.scope.locationId].every(opaque);
+function exactRecord(value: unknown, keys: string): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).sort().join(",") === keys;
 }
-function sameGrant(account: AdminAccount, grant: LoginGrant): boolean {
-  return validAccount(account) && account.actor.actorRef === grant.actorRef && membershipDigest(account) === grant.membershipDigest;
+export function validAdminAccount(account: unknown): account is AdminAccount {
+  if (!exactRecord(account, "actor,email,membershipVersion") || normalizeAdminEmail(account.email) !== account.email ||
+      typeof account.email !== "string" || !opaque(account.membershipVersion)) return false;
+  const actor = account.actor;
+  if (!exactRecord(actor, "actorRef,role,scope") || typeof actor.role !== "string" || !["clinicAdmin", "staff"].includes(actor.role) ||
+      typeof actor.actorRef !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(actor.actorRef)) return false;
+  const scope = actor.scope;
+  return exactRecord(scope, "clinicId,locationId,tenantId") && [scope.tenantId, scope.clinicId, scope.locationId].every(opaque);
 }
-function membershipDigest(account: AdminAccount): string {
+function sameGrant(account: AdminAccount, grant: LoginGrant, origin: string): boolean {
+  return validAdminAccount(account) && account.actor.actorRef === grant.actorRef && membershipDigest(account, origin) === grant.membershipDigest;
+}
+function membershipDigest(account: AdminAccount, origin: string): string {
   const { actorRef, role, scope } = account.actor;
-  return identityDigest(JSON.stringify([account.membershipVersion, account.email, actorRef, role, scope.tenantId, scope.clinicId, scope.locationId]));
+  return identityDigest(JSON.stringify([origin, account.membershipVersion, account.email, actorRef, role, scope.tenantId, scope.clinicId, scope.locationId]));
 }
 
 /** Owns authentication only. Trusted current directory membership supplies all clinic authority. */
@@ -93,9 +99,9 @@ export class MagicLinkIdentity {
         client: this.rateDigest("client", clientIdentity), global: this.rateDigest("global", "all") });
       if (!allowed.ok || !allowed.value) return;
       const found = await this.directory.findByEmail(email);
-      if (!found.ok || !found.value || !validAccount(found.value) || found.value.email !== email) return;
+      if (!found.ok || !found.value || !validAdminAccount(found.value) || found.value.email !== email) return;
       const account = structuredClone(found.value), secret = newIdentitySecret(), digest = identityDigest(secret);
-      const issued = await this.store.issue(digest, { actorRef: account.actor.actorRef, membershipDigest: membershipDigest(account) });
+      const issued = await this.store.issue(digest, { actorRef: account.actor.actorRef, membershipDigest: membershipDigest(account, this.origin) });
       if (!issued.ok) return;
       const controller = new AbortController();
       let deadline: ReturnType<typeof setTimeout> | undefined;
@@ -112,7 +118,7 @@ export class MagicLinkIdentity {
   }
   private async accountFor(grant: LoginGrant): Promise<Result<AdminAccount, IdentityFailure>> {
     const current = await this.directory.findByRef(grant.actorRef);
-    return current.ok && current.value && sameGrant(current.value, grant) ? ok(structuredClone(current.value))
+    return current.ok && current.value && sameGrant(current.value, grant, this.origin) ? ok(structuredClone(current.value))
       : current.ok ? invalidLink() : current;
   }
   /** Token holder sees the account for an explicit confirmation; GET requests never call redemption. */

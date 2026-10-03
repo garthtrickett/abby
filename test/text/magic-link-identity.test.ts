@@ -12,7 +12,7 @@ async function requested(): Promise<MagicLinkFixture> {
   return fixture;
 }
 
-test("magic link confirmation identifies a preprovisioned account without consuming the link", async () => {
+test("E2E-260 magic link confirmation identifies a preprovisioned account without consuming the link", async () => {
   const fixture = await requested(), secret = linkSecret(fixture);
   assert.equal(fixture.mail.length, 1);
   assert.equal(validIdentitySecret(secret), true);
@@ -92,6 +92,20 @@ test("failed delivery invalidates the issued link and failed logout does not cla
   assert.equal(fixture.challenges.size, 0);
   fixture.revokeSession = async () => err({ kind: "identityUnavailable" });
   assert.deepEqual(await identity.logout(newIdentitySecret()), err({ kind: "identityUnavailable" }));
+});
+
+test("shared storage cannot carry pending links or sessions to a different configured origin", async () => {
+  const fixture = await requested(), account = syntheticAdminAccount();
+  const foreign = new MagicLinkIdentity({ publicOrigin: "https://other.example.test", rateKeyHex: "4".repeat(64),
+    store: fixture, delivery: fixture.delivery, directory: {
+      findByEmail: async () => ok(account), findByRef: async () => ok(account),
+    } });
+  const secret = linkSecret(fixture);
+  assert.deepEqual(await foreign.inspectLink(secret), err({ kind: "invalidSignInLink" }));
+  assert.deepEqual(await foreign.redeemLink(secret), err({ kind: "invalidSignInLink" }));
+  const signed = await fixture.identity.redeemLink(secret); assert.ok(signed.ok);
+  assert.deepEqual(await foreign.resolveSession(signed.value), ok(undefined));
+  assert.deepEqual(await fixture.identity.resolveSession(signed.value), ok(account.actor));
 });
 
 test("identity rejects noncanonical secrets and email injection while preserving plus addressing", () => {
