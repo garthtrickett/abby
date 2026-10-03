@@ -69,7 +69,7 @@ test("E2E-258 E2E-259 migration upgrades populated public history and refuses vo
     const voices = new PostgresClinicVoiceSettingStore(upgraded, voiceRegistry());
     assert.ok((await voices.change(scope, "0", "locale", "en-AU", "owner")).ok);
     const saved = await voices.read(scope);
-    await assert.rejects(() => migrate(upgraded, "down"), /clinic voice setting history must be removed/);
+    await assert.rejects(() => migrateTo(upgraded, "039_clinic_notification_settings"), /clinic voice setting history must be removed/);
     assert.deepEqual(await voices.read(scope), saved);
     assert.deepEqual(await notifications.listChanges(scope), before);
   } finally {
