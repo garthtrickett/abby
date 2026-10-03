@@ -157,6 +157,11 @@ const staffChange = object({ kind: { const: "staffChange" }, taskKey: key, callV
   status: staffStatus, pending: bool, reviewRequired: bool });
 const turn = optional({ callId: key, sessionId: key, turnId: key, text: { type: "string", minLength: 1 },
   quality: choice("clear", "needsClarification"), at: str }, ["callId", "turnId", "text", "quality", "at"]);
+const sessionTurn: JsonSchema = { ...turn, required: [...turn.required!, "sessionId"] };
+const appointmentChangeSelection: JsonSchema = { oneOf: [
+  object({ kind: { const: "cancel" }, verificationRef: key, targetRef: key }),
+  object({ kind: { const: "reschedule" }, verificationRef: key, targetRef: key, offerRef: key }),
+] };
 const change = { oneOf: [object({ kind: { const: "acknowledge" } }), object({ kind: { const: "resolve" } }),
   object({ kind: { const: "reassign" }, target: choice("staff", "operator") })] } satisfies JsonSchema;
 const nullable = (value: JsonSchema): JsonSchema => ({ oneOf: [value, { const: null }] });
@@ -203,6 +208,7 @@ export type CapabilityDescriptor = Readonly<{
 
 export type CapabilityPrecondition = "expectedPolicyVersion" | "expectedAutomationVersion" | "expectedClinicIntakeVersion" | "expectedClinicNotificationVersion" | "expectedClinicVoiceVersion" | "hostVoiceProfileForSet" |
   "hostManagedNotificationForSet" | "hostStaffedDestinationForSet" | "readinessForEnable" | "activeCall" | "bookingEnabledForExecution" |
+  "currentCallSession" | "appointmentChangeEnabledForExecution" | "intakeEnabledForExecution" |
   "hostEvidenceForExecution" | "approvedKnowledgeForAnswer" | "availabilityHostConfigured" |
   "appointmentHostConfigured" | "hostIssuedPatientProof" |
   "callReviewAvailable" | "outcomeReportAvailable" | "staffQueueAvailable" | "operationalDailyAvailable" |
@@ -348,6 +354,15 @@ export const capabilityCatalogue = {
   "booking.propose.v2": entry("booking.propose.v2",
     object({ kind: { const: "booking.propose.v2" }, turn, verificationRef: key, offerRef: key, now: str }),
     reply("bookingProposal", "progress", progress), "proposalOnly", "permittedActor", "callerConfirmation", ["activeCall", "bookingEnabledForExecution", "hostEvidenceForExecution"]),
+  "appointments.change.propose.v1": entry("appointments.change.propose.v1",
+    object({ kind: { const: "appointments.change.propose.v1" }, turn: sessionTurn,
+      selection: appointmentChangeSelection, now: str }),
+    reply("appointmentChangeProposal", "progress", progress), "proposalOnly", "permittedActor", "callerConfirmation",
+    ["activeCall", "currentCallSession", "appointmentChangeEnabledForExecution", "hostEvidenceForExecution"]),
+  "patients.intake.propose.v1": entry("patients.intake.propose.v1",
+    object({ kind: { const: "patients.intake.propose.v1" }, turn: sessionTurn, draftRef: key, now: str }),
+    reply("intakeProposal", "progress", progress), "proposalOnly", "permittedActor", "callerConfirmation",
+    ["activeCall", "currentCallSession", "intakeEnabledForExecution", "hostEvidenceForExecution"]),
   "calls.turn.model.v1": entry("calls.turn.model.v1",
     object({ kind: { const: "calls.turn.model.v1" }, turn, now: str }),
     reply("modelTurn", "progress", progress), "proposalOnly", "permittedActor", "none", ["activeCall"]),

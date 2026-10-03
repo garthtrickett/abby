@@ -3,7 +3,7 @@ import type { NotificationAuditPage, NotificationCatalogue, NotificationKind, No
 import type { VoiceCatalogue } from "../core/voice-profile.ts";
 import type { VoiceSettingAuditPage } from "../core/clinic-voice-setting.ts";
 import type { StaffedDestinationAuditPage, StaffedDestinationCatalogue } from "../core/staffed-destination.ts";
-import type { AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, GreetingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
+import type { AppointmentChangeSelection, AfterHoursSettingAuditPage, AutomationSettingAuditPage, BookingSettingAuditPage, GreetingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage, PolicyFailure, PolicyStore } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, CallPolicy, FinalCallerTurn, LocalStaffWindow, LocationScope, Result, StaffChangeRequest, StaffItem, TransitionFailure } from "../core/model.ts";
 import { TextReception } from "./text-reception.ts";
@@ -80,6 +80,8 @@ export type GatewayCommand =
     greetingVersion: string; approvedText: string; effectiveFrom: string; effectiveUntil: string }>
   | Readonly<{ kind: "settings.routing.greeting.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "booking.propose.v2"; turn: FinalCallerTurn; verificationRef: string; offerRef: string; now: string }>
+  | Readonly<{ kind: "appointments.change.propose.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; selection: AppointmentChangeSelection; now: string }>
+  | Readonly<{ kind: "patients.intake.propose.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; draftRef: string; now: string }>
   | Readonly<{ kind: "calls.turn.model.v1"; turn: FinalCallerTurn; now: string }>
   | Readonly<{ kind: "knowledge.answer.v2"; turn: FinalCallerTurn; sourceRefs: readonly string[]; proposedText: string; now: string }>
   | Readonly<{ kind: "knowledge.list.v1" }>
@@ -129,6 +131,8 @@ export type GatewayReply =
   | Readonly<{ kind: "staffScheduleSettingAudit"; page: StaffScheduleSettingAuditPage }>
   | Readonly<{ kind: "greetingSettingAudit"; page: GreetingSettingAuditPage }>
   | Readonly<{ kind: "bookingProposal"; progress: CallCommandProgress }>
+  | Readonly<{ kind: "appointmentChangeProposal"; progress: CallCommandProgress }>
+  | Readonly<{ kind: "intakeProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "modelTurn"; progress: CallCommandProgress }>
   | Readonly<{ kind: "knowledgeAnswer"; progress: CallCommandProgress }>
   | Readonly<{ kind: "knowledgeList"; entries: readonly KnowledgeEntry[] }>
@@ -191,7 +195,8 @@ export class CommandGateway {
   }
 
   listPermitted(): readonly CapabilityDescriptor[] {
-    const permitted: CapabilityId[] = ["settings.read.v1", "booking.propose.v2", "knowledge.answer.v2"];
+    const permitted: CapabilityId[] = ["settings.read.v1", "booking.propose.v2", "appointments.change.propose.v1",
+      "patients.intake.propose.v1", "knowledge.answer.v2"];
     if (this.reception.modelEnabled()) permitted.push("calls.turn.model.v1");
     if (this.reception.availabilityEnabled()) permitted.push("availability.read.v2");
     if (this.reception.appointmentReadEnabled()) permitted.push("appointments.read.v1");
@@ -414,6 +419,16 @@ export class CommandGateway {
         if (!command.turn.turnId || !command.turn.callId || !command.turn.text || !command.verificationRef || !command.offerRef) return err({ kind: "invalid" });
         const result = await this.reception.proposeBooking(this.actor.scope, command.turn, command.verificationRef, command.offerRef, command.now);
         return result.ok ? ok({ kind: "bookingProposal", progress: commandProgress(result.value, command.turn.turnId) }) : result;
+      }
+      case "appointments.change.propose.v1": {
+        if (!Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
+        const result = await this.reception.proposeAppointmentChange(this.actor.scope, command.turn, command.selection, command.now);
+        return result.ok ? ok({ kind: "appointmentChangeProposal", progress: commandProgress(result.value, command.turn.turnId) }) : result;
+      }
+      case "patients.intake.propose.v1": {
+        if (!Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
+        const result = await this.reception.proposeIntake(this.actor.scope, command.turn, command.draftRef, command.now);
+        return result.ok ? ok({ kind: "intakeProposal", progress: commandProgress(result.value, command.turn.turnId) }) : result;
       }
       case "calls.turn.model.v1": {
         if (!command.turn || !command.turn.turnId || !command.turn.callId || !command.turn.text ||
