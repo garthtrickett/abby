@@ -101,7 +101,7 @@ function prepare(data: TenantConfigArchiveData, mapper: ReferenceImportMapper):
       ...(location.omittedTextCalls === undefined ? {} : { omittedTextCalls: location.omittedTextCalls }),
       sourceScope: location.sourceScope, targetScope: location.targetScope,
       timeZone: location.timeZone, mappingProvenance: location.mappingProvenance,
-      policies: location.policies, automation: clinic.automation, clinicIntake: clinic.clinicIntake ?? [], clinicNotifications: clinic.clinicNotifications ?? [], writeStops: clinic.writeStops,
+      policies: location.policies, automation: clinic.automation, clinicIntake: clinic.clinicIntake ?? [], clinicNotifications: clinic.clinicNotifications ?? [], clinicVoice: clinic.clinicVoice ?? [], writeStops: clinic.writeStops,
       knowledge: location.knowledge };
     const mapped = mapConfig(scoped, location.targetScope, mapper);
     if (!mapped.ok) return mapped;
@@ -114,7 +114,7 @@ function prepare(data: TenantConfigArchiveData, mapper: ReferenceImportMapper):
       clinics.set(sourceClinicId, { scope: location.targetScope, history: mapped.value.automationHistory,
         sourceVersion: head?.version ?? 0, sourceEnabled: head?.enabled ?? false,
         intake: { history: mapped.value.clinicIntakeHistory, sourceVersion: intakeHead?.version ?? 0, sourceEnabled: intakeHead?.enabled ?? false },
-        notifications: clinic.clinicNotifications ?? [] });
+        notifications: clinic.clinicNotifications ?? [], voices: clinic.clinicVoice ?? [] });
     }
   }
   try {

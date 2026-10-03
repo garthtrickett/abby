@@ -85,7 +85,6 @@ export type ClinikoVoiceServerConfig = Readonly<{
     /** Opt-in alternate model; it may speak only if the primary yielded no audio. */
     speechFallbackModel?: string;
     speechPrimaryFirstChunkMs?: number;
-    voice?: string;
     fetch?: typeof fetch;
     transcriptionSocketFactory?: OpenAIRealtimeTranscriptionConfig["socketFactory"];
   }>;
@@ -214,9 +213,9 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     catch { /* operational diagnostics cannot alter a call */ }
   };
   // Validate provider configuration before exposing an HTTP listener.
-  const primarySynthesis = new OpenAISpeechSynthesis({ apiKey: openaiApiKey,
+  if ("voice" in config.openai) throw new RangeError("use clinic voice preferences instead of a global voice");
+  new OpenAISpeechSynthesis({ apiKey: openaiApiKey,
     ...(config.openai.speechModel ? { model: config.openai.speechModel } : {}),
-    ...(config.openai.voice ? { voice: config.openai.voice } : {}),
     ...(config.openai.fetch ? { fetchPort: config.openai.fetch } : {}) });
   if (config.openai.speechPrimaryFirstChunkMs !== undefined && !config.openai.speechFallbackModel) {
     throw new RangeError("speech fallback model required");
@@ -230,7 +229,6 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       (playbackOptions?.firstChunkDeadlineMs ?? 0) <= primaryFirstChunkMs) {
     throw new RangeError("speech fallback deadline unavailable");
   }
-  void primarySynthesis;
   const voiceProfiles = config.voiceProfiles ?? new OpenAIVoiceProfileHost({ apiKey: openaiApiKey,
     mode: "keypadAvailability", ...(config.transcriptionFactory ? { customTranscription: {
       version: "host-transcription.v1", create: config.transcriptionFactory } } : {}), ...(config.openai.speechModel ? { primaryModel: config.openai.speechModel } : {}),

@@ -3,7 +3,7 @@ import test from "node:test";
 import { ClinikoAvailabilityReader } from "../../src/cliniko/availability.ts";
 import { ok } from "../../src/core/model.ts";
 import { createStandaloneClinikoVoiceServer } from "../../src/standalone/cliniko-voice-server.ts";
-import type { ClinikoVoiceRoute } from "../../src/standalone/cliniko-voice-server.ts";
+import type { ClinikoVoiceRoute, ClinikoVoiceServerConfig } from "../../src/standalone/cliniko-voice-server.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresActiveCallClaims } from "../../src/storage/postgres-active-call-claims.ts";
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
@@ -139,3 +139,37 @@ test("E2E-163 standalone voice refuses a process-local, wrong-key, or foreign Cl
       assert.equal(providerReads, 0);
     } finally { await Promise.all([db.destroy(), foreignDb.destroy()]); }
   });
+
+test("standalone startup rejects legacy global voice overrides before database or provider access", async () => {
+  const db = connectPostgres("postgresql://postgres@127.0.0.1:1/unused");
+  const scope = { tenantId: "voice-tenant", clinicId: "clinic", locationId: "main" };
+  const rateBudget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-key-au5" });
+  let providerReads = 0;
+  const reader = ClinikoAvailabilityReader.create({ scope, apiKey: "synthetic-key-au5", rateBudget,
+    contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
+  async () => { providerReads += 1; throw new Error("provider must not be read"); });
+  assert.ok(reader.ok);
+  const config: ClinikoVoiceServerConfig = { db,
+    activeCallClaims: new PostgresActiveCallClaims("postgresql://postgres@127.0.0.1:1/unused", Buffer.alloc(32, 0x54)),
+    twilio: { accountSid: `AC${"1".repeat(32)}`, authToken: "synthetic-voice-token",
+      publicWebhookUrl: "https://calls.example.test/twilio/inbound",
+      publicStreamUrl: "wss://calls.example.test/twilio/media/",
+      fallbackNumbers: { "+6125550199": "+6125550188" }, bindingKey: Buffer.alloc(32, 0x46) },
+    routes: [{ dialedNumber: "+6125550199", scope, routeVersion: "v1", availability: reader.value, rateBudget,
+      approval: syntheticCatalogueApproval(reader.value, scope, {
+        accountRef: `AC${"1".repeat(32)}`, dialedNumber: "+6125550199", routeVersion: "v1" }),
+      timeZone: "Australia/Sydney", clinicDate: () => "2026-09-29",
+      keypadAvailabilityGreeting: { scope, version: "voice-keypad-v1", ownerRef: "clinic-owner", approved: true,
+        approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],
+    openai: { apiKey: "synthetic-openai-key", intentModel: "configured-model" }, readiness: async () => ok(true),
+  };
+  try {
+    // JavaScript callers and stale configurations must receive an explicit migration error.
+    for (const voice of ["coral", "", undefined]) {
+      const legacyOpenai = { ...config.openai, voice };
+      await assert.rejects(createStandaloneClinikoVoiceServer({ ...config, openai: legacyOpenai }),
+        /use clinic voice preferences instead of a global voice/);
+    }
+    assert.equal(providerReads, 0);
+  } finally { await db.destroy(); }
+});

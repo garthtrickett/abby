@@ -1,3 +1,5 @@
+import { voiceArchiveSnapshot } from "../portability/voice-history.ts";
+import type { ClinicVoiceArchiveRow } from "../portability/voice-history.ts";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import type { PolicyFailure } from "../core/host.ts";
@@ -17,6 +19,13 @@ export class MemoryClinicVoiceSettingStore implements ClinicVoiceSettingStore {
   constructor(registry: VoiceProfileRegistry = unprovenVoiceProfileRegistry, clock: () => string = () => new Date().toISOString()) {
     this.registry = registry;
     this.clock = clock;
+  }
+  /** Trusted archive import installs only validated public history; the importer adds target clears. */
+  importHistory(scope: VoiceClinicScope, rows: readonly ClinicVoiceArchiveRow[] | undefined): void {
+    if (!validVoiceScope(scope)) throw new Error("invalid imported voice scope");
+    const snapshot = voiceArchiveSnapshot(rows), key = clinicKey(scope);
+    this.states.set(key, structuredClone(snapshot.settings));
+    this.histories.set(key, structuredClone([...snapshot.history]));
   }
   async read(scope: VoiceClinicScope): Promise<Result<VoicePreferences, PolicyFailure>> {
     return validVoiceScope(scope) ? ok(structuredClone(this.states.get(clinicKey(scope)) ?? defaultVoicePreferences())) : err({ kind: "invalidValue" });

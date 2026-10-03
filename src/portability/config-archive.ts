@@ -1,3 +1,5 @@
+import { validVoiceArchiveHistory } from "./voice-history.ts";
+import type { ClinicVoiceArchiveRow } from "./voice-history.ts";
 import { validClinicIntakeArchiveHistory } from "./clinic-intake-history.ts";
 import type { ClinicIntakeArchiveRow } from "./clinic-intake-history.ts";
 import { validNotificationArchiveHistory } from "./notification-history.ts";
@@ -41,6 +43,7 @@ export type ConfigArchiveData = Readonly<{
   /** Absent in legacy archives: clinic version zero, disabled, with no audit history. */
   clinicIntake?: readonly ClinicIntakeArchiveRow[];
   clinicNotifications?: readonly ClinicNotificationArchiveRow[];
+  clinicVoice?: readonly ClinicVoiceArchiveRow[];
   writeStops: readonly Readonly<{ version: number; isHead: boolean; stopped: boolean; actorRef: string;
     reasonDigest: string; changedAt: string }>[];
   knowledge: readonly PortablePublishedKnowledge[];
@@ -71,6 +74,7 @@ export type TenantConfigArchiveData = Readonly<{
     automation: ConfigArchiveData["automation"];
     clinicIntake?: readonly ClinicIntakeArchiveRow[];
     clinicNotifications?: readonly ClinicNotificationArchiveRow[];
+    clinicVoice?: readonly ClinicVoiceArchiveRow[];
     writeStops: ConfigArchiveData["writeStops"];
   }>[];
 }>;
@@ -323,6 +327,7 @@ type MutableClinic = {
   automation: ConfigArchiveData["automation"][number][];
   clinicIntake: ConfigArchiveData["automation"][number][];
   clinicNotifications: ClinicNotificationArchiveRow[];
+  clinicVoice: ClinicVoiceArchiveRow[];
   writeStops: ConfigArchiveData["writeStops"][number][];
 };
 
@@ -389,7 +394,7 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
       locations.set(key, { sourceScope, targetScope, timeZone, mappingProvenance, policies: [], knowledge: [] });
       targetScopes.add(targetKey);
       if (!clinics.has(sourceScope.clinicId)) clinics.set(sourceScope.clinicId,
-        { sourceClinicId: sourceScope.clinicId, automation: [], clinicIntake: [], clinicNotifications: [], writeStops: [] });
+        { sourceClinicId: sourceScope.clinicId, automation: [], clinicIntake: [], clinicNotifications: [], clinicVoice: [], writeStops: [] });
     }
     if (locations.size !== declaredMappings.size) throw new InvalidConfigArchive("locations");
 
@@ -493,6 +498,15 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
           owner: row.owner as ClinicNotificationArchiveRow["owner"], previousOwner: row.previousOwner as ClinicNotificationArchiveRow["previousOwner"],
           changedBy: optionalRef(row.changedBy, "settings"),
           changedAt: row.changedAt === null ? null : new Date(instant(row.changedAt, "settings")).toISOString() });
+      } else if (row.kind === "clinicVoice") {
+        const fields = ["recordVersion", "recordId", "sourceTenantId", "sourceClinicId", "kind", "version", "isHead",
+          "locale", "voiceId", "settingKind", "value", "previousValue", "changedBy", "changedAt"];
+        if (Object.keys(row).sort().join(",") !== fields.sort().join(",") ||
+          row.recordId !== expectedId("voice", sourceClinicId, version)) throw new InvalidConfigArchive("settings");
+        clinic.clinicVoice.push({ version, isHead, locale: row.locale as string | null, voiceId: row.voiceId as string | null,
+          settingKind: row.settingKind as ClinicVoiceArchiveRow["settingKind"], value: row.value as string | null,
+          previousValue: row.previousValue as string | null, changedBy: optionalRef(row.changedBy, "settings"),
+          changedAt: row.changedAt === null ? null : new Date(instant(row.changedAt, "settings")).toISOString() });
       } else if (row.kind === "writeStop") {
         if (row.recordId !== expectedId("writeStop", sourceClinicId, version) ||
             typeof row.reasonDigest !== "string" || !/^[a-f0-9]{64}$/.test(row.reasonDigest)) {
@@ -573,7 +587,7 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
     for (const clinic of clinics.values()) {
       assertHeads(clinic.automation, "settings", 0);
       if (!validClinicIntakeArchiveHistory(clinic.clinicIntake)) throw new InvalidConfigArchive("settings");
-      if (!validNotificationArchiveHistory(clinic.clinicNotifications)) throw new InvalidConfigArchive("settings");
+      if (!validNotificationArchiveHistory(clinic.clinicNotifications) || !validVoiceArchiveHistory(clinic.clinicVoice)) throw new InvalidConfigArchive("settings");
       assertHeads(clinic.writeStops, "settings", 1);
     }
 
@@ -643,6 +657,6 @@ export async function decodeConfigArchive(input: ArchiveEnvelope, expectedTarget
     ...(location.omittedTextCalls === undefined ? {} : { omittedTextCalls: location.omittedTextCalls }),
     sourceScope: location.sourceScope, targetScope: location.targetScope, timeZone: location.timeZone,
     mappingProvenance: location.mappingProvenance, policies: location.policies, automation: clinic.automation, clinicIntake: clinic.clinicIntake ?? [],
-    clinicNotifications: clinic.clinicNotifications ?? [],
+    clinicNotifications: clinic.clinicNotifications ?? [], clinicVoice: clinic.clinicVoice ?? [],
     writeStops: clinic.writeStops, knowledge: location.knowledge });
 }

@@ -1,20 +1,30 @@
+import { connectPostgres } from "../../src/storage/connect.ts";
+import { PostgresLedger } from "../../src/storage/postgres-ledger.ts";
+import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
 import { CallAdmissionService, callIdFor } from "../../src/voice/admission.ts";
 import { SharedNumberIntakeService } from "../../src/voice/shared-number-intake.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import test from "node:test";
+import test, { after } from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import { err, ok } from "../../src/core/model.ts";
 import { voiceClinicScope } from "../../src/core/voice-profile.ts";
 import { captureVoiceProfile, listVoiceOptions } from "../../src/core/voice-profile-registry.ts";
-import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
+import { MemoryPolicyStore, referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 import { ClinicPolicyRouter, ReferenceNumberRoutingHost } from "../../src/reference/clinic-number-routing.ts";
 import { createEmbeddedVoiceComposition } from "../../src/reference/embedded-voice-composition.ts";
 import { OpenAIVoiceProfileHost } from "../../src/voice/openai-voice-profile.ts";
 import { value } from "../support/voice-settings-contract.ts";
 import type { OpenAIVoiceProfileConfig } from "../../src/voice/openai-voice-profile.ts";
+
+const backends = process.env.ABBY_LEDGER === "postgres" ? ["memory", "postgres"] as const : ["memory"] as const;
+if (process.env.ABBY_LEDGER === "postgres") {
+  assert.equal(process.env.ABBY_ISOLATED_POSTGRES_PROBE, "1"); assert.ok(process.env.DATABASE_URL);
+}
+const db = process.env.ABBY_LEDGER === "postgres" ? connectPostgres(process.env.DATABASE_URL!) : undefined;
+after(async () => { await db?.destroy(); });
 
 const now = "2026-10-03T00:00:00.000Z", date = "2026-10-04", startsAt = "2026-10-04T00:00:00.000Z";
 class Socket extends EventEmitter {
@@ -32,7 +42,7 @@ class Socket extends EventEmitter {
   close() { this.closed++; this.readyState = 3; this.emit("close"); }
   terminate() { this.close(); }
 }
-function fixture(options: Partial<OpenAIVoiceProfileConfig> = {}) {
+function fixture(options: Partial<OpenAIVoiceProfileConfig> = {}, backend: "memory" | "postgres" = "memory") {
   const scope = { tenantId: `voice-call-${randomUUID()}`, clinicId: "clinic", locationId: "first" };
   const requests: Array<{ model: string; voice: string; input: string }> = [], sockets: Socket[] = [];
   let approved = true, qualityVersion = "synthetic-quality.v1", availabilityReads = 0;
@@ -46,8 +56,11 @@ function fixture(options: Partial<OpenAIVoiceProfileConfig> = {}) {
     socketFactory: () => { const socket = new Socket(); sockets.push(socket); queueMicrotask(() => socket.emit("open")); return socket as never; },
     ...options,
   });
-  const policy = new MemoryPolicyStore(undefined, () => now, async () => ok(true), undefined, undefined, undefined, host);
-  const ledger = new MemoryLedger();
+  const policy = backend === "postgres"
+    ? new PostgresPolicyStore(db!, referenceDefaultPolicy, "unavailable", async () => ok(true), false,
+      "unsafeReference", true, "unavailable", undefined, undefined, host)
+    : new MemoryPolicyStore(undefined, () => now, async () => ok(true), undefined, undefined, undefined, host);
+  const ledger = backend === "postgres" ? new PostgresLedger(db!, suggested => suggested, undefined, "unsafeReference") : new MemoryLedger();
   const number = "+6125550123", account = `voice-account-${randomUUID()}`;
   const routing = new ReferenceNumberRoutingHost([{ ...scope, dialedNumber: number, accountRef: account, routeVersion: "voice-route.v1" }]);
   const call = (runtime: OpenAIVoiceProfileConfig["runtime"] = {}) => {
@@ -89,9 +102,9 @@ test("E2E-258 E2E-259 unset and partial settings deny complete call before provi
     assert.equal(app.sockets.length, 0); assert.equal(app.requests.length, 0); assert.equal(app.reads(), 0);
   }
 });
-for (const kind of ["locale", "voiceId"] as const) {
-  test(`E2E-${kind === "locale" ? "258" : "259"} complete captured call uses actual ${kind} adapter parameters before and after edit and clear`, async () => {
-    const app = fixture(); await configure(app);
+for (const backend of backends) for (const [kind, scenario] of [["locale", "E2E-258"], ["voiceId", "E2E-259"]] as const) {
+  test(`${scenario} ${backend} complete captured call uses actual ${kind} adapter parameters before and after edit and clear`, async () => {
+    const app = fixture({}, backend); await configure(app);
     const old = app.call(); assert.ok((await old.instance.begin(now)).ok); await old.acknowledge();
     assert.equal(app.requests[0]?.voice, "coral");
     const session = app.sockets[0]!.sessions[0] as { audio: { input: { transcription: { model: string; languages: string[] } } } };
@@ -107,6 +120,10 @@ for (const kind of ["locale", "voiceId"] as const) {
     assert.equal(newSpeech.voice, kind === "voiceId" ? "cedar" : "coral");
     assert.ok(newSpeech.input.includes(kind === "locale" ? "October 4" : "4 October"));
     const auditBefore = value(await app.policy.listVoiceChanges(app.scope)); assert.equal(auditBefore.entries.length, 3);
+    const providerCount = app.sockets.length, speechCount = app.requests.length, pmsReads = app.reads();
+    app.approve(false);
+    const withdrawn = await app.call().instance.begin(now); assert.ok(!withdrawn.ok && withdrawn.error.kind === "readinessFailed");
+    assert.deepEqual([app.sockets.length, app.requests.length, app.reads()], [providerCount, speechCount, pmsReads]);
     assert.ok((await app.policy.changeVoiceSetting(app.scope, "3", kind, null, "owner")).ok);
     const sockets = app.sockets.length, requests = app.requests.length;
     const denied = await app.call().instance.begin(now); assert.ok(!denied.ok && denied.error.kind === "readinessFailed");

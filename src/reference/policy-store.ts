@@ -1,3 +1,5 @@
+import { voiceImportHistory } from "../portability/voice-history.ts";
+import type { ClinicVoiceArchiveRow } from "../portability/voice-history.ts";
 import { MemoryClinicIntakeSettingStore } from "./clinic-intake-setting-store.ts";
 import { notificationArchiveSnapshot, notificationImportHistory } from "../portability/notification-history.ts";
 import type { ClinicNotificationArchiveRow } from "../portability/notification-history.ts";
@@ -71,6 +73,7 @@ export type ImportedReferenceClinicAutomation = Readonly<{
   sourceEnabled: boolean;
   intake?: Readonly<{ history: readonly ClinicIntakeAuditEntry[]; sourceVersion: number; sourceEnabled: boolean }>;
   notifications?: readonly ClinicNotificationArchiveRow[];
+  voices?: readonly ClinicVoiceArchiveRow[];
 }>;
 
 export class MemoryPolicyStore implements PolicyStore {
@@ -129,10 +132,11 @@ export class MemoryPolicyStore implements PolicyStore {
                       reschedulingHistory: readonly ReschedulingSettingAuditEntry[] = [],
                       intake?: ImportedReferenceClinicAutomation["intake"],
                       staffedDestinationHistory: readonly StaffedDestinationAuditEntry[] = [],
-                      notifications: readonly ClinicNotificationArchiveRow[] = []): MemoryPolicyStore {
+                      notifications: readonly ClinicNotificationArchiveRow[] = [],
+                      voices: readonly ClinicVoiceArchiveRow[] = []): MemoryPolicyStore {
     return MemoryPolicyStore.fromImportedMany(
       [{ scope, policy: sourceHead, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, cancellationHistory, reschedulingHistory, staffedDestinationHistory }],
-      [{ scope, history: automationHistory, sourceVersion: sourceAutomationVersion, sourceEnabled: sourceAutomationEnabled, notifications, ...(intake ? { intake } : {}) }],
+      [{ scope, history: automationHistory, sourceVersion: sourceAutomationVersion, sourceEnabled: sourceAutomationEnabled, notifications, voices, ...(intake ? { intake } : {}) }],
       importActorRef, importedAt);
   }
 
@@ -196,6 +200,7 @@ export class MemoryPolicyStore implements PolicyStore {
         enabled: clinic.intake?.sourceEnabled ?? false }, clinic.intake?.history ?? [], importActorRef, importedAt);
       const notifications = notificationArchiveSnapshot(notificationImportHistory(clinic.notifications, importActorRef, importedAt));
       store.notifications.importSnapshot(clinic.scope, notifications.settings, notifications.history);
+      store.voices.importHistory(voiceClinicScope(clinic.scope), voiceImportHistory(clinic.voices, importActorRef, importedAt));
     }
     return store;
   }
