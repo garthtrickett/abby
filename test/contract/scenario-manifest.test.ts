@@ -32,6 +32,9 @@ function read(path: string): string { return readFileSync(new URL(path, root), "
 
 test("scenario manifest tracks every designed E2E and never promotes a planned fixture to full-call evidence", () => {
   const manifest = JSON.parse(read("phase-0/SCENARIO_MANIFEST.json")) as Manifest;
+  const overview = read("phase-0/SCENARIO_MANIFEST.md");
+  assert.equal(overview.split("\n")[0], `# Scenario manifest, version ${manifest.version}`);
+  assert.ok(overview.includes(`tracks the ${manifest.scenarios.length} stable E2E IDs`));
   const design = read("TECHNICAL_DESIGN.md");
   const rows = [...design.matchAll(/^\| `(E2E-\d{3})` \| (.*?) \| (FR-\d{2}(?:, FR-\d{2})*) \|$/gm)];
   assert.equal(manifest.version, "1.71");

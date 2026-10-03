@@ -2,7 +2,7 @@
 
 ## Status
 
-Local implementation closes a D2 gateway gap: cancellation, rescheduling and intake were supported by the reception core and voice composition, but had no schema-defined agent proposal commands. No new patient action is enabled in standalone Cliniko. Current gateway, PostgreSQL, voice-session and TypeScript checks pass. Registration and broad/parallel release remain open.
+Local implementation closes a D2 gateway gap: cancellation, rescheduling and intake were supported by the reception core and voice composition, but had no schema-defined agent proposal commands. No new patient action is enabled in standalone Cliniko. Manifest 1.71 registers E2E-261. The complete local release on source `558b66aa9e1c79dbe4f0fd3158a71b7d8071031c` passed, including actual PostgreSQL, full browser and mapped parallel isolation; see the final evidence below. Publication remains pending.
 
 ## Commands and authority
 
@@ -40,4 +40,18 @@ Initial evidence is retained with corrections:
 - The first voice-fixture typecheck rejected two potentially absent playback IDs. Explicit presence assertions keep the fixture tied to concrete playback evidence. `Abby voice gateway actual playback identifiers current type and regression correction` passed TypeScript, all 17 gateway/voice cases without skips and diff check in 37s. Logs: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791008344330.log` and `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791008558320.log`.
 - `Abby registered proposal manifest governance trace and complete focused PostgreSQL voice gate` passed **36 complete-file checks with zero failures/skips**, including registration/trace contracts, existing reference/cross-mode booking, new PostgreSQL conformance, eleven memory cases and six voice journeys, with four file workers. Command: `bash scripts/with-postgres.sh bash -c 'npm run db:migrate && node --test --test-concurrency=4 test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts test/composition/reference.test.ts test/composition/cross-mode-appointment-proposals.test.ts test/composition/cross-mode-agent-conformance.test.ts test/text/agent-appointment-proposals.test.ts test/voice/agent-appointment-proposal-call.test.ts'`. Log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791009352276.log`. The [direct maintainability review](AGENT_APPOINTMENT_PROPOSALS_REVIEW.md) has no remaining substantive finding; complete release and parallel gates are still required.
 
-The gateway-to-voice-session contract now has complete local journey proof. Register the commands and scenario evidence, update the agent contracts and work plan, run final release/parallel gates, and publish the complete change. Broader signed ingress and real carrier evidence retain their own existing gates.
+The gateway-to-voice-session contract and registered local release are verified. Publish the complete change after recording the evidence; broader signed ingress, buyer integration and real carrier evidence retain their own existing gates.
+
+## Final local release — 2026-10-03
+
+`Abby agent proposal 558b66a complete local release and mapped parallel isolation` **passed, exit 0, 51m11s**, with source frozen at `558b66aa9e1c79dbe4f0fd3158a71b7d8071031c`. It ran `npm run typecheck`, `ABBY_LEDGER=memory npm run test:text`, `npm run probe:postgres`, `npm run test:browser`, `npm run test:settings-isolation` and `ABBY_LEDGER=postgres npm run test:settings-isolation:postgres`, with exact-source, generated-type and diff checks before/after.
+
+- Memory: **724 passed**, zero failed; 39 PostgreSQL/live-only cases skipped in this stage.
+- PostgreSQL: **1,197 passed**, zero failed; one opt-in live-provider case skipped. Migration up/down/up, populated upgrades and actual Kanel generation passed without generated drift.
+- Browser: **72 journeys passed** with the existing two workers. The separate Node/browser scheduling coordinators passed.
+- Representative setting isolation: **18 checks across six files**, individually and in both four-worker dispatch orders.
+- Complete mapped isolation: **517 Node checks across 60 files** and **59 browser journeys across 12 files**, each alone and in forward/reverse order with four Node or three browser workers. Every mapped run has zero failures/skips; both mapped coordinators also passed.
+
+Log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791009772311.log`. This closes the local D2 proposal-gateway gap. It does not prove a production buyer, Cliniko mutation safety or carrier behavior. Strict standalone patient actions remain unavailable.
+
+A final documentation audit found the Markdown overview still at version 1.68/257 IDs despite the tested JSON registry at 1.71/261. An added contract assertion reproduced that mismatch; synchronizing the overview and checking version/count in the existing contract prevents this particular drift. Publication-source documentation validation is separate from the full release above; production and remaining runtime/test inputs must remain identical to that tested source.
