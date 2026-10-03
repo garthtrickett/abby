@@ -178,3 +178,31 @@ test("E2E-262 actual directory role changes and revocation remove clinic aggrega
     assert.equal((await page.request.get(`${app.origin}/api/settings`)).status(), 403);
   });
 });
+
+test("E2E-262 clinic setup renders a disabled loading state while actual catalogue traffic is held", async ({ page }) => {
+  await withClinicOperations(async app => {
+    const link = await requestBrowserMagicLink(page, app.origin, app.mail);
+    let release: () => void = () => {};
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    await page.route("**/api/clinic-availability/command", async route => {
+      if (route.request().postDataJSON().kind === "clinic.availability.businesses.list.v1") await pending;
+      await route.continue();
+    });
+    try {
+      await page.goto(link); await page.getByRole("button", { name: "Continue to Abby" }).click();
+      const setup = page.getByRole("region", { name: "Read-only availability setup", exact: true });
+      await expect(setup.getByRole("heading")).toBeVisible();
+      await expect(setup.getByLabel("Availability setup loading")).toHaveText("Loading clinic setup...");
+      await expect(setup.getByLabel("Availability approval status")).toHaveText("Checking current approval...");
+      assert.ok(await setup.getByRole("button").count() > 0);
+      for (const button of await setup.getByRole("button").all()) await expect(button).toBeDisabled();
+      assert.equal(app.providerPaths.length, 0, "the held catalogue request has not reached Cliniko");
+      release();
+      await expect(setup.getByLabel("Availability setup loading")).toHaveCount(0);
+      await expect(setup.getByLabel("Availability approval status")).toContainText("No approved availability route · version 0");
+      await expect(setup.getByRole("button", { name: "Inspect selection", exact: true })).toBeEnabled();
+      await expect(setup.getByRole("button", { name: "Approve read-only route", exact: true })).toBeDisabled();
+      assert.deepEqual(app.providerPaths, ["/v1/businesses"]);
+    } finally { release(); await page.unrouteAll({ behavior: "wait" }); }
+  });
+});
