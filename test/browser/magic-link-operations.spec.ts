@@ -21,6 +21,7 @@ import { ok } from "../../src/core/model.ts";
 import type { OperationalDailyCounts } from "../../src/voice/operational-counts.ts";
 
 test.use({ ignoreHTTPSErrors: true });
+const now = "2026-10-03T10:00:00.000Z";
 const privateTranscript = "synthetic-private-transcript-262";
 const privatePatient = "synthetic-private-patient-262";
 const reportPath = "/synthetic-owner-only/speech-report-262.json";
@@ -46,7 +47,7 @@ async function withClinicOperations(run: (app: Readonly<{
     };
     try {
       await replaceAccount(account);
-      const counters = new PostgresOperationalCounters(db);
+      const counters = new PostgresOperationalCounters(db, () => now);
       await Promise.all([
         counters.record(account.actor.scope, "voiceFailure"),
         counters.record(account.actor.scope, "intentClassificationUnavailable"),
@@ -56,7 +57,7 @@ async function withClinicOperations(run: (app: Readonly<{
       ]);
       await withHttpsApplication(async origin => {
         const prepare = async (): Promise<MagicLinkHttp> => {
-          const app = await createStandaloneClinikoMagicLinkAdmin({ db, scope: account.actor.scope, publicOrigin: origin,
+          const app = await createStandaloneClinikoMagicLinkAdmin({ db, scope: account.actor.scope, publicOrigin: origin, now: () => now,
             apiKey: "synthetic-operations-key-au5", contactEmail: "test@example.test",
             fetch: async input => {
               const pathname = new URL(String(input)).pathname; providerPaths.push(pathname);
