@@ -2,7 +2,7 @@
 
 ## Status — 2026-10-03
 
-Local D1/D3 implementation connects the actual standalone Cliniko magic-link application to its existing aggregate and speech-status screens. Three new complete HTTPS browser journeys have focused proof; the final registered-source and parallel gates remain open. No email provider is selected. Messages, catalogue replies and speech reports in these journeys are synthetic.
+Local D1/D3 implementation connects the actual standalone Cliniko magic-link application to its existing aggregate and speech-status screens. Three new complete HTTPS browser journeys have focused proof; the final registered-source and parallel gates passed on `67ea968`. Publication remains pending. No email provider is selected. Messages, catalogue replies and speech reports in these journeys are synthetic.
 
 ## Contract
 
@@ -39,3 +39,14 @@ Real mail delivery, approved deployed accounts/recovery and production HTTPS/pro
 `Abby fd174e4 full browser and mapped three worker operation isolation release` **failed, exit 1, 6m32s**. The broad browser suite passed 72 journeys and failed the existing actual Cliniko login plus the new operational admin journey at their unchanged five-second heading assertion. Traces show valid signed-in operational/speech panels and successful setup requests still completing: the availability panel remained blank until all initial reads resolved. Mapped isolation was not reached. Log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791011092000.log`.
 
 The correction renders the existing permitted availability panel immediately, uses its existing busy state to disable actions and shows loading/current approval unknown. It does not raise deadlines, reduce workers, add retries or claim a missing approval from incomplete reads. `Abby actual Cliniko loading state held catalogue and prior HTTPS failure correction` **passed, exit 0, 51s**: **four HTTPS journeys** with two workers include both earlier failed journeys and the new deliberately held catalogue case, followed by diff check. Command: `npm run build:cliniko-admin && npm run build:sign-in && npx playwright test test/browser/magic-link-operations.spec.ts test/browser/magic-link-cliniko.spec.ts && git diff --check`. Log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791011713628.log`. Final validation remains required after restoring the existing completed catalogue-failure wording and registering the loading evidence.
+
+## Final local recovery release — 2026-10-03
+
+Source `67ea96859708c41303722b35559ac357c60365f2` remained frozen through both terminal gates:
+
+- `Abby 67ea968 final registered operational loading identity PostgreSQL and type gate` **passed, exit 0, 3m38s**. Typecheck and **19 Node/PostgreSQL complete-file checks** passed with four workers and zero failures/skips; exact-source and diff checks passed. It ran the same seven files and migrated disposable PostgreSQL command recorded above. Log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791011963374.log`.
+- `Abby 67ea968 complete browser and mapped parallel loading recovery gate` **passed, exit 0, 23m35s**. `npm run test:browser` passed **75 journeys** with two workers and its separate scheduling coordinator. `npm run test:settings-isolation:browser` passed the mapped coordinator and **62 journeys across 13 files**, alone and in both actual three-worker forward/reverse orders, with zero failures/skips. Both previously failed journeys and the held catalogue case participate. Exact-source and diff checks passed. Log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791011963836.log`.
+
+The source was then rebased onto the normal merge of proposal PR #358, `faff381eec34e4ce303b2bbda273885845a006a0`. This inherited its independent overview metadata assertions. The overview now matches manifest 1.72/262; focused registration/trace validation passed **two checks without failures/skips**, and production, scripts, dependency/registry inputs and all other runtime fixtures compare identical to `67ea968`. These documentation checks do not replace or claim another full runtime sweep.
+
+This closes the local D1/D3 operational identity and loading contracts. Real mail, approved deployed accounts, production proxy/identity, speech-quality promotion and clinic-approved patient follow-up remain open as stated above.
