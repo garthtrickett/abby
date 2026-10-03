@@ -23,6 +23,8 @@ export type AdmissionResult = Readonly<{ kind: "created" | "duplicate"; receipt:
 export type PendingLocationRoute = Readonly<{
   tenantId: string;
   clinicId: string;
+  /** Captured before a shared-number prompt. Legacy stored routes without it grant no new voice authority. */
+  voiceProfile?: import("./voice-profile.ts").VoiceProfile;
   candidateLocationIds: readonly string[];
   candidateNames: readonly Readonly<{ locationId: string; spokenName: string }>[];
   routeVersion: string;

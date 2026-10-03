@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import test from "node:test";
@@ -44,7 +45,7 @@ function pcm(tone: number): Uint8Array {
 test("E2E-240 signed embedded model answer completes and an in-flight correction suppresses its predecessor",
   { timeout: 60_000 }, async () => {
   const ledger = new MemoryLedger();
-  const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+  const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
   assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
   const knowledge = new MemoryKnowledgeCatalogue();
   for (const [sourceRef, text] of [["hours", oldAnswer], ["parking", correctedAnswer]]) {
@@ -84,15 +85,15 @@ test("E2E-240 signed embedded model answer completes and an in-flight correction
       resolveIntent: async turn => ok(turn.text.startsWith("Actually")
         ? { kind: "answer", sourceRefs: ["parking"], proposedText: correctedAnswer }
         : { kind: "model" }),
-      transcription: { async accept() { return ok([]); }, async flush(generation) {
+      ...syntheticSpeech({ synthesis: { async *stream(text) {
+        spoken.set(callSid, [...(spoken.get(callSid) ?? []), text]);
+        yield pcm(text === oldAnswer ? 2_000 : text === correctedAnswer ? 3_000 : 1_000);
+      } }, transcription: { async accept() { return ok([]); }, async flush(generation) {
         utterance += 1;
         return ok([{ kind: "segmentFinal", sessionId, generation, utteranceId: `model-${utterance}`,
           text: utterance === 1 ? "What are your hours?" : "Actually, where can I park?", quality: "clear" }]);
-      } },
-      synthesis: { async *stream(text) {
-        spoken.set(callSid, [...(spoken.get(callSid) ?? []), text]);
-        yield pcm(text === oldAnswer ? 2_000 : text === correctedAnswer ? 3_000 : 1_000);
-      } },
+      } } }),
+
       mediaOptions: { silenceMs: 100 },
     });
     return { receive: raw => call.receive(raw), disconnect: () => call.disconnect() };

@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
@@ -29,12 +30,12 @@ function newCall(index: number, ledger: MemoryLedger, policy: MemoryPolicyStore,
     resolveIntent: async turn => ok(turn.text === "Book physio"
       ? { kind: "book", verificationRef: patient.verificationRef, offerRef: offer.offerRef }
       : { kind: "affirm" }),
-    transcription: { async accept() { return ok([]); }, async flush(generation) {
+    ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush(generation) {
       utterance += 1;
       return ok([{ kind: "segmentFinal", sessionId, generation,
         utteranceId: `caller-${utterance}`, text: utterance === 1 ? "Book physio" : "Yes", quality: "clear" }]);
-    } },
-    synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
+    } } }),
+
     output: { async queueChunk(playbackId, sequence) {
       chunks.set(playbackId, [...(chunks.get(playbackId) ?? []), sequence]);
       return "queued" as const;
@@ -72,7 +73,7 @@ function newCall(index: number, ledger: MemoryLedger, policy: MemoryPolicyStore,
 
 test("E2E-010 embedded voice applies booking default, enabled and disabled to the next call", async () => {
   const ledger = new MemoryLedger();
-  const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+  const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
   assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
   const host = new ReferenceClinicHost([patient], [offer]);
   const routing = new ReferenceNumberRoutingHost([{ ...scope, accountRef: "buyer-provider",
@@ -140,7 +141,7 @@ test("E2E-010 embedded voice applies booking default, enabled and disabled to th
 
 test("E2E-074 embedded voice stop and resume affect the next call without replaying a blocked booking", async () => {
   const ledger = new MemoryLedger(async () => ok(true));
-  const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+  const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
   assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
   assert.ok((await policy.changeBookingEnabled(scope, "0", true, "clinic-admin")).ok);
   const host = new ReferenceClinicHost([patient], [offer]);

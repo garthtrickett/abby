@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
@@ -12,7 +13,7 @@ test("E2E-144 embedded host supplies voice storage, settings, and media through 
   const now = "2026-09-29T10:00:00.000Z";
   const scope = { tenantId: "buyer", clinicId: "clinic", locationId: "main" };
   const ledger = new MemoryLedger();
-  const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+  const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
   assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "host-admin")).ok);
   const host = new ReferenceClinicHost([], []);
   const event = { key: { accountRef: "buyer-provider", providerCallRef: "buyer-call" },
@@ -24,11 +25,11 @@ test("E2E-144 embedded host supplies voice storage, settings, and media through 
   const call = createEmbeddedVoiceComposition({ event, sessionId: "buyer-session", ledger, policy, routing,
     host, readiness: async () => ok(true),
     resolveIntent: async () => ok({ kind: "handoff", reason: "callerRequested" }),
-    transcription: { async accept() { return ok([]); }, async flush(generation) {
+    ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush(generation) {
       return ok([{ kind: "segmentFinal", sessionId: "buyer-session", generation,
         utteranceId: "caller-one", text: "Please speak with staff", quality: "clear" }]);
-    } },
-    synthesis: { async *stream() { yield new Uint8Array(640); } },
+    } } }),
+
     output: { async queueChunk(playbackId, sequence) { queued.push({ playbackId, sequence }); return "queued"; },
       async finishQueue(playbackId) { finishedPlayback = playbackId; return "queued"; },
       async clear() { return true; } },
@@ -72,7 +73,7 @@ test("E2E-145 embedded voice books only after exact details playback and a later
   const now = "2026-09-29T10:00:00.000Z";
   const scope = { tenantId: "buyer-booking", clinicId: "clinic", locationId: "main" };
   const ledger = new MemoryLedger();
-  const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+  const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
   assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "host-admin")).ok);
   assert.ok((await policy.changeBookingEnabled(scope, "0", true, "host-admin")).ok);
   const patient = { scope, patientRef: "host-patient", verificationRef: "host-verified",
@@ -92,13 +93,13 @@ test("E2E-145 embedded voice books only after exact details playback and a later
     resolveIntent: async turn => ok(turn.text === "Book physio"
       ? { kind: "book", verificationRef: "host-verified", offerRef: "host-offer" }
       : { kind: "affirm" }),
-    transcription: { async accept() { return ok([]); }, async flush(generation) {
+    ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush(generation) {
       const text = utterances[nextUtterance++];
       assert.ok(text);
       return ok([{ kind: "segmentFinal", sessionId: "booking-session", generation,
         utteranceId: `caller-${nextUtterance}`, text, quality: "clear" }]);
-    } },
-    synthesis: { async *stream() { yield new Uint8Array(640); yield new Uint8Array(640); } },
+    } } }),
+
     output: { async queueChunk(playbackId, sequence) { queued.push({ playbackId, sequence }); return "queued"; },
       async finishQueue() { return "queued"; }, async clear() { return true; } },
     mediaOptions: { silenceMs: 100 }, now: () => now,
@@ -166,7 +167,7 @@ test("E2E-148 embedded voice reads interchangeable host diaries and only speaks 
   await Promise.all(providers.map(async provider => {
     const scope = { tenantId: `buyer-${provider.name}`, clinicId: "clinic", locationId: "main" };
     const ledger = new MemoryLedger();
-    const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+    const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "host-admin")).ok);
     const host = new ReferenceClinicHost([], []);
     const event = { key: { accountRef: `account-${provider.name}`, providerCallRef: `call-${provider.name}` },
@@ -183,11 +184,11 @@ test("E2E-148 embedded voice reads interchangeable host diaries and only speaks 
           timeZone: "Australia/Sydney", observedAt: now, startsAt: [provider.startsAt], reservable: false });
       } },
       resolveIntent: async () => ok({ kind: "availability", from: "2026-10-01", to: "2026-10-02" }),
-      transcription: { async accept() { return ok([]); }, async flush(generation) {
+      ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush(generation) {
         return ok([{ kind: "segmentFinal", sessionId: `session-${provider.name}`, generation,
           utteranceId: "caller-one", text: "What times are available?", quality: "clear" }]);
-      } },
-      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      } } }),
+
       output: { async queueChunk(playbackId, sequence) { queued.push({ playbackId, sequence }); return "queued"; },
         async finishQueue() { return "queued"; }, async clear() { return true; } },
       mediaOptions: { silenceMs: 100 }, now: () => now,

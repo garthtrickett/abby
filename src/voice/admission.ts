@@ -1,3 +1,5 @@
+import { validVoicePresentation } from "../core/voice-presentation.ts";
+import { validVoicePolicy, validVoiceProfile } from "../core/voice-profile.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { pendingCallId, policyMatchesPending } from "../core/pending-location.ts";
 import type { ModelKnowledgeContextHost } from "../core/host.ts";
@@ -54,6 +56,8 @@ export class CallAdmissionService {
 
   private async preparePolicy(policy: CallPolicy): Promise<Result<Readonly<{ policy: CallPolicy; acceptedAt: string }>, RouteFailure | TransitionFailure>> {
     if (policy.automationEnabled !== true) return err({ kind: "automationDisabled" });
+    if (!validVoicePolicy(policy, policy.scope) || !policy.voiceProfile || !validVoicePresentation(policy.voiceProfile)) return err({ kind: "readinessFailed" });
+    policy = structuredClone(policy);
     if (!validApprovedGreeting(policy)) return err({ kind: "readinessFailed" });
     let ready = false;
     try {
@@ -126,10 +130,17 @@ export class CallAdmissionService {
         : err({ kind: "storageCorrupt" });
     }
     if (pending.value.status !== "pending") return err({ kind: "storageCorrupt" });
-    if (!policyMatchesPending(pending.value, policy)) return err({ kind: "scopeMismatch" });
+    const profile = pending.value.route.voiceProfile;
+    const selectedPolicy: CallPolicy = profile ? { ...policy,
+      voiceSettings: { version: profile.settingsVersion, locale: profile.locale, voiceId: profile.voiceId },
+      voiceProfile: structuredClone(profile) } : policy;
+    if (!policyMatchesPending(pending.value, selectedPolicy)) return err({ kind: "scopeMismatch" });
     if (!pending.value.sessionLease || pending.value.sessionLease.sessionId !== sessionId ||
         pending.value.sessionLease.version !== expectedLeaseVersion) return err({ kind: "leaseLost" });
-    const prepared = await this.preparePolicy(policy);
+    if (!validVoiceProfile(profile, { tenantId: pending.value.route.tenantId, clinicId: pending.value.route.clinicId })) {
+      return err({ kind: "readinessFailed" });
+    }
+    const prepared = await this.preparePolicy(selectedPolicy);
     if (!prepared.ok) {
       const raced = await this.ledger.findAdmission(callId);
       if (!raced.ok) return raced;

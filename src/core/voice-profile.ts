@@ -114,3 +114,10 @@ export function validVoiceCatalogue(value: unknown, scope: VoiceClinicScope): va
     (catalogue.locales as readonly VoiceChoice[]).every(locale => pairs.some(pair => pair?.locale === locale.id)) &&
     (catalogue.voices as readonly VoiceChoice[]).every(voice => pairs.some(pair => pair?.voiceId === voice.id));
 }
+
+export function sameVoiceProfile(left: VoiceProfile, right: VoiceProfile): boolean {
+  return sameVoiceScope(left.scope, right.scope) &&
+    ["settingsVersion", "hostVersion", "locale", "voiceId", "transcriptionVersion", "synthesisVersion",
+      "presentationVersion", "qualityVersion", "configurationHash"].every(key =>
+      left[key as Exclude<keyof VoiceProfile, "scope">] === right[key as Exclude<keyof VoiceProfile, "scope">]);
+}

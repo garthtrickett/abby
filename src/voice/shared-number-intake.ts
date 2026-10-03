@@ -87,12 +87,14 @@ export class SharedNumberIntakeService {
       return admitted.ok ? ok({ kind: "admitted", admission: admitted.value }) : admitted;
     }
     if (!identified.value.candidateNames) return err({ kind: "routeUnavailable" });
+    const profile = await this.router.captureVoice(identified.value);
+    if (!profile.ok) return profile;
     const acceptedAt = this.now();
     if (!Number.isFinite(Date.parse(acceptedAt))) return err({ kind: "invalidTransition" });
     const reservation = await this.ledger.reservePendingLocation(callId, {
       tenantId: identified.value.tenantId, clinicId: identified.value.clinicId,
       candidateLocationIds: identified.value.candidateLocationIds, candidateNames: identified.value.candidateNames,
-      routeVersion: identified.value.routeVersion,
+      routeVersion: identified.value.routeVersion, voiceProfile: profile.value,
     }, { key: event.key, dialedNumber: event.dialedNumber, acceptedAt,
       deadline: new Date(Date.parse(acceptedAt) + 120_000).toISOString() });
     if (reservation.ok) return reservation.value.pending.status === "pending"

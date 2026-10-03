@@ -1,3 +1,4 @@
+import { supportedVoiceLocale } from "./voice-presentation.ts";
 import { err, ok } from "./model.ts";
 import type { AppointmentRead, LocationScope, Result } from "./model.ts";
 
@@ -13,20 +14,20 @@ function millis(value: string): number | undefined {
 }
 
 /** Converts a complete, recently verified host read into limited caller-safe wording. */
-export function appointmentPresentation(snapshot: AppointmentRead, scope: LocationScope, from: string, to: string, now: string): Result<Presentation, Readonly<{ kind: "invalidEvidence" }>> {
+export function appointmentPresentation(snapshot: AppointmentRead, scope: LocationScope, from: string, to: string, now: string, locale = "en-AU"): Result<Presentation, Readonly<{ kind: "invalidEvidence" }>> {
   const fromMs = millis(from);
   const toMs = millis(to);
   const nowMs = millis(now);
   const observedMs = millis(snapshot?.observedAt);
   const expiresMs = millis(snapshot?.proofExpiresAt);
-  if (!snapshot || !snapshot.scope || !sameScope(snapshot.scope, scope) ||
+  if (!supportedVoiceLocale(locale) || !snapshot || !snapshot.scope || !sameScope(snapshot.scope, scope) ||
       !snapshot.sourceRef || snapshot.sourceRef.length > 256 || !snapshot.patientRef || !snapshot.verificationRef ||
       fromMs === undefined || toMs === undefined || nowMs === undefined || observedMs === undefined || expiresMs === undefined ||
       toMs <= fromMs || expiresMs <= nowMs || observedMs > nowMs || nowMs - observedMs > 120_000 ||
       !Array.isArray(snapshot.appointments) || snapshot.appointments.length > 500 ||
       typeof snapshot.timeZone !== "string" || !snapshot.timeZone.trim()) return err({ kind: "invalidEvidence" });
   let formatter: Intl.DateTimeFormat;
-  try { formatter = new Intl.DateTimeFormat("en-AU", { timeZone: snapshot.timeZone, weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" }); }
+  try { formatter = new Intl.DateTimeFormat(locale, { timeZone: snapshot.timeZone, weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" }); }
   catch { return err({ kind: "invalidEvidence" }); }
   const seen = new Set<string>();
   const times: number[] = [];

@@ -1,3 +1,6 @@
+import { validVoicePresentation } from "../core/voice-presentation.ts";
+import { validVoicePolicy, sameVoiceProfile } from "../core/voice-profile.ts";
+import type { VoiceProfile } from "../core/voice-profile.ts";
 import type { PolicyStore } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { CallPolicy, LocationScope, Result } from "../core/model.ts";
@@ -59,7 +62,7 @@ export class ClinicPolicyRouter {
     }
     const identity = identified.value;
     if (!validIdentity(identity, accountRef, dialedNumber)) return err({ kind: "routeUnavailable" });
-    return ok(identity);
+    return ok(structuredClone(identity));
   }
 
   private async loadPolicy(identity: ClinicIdentity, locationId: string): Promise<Result<CallPolicy, RouteFailure>> {
@@ -71,8 +74,23 @@ export class ClinicPolicyRouter {
       if (bound.tenantId !== scope.tenantId || bound.clinicId !== scope.clinicId || bound.locationId !== scope.locationId) {
         return err({ kind: "routeUnavailable" });
       }
-      return ok({ ...loaded.value, numberRouteVersion: identity.routeVersion });
+      return ok({ ...structuredClone(loaded.value), numberRouteVersion: identity.routeVersion });
     } catch { return err({ kind: "routeUnavailable" }); }
+  }
+
+  /** Every candidate location must observe the same complete clinic speech revision before any prompt. */
+  async captureVoice(identity: ClinicIdentity): Promise<Result<VoiceProfile, RouteFailure>> {
+    if (!validIdentity(identity, identity.accountRef, identity.dialedNumber)) return err({ kind: "routeUnavailable" });
+    const bound = structuredClone(identity);
+    const policies = await Promise.all(bound.candidateLocationIds.map(id => this.loadPolicy(bound, id)));
+    let captured: VoiceProfile | undefined;
+    for (const loaded of policies) {
+      if (!loaded.ok) return loaded;
+      if (!validVoicePolicy(loaded.value, loaded.value.scope) || !loaded.value.voiceProfile || !validVoicePresentation(loaded.value.voiceProfile)) return err({ kind: "readinessFailed" });
+      if (captured && !sameVoiceProfile(captured, loaded.value.voiceProfile)) return err({ kind: "readinessFailed" });
+      captured = loaded.value.voiceProfile;
+    }
+    return captured ? ok(structuredClone(captured)) : err({ kind: "readinessFailed" });
   }
 
   readonly resolve: PolicyResolver = async (dialedNumber, accountRef) => {

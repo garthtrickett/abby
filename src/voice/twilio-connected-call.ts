@@ -77,7 +77,7 @@ export class TwilioConnectedCall {
       startedAt: config.streamStartedAt, send: config.send });
     this.call = new ConnectedVoiceCall({ event: config.event, sessionId: config.sessionId,
       ledger: config.ledger, intake: config.intake, fullFactory: config.fullFactory,
-      transcription: config.transcription, synthesis: config.synthesis, output: this.stream,
+      speech: config.speech, output: this.stream,
       ...(config.monotonicNow ? { monotonicNow: config.monotonicNow } : {}),
       ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}),
       ...(config.playbackOptions ? { playbackOptions: config.playbackOptions } : {}),

@@ -1,3 +1,4 @@
+import { withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
@@ -44,8 +45,8 @@ function fixture(kind: "memory" | "postgres") {
   let policyReads = 0;
   const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggested => suggested, undefined, "unsafeReference") : new MemoryLedger();
   const policy = kind === "postgres"
-    ? new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true), true, "unsafeReference")
-    : new MemoryPolicyStore("execute", () => now, async () => ok(true));
+    ? withApprovedSyntheticVoice(new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true), true, "unsafeReference"))
+    : withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
   const router = new ClinicPolicyRouter({ identifyCall(accountRef, dialedNumber) {
     identityReads += 1;
     return routeHost.identifyCall(accountRef, dialedNumber);
@@ -81,14 +82,14 @@ function pausePendingRead(ledger: LedgerStore): { ledger: LedgerStore; entered: 
 }
 
 for (const kind of kinds) {
-  test(`${kind}: shared-number retry reuses durable candidates without reading location policy`, async () => {
+  test(`${kind}: shared-number capture reads candidate profiles once and retry reuses durable candidates`, async () => {
     const app = fixture(kind);
     const event = app.event("retry");
     const first = value(await app.intake.begin(event));
     assert.equal(first.kind, "locationChoice");
     assert.equal(first.newReservation, true);
     assert.deepEqual(first.pending.route.candidateLocationIds, ["main", "other"]);
-    assert.equal(app.policyReads(), 0);
+    assert.equal(app.policyReads(), 2);
     assert.equal(value(await app.ledger.findAdmission(callIdFor(event.key))), null);
     const reads = app.identityReads();
     app.replaceHost(new ReferenceNumberRoutingHost([]));
@@ -97,6 +98,7 @@ for (const kind of kinds) {
     assert.equal(retry.newReservation, false);
     assert.deepEqual(retry.pending, first.pending);
     assert.equal(app.identityReads(), reads);
+    assert.equal(app.policyReads(), 2, "a retry does not reread current speech preferences");
     const changedNumber = await app.intake.begin({ ...event, dialedNumber: "+6125550199" });
     assert.ok(!changedNumber.ok);
     assert.equal(changedNumber.error.kind, "callConflict");
@@ -109,7 +111,7 @@ for (const kind of kinds) {
     assert.equal(first.kind, "locationChoice");
     assert.equal(locationChoicePrompt(first.pending.route),
       "Which location would you like? Please say Main Street or Northside.");
-    assert.equal(app.policyReads(), 0);
+    assert.equal(app.policyReads(), 2);
     const attached = value(await app.intake.attachSession(event, "session"));
     const assembler = new TurnAssembler(callIdFor(event.key), "session");
     let generation = assembler.beginSpeech();
@@ -118,7 +120,7 @@ for (const kind of kinds) {
     const unclear = await app.intake.chooseFromTurn(event, value(assembler.finish(now)), attached.sessionLease!.version);
     assert.ok(!unclear.ok);
     assert.equal(unclear.error.kind, "locationChoiceUnclear");
-    assert.equal(app.policyReads(), 0);
+    assert.equal(app.policyReads(), 2);
     generation = assembler.beginSpeech();
     value(assembler.accept({ kind: "segmentFinal", sessionId: "session", generation, utteranceId: "choice",
       text: "The Northside location.", quality: "clear" }));
@@ -159,7 +161,7 @@ for (const kind of kinds) {
     const unowned = await app.intake.choose(event, app.turn(event), app.other.locationId, 1);
     assert.ok(!unowned.ok);
     assert.equal(unowned.error.kind, "leaseLost");
-    assert.equal(app.policyReads(), 0);
+    assert.equal(app.policyReads(), 2);
     value(await app.intake.attachSession(event, "session"));
     const wrongSession = await app.intake.choose(event, { ...app.turn(event), sessionId: "other-session" }, app.other.locationId, 1);
     assert.ok(!wrongSession.ok);
@@ -172,7 +174,7 @@ for (const kind of kinds) {
     const invalid = await app.intake.choose(event, app.turn(event), app.foreign.locationId, 1);
     assert.ok(!invalid.ok);
     assert.equal(invalid.error.kind, "invalidLocationChoice");
-    assert.equal(app.policyReads(), 0);
+    assert.equal(app.policyReads(), 2);
     value(await app.policy.changeAutomationEnabled(app.other, "0", true, "clinic-admin"));
     value(await app.policy.changeBookingEnabled(app.other, "0", true, "clinic-admin"));
     const chosen = value(await app.intake.choose(event, app.turn(event), app.other.locationId, 1));
@@ -227,7 +229,7 @@ for (const kind of kinds) {
     const choice = await app.intake.choose(event, app.turn(event), app.main.locationId, 1);
     assert.ok(!choice.ok);
     assert.equal(choice.error.kind, "staleLocationChoice");
-    assert.equal(app.policyReads(), 0);
+    assert.equal(app.policyReads(), 2);
     assert.equal(value(await app.ledger.findAdmission(callIdFor(event.key))), null);
   });
 
@@ -260,7 +262,7 @@ for (const kind of kinds) {
     const staleTurn = await app.intake.choose(event, app.turn(event), app.main.locationId, 1);
     assert.ok(!staleTurn.ok);
     assert.equal(staleTurn.error.kind, "leaseLost");
-    assert.equal(app.policyReads(), 0);
+    assert.equal(app.policyReads(), 2);
     value(await app.policy.changeAutomationEnabled(app.main, "0", true, "clinic-admin"));
     const chosen = value(await app.intake.choose(event, app.turn(event), app.main.locationId, 2));
     assert.equal(chosen.kind, "created");

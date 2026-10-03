@@ -1,3 +1,4 @@
+import { withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import { expect, test } from "../support/browser-test.ts";
@@ -26,7 +27,7 @@ async function localDashboard(role: "clinicAdmin" | "staff", availability?: Avai
                               sharedClinic?: Readonly<{ policy: MemoryPolicyStore; locationId: string }>) {
   const scope: LocationScope = { tenantId: "browser-tenant", clinicId: "browser-clinic", locationId: sharedClinic?.locationId ?? "browser-location" };
   const ledger = new MemoryLedger(readiness);
-  const policy = sharedClinic?.policy ?? new MemoryPolicyStore("execute", undefined, readiness, cancellationMode);
+  const policy = sharedClinic?.policy ?? withApprovedSyntheticVoice(new MemoryPolicyStore("execute", undefined, readiness, cancellationMode));
   const host = new ReferenceClinicHost([], [],
     [{ scope, sourceRef: "hours", version: "hours-v1", ownerRef: "clinic-owner", approvedText: "We open at 9 am.", approved: true,
       effectiveFrom: "2026-09-01T00:00:00.000Z", effectiveUntil: "2026-10-01T00:00:00.000Z" }]);

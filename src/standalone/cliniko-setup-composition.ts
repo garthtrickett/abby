@@ -1,3 +1,4 @@
+import type { VoiceProfileRegistry } from "../core/voice-profile-registry.ts";
 import type { Kysely } from "kysely";
 import { ClinikoCatalogueReader } from "../cliniko/catalogue.ts";
 import type { ClinikoCatalogueFailure } from "../cliniko/catalogue.ts";
@@ -20,6 +21,7 @@ export type StandaloneClinikoSetupConfig = Readonly<{
   apiKey: string;
   contactEmail: string;
   rateBudget: PostgresClinikoRequestBudget;
+  voiceProfiles?: VoiceProfileRegistry;
   fetch?: typeof fetch;
   now?: () => string;
 }>;
@@ -37,7 +39,7 @@ export function createStandaloneClinikoSetup(config: StandaloneClinikoSetupConfi
   }
   try {
     const policy = new PostgresPolicyStore(config.db, standaloneDefaultPolicy, "unavailable",
-      unprovenReadiness, false, "standaloneMinimal");
+      unprovenReadiness, false, "standaloneMinimal", false, undefined, undefined, undefined, config.voiceProfiles);
     const routing = new ReferenceNumberRoutingHost([{ ...config.scope, ...config.route }]);
     const setup = new ClinikoCatalogueSetup(catalogue.value, routing, policy,
       new PostgresClinikoApprovalStore(config.db), config.now);

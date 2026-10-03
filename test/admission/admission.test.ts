@@ -1,3 +1,4 @@
+import { approvedSyntheticPolicy, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { sql } from "kysely";
@@ -35,7 +36,7 @@ function failure<T>(result: Result<T, { kind: string }>, kind: string): void {
 
 function fixture(kind: "memory" | "postgres", suffix: string) {
   const scope = { tenantId: `admission-tenant-${suffix}`, clinicId: `admission-clinic-${suffix}`, locationId: `admission-location-${suffix}` };
-  const policy: CallPolicy = { ...referenceDefaultPolicy(scope), automationEnabled: true, bookingEnabled: true, capabilities: { book: "execute", cancel: "requestOnly", reschedule: "requestOnly", intake: "requestOnly", transfer: "requestOnly" } };
+  const policy: CallPolicy = { ...approvedSyntheticPolicy(referenceDefaultPolicy(scope)), automationEnabled: true, bookingEnabled: true, capabilities: { book: "execute", cancel: "requestOnly", reschedule: "requestOnly", intake: "requestOnly", transfer: "requestOnly" } };
   const ledger: LedgerStore & EffectCallLeaseStore = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt, undefined, "unsafeReference") : new MemoryLedger();
   let routeReads = 0;
   let automationEnabled = true;
@@ -94,7 +95,7 @@ for (const kind of kinds) {
     const saved = value(await knowledge.saveDraft(app.scope, "hours", "hours-v1", "clinic-owner", "We open at 10 am.",
       "2026-09-01T00:00:00.000Z", "2026-10-01T00:00:00.000Z", "admin"));
     value(await knowledge.approve(app.scope, "hours", saved.version, "admin"));
-    const reception = new TextReception(app.ledger, new MemoryPolicyStore(), new ReferenceClinicHost([], []),
+    const reception = new TextReception(app.ledger, withApprovedSyntheticVoice(new MemoryPolicyStore()), new ReferenceClinicHost([], []),
       undefined, undefined, undefined, knowledge);
     const oldAnswer = value(await reception.answer(app.scope,
       { callId: first.receipt.callId, sessionId: "first-session", turnId: "old-call-answer", text: "Hours?", quality: "clear", at: now },
@@ -111,7 +112,7 @@ for (const kind of kinds) {
 
   test(`${kind}: default-off automation refuses admission`, async () => {
     const app = fixture(kind, `${kind}-default-off`);
-    const service = new CallAdmissionService(app.ledger, async () => ok(referenceDefaultPolicy(app.scope)), () => now);
+    const service = new CallAdmissionService(app.ledger, async () => ok(approvedSyntheticPolicy(referenceDefaultPolicy(app.scope))), () => now);
     const event = { key: { accountRef: `account-${kind}`, providerCallRef: "default-off" }, dialedNumber: "+6125550100", receivedAt: now };
     failure(await service.begin(event), "automationDisabled");
     assert.equal(value(await app.ledger.findAdmission(callIdFor(event.key))), null);
@@ -269,7 +270,7 @@ test("postgres: admission and activation events persist as separate versions", {
 test("postgres: ledger clock rejects forged intake, renewal, and expiry timestamps", { skip: !db }, async () => {
   const scope = { tenantId: "database-clock-tenant", clinicId: "database-clock-clinic", locationId: "database-clock-location" };
   const ledger = new PostgresLedger(db!, undefined, undefined, "unsafeReference");
-  const basePolicy = referenceDefaultPolicy(scope);
+  const basePolicy = approvedSyntheticPolicy(referenceDefaultPolicy(scope));
   const staffedCoverage = { startsAt: new Date(Date.now() - 60_000).toISOString(),
     endsAt: new Date(Date.now() + 60_000).toISOString() };
   const policy: CallPolicy = { ...basePolicy, automationEnabled: true, capabilities: { ...basePolicy.capabilities, transfer: "execute" },

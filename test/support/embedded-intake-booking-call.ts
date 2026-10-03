@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "./approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { digestActionRequest } from "../../src/core/digest.ts";
@@ -123,7 +124,7 @@ export async function runEmbeddedIntakeBookingCall(bookingOutcome: "rejected" | 
   const callId = callIdFor(event.key);
   const sessionId = `session-${bookingOutcome}`;
   const ledger = configured?.ledger ?? new MemoryLedger();
-  const policy = configured?.policy ?? new IntakePolicyStore("execute", () => now, async () => ok(true), { intake: "execute" });
+  const policy = withApprovedSyntheticVoice(configured?.policy ?? new IntakePolicyStore("execute", () => now, async () => ok(true), { intake: "execute" }));
   if (!configured) {
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
     assert.ok((await policy.changeBookingEnabled(scope, "0", true, "clinic-admin")).ok);
@@ -144,13 +145,13 @@ export async function runEmbeddedIntakeBookingCall(bookingOutcome: "rejected" | 
       : turn.text === "Book physio"
         ? { kind: "book", verificationRef: "created-proof-1", offerRef: offer.offerRef }
         : { kind: "affirm" }),
-    transcription: { async accept() { return ok([]); }, async flush(generation) {
+    ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush(generation) {
       const text = callerTurns[utterance++];
       assert.ok(text);
       return ok([{ kind: "segmentFinal", sessionId, generation,
         utteranceId: `caller-${utterance}`, text, quality: "clear" }]);
-    } },
-    synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
+    } } }),
+
     output: { async queueChunk(playbackId, sequence) {
       chunks.set(playbackId, [...(chunks.get(playbackId) ?? []), sequence]);
       return "queued" as const;

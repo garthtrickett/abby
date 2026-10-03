@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { EventEmitter, once } from "node:events";
@@ -81,9 +82,9 @@ test("E2E-222 signed booking needs played confirmation across standalone and emb
         const readiness = async () => ok(true as const);
         const ledger = embedded ? new PostgresLedger(db, suggested => suggested, readiness, "unsafeReference")
           : undefined;
-        const policy = new PostgresPolicyStore(db, referenceDefaultPolicy,
+        const policy = withApprovedSyntheticVoice(new PostgresPolicyStore(db, referenceDefaultPolicy,
           embedded ? "execute" : "unavailable", readiness,
-          embedded, embedded ? "unsafeReference" : "standaloneMinimal");
+          embedded, embedded ? "unsafeReference" : "standaloneMinimal"));
         assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
         const booking = await policy.changeBookingEnabled(scope, "0", true, "clinic-admin");
         assert.ok(booking.ok);
@@ -127,12 +128,12 @@ test("E2E-222 signed booking needs played confirmation across standalone and emb
           const wire = mode === "standalone"
             ? await createStandaloneTransientVoiceCall({ db, routingHost: routing, stream, send,
               closeTransport: close, readiness, now: () => now, mediaOptions: { silenceMs: 100 },
-              transcriptionFactory: transcription, synthesis, resolveIntent })
+              ...syntheticSpeech({ synthesis, transcriptionFactory: transcription }),  resolveIntent })
             : ok(createEmbeddedTwilioVoiceComposition({ event: stream.event, sessionId,
               streamStartedAt: stream.streamStartedAt, send, closeTransport: close,
               ledger: ledger!, policy, routing, host, readiness, now: () => now,
-              mediaOptions: { silenceMs: 100 }, transcription: transcription(sessionId),
-              synthesis, resolveIntent }));
+              mediaOptions: { silenceMs: 100 }, ...syntheticSpeech({ synthesis, transcription: transcription(sessionId) }),
+               resolveIntent }));
           assert.ok(wire.ok, wire.ok ? "" : wire.error.kind);
           let playedCount = 0;
           return { async receive(raw: string) {

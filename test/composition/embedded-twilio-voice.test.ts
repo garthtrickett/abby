@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import test from "node:test";
@@ -25,7 +26,7 @@ test("E2E-149 buyer host mounts signed voice and speaks provisional diary times 
   const dialedNumber = "+6125550199";
   const scope = { tenantId: "buyer", clinicId: "clinic", locationId: "main" };
   const ledger = new MemoryLedger();
-  const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+  const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
   assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "buyer-admin")).ok);
   const host = new ReferenceClinicHost([], []);
   const routing = new ReferenceNumberRoutingHost([{ ...scope, accountRef: accountSid,
@@ -53,11 +54,11 @@ test("E2E-149 buyer host mounts signed voice and speaks provisional diary times 
           observedAt: now, startsAt: ["2026-09-30T23:00:00.000Z"], reservable: false });
       } },
       resolveIntent: async () => ok({ kind: "availability", from: "2026-10-01", to: "2026-10-02" }),
-      transcription: { async accept() { return ok([]); }, async flush(generation) {
+      ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush(generation) {
         return ok([{ kind: "segmentFinal", sessionId: "buyer-session", generation,
           utteranceId: "caller-one", text: "What times are available?", quality: "clear" }]);
-      } },
-      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      } } }),
+
       mediaOptions: { silenceMs: 100 },
     });
     return { async receive(raw: string) {

@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import twilio from "twilio";
@@ -25,7 +26,7 @@ test("E2E-018 signed synthetic calls respect automation default, on, off, invali
   const readiness = async () => ready ? ok(true as const) :
     err({ kind: "readinessFailed" as const, missing: ["mediaTestCall"] as const });
   const ledger = new MemoryLedger();
-  const policy = new MemoryPolicyStore("execute", () => now, readiness);
+  const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, readiness));
   const router = new ClinicPolicyRouter(new ReferenceNumberRoutingHost([
     { accountRef: accountSid, dialedNumber: number, ...scope, routeVersion: "v1" },
   ]), policy);
@@ -64,12 +65,12 @@ test("E2E-018 signed synthetic calls respect automation default, on, off, invali
       fullFactory: (receipt, sessionId, playback) => new VoiceSession(receipt.callId, sessionId,
         receipt.scope, ledger, reception, playback,
         async () => ok({ kind: "handoff", reason: "callerRequested" })),
-      transcription: {
+      ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } }, transcription: {
         async accept() { return ok([]); },
         async flush(generation) { return ok([{ kind: "segmentFinal", sessionId: `session-${index}`,
           generation, utteranceId: "staff-request", text: "Please speak with staff", quality: "clear" }]); },
-      },
-      synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
+      } }),
+
       mediaOptions: { silenceMs: 100 },
       send(json) { sent.push(JSON.parse(json) as Record<string, unknown>); return "queued" as const; },
     });

@@ -54,9 +54,15 @@ export class CallRuntime {
     return this.update(callId, { kind: "sessionExpired", sessionId, expectedLeaseVersion, now });
   }
 
-  endCall(callId: string, sessionId: string, now: string,
+  async endCall(callId: string, sessionId: string, now: string,
           reason: "callerDisconnected" | "sessionClosed" | "mediaFailure" | "localLeaseClosed" = "sessionClosed"): Promise<Result<CallState, TransitionFailure>> {
-    return this.update(callId, { kind: "callEnded", sessionId, reason, now });
+    // A stopping provider effect can settle concurrently. Retry only this local
+    // terminal transition; every apply rechecks the current session ownership.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const ended = await this.update(callId, { kind: "callEnded", sessionId, reason, now });
+      if (ended.ok || ended.error.kind !== "versionConflict") return ended;
+    }
+    return { ok: false, error: { kind: "versionConflict" } };
   }
 
   completeTextPresentation(callId: string, presentationId: string, now: string): Promise<Result<CallState, TransitionFailure>> {

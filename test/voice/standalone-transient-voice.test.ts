@@ -1,3 +1,4 @@
+import { syntheticSpeech } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
@@ -98,12 +99,12 @@ test("E2E-134 and E2E-137 standalone signed voice keeps the model decision and l
       routingHost: new ReferenceNumberRoutingHost([{ accountRef: accountSid, dialedNumber,
         ...scope, routeVersion: "v1" }]), stream: authenticated.value,
       send(json) { sent.push(JSON.parse(json) as Record<string, unknown>); return "queued"; },
-      transcription: {
+      ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } }, transcription: {
         async accept(frame) { sessionId = frame.sessionId; return ok([]); },
         async flush(generation) { return ok([{ kind: "segmentFinal", sessionId, generation,
           utteranceId: "one", text: callerText, quality: "clear" }]); },
-      },
-      synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
+      } }),
+
       resolveIntent: createOpenAIAvailabilityIntentResolver({ apiKey: "synthetic-model-key",
         model: "configured-model", clinicDate: () => "2026-09-29", fetch: (async (_url, init) => {
           modelReads += 1;
@@ -159,8 +160,8 @@ test("E2E-134 and E2E-137 standalone signed voice keeps the model decision and l
     const refused = await createStandaloneTransientVoiceCall({ db,
       routingHost: new ReferenceNumberRoutingHost([]), stream: authenticated.value,
       send() { throw new Error("must not send media"); },
-      transcriptionFactory() { throw new Error("privacy preflight must precede provider session creation"); },
-      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); } }, transcriptionFactory() { throw new Error("privacy preflight must precede provider session creation"); } }),
+
       resolveIntent: async () => ok({ kind: "model" }), readiness });
     assert.deepEqual(refused, { ok: false, error: { kind: "unsafeExistingData", areas: ["settings"] } });
   } finally {

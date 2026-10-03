@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import test from "node:test";
@@ -44,7 +45,7 @@ test("E2E-132 and E2E-141 signed call renews beyond its first lease and closes t
     callback();
   };
   const ledger = new MemoryLedger();
-  const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+  const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
   assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "admin")).ok);
   const router = new ClinicPolicyRouter(new ReferenceNumberRoutingHost([
     { accountRef: accountSid, dialedNumber: number, ...scope, routeVersion: "v1" },
@@ -70,12 +71,12 @@ test("E2E-132 and E2E-141 signed call renews beyond its first lease and closes t
     const call = new TwilioConnectedCall({ event: stream.event, sessionId: "session", ledger, intake,
       fullFactory: (receipt, sessionId, playback) => new VoiceSession(receipt.callId, sessionId, receipt.scope,
         ledger, reception, playback, async () => ok({ kind: "handoff", reason: "callerRequested" })),
-      transcription: {
+      ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); } }, transcription: {
         async accept() { return ok([]); },
         async flush(generation) { return ok([{ kind: "segmentFinal", sessionId: "session", generation,
           utteranceId: "one", text: "Please speak with staff", quality: "clear" }]); },
-      },
-      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      } }),
+
       mediaOptions: { silenceMs: 100 }, streamStartedAt: stream.streamStartedAt,
       now: clock, send, leaseTimer, closeTransport: close,
       onLeaseAttempt: outcome => {
@@ -164,7 +165,7 @@ test("E2E-132 and E2E-141 signed call renews beyond its first lease and closes t
 test("E2E-142 caller speech clears a signed socket greeting without deadlocking its fence", { timeout: 10_000 },
   async () => {
   const ledger = new MemoryLedger();
-  const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+  const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
   assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "admin")).ok);
   const router = new ClinicPolicyRouter(new ReferenceNumberRoutingHost([
     { accountRef: accountSid, dialedNumber: number, ...scope, routeVersion: "v1" },
@@ -181,8 +182,8 @@ test("E2E-142 caller speech clears a signed socket greeting without deadlocking 
     const call = new TwilioConnectedCall({ event: stream.event, sessionId: "session", ledger, intake,
       fullFactory: (receipt, sessionId, playback) => new VoiceSession(receipt.callId, sessionId, receipt.scope,
         ledger, reception, playback, async () => ok({ kind: "handoff", reason: "callerRequested" })),
-      transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } },
-      synthesis: { async *stream() { yield new Uint8Array(640); } },
+      ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } } }),
+
       streamStartedAt: stream.streamStartedAt, now: () => now, send, closeTransport: close,
     });
     return { async receive(raw: string) {

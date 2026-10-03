@@ -16,7 +16,7 @@ export function value<T>(result: Result<T, { kind: string }>): T {
 }
 export function voiceDeclaration(scope: VoiceClinicScope): VoiceProfileDeclaration {
   const pair = (locale: string, voiceId: string, hash: string) => ({ locale, voiceId, ready: true,
-    configurationHash: hash.repeat(64), transcriptionVersion: "stt.v1", synthesisVersion: "tts.v1", presentationVersion: "english.v1", qualityVersion: "quality.v1" });
+    configurationHash: hash.repeat(64), transcriptionVersion: "stt.v1", synthesisVersion: "tts.v1", presentationVersion: "english-reception.v1", qualityVersion: "quality.v1" });
   return { scope: structuredClone(scope), hostVersion: "voice-host.v1",
     locales: [{ id: "en-AU", label: "English (Australia)" }, { id: "en-US", label: "English (United States)" }],
     voices: [{ id: "coral", label: "Coral" }, { id: "cedar", label: "Cedar" }],

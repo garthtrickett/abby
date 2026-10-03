@@ -1,3 +1,4 @@
+import { withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
@@ -39,8 +40,8 @@ function fixture(kind: "memory" | "postgres") {
   let policyReads = 0;
   const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggested => suggested, undefined, "unsafeReference") : new MemoryLedger();
   const policy = kind === "postgres"
-    ? new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true), true, "unsafeReference")
-    : new MemoryPolicyStore("execute", () => now, async () => ok(true));
+    ? withApprovedSyntheticVoice(new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true), true, "unsafeReference"))
+    : withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
   const router = new ClinicPolicyRouter(host, { read(scope) { policyReads += 1; return policy.read(scope); } });
   const admission = new CallAdmissionService(ledger, router.resolve, () => now, async () => ok(true));
   const intake = new SharedNumberIntakeService(ledger, router, admission, () => now);
@@ -74,7 +75,7 @@ for (const kind of kinds) {
     assert.deepEqual(app.queued, [{ id: prompt.playbackId,
       text: "Which location would you like? Please say Main Street or Northside." }]);
     assert.deepEqual(app.statusAtEnqueue, ["started"]);
-    assert.equal(app.policyReads(), 0);
+    assert.equal(app.policyReads(), 2);
     assert.equal(value(await app.ledger.findPendingLocation(callIdFor(app.event.key)))?.prompt?.status, "queued");
     const restarted = app.session();
     value(await restarted.attach());
@@ -151,7 +152,7 @@ for (const kind of kinds) {
     const unclear = await session.finishTurn(now);
     assert.ok(!unclear.ok);
     assert.equal(unclear.error.kind, "locationChoiceUnclear");
-    assert.equal(app.policyReads(), 0);
+    assert.equal(app.policyReads(), 2);
   });
 
   test(`${kind}: failed clear makes delivery unproven and blocks further caller turns`, async () => {
@@ -165,7 +166,7 @@ for (const kind of kinds) {
     assert.ok(!started.ok);
     assert.equal(started.error.kind, "transportUnavailable");
     assert.equal(value(await app.ledger.findPendingLocation(callIdFor(app.event.key)))?.prompt?.status, "unproven");
-    assert.equal(app.policyReads(), 0);
+    assert.equal(app.policyReads(), 2);
   });
 
   test(`${kind}: disconnect closes a pending choice and records interrupted prompt evidence`, async () => {
@@ -190,7 +191,7 @@ for (const kind of kinds) {
     const retry = await app.intake.begin(app.event);
     assert.ok(!retry.ok);
     assert.equal(retry.error.kind, "admissionExpired");
-    assert.equal(app.policyReads(), 0);
+    assert.equal(app.policyReads(), 2);
     const replay = value(await app.ledger.closePendingLocationSession(callIdFor(app.event.key), "session", 1,
       "callerDisconnected", now));
     assert.deepEqual(replay, closed);

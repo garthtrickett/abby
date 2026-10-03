@@ -1,3 +1,4 @@
+import { approvedSyntheticPolicy, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test, { after } from "node:test";
@@ -80,7 +81,7 @@ function fixture(kind: "embedded" | "standalone", id: string, duplicateProof = f
     assert.ok(db);
     ({ reception, policy } = createReferenceStandaloneTextComposition(db, host, hostBookingMode, ledger, availability, undefined, readiness, undefined, host));
   } else {
-    policy = new MemoryPolicyStore(hostBookingMode, undefined, readiness);
+    policy = withApprovedSyntheticVoice(new MemoryPolicyStore(hostBookingMode, undefined, readiness));
     reception = createEmbeddedTextComposition(ledger, policy, host, availability);
   }
   const admin = new CommandGateway({ actorRef: `admin-${id}`, role: "clinicAdmin", scope }, policy, reception,
@@ -136,8 +137,8 @@ for (const kind of kinds) {
     mutable.properties!.kind = { const: "tampered" };
     assert.equal(matchesSchema(app.agent.listPermitted().find(item => item.id === "booking.propose.v2")!.inputSchema, command), true);
     const staffedPolicy: PolicyStore = {
-      read: async () => ({ ok: true, value: { ...referenceDefaultPolicy(app.scope),
-        capabilities: { ...referenceDefaultPolicy(app.scope).capabilities, transfer: "execute" },
+      read: async () => ({ ok: true, value: { ...approvedSyntheticPolicy(referenceDefaultPolicy(app.scope)),
+        capabilities: { ...approvedSyntheticPolicy(referenceDefaultPolicy(app.scope)).capabilities, transfer: "execute" },
         transferDestinationRef: "staff-destination",
         staffedCoverage: { startsAt: now, endsAt: expiresAt },
         staffedIntervals: [{ startsAt: now, endsAt: expiresAt }] } }),
@@ -175,7 +176,7 @@ for (const kind of kinds) {
     assert.ok(settingsDescriptor);
     assert.equal(matchesSchema(settingsDescriptor.resultSchema, { ok: true, value: staffedReply }), true);
     const brokenPolicy: PolicyStore = {
-      read: async () => ({ ok: true, value: { ...referenceDefaultPolicy(app.scope), capabilities: { book: "execute" } } as unknown as CallState["policy"] }),
+      read: async () => ({ ok: true, value: { ...approvedSyntheticPolicy(referenceDefaultPolicy(app.scope)), capabilities: { book: "execute" } } as unknown as CallState["policy"] }),
       changeBookingEnabled: (...args) => app.policy.changeBookingEnabled(...args),
       listBookingChanges: (...args) => app.policy.listBookingChanges(...args),
       changeCancellationEnabled: (...args) => app.policy.changeCancellationEnabled(...args),
@@ -329,7 +330,7 @@ for (const kind of kinds) {
     assert.equal(app.host.bookings(app.scope).length, 1);
     assert.equal(app.host.tasks(app.scope).length, 0);
 
-    const reloaded = kind === "standalone" ? new PostgresPolicyStore(db!, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference") : app.policy;
+    const reloaded = kind === "standalone" ? withApprovedSyntheticVoice(new PostgresPolicyStore(db!, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference")) : app.policy;
     assert.equal(value(await reloaded.read(app.scope)).policyVersion, "2");
     const otherScope = { tenantId: `${app.scope.tenantId}-other`, clinicId: app.scope.clinicId, locationId: app.scope.locationId };
     assert.equal(value(await reloaded.read(otherScope)).capabilities.book, "unavailable");
@@ -351,7 +352,7 @@ for (const kind of kinds) {
     assert.equal(history.entries.every(entry => !!entry.changedAt && Number.isFinite(Date.parse(entry.changedAt))), true);
     assert.deepEqual(bookingAudit(value(await app.admin.submit({ kind: "settings.appointments.booking.audit.v1", afterVersion: 1 }))).entries.map(entry => entry.version), ["2"]);
     error(await app.admin.submit({ kind: "settings.appointments.booking.audit.v1", afterVersion: -1 }), "invalid");
-    const reopened: PolicyStore = kind === "standalone" ? new PostgresPolicyStore(db!, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference") : app.policy;
+    const reopened: PolicyStore = kind === "standalone" ? withApprovedSyntheticVoice(new PostgresPolicyStore(db!, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference")) : app.policy;
     const persisted = value(await reopened.listBookingChanges(app.scope));
     assert.deepEqual(persisted.entries, history.entries);
     const otherScope = { ...app.scope, tenantId: `${app.scope.tenantId}-other` };
@@ -407,7 +408,7 @@ for (const kind of kinds) {
     ]);
     error(await app.admin.submit({ kind: "settings.automation.enabled.change.v1", expectedVersion: "1", enabled: true }), "versionConflict");
     error(await app.admin.submit({ kind: "settings.automation.enabled.change.v1", expectedVersion: "2", enabled: "yes" } as unknown as GatewayCommand), "invalid");
-    const reloaded: PolicyStore = kind === "standalone" ? new PostgresPolicyStore(db!, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference") : app.policy;
+    const reloaded: PolicyStore = kind === "standalone" ? withApprovedSyntheticVoice(new PostgresPolicyStore(db!, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference")) : app.policy;
     assert.equal(value(await reloaded.read(app.scope)).automationVersion, "2");
     assert.deepEqual(value(await reloaded.listAutomationChanges(app.scope)).entries, history.entries);
   });
@@ -593,11 +594,11 @@ for (const kind of kinds) {
 
 test("postgres: pre-audit policy versions stay readable without invented attribution", { skip: !db }, async () => {
   const scope = { tenantId: "audit-legacy-tenant", clinicId: "audit-legacy-clinic", locationId: "audit-legacy-location" };
-  const policy = { ...referenceDefaultPolicy(scope), policyVersion: "1", bookingEnabled: true };
+  const policy = { ...approvedSyntheticPolicy(referenceDefaultPolicy(scope)), policyVersion: "1", bookingEnabled: true };
   const legacyPolicy = Object.fromEntries(Object.entries(policy).filter(([field]) => field !== "automationEnabled"));
   await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy)
     values (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, 1, ${JSON.stringify(legacyPolicy)}::jsonb)`.execute(db!);
-  const store = new PostgresPolicyStore(db!, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference");
+  const store = withApprovedSyntheticVoice(new PostgresPolicyStore(db!, referenceDefaultPolicy, undefined, undefined, true, "unsafeReference"));
   const history = value(await store.listBookingChanges(scope));
   assert.deepEqual(history.entries, [{ version: "1", enabled: true, provenance: "legacyUnattributed" }]);
   const restored = value(await store.read(scope));
@@ -610,7 +611,7 @@ test("postgres: corrupt location policy cannot commit an automation change", { s
   const malformed = { scope, policyVersion: "0" };
   await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy)
     values (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, 0, ${JSON.stringify(malformed)}::jsonb)`.execute(db!);
-  const store = new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true), true, "unsafeReference");
+  const store = withApprovedSyntheticVoice(new PostgresPolicyStore(db!, referenceDefaultPolicy, "execute", async () => ok(true), true, "unsafeReference"));
   error(await store.changeAutomationEnabled(scope, "0", true, "corrupt-policy-admin"), "storageFailure");
   assert.deepEqual(value(await store.listAutomationChanges(scope)).entries, []);
   const count = await sql<{ count: string }>`select count(*)::text as count from clinic_automation

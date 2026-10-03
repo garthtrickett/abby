@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
@@ -112,24 +113,24 @@ async function runCase(composition: Composition, scenario: Case, adminUrl: strin
     const readiness = async () => ok(true as const);
     const host = new ReferenceClinicHost([], []);
     if (composition === "standalone") {
-      const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable", readiness, false, "standaloneMinimal");
+      const policy = withApprovedSyntheticVoice(new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable", readiness, false, "standaloneMinimal"));
       assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
       assert.ok((await policy.changeGreeting(scope, "0", { scope, version: "portable-greeting-v1",
         ownerRef: "test-operator", approved: true, approvedText: "Welcome to the clinic.",
         effectiveFrom: "2026-01-01T00:00:00.000Z", effectiveUntil: "2027-01-01T00:00:00.000Z" },
       "test-operator")).ok);
       call = value(await createStandaloneTransientVoiceCall({ db, routingHost: routing, stream,
-        send, transcription, synthesis, resolveIntent, readiness, availability: reader,
+        send, ...syntheticSpeech({ synthesis, transcription }),  resolveIntent, readiness, availability: reader,
         now: () => now,
         mediaOptions: { silenceMs: 100 } }));
     } else {
       const ledger = new MemoryLedger();
-      const policy = new MemoryPolicyStore("execute", () => now, readiness);
+      const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, readiness));
       assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "host-admin")).ok);
       call = createEmbeddedTwilioVoiceComposition({ event: stream.event,
         streamStartedAt: stream.streamStartedAt, sessionId: `host-session-${suffix}`, send,
         ledger, policy, routing, host, readiness, availability: reader, resolveIntent,
-        transcription, synthesis, now: () => now, mediaOptions: { silenceMs: 100 } });
+        ...syntheticSpeech({ synthesis, transcription }),  now: () => now, mediaOptions: { silenceMs: 100 } });
     }
     assert.ok((await call.receive(connected)).ok);
     assert.ok((await call.receive(begun)).ok);

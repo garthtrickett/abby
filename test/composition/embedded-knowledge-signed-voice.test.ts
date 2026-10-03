@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { EventEmitter, once } from "node:events";
 import test from "node:test";
@@ -25,7 +26,7 @@ test("E2E-004 signed embedded voice rechecks an approved answer after revocation
   const approvedText = "Parking is behind the clinic.";
   const unavailableText = "I can't verify that information right now.";
   const ledger = new MemoryLedger();
-  const policy = new MemoryPolicyStore("execute", () => now, async () => ok(true));
+  const policy = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, async () => ok(true)));
   assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
   const knowledge = new MemoryKnowledgeCatalogue();
   const draft = await knowledge.saveDraft(scope, "parking", "0", "practice-manager", approvedText,
@@ -51,15 +52,15 @@ test("E2E-004 signed embedded voice rechecks an approved answer after revocation
       streamStartedAt: stream.streamStartedAt, send, closeTransport: close, ledger, policy, routing,
       host, knowledge, readiness: async () => ok(true), now: () => now,
       resolveIntent: async () => ok({ kind: "answer", sourceRefs: ["parking"], proposedText: approvedText }),
-      transcription: { async accept() { return ok([]); }, async flush(generation) {
+      ...syntheticSpeech({ synthesis: { async *stream(text) {
+        spoken.set(callSid, [...(spoken.get(callSid) ?? []), text]);
+        yield new Uint8Array(640);
+      } }, transcription: { async accept() { return ok([]); }, async flush(generation) {
         utterance += 1;
         return ok([{ kind: "segmentFinal", sessionId, generation,
           utteranceId: `parking-${utterance}`, text: "Where is parking?", quality: "clear" }]);
-      } },
-      synthesis: { async *stream(text) {
-        spoken.set(callSid, [...(spoken.get(callSid) ?? []), text]);
-        yield new Uint8Array(640);
-      } },
+      } } }),
+
       mediaOptions: { silenceMs: 100 },
     });
     return { async receive(raw: string) {

@@ -1,3 +1,4 @@
+import type { VoiceProfileRegistry } from "../core/voice-profile-registry.ts";
 import type { Server } from "node:http";
 import type { Kysely } from "kysely";
 import type { ClinikoCatalogueFailure } from "../cliniko/catalogue.ts";
@@ -31,6 +32,7 @@ export type ClinikoAdminDashboardConfig = Readonly<{
   readSpeechGate?: HostDashboardIdentity["readSpeechGate"];
   unauthorized?: HostDashboardIdentity["unauthorized"];
   bundlePath: string;
+  voiceProfiles?: VoiceProfileRegistry;
   fetch?: typeof fetch;
   now?: () => string;
 }>;
@@ -53,7 +55,7 @@ export async function createStandaloneClinikoAdminDashboard(config: ClinikoAdmin
   } catch { return err({ kind: "invalidConfig" }); }
   const configured = createStandaloneClinikoSetup({ db: config.db, scope,
     route: config.route, apiKey: config.apiKey, contactEmail: config.contactEmail,
-    rateBudget, ...(config.fetch ? { fetch: config.fetch } : {}),
+    rateBudget, ...(config.voiceProfiles ? { voiceProfiles: config.voiceProfiles } : {}), ...(config.fetch ? { fetch: config.fetch } : {}),
     ...(config.now ? { now: config.now } : {}) });
   if (!configured.ok) return configured;
   const reception = new TextReception(new MemoryLedger(), configured.value.policy,

@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer } from "node:http";
@@ -67,7 +68,7 @@ async function fixture(kind: Kind, scenario: Scenario, writerBusinessId = "11",
   const callId = callIdFor(event.key);
   const sessionId = `session:${crypto.randomUUID()}`;
   const ledger = new MemoryLedger(async () => ok(true));
-  const policy = new ChangePolicyStore(kind, scenario !== "noStaff");
+  const policy = withApprovedSyntheticVoice(new ChangePolicyStore(kind, scenario !== "noStaff"));
   assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "clinic-admin")).ok);
   assert.ok((await policy.changeBookingEnabled(scope, "0", true, "clinic-admin")).ok);
   const proof = new TransientPatientProofHost({ scope, callId, sessionId,
@@ -173,13 +174,13 @@ async function fixture(kind: Kind, scenario: Scenario, writerBusinessId = "11",
     resolveIntent: async turn => ok(turn.text === "Yes" ? { kind: "affirm" }
       : kind === "cancel" ? { kind: "cancel", verificationRef, targetRef: "selected-91" }
         : { kind: "reschedule", verificationRef, targetRef: "selected-91", offerRef: "new-slot" }),
-    transcription: { async accept() { return ok([]); }, async flush(generation) {
+    ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush(generation) {
       utterance += 1;
       return ok([{ kind: "segmentFinal", sessionId, generation,
         utteranceId: `caller-${utterance}`, text: utterance === 1 ? "Change my appointment" : "Yes",
         quality: "clear" }]);
-    } },
-    synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
+    } } }),
+
     output: { async queueChunk(playbackId, sequence) {
       chunks.set(playbackId, [...(chunks.get(playbackId) ?? []), sequence]);
       return "queued" as const;

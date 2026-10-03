@@ -1,3 +1,4 @@
+import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
@@ -136,8 +137,8 @@ async function run(kind: Kind, scenario: Scenario, configured?: CallFixture) {
   const callId = callIdFor(event.key);
   const sessionId = `session:${randomUUID()}`;
   const ledger = configured?.ledger ?? new MemoryLedger();
-  const policy = configured?.policy ?? new ChangePolicyStore(kind, scenario === "requestOnly" ? "requestOnly"
-    : scenario === "unavailable" ? "unavailable" : "execute");
+  const policy = withApprovedSyntheticVoice(configured?.policy ?? new ChangePolicyStore(kind, scenario === "requestOnly" ? "requestOnly"
+    : scenario === "unavailable" ? "unavailable" : "execute"));
   const current = await policy.read(scope);
   assert.ok(current.ok);
   assert.ok((await policy.changeAutomationEnabled(scope, current.value.automationVersion, true, "clinic-admin")).ok);
@@ -165,13 +166,13 @@ async function run(kind: Kind, scenario: Scenario, configured?: CallFixture) {
       return ok(kind === "cancel" ? { kind: "cancel", verificationRef, targetRef }
         : { kind: "reschedule", verificationRef, targetRef, offerRef: offer.offerRef });
     },
-    transcription: { async accept() { return ok([]); }, async flush(generation) {
+    ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush(generation) {
       const text = turns[utterance++];
       assert.ok(text);
       return ok([{ kind: "segmentFinal", sessionId, generation,
         utteranceId: `caller-${utterance}`, text, quality: "clear" }]);
-    } },
-    synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
+    } } }),
+
     output: { async queueChunk(playbackId, sequence) {
       chunks.set(playbackId, [...(chunks.get(playbackId) ?? []), sequence]);
       return "queued" as const;
@@ -292,8 +293,8 @@ async function cancellationSettingCalls(ledger: LedgerStore & EffectCallLeaseSto
 
 test("E2E-252 cancellation setting gates complete voice calls and preserves the admitted call", async () => {
   const ready = async () => ok(true as const);
-  await cancellationSettingCalls(new MemoryLedger(ready), new MemoryPolicyStore("execute", () => now, ready, "execute"));
-  const denied = new MemoryPolicyStore("execute", () => now, ready, "unavailable");
+  await cancellationSettingCalls(new MemoryLedger(ready), withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, ready, "execute")));
+  const denied = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, ready, "unavailable"));
   assert.ok((await denied.changeCancellationEnabled(scope, "0", true, "clinic-admin")).ok);
   await run("cancel", "unavailable", { ledger: new MemoryLedger(ready), policy: denied });
 });
@@ -314,10 +315,10 @@ test("E2E-252 PostgreSQL cancellation setting gates complete voice calls after d
     await migrate(db);
     const ready = async () => ok(true as const);
     await cancellationSettingCalls(new PostgresLedger(db, suggested => suggested, ready, "unsafeReference"),
-      new PostgresPolicyStore(db, referenceDefaultPolicy, "execute", ready, true, "unsafeReference", false, "execute"));
+      withApprovedSyntheticVoice(new PostgresPolicyStore(db, referenceDefaultPolicy, "execute", ready, true, "unsafeReference", false, "execute")));
     await assert.rejects(migrateTo(db, "034_greeting_setting_audit"), /cancellation setting rows must be removed/);
-    const retained = await new PostgresPolicyStore(db, referenceDefaultPolicy, undefined, undefined, false,
-      "unsafeReference").listCancellationChanges(scope);
+    const retained = await withApprovedSyntheticVoice(new PostgresPolicyStore(db, referenceDefaultPolicy, undefined, undefined, false,
+      "unsafeReference")).listCancellationChanges(scope);
     assert.ok(retained.ok, retained.ok ? "" : retained.error.kind);
     assert.deepEqual(retained.value.entries.map(row => row.enabled), [true, false]);
   } finally {
@@ -345,8 +346,8 @@ async function reschedulingSettingCalls(ledger: LedgerStore & EffectCallLeaseSto
 
 test("E2E-254 rescheduling setting gates complete voice calls and preserves the admitted call", async () => {
   const ready = async () => ok(true as const);
-  await reschedulingSettingCalls(new MemoryLedger(ready), new MemoryPolicyStore("execute", () => now, ready, { rescheduling: "execute" }));
-  const denied = new MemoryPolicyStore("execute", () => now, ready, { rescheduling: "unavailable" });
+  await reschedulingSettingCalls(new MemoryLedger(ready), withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, ready, { rescheduling: "execute" })));
+  const denied = withApprovedSyntheticVoice(new MemoryPolicyStore("execute", () => now, ready, { rescheduling: "unavailable" }));
   assert.ok((await denied.changeReschedulingEnabled(scope, "0", true, "clinic-admin")).ok);
   await run("reschedule", "unavailable", { ledger: new MemoryLedger(ready), policy: denied });
 });
@@ -367,10 +368,10 @@ test("E2E-254 PostgreSQL rescheduling setting gates complete voice calls after d
     await migrate(db);
     const ready = async () => ok(true as const);
     await reschedulingSettingCalls(new PostgresLedger(db, suggested => suggested, ready, "unsafeReference"),
-      new PostgresPolicyStore(db, referenceDefaultPolicy, "execute", ready, true, "unsafeReference", false, { rescheduling: "execute" }));
+      withApprovedSyntheticVoice(new PostgresPolicyStore(db, referenceDefaultPolicy, "execute", ready, true, "unsafeReference", false, { rescheduling: "execute" })));
     await assert.rejects(migrateTo(db, "035_cancellation_setting_audit"), /rescheduling setting rows must be removed/);
-    const retained = await new PostgresPolicyStore(db, referenceDefaultPolicy, undefined, undefined, false,
-      "unsafeReference").listReschedulingChanges(scope);
+    const retained = await withApprovedSyntheticVoice(new PostgresPolicyStore(db, referenceDefaultPolicy, undefined, undefined, false,
+      "unsafeReference")).listReschedulingChanges(scope);
     assert.ok(retained.ok, retained.ok ? "" : retained.error.kind);
     assert.deepEqual(retained.value.entries.map(row => row.enabled), [true, false]);
   } finally {

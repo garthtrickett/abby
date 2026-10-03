@@ -1,3 +1,4 @@
+import { approvedSyntheticPolicy, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test, { after } from "node:test";
@@ -190,7 +191,7 @@ async function fixture(kind: "memory" | "postgres", id: string, bookingEnabled: 
     ({ policy, reception } = createReferenceStandaloneTextComposition(db, host, options.bookingMode ?? "execute", ledger, availability, undefined, undefined, model, host));
   } else {
     ledger = new MemoryLedger();
-    policy = new MemoryPolicyStore(options.bookingMode);
+    policy = withApprovedSyntheticVoice(new MemoryPolicyStore(options.bookingMode));
     reception = createEmbeddedTextComposition(ledger, policy, host, availability, undefined, model);
   }
   if (bookingEnabled) value(await policy.changeBookingEnabled(scope, "0", true, "voice-test-admin"));
@@ -351,11 +352,11 @@ test("E2E-133 transient greeting must match the admitted policy snapshot before 
   const scope = { tenantId: "greeting-snapshot", clinicId: "clinic", locationId: "location" };
   const callId = "transient-greeting-snapshot";
   const ledger = new MemoryLedger();
-  const policy = referenceDefaultPolicy(scope);
+  const policy = approvedSyntheticPolicy(referenceDefaultPolicy(scope));
   assert.ok(policy.greeting);
   value(await ledger.admit(callId, policy, { key: { accountRef: "account", providerCallRef: "call" },
     dialedNumber: "+6125550100", acceptedAt: now, deadline: at(30) }));
-  const reception = createEmbeddedTextComposition(ledger, new MemoryPolicyStore(), new ReferenceClinicHost([], []));
+  const reception = createEmbeddedTextComposition(ledger, withApprovedSyntheticVoice(new MemoryPolicyStore()), new ReferenceClinicHost([], []));
   for (const greeting of [{ ...policy.greeting, version: "different-version" },
     { ...policy.greeting, approvedText: "A changed greeting" }]) {
     const session = new VoiceSession(callId, "session", scope, ledger, reception, new FakePlayback(),

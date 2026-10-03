@@ -1,3 +1,4 @@
+import { approvedSyntheticPolicy } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { MemoryLedger } from "../../src/core/ledger.ts";
@@ -32,7 +33,7 @@ function fixture(kind: "memory" | "postgres") {
   const admission: Admission = { key, dialedNumber: "+6125550101", acceptedAt: now,
     deadline: new Date(Date.parse(now) + 30_000).toISOString() };
   const ledger: LedgerStore = kind === "postgres" ? new PostgresLedger(db!, suggested => suggested, undefined, "unsafeReference") : new MemoryLedger();
-  const policy = { ...referenceDefaultPolicy(scope), numberRouteVersion: route.routeVersion };
+  const policy = { ...approvedSyntheticPolicy(referenceDefaultPolicy(scope)), numberRouteVersion: route.routeVersion };
   return { ledger, route, key, callId, admission, scope, policy };
 }
 
