@@ -121,6 +121,8 @@ Implementation order: prove cancellation target protection and recovery first; i
 
 ## 10. Questions for a Cliniko provider contract
 
+The [reference implementation trace](../docs/flows/cliniko-reference-write-trace.md) demonstrates a practical integration based on ordinary writes, delayed inspection, compensation and local durable queues/ledgers. We can implement and test known API behavior without a written guarantee. The questions below concern this contract's stronger atomic-target/interval and permitted recovery requirements; the inspected reference paths do not establish them. Their local patient-specific persistence cannot be copied into strict standalone Abby.
+
 These questions identify the missing standalone evidence. They are prepared for the owner/API provider; no message has been sent and no production or demo mutation is authorized by this section.
 
 1. **Conditional cancellation/update:** Is there a supported request precondition tied to the exact confirmed appointment version or fields? Does its check occur atomically with the mutation, including a concurrent UI/API edit? What exact rejection proves no cancellation, move, fee or notification side effect occurred? A response `ETag` alone would not prove a mutation precondition.
