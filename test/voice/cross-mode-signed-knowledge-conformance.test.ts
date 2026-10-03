@@ -1,3 +1,4 @@
+import { seedSyntheticVoicePreferences } from "../support/seed-synthetic-voice-preferences.ts";
 import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -57,6 +58,7 @@ test("E2E-223 signed knowledge answer requires embedded approval and remains pri
       try {
         await migrate(db);
         const scope = { tenantId: `knowledge-${mode}`, clinicId: "clinic", locationId: "main" };
+        if (mode === "standalone") await seedSyntheticVoicePreferences(db, { tenantId: scope.tenantId, clinicId: scope.clinicId });
         const readiness = async () => ok(true as const);
         const ledger = mode === "embedded" ? new PostgresLedger(db, suggested => suggested, readiness,
           "unsafeReference") : undefined;

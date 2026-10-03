@@ -1,3 +1,4 @@
+import { seedSyntheticVoicePreferences } from "../support/seed-synthetic-voice-preferences.ts";
 import { syntheticSpeech, withApprovedSyntheticVoice } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -113,6 +114,7 @@ async function runCase(composition: Composition, scenario: Case, adminUrl: strin
     const readiness = async () => ok(true as const);
     const host = new ReferenceClinicHost([], []);
     if (composition === "standalone") {
+      await seedSyntheticVoicePreferences(db, { tenantId: scope.tenantId, clinicId: scope.clinicId });
       const policy = withApprovedSyntheticVoice(new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable", readiness, false, "standaloneMinimal"));
       assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
       assert.ok((await policy.changeGreeting(scope, "0", { scope, version: "portable-greeting-v1",

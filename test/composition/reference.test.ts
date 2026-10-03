@@ -594,7 +594,7 @@ for (const kind of kinds) {
 
 test("postgres: pre-audit policy versions stay readable without invented attribution", { skip: !db }, async () => {
   const scope = { tenantId: "audit-legacy-tenant", clinicId: "audit-legacy-clinic", locationId: "audit-legacy-location" };
-  const policy = { ...approvedSyntheticPolicy(referenceDefaultPolicy(scope)), policyVersion: "1", bookingEnabled: true };
+  const policy = { ...referenceDefaultPolicy(scope), policyVersion: "1", bookingEnabled: true };
   const legacyPolicy = Object.fromEntries(Object.entries(policy).filter(([field]) => field !== "automationEnabled"));
   await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy)
     values (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, 1, ${JSON.stringify(legacyPolicy)}::jsonb)`.execute(db!);
