@@ -118,6 +118,7 @@ export class TransientClinikoBookingHost extends NoStoredKnowledge implements Bo
   readonly #clock: () => string;
   #prepared: BookingRequest | undefined;
   #attempt: Attempt | undefined;
+  #conflictObserved = false;
   #busy = false;
   #closed = false;
   readonly #lifetime = new AbortController();
@@ -305,17 +306,22 @@ export class TransientClinikoBookingHost extends NoStoredKnowledge implements Bo
         deadline: new Date(nowMs + 5 * 60_000).toISOString() };
     }
     if (!result.ok) return { kind: "unsupported", actionKey: mutation.actionKey };
-    return result.value.kind === "accepted"
-      ? { kind: "committed", actionKey: mutation.actionKey, hostRef: result.value.appointmentRef }
-      : { kind: "uncertain", actionKey: mutation.actionKey, reconcileAfter: now,
-        deadline: new Date(nowMs + 5 * 60_000).toISOString() };
+    if (result.value.kind === "accepted") {
+      const conflicts = await this.#writer.inspectConflicts(result.value.appointmentRef, combined);
+      if (conflicts.ok && conflicts.value) this.#conflictObserved = true;
+      if (!this.#closed && !this.#conflictObserved && !combined.aborted && conflicts.ok && !conflicts.value) {
+        return { kind: "committed", actionKey: mutation.actionKey, hostRef: result.value.appointmentRef };
+      }
+    }
+    return { kind: "uncertain", actionKey: mutation.actionKey, reconcileAfter: now,
+      deadline: new Date(nowMs + 5 * 60_000).toISOString() };
   }
 
   /** A booking toggle can close new sends without erasing a possible prior commit. */
   async reconcile(mutation: HostMutation, signal?: AbortSignal): Promise<ReconcileObservation> {
     const unknown: ReconcileObservation = { kind: "stillUnknown", actionKey: mutation.actionKey };
     const attempt = this.#attempt;
-    if (this.#closed || !attempt || mutation.kind !== "book" ||
+    if (this.#closed || this.#conflictObserved || !attempt || mutation.kind !== "book" ||
         attempt.actionKey !== mutation.actionKey || attempt.digest !== mutation.payloadDigest ||
         mutation.request.kind !== "book" || !validScope(mutation.scope) ||
         !sameScope(mutation.scope, this.#scope) || mutation.policyVersion !== this.#policyVersion ||
@@ -342,6 +348,9 @@ export class TransientClinikoBookingHost extends NoStoredKnowledge implements Bo
     catch { return unknown; }
     if (this.#closed || combined.aborted || !observed.ok || observed.value.kind !== "one" ||
         !observed.value.active || !sameScope(observed.value.scope, this.#scope)) return unknown;
+    const conflicts = await this.#writer.inspectConflicts(observed.value.appointmentRef, combined);
+    if (conflicts.ok && conflicts.value) this.#conflictObserved = true;
+    if (this.#closed || this.#conflictObserved || combined.aborted || !conflicts.ok || conflicts.value) return unknown;
     return { kind: "exactCommit", actionKey: mutation.actionKey,
       hostRef: observed.value.appointmentRef };
   }

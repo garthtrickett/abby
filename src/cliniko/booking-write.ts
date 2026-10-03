@@ -163,6 +163,42 @@ export class ClinikoBookingWriter {
     return { scope: structuredClone(this.scope), ...this.config };
   }
 
+  /** Read current provider conflicts; a clear result is not a reservation or atomic exclusion. */
+  async inspectConflicts(appointmentRef: string, signal?: AbortSignal):
+    Promise<Result<boolean, ClinikoBookingFailure>> {
+    const id = typeof appointmentRef === "string"
+      ? appointmentRef.match(/^cliniko:appointment:([1-9][0-9]{0,18})$/)?.[1] : undefined;
+    if (!id) return err({ kind: "invalidQuery" });
+    const readSignal = signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000);
+    if (readSignal.aborted) return err({ kind: "unavailable" });
+    const limited = await untilAbort(claimClinikoBudget(this.rateBudget), readSignal);
+    if (readSignal.aborted || limited === undefined) return err({ kind: "unavailable" });
+    if (limited) return err(limited);
+    let response: Response;
+    try {
+      const received = await untilAbort(this.fetchPort(`${this.baseUrl}/individual_appointments/${id}/conflicts`, {
+        method: "GET", headers: { Accept: "application/json", Authorization: this.authorization,
+          "User-Agent": this.userAgent }, redirect: "error", signal: readSignal,
+      }), readSignal);
+      if (!received || readSignal.aborted) return err({ kind: "unavailable" });
+      response = received;
+    } catch { return err({ kind: "unavailable" }); }
+    if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
+    if (response.status === 429) {
+      const limited = await untilAbort(observeCliniko429(this.rateBudget,
+        response.headers.get("X-RateLimit-Reset")), readSignal);
+      return err(readSignal.aborted || !limited ? { kind: "unavailable" } : limited);
+    }
+    if (response.status >= 500 || response.status === 404) return err({ kind: "unavailable" });
+    if (response.status !== 200) return err({ kind: "malformed" });
+    const parsed = await untilAbort(boundedJson(response), readSignal);
+    if (!parsed || readSignal.aborted) return err({ kind: "unavailable" });
+    if (!parsed.ok) return parsed;
+    const exists = record(record(parsed.value)?.conflicts)?.exist;
+    return typeof exists === "boolean" ? ok(exists) : err({ kind: "malformed" });
+  }
+
   private matches(row: Record<string, unknown>, request: ClinikoBookingRequest): boolean {
     const link = (name: string) => record(record(row[name])?.links)?.self;
     return row.notes === notes(request.marker) && instant(row.starts_at) === instant(request.startsAt) &&
