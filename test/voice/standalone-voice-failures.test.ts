@@ -1,3 +1,4 @@
+import { seedSyntheticVoicePreferences } from "../support/seed-synthetic-voice-preferences.ts";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -118,6 +119,7 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
     const db = connectPostgres(target.toString());
     try {
       await migrate(db);
+      await seedSyntheticVoicePreferences(db, { tenantId: "fault-test", clinicId: "clinic" });
       await seedSyntheticCatalogueApproval(db, { scope: { tenantId: "fault-test", clinicId: "clinic", locationId: "main" },
         accountRef: accountSid, dialedNumber: number, routeVersion: "fault-test-v1",
         apiKey: "synthetic-key-au5",
@@ -494,8 +496,8 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         const greeting = fixture.speechRequests[0]!.text;
         assert.match(greeting, /Press 1 for possible times today/);
         assert.deepEqual(fixture.speechRequests.slice(0, 2), [
-          { model: "synthetic-primary-stalled", text: greeting },
-          { model: "synthetic-fallback", text: greeting },
+          { model: "gpt-4o-mini-tts", text: greeting },
+          { model: "tts-1", text: greeting },
         ]);
         call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
           dtmf: { track: "inbound_track", digit: "2" } }));
@@ -507,8 +509,8 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         assert.match(answer, /These may change/);
         assert.match(answer, /can't reserve or confirm/);
         assert.deepEqual(fixture.speechRequests.slice(2), [
-          { model: "synthetic-primary-stalled", text: answer },
-          { model: "synthetic-fallback", text: answer },
+          { model: "gpt-4o-mini-tts", text: answer },
+          { model: "tts-1", text: answer },
         ]);
         assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
         assert.ok(fixture.clinikoMethods.every(method => method === "GET"));

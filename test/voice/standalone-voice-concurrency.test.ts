@@ -1,3 +1,4 @@
+import { seedSyntheticVoicePreferences, syntheticSpeechQuality } from "../support/seed-synthetic-voice-preferences.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { EventEmitter, once } from "node:events";
@@ -35,16 +36,16 @@ const routes = [
 class SyntheticTranscriptionSocket extends EventEmitter {
   readyState: number = WebSocket.CONNECTING;
   bufferedAmount = 0;
-  send(): void {}
+  send(raw: string): void {
+    const event = JSON.parse(raw) as { type: string; session?: unknown };
+    if (event.type === "session.update") queueMicrotask(() => this.emit("message",
+      Buffer.from(JSON.stringify({ type: "session.updated", session: event.session }))));
+  }
   terminate(): void { this.readyState = WebSocket.CLOSED; this.emit("close"); }
   close(): void { this.terminate(); }
   open(): void {
     this.readyState = WebSocket.OPEN;
     this.emit("open");
-    this.emit("message", Buffer.from(JSON.stringify({ type: "session.updated", session: {
-      type: "transcription", audio: { input: { format: { type: "audio/pcm", rate: 24000 },
-        transcription: { model: "gpt-live-transcribe" }, turn_detection: null } },
-    } })));
   }
 }
 
@@ -106,6 +107,7 @@ test("E2E-198 eight parallel signed calls isolate tenants and exhaust one Clinik
       false, "standaloneMinimal");
     for (const route of routes) {
       const scope = { tenantId: route.tenantId, clinicId: "clinic", locationId: "main" };
+      await seedSyntheticVoicePreferences(db, { tenantId: scope.tenantId, clinicId: scope.clinicId });
       const changed = await policy.changeAutomationEnabled(scope, "0", true, "synthetic-admin");
       assert.ok(changed.ok);
       assert.ok((await policy.changeGreeting(scope, "0", { scope, version: "concurrent-greeting-v1",
@@ -162,7 +164,11 @@ test("E2E-198 eight parallel signed calls isolate tenants and exhaust one Clinik
         keypadAvailabilityGreeting: { scope, approved: true as const, version: "concurrent-greeting-v1",
           ownerRef: "synthetic-admin", approvedText: route.greeting } };
     });
+    const qualityByTenant = new Map(routes.map(route => [route.tenantId,
+      syntheticSpeechQuality({ tenantId: route.tenantId, clinicId: "clinic" })]));
     const prepared = await createStandaloneClinikoVoiceServer({ db,
+      speechQuality: (scope, hash) => qualityByTenant.get(scope.tenantId as typeof routes[number]["tenantId"])?.(scope, hash)
+        ?? { ok: false, error: { kind: "readinessFailed", missing: ["voiceProfile"] } },
       activeCallClaims: new PostgresActiveCallClaims(target.toString(), Buffer.alloc(32, 0x66)),
       twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
         bindingKey: Buffer.alloc(32, 0x66), fallbackNumbers: Object.fromEntries(routes.map(route => [route.number, route.fallback])) },

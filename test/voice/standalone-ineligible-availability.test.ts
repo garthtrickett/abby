@@ -1,3 +1,4 @@
+import { seedSyntheticVoicePreferences, syntheticSpeechQuality } from "../support/seed-synthetic-voice-preferences.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
@@ -45,6 +46,7 @@ test("E2E-153 signed keypad call refuses availability when Cliniko business is n
     const streamUrl = "wss://calls.example.test/twilio/media/";
     const now = "2026-09-29T10:00:00.000Z";
     const scope = { tenantId: `ineligible-${randomUUID().slice(0, 8)}`, clinicId: "clinic", locationId: "main" };
+    await seedSyntheticVoicePreferences(db, { tenantId: scope.tenantId, clinicId: scope.clinicId });
     const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable",
       async () => ok(true), false, "standaloneMinimal");
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
@@ -66,6 +68,8 @@ test("E2E-153 signed keypad call refuses availability when Cliniko business is n
     const spoken: string[] = [];
     let modelCalls = 0;
     const prepared = await createStandaloneClinikoVoiceServer({ db,
+      speechQuality: syntheticSpeechQuality({ tenantId: scope.tenantId, clinicId: scope.clinicId }),
+      transcriptionFactory: () => ({ async accept() { return ok([]); }, async flush() { return ok([]); } }),
       activeCallClaims: new PostgresActiveCallClaims(target.toString(), Buffer.alloc(32, 0x52)),
       twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
         fallbackNumbers: { [dialedNumber]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x49),

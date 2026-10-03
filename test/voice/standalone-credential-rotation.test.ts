@@ -1,3 +1,4 @@
+import { seedSyntheticVoicePreferences } from "../support/seed-synthetic-voice-preferences.ts";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -157,6 +158,7 @@ test("E2E-215 rotated Cliniko credential blocks signed calls until a clinic admi
       const setupDb = connectPostgres(target.toString());
       try {
         await migrate(setupDb);
+        await seedSyntheticVoicePreferences(setupDb, { tenantId: scope.tenantId, clinicId: scope.clinicId });
         await seedSyntheticCatalogueApproval(setupDb, { scope, ...route, apiKey: originalKey });
         const policy = new PostgresPolicyStore(setupDb, referenceDefaultPolicy, "unavailable",
           async () => ok(true), false, "standaloneMinimal");

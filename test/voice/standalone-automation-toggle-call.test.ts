@@ -1,3 +1,4 @@
+import { seedSyntheticVoicePreferences } from "../support/seed-synthetic-voice-preferences.ts";
 import { syntheticSpeech } from "../support/approved-voice.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -42,6 +43,7 @@ test("E2E-018 standalone signed calls use the automation toggle without durable 
       let ready = true;
       const readiness = async () => ready ? ok(true as const) :
         err({ kind: "readinessFailed" as const, missing: ["mediaTestCall"] as const });
+      await seedSyntheticVoicePreferences(db, { tenantId: scope.tenantId, clinicId: scope.clinicId });
       const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable", readiness,
         false, "standaloneMinimal");
       const routingHost = new ReferenceNumberRoutingHost([

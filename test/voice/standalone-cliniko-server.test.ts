@@ -1,3 +1,4 @@
+import { seedSyntheticVoicePreferences, syntheticSpeechQuality } from "../support/seed-synthetic-voice-preferences.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { EventEmitter, once } from "node:events";
@@ -28,16 +29,13 @@ class FakeTranscriptionSocket extends EventEmitter {
   send(raw: string): void {
     const event = JSON.parse(raw) as Record<string, unknown>;
     this.sent.push(event);
+    if (event.type === "session.update") queueMicrotask(() => this.receive({ type: "session.updated", session: event.session }));
     if (event.type === "input_audio_buffer.commit") this.emit("commit");
   }
   receive(event: object): void { this.emit("message", Buffer.from(JSON.stringify(event))); }
   open(): void {
     this.readyState = WebSocket.OPEN;
     this.emit("open");
-    this.receive({ type: "session.updated", session: { type: "transcription", audio: { input: {
-      format: { type: "audio/pcm", rate: 24000 }, transcription: { model: "gpt-live-transcribe" },
-      turn_detection: null,
-    } } } });
   }
   terminate(): void { this.terminateCount += 1; this.readyState = WebSocket.CLOSED; this.emit("close"); }
   close(): void { this.terminate(); }
@@ -68,7 +66,7 @@ test("E2E-143 standalone voice server refuses unsafe storage before opening a li
       contactEmail: "test@example.com", businessId: "11", practitionerId: "22", appointmentTypeId: "33" },
     async () => { throw new Error("blocked server must not call Cliniko"); });
     assert.ok(availability.ok);
-    const prepared = await createStandaloneClinikoVoiceServer({ db,
+    const prepared = await createStandaloneClinikoVoiceServer({ speechQuality: syntheticSpeechQuality({ tenantId: scope.tenantId, clinicId: scope.clinicId }), db,
       activeCallClaims: new PostgresActiveCallClaims(target.toString(), Buffer.alloc(32, 0x51)),
       twilio: { accountSid: `AC${"1".repeat(32)}`, authToken: "synthetic-twilio-token",
         publicWebhookUrl: "https://calls.example.test/twilio/inbound",
@@ -121,6 +119,7 @@ test("E2E-138, E2E-139, and E2E-140 local standalone server reads keypad availab
     const streamUrl = "wss://calls.example.test/twilio/media/";
     const now = "2026-09-29T10:00:00.000Z";
     const scope = { tenantId: `server-${randomUUID().slice(0, 8)}`, clinicId: "clinic", locationId: "main" };
+    await seedSyntheticVoicePreferences(db, { tenantId: scope.tenantId, clinicId: scope.clinicId });
     const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable",
       async () => ok(true), false, "standaloneMinimal");
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
@@ -155,7 +154,7 @@ test("E2E-138, E2E-139, and E2E-140 local standalone server reads keypad availab
     let modelCalls = 0;
     let synthesisCalls = 0;
     const spoken: string[] = [];
-    const prepared = await createStandaloneClinikoVoiceServer({ db,
+    const prepared = await createStandaloneClinikoVoiceServer({ speechQuality: syntheticSpeechQuality({ tenantId: scope.tenantId, clinicId: scope.clinicId }), db,
       activeCallClaims: new PostgresActiveCallClaims(target.toString(), Buffer.alloc(32, 0x51)),
       twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
         fallbackNumbers: { [number]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x46),
@@ -317,6 +316,7 @@ test("E2E-151 signed standalone call switches speech models before the first out
     const expectedGreeting = { scope, version: "fallback-keypad-v1",
       ownerRef: "synthetic-clinic-approval", approved: true as const,
       approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." };
+    await seedSyntheticVoicePreferences(db, { tenantId: scope.tenantId, clinicId: scope.clinicId });
     const policy = new PostgresPolicyStore(db, referenceDefaultPolicy, "unavailable",
       async () => ok(true), false, "standaloneMinimal");
     assert.ok((await policy.changeAutomationEnabled(scope, "0", true, "test-operator")).ok);
@@ -327,7 +327,7 @@ test("E2E-151 signed standalone call switches speech models before the first out
     assert.ok(availability.ok);
     const models: string[] = [];
     let primaryAborted = false;
-    const prepared = await createStandaloneClinikoVoiceServer({ db,
+    const prepared = await createStandaloneClinikoVoiceServer({ speechQuality: syntheticSpeechQuality({ tenantId: scope.tenantId, clinicId: scope.clinicId }), db,
       activeCallClaims: new PostgresActiveCallClaims(target.toString(), Buffer.alloc(32, 0x51)),
       twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
         fallbackNumbers: { [number]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x47),
@@ -338,6 +338,8 @@ test("E2E-151 signed standalone call switches speech models before the first out
         timeZone: "Australia/Sydney", clinicDate: () => "2026-09-29", keypadAvailabilityGreeting: expectedGreeting }],
       openai: { apiKey: "synthetic-openai-key", intentModel: "configured-model",
         speechFallbackModel: "tts-1", speechPrimaryFirstChunkMs: 100,
+        transcriptionSocketFactory: () => { const socket = new FakeTranscriptionSocket();
+          queueMicrotask(() => socket.open()); return socket as unknown as WebSocket; },
         fetch: (async (url, init) => {
           assert.equal(String(url), "https://api.openai.com/v1/audio/speech");
           const body = JSON.parse(String(init?.body)) as { model: string; input: string };

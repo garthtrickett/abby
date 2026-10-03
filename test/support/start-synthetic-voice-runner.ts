@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import WebSocket from "ws";
 import { clinicDateAt, serveClinikoVoice } from "../../scripts/serve-cliniko-voice.ts";
-import { ok } from "../../src/core/model.ts";
+import { err, ok } from "../../src/core/model.ts";
 import type { TranscriptionPort } from "../../src/voice/media-turn-controller.ts";
 
 if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
@@ -29,6 +29,9 @@ class SyntheticTranscriptionSocket extends EventEmitter {
   private committed = 0;
 
   send(data: string): void {
+    const request = JSON.parse(data) as { type: string; session?: unknown };
+    if (request.type === "session.update") queueMicrotask(() => this.emit("message",
+      Buffer.from(JSON.stringify({ type: "session.updated", session: request.session }))));
     if (fault === "openai-transcription" && !this.failed && data.includes('"input_audio_buffer.append"')) {
       this.failed = true;
       queueMicrotask(() => this.emit("message", Buffer.from(JSON.stringify({ type: "error" }))));
@@ -50,10 +53,6 @@ class SyntheticTranscriptionSocket extends EventEmitter {
   open(): void {
     this.readyState = WebSocket.OPEN;
     this.emit("open");
-    this.emit("message", Buffer.from(JSON.stringify({ type: "session.updated", session: {
-      type: "transcription", audio: { input: { format: { type: "audio/pcm", rate: 24000 },
-        transcription: { model: "gpt-live-transcribe" }, turn_detection: null } },
-    } })));
   }
 }
 
@@ -186,7 +185,7 @@ const openaiFetch: typeof fetch = async (input, init) => {
     throw new Error("invalid synthetic speech request");
   }
   process.send?.({ kind: "speech", text: request.input, model: request.model });
-  if (fault === "speech-primary-stall" && request.model === "synthetic-primary-stalled") {
+  if (fault === "speech-primary-stall" && request.model === "gpt-4o-mini-tts") {
     await new Promise<never>((_resolve, reject) => {
       const signal = init?.signal;
       if (!signal) return reject(new Error("synthetic speech abort signal missing"));
@@ -223,8 +222,11 @@ function syntheticClearTranscription(sessionId: string): TranscriptionPort {
 }
 
 await serveClinikoVoice({ clinikoFetch, openaiFetch,
-  ...(fault === "speech-primary-stall" ? { speechModels: { primary: "synthetic-primary-stalled",
-    fallback: "synthetic-fallback", primaryFirstChunkMs: 100 } } : {}),
+  speechQuality: (scope, configurationHash) => scope.tenantId === process.env.ABBY_TENANT_ID &&
+    scope.clinicId === process.env.ABBY_CLINIC_ID ? ok({ configurationHash, qualityVersion: "synthetic-runner.v1" })
+      : err({ kind: "readinessFailed", missing: ["voiceProfile"] }),
+  ...(fault === "speech-primary-stall" ? { speechModels: { primary: "gpt-4o-mini-tts",
+    fallback: "tts-1", primaryFirstChunkMs: 100 } } : {}),
   ...(clearTurn ? { transcriptionFactory: syntheticClearTranscription } : { transcriptionSocketFactory: () => {
     const socket = new SyntheticTranscriptionSocket();
     queueMicrotask(() => socket.open());
