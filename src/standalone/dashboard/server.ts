@@ -169,7 +169,7 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     }
     if (request.method === "GET" && url.pathname === "/api/capabilities") {
       return json(response, 200, { ok: true, value: gateway.listPermitted().filter(item =>
-        surface === "availabilitySetup" ? item.id === "settings.read.v1" || item.id.startsWith("clinic.availability.") ||
+        surface === "availabilitySetup" ? item.id === "settings.read.v1" || item.id === "operations.daily.v1" || item.id.startsWith("clinic.availability.") ||
           item.id === "settings.routing.greeting.change.v1" || item.id === "settings.routing.greeting.audit.v1" ||
           item.id === "settings.automation.enabled.change.v1" || item.id === "settings.automation.audit.v1" || item.id.startsWith("settings.voice.")
           : item.id !== "booking.propose.v2") });
