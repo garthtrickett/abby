@@ -65,7 +65,7 @@ The candidate is a dedicated approved recall type holding a confirmed request in
 
 A recall is review context, not an atomic receipt, unique send fence, assignment or human-delivery proof. Duplicate/edited/malformed envelopes and current-state mismatches must surface for review. Presence does not distinguish never sent, committed, failed or unknown. Initially only staff close records after inspection; API `recalled` alone does not establish the protocol's acknowledgment or resolution.
 
-C-LOCAL-39/52, C-LIVE-53 and E2E-228 supply existing create/marker and aggregate-pulse evidence. Harness-carried markers do not prove lost-context discovery. The actual report workflow must include every dedicated-type request: last-visited business filters may hide a request for another location. Pagination, account size/scan bounds, provider outages and aggregate-only escalation need proof. D-07 clinic acceptance remains required; patient-specific handoff/request-only stay unavailable.
+C-LOCAL-39/52, C-LIVE-53 and E2E-228 supply existing create/marker and aggregate-pulse evidence. Harness-carried markers do not prove lost-context discovery. E2E-267 adds fresh-process account/type-only discovery against a synthetic provider after sender SIGKILL; actual database/backup privacy is checked. This is not live Cliniko persistence, staff acknowledgment or complete pre-send workflow integration. The actual report workflow must include every dedicated-type request: last-visited business filters may hide a request for another location. Pagination, account size/scan bounds, provider outages and aggregate-only escalation need proof. D-07 clinic acceptance remains required; patient-specific handoff/request-only stay unavailable.
 
 ## 8. Provider evidence and limits
 

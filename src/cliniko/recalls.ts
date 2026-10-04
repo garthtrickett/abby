@@ -4,6 +4,8 @@ import { claimClinikoBudget, ClinikoReadBudget, isClinikoRequestBudget, observeC
 import type { ClinikoRequestBudget } from "./read-budget.ts";
 import type { ClinikoClinicScope } from "./patients.ts";
 import { matchesRecallMarker, validRecallDate, validRecallMarker } from "./recall-note.ts";
+import { decodeClinikoReview } from "./review-request.ts";
+import type { ClinikoDecodedReview } from "./review-request.ts";
 
 export type ClinikoRecallFailure = Readonly<{
   kind: "invalidConfig" | "scopeMismatch" | "invalidQuery" | "forbidden" | "rateLimited" |
@@ -31,6 +33,21 @@ export type ClinikoRecallQueuePulse = Readonly<{
   overdue: number;
   markedRecalled: number;
 }>;
+
+/** Transient staff-review context only. Never persist these records in standalone Abby or use them as send permits. */
+export type ClinikoPendingReview = Readonly<{ recallRef: string; patientRef: string; recallAt: string }> & (
+  | Readonly<{ kind: "review"; envelope: ClinikoDecodedReview }>
+  | Readonly<{ kind: "invalidEnvelope" }>
+  | Readonly<{ kind: "ambiguousMarker" }>
+);
+export type ClinikoReviewDiscovery = Readonly<{
+  scope: ClinikoClinicScope;
+  observedAt: string;
+  scanned: number;
+  pending: readonly ClinikoPendingReview[];
+}>;
+type ActiveRecall = Readonly<{ id: string; patientId: string; typeId: string;
+  recalled: boolean | null; recallAt: string; notes: unknown }>;
 
 const idPattern = /^[1-9][0-9]*$/;
 const emailPattern = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
@@ -197,14 +214,12 @@ export class ClinikoRecallReader {
       recalled: matches[0]!.recalled, archived: matches[0]!.archived });
   }
 
-  /** Read-only account scan for one configured recall type. Incomplete scans never yield partial counts. */
-  async queuePulse(scope: ClinikoClinicScope, recallTypeId: string, throughDate: string):
-    Promise<Result<ClinikoRecallQueuePulse, ClinikoRecallFailure>> {
+  /** Share one complete bounded account scan; consumers never receive partial pages. */
+  async #activeRecalls(scope: ClinikoClinicScope):
+    Promise<Result<Readonly<{ observedAt: string; rows: readonly ActiveRecall[] }>, ClinikoRecallFailure>> {
     if (!validScope(scope) || scope.tenantId !== this.scope.tenantId || scope.clinicId !== this.scope.clinicId) {
       return err({ kind: "scopeMismatch" });
     }
-    if (typeof recallTypeId !== "string" || !idPattern.test(recallTypeId) || recallTypeId.length > 19 ||
-        !validRecallDate(throughDate)) return err({ kind: "invalidQuery" });
     let observedAt: string;
     try { observedAt = this.clock(); }
     catch { return err({ kind: "unavailable" }); }
@@ -214,9 +229,7 @@ export class ClinikoRecallReader {
 
     let totalEntries: number | undefined;
     let scanned = 0;
-    let pending = 0;
-    let overdue = 0;
-    let markedRecalled = 0;
+    const rows: ActiveRecall[] = [];
     let lastId = 0n;
     for (let page = 1; page <= maxPages; page += 1) {
       const limited = await claimClinikoBudget(this.rateBudget);
@@ -261,17 +274,60 @@ export class ClinikoRecallReader {
         }
         lastId = BigInt(recall.id);
         scanned += 1;
-        if (typeLink !== `${this.baseUrl}/recall_types/${recallTypeId}`) continue;
-        if (recall.recalled === true) markedRecalled += 1;
-        else {
-          pending += 1;
-          if (recall.recall_at < throughDate) overdue += 1;
-        }
+        rows.push({ id: recall.id, patientId: patientLink.slice(`${this.baseUrl}/patients/`.length),
+          typeId: typeLink.slice(`${this.baseUrl}/recall_types/`.length), recalled: recall.recalled as boolean | null,
+          recallAt: recall.recall_at, notes: recall.notes });
       }
       if (scanned === totalEntries) break;
     }
     if (scanned !== totalEntries) return err({ kind: "tooManyResults" });
-    return ok({ scope: structuredClone(this.scope), observedAt, throughDate,
-      scanned, pending, overdue, markedRecalled });
+    return ok({ observedAt, rows });
+  }
+
+  /** Read-only account scan for one configured recall type. Incomplete scans never yield partial counts. */
+  async queuePulse(scope: ClinikoClinicScope, recallTypeId: string, throughDate: string):
+    Promise<Result<ClinikoRecallQueuePulse, ClinikoRecallFailure>> {
+    if (!validScope(scope) || scope.tenantId !== this.scope.tenantId || scope.clinicId !== this.scope.clinicId) {
+      return err({ kind: "scopeMismatch" });
+    }
+    if (typeof recallTypeId !== "string" || !idPattern.test(recallTypeId) || recallTypeId.length > 19 ||
+        !validRecallDate(throughDate)) return err({ kind: "invalidQuery" });
+    const scan = await this.#activeRecalls(scope);
+    if (!scan.ok) return scan;
+    const selected = scan.value.rows.filter(row => row.typeId === recallTypeId);
+    return ok({ scope: structuredClone(this.scope), observedAt: scan.value.observedAt, throughDate,
+      scanned: scan.value.rows.length, pending: selected.filter(row => row.recalled !== true).length,
+      overdue: selected.filter(row => row.recalled !== true && row.recallAt < throughDate).length,
+      markedRecalled: selected.filter(row => row.recalled === true).length });
+  }
+
+  /** Discover from provider configuration alone, including unknown/edited work. No lost patient or marker is supplied. */
+  async discoverPendingReviews(scope: ClinikoClinicScope, recallTypeId: string):
+    Promise<Result<ClinikoReviewDiscovery, ClinikoRecallFailure>> {
+    if (!validScope(scope) || scope.tenantId !== this.scope.tenantId || scope.clinicId !== this.scope.clinicId) {
+      return err({ kind: "scopeMismatch" });
+    }
+    if (typeof recallTypeId !== "string" || !idPattern.test(recallTypeId) || recallTypeId.length > 19) {
+      return err({ kind: "invalidQuery" });
+    }
+    const scan = await this.#activeRecalls(scope);
+    if (!scan.ok) return scan;
+    const selected = scan.value.rows.filter(row => row.typeId === recallTypeId).map(row => ({ row,
+      decoded: decodeClinikoReview(row.notes) }));
+    const markers = new Map<string, number>();
+    for (const { decoded } of selected) {
+      if (decoded.ok) markers.set(decoded.value.marker, (markers.get(decoded.value.marker) ?? 0) + 1);
+    }
+    const pending: ClinikoPendingReview[] = selected.filter(({ row }) => row.recalled !== true).map(({ row, decoded }) => {
+      const base = { recallRef: `cliniko:recall:${row.id}`, patientRef: `cliniko:patient:${row.patientId}`,
+        recallAt: row.recallAt };
+      if (!decoded.ok || decoded.value.request.scope.tenantId !== scope.tenantId ||
+          decoded.value.request.scope.clinicId !== scope.clinicId ||
+          decoded.value.request.patientId !== row.patientId) return { ...base, kind: "invalidEnvelope" };
+      if (markers.get(decoded.value.marker)! > 1) return { ...base, kind: "ambiguousMarker" };
+      return { ...base, kind: "review", envelope: decoded.value };
+    });
+    return ok({ scope: structuredClone(scope), observedAt: scan.value.observedAt,
+      scanned: scan.value.rows.length, pending });
   }
 }
