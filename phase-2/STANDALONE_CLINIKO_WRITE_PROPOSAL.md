@@ -32,7 +32,7 @@ A proven acknowledged review request is a precondition for the appointment execu
 
 ## 4. Cliniko-owned review candidate
 
-Use a dedicated clinic-approved recall type for confirmed existing-patient appointment requests. The existing recall writer supplies one-attempt creation; the current aggregate pulse supplies bounded queue-health counts. They do not yet supply lost-context discovery or an approved staff process.
+Use a dedicated clinic-approved recall type for confirmed existing-patient appointment requests. The existing recall writer supplies one-attempt creation; the current aggregate pulse supplies bounded queue-health counts. Lost-context discovery is implemented in E2E-267; an actual staff UI/workflow rehearsal remains open.
 
 Proposed ordering:
 
@@ -61,8 +61,8 @@ Cliniko's report location filters describe the patient's most recent business, n
 | Goal step | Concrete completion evidence | Current status |
 | --- | --- | --- |
 | 1. Agree standalone write contract | Explicit product decision recorded; PRD, technical design, D-15 and support matrix agree about standalone best-effort versus owning-host atomic semantics | Accepted D-16; PRD, technical design, activation contract and support matrix aligned |
-| 2. Cliniko-owned recovery/staff review | Provider-backed lost-context discovery, required failure/race/scan/privacy proofs and actual accepted staff workflow | Candidate design only; no clinic approval |
-| 3. Caller verification/policies | Actual clinic-approved verification source and operation/fee/consent policies, with denial/expiry/revocation and disclosure E2Es | Existing authorities are synthetic; production method remains unselected |
+| 2. Cliniko-owned recovery/staff review | Provider-backed lost-context discovery, required failure/race/scan/privacy proofs and actual accepted staff workflow | Bounded discovery implemented (E2E-267); acknowledged pre-send seam implemented (E2E-268); real caller composition and actual UI/staff rehearsal remain open |
+| 3. Caller verification/policies | Actual clinic-approved verification source and operation/fee/consent policies, with denial/expiry/revocation and disclosure E2Es | Email one-time code selected in D-17; real delivery and clinical policy activation remain open |
 | 4. Cancellation | Standalone text path using steps 1–3; exact confirmation, real provider lifecycle and adversarial failures; operation-specific activation evidence | Existing edge/test host, caller capability unavailable |
 | 5. Booking | Same approved composition, current offers/eligibility, one create and conflict handling; whole-call and failure evidence | Existing edge plus E2E-266 detection, caller capability unavailable |
 | 6. Rescheduling | Confirmed source/destination, in-place move, exact uncertainty/review behavior and E2Es | Existing edge/test host, caller capability unavailable |
@@ -83,3 +83,15 @@ The pre-mutation review protocol above is an engineering inference from these do
 ## 8. Discovery implementation boundary
 
 `encodeClinikoReview` creates the bounded version-1 envelope; `ClinikoRecallReader.discoverPendingReviews` needs only configured account/clinic and type. It returns transient review context or explicit invalid/ambiguous entries after a complete bounded account scan; it is not an agent command, staff authorization source or mutation dispatcher. E2E-267 exercises a killed sender and fresh discovery with PostgreSQL/backup/output privacy checks. The current reader refuses account scans above 500 rows and does not promise a snapshot. Real Cliniko persistence/UI proof, named staff process, pre-send acknowledgment integration, caller authority and full release activation remain required.
+
+## 9. Delegated supervised demo review defaults
+
+The product owner asked Abby to choose the demo process on 2026-10-04. Garth Trickett is the primary reviewer. Review all pending items of the dedicated Abby type after every synthetic write/failure test and before the next write test; use no location filter that could hide another requested location. If the primary is absent, the demo pauses rather than silently assigning work to an invented backup. The production backup role is the clinic duty manager, currently unassigned: production activation requires a named person/coverage, accepted cadence and independent rehearsal. Never tell a caller staff received or resolved work solely because the recall POST succeeded.
+
+During the rehearsal, the primary must actually locate and read each envelope in Cliniko, distinguish never-sent/success/unknown/conflicting examples without replay, verify the patient/location/target, and mark recalled only after the item is resolved. Unknown writes require provider-state inspection and caller contact as appropriate. Failed discovery or account limits stop test writes; generic operational alerts contain no patient/request content. These are defaults authorized for the supervised demo, not evidence that the reviewer has performed the rehearsal.
+
+## 10. Acknowledged pre-send seam
+
+`ClinikoReviewedSend` owns a single process-local attempt and a private copy of the confirmed envelope. A trusted host authorization port checks confirmation, live proof/policy/terms/target/write-stop state both before the recall and immediately before the clinical send. The gate validates configured account/location/business/credential/policy/time-zone bindings, creates one dated Cliniko review request, and requires the recall writer's exact successful acknowledgment. No acknowledgment, denial, stop, timeout or disconnect can release a clinical send. Once the send is invoked, throws/abort/response loss remain uncertain; there is no automatic recall closure, retry or compensation.
+
+This seam must be owned by the active call coordinator; constructing a new gate is not recovery or permission to replay. A recall's existence, decoded envelope or `recalled` flag never mints caller authority. E2E-268 supplies synthetic text ordering and fresh-process database/backup/output privacy tests at before/during/after-send checkpoints. It is not yet wired to real standalone caller intents. Actual verification, operation receipts, Cliniko UI/staff rehearsal and clinical release gates remain open.
