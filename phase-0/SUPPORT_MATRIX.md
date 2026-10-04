@@ -31,3 +31,5 @@ D-16 selects [best-effort Cliniko writes and Cliniko-owned review](../phase-2/ST
 ### Selected caller verification foundation — 2026-10-04
 
 D-17 selects email OTP. E2E-269/C-LOCAL-58 supply local synthetic-mail contact/code/proof/appointment-read journeys, independent patient/action permission rechecks and real database/process-loss aggregate-limit proofs. No production verification command or mail service is connected. Actual clinic authority, delivery and clinical activation remain required; a code or phone match cannot independently enable any write or staff handoff.
+
+E2E-271 adds a supervised owner-run [Cliniko recall rehearsal](../phase-2/CLINIKO_REVIEW_REHEARSAL.md), with fresh account/type-only status and verified fixture cleanup. It does not mark staff work recalled or enable an appointment write. Saved provider work and an observed recalled flag remain distinct from a human report/notes witness; D-07 activation remains open.
