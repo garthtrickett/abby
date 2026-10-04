@@ -1,6 +1,6 @@
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
-import { claimClinikoBudget, ClinikoReadBudget, isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
+import { claimClinikoBudget, ClinikoReadBudget, clinikoCredentialFingerprint, isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
 import type { ClinikoRequestBudget } from "./read-budget.ts";
 
 export type ClinikoBookingConfig = Readonly<{
@@ -121,6 +121,13 @@ async function untilAbort<Value>(pending: Promise<Value>, signal?: AbortSignal):
   finally { signal.removeEventListener("abort", onAbort); }
 }
 
+/** Optional trusted host check after the final budget wait; never an agent-provided callback. */
+async function permitted(hook: ((signal: AbortSignal) => Promise<boolean>) | undefined, signal: AbortSignal): Promise<boolean> {
+  try {
+    return typeof hook === "function" && await untilAbort(Promise.resolve().then(() => hook(signal)), signal) === true && !signal.aborted;
+  } catch { return false; }
+}
+
 /** A provider edge only. It cannot establish slot exclusivity or authorize live booking. */
 export class ClinikoBookingWriter {
   private readonly scope: LocationScope;
@@ -132,6 +139,7 @@ export class ClinikoBookingWriter {
   private readonly fetchPort: typeof fetch;
   private readonly clock: () => string;
   private readonly attempted = new Set<string>();
+  private readonly credentialHash: string;
 
   private constructor(config: ClinikoBookingConfig, shard: string, fetchPort: typeof fetch, clock: () => string) {
     this.scope = structuredClone(config.scope);
@@ -143,6 +151,7 @@ export class ClinikoBookingWriter {
     this.rateBudget = config.rateBudget ?? new ClinikoReadBudget();
     this.fetchPort = fetchPort;
     this.clock = clock;
+    this.credentialHash = clinikoCredentialFingerprint(config.apiKey);
   }
 
   static create(config: ClinikoBookingConfig, fetchPort: typeof fetch = fetch,
@@ -163,8 +172,10 @@ export class ClinikoBookingWriter {
     return { scope: structuredClone(this.scope), ...this.config };
   }
 
+  credentialFingerprint(): string { return this.credentialHash; }
+
   /** Read current provider conflicts; a clear result is not a reservation or atomic exclusion. */
-  async inspectConflicts(appointmentRef: string, signal?: AbortSignal):
+  async inspectConflicts(appointmentRef: string, signal?: AbortSignal, beforeRead?: (signal: AbortSignal) => Promise<boolean>):
     Promise<Result<boolean, ClinikoBookingFailure>> {
     const id = typeof appointmentRef === "string"
       ? appointmentRef.match(/^cliniko:appointment:([1-9][0-9]{0,18})$/)?.[1] : undefined;
@@ -175,6 +186,8 @@ export class ClinikoBookingWriter {
     const limited = await untilAbort(claimClinikoBudget(this.rateBudget), readSignal);
     if (readSignal.aborted || limited === undefined) return err({ kind: "unavailable" });
     if (limited) return err(limited);
+    if (beforeRead !== undefined && !await permitted(beforeRead, readSignal)) return err({ kind: "forbidden" });
+    if (readSignal.aborted) return err({ kind: "unavailable" });
     let response: Response;
     try {
       const received = await untilAbort(this.fetchPort(`${this.baseUrl}/individual_appointments/${id}/conflicts`, {
@@ -209,18 +222,21 @@ export class ClinikoBookingWriter {
   }
 
   /** At most one POST per marker in this process; abort before send prevents the POST. */
-  async writeOnce(request: ClinikoBookingRequest, signal?: AbortSignal):
+  async writeOnce(request: ClinikoBookingRequest, signal?: AbortSignal,
+    beforeSend?: (signal: AbortSignal) => Promise<boolean>):
     Promise<Result<ClinikoBookingWrite, ClinikoBookingFailure>> {
     if (!validRequest(request)) return err({ kind: "invalidQuery" });
+    request = structuredClone(request);
     if (!sameScope(this.scope, request.scope)) return err({ kind: "scopeMismatch" });
     if (this.attempted.has(request.marker)) return err({ kind: "invalidQuery" });
     if (this.attempted.size >= maxProcessAttempts) return err({ kind: "unavailable" });
     this.attempted.add(request.marker);
-    if (signal?.aborted) return err({ kind: "unavailable" });
-    const limited = await untilAbort(claimClinikoBudget(this.rateBudget), signal);
-    if (signal?.aborted || limited === undefined) return err({ kind: "unavailable" });
-    if (limited) return err(limited);
     const requestSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000);
+    if (requestSignal.aborted) return err({ kind: "unavailable" });
+    const limited = await untilAbort(claimClinikoBudget(this.rateBudget), requestSignal);
+    if (requestSignal.aborted || limited === undefined) return err({ kind: "unavailable" });
+    if (limited) return err(limited);
+    if (beforeSend !== undefined && !await permitted(beforeSend, requestSignal)) return err({ kind: "forbidden" });
     if (requestSignal.aborted) return err({ kind: "unavailable" });
     let response: Response;
     try {
@@ -248,6 +264,37 @@ export class ClinikoBookingWriter {
       return ok({ kind: "uncertain" });
     }
     return ok({ kind: "accepted", appointmentRef: `cliniko:appointment:${row.id}` });
+  }
+
+  /** Exact active read-back for a clear create response, including the clinic-approved duration.
+   * A clear read is best-effort evidence only; it cannot identify a writer after a lost response. */
+  async inspectCreated(request: ClinikoBookingRequest, appointmentRef: string, endsAt: string, signal?: AbortSignal,
+    beforeRead?: (signal: AbortSignal) => Promise<boolean>):
+    Promise<Result<boolean, ClinikoBookingFailure>> {
+    const id = typeof appointmentRef === "string" ? appointmentRef.match(/^cliniko:appointment:([1-9][0-9]{0,18})$/)?.[1] : undefined;
+    if (!validRequest(request) || !id || instant(endsAt) === undefined || instant(endsAt)! <= instant(request.startsAt)!) return err({ kind: "invalidQuery" });
+    if (!sameScope(this.scope, request.scope)) return err({ kind: "scopeMismatch" });
+    request = structuredClone(request);
+    const stop = signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000);
+    if (stop.aborted) return err({ kind: "unavailable" });
+    const limited = await untilAbort(claimClinikoBudget(this.rateBudget), stop);
+    if (limited === undefined || stop.aborted) return err({ kind: "unavailable" });
+    if (limited) return err(limited);
+    if (beforeRead !== undefined && !await permitted(beforeRead, stop)) return err({ kind: "forbidden" });
+    if (stop.aborted) return err({ kind: "unavailable" });
+    try {
+      const response = await untilAbort(this.fetchPort(`${this.baseUrl}/individual_appointments/${id}`, {
+        method: "GET", headers: { Accept: "application/json", Authorization: this.authorization, "User-Agent": this.userAgent }, redirect: "error", signal: stop,
+      }), stop);
+      if (!response || stop.aborted) return err({ kind: "unavailable" });
+      if (response.status === 429) await untilAbort(observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset")), stop);
+      if (response.status !== 200 || stop.aborted) return err({ kind: "unavailable" });
+      const parsed = await untilAbort(boundedJson(response), stop);
+      if (!parsed?.ok || stop.aborted) return err({ kind: "malformed" });
+      const row = record(parsed.value);
+      return ok(!!row && row.id === id && this.matches(row, request) && instant(row.ends_at) === instant(endsAt) &&
+        validStatus(row) && row.cancelled_at === null && row.archived_at === null && row.deleted_at === null);
+    } catch { return err({ kind: "unavailable" }); }
   }
 
   /** A miss or mismatch is only an observation; neither permits replay of a possible POST. */
