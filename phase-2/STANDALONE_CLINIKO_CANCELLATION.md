@@ -1,6 +1,6 @@
 # Standalone Cliniko cancellation implementation
 
-**Status:** local text implementation of D-16, not a clinic activation. E2E-272 composes the real agent gateway, SAM, email-proof verifier, cancellation host, review writer/recovery reader and appointment writer. Email delivery, patient/action permission, fee selection and provider traffic are synthetic in this proof. The production runner still advertises cancellation as unavailable. The nine-step objective remains open.
+**Status:** local text implementation of D-16, not a clinic activation. E2E-272 composes the real agent gateway, SAM, email-proof verifier, cancellation host, review writer/recovery reader and appointment writer. E2E-276/277 add a concrete protected-list/opaque-selection/fresh-provider-target authority and current public clinic-policy decoder. Inputs remain synthetic email delivery, patient/action permission, operator approval and provider traffic; actual clinical policies and final owner/voice integration remain open. The production runner still advertises cancellation as unavailable. The nine-step objective remains open.
 
 ## Contract
 
@@ -46,3 +46,5 @@ The local host refuses captured Abby notification directives until a supported n
 ## Current local evidence
 
 C-LOCAL-61 on source `3268aa1588d7278fc49318af243d0b65b802fa81`: typecheck, real isolated PostgreSQL/process/backup proofs, twelve-file suite 77 passed, and forward/reverse six-file suites 38 passed each, concurrency four, no failures/skips. This includes current standalone raw-toggle denial and existing embedded call/read regressions. Synthetic mail/permission/provider only; remaining activation gates above are unchanged.
+
+The [concrete authority/policy source](CLINIKO_CANCELLATION_AUTHORITY.md) now replaces the fabricated target/terms port in E2E-276, including actual played numbered selection before cancellation confirmation. E2E-277 proves current record binding and automatic standard/late fee-rule changes: crossing the notice boundary after confirmation prevents PATCH without inventing a new consent. This does not close the real clinic permission, staff, final composition, mail or live-provider gates above.
