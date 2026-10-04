@@ -2,7 +2,7 @@
 
 ## Write activation
 
-A clinic and location may offer a patient action only when the owning system supports that action, the clinic approves its use, and the required authority, commit protection, result and recovery evidence has been established. Approval of one action does not approve another.
+A clinic and location may offer a patient action only when the owning system supports that action, the clinic approves its use, and the authority, result and recovery evidence required by its declared write contract has been established. Approval of one action does not approve another.
 
 ## Commit protection
 
@@ -21,3 +21,11 @@ A request may have changed the owning system, but its exact outcome has not been
 A patient action is saved for staff through an approved, owned and recoverable workflow. It does not complete the appointment action. A generic alert or instruction to contact the clinic is not a saved patient request.
 
 Other established terms are defined in [PRD section 5](PRD.md#5-canonical-terms).
+
+## Best-effort write
+
+A confirmed request is checked and attempted once, then inspected under the approved external provider contract. Competing edits, overlaps or duplicates may still occur; unknown outcomes require owned review rather than replay or a completion claim. It does not promise commit protection.
+
+## Review request
+
+A durable request for a staff owner to examine an intended action and its unresolved outcome. Its presence proves neither that the action was sent nor that it completed, and does not authorize an automatic mutation.
