@@ -1,3 +1,5 @@
+import { boundedClinikoJson as boundedRecallJson } from "./bounded-json.ts";
+export { boundedClinikoJson as boundedRecallJson } from "./bounded-json.ts";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import { claimClinikoBudget, ClinikoReadBudget, isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
@@ -53,7 +55,6 @@ const idPattern = /^[1-9][0-9]*$/;
 const emailPattern = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
 const pageSize = 100;
 const maxPages = 5;
-const maxBodyBytes = 1_000_000;
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
@@ -65,29 +66,6 @@ function validScope(value: unknown): value is ClinikoClinicScope {
     .every(part => typeof part === "string" && !!part.trim() && part.length <= 256);
 }
 
-export async function boundedRecallJson(response: Response): Promise<Result<unknown, ClinikoRecallFailure>> {
-  if (!response.body) return err({ kind: "malformed" });
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const next = await reader.read();
-      if (next.done) break;
-      size += next.value.byteLength;
-      if (size > maxBodyBytes) {
-        await reader.cancel();
-        return err({ kind: "tooManyResults" });
-      }
-      chunks.push(next.value);
-    }
-    const bytes = new Uint8Array(size);
-    let offset = 0;
-    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-    return ok(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown);
-  } catch { return err({ kind: "malformed" }); }
-  finally { reader.releaseLock(); }
-}
 
 /** A read-only, bounded lookup. A miss cannot authorize retrying an uncertain POST. */
 export class ClinikoRecallReader {

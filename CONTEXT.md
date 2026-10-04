@@ -29,3 +29,7 @@ A confirmed request is checked and attempted once, then inspected under the appr
 ## Review request
 
 A durable request for a staff owner to examine an intended action and its unresolved outcome. Its presence proves neither that the action was sent nor that it completed, and does not authorize an automatic mutation.
+
+## Email verification
+
+The caller demonstrates control of the patient’s currently registered email channel using a short-lived code. It grants only the patient action permitted by the clinic’s current policy; it does not establish representative authority or turn a phone match into proof.

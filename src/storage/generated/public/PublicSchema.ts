@@ -16,6 +16,7 @@ import type { default as TenantPortabilityFencesTable } from './TenantPortabilit
 import type { default as PatientPhoneSyncTable } from './PatientPhoneSync.js';
 import type { default as ClinicWriteStopInflightTable } from './ClinicWriteStopInflight.js';
 import type { default as PatientPhoneIndexTable } from './PatientPhoneIndex.js';
+import type { default as PatientVerificationBudgetsTable } from './PatientVerificationBudgets.js';
 import type { default as TenantConfigImportsTable } from './TenantConfigImports.js';
 import type { default as EffectCallLeasesTable } from './EffectCallLeases.js';
 import type { default as ClinicAutomationTable } from './ClinicAutomation.js';
@@ -67,6 +68,8 @@ export default interface PublicSchema {
   clinic_write_stop_inflight: ClinicWriteStopInflightTable;
 
   patient_phone_index: PatientPhoneIndexTable;
+
+  patient_verification_budgets: PatientVerificationBudgetsTable;
 
   tenant_config_imports: TenantConfigImportsTable;
 
