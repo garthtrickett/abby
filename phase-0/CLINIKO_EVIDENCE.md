@@ -221,3 +221,30 @@ Earlier evidence: shared approval/policy typecheck passed (`4590eee3-17910980337
 A separate read-only actual Cliniko rehearsal status recheck still found one pending synthetic request, zero provider-marked recalled, zero invalid/ambiguous and zero clinical writes (`4590eee3-1791099543423.log`). Human report/notes inspection remains open; provider flags would not by themselves prove it. No real appointment was changed by this implementation.
 
 Limits: provider traffic, mail, operator approval and independent patient permission are synthetic. The shipped policy is a disabled/unapproved template. Actual clinic rules/consent, mail/sender, human staff process, notification side effects, final admitted-call owner/secret-entry/voice integration, final-composition loss/stop proofs and controlled real provider lifecycle remain open. Current standalone capabilities stay unavailable; the full nine-step goal is not complete. [Concrete adapter and function map](../phase-2/CLINIKO_CANCELLATION_AUTHORITY.md).
+
+## C-LOCAL-64 — one admitted cancellation composition, shared budgets and actual owner loss
+
+**2026-10-04; frozen executable source `9622037f282c4897097f1e6dd91ba3b99f52ddbb`; E2E-278.** `ClinikoCancellationSession` connects actual inbound/SAM admission, dedicated email secret entry, current owner-file method/fee/member approvals, current execution/staff declaration, independent permission, protected opaque/numbered selection and the existing reviewed one-attempt cancellation host. One mandatory provider budget covers contact, protected reads, recall, mutation and recovery; a single lifecycle close signal clears all retained transient ports. Bounded abandoned approval work cannot later create a usable owner.
+
+The frozen final command was:
+
+```sh
+npm run typecheck
+bash scripts/with-postgres.sh bash /tmp/abby-cancellation-session-final-proof.sh
+git diff --check
+```
+
+The wrapper migrates the disposable base database before dispatch, then runs 20 focused files with `node --test --test-concurrency=4`: the new session and session-PostgreSQL files; cancellation authority, clinic policy and authority-PostgreSQL; caller method/session approval; standalone cancellation, PostgreSQL and process loss; cancellation writer; email authority and aggregate PostgreSQL budget; owner admin directory and magic-link identity; embedded appointment-change and signed standalone verified-read voice; strict PostgreSQL standalone config; cross-mode agent conformance; scenario-manifest contract. **100 passed, zero failures/skips. Typecheck and diff checks passed.**
+
+The existing ordered runner then dispatched `cancellation-session`, `cancellation-session-postgres`, `standalone-cancellation-process` and `caller-verification-session` with concurrency four, and the exact reverse. **18 passed in each order, zero failures/skips.** Every ordered dispatch checked successful completion. Final log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791101107532.log`.
+
+The new PostgreSQL journey supplies both actual coordinated budgets, checks one API-user bucket covers every provider request, scans actual rows and a disposable backup, and confirms no durable call or patient-specific appointment/review/proof/code/contact state. The process fixture preserves the three earlier reference-owner checkpoints and adds three actual composed-owner SIGKILL checkpoints: before recall acknowledgment, during cancellation send, and after clear inspected completion. A fresh process receives only public provider configuration, discovers the full dedicated type, leaves its item pending and performs no new provider mutation. No code, call proof, selection or original action context is carried into that process.
+
+Prior failures/results retained:
+
+- Initial factory/fixture typechecks failed on exact optional-property arguments and `void` callback types: logs `4590eee3-1791100450525.log`, `4590eee3-1791100560480.log`. The source now supplies a concrete default clock and omits absent optional deadline arguments; callback types are explicit.
+- The first semantic gate failed because the held directory fixture lacked its required email lookup port: `4590eee3-1791100667844.log`. Supplying that port kept the abandonment assertion intact. The corrected gate passed 22 tests with no failures/skips: `4590eee3-1791100735806.log`.
+- The initial integrated PostgreSQL/process gate passed its actual crash cases but failed budget-accounting: the fixture's post-send discovery used a separate default budget, producing 39 provider requests against 38 coordinated reservations: `4590eee3-1791100830987.log`. The discovery and fresh composed recovery process now use the same supplied/coordinated budget; no assertion was removed or relaxed.
+- The corrected PostgreSQL/process/manifest gate passed before freezing: `4590eee3-1791100980590.log`. The frozen final gate above also rechecks the captured admission's execution/staff declaration and preserves the earlier reference private-note canary.
+
+All provider, mail, clinical permission and approvals remain synthetic. This evidence is neither an actual email-delivery witness nor actual clinic permission/policy approval, human staff review, notification side-effect proof, voice-runner activation or carrier evidence. Production standalone patient-specific actions remain unavailable; D-06/D-07/D-11/D-16/D-17 and the full nine-step objective remain intact. The pending supervised Cliniko UI fixture is not automatically marked recalled or counted as human receipt.
