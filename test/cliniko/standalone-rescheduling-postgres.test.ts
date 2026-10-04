@@ -32,7 +32,9 @@ test("E2E-285 reviewed standalone in-place move with actual provider and verific
       assert.equal(f.patches, 1); assert.equal(f.traffic.filter(value => value === "PATCH /v1/individual_appointments/91").length, 1);
       const discovered = await f.discovery(); assert.ok(discovered.ok);
       assert.equal(discovered.value.pending.length, 1, "review remains Cliniko-owned and is not closed automatically");
-      const canaries = [...verificationCanaries, f.mail[0].code, proofRef, f.callId, f.sessionId, String(f.recalls[0]!.notes), "2026-10-08T04:00:00.000Z", "2026-10-08T05:00:00.000Z"]
+      const reviewMarker = String(f.recalls[0]!.notes).split("\n")[0]!;
+      assert.match(reviewMarker, /^Abby request /);
+      const canaries = [...verificationCanaries, f.mail[0].code, proofRef, f.callId, f.sessionId, reviewMarker, "2026-10-08T04:00:00.000Z", "2026-10-08T05:00:00.000Z"]
         .map((value, i) => ({ label: `target_${i}`, value }));
       assert.deepEqual(await scanPatientDataCanaries(database, canaries), { ok: true, value: [] });
       assert.deepEqual(await scanDisposableBackupCanaries(target.toString(), canaries), []);
