@@ -169,8 +169,9 @@ export class ClinikoAppointmentChangeGuard {
     } catch { return false; }
   }
 
-  async resolve(query: AppointmentChangeEvidenceQuery, phase: "proposal" | "commit",
+  async resolve(incoming: AppointmentChangeEvidenceQuery, phase: "proposal" | "commit",
                  signal: AbortSignal): Promise<Result<PreparedClinikoChange, HostReadFailure>> {
+    const query = incoming && { ...incoming, scope: { ...incoming.scope } };
     if ((phase !== "proposal" && phase !== "commit") || !query || !validScope(query.scope) || !sameScope(query.scope, this.#scope) ||
         query.callId !== this.#callId || query.sessionId !== this.#sessionId || query.policyVersion !== this.#policyVersion ||
         ![query.verificationRef, query.targetRef].every(value => typeof value === "string" && refPattern.test(value)) ||
@@ -196,7 +197,7 @@ export class ClinikoAppointmentChangeGuard {
         return err({ kind: evidence?.ok === false && evidence.error.kind === "ambiguous"
           ? "ambiguous" : "unavailable", target: "appointment" });
       }
-      const selected = evidence.value;
+      const selected = structuredClone(evidence.value);
       if (!validScope(selected.scope) || !sameScope(selected.scope, this.#scope) ||
           selected.callId !== this.#callId || selected.sessionId !== this.#sessionId ||
           selected.policyVersion !== this.#policyVersion || selected.patientId !== patient.value.patientRef ||
@@ -251,6 +252,19 @@ export class ClinikoAppointmentChangeGuard {
       digestActionRequest(fresh.value.request) === mutation.payloadDigest &&
       sameProviderRequest(fresh.value.provider, prepared.provider) && Date.parse(prepared.request.terms.expiresAt) > at &&
       await this.#ready(prepared.request.kind, at, signal, mutation);
+  }
+
+  /** Protected read-back while the original SAM write is dispatched; a moved source need not still be old. */
+  async mayInspect(prepared: PreparedClinikoChange, mutation: HostMutation, now: string, signal: AbortSignal): Promise<boolean> {
+    try {
+      const at = this.#time(now);
+      if (at === undefined || !await this.#ready(prepared.request.kind, at, signal, mutation)) return false;
+      const patient = await untilAbort(this.#proof.verifyOperation(this.#scope, prepared.request.patient.verificationRef,
+        prepared.request.kind === "cancel" ? "appointments.cancel" : "appointments.reschedule", this.#clock(), signal), signal);
+      const fresh = this.#time(now);
+      return !!patient?.ok && patient.value.patientRef === prepared.provider.patientId && !signal.aborted && !this.#closed &&
+        fresh !== undefined && Date.parse(patient.value.expiresAt) > fresh && await this.#ready(prepared.request.kind, fresh, signal, mutation);
+    } catch { return false; }
   }
 
   async mayObserve(prepared: PreparedClinikoChange, mutation: HostMutation, signal: AbortSignal): Promise<boolean> {

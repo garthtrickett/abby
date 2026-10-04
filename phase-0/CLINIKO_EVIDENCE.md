@@ -349,3 +349,43 @@ Earlier results and corrections are retained:
 - Registered semantic/manifest/legacy-booking gate passed 13/13 before freezing (`4590eee3-1791107584604.log`). The final frozen gate above also includes malformed public-evidence, held-constructor, shared-budget failure and advancing-clock regressions.
 
 The product owner deferred real email-service setup on 2026-10-04; synthetic email testing continues. All provider, mail, independent clinical permission and clinic approvals in this proof are synthetic. Actual delivery, clinic policies/permission, human Cliniko staff witness and approved coverage, provider fee/notification side effects, gated live voice-runner integration and carrier evidence remain open. No new real Cliniko clinical write, production patient capability or privacy decision change occurred. D-06/D-07/D-11/D-16/D-17 and the full nine-step objective remain intact; it is not complete.
+
+
+## C-LOCAL-68 — Standalone reviewed best-effort in-place move and private final authority
+
+**2026-10-04; frozen executable source `8f1aa98484e5a131f0124d5c64515ea16b85362c`; E2E-285/286; manifest 1.89 /286 IDs.** `ClinikoReschedulingHost` joins the actual operation-bound email verifier/proof, existing agent proposal, SAM played exact old/new time and fee confirmation, required acknowledged full Cliniko review and one in-place move writer. The selected source/destination/fee authority, independent patient permission, email and provider responses are synthetic; this is not the final concrete clinic policy/selection or admitted-session factory.
+
+Trusted private callbacks run after the writer's exact old-target read and final provider-budget wait before PATCH, and after every budget wait before protected target/conflict inspection. Query bindings and selected evidence are cloned before later waits; provider target/scope/destination and callback functions are frozen before IO. False, throwing, held or aborted checks cannot issue HTTP. Current proof/call/lease/SAM dispatch/policy/emergency stop is rechecked after the final conflict response, so revocation during that read cannot produce a committed receipt. These hooks are host wiring and do not enter model schemas or serialized provider payloads.
+
+A pre-send edge error rejects without a PATCH. A possible send with lost/nonexact response, changed/unreadable target or detected conflict remains unresolved, never retries, undoes, creates a replacement appointment, automatically closes its recall or upgrades on later matching provider state. A clear 200 plus exact active new interval/provider links and no detected conflict supports a receipt under D-16 best-effort only, followed by the final authority check. It does not establish atomic overlap exclusion or original-writer identity after a lost response. The owning call separately closes its verifier and selection source.
+
+Frozen-source commands:
+
+```sh
+npm run typecheck
+bash scripts/with-postgres.sh bash /tmp/abby-reviewed-rescheduling-final-proof.sh
+```
+
+Exact wrapper contents for reproduction:
+
+```sh
+#!/usr/bin/env bash
+set -euo pipefail
+npm run db:migrate
+node --test --test-concurrency=4 test/cliniko/standalone-rescheduling.test.ts test/cliniko/rescheduling-best-effort-edge.test.ts test/cliniko/standalone-rescheduling-postgres.test.ts test/cliniko/standalone-rescheduling-process.test.ts test/cliniko/reschedule-write.test.ts test/cliniko/cancellation-write.test.ts test/cliniko/cancellation-authority.test.ts test/cliniko/cancellation-authority-postgres.test.ts test/cliniko/cancellation-session.test.ts test/cliniko/cancellation-session-postgres.test.ts test/cliniko/standalone-cancellation.test.ts test/cliniko/standalone-cancellation-postgres.test.ts test/cliniko/standalone-cancellation-process.test.ts test/cliniko/caller-verification-session.test.ts test/cliniko/owner-file-caller-policy.test.ts test/cliniko/email-patient-authority.test.ts test/cliniko/email-verification-budget-postgres.test.ts test/voice/embedded-cliniko-appointment-change-host-call.test.ts test/voice/standalone-signed-verified-read.test.ts test/composition/cross-mode-agent-conformance.test.ts test/composition/cross-mode-appointment-proposals.test.ts test/text/agent-appointment-proposals.test.ts test/contract/scenario-manifest.test.ts
+node scripts/ordered-node-e2e.mjs '{"files": ["test/cliniko/standalone-rescheduling.test.ts", "test/cliniko/rescheduling-best-effort-edge.test.ts", "test/cliniko/standalone-rescheduling-postgres.test.ts", "test/cliniko/standalone-rescheduling-process.test.ts", "test/cliniko/reschedule-write.test.ts"], "concurrency": 4}'
+node scripts/ordered-node-e2e.mjs '{"files": ["test/cliniko/reschedule-write.test.ts", "test/cliniko/standalone-rescheduling-process.test.ts", "test/cliniko/standalone-rescheduling-postgres.test.ts", "test/cliniko/rescheduling-best-effort-edge.test.ts", "test/cliniko/standalone-rescheduling.test.ts"], "concurrency": 4}'
+git diff --check
+```
+
+The 23-file parallel suite passed **116 tests**, then the five new move/edge/PG/process/original-writer files ran forward and in reverse through the actual ordered runner, concurrency four: **25 passed in each order**. Every dispatched file completed. **Zero failures/skips in all three runs; typecheck, migration and diff checks passed.** Final tracked log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791109703105.log`.
+
+Actual isolated PostgreSQL provider/verification budgets cover the adapter requests with one shared API-user bucket. Row and disposable-backup canaries cover code/contact/chart/patient/proof/call/session, both intervals and the actual Cliniko review marker; the call and phone-index tables remain empty and aggregate budget rows have only their authorized fields. The process fixture SIGKILLs an actual verifier/gateway/review/move sender before review acknowledgment, during PATCH and after inspected commit. A fresh process receives public provider configuration only, discovers the full pending review type and performs no clinical or recall mutation. Replacement discovery neither restores lost authority nor counts as human review. No patient-specific action/review context is persisted in Abby.
+
+Earlier observations/results retained:
+
+- Initial new host/edge typed contract passed (`4590eee3-1791108289472.log`). The first verifier-fixture typecheck failed because the proposal used an unsupported top-level operation field (`4590eee3-1791108452215.log`); the fixture now uses the existing typed `selection` field. Corrected actual verifier/SAM/move plus original cancellation/reschedule/embedded-host gate passed **45/45**, no skips (`4590eee3-1791108599021.log`).
+- The first PG/process gate stopped at typecheck because the new discovery result needed discriminated-result narrowing (`4590eee3-1791108811512.log`). The corrected combined gate passed **30/30**, no skips (`4590eee3-1791108938860.log`), including final inspection revocation and real sender loss. The registered semantic/manifest/original-writer gate passed **24/24** (`4590eee3-1791109200790.log`).
+- Initial frozen source `d0c2992fe318768228ea4368f73fd1d9c2df2d5b` passed **115** tests but failed **one** PG canary input (`4590eee3-1791109362613.log`): a full review note exceeded the scanner's existing 256-character input limit. It was replaced with the bounded actual review-marker canary while retaining the individual private-data/interval scans. No scanner limit or assertion was removed. Corrected focused PostgreSQL/backup proof passed **1/1**, no skips (`4590eee3-1791109571953.log`), then the complete corrected frozen gate above passed.
+
+All provider traffic, mail, clinical permission, source/destination/fee authority and approvals in this proof are synthetic. Real email delivery remains explicitly deferred by the owner. Concrete current rescheduling policy and protected source/destination selection, final admitted call/menu composition, actual clinic and human staff approval, clinical/notification provider lifecycle, gated live voice integration and carrier evidence remain open. Production patient-specific actions and general handoff remain unavailable. D-06/D-07/D-11/D-16/D-17 and the complete nine-step objective remain intact; it is not complete. See [the move contract and next work](../phase-2/STANDALONE_CLINIKO_RESCHEDULING.md).
