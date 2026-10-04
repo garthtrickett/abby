@@ -10,6 +10,8 @@ import type { LocationScope } from "../../src/core/model.ts";
 import { err, ok } from "../../src/core/model.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { TextReception } from "../../src/reference/text-reception.ts";
+import type { AppointmentChangeAuthority } from "../../src/standalone/appointment-change-authority.ts";
+import type { ClinikoReschedulingAuthorityConfig } from "../../src/standalone/cliniko-rescheduling-authority.ts";
 import type { AppointmentChangeAuthorityEvidence } from "../../src/standalone/appointment-change-authority.ts";
 import { CallerVerificationSession } from "../../src/standalone/caller-verification-session.ts";
 import { ClinikoReschedulingHost } from "../../src/standalone/cliniko-rescheduling-host.ts";
@@ -21,6 +23,8 @@ import { callerVerificationFixture, verificationCanaries, verificationNow } from
 /** Actual verifier/SAM/gateway/review/move adapters; clinical authority, mail and provider are synthetic. */
 export async function standaloneReschedulingFixture(options: { scope?: LocationScope; folder?: string; operation?: PatientOperation;
   verificationBudget?: PatientVerificationBudget; rateBudget?: ClinikoRequestBudget; fetchPort?: typeof fetch;
+  fetchAround?: (port: typeof fetch) => typeof fetch;
+  authorityFor?: (config: Omit<ClinikoReschedulingAuthorityConfig, "policy" | "feePolicy">, port: typeof fetch) => Promise<AppointmentChangeAuthority>;
   staffWorkEnabled?: boolean; lostRecall?: boolean; lostMove?: boolean } = {}) {
   const f = await callerVerificationFixture({ operation: options.operation ?? "appointments.reschedule", reschedulingExecute:true,
     ...(options.scope ? { scope:options.scope } : {}), ...(options.folder ? { folder:options.folder } : {}),
@@ -75,9 +79,10 @@ export async function standaloneReschedulingFixture(options: { scope?: LocationS
     if(inspected==="changed") row.starts_at="2026-10-09T06:00:00.000Z";
     return Response.json(row);
   };
+  const innerFetch = options.fetchAround ? options.fetchAround(options.fetchPort ?? fakeProvider) : options.fetchPort ?? fakeProvider;
   const fetchPort:typeof fetch=async (value,init) => {
     const url=new URL(String(value)); assert.equal(url.origin,"https://api.au5.cliniko.com"); assert.equal(init?.redirect,"error");
-    traffic.push(`${init?.method ?? "GET"} ${url.pathname}`); return (options.fetchPort ?? fakeProvider)(value,init);
+    traffic.push(`${init?.method ?? "GET"} ${url.pathname}`); return innerFetch(value,init);
   };
   const rateBudget=options.rateBudget ?? {claim:async () => { claims++; return null; },observe429:async () => ({kind:"rateLimited" as const})};
   try {
@@ -85,9 +90,12 @@ export async function standaloneReschedulingFixture(options: { scope?: LocationS
     session=resultValue(CallerVerificationSession.create({...f.sessionConfig,
       contact:new ClinikoVerificationContactReader({...provider,countryCallingCode:"61"},fetchPort),budget:options.verificationBudget ?? {reserve:async () => true},
       delivery:{send:async (email,code) => { mail.push({email,code}); return true; }} }));
+    const authority = options.authorityFor ? await options.authorityFor({ ...provider, practitionerId:"22", appointmentTypeId:"33",
+      callId:f.callId,sessionId:f.sessionId,policyVersion:f.sessionConfig.policyVersion,proof:session.proof,clock:f.sessionConfig.clock }, fetchPort) :
+      {resolve:async (query: Parameters<AppointmentChangeAuthority["resolve"]>[0]) => { sourceQueries.push(query.phase); return authorityPermitted ? ok(structuredClone(evidence)) : err({kind:"unavailable" as const,target:"appointment" as const}); }};
     host=new ClinikoReschedulingHost({ scope:f.scope,callId:f.callId,sessionId:f.sessionId,policyVersion:f.sessionConfig.policyVersion,
       businessId:"11",credentialFingerprint:clinikoCredentialFingerprint(apiKey),ledger:f.ledger,policy:f.policies,proof:session.proof,
-      authority:{resolve:async query => { sourceQueries.push(query.phase); return authorityPermitted ? ok(structuredClone(evidence)) : err({kind:"unavailable",target:"appointment"}); }},
+      authority,
       cancellation:resultValue(ClinikoCancellationWriter.create(provider,fetchPort,f.sessionConfig.clock)),
       rescheduling:resultValue(ClinikoRescheduleWriter.create(provider,fetchPort,f.sessionConfig.clock)),
       recallWriter:resultValue(ClinikoRecallWriter.create(provider,fetchPort)),recallTypeId:"7",timeZone:"Australia/Sydney",clock:f.sessionConfig.clock });
@@ -106,7 +114,7 @@ export async function standaloneReschedulingFixture(options: { scope?: LocationS
       return reception.affirm(f.scope,turn("affirm","Yes"),action.key,action.digest,verificationNow);
     }
     return {...f,host,session,agent,reception,mail,traffic,recalls,sourceQueries,turn,verify,confirm,
-      propose:(verificationRef:string,turnId="proposal") => agent.submit({kind:"appointments.change.propose.v1",turn:turn(turnId),selection:{kind:"reschedule",verificationRef,targetRef:"approved-target",offerRef:"approved-offer"},now:verificationNow}),
+      propose:(verificationRef:string,turnId="proposal",targetRef="approved-target",offerRef="approved-offer") => agent.submit({kind:"appointments.change.propose.v1",turn:turn(turnId),selection:{kind:"reschedule",verificationRef,targetRef,offerRef},now:verificationNow}),
       drain:() => reception.drain(f.scope,f.callId,verificationNow), discovery:() => resultValue(ClinikoRecallReader.create(provider,fetchPort)).discoverPendingReviews(f.scope,"7"),
       get evidence() {return evidence;}, setEvidence:(patch:Partial<AppointmentChangeAuthorityEvidence>) => {evidence={...evidence,...patch} as AppointmentChangeAuthorityEvidence;},
       denyAuthority:() => {authorityPermitted=false;},setInspection:(value:string) => {inspected=value;},setConflict:(value:string) => {conflict=value;},

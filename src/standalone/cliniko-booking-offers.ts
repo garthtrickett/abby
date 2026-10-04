@@ -17,7 +17,7 @@ import { TransientPatientProofHost } from "./transient-patient-proof.ts";
 export type ClinikoBookingOffersConfig = Readonly<{
   scope: LocationScope; callId: string; sessionId: string; policyVersion: string; apiKey: string; contactEmail: string;
   businessId: string; practitionerId: string; appointmentTypeId: string; proof: TransientPatientProofHost;
-  policy: OwnerFileBookingPolicy; rateBudget: ClinikoRequestBudget; clock?: () => string; timeoutMs?: number;
+  policy: OwnerFileBookingPolicy; operation?: "appointments.book" | "appointments.reschedule"; rateBudget: ClinikoRequestBudget; clock?: () => string; timeoutMs?: number;
 }>;
 export type BookingChoices = Readonly<{
   scope: LocationScope; callId: string; sessionId: string; policyVersion: string; observedAt: string; timeZone: string;
@@ -42,7 +42,8 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
     Result<ClinikoBookingOffers, Readonly<{ kind: "invalidConfig" }>> {
     try {
       const config = Object.freeze({ ...incoming, scope: Object.freeze({ ...incoming.scope }) });
-      if (!(config.proof instanceof TransientPatientProofHost) ||
+      if ((config.operation !== undefined && !["appointments.book", "appointments.reschedule"].includes(config.operation)) ||
+          !(config.proof instanceof TransientPatientProofHost) ||
           !config.proof.matchesCall(config.scope, config.callId, config.sessionId, config.policyVersion) ||
           !(config.policy instanceof OwnerFileBookingPolicy) ||
           !normalizeEmailAddress(config.contactEmail) || typeof config.apiKey !== "string" || /[\u0000-\u001f\u007f]/.test(config.apiKey) ||
@@ -77,7 +78,7 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
     const config = this.#config;
     const policy = await config.policy.current(config.scope);
     if (!policy.ok || signal.aborted || this.#time(now) === undefined) return undefined;
-    const proof = await config.proof.verifyOperation(config.scope, verificationRef, "appointments.book", this.#now(), signal);
+    const proof = await config.proof.verifyOperation(config.scope, verificationRef, config.operation ?? "appointments.book", this.#now(), signal);
     if (!proof.ok || signal.aborted) return undefined;
     const finalPolicy = await config.policy.current(config.scope), at = this.#time(now);
     if (!finalPolicy.ok || JSON.stringify(finalPolicy.value) !== JSON.stringify(policy.value) || at === undefined ||
@@ -143,6 +144,14 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
       return structuredClone(evidence);
     }, query.signal);
     return result ? ok(result) : denied();
+  }
+  /** Memory fence only: does not recheck provider state or issue patient permission. */
+  retains(evidence: ClinikoBookingEvidence, verificationRef: string): boolean {
+    try {
+      const selected = this.#offers.get(evidence.offer.offerRef), at = this.#time(this.#now());
+      return !this.#lifetime.signal.aborted && at !== undefined && !!selected && selected.verificationRef === verificationRef &&
+        Date.parse(selected.evidence.offer.expiresAt) > at && JSON.stringify(selected.evidence) === JSON.stringify(evidence);
+    } catch { return false; }
   }
   dispose(): void { this.#epoch++; this.#lifetime.abort(); this.#offers.clear(); }
 }

@@ -2,7 +2,7 @@
 
 ## Status and contract
 
-D-16 accepts one best-effort in-place move with concurrency limits. `ClinikoReschedulingHost` now composes the existing actual verifier/proof, agent proposal, SAM confirmation, acknowledged Cliniko review and move writer. Tests supply synthetic current target/offer/fee authority, independent permission, email and provider responses. The production runner still declares patient-specific rescheduling unavailable. This is engineering progress; the full nine-step objective remains incomplete.
+D-16 accepts one best-effort in-place move with concurrency limits. `ClinikoReschedulingHost` now composes the existing actual verifier/proof, agent proposal, SAM confirmation, acknowledged Cliniko review and move writer. Concrete public fee/notice policies and protected target/destination authority now replace synthetic selection. Independent permission, public approval witnesses, email and provider responses remain synthetic in tests. The production runner still declares patient-specific rescheduling unavailable. This is engineering progress; the full nine-step objective remains incomplete.
 
 The same appointment keeps its patient, business, practitioner, type and duration. Confirmation names the exact old and new time in the approved clinic calendar and the approved fee wording. Available time remains provisional; a competing editor or overlapping writer may still win after Abby's final read. D-16 accepts that risk. A clear successful response requires exact new-target read-back, no detected conflict and final current authority before a committed receipt.
 
@@ -33,10 +33,22 @@ E2E-286 covers trusted send/read checks after actual budget waits, false/throw/h
 
 ## Remaining execution work
 
-1. Implement the concrete current rescheduling fee/notice approval with current scoped administrator and exact public provider/review/calendar bindings. Actual clinic approval remains a separate witness.
-2. Connect protected opaque source-appointment selection to concrete operation-bound destination offers. Require the same provider links/duration, current eligibility/relationships/availability, fixed offer expiry and freshly rechecked source/destination/fee policy.
-3. Add the trusted admitted rescheduling-session owner and caller-facing played source/destination menu selection, with dedicated email secret entry, one close signal, shared budget, final-composition PostgreSQL/privacy and process-loss evidence.
-4. Complete independent patient/action permission, actual clinic policy and human staff-review approval, provider fee/notification behavior, controlled actual provider lifecycle and gated text/voice runner integration.
-5. Collect recorded/generated speech evidence and the separately required real carrier/fallback proof before telephone activation.
+1. Add the trusted admitted rescheduling-session owner and caller-facing played source/destination menu selection, with dedicated email secret entry, one close signal, shared budget, final-composition PostgreSQL/privacy and process-loss evidence.
+2. Complete independent patient/action permission, actual clinic policy and human staff-review approval, provider fee/notification behavior, controlled actual provider lifecycle and gated text/voice runner integration.
+3. Collect recorded/generated speech evidence and the separately required real carrier/fallback proof before telephone activation.
 
 The owner deferred real email-service setup on 2026-10-04; synthetic delivery tests continue. The pending supervised Cliniko UI witness is not automatically acknowledged or marked recalled. D-06/D-07/D-11/D-16/D-17 remain intact.
+
+## Concrete policy and selection (E2E-287/288)
+
+`OwnerFileReschedulingPolicy.capture/current` takes an owner-only exact public approval plus current scoped administrator directory and provider/review/calendar bindings. Its separate schema includes standard/late fee text (1–500 characters, no control characters), distinct terms versions, late-notice hours (1–168) and maximum source horizon (1–90 days). Private fields, cancellation reasons, invalid dates/zones/ranges, changed membership/approval and expired or disabled approval deny. Notice exactly at the threshold uses standard terms; crossing below it requires the new late wording and renewed caller confirmation. This approves public wording only: it does not charge fees, grant patient permission or prove receipt.
+
+`ClinikoAppointmentSelection.list/select/resolveTarget` owns opaque transient existing-appointment refs, checks the appropriate actual operation proof and rereads active exact patient/business/provider/type links, old interval/calendar and current fee terms. Cancellation and rescheduling compose this one protected source; cancellation's public adapter retains its reason and operation-specific proof.
+
+`ClinikoReschedulingAuthority.listOffers/resolve` uses concrete destination approval (`OwnerFileBookingPolicy`, the existing public offering schema) and `ClinikoBookingOffers` configured specifically for `appointments.reschedule`. A booking proof cannot substitute. Destination notice/horizon/duration/provider/eligibility/relationships/names/availability checks stay exact. Source and destination must agree on business, practitioner, type, credential, duration and calendar. Both public approvals must match policy/clinic/credential/review/calendar. The destination cannot equal the old start. Source/fee is reread after destination IO, fixed expiry never extends, relisting invalidates old refs, and close/abort prevents late evidence. These private interfaces do not expose provider IDs or fee authority as agent commands. A final admitted owner and played ordinal menu remain execution work.
+
+The actual verifier → concrete policies/selection → gateway/SAM confirmation → review → one move composition has isolated PostgreSQL and backup scans, including opaque refs, contact/code/proof and both intervals. Real SIGKILL before review acknowledgment, during PATCH and after inspected success leaves only the provider-owned review; a replacement owner gets public account/type configuration and performs no mutation. Full-call evidence remains planned. No real email account or provider credential is needed for these synthetic HTTP tests.
+
+A deployment's rescheduling approval must start with `approved: false` and `enabled: false`. To create an owner-only public record, copy the current exact schema and fill actual `scope`, `revision`, current `approverRef`, canonical `approvedAt/effectiveFrom/effectiveUntil`, `policyVersion`, `businessId`, credential fingerprint, dedicated approved `recallTypeId`, clinic `timeZone`, `writeContract: "bestEffort"`, `notificationOwner: "cliniko"`, `lateNoticeHours`, `maxAdvanceDays` and distinct `standardTerms/lateTerms {version, approvedText}`. The separate destination approval supplies the public service/provider/duration/notice/horizon/expiry rules. Neither synthetic fixture nor this schema is an actual clinic approval.
+
+A final volatile destination-selection fence after the last source/fee IO rejects an offer relisted or disposed during that read. The fence checks retained exact issued evidence and fixed expiry; it supplies no provider observation, reservation or new permission. The reproduced interleaving is part of E2E-287.
