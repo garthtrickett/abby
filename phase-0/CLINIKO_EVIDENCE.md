@@ -480,3 +480,57 @@ Tracked final job `Abby prepatient research final parallel and order proof`, log
 Earlier failed gate `Abby prepatient memo research probe focused safety proof`, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791115207113.log`, exited 2 in 54 seconds at TypeScript TS1294: a constructor parameter property is forbidden by `erasableSyntaxOnly`. It was corrected to an explicit field assignment; the corrected gate passed TypeScript and all eight then-existing probe tests, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791115346881.log`. The later ninth deadline test is covered by the final frozen gate. No assertion, setting verifier, deadline or concurrency was reduced.
 
 C-LIVE-55’s source-matched demo command job `Abby aa7c886 demo memo missing-patient and null-patient lifecycle proof`, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791115586011.log`, completed exit 0 in two seconds. Preliminary pre-deadline wrapper checks also rejected omitted/null associations and found zero records; final live evidence is the frozen command above. Production caller intake, prospective-patient permission, selected failure contract, actual consent/staff workflow, real email delivery and voice activation remain open.
+
+## C-LOCAL-72 — Exact intake phone receipt, independent read-back and abandoned work
+
+Executable/registered source: `721c1d29d70630beb7b304262b4d2cffeb00ccf1`. E2E-292; manifest 1.93 / 292. The intake provider edge requires an explicit country calling code, exact single submitted phone/type evidence in the successful create response and a separately budgeted same-patient GET with matching name/email/DOB/phone/privacy/active state. It returns only a transient patient reference; this does not authorize booking or supply pre-patient recovery.
+
+`createOnce(request, { signal?, timeoutMs? })` uses one default 15-second operation deadline through trusted authority, duplicate search, shared budget, one possible create and result read-back. Abort before a possible send returns a typed failure with zero creates; after a possible send it returns uncertainty. Late authority, budget, HTTP or body work cannot issue a fresh POST or created receipt. A noncooperative dependency may continue its own already-started work; the wait primitive cannot undo a remote send.
+
+The actual transient authority projects approved draft fields, captures attestation input before waits and propagates consumer/owner disposal into evidence resolution. Runtime draft extras cannot replace call/session/scope/policy/consent bindings. Malformed refreshed drafts deny without leaking host detail. Process-local attempt/authority claims are not provider uniqueness or replacement-process replay protection.
+
+Final command:
+
+```sh
+npm run typecheck && npm run build:availability-console &&
+bash scripts/with-postgres.sh bash /tmp/abby-intake-edge-final-proof.sh
+```
+
+Exact script:
+
+```sh
+#!/usr/bin/env bash
+set -euo pipefail
+node scripts/migrate.ts
+node --test --test-concurrency=4 \
+  test/cliniko/patient-intake-lifecycle.test.ts test/cliniko/patient-intake-postgres.test.ts \
+  test/cliniko/patient-intake.test.ts test/cliniko/transient-intake-authority.test.ts \
+  test/cliniko/patients.test.ts test/cliniko/write-activation.test.ts \
+  test/cliniko/prepatient-memo-probe.test.ts test/cliniko/shared-read-budget.test.ts \
+  test/cliniko/email-patient-authority.test.ts test/cliniko/caller-verification-session.test.ts \
+  test/cliniko/caller-verification-postgres.test.ts \
+  test/storage/postgres-cliniko-request-budget.test.ts test/storage/postgres-patient-phone-index.test.ts \
+  test/storage/standalone-privacy-journey.test.ts \
+  test/voice/embedded-intake-booking-call.test.ts test/voice/standalone-signed-verified-read.test.ts \
+  test/voice/shared-number-voice-call.test.ts \
+  test/text/first-time-intake-setting.test.ts test/text/partial-intake.test.ts \
+  test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts \
+  test/contract/acquisition-import-boundary.test.ts
+node --test --test-concurrency=4 \
+  test/cliniko/patient-intake-lifecycle.test.ts test/cliniko/patient-intake-postgres.test.ts \
+  test/cliniko/transient-intake-authority.test.ts test/contract/scenario-manifest.test.ts
+node --test --test-concurrency=4 \
+  test/contract/scenario-manifest.test.ts test/cliniko/transient-intake-authority.test.ts \
+  test/cliniko/patient-intake-postgres.test.ts test/cliniko/patient-intake-lifecycle.test.ts
+git diff --check
+```
+
+Tracked corrected final job `Abby corrected frozen intake receipt assets PostgreSQL parallel and both orders`, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791116884183.log`, completed exit 0 in **1m48s**. TypeScript, required availability assets, actual migrations and diff passed. **136/136** across 22 parallel files with concurrency four, **20/20** in controlled forward and **20/20** in reverse, all zero failures/cancellations/skips. Source was frozen and unchanged throughout the gate.
+
+The actual PostgreSQL intake proof reserves duplicate search/create/read-back through one coordinated API-user bucket; another owner on that bucket is denied before HTTP when the three-request limit is exhausted. Disposable database and backup scans find no draft/name/email/DOB/phone/call/session/consent/authority/attempt/chart canary; call and phone-index tables remain empty. Only aggregate provider budget data is stored. This is an actual database proof with synthetic provider and host approvals, not a real intake permission or a production patient create. Existing email/candidate/index/strict-privacy and embedded synthetic voice/TCP-reset cases remain in the passing gate.
+
+Earlier source `60f48f9f21009daf38f2ac1da800ac5103a14530` full invocation, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791116723561.log`, **failed** in 1m20s: TypeScript and migrations passed; 135 tests passed and one existing availability-console privacy journey failed with ENOENT for `dist/availability-console/app.js` in the fresh worktree. Neither order sweep was reached. The correction builds the required existing asset; no source assertion, limit, deadline or concurrency is weakened. The next source adds only E2E-292’s capability trace metadata; runtime/tests are unchanged.
+
+Earlier semantic gate, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791116343333.log`, passed TypeScript and 43 tests with one declared PostgreSQL-only skip. The focused migrated/backup gate, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791116529322.log`, passed 19 tests with zero skips before the last malformed-draft case was added. Only the final frozen gate above is the complete current proof.
+
+No live patient lifecycle was rerun for this patch, no live credential was loaded, no production route was added and no patient or appointment was mutated externally. Prior C-LIVE-39/40 evidence remains tied to its older provider source and is not promoted into proof of this exact current edge. D-18 remains awaiting product selection. Prospective-patient authority, approved clinic consent/recovery/staff policy, first-time caller composition, real email delivery (deferred) and actual provider/voice activation remain open. The original nine-step goal is not complete.
