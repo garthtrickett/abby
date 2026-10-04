@@ -96,6 +96,11 @@ export class CallerVerificationSession {
     return !this.#closed && Date.parse(state.value.sessionLease.expiresAt) > Date.parse(this.#now());
   }
 
+  /** Trusted transport binding only; no patient, contact, code or proof. */
+  binding(): Readonly<{ callId: string; sessionId: string }> {
+    return { callId: this.#config.receipt.callId, sessionId: this.#config.sessionId };
+  }
+
   /** Immediate, identical wording even if lookup, approval or mail is unavailable. No resend. */
   begin(): Readonly<{ prompt: string }> {
     if (!this.#closed && !this.#pending) {

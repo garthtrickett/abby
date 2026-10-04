@@ -182,6 +182,12 @@ export class ConnectedVoiceCall {
     }
   }
 
+  discardPrivateMedia(frame: MediaFrame): Result<void, ConnectedVoiceFailure> {
+    if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
+    if (!this.begun || !this.scope) return err({ kind: "locationUnbound" });
+    return this.media.discardPrivateMedia(frame);
+  }
+
   async acceptMedia(frame: MediaFrame): Promise<Result<ConnectedVoiceProgress, ConnectedVoiceFailure>> {
     if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
     if (!this.begun) return err({ kind: "notStarted" });
