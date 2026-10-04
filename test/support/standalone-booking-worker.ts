@@ -2,7 +2,7 @@ import { ClinikoRecallReader } from "../../src/cliniko/recalls.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 import { PostgresPatientVerificationBudget } from "../../src/storage/postgres-patient-verification-budget.ts";
-import { bookingOffersFixture } from "./booking-offers.ts";
+import { bookingSessionFixture } from "./booking-session.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 const input = JSON.parse(await new Promise<string>(resolve => { let text = "";
   process.stdin.on("data", part => { text += String(part); }); process.stdin.on("end", () => resolve(text)); }));
@@ -19,11 +19,11 @@ try {
     process.stdout.write(JSON.stringify({ pending: found.pending.length, valid: found.pending.filter(item => item.kind === "review").length,
       clinicalWrites: 0, replayed: false })+"\n");
   } else {
-    const app = await bookingOffersFixture({ scope: input.scope, fetchPort: providerPort, budget: rateBudget, folder: input.folder,
+    const app = await bookingSessionFixture({ scope: input.scope, fetchPort: providerPort, budget: rateBudget, folder: input.folder,
       verificationBudget: new PostgresPatientVerificationBudget(db, input.scope) });
     try {
-      const proof = await app.verify(), offered = resultValue(await app.list(proof));
-      resultValue(await app.propose(proof, "proposal", offered.choices[0]!.offerRef)); resultValue(await app.confirm());
+      await app.verify(); resultValue(await app.readMenu()); await app.playPending();
+      resultValue(await app.select()); resultValue(await app.confirm());
       const finished = resultValue(await app.drain());
       if (Object.values(finished.actions)[0]?.status !== "committed") throw new Error("synthetic commit did not finish");
       await fetch(input.proxy+"/owner-finished", { method: "POST", body: "completed", signal: AbortSignal.timeout(15_000) });

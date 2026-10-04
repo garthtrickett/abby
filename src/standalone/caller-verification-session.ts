@@ -123,12 +123,12 @@ export class CallerVerificationSession {
   }
 
   /** Private host wiring only: no token, email or patient ID is returned to caller/model progress. */
-  async verified(): Promise<Grant | undefined> {
+  async verified(signal?: AbortSignal): Promise<Grant | undefined> {
     const grant = this.#grant;
-    if (this.#closed || !grant) return undefined;
+    if (signal?.aborted || this.#closed || !grant) return undefined;
     try {
-      const checked = await this.#proof.verifyOperation(this.#config.receipt.scope, grant.verificationRef, this.#config.operation, this.#now());
-      if (!checked.ok || this.#closed || this.#grant !== grant) { this.dispose(); return undefined; }
+      const checked = await this.#proof.verifyOperation(this.#config.receipt.scope, grant.verificationRef, this.#config.operation, this.#now(), signal);
+      if (!checked.ok || signal?.aborted || this.#closed || this.#grant !== grant) { this.dispose(); return undefined; }
       return { ...grant };
     } catch { this.dispose(); return undefined; }
   }

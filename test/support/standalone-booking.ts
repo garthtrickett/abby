@@ -55,7 +55,7 @@ export async function standaloneBookingFixture(options: { scope?: LocationScope;
       assert.equal(action.status, "dispatched"); assert.equal((await f.state()).presentations[action.presentationId]?.status, "played");
       const body = JSON.parse(String(init?.body));
       assert.deepEqual([body.business_id, body.practitioner_id, body.appointment_type_id], ["11", "22", "33"]);
-      stored = { id: "91", notes: body.notes, starts_at: body.starts_at, ends_at: evidence.endsAt, cancelled_at: null, archived_at: null, deleted_at: null,
+      stored = { id: "91", notes: body.notes, starts_at: body.starts_at, ends_at: new Date(Date.parse(body.starts_at) + 30 * 60_000).toISOString(), cancelled_at: null, archived_at: null, deleted_at: null,
         patient: { links: { self: `${base}/patients/${body.patient_id}` } }, business: { links: { self: `${base}/businesses/11` } },
         practitioner: { links: { self: `${base}/practitioners/22` } }, appointment_type: { links: { self: `${base}/appointment_types/33` } } };
       await onBooking(); if (options.lostBooking) throw new Error("synthetic lost booking response");

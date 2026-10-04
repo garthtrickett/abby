@@ -3,7 +3,7 @@ import type { ClinikoBookingFailure, ClinikoBookingWrite } from "../cliniko/book
 import { ClinikoRecallWriter } from "../cliniko/recall-write.ts";
 import type { ClinikoReviewRequest } from "../cliniko/review-request.ts";
 import { digestActionRequest } from "../core/digest.ts";
-import type { BookingEvidenceHost, HostEffects, HostReadFailure } from "../core/host.ts";
+import type { BookingEvidenceHost, BookingMenuHost, BookingMenuQuery, HostEffects, HostReadFailure } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { ActionRequest, HostMutation, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffItem,
   StaffTaskObservation, StaffTaskReceipt } from "../core/model.ts";
@@ -15,7 +15,7 @@ import type { ClinikoBookingGuardConfig } from "./cliniko-booking-guard.ts";
 import { ClinikoReviewedSend } from "./cliniko-reviewed-send.ts";
 import { NoStoredKnowledge } from "./no-stored-knowledge.ts";
 
-export type ClinikoBookingHostConfig = ClinikoBookingGuardConfig & Readonly<{ recallWriter: ClinikoRecallWriter; recallTypeId: string; timeZone: string }>;
+export type ClinikoBookingHostConfig = ClinikoBookingGuardConfig & Readonly<{ recallWriter: ClinikoRecallWriter; recallTypeId: string; timeZone: string; menu?: BookingMenuHost }>;
 
 /** Standalone declared best-effort booking, with one Cliniko-owned review before one possible send.
  * This does not grant exclusive commit permission or activate the live runner. */
@@ -34,14 +34,21 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
       credentialFingerprint: config.writer.credentialFingerprint(), policyVersion: config.policyVersion, timeZone: config.timeZone,
       recallTypeId: config.recallTypeId, writer: config.recallWriter, clock: () => Date.parse(this.#now()) });
   }
+  bookingMenuAvailable(): boolean { return !this.#lifetime.signal.aborted && this.#config.menu?.bookingMenuAvailable() === true; }
+  async readBookingMenu(query: BookingMenuQuery & Readonly<{ from: string; to: string }>) {
+    return this.bookingMenuAvailable() ? this.#config.menu!.readBookingMenu(query) : err({ kind: "unavailable" as const, target: "offer" as const });
+  }
+  async selectBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>) {
+    return this.bookingMenuAvailable() ? this.#config.menu!.selectBookingMenu(query) : err({ kind: "unavailable" as const, target: "offer" as const });
+  }
   #now(): string { return (this.#config.clock ?? (() => new Date().toISOString()))(); }
-  async resolveBooking(scope: LocationScope, verificationRef: string, offerRef: string, now: string):
+  async resolveBooking(scope: LocationScope, verificationRef: string, offerRef: string, now: string, external?: AbortSignal):
     Promise<Result<Extract<ActionRequest, { kind: "book" }>, HostReadFailure>> {
     if (this.#lifetime.signal.aborted || this.#busy || this.#attempted || this.#prepared) return err({ kind: "unavailable", target: "offer" });
     this.#busy = true;
     try {
       const selected = await this.#guard.resolve(scope, verificationRef, offerRef, now, "proposal",
-        AbortSignal.any([this.#lifetime.signal, AbortSignal.timeout(15_000)]));
+        AbortSignal.any([this.#lifetime.signal, ...(external ? [external] : []), AbortSignal.timeout(15_000)]));
       if (!selected.ok) return selected;
       if (this.#lifetime.signal.aborted || selected.value.evidence.timeZone !== this.#config.timeZone) return err({ kind: "unavailable", target: "offer" });
       this.#prepared = selected.value; return ok(structuredClone(selected.value.request));

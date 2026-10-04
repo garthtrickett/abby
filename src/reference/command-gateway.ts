@@ -98,6 +98,8 @@ export type GatewayCommand =
   | Readonly<{ kind: "clinic.availability.approval.change.v2"; route: ClinicAvailabilityRoute; selection: ClinicAvailabilitySelection;
     alternatives: readonly ClinicAvailabilitySelection[]; expectedVersion: number }>
   | Readonly<{ kind: "clinic.availability.approval.revoke.v1"; expectedVersion: number }>
+  | Readonly<{ kind: "booking.offers.read.v1"; turn: FinalCallerTurn; from: string; to: string; now: string }>
+  | Readonly<{ kind: "booking.offers.select.v1"; turn: FinalCallerTurn; choice: 1 | 2 | 3; now: string }>
   | Readonly<{ kind: "availability.read.v2"; turn: FinalCallerTurn; from: string; to: string; now: string }>
   | Readonly<{ kind: "appointments.read.v1"; turn: FinalCallerTurn; verificationRef: string; from: string; to: string; now: string }>
   | Readonly<{ kind: "calls.read.v1"; callId: string }>
@@ -197,6 +199,7 @@ export class CommandGateway {
   listPermitted(): readonly CapabilityDescriptor[] {
     const permitted: CapabilityId[] = ["settings.read.v1", "booking.propose.v2", "appointments.change.propose.v1",
       "patients.intake.propose.v1", "knowledge.answer.v2"];
+    if (this.reception.bookingMenuEnabled()) permitted.push("booking.offers.read.v1", "booking.offers.select.v1");
     if (this.reception.modelEnabled()) permitted.push("calls.turn.model.v1");
     if (this.reception.availabilityEnabled()) permitted.push("availability.read.v2");
     if (this.reception.appointmentReadEnabled()) permitted.push("appointments.read.v1");
@@ -510,6 +513,14 @@ export class CommandGateway {
         if (!this.availabilitySetup) return err({ kind: "forbidden" });
         const result = await this.availabilitySetup.revoke(this.actor, command.expectedVersion);
         return result.ok ? ok({ kind: "clinicAvailabilityApprovalState", state: result.value }) : result;
+      }
+      case "booking.offers.read.v1": {
+        const result = await this.reception.readBookingMenu(this.actor.scope, command.turn, command.from, command.to, command.now);
+        return result.ok ? ok({ kind: "bookingProposal", progress: commandProgress(result.value, command.turn.turnId) }) : result;
+      }
+      case "booking.offers.select.v1": {
+        const result = await this.reception.selectBookingMenu(this.actor.scope, command.turn, command.choice, command.now);
+        return result.ok ? ok({ kind: "bookingProposal", progress: commandProgress(result.value, command.turn.turnId) }) : result;
       }
       case "availability.read.v2": {
         if (!command.turn || !command.turn.turnId || !command.turn.callId || !command.turn.text ||

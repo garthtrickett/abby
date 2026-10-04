@@ -14,7 +14,7 @@ import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-s
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 import { verificationCanaries } from "../support/caller-verification.ts";
 
-test("E2E-279 E2E-281 killed concrete approved-offer standalone booking owners leave discoverable Cliniko review before, during and after send without replacement replay",
+test("E2E-279 E2E-281 E2E-284 killed actual admitted booking-menu owners leave discoverable Cliniko review before, during and after send without replacement replay",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 90_000 }, async () => {
   const adminUrl = process.env.DATABASE_URL; assert.ok(adminUrl);
   const admin = connectPostgres(adminUrl), name = `abby_book_kill_${randomUUID().replaceAll("-", "")}`;

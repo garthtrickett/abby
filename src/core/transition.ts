@@ -1,3 +1,4 @@
+import { bookingConfirmation, bookingMenuPresentation } from "./booking-menu.ts";
 import { supportedVoiceLocale } from "./voice-presentation.ts";
 import { createHash } from "node:crypto";
 import { digestActionRequest } from "./digest.ts";
@@ -54,7 +55,7 @@ function appointmentTime(instant: string, timeZone: string, locale: string): str
 
 function describe(request: ActionRequest, locale: string): string {
   switch (request.kind) {
-    case "book": return `Please confirm the ${request.offer.serviceRef} appointment at ${request.offer.startsAt}.`;
+    case "book": { const confirmed = bookingConfirmation(request.offer, locale); return confirmed.ok ? confirmed.value : ""; }
     case "cancel": return `Please confirm cancellation of your appointment on ${appointmentTime(request.target.startsAt, request.target.timeZone, locale)}. ${request.terms.approvedText}`;
     case "reschedule": return `Please confirm moving your appointment on ${appointmentTime(request.target.startsAt, request.target.timeZone, locale)} to ${appointmentTime(request.offer.startsAt, request.target.timeZone, locale)}. ${request.terms.approvedText}`;
     case "intake": return "Please confirm that your approved intake details may be saved. This does not book an appointment.";
@@ -123,6 +124,7 @@ function evidenceFailure(state: CallState, request: ActionRequest, now: string):
   if (Date.parse(request.patient.expiresAt) <= Date.parse(now)) return { kind: "evidenceExpired" };
   if (request.kind === "book") {
     if (!sameScope(state.policy.scope, request.offer.scope)) return { kind: "scopeMismatch" };
+    if (!bookingConfirmation(request.offer, state.policy.voiceProfile?.locale ?? "en-AU").ok) return { kind: "invalidTransition" };
     if (Date.parse(request.offer.expiresAt) <= Date.parse(now)) return { kind: "evidenceExpired" };
   }
   return undefined;
@@ -368,6 +370,15 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       addStaffTask(state, "systemFailure", now);
       state.callerMessages.push(staffFallbackText(state, "I can't check available times right now. I'll request staff follow-up."));
       state.availabilityReads.push({ turnId: turn.turnId, status: "failed", reason: interpretation.reason });
+      break;
+    case "bookingMenu": {
+      const menu = bookingMenuPresentation(interpretation.snapshot, { scope: state.policy.scope, callId: state.callId,
+        sessionId: turn.sessionId ?? "", policyVersion: state.policy.policyVersion }, now, state.policy.voiceProfile?.locale ?? "en-AU");
+      state.callerMessages.push(turn.quality === "clear" && menu.ok ? menu.value : "I can't check booking options right now. Please contact the clinic directly.");
+      break;
+    }
+    case "bookingMenuFailure":
+      state.callerMessages.push("I can't check or select those booking options right now. Please request fresh options or contact the clinic directly.");
       break;
     case "appointments": {
       const presentation = appointmentPresentation(interpretation.snapshot, state.policy.scope, interpretation.from, interpretation.to, now, state.policy.voiceProfile?.locale ?? "en-AU");

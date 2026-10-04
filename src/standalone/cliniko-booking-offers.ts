@@ -106,7 +106,8 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
       const offered = read.value.startsAt.filter(start => OwnerFileBookingPolicy.allows(fresh.policy, start, new Date(at).toISOString())).slice(0, 3);
       const offering = read.value.offering;
       const selections = offered.map(startsAt => {
-        const offer = { scope: config.scope, offerRef: randomBytes(24).toString("base64url"), serviceRef: fresh.policy.serviceRef, startsAt, expiresAt };
+        const offer = { scope: config.scope, offerRef: randomBytes(24).toString("base64url"), serviceRef: fresh.policy.serviceRef, startsAt, expiresAt,
+          presentation: { ...offering, timeZone: fresh.policy.timeZone, durationMinutes: fresh.policy.durationMinutes } };
         const evidence: ClinikoBookingEvidence = { scope: config.scope, callId: config.callId, sessionId: config.sessionId, policyVersion: config.policyVersion,
           patientId: fresh.patient.patientRef, businessId: config.businessId, practitionerId: config.practitionerId, appointmentTypeId: config.appointmentTypeId,
           credentialFingerprint: fresh.policy.credentialFingerprint, offer, endsAt: new Date(Date.parse(startsAt) + fresh.policy.durationMinutes * 60_000).toISOString(),

@@ -65,7 +65,7 @@ export async function bookingOffersFixture(options: { budget?: ClinikoRequestBud
         source = resultValue(ClinikoBookingOffers.create(sourceConfig, port));
         return source;
       } });
-    return { ...f, source: source!, bookingPolicy: policy!, directory: directory!, path, accountPath, account: account!, allTraffic: traffic,
+    return { ...f, source: source!, ownerPorts: { fetchPort: sourceFetch!, rateBudget: sourceConfig!.rateBudget }, bookingPolicy: policy!, directory: directory!, path, accountPath, account: account!, allTraffic: traffic,
       createSource: (patch: Partial<ClinikoBookingOffersConfig>) => ClinikoBookingOffers.create({ ...sourceConfig, ...patch }, sourceFetch),
       freshSource: () => resultValue(ClinikoBookingOffers.create(sourceConfig, sourceFetch)),
       get approval() { return approval; }, get posts() { return f.posts; }, get claims() { return f.claims; },
