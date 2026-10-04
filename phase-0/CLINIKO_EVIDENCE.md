@@ -276,3 +276,35 @@ Prior observations/results are retained:
 - Registered manifest/cancellation/verification and held-work lifecycle regression passed: `4590eee3-1791102798705.log`. Evidence snapshots now freeze query bindings and clone returned selection before later asynchronous checks; final offer/proof/lease clock checks prevent stale authority or retargeting during waits. The updated semantic gate passed before source freeze: `4590eee3-1791103022913.log`.
 
 All approved-offer/eligibility and independent clinical-permission sources, mail and provider inputs in this composition remain synthetic. A concrete current clinic booking/offer source and call-bound offer presentation/selection still need implementation. Real email, permission, clinic policy, human review, notification side-effect proof, gated caller integration and activation remain open. This is no atomic overlap/duplicate guarantee, clinic approval, actual delivery witness, standalone live-write capability or completion of the full objective. D-06/D-07/D-11/D-16/D-17 remain intact; provider review is not automatically closed or counted as staff receipt.
+
+
+## C-LOCAL-66 — Concrete clinic booking policy and patient/call-bound offers
+
+Frozen executable source: `9366bc8ec10743b016fe03a1eaa59ea5337174a7`. E2E-281/282, scenario manifest 1.87 / 282 IDs. This is synthetic provider/email/independent-permission/clinic-approval evidence; no actual clinical write or live activation was made.
+
+`OwnerFileBookingPolicy` requires an exact current owner-only public approval, current scoped administrator and exact provider/credential/review/timezone/policy bindings. Duration, notice/horizon and fixed offer lifetime are bounded; unknown patient/contact/note fields, unsafe files, unapproved/disabled/expired/replaced records and changed membership deny authorization. The shipped template is disabled/unapproved.
+
+`ClinikoBookingOffers` uses the existing coordinated-budget availability reader's booking mode to reread explicit active provider metadata, relationships, exact approved duration, safe public labels and business calendar. It issues at most three volatile opaque patient/call-bound choices. Proposal/final-send phases reread the exact available time and all current proof/policy/provider bindings. New listings and call close invalidate old selections. This neither reserves availability nor establishes atomic overlap/duplicate exclusion.
+
+Final commands:
+
+```sh
+npm run typecheck
+bash scripts/with-postgres.sh bash /tmp/abby-booking-offer-final-proof.sh
+git diff --check
+```
+
+The script migrates its disposable base and dispatches 25 files with concurrency four: `booking-offers`, `booking-clinic-policy`, `booking-offers-postgres`, `standalone-booking-process`, `standalone-booking`, `standalone-booking-postgres`, `booking-best-effort-edge`, `booking-write`, `availability`, `approved-availability-search`, `cancellation-authority`, `cancellation-authority-postgres`, `cancellation-session`, `cancellation-session-postgres`, `standalone-cancellation`, `transient-patient-proof`, `caller-verification-session`, `owner-file-caller-policy`, `email-patient-authority`, `email-verification-budget-postgres` (all in `test/cliniko`), plus `test/voice/embedded-cliniko-booking-host-call.test.ts`, `test/voice/embedded-cliniko-appointment-change-host-call.test.ts`, `test/voice/standalone-signed-verified-read.test.ts`, `test/composition/cross-mode-agent-conformance.test.ts`, and `test/contract/scenario-manifest.test.ts`. All short names end in `.test.ts`. **154 passed, zero failures/skips. Typecheck and diff checks passed.** Final tracked job completed exit zero; log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791105325557.log`.
+
+The ordered runner dispatches `booking-offers`, `booking-clinic-policy`, `booking-offers-postgres`, `standalone-booking-process`, `caller-verification-session` with concurrency four, then their exact reverse. **23 passed in each order, zero failures/skips**, with successful completion of every dispatched file.
+
+The actual PostgreSQL/backup test includes opaque offer refs, email, code, proof, call/session, patient notes and appointment intervals as canaries. Only aggregate provider/verification budgets persist, and every provider request uses the mandatory coordinated API-user budget. Actual booking-owner SIGKILL before review acknowledgement, during POST and after inspected completion now constructs the concrete owner-file policy/offer source. Fresh replacement work receives only public provider configuration, discovers the pending full Cliniko review type and makes no replacement mutation or automatic review closure. The prior embedded exclusive contract and verified-read route pass this final gate.
+
+Retained earlier evidence and corrections:
+
+- Initial source typecheck failed two TypeScript checks (abort callback return type and narrowed metadata in a callback): `4590eee3-1791103893011.log`. Corrected typed-fixture gate passed: `4590eee3-1791104045114.log`.
+- Initial semantics/legacy availability run failed one of 38 tests: `4590eee3-1791104213263.log`. A held contact-budget reservation could resume HTTP after the outer offer deadline, because proof refresh did not accept the consumer signal. The proof now composes that signal into revalidation/contact reads; booking and cancellation guards/authority forward it. Cancelled protected refresh conservatively revokes proof. The correction passed: `4590eee3-1791104337977.log`.
+- Public-policy/protected semantic gate passed 57 tests: `4590eee3-1791104406566.log`; actual PG/backup/crash gate passed 13: `4590eee3-1791104489325.log`. Registered integrated gate passed 102: `4590eee3-1791104784148.log`.
+- Initial frozen source `2e3f8da1f1247afcf24d12644e123fbc9eb405a1` passed 139 plus 22 in each order: `4590eee3-1791104961097.log`. Final review then added a concrete negative constructor check, which failed: `4590eee3-1791105220053.log`. The source accepted a genuine verifier owned by another call/session when the clinic matched. `TransientPatientProofHost.matchesCall` now rejects rebinding at offer-source, booking/cancellation guard and cancellation-authority construction. The corrected booking/cancellation/embedded appointment-change gate passed 50 tests: `4590eee3-1791105257193.log`. The final frozen source above includes this fix and its negative regression. No failing assertion was weakened or skipped.
+
+Still open: caller-facing offer menu/selection and admitted booking composition; real email delivery and independent patient/action permission; actual clinic booking/recovery/notification approval and human staff-review witness; actual provider side-effect proof and gated live voice integration. All production standalone patient writes remain unavailable. This evidence does not complete booking activation, cancellation activation or the full nine-step objective, and does not claim recall receipt, staff assignment, fee charging or patient permission from a public policy file.
