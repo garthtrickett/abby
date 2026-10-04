@@ -261,6 +261,8 @@ export type TurnInterpretation =
   | Readonly<{ kind: "appointmentsFailure"; reason: AppointmentReadFailure["kind"] | "notConfigured" | "unclear" }>
   | Readonly<{ kind: "bookingMenu"; snapshot: import("./booking-menu.ts").BookingMenuRead }>
   | Readonly<{ kind: "bookingMenuFailure" }>
+  | Readonly<{ kind: "reschedulingMenu"; snapshot: import("./rescheduling-menu.ts").ReschedulingMenuRead }>
+  | Readonly<{ kind: "reschedulingMenuFailure" }>
   | Readonly<{ kind: "ambiguousTarget" }>;
 
 export const STAFF_REASONS = ["callerRequested", "verificationFailed", "unsupported", "uncertainAction",

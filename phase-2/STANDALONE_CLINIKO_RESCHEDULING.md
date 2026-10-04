@@ -33,9 +33,8 @@ E2E-286 covers trusted send/read checks after actual budget waits, false/throw/h
 
 ## Remaining execution work
 
-1. Add the trusted admitted rescheduling-session owner and caller-facing played source/destination menu selection, with dedicated email secret entry, one close signal, shared budget, final-composition PostgreSQL/privacy and process-loss evidence.
-2. Complete independent patient/action permission, actual clinic policy and human staff-review approval, provider fee/notification behavior, controlled actual provider lifecycle and gated text/voice runner integration.
-3. Collect recorded/generated speech evidence and the separately required real carrier/fallback proof before telephone activation.
+1. Complete independent patient/action permission, actual clinic policy and human staff-review approval, provider fee/notification behavior, controlled actual provider lifecycle and gated text/voice runner integration.
+2. Collect recorded/generated speech evidence and the separately required real carrier/fallback proof before telephone activation.
 
 The owner deferred real email-service setup on 2026-10-04; synthetic delivery tests continue. The pending supervised Cliniko UI witness is not automatically acknowledged or marked recalled. D-06/D-07/D-11/D-16/D-17 remain intact.
 
@@ -52,3 +51,17 @@ The actual verifier → concrete policies/selection → gateway/SAM confirmation
 A deployment's rescheduling approval must start with `approved: false` and `enabled: false`. To create an owner-only public record, copy the current exact schema and fill actual `scope`, `revision`, current `approverRef`, canonical `approvedAt/effectiveFrom/effectiveUntil`, `policyVersion`, `businessId`, credential fingerprint, dedicated approved `recallTypeId`, clinic `timeZone`, `writeContract: "bestEffort"`, `notificationOwner: "cliniko"`, `lateNoticeHours`, `maxAdvanceDays` and distinct `standardTerms/lateTerms {version, approvedText}`. The separate destination approval supplies the public service/provider/duration/notice/horizon/expiry rules. Neither synthetic fixture nor this schema is an actual clinic approval.
 
 A final volatile destination-selection fence after the last source/fee IO rejects an offer relisted or disposed during that read. The fence checks retained exact issued evidence and fixed expiry; it supplies no provider observation, reservation or new permission. The reproduced interleaving is part of E2E-287.
+
+## Admitted caller workflow (E2E-289/290)
+
+`ClinikoReschedulingSession.create` freezes authenticated inbound/admission/session/provider bindings before owner-file approval reads. It requires active matching admission/lease and current caller/destination/fee approval plus scoped administrator. A bounded constructor abandons late work and disposes any child resource; one close signal disposes verifier/proof, private menu, selections, review and write host. All provider requests share the mandatory API-user budget. Dedicated `beginVerification/submitCode` ports own email secret entry; neither is a model command. Production runner activation remains separate.
+
+`rescheduling.menu.read.v1` takes a final session turn, stage (`targets` or `offers`), bounded dates and time. `rescheduling.menu.select.v1` takes a later final turn, matching stage and ordinal 1–3. Both return existing generic appointment-change progress. The private `ClinikoReschedulingMenu` obtains the actual issued proof from its owner and stores only volatile mappings. Source choices are filtered by exact approved provider/type/duration and require a played SAM menu before selection. That selection produces a played old-target notice; it creates no action. Destination reads require that selected target notice or the latest matching destination menu has played. Available times remain provisional and carry fixed expiry. A played destination menu is consumed before resolving the combined action, which still needs played exact old/new/provider/duration/fee confirmation and separate affirmation.
+
+`ReschedulingMenuTurns` checks active session/lease, captured/current execution/staff/automation/rescheduling policy and emergency stop before and after host reads, with a 15-second operation budget and conversation-revision fence. Duplicate turns cannot repeat reads or selections. Intervening turns, wrong stage/ordinal and unplayed receipts cannot advance the private mapping. Final patient permission refresh precedes protected menu publication. Invalid or unavailable menu evidence gives a truthful direct-clinic fallback with no fabricated staff receipt.
+
+The portable core validates menu binding, canonical observed/choice/expiry instants, ordering/count, active interval/duration, calendar and public names; malformed evidence cannot enter caller text. Concrete rescheduling confirmation uses the existing validated public offer presentation and requires its calendar/duration to match the old target. Legacy embedded offers without public presentation retain their prior wording.
+
+Actual PostgreSQL/backup and SIGKILL tests construct this owner and execute its real commands/played receipts, instead of substituting direct proposal refs. Independent checkpoint databases retain a sender/replacement shared budget with spare recovery capacity. Patient data stays transient/Cliniko-owned; replacement recovery never reconstructs menus, proof or consent and never replays a move. This is local engineering evidence with synthetic clinic approval, permission, email and provider replies, not actual clinic readiness.
+
+Rescheduling menu inputs and response turn identity are captured before async work. The private appointment-change resolution port accepts a consumer abort signal; the standalone move host propagates the menu operation lifetime into preparation and rejects late results before retaining a prepared action. These host-only signals never enter agent schemas or provider payloads.

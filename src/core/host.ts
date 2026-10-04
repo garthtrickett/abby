@@ -117,6 +117,15 @@ export interface AppointmentHost {
 
 export type BookingMenuQuery = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
   turnId: string; now: string; signal: AbortSignal }>;
+export type ReschedulingMenuQuery = BookingMenuQuery & Readonly<{ stage: import("./rescheduling-menu.ts").ReschedulingMenuStage }>;
+export interface ReschedulingMenuHost {
+  reschedulingMenuAvailable(): boolean;
+  readReschedulingMenu(query: ReschedulingMenuQuery & Readonly<{ from: string; to: string; priorTurnId?: string }>):
+    Promise<Result<import("./rescheduling-menu.ts").ReschedulingMenuRead, HostReadFailure>>;
+  selectReschedulingMenu(query: ReschedulingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>):
+    Promise<Result<Readonly<{ kind: "targetSelected"; snapshot: import("./rescheduling-menu.ts").ReschedulingMenuRead }> |
+      Readonly<{ kind: "actionSelection"; verificationRef: string; targetRef: string; offerRef: string }>, HostReadFailure>>;
+}
 export interface BookingMenuHost {
   bookingMenuAvailable(): boolean;
   readBookingMenu(query: BookingMenuQuery & Readonly<{ from: string; to: string }>):
@@ -141,7 +150,7 @@ export type AppointmentChangeEvidenceQuery = Readonly<{
   now: string;
 }> & AppointmentChangeSelection;
 export interface AppointmentChangeEvidenceHost {
-  resolveAppointmentChange(query: AppointmentChangeEvidenceQuery): Promise<Result<Extract<ActionRequest,
+  resolveAppointmentChange(query: AppointmentChangeEvidenceQuery, signal?: AbortSignal): Promise<Result<Extract<ActionRequest,
     { kind: "cancel" | "reschedule" }>, HostReadFailure>>;
 }
 
