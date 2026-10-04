@@ -621,3 +621,44 @@ Earlier frozen source `f07039a04188d5450c0f18333de7baa0c8b16535`, job `Abby froz
 Preparatory type/semantic jobs passed: initial typecheck `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791119441997.log`; 14 initial composed cases `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791119665239.log`; 17 queued/foreign-owner cases `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791119860631.log`; nine initial PostgreSQL/registration cases `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791120072034.log`; the first resume refinement `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791120653500.log`; and 20 contiguous-fence focused cases `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791120767424.log`. These are development evidence, not a substitute for the exact final source above.
 
 The live standalone listener/runner leaves the private mode unset. No real mail delivery, external patient mutation, provider credential load, network WebSocket/carrier call, clinical permission, human staff witness or production activation is claimed. Real email is explicitly deferred and D-18 remains unselected. This completes the local transport secret-entry interface; the full nine-step objective remains incomplete.
+
+## C-LIVE-56 — Current fresh-owner staff-review status
+
+Source: `ea83d8eb2a915e54aa5775bb3652fe82b952c7df`, 2026-10-04. Existing demo-only CLI command:
+
+```sh
+ABBY_LIVE_CLINIKO_EVAL=1 node scripts/rehearse-cliniko-review.ts status --secret-file=/home/gust/code/abby/.env
+```
+
+Tracked job `Abby current demo review status with fresh lost-context reader`, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791121463848.log`, completed exit 0 in one second. Aggregate result: one dedicated type, one synthetic patient, one pending review item, zero provider-marked-recalled, zero invalid, zero ambiguous and zero clinical writes. The CLI reread the existing fixture and production lost-context discovery using account/type configuration; no remembered patient ID or request marker was supplied.
+
+This was read-only: no prepare, staff acknowledgment, cleanup, patient/appointment change or resend. The owner-provided local credentials were loaded by the bounded CLI and were not printed or committed. The pending item remains available for Garth's actual report/notes inspection. A saved recall and a provider flag cannot replace the human witness or clinic acceptance required by D-07. No new live appointment mutation should be started while that supervised review remains unavailable.
+
+## C-LOCAL-75 — Nine-step evidence audit and current speech report validation
+
+Inspected main: `ea83d8eb2a915e54aa5775bb3652fe82b952c7df`, including C-LOCAL-73/E2E-293 public intake policy and C-LOCAL-74/E2E-294 opt-in private keypad transport. The acceptance table still omitted these local implementations and said current speech evidence had not been collected. It is corrected to distinguish implemented/tested interfaces from actual approval, delivery and activation.
+
+`npm run voice:ops:speech` reread the owner-only report set and reports through `readSpeechGateStatus` and `assessSpeechReports`. The assessor validates current adapter/evaluator source hashes, pinned corpora, profiles, repetitions and report ownership. It emitted `syntheticCandidateGate: fail`, with these recomputed aggregates:
+
+| Check | Runs | Critical misses or failures | WER | Timing / verdict |
+| --- | ---: | ---: | ---: | --- |
+| Clean telephone band | 9 | 0 | 4.55% | Final p95 780 ms; pass |
+| 10 dB noise | 18 | 12 critical | 42.42% | Final p95 786 ms; fail accuracy |
+| 20 dB safety | 24 | 10 critical | 24.44% | Final p95 838 ms; fail accuracy |
+| Queued speech | 40 | 0 failed jobs | — | First-chunk p95 3,121 ms; utterance p95 3,872 ms; pass |
+
+These are the existing actual OpenAI reports documented in [the source-matched baseline](../eval/LIVE_BASELINE_2026-09-29.md#current-source-operator-status-after-noise-reduction-screens--2026-10-01), not a new paid provider run or current whole-runner/carrier proof. No new provider request or secret load was needed for this status read. Repeating unchanged failing accuracy evaluations is not a repair. `representativeCallGate` remains `notRun`, `releaseGate` remains `unverified` and natural-language caller admission stays closed.
+
+### Completion audit
+
+1. **Contract:** D-16 is explicitly selected and reflected in PRD/design/support matrix; no atomic provider guarantee is invented.
+2. **Recovery/staff:** provider persistence/discovery/local failure proof exists; C-LIVE-56 proves the actual item is still pending. Human UI witness and accepted clinic process remain missing.
+3. **Verification/policies:** actual local email verifier, approval/policy sources and private keypad interface have registered proofs. Real delivery, independent clinical patient/action authority and real clinic policies/rollout remain missing.
+4. **Cancellation:** exact target, fees, SAM confirmation, reviewed one-send/inspection and loss/privacy proofs exist locally. Actual clinic/permission/mail/staff/provider activation requirements remain open.
+5. **Booking:** offers/eligibility/private played menus, SAM confirmation, reviewed one-create/conflicts and loss/privacy proofs exist locally. Actual activation remains open.
+6. **Rescheduling:** exact source/destination, played menus, reviewed in-place move, uncertainty/loss/privacy proofs exist locally. Actual activation remains open.
+7. **First-time intake:** provider-edge and public policy proofs exist, but D-18 recovery selection and admitted caller implementation remain absent. No caller-mediated loss exception or durable patient state is assumed.
+8. **Identity/deployment/alerts:** local magic-link, HTTPS and operational foundations exist. Real mail is explicitly deferred; deployed accounts/TLS/proxy and independent alert delivery/schedule acceptance remain unproven.
+9. **Speech:** recorded/generated OpenAI tests have source-matched report evidence, validated above. Current synthetic accuracy gates fail and representative/release gates are unproven.
+
+The full objective is not achieved. Remaining dependencies are owner/clinic review and authority decisions, the selected first-time loss/recovery contract, real delivery/deployment setup and actual speech/activation evidence. No rule is weakened, capability enabled or task marked complete by this audit.

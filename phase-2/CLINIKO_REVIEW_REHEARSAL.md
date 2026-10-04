@@ -42,3 +42,5 @@ E2E-271 covers synthetic preparation, fresh account/type-only status, outside st
 ## Current rehearsal evidence
 
 On 2026-10-04, C-LOCAL-60 passed typecheck and 16 parallel checks with zero skips. C-LIVE-54 completed the actual provider create/fresh-status/verified-archive round trip, then provisioned a new separate UI fixture. One synthetic pending item currently remains under the type above, due 2026-10-04. Garth’s human report/notes inspection is pending; after that witness, observe status and archive the fixture through the cleanup command. No API staff acknowledgment or appointment mutation was sent.
+
+C-LIVE-56 rechecked the account on 2026-10-04 using a fresh `status` process on source `ea83d8eb2a915e54aa5775bb3652fe82b952c7df`: one exact type, one synthetic patient, one pending item, zero provider-marked-recalled, invalid or ambiguous items and zero clinical writes. The human report/notes inspection remains pending. This read did not prepare, acknowledge, archive or resend anything.
