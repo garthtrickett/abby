@@ -108,3 +108,7 @@ These questions remain useful if a protected provider path becomes available; a 
 5. **Create and downstream semantics:** What provider guarantees coordinate duplicate patient creates and duplicate recall requests? Which fees, confirmations, reminders, practitioner notifications or staff-work records are emitted by successful, rejected and repeated operations, and who owns suppression and uncertain-result review?
 
 For a proposed guarantee, request its supported endpoint/version, exact request/response contract, all participating writer paths, exceptions/overrides, retention/recovery semantics and deployment limitations. Then add bounded authorized adversarial probes and whole-call proof for that contract. Do not enable a mode based only on a finite successful demo, an undocumented header or a provider marketing statement.
+
+### First-time intake recovery follow-up
+
+The [standalone first-time intake proposal](STANDALONE_CLINIKO_FIRST_TIME_INTAKE.md) records E2E-291 and actual demo rejection of omitted/null memo patient associations. The current contract still requires pre-patient recovery; caller-mediated loss recovery is a concrete proposed product decision, not an accepted exception or an activated capability. Existing-patient appointment review remains mandatory.
