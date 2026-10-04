@@ -1,3 +1,5 @@
+import { callIdFor } from "./admission.ts";
+import type { PrivateKeypadInput } from "./private-keypad-input.ts";
 import { err, ok } from "../core/model.ts";
 import type { CallState, PendingLocationCall, Result } from "../core/model.ts";
 import { ConnectedVoiceCall } from "./connected-voice-call.ts";
@@ -11,6 +13,8 @@ import type { TimerPort } from "./timer.ts";
 
 export type TwilioConnectedCallConfig = Omit<ConnectedVoiceCallConfig, "output"> & Readonly<{
   streamStartedAt: string;
+  /** Opt-in trusted secret entry; the production standalone runner leaves it unset. */
+  privateKeypadInput?: PrivateKeypadInput;
   send: TwilioStreamConfig["send"];
   now?: () => string;
   /** Null means the option is intentionally disabled; undefined means its clock failed. */
@@ -25,17 +29,21 @@ export type TwilioConnectedCallConfig = Omit<ConnectedVoiceCallConfig, "output">
     Readonly<{ kind: "failed"; reason: string }>) => void;
 }>;
 export type TwilioConnectedProgress =
-  | Readonly<{ kind: "connected" | "ignored" | "stopped" }>
+  | Readonly<{ kind: "connected" | "ignored" | "stopped" | "privateInput" }>
   | Readonly<{ kind: "started"; value: ConnectedVoiceStart }>
   | Readonly<{ kind: "media"; value: ConnectedVoiceProgress }>
   | Readonly<{ kind: "keypad"; value: ConnectedVoiceProgress }>
   | Readonly<{ kind: "played"; value: PendingLocationCall | CallState }>;
 export type TwilioConnectedFailure = TwilioStreamFailure | ConnectedVoiceFailure |
-  Readonly<{ kind: "streamOverloaded" | "keypadUnavailable" }>;
+  Readonly<{ kind: "streamOverloaded" | "keypadUnavailable" | "privateInputUnavailable" }>;
 
 /** Serializes provider events through Abby's call owner; the host owns signature verification and WebSocket closure. */
 export class TwilioConnectedCall {
   readonly stream: TwilioMediaStream;
+  private readonly privateKeypadInput: PrivateKeypadInput | undefined;
+  private privateResuming = false;
+  private privateQuietMs = 0;
+  private privateQuietUntil: number | undefined;
   private readonly call: ConnectedVoiceCall;
   private readonly now: () => string;
   private readonly keypadAvailabilityRange: ((digit: string) => Readonly<{ from: string; to: string }> | null | undefined) | undefined;
@@ -63,12 +71,16 @@ export class TwilioConnectedCall {
         !Number.isSafeInteger(playbackDeadlineMs) || playbackDeadlineMs < 5_000 || playbackDeadlineMs > 120_000) {
       throw new RangeError("invalid silence timeout configuration");
     }
+    if (config.privateKeypadInput && (!config.privateKeypadInput.claim(callIdFor(config.event.key), config.sessionId) ||
+        config.privateKeypadInput.blocked() !== true)) throw new TypeError("invalid private input ownership");
+    this.privateKeypadInput = config.privateKeypadInput;
     this.silenceTimer = config.silenceTimer ?? systemTimer;
     this.silenceWaitMs = silenceWaitMs;
     this.playbackDeadlineMs = playbackDeadlineMs;
     this.stopCall = () => {
       if (this.callStopDelivered) return;
       this.callStopDelivered = true;
+      try { this.privateKeypadInput?.stop(); } catch { /* Call shutdown remains required. */ }
       this.call.requestStop();
       try { config.onCallStop?.(); } catch { /* Call shutdown remains required. */ }
     };
@@ -191,7 +203,40 @@ export class TwilioConnectedCall {
     return this.closeSession("failure");
   }
 
-  private async handle(received: Result<TwilioStreamEvent, TwilioStreamFailure>):
+  private privateInputMode(): "collecting" | "draining" | undefined {
+    if (this.privateKeypadInput?.blocked()) return "collecting";
+    return this.privateResuming ? "draining" : undefined;
+  }
+
+  private async handlePrivateInput(event: TwilioStreamEvent, privateAtArrival: "collecting" | "draining" | undefined):
+    Promise<Result<TwilioConnectedProgress, TwilioConnectedFailure> | undefined> {
+    if (event.kind === "media" && (privateAtArrival || this.privateInputMode())) {
+      const discarded = this.call.discardPrivateMedia(event.frame);
+      if (!discarded.ok) { await this.failSession(); return discarded; }
+      // Only audio arriving after verification can establish a fresh resume interval.
+      // Held earlier private silence and late voiced code packets cannot open transcription.
+      if (privateAtArrival === "draining" && this.privateResuming) {
+        const captured = Date.parse(event.frame.capturedAt);
+        this.privateQuietMs = discarded.value === 0 ? 0 : (this.privateQuietUntil === captured ? this.privateQuietMs : 0) + discarded.value;
+        this.privateQuietUntil = discarded.value === 0 ? undefined : captured + discarded.value;
+        if (this.privateQuietMs >= 500) this.privateResuming = false;
+      }
+      return ok({ kind: "privateInput" });
+    }
+    if (event.kind === "dtmf" && (privateAtArrival || this.privateInputMode())) {
+      if (!this.privateKeypadInput) { await this.failSession(); return err({ kind: "privateInputUnavailable" }); }
+      // A queued private digit never becomes an availability choice after verification opens media.
+      if (!this.privateKeypadInput.blocked()) return ok({ kind: "privateInput" });
+      const entered = await this.privateKeypadInput.accept(event.digit);
+      if (entered === "failed") { await this.failSession(); return err({ kind: "privateInputUnavailable" }); }
+      if (entered === "verified") { this.privateResuming = true; this.privateQuietMs = 0; this.privateQuietUntil = undefined; }
+      if (!this.pendingPlayback) this.scheduleSilenceTimer("listening");
+      return ok({ kind: "privateInput" });
+    }
+    return undefined;
+  }
+
+  private async handle(received: Result<TwilioStreamEvent, TwilioStreamFailure>, privateAtArrival: "collecting" | "draining" | undefined):
     Promise<Result<TwilioConnectedProgress, TwilioConnectedFailure>> {
     if (this.closed) return err({ kind: "streamClosed" });
     if (!received.ok) {
@@ -204,11 +249,16 @@ export class TwilioConnectedCall {
       const started = await this.call.begin(this.now());
       if (!started.ok) { await this.failSession(); return started; }
       this.begun = true;
+      if (this.privateKeypadInput && (started.value.kind !== "admitted" || !this.privateKeypadInput.start())) {
+        await this.failSession(); return err({ kind: "privateInputUnavailable" });
+      }
       try { this.lease.start(); }
       catch { await this.failSession(); return err({ kind: "streamUnavailable" }); }
       this.trackDelivery(started.value.kind === "locationChoice" ? started.value.prompt : started.value.delivery);
       return ok({ kind: "started", value: started.value });
     }
+    const privateInput = await this.handlePrivateInput(event, privateAtArrival);
+    if (privateInput) return privateInput;
     if (event.kind === "media") {
       const progressed = await this.call.acceptMedia(event.frame);
       if (!progressed.ok) { await this.failSession(); return progressed; }
@@ -267,10 +317,13 @@ export class TwilioConnectedCall {
     if (this.closed) return Promise.resolve(err({ kind: "streamClosed" }));
     // Decode wire order immediately. A clear fence must be acknowledged while an earlier
     // media turn is awaiting that same fence; semantic call transitions stay serialized.
+    let privateAtArrival: "collecting" | "draining" | undefined;
+    try { privateAtArrival = this.privateInputMode(); }
+    catch { this.stopCall(); return this.failSession().then(() => err({ kind: "privateInputUnavailable" })); }
     const received = this.stream.receive(raw);
     if (!received.ok) this.stopCall();
     if (received.ok && received.value.kind === "stopped") this.stopCall();
-    if (received.ok && received.value.kind === "media") this.call.observePendingCorrection(received.value.frame);
+    if (received.ok && received.value.kind === "media" && !privateAtArrival) this.call.observePendingCorrection(received.value.frame);
     if (received.ok && received.value.kind === "ignoredMark") return Promise.resolve(ok({ kind: "ignored" }));
     if (this.outstanding >= 64) {
       this.closed = true;
@@ -283,7 +336,7 @@ export class TwilioConnectedCall {
       });
     }
     this.outstanding += 1;
-    const handled = this.tail.then(() => this.handle(received)).catch(async () => {
+    const handled = this.tail.then(() => this.handle(received, privateAtArrival)).catch(async () => {
       try { await this.failSession(); } catch { /* original failure remains authoritative */ }
       return err<TwilioConnectedFailure>({ kind: "streamUnavailable" });
     });

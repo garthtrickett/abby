@@ -576,3 +576,48 @@ The shared memory/actual PostgreSQL setting scenario proves disabled baseline, e
 Initial development gate `Abby concrete intake clinic policy initial type and semantic proof`, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791117953405.log`, exited 2 at TypeScript before tests. Extracting the draft predicate narrowed away later request fields; tests also needed the directory scope, readonly mutation via explicit runtime assignment and narrowed result access. These were corrected directly. The corrected gate, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791118249843.log`, passed TypeScript and 33 tests; the registered PostgreSQL gate, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791118386028.log`, passed TypeScript and 10 tests. Only the final frozen source gate above is the complete current proof. No assertion, gate, safety rule, timeout or concurrency was weakened.
 
 All approval/provider/consent inputs remain synthetic. No new production route, schema migration or dependency is added; no external patient, appointment or email mutation occurs and no live credential is loaded. D-18 selection, actual prospective-patient authority and consent, first-time caller composition, recovery/activation and real delivery remain open. Email delivery is explicitly deferred. Public eligibility checks are engineering progress under either possible recovery contract; the original nine-step goal remains incomplete.
+
+## C-LOCAL-74 — Private keypad voice verification and fresh audio resume fence
+
+Executable/registered source: `5e99ab5a013d8af2b677ed6d9263b42e23ba1fa0`. E2E-294; manifest 1.95 / 294. The opt-in trusted `PrivateKeypadInput` interface claims one exact authenticated call/session. The actual admitted voice owner starts the existing email verifier after attach; six private digits and pound submit one answer, star clears an entry, and overflow/malformed/three denied answers never become an ordinary keypad choice, caller turn or model argument.
+
+Private audio consumes validated sequence/time without retention or transcription/model/SAM input. Wire arrival captures collection/drain state before serialized work waits. Successful verification still suppresses media until 500 ms of fresh contiguous PCM falls below the configured speech threshold; voiced frames, timestamp gaps and earlier queued collection-phase silence cannot establish the resume interval. This excludes late code audio before ordinary input resumes. It does not promise to detect arbitrary secret words spoken later outside secret entry. The existing proof revalidates contact/candidate/operation/permission and expiry on protected read; opening input is no lasting patient permission.
+
+Final command:
+
+```sh
+npm run typecheck &&
+bash scripts/with-postgres.sh bash /tmp/abby-private-keypad-final-proof.sh
+```
+
+Exact script:
+
+```sh
+#!/usr/bin/env bash
+set -euo pipefail
+node scripts/migrate.ts
+node --test --test-concurrency=4 \
+  test/voice/private-keypad-verification.test.ts test/voice/private-keypad-verification-postgres.test.ts \
+  test/voice/twilio-connected-call.test.ts test/voice/twilio-media-stream.test.ts \
+  test/voice/twilio-signed-ingress.test.ts test/voice/media-turn-controller.test.ts \
+  test/voice/twilio-signed-connected-call.test.ts test/voice/voice-lease-loop.test.ts \
+  test/cliniko/caller-verification-session.test.ts test/cliniko/caller-verification-postgres.test.ts \
+  test/cliniko/owner-file-caller-policy.test.ts test/cliniko/email-patient-authority.test.ts \
+  test/cliniko/cancellation-session.test.ts \
+  test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts
+node scripts/ordered-node-e2e.mjs '{"files":["test/voice/private-keypad-verification.test.ts","test/voice/private-keypad-verification-postgres.test.ts","test/contract/scenario-manifest.test.ts"],"concurrency":4}'
+node scripts/ordered-node-e2e.mjs '{"files":["test/contract/scenario-manifest.test.ts","test/voice/private-keypad-verification-postgres.test.ts","test/voice/private-keypad-verification.test.ts"],"concurrency":4}'
+git diff --check
+```
+
+Tracked corrected final job `Abby corrected frozen private keypad quiet fence PostgreSQL and verified orders`, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791120850051.log`, completed exit 0 in **1m07s**. TypeScript, actual migrations and diff passed. **66/66** across 15 parallel files with concurrency four, **12/12** in verified forward file dispatch and **12/12** in reverse, all zero failures/cancellations/skips. The existing programmatic dispatcher asserts actual file dispatch/completion while retaining parallel test execution. Source remained frozen and unchanged throughout this gate.
+
+The new signed in-process wire composition uses actual signature/HMAC authentication, media decode, admission/lease/SAM, owner-only current clinic approval, email verifier and protected Cliniko reader, with synthetic remote contact/mail/permission/HTTP/audio. It proves zero transcription/model/detail reads from private media, one protected read from later ordinary input after proof, star correction, overflow/malformed/three-answer closure, permission/approval denial, reused/foreign ownership, held code work with queued private audio/digits/silence, disconnect before held work settles, late completion and authority revocation after success. Forged webhook/upgrade signatures are rejected and disabled mode preserves ordinary keypad behaviour.
+
+Actual disposable PostgreSQL supplies the clinic aggregate issue/answer budget: one issue and one answer are retained as scoped counters only. Actual table and backup scans contain no email/chart/patient-ID/code/call/session/proof canary; call and phone-index tables remain empty. Existing wire/decoder/correction/lease, verifier/approval/contact, cancellation and registration boundaries participate in the parallel gate. No schema, generated database type or dependency changes are required.
+
+Earlier frozen source `f07039a04188d5450c0f18333de7baa0c8b16535`, job `Abby frozen private keypad voice PostgreSQL and verified dispatch regression`, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791120411385.log`, passed 64 parallel and 10 per order, but the subsequent review identified post-verification audio carryover not covered by that gate. `Abby private keypad post-verification audio carryover counterexample`, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791120607416.log`, **failed one focused test**: a voiced packet immediately after a valid code reached ordinary media instead of remaining private. The mandatory fresh quiet fence corrects it; the final frozen gate includes that exact counterexample plus old queued silence and timestamp-gap regressions. No threshold, provider/owner timeout, worker count, safety assertion or existing gate was relaxed.
+
+Preparatory type/semantic jobs passed: initial typecheck `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791119441997.log`; 14 initial composed cases `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791119665239.log`; 17 queued/foreign-owner cases `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791119860631.log`; nine initial PostgreSQL/registration cases `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791120072034.log`; the first resume refinement `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791120653500.log`; and 20 contiguous-fence focused cases `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791120767424.log`. These are development evidence, not a substitute for the exact final source above.
+
+The live standalone listener/runner leaves the private mode unset. No real mail delivery, external patient mutation, provider credential load, network WebSocket/carrier call, clinical permission, human staff witness or production activation is claimed. Real email is explicitly deferred and D-18 remains unselected. This completes the local transport secret-entry interface; the full nine-step objective remains incomplete.
