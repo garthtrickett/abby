@@ -113,3 +113,38 @@ test("E2E-269 an expired or revoked token cannot attest after the caller supplie
     assert.equal((await f.proof.issue(token.value, "appointments.read")).ok, false);
   }
 });
+
+test("E2E-273 already-issued proof rechecks current contact, candidates, permissions, source expiry and verifier lifetime", async () => {
+  for (const change of ["email", "phone", "patient", "permission", "policy", "expiry", "close"] as const) {
+    const live = emailFixture(); await live.authority.start("appointments.read");
+    const token = await live.authority.answer(live.mail[0]!.code); assert.ok(token.ok);
+    const issued = await live.proof.issue(token.value, "appointments.read"); assert.ok(issued.ok);
+    assert.ok((await live.proof.verifyOperation(scope, issued.value.verificationRef, "appointments.read", new Date(initial).toISOString())).ok);
+    if (change === "email") live.setEmail("changed@example.test");
+    if (change === "phone") live.setPhone("+61499999888");
+    if (change === "patient") live.setCandidates({ kind: "one", candidateIds: ["43"] });
+    if (change === "permission") live.setPermitted(false);
+    if (change === "policy") live.setVersion("changed");
+    if (change === "expiry") live.setTime(initial + 300_000);
+    if (change === "close") live.authority.close();
+    assert.equal((await live.proof.verifyOperation(scope, issued.value.verificationRef, "appointments.read",
+      new Date(change === "expiry" ? initial + 300_000 : initial).toISOString())).ok, false);
+    assert.equal((await live.proof.verifyOperation(scope, issued.value.verificationRef, "appointments.read", new Date(initial).toISOString())).ok, false);
+    assert.equal(live.mail.length, 1, "refresh never sends another code or issues new authority");
+    live.authority.close(); live.proof.dispose();
+  }
+});
+
+test("E2E-273 a held fresh permission check cannot revive a revoked proof after its late success", async () => {
+  const f = emailFixture(); await f.authority.start("appointments.read");
+  const token = await f.authority.answer(f.mail[0]!.code); assert.ok(token.ok);
+  const issued = await f.proof.issue(token.value, "appointments.read"); assert.ok(issued.ok);
+  let started = false, release: (value: boolean) => void = () => undefined;
+  f.config.permission.allows = async () => { started = true; return new Promise<boolean>(resolve => { release = resolve; }); };
+  const pending = f.proof.verifyOperation(scope, issued.value.verificationRef, "appointments.read", new Date(initial).toISOString());
+  for (let attempt = 0; attempt < 100 && !started; attempt++) await new Promise<void>(resolve => setImmediate(resolve));
+  assert.ok(started); f.proof.revoke(); assert.equal((await pending).ok, false);
+  release(true); await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal((await f.proof.verifyOperation(scope, issued.value.verificationRef, "appointments.read", new Date(initial).toISOString())).ok, false);
+  assert.equal(f.mail.length, 1); f.authority.close(); f.proof.dispose();
+});
