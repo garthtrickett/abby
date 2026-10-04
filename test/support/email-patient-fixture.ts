@@ -15,7 +15,7 @@ export function emailFixture(options: { scope?: typeof scope; patientId?: string
   delivery?: (email: string, code: string, signal: AbortSignal) => Promise<boolean> } = {}) {
   const boundScope = options.scope ?? scope;
   const patientId = options.patientId ?? "42";
-  let time = initial, enabled = true, version = "policy", email = "registered@example.test", phone = number;
+  let time = initial, enabled = true, permitted = true, version = "policy", email = "registered@example.test", phone = number;
   let candidates: CallerCandidates = { kind: "one", candidateIds: [patientId] };
   const mail: Array<{ email: string; code: string }> = [], reads: string[] = [];
   const config = { scope: boundScope, callId: "otp-call", sessionId: "otp-session", policyVersion: "policy", presentedNumber: number,
@@ -27,6 +27,7 @@ export function emailFixture(options: { scope?: typeof scope; patientId?: string
           patient_phone_numbers: [{ number: phone, phone_type: "Mobile" }], notes: "private-contact-canary" });
       }),
     policy: { current: async () => ok({ scope: boundScope, enabled, version }) }, budget: options.budget ?? { reserve: async () => true },
+    permission: { allows: async () => permitted },
     delivery: { send: options.delivery ?? (async (email: string, code: string) => { mail.push({ email, code }); return true; }) },
     clock: () => time, ...(options.deadlineMs === undefined ? {} : { deadlineMs: options.deadlineMs }) };
   const authority = new EmailPatientAuthority(config);
@@ -35,7 +36,7 @@ export function emailFixture(options: { scope?: typeof scope; patientId?: string
     policy: config.policy, clock: () => new Date(time).toISOString() });
   return { authority, proof, config, mail, reads, setTime: (value: number) => { time = value; },
     setEnabled: (value: boolean) => { enabled = value; }, setVersion: (value: string) => { version = value; },
+    setPermitted: (value: boolean) => { permitted = value; },
     setEmail: (value: string) => { email = value; }, setPhone: (value: string) => { phone = value; },
     setCandidates: (value: CallerCandidates) => { candidates = value; } };
 }
-

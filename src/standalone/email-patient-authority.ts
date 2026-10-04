@@ -17,10 +17,17 @@ export interface PatientCodeDelivery {
   /** Fixed verification email, no appointment or patient facts. Success means transport acceptance only. */
   send(email: string, code: string, signal: AbortSignal): Promise<boolean>;
 }
+export interface PatientVerificationPermission {
+  /** Trusted current patient/action authority policy, including self/proxy/minor restrictions.
+   * Channel possession alone must not supply this decision. */
+  allows(scope: LocationScope, patientId: string, operation: PatientOperation, policyVersion: string,
+    signal: AbortSignal): Promise<boolean>;
+}
 type Config = Readonly<{
   scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
   presentedNumber: string; operations: readonly PatientOperation[];
   lookup: CallerCandidateLookup; contact: VerificationContact; policy: VerificationPolicyGate;
+  permission: PatientVerificationPermission;
   budget: PatientVerificationBudget; delivery: PatientCodeDelivery;
   clock?: () => number; deadlineMs?: number;
 }>;
@@ -61,6 +68,7 @@ export class EmailPatientAuthority implements PatientAuthority {
       (config.clock !== undefined && typeof config.clock !== "function") ||
       typeof config.lookup?.candidates !== "function" || typeof config.contact?.read !== "function" ||
       typeof config.policy?.current !== "function" || typeof config.budget?.reserve !== "function" ||
+      typeof config.permission?.allows !== "function" ||
       typeof config.delivery?.send !== "function") throw new TypeError("invalid email patient authority configuration");
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }), operations: Object.freeze([...config.operations]) });
   }
@@ -70,7 +78,7 @@ export class EmailPatientAuthority implements PatientAuthority {
     if (!Number.isSafeInteger(now) || now < 0 || now > 8_640_000_000_000_000 - 300_000) throw new Error("verification clock unavailable");
     return now;
   }
-  async #current(patientId?: string, email?: string, signal = this.#lifetime.signal): Promise<Readonly<{ patientId: string; email: string }> | undefined> {
+  async #current(operation: PatientOperation, patientId?: string, email?: string, signal = this.#lifetime.signal): Promise<Readonly<{ patientId: string; email: string }> | undefined> {
     const config = this.#config;
     if (signal.aborted) return undefined;
     const policy = await config.policy.current(config.scope);
@@ -84,6 +92,7 @@ export class EmailPatientAuthority implements PatientAuthority {
     const contact = await config.contact.read(config.scope, selected, config.presentedNumber, signal);
     if (!contact.ok || typeof contact.value !== "string" || normalizeEmailAddress(contact.value) !== contact.value ||
         (email !== undefined && email !== contact.value) || signal.aborted) return undefined;
+    if (await config.permission.allows(config.scope, selected, operation, config.policyVersion, signal) !== true || signal.aborted) return undefined;
     const finalPolicy = await config.policy.current(config.scope);
     return finalPolicy.ok && finalPolicy.value.enabled === true && finalPolicy.value.version === config.policyVersion &&
       sameScope(finalPolicy.value.scope, config.scope) && !signal.aborted ? { patientId: selected, email: contact.value } : undefined;
@@ -104,7 +113,7 @@ export class EmailPatientAuthority implements PatientAuthority {
     try {
       const challenge = await this.#bounded(async signal => {
         if (!this.#config.operations.includes(operation) || !await this.#config.budget.reserve(this.#config.scope, "issue") || signal.aborted) return undefined;
-        const contact = await this.#current(undefined, undefined, signal);
+        const contact = await this.#current(operation, undefined, undefined, signal);
         if (!contact || signal.aborted) return undefined;
         const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
         const salt = randomBytes(32).toString("base64url");
@@ -126,7 +135,7 @@ export class EmailPatientAuthority implements PatientAuthority {
         const challenge = this.#challenge;
         if (!challenge || this.#now() >= challenge.expiresAt || !/^[0-9]{6}$/.test(code) ||
             !timingSafeEqual(challenge.digest, codeDigest(challenge.salt, code))) return undefined;
-        const current = await this.#current(challenge.patientId, challenge.email, signal);
+        const current = await this.#current(challenge.operation, challenge.patientId, challenge.email, signal);
         if (!current || this.#now() >= challenge.expiresAt || signal.aborted) return undefined;
         return { token: randomBytes(32).toString("base64url"), challenge };
       });
@@ -148,7 +157,7 @@ export class EmailPatientAuthority implements PatientAuthority {
     try {
       const current = await this.#bounded(async signal => {
         if (this.#now() >= grant.challenge.expiresAt) return undefined;
-        const contact = await this.#current(grant.challenge.patientId, grant.challenge.email, signal);
+        const contact = await this.#current(grant.challenge.operation, grant.challenge.patientId, grant.challenge.email, signal);
         return this.#now() < grant.challenge.expiresAt ? contact : undefined;
       }, request.signal);
       if (!current || this.#lifetime.signal.aborted || request.signal.aborted) return err({ kind: "denied" });

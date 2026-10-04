@@ -29,7 +29,7 @@ test("E2E-269 email-code verification reaches the existing call-bound proof and 
 });
 
 test("E2E-269 disabled, shared, stale or absent candidates use one generic start result and send no email", async () => {
-  for (const kind of ["disabled", "shared", "none", "stale", "wrongPhone", "noEmail", "unapprovedOperation", "oldPolicy"] as const) {
+  for (const kind of ["disabled", "shared", "none", "stale", "wrongPhone", "noEmail", "unapprovedOperation", "oldPolicy", "noPatientAuthority"] as const) {
     const f = emailFixture();
     if (kind === "disabled") f.setEnabled(false);
     if (kind === "shared") f.setCandidates({ kind: "multiple", candidateIds: ["42", "43"] });
@@ -38,6 +38,7 @@ test("E2E-269 disabled, shared, stale or absent candidates use one generic start
     if (kind === "wrongPhone") f.setPhone("+61499999888");
     if (kind === "noEmail") f.setEmail("");
     if (kind === "oldPolicy") f.setVersion("changed");
+    if (kind === "noPatientAuthority") f.setPermitted(false);
     assert.equal(await f.authority.start(kind === "unapprovedOperation" ? "appointments.cancel" : "appointments.read"), undefined);
     assert.equal(f.mail.length, 0); assert.equal((await f.authority.answer("123456")).ok, false);
     assert.equal((await f.proof.issue("guessedTokenThatLooksValid", "appointments.read")).ok, false);
@@ -45,7 +46,7 @@ test("E2E-269 disabled, shared, stale or absent candidates use one generic start
 });
 
 test("E2E-269 expiry, fresh contact/phone/candidate change and policy revocation cannot mint proof", async () => {
-  for (const kind of ["expiry", "email", "phone", "patient", "disabled", "policy", "disconnect"] as const) {
+  for (const kind of ["expiry", "email", "phone", "patient", "disabled", "policy", "disconnect", "revokedAuthority"] as const) {
     const f = emailFixture(); await f.authority.start("appointments.read");
     if (kind === "expiry") f.setTime(initial + 300_000);
     if (kind === "email") f.setEmail("changed@example.test");
@@ -54,6 +55,7 @@ test("E2E-269 expiry, fresh contact/phone/candidate change and policy revocation
     if (kind === "disabled") f.setEnabled(false);
     if (kind === "policy") f.setVersion("changed");
     if (kind === "disconnect") f.authority.close();
+    if (kind === "revokedAuthority") f.setPermitted(false);
     assert.equal((await f.authority.answer(f.mail[0]!.code)).ok, false);
   }
 });
@@ -101,12 +103,13 @@ test("E2E-269 delivery loss, timeout and disconnect revoke the challenge and sup
 });
 
 test("E2E-269 an expired or revoked token cannot attest after the caller supplied the correct code", async () => {
-  for (const kind of ["expiry", "email", "disable"] as const) {
+  for (const kind of ["expiry", "email", "disable", "revokedAuthority"] as const) {
     const f = emailFixture(); await f.authority.start("appointments.read");
     const token = await f.authority.answer(f.mail[0]!.code); assert.ok(token.ok);
     if (kind === "expiry") f.setTime(initial + 300_000);
     if (kind === "email") f.setEmail("changed@example.test");
     if (kind === "disable") f.setEnabled(false);
+    if (kind === "revokedAuthority") f.setPermitted(false);
     assert.equal((await f.proof.issue(token.value, "appointments.read")).ok, false);
   }
 });
