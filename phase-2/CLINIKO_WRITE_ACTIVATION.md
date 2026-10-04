@@ -49,7 +49,7 @@ Remaining release proof: real current offer/eligibility authority, accepted conf
 
 Bind exact current source, confirmed destination and approved terms. Recheck before one in-place PATCH, then observe exact new state and conflicts. Changed/unreadable/conflicting/lost results remain unresolved with no second PATCH, automatic revert or cancel/create. Best-effort accepts a competing source edit or destination booking between validation and mutation; it promises neither atomic source preservation nor destination exclusion. The owning diary provides those stronger protections in one transaction.
 
-C-LOCAL-36/48/49/50 and C-LIVE-37/38/41/42 supply existing edge and synthetic/demo evidence. E2E-264 demonstrates two moves colliding before conflict inspection. E2E-265 separately proves the owning-diary mechanism. Actual clinic source/destination authority, accepted policy, Cliniko-owned review and full standalone failure/loss evidence remain open; rescheduling stays unavailable.
+C-LOCAL-36/48/49/50 and C-LIVE-37/38/41/42 supply existing edge and synthetic/demo evidence. E2E-264 demonstrates two moves colliding before conflict inspection. E2E-265 separately proves the owning-diary mechanism. E2E-285/286 now add the standalone reviewed best-effort text host, final send/read authority callbacks, PostgreSQL/backup and actual sender-loss proofs with synthetic selection/fee/permission/mail/provider inputs. Concrete clinic source/destination authority and policy, admitted session/menu integration, actual approvals/staff witness and live provider/notification lifecycle remain open; production rescheduling stays unavailable. See [the move implementation and remaining gates](STANDALONE_CLINIKO_RESCHEDULING.md).
 
 ## 6. First-time patient creation
 

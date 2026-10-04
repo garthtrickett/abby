@@ -25,6 +25,13 @@ export type ClinikoAppointmentTarget = Readonly<{
 export type ClinikoCancellationRequest = ClinikoAppointmentTarget & Readonly<{
   cancellationReason: 10 | 20 | 30 | 40 | 50 | 60;
 }>;
+/** Trusted host callbacks only, run after each provider-budget wait; never an agent input. */
+export type ClinikoRescheduleChecks = Readonly<{
+  beforeSend(signal: AbortSignal): Promise<boolean>;
+  beforeRead(signal: AbortSignal): Promise<boolean>;
+}>;
+type BeforeRead = (signal: AbortSignal) => Promise<boolean>;
+
 export type ClinikoRescheduleRequest = ClinikoAppointmentTarget & Readonly<{
   newStartsAt: string;
   newEndsAt: string;
@@ -184,7 +191,17 @@ class ClinikoAppointmentWriter {
       credentialFingerprint: this.#credentialFingerprint };
   }
 
-  async #read(request: ClinikoAppointmentTarget, signal: AbortSignal):
+  async #check(check: BeforeRead | undefined, signal: AbortSignal): Promise<Result<void, ClinikoAppointmentWriteFailure>> {
+    if (signal.aborted) return err({ kind: "unavailable" });
+    if (!check) return ok(undefined);
+    try {
+      const permitted = await untilAbort(Promise.resolve().then(() => check(signal)), signal);
+      return signal.aborted || permitted === undefined ? err({ kind: "unavailable" }) :
+        permitted === true ? ok(undefined) : err({ kind: "forbidden" });
+    } catch { return err({ kind: "unavailable" }); }
+  }
+
+  async #read(request: ClinikoAppointmentTarget, signal: AbortSignal, beforeRead?: BeforeRead):
     Promise<Result<ClinikoAppointmentObservation, ClinikoAppointmentWriteFailure>> {
     if (signal.aborted) return err({ kind: "unavailable" });
     // Some Cliniko views require the explicit cancellation filter after a cancel.
@@ -199,6 +216,9 @@ class ClinikoAppointmentWriter {
       const limited = await untilAbort(claimClinikoBudget(this.#rateBudget), signal);
       if (signal.aborted || limited === undefined) return err({ kind: "unavailable" });
       if (limited) return err(limited);
+      const permitted = await this.#check(beforeRead, signal);
+      if (!permitted.ok) return permitted;
+      if (signal.aborted) return err({ kind: "unavailable" });
       try {
         const received = await untilAbort(this.#fetchPort(view, {
           method: "GET", headers: { Accept: "application/json", Authorization: this.#authorization,
@@ -312,11 +332,14 @@ class ClinikoAppointmentWriter {
     } finally { this.#inFlight.delete(request.appointmentId); }
   }
 
-  async #conflicts(appointmentId: string, signal: AbortSignal): Promise<Result<boolean, ClinikoAppointmentWriteFailure>> {
+  async #conflicts(appointmentId: string, signal: AbortSignal, beforeRead?: BeforeRead): Promise<Result<boolean, ClinikoAppointmentWriteFailure>> {
     if (signal.aborted) return err({ kind: "unavailable" });
     const limited = await untilAbort(claimClinikoBudget(this.#rateBudget), signal);
     if (signal.aborted || limited === undefined) return err({ kind: "unavailable" });
     if (limited) return err(limited);
+    const permitted = await this.#check(beforeRead, signal);
+    if (!permitted.ok) return permitted;
+    if (signal.aborted) return err({ kind: "unavailable" });
     let response: Response;
     try {
       const received = await untilAbort(this.#fetchPort(`${this.#baseUrl}/individual_appointments/${appointmentId}/conflicts`, {
@@ -342,37 +365,41 @@ class ClinikoAppointmentWriter {
   }
 
   /** A fresh observation is current state, not proof that this writer caused the move. */
-  async #observeReschedule(request: ClinikoRescheduleRequest, signal: AbortSignal):
+  async #observeReschedule(request: ClinikoRescheduleRequest, signal: AbortSignal, beforeRead?: BeforeRead):
     Promise<Result<ClinikoRescheduleObservation, ClinikoAppointmentWriteFailure>> {
     if (signal.aborted) return err({ kind: "unavailable" });
     if (!validReschedule(request)) return err({ kind: "invalidQuery" });
     if (!sameScope(request.scope, this.#scope)) return err({ kind: "scopeMismatch" });
-    const moved = await this.#read({ ...request, startsAt: request.newStartsAt, endsAt: request.newEndsAt }, signal);
+    const moved = await this.#read({ ...request, startsAt: request.newStartsAt, endsAt: request.newEndsAt }, signal, beforeRead);
     if (!moved.ok) return moved;
     if (signal.aborted) return err({ kind: "unavailable" });
     if (moved.value.kind === "active") {
-      const conflicts = await this.#conflicts(request.appointmentId, signal);
+      const conflicts = await this.#conflicts(request.appointmentId, signal, beforeRead);
       if (!conflicts.ok) return conflicts;
       if (signal.aborted) return err({ kind: "unavailable" });
       return ok({ kind: conflicts.value ? "newWithConflict" : "new", observedAt: moved.value.observedAt });
     }
     if (moved.value.kind === "cancelled") return ok({ kind: "cancelled", observedAt: moved.value.observedAt });
-    const old = await this.#read(request, signal);
+    const old = await this.#read(request, signal, beforeRead);
     if (!old.ok) return old;
     if (signal.aborted) return err({ kind: "unavailable" });
     return ok({ kind: old.value.kind === "active" ? "old" :
       old.value.kind === "cancelled" ? "cancelled" : "changed", observedAt: old.value.observedAt });
   }
 
-  async observeReschedule(request: ClinikoRescheduleRequest, signal?: AbortSignal):
+  async observeReschedule(incoming: ClinikoRescheduleRequest, signal?: AbortSignal, beforeRead?: BeforeRead):
     Promise<Result<ClinikoRescheduleObservation, ClinikoAppointmentWriteFailure>> {
-    return this.#observeReschedule(request, deadline(signal));
+    if (!validReschedule(incoming) || (beforeRead !== undefined && typeof beforeRead !== "function")) return err({ kind: "invalidQuery" });
+    const request = Object.freeze({ ...incoming, scope: Object.freeze({ ...incoming.scope }) });
+    return this.#observeReschedule(request, deadline(signal), beforeRead);
   }
 
   /** One in-place PATCH per appointment through this writer instance; no cancel-then-create or replay. */
-  async rescheduleOnce(request: ClinikoRescheduleRequest, signal?: AbortSignal):
+  async rescheduleOnce(incoming: ClinikoRescheduleRequest, signal?: AbortSignal, checks?: ClinikoRescheduleChecks):
     Promise<Result<ClinikoRescheduleOutcome, ClinikoAppointmentWriteFailure>> {
-    if (!validReschedule(request)) return err({ kind: "invalidQuery" });
+    if (!validReschedule(incoming) || (checks !== undefined && (!checks || typeof checks.beforeSend !== "function" || typeof checks.beforeRead !== "function"))) return err({ kind: "invalidQuery" });
+    const request = Object.freeze({ ...incoming, scope: Object.freeze({ ...incoming.scope }) });
+    const beforeSend = checks?.beforeSend, beforeRead = checks?.beforeRead;
     if (!sameScope(request.scope, this.#scope)) return err({ kind: "scopeMismatch" });
     if (this.#attempted.has(request.appointmentId) || this.#inFlight.has(request.appointmentId)) {
       return err({ kind: "invalidQuery" });
@@ -382,13 +409,16 @@ class ClinikoAppointmentWriter {
     if (requestSignal.aborted) return err({ kind: "unavailable" });
     this.#inFlight.add(request.appointmentId);
     try {
-      const before = await this.#read(request, requestSignal);
+      const before = await this.#read(request, requestSignal, beforeRead);
       if (!before.ok) return before;
       if (before.value.kind !== "active") return err({ kind: "targetChanged" });
       if (requestSignal.aborted) return err({ kind: "unavailable" });
       const limited = await untilAbort(claimClinikoBudget(this.#rateBudget), requestSignal);
       if (requestSignal.aborted || limited === undefined) return err({ kind: "unavailable" });
       if (limited) return err(limited);
+      if (requestSignal.aborted) return err({ kind: "unavailable" });
+      const permitted = await this.#check(beforeSend, requestSignal);
+      if (!permitted.ok) return permitted;
       if (requestSignal.aborted) return err({ kind: "unavailable" });
       this.#attempted.add(request.appointmentId);
       let response: Response;
@@ -408,7 +438,7 @@ class ClinikoAppointmentWriter {
       if (requestSignal.aborted) return ok({ kind: "uncertain" });
       if (response.status !== 200) return ok({ kind: "uncertain" });
       // The PATCH response alone cannot prove the appointment's current state or lack of overlap.
-      const after = await this.#observeReschedule(request, requestSignal);
+      const after = await this.#observeReschedule(request, requestSignal, beforeRead);
       return ok({ kind: requestSignal.aborted || !after.ok ? "uncertain" : after.value.kind === "new" ? "moved" :
         after.value.kind === "newWithConflict" ? "movedWithConflict" : "uncertain" });
     } finally { this.#inFlight.delete(request.appointmentId); }
@@ -459,13 +489,13 @@ export class ClinikoRescheduleWriter {
     return this.#inner.selection();
   }
 
-  observeReschedule(request: ClinikoRescheduleRequest, signal?: AbortSignal):
+  observeReschedule(request: ClinikoRescheduleRequest, signal?: AbortSignal, beforeRead?: BeforeRead):
     Promise<Result<ClinikoRescheduleObservation, ClinikoAppointmentWriteFailure>> {
-    return this.#inner.observeReschedule(request, signal);
+    return this.#inner.observeReschedule(request, signal, beforeRead);
   }
 
-  rescheduleOnce(request: ClinikoRescheduleRequest, signal?: AbortSignal):
+  rescheduleOnce(request: ClinikoRescheduleRequest, signal?: AbortSignal, checks?: ClinikoRescheduleChecks):
     Promise<Result<ClinikoRescheduleOutcome, ClinikoAppointmentWriteFailure>> {
-    return this.#inner.rescheduleOnce(request, signal);
+    return this.#inner.rescheduleOnce(request, signal, checks);
   }
 }
