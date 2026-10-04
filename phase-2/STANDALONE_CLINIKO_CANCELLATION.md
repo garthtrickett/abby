@@ -42,3 +42,7 @@ The shared guard extracts existing call/proof/confirmation checks from the embed
 These are local engineering proofs, not actual email delivery or live cancellation evidence. Remaining gates: human Cliniko report/notes witness and accepted clinic staff process; production verification and patient/action policy source; approved fee/cancellation/notification rules; clinic-scoped caller command and runner wiring; real provider lifecycle; process-loss/race/stop proofs for that final composition; source-matched speech and eventual carrier proof. Raw setting changes must continue to leave current standalone cancellation unavailable.
 
 The local host refuses captured Abby notification directives until a supported notification contract is supplied. Its generic staff methods reject handoff instead of relabelling the saved pre-send review as staff receipt. Production must supply the approved manual review route and truthful caller wording before any patient-specific action is enabled.
+
+## Current local evidence
+
+C-LOCAL-61 on source `3268aa1588d7278fc49318af243d0b65b802fa81`: typecheck, real isolated PostgreSQL/process/backup proofs, twelve-file suite 77 passed, and forward/reverse six-file suites 38 passed each, concurrency four, no failures/skips. This includes current standalone raw-toggle denial and existing embedded call/read regressions. Synthetic mail/permission/provider only; remaining activation gates above are unchanged.
