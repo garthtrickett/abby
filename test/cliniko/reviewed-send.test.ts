@@ -17,7 +17,7 @@ function request(kind: "book" | "cancel" | "reschedule" = "book"): ClinikoReview
     practitionerId: "22", appointmentTypeId: "33" };
   return { scope, patientId: "42", businessId: "11", credentialFingerprint: fingerprint,
     policyVersion: "policy", termsVersion: "terms", timeZone: "Asia/Jakarta", createdAt: time,
-    operation: kind === "book" ? { kind, ...common } : kind === "cancel" ? { kind, ...common, appointmentId: "71" } :
+    operation: kind === "book" ? { kind, ...common } : kind === "cancel" ? { kind, ...common, appointmentId: "71", cancellationReason: 10 } :
       { kind, ...common, appointmentId: "71", newStartsAt: "2026-10-09T04:00:00Z", newEndsAt: "2026-10-09T04:30:00Z" } };
 }
 function accepted(init: RequestInit | undefined): Response {
