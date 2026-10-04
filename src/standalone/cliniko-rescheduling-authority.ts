@@ -79,7 +79,7 @@ export class ClinikoReschedulingAuthority implements AppointmentChangeAuthority,
     // Destination IO may take time: re-read the protected source/fee before releasing combined evidence.
     const final = await this.#source.resolveTarget(query);
     const now = (this.#config.clock ?? (() => new Date().toISOString()))();
-    if (!final.ok || query.signal.aborted || JSON.stringify(final.value) !== JSON.stringify(target) ||
+    if (!final.ok || query.signal.aborted || !this.#offers.retains(offer, query.verificationRef) || JSON.stringify(final.value) !== JSON.stringify(target) ||
         Date.parse(offer.offer.expiresAt) <= Date.parse(now)) return denied();
     return ok({ ...final.value, kind: "reschedule", offer: offer.offer });
   }

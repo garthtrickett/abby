@@ -161,3 +161,19 @@ test("E2E-287 numbered private source choice is consumed once and caller query m
     assert.equal(f.patches, 0);
   } finally { release(); await f.close(); }
 });
+
+test("E2E-287 destination relisted during final source IO cannot release the obsolete combined offer", async () => {
+  const f = await reschedulingAuthorityFixture();
+  try {
+    const proof = await f.verify(), selected = await f.select(proof); let relisted = false;
+    f.setOnTimes(async () => {
+      f.setOnBusiness(async () => {
+        f.setOnBusiness(async () => {}); f.setOnTimes(async () => {});
+        const read = await f.source.listOffers(f.scope, proof, "2026-10-08", "2026-10-08", verificationNow);
+        assert.ok(read.ok); relisted = true;
+      });
+    });
+    const result = await f.source.resolve(f.query(proof, selected.targetRef, selected.offerRef));
+    assert.equal(relisted, true); assert.equal(result.ok, false); assert.equal(f.patches, 0);
+  } finally { await f.close(); }
+});

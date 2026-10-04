@@ -145,5 +145,13 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
     }, query.signal);
     return result ? ok(result) : denied();
   }
+  /** Memory fence only: does not recheck provider state or issue patient permission. */
+  retains(evidence: ClinikoBookingEvidence, verificationRef: string): boolean {
+    try {
+      const selected = this.#offers.get(evidence.offer.offerRef), at = this.#time(this.#now());
+      return !this.#lifetime.signal.aborted && at !== undefined && !!selected && selected.verificationRef === verificationRef &&
+        Date.parse(selected.evidence.offer.expiresAt) > at && JSON.stringify(selected.evidence) === JSON.stringify(evidence);
+    } catch { return false; }
+  }
   dispose(): void { this.#epoch++; this.#lifetime.abort(); this.#offers.clear(); }
 }
