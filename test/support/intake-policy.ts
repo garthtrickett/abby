@@ -5,12 +5,12 @@ import { join } from "node:path";
 import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 import type { AdminAccount } from "../../src/standalone/identity/magic-link.ts";
 import { OwnerFileAdminDirectory } from "../../src/standalone/identity/owner-file-admin-directory.ts";
-import { intakeRequiredFields, OwnerFileIntakePolicy } from "../../src/standalone/owner-file-intake-policy.ts";
+import { callerMediatedRecoveryText, intakeRequiredFields, OwnerFileIntakePolicy } from "../../src/standalone/owner-file-intake-policy.ts";
 import type { IntakeApproval, IntakeDraftQuery } from "../../src/standalone/owner-file-intake-policy.ts";
 import { intakeCredential, intakeDraft, intakeNow } from "./intake-edge.ts";
 
-export async function intakePolicyFixture() {
-  const folder = await mkdtemp(join(tmpdir(), "abby-intake-policy-"));
+export async function intakePolicyFixture(suppliedFolder?: string) {
+  const folder = suppliedFolder ?? await mkdtemp(join(tmpdir(), "abby-intake-policy-"));
   const path = join(folder, "intake.json"), accountPath = join(folder, "accounts.json");
   const scope = { tenantId: "intake-policy", clinicId: "clinic", locationId: "main" };
   let now = intakeNow;
@@ -21,6 +21,7 @@ export async function intakePolicyFixture() {
     operation: "patients.intake", callerEligibility: "selfOnly", minors: "deny", representatives: "deny", minimumAgeYears: 18,
     leapDayBirthday: "march1", callerPhone: "admittedCallerOnly", verificationMethod: "prospectiveEmailOtp",
     patientPermission: "independentClinicHost", duplicatePolicy: "exactEmailAndBirthDateDenyCandidates", requiredFields: [...intakeRequiredFields],
+    recoveryContract: "callerMediated", recoveryTerms: { version: "caller-recovery-1", approvedText: callerMediatedRecoveryText },
     privacyTerms: { version: "privacy-1", approvedText: "Your registration details will be kept in Cliniko." },
     intakeTerms: { version: "registration-1", approvedText: "Registering your details does not book an appointment." } };
   let account: AdminAccount = { email: "intake-admin@example.test", actor: { actorRef: approval.approverRef, role: "clinicAdmin", scope }, membershipVersion: "membership-1" };
@@ -34,7 +35,7 @@ export async function intakePolicyFixture() {
     const captured = await OwnerFileIntakePolicy.capture(config); assert.ok(captured.ok);
     const query: IntakeDraftQuery = { scope, draft: intakeDraft, admittedCallerPhone: intakeDraft.patientPhone,
       caller: "patient", privacyAccepted: true, intakeAccepted: true,
-      privacyTermsVersion: approval.privacyTerms.version, intakeTermsVersion: approval.intakeTerms.version };
+      privacyTermsVersion: approval.privacyTerms.version, intakeTermsVersion: approval.intakeTerms.version, recoveryAccepted: true, recoveryTermsVersion: approval.recoveryTerms.version };
     return { folder, path, accountPath, scope, config, directory, policy: captured.value, query,
       get approval() { return approval; }, get account() { return account; },
       setTime(value: string) { now = value; },
