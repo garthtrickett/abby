@@ -248,3 +248,31 @@ Prior failures/results retained:
 - The corrected PostgreSQL/process/manifest gate passed before freezing: `4590eee3-1791100980590.log`. The frozen final gate above also rechecks the captured admission's execution/staff declaration and preserves the earlier reference private-note canary.
 
 All provider, mail, clinical permission and approvals remain synthetic. This evidence is neither an actual email-delivery witness nor actual clinic permission/policy approval, human staff review, notification side-effect proof, voice-runner activation or carrier evidence. Production standalone patient-specific actions remain unavailable; D-06/D-07/D-11/D-16/D-17 and the full nine-step objective remain intact. The pending supervised Cliniko UI fixture is not automatically marked recalled or counted as human receipt.
+
+## C-LOCAL-65 — standalone best-effort reviewed booking, immutable evidence and owner loss
+
+**2026-10-04; frozen executable source `979ff0f208ae648d961c7c3649177288121150aa`; E2E-279/280.** The new `ClinikoBookingHost`/guard use the accepted standalone best-effort contract, independently of the earlier exclusive-permit embedded host. Actual email-code proof, current/captured booking/automation/execution/staff declarations, active admission/lease, emergency stop, trusted exact offer/provider/interval/timezone/booking-policy evidence and played SAM affirmation precede an acknowledged exact Cliniko review and one possible POST. A clear create response then requires protected exact active ID/marker/patient/business/practitioner/type/start/end read-back and conflict inspection. Trusted send/read checks run after final provider budget waits. Unknown, unreadable or conflicting outcomes remain unresolved without retry, compensation or later exact-commit promotion.
+
+The frozen final command was:
+
+```sh
+npm run typecheck
+bash scripts/with-postgres.sh bash /tmp/abby-reviewed-booking-final-proof.sh
+git diff --check
+```
+
+The wrapper migrates its disposable base and dispatches 21 focused files with `node --test --test-concurrency=4`: new standalone booking, provider-edge, booking-PostgreSQL and booking-process; original booking writer and exclusive embedded booking host; cancellation session/session-PostgreSQL, cancellation authority, standalone cancellation and its actual process test; caller session/method approval; email authority/aggregate PostgreSQL budget; reviewed send and its process test; cross-mode agent conformance; strict PostgreSQL standalone config; signed standalone verified read; scenario manifest. **114 passed, zero failures/skips. Typecheck and diff checks passed.** Final log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791103136315.log`.
+
+The ordered runner dispatches `standalone-booking`, `booking-best-effort-edge`, `standalone-booking-postgres`, `standalone-booking-process`, `caller-verification-session` with concurrency four, and then their exact reverse. **27 passed in each order, zero failures/skips**, with successful completion of every dispatched file.
+
+Actual PostgreSQL provider/verification budgets reserve the real synthetic adapter requests; their rows and a disposable backup contain no patient-specific code/contact/proof/call/session/appointment/review work. Three real booking-owner SIGKILL scenarios occur before review acknowledgment, during POST and after inspected completion. Fresh replacement work gets only public provider configuration, discovers the full review type and never performs a new provider mutation. Existing cancellation/reference and reviewed-send crash proofs also pass this final gate. No new real Cliniko clinical write was made.
+
+Prior observations/results are retained:
+
+- Initial new source and fixture typechecks passed: `4590eee3-1791101893680.log`, `4590eee3-1791102004767.log`.
+- Initial booking/edge/original writer/exclusive host/caller-session semantic gate passed 51 tests: `4590eee3-1791102153923.log`.
+- The first integrated PostgreSQL/process run failed three tests (45 passed of 48): `4590eee3-1791102364337.log`. It exposed an intermittent implementation defect: issued base64url proof references may begin with `-` or `_`, but the new guard applied the stricter public approval-ID validator. That rejected valid proof, preventing a SAM action and one expected crash checkpoint. Opaque proof/offer refs now have their own bounded shape; deterministic complete booking regressions cover both punctuation prefixes. No assertion was weakened.
+- The corrected integrated provider/PG/process gate passed 49 tests with no failures/skips: `4590eee3-1791102520754.log`.
+- Registered manifest/cancellation/verification and held-work lifecycle regression passed: `4590eee3-1791102798705.log`. Evidence snapshots now freeze query bindings and clone returned selection before later asynchronous checks; final offer/proof/lease clock checks prevent stale authority or retargeting during waits. The updated semantic gate passed before source freeze: `4590eee3-1791103022913.log`.
+
+All approved-offer/eligibility and independent clinical-permission sources, mail and provider inputs in this composition remain synthetic. A concrete current clinic booking/offer source and call-bound offer presentation/selection still need implementation. Real email, permission, clinic policy, human review, notification side-effect proof, gated caller integration and activation remain open. This is no atomic overlap/duplicate guarantee, clinic approval, actual delivery witness, standalone live-write capability or completion of the full objective. D-06/D-07/D-11/D-16/D-17 remain intact; provider review is not automatically closed or counted as staff receipt.
