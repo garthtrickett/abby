@@ -6,7 +6,7 @@ import type { CallerCandidateLookup } from "../voice/caller-candidates.ts";
 import { validCallerCandidates } from "../voice/caller-candidates.ts";
 import { normalizeEmailAddress } from "../shared/email-address.ts";
 import { sameScope } from "./appointment-change-authority.ts";
-import type { PatientAuthority, PatientAuthorityDecision, PatientAuthorityRequest, PatientOperation,
+import type { PatientAuthority, PatientAuthorityDecision, PatientAuthorityRequest, PatientAuthorityRecheck, PatientOperation,
   VerificationPolicyGate } from "./transient-patient-proof.ts";
 
 export interface PatientVerificationBudget {
@@ -56,6 +56,7 @@ export class EmailPatientAuthority implements PatientAuthority {
   #busy = false;
   #answers = 0;
   #challenge: Challenge | undefined;
+  #attested: Pick<Challenge, "patientId" | "email" | "operation" | "expiresAt"> | undefined;
   #grant: Grant | undefined;
   constructor(config: Config) {
     if (!config.scope || ![config.scope.tenantId, config.scope.clinicId, config.scope.locationId,
@@ -161,10 +162,31 @@ export class EmailPatientAuthority implements PatientAuthority {
         return this.#now() < grant.challenge.expiresAt ? contact : undefined;
       }, request.signal);
       if (!current || this.#lifetime.signal.aborted || request.signal.aborted) return err({ kind: "denied" });
+      this.#attested = { patientId: current.patientId, email: current.email, operation: grant.challenge.operation, expiresAt: grant.challenge.expiresAt };
       return ok({ scope: this.#config.scope, callId: this.#config.callId, sessionId: this.#config.sessionId,
         policyVersion: this.#config.policyVersion, patientId: current.patientId, operations: [grant.challenge.operation] });
     } finally { this.#busy = false; }
   }
 
-  close(): void { this.#lifetime.abort(); this.#challenge = undefined; this.#grant = undefined; }
+  async revalidate(request: PatientAuthorityRecheck): Promise<boolean> {
+    const attested = this.#attested, config = this.#config;
+    if (this.#busy || this.#lifetime.signal.aborted || request.signal.aborted || !attested ||
+        !sameScope(request.scope, config.scope) || request.callId !== config.callId || request.sessionId !== config.sessionId ||
+        request.patientId !== attested.patientId || request.operation !== attested.operation || request.policyVersion !== config.policyVersion) return false;
+    this.#busy = true;
+    try {
+      const current = await this.#bounded(async signal => {
+        if (this.#now() >= attested.expiresAt) return undefined;
+        const fresh = await this.#current(attested.operation, attested.patientId, attested.email, signal);
+        return this.#now() < attested.expiresAt ? fresh : undefined;
+      }, request.signal);
+      if (!current || request.signal.aborted || this.#lifetime.signal.aborted || this.#attested !== attested) {
+        if (this.#attested === attested) this.#attested = undefined;
+        return false;
+      }
+      return true;
+    } finally { this.#busy = false; }
+  }
+
+  close(): void { this.#lifetime.abort(); this.#challenge = undefined; this.#grant = undefined; this.#attested = undefined; }
 }

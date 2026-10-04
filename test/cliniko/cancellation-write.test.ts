@@ -261,3 +261,25 @@ test("aborting cancellation observation ignores a late cancelled row", async () 
   assert.deepEqual(await pending, { ok: false, error: { kind: "unavailable" } });
   release(Response.json(appointment({ cancelled_at: observedAt })));
 });
+
+test("E2E-272 final host authority runs after the provider read and budget reservation, and denies without PATCH", async () => {
+  const order: string[] = []; let allowed = true;
+  const budget: ClinikoRequestBudget = { claim() { order.push("budget"); if (order.length === 3) allowed = false; return null; },
+    observe429() { return { kind: "rateLimited" }; } };
+  const adapter = writer(async (_url, init) => {
+    assert.equal(init?.method, "GET"); order.push("read"); return Response.json(appointment());
+  }, budget);
+  assert.deepEqual(await adapter.cancelOnce(request, undefined, async () => { order.push("authority"); return allowed; }),
+    { ok: false, error: { kind: "forbidden" } });
+  assert.deepEqual(order, ["budget", "read", "budget", "authority"]);
+});
+
+test("E2E-272 a held final authority check is aborted without late PATCH", async () => {
+  let release: (value: boolean) => void = () => undefined, checks = 0, writes = 0;
+  const adapter = writer(async (_url, init) => { if (init?.method === "PATCH") writes++; return Response.json(appointment()); });
+  const controller = new AbortController();
+  const pending = adapter.cancelOnce(request, controller.signal, async () => { checks++; return new Promise<boolean>(resolve => { release = resolve; }); });
+  await waitFor(() => checks === 1); controller.abort();
+  assert.deepEqual(await pending, { ok: false, error: { kind: "unavailable" } });
+  release(true); await new Promise(resolve => setImmediate(resolve)); assert.equal(writes, 0);
+});

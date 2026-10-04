@@ -258,9 +258,10 @@ class ClinikoAppointmentWriter {
   }
 
   /** One send attempt per appointment through this writer instance. Never retries a possibly sent PATCH. */
-  async cancelOnce(request: ClinikoCancellationRequest, signal?: AbortSignal):
+  async cancelOnce(request: ClinikoCancellationRequest, signal?: AbortSignal,
+    beforeSend?: (signal: AbortSignal) => Promise<boolean>):
     Promise<Result<ClinikoCancellationOutcome, ClinikoAppointmentWriteFailure>> {
-    if (!validCancellation(request)) return err({ kind: "invalidQuery" });
+    if (!validCancellation(request) || (beforeSend !== undefined && typeof beforeSend !== "function")) return err({ kind: "invalidQuery" });
     if (!sameScope(request.scope, this.#scope)) return err({ kind: "scopeMismatch" });
     if (this.#attempted.has(request.appointmentId) || this.#inFlight.has(request.appointmentId)) {
       return err({ kind: "invalidQuery" });
@@ -278,6 +279,15 @@ class ClinikoAppointmentWriter {
       if (requestSignal.aborted || limited === undefined) return err({ kind: "unavailable" });
       if (limited) return err(limited);
       if (requestSignal.aborted) return err({ kind: "unavailable" });
+      // A composed host can recheck live caller/clinic authority after all edge reads and budget waits.
+      // Never let a held read or budget reservation move this check earlier than the actual PATCH.
+      if (beforeSend) {
+        let permitted: boolean | undefined;
+        try { permitted = await untilAbort(Promise.resolve().then(() => beforeSend(requestSignal)), requestSignal); }
+        catch { return err({ kind: "unavailable" }); }
+        if (requestSignal.aborted || permitted === undefined) return err({ kind: "unavailable" });
+        if (permitted !== true) return err({ kind: "forbidden" });
+      }
       this.#attempted.add(request.appointmentId);
       let response: Response;
       try {
@@ -426,9 +436,10 @@ export class ClinikoCancellationWriter {
     return this.#inner.observe(request, signal);
   }
 
-  cancelOnce(request: ClinikoCancellationRequest, signal?: AbortSignal):
+  cancelOnce(request: ClinikoCancellationRequest, signal?: AbortSignal,
+    beforeSend?: (signal: AbortSignal) => Promise<boolean>):
     Promise<Result<ClinikoCancellationOutcome, ClinikoAppointmentWriteFailure>> {
-    return this.#inner.cancelOnce(request, signal);
+    return this.#inner.cancelOnce(request, signal, beforeSend);
   }
 }
 

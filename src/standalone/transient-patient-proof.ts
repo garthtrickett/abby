@@ -18,6 +18,7 @@ export type PatientAuthorityRequest = Readonly<{
   policyVersion: string;
   signal: AbortSignal;
 }>;
+export type PatientAuthorityRecheck = Omit<PatientAuthorityRequest, "token" | "candidateIds"> & Readonly<{ patientId: string }>;
 export type PatientAuthorityDecision = Readonly<{
   scope: LocationScope;
   callId: string;
@@ -27,6 +28,8 @@ export type PatientAuthorityDecision = Readonly<{
   policyVersion: string;
 }>;
 export type PatientAuthority = Readonly<{
+  /** Sources with mutable contact/action permission recheck every protected use. No new proof is issued. */
+  revalidate?(request: PatientAuthorityRecheck): Promise<boolean>;
   /** The trusted verifier resolves a call-bound host token; no spoken answer or model output is accepted here. */
   attest(request: PatientAuthorityRequest): Promise<Result<PatientAuthorityDecision,
     Readonly<{ kind: "denied" | "unavailable" }>>>;
@@ -100,6 +103,7 @@ export class TransientPatientProofHost implements PatientProofHost {
   #epoch = 0;
   #attemptAbort: AbortController | undefined;
   #proof: LiveProof | undefined;
+  readonly #refreshes = new Set<AbortController>();
 
   constructor(config: TransientPatientProofConfig) {
     if (!validScope(config.scope) ||
@@ -107,6 +111,7 @@ export class TransientPatientProofHost implements PatientProofHost {
       typeof config.policyVersion !== "string" || !config.policyVersion.trim() || config.policyVersion.length > 256 ||
       ![1, 2, 3].includes(config.maxAttempts) || !config.lookup || typeof config.lookup.candidates !== "function" ||
       !config.authority || typeof config.authority.attest !== "function" ||
+      (config.authority.revalidate !== undefined && typeof config.authority.revalidate !== "function") ||
       !config.policy || typeof config.policy.current !== "function" ||
       (config.clock !== undefined && typeof config.clock !== "function") ||
       (config.timeoutMs !== undefined && (!Number.isSafeInteger(config.timeoutMs) ||
@@ -212,6 +217,21 @@ export class TransientPatientProofHost implements PatientProofHost {
     } catch { return err({ kind: "unavailable" }); }
   }
 
+  async #refresh(proof: LiveProof, operation: PatientOperation): Promise<boolean> {
+    const revalidate = this.#authority.revalidate;
+    if (!revalidate) return true; // Existing owning-host verifiers use their versioned permission source.
+    const controller = new AbortController(); this.#refreshes.add(controller);
+    const timer = setTimeout(() => controller.abort(), this.#timeoutMs);
+    let onAbort: () => void = () => undefined;
+    const stopped = new Promise<boolean>(resolve => { onAbort = () => resolve(false); controller.signal.addEventListener("abort", onAbort); });
+    try {
+      return await Promise.race([Promise.resolve().then(() => revalidate.call(this.#authority, {
+        scope: this.#scope, callId: this.#callId, sessionId: this.#sessionId, patientId: proof.patientId,
+        operation, policyVersion: this.#policyVersion, signal: controller.signal })), stopped]) === true;
+    } catch { return false; }
+    finally { clearTimeout(timer); controller.signal.removeEventListener("abort", onAbort); controller.abort(); this.#refreshes.delete(controller); }
+  }
+
   async verifyOperation(scope: LocationScope, verificationRef: string, operation: PatientOperation,
                         now: string): Promise<Result<VerifiedPatient, HostReadFailure>> {
     const proof = this.#proof;
@@ -233,6 +253,10 @@ export class TransientPatientProofHost implements PatientProofHost {
     if (!await this.#enabled() || this.#closed || this.#proof !== proof) {
       if (this.#proof === proof) this.#proof = undefined;
       return err({ kind: "unavailable", target: "patient" });
+    }
+    if (!await this.#refresh(proof, operation) || this.#closed || this.#proof !== proof || !await this.#enabled()) {
+      if (this.#proof === proof) this.#proof = undefined;
+      return err({ kind: "notFound", target: "patient" });
     }
     let freshMs: number | undefined;
     try { freshMs = instant(this.#clock()); }
@@ -256,6 +280,7 @@ export class TransientPatientProofHost implements PatientProofHost {
   revoke(): void {
     this.#epoch += 1;
     this.#attemptAbort?.abort();
+    for (const controller of this.#refreshes) controller.abort();
     this.#proof = undefined;
   }
 
