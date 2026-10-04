@@ -308,3 +308,44 @@ Retained earlier evidence and corrections:
 - Initial frozen source `2e3f8da1f1247afcf24d12644e123fbc9eb405a1` passed 139 plus 22 in each order: `4590eee3-1791104961097.log`. Final review then added a concrete negative constructor check, which failed: `4590eee3-1791105220053.log`. The source accepted a genuine verifier owned by another call/session when the clinic matched. `TransientPatientProofHost.matchesCall` now rejects rebinding at offer-source, booking/cancellation guard and cancellation-authority construction. The corrected booking/cancellation/embedded appointment-change gate passed 50 tests: `4590eee3-1791105257193.log`. The final frozen source above includes this fix and its negative regression. No failing assertion was weakened or skipped.
 
 Still open: caller-facing offer menu/selection and admitted booking composition; real email delivery and independent patient/action permission; actual clinic booking/recovery/notification approval and human staff-review witness; actual provider side-effect proof and gated live voice integration. All production standalone patient writes remain unavailable. This evidence does not complete booking activation, cancellation activation or the full nine-step objective, and does not claim recall receipt, staff assignment, fee charging or patient permission from a public policy file.
+
+
+## C-LOCAL-67 — Admitted booking owner, private played menu and localized confirmation
+
+**2026-10-04; frozen executable source `876543c331021b921c0689aaaa0fadf4dfcaa21d`; E2E-283/284; manifest 1.88 / 284 IDs.** One trusted `ClinikoBookingSession` binds actual admission/inbound/session, current public method/booking approvals and scoped administrator, independent operation permission, mandatory shared API-user budget and one close signal. It composes the actual verifier, concrete offers, private menu and reviewed booking host. The construction deadline abandons held approval work; a late result cannot create an owner or issue provider traffic.
+
+Actual versioned agent commands read and select numbered provisional options. Caller-facing SAM menu evidence contains only public provider/service/time-zone/interval facts; opaque offer/proof mapping remains private. The matching menu must have played and remain the latest caller turn before a new ordinal selection can consume it. Duplicate, unplayed, foreign, intervened, stale or malformed evidence cannot create unintended appointment/staff work. Selection proposes the existing SAM action; localized exact practitioner/service/duration/calendar confirmation must then play before a separate clear affirmation. All presentation metadata is action-digest bound. Legacy embedded offers retain their existing confirmation wording and contract.
+
+The complete read/select operation has one 15-second deadline, consumer abort propagation and final conversation-revision fencing. Interrupted or closed work cannot publish a late menu. Presentation observation tolerates the same bounded 30-second request/clock difference as the concrete source, allowing a healthy clock advance during provider IO; choices must remain future and unexpired relative to both supplied time and observation. Current permission/member/policies/settings/emergency stop, changed provider duration/slot and shared-budget failure block a clinical send, including after the acknowledged Cliniko review. Provider review stays pending and is never counted as human receipt.
+
+Frozen-source gate:
+
+```sh
+npm run typecheck
+bash scripts/with-postgres.sh bash /tmp/abby-booking-session-final-proof.sh
+```
+
+The script contents, reproduced for rerun, were:
+
+```sh
+#!/usr/bin/env bash
+set -euo pipefail
+npm run db:migrate
+node --test --test-concurrency=4 test/cliniko/booking-session.test.ts test/cliniko/booking-session-postgres.test.ts test/text/booking.test.ts test/text/agent-appointment-proposals.test.ts test/composition/cross-mode-appointment-proposals.test.ts test/cliniko/booking-offers.test.ts test/cliniko/booking-clinic-policy.test.ts test/cliniko/booking-offers-postgres.test.ts test/cliniko/standalone-booking-process.test.ts test/cliniko/standalone-booking.test.ts test/cliniko/standalone-booking-postgres.test.ts test/cliniko/booking-best-effort-edge.test.ts test/cliniko/booking-write.test.ts test/cliniko/availability.test.ts test/cliniko/approved-availability-search.test.ts test/cliniko/cancellation-authority.test.ts test/cliniko/cancellation-authority-postgres.test.ts test/cliniko/cancellation-session.test.ts test/cliniko/cancellation-session-postgres.test.ts test/cliniko/standalone-cancellation.test.ts test/cliniko/transient-patient-proof.test.ts test/cliniko/caller-verification-session.test.ts test/cliniko/owner-file-caller-policy.test.ts test/cliniko/email-patient-authority.test.ts test/cliniko/email-verification-budget-postgres.test.ts test/voice/embedded-cliniko-booking-host-call.test.ts test/voice/embedded-cliniko-appointment-change-host-call.test.ts test/voice/standalone-signed-verified-read.test.ts test/composition/cross-mode-agent-conformance.test.ts test/contract/scenario-manifest.test.ts
+node scripts/ordered-node-e2e.mjs '{"files": ["test/cliniko/booking-session.test.ts", "test/cliniko/booking-session-postgres.test.ts", "test/cliniko/standalone-booking-process.test.ts", "test/cliniko/booking-offers.test.ts", "test/cliniko/caller-verification-session.test.ts"], "concurrency": 4}'
+node scripts/ordered-node-e2e.mjs '{"files": ["test/cliniko/caller-verification-session.test.ts", "test/cliniko/booking-offers.test.ts", "test/cliniko/standalone-booking-process.test.ts", "test/cliniko/booking-session-postgres.test.ts", "test/cliniko/booking-session.test.ts"], "concurrency": 4}'
+git diff --check
+```
+
+The 30-file parallel suite passed **180 tests**, then the actual ordered runner dispatched the five booking-session/PG/process/offers/verifier files forward and in reverse with concurrency four: **29 passed in each order**. Every dispatched file completed successfully. **Zero failures/skips in all three runs; typecheck, migration and diff checks passed.** Final tracked log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791107673289.log`.
+
+Actual isolated PostgreSQL verification/provider budgets charge all provider traffic to the same supplied bucket; row and backup scans exclude contact, code, proof, opaque selection, call/session, appointment intervals and patient-specific review/action work. The three process-loss checkpoints now construct the actual admitted booking-menu owner: SIGKILL before review acknowledgment, during POST and after inspected commit. A fresh process receives public provider configuration only, discovers the full pending review type and performs no clinical or recall mutation. This does not persist or reconstruct lost call authority, identify the original writer after a lost response, or authorize replay/compensation.
+
+Earlier results and corrections are retained:
+
+- Initial typed contract failed on non-erasable constructor parameter properties, the stop-flag field, optional lease narrowing and invalid capability effect/authority names: `4590eee3-1791106198536.log`. Explicit fields and the existing typed contract fixed these; corrected typecheck passed (`4590eee3-1791106342445.log`).
+- The first fixture gate failed type narrowing/definite assignment (`4590eee3-1791106600809.log`); the corrected semantic gate then exposed an unplayed initial greeting (`4590eee3-1791106706135.log`). The fixture now actually starts and resolves that greeting through SAM, preserving the production pending-presentation guard. Actual admission/session checks were also added to construction. Corrected semantics passed 24/24 (`4590eee3-1791106856495.log`).
+- The first PG/process gate stopped at typecheck because the verification-mail canary lacked an explicit presence assertion (`4590eee3-1791106948818.log`). Adding that assertion preserved the canary; the corrected PG/process/semantic gate passed 18/18, no skips (`4590eee3-1791107289891.log`).
+- Registered semantic/manifest/legacy-booking gate passed 13/13 before freezing (`4590eee3-1791107584604.log`). The final frozen gate above also includes malformed public-evidence, held-constructor, shared-budget failure and advancing-clock regressions.
+
+The product owner deferred real email-service setup on 2026-10-04; synthetic email testing continues. All provider, mail, independent clinical permission and clinic approvals in this proof are synthetic. Actual delivery, clinic policies/permission, human Cliniko staff witness and approved coverage, provider fee/notification side effects, gated live voice-runner integration and carrier evidence remain open. No new real Cliniko clinical write, production patient capability or privacy decision change occurred. D-06/D-07/D-11/D-16/D-17 and the full nine-step objective remain intact; it is not complete.
