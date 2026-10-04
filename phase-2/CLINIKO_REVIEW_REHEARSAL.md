@@ -38,3 +38,7 @@ Cleanup verifies exact synthetic name/reference, dedicated type metadata, scope/
 Do not edit or reuse rehearsal fixtures for other work during cleanup. Cliniko offers no proved atomic compare-and-archive protection; an external edit after the last check remains a demo coordination risk. Archived provider fixtures remain in Cliniko; this is not hard deletion. The CLI writes no local patient-specific state, report file, replay key or artifact. Partial setup and uncertain cleanup need owner inspection; this tool is not a production first-time intake recovery design.
 
 E2E-271 covers synthetic preparation, fresh account/type-only status, outside staff-status observation, cleanup ordering and ownership failures, unknown sends, bounded scans, no appointment mutations and generic CLI output. Live provider persistence and an actual staff UI witness are recorded separately in `phase-0/CLINIKO_EVIDENCE.md`; local proof does not substitute for either.
+
+## Current rehearsal evidence
+
+On 2026-10-04, C-LOCAL-60 passed typecheck and 16 parallel checks with zero skips. C-LIVE-54 completed the actual provider create/fresh-status/verified-archive round trip, then provisioned a new separate UI fixture. One synthetic pending item currently remains under the type above, due 2026-10-04. Garth’s human report/notes inspection is pending; after that witness, observe status and archive the fixture through the cleanup command. No API staff acknowledgment or appointment mutation was sent.
