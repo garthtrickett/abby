@@ -10,7 +10,9 @@ The new host executes only after current operation-bound patient proof, approved
 
 | Function | Input | Output / work |
 | --- | --- | --- |
-| `ClinikoBookingAuthority.resolve` | Scoped call/session/policy, patient ID from proof, proof/offer refs, time, proposal/commit phase and abort signal | Typed fresh `ClinikoBookingEvidence` or unavailable/not-found. The real clinic offer/eligibility/policy source is still to be implemented; the executable fixture provides synthetic evidence. It must not accept provider IDs, timestamps or policy authority from model output. |
+| `OwnerFileBookingPolicy.capture/current` | Owner-only public clinic approval, exact provider/policy bindings and current scoped administrator directory | Captured then freshly reread exact booking policy. Replacement, membership change, disabled/unapproved status, expiry or unsafe schema/file denies the call. Patient permission and staff receipt remain separate. |
+| `ClinikoBookingOffers.list` | Scope, actual operation-bound proof ref, bounded clinic date range, current time and optional close signal | Up to three opaque, volatile patient/call-bound choices, each with exact start/end and fixed expiry. Provider eligibility, relationships, duration and names come from `ClinikoAvailabilityReader.listBooking`; current public policy filters notice/horizon. New listings invalidate prior selections. Availability is not a reservation. |
+| `ClinikoBookingOffers.resolve` | Scoped call/session/policy, patient ID from proof, issued proof/offer refs, time, proposal/commit phase and abort signal | Fresh exact offered time on its approved business-calendar day, provider/label/duration and current public approval plus proof rechecks. Unknown/cross-call/expired/replaced offers deny; model-supplied provider IDs, timestamps or policy authority cannot mint evidence. |
 | `ClinikoBookingGuard.resolve` | Scope, opaque proof/offer refs, time, phase and signal | Prepared portable booking plus private exact provider/interval/policy bindings. Checks active SAM admission/lease, automation/booking/execution/staff declaration, emergency stop, actual booking proof, trusted current evidence and final proof. Public approval IDs and opaque proof refs have distinct validation rules. |
 | `ClinikoBookingGuard.authorize` | Prepared action, actual dispatched mutation, current time and signal | Boolean only after played presentation, correct SAM action/effect, fresh commit evidence, digest/provider/interval/policy match, proof and emergency checks. Called before review, after review and after the writer's budget reservation. |
 | `ClinikoBookingGuard.mayInspect` | Prepared action/mutation/current time/signal | Current SAM dispatch, proof, setting and call authority for protected read-back/conflict/result disclosure. It does not require that the just-booked slot remain available. |
@@ -35,4 +37,32 @@ E2E-279 covers actual dedicated email-code proof, real text gateway/SAM confirma
 
 E2E-280 covers the actual provider send/read hooks after budget waits, false/throw/held/aborted denial, immutable request binding, exact link/marker/status/duration checks and a real emergency stop at the writer's final reservation.
 
-The mail, independent patient permission, approved offers/eligibility and provider are synthetic. Still required: concrete current clinic booking/offer source; call-bound offer presentation/selection; a real verifier/permission/mail integration; approved clinic/recovery/notification process with human staff witness; actual provider side-effect checks; and gated caller/voice-runner integration. This local host is progress on booking, not completion of cancellation activation, booking activation or the full nine-step objective.
+E2E-281/282 add the concrete public approval and offer source to the actual email-proof/SAM/review/booking path, shared PostgreSQL budgets and backup scans. The booking-owner SIGKILL journey now constructs that source too. Fixtures supply synthetic public approval, mail, independent permission and provider responses; this is engineering evidence, not an actual clinic approval. Interrupted protected refreshes pass their abort signal into the verifier/contact reader, so releasing a held budget after an offer deadline cannot cause a late contact request or publish an offer. Cancelled refreshes conservatively revoke the proof.
+
+Still required: caller-facing offer-list presentation/selection and the admitted booking-session composition; real verifier/permission/mail integration; actual clinic/recovery/notification approval with human staff witness; actual provider side-effect checks; and gated caller/voice-runner integration. This is progress on booking, not completion of cancellation activation, booking activation or the full nine-step objective.
+
+## Public booking approval template
+
+Provision only public clinic configuration in an owner-only regular file, atomically replaced by an authorized operator. `OwnerFileBookingPolicy` accepts exactly this schema (8 KiB maximum); patient/contact/note fields are rejected. This template is deliberately disabled and unapproved. Its identifiers, times, administrator, fingerprint and clinical values are placeholders and do not establish approval:
+
+```json
+{
+  "scope": { "tenantId": "demo", "clinicId": "clinic", "locationId": "main" },
+  "revision": "booking-1", "approverRef": "clinic-admin",
+  "approvedAt": "2026-10-04T06:00:00.000Z",
+  "effectiveFrom": "2026-10-04T06:00:00.000Z",
+  "effectiveUntil": "2026-10-05T06:00:00.000Z",
+  "approved": false, "enabled": false, "policyVersion": "captured-call-policy",
+  "businessId": "11", "practitionerId": "22", "appointmentTypeId": "33",
+  "credentialFingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "recallTypeId": "7", "timeZone": "Australia/Sydney",
+  "writeContract": "bestEffort", "notificationOwner": "cliniko",
+  "serviceRef": "physiotherapy", "bookingPolicyVersion": "booking-policy-1",
+  "durationMinutes": 30, "minNoticeMinutes": 60,
+  "maxAdvanceDays": 30, "offerTtlSeconds": 120
+}
+```
+
+Duration must equal current Cliniko appointment-type metadata and is limited to 1–480 minutes. Notice is 1–10,080 minutes; horizon is 1–90 days and must exceed notice; offer lifetime is 15–300 seconds and is capped by proof and approval expiry. The source rereads the exact available time in the approved business timezone, including daylight-saving calendar boundaries, at every authorization phase. Provider/customer edits can still race a POST; no atomic exclusion is implied. `serviceRef` is the approved portable service identifier, not an instruction, a provider ID or patient-specific text. No fee is charged and no patient permission is inferred from this public approval.
+
+The concrete offer source and booking/cancellation guards require `TransientPatientProofHost.matchesCall` for exact clinic/call/session/captured-policy ownership at construction. A valid verifier from another simultaneous call cannot be rebound by trusted composition configuration; this check exposes no presented phone, patient or proof token. E2E-281 reproduces the previously accepted foreign-call construction and asserts rejection before provider traffic.

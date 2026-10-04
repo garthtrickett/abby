@@ -87,6 +87,7 @@ export class ClinikoAppointmentChangeGuard {
         typeof config.ledger.readWriteStop !== "function" ||
         !config.policy || typeof config.policy.read !== "function" ||
         !(config.proof instanceof TransientPatientProofHost) ||
+        !config.proof.matchesCall(config.scope, config.callId, config.sessionId, config.policyVersion) ||
         !config.authority || typeof config.authority.resolve !== "function" ||
         !(config.cancellation instanceof ClinikoCancellationWriter) ||
         (config.rescheduling !== undefined && !(config.rescheduling instanceof ClinikoRescheduleWriter)) ||
@@ -184,7 +185,7 @@ export class ClinikoAppointmentChangeGuard {
     try {
       const patient = await untilAbort(this.#proof.verifyOperation(this.#scope,
         query.verificationRef, query.kind === "cancel" ? "appointments.cancel" : "appointments.reschedule",
-        query.now), signal);
+        query.now, signal), signal);
       if (!patient?.ok || this.#closed || signal.aborted || !validClinikoId(patient.value.patientRef)) {
         return err({ kind: "notFound", target: "patient" });
       }
@@ -230,7 +231,7 @@ export class ClinikoAppointmentChangeGuard {
       }
       const finalPatient = await untilAbort(this.#proof.verifyOperation(this.#scope,
         query.verificationRef, query.kind === "cancel" ? "appointments.cancel" : "appointments.reschedule",
-        query.now), signal);
+        query.now, signal), signal);
       if (!finalPatient?.ok || this.#closed || signal.aborted ||
           digestActionRequest({ ...request, patient: finalPatient.value }) !== digestActionRequest(request)) {
         return err({ kind: "notFound", target: "patient" });
@@ -262,7 +263,7 @@ export class ClinikoAppointmentChangeGuard {
         effect.mutation.payloadDigest !== mutation.payloadDigest) return false;
     const patient = await untilAbort(this.#proof.verifyOperation(this.#scope,
       prepared.request.patient.verificationRef,
-      mutation.kind === "cancel" ? "appointments.cancel" : "appointments.reschedule", now), signal);
+      mutation.kind === "cancel" ? "appointments.cancel" : "appointments.reschedule", now, signal), signal);
     return !!patient?.ok && patient.value.patientRef === prepared.provider.patientId && !this.#closed && !signal.aborted;
   }
 

@@ -52,7 +52,9 @@ export class ClinikoCancellationAuthority implements AppointmentChangeAuthority,
           ![config.callId, config.sessionId, config.policyVersion].every(ref) || !validClinikoId(config.businessId) ||
           binding.businessId !== config.businessId || binding.policyVersion !== config.policyVersion ||
           binding.credentialFingerprint !== clinikoCredentialFingerprint(config.apiKey) ||
-          !(config.proof instanceof TransientPatientProofHost) || !(config.policy instanceof OwnerFileCancellationPolicy) ||
+          !(config.proof instanceof TransientPatientProofHost) ||
+          !config.proof.matchesCall(config.scope, config.callId, config.sessionId, config.policyVersion) ||
+          !(config.policy instanceof OwnerFileCancellationPolicy) ||
           typeof fetchPort !== "function" || (config.clock !== undefined && typeof config.clock !== "function") ||
           (config.rateBudget !== undefined && !isClinikoRequestBudget(config.rateBudget)) ||
           (config.timeoutMs !== undefined && (!Number.isSafeInteger(config.timeoutMs) || config.timeoutMs < 1 || config.timeoutMs > 20_000))) return err({ kind: "invalidConfig" });
@@ -84,7 +86,7 @@ export class ClinikoCancellationAuthority implements AppointmentChangeAuthority,
       if (!policy.ok || signal.aborted) return undefined;
       const reader = ClinikoAppointmentReader.create({ scope, apiKey: this.#config.apiKey, contactEmail: this.#config.contactEmail,
         businessId: this.#config.businessId, rateBudget: this.#budget }, {
-        verifyPatient: (bound, proof, at) => this.#config.proof.verifyOperation(bound, proof, "appointments.cancel", at),
+        verifyPatient: (bound, proof, at) => this.#config.proof.verifyOperation(bound, proof, "appointments.cancel", at, signal),
       }, async (value, init) => {
         if (signal.aborted) throw new Error("appointment selection unavailable");
         return this.#fetch(value, { ...init, signal: AbortSignal.any([signal, ...(init?.signal ? [init.signal] : [])]) });
@@ -93,7 +95,7 @@ export class ClinikoCancellationAuthority implements AppointmentChangeAuthority,
       const result = await reader.value.list(scope, verificationRef, from, to, now);
       if (!result.ok || signal.aborted || epoch !== this.#listing || result.value.timeZone !== policy.value.timeZone ||
           !this.#currentTime(now) || !(await this.#config.policy.current(scope)).ok) return undefined;
-      const verified = await this.#config.proof.verifyOperation(scope, verificationRef, "appointments.cancel", this.#now());
+      const verified = await this.#config.proof.verifyOperation(scope, verificationRef, "appointments.cancel", this.#now(), signal);
       if (!verified.ok || signal.aborted || epoch !== this.#listing || verified.value.patientRef !== result.value.patientRef) return undefined;
       const appointments = [...result.value.appointments].sort((left, right) => left.startsAt.localeCompare(right.startsAt));
       if (appointments.some(target => instant(target.startsAt) === undefined || instant(target.endsAt) === undefined || instant(target.endsAt)! <= instant(target.startsAt)!) ||
@@ -147,7 +149,7 @@ export class ClinikoCancellationAuthority implements AppointmentChangeAuthority,
         selected.patientId !== query.patientId || selected.verificationRef !== query.verificationRef ||
         !this.#currentTime(query.now) || (query.phase !== "proposal" && query.phase !== "commit")) return denied();
     const result = await this.#bounded(async signal => {
-      const verified = await config.proof.verifyOperation(config.scope, query.verificationRef, "appointments.cancel", this.#now());
+      const verified = await config.proof.verifyOperation(config.scope, query.verificationRef, "appointments.cancel", this.#now(), signal);
       if (!verified.ok || verified.value.patientRef !== selected.patientId || signal.aborted) return undefined;
       const policy = await config.policy.current(config.scope);
       if (!policy.ok || signal.aborted) return undefined;
@@ -168,7 +170,7 @@ export class ClinikoCancellationAuthority implements AppointmentChangeAuthority,
           !this.#currentTime(query.now) || Date.parse(selected.expiresAt) <= Date.parse(this.#now()) || signal.aborted) return undefined;
       const terms = OwnerFileCancellationPolicy.termsFor(policy.value, selected.startsAt, this.#now());
       const freshPolicy = await config.policy.current(config.scope);
-      const freshProof = await config.proof.verifyOperation(config.scope, query.verificationRef, "appointments.cancel", this.#now());
+      const freshProof = await config.proof.verifyOperation(config.scope, query.verificationRef, "appointments.cancel", this.#now(), signal);
       if (!terms || !freshPolicy.ok || !freshProof.ok || freshProof.value.patientRef !== selected.patientId || signal.aborted ||
           this.#targets.get(query.targetRef) !== selected || !this.#currentTime(query.now) ||
           JSON.stringify(terms) !== JSON.stringify(OwnerFileCancellationPolicy.termsFor(freshPolicy.value, selected.startsAt, this.#now()))) return undefined;

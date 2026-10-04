@@ -31,6 +31,7 @@ export class ClinikoBookingGuard {
     if (!config.scope || ![config.scope.tenantId, config.scope.clinicId, config.scope.locationId,
       config.callId, config.sessionId, config.policyVersion].every(approvalRef) ||
         !(config.writer instanceof ClinikoBookingWriter) || !(config.proof instanceof TransientPatientProofHost) ||
+        !config.proof.matchesCall(config.scope, config.callId, config.sessionId, config.policyVersion) ||
         typeof config.ledger?.read !== "function" || typeof config.ledger?.readWriteStop !== "function" ||
         typeof config.policy?.read !== "function" || typeof config.authority?.resolve !== "function" ||
         !sameScope(config.writer.selection().scope, config.scope) || (config.clock !== undefined && typeof config.clock !== "function")) {
@@ -77,7 +78,7 @@ export class ClinikoBookingGuard {
     try {
       if (this.#closed || signal.aborted || !sameScope(scope, config.scope) || !/^[A-Za-z0-9:_-]{1,256}$/.test(verificationRef) || !/^[A-Za-z0-9:_-]{1,256}$/.test(offerRef) ||
           (phase !== "proposal" && phase !== "commit") || at === undefined || !await this.#ready(at, signal)) return denied();
-      const patient = await untilAbort(config.proof.verifyOperation(scope, verificationRef, "appointments.book", now), signal);
+      const patient = await untilAbort(config.proof.verifyOperation(scope, verificationRef, "appointments.book", now, signal), signal);
       if (!patient?.ok || !validClinikoId(patient.value.patientRef) || this.#closed || signal.aborted) return err({ kind: "notFound", target: "patient" });
       const query: ClinikoBookingQuery = Object.freeze({ scope: Object.freeze({ ...config.scope }), callId: config.callId, sessionId: config.sessionId, policyVersion: config.policyVersion,
         patientId: patient.value.patientRef, verificationRef, offerRef, phase, now, signal });
@@ -87,7 +88,7 @@ export class ClinikoBookingGuard {
       if (!selected || this.#closed || signal.aborted || fresh === undefined ||
           !validClinikoBookingEvidence(selected, { ...query, now: new Date(fresh).toISOString() }, config.writer.selection(), config.writer.credentialFingerprint()) ||
           Date.parse(patient.value.expiresAt) <= fresh || !await this.#ready(fresh, signal)) return denied();
-      const finalPatient = await untilAbort(config.proof.verifyOperation(scope, verificationRef, "appointments.book", now), signal);
+      const finalPatient = await untilAbort(config.proof.verifyOperation(scope, verificationRef, "appointments.book", now, signal), signal);
       const request = { kind: "book" as const, patient: patient.value, offer: selected.offer };
       const finalTime = this.#time(now);
       if (!finalPatient?.ok || this.#closed || signal.aborted || finalTime === undefined || Date.parse(request.patient.expiresAt) <= finalTime ||
@@ -114,7 +115,7 @@ export class ClinikoBookingGuard {
   async mayInspect(prepared: PreparedClinikoBooking, mutation: HostMutation, now: string, signal: AbortSignal): Promise<boolean> {
     try {
       const at = this.#time(now); if (at === undefined || !await this.#ready(at, signal, mutation)) return false;
-      const proof = await untilAbort(this.#config.proof.verifyOperation(this.#config.scope, prepared.query.verificationRef, "appointments.book", now), signal);
+      const proof = await untilAbort(this.#config.proof.verifyOperation(this.#config.scope, prepared.query.verificationRef, "appointments.book", now, signal), signal);
       const finalTime = this.#time(now);
       return !!proof?.ok && finalTime !== undefined && Date.parse(proof.value.expiresAt) > finalTime &&
         proof.value.patientRef === prepared.request.patient.patientRef && !this.#closed && !signal.aborted;
