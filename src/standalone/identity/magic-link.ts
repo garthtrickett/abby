@@ -1,3 +1,5 @@
+import { normalizeEmailAddress as normalizeAdminEmail } from "../../shared/email-address.ts";
+export { normalizeEmailAddress as normalizeAdminEmail } from "../../shared/email-address.ts";
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { err, ok } from "../../core/model.ts";
 import type { Result } from "../../core/model.ts";
@@ -37,15 +39,7 @@ export function validIdentitySecret(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value) &&
     Buffer.from(value, "base64url").toString("base64url") === value;
 }
-export function normalizeAdminEmail(value: unknown): string | undefined {
-  if (typeof value !== "string" || value.length > 254 || /[\r\n\u0000]/.test(value)) return undefined;
-  const email = value.trim(), at = email.lastIndexOf("@");
-  if (at < 1 || at > 64 || email.indexOf("@") !== at) return undefined;
-  const local = email.slice(0, at), domain = email.slice(at + 1).toLowerCase();
-  if (!/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$/.test(local) || local.startsWith(".") || local.endsWith(".") || local.includes("..") ||
-      !domain.includes(".") || domain.split(".").some(label => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) return undefined;
-  return `${local}@${domain}`;
-}
+
 function opaque(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= 256 && value === value.trim() && !/[\u0000-\u001f\u007f]/.test(value);
 }
