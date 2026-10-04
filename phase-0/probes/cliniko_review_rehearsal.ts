@@ -76,7 +76,8 @@ export class ClinikoReviewRehearsal {
       expected = Number(total);
       for (const value of entries) {
         const row = object(value);
-        if (!row || !id(row.id) || BigInt(row.id) <= previous || row.archived_at !== null) throw new ProbeFailure("unavailable");
+        if (!row || !id(row.id) || BigInt(row.id) <= previous ||
+            (resource === "practitioners" ? typeof row.active !== "boolean" : row.archived_at !== null)) throw new ProbeFailure("unavailable");
         previous = BigInt(row.id); rows.push(row);
       }
       if (rows.length === expected) return rows;
@@ -181,7 +182,7 @@ export class ClinikoReviewRehearsal {
       if (fixture.patients.length || fixture.status.pending || fixture.status.providerMarkedRecalled) return ok(fixture.status);
       const listedBusiness = (await this.#rows("businesses"))[0];
       const business = listedBusiness ? object(await this.#request("GET", `/businesses/${listedBusiness.id}`)) : undefined;
-      const practitioner = (await this.#rows("practitioners"))[0];
+      const practitioner = (await this.#rows("practitioners")).find(row => row.active === true);
       const appointmentType = (await this.#rows("appointment_types"))[0];
       if (!business || business.id !== listedBusiness?.id || business.archived_at !== null || !practitioner || !appointmentType || typeof business.time_zone_identifier !== "string") throw new ProbeFailure("unavailable");
       new Intl.DateTimeFormat("en", { timeZone: business.time_zone_identifier });

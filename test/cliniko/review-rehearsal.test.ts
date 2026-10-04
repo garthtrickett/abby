@@ -9,7 +9,7 @@ type Row = Record<string, unknown>;
 function provider() {
   const tables: Record<string, Row[]> = { recall_types: [], patients: [], recalls: [], individual_appointments: [],
     businesses: [{ id: "11", archived_at: null, time_zone_identifier: "Australia/Sydney" }],
-    practitioners: [{ id: "22", archived_at: null }], appointment_types: [{ id: "33", archived_at: null }] };
+    practitioners: [{ id: "22", active: true }], appointment_types: [{ id: "33", archived_at: null }] };
   const calls: { method: string; path: string }[] = [];
   let counter = 90, fault: ((method: string, url: URL, body: Row | undefined) => Response | undefined) | undefined;
   const fetchPort: typeof fetch = async (value, init) => {
@@ -35,7 +35,7 @@ function provider() {
     }
     assert.equal(method, "GET", "API never marks a request recalled on staff's behalf");
     if (rowId) return Response.json(table.find(row => row.id === rowId));
-    let rows = table.filter(row => row.archived_at === null);
+    let rows = table.filter(row => resource === "practitioners" || row.archived_at === null);
     const filter = url.searchParams.get("q[]");
     if (filter?.startsWith("patient_id:=")) rows = rows.filter(row => row.patient_id === filter.slice(12));
     return Response.json({ [resource!]: rows, total_entries: rows.length });
