@@ -54,7 +54,7 @@ test("C-LIVE-40 embedded voice keeps a real demo-created patient after synthetic
       try {
         const prepared = await authority.prepare(refs.draftRef, refs.consentRef, refs.authorityRef);
         assert.equal(prepared.ok, true, prepared.ok ? "" : prepared.error.kind);
-        const edge = ClinikoPatientIntakeEdge.create({ scope, apiKey, contactEmail }, authority,
+        const edge = ClinikoPatientIntakeEdge.create({ scope, countryCallingCode: "61", apiKey, contactEmail }, authority,
           async (input, init) => {
             if (init?.method === "POST") attempted = true;
             const response = await fetch(input, init);

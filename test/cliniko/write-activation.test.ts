@@ -118,10 +118,17 @@ test("E2E-264 separate intake authorities can both create after observing no dup
     dateOfBirth: "1990-05-21", patientPhone: "0400 111 222", phoneType: "Mobile", caller: "patient",
     consentRef: "host:consent:one", authorityRef: "host:authority:one" };
   const provider: typeof fetch = async (_input, init) => {
+    const path = new URL(String(_input)).pathname;
+    if (/\/patients\/[0-9]+$/.test(path)) return Response.json({ id: path.split("/").at(-1),
+      first_name: draft.firstName, last_name: draft.lastName, email: draft.email, date_of_birth: draft.dateOfBirth,
+      patient_phone_numbers: [{ number: draft.patientPhone, phone_type: draft.phoneType }],
+      accepted_privacy_policy: true, archived_at: null });
     if (init?.method === "GET") { await searched(); return Response.json({ total_entries: 0, patients: [] }); }
     assert.equal(init?.method, "POST"); posts += 1;
     return Response.json({ id: String(41 + posts), first_name: draft.firstName, last_name: draft.lastName,
-      email: draft.email, date_of_birth: draft.dateOfBirth, accepted_privacy_policy: true, archived_at: null }, { status: 201 });
+      email: draft.email, date_of_birth: draft.dateOfBirth,
+      patient_phone_numbers: [{ number: draft.patientPhone, phone_type: draft.phoneType }],
+      accepted_privacy_policy: true, archived_at: null }, { status: 201 });
   };
   const results = await Promise.all([0, 1].map(index => {
     const input = { ...draft, callId: `call:${index}`, sessionId: `session:${index}`, attemptRef: `intake:${index}` };
@@ -129,7 +136,7 @@ test("E2E-264 separate intake authorities can both create after observing no dup
       sessionId: request.sessionId, attemptRef: request.attemptRef, policyVersion: request.policyVersion,
       draftDigest: clinikoIntakeDraftDigest(request), caller: request.caller, consentRef: request.consentRef,
       authorityRef: request.authorityRef, privacyAccepted: true, proxyAuthorized: false, expiresAt: "2026-10-03T10:05:00.000Z" }) };
-    return value(ClinikoPatientIntakeEdge.create(config, authority, provider, () => now)).createOnce(input);
+    return value(ClinikoPatientIntakeEdge.create({ ...config, countryCallingCode: "61" }, authority, provider, () => now)).createOnce(input);
   }));
   assert.ok(results.every(result => result.ok && result.value.kind === "created"));
   assert.equal(posts, 2);
