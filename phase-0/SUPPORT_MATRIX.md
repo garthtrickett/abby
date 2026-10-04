@@ -27,3 +27,7 @@ The [owning-host write design](../phase-2/OWNING_HOST_WRITE_DESIGN.md) and E2E-2
 ### Accepted standalone contract — 2026-10-04
 
 D-16 selects [best-effort Cliniko writes and Cliniko-owned review](../phase-2/STANDALONE_CLINIKO_WRITE_PROPOSAL.md). Atomic guarantees are retained for an owning diary rather than required of the standalone external API. This changes the engineering target, not current capabilities: all five standalone writes and patient-specific request-only remain unavailable until the actual authority, recovery, staff process and per-operation proofs pass. D-06/D-07/D-11/D-12 remain fixed.
+
+### Selected caller verification foundation — 2026-10-04
+
+D-17 selects email OTP. E2E-269/C-LOCAL-58 supply local synthetic-mail contact/code/proof/appointment-read journeys, independent patient/action permission rechecks and real database/process-loss aggregate-limit proofs. No production verification command or mail service is connected. Actual clinic authority, delivery and clinical activation remain required; a code or phone match cannot independently enable any write or staff handoff.
