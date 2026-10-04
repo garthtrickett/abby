@@ -5,6 +5,7 @@ import { ClinikoRecallWriter } from "../../src/cliniko/recall-write.ts";
 import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 import { ClinikoVerificationContactReader } from "../../src/cliniko/verification-contact.ts";
 import { MemoryLedger } from "../../src/core/ledger.ts";
+import type { LocationScope } from "../../src/core/model.ts";
 import { ok } from "../../src/core/model.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
@@ -32,8 +33,8 @@ class CancellationPolicy extends MemoryPolicyStore {
 }
 
 /** Synthetic approved permission/mail/provider ports; actual SAM/gateway/proof/writer/recovery code. */
-export async function cancellationFixture(scenario: CancellationScenario = "success", budgetFor?: (scope: { tenantId: string; clinicId: string; locationId: string }) => PatientVerificationBudget) {
-  const scope = { tenantId: `cancel-${crypto.randomUUID()}`, clinicId: "clinic", locationId: "main" };
+export async function cancellationFixture(scenario: CancellationScenario = "success", budgetFor?: (scope: { tenantId: string; clinicId: string; locationId: string }) => PatientVerificationBudget, external: { scope?: LocationScope; fetchPort?: typeof fetch } = {}) {
+  const scope = external.scope ?? { tenantId: `cancel-${crypto.randomUUID()}`, clinicId: "clinic", locationId: "main" };
   const callId = `call-${crypto.randomUUID()}`, sessionId = `session-${crypto.randomUUID()}`;
   const ledger = new MemoryLedger(async () => ok(true)), policy = new CancellationPolicy();
   resultValue(await policy.changeAutomationEnabled(scope, "0", true, "synthetic-admin"));
@@ -90,21 +91,22 @@ export async function cancellationFixture(scenario: CancellationScenario = "succ
       patient: { links: { self: `${base}/patients/42` } }, business: { links: { self: `${base}/businesses/11` } },
       practitioner: { links: { self: `${base}/practitioners/22` } }, appointment_type: { links: { self: `${base}/appointment_types/33` } } });
   };
+  const providerPort = external.fetchPort ?? fetchPort;
   const clinicConfig = { scope, apiKey, contactEmail: "test@example.test" }, credentialFingerprint = clinikoCredentialFingerprint(apiKey);
   const lookup = { candidates: async () => ok({ kind: "one" as const, candidateIds: ["42"] }) };
   const verificationPolicy = { current: async () => ok({ scope, enabled: true, version: captured.policyVersion }) };
   const email = new EmailPatientAuthority({ scope, callId, sessionId, presentedNumber: phone,
     policyVersion: captured.policyVersion, operations: ["appointments.cancel"], lookup,
-    contact: new ClinikoVerificationContactReader({ ...clinicConfig, countryCallingCode: "61" }, fetchPort),
+    contact: new ClinikoVerificationContactReader({ ...clinicConfig, countryCallingCode: "61" }, providerPort),
     policy: verificationPolicy, budget: budgetFor?.(scope) ?? { reserve: async () => true }, permission: { allows: async () => permitted },
     delivery: { send: async (address, code) => { mail.push({ email: address, code }); return true; } },
     clock: () => Date.parse(cancellationNow) });
   const proof = new TransientPatientProofHost({ scope, callId, sessionId, policyVersion: captured.policyVersion,
     presentedCallerNumber: phone, maxAttempts: 3, lookup, authority: email, policy: verificationPolicy, clock: () => cancellationNow });
-  const writer = resultValue(ClinikoCancellationWriter.create({ ...clinicConfig, businessId: "11" }, fetchPort, () => cancellationNow));
+  const writer = resultValue(ClinikoCancellationWriter.create({ ...clinicConfig, businessId: "11" }, providerPort, () => cancellationNow));
   host = new ClinikoCancellationHost({ scope, callId, sessionId, policyVersion: captured.policyVersion,
     ledger, policy, proof, cancellation: writer, businessId: "11", credentialFingerprint, timeZone: "Australia/Sydney",
-    recallTypeId: "7", recallWriter: resultValue(ClinikoRecallWriter.create(clinicConfig, fetchPort)), clock: () => cancellationNow,
+    recallTypeId: "7", recallWriter: resultValue(ClinikoRecallWriter.create(clinicConfig, providerPort)), clock: () => cancellationNow,
     authority: { async resolve(query) { return ok({ scope, callId, sessionId, policyVersion: captured.policyVersion,
       patientId: "42", targetRef: query.targetRef, businessId: "11", credentialFingerprint, practitionerId: "22", appointmentTypeId: "33",
       kind: "cancel" as const, cancellationReason: 50 as const,
@@ -135,7 +137,7 @@ export async function cancellationFixture(scenario: CancellationScenario = "succ
   }
   const drain = async (at = cancellationNow) => resultValue(await reception.drain(scope, callId, at));
   async function discovery() {
-    return resultValue(await resultValue(ClinikoRecallReader.create(clinicConfig, fetchPort)).discoverPendingReviews(scope, "7"));
+    return resultValue(await resultValue(ClinikoRecallReader.create(clinicConfig, providerPort)).discoverPendingReviews(scope, "7"));
   }
   return { scope, callId, sessionId, ledger, policy, host, runtime, reception, agent, email, mail, recalls, calls,
     verify, propose, confirm, drain, state, discovery, releaseWrite, revoke: () => { permitted = false; },
