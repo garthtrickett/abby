@@ -129,6 +129,12 @@ export class TransientPatientProofHost implements PatientProofHost {
     this.#timeoutMs = config.timeoutMs ?? 20_000;
   }
 
+  /** Trusted compositions cannot reuse this verifier for another call, session or captured policy. */
+  matchesCall(scope: LocationScope, callId: string, sessionId: string, policyVersion: string): boolean {
+    return !this.#closed && validScope(scope) && sameScope(scope, this.#scope) && callId === this.#callId &&
+      sessionId === this.#sessionId && policyVersion === this.#policyVersion;
+  }
+
   async #enabled(): Promise<boolean> {
     let timer: NodeJS.Timeout | undefined;
     try {
@@ -217,24 +223,26 @@ export class TransientPatientProofHost implements PatientProofHost {
     } catch { return err({ kind: "unavailable" }); }
   }
 
-  async #refresh(proof: LiveProof, operation: PatientOperation): Promise<boolean> {
+  async #refresh(proof: LiveProof, operation: PatientOperation, external?: AbortSignal): Promise<boolean> {
     const revalidate = this.#authority.revalidate;
     if (!revalidate) return true; // Existing owning-host verifiers use their versioned permission source.
     const controller = new AbortController(); this.#refreshes.add(controller);
+    const signal = external ? AbortSignal.any([controller.signal, external]) : controller.signal;
     const timer = setTimeout(() => controller.abort(), this.#timeoutMs);
     let onAbort: () => void = () => undefined;
-    const stopped = new Promise<boolean>(resolve => { onAbort = () => resolve(false); controller.signal.addEventListener("abort", onAbort); });
+    const stopped = new Promise<boolean>(resolve => { onAbort = () => resolve(false); signal.addEventListener("abort", onAbort); if (signal.aborted) onAbort(); });
     try {
-      return await Promise.race([Promise.resolve().then(() => revalidate.call(this.#authority, {
+      return await Promise.race([Promise.resolve().then(() => signal.aborted ? false : revalidate.call(this.#authority, {
         scope: this.#scope, callId: this.#callId, sessionId: this.#sessionId, patientId: proof.patientId,
-        operation, policyVersion: this.#policyVersion, signal: controller.signal })), stopped]) === true;
+        operation, policyVersion: this.#policyVersion, signal })), stopped]) === true;
     } catch { return false; }
-    finally { clearTimeout(timer); controller.signal.removeEventListener("abort", onAbort); controller.abort(); this.#refreshes.delete(controller); }
+    finally { clearTimeout(timer); signal.removeEventListener("abort", onAbort); controller.abort(); this.#refreshes.delete(controller); }
   }
 
   async verifyOperation(scope: LocationScope, verificationRef: string, operation: PatientOperation,
-                        now: string): Promise<Result<VerifiedPatient, HostReadFailure>> {
+                        now: string, signal?: AbortSignal): Promise<Result<VerifiedPatient, HostReadFailure>> {
     const proof = this.#proof;
+    if (signal?.aborted) return err({ kind: "unavailable", target: "patient" });
     if (this.#closed || !validScope(scope) || !sameScope(scope, this.#scope) || typeof verificationRef !== "string" ||
         !operations.includes(operation) || !proof || proof.verificationRef !== verificationRef ||
         !proof.operations.includes(operation)) return err({ kind: "notFound", target: "patient" });
@@ -250,11 +258,11 @@ export class TransientPatientProofHost implements PatientProofHost {
       this.#proof = undefined;
       return err({ kind: "expired", target: "patient" });
     }
-    if (!await this.#enabled() || this.#closed || this.#proof !== proof) {
+    if (!await this.#enabled() || signal?.aborted || this.#closed || this.#proof !== proof) {
       if (this.#proof === proof) this.#proof = undefined;
       return err({ kind: "unavailable", target: "patient" });
     }
-    if (!await this.#refresh(proof, operation) || this.#closed || this.#proof !== proof || !await this.#enabled()) {
+    if (!await this.#refresh(proof, operation, signal) || signal?.aborted || this.#closed || this.#proof !== proof || !await this.#enabled()) {
       if (this.#proof === proof) this.#proof = undefined;
       return err({ kind: "notFound", target: "patient" });
     }
@@ -268,13 +276,13 @@ export class TransientPatientProofHost implements PatientProofHost {
       this.#proof = undefined;
       return err({ kind: "expired", target: "patient" });
     }
-    if (this.#closed || this.#proof !== proof) return err({ kind: "unavailable", target: "patient" });
+    if (signal?.aborted || this.#closed || this.#proof !== proof) return err({ kind: "unavailable", target: "patient" });
     return ok({ scope: structuredClone(this.#scope), patientRef: proof.patientId,
       verificationRef: proof.verificationRef, expiresAt: proof.expiresAt });
   }
 
-  verifyPatient(scope: LocationScope, verificationRef: string, now: string): Promise<Result<VerifiedPatient, HostReadFailure>> {
-    return this.verifyOperation(scope, verificationRef, "appointments.read", now);
+  verifyPatient(scope: LocationScope, verificationRef: string, now: string, signal?: AbortSignal): Promise<Result<VerifiedPatient, HostReadFailure>> {
+    return this.verifyOperation(scope, verificationRef, "appointments.read", now, signal);
   }
 
   revoke(): void {

@@ -189,12 +189,14 @@ export class ClinikoAvailabilityReader {
     return signal.aborted ? err({ kind: "unavailable" }) : parsed;
   }
 
-  private async onlineFlag(id: string, path: string, signal: AbortSignal, requireActive = false, nameField?: string):
+  private async onlineFlag(id: string, path: string, signal: AbortSignal, requireActive = false, nameField?: string, bookingDuration?: number):
     Promise<Result<Readonly<{ eligible: boolean; name?: string }>, ClinikoAvailabilityFailure>> {
     const fetched = await this.get(path, signal);
     if (!fetched.ok) return fetched;
     const body = record(fetched.value);
     if (!body || String(body.id) !== id || typeof body.show_in_online_bookings !== "boolean" ||
+        (bookingDuration !== undefined && (body.archived_at !== null ||
+          (!requireActive && body.duration_in_minutes !== bookingDuration))) ||
         (requireActive && body.active !== true && body.active !== false && body.active !== null)) return err({ kind: "malformed" });
     if (nameField && !spokenName(body[nameField])) return err({ kind: "malformed" });
     const eligible = (body.archived_at === undefined || body.archived_at === null) &&
@@ -232,12 +234,13 @@ export class ClinikoAvailabilityReader {
     return err({ kind: "tooManyResults" });
   }
 
-  private async business(signal: AbortSignal): Promise<Result<Readonly<{ eligible: false; reason: "business" | "appointmentType" }> |
+  private async business(signal: AbortSignal, bookingDuration?: number): Promise<Result<Readonly<{ eligible: false; reason: "business" | "appointmentType" }> |
     Readonly<{ eligible: true; timeZone: string }>, ClinikoAvailabilityFailure>> {
     const fetched = await this.get(`/businesses/${this.businessId}`, signal);
     if (!fetched.ok) return fetched;
     const body = record(fetched.value);
     if (!body || String(body.id) !== this.businessId || typeof body.show_in_online_bookings !== "boolean" ||
+        (bookingDuration !== undefined && body.archived_at !== null) ||
         !(body.appointment_type_ids === null || Array.isArray(body.appointment_type_ids)) ||
         (Array.isArray(body.appointment_type_ids) && !body.appointment_type_ids.every(validId))) return err({ kind: "malformed" });
     if ((body.archived_at !== undefined && body.archived_at !== null) || !body.show_in_online_bookings) {
@@ -269,14 +272,23 @@ export class ClinikoAvailabilityReader {
       err({ kind: "unavailable" }));
   }
 
+  /** Fresh booking eligibility/duration evidence; still observes availability without reserving it. */
+  async listBooking(scope: LocationScope, from: string, to: string, durationMinutes: number, parentSignal?: AbortSignal):
+    Promise<Result<ClinikoAvailability, ClinikoAvailabilityFailure>> {
+    if (!Number.isSafeInteger(durationMinutes) || durationMinutes < 1 || durationMinutes > 480) return err({ kind: "invalidConfig" });
+    const local = AbortSignal.timeout(availabilityReadDeadlineMs);
+    const signal = parentSignal ? AbortSignal.any([parentSignal, local]) : local;
+    return settleBeforeAbort(this.listInternal(scope, from, to, true, signal, durationMinutes), signal, err({ kind: "unavailable" }));
+  }
+
   private async listInternal(scope: LocationScope, from: string, to: string, withLabel: boolean,
-                             signal: AbortSignal):
+                             signal: AbortSignal, bookingDuration?: number):
     Promise<Result<ClinikoAvailability, ClinikoAvailabilityFailure>> {
     if (!sameScope(this.scope, scope)) return err({ kind: "scopeMismatch" });
     if (!validDate(from) || !validDate(to) || Date.parse(`${to}T00:00:00Z`) < Date.parse(`${from}T00:00:00Z`) ||
         Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`) > 7 * 86_400_000) return err({ kind: "invalidRange" });
 
-    const business = await this.business(signal);
+    const business = await this.business(signal, bookingDuration);
     if (!business.ok) return business;
     if (!business.value.eligible) return ok({ kind: "notEligible", reason: business.value.reason });
     const timeZone = business.value.timeZone;
@@ -284,11 +296,11 @@ export class ClinikoAvailabilityReader {
       year: "numeric", month: "2-digit", day: "2-digit" });
 
     const practitioner = await this.onlineFlag(this.practitionerId, `/practitioners/${this.practitionerId}`, signal, true,
-      withLabel ? "display_name" : undefined);
+      withLabel ? "display_name" : undefined, bookingDuration);
     if (!practitioner.ok) return practitioner;
     if (!practitioner.value.eligible) return ok({ kind: "notEligible", reason: "practitioner" });
     const appointmentType = await this.onlineFlag(this.appointmentTypeId, `/appointment_types/${this.appointmentTypeId}`,
-      signal, false, withLabel ? "name" : undefined);
+      signal, false, withLabel ? "name" : undefined, bookingDuration);
     if (!appointmentType.ok) return appointmentType;
     if (!appointmentType.value.eligible) return ok({ kind: "notEligible", reason: "appointmentType" });
     const businessPractitioner = await this.includesRelated(`/businesses/${this.businessId}/practitioners`,

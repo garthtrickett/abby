@@ -11,6 +11,7 @@ import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { TextReception } from "../../src/reference/text-reception.ts";
 import { CallerVerificationSession } from "../../src/standalone/caller-verification-session.ts";
 import { ClinikoBookingHost } from "../../src/standalone/cliniko-booking-host.ts";
+import type { ClinikoBookingOffersConfig } from "../../src/standalone/cliniko-booking-offers.ts";
 import type { ClinikoBookingAuthority, ClinikoBookingEvidence } from "../../src/standalone/cliniko-booking-authority.ts";
 import type { PatientOperation } from "../../src/standalone/transient-patient-proof.ts";
 import type { PatientVerificationBudget } from "../../src/standalone/email-patient-authority.ts";
@@ -18,7 +19,8 @@ import { callerVerificationFixture, verificationCanaries, verificationNow } from
 import { resultValue } from "./agent-appointment-proposals.ts";
 
 export async function standaloneBookingFixture(options: { scope?: LocationScope; verificationBudget?: PatientVerificationBudget; rateBudget?: ClinikoRequestBudget;
-  fetchPort?: typeof fetch; operation?: PatientOperation; staffWorkEnabled?: boolean; lostRecall?: boolean; lostBooking?: boolean } = {}) {
+  fetchPort?: typeof fetch; fetchAround?: (port: typeof fetch) => typeof fetch;
+  authorityFor?: (config: Omit<ClinikoBookingOffersConfig, "policy">, port: typeof fetch) => Promise<ClinikoBookingAuthority>; operation?: PatientOperation; staffWorkEnabled?: boolean; lostRecall?: boolean; lostBooking?: boolean } = {}) {
   const f = await callerVerificationFixture({ operation: options.operation ?? "appointments.book", bookingExecute: true, ...(options.staffWorkEnabled === undefined ? {} : { staffWorkEnabled: options.staffWorkEnabled }), ...(options.scope ? { scope: options.scope } : {}) });
   f.session.dispose();
   const apiKey = "synthetic-session-au5", base = "https://api.au5.cliniko.com/v1";
@@ -33,7 +35,7 @@ export async function standaloneBookingFixture(options: { scope?: LocationScope;
   const sourceQueries: string[] = [];
   let host: ClinikoBookingHost | undefined, session: CallerVerificationSession | undefined;
   const rateBudget = options.rateBudget ?? { claim: async () => { claims++; return null; }, observe429: async () => ({ kind: "rateLimited" as const }) };
-  const fetchPort: typeof fetch = options.fetchPort ?? (async (value, init) => {
+  const baseFetch: typeof fetch = options.fetchPort ?? (async (value, init) => {
     const url = new URL(String(value)), method = init?.method ?? "GET"; traffic.push(`${method} ${url.pathname}`);
     assert.equal(url.origin, "https://api.au5.cliniko.com"); assert.equal(init?.redirect, "error");
     if (url.pathname.startsWith("/v1/patients/")) return Response.json({ id: verificationCanaries[2], email: verificationCanaries[0], archived_at: null,
@@ -74,13 +76,15 @@ export async function standaloneBookingFixture(options: { scope?: LocationScope;
     if (conflict === "unavailable") return new Response(null, { status: 503 });
     return Response.json({ conflicts: { exist: conflict === "malformed" ? "false" : conflict === "present" } });
   });
+  const fetchPort = options.fetchAround ? options.fetchAround(baseFetch) : baseFetch;
   try {
     session = resultValue(CallerVerificationSession.create({ ...f.sessionConfig,
       contact: new ClinikoVerificationContactReader({ scope: f.scope, apiKey, contactEmail: "test@example.test", countryCallingCode: "61", rateBudget }, fetchPort),
       budget: options.verificationBudget ?? { reserve: async () => true }, delivery: { send: async (email, code) => { mail.push({ email, code }); return true; } } }));
     const writerConfig = { scope: f.scope, apiKey, contactEmail: "test@example.test", businessId: "11", practitionerId: "22", appointmentTypeId: "33", rateBudget };
     const writer = resultValue(ClinikoBookingWriter.create(writerConfig, fetchPort, f.sessionConfig.clock));
-    const authority: ClinikoBookingAuthority = { resolve: async query => {
+    const authority: ClinikoBookingAuthority = options.authorityFor ? await options.authorityFor({ ...writerConfig, proof: session.proof,
+      callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion, clock: f.sessionConfig.clock }, fetchPort) : { resolve: async query => {
       sourceQueries.push(query.phase); return authorityPermitted ? ok(structuredClone(evidence)) : { ok: false, error: { kind: "unavailable", target: "offer" } };
     } };
     host = new ClinikoBookingHost({ scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion,
@@ -105,7 +109,7 @@ export async function standaloneBookingFixture(options: { scope?: LocationScope;
       return reception.affirm(f.scope, turn("affirm", "Yes"), action.key, action.digest, verificationNow);
     }
     return { ...f, session, host, writer, authority, evidence, traffic, mail, recalls, sourceQueries, verify, confirm, reception, agent, turn,
-      propose: (verificationRef: string, turnId = "proposal") => agent.submit({ kind: "booking.propose.v2", turn: turn(turnId), verificationRef, offerRef: "selected-offer", now: verificationNow }),
+      propose: (verificationRef: string, turnId = "proposal", offerRef = "selected-offer") => agent.submit({ kind: "booking.propose.v2", turn: turn(turnId), verificationRef, offerRef, now: verificationNow }),
       drain: () => reception.drain(f.scope, f.callId, verificationNow),
       discovery: async () => resultValue(await resultValue(ClinikoRecallReader.create(writerConfig, fetchPort)).discoverPendingReviews(f.scope, "7")),
       setEvidence: (patch: Partial<ClinikoBookingEvidence>) => { evidence = { ...evidence, ...patch }; },

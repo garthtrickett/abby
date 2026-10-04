@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createServer } from "node:http";
 import test from "node:test";
 import { sql } from "kysely";
@@ -11,7 +14,7 @@ import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-s
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 import { verificationCanaries } from "../support/caller-verification.ts";
 
-test("E2E-279 killed actual standalone booking owners leave discoverable Cliniko review before, during and after send without replacement replay",
+test("E2E-279 E2E-281 killed concrete approved-offer standalone booking owners leave discoverable Cliniko review before, during and after send without replacement replay",
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 90_000 }, async () => {
   const adminUrl = process.env.DATABASE_URL; assert.ok(adminUrl);
   const admin = connectPostgres(adminUrl), name = `abby_book_kill_${randomUUID().replaceAll("-", "")}`;
@@ -21,6 +24,7 @@ test("E2E-279 killed actual standalone booking owners leave discoverable Cliniko
     await sql.raw(`create database "${name}"`).execute(admin); created = true;
     db = connectPostgres(target.toString()); await migrate(db);
     for (const stage of ["before", "during", "after"] as const) {
+      const folder = await mkdtemp(join(tmpdir(), "abby-offer-kill-"));
       const patientId = verificationCanaries[2];
       const privateValues = verificationCanaries;
       const privateNote = verificationCanaries[1];
@@ -76,7 +80,7 @@ test("E2E-279 killed actual standalone booking owners leave discoverable Cliniko
           children.push(child); let stdout = "", stderr = "";
           child.stdout.on("data", part => { stdout += String(part); }); child.stderr.on("data", part => { stderr += String(part); });
           const exited = once(child, "exit").then(([code, signal]) => { output.push(stdout, stderr); return { code, signal, stdout, stderr }; });
-          child.stdin.end(JSON.stringify({ mode, scope, proxy })); return { child, exited };
+          child.stdin.end(JSON.stringify({ mode, scope, proxy, ...(mode === "send" ? { folder } : {}) })); return { child, exited };
         };
         const sender = launch("send");
         await Promise.race([ready, sender.exited.then(outcome => { throw new Error(`booking owner exited before ${stage} checkpoint: ${outcome.stderr}`); })]);
@@ -97,6 +101,7 @@ test("E2E-279 killed actual standalone booking owners leave discoverable Cliniko
         for (const child of children) if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
         server.closeAllConnections();
         if (server.listening) await new Promise<void>(resolve => server.close(() => resolve()));
+        await rm(folder, { recursive: true, force: true });
       }
     }
   } finally {
