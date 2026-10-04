@@ -163,6 +163,7 @@ export type BookableOffer = Readonly<{
   scope: LocationScope;
   offerRef: string;
   serviceRef: string;
+  presentation?: Readonly<{ timeZone: string; practitionerName: string; appointmentTypeName: string; durationMinutes: number }>;
   startsAt: string;
   expiresAt: string;
 }>;
@@ -258,6 +259,8 @@ export type TurnInterpretation =
   | Readonly<{ kind: "availabilityFailure"; reason: AvailabilityReadFailure["kind"] | "notEligible" | "notConfigured" | "unclear" }>
   | Readonly<{ kind: "appointments"; from: string; to: string; snapshot: AppointmentRead }>
   | Readonly<{ kind: "appointmentsFailure"; reason: AppointmentReadFailure["kind"] | "notConfigured" | "unclear" }>
+  | Readonly<{ kind: "bookingMenu"; snapshot: import("./booking-menu.ts").BookingMenuRead }>
+  | Readonly<{ kind: "bookingMenuFailure" }>
   | Readonly<{ kind: "ambiguousTarget" }>;
 
 export const STAFF_REASONS = ["callerRequested", "verificationFailed", "unsupported", "uncertainAction",

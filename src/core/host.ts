@@ -115,8 +115,19 @@ export interface AppointmentHost {
   }>, AppointmentReadFailure>>;
 }
 
+export type BookingMenuQuery = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
+  turnId: string; now: string; signal: AbortSignal }>;
+export interface BookingMenuHost {
+  bookingMenuAvailable(): boolean;
+  readBookingMenu(query: BookingMenuQuery & Readonly<{ from: string; to: string }>):
+    Promise<Result<import("./booking-menu.ts").BookingMenuRead, HostReadFailure>>;
+  /** Private selection wiring; these references are never returned by an agent command. */
+  selectBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>):
+    Promise<Result<Readonly<{ verificationRef: string; offerRef: string }>, HostReadFailure>>;
+}
+
 export interface BookingEvidenceHost {
-  resolveBooking(scope: LocationScope, verificationRef: string, offerRef: string, now: string): Promise<Result<Extract<ActionRequest, { kind: "book" }>, HostReadFailure>>;
+  resolveBooking(scope: LocationScope, verificationRef: string, offerRef: string, now: string, signal?: AbortSignal): Promise<Result<Extract<ActionRequest, { kind: "book" }>, HostReadFailure>>;
 }
 
 /** Opaque selections and proof are resolved by the host; neither is a provider ID from the model. */
