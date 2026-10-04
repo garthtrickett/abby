@@ -28,11 +28,19 @@ export const verificationNow = "2026-10-04T06:00:00.000Z";
 export const verificationCanaries = ["registered-session@example.test", "private-session-chart", "482746192837465"];
 
 export async function callerVerificationFixture(options: { scope?: LocationScope; approved?: boolean; enabled?: boolean;
-  operation?: PatientOperation; budget?: PatientVerificationBudget; delivery?: PatientCodeDelivery; timeoutMs?: number } = {}) {
+  operation?: PatientOperation; budget?: PatientVerificationBudget; delivery?: PatientCodeDelivery; timeoutMs?: number; cancellationExecute?: boolean } = {}) {
   const scope = options.scope ?? { tenantId: `verification-${crypto.randomUUID()}`, clinicId: "clinic", locationId: "main" };
   const folder = await mkdtemp(join(tmpdir(), "abby-caller-policy-"));
   const path = join(folder, "approval.json"), accountPath = join(folder, "accounts.json");
-  const ledger = new MemoryLedger(async () => ok(true)), policies = new MemoryPolicyStore("requestOnly", () => now, async () => ok(true));
+  const ledger = new MemoryLedger(async () => ok(true));
+  class FixturePolicy extends MemoryPolicyStore {
+    override async read(bound: LocationScope) {
+      const found = await super.read(bound);
+      return found.ok && options.cancellationExecute ? ok({ ...found.value, staffWorkEnabled: true }) : found;
+    }
+  }
+  const policies = new FixturePolicy("requestOnly", () => now, async () => ok(true),
+    options.cancellationExecute ? { cancellation: "execute" } : {});
   let now = verificationNow, permitted = true, email = verificationCanaries[0]!, phone = "+61400111222";
   let candidates: CallerCandidates = { kind: "one", candidateIds: [verificationCanaries[2]!] };
   let approval: CallerVerificationApproval = { scope, revision: "demo-revision-1", approverRef: "synthetic-admin",
@@ -48,6 +56,7 @@ export async function callerVerificationFixture(options: { scope?: LocationScope
   try {
     await replace(path, approval); await replace(accountPath, [account]);
     resultValue(await policies.changeAutomationEnabled(scope, "0", true, "synthetic-admin"));
+    if (options.cancellationExecute) resultValue(await policies.changeCancellationEnabled(scope, "0", true, "synthetic-admin"));
     const captured = approvedSyntheticPolicy(resultValue(await policies.read(scope)));
     const inbound = { key: { accountRef: "synthetic-account", providerCallRef: `provider-${crypto.randomUUID()}` },
       dialedNumber: "+6125550199", presentedCallerNumber: phone, receivedAt: now };

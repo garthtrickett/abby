@@ -344,3 +344,7 @@ These are defaults for the draft, not decisions attributed to Cliniko, Splose, o
 [^gafu-lit-html]: Gafu v2's [reading browser module](https://github.com/garthtrickett/gafu-v2/blob/main/src/reading/browser.ts) and [diagnostic view](https://github.com/garthtrickett/gafu-v2/blob/main/src/diagnostic.ts) import `html` and `render` from `lit-html` and mount views directly. They are reference examples for the rendering style, not Abby UI code to copy.
 
 The local [concrete cancellation authority/policy adapter](phase-2/CLINIKO_CANCELLATION_AUTHORITY.md) reads protected appointment choices, rechecks the exact provider target and derives standard/late wording from current versioned clinic approval. Fee-rule changes after confirmation stop dispatch. These implementation proofs do not activate a clinic, establish patient/action consent, charge fees, prove staff receipt or replace the remaining real mail/clinic/provider/voice gates.
+
+#### Local standalone cancellation composition
+
+E2E-278 composes the admitted call-bound email-code verifier, current method/cancellation approvals, protected selection and SAM reviewed cancellation with one provider budget and one transient lifetime. It tests actual owner loss before/during/after send without replacement replay and database/backup privacy. Synthetic mail/permission/provider ports do not establish actual delivery, patient authority, clinic activation or staff receipt. Production standalone patient-specific actions remain unavailable pending the documented gates.
