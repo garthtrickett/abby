@@ -25,6 +25,7 @@ test("E2E-294 actual keypad verifier uses PostgreSQL aggregate budget and keeps 
       for (let i = 0; i < 8; i++) assert.ok((await f.media()).ok);
       assert.deepEqual(f.transcripts, []); assert.ok((await f.code(f.mail[0].code)).ok);
       const proof = await f.owner.verified(); assert.ok(proof);
+      await f.resume();
       for (let i = 0; i < 7; i++) assert.ok((await f.media(i < 2)).ok);
       assert.equal(f.detailReads, 1);
       const canaries = [...verificationCanaries, f.mail[0].code, proof.verificationRef, f.sessionId, f.callId]

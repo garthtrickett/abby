@@ -279,13 +279,14 @@ export class MediaTurnController<T, F> {
 
   /** Consume ordered private-mode audio without storing, transcribing or making a caller turn.
    * Entry is allowed only before an ordinary turn is pending; fail closed otherwise. */
-  discardPrivateMedia(frame: MediaFrame): Result<void, MediaFailure> {
+  discardPrivateMedia(frame: MediaFrame): Result<number, MediaFailure> {
     if (!this.idle() || this.pendingTurn || this.pendingEffect) return err({ kind: "mediaUnavailable" });
-    if (decodedFrame(frame, this.sessionId) === undefined) return err({ kind: "invalidMedia" });
+    const durationMs = decodedFrame(frame, this.sessionId);
+    if (durationMs === undefined) return err({ kind: "invalidMedia" });
     const capturedMs = Date.parse(frame.capturedAt);
     if (frame.sequence !== this.nextSequence || capturedMs < this.lastCapturedMs) return err({ kind: "mediaOutOfOrder" });
     this.nextSequence += 1; this.lastCapturedMs = capturedMs;
-    return ok(undefined);
+    return ok(averageAmplitude(frame.bytes) < this.speechThreshold ? durationMs : 0);
   }
 
   async stop(): Promise<void> {

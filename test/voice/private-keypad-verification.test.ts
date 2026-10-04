@@ -16,6 +16,7 @@ test("E2E-294 signed admitted keypad code bypasses audio transcription, ordinary
     await f.digit("9"); await f.digit("*");
     const answer = await f.code(code); assert.ok(answer.ok); assert.ok(await f.owner.verified());
     assert.equal(f.privateInput.blocked(), false); assert.equal(f.normalKeys, 0);
+    await f.resume();
     for (let i = 0; i < 7; i++) assert.ok((await f.media(i < 2)).ok);
     assert.ok(f.transcripts.length > 0); assert.equal(f.modelTurns.length, 1); assert.equal(f.detailReads, 1);
     const state = await f.ledger.read(f.callId, f.f.scope); assert.ok(state.ok);
@@ -65,11 +66,15 @@ test("E2E-294 private wire arrival is retained while delivery/code work is held 
     await f.start(); await f.mark(); await f.delivered; assert.ok(f.mail[0]);
     for (const digit of f.mail[0].code) await f.digit(digit);
     const answering = f.digit("#"), queuedAudio = f.media(), queuedKey = f.digit("1");
+    const oldQuiet = Array.from({ length: 25 }, () => f.media(false));
     released.resolve(true);
     assert.ok((await answering).ok);
     assert.deepEqual(await queuedAudio, { ok: true, value: { kind: "privateInput" } });
     assert.deepEqual(await queuedKey, { ok: true, value: { kind: "privateInput" } });
+    for (const result of await Promise.all(oldQuiet)) assert.deepEqual(result, { ok: true, value: { kind: "privateInput" } });
+    assert.deepEqual(await f.media(), { ok: true, value: { kind: "privateInput" } }, "earlier queued silence cannot end the fresh resume fence");
     assert.equal(f.privateInput.blocked(), false); assert.equal(f.normalKeys, 0); assert.deepEqual(f.transcripts, []);
+    await f.resume();
     for (let i = 0; i < 7; i++) assert.ok((await f.media(i < 2)).ok);
     assert.equal(f.detailReads, 1);
   } finally { released.resolve(false); await f.close(); }
@@ -110,7 +115,32 @@ test("E2E-294 opening ordinary input supplies no lasting patient permission afte
     await f.start(); await f.mark(); await f.delivered;
     assert.ok((await f.code(f.mail[0]!.code)).ok); assert.ok(await f.owner.verified());
     f.f.setPermitted(false);
+    await f.resume();
     for (let i = 0; i < 7; i++) assert.ok((await f.media(i < 2)).ok);
     assert.equal(f.modelTurns.length, 1); assert.equal(f.detailReads, 0); assert.equal(await f.owner.verified(), undefined);
+  } finally { await f.close(); }
+});
+
+test("E2E-294 code audio arriving after verification remains private until a fresh quiet interval", async () => {
+  const f = await privateKeypadCallFixture();
+  try {
+    await f.start(); await f.mark(); await f.delivered; assert.ok((await f.code(f.mail[0]!.code)).ok);
+    assert.deepEqual(await f.media(), { ok: true, value: { kind: "privateInput" } });
+    assert.deepEqual(await f.media(), { ok: true, value: { kind: "privateInput" } });
+    assert.deepEqual(f.transcripts, []); assert.deepEqual(f.modelTurns, []);
+  } finally { await f.close(); }
+});
+
+
+test("E2E-294 disconnected quiet frames cannot establish the continuous 500 ms private-audio resume interval", async () => {
+  const f = await privateKeypadCallFixture();
+  try {
+    await f.start(); await f.mark(); await f.delivered; assert.ok((await f.code(f.mail[0]!.code)).ok);
+    for (let i = 0; i < 25; i++) assert.deepEqual(await f.media(false, 100), { ok: true, value: { kind: "privateInput" } });
+    assert.deepEqual(await f.media(), { ok: true, value: { kind: "privateInput" } });
+    assert.deepEqual(f.transcripts, []); assert.deepEqual(f.modelTurns, []);
+    await f.resume();
+    for (let i = 0; i < 7; i++) assert.ok((await f.media(i < 2)).ok);
+    assert.equal(f.detailReads, 1);
   } finally { await f.close(); }
 });

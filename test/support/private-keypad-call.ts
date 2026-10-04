@@ -86,7 +86,7 @@ export async function privateKeypadCallFixture(options: Parameters<typeof caller
     send(json) { sent.push(JSON.parse(json) as Record<string, unknown>); return "queued"; },
   };
   const call = new TwilioConnectedCall(callConfig);
-  let wireSequence = 1, chunk = 0;
+  let wireSequence = 1, chunk = 0, timestampOffset = 0;
   const receive = (message: Record<string, unknown>) => call.receive(JSON.stringify({ ...message, streamSid, sequenceNumber: String(++wireSequence) }));
   return { f, ledger, call, callConfig, mail, delivered, privateInput, callId, sessionId, sent, spoken, transcripts, modelTurns, ingress, webhook, upgrade,
     get owner() { assert.ok(owner); return owner; }, get detailReads() { return detailReads; }, get normalKeys() { return normalKeys; },
@@ -96,8 +96,16 @@ export async function privateKeypadCallFixture(options: Parameters<typeof caller
     digit(digit: string) { return receive({ event: "dtmf", dtmf: { track: "inbound_track", digit } }); },
     async code(code: string) { for (const digit of `${code}#`) { const result = await receive({ event: "dtmf", dtmf: { track: "inbound_track", digit } }); if (!result.ok) return result; }
       return ok({ kind: "privateInput" as const }); },
-    media(voiced = true) { const current = chunk++; return receive({ event: "media", media: { track: "inbound", chunk: String(current + 1), timestamp: String(current * 20),
+    media(voiced = true, gapMs = 0) { const current = chunk++; timestampOffset += gapMs; return receive({ event: "media", media: { track: "inbound", chunk: String(current + 1), timestamp: String(current * 20 + timestampOffset),
       payload: Buffer.alloc(160, voiced ? 0x9f : 0xff).toString("base64") } }); },
+    async resume() {
+      for (let i = 0; i < 25; i++) {
+        const current = chunk++;
+        const discarded = await receive({ event: "media", media: { track: "inbound", chunk: String(current + 1), timestamp: String(current * 20 + timestampOffset),
+          payload: Buffer.alloc(160, 0xff).toString("base64") } });
+        assert.deepEqual(discarded, { ok: true, value: { kind: "privateInput" } });
+      }
+    },
     receive,
     async close() { try { await call.disconnect(); } finally { owner?.dispose(); await f.close(); } },
   };

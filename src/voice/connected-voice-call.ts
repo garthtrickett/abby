@@ -182,7 +182,7 @@ export class ConnectedVoiceCall {
     }
   }
 
-  discardPrivateMedia(frame: MediaFrame): Result<void, ConnectedVoiceFailure> {
+  discardPrivateMedia(frame: MediaFrame): Result<number, ConnectedVoiceFailure> {
     if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
     if (!this.begun || !this.scope) return err({ kind: "locationUnbound" });
     return this.media.discardPrivateMedia(frame);
