@@ -2,7 +2,7 @@ import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import type { ClinikoClinicScope } from "./patients.ts";
 import { formatRecallNote, validRecallDate, validRecallMarker, validRecallSummary } from "./recall-note.ts";
-import { claimClinikoBudget, ClinikoReadBudget, observeCliniko429 } from "./read-budget.ts";
+import { claimClinikoBudget, ClinikoReadBudget, clinikoCredentialFingerprint, observeCliniko429 } from "./read-budget.ts";
 import type { ClinikoRequestBudget } from "./read-budget.ts";
 import { boundedRecallJson, ClinikoRecallReader } from "./recalls.ts";
 import type { ClinikoRecallConfig, ClinikoRecallFailure, ClinikoRecallMatch } from "./recalls.ts";
@@ -37,6 +37,7 @@ export class ClinikoRecallWriter {
   private readonly fetchPort: typeof fetch;
   private readonly reader: ClinikoRecallReader;
   private readonly attempted = new Set<string>();
+  private readonly credentialHash: string;
 
   private constructor(config: ClinikoRecallConfig, reader: ClinikoRecallReader, fetchPort: typeof fetch) {
     this.scope = { ...config.scope };
@@ -46,6 +47,7 @@ export class ClinikoRecallWriter {
     this.rateBudget = config.rateBudget!;
     this.fetchPort = fetchPort;
     this.reader = reader;
+    this.credentialHash = clinikoCredentialFingerprint(config.apiKey);
   }
 
   static create(config: ClinikoRecallConfig, fetchPort: typeof fetch = fetch): Result<ClinikoRecallWriter, ClinikoRecallFailure> {
@@ -55,7 +57,11 @@ export class ClinikoRecallWriter {
     return reader.ok ? ok(new ClinikoRecallWriter(shared, reader.value, fetchPort)) : reader;
   }
 
-  async openOnce(request: ClinikoRecallWriteRequest):
+  selection(): Readonly<{ scope: ClinikoClinicScope; credentialFingerprint: string }> {
+    return { scope: { ...this.scope }, credentialFingerprint: this.credentialHash };
+  }
+
+  async openOnce(request: ClinikoRecallWriteRequest, signal?: AbortSignal):
     Promise<Result<ClinikoRecallWriteOutcome, ClinikoRecallFailure>> {
     const scope = record(request?.scope);
     if (!scope || scope.tenantId !== this.scope.tenantId || scope.clinicId !== this.scope.clinicId) {
@@ -67,15 +73,16 @@ export class ClinikoRecallWriter {
       return err({ kind: "invalidQuery" });
     }
     if (this.attempted.has(request.marker)) return err({ kind: "invalidQuery" });
+    if (signal?.aborted) return err({ kind: "unavailable" });
     if (this.attempted.size >= maxProcessAttempts) return err({ kind: "unavailable" });
     // Claim before the asynchronous budget reservation so concurrent callers
     // cannot both pass the marker check and send duplicate recalls.
     this.attempted.add(request.marker);
     const limited = await claimClinikoBudget(this.rateBudget);
-    if (limited) {
+    if (limited || signal?.aborted) {
       // No provider request was sent; the caller may safely try again later.
       this.attempted.delete(request.marker);
-      return err(limited);
+      return err(limited ?? { kind: "unavailable" });
     }
     const notes = formatRecallNote(request.marker, request.summary);
     let response: Response;
@@ -85,13 +92,13 @@ export class ClinikoRecallWriter {
           "Content-Type": "application/json", "User-Agent": this.userAgent },
         body: JSON.stringify({ patient_id: request.patientId, recall_type_id: request.recallTypeId,
           recall_at: request.recallAt, notes, recalled: false }),
-        redirect: "error", signal: AbortSignal.timeout(15_000),
+        redirect: "error", signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
       });
     } catch { return ok({ kind: "uncertain" }); }
     if (response.status === 429) await observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset"));
     if (response.status !== 201) return ok({ kind: "uncertain" });
     const parsed = await boundedRecallJson(response);
-    if (!parsed.ok) return ok({ kind: "uncertain" });
+    if (!parsed.ok || signal?.aborted) return ok({ kind: "uncertain" });
     const row = record(parsed.value);
     const patient = record(row?.patient);
     const type = record(row?.recall_type);
