@@ -10,7 +10,7 @@ test("E2E-293 approved clinic policy validates private draft and exact recorded 
   try {
     const checked = await f.policy.checkDraft(f.query); assert.ok(checked.ok);
     assert.deepEqual(checked.value, { scope: f.scope, revision: f.approval.revision, intakeVersion: "1",
-      privacyTerms: f.approval.privacyTerms, intakeTerms: f.approval.intakeTerms, expiresAt: f.approval.effectiveUntil });
+      privacyTerms: f.approval.privacyTerms, intakeTerms: f.approval.intakeTerms, recoveryTerms: f.approval.recoveryTerms, expiresAt: f.approval.effectiveUntil });
     for (const privateValue of [intakeDraft.firstName, intakeDraft.lastName, intakeDraft.email, intakeDraft.dateOfBirth, intakeDraft.patientPhone]) {
       assert.equal(JSON.stringify(checked).includes(privateValue), false);
     }
@@ -21,11 +21,11 @@ test("E2E-293 approved clinic policy validates private draft and exact recorded 
   } finally { await f.close(); }
 });
 
-test("E2E-293 public schema rejects patient data, unselected recovery, unsupported caller methods and missing or expanded required fields", async () => {
+test("E2E-293 public schema rejects patient data, unsupported recovery, unsupported caller methods and missing or expanded required fields", async () => {
   const f = await intakePolicyFixture();
   try {
     for (const patch of [{ patientId: "42" }, { email: intakeDraft.email }, { patientPhone: intakeDraft.patientPhone }, { notes: "private note" },
-      { recoveryContract: "callerMediated" }, { operation: "appointments.book" }, { callerEligibility: "anyone" }, { minors: "allow" },
+      { recoveryContract: "providerQueue" }, { recoveryTerms: { version: "r", approvedText: "It will all be fine." } }, { operation: "appointments.book" }, { callerEligibility: "anyone" }, { minors: "allow" },
       { representatives: "allow" }, { minimumAgeYears: 17 }, { minimumAgeYears: 121 }, { minimumAgeYears: "18" },
       { leapDayBirthday: "february28" }, { callerPhone: "callerSupplied" }, { verificationMethod: "callerId" },
       { patientPermission: "emailPossession" }, { duplicatePolicy: "merge" }, { intakeVersion: "0" }, { intakeVersion: "01" },
@@ -76,7 +76,7 @@ test("E2E-293 caller, private fields, exact terms, privacy and admitted-phone mi
   const f = await intakePolicyFixture();
   try {
     for (const patch of [{ caller: "proxy" }, { privacyAccepted: false }, { intakeAccepted: false }, { privacyTermsVersion: "old" },
-      { intakeTermsVersion: "old" }, { admittedCallerPhone: "+61499999999" }, { admittedCallerPhone: "hidden" },
+      { intakeTermsVersion: "old" }, { recoveryAccepted: false }, { recoveryTermsVersion: "old" }, { admittedCallerPhone: "+61499999999" }, { admittedCallerPhone: "hidden" },
       { draft: { ...intakeDraft, firstName: "" } }, { draft: { ...intakeDraft, lastName: "x".repeat(256) } },
       { draft: { ...intakeDraft, email: "bad" } }, { draft: { ...intakeDraft, dateOfBirth: "1990-02-30" } },
       { draft: { ...intakeDraft, dateOfBirth: "2027-01-01" } }, { draft: { ...intakeDraft, patientPhone: "+61499999999" } },

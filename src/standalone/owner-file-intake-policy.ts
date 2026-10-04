@@ -10,6 +10,8 @@ import type { AdminDirectory } from "./identity/magic-link.ts";
 import { approvalInstant, approvalRef, clinicApprovalKeys, decodeClinicApproval, OwnerFileClinicApproval } from "./owner-file-clinic-approval.ts";
 import type { ClinicApproval } from "./owner-file-clinic-approval.ts";
 
+export const callerMediatedRecoveryText = "If this call or connection fails, your patient record may have been saved without an appointment or a staff request. Abby will not retry automatically. Contact the clinic to check and resolve this. Do you acknowledge this risk?";
+
 export const intakeRequiredFields = Object.freeze(["firstName", "lastName", "email", "dateOfBirth", "patientPhone", "phoneType"] as const);
 type Terms = Readonly<{ version: string; approvedText: string }>;
 export type IntakeApproval = ClinicApproval & Readonly<{
@@ -18,6 +20,7 @@ export type IntakeApproval = ClinicApproval & Readonly<{
   callerEligibility: "selfOnly"; minors: "deny"; representatives: "deny"; minimumAgeYears: number;
   leapDayBirthday: "march1"; callerPhone: "admittedCallerOnly"; verificationMethod: "prospectiveEmailOtp";
   patientPermission: "independentClinicHost"; duplicatePolicy: "exactEmailAndBirthDateDenyCandidates";
+  recoveryContract: "callerMediated"; recoveryTerms: Terms;
   requiredFields: readonly (typeof intakeRequiredFields)[number][]; privacyTerms: Terms; intakeTerms: Terms;
 }>;
 export type IntakePolicyBinding = Pick<IntakeApproval, "scope" | "policyVersion" | "intakeVersion" | "businessId" |
@@ -29,10 +32,10 @@ export type IntakePolicyFailure = Readonly<{ kind: "intakePolicyUnavailable" }>;
 export type IntakeDraftQuery = Readonly<{
   scope: LocationScope; draft: ClinikoIntakeDraft; admittedCallerPhone: string;
   caller: "patient" | "proxy"; privacyAccepted: boolean; intakeAccepted: boolean;
-  privacyTermsVersion: string; intakeTermsVersion: string;
+  privacyTermsVersion: string; intakeTermsVersion: string; recoveryAccepted: boolean; recoveryTermsVersion: string;
 }>;
 export type IntakeDraftPolicyCheck = Readonly<{
-  scope: LocationScope; revision: string; intakeVersion: string; privacyTerms: Terms; intakeTerms: Terms; expiresAt: string;
+  scope: LocationScope; revision: string; intakeVersion: string; privacyTerms: Terms; intakeTerms: Terms; recoveryTerms: Terms; expiresAt: string;
 }>;
 type DraftFailure = IntakePolicyFailure | Readonly<{ kind: "intakeDraftDenied" }>;
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -47,7 +50,7 @@ function terms(value: unknown): value is Terms {
 function decode(value: unknown, bound: LocationScope): IntakeApproval | undefined {
   const common = decodeClinicApproval(value, bound, [...clinicApprovalKeys, "policyVersion", "intakeVersion", "businessId", "credentialFingerprint",
     "countryCallingCode", "timeZone", "operation", "callerEligibility", "minors", "representatives", "minimumAgeYears", "leapDayBirthday",
-    "callerPhone", "verificationMethod", "patientPermission", "duplicatePolicy", "requiredFields", "privacyTerms", "intakeTerms"]);
+    "callerPhone", "verificationMethod", "patientPermission", "duplicatePolicy", "requiredFields", "privacyTerms", "intakeTerms", "recoveryContract", "recoveryTerms"]);
   if (!common || !record(value)) return undefined;
   if (!approvalRef(value.policyVersion) || typeof value.intakeVersion !== "string" || !/^[1-9][0-9]*$/.test(value.intakeVersion) ||
       !Number.isSafeInteger(Number(value.intakeVersion)) || !validClinikoId(value.businessId) ||
@@ -60,7 +63,8 @@ function decode(value: unknown, bound: LocationScope): IntakeApproval | undefine
       value.patientPermission !== "independentClinicHost" || value.duplicatePolicy !== "exactEmailAndBirthDateDenyCandidates" ||
       !Array.isArray(value.requiredFields) || value.requiredFields.length !== intakeRequiredFields.length ||
       new Set(value.requiredFields).size !== intakeRequiredFields.length || value.requiredFields.some(field => !intakeRequiredFields.includes(field)) ||
-      !terms(value.privacyTerms) || !terms(value.intakeTerms)) return undefined;
+      !terms(value.privacyTerms) || !terms(value.intakeTerms) || value.recoveryContract !== "callerMediated" ||
+      !terms(value.recoveryTerms) || value.recoveryTerms.approvedText !== callerMediatedRecoveryText) return undefined;
   try { new Intl.DateTimeFormat("en", { timeZone: value.timeZone }); } catch { return undefined; }
   return value as unknown as IntakeApproval;
 }
@@ -112,23 +116,23 @@ export class OwnerFileIntakePolicy {
   async checkDraft(query: IntakeDraftQuery, signal?: AbortSignal): Promise<Result<IntakeDraftPolicyCheck, DraftFailure>> {
     try {
       query = structuredClone(query);
-      if (!record(query) || Object.keys(query).sort().join(",") !== "admittedCallerPhone,caller,draft,intakeAccepted,intakeTermsVersion,privacyAccepted,privacyTermsVersion,scope" || !scope(query.scope) ||
+      if (!record(query) || Object.keys(query).sort().join(",") !== "admittedCallerPhone,caller,draft,intakeAccepted,intakeTermsVersion,privacyAccepted,privacyTermsVersion,recoveryAccepted,recoveryTermsVersion,scope" || !scope(query.scope) ||
           !record(query.draft) || Object.keys(query.draft).sort().join(",") !== [...intakeRequiredFields].sort().join(",") ||
-          !validClinikoIntakeDraft(query.draft) || query.caller !== "patient" || query.privacyAccepted !== true || query.intakeAccepted !== true) return err({ kind: "intakeDraftDenied" });
+          !validClinikoIntakeDraft(query.draft) || query.caller !== "patient" || query.privacyAccepted !== true || query.intakeAccepted !== true || query.recoveryAccepted !== true) return err({ kind: "intakeDraftDenied" });
       const found = await this.current(query.scope, signal);
       if (!found.ok) return found;
       const approval = found.value, now = approvalInstant((this.#config.clock ?? (() => new Date().toISOString()))());
       if (now === undefined || now < Date.parse(approval.effectiveFrom) || now >= Date.parse(approval.effectiveUntil) || signal?.aborted) {
         return err({ kind: "intakePolicyUnavailable" });
       }
-      if (query.privacyTermsVersion !== approval.privacyTerms.version || query.intakeTermsVersion !== approval.intakeTerms.version) return err({ kind: "intakeDraftDenied" });
+      if (query.privacyTermsVersion !== approval.privacyTerms.version || query.intakeTermsVersion !== approval.intakeTerms.version || query.recoveryTermsVersion !== approval.recoveryTerms.version) return err({ kind: "intakeDraftDenied" });
       const admitted = normalizePatientPhone(query.admittedCallerPhone, approval.countryCallingCode);
       if (!admitted || admitted !== normalizePatientPhone(query.draft.patientPhone, approval.countryCallingCode)) return err({ kind: "intakeDraftDenied" });
       const today = clinicDateAt(approval.timeZone, new Date(now)), born = query.draft.dateOfBirth;
       const age = Number(today.slice(0, 4)) - Number(born.slice(0, 4)) - (today.slice(5) < born.slice(5) ? 1 : 0);
       if (born > today || age < approval.minimumAgeYears) return err({ kind: "intakeDraftDenied" });
       return ok({ scope: { ...query.scope }, revision: approval.revision, intakeVersion: approval.intakeVersion,
-        privacyTerms: { ...approval.privacyTerms }, intakeTerms: { ...approval.intakeTerms }, expiresAt: approval.effectiveUntil });
+        privacyTerms: { ...approval.privacyTerms }, intakeTerms: { ...approval.intakeTerms }, recoveryTerms: { ...approval.recoveryTerms }, expiresAt: approval.effectiveUntil });
     } catch { return err({ kind: "intakeDraftDenied" }); }
   }
 }

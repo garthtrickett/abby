@@ -187,7 +187,7 @@ export type ActionRequest =
   | Readonly<{ kind: "book"; patient: VerifiedPatient; offer: BookableOffer }>
   | Readonly<{ kind: "cancel"; patient: VerifiedPatient; target: AppointmentTarget; terms: AppointmentChangeTerms }>
   | Readonly<{ kind: "reschedule"; patient: VerifiedPatient; target: AppointmentTarget; offer: BookableOffer; terms: AppointmentChangeTerms }>
-  | Readonly<{ kind: "intake"; scope: LocationScope; approvedDraftRef: string; consentRef: string; duplicateCheckRef: string }>;
+  | Readonly<{ kind: "intake"; scope: LocationScope; approvedDraftRef: string; consentRef: string; duplicateCheckRef: string; recoveryContract?: "callerMediated" }>;
 
 export type FinalCallerTurn = Readonly<{
   callId: string;

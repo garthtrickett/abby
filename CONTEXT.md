@@ -33,3 +33,7 @@ A durable request for a staff owner to examine an intended action and its unreso
 ## Email verification
 
 The caller demonstrates control of the patient’s currently registered email channel using a short-lived code. It grants only the patient action permitted by the clinic’s current policy; it does not establish representative authority or turn a phone match into proof.
+
+## Caller-mediated intake recovery
+
+Before first-time registration, the caller separately acknowledges that a failure can leave a patient record without an appointment or saved staff request. Unknown creation is not retried automatically; the caller contacts the clinic to resolve it. This does not promise recoverable staff work or grant appointment authority.

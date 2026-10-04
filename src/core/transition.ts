@@ -126,7 +126,7 @@ function evidenceFailure(state: CallState, request: ActionRequest, now: string):
   }
   if (!sameScope(state.policy.scope, requestScope(request))) return { kind: "scopeMismatch" };
   if (request.kind === "intake") {
-    if (!request.approvedDraftRef || !request.consentRef || !request.duplicateCheckRef) return { kind: "invalidTransition" };
+    if ((request.recoveryContract !== undefined && request.recoveryContract !== "callerMediated") || !request.approvedDraftRef || !request.consentRef || !request.duplicateCheckRef) return { kind: "invalidTransition" };
     return undefined;
   }
   if (Date.parse(request.patient.expiresAt) <= Date.parse(now)) return { kind: "evidenceExpired" };
@@ -449,7 +449,9 @@ function recordHostResult(state: CallState, effectId: string, receipt: import(".
     state.effects[effectId] = { ...effect, status: "uncertain" };
     const reconcileId = `${effectId}:reconcile`;
     state.effects[reconcileId] = { kind: "hostReconcile", id: reconcileId, actionKey: action.key, originalEffectId: effectId, status: "pending" };
-    hostOutcomeNotice(state, effectId, "I can't confirm that action yet. It is pending review.");
+    hostOutcomeNotice(state, effectId, action.mutation.request.kind === "intake" && action.mutation.request.recoveryContract === "callerMediated"
+      ? "I can't confirm that your details were saved. No appointment or staff request is confirmed. Contact the clinic before trying again."
+      : "I can't confirm that action yet. It is pending review.");
     if (action.kind === "book" && Object.values(state.actions).some(item => item.kind === "intake" && item.status === "committed")) {
       addStaffTask(state, "partialIntake", now, action.key);
     }
@@ -713,7 +715,9 @@ export function transition(current: CallState, action: TransitionAction): Result
       } else {
         if (!linked.reconciliationDeadline || Date.parse(action.now) >= Date.parse(linked.reconciliationDeadline)) {
           state.actions[linked.key] = { ...linked, status: "needsReview" };
-          addStaffTask(state, "uncertainAction", action.now, linked.key);
+          if (linked.mutation.request.kind !== "intake" || linked.mutation.request.recoveryContract !== "callerMediated") {
+            addStaffTask(state, "uncertainAction", action.now, linked.key);
+          }
         } else {
           return ok(current);
         }
@@ -913,7 +917,9 @@ export function transition(current: CallState, action: TransitionAction): Result
       const linked = state.actions[action.actionKey];
       if (!linked || linked.status !== "uncertain" || !linked.reconciliationDeadline || Date.parse(action.now) < Date.parse(linked.reconciliationDeadline)) return err({ kind: "invalidTransition" });
       state.actions[linked.key] = { ...linked, status: "needsReview" };
-      addStaffTask(state, "uncertainAction", action.now, linked.key);
+      if (linked.mutation.request.kind !== "intake" || linked.mutation.request.recoveryContract !== "callerMediated") {
+        addStaffTask(state, "uncertainAction", action.now, linked.key);
+      }
       break;
     }
   }

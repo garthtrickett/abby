@@ -1,6 +1,6 @@
 # Private keypad caller verification
 
-**Status:** opt-in trusted voice interface with authenticated synthetic wire and actual verifier/read tests. The production standalone runner leaves it unset. This provides no real mail delivery, clinic authority, patient permission, carrier proof or write activation. Email delivery remains deferred; D-18 remains unselected.
+**Status:** opt-in trusted voice interface with authenticated synthetic wire and actual verifier/read tests. The production standalone runner leaves it unset. This provides no real mail delivery, clinic authority, patient permission, carrier proof or write activation. Email delivery remains deferred; D-18 is now selected for a separate first-time intake flow; this existing-patient keypad mode grants no intake authority.
 
 ## Behaviour and ownership
 
