@@ -69,7 +69,7 @@
     "settings.voice.options.v1": ["E2E-258", "E2E-259"],
     "settings.voice.audit.v1": ["E2E-258", "E2E-259"],
     "appointments.change.propose.v1": ["E2E-261", "E2E-264", "E2E-276", "E2E-277", "E2E-278", "E2E-285"],
-    "patients.intake.propose.v1": ["E2E-261", "E2E-264"]
+    "patients.intake.propose.v1": ["E2E-261", "E2E-264", "E2E-292"]
   },
   "settingMappings": {
     "availability.sevenDay.enabled": ["E2E-199", "E2E-247"],
