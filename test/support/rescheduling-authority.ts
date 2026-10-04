@@ -50,6 +50,10 @@ export async function reschedulingAuthorityFixture(options: { scope?: LocationSc
           const appointments = options.multiple ? [first, { ...first, id: "92", starts_at: "2026-10-08T06:00:00.000Z", ends_at: "2026-10-08T06:30:00.000Z" }] : [first];
           return Response.json({ total_entries: appointments.length, individual_appointments: appointments });
         }
+        if (options.multiple && url.pathname === "/v1/individual_appointments/92") return Response.json({ id: "92", starts_at: "2026-10-08T06:00:00.000Z", ends_at: "2026-10-08T06:30:00.000Z",
+          cancelled_at: null, deleted_at: null, archived_at: null,
+          patient: { links: { self: `https://api.au5.cliniko.com/v1/patients/${verificationCanaries[2]}` } }, business: { links: { self: "https://api.au5.cliniko.com/v1/businesses/11" } },
+          practitioner: { links: { self: "https://api.au5.cliniko.com/v1/practitioners/22" } }, appointment_type: { links: { self: "https://api.au5.cliniko.com/v1/appointment_types/33" } } });
         const response = await port(value, init);
         if (url.pathname === "/v1/individual_appointments/91" && (init?.method ?? "GET") === "GET") {
           const row = await response.json();
@@ -80,7 +84,7 @@ export async function reschedulingAuthorityFixture(options: { scope?: LocationSc
           ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}) }; sourceFetch = port;
         source = resultValue(ClinikoReschedulingAuthority.create(sourceConfig, port)); return source;
       } });
-    return { ...f, source: source!, feePolicy: feePolicy!, destinationPolicy: destinationPolicy!, path, destinationPath, directory: directory!, account: account!, accountPath,
+    return { ...f, source: source!, ownerPorts: { fetchPort: sourceFetch!, rateBudget: sourceConfig!.rateBudget }, feePolicy: feePolicy!, destinationPolicy: destinationPolicy!, path, destinationPath, directory: directory!, account: account!, accountPath,
       createSource: (patch: Partial<ClinikoReschedulingAuthorityConfig>) => ClinikoReschedulingAuthority.create({ ...sourceConfig, ...patch }, sourceFetch),
       get approval() { return approval; }, get destinationApproval() { return destinationApproval; }, get patches() { return f.patches; }, get claims() { return f.claims; },
       query: (verificationRef: string, targetRef: string, offerRef: string) => ({ scope: f.scope, callId: f.callId, sessionId: f.sessionId,

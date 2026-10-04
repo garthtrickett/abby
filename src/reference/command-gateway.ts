@@ -98,6 +98,8 @@ export type GatewayCommand =
   | Readonly<{ kind: "clinic.availability.approval.change.v2"; route: ClinicAvailabilityRoute; selection: ClinicAvailabilitySelection;
     alternatives: readonly ClinicAvailabilitySelection[]; expectedVersion: number }>
   | Readonly<{ kind: "clinic.availability.approval.revoke.v1"; expectedVersion: number }>
+  | Readonly<{ kind: "rescheduling.menu.read.v1"; turn: FinalCallerTurn; stage: "targets" | "offers"; from: string; to: string; now: string }>
+  | Readonly<{ kind: "rescheduling.menu.select.v1"; turn: FinalCallerTurn; stage: "targets" | "offers"; choice: 1 | 2 | 3; now: string }>
   | Readonly<{ kind: "booking.offers.read.v1"; turn: FinalCallerTurn; from: string; to: string; now: string }>
   | Readonly<{ kind: "booking.offers.select.v1"; turn: FinalCallerTurn; choice: 1 | 2 | 3; now: string }>
   | Readonly<{ kind: "availability.read.v2"; turn: FinalCallerTurn; from: string; to: string; now: string }>
@@ -199,6 +201,7 @@ export class CommandGateway {
   listPermitted(): readonly CapabilityDescriptor[] {
     const permitted: CapabilityId[] = ["settings.read.v1", "booking.propose.v2", "appointments.change.propose.v1",
       "patients.intake.propose.v1", "knowledge.answer.v2"];
+    if (this.reception.reschedulingMenuEnabled()) permitted.push("rescheduling.menu.read.v1", "rescheduling.menu.select.v1");
     if (this.reception.bookingMenuEnabled()) permitted.push("booking.offers.read.v1", "booking.offers.select.v1");
     if (this.reception.modelEnabled()) permitted.push("calls.turn.model.v1");
     if (this.reception.availabilityEnabled()) permitted.push("availability.read.v2");
@@ -513,6 +516,16 @@ export class CommandGateway {
         if (!this.availabilitySetup) return err({ kind: "forbidden" });
         const result = await this.availabilitySetup.revoke(this.actor, command.expectedVersion);
         return result.ok ? ok({ kind: "clinicAvailabilityApprovalState", state: result.value }) : result;
+      }
+      case "rescheduling.menu.read.v1": {
+        const turn = structuredClone(command.turn);
+        const result = await this.reception.readReschedulingMenu(this.actor.scope, turn, command.stage, command.from, command.to, command.now);
+        return result.ok ? ok({ kind: "appointmentChangeProposal", progress: commandProgress(result.value, turn.turnId) }) : result;
+      }
+      case "rescheduling.menu.select.v1": {
+        const turn = structuredClone(command.turn);
+        const result = await this.reception.selectReschedulingMenu(this.actor.scope, turn, command.stage, command.choice, command.now);
+        return result.ok ? ok({ kind: "appointmentChangeProposal", progress: commandProgress(result.value, turn.turnId) }) : result;
       }
       case "booking.offers.read.v1": {
         const result = await this.reception.readBookingMenu(this.actor.scope, command.turn, command.from, command.to, command.now);

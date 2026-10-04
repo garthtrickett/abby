@@ -3,7 +3,7 @@ import { ClinikoRescheduleWriter } from "../cliniko/reschedule-write.ts";
 import type { ClinikoReviewRequest } from "../cliniko/review-request.ts";
 import { digestActionRequest } from "../core/digest.ts";
 import type { AppointmentChangeEvidenceHost, AppointmentChangeEvidenceQuery, BookingEvidenceHost,
-  HostEffects, HostReadFailure } from "../core/host.ts";
+  ReschedulingMenuHost, HostEffects, HostReadFailure } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { ActionRequest, HostMutation, HostWriteReceipt, LocationScope, ReconcileObservation,
   Result, StaffItem, StaffTaskObservation, StaffTaskReceipt } from "../core/model.ts";
@@ -18,6 +18,7 @@ export type ClinikoReschedulingHostConfig = ClinikoAppointmentChangeGuardConfig 
   recallWriter: ClinikoRecallWriter;
   recallTypeId: string;
   timeZone: string;
+  menu?: ReschedulingMenuHost;
 }>;
 
 /** Standalone best-effort in-place move. All call state is volatile; provider review precedes one send.
@@ -43,19 +44,27 @@ export class ClinikoReschedulingHost extends NoStoredKnowledge
       clock: () => Date.parse(this.#now()) });
   }
 
+  reschedulingMenuAvailable(): boolean { return !this.#lifetime.signal.aborted && this.#config.menu?.reschedulingMenuAvailable() === true; }
+  readReschedulingMenu(...args: Parameters<ReschedulingMenuHost["readReschedulingMenu"]>): ReturnType<ReschedulingMenuHost["readReschedulingMenu"]> {
+    return this.reschedulingMenuAvailable() ? this.#config.menu!.readReschedulingMenu(...args) : Promise.resolve(err({ kind: "unavailable", target: "appointment" }));
+  }
+  selectReschedulingMenu(...args: Parameters<ReschedulingMenuHost["selectReschedulingMenu"]>): ReturnType<ReschedulingMenuHost["selectReschedulingMenu"]> {
+    return this.reschedulingMenuAvailable() ? this.#config.menu!.selectReschedulingMenu(...args) : Promise.resolve(err({ kind: "unavailable", target: "appointment" }));
+  }
+
   #now(): string { return (this.#config.clock ?? (() => new Date().toISOString()))(); }
 
-  async resolveAppointmentChange(query: AppointmentChangeEvidenceQuery): Promise<Result<Extract<ActionRequest,
+  async resolveAppointmentChange(query: AppointmentChangeEvidenceQuery, external?: AbortSignal): Promise<Result<Extract<ActionRequest,
     { kind: "cancel" | "reschedule" }>, HostReadFailure>> {
     if (this.#lifetime.signal.aborted || this.#busy || this.#attempted || this.#prepared || query?.kind !== "reschedule") {
       return err({ kind: "unavailable", target: "appointment" });
     }
     this.#busy = true;
+    const signal = AbortSignal.any([this.#lifetime.signal, ...(external ? [external] : []), AbortSignal.timeout(15_000)]);
     try {
-      const selected = await this.#guard.resolve(query, "proposal",
-        AbortSignal.any([this.#lifetime.signal, AbortSignal.timeout(15_000)]));
+      const selected = await this.#guard.resolve(query, "proposal", signal);
       if (!selected.ok) return selected;
-      if (selected.value.request.target.timeZone !== this.#config.timeZone || this.#lifetime.signal.aborted) {
+      if (selected.value.request.target.timeZone !== this.#config.timeZone || signal.aborted) {
         return err({ kind: "unavailable", target: "appointment" });
       }
       this.#prepared = selected.value;

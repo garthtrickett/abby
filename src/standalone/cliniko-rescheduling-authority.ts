@@ -50,6 +50,17 @@ export class ClinikoReschedulingAuthority implements AppointmentChangeAuthority,
   }
   list(...args: Parameters<ClinikoAppointmentSelection["list"]>) { return this.#source.list(...args); }
   select(...args: Parameters<ClinikoAppointmentSelection["select"]>) { return this.#source.select(...args); }
+  async resolveTarget(query: Omit<Parameters<AppointmentChangeAuthority["resolve"]>[0], "kind" | "offerRef">) {
+    const bound = { ...query, scope: { ...query.scope } };
+    return await this.#bounded(async signal => {
+      const target = await this.#source.resolveTarget({ ...bound, kind: "reschedule", signal });
+      const policy = await this.#config.policy.current(bound.scope);
+      return target.ok && policy.ok && !signal.aborted && target.value.practitionerId === policy.value.practitionerId &&
+        target.value.appointmentTypeId === policy.value.appointmentTypeId &&
+        Date.parse(target.value.target.endsAt)-Date.parse(target.value.target.startsAt) === policy.value.durationMinutes*60_000 ? target :
+        err({ kind: "unavailable" as const, target: "appointment" as const });
+    }, bound.signal) ?? err({ kind: "unavailable" as const, target: "appointment" as const });
+  }
   async listOffers(scope: LocationScope, verificationRef: string, from: string, to: string, now: string, external?: AbortSignal): Promise<Result<BookingChoices, HostReadFailure>> {
     const bound = { ...scope };
     return await this.#bounded(async signal => {

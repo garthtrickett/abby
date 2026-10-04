@@ -1,3 +1,4 @@
+import { reschedulingMenuPresentation } from "./rescheduling-menu.ts";
 import { bookingConfirmation, bookingMenuPresentation } from "./booking-menu.ts";
 import { supportedVoiceLocale } from "./voice-presentation.ts";
 import { createHash } from "node:crypto";
@@ -57,7 +58,11 @@ function describe(request: ActionRequest, locale: string): string {
   switch (request.kind) {
     case "book": { const confirmed = bookingConfirmation(request.offer, locale); return confirmed.ok ? confirmed.value : ""; }
     case "cancel": return `Please confirm cancellation of your appointment on ${appointmentTime(request.target.startsAt, request.target.timeZone, locale)}. ${request.terms.approvedText}`;
-    case "reschedule": return `Please confirm moving your appointment on ${appointmentTime(request.target.startsAt, request.target.timeZone, locale)} to ${appointmentTime(request.offer.startsAt, request.target.timeZone, locale)}. ${request.terms.approvedText}`;
+    case "reschedule": {
+      const detail = request.offer.presentation;
+      if (detail && !bookingConfirmation(request.offer, locale).ok) return "";
+      return `Please confirm moving your ${detail ? `${detail.appointmentTypeName} appointment with ${detail.practitionerName}` : "appointment"} on ${appointmentTime(request.target.startsAt, request.target.timeZone, locale)} to ${appointmentTime(request.offer.startsAt, request.target.timeZone, locale)}${detail ? `, for ${detail.durationMinutes} minutes` : ""}. ${request.terms.approvedText}`;
+    }
     case "intake": return "Please confirm that your approved intake details may be saved. This does not book an appointment.";
   }
 }
@@ -107,6 +112,9 @@ export function appointmentChangeEvidenceFailure(scope: LocationScope,
       (request.kind === "reschedule" && (!Number.isFinite(newStart) || newStart === start))) {
     return { kind: "invalidTransition" };
   }
+  if (request.kind === "reschedule" && request.offer.presentation &&
+      (!bookingConfirmation(request.offer, "en-AU").ok || request.offer.presentation.timeZone !== request.target.timeZone ||
+       request.offer.presentation.durationMinutes*60_000 !== end-start)) return { kind: "invalidTransition" };
   try { appointmentTime(request.target.startsAt, request.target.timeZone, "en-AU"); }
   catch { return { kind: "invalidTransition" }; }
   return undefined;
@@ -370,6 +378,15 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       addStaffTask(state, "systemFailure", now);
       state.callerMessages.push(staffFallbackText(state, "I can't check available times right now. I'll request staff follow-up."));
       state.availabilityReads.push({ turnId: turn.turnId, status: "failed", reason: interpretation.reason });
+      break;
+    case "reschedulingMenu": {
+      const menu = reschedulingMenuPresentation(interpretation.snapshot, { scope: state.policy.scope, callId: state.callId,
+        sessionId: turn.sessionId ?? "", policyVersion: state.policy.policyVersion }, now, state.policy.voiceProfile?.locale ?? "en-AU");
+      state.callerMessages.push(turn.quality === "clear" && menu.ok ? menu.value : "I can't check rescheduling options right now. Please contact the clinic directly.");
+      break;
+    }
+    case "reschedulingMenuFailure":
+      state.callerMessages.push("I can't check or select those rescheduling options right now. Please request fresh options or contact the clinic directly.");
       break;
     case "bookingMenu": {
       const menu = bookingMenuPresentation(interpretation.snapshot, { scope: state.policy.scope, callId: state.callId,
