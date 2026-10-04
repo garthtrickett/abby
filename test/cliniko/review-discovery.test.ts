@@ -30,7 +30,7 @@ test("E2E-267 review envelopes retain exact approved context for all three appoi
   const selection = { practitionerId: "22", appointmentTypeId: "33",
     startsAt: "2026-10-08T04:00:00Z", endsAt: "2026-10-08T04:30:00Z" };
   const operations: ClinikoReviewRequest["operation"][] = [request.operation,
-    { kind: "cancel", ...selection, appointmentId: "91" },
+    { kind: "cancel", ...selection, appointmentId: "91", cancellationReason: 10 },
     { kind: "reschedule", ...selection, appointmentId: "91", newStartsAt: "2026-10-09T04:00:00Z",
       newEndsAt: "2026-10-09T04:30:00Z" }];
   for (const operation of operations) {
@@ -53,7 +53,7 @@ test("E2E-267 malformed, expanded and oversized review context cannot become a s
   ];
   for (const value of invalid) assert.deepEqual(encodeClinikoReview(marker, value as ClinikoReviewRequest),
     { ok: false, error: { kind: "invalidReviewRequest" } });
-  for (const value of [null, "private note", notes().replace("review v1", "review v2"),
+  for (const value of [null, "private note", notes().replace("review v2", "review v3"),
     notes().replace('"book"', '"intake"'), notes().replace(marker, "invalid-marker"), notes()+"\nextra"])
     assert.deepEqual(decodeClinikoReview(value), { ok: false, error: { kind: "invalidReviewRequest" } });
 });

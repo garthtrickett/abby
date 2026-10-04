@@ -22,7 +22,7 @@ test("E2E-268 crash before, during and after the clinical send preserves discove
   const request: ClinikoReviewRequest = { scope, patientId: "917263544536271", businessId: "11",
     credentialFingerprint: clinikoCredentialFingerprint("synthetic-review-key-au5"), policyVersion: "reviewed-policy-canary",
     termsVersion: "reviewed-terms-canary", timeZone: "Asia/Jakarta", createdAt: "2026-10-04T04:00:00Z",
-    operation: { kind: "cancel", appointmentId: "71", practitionerId: "22", appointmentTypeId: "33",
+    operation: { kind: "cancel", appointmentId: "71", cancellationReason: 10, practitionerId: "22", appointmentTypeId: "33",
       startsAt: "2026-10-08T04:00:00Z", endsAt: "2026-10-08T04:30:00Z" } };
   const base = "https://api.au5.cliniko.com/v1";
   let checkpoint: "beforeMutation" | "duringMutation" | "afterMutation" = "beforeMutation";

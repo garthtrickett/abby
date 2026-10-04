@@ -1,12 +1,13 @@
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
+import type { ClinikoCancellationRequest } from "./appointment-write.ts";
 import { formatRecallNote, validRecallDate, validRecallMarker, validRecallSummary } from "./recall-note.ts";
 
 type Interval = Readonly<{ startsAt: string; endsAt: string }>;
 type Selection = Readonly<{ practitionerId: string; appointmentTypeId: string }>;
 export type ClinikoReviewOperation =
   | Readonly<{ kind: "book" }> & Interval & Selection
-  | Readonly<{ kind: "cancel"; appointmentId: string }> & Interval & Selection
+  | Readonly<{ kind: "cancel"; appointmentId: string; cancellationReason: ClinikoCancellationRequest["cancellationReason"] }> & Interval & Selection
   | Readonly<{ kind: "reschedule"; appointmentId: string; newStartsAt: string; newEndsAt: string }> & Interval & Selection;
 
 /** Provider-owned confirmed context, including patient-link binding. Never a send permit. */
@@ -23,7 +24,7 @@ export type ClinikoReviewRequest = Readonly<{
 }>;
 export type ClinikoReviewRequestFailure = Readonly<{ kind: "invalidReviewRequest" }>;
 export type ClinikoDecodedReview = Readonly<{ marker: string; request: ClinikoReviewRequest }>;
-const header = "Abby appointment review v1";
+const header = "Abby appointment review v2";
 const instruction = "Staff review required. Do not replay automatically.";
 const idPattern = /^[1-9][0-9]{0,18}$/;
 
@@ -55,7 +56,8 @@ function operation(value: unknown): value is ClinikoReviewOperation {
   const common = ["kind", "practitionerId", "appointmentTypeId", "startsAt", "endsAt"];
   switch (row.kind) {
     case "book": return keys(row, common);
-    case "cancel": return keys(row, [...common, "appointmentId"]) && id(row.appointmentId);
+    case "cancel": return keys(row, [...common, "appointmentId", "cancellationReason"]) && id(row.appointmentId) &&
+      typeof row.cancellationReason === "number" && [10, 20, 30, 40, 50, 60].includes(row.cancellationReason);
     case "reschedule": return keys(row, [...common, "appointmentId", "newStartsAt", "newEndsAt"]) &&
       id(row.appointmentId) && interval(row, "newStartsAt", "newEndsAt");
     default: return false;
