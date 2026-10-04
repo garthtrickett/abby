@@ -1,12 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { clinikoIntakeDraftDigest, validClinikoIntakeRequest } from "../cliniko/patient-intake.ts";
-import type { ClinikoIntakeAttestation, ClinikoIntakeAuthority, ClinikoIntakeRequest } from "../cliniko/patient-intake.ts";
+import type { ClinikoIntakeAttestation, ClinikoIntakeAuthority, ClinikoIntakeDraft, ClinikoIntakeRequest } from "../cliniko/patient-intake.ts";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
-
-type IntakeDraft = Pick<ClinikoIntakeRequest,
-  "firstName" | "lastName" | "email" | "dateOfBirth" | "patientPhone" | "phoneType">;
 
 export type HostIntakeEvidence = Readonly<{
   scope: LocationScope;
@@ -16,7 +13,7 @@ export type HostIntakeEvidence = Readonly<{
   draftRef: string;
   consentRef: string;
   authorityRef: string;
-  draft: IntakeDraft;
+  draft: ClinikoIntakeDraft;
   caller: ClinikoIntakeRequest["caller"];
   privacyAccepted: boolean;
   proxyAuthorized: boolean;

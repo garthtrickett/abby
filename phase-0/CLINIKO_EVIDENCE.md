@@ -534,3 +534,45 @@ Earlier source `60f48f9f21009daf38f2ac1da800ac5103a14530` full invocation, log `
 Earlier semantic gate, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791116343333.log`, passed TypeScript and 43 tests with one declared PostgreSQL-only skip. The focused migrated/backup gate, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791116529322.log`, passed 19 tests with zero skips before the last malformed-draft case was added. Only the final frozen gate above is the complete current proof.
 
 No live patient lifecycle was rerun for this patch, no live credential was loaded, no production route was added and no patient or appointment was mutated externally. Prior C-LIVE-39/40 evidence remains tied to its older provider source and is not promoted into proof of this exact current edge. D-18 remains awaiting product selection. Prospective-patient authority, approved clinic consent/recovery/staff policy, first-time caller composition, real email delivery (deferred) and actual provider/voice activation remain open. The original nine-step goal is not complete.
+
+## C-LOCAL-73 — Public clinic intake policy without patient-create authority
+
+Executable/registered source: `dd024bd102ba037f4e5c410c3261269ee4ab0309`. E2E-293; manifest 1.94 / 293. `OwnerFileIntakePolicy` captures an exact owner-only public approval, current scoped clinic administrator and provider/setting bindings. Capture/current reads are bounded and late abandoned reads cannot publish a policy. Current file replacement, membership/role removal, expiry or binding change denies use.
+
+Private draft checks enforce the six exact fields, declared self-only/minor/proxy policy, clinic-local minimum age with explicit March 1 leap-day rule, normalized admitted caller phone and both recorded accepted-terms versions. Results contain only public terms/revision/expiry or typed denial. The shared provider draft validator preserves the existing provider-edge validation and supplies no consent or permission. Passing the policy checks cannot prove observed consent, mailbox possession, independent host permission, a selected recovery contract or SAM affirmation.
+
+Final command:
+
+```sh
+npm run typecheck && npm run build:availability-console &&
+bash scripts/with-postgres.sh bash /tmp/abby-intake-policy-final-proof.sh
+```
+
+Exact script:
+
+```sh
+#!/usr/bin/env bash
+set -euo pipefail
+node scripts/migrate.ts
+node --test --test-concurrency=4 \
+  test/cliniko/intake-clinic-policy.test.ts test/cliniko/intake-clinic-policy-postgres.test.ts \
+  test/cliniko/patient-intake.test.ts test/cliniko/patient-intake-lifecycle.test.ts \
+  test/cliniko/patient-intake-postgres.test.ts test/cliniko/transient-intake-authority.test.ts \
+  test/cliniko/write-activation.test.ts test/cliniko/prepatient-memo-probe.test.ts \
+  test/storage/postgres-clinic-intake-setting.test.ts test/storage/standalone-privacy-journey.test.ts \
+  test/text/first-time-intake-setting.test.ts test/text/partial-intake.test.ts \
+  test/voice/embedded-intake-booking-call.test.ts \
+  test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts \
+  test/contract/acquisition-import-boundary.test.ts
+node scripts/ordered-node-e2e.mjs '{"files":["test/cliniko/intake-clinic-policy.test.ts","test/cliniko/intake-clinic-policy-postgres.test.ts","test/contract/scenario-manifest.test.ts"],"concurrency":4}'
+node scripts/ordered-node-e2e.mjs '{"files":["test/contract/scenario-manifest.test.ts","test/cliniko/intake-clinic-policy-postgres.test.ts","test/cliniko/intake-clinic-policy.test.ts"],"concurrency":4}'
+git diff --check
+```
+
+Tracked job `Abby frozen intake policy parallel PostgreSQL and verified dispatch orders`, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791118507820.log`, completed exit 0 in **1m15s**. TypeScript, required existing availability assets, actual migrations and diff passed. **75/75** across 16 parallel files with concurrency four, **10/10** in verified forward file dispatch and **10/10** in reverse, all zero failures/cancellations/skips. The existing programmatic dispatcher checks file dispatch/completion and preserves parallel execution; test-body completion is not ordered. Source was frozen and unchanged throughout validation.
+
+The shared memory/actual PostgreSQL setting scenario proves disabled baseline, enable, next-call disable, preserved active captured policy, re-enable needing matching public approval and foreign tenant/clinic/location isolation. Approval replacement revokes the older capture independently of normal raw-setting edits. The actual migrated database stores only public setting/audit/config rows; private name/email/DOB/phone canaries are absent from the database and disposable backup, and call/phone-index tables are empty. Valid public policy plus enabled raw setting still yields unavailable standalone intake. Existing provider deadline/read-back, consent revocation, embedded synthetic intake/booking, strict storage, setting audit and acquisition boundaries are regression-tested.
+
+Initial development gate `Abby concrete intake clinic policy initial type and semantic proof`, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791117953405.log`, exited 2 at TypeScript before tests. Extracting the draft predicate narrowed away later request fields; tests also needed the directory scope, readonly mutation via explicit runtime assignment and narrowed result access. These were corrected directly. The corrected gate, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791118249843.log`, passed TypeScript and 33 tests; the registered PostgreSQL gate, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791118386028.log`, passed TypeScript and 10 tests. Only the final frozen source gate above is the complete current proof. No assertion, gate, safety rule, timeout or concurrency was weakened.
+
+All approval/provider/consent inputs remain synthetic. No new production route, schema migration or dependency is added; no external patient, appointment or email mutation occurs and no live credential is loaded. D-18 selection, actual prospective-patient authority and consent, first-time caller composition, recovery/activation and real delivery remain open. Email delivery is explicitly deferred. Public eligibility checks are engineering progress under either possible recovery contract; the original nine-step goal remains incomplete.

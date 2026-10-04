@@ -12,20 +12,18 @@ export type ClinikoIntakeConfig = ClinikoPatientConfig & Readonly<{
   countryCallingCode: string;
 }>;
 export type ClinikoIntakeOptions = Readonly<{ signal?: AbortSignal; timeoutMs?: number }>;
+export type ClinikoIntakeDraft = Readonly<{
+  firstName: string; lastName: string; email: string; dateOfBirth: string;
+  patientPhone: string; phoneType: "Mobile" | "Home" | "Work";
+}>;
 
 /** Provider edge only. The caller runtime does not construct this adapter. */
-export type ClinikoIntakeRequest = Readonly<{
+export type ClinikoIntakeRequest = ClinikoIntakeDraft & Readonly<{
   scope: LocationScope;
   callId: string;
   sessionId: string;
   attemptRef: string;
   policyVersion: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  dateOfBirth: string;
-  patientPhone: string;
-  phoneType: "Mobile" | "Home" | "Work";
   caller: "patient" | "proxy";
   /** A trusted host must bind these to this patient, call, policy, and operation. */
   consentRef: string;
@@ -94,15 +92,20 @@ export function validClinikoIntakeRequest(value: unknown): value is ClinikoIntak
     typeof request.sessionId === "string" && refPattern.test(request.sessionId) &&
     typeof request.attemptRef === "string" && refPattern.test(request.attemptRef) &&
     typeof request.policyVersion === "string" && refPattern.test(request.policyVersion) &&
-    validName(request.firstName, 50) && validName(request.lastName, 255) &&
+    (request.caller === "patient" || request.caller === "proxy") &&
+    typeof request.consentRef === "string" && refPattern.test(request.consentRef) &&
+    typeof request.authorityRef === "string" && refPattern.test(request.authorityRef) && validClinikoIntakeDraft(request);
+}
+
+/** Shared provider-field validation; it supplies no caller consent or permission. */
+export function validClinikoIntakeDraft(value: unknown): value is ClinikoIntakeDraft {
+  const request = record(value);
+  return !!request && validName(request.firstName, 50) && validName(request.lastName, 255) &&
     typeof request.email === "string" && request.email.length <= 254 && emailPattern.test(request.email) &&
     validDate(request.dateOfBirth) && typeof request.patientPhone === "string" &&
     request.patientPhone.length > 0 && request.patientPhone.length <= 50 &&
     !/[\u0000-\u001f\u007f]/.test(request.patientPhone) &&
-    (request.phoneType === "Mobile" || request.phoneType === "Home" || request.phoneType === "Work") &&
-    (request.caller === "patient" || request.caller === "proxy") &&
-    typeof request.consentRef === "string" && refPattern.test(request.consentRef) &&
-    typeof request.authorityRef === "string" && refPattern.test(request.authorityRef);
+    (request.phoneType === "Mobile" || request.phoneType === "Home" || request.phoneType === "Work");
 }
 
 /** Transient digest lets the host attest to every field that will enter Cliniko. */
