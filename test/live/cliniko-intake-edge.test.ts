@@ -103,7 +103,7 @@ test("C-LIVE-39 disconnected intake edge creates once, rejects duplicate and rev
   }
 
   function edge(instance: ReturnType<typeof host>, fetchPort: typeof fetch) {
-    const created = ClinikoPatientIntakeEdge.create({ scope, apiKey, contactEmail }, instance.authority, fetchPort);
+    const created = ClinikoPatientIntakeEdge.create({ scope, countryCallingCode: "61", apiKey, contactEmail }, instance.authority, fetchPort);
     assert.equal(created.ok, true, created.ok ? "" : created.error.kind);
     return created.value;
   }
@@ -112,7 +112,7 @@ test("C-LIVE-39 disconnected intake edge creates once, rejects duplicate and rev
     return async (input, init) => {
       const url = new URL(String(input));
       assert.equal(url.origin, new URL(base).origin);
-      assert.equal(url.pathname, "/v1/patients");
+      assert.ok(url.pathname === "/v1/patients" || (init?.method === "GET" && fixture.id && url.pathname === `/v1/patients/${fixture.id}`));
       if (init?.method === "POST") fixture.attempted = true;
       const response = await fetch(input, init);
       if (init?.method === "POST") {

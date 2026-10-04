@@ -5,6 +5,13 @@ import { ClinikoPatientCandidateReader } from "./patients.ts";
 import type { ClinikoClinicScope, ClinikoPatientConfig } from "./patients.ts";
 import { claimClinikoBudget, ClinikoReadBudget, isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
 import type { ClinikoRequestBudget } from "./read-budget.ts";
+import { normalizePatientPhone } from "./phone-number.ts";
+import { awaitUntilAbort } from "../shared/await-until-abort.ts";
+
+export type ClinikoIntakeConfig = ClinikoPatientConfig & Readonly<{
+  countryCallingCode: string;
+}>;
+export type ClinikoIntakeOptions = Readonly<{ signal?: AbortSignal; timeoutMs?: number }>;
 
 /** Provider edge only. The caller runtime does not construct this adapter. */
 export type ClinikoIntakeRequest = Readonly<{
@@ -42,7 +49,7 @@ export type ClinikoIntakeAttestation = Readonly<{
 
 /** The host resolves these references against its own call-scoped consent and authority records. */
 export type ClinikoIntakeAuthority = Readonly<{
-  attest(request: ClinikoIntakeRequest, phase: "read" | "send"): Promise<ClinikoIntakeAttestation | null>;
+  attest(request: ClinikoIntakeRequest, phase: "read" | "send", signal?: AbortSignal): Promise<ClinikoIntakeAttestation | null>;
 }>;
 
 export type ClinikoIntakeOutcome =
@@ -124,17 +131,18 @@ function validAttestation(value: unknown, request: ClinikoIntakeRequest, now: st
     expires > current && expires <= current + maxAttestationAgeMs;
 }
 
-async function boundedPatient(response: Response): Promise<Record<string, unknown> | undefined> {
+async function boundedPatient(response: Response, signal: AbortSignal): Promise<Record<string, unknown> | undefined> {
   if (!response.body) return undefined;
   const reader = response.body.getReader();
   let size = 0;
   const chunks: Uint8Array[] = [];
   try {
     while (true) {
-      const next = await reader.read();
+      const next = await awaitUntilAbort(reader.read(), signal);
+      if (!next || signal.aborted) { void reader.cancel().catch(() => {}); return undefined; }
       if (next.done) break;
       size += next.value.byteLength;
-      if (size > maxResponseBytes) { await reader.cancel(); return undefined; }
+      if (size > maxResponseBytes) { void reader.cancel().catch(() => {}); return undefined; }
       chunks.push(next.value);
     }
     const bytes = new Uint8Array(size);
@@ -156,9 +164,10 @@ export class ClinikoPatientIntakeEdge {
   private readonly fetchPort: typeof fetch;
   private readonly authority: ClinikoIntakeAuthority;
   private readonly clock: () => string;
+  private readonly countryCallingCode: string;
   private readonly attempted = new Set<string>();
 
-  private constructor(config: ClinikoPatientConfig, reader: ClinikoPatientCandidateReader,
+  private constructor(config: ClinikoIntakeConfig, reader: ClinikoPatientCandidateReader,
                       authority: ClinikoIntakeAuthority, fetchPort: typeof fetch, clock: () => string) {
     this.scope = { ...config.scope };
     this.baseUrl = `https://api.${config.apiKey.match(/-([a-z]{2}[0-9]{1,2})$/)![1]}.cliniko.com/v1`;
@@ -169,12 +178,14 @@ export class ClinikoPatientIntakeEdge {
     this.fetchPort = fetchPort;
     this.authority = authority;
     this.clock = clock;
+    this.countryCallingCode = config.countryCallingCode;
   }
 
-  static create(config: ClinikoPatientConfig, authority: ClinikoIntakeAuthority,
+  static create(config: ClinikoIntakeConfig, authority: ClinikoIntakeAuthority,
                 fetchPort: typeof fetch = fetch, clock: () => string = () => new Date().toISOString()):
     Result<ClinikoPatientIntakeEdge, ClinikoIntakeFailure> {
     if (!config || typeof config !== "object" ||
+        typeof config.countryCallingCode !== "string" || !/^[1-9][0-9]{0,2}$/.test(config.countryCallingCode) ||
         (config.rateBudget !== undefined && !isClinikoRequestBudget(config.rateBudget)) ||
         !authority || typeof authority.attest !== "function" || typeof clock !== "function") {
       return err({ kind: "invalidConfig" });
@@ -184,19 +195,25 @@ export class ClinikoPatientIntakeEdge {
     return reader.ok ? ok(new ClinikoPatientIntakeEdge(shared, reader.value, authority, fetchPort, clock)) : reader;
   }
 
-  private async authorized(input: ClinikoIntakeRequest, phase: "read" | "send"): Promise<boolean> {
+  private async authorized(input: ClinikoIntakeRequest, phase: "read" | "send", signal: AbortSignal): Promise<boolean> {
     try {
-      const attestation = await this.authority.attest(structuredClone(input), phase);
-      return validAttestation(attestation, input, this.clock());
+      if (signal.aborted) return false;
+      const attestation = await awaitUntilAbort(Promise.resolve().then(() => signal.aborted ? null :
+        this.authority.attest(structuredClone(input), phase, signal)), signal);
+      return !signal.aborted && validAttestation(attestation, input, this.clock());
     } catch { return false; }
   }
 
   /** A possible send consumes the attempt. Unknown outcomes never trigger another POST. */
-  async createOnce(request: ClinikoIntakeRequest): Promise<Result<ClinikoIntakeOutcome, ClinikoIntakeFailure>> {
+  async createOnce(request: ClinikoIntakeRequest, options: ClinikoIntakeOptions = {}): Promise<Result<ClinikoIntakeOutcome, ClinikoIntakeFailure>> {
     let input: ClinikoIntakeRequest;
     try { input = structuredClone(request); }
     catch { return err({ kind: "invalidQuery" }); }
     if (!validClinikoIntakeRequest(input)) return err({ kind: "invalidQuery" });
+    const timeoutMs = options?.timeoutMs ?? 15_000;
+    if (!options || typeof options !== "object" || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30_000 ||
+        (options.signal !== undefined && !(options.signal instanceof AbortSignal)) ||
+        !normalizePatientPhone(input.patientPhone, this.countryCallingCode)) return err({ kind: "invalidQuery" });
     if (input.scope.tenantId !== this.scope.tenantId || input.scope.clinicId !== this.scope.clinicId) {
       return err({ kind: "scopeMismatch" });
     }
@@ -204,35 +221,77 @@ export class ClinikoPatientIntakeEdge {
     if (this.attempted.size >= maxAttempts) return err({ kind: "unavailable" });
     // Claim before any await so racing calls through this instance cannot both send.
     this.attempted.add(input.attemptRef);
-    if (!await this.authorized(input, "read")) return err({ kind: "unauthorized" });
-    const candidates = await this.reader.findByEmailAndBirthDate(input.scope, input.email, input.dateOfBirth);
+    const controller = new AbortController();
+    const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let sent = false;
+    try {
+      const pending = this.perform(input, signal, () => { sent = true; });
+      const outcome = await awaitUntilAbort(pending, signal);
+      if (signal.aborted || !outcome) return sent ? ok({ kind: "uncertain" }) : err({ kind: "unavailable" });
+      return outcome;
+    } catch { return sent ? ok({ kind: "uncertain" }) : err({ kind: "unavailable" }); }
+    finally { clearTimeout(timer); controller.abort(); }
+  }
+
+  private matches(row: Record<string, unknown> | undefined, input: ClinikoIntakeRequest, expectedId?: string):
+    row is Record<string, unknown> & { id: string } {
+    const phones = row?.patient_phone_numbers;
+    const phone = Array.isArray(phones) && phones.length === 1 ? record(phones[0]) : undefined;
+    return !!row && typeof row.id === "string" && idPattern.test(row.id) && (expectedId === undefined || row.id === expectedId) &&
+      row.first_name === input.firstName && row.last_name === input.lastName && typeof row.email === "string" &&
+      row.email.toLowerCase() === input.email.toLowerCase() && row.date_of_birth === input.dateOfBirth &&
+      row.accepted_privacy_policy === true && row.archived_at === null && !!phone && phone.phone_type === input.phoneType &&
+      typeof phone.number === "string" && normalizePatientPhone(phone.number, this.countryCallingCode) ===
+      normalizePatientPhone(input.patientPhone, this.countryCallingCode);
+  }
+
+  private async perform(input: ClinikoIntakeRequest, signal: AbortSignal, markSend: () => void):
+    Promise<Result<ClinikoIntakeOutcome, ClinikoIntakeFailure>> {
+    if (signal.aborted) return err({ kind: "unavailable" });
+    if (!await this.authorized(input, "read", signal)) return err({ kind: "unauthorized" });
+    if (signal.aborted) return err({ kind: "unavailable" });
+    const candidates = await this.reader.findByEmailAndBirthDate(input.scope, input.email, input.dateOfBirth, signal);
+    if (signal.aborted) return err({ kind: "unavailable" });
     if (!candidates.ok) return err(candidates.error);
     if (candidates.value.kind === "one") return ok({ kind: "existingCandidate" });
     if (candidates.value.kind === "ambiguous") return ok({ kind: "ambiguous" });
-    const limited = await claimClinikoBudget(this.rateBudget);
+    const limited = await awaitUntilAbort(claimClinikoBudget(this.rateBudget), signal);
+    if (signal.aborted || limited === undefined) return err({ kind: "unavailable" });
     if (limited) return err(limited);
     // A host policy or consent can change while Cliniko is answering the duplicate check.
-    if (!await this.authorized(input, "send")) return err({ kind: "unauthorized" });
+    if (!await this.authorized(input, "send", signal)) return err({ kind: "unauthorized" });
+    if (signal.aborted) return err({ kind: "unavailable" });
     let response: Response;
     try {
-      response = await this.fetchPort(`${this.baseUrl}/patients`, {
+      markSend();
+      const received = await awaitUntilAbort(this.fetchPort(`${this.baseUrl}/patients`, {
         method: "POST", headers: { Accept: "application/json", Authorization: this.authorization,
           "Content-Type": "application/json", "User-Agent": this.userAgent },
         body: JSON.stringify({ first_name: input.firstName, last_name: input.lastName,
           date_of_birth: input.dateOfBirth, email: input.email,
           patient_phone_numbers: [{ number: input.patientPhone, phone_type: input.phoneType }],
           accepted_privacy_policy: true }),
-        redirect: "error", signal: AbortSignal.timeout(15_000),
-      });
+        redirect: "error", signal,
+      }), signal);
+      if (!received || signal.aborted) return ok({ kind: "uncertain" });
+      response = received;
     } catch { return ok({ kind: "uncertain" }); }
     if (response.status === 429) await observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset"));
     if (response.status !== 201) return ok({ kind: "uncertain" });
-    const row = await boundedPatient(response);
-    if (!row || typeof row.id !== "string" || !idPattern.test(row.id) ||
-        row.first_name !== input.firstName || row.last_name !== input.lastName ||
-        typeof row.email !== "string" || row.email.toLowerCase() !== input.email.toLowerCase() ||
-        row.date_of_birth !== input.dateOfBirth || row.accepted_privacy_policy !== true ||
-        row.archived_at !== null) return ok({ kind: "uncertain" });
+    const row = await boundedPatient(response, signal);
+    if (signal.aborted || !this.matches(row, input)) return ok({ kind: "uncertain" });
+    const observationBudget = await awaitUntilAbort(claimClinikoBudget(this.rateBudget), signal);
+    if (signal.aborted || observationBudget !== null) return ok({ kind: "uncertain" });
+    const observed = await awaitUntilAbort(this.fetchPort(`${this.baseUrl}/patients/${row.id}`, {
+      method: "GET", headers: { Accept: "application/json", Authorization: this.authorization, "User-Agent": this.userAgent },
+      redirect: "error", signal,
+    }), signal);
+    if (!observed || signal.aborted) return ok({ kind: "uncertain" });
+    if (observed.status === 429) await observeCliniko429(this.rateBudget, observed.headers.get("X-RateLimit-Reset"));
+    if (observed.status !== 200) return ok({ kind: "uncertain" });
+    const current = await boundedPatient(observed, signal);
+    if (signal.aborted || !this.matches(current, input, row.id)) return ok({ kind: "uncertain" });
     return ok({ kind: "created", patientRef: `cliniko:patient:${row.id}` });
   }
 }

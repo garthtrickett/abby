@@ -3,6 +3,7 @@ import { clinikoIntakeDraftDigest, validClinikoIntakeRequest } from "../cliniko/
 import type { ClinikoIntakeAttestation, ClinikoIntakeAuthority, ClinikoIntakeRequest } from "../cliniko/patient-intake.ts";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
+import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 
 type IntakeDraft = Pick<ClinikoIntakeRequest,
   "firstName" | "lastName" | "email" | "dateOfBirth" | "patientPhone" | "phoneType">;
@@ -90,6 +91,7 @@ export class TransientIntakeAuthority implements ClinikoIntakeAuthority {
   #sendClaimed = false;
   #closed = false;
   #epoch = 0;
+  readonly #lifetime = new AbortController();
 
   constructor(config: TransientIntakeAuthorityConfig) {
     if (!validScope(config.scope) || ![config.callId, config.sessionId, config.policyVersion].every(value =>
@@ -107,21 +109,21 @@ export class TransientIntakeAuthority implements ClinikoIntakeAuthority {
     this.#timeoutMs = config.timeoutMs ?? 15_000;
   }
 
-  async #resolve(draftRef: string, consentRef: string, authorityRef: string):
+  async #resolve(draftRef: string, consentRef: string, authorityRef: string, consumer?: AbortSignal):
     Promise<Result<HostIntakeEvidence, EvidenceFailure>> {
     const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, this.#lifetime.signal, ...(consumer ? [consumer] : [])]);
     let timer: ReturnType<typeof setTimeout> | undefined;
     const epoch = this.#epoch;
     try {
-      const pending = Promise.resolve().then(() => this.#source.resolve({ scope: this.#scope,
+      if (signal.aborted) return err({ kind: "unavailable" });
+      const pending = Promise.resolve().then(() => signal.aborted ? undefined : this.#source.resolve({ scope: this.#scope,
         callId: this.#callId, sessionId: this.#sessionId, policyVersion: this.#policyVersion,
-        draftRef, consentRef, authorityRef, signal: controller.signal }));
-      const timeout = new Promise<undefined>(resolve => {
-        timer = setTimeout(() => { controller.abort(); resolve(undefined); }, this.#timeoutMs);
-      });
-      const result = await Promise.race([pending, timeout]);
-      if (this.#closed || this.#epoch !== epoch || !result) return err({ kind: "unavailable" });
-      return result.ok ? ok(structuredClone(result.value)) : result;
+        draftRef, consentRef, authorityRef, signal }));
+      timer = setTimeout(() => controller.abort(), this.#timeoutMs);
+      const result = await awaitUntilAbort(pending, signal);
+      if (signal.aborted || this.#closed || this.#epoch !== epoch || !result) return err({ kind: "unavailable" });
+      return result.ok ? ok(structuredClone(result.value)) : err({ kind: result.error?.kind === "denied" ? "denied" : "unavailable" });
     } catch { return err({ kind: "unavailable" }); }
     finally { if (timer) clearTimeout(timer); controller.abort(); }
   }
@@ -133,6 +135,7 @@ export class TransientIntakeAuthority implements ClinikoIntakeAuthority {
     const expires = typeof evidence?.expiresAt === "string" && instantPattern.test(evidence.expiresAt)
       ? Date.parse(evidence.expiresAt) : NaN;
     return !!evidence && validScope(evidence.scope) && sameScope(evidence.scope, this.#scope) &&
+      evidence.draft !== null && typeof evidence.draft === "object" && !Array.isArray(evidence.draft) &&
       evidence.callId === this.#callId && evidence.sessionId === this.#sessionId &&
       evidence.policyVersion === this.#policyVersion && evidence.draftRef === refs.draftRef &&
       evidence.consentRef === refs.consentRef && evidence.authorityRef === refs.authorityRef &&
@@ -142,7 +145,7 @@ export class TransientIntakeAuthority implements ClinikoIntakeAuthority {
   }
 
   /** Only the trusted call owner supplies host-owned references; a model cannot issue one. */
-  async prepare(draftRef: string, consentRef: string, authorityRef: string):
+  async prepare(draftRef: string, consentRef: string, authorityRef: string, signal?: AbortSignal):
     Promise<Result<ClinikoIntakeRequest, IntakePreparationFailure>> {
     if (this.#closed) return err({ kind: "disconnected" });
     if (![draftRef, consentRef, authorityRef].every(ref => typeof ref === "string" && refPattern.test(ref))) {
@@ -152,14 +155,16 @@ export class TransientIntakeAuthority implements ClinikoIntakeAuthority {
     this.#busy = true;
     const epoch = this.#epoch;
     try {
-      const resolved = await this.#resolve(draftRef, consentRef, authorityRef);
+      const resolved = await this.#resolve(draftRef, consentRef, authorityRef, signal);
       if (this.#closed || this.#epoch !== epoch) return err({ kind: "disconnected" });
       if (!resolved.ok) return err(resolved.error);
       const evidence = resolved.value;
       if (!this.#validEvidence(evidence, { draftRef, consentRef, authorityRef })) return err({ kind: "denied" });
       const request: ClinikoIntakeRequest = { scope: this.#scope, callId: this.#callId,
         sessionId: this.#sessionId, attemptRef: randomUUID(), policyVersion: this.#policyVersion,
-        ...evidence.draft, caller: evidence.caller, consentRef, authorityRef };
+        firstName: evidence.draft.firstName, lastName: evidence.draft.lastName, email: evidence.draft.email,
+        dateOfBirth: evidence.draft.dateOfBirth, patientPhone: evidence.draft.patientPhone,
+        phoneType: evidence.draft.phoneType, caller: evidence.caller, consentRef, authorityRef };
       if (!validClinikoIntakeRequest(request)) return err({ kind: "denied" });
       const pending: Pending = { request: structuredClone(request), draftRef,
         digest: clinikoIntakeDraftDigest(request) };
@@ -169,7 +174,8 @@ export class TransientIntakeAuthority implements ClinikoIntakeAuthority {
     finally { this.#busy = false; }
   }
 
-  async attest(request: ClinikoIntakeRequest, phase: "read" | "send"): Promise<ClinikoIntakeAttestation | null> {
+  async attest(request: ClinikoIntakeRequest, phase: "read" | "send", signal?: AbortSignal): Promise<ClinikoIntakeAttestation | null> {
+    try { request = structuredClone(request); } catch { return null; }
     const pending = this.#pending;
     if (this.#closed || this.#sendClaimed || (phase !== "read" && phase !== "send") ||
         !pending || !validClinikoIntakeRequest(request) ||
@@ -181,14 +187,16 @@ export class TransientIntakeAuthority implements ClinikoIntakeAuthority {
         request.caller !== pending.request.caller ||
         clinikoIntakeDraftDigest(request) !== pending.digest) return null;
     const epoch = this.#epoch;
-    const resolved = await this.#resolve(pending.draftRef, request.consentRef, request.authorityRef);
+    const resolved = await this.#resolve(pending.draftRef, request.consentRef, request.authorityRef, signal);
     if (!resolved.ok) return null;
     const evidence = resolved.value;
     if (this.#closed || this.#epoch !== epoch || this.#pending !== pending ||
         !this.#validEvidence(evidence, { draftRef: pending.draftRef,
           consentRef: request.consentRef, authorityRef: request.authorityRef }) ||
         evidence.caller !== request.caller) return null;
-    const refreshed: ClinikoIntakeRequest = { ...request, ...evidence.draft };
+    const refreshed: ClinikoIntakeRequest = { ...request,
+      firstName: evidence.draft.firstName, lastName: evidence.draft.lastName, email: evidence.draft.email,
+      dateOfBirth: evidence.draft.dateOfBirth, patientPhone: evidence.draft.patientPhone, phoneType: evidence.draft.phoneType };
     if (!validClinikoIntakeRequest(refreshed) ||
         clinikoIntakeDraftDigest(refreshed) !== pending.digest) return null;
     if (this.#sendClaimed) return null;
@@ -204,6 +212,7 @@ export class TransientIntakeAuthority implements ClinikoIntakeAuthority {
   dispose(): void {
     this.#closed = true;
     this.#epoch += 1;
+    this.#lifetime.abort();
     this.#pending = undefined;
   }
 }

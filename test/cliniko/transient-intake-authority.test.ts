@@ -47,8 +47,12 @@ test("trusted transient host evidence permits exactly one scoped Cliniko create"
   assert.equal(request.callId, "call:one");
   assert.equal(request.caller, "patient");
   assert.equal(JSON.stringify(await host.prepare(...refs)).includes("Synthetic"), false);
-  const created = ClinikoPatientIntakeEdge.create({ scope, apiKey: "synthetic-key-au5",
+  const created = ClinikoPatientIntakeEdge.create({ scope, countryCallingCode: "61", apiKey: "synthetic-key-au5",
     contactEmail: "dev@example.test" }, host, async (_input, init) => {
+    if (new URL(String(_input)).pathname.endsWith("/42")) return Response.json({ id: "42",
+      first_name: request.firstName, last_name: request.lastName, email: request.email, date_of_birth: request.dateOfBirth,
+      patient_phone_numbers: [{ number: request.patientPhone, phone_type: request.phoneType }],
+      accepted_privacy_policy: true, archived_at: null });
     if (init?.method === "GET") return Response.json({ total_entries: 0, patients: [] });
     posts += 1;
     const body = JSON.parse(String(init?.body));
@@ -56,6 +60,7 @@ test("trusted transient host evidence permits exactly one scoped Cliniko create"
     assert.equal(body.accepted_privacy_policy, true);
     return Response.json({ id: "42", first_name: body.first_name, last_name: body.last_name,
       email: body.email, date_of_birth: body.date_of_birth,
+      patient_phone_numbers: [{ number: request.patientPhone, phone_type: request.phoneType }],
       accepted_privacy_policy: true, archived_at: null }, { status: 201 });
   }, () => now);
   assert.equal(created.ok, true);
@@ -74,8 +79,12 @@ test("consent revocation while Cliniko answers the duplicate search prevents cre
   let posts = 0;
   const host = authority(clinicianSource(() => evidence));
   const request = await prepared(host);
-  const created = ClinikoPatientIntakeEdge.create({ scope, apiKey: "synthetic-key-au5",
+  const created = ClinikoPatientIntakeEdge.create({ scope, countryCallingCode: "61", apiKey: "synthetic-key-au5",
     contactEmail: "dev@example.test" }, host, async (_input, init) => {
+    if (new URL(String(_input)).pathname.endsWith("/42")) return Response.json({ id: "42",
+      first_name: request.firstName, last_name: request.lastName, email: request.email, date_of_birth: request.dateOfBirth,
+      patient_phone_numbers: [{ number: request.patientPhone, phone_type: request.phoneType }],
+      accepted_privacy_policy: true, archived_at: null });
     if (init?.method === "GET") {
       evidence = null;
       return Response.json({ total_entries: 0, patients: [] });
@@ -95,13 +104,18 @@ test("two writer instances sharing one call authority cannot both create", async
   const request = await prepared(host);
   let posts = 0;
   const provider: typeof fetch = async (_input, init) => {
+    if (new URL(String(_input)).pathname.endsWith("/42")) return Response.json({ id: "42",
+      first_name: request.firstName, last_name: request.lastName, email: request.email, date_of_birth: request.dateOfBirth,
+      patient_phone_numbers: [{ number: request.patientPhone, phone_type: request.phoneType }],
+      accepted_privacy_policy: true, archived_at: null });
     if (init?.method === "GET") return Response.json({ total_entries: 0, patients: [] });
     posts += 1;
     return Response.json({ id: "42", first_name: request.firstName, last_name: request.lastName,
       email: request.email, date_of_birth: request.dateOfBirth,
+      patient_phone_numbers: [{ number: request.patientPhone, phone_type: request.phoneType }],
       accepted_privacy_policy: true, archived_at: null }, { status: 201 });
   };
-  const config = { scope, apiKey: "synthetic-key-au5", contactEmail: "dev@example.test" };
+  const config = { scope, countryCallingCode: "61", apiKey: "synthetic-key-au5", contactEmail: "dev@example.test" };
   const first = ClinikoPatientIntakeEdge.create(config, host, provider, () => now);
   const second = ClinikoPatientIntakeEdge.create(config, host, provider, () => now);
   assert.equal(first.ok, true);
@@ -154,4 +168,51 @@ test("host outage remains typed and disconnect during evidence resolution cannot
   interrupted.dispose();
   release();
   assert.deepEqual(await pending, { ok: false, error: { kind: "disconnected" } });
+});
+
+test("E2E-292 consumer abort or owner disposal releases held evidence immediately and late approval cannot claim a send", async () => {
+  for (const stage of ["prepare", "attest"] as const) for (const stop of ["consumer", "owner"] as const) {
+    let held = false, entered!: () => void, release!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    const waiting = new Promise<void>(resolve => { release = resolve; });
+    const host = authority({ async resolve() { if (held) { entered(); await waiting; } return ok(baseEvidence); } });
+    const request = stage === "attest" ? await prepared(host) : undefined;
+    held = true; const controller = new AbortController();
+    const pending = stage === "prepare" ? host.prepare(...refs, controller.signal) : host.attest(request!, "send", controller.signal);
+    await started;
+    if (stop === "consumer") controller.abort(); else host.dispose();
+    assert.deepEqual(await pending, stage === "attest" ? null :
+      { ok: false, error: { kind: stop === "owner" ? "disconnected" : "unavailable" } });
+    release(); await new Promise<void>(resolve => setImmediate(resolve));
+    if (stage === "attest" && stop === "consumer") assert.ok(await host.attest(request!, "send"), "abandoned approval did not mint or consume a send claim");
+    host.dispose();
+  }
+});
+
+test("E2E-292 a changing input and extra runtime draft keys cannot replace trusted call, scope or consent bindings", async () => {
+  const injected = { ...baseEvidence, draft: { ...baseEvidence.draft,
+    callId: "call:forged", sessionId: "session:forged", scope: { ...scope, clinicId: "forged" },
+    policyVersion: "forged", consentRef: "forged", authorityRef: "forged", attemptRef: "forged" } };
+  let held = false, entered!: () => void, release!: () => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const waiting = new Promise<void>(resolve => { release = resolve; });
+  const host = authority({ async resolve() { if (held) { entered(); await waiting; } return ok(injected); } });
+  const request = await prepared(host);
+  assert.equal(request.callId, baseEvidence.callId); assert.equal(request.sessionId, baseEvidence.sessionId);
+  assert.deepEqual(request.scope, scope); assert.equal(request.consentRef, refs[1]); assert.notEqual(request.attemptRef, "forged");
+  const mutable = structuredClone(request) as { -readonly [Key in keyof ClinikoIntakeRequest]: ClinikoIntakeRequest[Key] };
+  held = true; const pending = host.attest(mutable, "read"); await started;
+  mutable.callId = "call:changed"; mutable.consentRef = "consent:changed"; mutable.firstName = "Changed";
+  release(); const proof = await pending; assert.ok(proof);
+  assert.equal(proof.callId, baseEvidence.callId); assert.equal(proof.consentRef, refs[1]);
+  host.dispose();
+});
+
+test("E2E-292 malformed refreshed draft denies an attestation instead of throwing private host detail", async () => {
+  let evidence = baseEvidence;
+  const host = authority(clinicianSource(() => evidence));
+  const request = await prepared(host);
+  evidence = { ...baseEvidence, draft: null } as unknown as HostIntakeEvidence;
+  assert.equal(await host.attest(request, "send"), null);
+  host.dispose();
 });

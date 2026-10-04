@@ -138,7 +138,7 @@ test("E2E-016 a TCP reset after patient creation never claims saved details or r
       try {
         const prepared = await authority.prepare(refs.draftRef, refs.consentRef, refs.authorityRef);
         assert.ok(prepared.ok);
-        const edge = ClinikoPatientIntakeEdge.create({ scope, apiKey: "synthetic-key-au5",
+        const edge = ClinikoPatientIntakeEdge.create({ scope, countryCallingCode: "61", apiKey: "synthetic-key-au5",
           contactEmail: "dev@example.test" }, authority, providerFetch, () => now);
         assert.ok(edge.ok);
         const first = await edge.value.createOnce(prepared.value);

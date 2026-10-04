@@ -395,3 +395,5 @@ E2E-289/290 add the concrete admitted rescheduling owner and two-stage played so
 ### Step-7 pre-patient recovery research
 
 E2E-291 tests a demo-only memo probe with bounded account discovery, fresh-owner guarded cleanup and redacted failures. Actual demo rejection of omitted/null patient associations closes this candidate as an established pre-patient queue; no patient/appointment mutation occurred. The [first-time intake proposal](phase-2/STANDALONE_CLINIKO_FIRST_TIME_INTAKE.md) makes a caller-mediated loss contract reviewable but leaves it unselected. Caller implementation and actual activation gates remain open; real email delivery is deferred.
+
+E2E-292 hardens the intake provider seam independently of the unresolved D-18 choice: exact phone/type creation and read-back evidence, one operation deadline/call cancellation, late-response denial and actual PostgreSQL/backup aggregate-budget privacy. This does not complete the first-time caller journey or activate its raw setting.

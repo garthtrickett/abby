@@ -32,3 +32,5 @@ The first broad release stopped correctly on an optional live test sharing the s
 ## Standalone intake follow-up
 
 The [step-7 standalone proposal](STANDALONE_CLINIKO_FIRST_TIME_INTAKE.md) records memo research E2E-291 and a separate caller-mediated failure contract awaiting explicit product selection. The demo rejected omitted and null patient associations; a memo is not established pre-patient recovery. SET-005 remains unavailable in strict standalone, and neither research nor the proposed contract authorizes caller intake.
+
+E2E-292 separately hardens the existing intake provider edge: explicit country calling code, exact phone/type response plus independent same-patient read-back, bounded consumer deadline and transient authority disposal, with actual PostgreSQL/backup shared-budget canaries. This does not change SET-005 authority or choose D-18; caller intake remains unavailable.

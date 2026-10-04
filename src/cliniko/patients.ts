@@ -3,6 +3,7 @@ import type { LocationScope, Result } from "../core/model.ts";
 import { claimClinikoBudget, ClinikoReadBudget, clinikoCredentialFingerprint, isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
 import type { ClinikoRequestBudget } from "./read-budget.ts";
 import { normalizePatientPhone } from "./phone-number.ts";
+import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 
 export type ClinikoClinicScope = Pick<LocationScope, "tenantId" | "clinicId">;
 export type ClinikoPatientConfig = Readonly<{
@@ -58,18 +59,19 @@ function validEmail(value: unknown): value is string {
   return typeof value === "string" && value.length <= 254 && emailPattern.test(value);
 }
 
-async function boundedJson(response: Response): Promise<Result<unknown, ClinikoPatientFailure>> {
+async function boundedJson(response: Response, signal?: AbortSignal): Promise<Result<unknown, ClinikoPatientFailure>> {
   if (!response.body) return err({ kind: "malformed" });
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
   try {
     while (true) {
-      const next = await reader.read();
+      const next = await awaitUntilAbort(reader.read(), signal);
+      if (!next || signal?.aborted) { void reader.cancel().catch(() => {}); return err({ kind: "unavailable" }); }
       if (next.done) break;
       size += next.value.byteLength;
       if (size > maxBodyBytes) {
-        await reader.cancel();
+        void reader.cancel().catch(() => {});
         return err({ kind: "tooManyResults" });
       }
       chunks.push(next.value);
@@ -121,12 +123,13 @@ export class ClinikoPatientCandidateReader {
   credentialFingerprint(): string { return this.credentialHash; }
 
   /** Search by two documented exact filters; no phone or partial-name scan is attempted. */
-  async findByEmailAndBirthDate(scope: ClinikoClinicScope, email: string, dateOfBirth: string):
+  async findByEmailAndBirthDate(scope: ClinikoClinicScope, email: string, dateOfBirth: string, signal?: AbortSignal):
     Promise<Result<ClinikoPatientSearch, ClinikoPatientFailure>> {
     if (!validScope(scope) || scope.tenantId !== this.scope.tenantId || scope.clinicId !== this.scope.clinicId) {
       return err({ kind: "scopeMismatch" });
     }
     if (!validEmail(email) || !validDate(dateOfBirth)) return err({ kind: "invalidQuery" });
+    if (signal?.aborted) return err({ kind: "unavailable" });
     let observedAt: string;
     try { observedAt = this.clock(); }
     catch { return err({ kind: "unavailable" }); }
@@ -136,21 +139,25 @@ export class ClinikoPatientCandidateReader {
     const query = new URLSearchParams({ page: "1", per_page: "2" });
     query.append("q[]", `email:=${email}`);
     query.append("q[]", `date_of_birth:=${dateOfBirth}`);
-    const limited = await claimClinikoBudget(this.rateBudget);
+    const limited = await awaitUntilAbort(claimClinikoBudget(this.rateBudget), signal);
+    if (signal?.aborted || limited === undefined) return err({ kind: "unavailable" });
     if (limited) return err(limited);
     let response: Response;
     try {
-      response = await this.fetchPort(`${this.baseUrl}/patients?${query}`, {
+      const received = await awaitUntilAbort(this.fetchPort(`${this.baseUrl}/patients?${query}`, {
         method: "GET",
         headers: { Accept: "application/json", Authorization: this.authorization, "User-Agent": this.userAgent },
-        redirect: "error", signal: AbortSignal.timeout(15_000),
-      });
+        redirect: "error", signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
+      }), signal);
+      if (!received || signal?.aborted) return err({ kind: "unavailable" });
+      response = received;
     } catch { return err({ kind: "unavailable" }); }
     if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
     if (response.status === 429) return err(await observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset")));
     if (response.status >= 500 || response.status === 404) return err({ kind: "unavailable" });
     if (response.status !== 200) return err({ kind: "malformed" });
-    const parsed = await boundedJson(response);
+    const parsed = await boundedJson(response, signal);
+    if (signal?.aborted) return err({ kind: "unavailable" });
     if (!parsed.ok) return parsed;
     const body = record(parsed.value);
     if (!body || !Number.isSafeInteger(body.total_entries) || Number(body.total_entries) < 0 ||

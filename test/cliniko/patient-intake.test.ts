@@ -4,7 +4,7 @@ import { ClinikoPatientIntakeEdge, clinikoIntakeDraftDigest } from "../../src/cl
 import type { ClinikoIntakeAttestation, ClinikoIntakeAuthority, ClinikoIntakeRequest } from "../../src/cliniko/patient-intake.ts";
 
 const scope = { tenantId: "intake-tenant", clinicId: "intake-clinic", locationId: "intake-location" };
-const config = { scope, apiKey: "synthetic-key-au5", contactEmail: "dev@example.test" };
+const config = { scope, countryCallingCode: "61", apiKey: "synthetic-key-au5", contactEmail: "dev@example.test" };
 const request: ClinikoIntakeRequest = {
   scope, callId: "call:one", sessionId: "session:one", attemptRef: "intake:one",
   policyVersion: "intake-policy:1", firstName: "First", lastName: "Patient",
@@ -28,6 +28,13 @@ function edge(fetchPort: typeof fetch, authority: ClinikoIntakeAuthority = { att
   return result.value;
 }
 
+function createdRow(input: ClinikoIntakeRequest = request) {
+  return { id: "42", first_name: input.firstName, last_name: input.lastName,
+    email: input.email, date_of_birth: input.dateOfBirth, accepted_privacy_policy: true,
+    patient_phone_numbers: [{ number: input.patientPhone, phone_type: input.phoneType }],
+    archived_at: null, notes: "private Cliniko note" };
+}
+
 function candidateList(total: number) {
   return { total_entries: total, patients: Array.from({ length: Math.min(total, 2) }, (_, index) => ({
     id: String(index + 1), email: request.email, date_of_birth: request.dateOfBirth, archived_at: null,
@@ -39,8 +46,9 @@ test("first-time intake checks exact candidates and returns only the Cliniko pat
   const fetchPort: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
     assert.equal(url.origin, "https://api.au5.cliniko.com");
-    assert.equal(url.pathname, "/v1/patients");
+    assert.ok(["/v1/patients", "/v1/patients/42"].includes(url.pathname));
     methods.push(init?.method ?? "");
+    if (url.pathname === "/v1/patients/42") return Response.json(createdRow());
     if (init?.method === "GET") {
       assert.deepEqual(url.searchParams.getAll("q[]"),
         [`email:=${request.email}`, `date_of_birth:=${request.dateOfBirth}`]);
@@ -52,14 +60,12 @@ test("first-time intake checks exact candidates and returns only the Cliniko pat
       date_of_birth: request.dateOfBirth, email: request.email,
       patient_phone_numbers: [{ number: request.patientPhone, phone_type: request.phoneType }],
       accepted_privacy_policy: true });
-    return Response.json({ id: "42", first_name: request.firstName, last_name: request.lastName,
-      email: request.email, date_of_birth: request.dateOfBirth, accepted_privacy_policy: true,
-      archived_at: null, notes: "private Cliniko note" }, { status: 201 });
+    return Response.json(createdRow(), { status: 201 });
   };
   const result = await edge(fetchPort).createOnce(request);
   assert.deepEqual(result, { ok: true, value: { kind: "created", patientRef: "cliniko:patient:42" } });
   assert.equal(JSON.stringify(result).includes("private Cliniko note"), false);
-  assert.deepEqual(methods, ["GET", "POST"]);
+  assert.deepEqual(methods, ["GET", "POST", "GET"]);
 });
 
 test("existing or ambiguous patients, including a household proxy, never trigger create", async () => {
@@ -137,12 +143,11 @@ test("changing the caller's draft during host attestation cannot alter the autho
   const mutable = structuredClone(request) as { -readonly [K in keyof ClinikoIntakeRequest]: ClinikoIntakeRequest[K] };
   const postedNames: string[] = [];
   const adapter = edge(async (_input, init) => {
+    if (new URL(String(_input)).pathname.endsWith("/42")) return Response.json(createdRow());
     if (init?.method === "GET") return Response.json(candidateList(0));
     const body = JSON.parse(String(init?.body));
     postedNames.push(body.first_name);
-    return Response.json({ id: "42", first_name: request.firstName, last_name: request.lastName,
-      email: request.email, date_of_birth: request.dateOfBirth,
-      accepted_privacy_policy: true, archived_at: null }, { status: 201 });
+    return Response.json(createdRow(), { status: 201 });
   }, { attest: async input => {
     entered();
     await waiting;
