@@ -640,6 +640,25 @@ Source: merged `270673eb271656ca011486c34acea01523e7b840`, 2026-10-05. The same 
 
 Result: one dedicated type, one synthetic patient, one pending item; zero provider-marked-recalled, invalid or ambiguous items and zero clinical writes. No prepare, acknowledgment, archive, appointment mutation or resend occurred. Browser Drive fallback is owner-authorized and isolated from other agents on task-owned port/profile 9335; the account requires an emailed login verification code. Report/notes inspection, UI acknowledgment and cleanup remain pending. A later agent-operated UI observation would prove that observation only, not human staff receipt, resolution or an accepted unattended clinic process.
 
+## C-LIVE-58 — Authorized Cliniko report/notes UI rehearsal and verified cleanup
+
+Source: merged `12caf3b6e07c8d799a1b41bbb4b3b054c0a37e15`, 2026-10-05. The owner explicitly delegated the synthetic UI rehearsal to the agent and supplied the sign-in verification code. The isolated Browser Drive used task-owned port/profile 9335; other agents' browser state was untouched. Credentials, codes, patient identifiers, request markers and full notes are not copied into this record.
+
+A fresh preflight observed one type, one synthetic patient and one pending item, with zero recalled, invalid, ambiguous or clinical-write counts. The agent opened **Reports → Recalls**, selected **Abby supervised review rehearsal** and **All practitioners**, and found the one **Abby ReviewRehearsal** item due 4 October. The report exposed no business filter. In that patient's **Recalls** tab, the complete visible notes were read transiently and passed the production `decodeClinikoReview` decoder: version 2, demo-only policy, booking intent and the exact instruction **Staff review required. Do not replay automatically.** The JSON and marker remained provider/browser-owned and transient in the validation process.
+
+The agent clicked the exact row's **Recalled?** label through the ordinary UI. The UI request returned HTTP 200, the checkbox became checked, and a page reload retained that state. A separate credential/account/type-only `status` process then observed pending=0 and providerMarkedRecalled=1, with one type and one patient and zero invalid, ambiguous or clinical writes. This is an agent-operated UI visibility/acknowledgment witness, not a claim that a human staff member received, understood or resolved clinical work, or that an unattended clinic process is approved.
+
+The guarded `cleanup` command independently checked exact fixture ownership, unchanged metadata, absence of contact data and appointments, and each archive result. It archived the recall, synthetic patient and dedicated type in that order. Cleanup and an additional fresh `status` process both returned zero active types, patients, pending, recalled, invalid and ambiguous items, with zero clinical writes. Archived provider records remain in Cliniko; no hard deletion or appointment mutation is claimed.
+
+Exact commands, each in a separate tracked process with `ABBY_LIVE_CLINIKO_EVAL=1`:
+
+```sh
+node scripts/rehearse-cliniko-review.ts status --secret-file=/home/gust/code/abby/.env
+node scripts/rehearse-cliniko-review.ts cleanup --secret-file=/home/gust/code/abby/.env
+```
+
+Logs under `/home/gust/paseo/paseo-home/work/logs/`: preflight `4590eee3-1791190090779.log` (exit 0, two seconds); fresh post-UI status `4590eee3-1791190349414.log` (exit 0, one second); cleanup `4590eee3-1791190403607.log` (exit 0, six seconds); independent post-cleanup status `4590eee3-1791190428649.log` (exit 0). No new fixture was prepared. The owner's demo primary/cadence remains in the [runbook](../phase-2/CLINIKO_REVIEW_REHEARSAL.md); a real clinic still needs actual staff acceptance, backup, operating hours and escalation approval before unattended activation.
+
 ## C-LOCAL-75 — Nine-step evidence audit and current speech report validation
 
 Inspected main: `ea83d8eb2a915e54aa5775bb3652fe82b952c7df`, including C-LOCAL-73/E2E-293 public intake policy and C-LOCAL-74/E2E-294 opt-in private keypad transport. The acceptance table still omitted these local implementations and said current speech evidence had not been collected. It is corrected to distinguish implemented/tested interfaces from actual approval, delivery and activation.
