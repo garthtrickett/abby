@@ -112,3 +112,7 @@ For a proposed guarantee, request its supported endpoint/version, exact request/
 ### First-time intake recovery follow-up
 
 The [standalone first-time intake proposal](STANDALONE_CLINIKO_FIRST_TIME_INTAKE.md) records E2E-291 and actual demo rejection of omitted/null memo patient associations. The product owner selected caller-mediated loss recovery on 2026-10-04 (D-18); its implementation and actual clinic/authority/delivery proofs remain required before activation. Existing-patient appointment review remains mandatory.
+
+### E2E-296 local first-time booking continuation
+
+The admitted intake/booking composition now supplies the local same-call journey, original mailbox expiry and independent booking-permission checks, concrete public eligible offers, played ordinal selection, separate SAM booking affirmation, acknowledged full Cliniko review and one inspected best-effort send. Actual PostgreSQL aggregate budgets/table/backup checks and five parallel SIGKILL positions retain the patient and forbid fresh-owner replay. This is synthetic clinical approval/permission/mail/provider evidence. It does not satisfy actual clinic permission/consent/notification/staff witness, real delivery, current provider lifecycle or live voice activation.

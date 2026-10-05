@@ -25,6 +25,8 @@ export type PatientAuthorityDecision = Readonly<{
   sessionId: string;
   patientId: string;
   operations: readonly PatientOperation[];
+  /** Original source expiry; issuance must never extend it. */
+  expiresAt?: string;
   policyVersion: string;
 }>;
 export type PatientAuthority = Readonly<{
@@ -216,8 +218,10 @@ export class TransientPatientProofHost implements PatientProofHost {
       const now = instant(this.#clock());
       if (now === undefined) return err({ kind: "unavailable" });
       if (this.#closed || this.#epoch !== epoch) return err({ kind: this.#closed ? "disconnected" : "denied" });
+      const sourceExpiry = attested.value.expiresAt === undefined ? now + maxProofMs : instant(attested.value.expiresAt);
+      if (sourceExpiry === undefined || sourceExpiry <= now + 120_000) return err({ kind: "denied" });
       const proof: LiveProof = { patientId, verificationRef: randomBytes(32).toString("base64url"),
-        operations: permitted, expiresAt: new Date(now + maxProofMs).toISOString() };
+        operations: permitted, expiresAt: new Date(Math.min(now + maxProofMs, sourceExpiry)).toISOString() };
       this.#proof = proof;
       return ok({ verificationRef: proof.verificationRef, expiresAt: proof.expiresAt });
     } catch { return err({ kind: "unavailable" }); }

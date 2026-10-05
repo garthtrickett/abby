@@ -37,3 +37,7 @@ The caller demonstrates control of the patient’s currently registered email ch
 ## Caller-mediated intake recovery
 
 Before first-time registration, the caller separately acknowledges that a failure can leave a patient record without an appointment or saved staff request. Unknown creation is not retried automatically; the caller contacts the clinic to resolve it. This does not promise recoverable staff work or grant appointment authority.
+
+## Newly registered patient
+
+A patient whose registration was proven during the current call. Registration success is separate from appointment success. Booking for this patient requires independently approved permission and a separate caller confirmation; a rejected or uncertain booking leaves the patient record intact.

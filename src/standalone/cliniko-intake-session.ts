@@ -51,6 +51,7 @@ export class ClinikoIntakeSession extends NoStoredKnowledge implements IntakeEvi
   #providerRequest: ClinikoIntakeRequest | undefined;
   #action: IntakeAction | undefined;
   #dispatch: HostMutation | undefined;
+  #created: Readonly<{ actionKey: string; patientRef: string }> | undefined;
   #draftCount = 0;
   #busy = false;
   #attempted = false;
@@ -128,8 +129,10 @@ export class ClinikoIntakeSession extends NoStoredKnowledge implements IntakeEvi
     const mutation = this.#dispatch;
     if (mutation) {
       const action = state.value.actions[mutation.actionKey], effect = state.value.effects[`${mutation.actionKey}:write`];
-      if (action?.kind !== "intake" || action.status !== "dispatched" || action.digest !== mutation.payloadDigest ||
-          state.value.presentations[action.presentationId]?.status !== "played" || effect?.kind !== "hostWrite" || effect.status !== "possiblySent" ||
+      if (action?.kind !== "intake" || action.digest !== mutation.payloadDigest ||
+          !((action.status === "dispatched" && effect?.status === "possiblySent") ||
+            (action.status === "committed" && effect?.status === "completed" && this.#created?.actionKey === action.key && action.hostRef === this.#created.patientRef)) ||
+          state.value.presentations[action.presentationId]?.status !== "played" || effect?.kind !== "hostWrite" ||
           digestActionRequest(action.mutation.request) !== mutation.payloadDigest || digestActionRequest(effect.mutation.request) !== mutation.payloadDigest) return false;
     }
     return !signal.aborted && !this.#lifetime.signal.aborted && Date.parse(state.value.sessionLease!.expiresAt) > Date.parse(this.#now());
@@ -247,15 +250,38 @@ export class ClinikoIntakeSession extends NoStoredKnowledge implements IntakeEvi
         return { kind: "committed" as const, actionKey: mutation.actionKey, hostRef: outcome.value.patientRef };
       }, external);
       // Abandoning the composition cannot prove the provider send never occurred.
-      return result ?? uncertain();
+      if (result?.kind === "committed" && !this.#lifetime.signal.aborted && !external?.aborted) {
+        this.#created = { actionKey: mutation.actionKey, patientRef: result.hostRef };
+        return result;
+      }
+      return result?.kind === "committed" ? uncertain() : result ?? uncertain();
     } catch { return uncertain(); }
+  }
+  /** Trusted owner only: a private exact provider receipt AND committed SAM action are required.
+   * This supplies a candidate for independent booking permission, never appointment authority. */
+  async createdPatient(external?: AbortSignal): Promise<Readonly<{ patientId: string; email: string; phone: string; expiresAt: string }> | undefined> {
+    return this.#bounded(async signal => {
+      const created = this.#created, draft = this.#draft;
+      if (!created || !draft || !await this.#currentDraft(signal)) return undefined;
+      const state = await this.#config.ledger.read(this.#config.receipt.callId, this.#config.receipt.scope);
+      const action = state.ok ? state.value.actions[created.actionKey] : undefined;
+      const patientId = created.patientRef.match(/^cliniko:patient:([1-9][0-9]{0,18})$/)?.[1];
+      if (!patientId || action?.status !== "committed" || action.hostRef !== created.patientRef ||
+          !await this.#currentDraft(signal) || signal.aborted || this.#created !== created || this.#draft !== draft) return undefined;
+      return { patientId, email: draft.query.draft.email, phone: draft.query.draft.patientPhone, expiresAt: this.#mail!.expiresAt()! };
+    }, external);
+  }
+  matchesCall(scope: LocationScope, callId: string, sessionId: string, policyVersion: string): boolean {
+    const config = this.#config;
+    return !this.#lifetime.signal.aborted && sameScope(scope, config.receipt.scope) && callId === config.receipt.callId &&
+      sessionId === config.sessionId && policyVersion === config.policyVersion;
   }
   async reconcile(mutation: HostMutation): Promise<ReconcileObservation> { return { kind: "stillUnknown", actionKey: mutation.actionKey }; }
   async openTask(item: StaffItem): Promise<StaffTaskReceipt> { return { kind: "rejected", taskKey: item.key }; }
   async reconcileTask(item: StaffItem): Promise<StaffTaskObservation> { return { kind: "stillUnknown", taskKey: item.key }; }
   dispose(): void {
     this.#lifetime.abort(); this.#config.signal.removeEventListener("abort", this.#onClose); this.#mail?.close(); this.#authority.dispose();
-    this.#mail = undefined; this.#draft = undefined; this.#providerRequest = undefined; this.#action = undefined; this.#dispatch = undefined;
+    this.#mail = undefined; this.#draft = undefined; this.#providerRequest = undefined; this.#action = undefined; this.#dispatch = undefined; this.#created = undefined;
     this.#recoveryRef = undefined; this.#recoveryAccepted = false;
   }
 }

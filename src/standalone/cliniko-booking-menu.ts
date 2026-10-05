@@ -6,7 +6,7 @@ import { CallerVerificationSession } from "./caller-verification-session.ts";
 import { ClinikoBookingOffers } from "./cliniko-booking-offers.ts";
 import type { BookingChoices } from "./cliniko-booking-offers.ts";
 
-type Config = Readonly<{ verification: CallerVerificationSession; offers: ClinikoBookingOffers;
+type Config = Readonly<{ verification: Pick<CallerVerificationSession, "verified">; offers: ClinikoBookingOffers;
   scope: BookingMenuQuery["scope"]; callId: string; sessionId: string; policyVersion: string }>;
 const denied = <T>(): Result<T, HostReadFailure> => err({ kind: "unavailable", target: "offer" });
 
