@@ -39,6 +39,7 @@
     "test:postgres": "npm run build:cliniko-admin && npm run build:availability-console && node --test --test-concurrency=4 test/text/*.test.ts test/storage/*.test.ts test/composition/*.test.ts test/admission/*.test.ts test/voice/*.test.ts test/cliniko/*.test.ts test/portability/*.test.ts test/contract/*.test.ts && node --test test/runner/ordered-node-e2e.test.ts",
     "eval:model": "node scripts/evaluate-model.ts",
     "eval:availability-intent": "node scripts/evaluate-availability-intent.ts",
+    "eval:clinical-intent": "node scripts/evaluate-clinical-intent.ts",
     "eval:transcription": "node scripts/evaluate-transcription.ts",
     "eval:file-transcription": "node scripts/evaluate-file-transcription.ts",
     "eval:speech-loop": "node scripts/evaluate-speech-loop.ts",

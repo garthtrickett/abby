@@ -95,6 +95,11 @@ export class CallRuntime {
     return this.update(turn.callId, { kind: "callerTurn", turn, interpretation, now, ...(expectedConversationRevision === undefined ? {} : { expectedConversationRevision }) });
   }
 
+  /** The trusted voice owner retains the text; SAM tracks only this opaque playback receipt. */
+  privateIntakePrompt(callId: string, presentationId: string, sessionId: string, now: string) {
+    return this.update(callId, { kind: "privateIntakePrompt", presentationId, sessionId, now });
+  }
+
   acceptModelResult(callId: string, effectId: string,
                     result: Extract<TransitionAction, { kind: "modelResolved" }>["result"], now: string): Promise<Result<CallState, TransitionFailure>> {
     return this.update(callId, { kind: "modelResolved", effectId, result, now });

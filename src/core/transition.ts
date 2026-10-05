@@ -254,6 +254,28 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   const messageCount = state.callerMessages.length;
 
   switch (interpretation.kind) {
+    case "workflowStarted": {
+      if (!["book", "cancel", "reschedule", "intake"].includes(interpretation.operation) ||
+          (interpretation.operation === "intake" ? interpretation.next !== "intakeRequired" : interpretation.next !== "codeRequired") ||
+          state.policy.capabilities[interpretation.operation] !== "execute" || !state.policy.automationEnabled) return err({ kind: "invalidTransition" });
+      state.callerMessages.push(interpretation.next === "codeRequired"
+        ? "Before we continue, verify your email. If you receive a six-digit code, enter it on the keypad, then press pound. Star clears your entry. Please do not say the code aloud."
+        : "Before registration, we will explain privacy and what happens if the call fails, then review your details. Registration does not book an appointment. Press one to start private registration, or star to stop.");
+      break;
+    }
+    case "outcomeQuery": {
+      const latest = Object.values(state.actions).at(-1);
+      const text = !latest ? "I haven't completed an action in this call." : latest.status === "committed"
+        ? confirmedActionText(latest.kind) : latest.status === "uncertain" || latest.status === "needsReview" || latest.status === "dispatched"
+          ? latest.kind === "intake" && latest.mutation.request.kind === "intake" && latest.mutation.request.recoveryContract === "callerMediated"
+            ? "I can't confirm that your details were saved. No appointment or staff request is confirmed. Contact the clinic before trying again."
+            : "I can't confirm that action yet. It is pending review."
+          : latest.status === "awaitingConfirmation" || latest.status === "ready"
+            ? "That action is not confirmed yet. I still need your separate confirmation."
+            : "That action was not completed.";
+      state.callerMessages.push(text);
+      break;
+    }
     case "modelPending": {
       if (!state.policy.automationEnabled || turn.quality !== "clear" || turn.turnId.length > 256 ||
           !/^[a-f0-9]{64}$/.test(interpretation.taskRef)) return err({ kind: "invalidTransition" });
@@ -547,6 +569,17 @@ export function transition(current: CallState, action: TransitionAction): Result
       }
       state.conversationRevision += 1;
       cancelModelWork(state);
+      break;
+    }
+    case "privateIntakePrompt": {
+      const lease = state.sessionLease;
+      if (state.lifecycle !== "active" || !state.admission || !lease || lease.sessionId !== action.sessionId ||
+          Date.parse(action.now) >= Date.parse(lease.expiresAt) || !state.policy.automationEnabled ||
+          state.policy.capabilities.intake !== "execute" || state.policy.firstTimeIntakeEnabled !== true) return err({ kind: "leaseLost" });
+      if (!/^[a-f0-9-]{36}$/.test(action.presentationId) || state.pendingPresentationId || state.presentations[action.presentationId] ||
+          Object.values(state.presentations).some(item => item.status === "started" || item.status === "possiblySent")) return err({ kind: "invalidTransition" });
+      state.presentations[action.presentationId] = { kind: "notice", id: action.presentationId, approvedText: "", status: "pending" };
+      state.pendingPresentationId = action.presentationId;
       break;
     }
     case "silenceTimeout": {

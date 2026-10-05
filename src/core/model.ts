@@ -243,6 +243,8 @@ export type AppointmentRead = Readonly<{
 }>;
 
 export type TurnInterpretation =
+  | Readonly<{ kind: "workflowStarted"; operation: ActionKind; next: "codeRequired" | "intakeRequired" }>
+  | Readonly<{ kind: "outcomeQuery" }>
   | Readonly<{ kind: "modelPending"; taskRef: string }>
   | Readonly<{ kind: "modelFallback" }>
   | Readonly<{ kind: "clarify" }>
@@ -463,6 +465,7 @@ export type TransitionAction =
   | Readonly<{ kind: "textPresentationWritten"; presentationId: string; now: string }>
   | Readonly<{ kind: "speechBegan"; sessionId: string; now: string }>
   | Readonly<{ kind: "silenceTimeout"; sessionId: string; stage: "retry" | "final"; now: string }>
+  | Readonly<{ kind: "privateIntakePrompt"; sessionId: string; presentationId: string; now: string }>
   | Readonly<{ kind: "callerTurn"; turn: FinalCallerTurn; interpretation: TurnInterpretation; now: string; expectedConversationRevision?: number }>
   | Readonly<{ kind: "modelResolved"; effectId: string; result: Result<import("../model/proposal.ts").ModelProposal, import("../model/proposal.ts").ModelFailure>; now: string }>
   | Readonly<{ kind: "modelKnowledgeResolved"; effectId: string; result: Result<readonly ApprovedKnowledge[], Readonly<{ kind: "invalidQuery" | "unavailable" }>>;

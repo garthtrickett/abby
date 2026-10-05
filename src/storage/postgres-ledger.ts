@@ -74,6 +74,7 @@ function auditPayload(action: TransitionAction): Record<string, string> {
     case "silenceTimeout": return { sessionId: action.sessionId, stage: action.stage };
     case "callEnded": return { sessionId: action.sessionId, reason: action.reason };
     case "textPresentationWritten": return { presentationId: action.presentationId };
+    case "privateIntakePrompt": return { presentationId: action.presentationId, sessionId: action.sessionId };
     case "admissionExpired": return {};
     case "callerTurn": return { turnId: action.turn.turnId, interpretation: action.interpretation.kind };
     case "presentationStarted":
