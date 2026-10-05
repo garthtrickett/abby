@@ -9,6 +9,55 @@ const config: ClinikoAvailabilityConfig = {
   scope, apiKey: "synthetic-key-au5", contactEmail: "dev@example.test", businessId: "11", practitionerId: "22", appointmentTypeId: "33",
 };
 
+test("E2E-305 booking accepts Cliniko's active practitioner without archive field and keeps type/archive/inactive checks", async () => {
+  for (const mode of ["practitionerOmitted", "practitionerNull", "practitionerArchived", "typeOmitted", "inactive"] as const) {
+    const fake=fakeProvider();
+    const port:typeof fetch=async(input,init)=>{
+      const response=await fake.port(input,init),body=await response.json(),path=new URL(String(input)).pathname;
+      if(path==="/v1/businesses/11") body.archived_at=null;
+      if(path==="/v1/practitioners/22") {
+        body.display_name="Demo practitioner";
+        if(mode==="practitionerNull") body.archived_at=null;
+        if(mode==="practitionerArchived") body.archived_at="2026-09-30T00:00:00.000Z";
+        if(mode==="inactive") body.active=false;
+      }
+      if(path==="/v1/appointment_types/33") {body.name="Demo service";body.duration_in_minutes=30;if(mode!=="typeOmitted")body.archived_at=null;}
+      return Response.json(body);
+    };
+    const reader=value(ClinikoAvailabilityReader.create(config,port,()=>"2026-09-30T23:00:00.000Z"));
+    const result=await reader.listBooking(scope,"2026-10-01","2026-10-01",30);
+    if(mode==="practitionerOmitted" || mode==="practitionerNull") {
+      assert.equal(result.ok,true,mode);assert.equal(result.ok && result.value.kind,"times",mode);
+    } else {
+      assert.ok(!result.ok || result.value.kind==="notEligible",mode);
+      assert.equal(fake.requests.some(request=>request.url.pathname.endsWith("/available_times")),false,mode);
+    }
+  }
+});
+
+test("E2E-305 independent metadata and relationship reads overlap before the availability request", async () => {
+  const fake=fakeProvider(),arrived=new Set<string>();
+  let releaseMetadata:()=>void=()=>{},releaseRelations:()=>void=()=>{};
+  const metadata=new Promise<void>(resolve=>{releaseMetadata=resolve;}),relations=new Promise<void>(resolve=>{releaseRelations=resolve;});
+  const port:typeof fetch=async(input,init)=>{
+    const path=new URL(String(input)).pathname;arrived.add(path);
+    if(path==="/v1/practitioners/22" || path==="/v1/appointment_types/33") {
+      if(arrived.has("/v1/practitioners/22") && arrived.has("/v1/appointment_types/33")) releaseMetadata();await metadata;
+    }
+    if(path==="/v1/businesses/11/practitioners" || path==="/v1/practitioners/22/appointment_types") {
+      if(arrived.has("/v1/businesses/11/practitioners") && arrived.has("/v1/practitioners/22/appointment_types")) releaseRelations();await relations;
+    }
+    if(path.endsWith("/available_times")) assert.ok(arrived.has("/v1/businesses/11/practitioners") && arrived.has("/v1/practitioners/22/appointment_types"));
+    return fake.port(input,init);
+  };
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),2000);
+  try {
+    const result=await value(ClinikoAvailabilityReader.create(config,port,()=>"2026-09-30T23:00:00.000Z"))
+      .list(scope,"2026-10-01","2026-10-01",controller.signal);
+    assert.equal(result.ok && result.value.kind,"times");
+  } finally {clearTimeout(timeout);releaseMetadata();releaseRelations();}
+});
+
 function value<T>(result: Result<T, { kind: string }>): T {
   assert.equal(result.ok, true, result.ok ? "" : result.error.kind);
   return result.value;

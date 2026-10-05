@@ -23,7 +23,7 @@ export class EffectWorker {
 
   constructor(runtime: CallRuntime, host: HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost & NotificationHost>, model?: ModelWork,
               knowledge?: KnowledgeHost, options: EffectWorkerOptions = {}) {
-    const deadline = options.hostDeadlineMs ?? 15_000;
+    const deadline = options.hostDeadlineMs ?? host.effectDeadlineMs ?? 15_000;
     if (!Number.isSafeInteger(deadline) || deadline < 1 || deadline > 120_000) throw new RangeError("hostDeadlineMs must be 1..120000");
     this.runtime = options.leaseGuard ? runtime.withEffectLease(options.leaseGuard) : runtime;
     this.host = host;

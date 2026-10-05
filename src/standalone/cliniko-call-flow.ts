@@ -26,6 +26,7 @@ const readDenied = () => err({ kind: "unavailable" as const, target: "appointmen
 /** One admitted call chooses one workflow. No eager verifier, model credential, cross-operation grant or implicit intake booking.
  * Concrete workflow owners retain all permission, public approval, SAM, inspection and single-send checks. */
 export class ClinikoCallFlow extends NoStoredKnowledge {
+  readonly effectDeadlineMs = 30_000;
   readonly #config: ClinikoCallFlowConfig;
   readonly #lifetime = new AbortController();
   readonly #onClose = () => this.dispose();

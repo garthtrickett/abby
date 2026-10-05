@@ -39,6 +39,7 @@ export type ClinikoIntakeSessionConfig = Readonly<{
 /** One admitted, volatile caller-mediated registration. Private collection/OTP stays outside SAM/model turns.
  * SAM alone owns the final action confirmation and dispatch. Production wiring remains separately gated. */
 export class ClinikoIntakeSession extends NoStoredKnowledge implements IntakeEvidenceHost {
+  readonly effectDeadlineMs = 30_000;
   readonly #config: ClinikoIntakeSessionConfig;
   readonly #lifetime = new AbortController();
   readonly #authority: TransientIntakeAuthority;

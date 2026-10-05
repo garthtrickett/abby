@@ -20,6 +20,7 @@ export type ClinikoBookingHostConfig = ClinikoBookingGuardConfig & Readonly<{ re
 /** Standalone declared best-effort booking, with one Cliniko-owned review before one possible send.
  * This does not grant exclusive commit permission or activate the live runner. */
 export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvidenceHost, HostEffects {
+  readonly effectDeadlineMs = 30_000;
   readonly #config: ClinikoBookingHostConfig;
   readonly #guard: ClinikoBookingGuard;
   readonly #review: ClinikoReviewedSend;
