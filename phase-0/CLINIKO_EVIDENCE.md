@@ -659,6 +659,53 @@ node scripts/rehearse-cliniko-review.ts cleanup --secret-file=/home/gust/code/ab
 
 Logs under `/home/gust/paseo/paseo-home/work/logs/`: preflight `4590eee3-1791190090779.log` (exit 0, two seconds); fresh post-UI status `4590eee3-1791190349414.log` (exit 0, one second); cleanup `4590eee3-1791190403607.log` (exit 0, six seconds); independent post-cleanup status `4590eee3-1791190428649.log` (exit 0). No new fixture was prepared. The owner's demo primary/cadence remains in the [runbook](../phase-2/CLINIKO_REVIEW_REHEARSAL.md); a real clinic still needs actual staff acceptance, backup, operating hours and escalation approval before unattended activation.
 
+## C-LIVE-59 — Complete admitted demo lifecycle with independent readbacks and cleanup
+
+Executable/test source: `63e669bb4c6f8bb20b398e86a0e1f93fa8f87edb`, 2026-10-05. The owner explicitly authorized booking, cancellation, rescheduling and intake against the real Cliniko demo API. The opt-in harness uses actual session owners, private verification state, current public policy sources, gateway, volatile SAM ledger, complete action playback and separate affirmation. Admission, clinic permission, approvals, caller turns, playback and an in-memory verification mailbox are synthetic. Provider HTTP and the patient, appointment and recall mutations are real. This does not activate patient calls in the standalone listener.
+
+| Stage | Live result |
+| --- | --- |
+| First-time intake | Recovery terms acknowledged; exactly one patient POST; SAM committed; independent exact synthetic patient readback |
+| Intake booking | Live offers and separately confirmed details; one review recall and one appointment POST; exact appointment, service, practitioner and duration readback; no observed conflict |
+| Rescheduling | Fresh operation-bound verification and played source/destination menus; one review and one in-place PATCH; same appointment at the selected new time, correct duration and no observed conflict |
+| Cancellation | Fresh verification, protected appointment and approved terms; one review and one cancellation PATCH; exact cancelled record and expected reason |
+| Returning-patient booking | Separate existing-patient session and new verification; one review and one additional appointment POST; exact readback and no observed conflict |
+| Repeated drains | No additional clinical or recall send for any completed action |
+| Cleanup | Both appointments, all four reviews, patient and dedicated recall type guarded and independently verified archived; original online-booking value restored and independently reread; public recovery checkpoint removed |
+
+The final run returned `ok=true`, `cleanup=true`, intake=1, book=2, reschedule=1, cancel=1, recall=4, exit 0 in 5m38s. Independent workflow owners close before each 61-second shared-provider-budget pause. A separate fresh `status` process observed zero active synthetic patients and recall types, one business with its original online flag false, and exit 0. Appointment and recall archives are verified individually during cleanup; the fresh process finds no active fixture patient to enumerate their children. Archived records remain Cliniko-owned; this is not hard deletion or patient-facing rollback.
+
+Exact live commands, each in a tracked process with `ABBY_LIVE_CLINIKO_EVAL=1` and owner-only secrets loaded from disk:
+
+```sh
+node scripts/rehearse-cliniko-lifecycle.ts run --secret-file=/home/gust/code/abby/.env --recovery-file=/tmp/abby-cliniko-lifecycle-public.json
+node scripts/rehearse-cliniko-lifecycle.ts status --secret-file=/home/gust/code/abby/.env --recovery-file=/tmp/abby-cliniko-lifecycle-public.json
+```
+
+Final logs under `/home/gust/paseo/paseo-home/work/logs/`: complete lifecycle `4590eee3-1791195533688.log`; fresh independent status `4590eee3-1791195897571.log`. Output contains fixed step names, counts, timing, booleans and redacted failure kinds. No patient identifiers, appointment times, private fields, codes, notes, credentials or response bodies are written to these logs or this evidence record. The only durable rehearsal checkpoint contains public business-setting restoration data; patient/action state remains in memory or Cliniko.
+
+### Findings fixed before the successful run
+
+- The actual active practitioner's response omits `archived_at`. Availability now accepts that practitioner shape while preserving active/online checks, explicit appointment-type archive/duration evidence and business/relationship checks. The public practitioner/type reads and their relationship reads overlap; protected patient authority remains sequential.
+- Cliniko's reviewed appointment protocol already had a 30-second budget, but dispatch aborted at 15 seconds. A live reschedule attempted one PATCH and correctly remained uncertain at 15,004 ms. Trusted host metadata now supplies the bounded 30-second dispatcher budget through both text and aggregate voice composition; undeclared hosts retain 15 seconds and explicit worker options take precedence. The successful final reschedule committed in 15,522 ms. Expiry, interruption, uncertain outcomes, single-send and late-response rejection remain enforced.
+- Cleanup uses resource-specific queries. Patient/recall/type lists reject appointment cancellation filters; recall lists reject the attempted recall-type filter. Cancelled appointment archives need explicit cancellation scope: the first otherwise complete four-workflow run returned 404 at cleanup and remained a failed run. A guarded fresh-owner cleanup with the corrected scope succeeded, then the entire corrected lifecycle passed together. No clinical write was retried during recovery.
+- Cliniko updates a patient's revision when its child appointments change or are archived. Cleanup refreshes that revision after owned child archives, preserves exact original private-field comparisons, and checks the fresh revision immediately before archiving the patient. Concurrent clinical edits still prevent cleanup.
+
+### Local validation
+
+The following commands passed on the corresponding source with four workers and no failed, cancelled or skipped tests:
+
+```sh
+npm run typecheck
+node --test --test-concurrency=4 test/text/effect-deadline.test.ts test/text/effect-recovery.test.ts test/text/effect-work-loop.test.ts test/cliniko/lifecycle-rehearsal.test.ts test/cliniko/availability.test.ts test/cliniko/cliniko-call-flow.test.ts test/cliniko/rescheduling-session.test.ts test/cliniko/cancellation-session.test.ts test/contract/scenario-manifest.test.ts test/voice/cliniko-workflow-call.test.ts
+node --test --test-concurrency=4 test/cliniko/lifecycle-rehearsal.test.ts test/cliniko/availability.test.ts test/text/effect-deadline.test.ts test/contract/scenario-manifest.test.ts
+git diff --check
+```
+
+The broad focused gate on `2dc6ed590924e971ee01a2e27398b060fc940462` passed typecheck and 86 tests, including actual signed HTTP/WebSocket workflow journeys, disposable PostgreSQL and database canary checks. The subsequent cancelled-archive correction on `63e669bb4c6f8bb20b398e86a0e1f93fa8f87edb` passed typecheck and all 33 affected checks. Logs: `4590eee3-1791194841452.log`, `4590eee3-1791195419835.log`, `4590eee3-1791195443022.log`. E2E-305 covers full lifecycle, provider shape and parallel public reads, rejected/lost completed booking responses, guarded recovery, public-only checkpoints and edit/isolation refusal. E2E-306 covers trusted/default/explicit dispatcher budgets, invalid bounds, provider abort and late-response uncertainty. Manifest 1.101 tracks 306 IDs and keeps full-call evidence planned for these cases.
+
+Remaining limits: current demo-account observations establish neither atomic overlap/conditional-write guarantees nor other clinics' behavior. D-06/D-11 privacy, D-16 best effort and D-18 caller-mediated intake loss remain intact. Real verification-email delivery is deferred. Independent clinical authority, actual staff acceptance/operating workflow, deployed identity/policy, representative speech quality and carrier-call proof remain open; natural-language/patient-call activation stays held. See the [lifecycle runbook](../phase-2/CLINIKO_LIVE_LIFECYCLE.md).
+
 ## C-LOCAL-75 — Nine-step evidence audit and current speech report validation
 
 Inspected main: `ea83d8eb2a915e54aa5775bb3652fe82b952c7df`, including C-LOCAL-73/E2E-293 public intake policy and C-LOCAL-74/E2E-294 opt-in private keypad transport. The acceptance table still omitted these local implementations and said current speech evidence had not been collected. It is corrected to distinguish implemented/tested interfaces from actual approval, delivery and activation.

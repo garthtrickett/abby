@@ -28,6 +28,7 @@ type Failure = Readonly<{ kind: "intakeBookingSessionUnavailable" }>;
 /** One admitted call, two separately confirmed actions. Registration cannot auto-book or roll back a patient.
  * Private intake/OTP collection belongs to the trusted owner; existing agent commands own the booking menu and SAM. */
 export class ClinikoIntakeBookingSession extends NoStoredKnowledge implements IntakeEvidenceHost, BookingEvidenceHost, BookingMenuHost {
+  readonly effectDeadlineMs = 30_000;
   readonly intake: ClinikoIntakeSession;
   readonly #proof: IntakeBookingProof;
   readonly #offers: ClinikoBookingOffers;

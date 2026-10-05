@@ -195,7 +195,9 @@ export class ClinikoAvailabilityReader {
     if (!fetched.ok) return fetched;
     const body = record(fetched.value);
     if (!body || String(body.id) !== id || typeof body.show_in_online_bookings !== "boolean" ||
-        (bookingDuration !== undefined && (body.archived_at !== null ||
+        // Cliniko practitioners use active status and can omit archived_at.
+        // Appointment types still require their explicit unarchived evidence.
+        (bookingDuration !== undefined && ((body.archived_at !== null && !(requireActive && body.archived_at === undefined)) ||
           (!requireActive && body.duration_in_minutes !== bookingDuration))) ||
         (requireActive && body.active !== true && body.active !== false && body.active !== null)) return err({ kind: "malformed" });
     if (nameField && !spokenName(body[nameField])) return err({ kind: "malformed" });
@@ -295,20 +297,22 @@ export class ClinikoAvailabilityReader {
     const clinicDate = new Intl.DateTimeFormat("en-US", { timeZone, calendar: "gregory", numberingSystem: "latn",
       year: "numeric", month: "2-digit", day: "2-digit" });
 
-    const practitioner = await this.onlineFlag(this.practitionerId, `/practitioners/${this.practitionerId}`, signal, true,
-      withLabel ? "display_name" : undefined, bookingDuration);
+    const [practitioner, appointmentType] = await Promise.all([
+      this.onlineFlag(this.practitionerId, `/practitioners/${this.practitionerId}`, signal, true,
+        withLabel ? "display_name" : undefined, bookingDuration),
+      this.onlineFlag(this.appointmentTypeId, `/appointment_types/${this.appointmentTypeId}`,
+        signal, false, withLabel ? "name" : undefined, bookingDuration),
+    ]);
     if (!practitioner.ok) return practitioner;
     if (!practitioner.value.eligible) return ok({ kind: "notEligible", reason: "practitioner" });
-    const appointmentType = await this.onlineFlag(this.appointmentTypeId, `/appointment_types/${this.appointmentTypeId}`,
-      signal, false, withLabel ? "name" : undefined, bookingDuration);
     if (!appointmentType.ok) return appointmentType;
     if (!appointmentType.value.eligible) return ok({ kind: "notEligible", reason: "appointmentType" });
-    const businessPractitioner = await this.includesRelated(`/businesses/${this.businessId}/practitioners`,
-      "practitioners", this.practitionerId, signal);
+    const [businessPractitioner, practitionerType] = await Promise.all([
+      this.includesRelated(`/businesses/${this.businessId}/practitioners`, "practitioners", this.practitionerId, signal),
+      this.includesRelated(`/practitioners/${this.practitionerId}/appointment_types`, "appointment_types", this.appointmentTypeId, signal),
+    ]);
     if (!businessPractitioner.ok) return businessPractitioner;
     if (!businessPractitioner.value) return ok({ kind: "notEligible", reason: "practitioner" });
-    const practitionerType = await this.includesRelated(`/practitioners/${this.practitionerId}/appointment_types`,
-      "appointment_types", this.appointmentTypeId, signal);
     if (!practitionerType.ok) return practitionerType;
     if (!practitionerType.value) return ok({ kind: "notEligible", reason: "appointmentType" });
 

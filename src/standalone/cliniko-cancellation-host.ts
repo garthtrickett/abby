@@ -22,6 +22,7 @@ export type ClinikoCancellationHostConfig = Omit<ClinikoAppointmentChangeGuardCo
  * Construction is not clinic activation. The production caller runner does not expose this host yet. */
 export class ClinikoCancellationHost extends NoStoredKnowledge
   implements AppointmentChangeEvidenceHost, BookingEvidenceHost, HostEffects {
+  readonly effectDeadlineMs = 30_000;
   readonly #config: ClinikoCancellationHostConfig;
   readonly #guard: ClinikoAppointmentChangeGuard;
   readonly #review: ClinikoReviewedSend;

@@ -180,6 +180,10 @@ export interface PatientProofHost {
 }
 
 export interface HostEffects {
+  /** Trusted adapter budget for its complete effect protocol, including review
+   * and readback. Dispatcher validates 1..120000 ms; absent means 15000 ms.
+   * This is not caller/model input and cannot extend proof or call lifetimes. */
+  readonly effectDeadlineMs?: number;
   write(mutation: HostMutation, now: string, signal?: AbortSignal): Promise<HostWriteReceipt>;
   reconcile(mutation: HostMutation, signal?: AbortSignal): Promise<ReconcileObservation>;
   openTask(item: StaffItem, signal?: AbortSignal): Promise<StaffTaskReceipt>;
