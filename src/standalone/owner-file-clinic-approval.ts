@@ -35,40 +35,45 @@ const hash = (value: unknown): string => createHash("sha256").update(JSON.string
 /** Current owner-provisioned approval/membership, shared by method and cancellation policy decoders. */
 export class OwnerFileClinicApproval<Value extends ClinicApproval> {
   readonly #config: Config<Value>;
-  readonly #approvalHash: string;
+  readonly #sourceHash: string;
+  readonly #captured: Value;
   readonly #membershipHash: string;
-  private constructor(config: Config<Value>, captured: Value, account: AdminAccount) {
+  private constructor(config: Config<Value>, captured: Value, account: AdminAccount, sourceHash: string) {
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }) });
-    this.#approvalHash = hash(captured); this.#membershipHash = hash(account);
+    this.#sourceHash = sourceHash; this.#captured = structuredClone(captured); this.#membershipHash = hash(account);
   }
   static async capture<Value extends ClinicApproval>(config: Config<Value>): Promise<Result<OwnerFileClinicApproval<Value>, ClinicApprovalFailure>> {
     try {
       if (typeof config.decode !== "function" || typeof config.directory?.findByRef !== "function" ||
           (config.clock !== undefined && typeof config.clock !== "function")) return err({ kind: "unavailable" });
-      const captured = config.decode(await readOwnerJson(config.path, 8192), config.scope);
+      const source = await readOwnerJson(config.path, 8192), sourceHash = hash(source);
+      const captured = config.decode(source, config.scope);
       if (!captured) return err({ kind: "unavailable" });
       const found = await config.directory.findByRef(captured.approverRef);
       if (!found.ok || !found.value || !validAdminAccount(found.value) || found.value.actor.role !== "clinicAdmin" ||
           found.value.actor.actorRef !== captured.approverRef || !sameScope(found.value.actor.scope, config.scope)) return err({ kind: "unavailable" });
-      const again = config.decode(await readOwnerJson(config.path, 8192), config.scope);
-      if (!again || hash(again) !== hash(captured)) return err({ kind: "unavailable" });
-      return ok(new OwnerFileClinicApproval(config, captured, found.value));
+      const reread = await readOwnerJson(config.path, 8192), again = config.decode(reread, config.scope);
+      if (!again || hash(reread) !== sourceHash || hash(again) !== hash(captured)) return err({ kind: "unavailable" });
+      return ok(new OwnerFileClinicApproval(config, captured, found.value, sourceHash));
     } catch { return err({ kind: "unavailable" }); }
   }
   async current(scope: LocationScope): Promise<Result<Value | undefined, ClinicApprovalFailure>> {
     const config = this.#config;
     try {
       if (!sameScope(scope, config.scope)) return ok(undefined);
-      const current = config.decode(await readOwnerJson(config.path, 8192), config.scope);
-      if (!current || hash(current) !== this.#approvalHash) return ok(undefined);
+      // The complete decoded snapshot was validated at capture. Fresh content
+      // must match that exact source before and after current membership lookup.
+      // This avoids repeating expensive schema/Intl validation on identical data.
+      if (hash(await readOwnerJson(config.path, 8192)) !== this.#sourceHash) return ok(undefined);
+      const current = this.#captured;
       const found = await config.directory.findByRef(current.approverRef);
       if (!found.ok || !found.value || !validAdminAccount(found.value) || found.value.actor.role !== "clinicAdmin" ||
           !sameScope(found.value.actor.scope, config.scope) || hash(found.value) !== this.#membershipHash) return ok(undefined);
-      const again = config.decode(await readOwnerJson(config.path, 8192), config.scope);
+      const again = await readOwnerJson(config.path, 8192);
       const now = approvalInstant((config.clock ?? (() => new Date().toISOString()))());
-      if (!again || hash(again) !== this.#approvalHash || now === undefined || now < Date.parse(current.effectiveFrom) ||
+      if (hash(again) !== this.#sourceHash || now === undefined || now < Date.parse(current.effectiveFrom) ||
           now >= Date.parse(current.effectiveUntil) || !current.approved || !current.enabled) return ok(undefined);
-      return ok(current);
+      return ok(structuredClone(current));
     } catch { return err({ kind: "unavailable" }); }
   }
 }

@@ -48,7 +48,11 @@ test("E2E-299 signed Cliniko workflows run concurrently through actual HTTP/WS, 
         const proposed = Object.values((await call.state()).actions).at(-1)!; assert.equal(proposed.status, "awaitingConfirmation");
         assert.match(call.spoken.at(-1)!, operation === "book" ? /Physiotherapy.*Demo Practitioner.*30 minutes/ : /cancel|reschedul|move/i);
         await call.mark(); await call.turn("Yes");
-        assert.equal(call.writes.length, 1); assert.equal(Object.values((await call.state()).actions).at(-1)!.status, lostWrite ? "uncertain" : "committed");
+        const settled = await call.state();
+        assert.equal(call.writes.length, 1, JSON.stringify({ operation, lostWrite,
+          actions: Object.values(settled.actions).map(action => action.status),
+          effects: Object.values(settled.effects).map(effect => ({ kind: effect.kind, status: effect.status })) }));
+        assert.equal(Object.values(settled.actions).at(-1)!.status, lostWrite ? "uncertain" : "committed");
         if (lostWrite) {
           assert.match(call.spoken.at(-1)!, /can't confirm|couldn't confirm|not confirmed|unconfirmed/i);
           assert.equal(call.spoken.at(-1)!.includes("is confirmed"), false);
