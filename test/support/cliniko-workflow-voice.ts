@@ -176,7 +176,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
             await voiceUntil(() => hostWritesStarted > beforeWrites || processedChunk >= finalChunk || failures.length > 0,
               "confirmed caller turn dispatch");
             if (hostWritesStarted > beforeWrites) {
-              // EffectWorker starts its unchanged 15-second host deadline before
+              // EffectWorker starts the host's declared dispatch deadline before
               // invoking write; start this observation only after that invocation.
               await voiceUntil(() => hostWritesSettled > beforeWrites || failures.length > 0, "host write settlement", 15_000);
             }
