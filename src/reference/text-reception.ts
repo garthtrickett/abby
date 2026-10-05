@@ -3,7 +3,7 @@ import { BookingMenuTurns } from "./booking-menu-turns.ts";
 import { EffectWorker } from "../core/effect-worker.ts";
 import { EffectCallLeaseCoordinator } from "../core/effect-call-lease.ts";
 import type { EffectCallLeaseStore } from "../core/effect-call-lease.ts";
-import type { AppointmentChangeEvidenceHost, AppointmentChangeEvidenceQuery, AppointmentChangeSelection, AppointmentHost, AvailabilityHost, ReschedulingMenuHost, BookingMenuHost, BookingEvidenceHost, HostEffects, IntakeEvidenceHost, KnowledgeHost, ModelKnowledgeContextHost, NotificationHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
+import type { WorkflowHost, AppointmentChangeEvidenceHost, AppointmentChangeEvidenceQuery, AppointmentChangeSelection, AppointmentHost, AvailabilityHost, ReschedulingMenuHost, BookingMenuHost, BookingEvidenceHost, HostEffects, IntakeEvidenceHost, KnowledgeHost, ModelKnowledgeContextHost, NotificationHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
 import { captureKnowledgeSnapshot, validCallKnowledgeSource, validKnowledgeSource } from "../core/knowledge-evidence.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err } from "../core/model.ts";
@@ -11,9 +11,10 @@ import type { CallState, FinalCallerTurn, LocationScope, Result, StaffChangeRequ
 import { CallRuntime } from "../core/runtime.ts";
 import { appointmentChangeEvidenceFailure, noticePresentationId } from "../core/transition.ts";
 import { modelTaskRef } from "../model/work.ts";
+import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 function validIntakeRef(value: unknown): value is string {
@@ -42,6 +43,24 @@ export class TextReception {
     this.availability = availability;
     this.appointments = appointments;
     this.model = model;
+  }
+
+  async startWorkflow(scope: LocationScope, turn: FinalCallerTurn, operation: import("../core/model.ts").ActionKind, now: string, expectedConversationRevision?: number, external?: AbortSignal) {
+    const state = await this.ledger.read(turn.callId, scope);
+    if (!state.ok) return state;
+    if (!this.host.startWorkflow || !state.value.policy.policyVersion || !turn.sessionId || turn.quality !== "clear" || state.value.sessionLease?.sessionId !== turn.sessionId ||
+        (expectedConversationRevision !== undefined && state.value.conversationRevision !== expectedConversationRevision)) return err({ kind: "invalidTransition" as const });
+    if (state.value.processedTurnIds.includes(turn.turnId)) return state;
+    const signal = AbortSignal.any([AbortSignal.timeout(20_000), ...(external ? [external] : [])]);
+    if (signal.aborted) return err({ kind: "staleTurn" as const });
+    let selected;
+    try { selected = await awaitUntilAbort(this.host.startWorkflow({ scope, callId: turn.callId, sessionId: turn.sessionId,
+      policyVersion: state.value.policy.policyVersion, operation, signal }), signal); }
+    catch { selected = undefined; }
+    if (external?.aborted) return err({ kind: "staleTurn" as const });
+    const runtime = new CallRuntime(this.ledger, scope);
+    return selected?.ok ? runtime.acceptTurn(turn, { kind: "workflowStarted", operation, next: selected.value.kind }, now, expectedConversationRevision)
+      : runtime.acceptTurn(turn, { kind: "unavailableAction", actionKind: operation }, now, expectedConversationRevision);
   }
 
   reschedulingMenuEnabled(): boolean {

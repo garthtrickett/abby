@@ -139,6 +139,13 @@ export interface BookingEvidenceHost {
   resolveBooking(scope: LocationScope, verificationRef: string, offerRef: string, now: string, signal?: AbortSignal): Promise<Result<Extract<ActionRequest, { kind: "book" }>, HostReadFailure>>;
 }
 
+export type WorkflowQuery = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
+  operation: import("./model.ts").ActionKind; signal: AbortSignal }>;
+/** Trusted workflow routing issues neither patient proof nor a clinical action. */
+export interface WorkflowHost {
+  startWorkflow(query: WorkflowQuery): Promise<Result<Readonly<{ kind: "codeRequired" | "intakeRequired" }>, Readonly<{ kind: "workflowUnavailable" }>>>;
+}
+
 /** Opaque selections and proof are resolved by the host; neither is a provider ID from the model. */
 export type AppointmentChangeSelection = Readonly<{ verificationRef: string; targetRef: string }> &
   (Readonly<{ kind: "cancel" }> | Readonly<{ kind: "reschedule"; offerRef: string }>);

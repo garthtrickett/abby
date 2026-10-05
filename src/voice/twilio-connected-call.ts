@@ -213,6 +213,9 @@ export class TwilioConnectedCall {
     if (event.kind === "media" && (privateAtArrival || this.privateInputMode())) {
       const discarded = this.call.discardPrivateMedia(event.frame);
       if (!discarded.ok) { await this.failSession(); return discarded; }
+      if (privateAtArrival === "collecting" && this.privateKeypadInput?.blocked() && this.privateKeypadInput.acceptMedia) {
+        if (await this.privateKeypadInput.acceptMedia(event.frame) === "failed") { await this.failSession(); return err({ kind: "privateInputUnavailable" }); }
+      }
       // Only audio arriving after verification can establish a fresh resume interval.
       // Held earlier private silence and late voiced code packets cannot open transcription.
       if (privateAtArrival === "draining" && this.privateResuming) {

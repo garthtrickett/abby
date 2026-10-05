@@ -6,9 +6,16 @@ import { CallRuntime } from "../core/runtime.ts";
 import type { TextReceptionFailure } from "../reference/text-reception.ts";
 import { TextReception } from "../reference/text-reception.ts";
 import { TurnAssembler } from "./turn-assembler.ts";
+import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 
 export type VoiceIntent =
+  | Readonly<{ kind: "workflow"; operation: "book" | "cancel" | "reschedule" | "intake" }>
+  | Readonly<{ kind: "outcome" }>
+  | Readonly<{ kind: "bookingMenu"; from: string; to: string }>
+  | Readonly<{ kind: "bookingChoice"; choice: 1 | 2 | 3 }>
+  | Readonly<{ kind: "reschedulingMenu"; stage: "targets" | "offers"; from: string; to: string }>
+  | Readonly<{ kind: "reschedulingChoice"; stage: "targets" | "offers"; choice: 1 | 2 | 3 }>
   | Readonly<{ kind: "model" }>
   | Readonly<{ kind: "book"; verificationRef: string; offerRef: string }>
   | Readonly<{ kind: "cancel"; verificationRef: string; targetRef: string }>
@@ -48,7 +55,7 @@ export type DispatchResult = Readonly<{ kind: "none" | "queued" | "played" | "fa
 
 type ActivePlayback = { id: string; presentationId: string; generation: number };
 
-function clearAffirmation(text: string): boolean {
+export function clearAffirmation(text: string): boolean {
   return /^(yes|yes, book it|yes book it|yes, please|yes please)[.!]?$/i.test(text.trim());
 }
 
@@ -84,6 +91,7 @@ export class VoiceSession {
   private cachedIntent: VoiceIntent | undefined;
   private pendingIntent: Readonly<{ cancel: () => void }> | undefined;
   private unclearTurns = 0;
+  private readonly privatePlayback = new Map<string, (played: boolean) => void>();
 
   /** A qualified new speech onset may fence a still-pending classifier before wire-order work resumes. */
   supersedePendingIntent(): boolean {
@@ -100,6 +108,8 @@ export class VoiceSession {
   stopTransientWork(): void {
     this.pendingIntent?.cancel();
     this.reception.cancelPendingModel(this.scope, this.callId);
+    for (const resolve of this.privatePlayback.values()) resolve(false);
+    this.privatePlayback.clear();
   }
 
   constructor(callId: string, sessionId: string, scope: LocationScope, ledger: LedgerStore, reception: TextReception, playback: PlaybackPort, resolveIntent: IntentResolver, transfer?: TransferPort, monotonicNow: () => number = () => performance.now(), transient?: TransientPresentationConfig) {
@@ -310,7 +320,22 @@ export class VoiceSession {
       this.cachedIntent = intent.value;
     }
     let result: Result<CallState, VoiceSessionFailure>;
-    if (this.cachedIntent.kind === "model") {
+    if (this.cachedIntent.kind === "workflow") {
+      const controller = new AbortController(), pending = { cancel: () => controller.abort() };
+      this.pendingIntent = pending;
+      try { result = await this.reception.startWorkflow(this.scope, turn, this.cachedIntent.operation, now, existing.value.conversationRevision, controller.signal); }
+      finally { if (this.pendingIntent === pending) this.pendingIntent = undefined; }
+    } else if (this.cachedIntent.kind === "outcome") {
+      result = await this.runtime.acceptTurn(turn, { kind: "outcomeQuery" }, now, existing.value.conversationRevision);
+    } else if (this.cachedIntent.kind === "bookingMenu") {
+      result = await this.reception.readBookingMenu(this.scope, turn, this.cachedIntent.from, this.cachedIntent.to, now);
+    } else if (this.cachedIntent.kind === "bookingChoice") {
+      result = await this.reception.selectBookingMenu(this.scope, turn, this.cachedIntent.choice, now);
+    } else if (this.cachedIntent.kind === "reschedulingMenu") {
+      result = await this.reception.readReschedulingMenu(this.scope, turn, this.cachedIntent.stage, this.cachedIntent.from, this.cachedIntent.to, now);
+    } else if (this.cachedIntent.kind === "reschedulingChoice") {
+      result = await this.reception.selectReschedulingMenu(this.scope, turn, this.cachedIntent.stage, this.cachedIntent.choice, now);
+    } else if (this.cachedIntent.kind === "model") {
       result = this.reception.modelEnabled()
         ? await this.reception.interpretModelTurn(this.scope, turn, now, existing.value.conversationRevision)
         : await this.runtime.acceptTurn(turn, { kind: "modelFallback" }, now, existing.value.conversationRevision);
@@ -378,6 +403,38 @@ export class VoiceSession {
       existing.value.conversationRevision);
     if (checked.ok) { this.rememberPending(checked.value); this.unclearTurns = 0; }
     return checked;
+  }
+
+  /** Private intake speech is absent from SAM text/history and the model. Only the exact
+   * transport completion can fulfill this promise. The source owns consent/draft authority. */
+  async presentPrivateIntake(text: string, signal: AbortSignal, now: string): Promise<boolean> {
+    if (!this.transientContent || signal.aborted || !this.canSend() || this.speechOpen || this.activePlayback ||
+        typeof text !== "string" || !text.trim() || text.length > 2_000) return false;
+    const id = randomUUID();
+    const queued = await this.runtime.privateIntakePrompt(this.callId, id, this.sessionId, now);
+    if (!queued.ok || signal.aborted) return false;
+    this.transientContent.set(id, text);
+    let resolve!: (played: boolean) => void;
+    const receipt = new Promise<boolean>(done => { resolve = done; });
+    this.privatePlayback.set(id, resolve);
+    let played = false;
+    try {
+      const dispatched = await this.dispatchPending(now);
+      if (!dispatched.ok || !["queued", "played"].includes(dispatched.value.kind)) return false;
+      played = await awaitUntilAbort(receipt, AbortSignal.any([signal, AbortSignal.timeout(20_000)])) === true;
+      return played;
+    } finally {
+      this.privatePlayback.delete(id); this.transientContent.delete(id);
+      if (!played) await this.clearPrivateIntakePrompt(id, now);
+    }
+  }
+
+  private async clearPrivateIntakePrompt(id: string, now: string): Promise<void> {
+    const active = this.activePlayback;
+    if (active?.presentationId !== id) return;
+    this.activePlayback = undefined;
+    await this.runtime.resolvePresentation(this.callId, id, "unproven", this.sessionId, now);
+    await this.playback.clear(active.id).catch(() => false);
   }
 
   async dispatchPending(now: string): Promise<Result<DispatchResult, VoiceSessionFailure>> {
@@ -490,6 +547,7 @@ export class VoiceSession {
     if (result.ok) {
       this.activePlayback = undefined;
       this.transientContent?.delete(active.presentationId);
+      this.privatePlayback.get(active.presentationId)?.(status === "played");
     }
     return result;
   }
@@ -511,6 +569,7 @@ export class VoiceSession {
   async end(now: string, reason: "callerDisconnected" | "sessionClosed" = "sessionClosed"): Promise<Result<CallState, VoiceSessionFailure>> {
     if (!this.attached) return err({ kind: "sessionUnknown" });
     this.speechOpen = true;
+    this.stopTransientWork();
     const active = this.activePlayback;
     this.activePlayback = undefined;
     const ended = await this.runtime.endCall(this.callId, this.sessionId, now, reason);
