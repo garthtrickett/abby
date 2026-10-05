@@ -30,7 +30,10 @@ function provider() {
     }
     if(method==="GET" && path.endsWith("/conflicts")) return Response.json({conflicts:{exist:false}});
     if(method==="POST" && path.endsWith("/archive")) {
-      const record=records.get(path.slice(0,-8));assert.ok(record);record.archived_at=stamp();
+      const record=records.get(path.slice(0,-8));assert.ok(record);
+      if(path.startsWith("individual_appointments/") && record.cancelled_at &&
+        !url.searchParams.getAll("q[]").includes("cancelled_at:*")) return new Response(null,{status:404});
+      record.archived_at=stamp();
       if(path.startsWith("individual_appointments/")) {
         const patient=records.get(`patients/${record.patient_id}`);assert.ok(patient);patient.updated_at=stamp();
         if(editDuringArchive)patient.notes="Staff added work during cleanup";

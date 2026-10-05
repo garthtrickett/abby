@@ -70,7 +70,9 @@ export class ClinikoLifecycleFixture {
       signal: AbortSignal.timeout(15_000), ...(body ? { body: JSON.stringify(body) } : {}) }); }
     catch { throw new LifecycleFailure(method === "GET" ? "providerUnavailable" : "mutationUncertain"); }
     if (response.status === 429) await observeCliniko429(this.budget, response.headers.get("X-RateLimit-Reset"));
-    if (path.endsWith("/archive")) { requireLive(response.status === 204, "archiveUncertain"); return {}; }
+    if (path.split("?")[0]!.endsWith("/archive")) {
+      requireLive(response.status === 204, `archiveUncertain_${response.status}_${path.split("/")[1]}`); return {};
+    }
     requireLive(response.status === (method === "POST" ? 201 : 200), method === "GET" ? `providerReadRejected_${response.status}_${path.split("/")[1]?.split("?")[0]}` : "mutationUncertain");
     const parsed = await boundedClinikoJson(response); requireLive(parsed.ok, "invalidProviderShape"); return row(parsed.value);
   }
@@ -214,7 +216,7 @@ export class ClinikoLifecycleFixture {
     const cancelled=resource==="individual_appointments" ? "&q%5B%5D=cancelled_at%3A*" : "";
     const current=await this.request("GET",`/${resource}/${record.id}${cancelled ? "?"+cancelled.slice(1) : ""}`);
     requireLive(this.#same(resource,current,record),"fixtureEditedBeforeCleanup");
-    await this.request("POST",`/${resource}/${record.id}/archive`);
+    await this.request("POST",`/${resource}/${record.id}/archive${cancelled ? "?"+cancelled.slice(1) : ""}`);
     const after=await this.request("GET",`/${resource}/${record.id}?q%5B%5D=archived_at%3A*${cancelled}`);
     requireLive(after.id===record.id && typeof after.archived_at==="string" && Number.isFinite(Date.parse(after.archived_at)),"archiveUnverified");
   }
