@@ -76,6 +76,12 @@ fixture timing gap; it does not establish that every timing-related failure is
 eliminated. Failure diagnostics contain statuses and counters, never private
 caller text, codes or provider payloads.
 
+## Complete local regression follow-up — 2026-10-05
+
+The complete parallel sweep exposed two concrete timing problems beyond the focused checks: the fixture's generic speech wait included host work, and repeated decoding of identical public approvals could consume the actual host deadline. Source `cde262a317168659463aa6f32c3a7bea6ff081d8`, based on merged PR #389, separates actual host start/settlement from playback waiting and validates captured approvals against fresh complete file hashes, current administrator membership and current expiry on every use. Returned values are independent copies. Revocation, protected file reads, host deadlines, worker counts and single-send/outcome assertions remain enforced; E2E-282 covers returned-copy mutation followed by actual file revocation.
+
+The corrected source passed typecheck, 64 focused checks, the complete text suite, the complete PostgreSQL/schema/Kanel probe and all 75 browser tests. Manifest 1.99's setting isolation gate then passed 539 Node checks across 88 files individually and in both observed four-worker orders, plus 62 browser checks across 13 files individually and in both observed three-worker orders; both coordinators passed. All selected setting checks executed without skips. The sole remaining complete PostgreSQL skip is the opt-in live-provider C-LIVE-40 patient-creation test. Exact counts, commands, logs and skip accounting are in the [current work plan](../NO_TWILIO_NUMBER_WORK_PLAN.md#current-number-independent-checklist). This closes broad local regression on that executable/test source; it does not change the activation gates below.
+
 ## Remaining activation gates
 
 The runnable standalone CLI does not enable patient-specific voice workflows.

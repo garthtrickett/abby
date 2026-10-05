@@ -59,6 +59,19 @@ test("E2E-282 notice and horizon boundaries use real canonical instants and effe
   } finally { await f.close(); }
 });
 
+test("E2E-282 returned approval mutation cannot alter the captured policy or survive file revocation", async () => {
+  const f = await bookingOffersFixture();
+  try {
+    const first = await f.bookingPolicy.current(f.scope); assert.ok(first.ok);
+    Object.assign(first.value, { enabled: false, durationMinutes: 480 });
+    Object.assign(first.value.scope, { clinicId: "foreign" });
+    const fresh = await f.bookingPolicy.current(f.scope); assert.ok(fresh.ok);
+    assert.deepEqual(fresh.value, f.approval);
+    await f.replacePolicy({ enabled: false });
+    assert.equal((await f.bookingPolicy.current(f.scope)).ok, false);
+  } finally { await f.close(); }
+});
+
 test("E2E-282 approval replacement during the final protected contact refresh prevents publishing offers", async () => {
   const f = await bookingOffersFixture();
   try {

@@ -634,6 +634,12 @@ Tracked job `Abby current demo review status with fresh lost-context reader`, lo
 
 This was read-only: no prepare, staff acknowledgment, cleanup, patient/appointment change or resend. The owner-provided local credentials were loaded by the bounded CLI and were not printed or committed. The pending item remains available for Garth's actual report/notes inspection. A saved recall and a provider flag cannot replace the human witness or clinic acceptance required by D-07. No new live appointment mutation should be started while that supervised review remains unavailable.
 
+## C-LIVE-57 — Fresh review status while connecting isolated UI
+
+Source: merged `270673eb271656ca011486c34acea01523e7b840`, 2026-10-05. The same demo-only `status` command above ran in a new process, loading only the protected secret file and public account/type configuration. Tracked job `Abby fresh demo recall status while awaiting browser attachment`, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791180102395.log`, completed exit 0 in two seconds.
+
+Result: one dedicated type, one synthetic patient, one pending item; zero provider-marked-recalled, invalid or ambiguous items and zero clinical writes. No prepare, acknowledgment, archive, appointment mutation or resend occurred. Browser Drive fallback is owner-authorized and isolated from other agents on task-owned port/profile 9335; the account requires an emailed login verification code. Report/notes inspection, UI acknowledgment and cleanup remain pending. A later agent-operated UI observation would prove that observation only, not human staff receipt, resolution or an accepted unattended clinic process.
+
 ## C-LOCAL-75 — Nine-step evidence audit and current speech report validation
 
 Inspected main: `ea83d8eb2a915e54aa5775bb3652fe82b952c7df`, including C-LOCAL-73/E2E-293 public intake policy and C-LOCAL-74/E2E-294 opt-in private keypad transport. The acceptance table still omitted these local implementations and said current speech evidence had not been collected. It is corrected to distinguish implemented/tested interfaces from actual approval, delivery and activation.

@@ -2,6 +2,25 @@
 
 All runs used patient-free synthetic fixtures, an account-provided OpenAI API key, and owner-only reports under ignored `eval/results/`. No key value or real patient content is in this file. The reports retain repeat-level proposals or transcripts for local review; this summary records only counts and configuration evidence.
 
+## Paired noise-filter diagnostic — 2026-10-05
+
+One bounded file-transcription screen compared the original six `transcription-noise-v1` clips with a fixed filter, one repeat per clip and two concurrent requests. Original PCM hashes were verified before processing. The existing installed FFmpeg 6.1.1 used `highpass=f=80,lowpass=f=3400,afftdn=nr=12:nf=-35:tn=1`, retaining 16 kHz mono PCM. Both arms used `gpt-transcribe`, the same generic patient-free English physiotherapy context and the unchanged exact critical-term/word-error checks. No production adapter, corpus, threshold or dependency changed.
+
+| Arm | Jobs | Critical misses | Word errors / expected words | WER | Provider failures |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Original | 6 | 2 | 8 / 44 | 18.18% | 0 |
+| Filtered | 6 | 1 | 1 / 44 | 2.27% | 0 |
+
+The filtered urgent-language case still omitted the critical word `chest` (`NS-006`). This fails the zero-critical condition despite lower aggregate WER. This candidate is not promoted; no extra repetitions, safety screen or streaming integration were run for it. Complete-recording request time cannot establish Realtime post-commit latency or audible carrier performance. The report states `syntheticGate: notAssessed`, `realtimeLatency: notMeasured` and `releaseGate: unverified`; production speech admission remains disabled under the existing failing complete gate.
+
+Exact diagnostic command:
+
+```sh
+node --env-file=/home/gust/code/abby/.env /home/gust/code/abby/eval/results/screen-noise-filter-20261005.mjs transcription-noise-v1 /home/gust/code/abby/eval/results/20261005-noise-filter-paired-screen.json
+```
+
+Tracked job `Abby paired fixed-corpus noise-filter screen` completed exit 0 in nine seconds, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791182686617.log`. Exit 0 means the diagnostic/report completed, not that a quality gate passed. The owner-only ignored runner/report are retained locally: runner SHA-256 `7f037bcaf5b3f89e72b60b128d1620899179bdc0ed538f8077b9c780b9102a52`, report SHA-256 `4658e9bd4a62a57b8c467e4b3b53e17fee2bef0d19fe494af6b67e4547cf52fb`, unchanged corpus SHA-256 `ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2`, context SHA-256 `8241f56c7e19445b09fe988c8c8a06506a81dad1c4d3440d14b78c8c07c18620`. The report pins every original and transformed clip hash; it contains synthetic transcript details locally, which are not copied here.
+
 | Run | Model | Corpus and repeats | Match | Mismatch | Critical | Provider failure |
 | --- | --- | --- | ---: | ---: | ---: | ---: |
 | Model prompt v1 baseline | `gpt-6-luna` | `model-v1`, 10 cases × 3 | 24 | 0 | 3 | 3 |

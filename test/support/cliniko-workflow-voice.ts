@@ -19,8 +19,8 @@ import { approvedSyntheticPolicy, syntheticSpeech } from "./approved-voice.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 import { verificationCanaries, verificationNow } from "./caller-verification.ts";
 
-export async function voiceUntil(check: () => boolean, label: string) {
-  const deadline = Date.now() + 10_000;
+export async function voiceUntil(check: () => boolean, label: string, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
   while (!check() && Date.now() < deadline) await new Promise<void>(resolve => setTimeout(resolve, 5));
   assert.ok(check(), `${label} timed out`);
 }
@@ -46,7 +46,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   const acknowledged = new Set<string>();
   let ledger: MemoryLedger | undefined, flow: ClinikoCallFlow | undefined, socket: WebSocket | undefined, closed = false;
   let after: Record<string, unknown> | undefined, sequence = 1, chunk = 0, utterance = 0, transcriptionFrames = 0;
-  let processedChunk = 0, processedSequence = 0;
+  let processedChunk = 0, processedSequence = 0, hostWritesStarted = 0, hostWritesSettled = 0;
   const callId = callIdFor({ accountRef: accountSid, providerCallRef: callSid });
   const base = "https://api.au5.cliniko.com/v1", port = config.fetchPort!;
   const provider: typeof fetch = async (value, init) => {
@@ -81,7 +81,13 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       clinicalWorkflow: { policies: policy,
         create(context) { ledger = context.ledger; flow = resultValue(ClinikoCallFlow.create({ ...config, ...context,
           policyVersion: config.policyVersion, fetchPort: provider,
-          ...(config.intake ? { intake: { ...config.intake, presentation: context.privatePresentation } } : {}) })); return flow; },
+          ...(config.intake ? { intake: { ...config.intake, presentation: context.privatePresentation } } : {}) }));
+          const write = flow.write.bind(flow);
+          flow.write = async (...args: Parameters<ClinikoCallFlow["write"]>) => {
+            hostWritesStarted++;
+            try { return await write(...args); } finally { hostWritesSettled++; }
+          };
+          return flow; },
         intent(owner) { const resolve = intent(owner); return async (turn, signal) => { modelTurns.push(turn.text); return resolve(turn, signal); }; },
         ...(config.intake ? { privateIntakeTranscription: (sessionId: string) => ({ async accept() { return ok([]); }, async flush(generation: number) {
           const text = privateInputs.shift(); assert.ok(text); privateTranscripts.push(text);
@@ -150,6 +156,9 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       async turn(text: string, options: { expectedFailure?: "confirmationMissing"; interrupt?: boolean } = {}) {
         const marks = sent.filter(item => item.event === "mark").length, clears = sent.filter(item => item.event === "clear").length;
         const interruptedMark = sent.filter(item => item.event === "mark").at(-1)?.mark;
+        const pending = text === "Yes" && !options.expectedFailure
+          ? Object.values(resultValue(await ledger!.read(callId, scope)).actions).find(action => action.status === "awaitingConfirmation") : undefined;
+        const beforeWrites = hostWritesStarted;
         inputs.push(text); media(true); media(true);
         if (options.interrupt) {
           assert.ok(interruptedMark); await voiceUntil(() => sent.filter(item => item.event === "clear").length > clears, "interrupted speech clear");
@@ -161,12 +170,23 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         for (let frame = 0; frame < 5; frame++) media(false);
         const finalChunk = chunk;
         try {
+          if (pending) {
+            // Observe the actual host boundary without repeatedly cloning the SAM
+            // state. Confirmation validation and playback retain their own waits.
+            await voiceUntil(() => hostWritesStarted > beforeWrites || processedChunk >= finalChunk || failures.length > 0,
+              "confirmed caller turn dispatch");
+            if (hostWritesStarted > beforeWrites) {
+              // EffectWorker starts its unchanged 15-second host deadline before
+              // invoking write; start this observation only after that invocation.
+              await voiceUntil(() => hostWritesSettled > beforeWrites || failures.length > 0, "host write settlement", 15_000);
+            }
+          }
           await voiceUntil(() => sent.filter(item => item.event === "mark").length >= marks + (options.interrupt ? 2 : 1) || failures.length > 0, "caller turn speech");
         } catch (error) {
           const state = resultValue(await ledger!.read(callId, scope));
           throw new Error(`caller turn delivery stalled: ${JSON.stringify({ closed, workflowClosed: flow?.closed,
             workflow: flow?.workflow, lifecycle: state.lifecycle, queuedInputs: inputs.length, processedChunk, chunk,
-            modelTurns: modelTurns.length, transcriptionFrames, writes: writes.length, failures,
+            modelTurns: modelTurns.length, transcriptionFrames, writes: writes.length, hostWritesStarted, hostWritesSettled, failures, stageFailure: error instanceof Error ? error.message : "unknown",
             actions: Object.values(state.actions).map(action => action.status),
             presentations: Object.values(state.presentations).map(presentation => presentation.status),
             effects: Object.values(state.effects).map(effect => ({ kind: effect.kind, status: effect.status })) })}`, { cause: error });
