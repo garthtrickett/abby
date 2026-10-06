@@ -1,3 +1,4 @@
+import type { BookingSearchWindow } from "../core/booking-search-window.ts";
 import type { AppointmentHost, HostReadFailure } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
@@ -61,12 +62,12 @@ export class ClinikoReschedulingAuthority implements AppointmentChangeAuthority,
         err({ kind: "unavailable" as const, target: "appointment" as const });
     }, bound.signal) ?? err({ kind: "unavailable" as const, target: "appointment" as const });
   }
-  async listOffers(scope: LocationScope, verificationRef: string, from: string, to: string, now: string, external?: AbortSignal): Promise<Result<BookingChoices, HostReadFailure>> {
+  async listOffers(scope: LocationScope, verificationRef: string, from: string, to: string, now: string, external?: AbortSignal, window?: BookingSearchWindow): Promise<Result<BookingChoices, HostReadFailure>> {
     const bound = { ...scope };
     return await this.#bounded(async signal => {
       const policy = await this.#config.feePolicy.current(bound);
       if (!policy.ok || signal.aborted) return denied<BookingChoices>();
-      const result = await this.#offers.list(bound, verificationRef, from, to, now, signal);
+      const result = await this.#offers.list(bound, verificationRef, from, to, now, signal, window);
       const current = await this.#config.feePolicy.current(bound);
       return result.ok && current.ok && !signal.aborted && JSON.stringify(current.value) === JSON.stringify(policy.value) ? result : denied<BookingChoices>();
     }, external) ?? denied();

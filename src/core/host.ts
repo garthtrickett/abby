@@ -115,10 +115,12 @@ export interface AppointmentHost {
   }>, AppointmentReadFailure>>;
 }
 
+export type BookingSearchWindow = import("./booking-search-window.ts").BookingSearchWindow;
+export type BookingMenuReadQuery = BookingMenuQuery & Readonly<{ from: string; to: string; window?: BookingSearchWindow | null }>;
 export type BookingMenuQuery = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
   turnId: string; now: string; signal: AbortSignal }>;
 export type ReschedulingMenuQuery = BookingMenuQuery & Readonly<{ stage: import("./rescheduling-menu.ts").ReschedulingMenuStage }>;
-export type ReschedulingMenuReadQuery = ReschedulingMenuQuery & Readonly<{ from: string; to: string; priorTurnId?: string;
+export type ReschedulingMenuReadQuery = ReschedulingMenuQuery & Readonly<{ from: string; to: string; window?: BookingSearchWindow | null; priorTurnId?: string;
   /** Derived from the canceled SAM request, never a caller/model provider ID. */
   correctingAppointmentRef?: string }>;
 export interface ReschedulingMenuHost {
@@ -137,7 +139,7 @@ export interface BookingMenuHost {
   correctBookingMenu?(query: BookingMenuQuery & Readonly<{ menuTurnId: string; startsAt: string }>):
     Promise<Result<Readonly<{ verificationRef: string; offerRef: string }>, HostReadFailure>>;
   bookingMenuAvailable(): boolean;
-  readBookingMenu(query: BookingMenuQuery & Readonly<{ from: string; to: string }>):
+  readBookingMenu(query: BookingMenuReadQuery):
     Promise<Result<import("./booking-menu.ts").BookingMenuRead, HostReadFailure>>;
   /** Private selection wiring; these references are never returned by an agent command. */
   selectBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>):

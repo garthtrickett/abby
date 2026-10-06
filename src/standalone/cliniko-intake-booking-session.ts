@@ -2,7 +2,7 @@ import { ClinikoBookingWriter } from "../cliniko/booking-write.ts";
 import { ClinikoRecallWriter } from "../cliniko/recall-write.ts";
 import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
 import { ClinikoVerificationContactReader } from "../cliniko/verification-contact.ts";
-import type { BookingEvidenceHost, BookingMenuHost, BookingMenuQuery, IntakeEvidenceHost, IntakeEvidenceQuery, PolicyStore } from "../core/host.ts";
+import type { BookingEvidenceHost, BookingMenuHost, BookingMenuQuery, BookingMenuReadQuery, IntakeEvidenceHost, IntakeEvidenceQuery, PolicyStore } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
 import type { HostMutation, HostWriteReceipt, LocationScope, Result, StaffItem } from "../core/model.ts";
@@ -98,7 +98,7 @@ export class ClinikoIntakeBookingSession extends NoStoredKnowledge implements In
     return this.#booking.resolveBooking(scope, verificationRef, offerRef, now, signal);
   }
   bookingMenuAvailable(): boolean { return this.#booking.bookingMenuAvailable(); }
-  readBookingMenu(query: BookingMenuQuery & Readonly<{ from: string; to: string }>) { return this.#booking.readBookingMenu(query); }
+  readBookingMenu(query: BookingMenuReadQuery) { return this.#booking.readBookingMenu(query); }
   selectBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>) { return this.#booking.selectBookingMenu(query); }
   correctBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; startsAt: string }>) { return this.#booking.correctBookingMenu(query); }
   write(mutation: HostMutation, now: string, signal?: AbortSignal): Promise<HostWriteReceipt> {

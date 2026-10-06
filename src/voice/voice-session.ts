@@ -17,9 +17,9 @@ export type VoiceIntent =
   | Readonly<{ kind: "outcome" }>
   | Readonly<{ kind: "staffOutcome" }>
   | Readonly<{ kind: "staffRequest"; requestedPerson?: string }>
-  | Readonly<{ kind: "bookingMenu"; from: string; to: string }>
+  | Readonly<{ kind: "bookingMenu"; from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null }>
   | Readonly<{ kind: "bookingChoice"; choice: 1 | 2 | 3 }>
-  | Readonly<{ kind: "reschedulingMenu"; stage: "targets" | "offers"; from: string; to: string; correcting?: true }>
+  | Readonly<{ kind: "reschedulingMenu"; stage: "targets" | "offers"; from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null; correcting?: true }>
   | Readonly<{ kind: "reschedulingChoice"; stage: "targets" | "offers"; choice: 1 | 2 | 3 }>
   | Readonly<{ kind: "model" }>
   | Readonly<{ kind: "book"; verificationRef: string; offerRef: string }>
@@ -338,11 +338,11 @@ export class VoiceSession {
     } else if (this.cachedIntent.kind === "outcome") {
       result = await this.runtime.acceptTurn(turn, { kind: "outcomeQuery" }, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "bookingMenu") {
-      result = await this.reception.readBookingMenu(this.scope, turn, this.cachedIntent.from, this.cachedIntent.to, now);
+      result = await this.reception.readBookingMenu(this.scope, turn, this.cachedIntent.from, this.cachedIntent.to, now, this.cachedIntent.window);
     } else if (this.cachedIntent.kind === "bookingChoice") {
       result = await this.reception.selectBookingMenu(this.scope, turn, this.cachedIntent.choice, now);
     } else if (this.cachedIntent.kind === "reschedulingMenu") {
-      result = await this.reception.readReschedulingMenu(this.scope, turn, this.cachedIntent.stage, this.cachedIntent.from, this.cachedIntent.to, now, this.cachedIntent.correcting);
+      result = await this.reception.readReschedulingMenu(this.scope, turn, this.cachedIntent.stage, this.cachedIntent.from, this.cachedIntent.to, now, this.cachedIntent.correcting, this.cachedIntent.window);
     } else if (this.cachedIntent.kind === "reschedulingChoice") {
       result = await this.reception.selectReschedulingMenu(this.scope, turn, this.cachedIntent.stage, this.cachedIntent.choice, now);
     } else if (this.cachedIntent.kind === "model") {

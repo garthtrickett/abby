@@ -6,6 +6,8 @@ import { STAFF_REASONS } from "../core/model.ts";
 const schemaUri = "https://json-schema.org/draft/2020-12/schema";
 const root = (schema: JsonSchema): JsonSchema => ({ $schema: schemaUri, ...schema });
 const optional = (properties: Record<string, JsonSchema>, required: readonly string[]): JsonSchema => object(properties, required);
+const bookingWindow: JsonSchema = { oneOf: [{ const: null }, object({ startMinute: { type: "integer", minimum: 0, maximum: 1439 },
+  endMinute: { type: "integer", minimum: 1, maximum: 1440 }, startInclusive: bool })] };
 const nonEmpty: JsonSchema = { type: "string", minLength: 1 };
 const result = (value: JsonSchema): JsonSchema => root({ oneOf: [
   object({ ok: { const: true }, value }),
@@ -425,13 +427,13 @@ export const capabilityCatalogue = {
     reply("clinicAvailabilityApprovalState", "state", clinicAvailabilityApprovalState),
     "policyChange", "clinicAdmin", "none", ["availabilitySetupAvailable", "expectedAvailabilityApprovalVersion"]),
   "rescheduling.menu.read.v1": entry("rescheduling.menu.read.v1",
-    object({ kind: { const: "rescheduling.menu.read.v1" }, turn: sessionTurn, stage: { enum: ["targets", "offers"] }, from: str, to: str, now: str }),
+    optional({ kind: { const: "rescheduling.menu.read.v1" }, turn: sessionTurn, stage: { enum: ["targets", "offers"] }, from: str, to: str, now: str, window: bookingWindow }, ["kind", "turn", "stage", "from", "to", "now"]),
     reply("appointmentChangeProposal", "progress", progress), "read", "permittedActor", "none", ["activeCall", "currentCallSession", "hostIssuedPatientProof", "appointmentChangeEnabledForExecution"]),
   "rescheduling.menu.select.v1": entry("rescheduling.menu.select.v1",
     object({ kind: { const: "rescheduling.menu.select.v1" }, turn: sessionTurn, stage: { enum: ["targets", "offers"] }, choice: { type: "integer", minimum: 1, maximum: 3 }, now: str }),
     reply("appointmentChangeProposal", "progress", progress), "proposalOnly", "permittedActor", "callerConfirmation", ["activeCall", "currentCallSession", "hostIssuedPatientProof", "appointmentChangeEnabledForExecution"]),
   "booking.offers.read.v1": entry("booking.offers.read.v1",
-    object({ kind: { const: "booking.offers.read.v1" }, turn: sessionTurn, from: str, to: str, now: str }),
+    optional({ kind: { const: "booking.offers.read.v1" }, turn: sessionTurn, from: str, to: str, now: str, window: bookingWindow }, ["kind", "turn", "from", "to", "now"]),
     reply("bookingProposal", "progress", progress), "read", "permittedActor", "none", ["activeCall", "currentCallSession", "hostIssuedPatientProof", "bookingEnabledForExecution"]),
   "booking.offers.select.v1": entry("booking.offers.select.v1",
     object({ kind: { const: "booking.offers.select.v1" }, turn: sessionTurn, choice: { type: "integer", minimum: 1, maximum: 3 }, now: str }),

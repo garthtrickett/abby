@@ -12,7 +12,7 @@ import { staffRequestLanguage } from "./staff-request-language.ts";
 const endpoint = "https://api.openai.com/v1/responses";
 const unavailable = { kind: "intentUnavailable" } as const;
 const maxBytes = 16 * 1024;
-export const clinicalIntentPromptVersion = "clinical-intent-v7";
+export const clinicalIntentPromptVersion = "clinical-intent-v8";
 
 const schema = { type: "object", additionalProperties: false,
   properties: {
@@ -174,6 +174,9 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
       return before.lastAction?.status === "awaitingConfirmation" && before.lastAction.confirmationPlayed
         ? ok({ kind: "affirm" }) : err(unavailable);
     }
+    const search = await config.owner.searchMenuIntent(turn.text);
+    if (signal?.aborted) return err(unavailable);
+    if (search) return ok(search);
     const corrected = await config.owner.correctionIntent(turn, signal);
     if (signal?.aborted) return err(unavailable);
     if (corrected) return ok(corrected);

@@ -89,9 +89,17 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
     case "human": pass = /reception|clinic|staff|person/i.test(text) && /contact the clinic|transfer.*unavailable|request.*saved|can't confirm.*request/i.test(text); break;
     case "unsupported": pass = (last === null || last?.kind === "clarify" && last.reason === "changeUnsupported") &&
       /can't|cannot|not supported|contact.*clinic|unavailable/i.test(text) && !statuses.includes("awaitingConfirmation"); break;
-    // The current public intent cannot carry these constraints/facts. An empty
-    // provider response or unsupported model decision is not evidence of them.
-    case "constraints": case "boundedSearch": case "publicFacts": pass = false; break;
+    case "constraints":
+      pass = candidate.id === "CCP-027" && last?.kind === "bookingMenu" && last.from === "2026-10-08" && last.to === "2026-10-08" &&
+        last.window?.startMinute === 960 && last.window.endMinute === 1440 && last.window.startInclusive === false &&
+        /after 4:00 pm.*5:00 pm/s.test(text) && !/3:00 pm|option two/.test(text) && !statuses.includes("awaitingConfirmation");
+      break;
+    case "boundedSearch":
+      pass = candidate.id === "CCP-028" && last?.kind === "bookingMenu" && last.from === "2026-10-09" && last.to === "2026-10-11" &&
+        /Friday 9 October.*10:00 am/s.test(text) && !/Thursday 8 October/.test(text) && !statuses.includes("awaitingConfirmation");
+      break;
+    // Other preferences, horizons and public facts remain explicitly unassessed.
+    case "publicFacts": pass = false; break;
   }
   return { id: "conversation-observation", pass: pass && !plan.missingSetup,
     detail: `${candidate.pattern}: ${plan.expectation}; this check covers only the named observation, not every prose acceptance condition.` };
