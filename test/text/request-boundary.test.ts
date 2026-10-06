@@ -15,11 +15,12 @@ test("E2E-320 agent request boundaries cancel unsent proposals with exact scope,
         ledger: new PostgresLedger(db, ref => ref, proposalReady, "unsafeReference"),
         policy: new MemoryPolicyStore("execute", () => proposalNow, proposalReady, { cancellation: "execute", rescheduling: "execute", intake: "execute" }),
       } : undefined);
-      let cleared = 0, clock = proposalNow;
+      let cleared = 0, clock = proposalNow, cleanupAvailable = false;
       try {
         Object.assign(f.host, { clearUnsupportedWorkflow: async (query: { callId: string; sessionId: string; turnId: string; conversationRevision: number }) => {
           const state = resultValue(await f.runtime.read(query.callId));
           if (state.lastRequestBoundary?.turnId !== query.turnId || state.sessionLease?.sessionId !== query.sessionId || state.conversationRevision !== query.conversationRevision) return false;
+          if (!cleanupAvailable) return false;
           cleared++; f.host.expected.delete(query.callId); return true;
         } });
         await f.enable(); const proposal = await f.admit("cancel"); resultValue(await f.agent.submit(proposal));
@@ -37,9 +38,12 @@ test("E2E-320 agent request boundaries cancel unsent proposals with exact scope,
         const foreign = new CommandGateway({ actorRef: "foreign", role: "agent", scope: { ...scope, locationId: "foreign" } }, f.policy, reception);
         assert.equal((await foreign.submit(command)).ok, false);
         assert.deepEqual(resultValue(await f.runtime.read(proposal.turn.callId)), before);
+        assert.equal((await agent.submit(command)).ok, false);
+        assert.equal((await agent.submit(command)).ok, false, "a stored negative turn is not a successful host cleanup receipt");
+        cleanupAvailable = true;
         resultValue(await agent.submit(command)); resultValue(await agent.submit(command));
         const after = resultValue(await f.runtime.read(proposal.turn.callId));
-        assert.equal(cleared, 1); assert.equal(after.callerMessages.length, before.callerMessages.length + 1);
+        assert.equal(cleared, 2); assert.equal(after.callerMessages.length, before.callerMessages.length + 1);
         assert.deepEqual(after.lastRequestBoundary, { turnId: "proxy-boundary", reason: "proxyPatient" });
         assert.equal(Object.values(after.actions)[0]!.status, "canceled"); assert.equal(after.callerIdentityDenied, undefined);
         assert.equal((await agent.submit({ ...command, reason: "minorIntake" })).ok, false);

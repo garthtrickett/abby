@@ -74,9 +74,12 @@ export class TextReception {
     if (state.value.lifecycle !== "active" || state.value.sessionLease?.sessionId !== turn.sessionId ||
         Date.parse(state.value.sessionLease.expiresAt) <= Date.parse(now)) return err({ kind: "leaseLost" as const });
     if (state.value.callerIdentityDenied) return this.denyCallerIdentity(scope, turn, state.value.callerIdentityDenied, expectedRevision);
-    if (state.value.processedTurnIds.includes(turn.turnId)) return state.value.lastRequestBoundary?.turnId === turn.turnId &&
-      state.value.lastRequestBoundary.reason === reason ? state : err({ kind: "keyMismatch" as const });
-    const accepted = await this.runtime(scope).acceptTurn(turn, { kind: "requestBoundary", reason }, now, expectedRevision);
+    const duplicate = state.value.processedTurnIds.includes(turn.turnId);
+    if (duplicate && (state.value.lastRequestBoundary?.turnId !== turn.turnId || state.value.lastRequestBoundary.reason !== reason ||
+        state.value.processedTurnIds.at(-1) !== turn.turnId)) return err({ kind: "keyMismatch" as const });
+    // A recorded turn is not proof that private cleanup succeeded. Retry the
+    // idempotent negative host operation while this is still the current turn.
+    const accepted = duplicate ? state : await this.runtime(scope).acceptTurn(turn, { kind: "requestBoundary", reason }, now, expectedRevision);
     if (!accepted.ok) return accepted;
     this.cancelPendingModel(scope, turn.callId);
     let cleared = false;

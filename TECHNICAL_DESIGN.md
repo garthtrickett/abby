@@ -1523,7 +1523,9 @@ undo, retries a request, or overwrites a known/uncertain outcome.
 exact active scope/session, a clear turn and a valid reason. The reception uses
 its private clock. A minimal negative turn/reason receipt makes same-command
 replay idempotent and rejects reuse of an unrelated processed turn or a different
-reason. This receipt contains no patient identity or permission and remains
+reason. A recorded negative turn alone is not a cleanup receipt: a same-current-turn
+retry must confirm the idempotent negative host cleanup again; failure remains
+a typed error. A retry after another turn cannot clear that newer workflow. This receipt contains no patient identity or permission and remains
 transient in standalone Cliniko. PostgreSQL tests exercise the authorized
 embedded state contract. E2E-320 combines signed public calls, independent
 private email entry, memory/PostgreSQL commands and a held read; actual clinic,

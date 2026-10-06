@@ -539,8 +539,8 @@ service ambiguity, search horizon, unknown price and pending-read setup gaps
 remain separate; these tests do not award missing capabilities. Real email,
 clinic approval and carrier activation remain open.
 
-The [final conversation report](baselines/clinic-conversation-after-request-boundaries-v1.json)
-matches all 456 final production/fixture/runner source files and executes every
+The [pre-retry conversation report](baselines/clinic-conversation-after-request-boundaries-v1.json)
+matches all 456 production/fixture/runner source files at that checkpoint and executes every
 candidate. It records zero harness failures, two setup gaps, all 135 safety
 observations passing and clear PostgreSQL patient-data canaries. There are 38
 passing narrow conversation observations and seven failing; twelve candidate
@@ -551,3 +551,21 @@ cases still fail the unchanged unsupported scorer rather than being promoted to
 billing or enrollment capabilities. All prose acceptance conditions remain
 unassessed. The evaluation intentionally exits nonzero and remains a partial
 baseline, not a clinical reliability or release gate.
+
+Final direct review also found that returning a recorded duplicate turn could
+hide a prior failed private cleanup. Same-current-turn retries now repeat the
+idempotent negative host release and retain its typed failure until it succeeds;
+SAM messages and canceled proposals are still recorded only once. Reuse after
+another processed turn is rejected, so a duplicate cannot clear a later self
+workflow. The memory/PostgreSQL agent test exercises two failed attempts followed
+by successful retries rather than treating the stored turn as a cleanup receipt.
+
+The final cleanup-retry gate passes six tests using
+`node --test --test-concurrency=3 test/text/request-boundary.test.ts test/cliniko/request-boundary.test.ts test/voice/booking-request-boundaries.test.ts test/voice/conversation-baseline.test.ts test/contract/scenario-manifest.test.ts`.
+Its final `npm run typecheck` and `git diff --check` pass. The [final all-45 report](baselines/clinic-conversation-after-request-boundaries-v2.json)
+matches the final 456 production/fixture/runner source files with sourceStable
+true. It again records 38 passing named observations, seven failing, zero harness
+failures, two setup gaps, all 135 safety observations passing and clear PostgreSQL
+patient-data canaries. Twelve candidate turns make actual model requests, with
+33 trusted interpretations. Its intentional nonzero result preserves the same
+remaining gaps and every prose acceptance condition remains unassessed.
