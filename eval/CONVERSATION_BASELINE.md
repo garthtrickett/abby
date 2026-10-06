@@ -691,3 +691,17 @@ Validation commands and results for this change:
 - `npm run typecheck` and `git diff --check`: passed on final source.
 - `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinical-intent.ts --model gpt-4o-mini --out eval/results/20261006-public-info-intent-v19-v3.json`: 25 of 25 classifications passed with 20 actual model requests; earlier v17/v18 failures are archived above.
 - `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/results/20261006-conversations-public-info-v1.json`: all 45 executed with stable source and the 41/45 named result above; intentionally nonzero for four remaining observations.
+
+Final direct review corrected the synthetic published service text: “I have not
+selected an appointment type for you” could misdescribe an earlier committed
+booking. It now describes the information's scope instead: “These descriptions
+do not select an appointment type or reserve a time.” The signed test rerun
+passes both tests, including committed/uncertain outcomes and all 27 scenarios.
+The [final all-45 report](baselines/clinic-conversation-after-public-information-v2.json),
+produced with the same command and output
+`eval/results/20261006-conversations-public-info-v2.json`, matches the final 463
+source files with sourceStable true. It retains 41 passing observations, the
+same four failures, one setup gap, zero harness failures, all 135 safety checks
+passing and clear PostgreSQL patient-data canaries. Ten turns make actual model
+requests and 35 use trusted routes. This wording correction does not turn public
+descriptions into appointment selection or expand the unassessed acceptance scope.
