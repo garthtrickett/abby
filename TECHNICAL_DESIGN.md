@@ -1192,6 +1192,7 @@ The initial corpus has these minimum journeys. One scenario may cover several re
 | `E2E-324` | Qualified caller speech repairs or corrects held booking/rescheduling menus and selections before provider completion; late results cannot revive menus/proposals, noise cannot cancel a read, and native presence replies fence scope/session/time without guessing availability or promising a result | FR-04, FR-06, FR-11, FR-22 |
 | `E2E-325` | Missed-call questions explicitly explain the absent outbound reason and approved contact path; public native commands use current scope/session/private time, and signed calls preserve known receipts without a new patient, clinical or staff action | FR-04, FR-06, FR-11, FR-22 |
 | `E2E-326` | Saved staff requests explain only current clinic-approved review cadence without promising receipt or response time; changed approval preserves exact saved status, read-only status never resends, and native/voice paths fence malformed evidence, private time and interruption | FR-03, FR-09, FR-11, FR-22 |
+| `E2E-327` | Old or expired spoken menus recover only through fresh played options, exact current host revalidation and a separately played confirmation; interrupted playback, vanished slots, old native menu bindings and repeated affirmation cannot reuse stale authority or duplicate booking | FR-06, FR-11, FR-22 |
 
 The corpus runs with deterministic synthetic media frames, partial hypotheses and segment-final transcription events, synthesis chunks, playback acknowledgments, typed model effect results, clock, and host effects against the reference host and standalone adapters. It enters through `VoiceSession.begin` and its media/transcript methods, not by calling `CallRuntime.acceptTurn` directly as a substitute for voice E2E. The harness can delay a playback acknowledgment or deliver it after a clear to prove that queued/cleared audio does not count as played. It can race a caller correction with `startNextPresentation`, drop a commit wake-up, restart the dispatcher task while retaining the live session, or lose the entire session process before activation or after atomic start. Assertions distinguish superseded pending speech from unproven started speech, reject `played` for a pending or transfer intent, and verify exactly one terminal resolution without duplicate media. `E2E-035` and `E2E-082` through `E2E-084` separately submit invalid presentation outcomes through T4 and prove each is rejected before a second SAM transition. `E2E-019` through `E2E-026` individually cover final turn, playback, interruption, transfer, and fallback behavior. Each independently triggerable voice or effect fault has its own scenario ID so cases can run in parallel and a failure identifies one behavior. Every provider runs the same scenario IDs; assertions use its approved support-matrix row and fail if its declared capability snapshot disagrees. Provider-specific contract tests separately cover permission limits, pagination, rate limits, availability rules, unsupported mutations, and lost responses. Scheduled smoke tests use sanctioned provider test accounts and a limited real telephony path, including an actual interruption and transfer. Tests contain no live patient data.
 
@@ -1803,3 +1804,28 @@ introduced. Native PostgreSQL tests use the explicit unsafe reference lab
 contract; standalone patient-specific call/request state remains transient or
 Cliniko-owned. E2E-326 is synthetic evidence; actual clinic activation, staff
 workflow acceptance and real carrier/email delivery remain separate gates.
+
+
+### Connected stale-menu recovery proof — E2E-327
+
+The latest private menu and its played notice supply selection authority. A
+reference to options before the newer menu cannot become a model-guessed
+ordinal. A clarification also invalidates the old notice as the most recent
+processed menu; another selection without fresh representation is unavailable.
+The caller requests current options, hears and plays their new notice, selects
+a matching time, and hears a fresh exact proposal. Only a separate affirmative
+after that confirmation plays can authorize the usual reviewed booking send.
+
+Six actual signed synthetic Cliniko workflows exercise superseded and expired
+offers, interrupted new menu, interrupted confirmation, a slot removed between
+menu and selection, and a repeated final affirmative. They cross public wire,
+private email verification, actual menu/offer owner, SAM presentation receipts,
+provider revalidation and inspected booking. A denied old native host menu
+selection is probed after ordinary voice clarification so its intentional
+spoken-menu invalidation cannot manufacture the voice proof. A vanished slot
+requires another read/representation; interrupted confirmation cancels its
+proposal and requires a new one. The final exact selected start differs from
+every original offered start; no old offer is ever resolved into a proposal.
+The existing implementation passes; this adds evidence without new production
+behavior, capability, storage or patient authority. Real approval, delivery and
+carrier/audible timing remain separate evidence.

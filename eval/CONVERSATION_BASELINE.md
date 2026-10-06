@@ -974,3 +974,54 @@ still requires the stale-menu sequence, transport ownership/approved termination
 limits, meridiem clarification and remaining clause-by-clause inspection. Real
 clinic approval, carrier calls, email delivery and audible pace remain separate
 release evidence.
+
+
+## Stale-menu recovery acceptance proof — 2026-10-06
+
+The CCP-007 named observation only checked clarification. E2E-327 now exercises
+the full original requirement and prohibition through actual signed HTTP/WS
+Cliniko workflows: old played menu, a different newer menu or expired offers,
+old reference, clarification and denial before fresh representation, new read
+and played options, exact current proposal, separately played confirmation,
+and one inspected booking after a separate affirmative. Every original offered
+start is excluded from successful proposal evidence. No production behavior
+change was required: all six corrected connected journeys pass on main 903bcda.
+The [sequence evidence](baselines/stale-menu-sequence-before-v1.json) records the
+base revision and added test's separate hash.
+
+The six modes cover supersession, expiry with an independently active call and
+proof, interrupted fresh menu, interrupted fresh confirmation, a selected slot
+removed at the provider before revalidation, and repeated final affirmation.
+Interrupted confirmation cancels its action and requires a new proposal. A
+vanished time cannot be confirmed; another representation uses the newly
+available start. Model replies deliberately guess ordinal two for unrecognized
+selections; they cannot bypass the private played-menu matcher. Old native host
+menu bindings are denied without a SAM change. Private OTPs stay out of ordinary
+transcripts and PostgreSQL patient-data canaries remain clear.
+
+The first test incorrectly probed a denied native selection before ordinary
+caller recovery. The host intentionally clears spoken state on denial, changing
+the fixture under test. The corrected test probes that fault after the ordinary
+voice turns. Presentation assertions use the actual hashed notice ID helper.
+This was a fixture failure, not evidence of a production gap. All parallel
+workers settle before disposable PostgreSQL cleanup.
+
+Commands and evidence:
+
+- `node --test test/voice/stale-menu-recovery.test.ts`: corrected connected gate passed all six modes on existing behavior.
+- `npm run typecheck`: passed with the new connected test.
+- `node --test --test-concurrency=3 test/voice/stale-menu-recovery.test.ts test/voice/played-menu-selection.test.ts test/voice/caller-corrections.test.ts test/voice/dated-window-corrections.test.ts test/voice/appointment-change-intent.test.ts test/voice/cliniko-staff-request.test.ts test/voice/staff-review-expectations.test.ts test/voice/conversation-baseline.test.ts test/contract/scenario-manifest.test.ts`: all nine tests passed, with zero skips/cancellations.
+- `git diff --check`: passed. Manifest 1.122 maps E2E-327.
+
+The source inputs of the existing [45-case baseline](baselines/clinic-conversation-after-staff-review-v24-v1.json)
+are byte-for-byte unchanged: 471 inputs, SHA-256
+`768ac6691b1a34ada042f04c21ed973e86bd29d1e7ba934f307b576a7e910648`.
+Its 45/45 named and 135/135 safety observations remain the partial baseline;
+no redundant live model run is presented as new language-understanding evidence.
+The connected sequence supplies the previously missing acceptance evidence,
+not a replacement corpus or relaxed required/forbidden clause. Native commands
+retain their earlier independent fixture coverage; this new journey proves the
+standalone voice composition and includes a denied native host selection.
+Caller-ownership/approved-limit proof, explicit meridiem wording and remaining
+clause inspection stay open. Real carrier/audio, delivery and clinic approval
+remain outside these synthetic observations.
