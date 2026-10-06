@@ -85,7 +85,9 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
     case "revisedProposal": pass = latest?.status === "awaitingConfirmation" && latest.mutation.request.kind === "book" &&
       latest.mutation.request.offer.startsAt === "2026-10-07T23:30:00.000Z" && Object.values(before.actions)
         .some(action => action.status === "awaitingConfirmation" && after.actions[action.key]?.status === "canceled"); break;
-    case "revisedDate": pass = last?.kind === "bookingMenu" && last.from === "2026-10-07" && last.to === "2026-10-07"; break;
+    case "revisedDate": pass = last?.kind === "bookingMenu" && last.from === "2026-10-07" && last.to === "2026-10-07" &&
+      last.window?.startMinute === 0 && last.window.endMinute === 720 && last.window.startInclusive &&
+      /before 12:00 pm.*Wednesday 7 October.*9:00 am/s.test(text) && !/4:30 pm/.test(text) && !statuses.includes("awaitingConfirmation"); break;
     case "outcome": pass = (last?.kind === "outcome" || last?.kind === "clarify" && last.reason === "changeAfterSend") &&
       /confirmed|can't confirm|contact the clinic/i.test(text); break;
     case "readOnly": pass = last?.kind === "appointmentEnquiry" && after.appointmentReads.at(-1)?.status === "shown" &&
@@ -125,7 +127,8 @@ export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: 
     : plan.stage.startsWith("cancel") ? await cancellationCallFlowFixture({ multiple: candidate.id === "CCP-036" })
     : plan.stage.startsWith("move") ? await reschedulingCallFlowFixture() : await bookingCallFlowFixture();
   f.flow.dispose();
-  if ("setStarts" in f) f.setStarts(candidate.id === "CCP-006"
+  if ("setStarts" in f) f.setStarts(candidate.id === "CCP-004"
+    ? ["2026-10-06T22:00:00.000Z", "2026-10-07T05:30:00.000Z"] : candidate.id === "CCP-006"
     ? ["2026-10-07T23:30:00.000Z", "2026-10-09T11:30:00.000Z"]
     : candidate.id === "CCP-027" ? ["2026-10-08T04:00:00.000Z", "2026-10-08T06:00:00.000Z"]
       : ["2026-10-07T22:00:00.000Z", "2026-10-07T23:30:00.000Z", "2026-10-08T23:00:00.000Z"]);

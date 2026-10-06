@@ -2,6 +2,7 @@ import type { BookingMenuRead } from "../core/booking-menu.ts";
 import type { CallState } from "../core/model.ts";
 import { noticePresentationId } from "../core/transition.ts";
 import type { VoiceIntent } from "../voice/voice-session.ts";
+import { callerCorrection } from "./caller-correction.ts";
 import { bookingSearchLanguage } from "./booking-search-language.ts";
 import { clinicDateAt } from "./clinic-clock.ts";
 
@@ -15,7 +16,9 @@ export class PlayedMenuSearch {
   remember(menu: Menu): void { this.#menu = structuredClone(menu); }
   clear(): void { this.#menu = undefined; }
   resolve(text: string, state: CallState, today: string, timeZone: string, kind: "booking" | "rescheduling"): VoiceIntent | undefined {
-    const request = bookingSearchLanguage(text, today);
+    const correction = callerCorrection(text, today);
+    const request = correction?.kind === "date" && correction.window !== undefined
+      ? { kind: "window" as const, date: correction.date, window: correction.window } : bookingSearchLanguage(text, today);
     if (!request) return undefined;
     if (request.kind === "ambiguous") return { kind: "clarify", reason: "menuAmbiguous" };
     const action = Object.values(state.actions).at(-1);

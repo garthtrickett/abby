@@ -215,3 +215,52 @@ service/location support, actual notifications and full acceptance still need
 work. No actual clinic FAQ approval, real email delivery, carrier traffic or
 production clinical capability was activated. The previously documented broad
 voice request-count assertion remains outside these passing focused gates.
+
+
+## Date corrections with retained time windows
+
+The signed E2E-316 reproduction initially fails on the merged FAQ source: a
+caller changing from a tentative Thursday to Wednesday morning receives a
+generic menu clarification. The window parser had considered the whole sentence
+while the date-correction parser considered only the final phrase. The fix keeps
+the final phrase's recognized date and explicit window together, delegates clock
+parsing to the existing bounded window parser, and passes both through fresh
+approved search. Ambiguous meridiem and extra qualifiers remain clarification,
+not unrestricted searches.
+
+[Source-pinned dated-window report](baselines/clinic-conversation-after-dated-windows-v1.json),
+run on 2026-10-06 with `gpt-4o-mini`, executes all 45 candidates with unchanged
+source, zero harness failures, all 135 safety observations passing and clear
+PostgreSQL patient-data canaries. It records 31 passing narrow conversation
+observations and 14 failing, with the same three setup gaps. Nineteen candidate
+turns make actual model requests; 26 use trusted interpretation. It intentionally
+exits nonzero for unresolved observations and remains partial evidence with all
+prose acceptance requirements unassessed.
+
+CCP-004 now uses the final Wednesday morning correction, speaks its local
+before-noon constraint and actual eligible Wednesday time, and prepares no
+action. Its fixture now provides morning and afternoon evidence on the corrected
+day; the named observation is strengthened to check the explicit window and
+filtered spoken result in addition to its date. CCP-022's generic contact
+observation fails this run after passing the prior FAQ run; no notification
+workflow or email explanation was implemented, and that variation remains
+visible. The total passing count is unchanged, although the targeted correction
+is now verified. No reliability claim is based on these single-run counts.
+
+E2E-316 covers 13 parallel isolated signed scenarios: a verified initial search,
+booking/move proposal corrections, retained and explicitly cleared windows,
+multiple correction clauses, ambiguous or qualified requests, revoked approval,
+unplayed replacement menus/confirmations, a committed receipt and an independent
+read request containing an unsupported time filter. Old proposals are fenced
+before new reads; a move preserves its exact protected original; replacement
+menus/selections/details must be played before a new separate affirmation can
+send once. Date-only appointment enquiries clarify a requested time-of-day
+filter instead of dropping it and reading the full day.
+
+`node --test --test-concurrency=3 test/voice/dated-window-corrections.test.ts test/voice/caller-corrections.test.ts test/voice/booking-search-windows.test.ts`
+passed all five tests. The final dated-window/model/manifest gate passed all five
+tests; `npm run typecheck` and `git diff --check` passed. The archived report
+matches the final production/fixture/runner source. The unchanged urgent-route,
+multiple-service and concurrent-pending-read setups, other conversation failures
+and live carrier/email activation still need work; no actual clinic capability
+was activated.
