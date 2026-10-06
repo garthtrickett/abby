@@ -7,6 +7,7 @@ import { clearAffirmation } from "./caller-affirmation.ts";
 import { actionOutcomeText, confirmedActionText } from "./action-outcome.ts";
 import { requestBoundaryText, validRequestBoundary } from "./request-boundary.ts";
 import { bookingHorizonText, validBookingHorizon } from "./booking-horizon.ts";
+import { publicInformationUnavailable } from "./public-information.ts";
 import { callerIdentityDenialText, restrictDeniedCaller, validCallerIdentityDenial } from "./caller-identity.ts";
 import { notificationOutcomeText } from "./notification-outcome.ts";
 import { clarificationText } from "./clarification.ts";
@@ -396,9 +397,10 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       const sources = Array.isArray(interpretation.sources) ? interpretation.sources : [];
       const source = sources[0];
       if (turn.quality !== "clear" || sources.length !== 1 ||
-          !validCallKnowledgeSource(source, state.policy, now) || interpretation.proposedText !== source.approvedText) {
-        addStaffTask(state, "systemFailure", now);
-        state.callerMessages.push("I can't verify that information right now.");
+          !validCallKnowledgeSource(source, state.policy, now) || interpretation.proposedText !== source.approvedText ||
+          interpretation.publicTopic !== undefined && source.sourceRef !== `clinic-public-${interpretation.publicTopic}`) {
+        if (!interpretation.publicTopic) addStaffTask(state, "systemFailure", now);
+        state.callerMessages.push(interpretation.publicTopic ? publicInformationUnavailable(interpretation.publicTopic) : "I can't verify that information right now.");
       } else {
         state.callerMessages.push(source.approvedText);
         state.knowledgeAnswers.push({ turnId: turn.turnId, sourceRef: source.sourceRef, version: source.version, ownerRef: source.ownerRef });
@@ -406,8 +408,8 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       break;
     }
     case "knowledgeFailure":
-      addStaffTask(state, "systemFailure", now);
-      state.callerMessages.push("I can't verify that information right now.");
+      if (!interpretation.publicTopic) addStaffTask(state, "systemFailure", now);
+      state.callerMessages.push(interpretation.publicTopic ? publicInformationUnavailable(interpretation.publicTopic) : "I can't verify that information right now.");
       break;
     case "availability": {
       const presentation = availabilityPresentation(interpretation.snapshot, state.policy.scope, interpretation.from, interpretation.to,

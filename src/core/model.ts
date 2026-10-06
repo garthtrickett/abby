@@ -268,8 +268,8 @@ export type TurnInterpretation =
   | Readonly<{ kind: "readFailure"; target: "patient" | "offer" | "appointment"; failure: "unavailable" | "notFound" }>
   | Readonly<{ kind: "intakeFailure"; reason: "missing" | "unavailable" }>
   | Readonly<{ kind: "unavailableAction"; actionKind: ActionKind }>
-  | Readonly<{ kind: "answer"; sources: readonly ApprovedKnowledge[]; proposedText: string }>
-  | Readonly<{ kind: "knowledgeFailure"; reason: "invalidQuery" | "unavailable" }>
+  | Readonly<{ kind: "answer"; sources: readonly ApprovedKnowledge[]; proposedText: string; publicTopic?: import("./public-information.ts").PublicInformationTopic }>
+  | Readonly<{ kind: "knowledgeFailure"; reason: "invalidQuery" | "unavailable"; publicTopic?: import("./public-information.ts").PublicInformationTopic }>
   | Readonly<{ kind: "availability"; from: string; to: string; snapshot: AvailabilitySnapshot }>
   | Readonly<{ kind: "availabilityFailure"; reason: AvailabilityReadFailure["kind"] | "notEligible" | "notConfigured" | "unclear" }>
   | Readonly<{ kind: "appointments"; from: string; to: string; snapshot: AppointmentRead; declareRange?: true }>

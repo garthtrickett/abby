@@ -8,6 +8,8 @@ import type { WorkflowHost, AppointmentChangeEvidenceHost, AppointmentChangeEvid
 import { captureKnowledgeSnapshot, validCallKnowledgeSource, validKnowledgeSource } from "../core/knowledge-evidence.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { BookingHorizonTurns } from "./booking-horizon-turns.ts";
+import { PublicInformationAnswers } from "./public-information-answers.ts";
+import { publicInformationTopic } from "../core/public-information.ts";
 import { validRequestBoundary } from "../core/request-boundary.ts";
 import { validCallerIdentityDenial } from "../core/caller-identity.ts";
 import { err } from "../core/model.ts";
@@ -424,7 +426,9 @@ export class TextReception {
     return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);
   }
 
-  async answer(scope: LocationScope, turn: FinalCallerTurn, sourceRefs: readonly string[], proposedText: string, now: string, expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
+  async answer(scope: LocationScope, turn: FinalCallerTurn, sourceRefs: readonly string[], proposedText: string, now: string, expectedConversationRevision?: number, external?: AbortSignal): Promise<Result<CallState, TextReceptionFailure>> {
+    const topic = publicInformationTopic(sourceRefs);
+    if (topic) return new PublicInformationAnswers(this.ledger, this.knowledge, this.clock).run(scope, turn, topic, proposedText, expectedConversationRevision, external);
     const runtime = this.runtime(scope);
     const current = await runtime.read(turn.callId);
     if (!current.ok) return current;

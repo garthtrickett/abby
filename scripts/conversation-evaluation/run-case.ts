@@ -2,6 +2,8 @@ import { callerIdentityDenialText } from "../../src/core/caller-identity.ts";
 import { requestBoundaryText } from "../../src/core/request-boundary.ts";
 import type { RequestBoundary } from "../../src/core/request-boundary.ts";
 import { clinicFAQFixture, publicDirections } from "../../test/support/clinic-faqs.ts";
+import { publicServiceInformationFixture, publicServices } from "../../test/support/public-service-information.ts";
+import { publicInformationUnavailable } from "../../src/core/public-information.ts";
 import { urgentConversationFixture, urgentReply } from "../../test/support/urgent-conversation.ts";
 import { bookingCatalogueFixture } from "../../test/support/cliniko-booking-catalogue.ts";
 import type { Kysely } from "kysely";
@@ -85,6 +87,15 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
   const statuses = Object.values(after.actions).map(action => action.status), latest = Object.values(after.actions).at(-1);
   let pass = false;
   switch (plan.expectation) {
+    case "publicInformation": {
+      const topic = candidate.id === "CCP-030" ? "serviceGuidance" : "priceAndFees";
+      const expected = topic === "serviceGuidance" ? publicServices : publicInformationUnavailable(topic);
+      pass = last?.kind === "answer" && last.sourceRefs.length === 1 && last.sourceRefs[0] === `clinic-public-${topic}` && last.proposedText === expected &&
+        speech.includes(expected) && work.noNewProviderWork && !statuses.includes("awaitingConfirmation") &&
+        JSON.stringify(after.actions) === JSON.stringify(before.actions) && JSON.stringify(after.staffItems) === JSON.stringify(before.staffItems) &&
+        after.knowledgeAnswers.length === before.knowledgeAnswers.length + (topic === "serviceGuidance" ? 1 : 0);
+      break;
+    }
     case "requestBoundary": {
       const reasons: Record<string, RequestBoundary> = { "CCP-012": "proxyPatient", "CCP-013": "minorIntake", "CCP-037": "proxyPatient", "CCP-039": "jointPractitioners", "CCP-041": "groupClass" };
       const reason = reasons[candidate.id];
@@ -151,7 +162,7 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
 /** Exercise the same signed HTTP/WS owner, private OTP and SAM/playback path as
  * E2E-303. Setup decisions are pinned; only candidate turns use the live model. */
 export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: Plan, model: ModelConfig) {
-  const f = candidate.id === "CCP-015" ? await urgentConversationFixture() : candidate.id === "CCP-032" ? await clinicFAQFixture() : plan.stage === "enquiry" ? await appointmentEnquiryFixture() : ["CCP-011", "CCP-025", "CCP-026"].includes(candidate.id) ? await bookingCatalogueFixture() : plan.stage.startsWith("staff") ? await clinikoStaffCallFlowFixture({ lostResponse: plan.stage === "staffUncertain" })
+  const f = candidate.id === "CCP-015" ? await urgentConversationFixture() : ["CCP-030", "CCP-033"].includes(candidate.id) ? await publicServiceInformationFixture({ prices: false }) : candidate.id === "CCP-032" ? await clinicFAQFixture() : plan.stage === "enquiry" ? await appointmentEnquiryFixture() : ["CCP-011", "CCP-025", "CCP-026"].includes(candidate.id) ? await bookingCatalogueFixture() : plan.stage.startsWith("staff") ? await clinikoStaffCallFlowFixture({ lostResponse: plan.stage === "staffUncertain" })
     : plan.stage.startsWith("cancel") ? await cancellationCallFlowFixture({ multiple: candidate.id === "CCP-036" })
     : plan.stage.startsWith("move") ? await reschedulingCallFlowFixture() : await bookingCallFlowFixture();
   f.flow.dispose();

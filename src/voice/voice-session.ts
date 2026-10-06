@@ -377,7 +377,10 @@ export class VoiceSession {
     } else if (this.cachedIntent.kind === "intake") {
       result = await this.reception.proposeIntake(this.scope, turn, this.cachedIntent.draftRef, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "answer") {
-      result = await this.reception.answer(this.scope, turn, this.cachedIntent.sourceRefs, this.cachedIntent.proposedText, now, existing.value.conversationRevision);
+      const controller = new AbortController(), pending = { cancel: () => controller.abort() };
+      this.pendingIntent = pending;
+      try { result = await this.reception.answer(this.scope, turn, this.cachedIntent.sourceRefs, this.cachedIntent.proposedText, now, existing.value.conversationRevision, controller.signal); }
+      finally { if (this.pendingIntent === pending) this.pendingIntent = undefined; }
     } else if (this.cachedIntent.kind === "availability") {
       result = await this.reception.checkAvailability(this.scope, turn, this.cachedIntent.from, this.cachedIntent.to, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "appointmentEnquiry" || this.cachedIntent.kind === "appointmentEnquiryChoice") {

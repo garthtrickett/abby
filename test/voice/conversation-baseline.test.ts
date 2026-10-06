@@ -8,7 +8,7 @@ test("E2E-307 conversation baseline distinguishes trusted spoken selection and m
   const corpus = await candidates();
   assert.equal(corpus.length, 45);
   await withDisposablePostgres(async db => {
-    const ids = ["CCP-005", "CCP-006", "CCP-009", "CCP-012", "CCP-013", "CCP-015", "CCP-017", "CCP-021", "CCP-022", "CCP-029", "CCP-037", "CCP-039", "CCP-041"];
+    const ids = ["CCP-005", "CCP-006", "CCP-009", "CCP-012", "CCP-013", "CCP-015", "CCP-017", "CCP-021", "CCP-022", "CCP-029", "CCP-030", "CCP-033", "CCP-037", "CCP-039", "CCP-041"];
     let next = 0;
     const evaluated: Awaited<ReturnType<typeof runCase>>[] = [];
     const settled = await Promise.allSettled(Array.from({ length: 4 }, async () => { for (;;) {
@@ -28,6 +28,12 @@ test("E2E-307 conversation baseline distinguishes trusted spoken selection and m
     const horizon = results.find(result => result.id === "CCP-029")!;
     assert.deepEqual(horizon.intents, [{ kind: "bookingHorizon" }]);
     assert.equal(horizon.checks.find(check => check.id === "conversation-observation")?.pass, true);
+    for (const id of ["CCP-030", "CCP-033"]) {
+      const result = results.find(result => result.id === id)!;
+      assert.equal(result.setupMatch, true); assert.equal(result.setupGap, null);
+      assert.equal(result.intents.at(-1)?.kind, "answer");
+      assert.equal(result.checks.find(check => check.id === "conversation-observation")?.pass, true, id);
+    }
     const denial = results.find(result => result.id === "CCP-009")!;
     assert.deepEqual(denial.intents, [{ kind: "callerIdentityDenied", reason: "identityDisagreement" }]);
     assert.equal(denial.checks.find(check => check.id === "conversation-observation")?.pass, true);

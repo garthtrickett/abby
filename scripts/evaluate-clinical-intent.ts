@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { clinicalIntentPromptVersion, createOpenAIClinicalIntentResolver } from "../src/standalone/openai-clinical-intent.ts";
 import { bookingCallFlowFixture, cancellationCallFlowFixture, reschedulingCallFlowFixture, intakeCallFlowFixture } from "../test/support/cliniko-call-flow.ts";
+import { publicInformationUnavailable } from "../src/core/public-information.ts";
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -41,6 +42,18 @@ async function main(): Promise<void> {
     { name: "background-horizon-question", text: "My friend asked 'how far ahead can I book' yesterday.",
       expected: { kind: "intentUnavailable" }, fixture: bookingCallFlowFixture },
     { name: "outcome", text: "Did that action work?", expected: { kind: "outcome" }, fixture: bookingCallFlowFixture },
+    { name: "service-guidance-trusted", text: "I do not know which appointment type I need.",
+      expected: { kind: "answer", sourceRefs: ["clinic-public-serviceGuidance"], proposedText: publicInformationUnavailable("serviceGuidance") }, fixture: bookingCallFlowFixture },
+    { name: "service-guidance-model-paraphrase", text: "Could you explain the different visit categories?",
+      expected: { kind: "answer", sourceRefs: ["clinic-public-serviceGuidance"], proposedText: publicInformationUnavailable("serviceGuidance") }, fixture: bookingCallFlowFixture },
+    { name: "service-guidance-symptoms", text: "My knee hurts. Which appointment type should I book?",
+      expected: { kind: "answer", sourceRefs: ["clinic-public-serviceGuidance"], proposedText: publicInformationUnavailable("serviceGuidance") }, fixture: bookingCallFlowFixture },
+    { name: "price-and-fees-trusted", text: "What would this visit cost, and would I pay a fee to cancel?",
+      expected: { kind: "answer", sourceRefs: ["clinic-public-priceAndFees"], proposedText: publicInformationUnavailable("priceAndFees") }, fixture: bookingCallFlowFixture },
+    { name: "price-and-fees-model-paraphrase", text: "What charges might a consultation and its cancellation attract?",
+      expected: { kind: "answer", sourceRefs: ["clinic-public-priceAndFees"], proposedText: publicInformationUnavailable("priceAndFees") }, fixture: bookingCallFlowFixture },
+    { name: "reported-service-question", text: "My friend asked 'which appointment type do I need' yesterday.", expected: { kind: "intentUnavailable" }, fixture: bookingCallFlowFixture },
+    { name: "negated-service-question", text: "I am not asking for service descriptions.", expected: { kind: "intentUnavailable" }, fixture: bookingCallFlowFixture },
   ] as const;
   const results = await Promise.all(cases.map(async item => {
     const f = await item.fixture();
@@ -53,7 +66,7 @@ async function main(): Promise<void> {
       return { name: item.name, requests, pass: JSON.stringify(actual) === JSON.stringify(item.expected), expected: item.expected, actual };
     } finally { f.flow.dispose(); await f.close(); }
   }));
-  const adapter = await Promise.all(["src/standalone/openai-clinical-intent.ts", "src/standalone/cliniko-call-flow.ts", "src/standalone/caller-identity-language.ts", "src/standalone/appointment-change-language.ts", "src/standalone/request-boundary-language.ts", "src/core/request-boundary.ts", "src/standalone/booking-horizon-language.ts", "src/standalone/cliniko-booking-horizon.ts", "src/core/booking-horizon.ts"]
+  const adapter = await Promise.all(["src/standalone/openai-clinical-intent.ts", "src/standalone/cliniko-call-flow.ts", "src/standalone/caller-identity-language.ts", "src/standalone/appointment-change-language.ts", "src/standalone/request-boundary-language.ts", "src/core/request-boundary.ts", "src/standalone/booking-horizon-language.ts", "src/standalone/cliniko-booking-horizon.ts", "src/core/booking-horizon.ts", "src/standalone/clinic-information-language.ts", "src/standalone/owner-file-clinic-faqs.ts", "src/core/public-information.ts"]
     .map(path => readFile(resolve(path))));
   const hash = createHash("sha256"); for (const source of adapter) hash.update(source);
   const report = { version: 1, kind: "clinical-intent-live-evaluation", at: new Date().toISOString(), model: args[1],

@@ -618,3 +618,90 @@ fees, invoice/refund/waitlist handling and pending-read setup still need work;
 unchanged generic scoring does not award unsupported capabilities. Every prose
 acceptance condition remains unassessed. Synthetic signed calls and current demo
 approvals do not establish real carrier/email operation or clinic activation.
+
+## Public service descriptions and unknown fees
+
+The valid-call signed reproduction on `082aba2e5d31997e9a122827037f3d9a0df8a898`
+failed before production edits: “I do not know which appointment type I need”
+received disputed-appointment wording. The existing
+[horizon report](baselines/clinic-conversation-after-horizon-v1.json) preserves
+that CCP-030 setup gap and the CCP-033 generic-information response. An earlier
+new fixture attempted to provision a then-unsupported fourth FAQ topic and
+could not admit the call; it was corrected to reproduce the caller response on
+a valid existing approval before implementation.
+
+E2E-322 adds exact call-pinned public topics `serviceGuidance` and `priceAndFees`
+through the existing operator approval and `knowledge.answer.v2` agent command.
+Approved text may describe multiple clinic services; it does not enable a
+second booking type or choose a type from symptoms. The actual clinical type,
+fee authority, confirmation and writer remain separately protected. Absent,
+revoked, changed, expired or forged public evidence gives an explicit unknown
+and clinic-contact notice without a patient-specific staff request. Public
+queries perform no provider/patient/email work. Admitted pending proposals are
+canceled before public host IO, and held reads use fresh owner time, consumer
+cancellation and revision fences. Original FAQ topics retain their prior path.
+
+The first expanded signed run found a real routing defect: a symptom story
+followed by “Which appointment type should I book?” still matched the disputed
+appointment guard. That guard now distinguishes `appointment type` from an
+existing appointment. Later fixture failures are also retained in the tracked
+work logs: a spoken question attempted during the private keypad-code lane, a
+denial setup whose synthetic model returned the wrong cue, and interruption
+after playback was already acknowledged. The fixtures now complete private
+verification, assert actual denial before the public question and interrupt
+active playback before acknowledging it. Ordinary spoken questions during
+private keypad entry are not claimed as supported by this patch.
+
+The [first real classification sample](baselines/clinical-intent-after-public-information-v1.json)
+passes 23 of 25 with 20 actual requests, but regresses adult registration and
+explicitly negated joint attendance. A bounded diagnostic saw registration
+returned as `minorIntake` with an invalid nonnull `intake` operation in about
+1.6 seconds, within the unchanged production five-second deadline. The
+[second sample](baselines/clinical-intent-after-public-information-v2.json)
+passes 22 of 25: the first prompt correction overgeneralized registration and
+returned intake for ordinary self-booking. The refined distinction in
+`clinical-intent-v19` [passes 25 of 25](baselines/clinical-intent-after-public-information-v3.json),
+with 20 actual model requests and five trusted routes. All failed samples remain
+archived; one passing sample does not establish statistical reliability.
+
+The [all-45 public-information report](baselines/clinic-conversation-after-public-information-v1.json)
+records 41 passing narrow conversation observations, four failing, zero harness
+failures, one explicit setup gap, all 135 safety checks passing and a clear
+PostgreSQL patient-data canary scan. Source is stable across all 463 recorded
+production/fixture/runner files. Ten candidate turns make actual model requests
+and 35 use trusted interpretation. CCP-030 now starts before verification with
+approved descriptions of Initial visit and Follow-up visit, without authorizing
+another clinical type. CCP-033 retains an absent price/fee source and must
+explicitly explain the unknown rather than infer a quote or waiver. The new
+checks require exact topic/text, no provider/mail/write work, unchanged
+actions/staff items and the appropriate recorded knowledge evidence.
+
+CCP-034, CCP-035, CCP-040 and CCP-044 still fail. Invoice/refund/waitlist cases
+retain the existing generic scorer; no billing, refund or waitlist capability
+is awarded. The concurrent pending-read setup remains absent. Every prose
+acceptance condition remains unassessed. The evaluator intentionally exits
+nonzero as a partial baseline, not a release gate. Actual clinic activation,
+carrier audio and real email operation remain separately unverified.
+
+Validation commands and results for this change:
+
+- `node --test --test-concurrency=3 test/text/public-service-information.test.ts test/cliniko/public-service-information.test.ts test/voice/public-service-guidance.test.ts test/voice/clinic-faqs.test.ts test/voice/appointment-change-intent.test.ts test/voice/conversation-baseline.test.ts test/contract/scenario-manifest.test.ts`: eight of nine tests passed; the new signed test then exposed the incomplete synthetic denial setup described above. The other eight include parallel memory/PostgreSQL commands, three held-source interleavings, existing FAQ/change behavior and the fifteen-candidate scripted baseline.
+- `node --test test/voice/public-service-guidance.test.ts`: both tests passed after correcting denial and active-playback fixture state; the expanded test runs 27 independent signed scenarios with four workers.
+- `node --test --test-concurrency=3 test/voice/openai-clinical-intent.test.ts test/contract/scenario-manifest.test.ts test/voice/public-service-guidance.test.ts`: final v19 gate passed all six tests, including strict malformed/forged/wrong-phase model rejection, prompt cancellation and the corrected signed journeys.
+- `npm run typecheck` and `git diff --check`: passed on final source.
+- `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinical-intent.ts --model gpt-4o-mini --out eval/results/20261006-public-info-intent-v19-v3.json`: 25 of 25 classifications passed with 20 actual model requests; earlier v17/v18 failures are archived above.
+- `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/results/20261006-conversations-public-info-v1.json`: all 45 executed with stable source and the 41/45 named result above; intentionally nonzero for four remaining observations.
+
+Final direct review corrected the synthetic published service text: “I have not
+selected an appointment type for you” could misdescribe an earlier committed
+booking. It now describes the information's scope instead: “These descriptions
+do not select an appointment type or reserve a time.” The signed test rerun
+passes both tests, including committed/uncertain outcomes and all 27 scenarios.
+The [final all-45 report](baselines/clinic-conversation-after-public-information-v2.json),
+produced with the same command and output
+`eval/results/20261006-conversations-public-info-v2.json`, matches the final 463
+source files with sourceStable true. It retains 41 passing observations, the
+same four failures, one setup gap, zero harness failures, all 135 safety checks
+passing and clear PostgreSQL patient-data canaries. Ten turns make actual model
+requests and 35 use trusted routes. This wording correction does not turn public
+descriptions into appointment selection or expand the unassessed acceptance scope.

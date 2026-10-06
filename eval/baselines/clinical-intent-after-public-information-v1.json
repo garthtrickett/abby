@@ -1,0 +1,355 @@
+{
+  "version": 1,
+  "kind": "clinical-intent-live-evaluation",
+  "at": "2026-10-06T09:40:20.551Z",
+  "model": "gpt-4o-mini",
+  "promptVersion": "clinical-intent-v17",
+  "adapterSha256": "7a06e0f8284f2444a90c21b61f58164e7ece99c295f5f20b3e575901b1dc1554",
+  "gate": "classification-sample-only",
+  "pass": 23,
+  "total": 25,
+  "results": [
+    {
+      "name": "book",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "workflow",
+        "operation": "book"
+      },
+      "actual": {
+        "kind": "workflow",
+        "operation": "book"
+      }
+    },
+    {
+      "name": "cancel",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "workflow",
+        "operation": "cancel"
+      },
+      "actual": {
+        "kind": "workflow",
+        "operation": "cancel"
+      }
+    },
+    {
+      "name": "reschedule",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "workflow",
+        "operation": "reschedule"
+      },
+      "actual": {
+        "kind": "workflow",
+        "operation": "reschedule"
+      }
+    },
+    {
+      "name": "new-patient",
+      "requests": 1,
+      "pass": false,
+      "expected": {
+        "kind": "workflow",
+        "operation": "intake"
+      },
+      "actual": {
+        "kind": "intentUnavailable"
+      }
+    },
+    {
+      "name": "identity-disagreement-paraphrase",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "callerIdentityDenied",
+        "reason": "identityDisagreement"
+      },
+      "actual": {
+        "kind": "callerIdentityDenied",
+        "reason": "identityDisagreement"
+      }
+    },
+    {
+      "name": "shared-phone-paraphrase",
+      "requests": 0,
+      "pass": true,
+      "expected": {
+        "kind": "callerIdentityDenied",
+        "reason": "sharedPhone"
+      },
+      "actual": {
+        "kind": "callerIdentityDenied",
+        "reason": "sharedPhone"
+      }
+    },
+    {
+      "name": "shared-line-model-paraphrase",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "callerIdentityDenied",
+        "reason": "sharedPhone"
+      },
+      "actual": {
+        "kind": "callerIdentityDenied",
+        "reason": "sharedPhone"
+      }
+    },
+    {
+      "name": "minor-intake-model-paraphrase",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "requestBoundary",
+        "reason": "minorIntake"
+      },
+      "actual": {
+        "kind": "requestBoundary",
+        "reason": "minorIntake"
+      }
+    },
+    {
+      "name": "proxy-patient-model-paraphrase",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "requestBoundary",
+        "reason": "proxyPatient"
+      },
+      "actual": {
+        "kind": "requestBoundary",
+        "reason": "proxyPatient"
+      }
+    },
+    {
+      "name": "joint-practitioner-model-paraphrase",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "requestBoundary",
+        "reason": "jointPractitioners"
+      },
+      "actual": {
+        "kind": "requestBoundary",
+        "reason": "jointPractitioners"
+      }
+    },
+    {
+      "name": "group-class-model-paraphrase",
+      "requests": 0,
+      "pass": true,
+      "expected": {
+        "kind": "requestBoundary",
+        "reason": "groupClass"
+      },
+      "actual": {
+        "kind": "requestBoundary",
+        "reason": "groupClass"
+      }
+    },
+    {
+      "name": "group-class-unavailable-model-paraphrase",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "requestBoundary",
+        "reason": "groupClass"
+      },
+      "actual": {
+        "kind": "requestBoundary",
+        "reason": "groupClass"
+      }
+    },
+    {
+      "name": "own-booking-with-background-partner",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "workflow",
+        "operation": "book"
+      },
+      "actual": {
+        "kind": "workflow",
+        "operation": "book"
+      }
+    },
+    {
+      "name": "own-booking-single-practitioner",
+      "requests": 1,
+      "pass": false,
+      "expected": {
+        "kind": "workflow",
+        "operation": "book"
+      },
+      "actual": {
+        "kind": "requestBoundary",
+        "reason": "jointPractitioners"
+      }
+    },
+    {
+      "name": "booking-horizon-trusted",
+      "requests": 0,
+      "pass": true,
+      "expected": {
+        "kind": "bookingHorizon"
+      },
+      "actual": {
+        "kind": "bookingHorizon"
+      }
+    },
+    {
+      "name": "booking-horizon-model-paraphrase",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "bookingHorizon"
+      },
+      "actual": {
+        "kind": "bookingHorizon"
+      }
+    },
+    {
+      "name": "background-horizon-question",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "intentUnavailable"
+      },
+      "actual": {
+        "kind": "intentUnavailable"
+      }
+    },
+    {
+      "name": "outcome",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "outcome"
+      },
+      "actual": {
+        "kind": "outcome"
+      }
+    },
+    {
+      "name": "service-guidance-trusted",
+      "requests": 0,
+      "pass": true,
+      "expected": {
+        "kind": "answer",
+        "sourceRefs": [
+          "clinic-public-serviceGuidance"
+        ],
+        "proposedText": "I can't verify approved service descriptions right now, and I can't choose an appointment type from symptoms. Please contact clinic staff for guidance. I haven't selected an appointment type or changed an appointment for this request."
+      },
+      "actual": {
+        "kind": "answer",
+        "sourceRefs": [
+          "clinic-public-serviceGuidance"
+        ],
+        "proposedText": "I can't verify approved service descriptions right now, and I can't choose an appointment type from symptoms. Please contact clinic staff for guidance. I haven't selected an appointment type or changed an appointment for this request."
+      }
+    },
+    {
+      "name": "service-guidance-model-paraphrase",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "answer",
+        "sourceRefs": [
+          "clinic-public-serviceGuidance"
+        ],
+        "proposedText": "I can't verify approved service descriptions right now, and I can't choose an appointment type from symptoms. Please contact clinic staff for guidance. I haven't selected an appointment type or changed an appointment for this request."
+      },
+      "actual": {
+        "kind": "answer",
+        "sourceRefs": [
+          "clinic-public-serviceGuidance"
+        ],
+        "proposedText": "I can't verify approved service descriptions right now, and I can't choose an appointment type from symptoms. Please contact clinic staff for guidance. I haven't selected an appointment type or changed an appointment for this request."
+      }
+    },
+    {
+      "name": "service-guidance-symptoms",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "answer",
+        "sourceRefs": [
+          "clinic-public-serviceGuidance"
+        ],
+        "proposedText": "I can't verify approved service descriptions right now, and I can't choose an appointment type from symptoms. Please contact clinic staff for guidance. I haven't selected an appointment type or changed an appointment for this request."
+      },
+      "actual": {
+        "kind": "answer",
+        "sourceRefs": [
+          "clinic-public-serviceGuidance"
+        ],
+        "proposedText": "I can't verify approved service descriptions right now, and I can't choose an appointment type from symptoms. Please contact clinic staff for guidance. I haven't selected an appointment type or changed an appointment for this request."
+      }
+    },
+    {
+      "name": "price-and-fees-trusted",
+      "requests": 0,
+      "pass": true,
+      "expected": {
+        "kind": "answer",
+        "sourceRefs": [
+          "clinic-public-priceAndFees"
+        ],
+        "proposedText": "I can't verify the current price or cancellation fee for your visit. Moving an appointment does not establish that a cancellation fee is waived. Please contact the clinic to confirm costs and fees. I haven't changed an appointment for this request."
+      },
+      "actual": {
+        "kind": "answer",
+        "sourceRefs": [
+          "clinic-public-priceAndFees"
+        ],
+        "proposedText": "I can't verify the current price or cancellation fee for your visit. Moving an appointment does not establish that a cancellation fee is waived. Please contact the clinic to confirm costs and fees. I haven't changed an appointment for this request."
+      }
+    },
+    {
+      "name": "price-and-fees-model-paraphrase",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "answer",
+        "sourceRefs": [
+          "clinic-public-priceAndFees"
+        ],
+        "proposedText": "I can't verify the current price or cancellation fee for your visit. Moving an appointment does not establish that a cancellation fee is waived. Please contact the clinic to confirm costs and fees. I haven't changed an appointment for this request."
+      },
+      "actual": {
+        "kind": "answer",
+        "sourceRefs": [
+          "clinic-public-priceAndFees"
+        ],
+        "proposedText": "I can't verify the current price or cancellation fee for your visit. Moving an appointment does not establish that a cancellation fee is waived. Please contact the clinic to confirm costs and fees. I haven't changed an appointment for this request."
+      }
+    },
+    {
+      "name": "reported-service-question",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "intentUnavailable"
+      },
+      "actual": {
+        "kind": "intentUnavailable"
+      }
+    },
+    {
+      "name": "negated-service-question",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "intentUnavailable"
+      },
+      "actual": {
+        "kind": "intentUnavailable"
+      }
+    }
+  ]
+}
