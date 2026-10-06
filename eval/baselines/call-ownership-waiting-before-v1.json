@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "kind": "signed-call-protocol-ownership-and-real-default-waiting-limits",
+  "sourceRevision": "3bfaf74406dc6744a928ab4ff4e694cd9fc765b8",
+  "testInputs": {
+    "test/voice/call-transcript-ownership.test.ts": "3bebe98af5b1e2e86b63131f8c871e52a627f0cd207472f2341c3e4c1e2e18ee",
+    "test/voice/call-waiting-limits.test.ts": "a2574b008bca7b9e1baa98afd745acd7f809b97bd2ddb35d32653d35c8286267",
+    "test/support/cliniko-workflow-voice.ts": "7c4b9460cba3194a423becb757a2be158846fdf88e867b893a8d6dec86cb5683"
+  },
+  "productionBehaviorChanged": false,
+  "result": "passed-on-existing-behavior-after-fixture-assertion-corrections",
+  "ownershipModes": [
+    "session",
+    "generation",
+    "futureGeneration",
+    "mixedBatch",
+    "stream",
+    "track",
+    "ownedBackground",
+    "unclearAffirmative"
+  ],
+  "waitingModes": [
+    "deadline",
+    "presenceThenSilence"
+  ],
+  "fixtureCorrections": [
+    "Ending retains the inert unconfirmed action record; it does not label it canceled. The test now checks unchanged actions, ended lifecycle, no new processed turn or host-write effect.",
+    "Existing terminal retention clears callerMessages rather than preserving prior messages. The test now checks terminal redaction alongside unchanged processed-turn history."
+  ],
+  "scope": "Actual signed ingress and transient Cliniko owner; provider, approval, mail and clear-final speech are synthetic. Protocol ownership does not establish physical speaker identity.",
+  "privacy": "Test-only memory snapshot occurs immediately before real ledger disposal; ordinary OTP transcripts and PostgreSQL patient-data canaries remain clear.",
+  "commands": [
+    "node --test test/voice/call-transcript-ownership.test.ts",
+    "node --test --test-concurrency=2 test/voice/call-transcript-ownership.test.ts test/voice/call-waiting-limits.test.ts"
+  ],
+  "initialResults": "The waiting test passed on existing behavior; ownership failed only the two overspecified assertions listed above. All eight corrected ownership modes passed; no production fix was required.",
+  "focusedGate": {
+    "command": "node --test --test-concurrency=3 test/voice/call-transcript-ownership.test.ts test/voice/call-waiting-limits.test.ts test/voice/media-turn-controller.test.ts test/voice/twilio-media-stream.test.ts test/voice/transport-media-normalizer.test.ts test/voice/pending-lookup-repair.test.ts test/voice/caller-corrections.test.ts test/voice/stale-menu-recovery.test.ts test/voice/conversation-baseline.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 23,
+    "fail": 0,
+    "skipped": 0,
+    "canceled": 0
+  },
+  "waitingObservations": [
+    {
+      "mode": "deadline",
+      "completion": "boundedFailureClose",
+      "closedAfterMs": 15033,
+      "closeCode": 1008
+    },
+    {
+      "mode": "presenceThenSilence",
+      "completion": "playedSilenceRetryThenFinal",
+      "closedAfterMs": 30239,
+      "closeCode": 1000
+    }
+  ],
+  "typecheck": "passed",
+  "fullBaseline": "clinic-conversation-after-ownership-waiting-v24-v1.json"
+}

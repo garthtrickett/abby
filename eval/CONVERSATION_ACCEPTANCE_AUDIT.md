@@ -31,16 +31,20 @@ approved preferences, windows, appointment enquiries and public facts.
    playback, provider-removed slots and repeated affirmation remain fenced.
    The [before-change sequence evidence](baselines/stale-menu-sequence-before-v1.json)
    records the implementation and separate test hash; no production fix was needed.
-4. **CCP-043/044: incomplete ownership/termination proof, still open.** The named
-   cases prove safe text handling and prompt repair respectively. Their setup and
-   approved termination clauses need direct transport/generation and finite-limit
-   evidence. No indefinite waiting or caller-identity inference is accepted.
+4. **CCP-043/044: direct ownership/termination proof added.** E2E-328
+   exercises foreign stream, track, session and generation rejection while a
+   played unconfirmed proposal exists, plus owned unrelated/unclear text.
+   E2E-329 uses actual serving read/silence timers with an unresolved provider;
+   truthful repair/failure, finite closure and no late speech are asserted.
+   These are protocol ownership and synthetic approved-limit evidence, not
+   physical speaker identity or actual clinic/carrier activation. The 23-test
+   focused gate, typecheck and refreshed stable all-45 baseline pass.
 5. **CCP-006: inspect explicit AM/PM clarification.** The current reply requests
    a full date and time and selects nothing. Its wording does not explicitly
    identify the ambiguous day/meridiem. This is partial wording evidence, not a
    proven unsafe selection.
 
-The next implementation order is 4, then the wording check. These are
+The next work is the wording check, then the remaining clause audit. These are
 local synthetic tasks; real carrier and email setup is outside these test goals
 and remains a separate release gate.
 
@@ -486,18 +490,18 @@ Evidence to inspect: [targeted test](../test/voice/played-menu-selection.test.ts
 
 ### CCP-043 — irrelevant-background-text
 
-Assessment: **Partial setup evidence**. The candidate runs as a clear-final owned synthetic transcript. It proves unrelated text grants no action authority, but does not itself exercise unknown media/transcript ownership. Map and run the transport/generation rejection evidence or add that setup.
+Assessment: **Supported with direct protocol evidence**. E2E-328 adds eight signed proposed-call journeys: wrong stream/track/session/old or future generation and mixed-owner finals end the call without new processed turns, model requests, provider traffic or host-write effects. Owned unrelated text and unclear affirmation clarify and cancel the unsent proposal. Terminal caller messages are redacted. This establishes protocol ownership, not physical speaker identity.
 
-Evidence to inspect: [targeted test](../test/voice/conversation-baseline.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted signed ownership test](../test/voice/call-transcript-ownership.test.ts); [named baseline](baselines/clinic-conversation-after-ownership-waiting-v24-v1.json).
 
 - `CCP-043-R01`: Ignore unrelated text as action authorization and ask an appropriate clarification if needed.
 - `CCP-043-F01`: Infer affirmation or a time selection from unrelated content.
 
 ### CCP-044 — silence-and-wait
 
-Assessment: **Partial limits evidence**. E2E-324 proves prompt repair, one canceled consumer, no late result, noise and disconnect behavior. Separately verify the approved silence/deadline termination limit; do not infer it from the successful presence reply.
+Assessment: **Supported with actual serving limits**. E2E-324 proves prompt repair, consumer cancellation, noise and disconnect behavior. E2E-329 directly holds a Cliniko response that ignores cancellation, uses the real read deadline/default silence timers, and verifies truthful failure or prompt repair followed by finite closure. A live silence path allows exactly one retry and a played final notice; releasing the provider only after closure cannot speak or publish a menu. No options, result guarantee, actions or staff requests are invented. Approval and playback are synthetic, not actual clinic/carrier acceptance.
 
-Evidence to inspect: [targeted test](../test/voice/pending-lookup-repair.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [repair test](../test/voice/pending-lookup-repair.test.ts), [actual limits test](../test/voice/call-waiting-limits.test.ts); [named baseline](baselines/clinic-conversation-after-ownership-waiting-v24-v1.json).
 
 - `CCP-044-R01`: Use bounded accurate waiting/repair behavior and terminate or fallback according to approved limits.
 - `CCP-044-F01`: Invent available times to fill silence.
