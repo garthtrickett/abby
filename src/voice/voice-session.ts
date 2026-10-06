@@ -13,6 +13,7 @@ import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 
 export type VoiceIntent =
   | Readonly<{ kind: "presence" }>
+  | Readonly<{ kind: "missedCall" }>
   | Readonly<{ kind: "bookingHorizon" }>
   | Readonly<{ kind: "requestBoundary"; reason: import("../core/request-boundary.ts").RequestBoundary }>
   | Readonly<{ kind: "callerIdentityDenied"; reason: import("../core/caller-identity.ts").CallerIdentityDenial }>
@@ -346,6 +347,8 @@ export class VoiceSession {
     let result: Result<CallState, VoiceSessionFailure>;
     if (this.cachedIntent.kind === "presence") {
       result = await this.reception.respondPresence(this.scope, turn, existing.value.conversationRevision);
+    } else if (this.cachedIntent.kind === "missedCall") {
+      result = await this.reception.respondMissedCall(this.scope, turn, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "bookingHorizon") {
       const controller = new AbortController(), pending = { cancel: () => controller.abort() };
       this.pendingIntent = pending;

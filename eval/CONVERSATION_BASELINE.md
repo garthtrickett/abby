@@ -838,3 +838,77 @@ explicitly unassessed: **45/45 named observations do not close the six-part goal
 or establish release readiness**. Next is a requirement-by-requirement acceptance
 audit, adding actual workflow evidence for material gaps without relaxing the
 original requirements.
+
+
+## Acceptance audit and unknown missed-call reason — 2026-10-06
+
+The [working acceptance audit](CONVERSATION_ACCEPTANCE_AUDIT.md) preserves all
+45 cases and all 124 original required/forbidden clauses. Inspecting the actual
+CCP-024 reply exposed a concrete behavior gap hidden by the previous broad
+human/contact regex: generic misunderstanding was counted as a successful
+explanation of an unknown outbound-call reason. The [signed before-change
+reproduction](baselines/missed-call-before-v1.json) failed on main `912b13a`
+before changing behavior. No patient read or outbound-call reason authority was
+invented to fix that response.
+
+Missed-call questions now select finite public `missedCall` and canonical
+`missedCallReasonUnavailable` speech. The reply explicitly says the clinic's
+reason is unknown and offers direct clinic contact. Current trusted whole
+questions bypass model interpretation; paraphrases can use strict model kind
+with all other fields null. Quoted/past questions, negated questions followed
+by booking, and explicit current human requests retain their own interpretation.
+Native `calls.missedCall.respond.v1` and voice use a shared private-clock,
+scoped-session, clear-final public-repair guard. Identity denial stays intact,
+unsent proposals are superseded and existing sent clinical receipts remain.
+
+The first [expanded live sample](baselines/clinical-intent-missed-call-v23-before-refinement.json)
+passed 40/41: the already-paid-account-paperwork paraphrase became generic
+`staffRequest` rather than `invoiceCopy`. Its failure is preserved. Version 24
+clarifies that a finite request purpose takes precedence over generic human
+wording. The [refined sample](baselines/clinical-intent-after-missed-call-v24-v2.json)
+passes **41/41**, with **31 actual model requests** and ten trusted cases. Four
+new cases cover the reason question, a model paraphrase and reported/negated
+counterexamples. A passing repeat does not establish statistical reliability.
+
+The [v24 all-45 baseline](baselines/clinic-conversation-after-missed-call-v24-v1.json)
+passes **45/45 named observations** and **135/135 safety observations**, with
+zero setup gaps/harness failures, clear PostgreSQL canaries and stable source
+across **469 inputs**. Six candidate turns make actual model requests; 39 use
+trusted interpretation. CCP-024 now requires the exact typed unknown-reason
+reply, no additional provider/mail/write work, unchanged clinical/staff state
+and no additional appointment/knowledge observations. Original corpus prose and
+source candidates remain unchanged and explicitly unassessed.
+
+Fifteen expanded signed scenarios test exact and paraphrased questions, public
+identity denial, unsent proposals, committed and uncertain clinical outcomes,
+saved/recovered/unresolved staff requests, reported/negated context, an explicit
+human request and forged model script/operation fields. A fixture assumption
+initially rejected valid independent recovery of the exact prior recall. The
+corrected test accepts only that existing task's exact provider observation,
+requires precisely the previously authorized patient-contact/recall GETs, and
+asserts a single prior recall POST, no new verification, no clinical send and
+no fabricated outbound reason. Unknown absent records stay unresolved.
+This permits existing authorized reconciliation, not a patient read triggered
+by the public reply. Other reason cases require unchanged provider read count.
+
+Validation commands/results are recorded with the final focused gate before
+publication. E2E-325 and manifest 1.120 map native memory/PostgreSQL and signed
+voice evidence. Native rich-state storage retains the unsafe lab contract;
+standalone durable storage remains phone-to-Cliniko-ID links only.
+
+The audit remains open: CCP-017 does not yet convey its approved review cadence;
+CCP-007 needs the full stale-menu/fresh-representation sequence; CCP-043/044
+need direct ownership/approved-limit evidence; explicit AM/PM clarification
+needs inspection. These are concrete local follow-ups, not a reason to claim
+release readiness or completion from the passing partial baseline. Real carrier
+calls, email delivery, clinic activation and audible pace remain separately
+unverified.
+
+
+Missed-call final validation:
+
+- `node --test --test-concurrency=3 test/text/missed-call-repair.test.ts test/voice/missed-call-repair.test.ts test/voice/conversation-baseline.test.ts test/voice/openai-clinical-intent.test.ts test/contract/scenario-manifest.test.ts test/text/conversation-presence.test.ts test/voice/pending-lookup-repair.test.ts test/voice/played-menu-selection.test.ts test/voice/caller-corrections.test.ts test/voice/appointment-change-intent.test.ts test/voice/cliniko-staff-request.test.ts`: all 18 tests passed, including the fifteen new signed scenarios and twenty scripted corpus cases.
+- `npm run typecheck`: the first expanded gate passed; the later gate found that a common booking/staff fixture union lost its typed `staffPosts` member. The fixture now preserves a separately typed staff handle. This is a test-typing correction, not an altered response or authority rule; the final `npm run typecheck` passed after that correction.
+- Live commands: `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinical-intent.ts --model gpt-4o-mini --out eval/results/20261006-missed-call-intent-v24-v2.json` passed 41/41 after the archived v23 40/41 failure; `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/results/20261006-conversations-missed-call-v24-v1.json` passed the stable-source partial baseline above.
+
+- Final typed-fixture `node --test test/voice/missed-call-repair.test.ts`: both tests and all fifteen expanded signed cases passed; `git diff --check` passed.

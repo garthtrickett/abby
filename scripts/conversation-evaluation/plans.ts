@@ -5,7 +5,7 @@ export type Candidate = Readonly<{ id: string; pattern: string; priority: string
 export type Stage = "initial" | "book" | "menu" | "proposal" | "committed" | "uncertain" |
   "cancel" | "cancelTarget" | "cancelCommitted" | "move" | "moveOffers" | "staff" | "staffUncertain" | "enquiry" | "pendingLookup";
 export type Expectation = "clarify" | "cancelProposal" | "spokenChoice" | "revisedProposal" | "revisedDate" |
-  "identityDenied" | "requestBoundary" | "bookingHorizon" | "publicInformation" | "staffPurpose" | "presence" | "outcome" | "notificationOutcome" | "human" | "readOnly" | "constraints" | "publicFacts" | "boundedSearch" | "urgent" | "unsupported";
+  "identityDenied" | "requestBoundary" | "bookingHorizon" | "publicInformation" | "staffPurpose" | "presence" | "missedCall" | "outcome" | "notificationOutcome" | "human" | "readOnly" | "constraints" | "publicFacts" | "boundedSearch" | "urgent" | "unsupported";
 export type Plan = Readonly<{ stage: Stage; expectation: Expectation; missingSetup?: string }>;
 
 /** These are explicit fixture contracts, not model answers. An absent production
@@ -34,7 +34,7 @@ export const plans: Readonly<Record<string, Plan>> = {
   "CCP-021": { stage: "uncertain", expectation: "outcome" },
   "CCP-022": { stage: "committed", expectation: "notificationOutcome" },
   "CCP-023": { stage: "book", expectation: "human" },
-  "CCP-024": { stage: "initial", expectation: "human" },
+  "CCP-024": { stage: "initial", expectation: "missedCall" },
   "CCP-025": { stage: "book", expectation: "constraints" },
   "CCP-026": { stage: "book", expectation: "boundedSearch" },
   "CCP-027": { stage: "menu", expectation: "constraints" },

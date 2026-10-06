@@ -1190,6 +1190,7 @@ The initial corpus has these minimum journeys. One scenario may cover several re
 | `E2E-322` | Service uncertainty and price/fee questions use exact current approved public descriptions or explicit clinic guidance; model/agent inventions, stale approvals, held expiry and cancellation cannot choose a clinical type, waive a fee, preserve an unsent confirmation or create patient-specific work | FR-04, FR-06, FR-11, FR-12, FR-22 |
 | `E2E-323` | Invoice-copy, charge-review and waitlist-interest staff requests preserve their finite purpose through independent verification and exact Cliniko receipts; stale clocks, held preparation, revoked authority and changed purposes cannot send, while document delivery, refunds, enrollment and callback remain unproven | FR-03, FR-09, FR-11, FR-12, FR-22 |
 | `E2E-324` | Qualified caller speech repairs or corrects held booking/rescheduling menus and selections before provider completion; late results cannot revive menus/proposals, noise cannot cancel a read, and native presence replies fence scope/session/time without guessing availability or promising a result | FR-04, FR-06, FR-11, FR-22 |
+| `E2E-325` | Missed-call questions explicitly explain the absent outbound reason and approved contact path; public native commands use current scope/session/private time, and signed calls preserve known receipts without a new patient, clinical or staff action | FR-04, FR-06, FR-11, FR-22 |
 
 The corpus runs with deterministic synthetic media frames, partial hypotheses and segment-final transcription events, synthesis chunks, playback acknowledgments, typed model effect results, clock, and host effects against the reference host and standalone adapters. It enters through `VoiceSession.begin` and its media/transcript methods, not by calling `CallRuntime.acceptTurn` directly as a substitute for voice E2E. The harness can delay a playback acknowledgment or deliver it after a clear to prove that queued/cleared audio does not count as played. It can race a caller correction with `startNextPresentation`, drop a commit wake-up, restart the dispatcher task while retaining the live session, or lose the entire session process before activation or after atomic start. Assertions distinguish superseded pending speech from unproven started speech, reject `played` for a pending or transfer intent, and verify exactly one terminal resolution without duplicate media. `E2E-035` and `E2E-082` through `E2E-084` separately submit invalid presentation outcomes through T4 and prove each is rejected before a second SAM transition. `E2E-019` through `E2E-026` individually cover final turn, playback, interruption, transfer, and fallback behavior. Each independently triggerable voice or effect fault has its own scenario ID so cases can run in parallel and a failure identifies one behavior. Every provider runs the same scenario IDs; assertions use its approved support-matrix row and fail if its declared capability snapshot disagrees. Provider-specific contract tests separately cover permission limits, pagination, rate limits, availability rules, unsupported mutations, and lost responses. Scheduled smoke tests use sanctioned provider test accounts and a limited real telephony path, including an actual interruption and transfer. Tests contain no live patient data.
 
@@ -1737,3 +1738,33 @@ then sends the corpus caller question. Its named observation requires repair
 before release, aborted consumer evidence, no late speech/menu, one availability
 read and unchanged actions/staff items. This is synthetic concurrency evidence;
 real carrier timing and broader prose acceptance remain separate verification.
+
+
+### Unknown outbound-call reasons
+
+The standalone call contract has no approved outbound-call history capability.
+A current reason question selects finite `missedCall`; the core accepts only
+`missedCallReasonUnavailable` and speaks the canonical public unknown-reason
+reply plus clinic contact. It never guesses patient, appointment, billing or
+clinical context, starts verification or prepares a staff request. An explicit
+current human/callback request still follows the independent staff operation.
+Quoted, past or negated reason questions do not by themselves select this reply.
+Trusted bounded syntax recognizes whole questions; other current paraphrases
+may use strict model classification with every other decision field null.
+
+`calls.missedCall.respond.v1` carries only a current final caller turn and a
+parseable public timestamp. Presence and missed-call native/voice entry points
+share TextReception's private public-repair guard: scoped active session,
+private current time and clear quality. Canonical SAM speech supersedes unsent
+proposals, preserves sent clinical receipts and restores no patient authority
+after identity denial. No model/native custom script or host reference is accepted.
+Previously authorized recall reconciliation can separately observe its exact
+provider record, but that supplies neither a new send nor an outbound-call reason.
+
+E2E-325 covers the connected before/after reproduction, parallel signed states
+and memory/PostgreSQL native commands. The richer PostgreSQL fixtures retain
+the explicit unsafe lab contract; standalone storage permission is unchanged.
+CCP-024's named observation now requires the exact typed reply, no additional
+provider/mail/write work and unchanged clinical/staff/read state rather than a
+generic clinic-contact regex. Broader prose and real carrier evidence remain
+separate acceptance work.
