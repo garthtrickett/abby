@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "kind": "clinical-intent-live-evaluation",
+  "at": "2026-10-06T08:06:39.623Z",
+  "model": "gpt-4o-mini",
+  "promptVersion": "clinical-intent-v14",
+  "adapterSha256": "2d076d5d704456848dc24cccdf5045474983674fc75136189ee444a29f7a3fe5",
+  "gate": "classification-sample-only",
+  "pass": 8,
+  "total": 8,
+  "results": [
+    {
+      "name": "book",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "workflow",
+        "operation": "book"
+      },
+      "actual": {
+        "kind": "workflow",
+        "operation": "book"
+      }
+    },
+    {
+      "name": "cancel",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "workflow",
+        "operation": "cancel"
+      },
+      "actual": {
+        "kind": "workflow",
+        "operation": "cancel"
+      }
+    },
+    {
+      "name": "reschedule",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "workflow",
+        "operation": "reschedule"
+      },
+      "actual": {
+        "kind": "workflow",
+        "operation": "reschedule"
+      }
+    },
+    {
+      "name": "new-patient",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "workflow",
+        "operation": "intake"
+      },
+      "actual": {
+        "kind": "workflow",
+        "operation": "intake"
+      }
+    },
+    {
+      "name": "identity-disagreement-paraphrase",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "callerIdentityDenied",
+        "reason": "identityDisagreement"
+      },
+      "actual": {
+        "kind": "callerIdentityDenied",
+        "reason": "identityDisagreement"
+      }
+    },
+    {
+      "name": "shared-phone-paraphrase",
+      "requests": 0,
+      "pass": true,
+      "expected": {
+        "kind": "callerIdentityDenied",
+        "reason": "sharedPhone"
+      },
+      "actual": {
+        "kind": "callerIdentityDenied",
+        "reason": "sharedPhone"
+      }
+    },
+    {
+      "name": "shared-line-model-paraphrase",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "callerIdentityDenied",
+        "reason": "sharedPhone"
+      },
+      "actual": {
+        "kind": "callerIdentityDenied",
+        "reason": "sharedPhone"
+      }
+    },
+    {
+      "name": "outcome",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "outcome"
+      },
+      "actual": {
+        "kind": "outcome"
+      }
+    }
+  ]
+}

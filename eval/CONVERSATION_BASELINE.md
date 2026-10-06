@@ -420,3 +420,66 @@ query. The invoice scorer still fails rather than awarding an invented billing
 capability. CCP-033's unknown-price contact observation varies from the prior
 run and remains unresolved. All prose acceptance conditions remain unassessed;
 the report intentionally exits nonzero and is not a reliability or release gate.
+
+## Caller identity disagreement and shared-phone denial (2026-10-06)
+
+The E2E-319 reproduction failed on merged source `67750a3`: a verified booking
+proposal followed by “that isn't me” received generic repair. There was no
+call-wide negative authority transition. The new denial records only its first
+reason enum, cancels unsent proposals/model work and permanently revokes patient
+access within this call. Cliniko clinical and independently verified staff
+owners are disposed through a separate patient lifetime; the whole call remains
+available for independently approved public FAQs and the urgent script.
+
+Reception checks precede every patient/model-work host seam, and SAM send
+barriers/effect dispatch independently fence new patient work and automatic
+reconciliation. Scoped agent progress hides prior patient actions, staff
+outcomes and appointment read metadata. An already-sent action is not undone:
+existing receipts remain truthful and an actual late receipt may settle its
+action without disclosure or a new notification. The caller is directed to
+contact the clinic. Standalone Cliniko state remains transient under D-06/D-11;
+the PostgreSQL denial round trip tests the authorized embedded contract.
+
+The signed test covers sixteen parallel scenarios including initial and verified
+denial, shared-phone statements, strict model paraphrases, forged output,
+negated/background counterexamples, booking/cancel/move/enquiry/staff workflows,
+prior committed/uncertain outcomes and retained public FAQ/urgent access.
+Additional agent tests cover exact input, foreign scope/session, stale private
+clock, idempotency, monotonic reasons and refusal to reuse a processed unrelated
+turn. A held Cliniko read cannot publish a late menu, private code collection
+can be revoked by an authorized command, and a late actual write receipt is
+retained without a result announcement to the denied caller.
+
+The first [live intent sample](baselines/clinical-intent-after-identity-v1.json)
+passed six of seven checks and exposed a routing defect: a partner/shared-number
+statement reached the existing proxy-request boundary before shared-phone
+handling. That failed sample is retained. The bounded explicit shared-phone
+matcher now takes precedence, while a request to book for a partner remains a
+proxy counterexample. The [corrected intent sample](baselines/clinical-intent-after-identity-v2.json)
+passes eight of eight samples with seven actual model requests and one trusted
+shared-phone route. Both identity-disagreement and less literal shared-line
+paraphrases made real model requests. This is a classification sample, not an
+audio reliability gate; the earlier report's adapter hash precedes the routing
+correction and covers only its original two-file adapter set.
+
+Validation commands and observed results:
+
+- `node --test --test-concurrency=3 test/voice/openai-clinical-intent.test.ts test/voice/conversation-baseline.test.ts test/voice/clinic-faqs.test.ts test/voice/urgent-conversation-routing.test.ts test/voice/cliniko-staff-request.test.ts test/voice/notification-outcome-query.test.ts test/text/notification-effects.test.ts test/text/staff-task.test.ts test/cliniko/cliniko-call-flow.test.ts`: 56 passed.
+- `node --test --test-concurrency=3 test/text/caller-identity-denial.test.ts test/voice/conversation-baseline.test.ts test/voice/caller-identity-denial.test.ts test/cliniko/caller-identity-denial.test.ts test/contract/scenario-manifest.test.ts`: seven passed after the denial-aware public-availability fallback correction.
+- `node --test --test-concurrency=3 test/voice/caller-identity-denial.test.ts test/voice/openai-clinical-intent.test.ts test/voice/conversation-baseline.test.ts test/contract/scenario-manifest.test.ts`: four passed after the shared-phone precedence correction, including all sixteen signed scenarios.
+- `npm run typecheck` and `git diff --check`: passed on the final source.
+- `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinical-intent.ts --model gpt-4o-mini --out eval/results/20261006-identity-intent-v14-v2.json`: eight of eight samples passed.
+- `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/results/20261006-conversations-identity-v1.json`: intentionally nonzero because named observations remain incomplete.
+
+The [final conversation report](baselines/clinic-conversation-after-identity-v1.json)
+matches all 454 production/fixture/runner source files. All 45 candidates execute
+with zero harness failures, two setup gaps, all 135 safety observations passing
+and clear PostgreSQL patient-data canaries. It records 34 passing narrow
+conversation observations and eleven failing. Fifteen candidate turns make real
+model requests and 30 use trusted interpretation. CCP-009 now requires actual
+identity denial and the exact restricted response instead of generic repair.
+The aggregate is not presented as an improvement: CCP-039's paired-practitioner
+request now varies to a booking workflow, while minor intake, horizon/service
+handling, unknown prices and other unsupported-request observations remain open.
+All prose acceptance conditions remain unassessed; this partial report does not
+close the six-part goal, clinic activation or real carrier/email testing.

@@ -52,6 +52,7 @@ export function notificationDirective(policy: CallPolicy, callId: string, action
 /** Queue only after a proven appointment commit, and require an exact host suppression acknowledgement. */
 export function queueCommittedNotification(state: CallState, action: ActionState, hostRef: string,
   accepted: NotificationDirective | undefined): void {
+  if (state.callerIdentityDenied) return;
   const directive = action.mutation.notification;
   if (!directive) return;
   const id = `${directive.notificationKey}:notification`;

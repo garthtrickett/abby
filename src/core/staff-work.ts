@@ -5,7 +5,7 @@ export type StaffPlan = Readonly<{ item: StaffItem; effect: Extract<Effect, { ki
 
 /** Stage one staff request and its host effect in the same call transition. */
 export function addStaffTask(state: CallState, reason: StaffReason, now: string, linkedActionKey?: string, request?: ActionRequest, requestedPerson?: string): void {
-  if (state.policy.staffWorkEnabled === false) return;
+  if (state.callerIdentityDenied || state.policy.staffWorkEnabled === false) return;
   if (linkedActionKey && Object.values(state.staffItems).some(item => item.linkedActionKey === linkedActionKey)) return;
   const key = `${state.callId}:staff:${Object.keys(state.staffItems).length + 1}`;
   const item = {

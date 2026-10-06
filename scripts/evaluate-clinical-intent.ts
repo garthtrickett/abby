@@ -15,19 +15,26 @@ async function main(): Promise<void> {
     { name: "cancel", text: "I need to cancel an appointment.", expected: { kind: "workflow", operation: "cancel" }, fixture: cancellationCallFlowFixture },
     { name: "reschedule", text: "I need to move an appointment.", expected: { kind: "workflow", operation: "reschedule" }, fixture: reschedulingCallFlowFixture },
     { name: "new-patient", text: "I'm new to this clinic and want to register.", expected: { kind: "workflow", operation: "intake" }, fixture: intakeCallFlowFixture },
+    { name: "identity-disagreement-paraphrase", text: "You have linked this conversation to somebody different from its speaker.",
+      expected: { kind: "callerIdentityDenied", reason: "identityDisagreement" }, fixture: bookingCallFlowFixture },
+    { name: "shared-phone-paraphrase", text: "My partner and I both use the number I am ringing from.",
+      expected: { kind: "callerIdentityDenied", reason: "sharedPhone" }, fixture: bookingCallFlowFixture },
+    { name: "shared-line-model-paraphrase", text: "More than one person uses the line I am calling you on.",
+      expected: { kind: "callerIdentityDenied", reason: "sharedPhone" }, fixture: bookingCallFlowFixture },
     { name: "outcome", text: "Did that action work?", expected: { kind: "outcome" }, fixture: bookingCallFlowFixture },
   ] as const;
   const results = await Promise.all(cases.map(async item => {
     const f = await item.fixture();
     try {
+      let requests = 0;
       const resolveIntent = createOpenAIClinicalIntentResolver({ owner: f.flow, apiKey: key, model: args[1]!,
-        clinicDate: () => "2026-10-04" });
+        clinicDate: () => "2026-10-04", fetch: async (...args) => { requests++; return fetch(...args); } });
       const result = await resolveIntent(f.turn(`live-${item.name}`, item.text));
       const actual = result.ok ? result.value : { kind: "intentUnavailable" };
-      return { name: item.name, pass: JSON.stringify(actual) === JSON.stringify(item.expected), expected: item.expected, actual };
+      return { name: item.name, requests, pass: JSON.stringify(actual) === JSON.stringify(item.expected), expected: item.expected, actual };
     } finally { f.flow.dispose(); await f.close(); }
   }));
-  const adapter = await Promise.all(["src/standalone/openai-clinical-intent.ts", "src/standalone/cliniko-call-flow.ts"]
+  const adapter = await Promise.all(["src/standalone/openai-clinical-intent.ts", "src/standalone/cliniko-call-flow.ts", "src/standalone/caller-identity-language.ts", "src/standalone/appointment-change-language.ts"]
     .map(path => readFile(resolve(path))));
   const hash = createHash("sha256"); for (const source of adapter) hash.update(source);
   const report = { version: 1, kind: "clinical-intent-live-evaluation", at: new Date().toISOString(), model: args[1],

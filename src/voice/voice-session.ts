@@ -12,6 +12,7 @@ import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 
 export type VoiceIntent =
+  | Readonly<{ kind: "callerIdentityDenied"; reason: import("../core/caller-identity.ts").CallerIdentityDenial }>
   | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason; approvedLocation?: string }>
   | Readonly<{ kind: "workflow"; operation: import("../core/model.ts").WorkflowOperation; replaceCanceledChange?: true }>
   | Readonly<{ kind: "outcome" }>
@@ -333,7 +334,9 @@ export class VoiceSession {
       this.cachedIntent = intent.value;
     }
     let result: Result<CallState, VoiceSessionFailure>;
-    if (this.cachedIntent.kind === "clarify") {
+    if (this.cachedIntent.kind === "callerIdentityDenied") {
+      result = await this.reception.denyCallerIdentity(this.scope, turn, this.cachedIntent.reason, existing.value.conversationRevision);
+    } else if (this.cachedIntent.kind === "clarify") {
       result = await this.runtime.acceptTurn(turn, this.cachedIntent, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "workflow") {
       const controller = new AbortController(), pending = { cancel: () => controller.abort() };

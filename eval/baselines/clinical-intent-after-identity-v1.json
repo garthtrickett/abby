@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "kind": "clinical-intent-live-evaluation",
+  "at": "2026-10-06T08:05:14.713Z",
+  "model": "gpt-4o-mini",
+  "promptVersion": "clinical-intent-v14",
+  "adapterSha256": "08064337674c97b70ea7c8b72f833db4fa82c8c527eab4037d911868f1476bb5",
+  "gate": "classification-sample-only",
+  "pass": 6,
+  "total": 7,
+  "results": [
+    {
+      "name": "book",
+      "pass": true,
+      "expected": {
+        "kind": "workflow",
+        "operation": "book"
+      },
+      "actual": {
+        "kind": "workflow",
+        "operation": "book"
+      }
+    },
+    {
+      "name": "cancel",
+      "pass": true,
+      "expected": {
+        "kind": "workflow",
+        "operation": "cancel"
+      },
+      "actual": {
+        "kind": "workflow",
+        "operation": "cancel"
+      }
+    },
+    {
+      "name": "reschedule",
+      "pass": true,
+      "expected": {
+        "kind": "workflow",
+        "operation": "reschedule"
+      },
+      "actual": {
+        "kind": "workflow",
+        "operation": "reschedule"
+      }
+    },
+    {
+      "name": "new-patient",
+      "pass": true,
+      "expected": {
+        "kind": "workflow",
+        "operation": "intake"
+      },
+      "actual": {
+        "kind": "workflow",
+        "operation": "intake"
+      }
+    },
+    {
+      "name": "identity-disagreement-paraphrase",
+      "pass": true,
+      "expected": {
+        "kind": "callerIdentityDenied",
+        "reason": "identityDisagreement"
+      },
+      "actual": {
+        "kind": "callerIdentityDenied",
+        "reason": "identityDisagreement"
+      }
+    },
+    {
+      "name": "shared-phone-paraphrase",
+      "pass": false,
+      "expected": {
+        "kind": "callerIdentityDenied",
+        "reason": "sharedPhone"
+      },
+      "actual": {
+        "kind": "clarify",
+        "reason": "changeUnsupported"
+      }
+    },
+    {
+      "name": "outcome",
+      "pass": true,
+      "expected": {
+        "kind": "outcome"
+      },
+      "actual": {
+        "kind": "outcome"
+      }
+    }
+  ]
+}

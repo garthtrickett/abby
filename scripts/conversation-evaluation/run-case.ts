@@ -1,3 +1,4 @@
+import { callerIdentityDenialText } from "../../src/core/caller-identity.ts";
 import { clinicFAQFixture, publicDirections } from "../../test/support/clinic-faqs.ts";
 import { urgentConversationFixture, urgentReply } from "../../test/support/urgent-conversation.ts";
 import { bookingCatalogueFixture } from "../../test/support/cliniko-booking-catalogue.ts";
@@ -81,6 +82,8 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
   const statuses = Object.values(after.actions).map(action => action.status), latest = Object.values(after.actions).at(-1);
   let pass = false;
   switch (plan.expectation) {
+    case "identityDenied": pass = last?.kind === "callerIdentityDenied" && after.callerIdentityDenied === "identityDisagreement" &&
+      speech.includes(callerIdentityDenialText) && !statuses.includes("awaitingConfirmation") && !Object.keys(after.staffItems).length; break;
     case "cancelProposal": pass = last?.kind === "cancel" && statuses.includes("awaitingConfirmation"); break;
     case "spokenChoice": pass = last?.kind === "bookingChoice" && last.choice === 2 && statuses.includes("awaitingConfirmation"); break;
     case "revisedProposal": pass = latest?.status === "awaitingConfirmation" && latest.mutation.request.kind === "book" &&
