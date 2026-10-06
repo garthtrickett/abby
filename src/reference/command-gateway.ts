@@ -83,6 +83,7 @@ export type GatewayCommand =
   | Readonly<{ kind: "appointments.change.propose.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; selection: AppointmentChangeSelection; now: string }>
   | Readonly<{ kind: "patients.intake.propose.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; draftRef: string; now: string }>
   | Readonly<{ kind: "calls.urgent.respond.v1"; turn: FinalCallerTurn; now: string }>
+  | Readonly<{ kind: "calls.notifications.outcome.v1"; turn: FinalCallerTurn; now: string }>
   | Readonly<{ kind: "calls.turn.model.v1"; turn: FinalCallerTurn; now: string }>
   | Readonly<{ kind: "knowledge.answer.v2"; turn: FinalCallerTurn; sourceRefs: readonly string[]; proposedText: string; now: string }>
   | Readonly<{ kind: "knowledge.list.v1" }>
@@ -145,6 +146,7 @@ export type GatewayReply =
   | Readonly<{ kind: "intakeProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "staffRequestProgress"; progress: CallCommandProgress }>
   | Readonly<{ kind: "urgentResponseProgress"; progress: CallCommandProgress }>
+  | Readonly<{ kind: "notificationOutcomeProgress"; progress: CallCommandProgress }>
   | Readonly<{ kind: "modelTurn"; progress: CallCommandProgress }>
   | Readonly<{ kind: "knowledgeAnswer"; progress: CallCommandProgress }>
   | Readonly<{ kind: "knowledgeList"; entries: readonly KnowledgeEntry[] }>
@@ -208,7 +210,7 @@ export class CommandGateway {
 
   listPermitted(): readonly CapabilityDescriptor[] {
     const permitted: CapabilityId[] = ["settings.read.v1", "booking.propose.v2", "appointments.change.propose.v1",
-      "patients.intake.propose.v1", "knowledge.answer.v2", "calls.urgent.respond.v1"];
+      "patients.intake.propose.v1", "knowledge.answer.v2", "calls.urgent.respond.v1", "calls.notifications.outcome.v1"];
     if (this.reception.reschedulingMenuEnabled()) permitted.push("rescheduling.menu.read.v1", "rescheduling.menu.select.v1");
     if (this.reception.bookingMenuEnabled()) permitted.push("booking.offers.read.v1", "booking.offers.select.v1");
     if (this.reception.modelEnabled()) permitted.push("calls.turn.model.v1");
@@ -458,6 +460,11 @@ export class CommandGateway {
         if (!Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
         const result = await this.reception.respondUrgent(this.actor.scope, command.turn);
         return result.ok ? ok({ kind: "urgentResponseProgress", progress: commandProgress(result.value, command.turn.turnId) }) : result;
+      }
+      case "calls.notifications.outcome.v1": {
+        if (!Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
+        const result = await this.reception.notificationOutcome(this.actor.scope, command.turn);
+        return result.ok ? ok({ kind: "notificationOutcomeProgress", progress: commandProgress(result.value, command.turn.turnId) }) : result;
       }
       case "calls.turn.model.v1": {
         if (!command.turn || !command.turn.turnId || !command.turn.callId || !command.turn.text ||

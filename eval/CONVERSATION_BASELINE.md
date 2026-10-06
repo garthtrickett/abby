@@ -341,3 +341,82 @@ gate passes: another location cannot use the call, an invalid private clock
 cannot change state, and backdated public time cannot revive expired wording.
 The report stays partial with every prose acceptance condition unassessed; no
 single-run reliability or real clinic activation claim is made.
+
+## Booking versus email confirmation questions (2026-10-06)
+
+The E2E-318 signed reproduction failed on the merged urgent source: a committed
+booking followed by an email-proof request received generic repair without the
+known booking receipt. The new query selects a SAM status response, never a send.
+It separately reports the actual latest action and a valid uniquely linked
+notification receipt. The action-outcome wording is shared with the existing
+ordinary outcome query so cancellation, move and caller-mediated intake retain
+their established distinctions.
+
+An unproven standalone path states that the booking is confirmed but email
+confirmation cannot be verified or delivered from this call. Approved embedded
+receipts can report pending, definitively unsent or reported sent. A sent
+notification does not prove an email channel or inbox delivery; its wording says
+so explicitly. None of these questions authorizes an email/resend, owner change,
+new notification/reconciliation effect or staff request. Previously queued,
+authorized reconciliation may drain through the voice runner and its proven
+receipt can update a later answer without another send.
+
+The first embedded query assertion incorrectly expected the voice runner to
+freeze its already queued reconciliation. That expectation was corrected by
+checking unchanged effect IDs, no new send, observation of the exact prior
+captured intent and the updated proven receipt on the next question. The query
+implementation did not change to force a frozen or fictional delivery status.
+Standalone signed and agent paths, which have no pending notification to drain,
+still require their effect records to remain unchanged.
+
+E2E-318 covers nine parallel signed standalone scenarios including valid strict
+model interpretation, forged model wording and a malformed structured choice.
+The agent command denies fabricated receipt/recipient/owner fields, cross-scope
+access and backdated access to an expired session lease. Both approved embedded
+owners are exercised against memory and PostgreSQL, including receipt updates
+and later owner edits. Text tests cover actual pending and definitive-unsent
+outbox receipts without dispatch or retry from the query.
+
+The receipt/reconciliation gate passed all 51 tests. The final
+language/baseline/manifest/urgent regression gate passed all ten tests; the
+memory/PostgreSQL embedded receipt gate passed all 35 tests with no skips. The
+additional strict model/forged receipt and agent gate passed both tests.
+Final `npm run typecheck` and `git diff --check` passed. CCP-022's named observation
+now requires the actual committed booking status, explicit unknown email path
+and absence of notification or staff effects instead of generic contact wording.
+Live email delivery remains deferred, and this is focused synthetic validation,
+not a release gate or full goal completion.
+
+[First notification-query report](baselines/clinic-conversation-after-notification-query-v1.json)
+preserves all 45 executed candidates, 35 passing narrow observations and ten
+failing, with two setup gaps and no harness failure. All 135 safety observations
+pass and PostgreSQL canaries remain clear. CCP-022 now passes the stronger exact
+booking-plus-email-status observation. CCP-009 varies back to a generic staff
+classification, and CCP-034 incorrectly becomes a booking-notification query;
+those results are preserved rather than hidden by the passing target.
+
+The paid-receipt distinction is corrected by bounded routing to the existing
+approved staff/contact seam before generic notification classification. A tenth
+signed scenario checks that a paid receipt request cannot become a booking-status
+answer, send an invoice, look up private billing data or begin unapproved staff
+work. Named staff requests retain priority. This does not add a billing feature
+or change the receipt-request scorer to award missing capabilities.
+
+The final notification-versus-billing signed/model/staff/baseline/manifest gate
+passes all eight tests, including the tenth paid-receipt counterexample and
+independent verified staff-request regression. Its final typecheck passes.
+The earlier memory/PostgreSQL receipt and reconciliation checks remain valid;
+the final routing refinement changes no notification dispatch or storage code.
+
+[Final notification-query report](baselines/clinic-conversation-after-notification-query-v2.json)
+matches all 452 final production/fixture/runner source files and executes all
+45 candidates with zero harness failures, two setup gaps, all 135 safety
+observations passing and clear PostgreSQL patient-data canaries. It records 35
+passing narrow conversation observations and ten failing; sixteen candidate
+turns make real model requests and 29 use trusted interpretation. CCP-022 uses
+the actual committed booking plus unknown email-delivery response, and CCP-034
+now uses the existing staff/contact route instead of the wrong notification
+query. The invoice scorer still fails rather than awarding an invented billing
+capability. CCP-033's unknown-price contact observation varies from the prior
+run and remains unresolved. All prose acceptance conditions remain unassessed;
+the report intentionally exits nonzero and is not a reliability or release gate.

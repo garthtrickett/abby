@@ -4,7 +4,8 @@ import { supportedVoiceLocale } from "./voice-presentation.ts";
 import { createHash } from "node:crypto";
 import { digestActionRequest } from "./digest.ts";
 import { clearAffirmation } from "./caller-affirmation.ts";
-import { confirmedActionText } from "./action-outcome.ts";
+import { actionOutcomeText, confirmedActionText } from "./action-outcome.ts";
+import { notificationOutcomeText } from "./notification-outcome.ts";
 import { clarificationText } from "./clarification.ts";
 import { notificationDirective, queueCommittedNotification, transitionNotification } from "./notification-effects.ts";
 import { availabilityPresentation } from "./availability-presentation.ts";
@@ -272,18 +273,12 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       break;
     }
     case "outcomeQuery": {
-      const latest = Object.values(state.actions).at(-1);
-      const text = !latest ? "I haven't completed an action in this call." : latest.status === "committed"
-        ? confirmedActionText(latest.kind) : latest.status === "uncertain" || latest.status === "needsReview" || latest.status === "dispatched"
-          ? latest.kind === "intake" && latest.mutation.request.kind === "intake" && latest.mutation.request.recoveryContract === "callerMediated"
-            ? "I can't confirm that your details were saved. No appointment or staff request is confirmed. Contact the clinic before trying again."
-            : "I can't confirm that action yet. It is pending review."
-          : latest.status === "awaitingConfirmation" || latest.status === "ready"
-            ? "That action is not confirmed yet. I still need your separate confirmation."
-            : "That action was not completed.";
-      state.callerMessages.push(text);
+      state.callerMessages.push(actionOutcomeText(Object.values(state.actions).at(-1)));
       break;
     }
+    case "notificationOutcomeQuery":
+      state.callerMessages.push(notificationOutcomeText(state));
+      break;
     case "modelPending": {
       if (!state.policy.automationEnabled || turn.quality !== "clear" || turn.turnId.length > 256 ||
           !/^[a-f0-9]{64}$/.test(interpretation.taskRef)) return err({ kind: "invalidTransition" });

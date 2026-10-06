@@ -51,10 +51,20 @@ export class TextReception {
   /** A public urgent cue cannot treat an ordinary task queue as a proven urgent route. */
   async respondUrgent(scope: LocationScope, turn: FinalCallerTurn) {
     // Public command timestamps cannot revive an expired admitted script.
-    let now: string;
-    try { now = this.clock(); } catch { return err({ kind: "invalidTransition" as const }); }
-    if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" as const });
+    const now = this.currentInstant();
+    if (!now) return err({ kind: "invalidTransition" as const });
     return this.runtime(scope).acceptTurn(turn, { kind: "handoff", reason: "potentiallyUrgent", staffWorkUnavailable: true }, now);
+  }
+
+  async notificationOutcome(scope: LocationScope, turn: FinalCallerTurn) {
+    const now = this.currentInstant();
+    if (!now) return err({ kind: "invalidTransition" as const });
+    return this.runtime(scope).acceptTurn(turn, { kind: "notificationOutcomeQuery" }, now);
+  }
+
+  private currentInstant(): string | undefined {
+    try { const now = this.clock(); return Number.isFinite(Date.parse(now)) ? now : undefined; }
+    catch { return undefined; }
   }
 
   async startWorkflow(scope: LocationScope, turn: FinalCallerTurn, operation: import("../core/model.ts").WorkflowOperation, now: string,

@@ -109,6 +109,23 @@ test("E2E-257 corrupt notification linkage and missing delivery outcomes fail sc
 });
 
 for (const owner of ["host", "abby"] as const) {
+  test(`E2E-318 ${owner} pending and definitively unsent receipt queries cannot dispatch or retry delivery`, async () => {
+    const app = await fixture(`query-${owner}`, owner);
+    const { notification } = await app.commit();
+    const before = await app.state();
+    success(await app.turn("query-pending", { kind: "notificationOutcomeQuery" }));
+    const pending = await app.state();
+    assert.match(pending.callerMessages.at(-1)!, /^Your booking is confirmed\. Confirmation delivery is pending.*can't confirm that it was sent or received.*can't send or resend/s);
+    assert.deepEqual(pending.effects, before.effects); assert.equal(app.sends.length, 0);
+    app.host.dispatchNotification = async intent => { app.sends.push(structuredClone(intent)); return { ...unknownNotification(intent), kind: "definitiveUnsent" }; };
+    await app.worker.process(app.callId, notification.id, now);
+    const resolved = await app.state();
+    success(await app.turn("query-unsent", { kind: "notificationOutcomeQuery" }));
+    const unsent = await app.state();
+    assert.match(unsent.callerMessages.at(-1)!, /^Your booking is confirmed\. The approved notification service reported that the confirmation was not sent\./);
+    assert.deepEqual(unsent.effects, resolved.effects); assert.deepEqual(unsent.actions, resolved.actions); assert.equal(app.sends.length, 1);
+    success(await app.turn("query-repeat", { kind: "notificationOutcomeQuery" })); assert.equal(app.sends.length, 1);
+  });
   for (const kind of ["book", "cancel", "reschedule"] as const) {
     test(`E2E-257 ${owner} owns ${kind} confirmation: exact suppression receipt queues one captured notification after commit`, async () => {
       const app = await fixture(`${owner}-${kind}`, owner);

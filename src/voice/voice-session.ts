@@ -15,6 +15,7 @@ export type VoiceIntent =
   | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason; approvedLocation?: string }>
   | Readonly<{ kind: "workflow"; operation: import("../core/model.ts").WorkflowOperation; replaceCanceledChange?: true }>
   | Readonly<{ kind: "outcome" }>
+  | Readonly<{ kind: "notificationOutcome" }>
   | Readonly<{ kind: "staffOutcome" }>
   | Readonly<{ kind: "staffRequest"; requestedPerson?: string }>
   | Readonly<{ kind: "bookingMenu"; from: string; to: string; preference?: import("../core/booking-search-preference.ts").BookingSearchPreference; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null }>
@@ -342,6 +343,8 @@ export class VoiceSession {
       finally { if (this.pendingIntent === pending) this.pendingIntent = undefined; }
     } else if (this.cachedIntent.kind === "outcome") {
       result = await this.runtime.acceptTurn(turn, { kind: "outcomeQuery" }, now, existing.value.conversationRevision);
+    } else if (this.cachedIntent.kind === "notificationOutcome") {
+      result = await this.runtime.acceptTurn(turn, { kind: "notificationOutcomeQuery" }, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "bookingMenu") {
       result = await this.reception.readBookingMenu(this.scope, turn, this.cachedIntent.from, this.cachedIntent.to, now, this.cachedIntent.window, this.cachedIntent.preference);
     } else if (this.cachedIntent.kind === "bookingChoice") {

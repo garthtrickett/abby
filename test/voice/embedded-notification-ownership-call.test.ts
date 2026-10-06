@@ -47,6 +47,7 @@ function newCall(stores: Stores, kind: Kind, sendUnknown = false, suppression = 
   const spoken: string[] = [];
   const chunks = new Map<string, number[]>();
   let utterance = 0;
+  let requestedText: string | undefined;
   let mediaSequence = 0;
   const host = Object.assign(new ReferenceClinicHost([patient], [offer]), {
     async resolveAppointmentChange(query: AppointmentChangeEvidenceQuery): Promise<Result<Extract<ActionRequest, { kind: "cancel" | "reschedule" }>, { kind: "notFound"; target: "appointment" }>> {
@@ -83,13 +84,13 @@ function newCall(stores: Stores, kind: Kind, sendUnknown = false, suppression = 
   });
   const call = createEmbeddedVoiceComposition({ event, sessionId, ledger, policy, host, readiness, now: () => now,
     routing: new ReferenceNumberRoutingHost([{ ...scope, accountRef: event.key.accountRef, dialedNumber: event.dialedNumber, routeVersion: "route-v1" }]),
-    resolveIntent: async () => utterance > 1 ? ok({ kind: "affirm" }) : kind === "book"
+    resolveIntent: async turn => turn.text === "Please check its delivery status." ? ok({ kind: "notificationOutcome" }) : utterance > 1 ? ok({ kind: "affirm" }) : kind === "book"
       ? ok({ kind, verificationRef: patient.verificationRef, offerRef: offer.offerRef }) : kind === "cancel"
         ? ok({ kind, verificationRef: patient.verificationRef, targetRef: target.appointmentRef })
         : ok({ kind, verificationRef: patient.verificationRef, targetRef: target.appointmentRef, offerRef: offer.offerRef }),
     ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } }, transcription: { async accept() { return ok([]); }, async flush(generation) {
       return ok([{ kind: "segmentFinal", sessionId, generation, utteranceId: `request-${++utterance}`,
-        text: utterance === 1 ? "Please change my appointment" : "Yes", quality: "clear" }]);
+        text: requestedText ?? (utterance === 1 ? "Please change my appointment" : "Yes"), quality: "clear" }]);
     } } }),
 
     output: { async queueChunk(playbackId, sequence) { chunks.set(playbackId, [...(chunks.get(playbackId) ?? []), sequence]); return "queued" as const; },
@@ -101,7 +102,8 @@ function newCall(stores: Stores, kind: Kind, sendUnknown = false, suppression = 
     value(await call.acceptPlaybackCompletion({ playbackId: delivery.playbackId, lastSequence: sequences.at(-1)!, status: "played" }, now));
   }
   async function begin() { const admitted = value(await call.begin(now)); assert.equal(admitted.kind, "admitted"); await play(admitted.delivery); }
-  async function speak() {
+  async function speak(text?: string) {
+    requestedText = text;
     let completed: Awaited<ReturnType<typeof call.acceptMedia>> | undefined;
     for (let frame = 0; frame < 7; frame += 1) {
       const bytes = new Uint8Array(640);
@@ -165,6 +167,39 @@ test("E2E-257 SET-009 complete embedded notification ownership calls", { timeout
           assert.equal(call.sends[0]!.kind, notificationKind(kind)); assert.equal(call.sends[0]!.hostVersion, "sender-v1");
           assert.equal(Object.values((await call.state()).effects).find(effect => effect.kind === "notification")?.status, "completed");
           value(await call.recovery.recover(now)); assert.equal(call.sends.length, 1);
+        });
+      }
+      for (const owner of ["host", "abby"] as const) for (const outcome of ["sent", "unknown", "unproven", "unset"] as const) {
+        await t.test(`E2E-318 ${adapter}: ${owner} ${outcome} notification query reports receipts without sending or changing ownership`, async () => {
+          const state = await fixture();
+          if (outcome !== "unset") value(await state.policy.changeNotificationOwner(state.scope, "0", "bookingConfirmation", owner, "owner"));
+          const call = newCall(state, "book", outcome === "unknown", outcome !== "unproven");
+          try {
+            await call.begin(); await call.confirm(); value(await call.recovery.recover(now));
+            const before = await call.state(), sends = call.sends.length, observations = call.observations.length;
+            const query = await call.speak("Please check its delivery status."); await call.play(query.delivery);
+            const text = call.spoken.at(-1)!; assert.match(text, /^Your booking is confirmed\./);
+            if (outcome === "sent") assert.match(text, /service reported sending.*can't confirm that it was an email or that it reached your inbox.*can't send or resend/s);
+            else assert.match(text, /can't verify that an email confirmation was sent or deliver one/);
+            assert.equal(call.sends.length, sends); assert.equal(call.writes.length, 1);
+            const after = await call.state(); assert.deepEqual(after.actions, before.actions);
+            assert.deepEqual(Object.keys(after.effects), Object.keys(before.effects), "the query cannot queue notification or reconciliation work");
+            if (outcome === "unknown") {
+              // The voice runner may drain reconciliation already queued by the
+              // earlier uncertain send. The query itself adds no effect or send.
+              assert.equal(call.observations.length, observations + 1);
+              assert.deepEqual(call.observations.at(-1), call.sends[0]);
+              assert.equal(Object.values(after.effects).find(effect => effect.kind === "notification")?.status, "completed");
+            } else { assert.equal(call.observations.length, observations); assert.deepEqual(after.effects, before.effects); }
+            value(await state.policy.changeNotificationOwner(state.scope, outcome === "unset" ? "0" : "1", "bookingConfirmation", null, "owner"));
+            const repeated = await call.speak("Please check its delivery status."); await call.play(repeated.delivery);
+            if (outcome === "unknown") assert.match(call.spoken.at(-1)!, /service reported sending.*can't confirm that it was an email or that it reached your inbox/s);
+            else assert.equal(call.spoken.at(-1), text, "setting changes cannot invent or erase captured delivery receipts");
+            assert.equal(call.sends.length, sends); assert.equal(call.observations.length, outcome === "unknown" ? observations + 1 : observations);
+          } finally {
+            await call.call.disconnect(now);
+            if ("dispose" in state.ledger && typeof state.ledger.dispose === "function") state.ledger.dispose();
+          }
         });
       }
       await t.test(`E2E-257 ${adapter}: default, future owner edit, clear and withdrawal preserve active call bindings`, async () => {
