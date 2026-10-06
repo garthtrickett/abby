@@ -4,6 +4,7 @@ import { createOpenAIClinicalIntentResolver } from "../../src/standalone/openai-
 import { bookingCallFlowFixture } from "../support/cliniko-call-flow.ts";
 import { clinikoWorkflowVoiceFixture, voiceUntil } from "../support/cliniko-workflow-voice.ts";
 import { withDisposablePostgres } from "../support/disposable-postgres.ts";
+import { verificationCanaries } from "../support/caller-verification.ts";
 
 test("E2E-308 signed calls resolve spoken time and relative selections from actually played offers and clarify rejection, ambiguity and guessed choices", { timeout: 100_000 }, async () => {
   await withDisposablePostgres(async db => {
@@ -13,9 +14,10 @@ test("E2E-308 signed calls resolve spoken time and relative selections from actu
       { text: "The half-past-ten one.", ambiguous: true, propose: false },
       { text: "None of those work.", ambiguous: false, propose: false },
       { text: "The train one, please.", ambiguous: false, propose: false },
+      { text: "The eleven-thirty appointment, thanks.", ambiguous: false, propose: false },
       { text: "The half-past-ten appointment, thanks.", ambiguous: false, propose: false, unplayed: true },
     ];
-    await Promise.all(cases.map(async item => {
+    const settled = await Promise.allSettled(cases.map(async item => {
       const f = await bookingCallFlowFixture(); f.flow.dispose();
       f.setStarts(item.ambiguous ? ["2026-10-07T23:30:00.000Z", "2026-10-08T11:30:00.000Z"]
         : ["2026-10-07T22:00:00.000Z", "2026-10-07T23:30:00.000Z"]);
@@ -43,8 +45,19 @@ test("E2E-308 signed calls resolve spoken time and relative selections from actu
         assert.equal(call.writes.length, 0);
         if (item.propose) {
           assert.equal(actions.at(-1)?.status, "awaitingConfirmation"); assert.match(call.spoken.at(-1)!, /10:30 am/);
+          const proposal = actions.at(-1)!;
+          assert.equal(proposal.mutation.request.kind, "book");
+          if (proposal.mutation.request.kind !== "book") throw new Error("expected exact booking proposal");
+          assert.equal(proposal.mutation.request.offer.startsAt, "2026-10-07T23:30:00.000Z");
+          assert.equal(call.writeRequests.length, 0);
           assert.ok(!requests.includes(item.text), "selection must not require a model ordinal");
           await call.mark(); await call.turn("Yes"); assert.equal(call.writes.length, 1);
+          assert.equal(call.writeRequests.length, 1);
+          const sent = call.writeRequests[0]!;
+          assert.equal(sent.method, "POST"); assert.equal(sent.path, "/v1/individual_appointments");
+          assert.equal(sent.body.starts_at, proposal.mutation.request.offer.startsAt);
+          assert.equal(sent.body.business_id, "11"); assert.equal(sent.body.practitioner_id, "22"); assert.equal(sent.body.appointment_type_id, "33");
+          assert.equal(sent.body.patient_id, verificationCanaries[2]);
           assert.equal(Object.values((await call.state()).actions).at(-1)?.status, "committed");
         } else {
           assert.equal(actions.length, 0); assert.match(call.spoken.at(-1)!, /which option|other date or time|fresh appointment options/i);
@@ -54,5 +67,7 @@ test("E2E-308 signed calls resolve spoken time and relative selections from actu
         }
       } finally { try { await call?.close(); } finally { await f.close(); } }
     }));
+    const failures = settled.flatMap(result => result.status === "rejected" ? [result.reason] : []);
+    if (failures.length) throw new AggregateError(failures, "played menu scenarios failed");
   });
 });

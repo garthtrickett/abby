@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "kind": "exact-clinical-send-fee-and-unresolved-date-proof",
+  "baseRevision": "4b64f38040965c98c4a2da4086741f2e0ae06f97",
+  "productionBehaviorChanged": false,
+  "inputs": {
+    "test/support/cliniko-workflow-voice.ts": "222bb2ca4d562e14fe22498663d5066cf15044ed917ea4acffc3eacdf58732bf",
+    "test/voice/played-menu-selection.test.ts": "aed7ff2719107e9db3b31b1c820d772a1a0ff318ad137f5a2b8f8e2b0d1d0be3",
+    "test/voice/caller-corrections.test.ts": "134a1f009320e4f39453b26fa2a8db1a279c868571700299fa655d920210dbcb",
+    "test/voice/appointment-change-intent.test.ts": "0ccbe785d7b0352254f892392e365d34967c078e1652184282f57f0c67e110d9",
+    "test/voice/dated-window-corrections.test.ts": "3062c1e246becb6aa9c21d9287ef19dbdf725f6c7a3cd93ca730c8391f1789f3"
+  },
+  "assertions": [
+    "Spoken half-past-ten/later resolves the exact current offer and its actual booking POST start, approved business/practitioner/type and verified synthetic patient.",
+    "Corrections cancel the old proposal and assert a different exact replacement start; no mutation before fresh played confirmation and separate affirmation; one matching POST or original-source PATCH.",
+    "Source-bound rescheduling PATCH contains only the new start and null end, without reassignment fields.",
+    "Cancellation-only standard/late paths speak the exact approved no-fee/$20 terms before played confirmation and separate affirmation; the sole PATCH has the approved reason, null cancellation note and apply_to_repeats false.",
+    "Wednesday-or-Friday correction creates no provider search, model request or write; old proposal canceled, displayed day clarified, and later yes remains unsent."
+  ],
+  "initialAssertionFailures": [
+    {
+      "case": "cancellation-body",
+      "expected": "Only cancellation_reason",
+      "observed": "cancellation_note null, cancellation_reason 50, apply_to_repeats false",
+      "classification": "Overspecified incomplete expected fixture body; actual writer matches existing API contract."
+    },
+    {
+      "case": "unresolved-date-clarification",
+      "expected": "proposalCorrection notice",
+      "observed": "menuAmbiguous notice explicitly asks displayed day and AM or PM",
+      "classification": "Wrong assumed clarification reason; actual owned-menu clarification fulfills unresolved-day requirement."
+    }
+  ],
+  "initialGate": {
+    "passed": 2,
+    "failed": 2,
+    "job": "Abby exact sends fees unresolved date before behavior",
+    "logSha256": "f519fbd258b3d415b563087289fc2476be573df6b3a5248077856b93f238cc4c"
+  },
+  "correctedGate": {
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "canceled": 0,
+    "scenarios": {
+      "E2E-308": 6,
+      "E2E-309": 9,
+      "E2E-310": 16,
+      "E2E-316": 14
+    }
+  },
+  "privacy": "Only synthetic fixture memory observes mutation bodies; no production logging/storage is added. Ordinary OTP isolation and PostgreSQL canary scans remain in the signed journeys.",
+  "remainingScope": "Cases beyond the first eight and earlier directly verified rows remain open in CONVERSATION_ACCEPTANCE_AUDIT.md; real clinic activation/carrier/email/audio evidence is separate.",
+  "broaderGateBeforeDiagnostic": {
+    "passed": 8,
+    "failed": 1,
+    "test": "E2E-310",
+    "observation": "AggregateError hid the failing internal case; the original cause cannot be recovered from the default TAP log. No deadline or assertion was relaxed.",
+    "logSha256": "ece3e4376f53ef9add7302db1289ac376dc1bec938237871c98a62787d17a2a8"
+  },
+  "namedReproduction": {
+    "command": "node --test test/voice/appointment-change-intent.test.ts",
+    "passed": 1,
+    "failed": 0,
+    "scenarios": 16,
+    "diagnosticChange": "Aggregate failure now prints the collected scenario names and error messages; no production/assertion change."
+  },
+  "typecheck": "passed",
+  "finalGate": {
+    "command": "node --test --test-concurrency=3 test/voice/played-menu-selection.test.ts test/voice/caller-corrections.test.ts test/voice/appointment-change-intent.test.ts test/voice/dated-window-corrections.test.ts test/voice/explicit-time-clarification.test.ts test/voice/stale-menu-recovery.test.ts test/voice/call-transcript-ownership.test.ts test/voice/conversation-baseline.test.ts test/contract/scenario-manifest.test.ts",
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "canceled": 0
+  },
+  "additionalUnofferedClockWitness": {
+    "command": "node --test test/voice/played-menu-selection.test.ts",
+    "passed": 1,
+    "failed": 0,
+    "selectionScenarios": 7,
+    "text": "The eleven-thirty appointment, thanks.",
+    "assertion": "Recognized but unoffered clock yields clarification, zero actions/writes and no model ordinal."
+  },
+  "fullBaseline": "clinic-conversation-after-exact-sends-v24-v1.json"
+}

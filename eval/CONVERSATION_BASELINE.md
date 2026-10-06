@@ -1119,3 +1119,83 @@ actual candidate model requests, clear patient canaries and 471 stable source
 inputs with SHA-256 `5106913f0f488f6c1371e7d39e6e75798dbb3bb5bf672289881d47a0bad42083`.
 This preserves the original required/forbidden prose as unassessed rather than
 promoting every clause from the named score.
+
+## Exact clinical sends, fee terms and unresolved dates — 2026-10-06
+
+The first-eight-clause audit identified indirect evidence: spoken expected times
+and SAM statuses did not themselves inspect the provider mutation body, the
+cancellation-only branch did not assert fee speech, and a time ambiguity was
+not an unresolved-date witness. The existing E2E-308/309/310/316 journeys now
+assert those contracts through signed synthetic calls on main 4b64f38 behavior.
+No production behavior, public capability, setting or patient storage changes.
+The [direct evidence record](baselines/exact-clinical-send-evidence-v1.json)
+binds the base and separate test/fixture hashes.
+
+The synthetic fixture captures actual provider mutation bodies in fixture memory
+only. Half-past-ten/later selections assert the exact current offer and matching
+POST start, approved business/practitioner/type and verified synthetic patient.
+Corrections assert the replacement differs from the old offer, no mutation
+before a new played confirmation and separate affirmative, and one matching
+POST or source-bound PATCH. Rescheduling has only the new start and null end,
+without patient/practitioner/type reassignment fields.
+
+Cancellation-only has separate standard and late-fee paths. Both assert the exact
+approved terms are spoken before confirmation, one operation-specific verification
+email, cancellation as the sole workflow and one exact cancellation PATCH.
+The body retains the approved reason, null note and `apply_to_repeats: false`.
+A genuinely unresolved "Wednesday or Friday morning" correction cancels the
+old proposal, asks the displayed day, makes no provider search/model request,
+and writes nothing even after a later affirmative.
+
+The initial four-file run passed the exact booking/correction assertions but
+failed two wrong fixture expectations: the cancellation body intentionally also
+has null-note/non-recurring fields, and unresolved-date handling uses owned-menu
+clarification rather than proposal-correction wording. The corrected four-file
+gate passed all 45 internal scenarios (6 selection, 9 correction, 16 operation,
+14 date/window), without a production fix. These assertion failures are retained
+as harness corrections, not product bugs. Parallel workers now settle before
+teardown; independent faults cannot leave another worker using a destroyed DB.
+
+The corrected gate command was:
+`node --test --test-concurrency=3 test/voice/played-menu-selection.test.ts test/voice/caller-corrections.test.ts test/voice/appointment-change-intent.test.ts test/voice/dated-window-corrections.test.ts`.
+The first run used the same command before fixture corrections. Final validation
+also inspects the verified patient and complete source-bound rescheduling body,
+then exercises the neighboring signed journeys and manifest.
+
+Manifest 1.125 strengthens these existing E2Es without adding or renumbering IDs.
+The audit preserves every original clause and only promotes inspected evidence.
+Remaining original-case clauses and actual carrier/audio, email delivery and
+clinic activation are still separate work; named observations remain partial.
+
+The first broader nine-file gate passed eight tests but failed E2E-310 with an
+aggregate error that hid its internal case. The fixture now reports collected
+case names/messages, preserving parallel settlement and the same assertions and
+deadlines. The focused 16-case E2E-310 reproduction passed. The original cause
+is unavailable from its default TAP output; no claim of a production defect or
+proven resource cause is made. Typecheck passed. The full gate is rerun with
+useful diagnostics; this earlier failure is retained in the evidence record.
+
+The final nine-file parallel gate passed all nine tests, with zero failures,
+skips or cancellations. It used:
+`node --test --test-concurrency=3 test/voice/played-menu-selection.test.ts test/voice/caller-corrections.test.ts test/voice/appointment-change-intent.test.ts test/voice/dated-window-corrections.test.ts test/voice/explicit-time-clarification.test.ts test/voice/stale-menu-recovery.test.ts test/voice/call-transcript-ownership.test.ts test/voice/conversation-baseline.test.ts test/contract/scenario-manifest.test.ts`.
+`npm run typecheck` passed after the verified-patient/source-body assertions;
+only aggregate error wording changed afterward. `git diff --check` passed.
+The earlier broad failure remains unexplained and retained; the diagnostic
+change does not claim to fix an unidentified runtime defect.
+
+The fresh stable [all-45 baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json)
+passed 45/45 named and 135/135 safety observations, with no setup gaps or harness
+failures, six actual candidate model requests and clear PostgreSQL patient
+canaries. Command:
+`node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/baselines/clinic-conversation-after-exact-sends-v24-v1.json`.
+It records 471 stable source inputs, SHA-256
+`942e7de1dcaf7870f72e3d9677fe78b6b1226b6cbc77eedc54d0ebacb007b915`. Setup remains pinned synthetic decisions;
+the original prose clauses remain explicitly unassessed in the named report.
+
+A final clause check adds a recognized but unoffered 11:30 spoken clock to
+E2E-308, separately from the phonetic/unknown train phrase. This specifically
+checks the zero-match time path without a model call or proposal. Test files
+outside `test/support` are excluded from the baseline hash and bound separately
+in the direct evidence record; this added test does not change evaluator source.
+
+The added seven-case E2E-308 focus passed: `node --test test/voice/played-menu-selection.test.ts`. All earlier assertions remain intact; the latest test hash is recorded separately.

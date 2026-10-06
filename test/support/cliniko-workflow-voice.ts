@@ -44,6 +44,9 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   } });
   const sent: { event: string; mark?: { name: string } }[] = [], spoken: string[] = [], transcripts: string[] = [], modelTurns: string[] = [];
   const inputs: string[] = [], privateInputs: string[] = [], privateTranscripts: string[] = [], writes: string[] = [];
+  // Synthetic fixture memory only: inspect the actual provider mutation body,
+  // separately from public speech and the SAM proposal being exercised.
+  const writeRequests: { method: string; path: string; body: Record<string, unknown> }[] = [];
   const failures: string[] = [];
   const acknowledged = new Set<string>();
   let ledger: MemoryLedger | undefined, flow: ClinikoCallFlow | undefined, socket: WebSocket | undefined, closed = false;
@@ -64,6 +67,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       assert.ok(Object.values(state.effects).some(effect => effect.kind === "hostWrite" && effect.actionKey === action.key));
       writes.push(`${method} ${url.pathname}`); assert.equal(writes.length, 1);
       const body = JSON.parse(String(init?.body));
+      writeRequests.push({ method, path: url.pathname, body: structuredClone(body) });
       const appointmentId = method === "PATCH" ? url.pathname.split("/")[3]! : "91";
       const before = method === "PATCH" ? await (await port(`${base}/individual_appointments/${appointmentId}`, { method: "GET", redirect: "error", ...(init?.signal ? { signal: init.signal } : {}) })).json() : {};
       const starts = body.starts_at ?? before.starts_at;
@@ -150,7 +154,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       await voiceUntil(() => processedSequence >= markSequence, "processed playback receipt");
     };
     await mark();
-    return { callId, sent, spoken, transcripts, privateTranscripts, modelTurns, writes, close, mark, media, sendEvent,
+    return { callId, sent, spoken, transcripts, privateTranscripts, modelTurns, writes, writeRequests, close, mark, media, sendEvent,
       get flow() { assert.ok(flow); return flow; }, get transcriptionFrames() { return transcriptionFrames; },
       get closed() { return closed; }, get closeCode() { return closeCode; },
       state: async () => resultValue(await (disposedState ?? ledger!.read(callId, scope))),

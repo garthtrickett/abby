@@ -14,7 +14,7 @@ const times = ["2026-10-06T22:00:00.000Z", "2026-10-07T00:00:00.000Z", "2026-10-
 
 test("E2E-316 signed final date/window corrections preserve constraints and require fresh protected confirmation", { timeout: 180_000 }, async () => {
   await withDisposablePostgres(async db => {
-    const scenarios = ["bookInitial", "bookProposal", "bookRetain", "bookFinal", "bookAmbiguous", "bookQualified", "bookUnplayedMenu", "bookUnplayedConfirmation", "bookRevoked", "bookCommitted",
+    const scenarios = ["bookInitial", "bookProposal", "bookRetain", "bookFinal", "bookAmbiguous", "bookAmbiguousDate", "bookQualified", "bookUnplayedMenu", "bookUnplayedConfirmation", "bookRevoked", "bookCommitted",
       "moveProposal", "moveClear", "readWindow"] as const;
     const run = async (scenario: typeof scenarios[number]) => {
       const move = scenario.startsWith("move"), enquiry = scenario === "readWindow";
@@ -60,11 +60,19 @@ test("E2E-316 signed final date/window corrections preserve constraints and requ
         if (scenario === "bookRevoked" && "replacePolicy" in f) await f.replacePolicy({ enabled: false });
         const text = scenario === "bookFinal" ? "Actually Thursday afternoon. Actually, Wednesday morning."
           : scenario === "bookAmbiguous" ? "Maybe Thursday. Actually, Wednesday after ten."
+            : scenario === "bookAmbiguousDate" ? "Maybe Thursday. Actually, Wednesday or Friday morning."
             : scenario === "bookQualified" ? "Maybe Thursday. Actually, Wednesday morning unless it rains." : mixedCorrection;
+        const traffic = "allTraffic" in f ? f.allTraffic.length : undefined;
         await call.turn(text); assert.equal(call.writes.length, 0); assert.ok(!modelTurns.includes(text));
         if (old) assert.equal((await call.state()).actions[old.key]?.status, "canceled");
-        if (["bookAmbiguous", "bookQualified", "bookRevoked"].includes(scenario)) {
-          assert.doesNotMatch(call.spoken.at(-1)!, /option one/); await call.mark(); await call.turn("Yes"); assert.equal(call.writes.length, 0); return;
+        if (["bookAmbiguous", "bookAmbiguousDate", "bookQualified", "bookRevoked"].includes(scenario)) {
+          assert.doesNotMatch(call.spoken.at(-1)!, /option one/);
+          if (scenario === "bookAmbiguousDate") {
+            assert.match(call.spoken.at(-1)!, /which displayed day.*AM or PM/i);
+            assert.equal("allTraffic" in f ? f.allTraffic.length : undefined, traffic, "an unresolved date cannot choose either day for a provider search");
+            assert.equal(call.writeRequests.length, 0);
+          }
+          await call.mark(); await call.turn("Yes"); assert.equal(call.writes.length, 0); return;
         }
         assert.match(call.spoken.at(-1)!, /before 12:00 pm.*Wednesday 7 October.*9:00 am.*11:00 am/s);
         assert.doesNotMatch(call.spoken.at(-1)!, /Thursday 8 October|4:30 pm/);
