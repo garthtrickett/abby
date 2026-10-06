@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "kind": "signed-missed-call-prose-reproduction",
+  "sourceRevision": "912b13a7a4d208dd5199e72e4cce811a96ab05c8",
+  "command": "node --test test/voice/missed-call-repair.test.ts",
+  "result": "failed-before-behavior-edits",
+  "observedResponse": "I couldn't understand that safely. Could you repeat your request, or contact the clinic directly?",
+  "unmetRequirement": "CCP-024 requires an explicit explanation that the outbound-call reason is unknown, followed by the approved contact path.",
+  "priorNamedObservation": "passed an overly broad clinic/contact regex",
+  "limitation": "Signed synthetic transport, not a real caller or outbound-call reason."
+}

@@ -10,7 +10,7 @@ export function validCallerIdentityDenial(value: unknown): value is CallerIdenti
 export function restrictDeniedCaller(state: CallState, interpretation: TurnInterpretation): TurnInterpretation {
   if (!state.callerIdentityDenied) return interpretation;
   switch (interpretation.kind) {
-    case "conversationPresence": return interpretation;
+    case "conversationPresence": case "missedCallReasonUnavailable": return interpretation;
     case "answer": case "knowledgeFailure": case "availability": case "availabilityFailure": return interpretation;
     case "clarify": if (interpretation.reason === "clinicalAdviceUnavailable") return interpretation; break;
     case "handoff": if (interpretation.reason === "potentiallyUrgent") return { ...interpretation, staffWorkUnavailable: true }; break;

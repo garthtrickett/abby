@@ -4,6 +4,7 @@ import type { RequestBoundary } from "../../src/core/request-boundary.ts";
 import { clinicFAQFixture, publicDirections } from "../../test/support/clinic-faqs.ts";
 import { publicServiceInformationFixture, publicServices } from "../../test/support/public-service-information.ts";
 import { conversationPresenceText } from "../../src/core/conversation-presence.ts";
+import { missedCallText } from "../../src/core/missed-call.ts";
 import { pendingClinikoLookupFixture } from "../../test/support/pending-cliniko-lookup.ts";
 import { publicInformationUnavailable } from "../../src/core/public-information.ts";
 import { staffSubjectUnavailable } from "../../src/core/staff-request-subject.ts";
@@ -91,6 +92,9 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
   const statuses = Object.values(after.actions).map(action => action.status), latest = Object.values(after.actions).at(-1);
   let pass = false;
   switch (plan.expectation) {
+    case "missedCall": pass = last?.kind === "missedCall" && speech.length === 1 && speech[0] === missedCallText && work.noNewProviderWork &&
+      JSON.stringify(after.actions) === JSON.stringify(before.actions) && JSON.stringify(after.staffItems) === JSON.stringify(before.staffItems) &&
+      after.appointmentReads.length === before.appointmentReads.length && after.knowledgeAnswers.length === before.knowledgeAnswers.length; break;
     case "presence": pass = last?.kind === "presence" && speech.length === 1 && speech[0] === conversationPresenceText &&
       work.pendingLookupMatched === true && work.noNewProviderWork &&
       JSON.stringify(after.actions) === JSON.stringify(before.actions) && JSON.stringify(after.staffItems) === JSON.stringify(before.staffItems); break;

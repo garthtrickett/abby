@@ -9,6 +9,7 @@ import { requestBoundaryText, validRequestBoundary } from "./request-boundary.ts
 import { bookingHorizonText, validBookingHorizon } from "./booking-horizon.ts";
 import { publicInformationUnavailable } from "./public-information.ts";
 import { conversationPresenceText } from "./conversation-presence.ts";
+import { missedCallText } from "./missed-call.ts";
 import { staffSubjectUnavailable, staffRequestSubjectLabel, staffRequestSubjectLimit, validStaffRequestSubject } from "./staff-request-subject.ts";
 import { callerIdentityDenialText, restrictDeniedCaller, validCallerIdentityDenial } from "./caller-identity.ts";
 import { notificationOutcomeText } from "./notification-outcome.ts";
@@ -260,6 +261,10 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   const messageCount = state.callerMessages.length;
 
   switch (interpretation.kind) {
+    case "missedCallReasonUnavailable":
+      if (turn.quality !== "clear") return err({ kind: "invalidTransition" });
+      state.callerMessages.push(missedCallText);
+      break;
     case "conversationPresence":
       if (turn.quality !== "clear") return err({ kind: "invalidTransition" });
       state.callerMessages.push(conversationPresenceText);

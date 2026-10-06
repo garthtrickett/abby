@@ -166,13 +166,19 @@ export class TextReception {
   reschedulingMenuEnabled(): boolean {
     return !!this.host.resolveAppointmentChange && new ReschedulingMenuTurns(this.ledger, this.policy, this.host, this.clock).enabled();
   }
-  async respondPresence(scope: LocationScope, turn: FinalCallerTurn, expectedRevision?: number) {
+  respondPresence(scope: LocationScope, turn: FinalCallerTurn, expectedRevision?: number) {
+    return this.respondPublicRepair(scope, turn, "conversationPresence", expectedRevision);
+  }
+  respondMissedCall(scope: LocationScope, turn: FinalCallerTurn, expectedRevision?: number) {
+    return this.respondPublicRepair(scope, turn, "missedCallReasonUnavailable", expectedRevision);
+  }
+  private async respondPublicRepair(scope: LocationScope, turn: FinalCallerTurn, kind: "conversationPresence" | "missedCallReasonUnavailable", expectedRevision?: number) {
     const now = this.currentInstant();
     if (!now || !turn.sessionId || turn.quality !== "clear") return err({ kind: "invalidTransition" as const });
     const state = await this.ledger.read(turn.callId, scope); if (!state.ok) return state;
     if (state.value.lifecycle !== "active" || state.value.sessionLease?.sessionId !== turn.sessionId ||
         Date.parse(state.value.sessionLease.expiresAt) <= Date.parse(now)) return err({ kind: "leaseLost" as const });
-    return this.runtime(scope).acceptTurn(turn, { kind: "conversationPresence" }, now, expectedRevision);
+    return this.runtime(scope).acceptTurn(turn, { kind }, now, expectedRevision);
   }
 
   async requestStaff(scope: LocationScope, turn: FinalCallerTurn, requestedPerson: string | undefined, now: string,
