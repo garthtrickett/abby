@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { clearAffirmation } from "../core/caller-affirmation.ts";
+export { clearAffirmation } from "../core/caller-affirmation.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
 import type { ApprovedGreeting, CallState, FinalCallerTurn, LocationScope, MenuClarificationReason, PendingPresentationRef, Presentation, Result, StaffReason, TransitionFailure } from "../core/model.ts";
@@ -15,7 +17,7 @@ export type VoiceIntent =
   | Readonly<{ kind: "outcome" }>
   | Readonly<{ kind: "bookingMenu"; from: string; to: string }>
   | Readonly<{ kind: "bookingChoice"; choice: 1 | 2 | 3 }>
-  | Readonly<{ kind: "reschedulingMenu"; stage: "targets" | "offers"; from: string; to: string }>
+  | Readonly<{ kind: "reschedulingMenu"; stage: "targets" | "offers"; from: string; to: string; correcting?: true }>
   | Readonly<{ kind: "reschedulingChoice"; stage: "targets" | "offers"; choice: 1 | 2 | 3 }>
   | Readonly<{ kind: "model" }>
   | Readonly<{ kind: "book"; verificationRef: string; offerRef: string }>
@@ -55,10 +57,6 @@ export type VoiceSessionFailure = TransitionFailure | TextReceptionFailure | Tra
 export type DispatchResult = Readonly<{ kind: "none" | "queued" | "played" | "failed" | "unproven" | "interrupted" | "transferConnected" | "transferFailed" | "transferUnproven" | "transferCanceled"; playbackId?: string }>;
 
 type ActivePlayback = { id: string; presentationId: string; generation: number };
-
-export function clearAffirmation(text: string): boolean {
-  return /^(yes|yes, book it|yes book it|yes, please|yes please)[.!]?$/i.test(text.trim());
-}
 
 function decodeTransferOutcome(value: unknown): TransferOutcome {
   if (typeof value !== "object" || value === null) return { kind: "unproven" };
@@ -278,7 +276,7 @@ export class VoiceSession {
     const final = this.assembler.finish(now);
     if (!final.ok) return final;
     const turn = final.value;
-    const existing = await this.runtime.read(this.callId);
+    let existing = await this.runtime.read(this.callId);
     if (!existing.ok) return existing;
     if (generation !== this.assembler.currentGeneration()) return err({ kind: "staleTurn" });
     if (existing.value.processedTurnIds.includes(turn.turnId)) {
@@ -295,6 +293,12 @@ export class VoiceSession {
         this.unclearTurns += 1;
       }
       return clarified;
+    }
+    if (!clearAffirmation(turn.text) && Object.values(existing.value.actions).some(action =>
+      action.status === "awaitingConfirmation" || action.status === "ready")) {
+      existing = await this.runtime.nonAffirmativeFinal(turn, existing.value.conversationRevision, now);
+      if (!existing.ok) return existing;
+      if (generation !== this.assembler.currentGeneration()) return err({ kind: "staleTurn" });
     }
     if (!this.cachedIntent) {
       let intent: Result<VoiceIntent, Readonly<{ kind: "intentUnavailable" }>>;
@@ -335,7 +339,7 @@ export class VoiceSession {
     } else if (this.cachedIntent.kind === "bookingChoice") {
       result = await this.reception.selectBookingMenu(this.scope, turn, this.cachedIntent.choice, now);
     } else if (this.cachedIntent.kind === "reschedulingMenu") {
-      result = await this.reception.readReschedulingMenu(this.scope, turn, this.cachedIntent.stage, this.cachedIntent.from, this.cachedIntent.to, now);
+      result = await this.reception.readReschedulingMenu(this.scope, turn, this.cachedIntent.stage, this.cachedIntent.from, this.cachedIntent.to, now, this.cachedIntent.correcting);
     } else if (this.cachedIntent.kind === "reschedulingChoice") {
       result = await this.reception.selectReschedulingMenu(this.scope, turn, this.cachedIntent.stage, this.cachedIntent.choice, now);
     } else if (this.cachedIntent.kind === "model") {

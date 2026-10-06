@@ -5,16 +5,19 @@ import type { Result } from "../core/model.ts";
 import { CallerVerificationSession } from "./caller-verification-session.ts";
 import { ClinikoBookingOffers } from "./cliniko-booking-offers.ts";
 import type { BookingChoices } from "./cliniko-booking-offers.ts";
+import { clinicDateAt } from "./clinic-clock.ts";
 
 type Config = Readonly<{ verification: Pick<CallerVerificationSession, "verified">; offers: ClinikoBookingOffers;
   scope: BookingMenuQuery["scope"]; callId: string; sessionId: string; policyVersion: string }>;
+type Menu = Readonly<{ turnId: string; verificationRef: string; choices: BookingChoices }>;
 const denied = <T>(): Result<T, HostReadFailure> => err({ kind: "unavailable", target: "offer" });
 
 /** Private volatile menu mapping; only caller-safe facts cross the SAM read seam. */
 export class ClinikoBookingMenu implements BookingMenuHost {
   readonly #config: Config;
   readonly #lifetime = new AbortController();
-  #menu: Readonly<{ turnId: string; verificationRef: string; choices: BookingChoices }> | undefined;
+  #menu: Menu | undefined;
+  #previous: Menu | undefined;
   #epoch = 0;
   constructor(config: Config) { this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }) }); }
   bookingMenuAvailable(): boolean { return !this.#lifetime.signal.aborted; }
@@ -28,6 +31,7 @@ export class ClinikoBookingMenu implements BookingMenuHost {
     const query = { ...incoming, scope: { ...incoming.scope } };
     if (!this.#matches(query)) return denied();
     const epoch = ++this.#epoch; this.#menu = undefined;
+    this.#previous = undefined;
     const signal = AbortSignal.any([query.signal, this.#lifetime.signal]);
     const grant = await this.#config.verification.verified(signal);
     if (!grant || !this.#matches(query) || signal.aborted || epoch !== this.#epoch) return denied();
@@ -49,7 +53,23 @@ export class ClinikoBookingMenu implements BookingMenuHost {
     const grant = await this.#config.verification.verified(signal);
     if (!choice || !grant || grant.verificationRef !== menu.verificationRef || !this.#matches(query) || signal.aborted ||
         Date.parse(choice.expiresAt) <= Date.parse(query.now)) return denied();
+    this.#previous = menu;
     return ok({ verificationRef: grant.verificationRef, offerRef: choice.offerRef });
   }
-  dispose(): void { ++this.#epoch; this.#lifetime.abort(); this.#menu = undefined; }
+  async correctBookingMenu(incoming: BookingMenuQuery & Readonly<{ menuTurnId: string; startsAt: string }>) {
+    const query = { ...incoming, scope: { ...incoming.scope } }, previous = this.#previous;
+    const choice = previous?.choices.choices.find(item => item.startsAt === query.startsAt);
+    if (!this.#matches(query) || !previous || previous.turnId !== query.menuTurnId || !choice ||
+        Date.parse(choice.expiresAt) <= Date.parse(query.now)) return denied<Readonly<{ verificationRef: string; offerRef: string }>>();
+    const epoch = ++this.#epoch, signal = AbortSignal.any([query.signal, this.#lifetime.signal]);
+    const grant = await this.#config.verification.verified(signal);
+    if (!grant || grant.verificationRef !== previous.verificationRef || !this.#matches(query) || signal.aborted || epoch !== this.#epoch)
+      return denied<Readonly<{ verificationRef: string; offerRef: string }>>();
+    const day = clinicDateAt(previous.choices.timeZone, new Date(query.startsAt));
+    const fresh = await this.#config.offers.list(query.scope, grant.verificationRef, day, day, query.now, signal);
+    const selected = fresh.ok ? fresh.value.choices.find(item => item.startsAt === query.startsAt && item.endsAt === choice.endsAt) : undefined;
+    if (!selected || !this.#matches(query) || signal.aborted || epoch !== this.#epoch) return denied<Readonly<{ verificationRef: string; offerRef: string }>>();
+    return ok({ verificationRef: grant.verificationRef, offerRef: selected.offerRef });
+  }
+  dispose(): void { ++this.#epoch; this.#lifetime.abort(); this.#menu = undefined; this.#previous = undefined; }
 }

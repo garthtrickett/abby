@@ -242,7 +242,7 @@ export type AppointmentRead = Readonly<{
   appointments: readonly Readonly<{ appointmentRef: string; startsAt: string; endsAt: string }>[];
 }>;
 
-export type MenuClarificationReason = "menuAmbiguous" | "menuRejected" | "menuUnavailable";
+export type MenuClarificationReason = "menuAmbiguous" | "menuRejected" | "menuUnavailable" | "proposalCorrection";
 export type TurnInterpretation =
   | Readonly<{ kind: "workflowStarted"; operation: ActionKind; next: "codeRequired" | "intakeRequired" }>
   | Readonly<{ kind: "outcomeQuery" }>
@@ -465,6 +465,7 @@ export type TransitionAction =
   | Readonly<{ kind: "callEnded"; sessionId: string; reason: "callerDisconnected" | "sessionClosed" | "mediaFailure" | "localLeaseClosed"; now: string }>
   | Readonly<{ kind: "textPresentationWritten"; presentationId: string; now: string }>
   | Readonly<{ kind: "speechBegan"; sessionId: string; now: string }>
+  | Readonly<{ kind: "nonAffirmativeFinal"; turn: FinalCallerTurn; expectedConversationRevision: number; now: string }>
   | Readonly<{ kind: "silenceTimeout"; sessionId: string; stage: "retry" | "final"; now: string }>
   | Readonly<{ kind: "privateIntakePrompt"; sessionId: string; presentationId: string; now: string }>
   | Readonly<{ kind: "callerTurn"; turn: FinalCallerTurn; interpretation: TurnInterpretation; now: string; expectedConversationRevision?: number }>

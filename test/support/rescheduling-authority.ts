@@ -6,6 +6,7 @@ import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 import type { LocationScope } from "../../src/core/model.ts";
 import type { ClinikoReschedulingAuthorityConfig } from "../../src/standalone/cliniko-rescheduling-authority.ts";
 import { ClinikoReschedulingAuthority } from "../../src/standalone/cliniko-rescheduling-authority.ts";
+import { clinicDateAt } from "../../src/standalone/clinic-clock.ts";
 import { OwnerFileAdminDirectory } from "../../src/standalone/identity/owner-file-admin-directory.ts";
 import { OwnerFileBookingPolicy } from "../../src/standalone/owner-file-booking-policy.ts";
 import type { BookingApproval } from "../../src/standalone/owner-file-booking-policy.ts";
@@ -41,8 +42,15 @@ export async function reschedulingAuthorityFixture(options: { scope?: LocationSc
           name: "Physiotherapy", duration_in_minutes: failure === "duration" ? 60 : 30 });
         if (url.pathname === "/v1/businesses/11/practitioners") return Response.json({ total_entries: 1, practitioners: [{ id: failure === "relationship" ? "23" : "22" }] });
         if (url.pathname === "/v1/practitioners/22/appointment_types") return Response.json({ total_entries: 1, appointment_types: [{ id: "33" }] });
-        if (url.pathname.endsWith("/available_times")) { await onTimes(); return failure === "unavailable" ? new Response(null, { status: 503 }) :
-          Response.json({ total_entries: starts.length, available_times: starts.map(appointment_start => ({ appointment_start })) }); }
+        if (url.pathname.endsWith("/available_times")) {
+          await onTimes();
+          if (failure === "unavailable") return new Response(null, { status: 503 });
+          const times = starts.filter(start => {
+            const day = clinicDateAt("Australia/Sydney", new Date(start));
+            return day >= url.searchParams.get("from")! && day <= url.searchParams.get("to")!;
+          });
+          return Response.json({ total_entries: times.length, available_times: times.map(appointment_start => ({ appointment_start })) });
+        }
         if (url.pathname === "/v1/individual_appointments") {
           const first = { id: "91", starts_at: options.startsAt ?? "2026-10-08T04:00:00.000Z",
             ends_at: options.startsAt ? new Date(Date.parse(options.startsAt) + 1_800_000).toISOString() : "2026-10-08T04:30:00.000Z", cancelled_at: null, deleted_at: null, archived_at: null,

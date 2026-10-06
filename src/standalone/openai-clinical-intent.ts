@@ -5,6 +5,7 @@ import type { IntentResolver, VoiceIntent } from "../voice/voice-session.ts";
 import { clearAffirmation } from "../voice/voice-session.ts";
 import type { ClinikoCallFlow, ClinikoWorkflow } from "./cliniko-call-flow.ts";
 import { clinicDateAt, clinicDayStartUtc } from "./clinic-clock.ts";
+import { callerCorrection } from "./caller-correction.ts";
 
 const endpoint = "https://api.openai.com/v1/responses";
 const unavailable = { kind: "intentUnavailable" } as const;
@@ -162,6 +163,18 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
       if (before.lastAction?.status === "uncertain") return ok({ kind: "outcome" });
       return before.lastAction?.status === "awaitingConfirmation" && before.lastAction.confirmationPlayed
         ? ok({ kind: "affirm" }) : err(unavailable);
+    }
+    const corrected = await config.owner.correctionIntent(turn, signal);
+    if (signal?.aborted) return err(unavailable);
+    if (corrected) return ok(corrected);
+    const correction = callerCorrection(turn.text, date);
+    if (correction && before.workflow !== null && !before.verificationRequired &&
+        (!before.lastAction || ["awaitingConfirmation", "canceled"].includes(before.lastAction.status))) {
+      if (correction.kind === "date" && before.workflow === "book") return ok({ kind: "bookingMenu", from: correction.date, to: correction.date });
+      if (correction.kind === "date" && before.workflow === "reschedule" && before.reschedulingTargetSelected)
+        return ok({ kind: "reschedulingMenu", stage: "offers", from: correction.date, to: correction.date,
+          ...(before.lastAction?.kind === "reschedule" ? { correcting: true as const } : {}) });
+      return ok({ kind: "clarify", reason: "proposalCorrection" });
     }
     const selection = await config.owner.spokenMenuIntent(turn.text);
     if (signal?.aborted) return err(unavailable);

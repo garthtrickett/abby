@@ -12,6 +12,8 @@ import { ClinikoAppointmentChangeGuard } from "./cliniko-appointment-change-guar
 import type { ClinikoAppointmentChangeGuardConfig, PreparedClinikoChange } from "./cliniko-appointment-change-guard.ts";
 import { ClinikoReviewedSend } from "./cliniko-reviewed-send.ts";
 import { NoStoredKnowledge } from "./no-stored-knowledge.ts";
+import { awaitUntilAbort } from "../shared/await-until-abort.ts";
+import { preparationMayBeDiscarded } from "./prepared-proposal.ts";
 
 export type ClinikoReschedulingHostConfig = ClinikoAppointmentChangeGuardConfig & Readonly<{
   rescheduling: NonNullable<ClinikoAppointmentChangeGuardConfig["rescheduling"]>;
@@ -31,6 +33,7 @@ export class ClinikoReschedulingHost extends NoStoredKnowledge
   readonly #review: ClinikoReviewedSend;
   readonly #lifetime = new AbortController();
   #prepared: PreparedClinikoChange | undefined;
+  #preparedRevision = 0;
   #attempted = false;
   #busy = false;
 
@@ -54,21 +57,32 @@ export class ClinikoReschedulingHost extends NoStoredKnowledge
   }
 
   #now(): string { return (this.#config.clock ?? (() => new Date().toISOString()))(); }
+  async correctReschedulingMenu(query: import("../core/host.ts").ReschedulingMenuQuery & Readonly<{ menuTurnId: string; startsAt: string }>) {
+    return this.reschedulingMenuAvailable() && this.#config.menu?.correctReschedulingMenu
+      ? this.#config.menu.correctReschedulingMenu(query) : err({ kind: "unavailable" as const, target: "appointment" as const });
+  }
 
   async resolveAppointmentChange(query: AppointmentChangeEvidenceQuery, external?: AbortSignal): Promise<Result<Extract<ActionRequest,
     { kind: "cancel" | "reschedule" }>, HostReadFailure>> {
-    if (this.#lifetime.signal.aborted || this.#busy || this.#attempted || this.#prepared || query?.kind !== "reschedule") {
+    if (this.#lifetime.signal.aborted || this.#busy || this.#attempted || query?.kind !== "reschedule") {
       return err({ kind: "unavailable", target: "appointment" });
     }
     this.#busy = true;
     const signal = AbortSignal.any([this.#lifetime.signal, ...(external ? [external] : []), AbortSignal.timeout(15_000)]);
     try {
+      const before = await awaitUntilAbort(this.#config.ledger.read(this.#config.callId, this.#config.scope), signal);
+      if (!before?.ok || this.#prepared && !preparationMayBeDiscarded(before.value, this.#prepared.request, this.#preparedRevision))
+        return err({ kind: "unavailable", target: "appointment" });
+      this.#prepared = undefined;
       const selected = await this.#guard.resolve(query, "proposal", signal);
       if (!selected.ok) return selected;
-      if (selected.value.request.target.timeZone !== this.#config.timeZone || signal.aborted) {
+      const after = await awaitUntilAbort(this.#config.ledger.read(this.#config.callId, this.#config.scope), signal);
+      if (!after?.ok || after.value.conversationRevision !== before.value.conversationRevision ||
+          selected.value.request.target.timeZone !== this.#config.timeZone || signal.aborted) {
         return err({ kind: "unavailable", target: "appointment" });
       }
       this.#prepared = selected.value;
+      this.#preparedRevision = before.value.conversationRevision;
       return ok(structuredClone(selected.value.request));
     } finally { this.#busy = false; }
   }

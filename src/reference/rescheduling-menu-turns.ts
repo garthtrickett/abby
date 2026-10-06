@@ -34,7 +34,7 @@ export class ReschedulingMenuTurns {
         live.value.conversationRevision !== state.value.conversationRevision) return err({ kind: "invalidTransition" });
     return live;
   }
-  async run(incomingScope: LocationScope, incomingTurn: FinalCallerTurn, now: string, stage: "targets" | "offers", incomingOperation: Readonly<{ from: string; to: string }> | Readonly<{ choice: 1|2|3 }>):
+  async run(incomingScope: LocationScope, incomingTurn: FinalCallerTurn, now: string, stage: "targets" | "offers", incomingOperation: Readonly<{ from: string; to: string; correcting?: true }> | Readonly<{ choice: 1|2|3 }>):
     Promise<Result<CallState, Failure>> {
     const scope = Object.freeze({ ...incomingScope }), turn = Object.freeze(structuredClone(incomingTurn)), operation = Object.freeze({ ...incomingOperation });
     const runtime = new CallRuntime(this.ledger, scope);
@@ -51,8 +51,13 @@ export class ReschedulingMenuTurns {
         if ("from" in operation) {
           const priorTurnId = initial.value.processedTurnIds.at(-1);
           const prior = priorTurnId ? initial.value.presentations[noticePresentationId(turn.callId, priorTurnId)] : undefined;
-          const read = stage === "offers" && prior?.status !== "played" ? undefined :
-            await untilAbort(this.host.readReschedulingMenu!({ ...query, ...operation, ...(priorTurnId ? { priorTurnId } : {}) }), signal);
+          const action = Object.values(initial.value.actions).at(-1);
+          const correctingAppointmentRef = operation.correcting && stage === "offers" && action?.status === "canceled" &&
+            action.mutation.request.kind === "reschedule" ? action.mutation.request.target.appointmentRef : undefined;
+          const blocked = operation.correcting ? !correctingAppointmentRef : stage === "offers" && prior?.status !== "played";
+          const read = blocked ? undefined : await untilAbort(this.host.readReschedulingMenu!({ ...query,
+            from: operation.from, to: operation.to, ...(priorTurnId ? { priorTurnId } : {}),
+            ...(correctingAppointmentRef ? { correctingAppointmentRef } : {}) }), signal);
           if (read?.ok && !signal.aborted) interpretation = { kind: "reschedulingMenu", snapshot: structuredClone(read.value) };
         } else {
           const menuTurnId = initial.value.processedTurnIds.at(-1);

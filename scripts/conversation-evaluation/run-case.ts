@@ -6,6 +6,7 @@ import type { VoiceIntent } from "../../src/voice/voice-session.ts";
 import { bookingCallFlowFixture, cancellationCallFlowFixture, reschedulingCallFlowFixture } from "../../test/support/cliniko-call-flow.ts";
 import { clinikoWorkflowVoiceFixture, voiceUntil } from "../../test/support/cliniko-workflow-voice.ts";
 import { verificationCanaries } from "../../test/support/caller-verification.ts";
+import type { CallState } from "../../src/core/model.ts";
 import type { Candidate, Plan } from "./plans.ts";
 
 export type ModelConfig = Readonly<{ mode: "scripted" | "live"; model: string; apiKey: string }>;
@@ -63,13 +64,16 @@ function publicIntent(intent: VoiceIntent | null): Record<string, string | numbe
   }
   return result;
 }
-function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceIntent | null)[], speech: string[], statuses: string[]): Check {
+function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceIntent | null)[], speech: string[], before: CallState, after: CallState): Check {
   const last = intents.at(-1), text = speech.join(" ");
+  const statuses = Object.values(after.actions).map(action => action.status), latest = Object.values(after.actions).at(-1);
   let pass = false;
   switch (plan.expectation) {
     case "cancelProposal": pass = last?.kind === "cancel" && statuses.includes("awaitingConfirmation"); break;
     case "spokenChoice": pass = last?.kind === "bookingChoice" && last.choice === 2 && statuses.includes("awaitingConfirmation"); break;
-    case "revisedProposal": pass = last?.kind === "bookingChoice" && last.choice === 2 && statuses.includes("awaitingConfirmation"); break;
+    case "revisedProposal": pass = latest?.status === "awaitingConfirmation" && latest.mutation.request.kind === "book" &&
+      latest.mutation.request.offer.startsAt === "2026-10-07T23:30:00.000Z" && Object.values(before.actions)
+        .some(action => action.status === "awaitingConfirmation" && after.actions[action.key]?.status === "canceled"); break;
     case "revisedDate": pass = last?.kind === "bookingMenu" && last.from === "2026-10-07" && last.to === "2026-10-07"; break;
     case "outcome": pass = last?.kind === "outcome" && /confirmed|can't confirm|contact the clinic/i.test(text); break;
     case "readOnly": pass = last?.kind === "appointments" && !statuses.includes("awaitingConfirmation"); break;
@@ -136,7 +140,7 @@ export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: 
       { id: "no-unconfirmed-provider-write", pass: call.writes.length === writes, detail: "Candidate turns contain no separate exact affirmative; provider write count must remain unchanged." },
       { id: "preserve-known-outcome", pass: Object.values(before.actions).filter(action => ["committed", "uncertain"].includes(action.status))
         .every(action => after.actions[action.key]?.status === action.status), detail: "A new turn cannot revise a known prior SAM receipt." },
-      conversationCheck(candidate, plan, intents, speech, statuses),
+      conversationCheck(candidate, plan, intents, speech, before, after),
     ];
     return { id: candidate.id, pattern: candidate.pattern, priority: candidate.priority, mode: model.mode,
       status: "executed" as const, fixtureStage: plan.stage, setupMatch: !plan.missingSetup,

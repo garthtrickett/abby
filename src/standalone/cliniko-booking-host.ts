@@ -14,6 +14,8 @@ import { ClinikoBookingGuard } from "./cliniko-booking-guard.ts";
 import type { ClinikoBookingGuardConfig } from "./cliniko-booking-guard.ts";
 import { ClinikoReviewedSend } from "./cliniko-reviewed-send.ts";
 import { NoStoredKnowledge } from "./no-stored-knowledge.ts";
+import { awaitUntilAbort } from "../shared/await-until-abort.ts";
+import { preparationMayBeDiscarded } from "./prepared-proposal.ts";
 
 export type ClinikoBookingHostConfig = ClinikoBookingGuardConfig & Readonly<{ recallWriter: ClinikoRecallWriter; recallTypeId: string; timeZone: string; menu?: BookingMenuHost }>;
 
@@ -26,6 +28,7 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
   readonly #review: ClinikoReviewedSend;
   readonly #lifetime = new AbortController();
   #prepared: PreparedClinikoBooking | undefined;
+  #preparedRevision = 0;
   #attempted = false;
   #busy = false;
   constructor(config: ClinikoBookingHostConfig) {
@@ -42,16 +45,27 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
   async selectBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>) {
     return this.bookingMenuAvailable() ? this.#config.menu!.selectBookingMenu(query) : err({ kind: "unavailable" as const, target: "offer" as const });
   }
+  async correctBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; startsAt: string }>) {
+    return this.bookingMenuAvailable() && this.#config.menu?.correctBookingMenu
+      ? this.#config.menu.correctBookingMenu(query) : err({ kind: "unavailable" as const, target: "offer" as const });
+  }
   #now(): string { return (this.#config.clock ?? (() => new Date().toISOString()))(); }
   async resolveBooking(scope: LocationScope, verificationRef: string, offerRef: string, now: string, external?: AbortSignal):
     Promise<Result<Extract<ActionRequest, { kind: "book" }>, HostReadFailure>> {
-    if (this.#lifetime.signal.aborted || this.#busy || this.#attempted || this.#prepared) return err({ kind: "unavailable", target: "offer" });
+    if (this.#lifetime.signal.aborted || this.#busy || this.#attempted) return err({ kind: "unavailable", target: "offer" });
     this.#busy = true;
+    const signal = AbortSignal.any([this.#lifetime.signal, ...(external ? [external] : []), AbortSignal.timeout(15_000)]);
     try {
-      const selected = await this.#guard.resolve(scope, verificationRef, offerRef, now, "proposal",
-        AbortSignal.any([this.#lifetime.signal, ...(external ? [external] : []), AbortSignal.timeout(15_000)]));
+      const before = await awaitUntilAbort(this.#config.ledger.read(this.#config.callId, this.#config.scope), signal);
+      if (!before?.ok || this.#prepared && !preparationMayBeDiscarded(before.value, this.#prepared.request, this.#preparedRevision))
+        return err({ kind: "unavailable", target: "offer" });
+      this.#prepared = undefined;
+      const selected = await this.#guard.resolve(scope, verificationRef, offerRef, now, "proposal", signal);
       if (!selected.ok) return selected;
-      if (this.#lifetime.signal.aborted || selected.value.evidence.timeZone !== this.#config.timeZone) return err({ kind: "unavailable", target: "offer" });
+      const after = await awaitUntilAbort(this.#config.ledger.read(this.#config.callId, this.#config.scope), signal);
+      if (!after?.ok || after.value.conversationRevision !== before.value.conversationRevision || signal.aborted ||
+          selected.value.evidence.timeZone !== this.#config.timeZone) return err({ kind: "unavailable", target: "offer" });
+      this.#preparedRevision = before.value.conversationRevision;
       this.#prepared = selected.value; return ok(structuredClone(selected.value.request));
     } finally { this.#busy = false; }
   }
