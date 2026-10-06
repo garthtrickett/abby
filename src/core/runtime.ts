@@ -161,8 +161,8 @@ export class CallRuntime {
     return this.update(callId, { kind: "recoverStaffPossiblySent", effectId, now });
   }
 
-  acceptStaffResult(callId: string, effectId: string, receipt: StaffTaskReceipt): Promise<Result<CallState, TransitionFailure>> {
-    return this.update(callId, { kind: "staffTaskResolved", effectId, receipt });
+  acceptStaffResult(callId: string, effectId: string, receipt: StaffTaskReceipt, now?: string): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "staffTaskResolved", effectId, receipt, ...(now === undefined ? {} : { now }) });
   }
 
   acceptStaffReconciliation(callId: string, effectId: string, observation: StaffTaskObservation): Promise<Result<CallState, TransitionFailure>> {

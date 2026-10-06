@@ -207,6 +207,11 @@ export type StaffRequestQuery = Readonly<{
 }>;
 export type StaffRequestPreparation = Readonly<{ kind: "existing" }> | Readonly<{ kind: "codeRequired"; requestSubject?: import("./staff-request-subject.ts").StaffRequestSubject }> |
   Readonly<{ kind: "ready"; requestedPerson?: string; requestSubject?: import("./staff-request-subject.ts").StaffRequestSubject }>;
+export type StaffReviewProcessQuery = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string; taskKey: string; expectedConversationRevision: number; signal: AbortSignal }>;
+export interface StaffReviewProcessHost {
+  readStaffReviewProcess(query: StaffReviewProcessQuery): Promise<Result<import("./staff-review-process.ts").StaffReviewProcess, Readonly<{ kind: "staffReviewUnavailable" }>>>;
+}
+
 export interface StaffRequestHost {
   prepareStaffRequest(query: StaffRequestQuery): Promise<Result<StaffRequestPreparation, Readonly<{ kind: "staffUnavailable" }>>>;
 }

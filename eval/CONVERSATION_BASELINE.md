@@ -912,3 +912,65 @@ Missed-call final validation:
 - Live commands: `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinical-intent.ts --model gpt-4o-mini --out eval/results/20261006-missed-call-intent-v24-v2.json` passed 41/41 after the archived v23 40/41 failure; `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/results/20261006-conversations-missed-call-v24-v1.json` passed the stable-source partial baseline above.
 
 - Final typed-fixture `node --test test/voice/missed-call-repair.test.ts`: both tests and all fifteen expanded signed cases passed; `git diff --check` passed.
+
+
+## Current approved staff review expectations — 2026-10-06
+
+CCP-017's required process expectations were absent on main `cd47930`. The
+[signed before-change witness](baselines/staff-review-expectations-before-v1.json)
+records an exact saved receipt, one synthetic recall POST and no clinical write,
+but no approved 30-minute cadence. The original requirement and corpus remain
+unchanged. The named grader now explicitly requires the current approved cadence,
+exact saved status, no staff-read/callback claim and no pending clinical action.
+
+E2E-326 adds an optional finite public process snapshot to an exact opened
+receipt. Later status/repeated request queries use a bounded current read of
+approval, policy and session; no patient lookup, verification email or new send
+is needed. Missing or changed approval removes process wording, preserving the
+truthful saved receipt. Review cadence is an approved process expectation, not
+a claim that staff actually read the request or a promised response time.
+Reviewer/backup identities and patient/provider details never enter that public
+snapshot or agent progress. No migration, generated type or durable call-state
+field is introduced.
+
+Ten parallel signed cases cover current/repeated status, changed/revoked/expired/
+disabled approval, unavailable metadata, revocation after exact provider
+acknowledgment, an uncertain send and interruption before a held read releases.
+Native memory and explicit unsafe PostgreSQL lab cases cover exact public shape,
+foreign task/scope/session/policy, finite cadence and timestamps, duplicate turns,
+caller-clock replay, held read cancellation, revision, lease expiry, and disabled
+or unavailable current policy. All workers settle before fixture teardown.
+Actual PostgreSQL canary scanning excludes protected patient data.
+
+The first source gate failed because the new class used TypeScript constructor
+parameter properties unsupported by Node's strip-only execution; explicit fields
+fixed that error. The first broader regression passed 24/25: the existing human-
+receipt guard rejected the word “guarantee” even in a negated sentence. Its
+assertion is unchanged. Public wording now says “This does not promise a response
+time.” The refined regression passed all 25 tests, including the ten new signed
+cases and twenty scripted corpus cases. The original behavior failure remains
+archived; neither fixture checks nor safety assertions were relaxed.
+
+Commands:
+
+- `node --test --test-concurrency=2 test/voice/staff-review-expectations.test.ts test/text/staff-review-expectations.test.ts`: passed both new tests before the later policy-refresh exception refinement.
+- `node --test --test-concurrency=3 test/text/staff-review-expectations.test.ts test/voice/staff-review-expectations.test.ts test/text/staff-request-purpose.test.ts test/voice/staff-request-purpose.test.ts test/voice/cliniko-staff-request.test.ts test/text/staff-task.test.ts test/voice/conversation-baseline.test.ts test/voice/openai-clinical-intent.test.ts test/contract/scenario-manifest.test.ts test/voice/pending-lookup-repair.test.ts test/voice/missed-call-repair.test.ts`: refined gate passed 25/25, zero skips/cancellations.
+
+The final `npm run typecheck` and `git diff --check` pass. The [strengthened
+all-45 baseline](baselines/clinic-conversation-after-staff-review-v24-v1.json)
+passes 45/45 named observations and 135/135 safety observations, with zero setup
+gaps or harness failures, clear PostgreSQL canaries and unchanged source across
+471 inputs. Six candidate turns make actual model requests and 39 use trusted
+interpretation; prompt v24 is unchanged. This is narrower than all original
+acceptance prose. The exact command was:
+
+```sh
+node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/results/20261006-conversations-staff-review-v24-v1.json
+```
+
+Manifest 1.121 maps E2E-326. Original corpus prose
+remains explicitly unassessed in the partial evaluator. The acceptance audit
+still requires the stale-menu sequence, transport ownership/approved termination
+limits, meridiem clarification and remaining clause-by-clause inspection. Real
+clinic approval, carrier calls, email delivery and audible pace remain separate
+release evidence.

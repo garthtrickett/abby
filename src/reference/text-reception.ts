@@ -1,3 +1,4 @@
+import { StaffOutcomeTurns } from "./staff-outcome-turns.ts";
 import { ReschedulingMenuTurns } from "./rescheduling-menu-turns.ts";
 import { AppointmentEnquiryTurns } from "./appointment-enquiry-turns.ts";
 import { BookingMenuTurns } from "./booking-menu-turns.ts";
@@ -21,7 +22,7 @@ import { modelTaskRef } from "../model/work.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").BookingHorizonHost & import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").StaffReviewProcessHost & import("../core/host.ts").BookingHorizonHost & import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 function validIntakeRef(value: unknown): value is string {
@@ -212,14 +213,14 @@ export class TextReception {
     if (typed !== undefined && !validStaffRequestSubject(typed) || requestSubject !== undefined && selected?.ok && selected.value.kind !== "existing" && typed !== requestSubject) selected = undefined;
     if (selected?.ok && selected.value.kind === "existing" && requestSubject !== undefined &&
         !Object.values(current.value.staffItems).some(item => item.reason === "callerRequested" && item.requestSubject === requestSubject)) selected = undefined;
+    if (selected?.ok && selected.value.kind === "existing") return this.staffOutcome(scope, turn, finalNow, revision, external);
     const subject = requestSubject ?? (validStaffRequestSubject(typed) ? typed : undefined), detail = subject === undefined ? {} : { requestSubject: subject };
     const interpretation: TurnInterpretation = !selected?.ok ? { kind: "staffUnavailable", ...detail } : selected.value.kind === "codeRequired"
-      ? { kind: "staffVerificationRequired", ...detail } : selected.value.kind === "existing" ? { kind: "staffOutcomeQuery" }
-        : { kind: "staffRequestReady", ...detail, ...("requestedPerson" in selected.value && selected.value.requestedPerson ? { requestedPerson: selected.value.requestedPerson } : {}) };
+      ? { kind: "staffVerificationRequired", ...detail } : { kind: "staffRequestReady", ...detail, ...("requestedPerson" in selected.value && selected.value.requestedPerson ? { requestedPerson: selected.value.requestedPerson } : {}) };
     return this.runtime(scope).acceptTurn(turn, interpretation, finalNow, revision);
   }
-  staffOutcome(scope: LocationScope, turn: FinalCallerTurn, now: string) {
-    return this.runtime(scope).acceptTurn(turn, { kind: "staffOutcomeQuery" }, now);
+  staffOutcome(scope: LocationScope, turn: FinalCallerTurn, _now: string, expectedRevision?: number, external?: AbortSignal) {
+    return new StaffOutcomeTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, expectedRevision, external);
   }
   staffRequestEnabled(): boolean { return typeof this.host.prepareStaffRequest === "function"; }
   async readReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", from: string, to: string, now: string, correcting = false, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null, signal?: AbortSignal) {
@@ -593,7 +594,7 @@ export class TextReception {
       const leased = await this.effectLeases.run(callId, scope, async (signal, guard) => {
         const read = await runtime.read(callId);
         if (!read.ok) return read;
-        const worker = new EffectWorker(runtime, this.host, this.model, this.knowledge, { signal, leaseGuard: guard });
+        const worker = new EffectWorker(runtime, this.host, this.model, this.knowledge, { signal, leaseGuard: guard, clock: this.clock });
         for (const effect of Object.values(read.value.effects)) {
           if (effect.status !== "pending") continue;
           try {
@@ -620,7 +621,7 @@ export class TextReception {
     if (!effectId) return err({ kind: "effectFailure" });
     try {
       await this.effectLeases.run(callId, scope, (signal, guard) =>
-        new EffectWorker(runtime, this.host, undefined, undefined, { signal, leaseGuard: guard }).process(callId, effectId, now));
+        new EffectWorker(runtime, this.host, undefined, undefined, { signal, leaseGuard: guard, clock: this.clock }).process(callId, effectId, now));
     }
     catch { /* The persisted intent remains available to the recovery worker. */ }
     return runtime.read(callId);

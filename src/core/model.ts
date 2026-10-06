@@ -256,7 +256,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "workflowStarted"; operation: WorkflowOperation; next: "codeRequired" | "intakeRequired" }>
   | Readonly<{ kind: "outcomeQuery" }>
   | Readonly<{ kind: "notificationOutcomeQuery" }>
-  | Readonly<{ kind: "staffOutcomeQuery" }>
+  | Readonly<{ kind: "staffOutcomeQuery"; reviewProcess?: import("./staff-review-process.ts").StaffReviewProcess }>
   | Readonly<{ kind: "staffVerificationRequired"; requestSubject?: import("./staff-request-subject.ts").StaffRequestSubject }>
   | Readonly<{ kind: "staffUnavailable"; requestSubject?: import("./staff-request-subject.ts").StaffRequestSubject }>
   | Readonly<{ kind: "staffRequestReady"; requestedPerson?: string; requestSubject?: import("./staff-request-subject.ts").StaffRequestSubject }>
@@ -343,7 +343,7 @@ export type ReconcileObservation =
   | Readonly<{ kind: "definitiveNonCommit"; actionKey: string }>
   | Readonly<{ kind: "stillUnknown"; actionKey: string }>;
 export type StaffTaskReceipt =
-  | Readonly<{ kind: "opened"; taskKey: string; hostTaskRef: string; destination: StaffDestination }>
+  | Readonly<{ kind: "opened"; taskKey: string; hostTaskRef: string; destination: StaffDestination; reviewProcess?: import("./staff-review-process.ts").StaffReviewProcess }>
   | Readonly<{ kind: "rejected"; taskKey: string }>
   | Readonly<{ kind: "uncertain"; taskKey: string }>;
 export type StaffTaskObservation =
@@ -502,7 +502,7 @@ export type TransitionAction =
   | Readonly<{ kind: "reconciliationResolved"; effectId: string; observation: ReconcileObservation; now: string }>
   | Readonly<{ kind: "markStaffPossiblySent"; effectId: string; now: string }>
   | Readonly<{ kind: "recoverStaffPossiblySent"; effectId: string; now: string }>
-  | Readonly<{ kind: "staffTaskResolved"; effectId: string; receipt: StaffTaskReceipt }>
+  | Readonly<{ kind: "staffTaskResolved"; effectId: string; receipt: StaffTaskReceipt; now?: string }>
   | Readonly<{ kind: "staffTaskReconciled"; effectId: string; observation: StaffTaskObservation }>
   | Readonly<{ kind: "staffChangeRequested"; taskKey: string; actorRef: string; change: StaffChangeRequest }>
   | Readonly<{ kind: "markStaffChangePossiblySent"; effectId: string; now: string }>

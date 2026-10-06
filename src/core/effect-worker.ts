@@ -10,7 +10,7 @@ import { systemTimer } from "./timer.ts";
 import type { TimerPort } from "./timer.ts";
 import type { EffectCallLeaseGuard } from "./effect-call-lease.ts";
 
-export type EffectWorkerOptions = Readonly<{ hostDeadlineMs?: number; timer?: TimerPort; signal?: AbortSignal; leaseGuard?: EffectCallLeaseGuard }>;
+export type EffectWorkerOptions = Readonly<{ hostDeadlineMs?: number; timer?: TimerPort; signal?: AbortSignal; leaseGuard?: EffectCallLeaseGuard; clock?: () => string }>;
 
 export class EffectWorker {
   private readonly runtime: CallRuntime;
@@ -20,6 +20,7 @@ export class EffectWorker {
   private readonly hostDeadlineMs: number;
   private readonly timer: TimerPort;
   private readonly signal: AbortSignal | undefined;
+  private readonly clock: (() => string) | undefined;
 
   constructor(runtime: CallRuntime, host: HostEffects & Partial<KnowledgeHost & StaffLifecycleHost & OperatorAlertHost & NotificationHost>, model?: ModelWork,
               knowledge?: KnowledgeHost, options: EffectWorkerOptions = {}) {
@@ -32,6 +33,7 @@ export class EffectWorker {
     this.hostDeadlineMs = deadline;
     this.timer = options.timer ?? systemTimer;
     this.signal = options.signal;
+    this.clock = options.clock;
   }
 
   private async hostCall<Value>(work: (signal: AbortSignal) => Promise<Value>, cancel?: AbortSignal): Promise<Value> {
@@ -216,7 +218,10 @@ export class EffectWorker {
     } catch {
       receipt = { kind: "uncertain", taskKey: item.key };
     }
-    const resolved = await this.runtime.acceptStaffResult(callId, effectId, receipt);
+    // A failed public-process clock must not discard an exact provider receipt.
+    let checkedAt: string | undefined;
+    try { const value = this.clock?.() ?? now; if (Number.isFinite(Date.parse(value))) checkedAt = value; } catch { /* Keep the receipt without process wording. */ }
+    const resolved = await this.runtime.acceptStaffResult(callId, effectId, receipt, checkedAt);
     if (!resolved.ok) throw new Error(resolved.error.kind);
   }
 }

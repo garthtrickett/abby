@@ -284,6 +284,7 @@ export class CommandGateway {
         return result.ok ? ok({ kind: "staffRequestProgress", progress: commandProgress(result.value, command.turn.turnId) }) : result;
       }
       case "staff.requests.outcome.v1": {
+        if (!Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
         const result = await this.reception.staffOutcome(this.actor.scope, command.turn, command.now);
         return result.ok ? ok({ kind: "staffRequestProgress", progress: commandProgress(result.value, command.turn.turnId) }) : result;
       }

@@ -284,7 +284,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       state.callerMessages.push(callerIdentityDenialText);
       break;
     case "staffOutcomeQuery":
-      state.callerMessages.push(staffOutcomeText(state));
+      state.callerMessages.push(staffOutcomeText(state, undefined, interpretation.reviewProcess, now));
       break;
     case "staffUnavailable":
       if (interpretation.requestSubject !== undefined && !validStaffRequestSubject(interpretation.requestSubject)) return err({ kind: "invalidTransition" });
@@ -855,7 +855,7 @@ export function transition(current: CallState, action: TransitionAction): Result
         state.effects[effect.id] = { ...effect, status: uncertain ? "uncertain" : "completed" };
       }
       if (item.reason === "callerRequested" && !item.linkedActionKey) {
-        hostOutcomeNotice(state, effect.id, staffOutcomeText(state, state.staffItems[item.key]));
+        hostOutcomeNotice(state, effect.id, staffOutcomeText(state, state.staffItems[item.key], action.receipt.kind === "opened" ? action.receipt.reviewProcess : undefined, action.now));
       }
       break;
     }

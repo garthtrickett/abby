@@ -3,7 +3,7 @@ import { ClinikoRecallWriter } from "../cliniko/recall-write.ts";
 import type { ClinikoRecallWriteRequest } from "../cliniko/recall-write.ts";
 import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
 import { ClinikoVerificationContactReader } from "../cliniko/verification-contact.ts";
-import type { StaffRequestQuery, StaffRequestPreparation } from "../core/host.ts";
+import type { StaffReviewProcessQuery, StaffRequestQuery, StaffRequestPreparation } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { Result, StaffItem, StaffTaskReceipt, StaffTaskObservation } from "../core/model.ts";
 import { validStaffLabel } from "../core/staff-outcome.ts";
@@ -17,6 +17,7 @@ import { OwnerFileStaffPolicy } from "./owner-file-staff-policy.ts";
 import { staffRequestLanguage } from "./staff-request-language.ts";
 import { validStaffRequestSubject } from "../core/staff-request-subject.ts";
 import type { StaffRequestSubject } from "../core/staff-request-subject.ts";
+import type { StaffReviewProcess } from "../core/staff-review-process.ts";
 
 export type ClinikoStaffSessionConfig = Omit<ClinikoCancellationSessionConfig, "cancellationApprovalPath"> & Readonly<{ staffApprovalPath: string }>;
 type Failure = Readonly<{ kind: "staffUnavailable" }>;
@@ -99,6 +100,22 @@ export class ClinikoStaffSession {
         call.value.admission.dialedNumber !== c.inbound.dialedNumber) return undefined;
     return { state: call.value, approval: queue.value };
   }
+  #reviewSnapshot(active: Readonly<{ state: import("../core/model.ts").CallState; approval: import("./owner-file-staff-policy.ts").StaffApproval }>, taskKey: string): StaffReviewProcess | undefined {
+    const state = active.state, c = this.#config, observedAt = (c.clock ?? (() => new Date().toISOString()))();
+    const expiry = Math.min(Date.parse(state.sessionLease!.expiresAt), Date.parse(active.approval.effectiveUntil));
+    if (state.callerIdentityDenied || state.staffItems[taskKey]?.reason !== "callerRequested" || !Number.isFinite(Date.parse(observedAt)) || !Number.isFinite(expiry) || expiry <= Date.parse(observedAt)) return undefined;
+    return { scope: { ...c.receipt.scope }, callId: c.receipt.callId, sessionId: c.sessionId, policyVersion: c.policyVersion,
+      taskKey, approvalRevision: active.approval.revision, cadenceMinutes: active.approval.reviewCadenceMinutes, observedAt, expiresAt: new Date(expiry).toISOString() };
+  }
+  async readReviewProcess(query: StaffReviewProcessQuery) {
+    const denied = () => err({ kind: "staffReviewUnavailable" as const }), c = this.#config;
+    const signal = AbortSignal.any([query.signal, this.#lifetime.signal]);
+    if (!sameScope(query.scope, c.receipt.scope) || query.callId !== c.receipt.callId || query.sessionId !== c.sessionId || query.policyVersion !== c.policyVersion) return denied();
+    const active = await this.#active(signal);
+    if (!active || active.state.conversationRevision !== query.expectedConversationRevision || active.state.staffItems[query.taskKey]?.status !== "open") return denied();
+    const value = this.#reviewSnapshot(active, query.taskKey);
+    return value && !signal.aborted ? ok(value) : denied();
+  }
   async prepare(query: StaffRequestQuery): Promise<Result<StaffRequestPreparation, Failure>> {
     const c = this.#config, signal = AbortSignal.any([query.signal, this.#lifetime.signal, AbortSignal.timeout(15_000)]);
     if (!sameScope(query.scope, c.receipt.scope) || query.callId !== c.receipt.callId || query.sessionId !== c.sessionId ||
@@ -165,8 +182,15 @@ export class ClinikoStaffSession {
     let result;
     try { result = await awaitUntilAbort(this.#writer.openOnce(request, signal), signal); } catch { result = undefined; }
     if (this.#lifetime.signal.aborted) return { kind: "uncertain", taskKey: item.key };
+    let reviewProcess: StaffReviewProcess | undefined;
+    if (result?.ok && result.value.kind === "accepted") {
+      try {
+        const current = await this.#active(signal);
+        if (current && current.state.conversationRevision === prepared.revision) reviewProcess = this.#reviewSnapshot(current, item.key);
+      } catch { /* The exact send receipt survives unavailable public process evidence. */ }
+    }
     this.#receipt = result?.ok && result.value.kind === "accepted"
-      ? { kind: "opened", taskKey: item.key, hostTaskRef: result.value.recallRef, destination: item.destination }
+      ? { kind: "opened", taskKey: item.key, hostTaskRef: result.value.recallRef, destination: item.destination, ...(reviewProcess ? { reviewProcess } : {}) }
       : this.#definitiveNoSend || result && !result.ok ? rejected : { kind: "uncertain", taskKey: item.key };
     return this.#receipt;
   }

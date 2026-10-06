@@ -1191,6 +1191,7 @@ The initial corpus has these minimum journeys. One scenario may cover several re
 | `E2E-323` | Invoice-copy, charge-review and waitlist-interest staff requests preserve their finite purpose through independent verification and exact Cliniko receipts; stale clocks, held preparation, revoked authority and changed purposes cannot send, while document delivery, refunds, enrollment and callback remain unproven | FR-03, FR-09, FR-11, FR-12, FR-22 |
 | `E2E-324` | Qualified caller speech repairs or corrects held booking/rescheduling menus and selections before provider completion; late results cannot revive menus/proposals, noise cannot cancel a read, and native presence replies fence scope/session/time without guessing availability or promising a result | FR-04, FR-06, FR-11, FR-22 |
 | `E2E-325` | Missed-call questions explicitly explain the absent outbound reason and approved contact path; public native commands use current scope/session/private time, and signed calls preserve known receipts without a new patient, clinical or staff action | FR-04, FR-06, FR-11, FR-22 |
+| `E2E-326` | Saved staff requests explain only current clinic-approved review cadence without promising receipt or response time; changed approval preserves exact saved status, read-only status never resends, and native/voice paths fence malformed evidence, private time and interruption | FR-03, FR-09, FR-11, FR-22 |
 
 The corpus runs with deterministic synthetic media frames, partial hypotheses and segment-final transcription events, synthesis chunks, playback acknowledgments, typed model effect results, clock, and host effects against the reference host and standalone adapters. It enters through `VoiceSession.begin` and its media/transcript methods, not by calling `CallRuntime.acceptTurn` directly as a substitute for voice E2E. The harness can delay a playback acknowledgment or deliver it after a clear to prove that queued/cleared audio does not count as played. It can race a caller correction with `startNextPresentation`, drop a commit wake-up, restart the dispatcher task while retaining the live session, or lose the entire session process before activation or after atomic start. Assertions distinguish superseded pending speech from unproven started speech, reject `played` for a pending or transfer intent, and verify exactly one terminal resolution without duplicate media. `E2E-035` and `E2E-082` through `E2E-084` separately submit invalid presentation outcomes through T4 and prove each is rejected before a second SAM transition. `E2E-019` through `E2E-026` individually cover final turn, playback, interruption, transfer, and fallback behavior. Each independently triggerable voice or effect fault has its own scenario ID so cases can run in parallel and a failure identifies one behavior. Every provider runs the same scenario IDs; assertions use its approved support-matrix row and fail if its declared capability snapshot disagrees. Provider-specific contract tests separately cover permission limits, pagination, rate limits, availability rules, unsupported mutations, and lost responses. Scheduled smoke tests use sanctioned provider test accounts and a limited real telephony path, including an actual interruption and transfer. Tests contain no live patient data.
 
@@ -1768,3 +1769,37 @@ CCP-024's named observation now requires the exact typed reply, no additional
 provider/mail/write work and unchanged clinical/staff/read state rather than a
 generic clinic-contact regex. Broader prose and real carrier evidence remain
 separate acceptance work.
+
+
+### Current public staff review expectations — E2E-326
+
+An exact opened staff receipt may carry an optional public process snapshot:
+scope, call/session, policy version, task key, approval revision, finite cadence,
+observation time and expiry. This supplies only approved review expectations;
+the SAM receipt alone supplies saved/uncertain/rejected status. The caller hears
+that the clinic's approved process calls for reviewing saved requests at that
+cadence, together with the existing statement that staff read and a callback
+time are unconfirmed. A cadence is not an observed staff action or a response
+SLA. Reviewer/backup identities and patient/provider detail stay outside this
+public evidence and model context.
+
+The standalone Cliniko owner rereads captured approval, current policy, session,
+conversation revision and write stop after exact provider acknowledgment. Missing
+or changed approval omits process wording while retaining the exact save
+receipt. Status queries use the same bounded public read, without patient lookup,
+new verification or sending. Current policy failure also omits only cadence.
+Core rendering checks exact public shape, scope, call/session/policy/task, open
+caller-requested status, 1–1440 minute cadence, at most 30-second observation age
+and expiry bounded by the active lease. The dispatcher's private clock supplies
+receipt-rendering time; public command timestamps cannot extend authority.
+
+The outcome query module shares current private time, expected revision and
+cancellation across voice and `staff.requests.outcome.v1`; repeated prepare
+commands returning an existing request use it too. Qualified newer speech
+cancels a held process read. Expiry or supersession cannot publish a late reply,
+renew patient proof or change request status. No new persisted call-state field,
+patient storage exception, command, migration or generated database type is
+introduced. Native PostgreSQL tests use the explicit unsafe reference lab
+contract; standalone patient-specific call/request state remains transient or
+Cliniko-owned. E2E-326 is synthetic evidence; actual clinic activation, staff
+workflow acceptance and real carrier/email delivery remain separate gates.
