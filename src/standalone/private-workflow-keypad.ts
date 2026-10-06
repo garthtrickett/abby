@@ -52,6 +52,7 @@ export class PrivateWorkflowKeypad implements PrivateKeypadInput {
     try {
       const answer = await this.#owner!.submitCode(code);
       if (this.#closed || this.#config.owner() !== this.#owner) { this.stop(); return "failed"; }
+      if (this.#owner!.patientAccessDenied) return "pending";
       if (answer.verified) return "verified";
       if (this.#attempts >= 3) { this.stop(); return "failed"; }
       return "pending";

@@ -7,6 +7,7 @@ import type { EffectCallLeaseStore } from "../core/effect-call-lease.ts";
 import type { WorkflowHost, AppointmentChangeEvidenceHost, AppointmentChangeEvidenceQuery, AppointmentChangeSelection, AppointmentHost, AvailabilityHost, ReschedulingMenuHost, BookingMenuHost, BookingEvidenceHost, HostEffects, IntakeEvidenceHost, KnowledgeHost, ModelKnowledgeContextHost, NotificationHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
 import { captureKnowledgeSnapshot, validCallKnowledgeSource, validKnowledgeSource } from "../core/knowledge-evidence.ts";
 import type { LedgerStore } from "../core/ledger.ts";
+import { validCallerIdentityDenial } from "../core/caller-identity.ts";
 import { err } from "../core/model.ts";
 import type { CallState, FinalCallerTurn, LocationScope, Result, StaffChangeRequest, TransitionFailure, TurnInterpretation } from "../core/model.ts";
 import { CallRuntime } from "../core/runtime.ts";
@@ -15,7 +16,7 @@ import { modelTaskRef } from "../model/work.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 function validIntakeRef(value: unknown): value is string {
@@ -62,6 +63,35 @@ export class TextReception {
     return this.runtime(scope).acceptTurn(turn, { kind: "notificationOutcomeQuery" }, now);
   }
 
+  callerIdentityEnabled(): boolean { return typeof this.host.revokeCallerPatientAccess === "function"; }
+
+  async denyCallerIdentity(scope: LocationScope, turn: FinalCallerTurn, reason: import("../core/caller-identity.ts").CallerIdentityDenial,
+    expectedConversationRevision?: number) {
+    const now = this.currentInstant();
+    if (!this.callerIdentityEnabled() || !now || !turn.sessionId || turn.quality !== "clear" || !validCallerIdentityDenial(reason)) return err({ kind: "invalidTransition" as const });
+    const state = await this.ledger.read(turn.callId, scope);
+    if (!state.ok) return state;
+    if (state.value.lifecycle !== "active" || state.value.sessionLease?.sessionId !== turn.sessionId ||
+        Date.parse(state.value.sessionLease.expiresAt) <= Date.parse(now)) return err({ kind: "leaseLost" as const });
+    if (state.value.processedTurnIds.includes(turn.turnId) && !state.value.callerIdentityDenied) return err({ kind: "keyMismatch" as const });
+    const accepted = await this.runtime(scope).acceptTurn(turn, { kind: "callerIdentityDenied", reason }, now, expectedConversationRevision);
+    if (accepted.ok) {
+      this.cancelPendingModel(scope, turn.callId);
+      // SAM denies access first, so a rejected/late host release cannot restore caller authority.
+      try { await this.host.revokeCallerPatientAccess?.({ scope, callId: turn.callId, sessionId: turn.sessionId,
+        reason: accepted.value.callerIdentityDenied! }); }
+      catch { /* The recorded denial still fences reception, interpretation and effects. */ }
+    }
+    return accepted;
+  }
+
+  private async patientAccessDenied(scope: LocationScope, turn: FinalCallerTurn, expectedRevision?: number) {
+    const state = await this.ledger.read(turn.callId, scope);
+    if (!state.ok) return state;
+    if (!state.value.callerIdentityDenied) return undefined;
+    return this.denyCallerIdentity(scope, turn, state.value.callerIdentityDenied, expectedRevision);
+  }
+
   private currentInstant(): string | undefined {
     try { const now = this.clock(); return Number.isFinite(Date.parse(now)) ? now : undefined; }
     catch { return undefined; }
@@ -69,6 +99,8 @@ export class TextReception {
 
   async startWorkflow(scope: LocationScope, turn: FinalCallerTurn, operation: import("../core/model.ts").WorkflowOperation, now: string,
     expectedConversationRevision?: number, external?: AbortSignal, replaceCanceledChange = false) {
+    const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision);
+    if (denied) return denied;
     const state = await this.ledger.read(turn.callId, scope);
     if (!state.ok) return state;
     if (!this.host.startWorkflow || !state.value.policy.policyVersion || !turn.sessionId || turn.quality !== "clear" || state.value.sessionLease?.sessionId !== turn.sessionId ||
@@ -88,8 +120,10 @@ export class TextReception {
   }
 
   appointmentEnquiryEnabled(): boolean { return !!this.host.startWorkflow && new AppointmentEnquiryTurns(this.ledger, this.host).enabled(); }
-  enquireAppointments(scope: LocationScope, turn: FinalCallerTurn, request: Readonly<{ from: string; to: string }> | Readonly<{ choice: 1 | 2 | 3 }>,
+  async enquireAppointments(scope: LocationScope, turn: FinalCallerTurn, request: Readonly<{ from: string; to: string }> | Readonly<{ choice: 1 | 2 | 3 }>,
     now: string, expectedRevision?: number, signal?: AbortSignal) {
+    const denied = await this.patientAccessDenied(scope, turn, expectedRevision);
+    if (denied) return denied;
     return new AppointmentEnquiryTurns(this.ledger, this.host).accept(scope, turn, request, now, expectedRevision, signal);
   }
 
@@ -98,6 +132,8 @@ export class TextReception {
   }
   async requestStaff(scope: LocationScope, turn: FinalCallerTurn, requestedPerson: string | undefined, now: string,
     expectedConversationRevision?: number, external?: AbortSignal) {
+    const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision);
+    if (denied) return denied;
     const state = await this.ledger.read(turn.callId, scope);
     if (!state.ok) return state;
     if (turn.quality !== "clear" || !turn.sessionId || expectedConversationRevision !== undefined && state.value.conversationRevision !== expectedConversationRevision) return err({ kind: "staleTurn" as const });
@@ -119,18 +155,26 @@ export class TextReception {
     return this.runtime(scope).acceptTurn(turn, { kind: "staffOutcomeQuery" }, now);
   }
   staffRequestEnabled(): boolean { return typeof this.host.prepareStaffRequest === "function"; }
-  readReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", from: string, to: string, now: string, correcting = false, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null) {
+  async readReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", from: string, to: string, now: string, correcting = false, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null) {
+    const denied = await this.patientAccessDenied(scope, turn, undefined);
+    if (denied) return denied;
     return new ReschedulingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, stage, { from, to, ...(window !== undefined ? { window } : {}), ...(correcting ? { correcting: true as const } : {}) });
   }
-  selectReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", choice: 1 | 2 | 3, now: string) {
+  async selectReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", choice: 1 | 2 | 3, now: string) {
+    const denied = await this.patientAccessDenied(scope, turn, undefined);
+    if (denied) return denied;
     return new ReschedulingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, stage, { choice });
   }
 
   bookingMenuEnabled(): boolean { return new BookingMenuTurns(this.ledger, this.policy, this.host).enabled(); }
-  readBookingMenu(scope: LocationScope, turn: FinalCallerTurn, from: string, to: string, now: string, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null, preference?: import("../core/booking-search-preference.ts").BookingSearchPreference) {
+  async readBookingMenu(scope: LocationScope, turn: FinalCallerTurn, from: string, to: string, now: string, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null, preference?: import("../core/booking-search-preference.ts").BookingSearchPreference) {
+    const denied = await this.patientAccessDenied(scope, turn, undefined);
+    if (denied) return denied;
     return new BookingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, { from, to, ...(window !== undefined ? { window } : {}), ...(preference ? { preference } : {}) });
   }
-  selectBookingMenu(scope: LocationScope, turn: FinalCallerTurn, choice: 1 | 2 | 3, now: string) {
+  async selectBookingMenu(scope: LocationScope, turn: FinalCallerTurn, choice: 1 | 2 | 3, now: string) {
+    const denied = await this.patientAccessDenied(scope, turn, undefined);
+    if (denied) return denied;
     return new BookingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, { choice });
   }
 
@@ -158,6 +202,8 @@ export class TextReception {
 
   async interpretModelTurn(scope: LocationScope, turn: FinalCallerTurn, now: string,
                            expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
+    const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision);
+    if (denied) return denied;
     if (!this.model) return err({ kind: "effectFailure" });
     const runtime = this.runtime(scope);
     const current = await runtime.read(turn.callId);
@@ -241,6 +287,8 @@ export class TextReception {
   }
 
   async proposeBooking(scope: LocationScope, turn: FinalCallerTurn, verificationRef: string, offerRef: string, now: string, expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
+    const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision);
+    if (denied) return denied;
     const runtime = this.runtime(scope);
     const current = await runtime.read(turn.callId);
     if (!current.ok) return current;
@@ -266,6 +314,8 @@ export class TextReception {
   async proposeAppointmentChange(scope: LocationScope, turn: FinalCallerTurn,
                                  selection: AppointmentChangeSelection,
                                  now: string, expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
+    const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision);
+    if (denied) return denied;
     const runtime = this.runtime(scope);
     const current = await runtime.read(turn.callId);
     if (!current.ok) return current;
@@ -309,6 +359,8 @@ export class TextReception {
 
   async proposeIntake(scope: LocationScope, turn: FinalCallerTurn, draftRef: string, now: string,
                       expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
+    const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision);
+    if (denied) return denied;
     const runtime = this.runtime(scope);
     const current = await runtime.read(turn.callId);
     if (!current.ok) return current;
@@ -385,6 +437,8 @@ export class TextReception {
 
   async checkAppointments(scope: LocationScope, turn: FinalCallerTurn, verificationRef: string, from: string, to: string, now: string,
                           expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
+    const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision);
+    if (denied) return denied;
     const runtime = this.runtime(scope);
     const current = await runtime.read(turn.callId);
     if (!current.ok) return current;
@@ -408,6 +462,8 @@ export class TextReception {
 
   async selectAppointment(scope: LocationScope, turn: FinalCallerTurn, verificationRef: string, choice: 1 | 2 | 3,
                           now: string, expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
+    const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision);
+    if (denied) return denied;
     const runtime = this.runtime(scope);
     const current = await runtime.read(turn.callId);
     if (!current.ok) return current;

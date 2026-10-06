@@ -1184,6 +1184,7 @@ The initial corpus has these minimum journeys. One scenario may cover several re
 | `E2E-316` | Final date corrections carry explicit local time windows into fresh booking/move menus without dropping qualifiers; old proposals are fenced, original move targets remain protected and unplayed replacement menus or confirmations cannot send | FR-03, FR-06, FR-11, FR-18, FR-22 |
 | `E2E-317` | Urgent conversation cues speak only the admitted approved script at its effective time, report unavailable standalone escalation truthfully and cannot use an ordinary recall queue, fabricate a transfer or revise prior clinical receipts | FR-09, FR-11, FR-18, FR-22 |
 | `E2E-318` | Email-proof and delivery queries separately report actual action and captured notification receipts, cannot promise inbox delivery or authorize a send/resend/owner change, and preserve clinical and staff outcomes across standalone signed calls and embedded notification reconciliation | FR-07, FR-11, FR-12, FR-18, FR-22 |
+| `E2E-319` | Caller identity denial permanently fences patient reads, writes and verification within the call; cancels unsent proposals, preserves already-sent receipts, hides private progress and retains approved public FAQs and urgent scripts across signed, agent and memory/PostgreSQL paths | FR-03, FR-11, FR-18, FR-22 |
 
 The corpus runs with deterministic synthetic media frames, partial hypotheses and segment-final transcription events, synthesis chunks, playback acknowledgments, typed model effect results, clock, and host effects against the reference host and standalone adapters. It enters through `VoiceSession.begin` and its media/transcript methods, not by calling `CallRuntime.acceptTurn` directly as a substitute for voice E2E. The harness can delay a playback acknowledgment or deliver it after a clear to prove that queued/cleared audio does not count as played. It can race a caller correction with `startNextPresentation`, drop a commit wake-up, restart the dispatcher task while retaining the live session, or lose the entire session process before activation or after atomic start. Assertions distinguish superseded pending speech from unproven started speech, reject `played` for a pending or transfer intent, and verify exactly one terminal resolution without duplicate media. `E2E-035` and `E2E-082` through `E2E-084` separately submit invalid presentation outcomes through T4 and prove each is rejected before a second SAM transition. `E2E-019` through `E2E-026` individually cover final turn, playback, interruption, transfer, and fallback behavior. Each independently triggerable voice or effect fault has its own scenario ID so cases can run in parallel and a failure identifies one behavior. Every provider runs the same scenario IDs; assertions use its approved support-matrix row and fail if its declared capability snapshot disagrees. Provider-specific contract tests separately cover permission limits, pagination, rate limits, availability rules, unsupported mutations, and lost responses. Scheduled smoke tests use sanctioned provider test accounts and a limited real telephony path, including an actual interruption and transfer. Tests contain no live patient data.
 
@@ -1449,3 +1450,43 @@ Paid receipt and invoice requests use the existing clinic staff/contact path,
 including its independent approval and verification requirements. They cannot
 become booking-notification status questions or invented billing actions. Explicit
 requests for a person retain priority over generic notification classification.
+
+### Call-scoped patient-access denial
+
+An explicit disagreement with the matched identity or an affirmative shared-phone
+statement is negative authority. Trusted bounded language or a strict structured
+model decision may request `callerIdentityDenied`; every other model field must
+be null. No decision may replace the phone number, select another patient, reset
+the denial or grant access. Background quotations and negated descriptions do
+not use the trusted denial matcher.
+
+SAM records the first denial reason monotonically and cancels unsent proposals
+and pending model work. The reception records this denial before asking the host
+to release its patient owner. All reception patient seams check the denial before
+host work; SAM and effect dispatch independently fence later patient work and
+send barriers. The Cliniko host aborts its separate patient lifetime, disposes
+clinical and staff verifiers/owners and clears proof, intake, target and menu
+state. An in-flight owner/read cannot publish itself after that abort.
+
+The whole call remains live. Only independently approved public knowledge, public
+availability, the clinical-advice boundary and the admitted urgent script may
+continue; denial never authorizes an ordinary staff task or transfer. Agent/model
+public context hides prior patient actions, staff outcomes and appointment-menu
+metadata. `calls.callerIdentity.deny.v1` requires an actual negative host port,
+exact scope and active session, a valid enum and the reception's trusted clock.
+It accepts no patient identity, replacement phone, custom script or reset field.
+
+Denial cannot undo a request already past its possible-send barrier. Existing
+committed/uncertain receipts remain unchanged; a late actual send receipt may
+settle its existing action but is not announced to the denied caller and does
+not queue a new notification. Automatic patient reconciliation and new sends
+stop for this call; the caller must contact the clinic. Previously created
+Cliniko-owned records remain Cliniko's responsibility. Standalone Cliniko SAM
+state and its denial enum remain transient under D-06/D-11; persistence tests
+exercise an authorized embedded contract rather than adding standalone replay.
+
+E2E-319 covers sixteen parallel signed scenarios, scoped agent denial with
+memory/PostgreSQL state, refusal to reuse a previously processed unrelated turn,
+backdated/stale-session attempts, denial while collecting a private code, a held
+provider read and a late write receipt. Public access preservation does not
+establish real clinic approvals, real audio recognition or carrier behavior.

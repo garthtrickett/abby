@@ -1,3 +1,4 @@
+import { validCallerIdentityDenial } from "../core/caller-identity.ts";
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import { CALL_TERMINAL_REASONS, POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "../core/model.ts";
@@ -43,6 +44,7 @@ function validModelEffect(value: unknown, effectId: string): boolean {
 function decodeState(value: unknown, callId: string): Result<CallState, TransitionFailure> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return err({ kind: "storageCorrupt" });
   const data = value as Record<string, unknown>;
+  if (data.callerIdentityDenied !== undefined && !validCallerIdentityDenial(data.callerIdentityDenied)) return err({ kind: "storageCorrupt" });
   if (data.callId !== callId || !Number.isInteger(data.version) || !["starting", "active", "ended"].includes(String(data.lifecycle)) || typeof data.policy !== "object" || data.policy === null ||
       ((data.policy as { knowledgeSnapshot?: unknown }).knowledgeSnapshot !== undefined &&
         !validKnowledgeSnapshot((data.policy as { knowledgeSnapshot: unknown }).knowledgeSnapshot)) ||

@@ -281,3 +281,9 @@ export interface PolicyStore {
                  actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
   listGreetingChanges(scope: LocationScope, afterVersion?: number): Promise<Result<GreetingSettingAuditPage, PolicyFailure>>;
 }
+
+/** Negative authority only: release all patient owners after SAM records the denial. */
+export type CallerIdentityHost = Readonly<{
+  revokeCallerPatientAccess(query: Readonly<{ scope: LocationScope; callId: string; sessionId: string;
+    reason: import("./caller-identity.ts").CallerIdentityDenial }>): Promise<boolean>;
+}>;

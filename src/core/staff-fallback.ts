@@ -4,7 +4,7 @@ const NO_STAFF_WORK_NOTICE = "I can't send a staff request from this call. Pleas
 
 /** A staff-task outcome must never be spoken when the captured host has no proven task route. */
 export function staffFallbackText(state: CallState, whenAvailable: string): string {
-  return state.policy.staffWorkEnabled === false ? NO_STAFF_WORK_NOTICE : whenAvailable;
+  return state.callerIdentityDenied || state.policy.staffWorkEnabled === false ? NO_STAFF_WORK_NOTICE : whenAvailable;
 }
 
 export function staffRequestNotice(state: CallState, staffWorkUnavailable = false): string {

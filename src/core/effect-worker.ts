@@ -74,6 +74,8 @@ export class EffectWorker {
     if (!read.ok) throw new Error(read.error.kind);
     const effect = read.value.effects[effectId];
     if (!effect) throw new Error("effectUnknown");
+    // Retain already-sent receipts; denial cannot authorize another patient read, send or reconciliation.
+    if (read.value.callerIdentityDenied) return "canceled";
     if (effect.kind === "notification" || effect.kind === "notificationReconcile") {
       if (!validNotificationEffectForCall(read.value, effect)) throw new Error("storageCorrupt");
       return processNotification(this.runtime, this.host, effect, now, operation => this.hostCall(operation));

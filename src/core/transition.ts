@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { digestActionRequest } from "./digest.ts";
 import { clearAffirmation } from "./caller-affirmation.ts";
 import { actionOutcomeText, confirmedActionText } from "./action-outcome.ts";
+import { callerIdentityDenialText, restrictDeniedCaller, validCallerIdentityDenial } from "./caller-identity.ts";
 import { notificationOutcomeText } from "./notification-outcome.ts";
 import { clarificationText } from "./clarification.ts";
 import { notificationDirective, queueCommittedNotification, transitionNotification } from "./notification-effects.ts";
@@ -43,6 +44,7 @@ export function noticePresentationId(callId: string, turnId: string): string {
 }
 
 function hostOutcomeNotice(state: CallState, effectId: string, approvedText: string): void {
+  if (state.callerIdentityDenied) return;
   state.callerMessages.push(approvedText);
   if (state.lifecycle !== "active" || state.pendingPresentationId) return;
   const id = `${effectId}:resultNotice`;
@@ -244,12 +246,18 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   if (turn.callId !== state.callId || !turn.turnId || !turn.text || !Number.isFinite(Date.parse(turn.at))) return err({ kind: "invalidTransition" });
   if (state.processedTurnIds.includes(turn.turnId)) return ok(undefined);
   if (Object.values(state.presentations).some(presentation => presentation.kind === "transfer" && (presentation.status === "started" || presentation.status === "possiblySent"))) return err({ kind: "invalidTransition" });
+  if (interpretation.kind === "callerIdentityDenied" && (!validCallerIdentityDenial(interpretation.reason) || turn.quality !== "clear")) return err({ kind: "invalidTransition" });
+  interpretation = restrictDeniedCaller(state, interpretation);
   if (interpretation.kind !== "affirm") supersedeUnsent(state);
   cancelModelWork(state);
   state.conversationRevision += 1;
   const messageCount = state.callerMessages.length;
 
   switch (interpretation.kind) {
+    case "callerIdentityDenied":
+      state.callerIdentityDenied ??= interpretation.reason;
+      state.callerMessages.push(callerIdentityDenialText);
+      break;
     case "staffOutcomeQuery":
       state.callerMessages.push(staffOutcomeText(state));
       break;
@@ -390,7 +398,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       break;
     case "availability": {
       const presentation = availabilityPresentation(interpretation.snapshot, state.policy.scope, interpretation.from, interpretation.to,
-        now, state.policy.staffWorkEnabled !== false, state.policy.voiceProfile?.locale ?? "en-AU");
+        now, !state.callerIdentityDenied && state.policy.staffWorkEnabled !== false, state.policy.voiceProfile?.locale ?? "en-AU");
       if (turn.quality !== "clear" || !presentation.ok) {
         addStaffTask(state, "systemFailure", now);
         state.callerMessages.push(staffFallbackText(state, "I can't check available times right now. I'll request staff follow-up."));
@@ -496,6 +504,9 @@ function recordHostResult(state: CallState, effectId: string, receipt: import(".
 
 export function transition(current: CallState, action: TransitionAction): Result<CallState, TransitionFailure> {
   if ("now" in action && action.now !== undefined && !Number.isFinite(Date.parse(action.now))) return err({ kind: "invalidTransition" });
+  if (current.callerIdentityDenied && ["markHostPossiblySent", "markStaffPossiblySent", "markStaffChangePossiblySent",
+    "markNotificationPossiblySent", "markOperatorAlertPossiblySent", "transferPossiblySent", "privateIntakePrompt"].includes(action.kind))
+    return err({ kind: "invalidTransition" });
   const state = structuredClone(current);
   const now = "now" in action && action.now !== undefined ? action.now : new Date(0).toISOString();
 
