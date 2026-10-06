@@ -225,14 +225,17 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     if (correction && before.workflow !== null && !before.verificationRequired &&
         (!before.lastAction || ["awaitingConfirmation", "canceled"].includes(before.lastAction.status))) {
       if (correction.kind === "date" && before.workflow === "appointments.read") {
+        if (correction.window !== undefined) return ok({ kind: "clarify", reason: "menuAmbiguous" });
         const from = clinicDayStartUtc(before.timeZone, correction.date);
         const next = new Date(Date.parse(`${correction.date}T00:00:00.000Z`) + 86_400_000).toISOString().slice(0, 10);
         return ok({ kind: "appointmentEnquiry", from: Date.parse(before.now) > Date.parse(from) ? before.now : from,
           to: new Date(Date.parse(clinicDayStartUtc(before.timeZone, next)) - 1).toISOString() });
       }
-      if (correction.kind === "date" && before.workflow === "book") return ok({ kind: "bookingMenu", from: correction.date, to: correction.date });
+      if (correction.kind === "date" && before.workflow === "book") return ok({ kind: "bookingMenu", from: correction.date, to: correction.date,
+        ...(correction.window !== undefined ? { window: correction.window } : {}) });
       if (correction.kind === "date" && before.workflow === "reschedule" && before.reschedulingTargetSelected)
         return ok({ kind: "reschedulingMenu", stage: "offers", from: correction.date, to: correction.date,
+          ...(correction.window !== undefined ? { window: correction.window } : {}),
           ...(before.lastAction?.kind === "reschedule" ? { correcting: true as const } : {}) });
       return ok({ kind: "clarify", reason: "proposalCorrection" });
     }

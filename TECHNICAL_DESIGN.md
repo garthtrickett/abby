@@ -1181,6 +1181,7 @@ The initial corpus has these minimum journeys. One scenario may cover several re
 | `E2E-313` | Signed and agent-native searches use independently approved same-location practitioners, retain caller preferences and local windows, disclose a bounded earliest comparison and confirm the exact provider/location; incomplete reads, stale labels, foreign locations, revoked authority and interrupted menus cannot select or send, while correction and uncertain outcomes preserve one-send and privacy contracts | FR-03, FR-06, FR-11, FR-18, FR-22 |
 | `E2E-314` | Signed and agent-native appointment enquiries use independent read-only approval, patient verification and a disclosed upcoming range without clinical write activation; exact played selections re-read the appointment, while stale permissions, changed records, foreign scopes and unplayed lists cannot disclose details or create a mutation | FR-03, FR-06, FR-11, FR-18, FR-22 |
 | `E2E-315` | Signed and agent-native public clinic FAQs use exact current call-pinned approval without patient verification; changed content or membership, expired or revoked approval and model-invented wording cannot disclose unapproved facts or prepare clinical writes | FR-03, FR-09, FR-11, FR-18, FR-22 |
+| `E2E-316` | Final date corrections carry explicit local time windows into fresh booking/move menus without dropping qualifiers; old proposals are fenced, original move targets remain protected and unplayed replacement menus or confirmations cannot send | FR-03, FR-06, FR-11, FR-18, FR-22 |
 
 The corpus runs with deterministic synthetic media frames, partial hypotheses and segment-final transcription events, synthesis chunks, playback acknowledgments, typed model effect results, clock, and host effects against the reference host and standalone adapters. It enters through `VoiceSession.begin` and its media/transcript methods, not by calling `CallRuntime.acceptTurn` directly as a substitute for voice E2E. The harness can delay a playback acknowledgment or deliver it after a clear to prove that queued/cleared audio does not count as played. It can race a caller correction with `startNextPresentation`, drop a commit wake-up, restart the dispatcher task while retaining the live session, or lose the entire session process before activation or after atomic start. Assertions distinguish superseded pending speech from unproven started speech, reject `played` for a pending or transfer intent, and verify exactly one terminal resolution without duplicate media. `E2E-035` and `E2E-082` through `E2E-084` separately submit invalid presentation outcomes through T4 and prove each is rejected before a second SAM transition. `E2E-019` through `E2E-026` individually cover final turn, playback, interruption, transfer, and fallback behavior. Each independently triggerable voice or effect fault has its own scenario ID so cases can run in parallel and a failure identifies one behavior. Every provider runs the same scenario IDs; assertions use its approved support-matrix row and fail if its declared capability snapshot disagrees. Provider-specific contract tests separately cover permission limits, pagination, rate limits, availability rules, unsupported mutations, and lost responses. Scheduled smoke tests use sanctioned provider test accounts and a limited real telephony path, including an actual interruption and transfer. Tests contain no live patient data.
 
@@ -1341,3 +1342,32 @@ cannot substitute invented wording. E2E-315 exercises signed HTTP/WSS calls,
 approval changes during model interpretation, repeat/interruption, agent answers
 and PostgreSQL canaries. The runnable listener still leaves the optional clinical
 and FAQ source seam unset until its own activation requirements are satisfied.
+
+
+### Final date and time-window corrections
+
+The correction parser extracts the final explicit correction clause and delegates
+its clock constraint to the existing bounded booking-window parser. A recognized
+weekday or future ISO date and an explicit morning/afternoon/evening, before/after
+clock bound, or `any time` remain one correction value. The last explicit
+`actually` clause wins; unsupported meridiem or additional qualifiers clarify
+rather than silently producing an unrestricted date search. This syntax is
+bounded and does not claim general interpretation of every conversational date.
+
+The played-menu search owner uses that date/window together for fresh booking
+or rescheduling offer reads. The existing host filters clinic-local starts
+before truncating choices. Omitted windows retain prior constraints; explicit
+`any time` clears them. The ordinary nonaffirmative-turn fence cancels an unsent
+proposal before any new interpretation/read. A replacement offer still needs an
+actually played menu, a fresh protected selection and new exact confirmation
+playback followed by a separate affirmation. A move retains the exact protected
+source appointment. A committed or possibly sent action cannot be replaced or
+replayed by this correction.
+
+Independent appointment enquiries currently implement date ranges, not these
+time-of-day filters. A dated read correction containing a window clarifies
+instead of silently dropping that constraint and disclosing the full day. It
+grants no clinical authority. E2E-316 covers initial searches, corrected booking
+and move proposals, retained/cleared windows, the final of multiple corrections,
+ambiguous/qualified language, revoked approval, interrupted menus/confirmations,
+read-filter refusal, committed outcome preservation and PostgreSQL canaries.
