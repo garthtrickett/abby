@@ -163,7 +163,7 @@ export type BookableOffer = Readonly<{
   scope: LocationScope;
   offerRef: string;
   serviceRef: string;
-  presentation?: Readonly<{ timeZone: string; practitionerName: string; appointmentTypeName: string; durationMinutes: number }>;
+  presentation?: Readonly<{ timeZone: string; practitionerName: string; appointmentTypeName: string; locationName?: string; durationMinutes: number }>;
   startsAt: string;
   expiresAt: string;
 }>;
@@ -243,7 +243,7 @@ export type AppointmentRead = Readonly<{
 }>;
 
 export type MenuClarificationReason = "menuAmbiguous" | "menuRejected" | "menuUnavailable" | "proposalCorrection" |
-  "changeAmbiguous" | "targetDisagreement" | "changeUnsupported" | "changeAfterSend";
+  "changeAmbiguous" | "targetDisagreement" | "changeUnsupported" | "changeAfterSend" | "searchPreferenceUnavailable";
 export type TurnInterpretation =
   | Readonly<{ kind: "workflowStarted"; operation: ActionKind; next: "codeRequired" | "intakeRequired" }>
   | Readonly<{ kind: "outcomeQuery" }>
@@ -253,7 +253,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "staffRequestReady"; requestedPerson?: string }>
   | Readonly<{ kind: "modelPending"; taskRef: string }>
   | Readonly<{ kind: "modelFallback" }>
-  | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason }>
+  | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason; approvedLocation?: string }>
   | Readonly<{ kind: "requestAction"; request: ActionRequest }>
   | Readonly<{ kind: "affirm"; actionKey: string; digest: string; affirmative: boolean }>
   | Readonly<{ kind: "handoff"; reason: StaffReason; requestedPerson?: string }>

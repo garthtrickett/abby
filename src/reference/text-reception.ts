@@ -99,8 +99,8 @@ export class TextReception {
   }
 
   bookingMenuEnabled(): boolean { return new BookingMenuTurns(this.ledger, this.policy, this.host).enabled(); }
-  readBookingMenu(scope: LocationScope, turn: FinalCallerTurn, from: string, to: string, now: string, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null) {
-    return new BookingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, { from, to, ...(window !== undefined ? { window } : {}) });
+  readBookingMenu(scope: LocationScope, turn: FinalCallerTurn, from: string, to: string, now: string, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null, preference?: import("../core/booking-search-preference.ts").BookingSearchPreference) {
+    return new BookingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, { from, to, ...(window !== undefined ? { window } : {}), ...(preference ? { preference } : {}) });
   }
   selectBookingMenu(scope: LocationScope, turn: FinalCallerTurn, choice: 1 | 2 | 3, now: string) {
     return new BookingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, { choice });

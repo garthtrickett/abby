@@ -23,11 +23,12 @@ response being evaluated. All prose requirements and forbidden behaviors are
 also retained as **unassessed**: these narrow observations do not prove full
 acceptance, audio quality, actual telephony or production activation.
 
-Nine candidate setups require capabilities the current standalone call flow or
+Five candidate setups require capabilities the current standalone call flow or
 baseline fixture cannot supply. The runner exercises a declared substitute
 state and reports `setupMatch: false`, an explicit `setupGap`, and a failed
 conversation observation. It does not invent staff receipts, public knowledge
-approval or additional practitioner/service authorizations.
+approval or additional service authorizations. The recorded earlier reports
+retain their original setup gaps; later sections describe which fixtures changed.
 
 Scripted mode deliberately returns `unsupported` for candidate turns. It is a
 harness and safety check; its results are not a language-quality score.
@@ -129,3 +130,15 @@ The initial run exposed CCP-045: “after all” was incorrectly treated as an a
 CCP-022's narrow human-route observation, passing in the prior staff report, fails all three window runs: the live model returns a booking outcome for a request to email proof of the booking. It makes no email-delivery claim, but does not establish the required notification-owner explanation or workflow. This remains visible work and illustrates why single-run scores are not a reliability claim. All prose acceptance requirements still remain listed as unassessed. Independent appointment enquiries, approved practitioner/location/service routing, FAQs, richer date language and complete scenario setup remain open; these partial observations do not close the six-part goal or authorize live clinic calls.
 
 Final local gates: `npm run typecheck` passed. `node --test --test-concurrency=3 test/voice/booking-search-windows.test.ts test/voice/openai-clinical-intent.test.ts test/contract/scenario-manifest.test.ts` passed all seven tests, including 16 parallel signed scenarios in E2E-312. The preceding combined E2E-312/309/308/manifest gate passed all six tests. These focused gates do not imply a green full suite or full scenario acceptance.
+
+## Approved practitioner preferences and bounded earliest searches
+
+[Source-pinned approved-search report](baselines/clinic-conversation-after-approved-search-v1.json), run on 2026-10-06 with `gpt-4o-mini`, executes all 45 candidates with zero harness failures, stable source, all 135 safety observations passing and clear PostgreSQL patient-data canaries. Twenty candidate turns make actual model requests; 25 use trusted interpretation. Narrow conversation observations improve from 24 to 27 passing, with 18 failing and no previously passing observation regressing in this run. Five setup gaps remain. The report exits nonzero for those failures and remains a partial workflow baseline; all prose acceptance requirements are still unassessed.
+
+CCP-011 now explains the approved current location without silently switching branches. CCP-025 searches only the independently approved requested practitioner. CCP-026 compares every configured approved practitioner within the explicitly spoken range and presents the winner's times. The latter two fixtures now compose actual independent booking authorities rather than assuming missing practitioner approval. The configured catalogue permits one to three practitioners at the admitted location for one appointment type. It does not provide cross-location admission, service selection, unbounded earliest searches or a globally sorted three-option menu.
+
+Each practitioner keeps its own current booking approval, provider binding and writer. An owner-file catalogue supplies public names and search bounds, not patient verification or write permission. One operation-bound patient verifier and one possible-send fence belong to the call. Member reads serialize because their shared verifier's contact recheck is exclusive; independent calls and signed scenarios continue to run in parallel. An unavailable member prevents an earliest/no-match claim. Corrections preserve the selected member, cancel the old proposal and require new exact confirmation; final protected confirmation includes the approved location. Omitted preference dimensions retain their prior values.
+
+`E2E-313` covers 20 signed synthetic-call scenarios plus the agent command path: earlier alternate openings, named preferences, an empty preferred practitioner, failed or changed provider evidence, catalogue and member-policy revocation, a changed patient proof, interrupted menus, retained dates/windows/location, unknown names and other branches, ties, corrections and a response-lost send without replay. The final gate `node --test --test-concurrency=3 test/voice/approved-booking-search.test.ts test/voice/booking-search-windows.test.ts test/voice/openai-clinical-intent.test.ts test/contract/scenario-manifest.test.ts` passed all nine tests; `npm run typecheck` passed.
+
+The remaining setup gaps are CCP-015 (urgent-route fixture), CCP-019 (independent appointment enquiry), CCP-030 (multiple services), CCP-032 (approved public knowledge) and CCP-044 (concurrent pending read). CCP-022's email-proof explanation and the other conversation failures remain unresolved. This patch does not activate a real clinic, email delivery or carrier traffic, and it does not close the six-part goal or claim a green full suite.

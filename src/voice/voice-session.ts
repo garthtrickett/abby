@@ -12,12 +12,12 @@ import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 
 export type VoiceIntent =
-  | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason }>
+  | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason; approvedLocation?: string }>
   | Readonly<{ kind: "workflow"; operation: "book" | "cancel" | "reschedule" | "intake"; replaceCanceledChange?: true }>
   | Readonly<{ kind: "outcome" }>
   | Readonly<{ kind: "staffOutcome" }>
   | Readonly<{ kind: "staffRequest"; requestedPerson?: string }>
-  | Readonly<{ kind: "bookingMenu"; from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null }>
+  | Readonly<{ kind: "bookingMenu"; from: string; to: string; preference?: import("../core/booking-search-preference.ts").BookingSearchPreference; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null }>
   | Readonly<{ kind: "bookingChoice"; choice: 1 | 2 | 3 }>
   | Readonly<{ kind: "reschedulingMenu"; stage: "targets" | "offers"; from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null; correcting?: true }>
   | Readonly<{ kind: "reschedulingChoice"; stage: "targets" | "offers"; choice: 1 | 2 | 3 }>
@@ -338,7 +338,7 @@ export class VoiceSession {
     } else if (this.cachedIntent.kind === "outcome") {
       result = await this.runtime.acceptTurn(turn, { kind: "outcomeQuery" }, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "bookingMenu") {
-      result = await this.reception.readBookingMenu(this.scope, turn, this.cachedIntent.from, this.cachedIntent.to, now, this.cachedIntent.window);
+      result = await this.reception.readBookingMenu(this.scope, turn, this.cachedIntent.from, this.cachedIntent.to, now, this.cachedIntent.window, this.cachedIntent.preference);
     } else if (this.cachedIntent.kind === "bookingChoice") {
       result = await this.reception.selectBookingMenu(this.scope, turn, this.cachedIntent.choice, now);
     } else if (this.cachedIntent.kind === "reschedulingMenu") {

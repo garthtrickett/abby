@@ -100,7 +100,7 @@ export type GatewayCommand =
   | Readonly<{ kind: "clinic.availability.approval.revoke.v1"; expectedVersion: number }>
   | Readonly<{ kind: "rescheduling.menu.read.v1"; turn: FinalCallerTurn; stage: "targets" | "offers"; from: string; to: string; now: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null }>
   | Readonly<{ kind: "rescheduling.menu.select.v1"; turn: FinalCallerTurn; stage: "targets" | "offers"; choice: 1 | 2 | 3; now: string }>
-  | Readonly<{ kind: "booking.offers.read.v1"; turn: FinalCallerTurn; from: string; to: string; now: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null }>
+  | Readonly<{ kind: "booking.offers.read.v1"; turn: FinalCallerTurn; from: string; to: string; now: string; preference?: import("../core/booking-search-preference.ts").BookingSearchPreference; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null }>
   | Readonly<{ kind: "booking.offers.select.v1"; turn: FinalCallerTurn; choice: 1 | 2 | 3; now: string }>
   | Readonly<{ kind: "availability.read.v2"; turn: FinalCallerTurn; from: string; to: string; now: string }>
   | Readonly<{ kind: "appointments.read.v1"; turn: FinalCallerTurn; verificationRef: string; from: string; to: string; now: string }>
@@ -540,7 +540,7 @@ export class CommandGateway {
         return result.ok ? ok({ kind: "appointmentChangeProposal", progress: commandProgress(result.value, turn.turnId) }) : result;
       }
       case "booking.offers.read.v1": {
-        const result = await this.reception.readBookingMenu(this.actor.scope, command.turn, command.from, command.to, command.now, command.window);
+        const result = await this.reception.readBookingMenu(this.actor.scope, command.turn, command.from, command.to, command.now, command.window, command.preference);
         return result.ok ? ok({ kind: "bookingProposal", progress: commandProgress(result.value, command.turn.turnId) }) : result;
       }
       case "booking.offers.select.v1": {

@@ -1,3 +1,4 @@
+import { normalizedSpokenName } from "../core/pending-location.ts";
 import { validBookingSearchWindow } from "../core/booking-search-window.ts";
 import type { BookingEvidenceHost, BookingMenuHost, PolicyStore } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
@@ -35,7 +36,7 @@ export class BookingMenuTurns {
         live.value.conversationRevision !== state.value.conversationRevision) return err({ kind: "invalidTransition" });
     return live;
   }
-  async run(scope: LocationScope, turn: FinalCallerTurn, now: string, operation: Readonly<{ from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null }> | Readonly<{ choice: 1|2|3 }>):
+  async run(scope: LocationScope, turn: FinalCallerTurn, now: string, operation: Readonly<{ from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null; preference?: import("../core/booking-search-preference.ts").BookingSearchPreference }> | Readonly<{ choice: 1|2|3 }>):
     Promise<Result<CallState, Failure>> {
     const runtime = new CallRuntime(this.ledger, scope);
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15_000), signal = controller.signal;
@@ -54,7 +55,11 @@ export class BookingMenuTurns {
           const matchesWindow = expectedWindow === undefined || expectedWindow === null ?
             expectedWindow === undefined || read?.ok && read.value.window === undefined :
             validBookingSearchWindow(expectedWindow) && read?.ok && read.value.window?.startMinute === expectedWindow.startMinute && read.value.window.endMinute === expectedWindow.endMinute && read.value.window.startInclusive === expectedWindow.startInclusive;
-          if (read?.ok && matchesWindow && !signal.aborted) interpretation = { kind: "bookingMenu", snapshot: structuredClone(read.value) };
+          const preference = operation.preference;
+          const matchesPreference = !preference || read?.ok && (!preference.practitioner ? true : preference.practitioner === "any" ? read.value.searchScope?.selection === "earliestApproved" :
+            normalizedSpokenName(read.value.practitionerName) === normalizedSpokenName(preference.practitioner)) &&
+            (!preference.location || normalizedSpokenName(read.value.locationName) === normalizedSpokenName(preference.location));
+          if (read?.ok && matchesPreference && matchesWindow && !signal.aborted) interpretation = { kind: "bookingMenu", snapshot: structuredClone(read.value) };
         } else {
           const menuTurnId = initial.value.processedTurnIds.at(-1);
           const notice = menuTurnId ? initial.value.presentations[noticePresentationId(turn.callId, menuTurnId)] : undefined;

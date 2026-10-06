@@ -1,3 +1,6 @@
+import { bookingPreferenceLanguage } from "./booking-preference-language.ts";
+import { ClinikoCatalogueBookingHost } from "./cliniko-catalogue-booking-host.ts";
+import { normalizedSpokenName } from "../core/pending-location.ts";
 import { PlayedMenuSearch } from "./played-menu-search.ts";
 import { clinicDateAt } from "./clinic-clock.ts";
 import type { AppointmentChangeEvidenceQuery, BookingMenuQuery, BookingMenuReadQuery, IntakeEvidenceQuery, ReschedulingMenuQuery, ReschedulingMenuReadQuery, StaffRequestQuery, WorkflowQuery } from "../core/host.ts";
@@ -54,6 +57,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   private constructor(config: ClinikoCallFlowConfig) {
     super(); this.#config = Object.freeze({ ...config, receipt: structuredClone(config.receipt), inbound: structuredClone(config.inbound),
       cliniko: Object.freeze({ ...config.cliniko }), approvals: Object.freeze({ ...config.approvals }), ...(config.intake ? { intake: Object.freeze({ ...config.intake }) } : {}),
+      ...(config.catalogue ? { catalogue: Object.freeze({ ...config.catalogue, practitioners: Object.freeze(config.catalogue.practitioners.map(member => Object.freeze({ ...member }))) }) } : {}),
       ...(config.staff ? { staff: Object.freeze({ ...config.staff }) } : {}) });
     config.signal.addEventListener("abort", this.#onClose, { once: true }); if (config.signal.aborted) this.dispose();
   }
@@ -76,6 +80,27 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     const state = await this.#config.ledger.read(this.#config.receipt.callId, this.#config.receipt.scope);
     if (!state.ok || this.closed || state.value.sessionLease?.sessionId !== this.#config.sessionId) return undefined;
     return this.#spokenMenu.resolve(text, state.value, (this.#config.clock ?? (() => new Date().toISOString()))());
+  }
+  async preferenceMenuIntent(text: string): Promise<VoiceIntent | undefined> {
+    const preference = bookingPreferenceLanguage(text);
+    if (!preference) return undefined;
+    const denied = { kind: "clarify", reason: "searchPreferenceUnavailable" } as const;
+    if (this.closed || this.#staffActive || this.#verificationRequired || !(this.#owner instanceof ClinikoBookingSession)) return denied;
+    const state = await this.#config.ledger.read(this.#config.receipt.callId, this.#config.receipt.scope);
+    if (!state.ok || this.closed || state.value.sessionLease?.sessionId !== this.#config.sessionId) return denied;
+    if (Object.values(state.value.actions).some(action => ["committed", "uncertain", "needsReview", "dispatched"].includes(action.status)))
+      return { kind: "clarify", reason: "changeAfterSend" };
+    const host = this.#owner.effects;
+    if (!(host instanceof ClinikoCatalogueBookingHost)) return denied;
+    const profile = await host.searchProfile();
+    if (!profile || this.closed) return denied;
+    const deniedAt = { ...denied, approvedLocation: profile.locationName };
+    if (preference.location && normalizedSpokenName(preference.location) !== normalizedSpokenName(profile.locationName)) return deniedAt;
+    if (preference.practitioner && preference.practitioner !== "any" &&
+        !profile.practitioners.some(member => normalizedSpokenName(member.name) === normalizedSpokenName(preference.practitioner))) return deniedAt;
+    const from = clinicDateAt(profile.timeZone, new Date((this.#config.clock ?? (() => new Date().toISOString()))()));
+    const to = new Date(Date.parse(`${from}T00:00:00.000Z`) + (profile.searchDays - 1) * 86_400_000).toISOString().slice(0, 10);
+    return { kind: "bookingMenu", from, to, preference };
   }
   async searchMenuIntent(text: string): Promise<VoiceIntent | undefined> {
     if (this.closed || this.#staffActive || this.#verificationRequired ||
