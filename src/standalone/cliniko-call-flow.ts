@@ -430,7 +430,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     this.#spokenMenu.clear();
     if (this.#booking()) { const failure = await this.#horizonFailure(query); if (failure) return err(failure); }
     const result = await (this.#booking()?.readBookingMenu(query) ?? readDenied());
-    if (result.ok && !this.closed && !this.#patientLifetime.signal.aborted) {
+    if (result.ok && !query.signal.aborted && !this.closed && !this.#patientLifetime.signal.aborted) {
       this.#publicMenu = { kind: "booking", stage: null };
       this.#searchMenu.remember({ turnId: query.turnId, from: query.from, to: query.to, kind: "booking", snapshot: result.value });
       this.#spokenMenu.remember({ kind: "booking", stage: null, turnId: query.turnId, snapshot: result.value });
@@ -439,8 +439,8 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   }
   async selectBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>) {
     const result = await (this.#booking()?.selectBookingMenu(query) ?? readDenied());
-    if (result.ok && !this.closed && !this.#patientLifetime.signal.aborted) { this.#publicMenu = undefined; this.#spokenMenu.consumed(query.turnId, query.choice); }
-    else this.#spokenMenu.clear();
+    if (result.ok && !query.signal.aborted && !this.closed && !this.#patientLifetime.signal.aborted) { this.#publicMenu = undefined; this.#spokenMenu.consumed(query.turnId, query.choice); }
+    else if (!query.signal.aborted) this.#spokenMenu.clear();
     return result;
   }
   async resolveBooking(scope: LocationScope, verificationRef: string, offerRef: string, now: string, signal?: AbortSignal) { return this.#booking()?.resolveBooking(scope, verificationRef, offerRef, now, signal) ?? readDenied(); }
@@ -449,7 +449,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     this.#spokenMenu.clear();
     if (query.stage === "offers" && this.reschedulingMenuAvailable()) { const failure = await this.#horizonFailure(query); if (failure) return err(failure); }
     const result = await (!this.#staffActive && this.#owner instanceof ClinikoReschedulingSession ? this.#owner.effects.readReschedulingMenu(query) : readDenied());
-    if (result.ok && !this.closed && !this.#patientLifetime.signal.aborted) {
+    if (result.ok && !query.signal.aborted && !this.closed && !this.#patientLifetime.signal.aborted) {
       this.#publicMenu = { kind: "rescheduling", stage: query.stage };
       if (query.stage === "offers") this.#searchMenu.remember({ turnId: query.turnId, from: query.from, to: query.to, kind: "rescheduling", snapshot: result.value });
       else this.#searchMenu.clear();
@@ -459,15 +459,15 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   }
   async selectReschedulingMenu(query: ReschedulingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>) {
     const result = await (!this.#staffActive && this.#owner instanceof ClinikoReschedulingSession ? this.#owner.effects.selectReschedulingMenu(query) : readDenied());
-    if (result.ok && !this.closed && !this.#patientLifetime.signal.aborted) {
+    if (result.ok && !query.signal.aborted && !this.closed && !this.#patientLifetime.signal.aborted) {
       this.#publicMenu = undefined;
       if (result.value.kind === "targetSelected") { this.#reschedulingTargetSelected = true; this.#spokenMenu.clear(); }
       else this.#spokenMenu.consumed(query.turnId, query.choice);
     }
-    else this.#spokenMenu.clear();
+    else if (!query.signal.aborted) this.#spokenMenu.clear();
     return result;
   }
-  async resolveAppointmentChange(query: AppointmentChangeEvidenceQuery) { return !this.#staffActive && (this.#owner instanceof ClinikoCancellationSession || this.#owner instanceof ClinikoReschedulingSession) ? this.#owner.effects.resolveAppointmentChange(query) : readDenied(); }
+  async resolveAppointmentChange(query: AppointmentChangeEvidenceQuery, signal?: AbortSignal) { return !this.#staffActive && (this.#owner instanceof ClinikoCancellationSession || this.#owner instanceof ClinikoReschedulingSession) ? this.#owner.effects.resolveAppointmentChange(query, signal) : readDenied(); }
   async resolveIntake(query: IntakeEvidenceQuery) { return !this.#staffActive && this.#owner instanceof ClinikoIntakeBookingSession ? this.#owner.resolveIntake(query) : readDenied(); }
   async write(mutation: HostMutation, now: string, signal?: AbortSignal): Promise<HostWriteReceipt> {
     const owner = this.#owner;

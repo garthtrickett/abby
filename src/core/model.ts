@@ -247,6 +247,7 @@ export type AppointmentRead = Readonly<{
 export type MenuClarificationReason = "menuAmbiguous" | "menuRejected" | "menuUnavailable" | "proposalCorrection" |
   "changeAmbiguous" | "targetDisagreement" | "changeUnsupported" | "changeAfterSend" | "searchPreferenceUnavailable" | "clinicalAdviceUnavailable";
 export type TurnInterpretation =
+  | Readonly<{ kind: "conversationPresence" }>
   | Readonly<{ kind: "bookingHorizon"; snapshot: import("./booking-horizon.ts").BookingHorizonRead }>
   | Readonly<{ kind: "bookingHorizonFailure" }>
   | Readonly<{ kind: "requestBoundary"; reason: import("./request-boundary.ts").RequestBoundary }>

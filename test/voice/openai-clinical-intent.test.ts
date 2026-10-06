@@ -91,3 +91,20 @@ test("E2E-323 model staff categories carry no patient, free-text or clinical aut
     assert.equal(f.mail.length, 0); assert.equal(f.posts, 0);
   } finally { f.flow.dispose(); await f.close(); }
 });
+
+
+test("E2E-324 model presence cues cannot supply result text or appointment authority", async () => {
+  const f = await bookingCallFlowFixture();
+  try {
+    let response: unknown;
+    const resolver = createOpenAIClinicalIntentResolver({ owner: f.flow, apiKey: "synthetic-key", model: "synthetic-model",
+      clinicDate: () => "2026-10-04", fetch: async () => completed(response) });
+    response = decision("presence");
+    assert.deepEqual(await resolver(f.turn("presence", "Have we lost our connection?")), { ok: true, value: { kind: "presence" } });
+    for (const patch of [{ operation: "book" }, { choice: 1 }, { proposedText: "A slot is definitely available." }]) {
+      response = decision("presence", patch);
+      assert.deepEqual(await resolver(f.turn("forged-presence", "Have we lost our connection?")), unavail);
+    }
+    assert.equal(f.mail.length, 0); assert.equal(f.posts, 0);
+  } finally { f.flow.dispose(); await f.close(); }
+});

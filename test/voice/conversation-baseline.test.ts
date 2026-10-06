@@ -8,7 +8,7 @@ test("E2E-307 conversation baseline distinguishes trusted spoken selection and m
   const corpus = await candidates();
   assert.equal(corpus.length, 45);
   await withDisposablePostgres(async db => {
-    const ids = ["CCP-005", "CCP-006", "CCP-009", "CCP-012", "CCP-013", "CCP-015", "CCP-017", "CCP-021", "CCP-022", "CCP-029", "CCP-030", "CCP-033", "CCP-034", "CCP-035", "CCP-037", "CCP-039", "CCP-040", "CCP-041"];
+    const ids = ["CCP-005", "CCP-006", "CCP-009", "CCP-012", "CCP-013", "CCP-015", "CCP-017", "CCP-021", "CCP-022", "CCP-029", "CCP-030", "CCP-033", "CCP-034", "CCP-035", "CCP-037", "CCP-039", "CCP-040", "CCP-041", "CCP-044"];
     let next = 0;
     const evaluated: Awaited<ReturnType<typeof runCase>>[] = [];
     const settled = await Promise.allSettled(Array.from({ length: 4 }, async () => { for (;;) {
@@ -31,6 +31,10 @@ test("E2E-307 conversation baseline distinguishes trusted spoken selection and m
       assert.equal(result.intents.at(-1)?.kind, "requestBoundary");
       assert.equal(result.checks.find(check => check.id === "conversation-observation")?.pass, true, id);
     }
+    const presence = results.find(result => result.id === "CCP-044")!;
+    assert.deepEqual(presence.intents, [{ kind: "presence" }]); assert.equal(presence.setupMatch, true); assert.equal(presence.setupGap, null);
+    assert.equal(presence.checks.find(check => check.id === "conversation-observation")?.pass, true);
+    assert.deepEqual(presence.pendingLookupEvidence, { heldBeforeRelease: true, canceledBeforeRelease: true, noLateSpeech: true, noLateMenu: true, providerReads: 1 });
     const horizon = results.find(result => result.id === "CCP-029")!;
     assert.deepEqual(horizon.intents, [{ kind: "bookingHorizon" }]);
     assert.equal(horizon.checks.find(check => check.id === "conversation-observation")?.pass, true);

@@ -12,6 +12,7 @@ import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 
 export type VoiceIntent =
+  | Readonly<{ kind: "presence" }>
   | Readonly<{ kind: "bookingHorizon" }>
   | Readonly<{ kind: "requestBoundary"; reason: import("../core/request-boundary.ts").RequestBoundary }>
   | Readonly<{ kind: "callerIdentityDenied"; reason: import("../core/caller-identity.ts").CallerIdentityDenial }>
@@ -102,11 +103,18 @@ export class VoiceSession {
   private unclearTurns = 0;
   private readonly privatePlayback = new Map<string, (played: boolean) => void>();
 
-  /** A qualified new speech onset may fence a still-pending classifier before wire-order work resumes. */
+  /** A qualified new speech onset may fence a still-pending classifier or menu operation before wire-order work resumes. */
   supersedePendingIntent(): boolean {
     if (!this.attached || !this.pendingIntent) return false;
     this.pendingIntent.cancel();
     return true;
+  }
+
+  private async withPendingIntent<T>(work: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const controller = new AbortController(), pending = { cancel: () => controller.abort() };
+    this.pendingIntent = pending;
+    try { return await work(controller.signal); }
+    finally { if (this.pendingIntent === pending) this.pendingIntent = undefined; }
   }
 
   supersedePendingModel(): boolean {
@@ -336,7 +344,9 @@ export class VoiceSession {
       this.cachedIntent = intent.value;
     }
     let result: Result<CallState, VoiceSessionFailure>;
-    if (this.cachedIntent.kind === "bookingHorizon") {
+    if (this.cachedIntent.kind === "presence") {
+      result = await this.reception.respondPresence(this.scope, turn, existing.value.conversationRevision);
+    } else if (this.cachedIntent.kind === "bookingHorizon") {
       const controller = new AbortController(), pending = { cancel: () => controller.abort() };
       this.pendingIntent = pending;
       try { result = await this.reception.readBookingHorizon(this.scope, turn, existing.value.conversationRevision, controller.signal); }
@@ -358,22 +368,28 @@ export class VoiceSession {
     } else if (this.cachedIntent.kind === "notificationOutcome") {
       result = await this.runtime.acceptTurn(turn, { kind: "notificationOutcomeQuery" }, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "bookingMenu") {
-      result = await this.reception.readBookingMenu(this.scope, turn, this.cachedIntent.from, this.cachedIntent.to, now, this.cachedIntent.window, this.cachedIntent.preference);
+      const intent = this.cachedIntent;
+      result = await this.withPendingIntent(signal => this.reception.readBookingMenu(this.scope, turn, intent.from, intent.to, now, intent.window, intent.preference, signal));
     } else if (this.cachedIntent.kind === "bookingChoice") {
-      result = await this.reception.selectBookingMenu(this.scope, turn, this.cachedIntent.choice, now);
+      const intent = this.cachedIntent;
+      result = await this.withPendingIntent(signal => this.reception.selectBookingMenu(this.scope, turn, intent.choice, now, signal));
     } else if (this.cachedIntent.kind === "reschedulingMenu") {
-      result = await this.reception.readReschedulingMenu(this.scope, turn, this.cachedIntent.stage, this.cachedIntent.from, this.cachedIntent.to, now, this.cachedIntent.correcting, this.cachedIntent.window);
+      const intent = this.cachedIntent;
+      result = await this.withPendingIntent(signal => this.reception.readReschedulingMenu(this.scope, turn, intent.stage, intent.from, intent.to, now, intent.correcting, intent.window, signal));
     } else if (this.cachedIntent.kind === "reschedulingChoice") {
-      result = await this.reception.selectReschedulingMenu(this.scope, turn, this.cachedIntent.stage, this.cachedIntent.choice, now);
+      const intent = this.cachedIntent;
+      result = await this.withPendingIntent(signal => this.reception.selectReschedulingMenu(this.scope, turn, intent.stage, intent.choice, now, signal));
     } else if (this.cachedIntent.kind === "model") {
       result = this.reception.modelEnabled()
         ? await this.reception.interpretModelTurn(this.scope, turn, now, existing.value.conversationRevision)
         : await this.runtime.acceptTurn(turn, { kind: "modelFallback", ...(this.staffWorkUnavailable ? { staffWorkUnavailable: true as const } : {}) }, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "book") {
-      result = await this.reception.proposeBooking(this.scope, turn, this.cachedIntent.verificationRef, this.cachedIntent.offerRef, now, existing.value.conversationRevision);
+      const intent = this.cachedIntent;
+      result = await this.withPendingIntent(signal => this.reception.proposeBooking(this.scope, turn, intent.verificationRef, intent.offerRef, now, existing.value.conversationRevision, signal));
     } else if (this.cachedIntent.kind === "cancel" || this.cachedIntent.kind === "reschedule") {
-      result = await this.reception.proposeAppointmentChange(this.scope, turn, this.cachedIntent,
-        now, existing.value.conversationRevision);
+      const intent = this.cachedIntent;
+      result = await this.withPendingIntent(signal => this.reception.proposeAppointmentChange(this.scope, turn, intent,
+        now, existing.value.conversationRevision, signal));
     } else if (this.cachedIntent.kind === "intake") {
       result = await this.reception.proposeIntake(this.scope, turn, this.cachedIntent.draftRef, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "answer") {

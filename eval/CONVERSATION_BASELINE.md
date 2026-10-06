@@ -23,12 +23,12 @@ response being evaluated. All prose requirements and forbidden behaviors are
 also retained as **unassessed**: these narrow observations do not prove full
 acceptance, audio quality, actual telephony or production activation.
 
-Three candidate setups require capabilities the current standalone call flow or
-baseline fixture cannot supply. The runner exercises a declared substitute
-state and reports `setupMatch: false`, an explicit `setupGap`, and a failed
-conversation observation. It does not invent staff receipts, public knowledge
-approval or additional service authorizations. The recorded earlier reports
-retain their original setup gaps; later sections describe which fixtures changed.
+Earlier candidate setups required capabilities the standalone call flow or
+baseline fixture could not supply. Those reports retain their declared substitute
+states, `setupMatch: false`, explicit `setupGap` and failed observations. The
+latest pending-lookup report has no setup gaps. Later sections describe each
+fixture change; no report invents staff receipts, public knowledge approval or
+additional service authorizations.
 
 Scripted mode deliberately returns `unsupported` for candidate turns. It is a
 harness and safety check; its results are not a language-quality score.
@@ -768,3 +768,73 @@ checks use the deliberately unsafe lab contract rather than granting standalone
 permission to store purpose-bearing calls. Actual clinic approval, real email
 and carrier audio remain separately unverified. Next is a real pending-read
 fixture for CCP-044, followed by assessing the still-unassessed prose conditions.
+
+
+## Concurrent pending-lookup repair — 2026-10-06
+
+The [before-change signed reproduction](baselines/pending-lookup-before-v1.json)
+failed on main `b3a8b21`: a caller asking “Are you still there?” could not produce
+its new transcript or repair response before an actual availability read's
+held synthetic response was released. The provider deliberately ignored abort;
+no clinical write occurred. This established the failure before production edits.
+
+Booking/rescheduling menus, choices and direct appointment proposals now share
+an owned voice cancellation signal. Qualified speech releases the current read
+consumer before serialized processing continues. The existing fifteen-second
+read deadline, session, policy, revision and played-confirmation checks remain.
+Late results cannot create speech/proposals or overwrite/clear a fresh menu.
+The call-flow appointment-change adapter now forwards the signal it previously
+lost; expanded move-choice tests exposed that omission. Subthreshold noise
+retains the original read, and disconnect fences transient work.
+
+Presence uses a finite public reply rather than a made-up lookup status or
+appointment result. Whole current questions have trusted parsing; paraphrases
+can select strict model kind `presence`, with every other field null. The native
+`calls.presence.respond.v1` command uses scoped current sessions and a private
+clock, rejects extra script/reference fields, remains public after identity
+denial, and restores no patient authority. A negative presence turn cancels
+unsent proposals and preserves existing send receipts. Intake proposal reads
+have not been added to this appointment-lookup cancellation slice.
+
+The [v22 live classification sample](baselines/clinical-intent-after-pending-lookup-v1.json)
+passes **37/37**, with **28 actual model requests** and nine trusted cases. Four
+new cases cover the exact question, a connection/hearing paraphrase, quoted
+past speech and a negated presence question followed by self-booking. This is a
+small sample, not statistical proof of general language understanding.
+
+The [all-45 live baseline](baselines/clinic-conversation-after-pending-lookup-v1.json)
+executes **45/45 named conversation observations successfully**, with **135/135
+safety observations passing**, **zero harness failures**, **zero setup gaps**,
+clear PostgreSQL patient-data canaries and stable source across **468 inputs**.
+Seven candidate turns make actual model requests; 38 use trusted interpretation.
+CCP-044 starts the actual signed availability read concurrently, asks the corpus
+question while the response is held, observes cancellation before release, then
+checks no late speech/menu, exactly one availability read and unchanged
+clinical/staff state. The corpus and original prose requirements are unchanged.
+
+Test refinement preserved real preconditions: the native lab fixture needed
+booking enabled at the current policy revision, explicit embedded staff-work
+approval, and a started/played greeting before entering a menu. A fresh target
+query may legitimately repeat the old date, so its assertion checks preserved
+fresh menu/state after the old response releases rather than banning that date
+in the newly requested result. Failed fixture gates remain failures, not passing
+evidence. All parallel workers settle before disposable PostgreSQL cleanup.
+
+Validation commands:
+
+- `node --test test/text/conversation-presence.test.ts`: passed both native command and four held menu/proposal modes after the fixture corrections.
+- `node --test --test-concurrency=3 test/text/conversation-presence.test.ts test/voice/pending-lookup-repair.test.ts test/voice/conversation-baseline.test.ts test/voice/openai-clinical-intent.test.ts test/contract/scenario-manifest.test.ts`: final focused gate passed all eleven tests, including the 23 expanded signed scenarios and nineteen scripted corpus cases.
+- `node --test test/voice/pending-lookup-repair.test.ts`: passed the original concurrent reproduction and 23 expanded signed scenarios after the concrete rescheduling signal fix.
+- `node --test --test-concurrency=3 test/text/conversation-presence.test.ts test/voice/caller-corrections.test.ts test/voice/appointment-change-intent.test.ts test/voice/conversation-baseline.test.ts`: the signed correction, cancel/move and nineteen-case scripted baseline regressions passed; its new native hold fixture failed before the approval/playback corrections above.
+- `npm run typecheck` and `git diff --check`: passed.
+- `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinical-intent.ts --model gpt-4o-mini --out eval/results/20261006-pending-lookup-intent-v22-v1.json`: passed 37/37.
+- `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/results/20261006-conversations-pending-lookup-v1.json`: passed the partial baseline above with unchanged source.
+
+E2E-324 and manifest 1.119 record the feature. Rich PostgreSQL native fixtures
+use the explicit unsafe lab contract; standalone durable patient storage remains
+limited to phone-to-Cliniko-ID links. Real carrier timing, clinic activation and
+email delivery remain unverified. All corpus prose acceptance conditions remain
+explicitly unassessed: **45/45 named observations do not close the six-part goal
+or establish release readiness**. Next is a requirement-by-requirement acceptance
+audit, adding actual workflow evidence for material gaps without relaxing the
+original requirements.

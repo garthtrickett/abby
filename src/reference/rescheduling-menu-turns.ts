@@ -35,14 +35,14 @@ export class ReschedulingMenuTurns {
         live.value.conversationRevision !== state.value.conversationRevision) return err({ kind: "invalidTransition" });
     return live;
   }
-  async run(incomingScope: LocationScope, incomingTurn: FinalCallerTurn, now: string, stage: "targets" | "offers", incomingOperation: Readonly<{ from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null; correcting?: true }> | Readonly<{ choice: 1|2|3 }>):
+  async run(incomingScope: LocationScope, incomingTurn: FinalCallerTurn, now: string, stage: "targets" | "offers", incomingOperation: Readonly<{ from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null; correcting?: true }> | Readonly<{ choice: 1|2|3 }>, external?: AbortSignal):
     Promise<Result<CallState, Failure>> {
     const scope = Object.freeze({ ...incomingScope }), turn = Object.freeze(structuredClone(incomingTurn)), operation = Object.freeze({ ...incomingOperation });
     const runtime = new CallRuntime(this.ledger, scope);
-    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15_000), signal = controller.signal;
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15_000), signal = AbortSignal.any([controller.signal, ...(external ? [external] : [])]);
     try {
       const initial = await this.#ready(scope, turn, now, signal);
-      if (!initial.ok) return initial;
+      if (!initial.ok) return external?.aborted ? err({ kind: "staleTurn" }) : initial;
       if (initial.value.processedTurnIds.includes(turn.turnId)) return initial;
       const revision = initial.value.conversationRevision;
       let interpretation: TurnInterpretation = { kind: "reschedulingMenuFailure" };
@@ -84,10 +84,10 @@ export class ReschedulingMenuTurns {
       }
       const acceptedAt = interpretation.kind === "bookingHorizon" ? (this.clock?.() ?? now) : now;
       const fresh = await this.#ready(scope, turn, acceptedAt, signal);
-      if (!fresh.ok) return fresh;
+      if (!fresh.ok) return external?.aborted ? err({ kind: "staleTurn" }) : fresh;
       if (signal.aborted) return err({ kind: "effectFailure" });
       return runtime.acceptTurn(turn, interpretation, acceptedAt, revision);
-    } catch { return err({ kind: "effectFailure" }); }
+    } catch { return err({ kind: external?.aborted ? "staleTurn" : "effectFailure" }); }
     finally { clearTimeout(timer); controller.abort(); }
   }
 }

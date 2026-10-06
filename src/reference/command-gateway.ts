@@ -83,6 +83,7 @@ export type GatewayCommand =
   | Readonly<{ kind: "appointments.change.propose.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; selection: AppointmentChangeSelection; now: string }>
   | Readonly<{ kind: "patients.intake.propose.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; draftRef: string; now: string }>
   | Readonly<{ kind: "calls.urgent.respond.v1"; turn: FinalCallerTurn; now: string }>
+  | Readonly<{ kind: "calls.presence.respond.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; now: string }>
   | Readonly<{ kind: "calls.notifications.outcome.v1"; turn: FinalCallerTurn; now: string }>
   | Readonly<{ kind: "booking.horizon.read.v1"; turn: FinalCallerTurn; now: string }>
   | Readonly<{ kind: "calls.requestBoundary.respond.v1"; turn: FinalCallerTurn; reason: import("../core/request-boundary.ts").RequestBoundary; now: string }>
@@ -149,6 +150,7 @@ export type GatewayReply =
   | Readonly<{ kind: "intakeProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "staffRequestProgress"; progress: CallCommandProgress }>
   | Readonly<{ kind: "urgentResponseProgress"; progress: CallCommandProgress }>
+  | Readonly<{ kind: "conversationPresenceProgress"; progress: CallCommandProgress }>
   | Readonly<{ kind: "notificationOutcomeProgress"; progress: CallCommandProgress }>
   | Readonly<{ kind: "bookingHorizonProgress"; progress: CallCommandProgress }>
   | Readonly<{ kind: "requestBoundaryProgress"; progress: CallCommandProgress }>
@@ -216,7 +218,7 @@ export class CommandGateway {
 
   listPermitted(): readonly CapabilityDescriptor[] {
     const permitted: CapabilityId[] = ["settings.read.v1", "booking.propose.v2", "appointments.change.propose.v1",
-      "patients.intake.propose.v1", "knowledge.answer.v2", "calls.urgent.respond.v1", "calls.notifications.outcome.v1"];
+      "patients.intake.propose.v1", "knowledge.answer.v2", "calls.urgent.respond.v1", "calls.notifications.outcome.v1", "calls.presence.respond.v1"];
     if (this.reception.bookingHorizonEnabled()) permitted.push("booking.horizon.read.v1");
     if (this.reception.requestBoundaryEnabled()) permitted.push("calls.requestBoundary.respond.v1");
     if (this.reception.callerIdentityEnabled()) permitted.push("calls.callerIdentity.deny.v1");
@@ -470,6 +472,11 @@ export class CommandGateway {
         if (!Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
         const result = await this.reception.respondUrgent(this.actor.scope, command.turn);
         return result.ok ? ok({ kind: "urgentResponseProgress", progress: commandProgress(result.value, command.turn.turnId) }) : result;
+      }
+      case "calls.presence.respond.v1": {
+        if (!Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
+        const result = await this.reception.respondPresence(this.actor.scope, command.turn);
+        return result.ok ? ok({ kind: "conversationPresenceProgress", progress: commandProgress(result.value, command.turn.turnId) }) : result;
       }
       case "booking.horizon.read.v1": {
         if (!Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });

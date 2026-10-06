@@ -17,16 +17,17 @@ import { validRequestBoundary } from "../core/request-boundary.ts";
 import { bookingHorizonLanguage } from "./booking-horizon-language.ts";
 import { requestBoundaryLanguage } from "./request-boundary-language.ts";
 import { callerIdentityLanguage } from "./caller-identity-language.ts";
+import { isPresenceQuestion } from "../core/conversation-presence.ts";
 import { staffRequestLanguage } from "./staff-request-language.ts";
 
 const endpoint = "https://api.openai.com/v1/responses";
 const unavailable = { kind: "intentUnavailable" } as const;
 const maxBytes = 16 * 1024;
-export const clinicalIntentPromptVersion = "clinical-intent-v21";
+export const clinicalIntentPromptVersion = "clinical-intent-v22";
 
 const schema = { type: "object", additionalProperties: false,
   properties: {
-    kind: { type: "string", enum: ["workflow", "menu", "choice", "appointments", "cancel", "save", "outcome", "staffRequest", "staffOutcome", "faq", "urgent", "notificationOutcome", "identityDisagreement", "sharedPhone", "minorIntake", "proxyPatient", "jointPractitioners", "groupClass", "bookingHorizon", ...publicInformationTopics, ...staffRequestSubjects, "unsupported"] },
+    kind: { type: "string", enum: ["workflow", "menu", "choice", "appointments", "cancel", "save", "outcome", "staffRequest", "staffOutcome", "faq", "urgent", "notificationOutcome", "identityDisagreement", "sharedPhone", "minorIntake", "proxyPatient", "jointPractitioners", "groupClass", "bookingHorizon", "presence", ...publicInformationTopics, ...staffRequestSubjects, "unsupported"] },
     operation: { type: ["string", "null"], enum: ["book", "cancel", "reschedule", "intake", "appointments.read", null] },
     stage: { type: ["string", "null"], enum: ["targets", "offers", null] },
     from: { type: ["string", "null"] }, to: { type: ["string", "null"] },
@@ -76,7 +77,7 @@ function schemaFor(context: Context, hasPublicFacts: boolean) {
   const stages = phase === "listExistingAppointments" || phase === "chooseExistingAppointment" ? ["targets", null]
     : phase === "listNewTimes" || phase === "chooseNewTime" ? ["offers", null] : [null];
   return { ...schema, properties: { ...schema.properties,
-    kind: { type: "string", enum: [...kinds, "staffRequest", "staffOutcome", "faq", "urgent", "notificationOutcome", "identityDisagreement", "sharedPhone", "minorIntake", "proxyPatient", "jointPractitioners", "groupClass", "bookingHorizon", ...publicInformationTopics, ...staffRequestSubjects] },
+    kind: { type: "string", enum: [...kinds, "staffRequest", "staffOutcome", "faq", "urgent", "notificationOutcome", "identityDisagreement", "sharedPhone", "minorIntake", "proxyPatient", "jointPractitioners", "groupClass", "bookingHorizon", "presence", ...publicInformationTopics, ...staffRequestSubjects] },
     operation: { type: ["string", "null"], enum: context.workflow === null || context.workflow === "appointments.read"
       ? ["book", "cancel", "reschedule", "intake", "appointments.read", null] : [null] },
     stage: { type: ["string", "null"], enum: stages },
@@ -119,6 +120,7 @@ async function boundedResponse(response: Response): Promise<Decision | undefined
 
 async function mapDecision(decision: Decision, context: Context, today: number, owner: ClinikoCallFlow): Promise<Result<VoiceIntent, typeof unavailable>> {
   const none = decision.operation === null && decision.stage === null && decision.from === null && decision.to === null && decision.choice === null;
+  if (decision.kind === "presence") return none ? ok({ kind: "presence" }) : err(unavailable);
   if ((decision.kind === "identityDisagreement" || decision.kind === "sharedPhone") && none) return ok({ kind: "callerIdentityDenied", reason: decision.kind });
   if (context.callerIdentityDenied && decision.kind !== "urgent") return ok({ kind: "callerIdentityDenied", reason: context.callerIdentityDenied });
   if (decision.kind === "bookingHorizon") return none ? ok({ kind: "bookingHorizon" }) : err(unavailable);
@@ -204,6 +206,7 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     const identity = callerIdentityLanguage(turn.text);
     if (identity) return ok({ kind: "callerIdentityDenied", reason: identity });
     if (explicitUrgentRequest(turn.text)) return ok({ kind: "handoff", reason: "potentiallyUrgent", staffWorkUnavailable: true, checkedAt: before.now });
+    if (isPresenceQuestion(turn.text)) return ok({ kind: "presence" });
     const clinicalAdvice = clinicalAdviceBoundary(turn.text);
     if (clinicalAdvice) return ok(clinicalAdvice);
     if (!before.callerIdentityDenied) {
@@ -292,6 +295,7 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
             "The current standalone workflows support adult self-registration and individual appointments for the verified caller. Requests to register or arrange a first visit for a child are minorIntake. A request to act for another patient or combine different people’s changes is proxyPatient. A synchronized visit requiring several practitioners together is jointPractitioners. Group-class attendance, booking or cancellation is groupClass. These four kinds require every other field null and select only a truthful clinic-contact boundary, never a default individual booking, representative permission, clinical advice or staff receipt. Explicit requests for a human still use staffRequest. Do not classify background/quoted speech or a negated unsupported request as a boundary. A corrected request explicitly only for the caller or one practitioner must not retain a negated earlier requirement.",
             "The four boundary kinds require an affirmative current unsupported requirement. A negated request for multiple clinicians followed by a request for one clinician is ordinary self-booking. Merely mentioning a partner's appointment before asking to book a separate appointment for oneself is ordinary self-booking. Do not treat negated requirements or background people as current requirements. A boundary kind has operation null, never intake or book.",
             "Questions about how far ahead appointments can be booked or moved, or a vague request several months in the future, are bookingHorizon with every other field null. This cue reads trusted current public clinic limits and asks for an exact date. Never guess a calendar date, a limit, availability or a reservation, and never extend offer or policy expiry. A precise dated request remains a dated menu request; the host independently applies clinic limits. A statement reporting that another person asked a question in the past, with no current question or request by the caller, must be unsupported even if that statement quotes an appointment-horizon question. Background, quoted or negated future requests do not by themselves require this query.",
+            "A current question whether the assistant is still there or can hear the caller is presence, with every other field null. This selects only a bounded truthful repair reply; it does not restart a lookup, invent options or guarantee a result. Background/quoted/past presence questions without a current request are unsupported. A current booking request with a negated background presence question is still workflow, not presence.",
             "A request to speak with a person, leave a message or ask for a callback is staffRequest, with every other field null. Respect a human request rather than forcing booking. Questions about whether a staff message/request was saved, delivered or read are staffOutcome. A staff request is not appointment authority. Never claim a callback, delivery or human acknowledgment yourself.",
             "A current request for the clinic to send or resend an invoice or paid receipt is invoiceCopy. A request for another copy of proof of payment or already paid/settled billing/account paperwork also uses invoiceCopy, rather than losing the purpose in generic staffRequest. A current request for somebody to review a disputed charge/payment/refund is chargeReview. A current request for earlier-appointment waitlist interest or a call if a vacancy arises is waitlistInterest. These three kinds require every other field null. They request only staff contact under independent verification and queue approval: never read/send a billing document, issue a refund, waive a fee, correct a record, enroll on a waitlist or promise an outbound call. They are not booking, cancellation, priceAndFees or notificationOutcome. Never force a new booking for a charge review. Background/quoted/past or negated requests without a current affirmative caller request are unsupported. A later generic request to send the staff request uses staffRequest, preserving the host's already stated purpose. A question whether the existing request was saved or received uses staffOutcome, never a new purpose send.",
             "A caller requesting urgent/emergency clinical help or the clinic’s immediate-help procedure is kind urgent with every other field null. It is only a routing cue, never a diagnosis, independent triage, medical clearance, transfer or staff delivery claim. Use no clinical advice or wording yourself. Negated urgency and irrelevant background speech do not by themselves require urgent routing.",

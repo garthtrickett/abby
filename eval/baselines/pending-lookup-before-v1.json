@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "kind": "signed-pending-lookup-reproduction",
+  "sourceRevision": "b3a8b21e70f0b7c0d20807e17ba8c513395e5318",
+  "command": "node --test test/voice/pending-lookup-repair.test.ts",
+  "result": "failed-before-production-edits",
+  "failure": "new caller turn before held provider release timed out",
+  "setup": "Verified booking workflow, actual availability adapter request held by a synthetic provider ignoring cancellation, then caller asks Are you still there?",
+  "observations": {
+    "newCallerTranscriptBeforeProviderRelease": false,
+    "providerResponseStillHeld": true,
+    "clinicalWrites": 0
+  },
+  "limitation": "Synthetic signed local call and provider; not carrier latency evidence."
+}

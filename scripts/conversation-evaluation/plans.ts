@@ -3,9 +3,9 @@ import { readFile } from "node:fs/promises";
 export type Candidate = Readonly<{ id: string; pattern: string; priority: string; coverage: string;
   setup: string; callerTurns: string[]; requiredBehavior: string[]; forbiddenBehavior: string[] }>;
 export type Stage = "initial" | "book" | "menu" | "proposal" | "committed" | "uncertain" |
-  "cancel" | "cancelTarget" | "cancelCommitted" | "move" | "moveOffers" | "staff" | "staffUncertain" | "enquiry";
+  "cancel" | "cancelTarget" | "cancelCommitted" | "move" | "moveOffers" | "staff" | "staffUncertain" | "enquiry" | "pendingLookup";
 export type Expectation = "clarify" | "cancelProposal" | "spokenChoice" | "revisedProposal" | "revisedDate" |
-  "identityDenied" | "requestBoundary" | "bookingHorizon" | "publicInformation" | "staffPurpose" | "outcome" | "notificationOutcome" | "human" | "readOnly" | "constraints" | "publicFacts" | "boundedSearch" | "urgent" | "unsupported";
+  "identityDenied" | "requestBoundary" | "bookingHorizon" | "publicInformation" | "staffPurpose" | "presence" | "outcome" | "notificationOutcome" | "human" | "readOnly" | "constraints" | "publicFacts" | "boundedSearch" | "urgent" | "unsupported";
 export type Plan = Readonly<{ stage: Stage; expectation: Expectation; missingSetup?: string }>;
 
 /** These are explicit fixture contracts, not model answers. An absent production
@@ -54,7 +54,7 @@ export const plans: Readonly<Record<string, Plan>> = {
   "CCP-041": { stage: "initial", expectation: "requestBoundary" },
   "CCP-042": { stage: "menu", expectation: "clarify" },
   "CCP-043": { stage: "proposal", expectation: "clarify" },
-  "CCP-044": { stage: "book", expectation: "clarify", missingSetup: "Concurrent pending availability read is not reproduced by the serialized baseline setup." },
+  "CCP-044": { stage: "pendingLookup", expectation: "presence" },
   "CCP-045": { stage: "committed", expectation: "outcome" },
 };
 
