@@ -76,7 +76,7 @@ async function main(): Promise<void> {
   const report = { version: 1, kind: "synthetic-clinic-conversation-baseline", startedAt: start, finishedAt: new Date().toISOString(),
     model: model.model, mode, promptVersion: clinicalIntentPromptVersion, source, corpusVersion: "clinic-conversation-candidates-v1",
     setupInterpretation: "Pinned structured responses establish actual workflow states; they are not language understanding evidence.",
-    candidateInterpretation: mode === "live" ? "Only candidate caller turns use actual model responses, with the production five-second deadline."
+    candidateInterpretation: mode === "live" ? "Only candidate turns may make live model requests under the production five-second deadline; trusted menu matching and exact affirmation bypass the model. Request counts distinguish these paths."
       : "Candidate responses are deliberately scripted unsupported. This measures harness/safety behavior, not model interpretation.",
     gate: "partial-baseline-not-a-release-gate", audio: "Synthetic clear-final transcription and synthesis; no real caller audio or Twilio number.",
     counts, privacyPass, sourceStable, results: results.sort((a, b) => a.id.localeCompare(b.id)) };

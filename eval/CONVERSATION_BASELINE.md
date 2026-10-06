@@ -49,7 +49,7 @@ all TypeScript source, runner and fixture helpers, and recheck source stability
 after the run. A nonzero exit can mean observed product gaps, setup gaps,
 privacy failure, harness failure or changed source; inspect these separately.
 
-`E2E-307` checks actual played ambiguous offers, an unsupported spoken selection,
+`E2E-307` checks actual played ambiguous offers, a trusted spoken selection without a model request,
 an explicitly absent saved staff request, and a lost booking response that stays
 uncertain without replay. It does not claim the 45 acceptance scenarios pass.
 
@@ -75,3 +75,11 @@ change expectations to turn an unsupported fallback into feature completion.
 - Source remained unchanged throughout the run.
 
 The run exposed guesses for ambiguous morning/evening times and misheard selections, cancellation proposals for requests about moving or questioning a target, missing correction support and generic staff fallback for unrelated requests. The date correction also resolved to the wrong day. Existing exact committed/uncertain outcome queries preserved their receipts without replay. These are observed model/workflow results, not claims about real recorded audio or actual provider writes.
+
+## Spoken selection follow-up
+
+[Source-pinned follow-up report](baselines/clinic-conversation-after-spoken-selection-v1.json), also run on 2026-10-06 with `gpt-4o-mini`, records 45 executed cases, no harness failures and unchanged source. All 135 safety observations and the database canary scan passed. Narrow conversation observations improved from 12 to 15, with no previously passing observation regressing in this run. Thirty observations still fail, including the same nine setup gaps.
+
+CCP-006 (morning/evening ambiguity), CCP-007 (reference to an older menu), and CCP-042 (misheard selection) now clarify without proposing an appointment. CCP-005 resolves its actual 10:30 offer through trusted facts rather than a model ordinal. Three candidate turns bypassed the model through trusted menu interpretation; the remaining 42 made live requests. This mixed workflow score does not measure only model quality, and a single run does not establish statistical reliability.
+
+`E2E-308` adds signed-call evidence for half-past-ten, the later one, rejected offers, ambiguity, a deliberately wrong model choice and interruption of an unplayed menu. Known choices still go through protected offer/proof checks, exact confirmation playback and one possible send. Correction after an existing proposal, cancellation versus rescheduling, staff handling and broader search remain outstanding.

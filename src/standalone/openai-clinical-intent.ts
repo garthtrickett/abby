@@ -132,9 +132,9 @@ async function mapDecision(decision: Decision, context: Context, today: number, 
       ...(decision.stage === "targets" ? instantRange() : range()) });
   }
   if (decision.kind === "choice" && decision.operation === null && decision.from === null && decision.to === null && decision.choice !== null) {
-    if ((context.workflow === "book" || (context.workflow === "intake" && context.lastAction?.kind === "intake" && context.lastAction.status === "committed")) &&
-        decision.stage === null) return ok({ kind: "bookingChoice", choice: decision.choice });
-    if (context.workflow === "reschedule" && decision.stage) return ok({ kind: "reschedulingChoice", stage: decision.stage, choice: decision.choice });
+    // Recognized caller selections are resolved by the played-menu owner before
+    // this request. A model ordinal has no authority to select another offer.
+    return ok({ kind: "clarify", reason: "menuAmbiguous" });
   }
   if (decision.kind === "appointments" && decision.operation === null && decision.stage === null && decision.choice === null && dates() && context.workflow === "cancel")
   { const proof = await owner.cancellationProof(); return proof ? ok({ kind: "appointments", verificationRef: proof.verificationRef, ...instantRange() }) : err(unavailable); }
@@ -163,6 +163,9 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
       return before.lastAction?.status === "awaitingConfirmation" && before.lastAction.confirmationPlayed
         ? ok({ kind: "affirm" }) : err(unavailable);
     }
+    const selection = await config.owner.spokenMenuIntent(turn.text);
+    if (signal?.aborted) return err(unavailable);
+    if (selection) return ok(selection);
     const controller = new AbortController(), cancel = () => controller.abort();
     signal?.addEventListener("abort", cancel, { once: true }); if (signal?.aborted) controller.abort();
     const timer = setTimeout(() => controller.abort(), 5_000);

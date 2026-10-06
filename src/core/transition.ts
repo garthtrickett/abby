@@ -285,7 +285,13 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       break;
     }
     case "clarify":
-      state.callerMessages.push("Could you repeat that for me?");
+      state.callerMessages.push(interpretation.reason === "menuRejected"
+        ? "I won't choose any of those options. What other date or time would work for you?"
+        : interpretation.reason === "menuAmbiguous"
+          ? "Which option did you mean? Please say its option number or its full date and time."
+          : interpretation.reason === "menuUnavailable"
+            ? "Please ask for fresh appointment options before choosing a time."
+            : "Could you repeat that for me?");
       break;
     case "modelFallback":
       addStaffTask(state, "systemFailure", now);

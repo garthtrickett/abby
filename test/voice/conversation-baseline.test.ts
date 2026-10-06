@@ -4,7 +4,7 @@ import { candidates, plans } from "../../scripts/conversation-evaluation/plans.t
 import { runCase } from "../../scripts/conversation-evaluation/run-case.ts";
 import { withDisposablePostgres } from "../support/disposable-postgres.ts";
 
-test("E2E-307 conversation baseline exposes unsupported language and missing setups without counting scripted responses as live understanding", { timeout: 90_000 }, async () => {
+test("E2E-307 conversation baseline distinguishes trusted spoken selection and missing setups from live model understanding", { timeout: 90_000 }, async () => {
   const corpus = await candidates();
   assert.equal(corpus.length, 45);
   await withDisposablePostgres(async db => {
@@ -24,7 +24,8 @@ test("E2E-307 conversation baseline exposes unsupported language and missing set
     assert.equal(spokenTime.context?.lastMenu?.kind, "booking");
     assert.ok(spokenTime.setupSpeech.some(text => /9:00/.test(text)));
     assert.ok(spokenTime.setupSpeech.some(text => /10:30/.test(text)));
-    assert.equal(spokenTime.checks.find(check => check.id === "conversation-observation")?.pass, false);
+    assert.equal(spokenTime.checks.find(check => check.id === "conversation-observation")?.pass, true);
+    assert.deepEqual(spokenTime.intents, [{ kind: "bookingChoice", choice: 2 }]);
     const ambiguous = results.find(result => result.id === "CCP-006")!;
     assert.ok(ambiguous.setupSpeech.some(text => /10:30 am/.test(text) && /10:30 pm/.test(text)), "both ambiguous times must actually be offered");
     const staff = results.find(result => result.id === "CCP-017")!;

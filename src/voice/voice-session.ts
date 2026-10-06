@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
-import type { ApprovedGreeting, CallState, FinalCallerTurn, LocationScope, PendingPresentationRef, Presentation, Result, StaffReason, TransitionFailure } from "../core/model.ts";
+import type { ApprovedGreeting, CallState, FinalCallerTurn, LocationScope, MenuClarificationReason, PendingPresentationRef, Presentation, Result, StaffReason, TransitionFailure } from "../core/model.ts";
 import { CallRuntime } from "../core/runtime.ts";
 import type { TextReceptionFailure } from "../reference/text-reception.ts";
 import { TextReception } from "../reference/text-reception.ts";
@@ -10,6 +10,7 @@ import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 
 export type VoiceIntent =
+  | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason }>
   | Readonly<{ kind: "workflow"; operation: "book" | "cancel" | "reschedule" | "intake" }>
   | Readonly<{ kind: "outcome" }>
   | Readonly<{ kind: "bookingMenu"; from: string; to: string }>
@@ -320,7 +321,9 @@ export class VoiceSession {
       this.cachedIntent = intent.value;
     }
     let result: Result<CallState, VoiceSessionFailure>;
-    if (this.cachedIntent.kind === "workflow") {
+    if (this.cachedIntent.kind === "clarify") {
+      result = await this.runtime.acceptTurn(turn, this.cachedIntent, now, existing.value.conversationRevision);
+    } else if (this.cachedIntent.kind === "workflow") {
       const controller = new AbortController(), pending = { cancel: () => controller.abort() };
       this.pendingIntent = pending;
       try { result = await this.reception.startWorkflow(this.scope, turn, this.cachedIntent.operation, now, existing.value.conversationRevision, controller.signal); }
