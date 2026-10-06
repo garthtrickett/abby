@@ -11,7 +11,7 @@ export function appointmentChangeLanguage(text: string): Request | Clarification
       /\b(?:book|move|cancel|reschedule)\b.*\b(?:for my (?:husband|wife|partner|friend)|my (?:husband|wife|partner|friend)'s)\b/.test(value) ||
       /\b(?:an hour|longer|shorter)\b.*\b(?:instead|visit|appointment)\b|\b(?:duration|change the type)\b/.test(value))
     return { kind: "clarify", reason: "changeUnsupported" };
-  if (/\b(?:i thought|you (?:are saying|said)|are you sure|which appointment)\b/.test(value))
+  if (/\b(?:i thought|you (?:are saying|said)|are you sure|which appointment(?! type\b))\b/.test(value))
     return { kind: "clarify", reason: "targetDisagreement" };
   if (/\b(?:don't|do not|not|no|wait|hold on)\b.*\b(?:cancel|remove|delete)\b/.test(value))
     return { kind: "clarify", reason: "changeAmbiguous" };

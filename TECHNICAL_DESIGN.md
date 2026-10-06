@@ -1187,6 +1187,7 @@ The initial corpus has these minimum journeys. One scenario may cover several re
 | `E2E-319` | Caller identity denial permanently fences patient reads, writes and verification within the call; cancels unsent proposals, preserves already-sent receipts, hides private progress and retains approved public FAQs and urgent scripts across signed, agent and memory/PostgreSQL paths | FR-03, FR-11, FR-18, FR-22 |
 | `E2E-320` | Unsupported minor, proxy, combined-patient, joint-practitioner and group-class requests explain clinic contact, release unsent private selection, fence held reads and require fresh self verification while preserving sent clinical and staff receipts across signed and scoped agent paths | FR-03, FR-11, FR-18, FR-22 |
 | `E2E-321` | Current approved destination notice/horizon limits answer vague future questions without guessed dates or provider/patient work; wholly outside dated searches, selected practitioner scope, stale/malformed evidence, cancellation and late expiry retain protected appointments and actual prior receipts | FR-04, FR-06, FR-11, FR-12, FR-18, FR-22 |
+| `E2E-322` | Service uncertainty and price/fee questions use exact current approved public descriptions or explicit clinic guidance; model/agent inventions, stale approvals, held expiry and cancellation cannot choose a clinical type, waive a fee, preserve an unsent confirmation or create patient-specific work | FR-04, FR-06, FR-11, FR-12, FR-22 |
 
 The corpus runs with deterministic synthetic media frames, partial hypotheses and segment-final transcription events, synthesis chunks, playback acknowledgments, typed model effect results, clock, and host effects against the reference host and standalone adapters. It enters through `VoiceSession.begin` and its media/transcript methods, not by calling `CallRuntime.acceptTurn` directly as a substitute for voice E2E. The harness can delay a playback acknowledgment or deliver it after a clear to prove that queued/cleared audio does not count as played. It can race a caller correction with `startNextPresentation`, drop a commit wake-up, restart the dispatcher task while retaining the live session, or lose the entire session process before activation or after atomic start. Assertions distinguish superseded pending speech from unproven started speech, reject `played` for a pending or transfer intent, and verify exactly one terminal resolution without duplicate media. `E2E-035` and `E2E-082` through `E2E-084` separately submit invalid presentation outcomes through T4 and prove each is rejected before a second SAM transition. `E2E-019` through `E2E-026` individually cover final turn, playback, interruption, transfer, and fallback behavior. Each independently triggerable voice or effect fault has its own scenario ID so cases can run in parallel and a failure identifies one behavior. Every provider runs the same scenario IDs; assertions use its approved support-matrix row and fail if its declared capability snapshot disagrees. Provider-specific contract tests separately cover permission limits, pagination, rate limits, availability rules, unsupported mutations, and lost responses. Scheduled smoke tests use sanctioned provider test accounts and a limited real telephony path, including an actual interruption and transfer. Tests contain no live patient data.
 
@@ -1580,3 +1581,54 @@ These checks do not change policy/offer lifetime or provider write semantics.
 Standalone call state remains transient under D-06/D-11; PostgreSQL tests exercise
 only the authorized embedded contract. E2E-321 supplies local synthetic evidence,
 not real email, clinic activation, caller audio or carrier qualification.
+
+### Public service guidance and price information
+
+`OwnerFileClinicFAQs` accepts five distinct public topics: directions/parking,
+hours, contact, `serviceGuidance` and `priceAndFees`. Each fact remains exact
+operator-provisioned public text, limited to 1,000 characters under current
+clinic-admin approval, file ownership, scope, policy version and effective time.
+The entire content fingerprint is pinned at call admission. Changing text or
+adding approval during an active call cannot make it usable by that old call;
+new calls capture the new content. Descriptions may list several clinic services
+without authorizing those types for booking. The protected clinical catalogue
+continues to bind its independently approved type, location and practitioner.
+Published general fees do not supply an appointment-specific cancellation term,
+waiver, refund or patient consent. The actual proposal/write path still checks
+its exact fee authority and obtains separate played confirmation.
+
+Bounded complete service/price questions select their public topic directly;
+paraphrases use strict `serviceGuidance` or `priceAndFees` decisions with all
+other structured fields null. These are classification cues, not text, prices,
+service IDs or an ordinal clinical selection. The mapper reads the matching
+current call-pinned source and proposes only its exact text. The three original
+FAQ topics retain their existing ordinal path; the new topics cannot be selected
+through a guessed fourth/fifth ordinal. Background or negated requests do not
+themselves select information. An explicit clinical-clearance question remains
+the existing medical-advice boundary; uncertain service choice never diagnoses
+symptoms. An explicit request for a person still uses the independent staff path.
+
+`TextReception.answer` derives a `PublicInformationTopic` only from one exact
+known source ref and delegates to `PublicInformationAnswers.run(scope, turn,
+topic, proposedText, expectedRevision?, signal?)`. The owner validates scoped
+call/session/lease, quality, private clock and revision; for an admitted call it
+cancels awaiting/ready proposals before public host IO. The five-second read is
+abortable and the final SAM transition uses fresh private time and a revision
+fence. Interruption cannot publish a late answer. The voice owner exposes this
+cancellation through its existing pending-intent handle. The existing
+`knowledge.answer.v2` agent command reaches the same owner without accepting a
+caller-supplied topic, service ID, fee or clock authority.
+
+SAM validates the source's exact topic, scope, pinned content version, current
+effective window and unchanged approved text before speech. Missing, revoked,
+expired, forged or wrong-topic evidence receives a canonical explicit unknown
+and clinic-contact message, with no patient-specific staff task or receipt.
+Public information remains available after call-wide identity denial without
+restoring patient access. No patient lookup, verifier, Cliniko HTTP, appointment
+send or staff request is performed for these queries. Existing sent actions are
+unchanged and an unsent proposal cannot be affirmed after the public question.
+E2E-322 supplies signed synthetic calls, memory/PostgreSQL agent commands,
+held-read expiry/revision/cancellation and patient-data canary evidence. Approval
+of public text is not a detector for patient data: provisioning still requires
+published public clinic material. Carrier/email and actual clinic activation
+remain separately gated.

@@ -6,7 +6,7 @@ import type { AdminDirectory } from "./identity/magic-link.ts";
 import { approvalRef, clinicApprovalKeys, decodeClinicApproval, OwnerFileClinicApproval } from "./owner-file-clinic-approval.ts";
 import type { ClinicApproval } from "./owner-file-clinic-approval.ts";
 
-export const clinicFAQTopics = ["directionsAndParking", "openingHours", "contact"] as const;
+export const clinicFAQTopics = ["directionsAndParking", "openingHours", "contact", "serviceGuidance", "priceAndFees"] as const;
 export type ClinicFAQTopic = typeof clinicFAQTopics[number];
 export type ClinicFAQApproval = ClinicApproval & Readonly<{ policyVersion: string;
   facts: readonly Readonly<{ topic: ClinicFAQTopic; approvedText: string }>[] }>;
@@ -14,7 +14,7 @@ type Config = Readonly<{ path: string; scope: LocationScope; policyVersion: stri
 function decode(value: unknown, scope: LocationScope): ClinicFAQApproval | undefined {
   if (!decodeClinicApproval(value, scope, [...clinicApprovalKeys, "policyVersion", "facts"])) return undefined;
   const row = value as ClinicFAQApproval;
-  if (!approvalRef(row.policyVersion) || !Array.isArray(row.facts) || row.facts.length > 3 ||
+  if (!approvalRef(row.policyVersion) || !Array.isArray(row.facts) || row.facts.length > clinicFAQTopics.length ||
       new Set(row.facts.map(fact => fact?.topic)).size !== row.facts.length || row.facts.some(fact =>
         !fact || Object.keys(fact).sort().join(",") !== "approvedText,topic" || !clinicFAQTopics.includes(fact.topic) ||
         typeof fact.approvedText !== "string" || !fact.approvedText.trim() || fact.approvedText.length > 1_000 || /[\x00-\x1f\x7f]/.test(fact.approvedText))) return undefined;
