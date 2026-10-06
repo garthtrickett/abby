@@ -1,0 +1,69 @@
+import { readFile } from "node:fs/promises";
+
+export type Candidate = Readonly<{ id: string; pattern: string; priority: string; coverage: string;
+  setup: string; callerTurns: string[]; requiredBehavior: string[]; forbiddenBehavior: string[] }>;
+export type Stage = "initial" | "book" | "menu" | "proposal" | "committed" | "uncertain" |
+  "cancel" | "cancelTarget" | "cancelCommitted" | "move" | "moveOffers";
+export type Expectation = "clarify" | "cancelProposal" | "spokenChoice" | "revisedProposal" | "revisedDate" |
+  "outcome" | "human" | "readOnly" | "constraints" | "publicFacts" | "boundedSearch" | "unsupported";
+export type Plan = Readonly<{ stage: Stage; expectation: Expectation; missingSetup?: string }>;
+
+/** These are explicit fixture contracts, not model answers. An absent production
+ * capability remains a setup gap even when its fallback safely sends nothing. */
+export const plans: Readonly<Record<string, Plan>> = {
+  "CCP-001": { stage: "cancelTarget", expectation: "clarify" },
+  "CCP-002": { stage: "cancelTarget", expectation: "cancelProposal" },
+  "CCP-003": { stage: "proposal", expectation: "revisedProposal" },
+  "CCP-004": { stage: "book", expectation: "revisedDate" },
+  "CCP-005": { stage: "menu", expectation: "spokenChoice" },
+  "CCP-006": { stage: "menu", expectation: "clarify" },
+  "CCP-007": { stage: "menu", expectation: "clarify" },
+  "CCP-008": { stage: "proposal", expectation: "clarify" },
+  "CCP-009": { stage: "initial", expectation: "clarify" },
+  "CCP-010": { stage: "cancelTarget", expectation: "clarify" },
+  "CCP-011": { stage: "book", expectation: "constraints" },
+  "CCP-012": { stage: "move", expectation: "unsupported" },
+  "CCP-013": { stage: "initial", expectation: "unsupported" },
+  "CCP-014": { stage: "initial", expectation: "unsupported" },
+  "CCP-015": { stage: "initial", expectation: "human", missingSetup: "Urgent policy route is not configured by this baseline fixture." },
+  "CCP-016": { stage: "initial", expectation: "human" },
+  "CCP-017": { stage: "book", expectation: "human", missingSetup: "Standalone call flow cannot open an approved patient staff request; no saved request was fabricated." },
+  "CCP-018": { stage: "book", expectation: "human", missingSetup: "Standalone call flow cannot open a staff request; no uncertain staff receipt was fabricated." },
+  "CCP-019": { stage: "cancel", expectation: "readOnly", missingSetup: "Independent read-only verification route is unavailable; cancellation-bound verification is explicitly a substitute." },
+  "CCP-020": { stage: "cancelCommitted", expectation: "outcome" },
+  "CCP-021": { stage: "uncertain", expectation: "outcome" },
+  "CCP-022": { stage: "committed", expectation: "human" },
+  "CCP-023": { stage: "book", expectation: "human" },
+  "CCP-024": { stage: "initial", expectation: "human" },
+  "CCP-025": { stage: "book", expectation: "constraints", missingSetup: "Only one approved practitioner exists in the current call fixture; no alternative catalogue was fabricated." },
+  "CCP-026": { stage: "book", expectation: "boundedSearch", missingSetup: "Current call fixture has one approved practitioner, not an independently approved multi-practitioner catalogue." },
+  "CCP-027": { stage: "menu", expectation: "constraints" },
+  "CCP-028": { stage: "menu", expectation: "boundedSearch" },
+  "CCP-029": { stage: "moveOffers", expectation: "constraints" },
+  "CCP-030": { stage: "book", expectation: "constraints", missingSetup: "Only one approved service exists in the current call fixture." },
+  "CCP-031": { stage: "moveOffers", expectation: "unsupported" },
+  "CCP-032": { stage: "initial", expectation: "publicFacts", missingSetup: "Standalone call flow has no approved public knowledge source; no approved address was fabricated." },
+  "CCP-033": { stage: "initial", expectation: "human" },
+  "CCP-034": { stage: "initial", expectation: "unsupported" },
+  "CCP-035": { stage: "initial", expectation: "unsupported" },
+  "CCP-036": { stage: "cancel", expectation: "cancelProposal" },
+  "CCP-037": { stage: "move", expectation: "unsupported" },
+  "CCP-038": { stage: "cancelTarget", expectation: "unsupported" },
+  "CCP-039": { stage: "initial", expectation: "unsupported" },
+  "CCP-040": { stage: "initial", expectation: "unsupported" },
+  "CCP-041": { stage: "initial", expectation: "unsupported" },
+  "CCP-042": { stage: "menu", expectation: "clarify" },
+  "CCP-043": { stage: "proposal", expectation: "clarify" },
+  "CCP-044": { stage: "book", expectation: "clarify", missingSetup: "Concurrent pending availability read is not reproduced by the serialized baseline setup." },
+  "CCP-045": { stage: "committed", expectation: "outcome" },
+};
+
+export async function candidates(): Promise<Candidate[]> {
+  const corpus = JSON.parse(await readFile(new URL("../../eval/clinic-conversation-candidates-v1.json", import.meta.url), "utf8"));
+  if (corpus.status !== "candidate-not-executed" || !Array.isArray(corpus.cases)) throw new Error("invalid candidate corpus");
+  const cases = corpus.cases as Candidate[];
+  if (cases.length !== 45 || new Set(cases.map(item => item.id)).size !== cases.length ||
+      cases.some(item => !plans[item.id] || !item.callerTurns.length || item.callerTurns.some(text => typeof text !== "string" || !text.trim())) ||
+      Object.keys(plans).some(id => !cases.some(item => item.id === id))) throw new Error("corpus and fixture plans differ");
+  return cases;
+}
