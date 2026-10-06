@@ -163,9 +163,9 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
         list: (...args: Parameters<NonNullable<ClinikoCallFlow["appointments"]>["list"]>) => workflow?.appointments?.list(...args) ?? Promise.resolve(err({ kind: "unavailable" as const })),
         select: (...args: Parameters<NonNullable<ClinikoCallFlow["appointments"]>["select"]>) => workflow?.appointments?.select(...args) ?? Promise.resolve(err({ kind: "unavailable" as const })),
       } : verifiedRead?.appointments;
-      const reception = new TextReception(ledger, policy, workflow ?? host, availability, appointments, undefined, publicKnowledge ?? host);
+      const reception = new TextReception(ledger, policy, workflow ?? host, availability, appointments, undefined, publicKnowledge ?? host, config.now);
       voice = new VoiceSession(receipt.callId, sessionId, receipt.scope, ledger, reception, playback,
-        workflow ? config.clinicalWorkflow!.intent(workflow) : config.resolveIntent, undefined, config.monotonicNow, { greeting });
+        workflow ? config.clinicalWorkflow!.intent(workflow) : config.resolveIntent, undefined, config.monotonicNow, { greeting, staffWorkUnavailable: true });
       return voice;
     },
   });

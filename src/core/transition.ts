@@ -296,8 +296,10 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       state.callerMessages.push(clarificationText(interpretation.reason, Object.values(state.actions).at(-1), interpretation.approvedLocation));
       break;
     case "modelFallback":
-      addStaffTask(state, "systemFailure", now);
-      state.callerMessages.push(staffRequestNotice(state));
+      if (interpretation.staffWorkUnavailable !== true) addStaffTask(state, "systemFailure", now);
+      state.callerMessages.push(interpretation.staffWorkUnavailable === true
+        ? "I couldn't understand that safely. Could you repeat your request, or contact the clinic directly?"
+        : staffRequestNotice(state));
       break;
     case "requestAction": {
       const result = handleRequest(state, turn, interpretation.request, now);
@@ -324,9 +326,9 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
     }
     case "handoff":
       if (interpretation.requestedPerson !== undefined && !validStaffLabel(interpretation.requestedPerson)) return err({ kind: "invalidTransition" });
-      addStaffTask(state, interpretation.reason, now, undefined, undefined, interpretation.requestedPerson);
+      if (interpretation.staffWorkUnavailable !== true) addStaffTask(state, interpretation.reason, now, undefined, undefined, interpretation.requestedPerson);
       state.callerMessages.push(interpretation.reason === "potentiallyUrgent"
-        ? urgentHandoffNotice(state, now) : staffRequestNotice(state));
+        ? urgentHandoffNotice(state, now, interpretation.staffWorkUnavailable === true) : staffRequestNotice(state, interpretation.staffWorkUnavailable === true));
       break;
     case "transfer": {
       if (interpretation.reason === "potentiallyUrgent") {

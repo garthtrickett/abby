@@ -1,4 +1,5 @@
 import { clinicFAQFixture, publicDirections } from "../../test/support/clinic-faqs.ts";
+import { urgentConversationFixture, urgentReply } from "../../test/support/urgent-conversation.ts";
 import { bookingCatalogueFixture } from "../../test/support/cliniko-booking-catalogue.ts";
 import type { Kysely } from "kysely";
 import type Database from "../../src/storage/generated/Database.ts";
@@ -69,7 +70,7 @@ type Check = Readonly<{ id: string; pass: boolean; detail: string }>;
 function publicIntent(intent: VoiceIntent | null): Record<string, string | number> | null {
   if (!intent) return null;
   const result: Record<string, string | number> = { kind: intent.kind };
-  for (const field of ["operation", "stage", "choice", "from", "to"] as const) {
+  for (const field of ["operation", "stage", "choice", "from", "to", "reason"] as const) {
     if (field in intent) { const value = (intent as unknown as Record<string, unknown>)[field];
       if (typeof value === "string" || typeof value === "number") result[field] = value; }
   }
@@ -94,6 +95,8 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
       /checked upcoming appointments between.*I found an appointment on/s.test(text) && !Object.keys(after.actions).length; break;
     case "clarify": pass = /which|clarif|repeat|did you mean|please (say|tell)|do you want|would you like/i.test(text) && !statuses.includes("awaitingConfirmation"); break;
     case "human": pass = /reception|clinic|staff|person/i.test(text) && /contact the clinic|transfer.*unavailable|request.*saved|can't confirm.*request/i.test(text); break;
+    case "urgent": pass = last?.kind === "handoff" && last.reason === "potentiallyUrgent" && speech.includes(urgentReply) &&
+      !Object.keys(after.actions).length && !Object.keys(after.staffItems).length && !/I (?:have|am) transfer|staff (?:have|has) received/i.test(text); break;
     case "unsupported": pass = (last === null || last?.kind === "clarify" && ["changeUnsupported", "clinicalAdviceUnavailable"].includes(last.reason ?? "")) &&
       /can['’]t|cannot|not supported|contact.*clinic|unavailable/i.test(text) && !statuses.includes("awaitingConfirmation"); break;
     case "constraints":
@@ -123,7 +126,7 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
 /** Exercise the same signed HTTP/WS owner, private OTP and SAM/playback path as
  * E2E-303. Setup decisions are pinned; only candidate turns use the live model. */
 export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: Plan, model: ModelConfig) {
-  const f = candidate.id === "CCP-032" ? await clinicFAQFixture() : plan.stage === "enquiry" ? await appointmentEnquiryFixture() : ["CCP-011", "CCP-025", "CCP-026"].includes(candidate.id) ? await bookingCatalogueFixture() : plan.stage.startsWith("staff") ? await clinikoStaffCallFlowFixture({ lostResponse: plan.stage === "staffUncertain" })
+  const f = candidate.id === "CCP-015" ? await urgentConversationFixture() : candidate.id === "CCP-032" ? await clinicFAQFixture() : plan.stage === "enquiry" ? await appointmentEnquiryFixture() : ["CCP-011", "CCP-025", "CCP-026"].includes(candidate.id) ? await bookingCatalogueFixture() : plan.stage.startsWith("staff") ? await clinikoStaffCallFlowFixture({ lostResponse: plan.stage === "staffUncertain" })
     : plan.stage.startsWith("cancel") ? await cancellationCallFlowFixture({ multiple: candidate.id === "CCP-036" })
     : plan.stage.startsWith("move") ? await reschedulingCallFlowFixture() : await bookingCallFlowFixture();
   f.flow.dispose();

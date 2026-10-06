@@ -7,6 +7,6 @@ export function staffFallbackText(state: CallState, whenAvailable: string): stri
   return state.policy.staffWorkEnabled === false ? NO_STAFF_WORK_NOTICE : whenAvailable;
 }
 
-export function staffRequestNotice(state: CallState): string {
-  return staffFallbackText(state, "I can request staff follow-up, but I can't confirm they have received it yet.");
+export function staffRequestNotice(state: CallState, staffWorkUnavailable = false): string {
+  return staffWorkUnavailable ? NO_STAFF_WORK_NOTICE : staffFallbackText(state, "I can request staff follow-up, but I can't confirm they have received it yet.");
 }

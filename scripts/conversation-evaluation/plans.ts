@@ -5,7 +5,7 @@ export type Candidate = Readonly<{ id: string; pattern: string; priority: string
 export type Stage = "initial" | "book" | "menu" | "proposal" | "committed" | "uncertain" |
   "cancel" | "cancelTarget" | "cancelCommitted" | "move" | "moveOffers" | "staff" | "staffUncertain" | "enquiry";
 export type Expectation = "clarify" | "cancelProposal" | "spokenChoice" | "revisedProposal" | "revisedDate" |
-  "outcome" | "human" | "readOnly" | "constraints" | "publicFacts" | "boundedSearch" | "unsupported";
+  "outcome" | "human" | "readOnly" | "constraints" | "publicFacts" | "boundedSearch" | "urgent" | "unsupported";
 export type Plan = Readonly<{ stage: Stage; expectation: Expectation; missingSetup?: string }>;
 
 /** These are explicit fixture contracts, not model answers. An absent production
@@ -25,7 +25,7 @@ export const plans: Readonly<Record<string, Plan>> = {
   "CCP-012": { stage: "move", expectation: "unsupported" },
   "CCP-013": { stage: "initial", expectation: "unsupported" },
   "CCP-014": { stage: "initial", expectation: "unsupported" },
-  "CCP-015": { stage: "initial", expectation: "human", missingSetup: "Urgent policy route is not configured by this baseline fixture." },
+  "CCP-015": { stage: "initial", expectation: "urgent" },
   "CCP-016": { stage: "initial", expectation: "human" },
   "CCP-017": { stage: "staff", expectation: "human" },
   "CCP-018": { stage: "staffUncertain", expectation: "human" },

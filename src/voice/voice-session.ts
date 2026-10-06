@@ -33,7 +33,7 @@ export type VoiceIntent =
   | Readonly<{ kind: "appointmentEnquiry"; from: string; to: string }>
   | Readonly<{ kind: "appointmentEnquiryChoice"; choice: 1 | 2 | 3 }>
   | Readonly<{ kind: "affirm" }>
-  | Readonly<{ kind: "handoff"; reason: StaffReason }>
+  | Readonly<{ kind: "handoff"; reason: StaffReason; staffWorkUnavailable?: true; checkedAt?: string }>
   | Readonly<{ kind: "transfer"; reason: StaffReason }>;
 export type IntentResolver = (turn: FinalCallerTurn, signal?: AbortSignal) =>
   Promise<Result<VoiceIntent, Readonly<{ kind: "intentUnavailable" }>>>;
@@ -55,7 +55,7 @@ export type TransferContext = Readonly<{
 /** The host must validate scope, call/session and the captured route version before initiating a transfer. */
 export type TransferPort = Readonly<{ request(transferId: string, destinationRef: string, context: TransferContext): Promise<TransferOutcome> }>;
 /** Speech content is kept in this live session; durable presentation rows may contain only status and opaque IDs. */
-export type TransientPresentationConfig = Readonly<{ greeting: ApprovedGreeting }>;
+export type TransientPresentationConfig = Readonly<{ greeting: ApprovedGreeting; staffWorkUnavailable?: true }>;
 export type VoiceSessionFailure = TransitionFailure | TextReceptionFailure | TranscriptFailure |
   Readonly<{ kind: "sessionUnknown" | "deliveryBlocked" | "playbackUnknown" | "transportUnavailable" | "intentUnavailable" }>;
 export type DispatchResult = Readonly<{ kind: "none" | "queued" | "played" | "failed" | "unproven" | "interrupted" | "transferConnected" | "transferFailed" | "transferUnproven" | "transferCanceled"; playbackId?: string }>;
@@ -85,6 +85,8 @@ export class VoiceSession {
   private readonly assembler: TurnAssembler;
   private readonly transientContent: Map<string, string> | undefined;
   private readonly transientGreeting: ApprovedGreeting | undefined;
+  /** Restricts automatic handoff only; verified caller-requested work uses its own approval. */
+  private readonly staffWorkUnavailable: true | undefined;
   private attached = false;
   private localSendDeadlineMs: number | undefined;
   private leaseVersion: number | undefined;
@@ -136,6 +138,7 @@ export class VoiceSession {
     this.monotonicNow = monotonicNow;
     this.assembler = new TurnAssembler(callId, sessionId);
     this.transientGreeting = transient ? structuredClone(transient.greeting) : undefined;
+    this.staffWorkUnavailable = transient?.staffWorkUnavailable;
     this.transientContent = this.transientGreeting
       ? new Map([[`${callId}:greeting`, this.transientGreeting.approvedText]]) : undefined;
   }
@@ -317,7 +320,7 @@ export class VoiceSession {
       finally { if (this.pendingIntent === pending) this.pendingIntent = undefined; }
       if (controller.signal.aborted || generation !== this.assembler.currentGeneration()) return err({ kind: "staleTurn" });
       if (!intent.ok) {
-        const fallback = await this.runtime.acceptTurn(turn, { kind: "modelFallback" }, now,
+        const fallback = await this.runtime.acceptTurn(turn, { kind: "modelFallback", ...(this.staffWorkUnavailable ? { staffWorkUnavailable: true as const } : {}) }, now,
           existing.value.conversationRevision);
         if (fallback.ok && generation === this.assembler.currentGeneration()) {
           this.rememberPending(fallback.value);
@@ -350,7 +353,7 @@ export class VoiceSession {
     } else if (this.cachedIntent.kind === "model") {
       result = this.reception.modelEnabled()
         ? await this.reception.interpretModelTurn(this.scope, turn, now, existing.value.conversationRevision)
-        : await this.runtime.acceptTurn(turn, { kind: "modelFallback" }, now, existing.value.conversationRevision);
+        : await this.runtime.acceptTurn(turn, { kind: "modelFallback", ...(this.staffWorkUnavailable ? { staffWorkUnavailable: true as const } : {}) }, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "book") {
       result = await this.reception.proposeBooking(this.scope, turn, this.cachedIntent.verificationRef, this.cachedIntent.offerRef, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "cancel" || this.cachedIntent.kind === "reschedule") {
@@ -375,7 +378,9 @@ export class VoiceSession {
       result = await this.reception.selectAppointment(this.scope, turn, this.cachedIntent.verificationRef,
         this.cachedIntent.choice, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "transfer") {
-      result = await this.runtime.acceptTurn(turn, { kind: "transfer", reason: this.cachedIntent.reason }, now, existing.value.conversationRevision);
+      result = await this.runtime.acceptTurn(turn, this.staffWorkUnavailable === true
+        ? { kind: "handoff", reason: this.cachedIntent.reason, staffWorkUnavailable: true }
+        : { kind: "transfer", reason: this.cachedIntent.reason }, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "staffRequest") {
       const controller = new AbortController(), pending = { cancel: () => controller.abort() };
       this.pendingIntent = pending;
@@ -385,7 +390,17 @@ export class VoiceSession {
     } else if (this.cachedIntent.kind === "staffOutcome") {
       result = await this.runtime.acceptTurn(turn, { kind: "staffOutcomeQuery" }, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "handoff") {
-      result = await this.runtime.acceptTurn(turn, { kind: "handoff", reason: this.cachedIntent.reason }, now, existing.value.conversationRevision);
+      // A trusted standalone classifier may finish after the media-turn clock.
+      // Revalidate the captured urgent script at its bounded fresh authority time.
+      let acceptedAt = now;
+      if (this.cachedIntent.checkedAt !== undefined) {
+        const checked = Date.parse(this.cachedIntent.checkedAt), received = Date.parse(now);
+        if (this.cachedIntent.reason !== "potentiallyUrgent" || !Number.isFinite(checked) || !Number.isFinite(received) ||
+            Math.abs(checked - received) > 30_000) return err({ kind: "invalidTransition" });
+        acceptedAt = new Date(Math.max(checked, received)).toISOString();
+      }
+      result = await this.runtime.acceptTurn(turn, { kind: "handoff", reason: this.cachedIntent.reason,
+        ...(this.cachedIntent.staffWorkUnavailable === true || this.staffWorkUnavailable === true ? { staffWorkUnavailable: true as const } : {}) }, acceptedAt, existing.value.conversationRevision);
     } else {
       if (turn.quality !== "clear" || !clearAffirmation(turn.text)) return err({ kind: "confirmationMissing" });
       const candidates = Object.values(existing.value.actions).filter(action => action.status === "awaitingConfirmation" && existing.value.presentations[action.presentationId]?.status === "played");
