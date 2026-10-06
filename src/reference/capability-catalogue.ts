@@ -483,7 +483,7 @@ export const capabilityCatalogue = {
     reply("staffQueueHealth", "health", staffHealth), "read", "permittedActor", "none", ["staffQueueAvailable"]),
   "staff.requests.prepare.v1": entry("staff.requests.prepare.v1",
     optional({ kind: { const: "staff.requests.prepare.v1" }, turn: sessionTurn,
-      requestedPerson: { type: "string", minLength: 1, maxLength: 80 }, now: str }, ["kind", "turn", "now"]),
+      requestedPerson: { type: "string", minLength: 1, maxLength: 80 }, requestSubject: { type: "string", enum: ["invoiceCopy", "chargeReview", "waitlistInterest"] }, now: str }, ["kind", "turn", "now"]),
     reply("staffRequestProgress", "progress", progress), "staffChange", "permittedActor", "none",
     ["activeCall", "independentStaffVerification", "approvedClinikoQueue"]),
   "staff.requests.outcome.v1": entry("staff.requests.outcome.v1",

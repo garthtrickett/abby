@@ -10,6 +10,7 @@ import type { LedgerStore } from "../core/ledger.ts";
 import { BookingHorizonTurns } from "./booking-horizon-turns.ts";
 import { PublicInformationAnswers } from "./public-information-answers.ts";
 import { publicInformationTopic } from "../core/public-information.ts";
+import { validStaffRequestSubject } from "../core/staff-request-subject.ts";
 import { validRequestBoundary } from "../core/request-boundary.ts";
 import { validCallerIdentityDenial } from "../core/caller-identity.ts";
 import { err } from "../core/model.ts";
@@ -166,25 +167,41 @@ export class TextReception {
     return !!this.host.resolveAppointmentChange && new ReschedulingMenuTurns(this.ledger, this.policy, this.host, this.clock).enabled();
   }
   async requestStaff(scope: LocationScope, turn: FinalCallerTurn, requestedPerson: string | undefined, now: string,
-    expectedConversationRevision?: number, external?: AbortSignal) {
+    expectedConversationRevision?: number, external?: AbortSignal, requestSubject?: import("../core/staff-request-subject.ts").StaffRequestSubject) {
+    if (requestSubject !== undefined && !validStaffRequestSubject(requestSubject)) return err({ kind: "invalidTransition" as const });
+    const currentNow = this.currentInstant(); if (!currentNow) return err({ kind: "invalidTransition" as const }); now = currentNow;
     const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision);
     if (denied) return denied;
     const state = await this.ledger.read(turn.callId, scope);
     if (!state.ok) return state;
+    if (state.value.lifecycle !== "active" || state.value.sessionLease?.sessionId !== turn.sessionId || !state.value.sessionLease || Date.parse(state.value.sessionLease.expiresAt) <= Date.parse(now)) return err({ kind: "leaseLost" as const });
     if (turn.quality !== "clear" || !turn.sessionId || expectedConversationRevision !== undefined && state.value.conversationRevision !== expectedConversationRevision) return err({ kind: "staleTurn" as const });
-    const revision = expectedConversationRevision ?? state.value.conversationRevision;
     if (state.value.processedTurnIds.includes(turn.turnId)) return state;
     const signal = AbortSignal.any([AbortSignal.timeout(20_000), ...(external ? [external] : [])]);
+    if (signal.aborted) return err({ kind: "staleTurn" as const });
+    let current: Result<CallState, TransitionFailure> = state;
+    if (Object.values(current.value.actions).some(action => ["awaitingConfirmation", "ready"].includes(action.status))) {
+      current = await this.runtime(scope).nonAffirmativeFinal(turn, current.value.conversationRevision, now);
+      if (!current.ok) return current;
+    }
+    const revision = current.value.conversationRevision;
     let selected;
     try { selected = await awaitUntilAbort(this.host.prepareStaffRequest?.({ scope, callId: turn.callId, sessionId: turn.sessionId,
       turnId: turn.turnId, callerText: turn.text, policyVersion: state.value.policy.policyVersion, expectedConversationRevision: revision,
-      ...(requestedPerson === undefined ? {} : { requestedPerson }), signal }) ?? Promise.resolve(undefined), signal); }
+      ...(requestedPerson === undefined ? {} : { requestedPerson }), ...(requestSubject === undefined ? {} : { requestSubject }), signal }) ?? Promise.resolve(undefined), signal); }
     catch { selected = undefined; }
     if (external?.aborted) return err({ kind: "staleTurn" as const });
-    const interpretation: TurnInterpretation = !selected?.ok ? { kind: "staffUnavailable" } : selected.value.kind === "codeRequired"
-      ? { kind: "staffVerificationRequired" } : selected.value.kind === "existing" ? { kind: "staffOutcomeQuery" }
-        : { kind: "staffRequestReady", ...("requestedPerson" in selected.value && selected.value.requestedPerson ? { requestedPerson: selected.value.requestedPerson } : {}) };
-    return this.runtime(scope).acceptTurn(turn, interpretation, now, revision);
+    const finalNow = this.currentInstant(); if (!finalNow) return err({ kind: "invalidTransition" as const });
+    if (selected?.ok && (!selected.value || typeof selected.value !== "object" || !["existing", "codeRequired", "ready"].includes(selected.value.kind))) selected = undefined;
+    const typed = selected?.ok && "requestSubject" in selected.value ? selected.value.requestSubject : undefined;
+    if (typed !== undefined && !validStaffRequestSubject(typed) || requestSubject !== undefined && selected?.ok && selected.value.kind !== "existing" && typed !== requestSubject) selected = undefined;
+    if (selected?.ok && selected.value.kind === "existing" && requestSubject !== undefined &&
+        !Object.values(current.value.staffItems).some(item => item.reason === "callerRequested" && item.requestSubject === requestSubject)) selected = undefined;
+    const subject = requestSubject ?? (validStaffRequestSubject(typed) ? typed : undefined), detail = subject === undefined ? {} : { requestSubject: subject };
+    const interpretation: TurnInterpretation = !selected?.ok ? { kind: "staffUnavailable", ...detail } : selected.value.kind === "codeRequired"
+      ? { kind: "staffVerificationRequired", ...detail } : selected.value.kind === "existing" ? { kind: "staffOutcomeQuery" }
+        : { kind: "staffRequestReady", ...detail, ...("requestedPerson" in selected.value && selected.value.requestedPerson ? { requestedPerson: selected.value.requestedPerson } : {}) };
+    return this.runtime(scope).acceptTurn(turn, interpretation, finalNow, revision);
   }
   staffOutcome(scope: LocationScope, turn: FinalCallerTurn, now: string) {
     return this.runtime(scope).acceptTurn(turn, { kind: "staffOutcomeQuery" }, now);

@@ -5,7 +5,7 @@ export type Candidate = Readonly<{ id: string; pattern: string; priority: string
 export type Stage = "initial" | "book" | "menu" | "proposal" | "committed" | "uncertain" |
   "cancel" | "cancelTarget" | "cancelCommitted" | "move" | "moveOffers" | "staff" | "staffUncertain" | "enquiry";
 export type Expectation = "clarify" | "cancelProposal" | "spokenChoice" | "revisedProposal" | "revisedDate" |
-  "identityDenied" | "requestBoundary" | "bookingHorizon" | "publicInformation" | "outcome" | "notificationOutcome" | "human" | "readOnly" | "constraints" | "publicFacts" | "boundedSearch" | "urgent" | "unsupported";
+  "identityDenied" | "requestBoundary" | "bookingHorizon" | "publicInformation" | "staffPurpose" | "outcome" | "notificationOutcome" | "human" | "readOnly" | "constraints" | "publicFacts" | "boundedSearch" | "urgent" | "unsupported";
 export type Plan = Readonly<{ stage: Stage; expectation: Expectation; missingSetup?: string }>;
 
 /** These are explicit fixture contracts, not model answers. An absent production
@@ -44,13 +44,13 @@ export const plans: Readonly<Record<string, Plan>> = {
   "CCP-031": { stage: "moveOffers", expectation: "unsupported" },
   "CCP-032": { stage: "initial", expectation: "publicFacts" },
   "CCP-033": { stage: "initial", expectation: "publicInformation" },
-  "CCP-034": { stage: "initial", expectation: "unsupported" },
-  "CCP-035": { stage: "initial", expectation: "unsupported" },
+  "CCP-034": { stage: "initial", expectation: "staffPurpose" },
+  "CCP-035": { stage: "initial", expectation: "staffPurpose" },
   "CCP-036": { stage: "cancel", expectation: "cancelProposal" },
   "CCP-037": { stage: "move", expectation: "requestBoundary" },
   "CCP-038": { stage: "cancelTarget", expectation: "unsupported" },
   "CCP-039": { stage: "initial", expectation: "requestBoundary" },
-  "CCP-040": { stage: "initial", expectation: "unsupported" },
+  "CCP-040": { stage: "initial", expectation: "staffPurpose" },
   "CCP-041": { stage: "initial", expectation: "requestBoundary" },
   "CCP-042": { stage: "menu", expectation: "clarify" },
   "CCP-043": { stage: "proposal", expectation: "clarify" },

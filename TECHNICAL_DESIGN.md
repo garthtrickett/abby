@@ -1188,6 +1188,7 @@ The initial corpus has these minimum journeys. One scenario may cover several re
 | `E2E-320` | Unsupported minor, proxy, combined-patient, joint-practitioner and group-class requests explain clinic contact, release unsent private selection, fence held reads and require fresh self verification while preserving sent clinical and staff receipts across signed and scoped agent paths | FR-03, FR-11, FR-18, FR-22 |
 | `E2E-321` | Current approved destination notice/horizon limits answer vague future questions without guessed dates or provider/patient work; wholly outside dated searches, selected practitioner scope, stale/malformed evidence, cancellation and late expiry retain protected appointments and actual prior receipts | FR-04, FR-06, FR-11, FR-12, FR-18, FR-22 |
 | `E2E-322` | Service uncertainty and price/fee questions use exact current approved public descriptions or explicit clinic guidance; model/agent inventions, stale approvals, held expiry and cancellation cannot choose a clinical type, waive a fee, preserve an unsent confirmation or create patient-specific work | FR-04, FR-06, FR-11, FR-12, FR-22 |
+| `E2E-323` | Invoice-copy, charge-review and waitlist-interest staff requests preserve their finite purpose through independent verification and exact Cliniko receipts; stale clocks, held preparation, revoked authority and changed purposes cannot send, while document delivery, refunds, enrollment and callback remain unproven | FR-03, FR-09, FR-11, FR-12, FR-22 |
 
 The corpus runs with deterministic synthetic media frames, partial hypotheses and segment-final transcription events, synthesis chunks, playback acknowledgments, typed model effect results, clock, and host effects against the reference host and standalone adapters. It enters through `VoiceSession.begin` and its media/transcript methods, not by calling `CallRuntime.acceptTurn` directly as a substitute for voice E2E. The harness can delay a playback acknowledgment or deliver it after a clear to prove that queued/cleared audio does not count as played. It can race a caller correction with `startNextPresentation`, drop a commit wake-up, restart the dispatcher task while retaining the live session, or lose the entire session process before activation or after atomic start. Assertions distinguish superseded pending speech from unproven started speech, reject `played` for a pending or transfer intent, and verify exactly one terminal resolution without duplicate media. `E2E-035` and `E2E-082` through `E2E-084` separately submit invalid presentation outcomes through T4 and prove each is rejected before a second SAM transition. `E2E-019` through `E2E-026` individually cover final turn, playback, interruption, transfer, and fallback behavior. Each independently triggerable voice or effect fault has its own scenario ID so cases can run in parallel and a failure identifies one behavior. Every provider runs the same scenario IDs; assertions use its approved support-matrix row and fail if its declared capability snapshot disagrees. Provider-specific contract tests separately cover permission limits, pagination, rate limits, availability rules, unsupported mutations, and lost responses. Scheduled smoke tests use sanctioned provider test accounts and a limited real telephony path, including an actual interruption and transfer. Tests contain no live patient data.
 
@@ -1632,3 +1633,58 @@ held-read expiry/revision/cancellation and patient-data canary evidence. Approva
 of public text is not a detector for patient data: provisioning still requires
 published public clinic material. Carrier/email and actual clinic activation
 remain separately gated.
+
+### Finite staff-request purposes
+
+`StaffRequestSubject` admits only `invoiceCopy`, `chargeReview` and
+`waitlistInterest`. These are reasons to ask clinic staff for help. They add no
+billing document read/send, amount, email recipient, refund, fee waiver,
+appointment correction, waitlist enrollment or outbound calling capability.
+The trusted whole-request grammar rejects reported, quoted and negated requests;
+model paraphrases select only a category with every other decision field null.
+The model cannot supply a free-text task body or authorize a send.
+
+The existing `staff.requests.prepare.v1` command accepts the optional enum;
+unknown values and extra command fields are refused. `TextReception.requestStaff`
+uses its private current clock, scoped active lease and revision, then cancels
+an unsent clinical proposal before host preparation. Interrupted or stale
+preparations cannot publish a positive result. Unknown/malformed host outcomes
+or mismatched categories produce purpose-specific unavailable guidance. Existing
+sent clinical receipts remain unchanged. Public agent progress keeps its
+existing redaction and excludes patient-specific request purpose.
+
+`ClinikoStaffSession.prepare` resolves the same category from current bounded
+caller language. It may use a model cue to offer independent staff verification,
+state the selected purpose and its limits, and retain the purpose transiently.
+The originating SAM turn must actually be committed before a generic later
+"Please send that request" can carry that purpose. A model-only cue after proof
+cannot send: a separate bounded caller request is still required. Clinical
+verification alone is insufficient for this independent staff operation.
+Current queue approval, caller permission and the existing single-send fences
+apply at preparation, proof and the final POST boundary.
+
+`staffRequestReady` creates a purpose-bearing caller-requested item and one
+outbox intent. `ClinikoStaffSession.openTask` requires its prepared category,
+turn, revision, verified patient and exact current SAM item to match. The
+Cliniko-owned `abby.staff-request.v1` JSON summary adds only the optional finite
+`requestSubject`; legacy generic summaries remain compatible. A saved request
+reports that storage succeeded without asserting human receipt. An uncertain
+response never triggers a create retry; an exact marker observation may later
+establish saved status, still without human acknowledgment. A new incompatible
+purpose cannot replace the already attempted task or produce a second POST.
+
+Absent/unapproved routes explain the specific clinic task and capability limits:
+Abby cannot email the invoice, issue a refund, enroll a caller on a waitlist or
+promise a callback. Enabling the staff queue changes only whether a verified
+request may be saved. It does not authorize these additional workflows.
+Standalone purpose/proof/call state stays transient; Cliniko durably owns the
+approved request. PostgreSQL persistence/corruption tests use the deliberately
+rich `unsafeReference` lab contract, not expanded standalone storage permission.
+
+E2E-323 includes parallel signed synthetic subject/authority/receipt scenarios,
+memory/PostgreSQL agent commands, held expiry/abort/revision fences and patient
+canary scans. Real model classification is evaluated separately. Corpus cases
+CCP-034/035/040 retain their missing billing/refund/waitlist authorities; their
+named observation requires the exact typed unavailable response, not a generic
+fallback or a claim that the missing workflow exists. Full prose acceptance,
+actual clinic activation, real email and carrier calls remain separately gated.

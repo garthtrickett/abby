@@ -3,6 +3,7 @@ import test from "node:test";
 import { createOpenAIClinicalIntentResolver } from "../../src/standalone/openai-clinical-intent.ts";
 import { clinicDayStartUtc } from "../../src/standalone/clinic-clock.ts";
 import { bookingCallFlowFixture } from "../support/cliniko-call-flow.ts";
+import { staffRequestSubjects } from "../../src/core/staff-request-subject.ts";
 
 const unavail = { ok: false, error: { kind: "intentUnavailable" } };
 const decision = (kind: string, patch: Record<string, unknown> = {}) =>
@@ -67,6 +68,26 @@ test("clinical model cancellation returns promptly if a response provider ignore
     const controller = new AbortController(), request = resolver(f.turn("slow", "I need to book"), controller.signal);
     controller.abort();
     assert.deepEqual(await Promise.race([request, new Promise(resolve => setTimeout(() => resolve("stalled"), 500))]), unavail);
+    assert.equal(f.mail.length, 0); assert.equal(f.posts, 0);
+  } finally { f.flow.dispose(); await f.close(); }
+});
+
+test("E2E-323 model staff categories carry no patient, free-text or clinical authority", async () => {
+  const f = await bookingCallFlowFixture();
+  try {
+    let response: unknown;
+    const resolver = createOpenAIClinicalIntentResolver({ owner: f.flow, apiKey: "synthetic-key", model: "synthetic-model",
+      clinicDate: () => "2026-10-04", fetch: async () => completed(response) });
+    let turn = 0;
+    for (const requestSubject of staffRequestSubjects) {
+      response = decision(requestSubject);
+      assert.deepEqual(await resolver(f.turn(`purpose-${turn++}`, "Please look into my request.")), { ok: true, value: { kind: "staffRequest", requestSubject } });
+      for (const patch of [{ operation: "book" }, { choice: 1 }, { patientRef: "forged" }, { taskText: "Send a refund now." }]) {
+        response = decision(requestSubject, patch);
+        assert.deepEqual(await resolver(f.turn(`forged-${turn++}`, "Please look into my request.")), unavail);
+      }
+    }
+    response = decision("sendInvoice"); assert.deepEqual(await resolver(f.turn("unknown-purpose", "Please look into my request.")), unavail);
     assert.equal(f.mail.length, 0); assert.equal(f.posts, 0);
   } finally { f.flow.dispose(); await f.close(); }
 });

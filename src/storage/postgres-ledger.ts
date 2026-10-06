@@ -1,5 +1,6 @@
 import { validCallerIdentityDenial } from "../core/caller-identity.ts";
 import { validRequestBoundary } from "../core/request-boundary.ts";
+import { validStaffRequestSubject } from "../core/staff-request-subject.ts";
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import { CALL_TERMINAL_REASONS, POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "../core/model.ts";
@@ -45,6 +46,9 @@ function validModelEffect(value: unknown, effectId: string): boolean {
 function decodeState(value: unknown, callId: string): Result<CallState, TransitionFailure> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return err({ kind: "storageCorrupt" });
   const data = value as Record<string, unknown>;
+  if (data.staffItems && typeof data.staffItems === "object" && Object.values(data.staffItems).some(item =>
+    item && typeof item === "object" && item.requestSubject !== undefined && (!validStaffRequestSubject(item.requestSubject) ||
+      item.reason !== "callerRequested" || item.linkedActionKey !== undefined || item.request !== undefined))) return err({ kind: "storageCorrupt" });
   if (data.callerIdentityDenied !== undefined && !validCallerIdentityDenial(data.callerIdentityDenied)) return err({ kind: "storageCorrupt" });
   if (data.lastRequestBoundary !== undefined) {
     const receipt = data.lastRequestBoundary as Record<string, unknown>;

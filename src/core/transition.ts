@@ -8,6 +8,7 @@ import { actionOutcomeText, confirmedActionText } from "./action-outcome.ts";
 import { requestBoundaryText, validRequestBoundary } from "./request-boundary.ts";
 import { bookingHorizonText, validBookingHorizon } from "./booking-horizon.ts";
 import { publicInformationUnavailable } from "./public-information.ts";
+import { staffSubjectUnavailable, staffRequestSubjectLabel, staffRequestSubjectLimit, validStaffRequestSubject } from "./staff-request-subject.ts";
 import { callerIdentityDenialText, restrictDeniedCaller, validCallerIdentityDenial } from "./caller-identity.ts";
 import { notificationOutcomeText } from "./notification-outcome.ts";
 import { clarificationText } from "./clarification.ts";
@@ -276,14 +277,19 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       state.callerMessages.push(staffOutcomeText(state));
       break;
     case "staffUnavailable":
-      state.callerMessages.push(staffUnavailableText);
+      if (interpretation.requestSubject !== undefined && !validStaffRequestSubject(interpretation.requestSubject)) return err({ kind: "invalidTransition" });
+      state.callerMessages.push(interpretation.requestSubject ?
+        (Object.values(state.staffItems).some(item => item.reason === "callerRequested") ? staffOutcomeText(state) + " " : "") + staffSubjectUnavailable(interpretation.requestSubject) : staffUnavailableText);
       break;
     case "staffRequestReady":
-      if (state.policy.staffWorkEnabled === false || interpretation.requestedPerson !== undefined && !validStaffLabel(interpretation.requestedPerson)) return err({ kind: "invalidTransition" });
-      addStaffTask(state, "callerRequested", now, undefined, undefined, interpretation.requestedPerson);
+      if (state.policy.staffWorkEnabled === false || interpretation.requestedPerson !== undefined && !validStaffLabel(interpretation.requestedPerson) ||
+          interpretation.requestSubject !== undefined && !validStaffRequestSubject(interpretation.requestSubject)) return err({ kind: "invalidTransition" });
+      addStaffTask(state, "callerRequested", now, undefined, undefined, interpretation.requestedPerson, interpretation.requestSubject);
       break;
     case "staffVerificationRequired":
-      state.callerMessages.push("Before saving a staff request, verify your registered email. If you receive a six-digit code, enter it on the keypad, then press pound. Star clears your entry. Please do not say the code aloud. After verification, ask me to send the request.");
+      if (interpretation.requestSubject !== undefined && !validStaffRequestSubject(interpretation.requestSubject)) return err({ kind: "invalidTransition" });
+      state.callerMessages.push((interpretation.requestSubject ? `You are asking staff about ${staffRequestSubjectLabel[interpretation.requestSubject]}. ${staffRequestSubjectLimit[interpretation.requestSubject]} ` : "") +
+        "Before saving a staff request, verify your registered email. If you receive a six-digit code, enter it on the keypad, then press pound. Star clears your entry. Please do not say the code aloud. After verification, ask me to send the request.");
       break;
     case "workflowStarted": {
       if (!["book", "cancel", "reschedule", "intake", "appointments.read"].includes(interpretation.operation) ||

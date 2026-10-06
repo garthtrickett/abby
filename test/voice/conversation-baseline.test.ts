@@ -8,7 +8,7 @@ test("E2E-307 conversation baseline distinguishes trusted spoken selection and m
   const corpus = await candidates();
   assert.equal(corpus.length, 45);
   await withDisposablePostgres(async db => {
-    const ids = ["CCP-005", "CCP-006", "CCP-009", "CCP-012", "CCP-013", "CCP-015", "CCP-017", "CCP-021", "CCP-022", "CCP-029", "CCP-030", "CCP-033", "CCP-037", "CCP-039", "CCP-041"];
+    const ids = ["CCP-005", "CCP-006", "CCP-009", "CCP-012", "CCP-013", "CCP-015", "CCP-017", "CCP-021", "CCP-022", "CCP-029", "CCP-030", "CCP-033", "CCP-034", "CCP-035", "CCP-037", "CCP-039", "CCP-040", "CCP-041"];
     let next = 0;
     const evaluated: Awaited<ReturnType<typeof runCase>>[] = [];
     const settled = await Promise.allSettled(Array.from({ length: 4 }, async () => { for (;;) {
@@ -20,6 +20,12 @@ test("E2E-307 conversation baseline distinguishes trusted spoken selection and m
     const failure = settled.find(item => item.status === "rejected"); if (failure?.status === "rejected") throw failure.reason;
     const results = evaluated;
     assert.equal(results.length, ids.length);
+    for (const [id, requestSubject] of [["CCP-034", "invoiceCopy"], ["CCP-035", "chargeReview"], ["CCP-040", "waitlistInterest"]]) {
+      const result = results.find(result => result.id === id)!;
+      assert.deepEqual(result.intents, [{ kind: "staffRequest", requestSubject }]);
+      assert.equal(result.checks.find(check => check.id === "conversation-observation")?.pass, true, id);
+      assert.deepEqual(result.actionStatuses, []);
+    }
     for (const id of ["CCP-012", "CCP-013", "CCP-037", "CCP-039", "CCP-041"]) {
       const result = results.find(result => result.id === id)!;
       assert.equal(result.intents.at(-1)?.kind, "requestBoundary");
