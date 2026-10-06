@@ -87,7 +87,7 @@ function publicIntent(intent: VoiceIntent | null): Record<string, string | numbe
   return result;
 }
 function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceIntent | null)[], speech: string[], before: CallState, after: CallState,
-  work: Readonly<{ noNewProviderWork: boolean; workflowReleased: boolean; pendingLookupMatched?: boolean; expectedHorizonDays?: number; expectedNoticeMinutes?: number }>): Check {
+  work: Readonly<{ noNewProviderWork: boolean; workflowReleased: boolean; pendingLookupMatched?: boolean; expectedHorizonDays?: number; expectedNoticeMinutes?: number; expectedReviewCadenceMinutes?: number }>): Check {
   const last = intents.at(-1), text = speech.join(" ");
   const statuses = Object.values(after.actions).map(action => action.status), latest = Object.values(after.actions).at(-1);
   let pass = false;
@@ -153,7 +153,14 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
     case "readOnly": pass = last?.kind === "appointmentEnquiry" && after.appointmentReads.at(-1)?.status === "shown" &&
       /checked upcoming appointments between.*I found an appointment on/s.test(text) && !Object.keys(after.actions).length; break;
     case "clarify": pass = /which|clarif|repeat|did you mean|please (say|tell)|do you want|would you like/i.test(text) && !statuses.includes("awaitingConfirmation"); break;
-    case "human": pass = /reception|clinic|staff|person/i.test(text) && /contact the clinic|transfer.*unavailable|request.*saved|can't confirm.*request/i.test(text); break;
+    case "human":
+      if (candidate.id === "CCP-017") {
+        pass = last?.kind === "staffRequest" && work.expectedReviewCadenceMinutes !== undefined &&
+          text.includes(`approved process calls for reviewing saved requests every ${work.expectedReviewCadenceMinutes} minutes`) &&
+          /staff request.*was saved.*can't confirm.*staff have read.*promise a callback time/s.test(text) && /does not promise a response time/.test(text) &&
+          Object.values(after.staffItems).some(item => item.reason === "callerRequested" && item.status === "open") && !statuses.includes("awaitingConfirmation"); break;
+      }
+      pass = /reception|clinic|staff|person/i.test(text) && /contact the clinic|transfer.*unavailable|request.*saved|can't confirm.*request/i.test(text); break;
     case "urgent": pass = last?.kind === "handoff" && last.reason === "potentiallyUrgent" && speech.includes(urgentReply) &&
       !Object.keys(after.actions).length && !Object.keys(after.staffItems).length && !/I (?:have|am) transfer|staff (?:have|has) received/i.test(text); break;
     case "unsupported": pass = (last === null || last?.kind === "clarify" && ["changeUnsupported", "clinicalAdviceUnavailable"].includes(last.reason ?? "")) &&
@@ -186,7 +193,8 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
  * E2E-303. Setup decisions are pinned; only candidate turns use the live model. */
 export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: Plan, model: ModelConfig) {
   const lookup = candidate.id === "CCP-044" ? await pendingClinikoLookupFixture() : undefined;
-  const f = lookup ?? (candidate.id === "CCP-015" ? await urgentConversationFixture() : ["CCP-030", "CCP-033"].includes(candidate.id) ? await publicServiceInformationFixture({ prices: false }) : candidate.id === "CCP-032" ? await clinicFAQFixture() : plan.stage === "enquiry" ? await appointmentEnquiryFixture() : ["CCP-011", "CCP-025", "CCP-026"].includes(candidate.id) ? await bookingCatalogueFixture() : plan.stage.startsWith("staff") ? await clinikoStaffCallFlowFixture({ lostResponse: plan.stage === "staffUncertain" })
+  const staff = plan.stage.startsWith("staff") ? await clinikoStaffCallFlowFixture({ lostResponse: plan.stage === "staffUncertain" }) : undefined;
+  const f = lookup ?? staff ?? (candidate.id === "CCP-015" ? await urgentConversationFixture() : ["CCP-030", "CCP-033"].includes(candidate.id) ? await publicServiceInformationFixture({ prices: false }) : candidate.id === "CCP-032" ? await clinicFAQFixture() : plan.stage === "enquiry" ? await appointmentEnquiryFixture() : ["CCP-011", "CCP-025", "CCP-026"].includes(candidate.id) ? await bookingCatalogueFixture()
     : plan.stage.startsWith("cancel") ? await cancellationCallFlowFixture({ multiple: candidate.id === "CCP-036" })
     : plan.stage.startsWith("move") ? await reschedulingCallFlowFixture() : await bookingCallFlowFixture());
   f.flow.dispose();
@@ -254,7 +262,7 @@ export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: 
       { id: "preserve-known-outcome", pass: Object.values(before.actions).filter(action => ["committed", "uncertain"].includes(action.status))
         .every(action => after.actions[action.key]?.status === action.status), detail: "A new turn cannot revise a known prior SAM receipt." },
       conversationCheck(candidate, plan, intents, speech, before, after,
-        { noNewProviderWork: providerRequests === readsBefore && f.mail.length === mailBefore && call.writes.length === writes,
+        { ...(staff ? { expectedReviewCadenceMinutes: staff.staffApproval.reviewCadenceMinutes } : {}), noNewProviderWork: providerRequests === readsBefore && f.mail.length === mailBefore && call.writes.length === writes,
           workflowReleased: call.flow.workflow === undefined && !call.flow.verificationRequired,
           ...(pendingLookupEvidence ? { pendingLookupMatched: pendingLookupEvidence.heldBeforeRelease && pendingLookupEvidence.canceledBeforeRelease &&
             pendingLookupEvidence.noLateSpeech && pendingLookupEvidence.noLateMenu && pendingLookupEvidence.providerReads === 1 } : {}),

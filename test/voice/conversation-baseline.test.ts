@@ -74,6 +74,8 @@ test("E2E-307 conversation baseline distinguishes trusted spoken selection and m
     assert.equal(staff.setupMatch, true); assert.equal(staff.setupGap, null);
     assert.equal(staff.checks.find(check => check.id === "conversation-observation")?.pass, true);
     assert.ok(staff.speech.some(text => /staff request.*was saved.*can't confirm.*read/.test(text)));
+    assert.ok(staff.speech.some(text => /approved process calls for reviewing saved requests every 30 minutes/.test(text)));
+    assert.ok(staff.speech.some(text => /does not promise a response time/.test(text)));
     const unknown = results.find(result => result.id === "CCP-021")!;
     assert.equal(unknown.writesBefore, 1); assert.equal(unknown.writesAfter, 1);
     assert.equal(unknown.context?.lastAction?.status, "uncertain"); assert.deepEqual(unknown.actionStatuses, ["uncertain"]);

@@ -425,7 +425,7 @@ export class VoiceSession {
       finally { if (this.pendingIntent === pending) this.pendingIntent = undefined; }
       if (controller.signal.aborted || generation !== this.assembler.currentGeneration()) return err({ kind: "staleTurn" });
     } else if (this.cachedIntent.kind === "staffOutcome") {
-      result = await this.runtime.acceptTurn(turn, { kind: "staffOutcomeQuery" }, now, existing.value.conversationRevision);
+      result = await this.withPendingIntent(signal => this.reception.staffOutcome(this.scope, turn, now, existing.value.conversationRevision, signal));
     } else if (this.cachedIntent.kind === "handoff") {
       // A trusted standalone classifier may finish after the media-turn clock.
       // Revalidate the captured urgent script at its bounded fresh authority time.

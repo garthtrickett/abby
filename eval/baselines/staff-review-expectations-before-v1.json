@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "kind": "signed-staff-review-expectation-reproduction",
+  "sourceRevision": "cd479303af2ed359938da66684d36c9be19de93f",
+  "command": "node --test test/voice/staff-review-expectations.test.ts",
+  "result": "failed-before-behavior-edits",
+  "observedResponse": "Your staff request was saved. I can't confirm that staff have read it or promise a callback time.",
+  "approvedReviewCadenceMinutes": 30,
+  "staffRecallPosts": 1,
+  "clinicalWrites": 0,
+  "unmetRequirement": "CCP-017 requires acknowledged request state with clinic-approved review expectations; the actual saved reply omits the approved review process."
+}

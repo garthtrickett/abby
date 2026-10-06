@@ -15,11 +15,15 @@ approved preferences, windows, appointment enquiries and public facts.
    signed failing witness is [preserved](baselines/missed-call-before-v1.json).
    The new named check requires the explicit unknown reason, typed public reply,
    unchanged actions/staff/read state and no extra provider/mail/write work.
-2. **CCP-017: confirmed missing review expectations, still open.** The trusted
-   staff approval carries a 30-minute synthetic review cadence; the saved-request
-   reply does not explain the approved process. Required next: carry current
-   public process evidence into the receipt response and fence changed approval,
-   without implying staff read, assignment, notification or callback time.
+2. **CCP-017: review-expectation gap fixed with stronger evidence.**
+   The [before-change signed witness](baselines/staff-review-expectations-before-v1.json)
+   confirms that saved status omitted the trusted synthetic 30-minute cadence.
+   E2E-326 carries current public process evidence into saved replies and existing
+   status queries, with changed/expired/revoked approval and interruption fencing.
+   Exact saved status survives missing process evidence; there is no human-read,
+   assignment, notification or response-time promise. The 25-test focused gate,
+   final typecheck and strengthened stable all-45 baseline pass. This closes the
+   demonstrated process-wording gap; the remaining clause map is still open.
 3. **CCP-007: incomplete stale-menu sequence proof, still open.** The baseline
    checks only clarification. Required next: exercise old menu reference, fresh
    representation, later selection, fresh exact confirmation and one possible
@@ -33,7 +37,7 @@ approved preferences, windows, appointment enquiries and public facts.
    identify the ambiguous day/meridiem. This is partial wording evidence, not a
    proven unsafe selection.
 
-The next implementation order is 2, 3, 4, then the wording check. These are
+The next implementation order is 3, 4, then the wording check. These are
 local synthetic tasks; real carrier and email setup is outside these test goals
 and remains a separate release gate.
 
@@ -62,7 +66,7 @@ for standalone durable patient-specific records.
 | 2. Latest played spoken choices | E2E-308 time/relative choice, rejected offers, ambiguity, evil model ordinal and interrupted menu; E2E-312 later bounded search | Complete stale-menu sequence and inspect explicit meridiem wording |
 | 3. Corrections | E2E-309 cancels old proposals before held interpretation, rereads replacements, rejects unplayed confirmation and requires a new affirmative; dated/window correction tests | Match each original clause to exact assertions and current passing run |
 | 4. Cancel versus move | E2E-310 mixed-operation clarification, denied switches, fresh operation verification, original target equality, one exact PATCH, sent/uncertain receipt preservation | Match original target and operation clauses to current passing evidence |
-| 5. Human/staff requests | E2E-311 independent permission/code, approved people, saved/uncertain receipts, no duplicate request; E2E-323 finite purpose; E2E-325 unknown missed-call reason | Convey approved review expectations; map late-arrival and background-context clauses |
+| 5. Human/staff requests | E2E-311 independent permission/code, approved people, saved/uncertain receipts, no duplicate request; E2E-323 finite purpose; E2E-325 unknown missed-call reason | Map late-arrival and background-context clauses; real staff workflow acceptance remains separate |
 | 6. Approved search/information | E2E-312 retained windows; E2E-313 approved names/earliest bounds/location confirmation; E2E-314 independent reads; E2E-315 public facts/repetition; E2E-322 services/unknown fees | Complete clause audit; do not infer a clinic-wide search, cross-location authority or audio pacing |
 
 ## Clause-by-clause map
@@ -228,9 +232,9 @@ Evidence to inspect: [targeted test](../test/voice/cliniko-staff-request.test.ts
 
 ### CCP-017 — message-persisted-not-received
 
-Assessment: **Confirmed behavior gap**. The approved synthetic staff process has reviewCadenceMinutes=30, but staffOutcomeText only says saved/not read/no callback promise. The required clinic-approved review expectations are not conveyed. Add trusted current process wording without a receipt or callback guarantee.
+Assessment: **Fixed with stronger evidence**. E2E-326 explains only the current approved finite cadence after an exact saved receipt. Changed, expired, disabled or missing approval omits cadence while preserving saved status. Public process evidence supplies neither staff-read nor callback authority. Native memory/PostgreSQL and signed tests exercise interruption, private clocks, malformed snapshots and no duplicate send. This is synthetic workflow evidence, not real clinic activation.
 
-Evidence to inspect: [targeted test](../test/voice/cliniko-staff-request.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [signed tests](../test/voice/staff-review-expectations.test.ts), [native tests](../test/text/staff-review-expectations.test.ts), [before-change witness](baselines/staff-review-expectations-before-v1.json), [strengthened baseline](baselines/clinic-conversation-after-staff-review-v24-v1.json).
 
 - `CCP-017-R01`: Report only the acknowledged request state, with clinic-approved review expectations.
 - `CCP-017-F01`: Claim staff read the request or guarantee a callback time.
