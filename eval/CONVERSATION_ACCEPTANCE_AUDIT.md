@@ -39,12 +39,14 @@ approved preferences, windows, appointment enquiries and public facts.
    These are protocol ownership and synthetic approved-limit evidence, not
    physical speaker identity or actual clinic/carrier activation. The 23-test
    focused gate, typecheck and refreshed stable all-45 baseline pass.
-5. **CCP-006: inspect explicit AM/PM clarification.** The current reply requests
-   a full date and time and selects nothing. Its wording does not explicitly
-   identify the ambiguous day/meridiem. This is partial wording evidence, not a
-   proven unsafe selection.
+5. **CCP-006: demonstrated wording gap fixed.** The strengthened observation
+   preserved the old generic full-date/time reply as a failure before changing
+   production behavior. The shared notice now asks the displayed day and AM/PM.
+   E2E-330 exercises three ambiguity setups without model/provider/action work,
+   then requires fresh played authority before one inspected booking. The nine-test
+   focused gate, typecheck and stable strengthened all-45 baseline pass.
 
-The next work is the wording check, then the remaining clause audit. These are
+The next work is the remaining clause audit. These are
 local synthetic tasks; real carrier and email setup is outside these test goals
 and remains a separate release gate.
 
@@ -70,7 +72,7 @@ for standalone durable patient-specific records.
 | Goal | Evidence inspected | Remaining completion work |
 | --- | --- | --- |
 | 1. Runnable baseline and real model interpretation | Actual signed HTTP/WS setup, synthetic Cliniko/private email/playback, stable-source all-45 report; separate strict live model sample; failing reports preserved | Strengthen the acceptance clauses below; a named observation remains narrower than full prose |
-| 2. Latest played spoken choices | E2E-308 time/relative choice, rejected offers, ambiguity, evil model ordinal and interrupted menu; E2E-312 later bounded search | Inspect explicit meridiem wording; stale-menu sequence now has connected evidence |
+| 2. Latest played spoken choices | E2E-308 time/relative choice, rejected offers, ambiguity, evil model ordinal and interrupted menu; E2E-312 later bounded search | Explicit meridiem and stale-menu sequence have direct evidence; inspect exact offer/send assertions |
 | 3. Corrections | E2E-309 cancels old proposals before held interpretation, rereads replacements, rejects unplayed confirmation and requires a new affirmative; dated/window correction tests | Match each original clause to exact assertions and current passing run |
 | 4. Cancel versus move | E2E-310 mixed-operation clarification, denied switches, fresh operation verification, original target equality, one exact PATCH, sent/uncertain receipt preservation | Match original target and operation clauses to current passing evidence |
 | 5. Human/staff requests | E2E-311 independent permission/code, approved people, saved/uncertain receipts, no duplicate request; E2E-323 finite purpose; E2E-325 unknown missed-call reason | Map late-arrival and background-context clauses; real staff workflow acceptance remains separate |
@@ -91,9 +93,9 @@ Evidence to inspect: [targeted test](../test/voice/appointment-change-intent.tes
 
 ### CCP-002 — cancel-only
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Partial direct evidence**. E2E-310 `cancelOnly` asserts only a cancellation proposal, zero writes until played confirmation and a separate affirmative, then exactly one cancellation PATCH. It never starts a booking workflow. The fixture has approved standard/late fee terms, but this branch does not explicitly assert that the fee text was spoken; that part of R01 needs direct coverage before full sign-off.
 
-Evidence to inspect: [targeted test](../test/voice/appointment-change-intent.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/appointment-change-intent.test.ts); [named baseline](baselines/clinic-conversation-after-explicit-time-v24-v1.json).
 
 - `CCP-002-R01`: Prepare only cancellation with approved fee terms and separate confirmation.
 - `CCP-002-F01`: Push the caller through a new booking.
@@ -101,9 +103,9 @@ Evidence to inspect: [targeted test](../test/voice/appointment-change-intent.tes
 
 ### CCP-003 — change-selected-time-before-confirmation
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Partial exact-send evidence**. E2E-309 `later` resolves the latest played menu without a model request, cancels the old action, creates a different awaiting-confirmation action, speaks 10:30 AM, and sends once only after a new played confirmation and separate affirmative. `unplayed` rejects affirmation before playback; `lostOffer`, `stop` and `mixed` remain unsent. Strengthen the exact replacement offer/provider-body assertion before declaring F01 fully proved; speech and action status alone are weaker than the sent target.
 
-Evidence to inspect: [targeted test](../test/voice/caller-corrections.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/caller-corrections.test.ts); [named baseline](baselines/clinic-conversation-after-explicit-time-v24-v1.json).
 
 - `CCP-003-R01`: Resolve the later time against the current menu.
 - `CCP-003-R02`: Supersede the old action and play the corrected exact details before a new affirmative turn.
@@ -112,9 +114,9 @@ Evidence to inspect: [targeted test](../test/voice/caller-corrections.test.ts); 
 
 ### CCP-004 — change-date-mid-sentence
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Partial ambiguity evidence**. E2E-316 asserts final Wednesday morning options, excludes abandoned Thursday/afternoon options, retains the morning window across another read, cancels prior proposals and requires fresh playback/affirmation. The strict CCP-004 named check verifies the final date and exact morning window. Existing ambiguous/qualified branches cover an ambiguous time bound or condition; a genuinely unresolved date needs its own direct no-search/clarification witness for R02.
 
-Evidence to inspect: [targeted test](../test/voice/dated-window-corrections.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/dated-window-corrections.test.ts); [named baseline](baselines/clinic-conversation-after-explicit-time-v24-v1.json).
 
 - `CCP-004-R01`: Use the final unambiguous correction, preserving the morning constraint.
 - `CCP-004-R02`: Clarify if the date remains ambiguous.
@@ -123,9 +125,9 @@ Evidence to inspect: [targeted test](../test/voice/dated-window-corrections.test
 
 ### CCP-005 — spoken-offer-time
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Partial exact-offer evidence**. E2E-308 proves unique half-past-ten and later choices bypass the deliberately wrong model ordinal, and rejects unknown/near-match and interrupted-menu selection without writes. A valid choice becomes an awaiting-confirmation action and speaks the expected time. Inspect/assert the exact unchanged offer in the action and provider send before declaring all of R01 proved.
 
-Evidence to inspect: [targeted test](../test/voice/played-menu-selection.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/played-menu-selection.test.ts); [named baseline](baselines/clinic-conversation-after-explicit-time-v24-v1.json).
 
 - `CCP-005-R01`: Trusted selection resolves the spoken time uniquely to the latest played menu and its unchanged offer.
 - `CCP-005-F01`: Model invents an ordinal without authoritative option matching.
@@ -133,9 +135,9 @@ Evidence to inspect: [targeted test](../test/voice/played-menu-selection.test.ts
 
 ### CCP-006 — ambiguous-offer-time
 
-Assessment: **Partial wording evidence**. The actual reply asks for full date/time, but does not explicitly name AM/PM. Keep the no-selection proof; inspect whether the clarification should make the ambiguous meridiem explicit.
+Assessment: **Fixed with direct ambiguity evidence**. The stronger named CCP-006 check failed the old generic reply while all three safety observations passed. E2E-330 now explicitly asks which displayed day and AM or PM, with an option-number alternative. Different-day AM/PM, same-day AM/PM and same-AM different-day offers create no action, model request, provider traffic, mail or staff request while ambiguous. Fresh played options, an exact current proposal, played confirmation and a separate affirmative precede one booking. The matcher and authority rules are unchanged.
 
-Evidence to inspect: [targeted test](../test/voice/played-menu-selection.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [direct ambiguity test](../test/voice/explicit-time-clarification.test.ts), [selection test](../test/voice/played-menu-selection.test.ts), [before-change failure](baselines/explicit-time-clarification-before-v1.json), [current named baseline](baselines/clinic-conversation-after-explicit-time-v24-v1.json).
 
 - `CCP-006-R01`: Ask which displayed day and AM/PM the caller means; send nothing while ambiguous.
 - `CCP-006-F01`: Pick a day or AM/PM by guesswork.
@@ -151,9 +153,9 @@ Evidence to inspect: [connected sequence test](../test/voice/stale-menu-recovery
 
 ### CCP-008 — negative-then-affirmative
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Supported by a direct whole-utterance witness**. E2E-309 `mixed` begins with a played unconfirmed proposal and receives "Yes. No, hold on, I cannot make that time." The old action is canceled, every action remains canceled, and the write count is zero both after the mixed utterance and after a later "Yes please". This directly proves R01 and F01; no first-token affirmation is accepted.
 
-Evidence to inspect: [targeted test](../test/voice/caller-corrections.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/caller-corrections.test.ts); [named baseline](baselines/clinic-conversation-after-explicit-time-v24-v1.json).
 
 - `CCP-008-R01`: Treat the whole utterance as a correction or ambiguity and send nothing.
 - `CCP-008-F01`: Commit because the first word was yes.
