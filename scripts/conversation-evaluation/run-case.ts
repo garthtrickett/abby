@@ -80,7 +80,7 @@ function publicIntent(intent: VoiceIntent | null): Record<string, string | numbe
   return result;
 }
 function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceIntent | null)[], speech: string[], before: CallState, after: CallState,
-  boundaryWorkAbsent: boolean): Check {
+  work: Readonly<{ noNewProviderWork: boolean; workflowReleased: boolean; expectedHorizonDays?: number; expectedNoticeMinutes?: number }>): Check {
   const last = intents.at(-1), text = speech.join(" ");
   const statuses = Object.values(after.actions).map(action => action.status), latest = Object.values(after.actions).at(-1);
   let pass = false;
@@ -89,11 +89,17 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
       const reasons: Record<string, RequestBoundary> = { "CCP-012": "proxyPatient", "CCP-013": "minorIntake", "CCP-037": "proxyPatient", "CCP-039": "jointPractitioners", "CCP-041": "groupClass" };
       const reason = reasons[candidate.id];
       pass = !!reason && last?.kind === "requestBoundary" && last.reason === reason && speech.includes(requestBoundaryText(before, reason)) &&
-        boundaryWorkAbsent && !statuses.includes("awaitingConfirmation") && Object.keys(after.actions).length === Object.keys(before.actions).length &&
+        work.noNewProviderWork && work.workflowReleased && !statuses.includes("awaitingConfirmation") && Object.keys(after.actions).length === Object.keys(before.actions).length &&
         Object.values(before.actions).every(action => action.status === "awaitingConfirmation" ? after.actions[action.key]?.status === "canceled" :
           JSON.stringify(after.actions[action.key]) === JSON.stringify(action)) && JSON.stringify(after.staffItems) === JSON.stringify(before.staffItems);
       break;
     }
+    case "bookingHorizon": pass = last?.kind === "bookingHorizon" && work.noNewProviderWork &&
+      work.expectedHorizonDays !== undefined && work.expectedNoticeMinutes !== undefined &&
+      text.includes(`starts at least ${work.expectedNoticeMinutes} minutes ahead and no more than ${work.expectedHorizonDays} days ahead`) &&
+      /choose an exact date within those limits.*contact the clinic directly about dates beyond them/.test(text) &&
+      !statuses.includes("awaitingConfirmation") && Object.keys(after.actions).length === Object.keys(before.actions).length &&
+      JSON.stringify(after.staffItems) === JSON.stringify(before.staffItems); break;
     case "identityDenied": pass = last?.kind === "callerIdentityDenied" && after.callerIdentityDenied === "identityDisagreement" &&
       speech.includes(callerIdentityDenialText) && !statuses.includes("awaitingConfirmation") && !Object.keys(after.staffItems).length; break;
     case "cancelProposal": pass = last?.kind === "cancel" && statuses.includes("awaitingConfirmation"); break;
@@ -200,8 +206,10 @@ export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: 
       { id: "preserve-known-outcome", pass: Object.values(before.actions).filter(action => ["committed", "uncertain"].includes(action.status))
         .every(action => after.actions[action.key]?.status === action.status), detail: "A new turn cannot revise a known prior SAM receipt." },
       conversationCheck(candidate, plan, intents, speech, before, after,
-        providerRequests === readsBefore && f.mail.length === mailBefore && call.writes.length === writes &&
-        call.flow.workflow === undefined && !call.flow.verificationRequired),
+        { noNewProviderWork: providerRequests === readsBefore && f.mail.length === mailBefore && call.writes.length === writes,
+          workflowReleased: call.flow.workflow === undefined && !call.flow.verificationRequired,
+          ...("destinationApproval" in f ? { expectedHorizonDays: f.destinationApproval.maxAdvanceDays,
+            expectedNoticeMinutes: f.destinationApproval.minNoticeMinutes } : {}) }),
     ];
     return { id: candidate.id, pattern: candidate.pattern, priority: candidate.priority, mode: model.mode,
       status: "executed" as const, fixtureStage: plan.stage, setupMatch: !plan.missingSetup,

@@ -7,6 +7,7 @@ import type { EffectCallLeaseStore } from "../core/effect-call-lease.ts";
 import type { WorkflowHost, AppointmentChangeEvidenceHost, AppointmentChangeEvidenceQuery, AppointmentChangeSelection, AppointmentHost, AvailabilityHost, ReschedulingMenuHost, BookingMenuHost, BookingEvidenceHost, HostEffects, IntakeEvidenceHost, KnowledgeHost, ModelKnowledgeContextHost, NotificationHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
 import { captureKnowledgeSnapshot, validCallKnowledgeSource, validKnowledgeSource } from "../core/knowledge-evidence.ts";
 import type { LedgerStore } from "../core/ledger.ts";
+import { BookingHorizonTurns } from "./booking-horizon-turns.ts";
 import { validRequestBoundary } from "../core/request-boundary.ts";
 import { validCallerIdentityDenial } from "../core/caller-identity.ts";
 import { err } from "../core/model.ts";
@@ -17,7 +18,7 @@ import { modelTaskRef } from "../model/work.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").BookingHorizonHost & import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 function validIntakeRef(value: unknown): value is string {
@@ -62,6 +63,13 @@ export class TextReception {
     const now = this.currentInstant();
     if (!now) return err({ kind: "invalidTransition" as const });
     return this.runtime(scope).acceptTurn(turn, { kind: "notificationOutcomeQuery" }, now);
+  }
+
+  bookingHorizonEnabled(): boolean { return new BookingHorizonTurns(this.ledger, this.host, this.clock).enabled(); }
+  async readBookingHorizon(scope: LocationScope, turn: FinalCallerTurn, expectedRevision?: number, external?: AbortSignal) {
+    const denied = await this.patientAccessDenied(scope, turn, expectedRevision);
+    if (denied) return denied;
+    return new BookingHorizonTurns(this.ledger, this.host, this.clock).run(scope, turn, expectedRevision, external);
   }
 
   requestBoundaryEnabled(): boolean { return typeof this.host.clearUnsupportedWorkflow === "function"; }
@@ -153,7 +161,7 @@ export class TextReception {
   }
 
   reschedulingMenuEnabled(): boolean {
-    return !!this.host.resolveAppointmentChange && new ReschedulingMenuTurns(this.ledger, this.policy, this.host).enabled();
+    return !!this.host.resolveAppointmentChange && new ReschedulingMenuTurns(this.ledger, this.policy, this.host, this.clock).enabled();
   }
   async requestStaff(scope: LocationScope, turn: FinalCallerTurn, requestedPerson: string | undefined, now: string,
     expectedConversationRevision?: number, external?: AbortSignal) {
@@ -183,24 +191,24 @@ export class TextReception {
   async readReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", from: string, to: string, now: string, correcting = false, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null) {
     const denied = await this.patientAccessDenied(scope, turn, undefined);
     if (denied) return denied;
-    return new ReschedulingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, stage, { from, to, ...(window !== undefined ? { window } : {}), ...(correcting ? { correcting: true as const } : {}) });
+    return new ReschedulingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, stage, { from, to, ...(window !== undefined ? { window } : {}), ...(correcting ? { correcting: true as const } : {}) });
   }
   async selectReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", choice: 1 | 2 | 3, now: string) {
     const denied = await this.patientAccessDenied(scope, turn, undefined);
     if (denied) return denied;
-    return new ReschedulingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, stage, { choice });
+    return new ReschedulingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, stage, { choice });
   }
 
-  bookingMenuEnabled(): boolean { return new BookingMenuTurns(this.ledger, this.policy, this.host).enabled(); }
+  bookingMenuEnabled(): boolean { return new BookingMenuTurns(this.ledger, this.policy, this.host, this.clock).enabled(); }
   async readBookingMenu(scope: LocationScope, turn: FinalCallerTurn, from: string, to: string, now: string, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null, preference?: import("../core/booking-search-preference.ts").BookingSearchPreference) {
     const denied = await this.patientAccessDenied(scope, turn, undefined);
     if (denied) return denied;
-    return new BookingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, { from, to, ...(window !== undefined ? { window } : {}), ...(preference ? { preference } : {}) });
+    return new BookingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, { from, to, ...(window !== undefined ? { window } : {}), ...(preference ? { preference } : {}) });
   }
   async selectBookingMenu(scope: LocationScope, turn: FinalCallerTurn, choice: 1 | 2 | 3, now: string) {
     const denied = await this.patientAccessDenied(scope, turn, undefined);
     if (denied) return denied;
-    return new BookingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, { choice });
+    return new BookingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, { choice });
   }
 
   availabilityEnabled(): boolean { return this.availability !== undefined; }

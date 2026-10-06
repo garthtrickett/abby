@@ -16,8 +16,8 @@ async function untilAbort<T>(pending: Promise<T>, signal: AbortSignal): Promise<
 
 /** Both agent commands use real SAM turns/presentation receipts, with private host selection state. */
 export class ReschedulingMenuTurns {
-  private readonly ledger: LedgerStore; private readonly policies: PolicyStore; private readonly host: Host;
-  constructor(ledger: LedgerStore, policies: PolicyStore, host: Host) { this.ledger = ledger; this.policies = policies; this.host = host; }
+  private readonly ledger: LedgerStore; private readonly policies: PolicyStore; private readonly host: Host; private readonly clock: (() => string) | undefined;
+  constructor(ledger: LedgerStore, policies: PolicyStore, host: Host, clock?: () => string) { this.ledger = ledger; this.policies = policies; this.host = host; this.clock = clock; }
   enabled(): boolean { return !!this.host.resolveAppointmentChange && this.host.reschedulingMenuAvailable?.() === true && !!this.host.readReschedulingMenu && !!this.host.selectReschedulingMenu; }
   async #ready(scope: LocationScope, turn: FinalCallerTurn, now: string, signal: AbortSignal): Promise<Result<CallState, Failure>> {
     const runtime = new CallRuntime(this.ledger, scope), state = await untilAbort(runtime.read(turn.callId), signal);
@@ -64,6 +64,7 @@ export class ReschedulingMenuTurns {
             expectedWindow === undefined || read?.ok && read.value.window === undefined :
             validBookingSearchWindow(expectedWindow) && read?.ok && read.value.window?.startMinute === expectedWindow.startMinute && read.value.window.endMinute === expectedWindow.endMinute && read.value.window.startInclusive === expectedWindow.startInclusive;
           if (read?.ok && matchesWindow && !signal.aborted) interpretation = { kind: "reschedulingMenu", snapshot: structuredClone(read.value) };
+          else if (read && !read.ok && read.error.kind === "outsideHorizon" && !signal.aborted) interpretation = { kind: "bookingHorizon", snapshot: structuredClone(read.error.snapshot) };
         } else {
           const menuTurnId = initial.value.processedTurnIds.at(-1);
           const notice = menuTurnId ? initial.value.presentations[noticePresentationId(turn.callId, menuTurnId)] : undefined;
@@ -81,10 +82,11 @@ export class ReschedulingMenuTurns {
           }
         }
       }
-      const fresh = await this.#ready(scope, turn, now, signal);
+      const acceptedAt = interpretation.kind === "bookingHorizon" ? (this.clock?.() ?? now) : now;
+      const fresh = await this.#ready(scope, turn, acceptedAt, signal);
       if (!fresh.ok) return fresh;
       if (signal.aborted) return err({ kind: "effectFailure" });
-      return runtime.acceptTurn(turn, interpretation, now, revision);
+      return runtime.acceptTurn(turn, interpretation, acceptedAt, revision);
     } catch { return err({ kind: "effectFailure" }); }
     finally { clearTimeout(timer); controller.abort(); }
   }

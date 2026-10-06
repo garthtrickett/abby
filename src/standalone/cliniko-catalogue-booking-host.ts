@@ -42,6 +42,7 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
   }
   bookingMenuAvailable(): boolean { return !this.#lifetime.signal.aborted && !this.#attempted; }
   async searchProfile() { return this.#lifetime.signal.aborted ? undefined : this.#profile(); }
+  currentSearchPreference(): BookingSearchPreference | undefined { return this.#preference && { ...this.#preference }; }
   async #profile() { const read = await this.#config.catalogue.current(this.#config.scope); return read.ok ? read.value : undefined; }
   #matches(query: BookingMenuQuery): boolean {
     const c = this.#config;

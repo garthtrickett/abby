@@ -35,6 +35,11 @@ async function main(): Promise<void> {
       expected: { kind: "workflow", operation: "book" }, fixture: bookingCallFlowFixture },
     { name: "own-booking-single-practitioner", text: "I don't need two clinicians; just book one practitioner for my own visit.",
       expected: { kind: "workflow", operation: "book" }, fixture: bookingCallFlowFixture },
+    { name: "booking-horizon-trusted", text: "How far ahead can I book?", expected: { kind: "bookingHorizon" }, fixture: bookingCallFlowFixture },
+    { name: "booking-horizon-model-paraphrase", text: "What is the outermost period this service lets me search for a visit?",
+      expected: { kind: "bookingHorizon" }, fixture: bookingCallFlowFixture },
+    { name: "background-horizon-question", text: "My friend asked 'how far ahead can I book' yesterday.",
+      expected: { kind: "intentUnavailable" }, fixture: bookingCallFlowFixture },
     { name: "outcome", text: "Did that action work?", expected: { kind: "outcome" }, fixture: bookingCallFlowFixture },
   ] as const;
   const results = await Promise.all(cases.map(async item => {
@@ -48,7 +53,7 @@ async function main(): Promise<void> {
       return { name: item.name, requests, pass: JSON.stringify(actual) === JSON.stringify(item.expected), expected: item.expected, actual };
     } finally { f.flow.dispose(); await f.close(); }
   }));
-  const adapter = await Promise.all(["src/standalone/openai-clinical-intent.ts", "src/standalone/cliniko-call-flow.ts", "src/standalone/caller-identity-language.ts", "src/standalone/appointment-change-language.ts", "src/standalone/request-boundary-language.ts", "src/core/request-boundary.ts"]
+  const adapter = await Promise.all(["src/standalone/openai-clinical-intent.ts", "src/standalone/cliniko-call-flow.ts", "src/standalone/caller-identity-language.ts", "src/standalone/appointment-change-language.ts", "src/standalone/request-boundary-language.ts", "src/core/request-boundary.ts", "src/standalone/booking-horizon-language.ts", "src/standalone/cliniko-booking-horizon.ts", "src/core/booking-horizon.ts"]
     .map(path => readFile(resolve(path))));
   const hash = createHash("sha256"); for (const source of adapter) hash.update(source);
   const report = { version: 1, kind: "clinical-intent-live-evaluation", at: new Date().toISOString(), model: args[1],
