@@ -493,7 +493,7 @@ for (const kind of kinds) {
     assert.equal(uncertain.presentations[uncertain.pendingPresentationId!]?.kind, "notice");
     const notice = value(await app.session.dispatchPending(at(7)));
     assert.equal(notice.kind, "queued");
-    assert.equal(app.playback.queuedTexts.at(-1), "I can't confirm that action yet. It is pending review.");
+    assert.equal(app.playback.queuedTexts.at(-1), "I can't confirm that action yet. It is pending review. Please contact the clinic before trying again. I won't send that action again from this call.");
     assert.equal(app.playback.queuedTexts.some(text => text.includes("booking is confirmed")), false);
     value(await app.session.acceptPlaybackResult(notice.playbackId!, "played", at(7)));
     value(await app.session.end(at(9), "callerDisconnected"));

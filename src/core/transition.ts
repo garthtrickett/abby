@@ -516,9 +516,7 @@ function recordHostResult(state: CallState, effectId: string, receipt: import(".
     state.effects[effectId] = { ...effect, status: "uncertain" };
     const reconcileId = `${effectId}:reconcile`;
     state.effects[reconcileId] = { kind: "hostReconcile", id: reconcileId, actionKey: action.key, originalEffectId: effectId, status: "pending" };
-    hostOutcomeNotice(state, effectId, action.mutation.request.kind === "intake" && action.mutation.request.recoveryContract === "callerMediated"
-      ? "I can't confirm that your details were saved. No appointment or staff request is confirmed. Contact the clinic before trying again."
-      : "I can't confirm that action yet. It is pending review.");
+    hostOutcomeNotice(state, effectId, actionOutcomeText(state.actions[action.key]));
     if (action.kind === "book" && Object.values(state.actions).some(item => item.kind === "intake" && item.status === "committed")) {
       addStaffTask(state, "partialIntake", now, action.key);
     }

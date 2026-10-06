@@ -14,9 +14,9 @@ import { verificationNow } from "../support/caller-verification.ts";
 
 test("E2E-311 signed staff requests use independent verification, approved people and exact Cliniko receipts without duplicate or human-receipt claims", { timeout: 120_000 }, async () => {
   await withDisposablePostgres(async db => {
-    const scenarios = ["saved", "named", "lost", "nonCommitted", "malformed", "unavailable", "unapproved", "disabled", "unlisted", "revoked", "lateRevoked", "changedApproval", "lateDisabled", "modelGuess", "repeated", "beforeCode", "clinicalGrant", "oldProposal", "committedClinical", "changedPerson"] as const;
+    const scenarios = ["saved", "named", "lost", "nonCommitted", "malformed", "unavailable", "unapproved", "disabled", "unlisted", "revoked", "lateRevoked", "changedApproval", "lateDisabled", "modelGuess", "repeated", "beforeCode", "clinicalGrant", "oldProposal", "committedClinical", "changedPerson", "lateArrival", "lateArrivalLost", "lateArrivalUnavailable"] as const;
     const run = async (scenario: typeof scenarios[number]) => {
-      const f = await clinikoStaffCallFlowFixture({ lostResponse: scenario === "lost", nonCommitted: scenario === "nonCommitted",
+      const f = await clinikoStaffCallFlowFixture({ lostResponse: scenario === "lost" || scenario === "lateArrivalLost", nonCommitted: scenario === "nonCommitted",
         malformed: scenario === "malformed", approved: scenario !== "unapproved" });
       f.flow.dispose();
       if (scenario === "disabled") await f.replaceStaffApproval({ enabled: false });
@@ -31,17 +31,17 @@ test("E2E-311 signed staff requests use independent verification, approved peopl
             return f.flowConfig.cliniko.rateBudget.claim();
           },
         } } } : f.flowConfig;
-        call = await clinikoWorkflowVoiceFixture(db, scenario === "unavailable" ? withoutStaff : config, owner =>
+        call = await clinikoWorkflowVoiceFixture(db, ["unavailable", "lateArrivalUnavailable"].includes(scenario) ? withoutStaff : config, owner =>
           createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-staff-key", model: "synthetic-staff-model", clinicDate: () => "2026-10-04",
             fetch: async (_value, init) => {
               modelInputs.push(String(init?.body));
               const text = JSON.parse(JSON.parse(String(init?.body)).input[1].content).callerText;
               const start = text === "I need to book an appointment.", menu = text === "What times are available on October 8?";
-              const body = JSON.stringify({ kind: start ? "workflow" : menu ? "menu" : text === "Please explain what you found." ? "staffRequest" : "staffOutcome", operation: start ? "book" : null,
+              const body = JSON.stringify({ kind: start ? "workflow" : menu ? "menu" : text === "Please explain what you found." || text === "I am a few minutes behind schedule. Please let reception know." ? "staffRequest" : "staffOutcome", operation: start ? "book" : null,
                 stage: null, from: menu ? "2026-10-08" : null, to: menu ? "2026-10-08" : null, choice: null });
               return Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [{ type: "output_text", text: body }] }] });
             } }));
-        const priorClinical = ["clinicalGrant", "oldProposal", "committedClinical"].includes(scenario);
+        const priorClinical = ["clinicalGrant", "oldProposal", "committedClinical", "lateArrival", "lateArrivalLost", "lateArrivalUnavailable"].includes(scenario);
         if (priorClinical) {
           await call.turn("I need to book an appointment."); await call.mark();
           await voiceUntil(() => f.mail.length === 1, "original clinical verification email"); await call.verify(f.mail[0]!.code);
@@ -54,13 +54,13 @@ test("E2E-311 signed staff requests use independent verification, approved peopl
         }
         const prior = await call.state(), priorStaffPosts = f.staffPosts, priorWrites = call.writes.length;
         await call.turn(["named", "changedPerson"].includes(scenario) ? "Could I speak to Morgan?" : scenario === "unlisted" ? "Could I speak to SomeoneUnknown?"
-          : "Can I speak to a receptionist rather than arrange a booking with you?");
+          : scenario.startsWith("lateArrival") ? "I am a few minutes behind schedule. Please let reception know." : "Can I speak to a receptionist rather than arrange a booking with you?");
         await call.mark();
         assert.doesNotMatch(call.spoken.at(-1)!, /your staff request was saved|staff (?:have|has) (?:read|received)|staff will call|guarantee/i,
           "an initial human request is not a saved, received or promised callback");
-        if (["unavailable", "unapproved", "disabled", "unlisted"].includes(scenario)) {
+        if (["unavailable", "unapproved", "disabled", "unlisted", "lateArrivalUnavailable"].includes(scenario)) {
           assert.match(call.spoken.at(-1)!, /can't send.*staff request.*contact the clinic/);
-          assert.equal(f.mail.length, 0); assert.equal(f.staffPosts, 0); assert.equal(Object.keys((await call.state()).staffItems).length, 0);
+          assert.equal(f.mail.length, priorClinical ? 1 : 0); assert.equal(f.staffPosts, 0); assert.equal(Object.keys((await call.state()).staffItems).length, 0);
           assert.deepEqual((await call.state()).actions, prior.actions, "unavailable human contact cannot force a booking workflow");
           assert.equal(call.writes.length, priorWrites);
           return;
@@ -85,8 +85,13 @@ test("E2E-311 signed staff requests use independent verification, approved peopl
         }
         const state = await call.state(), item = Object.values(state.staffItems).at(-1)!;
         assert.ok(item); assert.equal(f.staffPosts, priorStaffPosts + 1); assert.equal(call.writes.length, priorWrites);
+        if (scenario.startsWith("lateArrival")) {
+          assert.deepEqual(state.actions, prior.actions, "a late-arrival message cannot cancel, move or book a visit");
+          assert.equal(priorWrites, 0);
+          assert.equal(f.mail.length, 2, "clinical verification is not permission for a staff request");
+        }
         if (scenario === "committedClinical") assert.deepEqual((await call.state()).actions, prior.actions, "staff work retains the known clinical receipt");
-        const uncertain = ["lost", "nonCommitted", "malformed"].includes(scenario);
+        const uncertain = ["lost", "nonCommitted", "malformed", "lateArrivalLost"].includes(scenario);
         assert.equal(item.status, uncertain ? "needsReview" : "open");
         assert.match(call.spoken.at(-1)!, uncertain ? /can't confirm whether.*request.*saved or received.*won't send.*again/
           : /staff request.*was saved.*can't confirm.*read.*can't.*promise|staff request.*was saved.*can't confirm.*read.*promise/i);
@@ -99,6 +104,11 @@ test("E2E-311 signed staff requests use independent verification, approved peopl
         await call.turn(scenario === "changedPerson" ? "Could I speak to SomeoneUnknown?" : scenario === "repeated" ? "Please ask the team to call me about this." : "Has somebody received my message?");
         if (scenario === "changedPerson") assert.match(call.spoken.at(-1)!, /can't send.*staff request/);
         assert.equal(f.staffPosts, priorStaffPosts + 1, "outcome queries and repeated requests never send another recall");
+        if (scenario.startsWith("lateArrival")) {
+          assert.deepEqual((await call.state()).actions, prior.actions);
+          assert.equal(call.writes.length, 0);
+          assert.doesNotMatch(call.spoken.at(-1)!, /(?:staff|reception) (?:have|has|were|was) (?:told|notified)/i);
+        }
         if (scenario === "committedClinical") {
           await call.mark(); await call.turn("Did that work?");
           assert.match(call.spoken.at(-1)!, /staff request.*was saved/);
@@ -107,7 +117,8 @@ test("E2E-311 signed staff requests use independent verification, approved peopl
         assert.ok(!call.spoken.some(text => /(?:^|[.!?] )(?:the )?staff (?:have|has) (?:received|read)|staff will call|guarantee/i.test(text)), "provider storage is not human receipt");
         assert.ok(modelInputs.every(input => verificationCanaries.every(canary => !input.includes(canary))));
         assert.ok(call.transcripts.every(text => !text.includes(f.mail[0]!.code)));
-      } finally { await call?.close(); await f.close(); }
+      } catch (error) { throw new Error(`${scenario}: ${error instanceof Error ? error.message : String(error)}`, { cause: error }); }
+      finally { await call?.close(); await f.close(); }
     };
     let next = 0;
     const settled = await Promise.allSettled(Array.from({ length: 4 }, async () => { for (;;) { const index = next++; if (index >= scenarios.length) return; await run(scenarios[index]!); } }));

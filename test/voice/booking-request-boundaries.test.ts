@@ -107,7 +107,7 @@ test("E2E-320 signed boundaries clear unsent selections, require fresh self veri
           assert.equal(call.flow.workflow, undefined); assert.equal(call.flow.verificationRequired, false); return;
         }
         const notice = modelCase ? cases.find(item => item.text === ({ minorIntake: cases[0].text, proxyPatient: cases[1].text, jointPractitioners: cases[3].text, groupClass: cases[4].text })[modelCase[1]])!.expected : cases[1].expected;
-        const prefix = scenario === "committed" ? "Your booking is confirmed. " : scenario === "uncertain" ? "I can't confirm that action yet. It is pending review. " : "";
+        const prefix = scenario === "committed" ? "Your booking is confirmed. " : scenario === "uncertain" ? "I can't confirm that action yet. It is pending review. Please contact the clinic before trying again. I won't send that action again from this call. " : "";
         assert.equal(call.spoken.at(-1), prefix + notice, scenario);
         const after = await call.state();
         assert.equal(traffic, reads); assert.equal(f.mail.length, mail); assert.equal(call.writes.length, writes);

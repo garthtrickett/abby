@@ -255,7 +255,7 @@ test("E2E-264 a cancellation target moved after the last read stays unconfirmed 
     await app.play((await app.speak()).delivery);
     const uncertain = await app.speak();
     assert.equal(app.patchCount, 1);
-    assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review.");
+    assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review. Please contact the clinic before trying again. I won't send that action again from this call.");
     assert.equal(app.spoken.some(text => text.includes("is confirmed")), false);
     assert.equal(Object.values((await app.state()).actions)[0]?.status, "uncertain");
     await app.play(uncertain.delivery);
@@ -332,7 +332,7 @@ for (const kind of ["cancel", "reschedule"] as const) {
     await app.play((await app.speak()).delivery);
     const uncertain = await app.speak();
     assert.equal(app.patchCount, 1);
-    assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review.");
+    assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review. Please contact the clinic before trying again. I won't send that action again from this call.");
     await app.play(uncertain.delivery);
     const settled = await app.drain();
     assert.ok(settled.ok);
@@ -400,7 +400,7 @@ for (const kind of ["cancel", "reschedule"] as const) {
       const uncertain = await app.speak();
       assert.equal(patches, 1);
       assert.equal(readsAfterPatch, 0, "observation must follow the uncertain caller notice");
-      assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review.");
+      assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review. Please contact the clinic before trying again. I won't send that action again from this call.");
       assert.equal(Object.values((await app.state()).actions)[0]?.status, "uncertain");
       await app.play(uncertain.delivery);
       const settled = await app.drain();

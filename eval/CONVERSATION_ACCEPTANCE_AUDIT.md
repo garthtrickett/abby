@@ -66,7 +66,20 @@ approved preferences, windows, appointment enquiries and public facts.
    receipt clauses were matched to the exact assertions, not a generic named
    score. No production behavior change was required.
 
-The next work is the remaining clause audit, starting with appointment reads and outcome queries. These are
+8. **CCP-019 through CCP-023: reads, outcome truth and late arrival inspected.**
+   E2E-318 exposed missing uncertain recovery wording in both a direct signed
+   witness and the strengthened live named check before the shared reply changed.
+   Direct/repeated queries now retain SAM uncertainty without inspecting or
+   replaying a lost-response booking. E2E-314 independently protects reads and
+   E2E-311 covers literal late arrival with separate staff proof and no diary
+   change. The broader serving gate passes 168 tests but remains red on one
+   pre-existing practitioner request-count assertion reproduced on unchanged
+   main (five reads versus four expected); one opt-in PostgreSQL intake-setting probe is
+   skipped. This patch does not change or bypass that assertion and does not
+   claim the broad gate is green. See the dedicated evidence/journal for final
+   baseline/typecheck and publication state.
+
+The next work is the remaining clause audit, starting with retained search windows, next-option searches and the remaining service/target clauses. These are
 local synthetic tasks; real carrier and email setup is outside these test goals
 and remains a separate release gate.
 
@@ -95,7 +108,7 @@ for standalone durable patient-specific records.
 | 2. Latest played spoken choices | E2E-308 time/relative choice, rejected offers, ambiguity, evil model ordinal and interrupted menu; E2E-312 later bounded search | Spoken time, exact offer/send, ambiguity and stale-menu clauses inspected; continue remaining search/information clauses |
 | 3. Corrections | E2E-309 cancels old proposals before held interpretation, rereads replacements, rejects unplayed confirmation and requires a new affirmative; dated/window correction tests | Latest menu/whole-utterance/final date clauses inspected; continue remaining receipt/late-correction clauses |
 | 4. Cancel versus move | E2E-310 mixed-operation clarification, denied switches, fresh operation verification, original target equality, one exact PATCH, sent/uncertain receipt preservation | Connected cancel/move and standard/late fee clauses inspected; continue target-selection and sent-outcome clauses |
-| 5. Human/staff requests | E2E-311 independent permission/code, approved people, saved/uncertain receipts, no duplicate request; E2E-323 finite purpose; E2E-325 unknown missed-call reason | Initial human/saved/uncertain/proxy safety clauses inspected; late-arrival and background-context remain open; actual staff activation is separate |
+| 5. Human/staff requests | E2E-311 independent permission/code, approved people, saved/uncertain receipts, no duplicate request; E2E-323 finite purpose; E2E-325 unknown missed-call reason | Initial human/saved/uncertain/proxy safety clauses inspected; literal late-arrival contact and background-context boundaries are now directly covered; actual staff activation is separate |
 | 6. Approved search/information | E2E-312 retained windows; E2E-313 approved names/earliest bounds/location confirmation; E2E-314 independent reads; E2E-315 public facts/repetition; E2E-322 services/unknown fees | Complete clause audit; do not infer a clinic-wide search, cross-location authority or audio pacing |
 
 ## Clause-by-clause map
@@ -281,9 +294,9 @@ Evidence to inspect: [targeted test](../test/voice/cliniko-staff-request.test.ts
 
 ### CCP-019 — appointment-read-without-change
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Supported with independent read-only workflow evidence**. E2E-314 runs 25 signed read configurations, an agent-only read path and a signed enquiry-to-booking switch. Before verification there is no appointment read or disclosure. All read permissions are appointments.read; an attempted cancellation creates no action or write and keeps the read workflow. Disabled, revoked, foreign-business/time-zone, changed-email, closed and unavailable reads cannot disclose stale appointments. A later explicit booking needs a fresh independent code and played confirmation; it is not an enquiry side effect.
 
-Evidence to inspect: [targeted test](../test/voice/appointment-enquiries.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/appointment-enquiries.test.ts); [named baseline](baselines/clinic-conversation-after-uncertain-recovery-v24-v1.json).
 
 - `CCP-019-R01`: Use an explicitly permitted read-only route or explain its current absence.
 - `CCP-019-F01`: Select cancellation as a side effect of reading.
@@ -291,9 +304,9 @@ Evidence to inspect: [targeted test](../test/voice/appointment-enquiries.test.ts
 
 ### CCP-020 — cancelled-outcome-query
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Supported with direct cancellation-receipt queries**. E2E-318 asks the original “Did you actually remove the appointment?” after one played and separately affirmed cancellation. It restates the committed SAM receipt, truthfully denies another change and gives the clinic-review fallback. “Did that work?” independently returns the exact cancellation status. Actions, effects, staff items, provider-budget claims, mail and the single send remain unchanged; extra model success wording is rejected without changing the receipt.
 
-Evidence to inspect: [targeted test](../test/voice/notification-outcome-query.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/notification-outcome-query.test.ts); [named baseline](baselines/clinic-conversation-after-uncertain-recovery-v24-v1.json).
 
 - `CCP-020-R01`: Restate the committed cancellation from SAM without another send.
 - `CCP-020-F01`: Re-cancel the appointment.
@@ -301,9 +314,9 @@ Evidence to inspect: [targeted test](../test/voice/notification-outcome-query.te
 
 ### CCP-021 — uncertain-outcome-query
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Fixed with a preserved uncertain-recovery failure**. The strengthened live named check and direct signed witness both first failed because the pending-review reply lacked recovery instructions. The shared formatter now gives clinic contact before another attempt and says the action will not be sent again from this call; initial uncertain notices use the same formatter. E2E-318 preserves the uncertain SAM action and all effects after original/repeated questions, with no provider-budget claims, mail or second send. The synthetic provider has accepted the one POST despite the lost response: its later mutable row is neither inspected nor promoted. Forged model wording cannot claim success.
 
-Evidence to inspect: [targeted test](../test/voice/notification-outcome-query.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [before-change live failure](baselines/uncertain-recovery-before-v24-v1.json), [direct failure](baselines/uncertain-recovery-direct-before-v1.json); [targeted test](../test/voice/notification-outcome-query.test.ts); [named baseline](baselines/clinic-conversation-after-uncertain-recovery-v24-v1.json).
 
 - `CCP-021-R01`: Restate uncertainty and the approved recovery instruction.
 - `CCP-021-F01`: Promote uncertainty from later mutable provider state.
@@ -311,9 +324,9 @@ Evidence to inspect: [targeted test](../test/voice/notification-outcome-query.te
 
 ### CCP-022 — confirmation-email-query
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Supported with separate action and notification evidence**. E2E-318 checks committed booking/cancellation/move, uncertain, proposal, no-action and enquiry states. Exact replies distinguish SAM commitment from unproven email delivery and use the clinic-written-confirmation fallback. Repeated direct/model notification questions leave effects, staff items, mail and writes unchanged. Model-injected wording/ordinals are rejected; agent outcome commands cannot forge an owner, recipient, sent status or speech, cross scope or use an expired session. A paid-receipt question uses the exact finite invoice-copy contact boundary, not a booking-email claim.
 
-Evidence to inspect: [targeted test](../test/voice/notification-outcome-query.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/notification-outcome-query.test.ts); [named baseline](baselines/clinic-conversation-after-uncertain-recovery-v24-v1.json).
 
 - `CCP-022-R01`: Distinguish booking commitment from notification delivery.
 - `CCP-022-R02`: Use only the proven notification-owner path.
@@ -321,9 +334,9 @@ Evidence to inspect: [targeted test](../test/voice/notification-outcome-query.te
 
 ### CCP-023 — late-arrival-message
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Supported with literal late-arrival requests**. E2E-311 adds the original “I am a few minutes behind schedule. Please let reception know.” after independent clinical verification. Saved and lost-response routes require a separate staff code and explicit request to send; an unavailable route gives clinic contact without another code or task. Every path preserves clinical actions and makes zero diary writes; repeated status questions cannot send another recall or claim reception was told. The permitted route saves a generic staff-contact request, not a delivery receipt for arrival details.
 
-Evidence to inspect: [targeted test](../test/voice/cliniko-staff-request.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/cliniko-staff-request.test.ts); [named baseline](baselines/clinic-conversation-after-uncertain-recovery-v24-v1.json).
 
 - `CCP-023-R01`: Use an approved staff-request route or explain the available fallback.
 - `CCP-023-R02`: Leave the appointment unchanged.

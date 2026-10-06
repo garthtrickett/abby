@@ -1253,3 +1253,80 @@ requests). No redundant live run is claimed. Added test files are excluded from
 that evaluator hash and independently bound in this patch’s evidence record.
 The remaining appointment-read/outcome, late-arrival and search/information
 clauses stay open; the named baseline is not full acceptance sign-off.
+
+
+## 2026-10-06 — appointment reads, direct outcomes and literal late arrival
+
+Base: main `efacd456f4c1c24a82d1c6721c3a22d8f9ce6273`.
+
+- The corrected direct E2E-318 witness failed before the production change:
+  uncertainty gave only pending-review status, with no clinic-contact recovery.
+  The [direct record](baselines/uncertain-recovery-direct-before-v1.json) also
+  records the initial over-specific cancellation expectation and its correction.
+- `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/baselines/uncertain-recovery-before-v24-v1.json --case CCP-021`
+  failed the strengthened named observation, while all three safety observations
+  passed. Setup matched, one actual model request ran, source stayed stable and
+  PostgreSQL canaries were clear. The old status-only reply is preserved.
+- Shared uncertain replies now say to contact the clinic before another attempt
+  and that Abby will not send that action again from the call. Initial host-result
+  notices call the same formatter. Caller-mediated intake keeps its separate
+  saved-details/no-appointment warning. No new write, retry, storage or authority
+  path was added.
+- E2E-318 runs the original direct cancellation/uncertain questions, repeated
+  generic outcomes and rejected model success wording. SAM actions/effects/staff
+  items, provider-budget claims, mail and the single write remain unchanged; a
+  later accepted synthetic provider row after a lost response is not inspected.
+- E2E-314's 25 signed read configurations, native read commands and signed
+  enquiry-to-booking switch passed. Reads cannot authorize cancellation, reveal
+  data before verification or transfer read proof into booking.
+- E2E-311's 23 signed scenarios now include literal late arrival after clinical
+  verification across saved, lost-response and unavailable routes. Independent
+  staff code and an explicit send are required; no diary change or human delivery
+  is claimed. This is generic staff contact, not proof that arrival details were
+  conveyed to reception.
+
+### Local verification and publication limits
+
+The initial three-file serving gate passed six tests and failed one stale
+billing-receipt expectation. Its existing actual reply already used the finite
+invoice-copy contact boundary; only that expectation was updated.
+
+The broader command was:
+
+```sh
+node --test --test-concurrency=3 test/voice/appointment-enquiries.test.ts test/voice/notification-outcome-query.test.ts test/voice/cliniko-staff-request.test.ts test/voice/booking-horizon.test.ts test/voice/booking-request-boundaries.test.ts test/voice/embedded-cliniko-appointment-change-host-call.test.ts test/voice/embedded-cliniko-booking-host-call.test.ts test/voice/embedded-intake-booking-call.test.ts test/voice/voice.test.ts test/text/notification-effects.test.ts test/voice/conversation-baseline.test.ts test/contract/scenario-manifest.test.ts
+```
+
+Result: **168 passed, one failed, one skipped, zero canceled; exit 1**. The skip
+is the existing opt-in PostgreSQL intake-setting probe. The failure is the
+unchanged practitioner-outside-business assertion at `voice.test.ts:1027`:
+five provider reads versus four expected. The actual caller failure/no-write
+assertions before it pass. It was independently reproduced on clean unchanged
+main with:
+
+```sh
+node --test --test-name-pattern='memory: Cliniko practitioner outside business' test/voice/voice.test.ts
+```
+
+That reproduction also exits 1 with `5 !== 4`. The assertion and the provider
+reader are unchanged by this patch. The broader suite is **not green**; publication
+is a draft PR. This records a pre-existing failure rather than bypassing its test.
+
+After the wording change:
+
+```sh
+node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/baselines/clinic-conversation-after-uncertain-recovery-v24-v1.json
+npm run typecheck
+git diff --check
+```
+
+The source-stable [fresh all-45 report](baselines/clinic-conversation-after-uncertain-recovery-v24-v1.json)
+passes all 45 named observations and 135 safety observations: six actual candidate
+model requests, 39 trusted paths, no setup gaps or harness failures and clear
+PostgreSQL canaries. Typecheck and diff check pass. Prompt remains v24; no redundant
+intent-classifier run is claimed. The [direct evidence record](baselines/read-outcome-late-arrival-evidence-v1.json)
+binds commands, test hashes, before/after source hashes and the pre-existing red
+result. All 45 original cases and 124 prose clauses remain in the audit; 16
+assessments still await their remaining source/behavior review. Actual clinic,
+email and carrier activation remain separate release gates. Standalone privacy
+is unchanged, and rich database tests remain unsafe reference-lab evidence.

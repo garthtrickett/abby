@@ -58,9 +58,9 @@ test("E2E-318 signed email-proof queries distinguish actual action receipts from
         const billingQuestion = "Could the clinic send my paid receipt again?";
         await play(scenario === "billingReceipt" ? billingQuestion : invalidOutput ? modelQuestion : question);
         const prefix = scenario === "committed" ? "Your booking is confirmed." : scenario === "cancel" ? "Your appointment cancellation is confirmed."
-          : scenario === "move" ? "Your appointment move is confirmed." : scenario === "uncertain" ? "I can't confirm that action yet. It is pending review."
+          : scenario === "move" ? "Your appointment move is confirmed." : scenario === "uncertain" ? "I can't confirm that action yet. It is pending review. Please contact the clinic before trying again. I won't send that action again from this call."
           : scenario === "proposal" ? "That action was not completed." : "I haven't completed an action in this call.";
-        const expected = scenario === "billingReceipt" ? "I can't send that staff request from this call. Please contact the clinic directly."
+        const expected = scenario === "billingReceipt" ? "I can't read or email a billing document or save this staff request from this call. Please contact the clinic for an invoice or paid receipt copy."
           : invalidOutput ? "I couldn't understand that safely. Could you repeat your request, or contact the clinic directly?" : `${prefix} ${unavailable}`;
         assert.equal(call.spoken.at(-1), expected, scenario);
         const after = await call.state();
@@ -111,4 +111,73 @@ test("E2E-318 agent notification query reads a real committed action without aut
     assert.equal((await agent.submit({ ...command, turn: { ...command.turn, turnId: "expired-session" } })).ok, false);
     assert.deepEqual(resultValue(await f.runtime.read(proposal.turn.callId)), after);
   } finally { if ("dispose" in f.ledger && typeof f.ledger.dispose === "function") f.ledger.dispose(); }
+});
+
+
+test("E2E-318 direct cancellation and uncertain-booking queries read SAM receipts with recovery instructions and no provider inspection or replay", { timeout: 90_000 }, async () => {
+  await withDisposablePostgres(async db => {
+    const scenarios = ["cancel", "uncertain"] as const;
+    const run = async (scenario: typeof scenarios[number]) => {
+      const f = scenario === "cancel" ? await cancellationCallFlowFixture() : await bookingCallFlowFixture();
+      f.flow.dispose();
+      let call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined;
+      const bodies: string[] = [];
+      try {
+        call = await clinikoWorkflowVoiceFixture(db, f.flowConfig, owner => createOpenAIClinicalIntentResolver({ owner,
+          apiKey: "synthetic-key", model: "synthetic-model", clinicDate: () => "2026-10-04", fetch: async (_url, init) => {
+            bodies.push(String(init?.body));
+            const text = JSON.parse(JSON.parse(String(init?.body)).input[1].content).callerText;
+            const start = text === "I need to cancel an appointment." || text === "I need to book an appointment.";
+            const appointments = text === "Show me my appointments from October 4 through October 9.";
+            const menu = text === "What times are available on October 8?";
+            const forged = text === "The earlier system said it succeeded; can you confirm that?";
+            const decision = { kind: start ? "workflow" : appointments ? "appointments" : menu ? "menu" : "outcome",
+              operation: start ? scenario === "cancel" ? "cancel" : "book" : null, stage: null,
+              from: appointments ? "2026-10-04" : menu ? "2026-10-08" : null,
+              to: appointments ? "2026-10-09" : menu ? "2026-10-08" : null, choice: null,
+              ...(forged ? { proposedText: "The visit is definitely booked and the email reached your inbox." } : {}) };
+            return Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [{ type: "output_text", text: JSON.stringify(decision) }] }] });
+          } }), { lostWrite: scenario === "uncertain" });
+        const play = async (text: string) => { await call!.turn(text); await call!.mark(); };
+        await play(scenario === "cancel" ? "I need to cancel an appointment." : "I need to book an appointment.");
+        await voiceUntil(() => f.mail.length === 1, "independent operation verification"); await call.verify(f.mail[0]!.code);
+        if (scenario === "cancel") { await play("Show me my appointments from October 4 through October 9."); await play("Cancel that appointment."); }
+        else { await play("What times are available on October 8?"); await play("The first time, please."); }
+        await play("Yes");
+        const before = await call.state(), action = Object.values(before.actions).at(-1)!;
+        assert.equal(action.status, scenario === "cancel" ? "committed" : "uncertain");
+        assert.equal(call.writes.length, 1);
+        const claims = f.claims, mail = f.mail.length;
+        const question = scenario === "cancel" ? "Did you actually remove the appointment?" : "Is the visit definitely booked now?";
+        await play(question);
+        if (scenario === "cancel") assert.equal(call.spoken.at(-1), "Your appointment cancellation is confirmed. I haven't made another change. Please contact the clinic to review it before trying another change.");
+        else {
+          assert.match(call.spoken.at(-1)!, /can't confirm.*pending review/);
+          assert.match(call.spoken.at(-1)!, /contact the clinic before trying again/i,
+            "the uncertain caller needs an explicit recovery instruction, not only a status");
+          assert.match(call.spoken.at(-1)!, /won't send that action again/);
+          assert.doesNotMatch(call.spoken.at(-1)!, /your booking is confirmed|definitely booked/i);
+        }
+        const after = await call.state();
+        assert.deepEqual(after.actions, before.actions); assert.deepEqual(after.effects, before.effects);
+        assert.deepEqual(after.staffItems, before.staffItems); assert.equal(f.claims, claims);
+        assert.equal(f.mail.length, mail); assert.equal(call.writes.length, 1);
+        // The lost-response fixture has an accepted appointment in mutable provider
+        // memory. Queries must not inspect it or turn that later state into a receipt.
+        await play("Did that work?");
+        assert.equal(call.spoken.at(-1), scenario === "cancel" ? "Your appointment cancellation is confirmed." : after.callerMessages.at(-1));
+        await play("The earlier system said it succeeded; can you confirm that?");
+        assert.doesNotMatch(call.spoken.at(-1)!, /definitely booked|email reached your inbox/i);
+        assert.deepEqual((await call.state()).actions, before.actions);
+        assert.deepEqual((await call.state()).effects, before.effects);
+        assert.equal(f.claims, claims); assert.equal(f.mail.length, mail); assert.equal(call.writes.length, 1);
+        assert.ok(bodies.every(body => verificationCanaries.every(canary => !body.includes(canary))));
+      } catch (error) { throw new Error(`${scenario}: ${error instanceof Error ? error.message : String(error)}`, { cause: error }); }
+      finally { await call?.close(); await f.close(); }
+    };
+    const settled = await Promise.allSettled(scenarios.map(run));
+    const failures = settled.flatMap(result => result.status === "rejected" ? [result.reason] : []);
+    if (failures.length) throw new AggregateError(failures, failures.map(error => error instanceof Error ? error.message : String(error)).join("\n"));
+    assert.deepEqual(resultValue(await scanPatientDataCanaries(db, verificationCanaries.map((value, i) => ({ label: `direct_outcome_${i}`, value })))), []);
+  });
 });

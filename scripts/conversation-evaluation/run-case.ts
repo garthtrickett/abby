@@ -144,8 +144,18 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
     case "revisedDate": pass = last?.kind === "bookingMenu" && last.from === "2026-10-07" && last.to === "2026-10-07" &&
       last.window?.startMinute === 0 && last.window.endMinute === 720 && last.window.startInclusive &&
       /before 12:00 pm.*Wednesday 7 October.*9:00 am/s.test(text) && !/4:30 pm/.test(text) && !statuses.includes("awaitingConfirmation"); break;
-    case "outcome": pass = (last?.kind === "outcome" || last?.kind === "clarify" && last.reason === "changeAfterSend") &&
-      /confirmed|can't confirm|contact the clinic/i.test(text); break;
+    case "outcome": {
+      const routed = last?.kind === "outcome" || last?.kind === "clarify" && last.reason === "changeAfterSend";
+      const unchanged = work.noNewProviderWork && JSON.stringify(after.actions) === JSON.stringify(before.actions) &&
+        JSON.stringify(after.effects) === JSON.stringify(before.effects) && JSON.stringify(after.staffItems) === JSON.stringify(before.staffItems);
+      if (candidate.id === "CCP-020") pass = routed && unchanged && latest?.kind === "cancel" && latest.status === "committed" &&
+        /Your appointment cancellation is confirmed\./.test(text);
+      else if (candidate.id === "CCP-021") pass = routed && unchanged && latest?.kind === "book" && latest.status === "uncertain" &&
+        /I can't confirm that action yet\. It is pending review\./.test(text) && /contact the clinic before trying again/i.test(text) &&
+        !/Your booking is confirmed|definitely booked/i.test(text);
+      else pass = routed && /confirmed|can't confirm|contact the clinic/i.test(text);
+      break;
+    }
     case "notificationOutcome": pass = last?.kind === "notificationOutcome" && latest?.kind === "book" && latest.status === "committed" &&
       speech.includes("Your booking is confirmed. I can't verify that an email confirmation was sent or deliver one from this call. Please contact the clinic for written confirmation.") &&
       !Object.values(after.effects).some(effect => effect.kind === "notification" || effect.kind === "notificationReconcile") &&

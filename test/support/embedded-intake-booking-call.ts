@@ -238,7 +238,7 @@ export async function runEmbeddedIntakeBookingCall(bookingOutcome: "rejected" | 
     assert.equal(host.createdRef, undefined);
     assert.equal(Object.values(state.value.actions).find(action => action.kind === "intake")?.status, "uncertain");
     assert.equal(host.bookingWrites, 0);
-    assert.equal(spoken.at(-1), "I can't confirm that action yet. It is pending review.");
+    assert.equal(spoken.at(-1), "I can't confirm that action yet. It is pending review. Please contact the clinic before trying again. I won't send that action again from this call.");
     assert.equal(spoken.includes("Your details were saved. No appointment is confirmed yet."), false);
     assert.equal(spoken.includes("Your booking is confirmed."), false);
     assert.deepEqual(await host.resolveBooking(scope, "created-proof-1", offer.offerRef, now),
@@ -263,7 +263,7 @@ export async function runEmbeddedIntakeBookingCall(bookingOutcome: "rejected" | 
   assert.equal(spoken.includes("Your booking is confirmed."), false);
   assert.equal(spoken.at(-1), bookingOutcome === "rejected"
     ? "That action was not completed."
-    : "I can't confirm that action yet. It is pending review.");
+    : "I can't confirm that action yet. It is pending review. Please contact the clinic before trying again. I won't send that action again from this call.");
   const reception = createEmbeddedTextComposition(ledger, policy, host);
   const drained = await reception.drain(scope, callId, "2026-09-29T10:10:00.000Z");
   assert.ok(drained.ok);
