@@ -1,3 +1,4 @@
+import { bookingCatalogueFixture } from "../../test/support/cliniko-booking-catalogue.ts";
 import type { Kysely } from "kysely";
 import type Database from "../../src/storage/generated/Database.ts";
 import { createOpenAIClinicalIntentResolver } from "../../src/standalone/openai-clinical-intent.ts";
@@ -90,11 +91,18 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
     case "unsupported": pass = (last === null || last?.kind === "clarify" && last.reason === "changeUnsupported") &&
       /can't|cannot|not supported|contact.*clinic|unavailable/i.test(text) && !statuses.includes("awaitingConfirmation"); break;
     case "constraints":
+      if (candidate.id === "CCP-011") { pass = last?.kind === "clarify" && last.reason === "searchPreferenceUnavailable" &&
+        last.approvedLocation === "Demo North" && /supports appointments at Demo North.*can’t use/s.test(text) && !statuses.includes("awaitingConfirmation"); break; }
+      if (candidate.id === "CCP-025") { pass = last?.kind === "bookingMenu" && last.preference?.practitioner === "Demo B" &&
+        /approved practitioners Demo B at Demo North.*with Demo B/s.test(text) && !/with Demo A/.test(text) && !statuses.includes("awaitingConfirmation"); break; }
       pass = candidate.id === "CCP-027" && last?.kind === "bookingMenu" && last.from === "2026-10-08" && last.to === "2026-10-08" &&
         last.window?.startMinute === 960 && last.window.endMinute === 1440 && last.window.startInclusive === false &&
         /after 4:00 pm.*5:00 pm/s.test(text) && !/3:00 pm|option two/.test(text) && !statuses.includes("awaitingConfirmation");
       break;
     case "boundedSearch":
+      if (candidate.id === "CCP-026") { pass = last?.kind === "bookingMenu" && last.preference?.practitioner === "any" &&
+        last.from === "2026-10-04" && last.to === "2026-10-10" && /Demo A and Demo B.*Sunday 4 October.*Saturday 10 October.*earliest eligible start.*with Demo B/s.test(text) &&
+        !statuses.includes("awaitingConfirmation"); break; }
       pass = candidate.id === "CCP-028" && last?.kind === "bookingMenu" && last.from === "2026-10-09" && last.to === "2026-10-11" &&
         /Friday 9 October.*10:00 am/s.test(text) && !/Thursday 8 October/.test(text) && !statuses.includes("awaitingConfirmation");
       break;
@@ -108,7 +116,7 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
 /** Exercise the same signed HTTP/WS owner, private OTP and SAM/playback path as
  * E2E-303. Setup decisions are pinned; only candidate turns use the live model. */
 export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: Plan, model: ModelConfig) {
-  const f = plan.stage.startsWith("staff") ? await clinikoStaffCallFlowFixture({ lostResponse: plan.stage === "staffUncertain" })
+  const f = ["CCP-011", "CCP-025", "CCP-026"].includes(candidate.id) ? await bookingCatalogueFixture() : plan.stage.startsWith("staff") ? await clinikoStaffCallFlowFixture({ lostResponse: plan.stage === "staffUncertain" })
     : plan.stage.startsWith("cancel") ? await cancellationCallFlowFixture({ multiple: candidate.id === "CCP-036" })
     : plan.stage.startsWith("move") ? await reschedulingCallFlowFixture() : await bookingCallFlowFixture();
   f.flow.dispose();

@@ -1,3 +1,5 @@
+import type { BookingSearchScope } from "./booking-search-preference.ts";
+import { normalizedSpokenName } from "./pending-location.ts";
 import { bookingSearchWindowText, matchesBookingSearchWindow, validBookingSearchWindow } from "./booking-search-window.ts";
 import type { BookingSearchWindow } from "./booking-search-window.ts";
 import { err, ok } from "./model.ts";
@@ -8,6 +10,7 @@ import { supportedVoiceLocale } from "./voice-presentation.ts";
 export type BookingMenuRead = Readonly<{
   scope: LocationScope; callId: string; sessionId: string; policyVersion: string; observedAt: string; timeZone: string;
   practitionerName: string; appointmentTypeName: string; reservable: false;
+  locationName?: string; searchScope?: BookingSearchScope;
   window?: BookingSearchWindow;
   choices: readonly Readonly<{ startsAt: string; endsAt: string; expiresAt: string }>[];
 }>;
@@ -27,9 +30,23 @@ export function bookingMenuPresentation(read: BookingMenuRead, binding: Readonly
         at === undefined || observed === undefined || Math.abs(observed - at) > 30_000 ||
         !name(read.practitionerName) || !name(read.appointmentTypeName) || !Array.isArray(read.choices) || read.choices.length > 3 ||
         typeof read.timeZone !== "string" || read.timeZone.length > 128 ||
-        read.window !== undefined && !validBookingSearchWindow(read.window)) return err({ kind: "invalidEvidence" });
+        read.window !== undefined && !validBookingSearchWindow(read.window) || read.locationName !== undefined && !name(read.locationName)) return err({ kind: "invalidEvidence" });
     const clock = new Intl.DateTimeFormat(locale, { timeZone: read.timeZone, weekday: "long", day: "numeric", month: "long",
       hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "long" });
+    let search = "";
+    if (read.searchScope) {
+      const searched = read.searchScope, from = Date.parse(`${searched.from}T00:00:00.000Z`), to = Date.parse(`${searched.to}T00:00:00.000Z`);
+      if (!name(searched.locationName) || searched.locationName !== read.locationName || !Array.isArray(searched.practitioners) ||
+          searched.practitioners.length < 1 || searched.practitioners.length > 3 || !searched.practitioners.every(name) ||
+          new Set(searched.practitioners.map(normalizedSpokenName)).size !== searched.practitioners.length ||
+          !searched.practitioners.includes(read.practitionerName) || !["default", "preferred", "earliestApproved"].includes(searched.selection) ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(searched.from) || !/^\d{4}-\d{2}-\d{2}$/.test(searched.to) ||
+          !Number.isFinite(from) || !Number.isFinite(to) || new Date(from).toISOString().slice(0, 10) !== searched.from ||
+          new Date(to).toISOString().slice(0, 10) !== searched.to || to < from || to - from > 6 * 86_400_000) return err({ kind: "invalidEvidence" });
+      const day = new Intl.DateTimeFormat(locale, { timeZone: "UTC", weekday: "long", day: "numeric", month: "long" });
+      search = `I searched the approved practitioners ${searched.practitioners.join(" and ")} at ${searched.locationName}, from ${day.format(new Date(from))} through ${day.format(new Date(to))}. `;
+      if (searched.selection === "earliestApproved" && read.choices.length) search += `The earliest eligible start I found in that search is option one. These options are with ${read.practitionerName}. `;
+    }
     let prior = -Infinity;
     const choices: string[] = [];
     for (const choice of read.choices) {
@@ -40,7 +57,7 @@ export function bookingMenuPresentation(read: BookingMenuRead, binding: Readonly
       choices.push(`option ${["one", "two", "three"][choices.length]}, ${clock.format(new Date(start))}, for ${(end-start)/60_000} minutes`);
     }
     const constraint = read.window ? `I checked appointment start times ${bookingSearchWindowText(read.window)} in the clinic local time. ` : "";
-    return ok(constraint + (choices.length ? `For ${read.appointmentTypeName} with ${read.practitionerName}, I can check ${choices.join("; ")}. `+
+    return ok(search + constraint + (choices.length ? `For ${read.appointmentTypeName} with ${read.practitionerName}${read.locationName ? ` at ${read.locationName}` : ""}, I can check ${choices.join("; ")}. `+
       `Which option would you like? These times may change and are not reserved.` : "I couldn't find an eligible booking time for those dates. Please contact the clinic directly."));
   } catch { return err({ kind: "invalidEvidence" }); }
 }
@@ -51,11 +68,11 @@ export function bookingConfirmation(offer: BookableOffer, locale: string): Resul
   const presentation = offer.presentation;
   if (!presentation) return ok(`Please confirm the ${offer.serviceRef} appointment at ${offer.startsAt}.`);
   try {
-    if (!supportedVoiceLocale(locale) || !name(presentation.practitionerName) || !name(presentation.appointmentTypeName) ||
+    if (!supportedVoiceLocale(locale) || !name(presentation.practitionerName) || !name(presentation.appointmentTypeName) || presentation.locationName !== undefined && !name(presentation.locationName) ||
         !Number.isSafeInteger(presentation.durationMinutes) || presentation.durationMinutes < 1 || presentation.durationMinutes > 480 ||
         instant(offer.startsAt) === undefined || typeof presentation.timeZone !== "string" || presentation.timeZone.length > 128) return err({ kind: "invalidEvidence" });
     const at = new Intl.DateTimeFormat(locale, { timeZone: presentation.timeZone, weekday: "long", day: "numeric", month: "long",
       hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "long" }).format(new Date(offer.startsAt));
-    return ok(`Please confirm the ${presentation.appointmentTypeName} appointment with ${presentation.practitionerName} on ${at}, for ${presentation.durationMinutes} minutes.`);
+    return ok(`Please confirm the ${presentation.appointmentTypeName} appointment with ${presentation.practitionerName}${presentation.locationName ? ` at ${presentation.locationName}` : ""} on ${at}, for ${presentation.durationMinutes} minutes.`);
   } catch { return err({ kind: "invalidEvidence" }); }
 }

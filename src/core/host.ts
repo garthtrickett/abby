@@ -116,7 +116,7 @@ export interface AppointmentHost {
 }
 
 export type BookingSearchWindow = import("./booking-search-window.ts").BookingSearchWindow;
-export type BookingMenuReadQuery = BookingMenuQuery & Readonly<{ from: string; to: string; window?: BookingSearchWindow | null }>;
+export type BookingMenuReadQuery = BookingMenuQuery & Readonly<{ from: string; to: string; window?: BookingSearchWindow | null; preference?: import("./booking-search-preference.ts").BookingSearchPreference }>;
 export type BookingMenuQuery = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
   turnId: string; now: string; signal: AbortSignal }>;
 export type ReschedulingMenuQuery = BookingMenuQuery & Readonly<{ stage: import("./rescheduling-menu.ts").ReschedulingMenuStage }>;

@@ -1,3 +1,4 @@
+import { normalizedSpokenName } from "./pending-location.ts";
 import { confirmedActionText } from "./action-outcome.ts";
 import type { ActionState, MenuClarificationReason } from "./model.ts";
 
@@ -5,13 +6,16 @@ const notices: Record<Exclude<MenuClarificationReason, "changeAfterSend">, strin
   proposalCorrection: "Which details would you like to change? I'll ask for a new confirmation before continuing.",
   menuRejected: "I won't choose any of those options. What other date or time would work for you?",
   menuAmbiguous: "Which option did you mean? Please say its option number or its full date and time.",
+  searchPreferenceUnavailable: "I can only use this call’s clinic location and supported practitioners. I can’t use that preference on this call. Please contact the clinic for another practitioner or branch.",
   menuUnavailable: "Please ask for fresh appointment options before choosing a time.",
   changeAmbiguous: "Would you like to move the existing appointment, or cancel it without a replacement? Each needs exact details and a new confirmation.",
   targetDisagreement: "Let's check which appointment you mean before changing anything. Please request your appointments again.",
   changeUnsupported: "I can't change the patient or appointment type or duration in this workflow. Please contact the clinic about that change.",
 };
 
-export function clarificationText(reason: MenuClarificationReason | undefined, latest?: Pick<ActionState, "kind" | "status">): string {
+export function clarificationText(reason: MenuClarificationReason | undefined, latest?: Pick<ActionState, "kind" | "status">, approvedLocation?: string): string {
+  if (reason === "searchPreferenceUnavailable" && normalizedSpokenName(approvedLocation))
+    return `This call supports appointments at ${approvedLocation}. I can’t use that practitioner or another branch on this call. Please contact the clinic for another practitioner or location.`;
   if (reason !== "changeAfterSend") return reason ? notices[reason] : "Could you repeat that for me?";
   const outcome = latest?.status === "committed" ? confirmedActionText(latest.kind) : "I can't confirm the previous action yet.";
   return `${outcome} I haven't made another change. Please contact the clinic to review it before trying another change.`;

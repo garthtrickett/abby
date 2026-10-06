@@ -293,7 +293,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       break;
     }
     case "clarify":
-      state.callerMessages.push(clarificationText(interpretation.reason, Object.values(state.actions).at(-1)));
+      state.callerMessages.push(clarificationText(interpretation.reason, Object.values(state.actions).at(-1), interpretation.approvedLocation));
       break;
     case "modelFallback":
       addStaffTask(state, "systemFailure", now);
