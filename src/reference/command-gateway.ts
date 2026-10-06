@@ -108,6 +108,8 @@ export type GatewayCommand =
   | Readonly<{ kind: "calls.outcomes.v1"; afterCallId?: string }>
   | Readonly<{ kind: "staff.list.v1"; afterTaskKey?: string }>
   | Readonly<{ kind: "staff.health.v1" }>
+  | Readonly<{ kind: "staff.requests.prepare.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; requestedPerson?: string; now: string }>
+  | Readonly<{ kind: "staff.requests.outcome.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; now: string }>
   | Readonly<{ kind: "operations.daily.v1" }>
   | Readonly<{ kind: "staff.change.v1"; callId: string; taskKey: string; expectedVersion: number; change: StaffChangeRequest; now: string }>;
 
@@ -137,6 +139,7 @@ export type GatewayReply =
   | Readonly<{ kind: "bookingProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "appointmentChangeProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "intakeProposal"; progress: CallCommandProgress }>
+  | Readonly<{ kind: "staffRequestProgress"; progress: CallCommandProgress }>
   | Readonly<{ kind: "modelTurn"; progress: CallCommandProgress }>
   | Readonly<{ kind: "knowledgeAnswer"; progress: CallCommandProgress }>
   | Readonly<{ kind: "knowledgeList"; entries: readonly KnowledgeEntry[] }>
@@ -206,6 +209,7 @@ export class CommandGateway {
     if (this.reception.modelEnabled()) permitted.push("calls.turn.model.v1");
     if (this.reception.availabilityEnabled()) permitted.push("availability.read.v2");
     if (this.reception.appointmentReadEnabled()) permitted.push("appointments.read.v1");
+    if (this.reception.staffRequestEnabled()) permitted.push("staff.requests.prepare.v1", "staff.requests.outcome.v1");
     if (this.review) permitted.push("calls.read.v1");
     if (this.outcomeReport) permitted.push("calls.outcomes.v1");
     if (this.staffQueue) permitted.push("staff.list.v1", "staff.health.v1");
@@ -253,6 +257,14 @@ export class CommandGateway {
 
   private async dispatch(command: GatewayCommand): Promise<Result<GatewayReply, GatewayFailure>> {
     switch (command.kind) {
+      case "staff.requests.prepare.v1": {
+        const result = await this.reception.requestStaff(this.actor.scope, command.turn, command.requestedPerson, command.now);
+        return result.ok ? ok({ kind: "staffRequestProgress", progress: commandProgress(result.value, command.turn.turnId) }) : result;
+      }
+      case "staff.requests.outcome.v1": {
+        const result = await this.reception.staffOutcome(this.actor.scope, command.turn, command.now);
+        return result.ok ? ok({ kind: "staffRequestProgress", progress: commandProgress(result.value, command.turn.turnId) }) : result;
+      }
       case "settings.read.v1": {
         const result = await this.policy.read(this.actor.scope);
         return result.ok ? ok({ kind: "settings", policy: result.value }) : result;

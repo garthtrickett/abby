@@ -29,8 +29,9 @@ test("E2E-307 conversation baseline distinguishes trusted spoken selection and m
     const ambiguous = results.find(result => result.id === "CCP-006")!;
     assert.ok(ambiguous.setupSpeech.some(text => /10:30 am/.test(text) && /10:30 pm/.test(text)), "both ambiguous times must actually be offered");
     const staff = results.find(result => result.id === "CCP-017")!;
-    assert.equal(staff.setupMatch, false); assert.match(staff.setupGap!, /no saved request was fabricated/);
-    assert.equal(staff.checks.find(check => check.id === "conversation-observation")?.pass, false);
+    assert.equal(staff.setupMatch, true); assert.equal(staff.setupGap, null);
+    assert.equal(staff.checks.find(check => check.id === "conversation-observation")?.pass, true);
+    assert.ok(staff.speech.some(text => /staff request.*was saved.*can't confirm.*read/.test(text)));
     const unknown = results.find(result => result.id === "CCP-021")!;
     assert.equal(unknown.writesBefore, 1); assert.equal(unknown.writesAfter, 1);
     assert.equal(unknown.context?.lastAction?.status, "uncertain"); assert.deepEqual(unknown.actionStatuses, ["uncertain"]);

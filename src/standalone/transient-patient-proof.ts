@@ -5,7 +5,7 @@ import type { LocationScope, Result, VerifiedPatient } from "../core/model.ts";
 import { validCallerCandidates } from "../voice/caller-candidates.ts";
 import type { CallerCandidateLookup } from "../voice/caller-candidates.ts";
 
-export type PatientOperation = "appointments.read" | "appointments.book" | "appointments.cancel" | "appointments.reschedule";
+export type PatientOperation = "appointments.read" | "appointments.book" | "appointments.cancel" | "appointments.reschedule" | "staff.request";
 export type VerificationFailure = Readonly<{ kind: "disabled" | "denied" | "unavailable" | "attemptsExhausted" | "disconnected" }>;
 export type VerificationToken = string;
 export type PatientAuthorityRequest = Readonly<{
@@ -62,7 +62,7 @@ type LiveProof = Readonly<{
   operations: readonly PatientOperation[];
   expiresAt: string;
 }>;
-const operations: readonly PatientOperation[] = ["appointments.read", "appointments.book", "appointments.cancel", "appointments.reschedule"];
+const operations: readonly PatientOperation[] = ["appointments.read", "appointments.book", "appointments.cancel", "appointments.reschedule", "staff.request"];
 const maxProofMs = 5 * 60_000;
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {

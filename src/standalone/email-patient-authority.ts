@@ -35,7 +35,7 @@ type Challenge = Readonly<{ patientId: string; email: string; salt: string; dige
   operation: PatientOperation; expiresAt: number }>;
 type Grant = Readonly<{ token: string; challenge: Challenge }>;
 type Denied = Readonly<{ kind: "denied" }>;
-const allowedOperations: readonly PatientOperation[] = ["appointments.read", "appointments.book", "appointments.cancel", "appointments.reschedule"];
+const allowedOperations: readonly PatientOperation[] = ["appointments.read", "appointments.book", "appointments.cancel", "appointments.reschedule", "staff.request"];
 const codeDigest = (salt: string, code: string): Buffer => createHash("sha256").update(`${salt}\0${code}`).digest();
 
 async function untilAbort<Value>(pending: Promise<Value>, signal: AbortSignal): Promise<Value | undefined> {

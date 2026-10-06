@@ -212,7 +212,8 @@ export type CapabilityPrecondition = "expectedPolicyVersion" | "expectedAutomati
   "hostEvidenceForExecution" | "approvedKnowledgeForAnswer" | "availabilityHostConfigured" |
   "appointmentHostConfigured" | "hostIssuedPatientProof" |
   "callReviewAvailable" | "outcomeReportAvailable" | "staffQueueAvailable" | "operationalDailyAvailable" |
-  "hostConfirmedTask" | "expectedCallVersion" | "availabilitySetupAvailable" | "expectedAvailabilityApprovalVersion";
+  "hostConfirmedTask" | "expectedCallVersion" | "availabilitySetupAvailable" | "expectedAvailabilityApprovalVersion" |
+  "independentStaffVerification" | "approvedClinikoQueue";
 
 function entry(id: string, input: JsonSchema, success: JsonSchema, effect: CapabilityDescriptor["effect"],
                authority: CapabilityDescriptor["authority"], approval: CapabilityDescriptor["approval"] = "none",
@@ -450,6 +451,14 @@ export const capabilityCatalogue = {
     reply("staffQueue", "page", staffPage), "read", "permittedActor", "none", ["staffQueueAvailable"]),
   "staff.health.v1": entry("staff.health.v1", object({ kind: { const: "staff.health.v1" } }),
     reply("staffQueueHealth", "health", staffHealth), "read", "permittedActor", "none", ["staffQueueAvailable"]),
+  "staff.requests.prepare.v1": entry("staff.requests.prepare.v1",
+    optional({ kind: { const: "staff.requests.prepare.v1" }, turn: sessionTurn,
+      requestedPerson: { type: "string", minLength: 1, maxLength: 80 }, now: str }, ["kind", "turn", "now"]),
+    reply("staffRequestProgress", "progress", progress), "staffChange", "permittedActor", "none",
+    ["activeCall", "independentStaffVerification", "approvedClinikoQueue"]),
+  "staff.requests.outcome.v1": entry("staff.requests.outcome.v1",
+    object({ kind: { const: "staff.requests.outcome.v1" }, turn: sessionTurn, now: str }),
+    reply("staffRequestProgress", "progress", progress), "read", "permittedActor", "none", ["activeCall"]),
   "operations.daily.v1": entry("operations.daily.v1", object({ kind: { const: "operations.daily.v1" } }),
     reply("operationalDaily", "daily", operationalDaily), "read", "clinicAdmin", "none", ["operationalDailyAvailable"]),
   "staff.change.v1": entry("staff.change.v1",

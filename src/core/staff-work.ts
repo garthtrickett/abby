@@ -4,7 +4,7 @@ import type { ActionRequest, CallState, Effect, Result, StaffChangeRequest, Staf
 export type StaffPlan = Readonly<{ item: StaffItem; effect: Extract<Effect, { kind: "staffChange" }> }>;
 
 /** Stage one staff request and its host effect in the same call transition. */
-export function addStaffTask(state: CallState, reason: StaffReason, now: string, linkedActionKey?: string, request?: ActionRequest): void {
+export function addStaffTask(state: CallState, reason: StaffReason, now: string, linkedActionKey?: string, request?: ActionRequest, requestedPerson?: string): void {
   if (state.policy.staffWorkEnabled === false) return;
   if (linkedActionKey && Object.values(state.staffItems).some(item => item.linkedActionKey === linkedActionKey)) return;
   const key = `${state.callId}:staff:${Object.keys(state.staffItems).length + 1}`;
@@ -15,6 +15,7 @@ export function addStaffTask(state: CallState, reason: StaffReason, now: string,
     destination: state.policy.staffDestination,
     dueAt: new Date(Date.parse(now) + (reason === "potentiallyUrgent" ? 0 : 24 * 60 * 60 * 1000)).toISOString(),
     status: "requested" as const,
+    ...(requestedPerson === undefined ? {} : { requestedPerson }),
     ...(linkedActionKey === undefined ? {} : { linkedActionKey }),
     ...(request === undefined ? {} : { request }),
   };

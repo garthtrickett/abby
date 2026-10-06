@@ -11,6 +11,7 @@ import { availabilityPresentation } from "./availability-presentation.ts";
 import { appointmentPresentation } from "./appointment-presentation.ts";
 import { addStaffTask, planStaffChange } from "./staff-work.ts";
 import { staffFallbackText, staffRequestNotice } from "./staff-fallback.ts";
+import { staffOutcomeText, staffUnavailableText, validStaffLabel } from "./staff-outcome.ts";
 import { staffedForTransfer, staffingWindowStatus } from "./staffed-window.ts";
 import { approvedAfterHoursText } from "./after-hours-policy.ts";
 import { urgentHandoffNotice } from "./urgent-response.ts";
@@ -248,6 +249,19 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   const messageCount = state.callerMessages.length;
 
   switch (interpretation.kind) {
+    case "staffOutcomeQuery":
+      state.callerMessages.push(staffOutcomeText(state));
+      break;
+    case "staffUnavailable":
+      state.callerMessages.push(staffUnavailableText);
+      break;
+    case "staffRequestReady":
+      if (state.policy.staffWorkEnabled === false || interpretation.requestedPerson !== undefined && !validStaffLabel(interpretation.requestedPerson)) return err({ kind: "invalidTransition" });
+      addStaffTask(state, "callerRequested", now, undefined, undefined, interpretation.requestedPerson);
+      break;
+    case "staffVerificationRequired":
+      state.callerMessages.push("Before saving a staff request, verify your registered email. If you receive a six-digit code, enter it on the keypad, then press pound. Star clears your entry. Please do not say the code aloud. After verification, ask me to send the request.");
+      break;
     case "workflowStarted": {
       if (!["book", "cancel", "reschedule", "intake"].includes(interpretation.operation) ||
           (interpretation.operation === "intake" ? interpretation.next !== "intakeRequired" : interpretation.next !== "codeRequired") ||
@@ -309,7 +323,8 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       break;
     }
     case "handoff":
-      addStaffTask(state, interpretation.reason, now);
+      if (interpretation.requestedPerson !== undefined && !validStaffLabel(interpretation.requestedPerson)) return err({ kind: "invalidTransition" });
+      addStaffTask(state, interpretation.reason, now, undefined, undefined, interpretation.requestedPerson);
       state.callerMessages.push(interpretation.reason === "potentiallyUrgent"
         ? urgentHandoffNotice(state, now) : staffRequestNotice(state));
       break;
@@ -788,13 +803,20 @@ export function transition(current: CallState, action: TransitionAction): Result
       if (effect.taskKey !== action.receipt.taskKey) return err({ kind: "keyMismatch" });
       const item = state.staffItems[effect.taskKey];
       if (!item) return err({ kind: "invalidTransition" });
-      if (action.receipt.kind === "opened" && JSON.stringify(action.receipt.destination) === JSON.stringify(item.destination)) {
+      if (!["opened", "uncertain", "rejected"].includes(action.receipt.kind)) return err({ kind: "invalidTransition" });
+      if (action.receipt.kind === "opened" && typeof action.receipt.hostTaskRef === "string" && action.receipt.hostTaskRef.trim().length > 0 &&
+          action.receipt.hostTaskRef.length <= 256 && !/[\u0000-\u001f\u007f]/.test(action.receipt.hostTaskRef) &&
+          JSON.stringify(action.receipt.destination) === JSON.stringify(item.destination)) {
         state.staffItems[item.key] = { ...item, status: "open", hostTaskRef: action.receipt.hostTaskRef };
         state.effects[effect.id] = { ...effect, status: "completed" };
       } else {
-        if (action.receipt.kind === "uncertain") queueStaffReconciliation(state, effect.id, item);
+        const uncertain = action.receipt.kind !== "rejected";
+        if (uncertain) queueStaffReconciliation(state, effect.id, item);
         state.staffItems[item.key] = { ...item, status: "needsReview", destination: state.policy.operatorQueue };
-        state.effects[effect.id] = { ...effect, status: action.receipt.kind === "uncertain" ? "uncertain" : "completed" };
+        state.effects[effect.id] = { ...effect, status: uncertain ? "uncertain" : "completed" };
+      }
+      if (item.reason === "callerRequested" && !item.linkedActionKey) {
+        hostOutcomeNotice(state, effect.id, staffOutcomeText(state, state.staffItems[item.key]));
       }
       break;
     }

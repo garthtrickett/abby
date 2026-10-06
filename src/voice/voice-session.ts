@@ -15,6 +15,8 @@ export type VoiceIntent =
   | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason }>
   | Readonly<{ kind: "workflow"; operation: "book" | "cancel" | "reschedule" | "intake"; replaceCanceledChange?: true }>
   | Readonly<{ kind: "outcome" }>
+  | Readonly<{ kind: "staffOutcome" }>
+  | Readonly<{ kind: "staffRequest"; requestedPerson?: string }>
   | Readonly<{ kind: "bookingMenu"; from: string; to: string }>
   | Readonly<{ kind: "bookingChoice"; choice: 1 | 2 | 3 }>
   | Readonly<{ kind: "reschedulingMenu"; stage: "targets" | "offers"; from: string; to: string; correcting?: true }>
@@ -366,6 +368,14 @@ export class VoiceSession {
         this.cachedIntent.choice, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "transfer") {
       result = await this.runtime.acceptTurn(turn, { kind: "transfer", reason: this.cachedIntent.reason }, now, existing.value.conversationRevision);
+    } else if (this.cachedIntent.kind === "staffRequest") {
+      const controller = new AbortController(), pending = { cancel: () => controller.abort() };
+      this.pendingIntent = pending;
+      try { result = await this.reception.requestStaff(this.scope, turn, this.cachedIntent.requestedPerson, now, existing.value.conversationRevision, controller.signal); }
+      finally { if (this.pendingIntent === pending) this.pendingIntent = undefined; }
+      if (controller.signal.aborted || generation !== this.assembler.currentGeneration()) return err({ kind: "staleTurn" });
+    } else if (this.cachedIntent.kind === "staffOutcome") {
+      result = await this.runtime.acceptTurn(turn, { kind: "staffOutcomeQuery" }, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "handoff") {
       result = await this.runtime.acceptTurn(turn, { kind: "handoff", reason: this.cachedIntent.reason }, now, existing.value.conversationRevision);
     } else {

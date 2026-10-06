@@ -14,7 +14,7 @@ import { modelTaskRef } from "../model/work.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 function validIntakeRef(value: unknown): value is string {
@@ -68,6 +68,29 @@ export class TextReception {
   reschedulingMenuEnabled(): boolean {
     return !!this.host.resolveAppointmentChange && new ReschedulingMenuTurns(this.ledger, this.policy, this.host).enabled();
   }
+  async requestStaff(scope: LocationScope, turn: FinalCallerTurn, requestedPerson: string | undefined, now: string,
+    expectedConversationRevision?: number, external?: AbortSignal) {
+    const state = await this.ledger.read(turn.callId, scope);
+    if (!state.ok) return state;
+    if (turn.quality !== "clear" || !turn.sessionId || expectedConversationRevision !== undefined && state.value.conversationRevision !== expectedConversationRevision) return err({ kind: "staleTurn" as const });
+    const revision = expectedConversationRevision ?? state.value.conversationRevision;
+    if (state.value.processedTurnIds.includes(turn.turnId)) return state;
+    const signal = AbortSignal.any([AbortSignal.timeout(20_000), ...(external ? [external] : [])]);
+    let selected;
+    try { selected = await awaitUntilAbort(this.host.prepareStaffRequest?.({ scope, callId: turn.callId, sessionId: turn.sessionId,
+      turnId: turn.turnId, callerText: turn.text, policyVersion: state.value.policy.policyVersion, expectedConversationRevision: revision,
+      ...(requestedPerson === undefined ? {} : { requestedPerson }), signal }) ?? Promise.resolve(undefined), signal); }
+    catch { selected = undefined; }
+    if (external?.aborted) return err({ kind: "staleTurn" as const });
+    const interpretation: TurnInterpretation = !selected?.ok ? { kind: "staffUnavailable" } : selected.value.kind === "codeRequired"
+      ? { kind: "staffVerificationRequired" } : selected.value.kind === "existing" ? { kind: "staffOutcomeQuery" }
+        : { kind: "staffRequestReady", ...("requestedPerson" in selected.value && selected.value.requestedPerson ? { requestedPerson: selected.value.requestedPerson } : {}) };
+    return this.runtime(scope).acceptTurn(turn, interpretation, now, revision);
+  }
+  staffOutcome(scope: LocationScope, turn: FinalCallerTurn, now: string) {
+    return this.runtime(scope).acceptTurn(turn, { kind: "staffOutcomeQuery" }, now);
+  }
+  staffRequestEnabled(): boolean { return typeof this.host.prepareStaffRequest === "function"; }
   readReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", from: string, to: string, now: string, correcting = false) {
     return new ReschedulingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, stage, { from, to, ...(correcting ? { correcting: true as const } : {}) });
   }
