@@ -12,11 +12,12 @@ import { verificationCanaries } from "../support/caller-verification.ts";
 
 test("E2E-310 signed change intent clarifies conflicts, preserves the source and switches only unsent workflows with new verification", { timeout: 150_000 }, async () => {
   await withDisposablePostgres(async db => {
-    const scenarios = ["mixed", "disagreement", "modelGuess", "cancelOnly", "reassign", "duration", "redirect", "reverse", "denied", "committed", "genericCommitted", "unknown", "multiple", "unplayedChoice", "conflictingChoice"] as const;
+    const scenarios = ["mixed", "disagreement", "modelGuess", "cancelOnly", "cancelLateOnly", "reassign", "duration", "redirect", "reverse", "denied", "committed", "genericCommitted", "unknown", "multiple", "unplayedChoice", "conflictingChoice"] as const;
     const run = async (scenario: typeof scenarios[number]) => {
       const f = ["redirect", "reverse"].includes(scenario) ? await appointmentChangeCallFlowFixture()
         : await cancellationCallFlowFixture({ multiple: ["multiple", "unplayedChoice", "conflictingChoice"].includes(scenario) });
       f.flow.dispose(); let trustedOwner: ClinikoCallFlow | undefined;
+      if (scenario === "cancelLateOnly" && "replaceCancellation" in f) await f.replaceCancellation({ lateNoticeHours: 120 });
       let call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined;
       const requests: string[] = [], reverse = scenario === "reverse";
       try {
@@ -58,7 +59,7 @@ test("E2E-310 signed change intent clarifies conflicts, preserves the source and
         if (["committed", "genericCommitted", "unknown"].includes(scenario)) await call.mark();
         const text = scenario === "mixed" ? "I cannot come tomorrow. Could we cancel that and put it on another day?"
           : scenario === "disagreement" ? "I thought it was at ten. You are saying nine?"
-          : scenario === "cancelOnly" ? "Please remove this booking. I will arrange another visit myself."
+          : scenario === "cancelOnly" || scenario === "cancelLateOnly" ? "Please remove this booking. I will arrange another visit myself."
           : scenario === "reassign" ? "Can someone else take my slot instead of me?"
           : scenario === "duration" ? "Could I make that visit an hour instead of the usual half hour?"
           : scenario === "modelGuess" ? "Please explain what you found."
@@ -120,14 +121,32 @@ test("E2E-310 signed change intent clarifies conflicts, preserves the source and
           const proposal = Object.values((await call.state()).actions).at(-1)!;
           assert.equal(proposal.kind, "cancel"); assert.equal(proposal.status, "awaitingConfirmation"); assert.equal(call.writes.length, 0);
           if (proposal.mutation.request.kind !== "cancel") throw new Error("expected exact cancellation");
+          if (scenario === "cancelOnly" || scenario === "cancelLateOnly") {
+            const terms = scenario === "cancelOnly" ? "There is no fee for this cancellation." : "A cancellation fee of $20 applies.";
+            assert.equal(proposal.mutation.request.terms.approvedText, terms);
+            assert.ok(call.spoken.at(-1)!.includes(terms), "exact approved fee terms must be spoken before confirmation");
+            assert.equal(call.writeRequests.length, 0); assert.equal(f.mail.length, 1); assert.equal(trustedOwner!.workflow, "cancel");
+          }
           assert.equal(proposal.mutation.request.target.appointmentRef, scenario === "multiple" ? "92" : "91");
           await call.mark(); await call.turn("Yes"); assert.equal(call.writes.length, 1);
           assert.equal(call.writes[0], `PATCH /v1/individual_appointments/${scenario === "multiple" ? "92" : "91"}/cancel`);
+          if (scenario === "cancelOnly" || scenario === "cancelLateOnly") {
+            assert.equal(call.writeRequests.length, 1); assert.deepEqual(call.writeRequests[0], {
+              method: "PATCH", path: "/v1/individual_appointments/91/cancel",
+              body: { cancellation_note: null, cancellation_reason: 50, apply_to_repeats: false },
+            });
+          }
         }
       } finally { try { await call?.close(); } finally { await f.close(); } }
     };
     let next = 0;
-    await Promise.all(Array.from({ length: 4 }, async () => { while (next < scenarios.length) await run(scenarios[next++]!); }));
+    const failures: unknown[] = [];
+    const workers = await Promise.allSettled(Array.from({ length: 4 }, async () => { while (next < scenarios.length) {
+      const scenario = scenarios[next++]!;
+      try { await run(scenario); } catch (error) { failures.push(new Error(`${scenario}: ${error instanceof Error ? error.message : String(error)}`, { cause: error })); }
+    } }));
+    for (const worker of workers) if (worker.status === "rejected") failures.push(worker.reason);
+    if (failures.length) throw new AggregateError(failures, failures.map(error => error instanceof Error ? error.message : String(error)).join("\n"));
     assert.deepEqual(resultValue(await scanPatientDataCanaries(db, verificationCanaries.map((value, index) => ({ label: `change_${index}`, value })))), []);
   });
 });

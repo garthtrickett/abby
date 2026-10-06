@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.124
+# Scenario manifest, version 1.125
 
 [SCENARIO_MANIFEST.json](SCENARIO_MANIFEST.json) tracks the 330 stable E2E IDs in [Technical Design Section 11](../TECHNICAL_DESIGN.md#11-verification-design). The design table owns each journey's wording; the registry adds its requirement mapping, fixture family, intended compositions, earliest implementation phase, and evidence status. Each scenario's fixture ID is `fixture-` plus its lowercase E2E ID. The capability and setting maps cover the current agent catalogue and its behavior settings. `test/contract/scenario-manifest.test.ts` checks the design and catalogue for drift, duplicate or missing IDs, and test-file references.
 
@@ -255,3 +255,5 @@ E2E-328 adds eight signed synthetic ownership/clarification journeys with an act
 E2E-329 runs two held-provider journeys using actual serving deadlines and default silence timers. Truthful failure or prompt repair is followed by bounded closure, without fabricated offers or late speech. No manual timer firing, shortened serving timeout or real carrier evidence is used.
 
 E2E-330 directly exercises ambiguous played times across day and AM/PM combinations. The clarification explicitly names both distinctions; no guessed choice creates authority, and fresh played options and confirmation are required before one inspected booking. CCP-006 now requires this wording in its named baseline observation; its prior failure is preserved.
+
+Version 1.125 strengthens the existing E2E-308/309/310/316 journeys: exact offer-to-provider start and source-bound payloads, spoken standard/late cancellation fees, an unresolved date with no provider search, and parallel worker settlement before teardown. It adds no capability, setting, production persistence or E2E ID.

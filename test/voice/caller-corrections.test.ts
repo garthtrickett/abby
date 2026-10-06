@@ -63,6 +63,12 @@ test("E2E-309 signed corrections fence old proposals before interpretation, reva
         if (["later", "weekday", "unplayed", "move", "moveWeekday"].includes(scenario)) {
           const replacement = Object.values((await call.state()).actions).at(-1)!;
           assert.notEqual(replacement.key, old.key); assert.equal(replacement.status, "awaitingConfirmation");
+          if (replacement.mutation.request.kind !== "book" && replacement.mutation.request.kind !== "reschedule") throw new Error("expected exact replacement offer");
+          const expectedStart = weekday ? "2026-10-06T22:00:00.000Z" : "2026-10-07T23:30:00.000Z";
+          assert.equal(replacement.mutation.request.offer.startsAt, expectedStart);
+          assert.notEqual(replacement.mutation.request.offer.startsAt,
+            old.mutation.request.kind === "book" || old.mutation.request.kind === "reschedule" ? old.mutation.request.offer.startsAt : undefined);
+          assert.equal(call.writeRequests.length, 0);
           assert.match(call.spoken.at(-1)!, weekday ? /Wednesday 7 October/ : /10:30 am/);
           if (move && old.mutation.request.kind === "reschedule" && replacement.mutation.request.kind === "reschedule")
             assert.deepEqual(replacement.mutation.request.target, old.mutation.request.target, "correction must preserve the protected source appointment");
@@ -72,6 +78,14 @@ test("E2E-309 signed corrections fence old proposals before interpretation, reva
             assert.equal(call.writes.length, 0); assert.equal((await call.state()).actions[replacement.key]?.status, "canceled");
           } else {
             await call.mark(); await call.turn("Yes"); assert.equal(call.writes.length, 1);
+            assert.equal(call.writeRequests.length, 1);
+            const sent = call.writeRequests[0]!;
+            assert.equal(sent.body.starts_at, expectedStart);
+            assert.equal(sent.method, move ? "PATCH" : "POST");
+            assert.equal(sent.path, move && replacement.mutation.request.kind === "reschedule"
+              ? `/v1/individual_appointments/${replacement.mutation.request.target.appointmentRef}` : "/v1/individual_appointments");
+            if (move) assert.deepEqual(sent.body, { starts_at: expectedStart, ends_at: null }, "moving the source must not reassign its patient, practitioner or type");
+            else assert.equal(sent.body.patient_id, verificationCanaries[2]);
             assert.equal((await call.state()).actions[replacement.key]?.status, "committed");
             assert.equal((await call.state()).actions[old.key]?.status, "canceled");
           }
@@ -82,9 +96,11 @@ test("E2E-309 signed corrections fence old proposals before interpretation, reva
       } finally { release(); try { await call?.close(); } finally { await f.close(); } }
     };
     let next = 0;
-    await Promise.all(Array.from({ length: 4 }, async () => {
+    const workers = await Promise.allSettled(Array.from({ length: 4 }, async () => {
       while (next < scenarios.length) await run(scenarios[next++]!);
     }));
+    const failures = workers.flatMap(result => result.status === "rejected" ? [result.reason] : []);
+    if (failures.length) throw new AggregateError(failures, "caller correction scenarios failed");
     assert.deepEqual(resultValue(await scanPatientDataCanaries(db, verificationCanaries.map((value, index) => ({ label: `correction_${index}`, value })))), []);
   });
 });

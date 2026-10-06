@@ -46,7 +46,17 @@ approved preferences, windows, appointment enquiries and public facts.
    then requires fresh played authority before one inspected booking. The nine-test
    focused gate, typecheck and stable strengthened all-45 baseline pass.
 
-The next work is the remaining clause audit. These are
+6. **CCP-001 through CCP-005: direct send/fee/date evidence inspected.**
+   Existing signed journeys now observe actual mutation bodies, including exact
+   replacement starts, a protected source with no reassignment fields, spoken
+   standard/late fees and an unresolved date without provider search. The direct
+   [evidence record](baselines/exact-clinical-send-evidence-v1.json) retains the
+   fixture corrections and one earlier unexplained broad-gate failure. The
+   subsequent named reproduction, nine-test gate, additional unoffered-clock
+   witness, typecheck and stable all-45 baseline pass. No production change was
+   required. These rows do not sign off the remaining original clauses.
+
+The next work is the remaining clause audit, starting with CCP-009. These are
 local synthetic tasks; real carrier and email setup is outside these test goals
 and remains a separate release gate.
 
@@ -72,9 +82,9 @@ for standalone durable patient-specific records.
 | Goal | Evidence inspected | Remaining completion work |
 | --- | --- | --- |
 | 1. Runnable baseline and real model interpretation | Actual signed HTTP/WS setup, synthetic Cliniko/private email/playback, stable-source all-45 report; separate strict live model sample; failing reports preserved | Strengthen the acceptance clauses below; a named observation remains narrower than full prose |
-| 2. Latest played spoken choices | E2E-308 time/relative choice, rejected offers, ambiguity, evil model ordinal and interrupted menu; E2E-312 later bounded search | Explicit meridiem and stale-menu sequence have direct evidence; inspect exact offer/send assertions |
-| 3. Corrections | E2E-309 cancels old proposals before held interpretation, rereads replacements, rejects unplayed confirmation and requires a new affirmative; dated/window correction tests | Match each original clause to exact assertions and current passing run |
-| 4. Cancel versus move | E2E-310 mixed-operation clarification, denied switches, fresh operation verification, original target equality, one exact PATCH, sent/uncertain receipt preservation | Match original target and operation clauses to current passing evidence |
+| 2. Latest played spoken choices | E2E-308 time/relative choice, rejected offers, ambiguity, evil model ordinal and interrupted menu; E2E-312 later bounded search | Spoken time, exact offer/send, ambiguity and stale-menu clauses inspected; continue remaining search/information clauses |
+| 3. Corrections | E2E-309 cancels old proposals before held interpretation, rereads replacements, rejects unplayed confirmation and requires a new affirmative; dated/window correction tests | Latest menu/whole-utterance/final date clauses inspected; continue remaining receipt/late-correction clauses |
+| 4. Cancel versus move | E2E-310 mixed-operation clarification, denied switches, fresh operation verification, original target equality, one exact PATCH, sent/uncertain receipt preservation | Connected cancel/move and standard/late fee clauses inspected; continue target-selection and sent-outcome clauses |
 | 5. Human/staff requests | E2E-311 independent permission/code, approved people, saved/uncertain receipts, no duplicate request; E2E-323 finite purpose; E2E-325 unknown missed-call reason | Map late-arrival and background-context clauses; real staff workflow acceptance remains separate |
 | 6. Approved search/information | E2E-312 retained windows; E2E-313 approved names/earliest bounds/location confirmation; E2E-314 independent reads; E2E-315 public facts/repetition; E2E-322 services/unknown fees | Complete clause audit; do not infer a clinic-wide search, cross-location authority or audio pacing |
 
@@ -82,9 +92,9 @@ for standalone durable patient-specific records.
 
 ### CCP-001 — cancel-and-move
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Supported with connected operation/source evidence**. E2E-310 `mixed` clarifies move versus cancellation with zero proposals/writes; a malicious cancellation suggestion cannot authorize a send. `redirect` and `reverse` cancel only the unsent proposal, require another operation-specific verification email, reject the old proof and retain the exact protected source target before a newly played confirmation and separate affirmative. E2E-309 `move` independently checks the actual source-bound PATCH and exact replacement start, with no patient/practitioner/type reassignment fields. Sent or uncertain outcomes cannot start a replacement workflow.
 
-Evidence to inspect: [targeted test](../test/voice/appointment-change-intent.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [operation/source test](../test/voice/appointment-change-intent.test.ts), [exact source-bound send test](../test/voice/caller-corrections.test.ts); [named baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json).
 
 - `CCP-001-R01`: Clarify whether the caller wants one reschedule or a cancellation followed by a separate booking.
 - `CCP-001-R02`: Keep the existing appointment until an exact supported action has been played and separately confirmed.
@@ -93,9 +103,9 @@ Evidence to inspect: [targeted test](../test/voice/appointment-change-intent.tes
 
 ### CCP-002 — cancel-only
 
-Assessment: **Partial direct evidence**. E2E-310 `cancelOnly` asserts only a cancellation proposal, zero writes until played confirmation and a separate affirmative, then exactly one cancellation PATCH. It never starts a booking workflow. The fixture has approved standard/late fee terms, but this branch does not explicitly assert that the fee text was spoken; that part of R01 needs direct coverage before full sign-off.
+Assessment: **Supported with direct standard/late fee and payload evidence**. E2E-310 `cancelOnly` and `cancelLateOnly` prepare only cancellation and speak exactly the currently approved no-fee or $20 late-fee terms before confirmation. There is one operation-specific verification email, no provider mutation before played confirmation and a separate affirmative, then exactly one cancellation PATCH to the protected appointment. Its complete body has the approved reason, null cancellation note and `apply_to_repeats: false`; there is no booking workflow or inferred second mutation.
 
-Evidence to inspect: [targeted test](../test/voice/appointment-change-intent.test.ts); [named baseline](baselines/clinic-conversation-after-explicit-time-v24-v1.json).
+Evidence to inspect: [targeted test](../test/voice/appointment-change-intent.test.ts); [named baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json).
 
 - `CCP-002-R01`: Prepare only cancellation with approved fee terms and separate confirmation.
 - `CCP-002-F01`: Push the caller through a new booking.
@@ -103,9 +113,9 @@ Evidence to inspect: [targeted test](../test/voice/appointment-change-intent.tes
 
 ### CCP-003 — change-selected-time-before-confirmation
 
-Assessment: **Partial exact-send evidence**. E2E-309 `later` resolves the latest played menu without a model request, cancels the old action, creates a different awaiting-confirmation action, speaks 10:30 AM, and sends once only after a new played confirmation and separate affirmative. `unplayed` rejects affirmation before playback; `lostOffer`, `stop` and `mixed` remain unsent. Strengthen the exact replacement offer/provider-body assertion before declaring F01 fully proved; speech and action status alone are weaker than the sent target.
+Assessment: **Supported with exact replacement-send evidence**. E2E-309 `later` resolves the latest played menu without a model request, cancels the old action, creates a different awaiting-confirmation action and asserts the exact replacement offer start differs from the old one. No provider mutation exists until a new played confirmation and separate affirmative; the sole actual POST or source-bound PATCH has the exact replacement start. `unplayed`, `lostOffer`, `stop` and `mixed` prevent stale affirmation/writes. The provider body is observed separately from speech and SAM state.
 
-Evidence to inspect: [targeted test](../test/voice/caller-corrections.test.ts); [named baseline](baselines/clinic-conversation-after-explicit-time-v24-v1.json).
+Evidence to inspect: [targeted test](../test/voice/caller-corrections.test.ts); [named baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json).
 
 - `CCP-003-R01`: Resolve the later time against the current menu.
 - `CCP-003-R02`: Supersede the old action and play the corrected exact details before a new affirmative turn.
@@ -114,9 +124,9 @@ Evidence to inspect: [targeted test](../test/voice/caller-corrections.test.ts); 
 
 ### CCP-004 — change-date-mid-sentence
 
-Assessment: **Partial ambiguity evidence**. E2E-316 asserts final Wednesday morning options, excludes abandoned Thursday/afternoon options, retains the morning window across another read, cancels prior proposals and requires fresh playback/affirmation. The strict CCP-004 named check verifies the final date and exact morning window. Existing ambiguous/qualified branches cover an ambiguous time bound or condition; a genuinely unresolved date needs its own direct no-search/clarification witness for R02.
+Assessment: **Supported with direct unresolved-date evidence**. E2E-316 asserts final Wednesday morning options, excludes abandoned Thursday/afternoon options, retains the morning window across another read, cancels prior proposals and requires fresh playback/affirmation. The strict named CCP-004 check verifies the final date and exact window. New `bookAmbiguousDate` leaves Wednesday or Friday unresolved: it cancels the old proposal, explicitly asks the displayed day, performs no additional provider search or model request and sends nothing, including after a later affirmative. Ambiguous bounds/conditions remain separately fenced.
 
-Evidence to inspect: [targeted test](../test/voice/dated-window-corrections.test.ts); [named baseline](baselines/clinic-conversation-after-explicit-time-v24-v1.json).
+Evidence to inspect: [targeted test](../test/voice/dated-window-corrections.test.ts); [named baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json).
 
 - `CCP-004-R01`: Use the final unambiguous correction, preserving the morning constraint.
 - `CCP-004-R02`: Clarify if the date remains ambiguous.
@@ -125,9 +135,9 @@ Evidence to inspect: [targeted test](../test/voice/dated-window-corrections.test
 
 ### CCP-005 — spoken-offer-time
 
-Assessment: **Partial exact-offer evidence**. E2E-308 proves unique half-past-ten and later choices bypass the deliberately wrong model ordinal, and rejects unknown/near-match and interrupted-menu selection without writes. A valid choice becomes an awaiting-confirmation action and speaks the expected time. Inspect/assert the exact unchanged offer in the action and provider send before declaring all of R01 proved.
+Assessment: **Supported with exact offer-to-send evidence**. E2E-308 proves unique half-past-ten and later choices resolve to the exact current offer start without the deliberately wrong model ordinal. The sole booking POST after played confirmation and a separate affirmative matches that start, the approved business/practitioner/type and the verified synthetic patient. A recognized but unoffered 11:30, unknown/near-match, ambiguous and interrupted-menu choices create no action or write; the recognized zero-match clock does not call the model. E2E-327 separately proves stale/expired or provider-removed offered starts cannot become a successful proposal.
 
-Evidence to inspect: [targeted test](../test/voice/played-menu-selection.test.ts); [named baseline](baselines/clinic-conversation-after-explicit-time-v24-v1.json).
+Evidence to inspect: [targeted test](../test/voice/played-menu-selection.test.ts); [named baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json).
 
 - `CCP-005-R01`: Trusted selection resolves the spoken time uniquely to the latest played menu and its unchanged offer.
 - `CCP-005-F01`: Model invents an ordinal without authoritative option matching.
