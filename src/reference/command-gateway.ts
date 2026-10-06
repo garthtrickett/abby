@@ -116,7 +116,7 @@ export type GatewayCommand =
   | Readonly<{ kind: "calls.outcomes.v1"; afterCallId?: string }>
   | Readonly<{ kind: "staff.list.v1"; afterTaskKey?: string }>
   | Readonly<{ kind: "staff.health.v1" }>
-  | Readonly<{ kind: "staff.requests.prepare.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; requestedPerson?: string; now: string }>
+  | Readonly<{ kind: "staff.requests.prepare.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; requestedPerson?: string; requestSubject?: import("../core/staff-request-subject.ts").StaffRequestSubject; now: string }>
   | Readonly<{ kind: "staff.requests.outcome.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; now: string }>
   | Readonly<{ kind: "operations.daily.v1" }>
   | Readonly<{ kind: "staff.change.v1"; callId: string; taskKey: string; expectedVersion: number; change: StaffChangeRequest; now: string }>;
@@ -275,7 +275,8 @@ export class CommandGateway {
   private async dispatch(command: GatewayCommand): Promise<Result<GatewayReply, GatewayFailure>> {
     switch (command.kind) {
       case "staff.requests.prepare.v1": {
-        const result = await this.reception.requestStaff(this.actor.scope, command.turn, command.requestedPerson, command.now);
+        if (!Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
+        const result = await this.reception.requestStaff(this.actor.scope, command.turn, command.requestedPerson, command.now, undefined, undefined, command.requestSubject);
         return result.ok ? ok({ kind: "staffRequestProgress", progress: commandProgress(result.value, command.turn.turnId) }) : result;
       }
       case "staff.requests.outcome.v1": {

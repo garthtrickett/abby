@@ -1,4 +1,5 @@
 import type { CallState } from "./model.ts";
+import { staffRequestSubjectLabel, staffRequestSubjectLimit, validStaffRequestSubject } from "./staff-request-subject.ts";
 
 export const staffUnavailableText = "I can't send that staff request from this call. Please contact the clinic directly.";
 export const validStaffLabel = (value: unknown): value is string => typeof value === "string" &&
@@ -8,12 +9,14 @@ export const validStaffLabel = (value: unknown): value is string => typeof value
 export function staffOutcomeText(state: CallState, item = Object.values(state.staffItems).filter(item => item.reason === "callerRequested").at(-1)): string {
   if (!item) return "No staff request is confirmed in this call. Please contact the clinic directly.";
   const person = item.requestedPerson && validStaffLabel(item.requestedPerson) ? ` to speak to ${item.requestedPerson}` : "";
-  if (item.status === "open") return `Your staff request${person} was saved. I can't confirm that staff have read it or promise a callback time.`;
-  if (item.status === "acknowledged") return `The clinic has acknowledged your staff request${person}. I can't promise a callback time.`;
-  if (item.status === "resolved") return "The clinic has marked your staff request resolved. Please contact the clinic if you still need help.";
+  const subject = validStaffRequestSubject(item.requestSubject) ? item.requestSubject : undefined;
+  const description = subject ? ` about ${staffRequestSubjectLabel[subject]}` : "", limit = subject ? ` ${staffRequestSubjectLimit[subject]}` : "";
+  if (item.status === "open") return `Your staff request${description}${person} was saved. I can't confirm that staff have read it or promise a callback time.${limit}`;
+  if (item.status === "acknowledged") return `The clinic has acknowledged your staff request${description}${person}. I can't promise a callback time.${limit}`;
+  if (item.status === "resolved") return `The clinic has marked your staff request${description} resolved. Please contact the clinic if you still need help.${limit}`;
   const effect = state.effects[`${item.key}:open`];
   return effect?.kind === "staffTask" && (effect.status === "possiblySent" || effect.status === "uncertain")
-    ? "I can't confirm whether your staff request was saved or received. I won't send it again automatically. Please contact the clinic directly."
-    : item.status === "requested" ? "Your staff request is not confirmed yet."
-      : staffUnavailableText;
+    ? `I can't confirm whether your staff request${description} was saved or received. I won't send it again automatically. Please contact the clinic directly.${limit}`
+    : item.status === "requested" ? `Your staff request${description} is not confirmed yet.${limit}`
+      : staffUnavailableText + limit;
 }

@@ -255,9 +255,9 @@ export type TurnInterpretation =
   | Readonly<{ kind: "outcomeQuery" }>
   | Readonly<{ kind: "notificationOutcomeQuery" }>
   | Readonly<{ kind: "staffOutcomeQuery" }>
-  | Readonly<{ kind: "staffVerificationRequired" }>
-  | Readonly<{ kind: "staffUnavailable" }>
-  | Readonly<{ kind: "staffRequestReady"; requestedPerson?: string }>
+  | Readonly<{ kind: "staffVerificationRequired"; requestSubject?: import("./staff-request-subject.ts").StaffRequestSubject }>
+  | Readonly<{ kind: "staffUnavailable"; requestSubject?: import("./staff-request-subject.ts").StaffRequestSubject }>
+  | Readonly<{ kind: "staffRequestReady"; requestedPerson?: string; requestSubject?: import("./staff-request-subject.ts").StaffRequestSubject }>
   | Readonly<{ kind: "modelPending"; taskRef: string }>
   | Readonly<{ kind: "modelFallback"; staffWorkUnavailable?: true }>
   | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason; approvedLocation?: string }>
@@ -384,6 +384,7 @@ export type OperatorAlertReceipt = Readonly<{ kind: "delivered" | "failed" | "un
 export type OperatorAlertObservation = Readonly<{ kind: "exactDelivered" | "definitiveNotDelivered" | "stillUnknown"; alertKey: string }>;
 export type StaffItem = Readonly<{
   requestedPerson?: string;
+  requestSubject?: import("./staff-request-subject.ts").StaffRequestSubject;
   key: string;
   scope: LocationScope;
   reason: StaffReason;

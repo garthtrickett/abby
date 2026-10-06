@@ -20,7 +20,7 @@ export type VoiceIntent =
   | Readonly<{ kind: "outcome" }>
   | Readonly<{ kind: "notificationOutcome" }>
   | Readonly<{ kind: "staffOutcome" }>
-  | Readonly<{ kind: "staffRequest"; requestedPerson?: string }>
+  | Readonly<{ kind: "staffRequest"; requestedPerson?: string; requestSubject?: import("../core/staff-request-subject.ts").StaffRequestSubject }>
   | Readonly<{ kind: "bookingMenu"; from: string; to: string; preference?: import("../core/booking-search-preference.ts").BookingSearchPreference; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null }>
   | Readonly<{ kind: "bookingChoice"; choice: 1 | 2 | 3 }>
   | Readonly<{ kind: "reschedulingMenu"; stage: "targets" | "offers"; from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null; correcting?: true }>
@@ -402,7 +402,7 @@ export class VoiceSession {
     } else if (this.cachedIntent.kind === "staffRequest") {
       const controller = new AbortController(), pending = { cancel: () => controller.abort() };
       this.pendingIntent = pending;
-      try { result = await this.reception.requestStaff(this.scope, turn, this.cachedIntent.requestedPerson, now, existing.value.conversationRevision, controller.signal); }
+      try { result = await this.reception.requestStaff(this.scope, turn, this.cachedIntent.requestedPerson, now, existing.value.conversationRevision, controller.signal, this.cachedIntent.requestSubject); }
       finally { if (this.pendingIntent === pending) this.pendingIntent = undefined; }
       if (controller.signal.aborted || generation !== this.assembler.currentGeneration()) return err({ kind: "staleTurn" });
     } else if (this.cachedIntent.kind === "staffOutcome") {

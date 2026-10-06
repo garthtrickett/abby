@@ -705,3 +705,66 @@ same four failures, one setup gap, zero harness failures, all 135 safety checks
 passing and clear PostgreSQL patient-data canaries. Ten turns make actual model
 requests and 35 use trusted routes. This wording correction does not turn public
 descriptions into appointment selection or expand the unassessed acceptance scope.
+
+
+## Finite staff-request purpose refinement — 2026-10-06
+
+The [before-change signed reproduction](baselines/staff-request-purpose-before-v1.json)
+failed on main `b1f4e89`: one independently verified invoice request created a
+Cliniko recall, but its summary lost the invoice purpose. No clinical write was
+made. The fix carries only `invoiceCopy`, `chargeReview` or `waitlistInterest`
+through the existing staff operation, never an amount, document, recipient,
+refund authorization, appointment correction, enrollment or callback promise.
+The purpose lives transiently or in the approved Cliniko-owned recall.
+
+The first [live classification sample](baselines/clinical-intent-before-staff-purpose-v1.json)
+passed 32/33 with v20. The paid-account-paperwork paraphrase returned generic
+`staffRequest`, losing its invoice category. This failure was preserved before
+v21 clarified proof-of-payment and already paid billing paperwork. The
+[refined sample](baselines/clinical-intent-after-staff-purpose-v2.json) passed
+33/33 with 25 actual model requests; eight cases used trusted routes. The full
+sample includes all prior language cases plus three exact purposes, three model
+paraphrases and quoted/negated invoice counterexamples. This remains a small
+classification sample, not proof of general language accuracy.
+
+The [all-45 baseline](baselines/clinic-conversation-after-staff-purpose-v1.json)
+executes 45/45 with **44 passing named observations**, all **135 safety checks
+passing**, zero harness failures, one setup gap, clear PostgreSQL patient-data
+canaries and sourceStable true across 466 production/support/script inputs.
+Eight candidate turns make actual model requests and 37 use trusted routes.
+CCP-044 still fails because the serialized setup does not reproduce an active
+pending availability read. The evaluator intentionally exits nonzero for that
+remaining observation.
+
+CCP-034/035/040 retain their original absent billing/refund/waitlist authorities.
+Their updated named check requires the exact typed purpose and purpose-specific
+unavailable response, unchanged actions/staff items, and no additional provider,
+mail or write work. It awards no billing delivery, refund or waitlist workflow.
+Separate approved-queue signed tests prove that the finite purpose can reach a
+verified Cliniko recall. Every corpus prose acceptance condition remains
+explicitly unassessed; 44/45 is a partial baseline, not a release gate.
+
+Local test refinement also corrected three fixture assumptions: the reference
+host exposes tasks through a method; a synthetic call ID must not contain its
+purpose when checking progress redaction; and an earlier clinical booking can
+already have its own Cliniko review recall. New staff sends are counted against
+that known prior baseline. Exact read reconciliation can change an uncertain
+item to saved without a second POST, while speech may conservatively report the
+uncertainty until the next status turn. The assertions retain both truthfulness
+and no-duplicate-send requirements. Parallel workers settle before disposable
+PostgreSQL cleanup.
+
+Validation commands and results:
+
+- `node --test --test-concurrency=3 test/text/staff-request-purpose.test.ts test/voice/staff-request-purpose.test.ts test/voice/conversation-baseline.test.ts test/voice/openai-clinical-intent.test.ts test/contract/scenario-manifest.test.ts`: passed all nine tests before the final prompt refinement, including 29 expanded signed scenarios, scoped memory/PostgreSQL commands, three held preparation interleavings and eighteen scripted corpus cases.
+- `node --test --test-concurrency=3 test/text/staff-request-purpose.test.ts test/voice/staff-request-purpose.test.ts test/voice/cliniko-staff-request.test.ts`: passed four of five after fixture correction; the remaining failure was the call-ID redaction fixture described above. The signed purpose scenarios and existing twenty-case generic/person/receipt regression passed.
+- `node --test --test-concurrency=2 test/text/staff-request-purpose.test.ts test/voice/openai-clinical-intent.test.ts`: final v21 strict gate passed all six tests, including malformed/null host replies and forged model clinical/patient/free-text fields.
+- `npm run typecheck` and `git diff --check`: passed on final source.
+- `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinical-intent.ts --model gpt-4o-mini --out eval/results/20261006-staff-purpose-intent-v21-v2.json`: 33/33 classifications passed; earlier v20 failure is archived above.
+- `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/results/20261006-conversations-staff-purpose-v1.json`: all 45 executed with stable source and the intentionally nonzero 44/45 partial result above.
+
+E2E-323 and manifest 1.118 record the new feature. Rich PostgreSQL corruption
+checks use the deliberately unsafe lab contract rather than granting standalone
+permission to store purpose-bearing calls. Actual clinic approval, real email
+and carrier audio remain separately unverified. Next is a real pending-read
+fixture for CCP-044, followed by assessing the still-unassessed prose conditions.

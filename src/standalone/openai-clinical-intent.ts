@@ -12,6 +12,7 @@ import { notificationQuestion } from "./notification-question-language.ts";
 import { clinicalAdviceBoundary, publicInformationLanguage } from "./clinic-information-language.ts";
 import { publicInformationTopics, publicInformationUnavailable } from "../core/public-information.ts";
 import type { PublicInformationTopic } from "../core/public-information.ts";
+import { staffRequestSubjects, validStaffRequestSubject } from "../core/staff-request-subject.ts";
 import { validRequestBoundary } from "../core/request-boundary.ts";
 import { bookingHorizonLanguage } from "./booking-horizon-language.ts";
 import { requestBoundaryLanguage } from "./request-boundary-language.ts";
@@ -21,11 +22,11 @@ import { staffRequestLanguage } from "./staff-request-language.ts";
 const endpoint = "https://api.openai.com/v1/responses";
 const unavailable = { kind: "intentUnavailable" } as const;
 const maxBytes = 16 * 1024;
-export const clinicalIntentPromptVersion = "clinical-intent-v19";
+export const clinicalIntentPromptVersion = "clinical-intent-v21";
 
 const schema = { type: "object", additionalProperties: false,
   properties: {
-    kind: { type: "string", enum: ["workflow", "menu", "choice", "appointments", "cancel", "save", "outcome", "staffRequest", "staffOutcome", "faq", "urgent", "notificationOutcome", "identityDisagreement", "sharedPhone", "minorIntake", "proxyPatient", "jointPractitioners", "groupClass", "bookingHorizon", ...publicInformationTopics, "unsupported"] },
+    kind: { type: "string", enum: ["workflow", "menu", "choice", "appointments", "cancel", "save", "outcome", "staffRequest", "staffOutcome", "faq", "urgent", "notificationOutcome", "identityDisagreement", "sharedPhone", "minorIntake", "proxyPatient", "jointPractitioners", "groupClass", "bookingHorizon", ...publicInformationTopics, ...staffRequestSubjects, "unsupported"] },
     operation: { type: ["string", "null"], enum: ["book", "cancel", "reschedule", "intake", "appointments.read", null] },
     stage: { type: ["string", "null"], enum: ["targets", "offers", null] },
     from: { type: ["string", "null"] }, to: { type: ["string", "null"] },
@@ -75,7 +76,7 @@ function schemaFor(context: Context, hasPublicFacts: boolean) {
   const stages = phase === "listExistingAppointments" || phase === "chooseExistingAppointment" ? ["targets", null]
     : phase === "listNewTimes" || phase === "chooseNewTime" ? ["offers", null] : [null];
   return { ...schema, properties: { ...schema.properties,
-    kind: { type: "string", enum: [...kinds, "staffRequest", "staffOutcome", "faq", "urgent", "notificationOutcome", "identityDisagreement", "sharedPhone", "minorIntake", "proxyPatient", "jointPractitioners", "groupClass", "bookingHorizon", ...publicInformationTopics] },
+    kind: { type: "string", enum: [...kinds, "staffRequest", "staffOutcome", "faq", "urgent", "notificationOutcome", "identityDisagreement", "sharedPhone", "minorIntake", "proxyPatient", "jointPractitioners", "groupClass", "bookingHorizon", ...publicInformationTopics, ...staffRequestSubjects] },
     operation: { type: ["string", "null"], enum: context.workflow === null || context.workflow === "appointments.read"
       ? ["book", "cancel", "reschedule", "intake", "appointments.read", null] : [null] },
     stage: { type: ["string", "null"], enum: stages },
@@ -122,6 +123,7 @@ async function mapDecision(decision: Decision, context: Context, today: number, 
   if (context.callerIdentityDenied && decision.kind !== "urgent") return ok({ kind: "callerIdentityDenied", reason: context.callerIdentityDenied });
   if (decision.kind === "bookingHorizon") return none ? ok({ kind: "bookingHorizon" }) : err(unavailable);
   if (validRequestBoundary(decision.kind)) return none ? ok({ kind: "requestBoundary", reason: decision.kind }) : err(unavailable);
+  if (validStaffRequestSubject(decision.kind)) return none ? ok({ kind: "staffRequest", requestSubject: decision.kind }) : err(unavailable);
   if (decision.kind === "urgent" && none) return ok({ kind: "handoff", reason: "potentiallyUrgent", staffWorkUnavailable: true, checkedAt: context.now });
   if (decision.kind === "notificationOutcome" && none) return ok({ kind: "notificationOutcome" });
   if (decision.kind === "staffRequest" && none) return ok({ kind: "staffRequest" });
@@ -291,6 +293,7 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
             "The four boundary kinds require an affirmative current unsupported requirement. A negated request for multiple clinicians followed by a request for one clinician is ordinary self-booking. Merely mentioning a partner's appointment before asking to book a separate appointment for oneself is ordinary self-booking. Do not treat negated requirements or background people as current requirements. A boundary kind has operation null, never intake or book.",
             "Questions about how far ahead appointments can be booked or moved, or a vague request several months in the future, are bookingHorizon with every other field null. This cue reads trusted current public clinic limits and asks for an exact date. Never guess a calendar date, a limit, availability or a reservation, and never extend offer or policy expiry. A precise dated request remains a dated menu request; the host independently applies clinic limits. A statement reporting that another person asked a question in the past, with no current question or request by the caller, must be unsupported even if that statement quotes an appointment-horizon question. Background, quoted or negated future requests do not by themselves require this query.",
             "A request to speak with a person, leave a message or ask for a callback is staffRequest, with every other field null. Respect a human request rather than forcing booking. Questions about whether a staff message/request was saved, delivered or read are staffOutcome. A staff request is not appointment authority. Never claim a callback, delivery or human acknowledgment yourself.",
+            "A current request for the clinic to send or resend an invoice or paid receipt is invoiceCopy. A request for another copy of proof of payment or already paid/settled billing/account paperwork also uses invoiceCopy, rather than losing the purpose in generic staffRequest. A current request for somebody to review a disputed charge/payment/refund is chargeReview. A current request for earlier-appointment waitlist interest or a call if a vacancy arises is waitlistInterest. These three kinds require every other field null. They request only staff contact under independent verification and queue approval: never read/send a billing document, issue a refund, waive a fee, correct a record, enroll on a waitlist or promise an outbound call. They are not booking, cancellation, priceAndFees or notificationOutcome. Never force a new booking for a charge review. Background/quoted/past or negated requests without a current affirmative caller request are unsupported. A later generic request to send the staff request uses staffRequest, preserving the host's already stated purpose. A question whether the existing request was saved or received uses staffOutcome, never a new purpose send.",
             "A caller requesting urgent/emergency clinical help or the clinic’s immediate-help procedure is kind urgent with every other field null. It is only a routing cue, never a diagnosis, independent triage, medical clearance, transfer or staff delivery claim. Use no clinical advice or wording yourself. Negated urgency and irrelevant background speech do not by themselves require urgent routing.",
             "Questions about confirmation email or notification delivery for an action in this call are kind notificationOutcome with every other field null. This reads trusted action and delivery receipts only; it cannot send, resend, change the notification owner or claim an email reached the caller. Paid receipts, invoices and refund reviews belong to the clinic staff/contact path, never a booking-notification query. Do not supply response wording or delivery results.",
             "Public clinic questions about directions/parking, opening hours or contact are kind faq. Patient-specific medical questions or requests for clearance are never public facts; use staffRequest or unsupported, never faq. The publicFacts list contains only current call-approved text. Select its matching choice, or null if no entry answers the question. Every other field must be null. Never invent, rewrite or add facts. A repeated question can use the same public fact. Public questions do not require patient verification and do not select an appointment workflow.",

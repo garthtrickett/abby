@@ -106,11 +106,12 @@ test("E2E-311 signed staff requests use independent verification, approved peopl
       } finally { await call?.close(); await f.close(); }
     };
     let next = 0;
-    await Promise.all(Array.from({ length: 4 }, async () => { for (;;) { const index = next++; if (index >= scenarios.length) return; await run(scenarios[index]!); } }));
+    const settled = await Promise.allSettled(Array.from({ length: 4 }, async () => { for (;;) { const index = next++; if (index >= scenarios.length) return; await run(scenarios[index]!); } }));
+    for (const result of settled) if (result.status === "rejected") throw result.reason;
     const f = await clinikoStaffCallFlowFixture(); f.flow.dispose();
     const flow = resultValue(ClinikoCallFlow.create(f.flowConfig));
     try {
-      const reception = new TextReception(f.ledger, f.policies, flow);
+      const reception = new TextReception(f.ledger, f.policies, flow, undefined, undefined, undefined, undefined, f.flowConfig.clock);
       const agent = new CommandGateway({ actorRef: "staff-agent", role: "agent", scope: f.scope }, f.policies, reception);
       const turn = (turnId: string, text: string) => ({ callId: f.callId, sessionId: f.sessionId, turnId, text, quality: "clear" as const, at: verificationNow });
       assert.ok(agent.listPermitted().some(cap => cap.id === "staff.requests.prepare.v1"));

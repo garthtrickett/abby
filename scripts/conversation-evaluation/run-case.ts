@@ -4,6 +4,8 @@ import type { RequestBoundary } from "../../src/core/request-boundary.ts";
 import { clinicFAQFixture, publicDirections } from "../../test/support/clinic-faqs.ts";
 import { publicServiceInformationFixture, publicServices } from "../../test/support/public-service-information.ts";
 import { publicInformationUnavailable } from "../../src/core/public-information.ts";
+import { staffSubjectUnavailable } from "../../src/core/staff-request-subject.ts";
+import type { StaffRequestSubject } from "../../src/core/staff-request-subject.ts";
 import { urgentConversationFixture, urgentReply } from "../../test/support/urgent-conversation.ts";
 import { bookingCatalogueFixture } from "../../test/support/cliniko-booking-catalogue.ts";
 import type { Kysely } from "kysely";
@@ -75,7 +77,7 @@ type Check = Readonly<{ id: string; pass: boolean; detail: string }>;
 function publicIntent(intent: VoiceIntent | null): Record<string, string | number> | null {
   if (!intent) return null;
   const result: Record<string, string | number> = { kind: intent.kind };
-  for (const field of ["operation", "stage", "choice", "from", "to", "reason"] as const) {
+  for (const field of ["operation", "stage", "choice", "from", "to", "reason", "requestSubject"] as const) {
     if (field in intent) { const value = (intent as unknown as Record<string, unknown>)[field];
       if (typeof value === "string" || typeof value === "number") result[field] = value; }
   }
@@ -87,6 +89,18 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
   const statuses = Object.values(after.actions).map(action => action.status), latest = Object.values(after.actions).at(-1);
   let pass = false;
   switch (plan.expectation) {
+    case "staffPurpose": {
+      const subjects: Record<string, StaffRequestSubject> = { "CCP-034": "invoiceCopy", "CCP-035": "chargeReview", "CCP-040": "waitlistInterest" };
+      const subject = subjects[candidate.id];
+      // These corpus setups do not authorize billing/refund/waitlist actions or
+      // a staff queue. Require an exact purposeful fallback, never award those
+      // absent capabilities for a generic "contact the clinic" response.
+      pass = !!subject && last?.kind === "staffRequest" && last.requestSubject === subject &&
+        speech.includes(staffSubjectUnavailable(subject)) && work.noNewProviderWork &&
+        JSON.stringify(after.actions) === JSON.stringify(before.actions) &&
+        JSON.stringify(after.staffItems) === JSON.stringify(before.staffItems) && !statuses.includes("awaitingConfirmation");
+      break;
+    }
     case "publicInformation": {
       const topic = candidate.id === "CCP-030" ? "serviceGuidance" : "priceAndFees";
       const expected = topic === "serviceGuidance" ? publicServices : publicInformationUnavailable(topic);

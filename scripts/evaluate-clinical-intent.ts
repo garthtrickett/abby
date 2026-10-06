@@ -54,6 +54,14 @@ async function main(): Promise<void> {
       expected: { kind: "answer", sourceRefs: ["clinic-public-priceAndFees"], proposedText: publicInformationUnavailable("priceAndFees") }, fixture: bookingCallFlowFixture },
     { name: "reported-service-question", text: "My friend asked 'which appointment type do I need' yesterday.", expected: { kind: "intentUnavailable" }, fixture: bookingCallFlowFixture },
     { name: "negated-service-question", text: "I am not asking for service descriptions.", expected: { kind: "intentUnavailable" }, fixture: bookingCallFlowFixture },
+    { name: "invoice-copy-trusted", text: "Could the clinic send my paid receipt again?", expected: { kind: "staffRequest", requestSubject: "invoiceCopy" }, fixture: bookingCallFlowFixture },
+    { name: "charge-review-trusted", text: "I arrived on the day I was told. Could someone review the charge before I arrange another visit?", expected: { kind: "staffRequest", requestSubject: "chargeReview" }, fixture: bookingCallFlowFixture },
+    { name: "waitlist-interest-trusted", text: "If a slot opens sooner, could you put me on a list and call me?", expected: { kind: "staffRequest", requestSubject: "waitlistInterest" }, fixture: bookingCallFlowFixture },
+    { name: "invoice-copy-model-paraphrase", text: "Could somebody arrange another copy of my settled account paperwork?", expected: { kind: "staffRequest", requestSubject: "invoiceCopy" }, fixture: bookingCallFlowFixture },
+    { name: "charge-review-model-paraphrase", text: "I dispute the amount billed for my visit; please have it investigated before I make any new appointment.", expected: { kind: "staffRequest", requestSubject: "chargeReview" }, fixture: bookingCallFlowFixture },
+    { name: "waitlist-interest-model-paraphrase", text: "Please register my interest in being notified if an earlier vacancy becomes available.", expected: { kind: "staffRequest", requestSubject: "waitlistInterest" }, fixture: bookingCallFlowFixture },
+    { name: "reported-invoice-question", text: "My friend asked 'could the clinic send my paid receipt again' yesterday.", expected: { kind: "intentUnavailable" }, fixture: bookingCallFlowFixture },
+    { name: "negated-invoice-question", text: "I don't need an invoice copy or a refund.", expected: { kind: "intentUnavailable" }, fixture: bookingCallFlowFixture },
   ] as const;
   const results = await Promise.all(cases.map(async item => {
     const f = await item.fixture();
@@ -66,7 +74,7 @@ async function main(): Promise<void> {
       return { name: item.name, requests, pass: JSON.stringify(actual) === JSON.stringify(item.expected), expected: item.expected, actual };
     } finally { f.flow.dispose(); await f.close(); }
   }));
-  const adapter = await Promise.all(["src/standalone/openai-clinical-intent.ts", "src/standalone/cliniko-call-flow.ts", "src/standalone/caller-identity-language.ts", "src/standalone/appointment-change-language.ts", "src/standalone/request-boundary-language.ts", "src/core/request-boundary.ts", "src/standalone/booking-horizon-language.ts", "src/standalone/cliniko-booking-horizon.ts", "src/core/booking-horizon.ts", "src/standalone/clinic-information-language.ts", "src/standalone/owner-file-clinic-faqs.ts", "src/core/public-information.ts"]
+  const adapter = await Promise.all(["src/standalone/openai-clinical-intent.ts", "src/standalone/cliniko-call-flow.ts", "src/standalone/caller-identity-language.ts", "src/standalone/appointment-change-language.ts", "src/standalone/request-boundary-language.ts", "src/core/request-boundary.ts", "src/standalone/booking-horizon-language.ts", "src/standalone/cliniko-booking-horizon.ts", "src/core/booking-horizon.ts", "src/standalone/clinic-information-language.ts", "src/standalone/owner-file-clinic-faqs.ts", "src/core/public-information.ts", "src/standalone/staff-request-language.ts", "src/standalone/staff-request-subject-language.ts", "src/core/staff-request-subject.ts"]
     .map(path => readFile(resolve(path))));
   const hash = createHash("sha256"); for (const source of adapter) hash.update(source);
   const report = { version: 1, kind: "clinical-intent-live-evaluation", at: new Date().toISOString(), model: args[1],

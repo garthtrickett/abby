@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "kind": "synthetic-staff-request-purpose-reproduction",
+  "sourceRevision": "b1f4e89c086c1692c211d5e08d7aea8bfd117695",
+  "command": "node --test test/voice/staff-request-purpose.test.ts",
+  "test": "a verified invoice request preserves its purpose in Cliniko without reading or sending a billing document",
+  "result": "failed-before-production-edits",
+  "observations": {
+    "staffPosts": 1,
+    "clinicalWrites": 0,
+    "actualSummarySchema": "abby.staff-request.v1",
+    "actualReason": "callerRequested",
+    "actualRequestSubject": null,
+    "requiredRequestSubject": "invoiceCopy"
+  },
+  "limitation": "Signed synthetic local call; no real Cliniko, carrier or billing workflow."
+}
