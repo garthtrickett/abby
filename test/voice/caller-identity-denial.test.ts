@@ -14,6 +14,7 @@ import { clinikoWorkflowVoiceFixture, voiceUntil } from "../support/cliniko-work
 import { withDisposablePostgres } from "../support/disposable-postgres.ts";
 
 const denied = callerIdentityDenialText;
+const patientNames = ["IdentityNameCanary", "IdentitySurnameCanary"];
 
 test("E2E-319 signed caller denial revokes every private workflow, preserves prior receipts and retains approved public information", { timeout: 240_000 }, async () => {
   await withDisposablePostgres(async db => {
@@ -24,12 +25,16 @@ test("E2E-319 signed caller denial revokes every private workflow, preserves pri
       : scenario === "urgent" ? await urgentConversationFixture() : await clinicFAQFixture();
     let call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined;
     let reads = 0;
+    const bodies: string[] = [];
     try {
       const port = f.flowConfig.fetchPort!;
       call = await clinikoWorkflowVoiceFixture(db, { ...f.flowConfig, fetchPort: async (...args) => {
-        reads++; return port(...args);
+        reads++; const response = await port(...args);
+        if ((args[1]?.method ?? "GET") !== "GET" || !new URL(String(args[0])).pathname.startsWith("/v1/patients/")) return response;
+        return Response.json({ ...await response.json(), first_name: patientNames[0], last_name: patientNames[1] }, { status: response.status });
       } }, owner => createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-key", model: "synthetic-model",
         clinicDate: () => "2026-10-04", fetch: async (_url, init) => {
+          bodies.push(String(init?.body));
           const text = JSON.parse(JSON.parse(String(init?.body)).input[1].content).callerText;
           const start = ["I need to book an appointment.", "I need to cancel an appointment.", "I need to move an appointment.", "I only want to check my appointments."].includes(text);
           const operation = text.includes("cancel") ? "cancel" : text.includes("move") ? "reschedule" : text.includes("check") ? "appointments.read" : "book";
@@ -48,6 +53,9 @@ test("E2E-319 signed caller denial revokes every private workflow, preserves pri
             content: [{ type: "output_text", text: JSON.stringify(decision) }] }] });
         } }), { lostWrite: scenario === "uncertain" });
       const play = async (text: string) => { await call!.turn(text); await call!.mark(); };
+      assert.equal(reads, 0, "phone routing/admission cannot fetch a patient record or appointment before verification");
+      assert.equal(f.mail.length, 0); assert.equal(call.writes.length, 0);
+      assert.doesNotMatch(call.spoken.join(" "), /I found an appointment|your appointment (?:is|on|at)/i);
       if (scenario !== "initial") {
         await play(scenario === "cancel" ? "I need to cancel an appointment." : scenario === "move" ? "I need to move an appointment."
           : scenario === "enquiry" ? "I only want to check my appointments." : scenario.startsWith("staff") ? "Could I speak to a receptionist?" : "I need to book an appointment.");
@@ -75,13 +83,16 @@ test("E2E-319 signed caller denial revokes every private workflow, preserves pri
         await play("What times are available on October 8?");
         assert.match(call.spoken.at(-1)!, /Option one/i); return;
       }
-      const before = await call.state();
+      const before = await call.state(), readsAtDenial = reads, mailAtDenial = f.mail.length, writesAtDenial = call.writes.length;
       await play(scenario === "sharedPhone" ? "This is a shared phone." : scenario === "sharedPartner" ? "My partner and I both use the number I am ringing from."
         : scenario === "modelShared" ? "More than one person uses the line I am calling you on." : scenario === "modelDenial" || scenario === "forgedModel"
         ? "You have linked this conversation to somebody different from its speaker." : "That isn't me. This is a shared phone.");
       if (scenario === "forgedModel") { assert.equal((await call.state()).callerIdentityDenied, undefined); return; }
       assert.equal(call.spoken.at(-1), denied, scenario);
       const after = await call.state(); assert.equal(after.callerIdentityDenied, ["sharedPhone", "sharedPartner", "modelShared"].includes(scenario) ? "sharedPhone" : "identityDisagreement");
+      assert.equal(reads, readsAtDenial); assert.equal(f.mail.length, mailAtDenial); assert.equal(call.writes.length, writesAtDenial);
+      assert.ok([...verificationCanaries, ...patientNames].every(canary => call!.spoken.every(text => !text.includes(canary))));
+      assert.ok([...verificationCanaries, ...patientNames].every(canary => bodies.every(body => !body.includes(canary))));
       for (const action of Object.values(before.actions)) {
         if (action.status === "awaitingConfirmation") assert.equal(after.actions[action.key]?.status, "canceled");
         else assert.deepEqual(after.actions[action.key], action, "denial must not erase or undo a sent action");
@@ -103,6 +114,6 @@ test("E2E-319 signed caller denial revokes every private workflow, preserves pri
     let next = 0;
     const workers = await Promise.allSettled(Array.from({ length: 4 }, async () => { for (;;) { const scenario = scenarios[next++]; if (!scenario) return; await run(scenario); } }));
     const failure = workers.find(item => item.status === "rejected"); if (failure?.status === "rejected") throw failure.reason;
-    assert.deepEqual(resultValue(await scanPatientDataCanaries(db, verificationCanaries.map((value, index) => ({ label: `identity_${index}`, value })))), []);
+    assert.deepEqual(resultValue(await scanPatientDataCanaries(db, [...verificationCanaries, ...patientNames].map((value, index) => ({ label: `identity_${index}`, value })))), []);
   });
 });

@@ -73,6 +73,13 @@ test("E2E-313 signed approved practitioner searches preserve preferences, declar
         await call.turn("The first time, please.");
         if (scenario === "proofRevoked") { assert.equal(call.writes.length, 0); assert.ok(!Object.values((await call.state()).actions).length); return; }
         let action = Object.values((await call.state()).actions).at(-1)!; assert.equal(action.status, "awaitingConfirmation");
+        assert.equal(action.mutation.request.kind, "book");
+        if (action.mutation.request.kind !== "book") throw new Error("expected scoped booking proposal");
+        assert.deepEqual(action.mutation.request.offer.scope, f.scope);
+        assert.equal(action.mutation.request.offer.presentation?.locationName, "Demo North");
+        if (scenario === "earliest") assert.equal(action.mutation.request.offer.startsAt, "2026-10-06T23:00:00.000Z",
+          "any-practitioner selection must choose the actual earliest eligible start, not merely name Demo B");
+        if (scenario === "tie") assert.equal(action.mutation.request.offer.startsAt, "2026-10-08T04:00:00.000Z");
         assert.match(call.spoken.at(-1)!, primary ? /Demo A at Demo North/ : /Demo B at Demo North/); await call.mark();
         if (scenario === "laterCorrection") {
           await call.turn("Wait, the later one would be better.");
@@ -87,12 +94,22 @@ test("E2E-313 signed approved practitioner searches preserve preferences, declar
         assert.equal(call.writes.length, blocked ? 0 : 1);
         assert.equal((await call.state()).actions[action.key]?.status, blocked ? "rejected" : scenario === "lost" ? "uncertain" : "committed");
         if (!blocked) {
+          assert.equal(call.writeRequests.length, 1);
+          const sent = call.writeRequests[0]!;
+          assert.equal(sent.method, "POST"); assert.equal(sent.path, "/v1/individual_appointments");
+          assert.equal(sent.body.business_id, "11"); assert.equal(sent.body.practitioner_id, primary ? "22" : "23");
+          assert.equal(sent.body.appointment_type_id, "33"); assert.equal(sent.body.patient_id, verificationCanaries[2]);
+          const finalRequest = (await call.state()).actions[action.key]!.mutation.request;
+          if (finalRequest.kind !== "book") throw new Error("expected preserved booking request");
+          assert.equal(sent.body.starts_at, finalRequest.offer.startsAt);
           await call.mark(); await call.turn("Yes"); assert.equal(call.writes.length, 1);
         }
       } finally { await call?.close(); await f.close(); }
     };
     let next = 0;
-    await Promise.all(Array.from({ length: 4 }, async () => { for (;;) { const i = next++; if (i >= scenarios.length) return; await run(scenarios[i]!); } }));
+    const workers = await Promise.allSettled(Array.from({ length: 4 }, async () => { for (;;) { const i = next++; if (i >= scenarios.length) return; await run(scenarios[i]!); } }));
+    const failures = workers.flatMap(worker => worker.status === "rejected" ? [worker.reason] : []);
+    if (failures.length) throw new AggregateError(failures, failures.map(error => error instanceof Error ? error.message : String(error)).join("\n"));
     assert.deepEqual(resultValue(await scanPatientDataCanaries(db, verificationCanaries.map((value, i) => ({ label: `catalogue_${i}`, value })))), []);
   });
 });
@@ -112,7 +129,10 @@ test("E2E-313 agent searches use approved public names and never use a model/pro
     resultValue(await agent.submit({ kind: "booking.offers.select.v1", turn: f.turn("select", "Option one"), choice: 1, now: verificationNow }));
     const action = Object.values((await f.state()).actions).at(-1)!; assert.equal(action.status, "awaitingConfirmation");
     assert.equal(action.mutation.request.kind, "book");
-    if (action.mutation.request.kind === "book") assert.equal(action.mutation.request.offer.presentation?.practitionerName, "Demo B");
+    if (action.mutation.request.kind === "book") {
+      assert.equal(action.mutation.request.offer.presentation?.practitionerName, "Demo B");
+      assert.equal(action.mutation.request.offer.startsAt, "2026-10-06T23:00:00.000Z");
+    }
     assert.ok(!JSON.stringify(reply).includes("practitionerId")); assert.ok(verificationCanaries.every(canary => !JSON.stringify(reply).includes(canary)));
     const forged = { ...read, turn: f.turn("forged", "23"), preference: { practitioner: "Demo B", practitionerId: "23" } };
     assert.equal((await agent.submit(forged)).ok, false);

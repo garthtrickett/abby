@@ -21,7 +21,17 @@ test("E2E-310 signed change intent clarifies conflicts, preserves the source and
       let call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined;
       const requests: string[] = [], reverse = scenario === "reverse";
       try {
-        call = await clinikoWorkflowVoiceFixture(db, f.flowConfig, owner => {
+        const port = f.flowConfig.fetchPort!;
+        const fetchPort: typeof fetch = scenario !== "disagreement" ? port : async (value, init) => {
+          const response = await port(value, init);
+          if ((init?.method ?? "GET") !== "GET" || !new URL(String(value)).pathname.startsWith("/v1/individual_appointments")) return response;
+          const data = await response.json();
+          for (const row of Array.isArray(data.individual_appointments) ? data.individual_appointments : [data]) {
+            if (row.id === "91") { row.starts_at = "2026-10-07T22:00:00.000Z"; row.ends_at = "2026-10-07T22:30:00.000Z"; }
+          }
+          return Response.json(data, { status: response.status });
+        };
+        call = await clinikoWorkflowVoiceFixture(db, { ...f.flowConfig, fetchPort }, owner => {
           trustedOwner = owner;
           return createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-key", model: "synthetic-model", clinicDate: () => "2026-10-04",
             fetch: async (_value, init) => {
@@ -56,6 +66,7 @@ test("E2E-310 signed change intent clarifies conflicts, preserves the source and
           if (["committed", "genericCommitted", "unknown"].includes(scenario)) await call.turn("Yes");
         }
         const before = await call.state(), old = Object.values(before.actions).at(-1);
+        if (scenario === "disagreement") assert.match(call.spoken.at(-1)!, /Thursday 8 October at 9:00 am/);
         if (["committed", "genericCommitted", "unknown"].includes(scenario)) await call.mark();
         const text = scenario === "mixed" ? "I cannot come tomorrow. Could we cancel that and put it on another day?"
           : scenario === "disagreement" ? "I thought it was at ten. You are saying nine?"
@@ -82,8 +93,11 @@ test("E2E-310 signed change intent clarifies conflicts, preserves the source and
             assert.equal(refreshed.status, "awaitingConfirmation");
             assert.equal(refreshed.mutation.request.kind, "cancel");
             if (refreshed.mutation.request.kind !== "cancel") throw new Error("expected refreshed cancellation");
-            assert.equal(refreshed.mutation.request.target.startsAt, "2026-10-08T04:00:00.000Z", "caller recollection cannot overwrite provider time");
+            assert.equal(refreshed.mutation.request.target.startsAt, "2026-10-07T22:00:00.000Z", "caller recollection cannot overwrite provider time");
+            assert.match(call.spoken.at(-1)!, /Thursday 8 October at 9:00 am/);
             assert.equal(call.writes.length, 0); await call.mark(); await call.turn("Yes"); assert.equal(call.writes.length, 1);
+            assert.deepEqual(call.writeRequests[0], { method: "PATCH", path: "/v1/individual_appointments/91/cancel",
+              body: { cancellation_note: null, cancellation_reason: 50, apply_to_repeats: false } });
           }
         } else if (["committed", "genericCommitted", "unknown"].includes(scenario)) {
           assert.equal((await call.state()).actions[old!.key]?.status, old!.status); assert.equal(call.writes.length, 1);

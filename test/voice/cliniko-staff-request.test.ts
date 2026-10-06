@@ -56,9 +56,13 @@ test("E2E-311 signed staff requests use independent verification, approved peopl
         await call.turn(["named", "changedPerson"].includes(scenario) ? "Could I speak to Morgan?" : scenario === "unlisted" ? "Could I speak to SomeoneUnknown?"
           : "Can I speak to a receptionist rather than arrange a booking with you?");
         await call.mark();
+        assert.doesNotMatch(call.spoken.at(-1)!, /your staff request was saved|staff (?:have|has) (?:read|received)|staff will call|guarantee/i,
+          "an initial human request is not a saved, received or promised callback");
         if (["unavailable", "unapproved", "disabled", "unlisted"].includes(scenario)) {
           assert.match(call.spoken.at(-1)!, /can't send.*staff request.*contact the clinic/);
           assert.equal(f.mail.length, 0); assert.equal(f.staffPosts, 0); assert.equal(Object.keys((await call.state()).staffItems).length, 0);
+          assert.deepEqual((await call.state()).actions, prior.actions, "unavailable human contact cannot force a booking workflow");
+          assert.equal(call.writes.length, priorWrites);
           return;
         }
         const expectedMail = priorClinical ? 2 : 1;
