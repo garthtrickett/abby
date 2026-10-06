@@ -84,6 +84,8 @@ test("E2E-310 signed change intent clarifies conflicts, preserves the source and
           assert.match(call.spoken.at(-1)!, ["mixed", "modelGuess", "conflictingChoice"].includes(scenario) ? /move.*cancel/
             : scenario === "disagreement" ? /which appointment/ : scenario === "unplayedChoice" ? /fresh appointment options/ : /can't change.*patient.*type.*duration/);
           assert.equal(requests.includes(text), scenario === "modelGuess", "only the unrecognized question exercises the malicious model cancellation");
+          if (scenario === "reassign" || scenario === "duration")
+            assert.equal(call.spoken.at(-1), "I can't change the patient or appointment type or duration in this workflow. Please contact the clinic about that change.");
           if (scenario === "disagreement") {
             await call.mark(); await call.turn("Cancel that appointment.");
             assert.equal(Object.keys((await call.state()).actions).length, 0, "disputed private target must be discarded");
@@ -144,9 +146,9 @@ test("E2E-310 signed change intent clarifies conflicts, preserves the source and
           assert.equal(proposal.mutation.request.target.appointmentRef, scenario === "multiple" ? "92" : "91");
           await call.mark(); await call.turn("Yes"); assert.equal(call.writes.length, 1);
           assert.equal(call.writes[0], `PATCH /v1/individual_appointments/${scenario === "multiple" ? "92" : "91"}/cancel`);
-          if (scenario === "cancelOnly" || scenario === "cancelLateOnly") {
+          if (scenario === "cancelOnly" || scenario === "cancelLateOnly" || scenario === "multiple") {
             assert.equal(call.writeRequests.length, 1); assert.deepEqual(call.writeRequests[0], {
-              method: "PATCH", path: "/v1/individual_appointments/91/cancel",
+              method: "PATCH", path: `/v1/individual_appointments/${scenario === "multiple" ? "92" : "91"}/cancel`,
               body: { cancellation_note: null, cancellation_reason: 50, apply_to_repeats: false },
             });
           }

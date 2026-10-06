@@ -16,7 +16,7 @@ export function actionOutcomeText(action: ActionState | undefined): string {
   if (action.status === "uncertain" || action.status === "needsReview" || action.status === "dispatched")
     return action.kind === "intake" && action.mutation.request.kind === "intake" && action.mutation.request.recoveryContract === "callerMediated"
       ? "I can't confirm that your details were saved. No appointment or staff request is confirmed. Contact the clinic before trying again."
-      : "I can't confirm that action yet. It is pending review.";
+      : "I can't confirm that action yet. It is pending review. Please contact the clinic before trying again. I won't send that action again from this call.";
   return action.status === "awaitingConfirmation" || action.status === "ready"
     ? "That action is not confirmed yet. I still need your separate confirmation." : "That action was not completed.";
 }

@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "kind": "direct-uncertain-recovery-before",
+  "baseRevision": "efacd456f4c1c24a82d1c6721c3a22d8f9ce6273",
+  "testSha256": "75827cf8b47cd93d0fc1657f01f8ab9742d0a8b9446ba6a025450e3082d9abc5",
+  "command": "node --test --test-name-pattern='direct cancellation and uncertain-booking' test/voice/notification-outcome-query.test.ts",
+  "passed": 0,
+  "failed": 1,
+  "failure": "uncertain: the uncertain caller needs an explicit recovery instruction, not only a status",
+  "actualReply": "I can't confirm that action yet. It is pending review.",
+  "source": {
+    "sha256": "619e0ea64d19127bde4ca24e1ce63182c0e6b025c80d0c27f58b608f53974aed",
+    "files": 471
+  },
+  "fixtureCorrection": {
+    "initialWitness": "The first attempt also required an over-specific plain cancellation reply; actual behavior truthfully restated the committed receipt and denied another change. The witness now accepts that exact canonical reply and independently checks the later generic outcome.",
+    "correctedWitness": "Only the missing uncertain recovery instruction fails; cancellation, repeated query and model-field rejection pass."
+  },
+  "scope": "Synthetic signed workflow with one possible POST; no real provider, email or carrier release claim."
+}

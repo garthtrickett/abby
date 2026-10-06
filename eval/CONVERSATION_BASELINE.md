@@ -1253,3 +1253,104 @@ requests). No redundant live run is claimed. Added test files are excluded from
 that evaluator hash and independently bound in this patch’s evidence record.
 The remaining appointment-read/outcome, late-arrival and search/information
 clauses stay open; the named baseline is not full acceptance sign-off.
+
+
+## 2026-10-06 — appointment reads, direct outcomes and literal late arrival
+
+Base: main `efacd456f4c1c24a82d1c6721c3a22d8f9ce6273`.
+
+- The corrected direct E2E-318 witness failed before the production change:
+  uncertainty gave only pending-review status, with no clinic-contact recovery.
+  The [direct record](baselines/uncertain-recovery-direct-before-v1.json) also
+  records the initial over-specific cancellation expectation and its correction.
+- `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/baselines/uncertain-recovery-before-v24-v1.json --case CCP-021`
+  failed the strengthened named observation, while all three safety observations
+  passed. Setup matched, one actual model request ran, source stayed stable and
+  PostgreSQL canaries were clear. The old status-only reply is preserved.
+- Shared uncertain replies now say to contact the clinic before another attempt
+  and that Abby will not send that action again from the call. Initial host-result
+  notices call the same formatter. Caller-mediated intake keeps its separate
+  saved-details/no-appointment warning. No new write, retry, storage or authority
+  path was added.
+- E2E-318 runs the original direct cancellation/uncertain questions, repeated
+  generic outcomes and rejected model success wording. SAM actions/effects/staff
+  items, provider-budget claims, mail and the single write remain unchanged; a
+  later accepted synthetic provider row after a lost response is not inspected.
+- E2E-314's 25 signed read configurations, native read commands and signed
+  enquiry-to-booking switch passed. Reads cannot authorize cancellation, reveal
+  data before verification or transfer read proof into booking.
+- E2E-311's 23 signed scenarios now include literal late arrival after clinical
+  verification across saved, lost-response and unavailable routes. Independent
+  staff code and an explicit send are required; no diary change or human delivery
+  is claimed. This is generic staff contact, not proof that arrival details were
+  conveyed to reception.
+
+### Local verification and publication limits
+
+The initial three-file serving gate passed six tests and failed one stale
+billing-receipt expectation. Its existing actual reply already used the finite
+invoice-copy contact boundary; only that expectation was updated.
+
+The broader command was:
+
+```sh
+node --test --test-concurrency=3 test/voice/appointment-enquiries.test.ts test/voice/notification-outcome-query.test.ts test/voice/cliniko-staff-request.test.ts test/voice/booking-horizon.test.ts test/voice/booking-request-boundaries.test.ts test/voice/embedded-cliniko-appointment-change-host-call.test.ts test/voice/embedded-cliniko-booking-host-call.test.ts test/voice/embedded-intake-booking-call.test.ts test/voice/voice.test.ts test/text/notification-effects.test.ts test/voice/conversation-baseline.test.ts test/contract/scenario-manifest.test.ts
+```
+
+Result: **168 passed, one failed, one skipped, zero canceled; exit 1**. The skip
+is the existing opt-in PostgreSQL intake-setting probe. The failure is the
+unchanged practitioner-outside-business assertion at `voice.test.ts:1027`:
+five provider reads versus four expected. The actual caller failure/no-write
+assertions before it pass. It was independently reproduced on clean unchanged
+main with:
+
+```sh
+node --test --test-name-pattern='memory: Cliniko practitioner outside business' test/voice/voice.test.ts
+```
+
+That reproduction also exits 1 with `5 !== 4`. The assertion and the provider
+reader are unchanged by this patch. The broader suite is **not green**; publication
+is a draft PR. This records a pre-existing failure rather than bypassing its test.
+
+After the wording change:
+
+```sh
+node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/baselines/clinic-conversation-after-uncertain-recovery-v24-v1.json
+npm run typecheck
+git diff --check
+```
+
+The source-stable [fresh all-45 report](baselines/clinic-conversation-after-uncertain-recovery-v24-v1.json)
+passes all 45 named observations and 135 safety observations: six actual candidate
+model requests, 39 trusted paths, no setup gaps or harness failures and clear
+PostgreSQL canaries. Typecheck and diff check pass. Prompt remains v24; no redundant
+intent-classifier run is claimed. The [direct evidence record](baselines/read-outcome-late-arrival-evidence-v1.json)
+binds commands, test hashes, before/after source hashes and the pre-existing red
+result. All 45 original cases and 124 prose clauses remain in the audit; 16
+assessments still await their remaining source/behavior review. Actual clinic,
+email and carrier activation remain separate release gates. Standalone privacy
+is unchanged, and rich database tests remain unsafe reference-lab evidence.
+
+## Remaining original clauses and bounded test observation — 2026-10-06
+
+The source/behavior audit now inspects the remaining original CCP-027–031, CCP-033–042 and CCP-045 clauses directly. The corpus is unchanged: 45 cases, 53 required and 71 forbidden clauses, all copied exactly in the audit. E2E-312 adds later retained-window and empty-range journeys, observes exact provider `from`/`to` bounds and actual mutation starts, and preserves the complete committed state after a late correction. E2E-310 checks the selected second appointment's complete cancellation payload and unsupported patient/type/duration reply; E2E-316 independently preserves committed actions/effects/staff items and all provider/mail/write counts. The original CCP-032 requirement is concise approved repetition; real audible slowing is separate evidence.
+
+The first window witness passed four tests and failed one over-specific fixture expectation: an honest empty-search contact reply did not enumerate the date bounds. The original requirement allows an honest no-match within the actually inspected bounded search, so the assertion now checks that exact existing reply and no action/write or clinic-wide absence claim. No production behavior was changed for this expectation. The subsequent nine-file clause gate passed all 16 tests.
+
+The previous unchanged eligibility-count failure is resolved by reading the actual parallel relationship checks: both business/practitioner and practitioner/type requests run. The guards now require all five exact paths and no `available_times` request on either rejected relationship. The focused two-test gate passes, without a provider implementation change or bypass. The earlier red record remains unchanged.
+
+A 30-file combined gate then passed 196 tests, failed one staff `saved` caller-turn speech observation, and skipped the existing opt-in PostgreSQL intake-setting probe. The unchanged staff file passed its 23 signed scenarios in a focused reproduction; the broad timeout's cause remains unproven. A controlled probe initially held permission for 11 seconds under the default five-second private verification deadline. Its `0 !== 1` failure was a mistaken test expectation: denial was correct. The corrected probe explicitly configures the existing 15-second verification bound. With the old observer it demonstrably fails at the generic 10-second speech wait; the [before-change record](baselines/staff-observer-before-v1.json) preserves both the valid failure and initial fixture correction.
+
+The synthetic observer now records actual staff-preparation, staff-dispatch and clinical-dispatch invocation/settlement, uses the serving 20-second outer preparation and 30-second effect deadlines, then retains its 10-second speech wait. Production default/private/inner deadlines are unchanged. The controlled 11-second signed request saves exactly once with no diary write and no human-receipt claim; the five-test staff/outcome gate passes. This proves the observer contract correction, not the cause of the earlier broad timeout. Parallel workers continue to settle before database teardown. Final combined verification, fresh source-pinned live interpretation and publication are recorded below when they settle.
+
+### Final current-source verification
+
+```sh
+node --test --test-concurrency=3 test/voice/conversation-baseline.test.ts test/voice/played-menu-selection.test.ts test/voice/explicit-time-clarification.test.ts test/voice/stale-menu-recovery.test.ts test/voice/caller-corrections.test.ts test/voice/appointment-change-intent.test.ts test/voice/booking-search-windows.test.ts test/voice/approved-booking-search.test.ts test/voice/appointment-enquiries.test.ts test/voice/clinic-faqs.test.ts test/voice/dated-window-corrections.test.ts test/voice/urgent-conversation-routing.test.ts test/voice/notification-outcome-query.test.ts test/voice/caller-identity-denial.test.ts test/voice/booking-request-boundaries.test.ts test/voice/booking-horizon.test.ts test/voice/public-service-guidance.test.ts test/voice/staff-request-purpose.test.ts test/voice/missed-call-repair.test.ts test/voice/staff-review-expectations.test.ts test/voice/call-transcript-ownership.test.ts test/voice/call-waiting-limits.test.ts test/voice/pending-lookup-repair.test.ts test/voice/cliniko-staff-request.test.ts test/voice/voice.test.ts test/voice/embedded-cliniko-appointment-change-host-call.test.ts test/voice/embedded-cliniko-booking-host-call.test.ts test/voice/embedded-intake-booking-call.test.ts test/text/notification-effects.test.ts test/contract/scenario-manifest.test.ts
+node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinical-intent.ts --model gpt-4o-mini --out eval/baselines/clinical-intent-six-goal-final-v24-v1.json
+node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/baselines/clinic-conversation-six-goal-final-v24-v1.json
+npm run typecheck
+git diff --check
+```
+
+The final combined gate passes **198 tests, zero failures/canceled and one existing optional PostgreSQL intake-setting skip**, with three files and four signed case workers in parallel. The fresh intent sample passes 41/41 (31 actual model requests, ten trusted paths) on prompt v24. The fresh all-45 conversation report passes 45 named and 135 safety observations (six actual model requests, 39 trusted paths), with stable source, no setup gaps/harness failures and clear PostgreSQL canaries. Both fingerprints bind the final serving/observer source. The [final evidence record](baselines/remaining-conversation-clauses-evidence-v1.json) separately binds all 30 test-file hashes, historical failures, corrected assumptions, original clause preservation and current test/model results. These are synthetic workflow acceptance and a small live classification sample, not statistical generality, real clinic/carrier/email activation or acoustic pacing. Typecheck and diff check pass. The result is published through PR420; normal merge follows the user's standing authorization after local verification. This closes the six requested synthetic conversation tasks; release prerequisites remain as described above.

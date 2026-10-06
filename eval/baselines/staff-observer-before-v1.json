@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "kind": "bounded-staff-observer-before",
+  "baseRevision": "779cbdaf8a3e3895f0bcac9a2e4d7dfb92118dcc",
+  "testSha256": "526f2b83ce6500cd714b97c7db2284011bf33fb0c5b63bb0f6c7f730fd09d787",
+  "command": "node --test --test-name-pattern='a signed staff preparation can settle' test/voice/cliniko-staff-request.test.ts",
+  "passed": 0,
+  "failed": 1,
+  "heldPermissionMs": 11000,
+  "genericObserverMs": 10000,
+  "productionInnerPreparationMs": 15000,
+  "productionOuterPreparationMs": 20000,
+  "failure": "caller turn speech timed out; controlled pending turn rejected while permission was held for 11000 ms within the configured 15000 ms verification deadline",
+  "earlierBroadGate": {
+    "passed": 196,
+    "failed": 1,
+    "skipped": 1,
+    "failure": "saved: caller turn speech timed out with active lifecycle, no wire failures, no clinical writes/actions/effects and the last media frame still pending",
+    "focusedFileReproduction": "passed unchanged, 1 test, 23 scenarios",
+    "causalLimit": "The controlled witness proves the observer budget defect; it does not establish why the earlier broad saved preparation was slow."
+  },
+  "log": "4590eee3-1791294945797.log",
+  "privateVerificationDeadlineMs": 15000,
+  "initialFixtureCorrection": {
+    "log": "4590eee3-1791294432038.log",
+    "actualFailure": "expected staffPosts 1, actual 0",
+    "reason": "The initial probe retained the default 5000 ms private verification deadline. Rejection after holding permission for 11000 ms was correct. The probe now explicitly uses the supported 15000 ms verification configuration. Production defaults are unchanged."
+  },
+  "oldObserverSha256": "222bb2ca4d562e14fe22498663d5066cf15044ed917ea4acffc3eacdf58732bf"
+}

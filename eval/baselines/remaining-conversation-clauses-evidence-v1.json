@@ -1,0 +1,156 @@
+{
+  "version": 1,
+  "kind": "remaining-conversation-clauses-and-six-goal-evidence",
+  "baseRevision": "779cbdaf8a3e3895f0bcac9a2e4d7dfb92118dcc",
+  "originalCorpus": {
+    "file": "eval/clinic-conversation-candidates-v1.json",
+    "sha256": "2b537ef47b49a393c4916a43e0cbfc9e54f58a03daab6170b21ec3fa369e6e2c",
+    "cases": 45,
+    "requiredClauses": 53,
+    "forbiddenClauses": 71,
+    "exactAuditClausesPreserved": true
+  },
+  "remainingRowsInspected": [
+    "CCP-027",
+    "CCP-028",
+    "CCP-029",
+    "CCP-030",
+    "CCP-031",
+    "CCP-033",
+    "CCP-034",
+    "CCP-035",
+    "CCP-036",
+    "CCP-037",
+    "CCP-038",
+    "CCP-039",
+    "CCP-040",
+    "CCP-041",
+    "CCP-042",
+    "CCP-045"
+  ],
+  "testInputs": {
+    "test/voice/conversation-baseline.test.ts": "1682553fb45d405daf6155fec89f9ad5716b1ef84bac042e58d7ef5eac3a918c",
+    "test/voice/played-menu-selection.test.ts": "aed7ff2719107e9db3b31b1c820d772a1a0ff318ad137f5a2b8f8e2b0d1d0be3",
+    "test/voice/explicit-time-clarification.test.ts": "24bc9eb5f8d9b72bf26b1396025610d78e786873b23ec2dd353a05f1df2272cf",
+    "test/voice/stale-menu-recovery.test.ts": "730b1f9b50357397c5364210897a80deb43c4f92883a6b2ca4a43fcab22196f9",
+    "test/voice/caller-corrections.test.ts": "134a1f009320e4f39453b26fa2a8db1a279c868571700299fa655d920210dbcb",
+    "test/voice/appointment-change-intent.test.ts": "5760be88a371c203f0ce606d7a18ed1b6a4c4d67176665e22632acf991ddb285",
+    "test/voice/booking-search-windows.test.ts": "dc8e73d799c9bfc949ba0489a5d6f3927adf1c2ea1892fc0be1f2d78376069bc",
+    "test/voice/approved-booking-search.test.ts": "5c9e0414f1259c141c9ed08cd3ee9e6ab3c0b295489199e836c3049c5c6e9c13",
+    "test/voice/appointment-enquiries.test.ts": "4c205c484a687bafdc61d53dc8f1a2c736cf337f2b4231a95db19f3f7d15f8c6",
+    "test/voice/clinic-faqs.test.ts": "090745c003707c0b3ba22ee2a937aff273043e5ba7c55bca1de570325f9146fa",
+    "test/voice/dated-window-corrections.test.ts": "e1e2122a411d5a853503e7a25bbcd663115df30892789bc11995c3ce2a752726",
+    "test/voice/urgent-conversation-routing.test.ts": "c4d01c6900c360b9c53c8eb7d79c37fe24020c7463c6029d9e1cde786770099c",
+    "test/voice/notification-outcome-query.test.ts": "6a7d698bed17b68b2104e78e383725c0c6876d4f403989e4d3abedab0407bb77",
+    "test/voice/caller-identity-denial.test.ts": "e8d342ef03ced488828bb39a84b555d084fa8cbabd6612e12f0b32c03952824e",
+    "test/voice/booking-request-boundaries.test.ts": "a17b0160c57ba9b9a5246932c5f2b40022beed104188db2a768d16bd5df9ba82",
+    "test/voice/booking-horizon.test.ts": "d392142416c4113735776656688a7ca1c8826425fe82f3e1c96f6160b9478b29",
+    "test/voice/public-service-guidance.test.ts": "690f0426c9cf0d9ce427549b62927453ac99475400d5a1f018f47f9730325e33",
+    "test/voice/staff-request-purpose.test.ts": "2958be0a0d4a35e3849563eaf92f863521cc5c57e88a78db2616420eda6a2517",
+    "test/voice/missed-call-repair.test.ts": "46aed00f5b232a5808a6a518c5d9fc79527efd29cd65de77141e3feb2091c6c4",
+    "test/voice/staff-review-expectations.test.ts": "9df50e912642748bb0e25111a507567dbe5cdd5e22b6abc249b7bd22ff79e966",
+    "test/voice/call-transcript-ownership.test.ts": "3bebe98af5b1e2e86b63131f8c871e52a627f0cd207472f2341c3e4c1e2e18ee",
+    "test/voice/call-waiting-limits.test.ts": "a2574b008bca7b9e1baa98afd745acd7f809b97bd2ddb35d32653d35c8286267",
+    "test/voice/pending-lookup-repair.test.ts": "983cb6aec83c192cbac507b5a0bf73faabdbd5134e5eb18d8dd9bb3f04a720f3",
+    "test/voice/cliniko-staff-request.test.ts": "526f2b83ce6500cd714b97c7db2284011bf33fb0c5b63bb0f6c7f730fd09d787",
+    "test/voice/voice.test.ts": "fadf8842e366352348a88b16827d54b7b98c436d689815673313f5a713414e71",
+    "test/voice/embedded-cliniko-appointment-change-host-call.test.ts": "3253a4c1e78f5e6fc25e9ab46737af9a8035353d50a75be6dfea44d9765cda43",
+    "test/voice/embedded-cliniko-booking-host-call.test.ts": "e1dcc5baee1ae0fe53fa8b875372c442d59ea853978fc2f50f527f862026f249",
+    "test/voice/embedded-intake-booking-call.test.ts": "02159ddb5e159e3ef7e592a24dbe50ebaedee93982b0b10d4a845104e18e886a",
+    "test/text/notification-effects.test.ts": "af0944ebe9dfaf15dee6c91bc33f4b0c9f023e4e54ea8cc0d620fc9770f7be13",
+    "test/contract/scenario-manifest.test.ts": "fadf5dd1315e3c111da26f21808f44cbdd7f4d6501354c7655819f7f2b78185a"
+  },
+  "observerInputSha256": "9e9dbc7379b294b0e77b48b45d0b85e2eaf75aed98159e981cb67e93ad17b43f",
+  "eligibilityCorrection": {
+    "productionChanged": false,
+    "assertions": [
+      "Both relationship reads run in parallel; require the five exact paths.",
+      "No available_times request or write when either relationship is rejected."
+    ],
+    "focusedGate": {
+      "passed": 2,
+      "failed": 0,
+      "log": "4590eee3-1791293237541.log"
+    }
+  },
+  "firstWindowWitness": {
+    "passed": 4,
+    "failed": 1,
+    "log": "4590eee3-1791293341294.log",
+    "correction": "The test initially demanded explicit date bounds in empty-search speech; the original requirement permits an honest no-match within the actual inspected bounded search. Require the existing exact fallback, no action/write and no clinic-wide absence claim. No production change."
+  },
+  "remainingClauseGate": {
+    "passed": 16,
+    "failed": 0,
+    "log": "4590eee3-1791293461955.log"
+  },
+  "firstCombinedGate": {
+    "passed": 196,
+    "failed": 1,
+    "skipped": 1,
+    "log": "4590eee3-1791293642709.log",
+    "failure": "Staff saved scenario: caller turn speech timed out.",
+    "unchangedFocusedStaffFile": {
+      "passed": 1,
+      "failed": 0,
+      "signedScenarios": 23,
+      "log": "4590eee3-1791294204027.log"
+    },
+    "causalLimit": "The original broad timeout cause is unproven. A controlled witness separately proves a test-observer budget mismatch."
+  },
+  "observerBefore": "staff-observer-before-v1.json",
+  "observerAfterGate": {
+    "command": "node --test --test-concurrency=2 test/voice/cliniko-staff-request.test.ts test/voice/notification-outcome-query.test.ts",
+    "passed": 5,
+    "failed": 0,
+    "log": "4590eee3-1791295154210.log",
+    "productionDefaultDeadlinesChanged": false
+  },
+  "finalCombinedGate": {
+    "command": "node --test --test-concurrency=3 test/voice/conversation-baseline.test.ts test/voice/played-menu-selection.test.ts test/voice/explicit-time-clarification.test.ts test/voice/stale-menu-recovery.test.ts test/voice/caller-corrections.test.ts test/voice/appointment-change-intent.test.ts test/voice/booking-search-windows.test.ts test/voice/approved-booking-search.test.ts test/voice/appointment-enquiries.test.ts test/voice/clinic-faqs.test.ts test/voice/dated-window-corrections.test.ts test/voice/urgent-conversation-routing.test.ts test/voice/notification-outcome-query.test.ts test/voice/caller-identity-denial.test.ts test/voice/booking-request-boundaries.test.ts test/voice/booking-horizon.test.ts test/voice/public-service-guidance.test.ts test/voice/staff-request-purpose.test.ts test/voice/missed-call-repair.test.ts test/voice/staff-review-expectations.test.ts test/voice/call-transcript-ownership.test.ts test/voice/call-waiting-limits.test.ts test/voice/pending-lookup-repair.test.ts test/voice/cliniko-staff-request.test.ts test/voice/voice.test.ts test/voice/embedded-cliniko-appointment-change-host-call.test.ts test/voice/embedded-cliniko-booking-host-call.test.ts test/voice/embedded-intake-booking-call.test.ts test/text/notification-effects.test.ts test/contract/scenario-manifest.test.ts",
+    "passed": 198,
+    "failed": 0,
+    "skipped": 1,
+    "canceled": 0,
+    "log": "4590eee3-1791295242711.log",
+    "durationMs": 281368.247304,
+    "skip": "Existing opt-in PostgreSQL intake-setting probe, E2E-255.",
+    "fileConcurrency": 3,
+    "scenarioConcurrency": 4
+  },
+  "freshConversationBaseline": {
+    "file": "clinic-conversation-six-goal-final-v24-v1.json",
+    "source": {
+      "sha256": "e6e9623666eeb9a4791c808fbe5cd16635e344964943b4f7328e3194eb4f7d87",
+      "files": 471
+    },
+    "sourceStable": true,
+    "namedPassed": 45,
+    "safetyPassed": 135,
+    "modelRequests": 6,
+    "trustedPaths": 39,
+    "setupGaps": 0,
+    "harnessFailures": 0,
+    "privacyPass": true
+  },
+  "freshLiveInterpretation": {
+    "file": "clinical-intent-six-goal-final-v24-v1.json",
+    "adapterSha256": "d5fab470d67e4aedbaf7fd65ec7caad31720fdf355081766552fd39dd58533a5",
+    "passed": 41,
+    "total": 41,
+    "actualRequests": 31,
+    "trustedPaths": 10,
+    "model": "gpt-4o-mini",
+    "promptVersion": "clinical-intent-v24"
+  },
+  "typecheck": {
+    "command": "npm run typecheck",
+    "result": "passed",
+    "log": "4590eee3-1791295593149.log"
+  },
+  "scope": "All six requested synthetic conversation tasks; direct clause evidence supplements the deliberately partial named evaluator. Real Cliniko activation, delivered email, carrier calls, audible timing/pacing and statistical model reliability are separate release evidence. Rich PostgreSQL fixtures remain unsafe reference-lab tests, not standalone patient-storage permission.",
+  "diffCheck": {
+    "command": "git diff --check",
+    "result": "passed"
+  }
+}

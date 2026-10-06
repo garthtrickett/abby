@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "kind": "appointment-read-outcome-late-arrival-evidence",
+  "baseRevision": "efacd456f4c1c24a82d1c6721c3a22d8f9ce6273",
+  "behaviorChanged": "Shared uncertain-action reply gives clinic-contact recovery and no repeat-send wording; initial host notices use the same formatter. Caller-mediated intake wording remains distinct.",
+  "beforeFailure": "uncertain-recovery-before-v24-v1.json",
+  "beforeDirectWitness": "uncertain-recovery-direct-before-v1.json",
+  "testInputs": {
+    "test/voice/appointment-enquiries.test.ts": "4c205c484a687bafdc61d53dc8f1a2c736cf337f2b4231a95db19f3f7d15f8c6",
+    "test/voice/notification-outcome-query.test.ts": "6a7d698bed17b68b2104e78e383725c0c6876d4f403989e4d3abedab0407bb77",
+    "test/voice/cliniko-staff-request.test.ts": "267cc942786e65cb738a53773ac4b83c004cbae35979ae6ad38838f2169a2149",
+    "test/voice/voice.test.ts": "31066a3692acd807e1a5a1d3b244073017e1f12ecf62da1a4fb0ba519a790efc"
+  },
+  "initialServingGate": {
+    "passed": 6,
+    "failed": 1,
+    "failure": "An existing billingReceipt expectation still required the generic staff fallback instead of the current purpose-specific invoice-copy fallback. The assertion was corrected to the exact current reply; billing behavior was not changed."
+  },
+  "broaderServingGate": {
+    "command": "node --test --test-concurrency=3 test/voice/appointment-enquiries.test.ts test/voice/notification-outcome-query.test.ts test/voice/cliniko-staff-request.test.ts test/voice/booking-horizon.test.ts test/voice/booking-request-boundaries.test.ts test/voice/embedded-cliniko-appointment-change-host-call.test.ts test/voice/embedded-cliniko-booking-host-call.test.ts test/voice/embedded-intake-booking-call.test.ts test/voice/voice.test.ts test/text/notification-effects.test.ts test/voice/conversation-baseline.test.ts test/contract/scenario-manifest.test.ts",
+    "passed": 168,
+    "failed": 1,
+    "skipped": 1,
+    "canceled": 0,
+    "exitCode": 1,
+    "failure": "memory: Cliniko practitioner outside business fails to a spoken staff route without a write; provider read count 5 versus 4 expected.",
+    "skip": "Existing opt-in PostgreSQL intake-setting probe not enabled."
+  },
+  "preExistingFailure": {
+    "revision": "efacd456f4c1c24a82d1c6721c3a22d8f9ce6273",
+    "command": "node --test --test-name-pattern='memory: Cliniko practitioner outside business' test/voice/voice.test.ts",
+    "workingDirectory": "/home/gust/code/abby",
+    "failed": 1,
+    "sameAssertion": "5 !== 4 at test/voice/voice.test.ts:1027",
+    "action": "Recorded; the assertion and its underlying provider behavior are unchanged."
+  },
+  "currentConversationBaseline": {
+    "file": "clinic-conversation-after-uncertain-recovery-v24-v1.json",
+    "source": {
+      "sha256": "0398407edcbbf567cafe41eeae561b4d02933a8b562c820ac198e6aba6bfb8df",
+      "files": 471
+    },
+    "namedCasesPassed": 45,
+    "safetyObservationsPassed": 135,
+    "candidateModelRequests": 6,
+    "trustedCandidatePaths": 39,
+    "harnessFailures": 0,
+    "setupGaps": 0,
+    "privacyPass": true,
+    "sourceStable": true
+  },
+  "originalAcceptanceScope": {
+    "cases": 45,
+    "clauses": 124,
+    "missingOriginalClauses": 0
+  },
+  "typecheck": "passed",
+  "publication": "Draft PR; broader gate remains red on the independently reproduced pre-existing assertion. No green broad-suite or release claim.",
+  "limits": "Only signed synthetic workflows, Cliniko/private mail/playback fixtures and a separate limited live interpretation sample. Late arrival saves generic staff contact, not proof of delivered arrival details. Rich PostgreSQL fixtures remain unsafe reference lab evidence; actual clinic/email/carrier activation is separate.",
+  "remainingScope": "Retained search/windows, next-option and remaining original service/target/late-correction clauses remain open."
+}

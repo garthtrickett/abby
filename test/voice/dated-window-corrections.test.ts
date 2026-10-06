@@ -52,10 +52,14 @@ test("E2E-316 signed final date/window corrections preserve constraints and requ
         }
         const old = Object.values((await call.state()).actions).at(-1);
         if (scenario === "bookCommitted") {
-          await call.turn("Yes"); await call.mark(); const committed = Object.values((await call.state()).actions).at(-1)!;
+          await call.turn("Yes"); await call.mark(); const committedState = await call.state(), committed = Object.values(committedState.actions).at(-1)!;
+          const mail = f.mail.length, traffic = "allTraffic" in f ? f.allTraffic.length : undefined;
           assert.equal(committed.status, "committed"); await call.turn(mixedCorrection);
-          assert.deepEqual((await call.state()).actions[committed.key], committed); assert.equal(call.writes.length, 1);
-          assert.match(call.spoken.at(-1)!, /booking is confirmed.*contact the clinic/s); return;
+          const after = await call.state();
+          assert.deepEqual(after.actions, committedState.actions); assert.deepEqual(after.effects, committedState.effects);
+          assert.deepEqual(after.staffItems, committedState.staffItems); assert.equal(call.writes.length, 1); assert.equal(f.mail.length, mail);
+          assert.equal("allTraffic" in f ? f.allTraffic.length : undefined, traffic);
+          assert.equal(call.spoken.at(-1), "Your booking is confirmed. I haven't made another change. Please contact the clinic to review it before trying another change."); return;
         }
         if (scenario === "bookRevoked" && "replacePolicy" in f) await f.replacePolicy({ enabled: false });
         const text = scenario === "bookFinal" ? "Actually Thursday afternoon. Actually, Wednesday morning."

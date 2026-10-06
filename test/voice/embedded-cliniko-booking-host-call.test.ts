@@ -314,7 +314,7 @@ test("E2E-226 lost response after commit permits exact observation but no second
   await app.play((await app.speak()).delivery);
   const uncertain = await app.speak();
   assert.equal(app.posts.length, 1);
-  assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review.");
+  assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review. Please contact the clinic before trying again. I won't send that action again from this call.");
   await app.play(uncertain.delivery);
   const settled = await app.drain();
   assert.ok(settled.ok);
@@ -375,7 +375,7 @@ test("E2E-226 a TCP reset after provider commit stays uncertain until exact obse
     const uncertain = await app.speak();
     assert.equal(posts, 1);
     assert.equal(gets, 0);
-    assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review.");
+    assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review. Please contact the clinic before trying again. I won't send that action again from this call.");
     assert.equal(Object.values((await app.state()).actions)[0]?.status, "uncertain");
     await app.play(uncertain.delivery);
     const settled = await app.drain();
@@ -451,7 +451,7 @@ test("E2E-266 conflict-read errors stay uncertain and recover only by observatio
       const pending = await app.speak();
       assert.equal(app.posts.length, 1);
       assert.equal(app.conflictChecks, 1);
-      assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review.");
+      assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review. Please contact the clinic before trying again. I won't send that action again from this call.");
       assert.equal(Object.values((await app.state()).actions)[0]?.status, "uncertain");
       await app.play(pending.delivery);
       assert.ok((await app.drain()).ok);
@@ -472,7 +472,7 @@ test("E2E-266 a detected conflict cannot later become confirmed or trigger compe
       await app.begin();
       await app.play((await app.speak()).delivery);
       const pending = await app.speak();
-      assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review.");
+      assert.equal(app.spoken.at(-1), "I can't confirm that action yet. It is pending review. Please contact the clinic before trying again. I won't send that action again from this call.");
       await app.play(pending.delivery);
       assert.ok((await app.drain()).ok);
       assert.ok((await app.drain()).ok);

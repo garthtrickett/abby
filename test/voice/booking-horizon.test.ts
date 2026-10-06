@@ -91,7 +91,7 @@ test("E2E-321 signed current horizons preserve sends, cancel unsent proposals an
         await play(["datedBooking", "datedMove"].includes(scenario) ? "Show appointment times on January 15, 2027." :
           ["model", "forged", "wrongFields"].includes(scenario) ? "What is the outermost period this service lets me search for a visit?" :
           scenario === "quoted" ? "My friend asked 'how far ahead can I book' yesterday." : "How far ahead can I book?");
-        const prefix = scenario === "committed" ? "Your booking is confirmed. " : scenario === "uncertain" ? "I can't confirm that action yet. It is pending review. " : "";
+        const prefix = scenario === "committed" ? "Your booking is confirmed. " : scenario === "uncertain" ? "I can't confirm that action yet. It is pending review. Please contact the clinic before trying again. I won't send that action again from this call. " : "";
         if (["forged", "wrongFields", "quoted"].includes(scenario)) {
           assert.equal(call.spoken.at(-1), "I couldn't understand that safely. Could you repeat your request, or contact the clinic directly?");
         } else if (["revoked", "revokedAdmin", "expired"].includes(scenario)) assert.equal(call.spoken.at(-1), bookingHorizonUnavailable);
