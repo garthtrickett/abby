@@ -1,4 +1,6 @@
 import { callerIdentityDenialText } from "../../src/core/caller-identity.ts";
+import { requestBoundaryText } from "../../src/core/request-boundary.ts";
+import type { RequestBoundary } from "../../src/core/request-boundary.ts";
 import { clinicFAQFixture, publicDirections } from "../../test/support/clinic-faqs.ts";
 import { urgentConversationFixture, urgentReply } from "../../test/support/urgent-conversation.ts";
 import { bookingCatalogueFixture } from "../../test/support/cliniko-booking-catalogue.ts";
@@ -77,11 +79,21 @@ function publicIntent(intent: VoiceIntent | null): Record<string, string | numbe
   }
   return result;
 }
-function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceIntent | null)[], speech: string[], before: CallState, after: CallState): Check {
+function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceIntent | null)[], speech: string[], before: CallState, after: CallState,
+  boundaryWorkAbsent: boolean): Check {
   const last = intents.at(-1), text = speech.join(" ");
   const statuses = Object.values(after.actions).map(action => action.status), latest = Object.values(after.actions).at(-1);
   let pass = false;
   switch (plan.expectation) {
+    case "requestBoundary": {
+      const reasons: Record<string, RequestBoundary> = { "CCP-012": "proxyPatient", "CCP-013": "minorIntake", "CCP-037": "proxyPatient", "CCP-039": "jointPractitioners", "CCP-041": "groupClass" };
+      const reason = reasons[candidate.id];
+      pass = !!reason && last?.kind === "requestBoundary" && last.reason === reason && speech.includes(requestBoundaryText(before, reason)) &&
+        boundaryWorkAbsent && !statuses.includes("awaitingConfirmation") && Object.keys(after.actions).length === Object.keys(before.actions).length &&
+        Object.values(before.actions).every(action => action.status === "awaitingConfirmation" ? after.actions[action.key]?.status === "canceled" :
+          JSON.stringify(after.actions[action.key]) === JSON.stringify(action)) && JSON.stringify(after.staffItems) === JSON.stringify(before.staffItems);
+      break;
+    }
     case "identityDenied": pass = last?.kind === "callerIdentityDenied" && after.callerIdentityDenied === "identityDisagreement" &&
       speech.includes(callerIdentityDenialText) && !statuses.includes("awaitingConfirmation") && !Object.keys(after.staffItems).length; break;
     case "cancelProposal": pass = last?.kind === "cancel" && statuses.includes("awaitingConfirmation"); break;
@@ -144,7 +156,7 @@ export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: 
       : ["2026-10-07T22:00:00.000Z", "2026-10-07T23:30:00.000Z", "2026-10-08T23:00:00.000Z"]);
   // Match the protected target in CCP-010 to the explicit nine-o'clock setup.
   const originalProvider = f.flowConfig.fetchPort!;
-  const fetchPort: typeof fetch = candidate.id === "CCP-010" ? async (value, init) => {
+  const baseFetchPort: typeof fetch = candidate.id === "CCP-010" ? async (value, init) => {
     const response = await originalProvider(value, init);
     const path = new URL(String(value)).pathname;
     if ((init?.method ?? "GET") !== "GET" || !path.startsWith("/v1/individual_appointments")) return response;
@@ -154,6 +166,8 @@ export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: 
     }
     return Response.json(data, { status: response.status });
   } : originalProvider;
+  let providerRequests = 0;
+  const fetchPort: typeof fetch = async (...args) => { providerRequests++; return baseFetchPort(...args); };
   let call: Call | undefined, evaluating = false, requests = 0, modelPrivacyPass = true;
   const intents: (VoiceIntent | null)[] = [];
   try {
@@ -175,6 +189,7 @@ export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: 
     await prepare(call, plan, f.mail, candidate.id);
     const before = await call.state(), writes = call.writes.length, speechStart = call.spoken.length;
     const context = await call.flow.publicIntentContext();
+    const readsBefore = providerRequests, mailBefore = f.mail.length;
     evaluating = true;
     for (const text of candidate.callerTurns) { await call.turn(text); await call.mark(); }
     const after = await call.state(), speech = call.spoken.slice(speechStart);
@@ -184,7 +199,9 @@ export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: 
       { id: "no-unconfirmed-provider-write", pass: call.writes.length === writes, detail: "Candidate turns contain no separate exact affirmative; provider write count must remain unchanged." },
       { id: "preserve-known-outcome", pass: Object.values(before.actions).filter(action => ["committed", "uncertain"].includes(action.status))
         .every(action => after.actions[action.key]?.status === action.status), detail: "A new turn cannot revise a known prior SAM receipt." },
-      conversationCheck(candidate, plan, intents, speech, before, after),
+      conversationCheck(candidate, plan, intents, speech, before, after,
+        providerRequests === readsBefore && f.mail.length === mailBefore && call.writes.length === writes &&
+        call.flow.workflow === undefined && !call.flow.verificationRequired),
     ];
     return { id: candidate.id, pattern: candidate.pattern, priority: candidate.priority, mode: model.mode,
       status: "executed" as const, fixtureStage: plan.stage, setupMatch: !plan.missingSetup,

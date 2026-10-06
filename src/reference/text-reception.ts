@@ -7,6 +7,7 @@ import type { EffectCallLeaseStore } from "../core/effect-call-lease.ts";
 import type { WorkflowHost, AppointmentChangeEvidenceHost, AppointmentChangeEvidenceQuery, AppointmentChangeSelection, AppointmentHost, AvailabilityHost, ReschedulingMenuHost, BookingMenuHost, BookingEvidenceHost, HostEffects, IntakeEvidenceHost, KnowledgeHost, ModelKnowledgeContextHost, NotificationHost, OperatorAlertHost, PolicyFailure, PolicyStore, StaffLifecycleHost } from "../core/host.ts";
 import { captureKnowledgeSnapshot, validCallKnowledgeSource, validKnowledgeSource } from "../core/knowledge-evidence.ts";
 import type { LedgerStore } from "../core/ledger.ts";
+import { validRequestBoundary } from "../core/request-boundary.ts";
 import { validCallerIdentityDenial } from "../core/caller-identity.ts";
 import { err } from "../core/model.ts";
 import type { CallState, FinalCallerTurn, LocationScope, Result, StaffChangeRequest, TransitionFailure, TurnInterpretation } from "../core/model.ts";
@@ -16,7 +17,7 @@ import { modelTaskRef } from "../model/work.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 function validIntakeRef(value: unknown): value is string {
@@ -61,6 +62,27 @@ export class TextReception {
     const now = this.currentInstant();
     if (!now) return err({ kind: "invalidTransition" as const });
     return this.runtime(scope).acceptTurn(turn, { kind: "notificationOutcomeQuery" }, now);
+  }
+
+  requestBoundaryEnabled(): boolean { return typeof this.host.clearUnsupportedWorkflow === "function"; }
+  async respondRequestBoundary(scope: LocationScope, turn: FinalCallerTurn, reason: import("../core/request-boundary.ts").RequestBoundary,
+    expectedRevision?: number) {
+    const now = this.currentInstant();
+    if (!this.requestBoundaryEnabled() || !now || !turn.sessionId || turn.quality !== "clear" || !validRequestBoundary(reason)) return err({ kind: "invalidTransition" as const });
+    const state = await this.ledger.read(turn.callId, scope);
+    if (!state.ok) return state;
+    if (state.value.lifecycle !== "active" || state.value.sessionLease?.sessionId !== turn.sessionId ||
+        Date.parse(state.value.sessionLease.expiresAt) <= Date.parse(now)) return err({ kind: "leaseLost" as const });
+    if (state.value.callerIdentityDenied) return this.denyCallerIdentity(scope, turn, state.value.callerIdentityDenied, expectedRevision);
+    if (state.value.processedTurnIds.includes(turn.turnId)) return state.value.lastRequestBoundary?.turnId === turn.turnId &&
+      state.value.lastRequestBoundary.reason === reason ? state : err({ kind: "keyMismatch" as const });
+    const accepted = await this.runtime(scope).acceptTurn(turn, { kind: "requestBoundary", reason }, now, expectedRevision);
+    if (!accepted.ok) return accepted;
+    this.cancelPendingModel(scope, turn.callId);
+    let cleared = false;
+    try { cleared = await this.host.clearUnsupportedWorkflow!({ scope, callId: turn.callId, sessionId: turn.sessionId,
+      turnId: turn.turnId, conversationRevision: accepted.value.conversationRevision }); } catch { /* No positive authority is issued. */ }
+    return cleared ? accepted : err({ kind: "effectFailure" as const });
   }
 
   callerIdentityEnabled(): boolean { return typeof this.host.revokeCallerPatientAccess === "function"; }

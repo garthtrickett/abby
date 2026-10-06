@@ -1,4 +1,5 @@
 import { validCallerIdentityDenial } from "../core/caller-identity.ts";
+import { validRequestBoundary } from "../core/request-boundary.ts";
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import { CALL_TERMINAL_REASONS, POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "../core/model.ts";
@@ -45,6 +46,12 @@ function decodeState(value: unknown, callId: string): Result<CallState, Transiti
   if (typeof value !== "object" || value === null || Array.isArray(value)) return err({ kind: "storageCorrupt" });
   const data = value as Record<string, unknown>;
   if (data.callerIdentityDenied !== undefined && !validCallerIdentityDenial(data.callerIdentityDenied)) return err({ kind: "storageCorrupt" });
+  if (data.lastRequestBoundary !== undefined) {
+    const receipt = data.lastRequestBoundary as Record<string, unknown>;
+    if (!receipt || typeof receipt !== "object" || Array.isArray(receipt) || Object.keys(receipt).length !== 2 ||
+        typeof receipt.turnId !== "string" || !receipt.turnId || !validRequestBoundary(receipt.reason) ||
+        !Array.isArray(data.processedTurnIds) || !data.processedTurnIds.includes(receipt.turnId)) return err({ kind: "storageCorrupt" });
+  }
   if (data.callId !== callId || !Number.isInteger(data.version) || !["starting", "active", "ended"].includes(String(data.lifecycle)) || typeof data.policy !== "object" || data.policy === null ||
       ((data.policy as { knowledgeSnapshot?: unknown }).knowledgeSnapshot !== undefined &&
         !validKnowledgeSnapshot((data.policy as { knowledgeSnapshot: unknown }).knowledgeSnapshot)) ||

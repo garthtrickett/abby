@@ -21,6 +21,20 @@ async function main(): Promise<void> {
       expected: { kind: "callerIdentityDenied", reason: "sharedPhone" }, fixture: bookingCallFlowFixture },
     { name: "shared-line-model-paraphrase", text: "More than one person uses the line I am calling you on.",
       expected: { kind: "callerIdentityDenied", reason: "sharedPhone" }, fixture: bookingCallFlowFixture },
+    { name: "minor-intake-model-paraphrase", text: "Please enroll the youngster I care for.",
+      expected: { kind: "requestBoundary", reason: "minorIntake" }, fixture: bookingCallFlowFixture },
+    { name: "proxy-patient-model-paraphrase", text: "Please rearrange the visit of the other member of my household.",
+      expected: { kind: "requestBoundary", reason: "proxyPatient" }, fixture: bookingCallFlowFixture },
+    { name: "joint-practitioner-model-paraphrase", text: "Can several providers take part in a shared session with me?",
+      expected: { kind: "requestBoundary", reason: "jointPractitioners" }, fixture: bookingCallFlowFixture },
+    { name: "group-class-model-paraphrase", text: "Could you remove me from this evening's Pilates cohort?",
+      expected: { kind: "requestBoundary", reason: "groupClass" }, fixture: bookingCallFlowFixture },
+    { name: "group-class-unavailable-model-paraphrase", text: "I can't make the shared Pilates session with the other participants this evening.",
+      expected: { kind: "requestBoundary", reason: "groupClass" }, fixture: bookingCallFlowFixture },
+    { name: "own-booking-with-background-partner", text: "My partner has an appointment already. I want to book a separate appointment for myself.",
+      expected: { kind: "workflow", operation: "book" }, fixture: bookingCallFlowFixture },
+    { name: "own-booking-single-practitioner", text: "I don't need two clinicians; just book one practitioner for my own visit.",
+      expected: { kind: "workflow", operation: "book" }, fixture: bookingCallFlowFixture },
     { name: "outcome", text: "Did that action work?", expected: { kind: "outcome" }, fixture: bookingCallFlowFixture },
   ] as const;
   const results = await Promise.all(cases.map(async item => {
@@ -34,7 +48,7 @@ async function main(): Promise<void> {
       return { name: item.name, requests, pass: JSON.stringify(actual) === JSON.stringify(item.expected), expected: item.expected, actual };
     } finally { f.flow.dispose(); await f.close(); }
   }));
-  const adapter = await Promise.all(["src/standalone/openai-clinical-intent.ts", "src/standalone/cliniko-call-flow.ts", "src/standalone/caller-identity-language.ts", "src/standalone/appointment-change-language.ts"]
+  const adapter = await Promise.all(["src/standalone/openai-clinical-intent.ts", "src/standalone/cliniko-call-flow.ts", "src/standalone/caller-identity-language.ts", "src/standalone/appointment-change-language.ts", "src/standalone/request-boundary-language.ts", "src/core/request-boundary.ts"]
     .map(path => readFile(resolve(path))));
   const hash = createHash("sha256"); for (const source of adapter) hash.update(source);
   const report = { version: 1, kind: "clinical-intent-live-evaluation", at: new Date().toISOString(), model: args[1],

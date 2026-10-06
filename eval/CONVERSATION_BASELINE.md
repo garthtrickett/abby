@@ -483,3 +483,71 @@ request now varies to a booking workflow, while minor intake, horizon/service
 handling, unknown prices and other unsupported-request observations remain open.
 All prose acceptance conditions remain unassessed; this partial report does not
 close the six-part goal, clinic activation or real carrier/email testing.
+
+## Unsupported patient and coordinated appointment requests (2026-10-06)
+
+The E2E-320 reproduction failed on merged source `1ed9106`: a minor/proxy,
+combined-patient, paired-practitioner or group-class request could receive an
+ordinary booking verification prompt or generic change repair. It was recorded
+before production changes (`Abby unsupported booking scope signed reproduction
+320`, tracked failed run). These are unsupported in the current self-only adult,
+individual-appointment contract; no guardian, representative, joint-availability
+or class-booking permission is inferred.
+
+Four typed negative reasons now select exact clinic-contact explanations. SAM
+cancels unsent proposals and model work; the host releases unsent private owner,
+proof, selections, intake draft and menus using a separate workflow lifetime.
+A held read cannot publish its late result. A fresh supported self request needs
+fresh independent verification. This does not reset permanent identity denial.
+Any prior possible clinical/staff send retains its owner, saved-intake proof,
+receipt and authorized reconciliation rather than claiming undo or retry.
+Scoped agent commands use strict input, a private lease clock and a minimal
+turn/reason negative receipt. Standalone patient/call state remains transient;
+PostgreSQL command tests exercise the authorized embedded contract.
+
+The first [live classification sample](baselines/clinical-intent-after-request-boundaries-v1.json)
+passed twelve of fourteen checks. A class removal paraphrase was intercepted by
+the generic change grammar, while a background partner mention blocked a new
+self booking. The failed sample is retained. Class removal now has bounded
+negative routing, and the proxy guard checks a requested action/substitution
+rather than any later occurrence of the word appointment. The [final sample](baselines/clinical-intent-after-request-boundaries-v3.json)
+passes fifteen of fifteen checks: thirteen actual model requests and two trusted
+routes. A separate less literal class statement uses the actual model. Corrected
+self-only and single-practitioner counterexamples also use actual model requests.
+This is a public-language classification sample, not real caller audio evidence.
+
+The expanded signed test initially exposed a fixture error: a fresh booking was
+requested from a cancellation-only approval fixture. The test now resumes each
+fixture's independently approved self operation and checks new proof and a new
+menu/list. It did not add booking approval to the cancellation fixture. An earlier
+synthetic outcome assertion also failed because its stub returned unsupported;
+that stub now supplies the intended strict outcome enum. These failures were
+inspected before rerunning the changed tests.
+
+Validation commands and observed results:
+
+- `node --test --test-concurrency=3 test/text/request-boundary.test.ts test/cliniko/request-boundary.test.ts test/voice/booking-request-boundaries.test.ts test/voice/caller-identity-denial.test.ts test/voice/openai-clinical-intent.test.ts test/voice/conversation-baseline.test.ts test/contract/scenario-manifest.test.ts`: ten passed, including eighteen signed boundary scenarios and sixteen existing identity scenarios.
+- `node --test --test-concurrency=3 test/voice/conversation-baseline.test.ts test/voice/appointment-change-intent.test.ts test/voice/cliniko-staff-request.test.ts`: three passed on the final stricter twelve-candidate baseline fixture, protected cancel/move grammar and independent staff flow.
+- `npm run typecheck` and `git diff --check`: passed.
+- `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinical-intent.ts --model gpt-4o-mini --out eval/results/20261006-request-boundaries-intent-v15-v3.json`: fifteen of fifteen classifications passed with thirteen actual model requests.
+
+Only CCP-012, CCP-013, CCP-037, CCP-039 and CCP-041 now use a specific boundary
+observation: correct enum and exact notice, no new provider/mail/write work, no
+individual substitute proposal, unchanged sent receipts and released unsent
+workflow. Generic unsupported scoring remains unchanged. Billing, waitlist,
+service ambiguity, search horizon, unknown price and pending-read setup gaps
+remain separate; these tests do not award missing capabilities. Real email,
+clinic approval and carrier activation remain open.
+
+The [final conversation report](baselines/clinic-conversation-after-request-boundaries-v1.json)
+matches all 456 final production/fixture/runner source files and executes every
+candidate. It records zero harness failures, two setup gaps, all 135 safety
+observations passing and clear PostgreSQL patient-data canaries. There are 38
+passing narrow conversation observations and seven failing; twelve candidate
+turns make real model requests and 33 use trusted interpretation. The five new
+boundary observations pass. The remaining failures are CCP-029, CCP-030,
+CCP-033, CCP-034, CCP-035, CCP-040 and CCP-044. The invoice/refund/waitlist
+cases still fail the unchanged unsupported scorer rather than being promoted to
+billing or enrollment capabilities. All prose acceptance conditions remain
+unassessed. The evaluation intentionally exits nonzero and remains a partial
+baseline, not a clinical reliability or release gate.

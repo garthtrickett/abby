@@ -1185,6 +1185,7 @@ The initial corpus has these minimum journeys. One scenario may cover several re
 | `E2E-317` | Urgent conversation cues speak only the admitted approved script at its effective time, report unavailable standalone escalation truthfully and cannot use an ordinary recall queue, fabricate a transfer or revise prior clinical receipts | FR-09, FR-11, FR-18, FR-22 |
 | `E2E-318` | Email-proof and delivery queries separately report actual action and captured notification receipts, cannot promise inbox delivery or authorize a send/resend/owner change, and preserve clinical and staff outcomes across standalone signed calls and embedded notification reconciliation | FR-07, FR-11, FR-12, FR-18, FR-22 |
 | `E2E-319` | Caller identity denial permanently fences patient reads, writes and verification within the call; cancels unsent proposals, preserves already-sent receipts, hides private progress and retains approved public FAQs and urgent scripts across signed, agent and memory/PostgreSQL paths | FR-03, FR-11, FR-18, FR-22 |
+| `E2E-320` | Unsupported minor, proxy, combined-patient, joint-practitioner and group-class requests explain clinic contact, release unsent private selection, fence held reads and require fresh self verification while preserving sent clinical and staff receipts across signed and scoped agent paths | FR-03, FR-11, FR-18, FR-22 |
 
 The corpus runs with deterministic synthetic media frames, partial hypotheses and segment-final transcription events, synthesis chunks, playback acknowledgments, typed model effect results, clock, and host effects against the reference host and standalone adapters. It enters through `VoiceSession.begin` and its media/transcript methods, not by calling `CallRuntime.acceptTurn` directly as a substitute for voice E2E. The harness can delay a playback acknowledgment or deliver it after a clear to prove that queued/cleared audio does not count as played. It can race a caller correction with `startNextPresentation`, drop a commit wake-up, restart the dispatcher task while retaining the live session, or lose the entire session process before activation or after atomic start. Assertions distinguish superseded pending speech from unproven started speech, reject `played` for a pending or transfer intent, and verify exactly one terminal resolution without duplicate media. `E2E-035` and `E2E-082` through `E2E-084` separately submit invalid presentation outcomes through T4 and prove each is rejected before a second SAM transition. `E2E-019` through `E2E-026` individually cover final turn, playback, interruption, transfer, and fallback behavior. Each independently triggerable voice or effect fault has its own scenario ID so cases can run in parallel and a failure identifies one behavior. Every provider runs the same scenario IDs; assertions use its approved support-matrix row and fail if its declared capability snapshot disagrees. Provider-specific contract tests separately cover permission limits, pagination, rate limits, availability rules, unsupported mutations, and lost responses. Scheduled smoke tests use sanctioned provider test accounts and a limited real telephony path, including an actual interruption and transfer. Tests contain no live patient data.
 
@@ -1490,3 +1491,40 @@ memory/PostgreSQL state, refusal to reuse a previously processed unrelated turn,
 backdated/stale-session attempts, denial while collecting a private code, a held
 provider read and a late write receipt. Public access preservation does not
 establish real clinic approvals, real audio recognition or carrier behavior.
+
+### Unsupported patient and coordinated appointment requests
+
+The current standalone contract handles approved adult self intake and individual
+appointments for the independently verified caller. Minor intake, acting for a
+partner or another patient, combining different patients' changes, coordinating
+several practitioners for a single visit and group-class attendance each use a
+specific negative boundary and direct clinic contact. These requests do not
+start verification, infer guardian/proxy permission, return joint availability,
+prepare individual cancellation, or promise that staff received a request.
+
+Exact public request grammars precede ordinary clinical interpretation. Other
+paraphrases use the strict six-field model schema with one of four negative
+reason enums and every non-kind field null. Explicit requests for staff, urgent
+scripts and clinical-advice boundaries retain their independent priority.
+Negated, quoted and background relationship references are not positive proxy
+requests; the model cannot grant patient authority or supply a custom script.
+
+SAM cancels unsent proposals and pending model work before the host releases its
+private owner. The Cliniko workflow lifetime aborts old reads and construction;
+private menus, selections, verification and intake draft state are cleared when
+no patient/staff request has passed its possible-send barrier. A fresh supported
+self request builds a new independently permitted owner and verification proof.
+This is not a permanent identity denial and cannot reset one. Where a prior
+clinical or staff request may already have been sent, its owner, reconciliation,
+actual receipt and any saved-intake proof remain intact. No boundary claims an
+undo, retries a request, or overwrites a known/uncertain outcome.
+
+`calls.requestBoundary.respond.v1` requires the host's negative cleanup port,
+exact active scope/session, a clear turn and a valid reason. The reception uses
+its private clock. A minimal negative turn/reason receipt makes same-command
+replay idempotent and rejects reuse of an unrelated processed turn or a different
+reason. This receipt contains no patient identity or permission and remains
+transient in standalone Cliniko. PostgreSQL tests exercise the authorized
+embedded state contract. E2E-320 combines signed public calls, independent
+private email entry, memory/PostgreSQL commands and a held read; actual clinic,
+email and carrier activation are separate gates.

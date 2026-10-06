@@ -8,13 +8,23 @@ test("E2E-307 conversation baseline distinguishes trusted spoken selection and m
   const corpus = await candidates();
   assert.equal(corpus.length, 45);
   await withDisposablePostgres(async db => {
-    const ids = ["CCP-005", "CCP-006", "CCP-009", "CCP-015", "CCP-017", "CCP-021", "CCP-022"];
-    const settled = await Promise.allSettled(ids.map(async id => {
+    const ids = ["CCP-005", "CCP-006", "CCP-009", "CCP-012", "CCP-013", "CCP-015", "CCP-017", "CCP-021", "CCP-022", "CCP-037", "CCP-039", "CCP-041"];
+    let next = 0;
+    const evaluated: Awaited<ReturnType<typeof runCase>>[] = [];
+    const settled = await Promise.allSettled(Array.from({ length: 4 }, async () => { for (;;) {
+      const id = ids[next++]; if (!id) return;
       const item = corpus.find(candidate => candidate.id === id)!;
-      return runCase(db, item, plans[id]!, { mode: "scripted", model: "synthetic-baseline", apiKey: "synthetic-key" });
+      evaluated.push(await runCase(db, item, plans[id]!, { mode: "scripted", model: "synthetic-baseline", apiKey: "synthetic-key" }));
+    }
     }));
     const failure = settled.find(item => item.status === "rejected"); if (failure?.status === "rejected") throw failure.reason;
-    const results = settled.map(item => { if (item.status === "rejected") throw item.reason; return item.value; });
+    const results = evaluated;
+    assert.equal(results.length, ids.length);
+    for (const id of ["CCP-012", "CCP-013", "CCP-037", "CCP-039", "CCP-041"]) {
+      const result = results.find(result => result.id === id)!;
+      assert.equal(result.intents.at(-1)?.kind, "requestBoundary");
+      assert.equal(result.checks.find(check => check.id === "conversation-observation")?.pass, true, id);
+    }
     const denial = results.find(result => result.id === "CCP-009")!;
     assert.deepEqual(denial.intents, [{ kind: "callerIdentityDenied", reason: "identityDisagreement" }]);
     assert.equal(denial.checks.find(check => check.id === "conversation-observation")?.pass, true);

@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { digestActionRequest } from "./digest.ts";
 import { clearAffirmation } from "./caller-affirmation.ts";
 import { actionOutcomeText, confirmedActionText } from "./action-outcome.ts";
+import { requestBoundaryText, validRequestBoundary } from "./request-boundary.ts";
 import { callerIdentityDenialText, restrictDeniedCaller, validCallerIdentityDenial } from "./caller-identity.ts";
 import { notificationOutcomeText } from "./notification-outcome.ts";
 import { clarificationText } from "./clarification.ts";
@@ -246,6 +247,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   if (turn.callId !== state.callId || !turn.turnId || !turn.text || !Number.isFinite(Date.parse(turn.at))) return err({ kind: "invalidTransition" });
   if (state.processedTurnIds.includes(turn.turnId)) return ok(undefined);
   if (Object.values(state.presentations).some(presentation => presentation.kind === "transfer" && (presentation.status === "started" || presentation.status === "possiblySent"))) return err({ kind: "invalidTransition" });
+  if (interpretation.kind === "requestBoundary" && (!validRequestBoundary(interpretation.reason) || turn.quality !== "clear")) return err({ kind: "invalidTransition" });
   if (interpretation.kind === "callerIdentityDenied" && (!validCallerIdentityDenial(interpretation.reason) || turn.quality !== "clear")) return err({ kind: "invalidTransition" });
   interpretation = restrictDeniedCaller(state, interpretation);
   if (interpretation.kind !== "affirm") supersedeUnsent(state);
@@ -254,6 +256,10 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   const messageCount = state.callerMessages.length;
 
   switch (interpretation.kind) {
+    case "requestBoundary":
+      state.lastRequestBoundary = { turnId: turn.turnId, reason: interpretation.reason };
+      state.callerMessages.push(requestBoundaryText(state, interpretation.reason));
+      break;
     case "callerIdentityDenied":
       state.callerIdentityDenied ??= interpretation.reason;
       state.callerMessages.push(callerIdentityDenialText);

@@ -7,7 +7,8 @@ type Clarification = Readonly<{ kind: "clarify"; reason: MenuClarificationReason
  * mixed operations or patient reassignment into cancellation authority. */
 export function appointmentChangeLanguage(text: string): Request | Clarification | undefined {
   const value = text.toLowerCase().replace(/[’]/g, "'").replace(/[,.!?]/g, " ").replace(/\s+/g, " ").trim();
-  if (/\b(?:someone else|another person|my (?:husband|wife|partner|friend))\b.*\b(?:take|use|slot|appointment)\b/.test(value) ||
+  if (/\b(?:someone else|another person|my (?:husband|wife|partner|friend))\b.*\b(?:take|use)\b.*\b(?:slot|appointment|visit)\b/.test(value) ||
+      /\b(?:book|move|cancel|reschedule)\b.*\b(?:for my (?:husband|wife|partner|friend)|my (?:husband|wife|partner|friend)'s)\b/.test(value) ||
       /\b(?:an hour|longer|shorter)\b.*\b(?:instead|visit|appointment)\b|\b(?:duration|change the type)\b/.test(value))
     return { kind: "clarify", reason: "changeUnsupported" };
   if (/\b(?:i thought|you (?:are saying|said)|are you sure|which appointment)\b/.test(value))

@@ -287,3 +287,9 @@ export type CallerIdentityHost = Readonly<{
   revokeCallerPatientAccess(query: Readonly<{ scope: LocationScope; callId: string; sessionId: string;
     reason: import("./caller-identity.ts").CallerIdentityDenial }>): Promise<boolean>;
 }>;
+
+/** Cancel only unsent patient selections after a negative public routing turn. */
+export type RequestBoundaryHost = Readonly<{
+  clearUnsupportedWorkflow(query: Readonly<{ scope: LocationScope; callId: string; sessionId: string; turnId: string;
+    conversationRevision: number }>): Promise<boolean>;
+}>;
