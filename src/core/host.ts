@@ -3,7 +3,8 @@ import type { StaffedDestinationAuditPage, StaffedDestinationCatalogue } from ".
 import type { ActionRequest, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, ApprovedKnowledge, AppointmentRead, AppointmentReadFailure, AvailabilityRead, AvailabilityReadFailure, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, OperatorAlert, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
 import type { ReadinessFailure } from "./readiness.ts";
 
-export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable"; target: "patient" | "offer" | "appointment" }>;
+export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable"; target: "patient" | "offer" | "appointment" }> |
+  Readonly<{ kind: "outsideHorizon"; target: "offer"; snapshot: import("./booking-horizon.ts").BookingHorizonRead }>;
 export type PolicyFailure = Readonly<{ kind: "versionConflict" | "invalidValue" | "storageFailure" }> | ReadinessFailure;
 export type AutomationSettingAuditEntry = Readonly<{
   version: string;
@@ -293,3 +294,9 @@ export type RequestBoundaryHost = Readonly<{
   clearUnsupportedWorkflow(query: Readonly<{ scope: LocationScope; callId: string; sessionId: string; turnId: string;
     conversationRevision: number }>): Promise<boolean>;
 }>;
+
+export type BookingHorizonQuery = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
+  expectedConversationRevision: number; signal: AbortSignal }>;
+export interface BookingHorizonHost {
+  readBookingHorizon(query: BookingHorizonQuery): Promise<Result<import("./booking-horizon.ts").BookingHorizonRead, Readonly<{ kind: "bookingHorizonUnavailable" }>>>;
+}

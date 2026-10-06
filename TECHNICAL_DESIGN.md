@@ -1186,6 +1186,7 @@ The initial corpus has these minimum journeys. One scenario may cover several re
 | `E2E-318` | Email-proof and delivery queries separately report actual action and captured notification receipts, cannot promise inbox delivery or authorize a send/resend/owner change, and preserve clinical and staff outcomes across standalone signed calls and embedded notification reconciliation | FR-07, FR-11, FR-12, FR-18, FR-22 |
 | `E2E-319` | Caller identity denial permanently fences patient reads, writes and verification within the call; cancels unsent proposals, preserves already-sent receipts, hides private progress and retains approved public FAQs and urgent scripts across signed, agent and memory/PostgreSQL paths | FR-03, FR-11, FR-18, FR-22 |
 | `E2E-320` | Unsupported minor, proxy, combined-patient, joint-practitioner and group-class requests explain clinic contact, release unsent private selection, fence held reads and require fresh self verification while preserving sent clinical and staff receipts across signed and scoped agent paths | FR-03, FR-11, FR-18, FR-22 |
+| `E2E-321` | Current approved destination notice/horizon limits answer vague future questions without guessed dates or provider/patient work; wholly outside dated searches, selected practitioner scope, stale/malformed evidence, cancellation and late expiry retain protected appointments and actual prior receipts | FR-04, FR-06, FR-11, FR-12, FR-18, FR-22 |
 
 The corpus runs with deterministic synthetic media frames, partial hypotheses and segment-final transcription events, synthesis chunks, playback acknowledgments, typed model effect results, clock, and host effects against the reference host and standalone adapters. It enters through `VoiceSession.begin` and its media/transcript methods, not by calling `CallRuntime.acceptTurn` directly as a substitute for voice E2E. The harness can delay a playback acknowledgment or deliver it after a clear to prove that queued/cleared audio does not count as played. It can race a caller correction with `startNextPresentation`, drop a commit wake-up, restart the dispatcher task while retaining the live session, or lose the entire session process before activation or after atomic start. Assertions distinguish superseded pending speech from unproven started speech, reject `played` for a pending or transfer intent, and verify exactly one terminal resolution without duplicate media. `E2E-035` and `E2E-082` through `E2E-084` separately submit invalid presentation outcomes through T4 and prove each is rejected before a second SAM transition. `E2E-019` through `E2E-026` individually cover final turn, playback, interruption, transfer, and fallback behavior. Each independently triggerable voice or effect fault has its own scenario ID so cases can run in parallel and a failure identifies one behavior. Every provider runs the same scenario IDs; assertions use its approved support-matrix row and fail if its declared capability snapshot disagrees. Provider-specific contract tests separately cover permission limits, pagination, rate limits, availability rules, unsupported mutations, and lost responses. Scheduled smoke tests use sanctioned provider test accounts and a limited real telephony path, including an actual interruption and transfer. Tests contain no live patient data.
 
@@ -1530,3 +1531,52 @@ transient in standalone Cliniko. PostgreSQL tests exercise the authorized
 embedded state contract. E2E-320 combines signed public calls, independent
 private email entry, memory/PostgreSQL commands and a held read; actual clinic,
 email and carrier activation are separate gates.
+
+### Approved destination search horizon
+
+`booking.horizon.read.v1` and the strict model kind `bookingHorizon` select a
+public information query. Neither input accepts policy numbers, patient or
+provider references, custom text or an expiry override. Exact horizon and vague
+several-month requests use bounded routing; other current questions use the
+strict six-field model schema with every non-kind field null. Reported,
+quoted and negated requests do not become the caller's current question. An
+unspecified future period is never converted into a guessed date.
+
+The call's host reads exact current owner-file destination booking approval and
+approving administrator membership. The default, preferred or any-practitioner
+search retains its approved member scope; different current member limits are
+named separately. Move approval is also revalidated, but its maxAdvanceDays
+controls the original target's eligibility and is not substituted for the
+new-date horizon. Destination minNoticeMinutes and maxAdvanceDays remain rolling
+start-time bounds; they are not slot availability, a reservation, caller proof
+or permission to move an existing appointment.
+
+The generic path is `VoiceSession -> TextReception -> BookingHorizonTurns ->
+BookingHorizonHost -> readClinikoBookingHorizon -> current public policy sources
+-> SAM notice`. Its typed snapshot contains scope/call/session/policy binding,
+operation, observedAt, expiresAt and at most three public name/notice/advance
+bounds. Scope, schema, value ranges, admitted lease and fresh clock are validated
+before speech. Approval/call expiry bounds the snapshot. Revocation, absence,
+malformed evidence or exceptions use the unavailable clinic-contact response,
+never a fabricated number or ordinary staff queue.
+
+A read supersedes an unsent proposal before awaiting public host IO. Canceled
+external reads cannot publish a late answer, and expiry during a held read is
+checked with fresh private time; a backdated agent timestamp cannot revive it.
+Known/uncertain sent receipts remain intact and are explained independently.
+Any new appointment action still requires fresh protected selection, actually
+played exact confirmation and a separate affirmation. The query performs no
+patient/contact/Cliniko HTTP read, starts no verification email or staff work,
+and neither retries nor undoes prior clinical work.
+
+Precise dated booking and move-offer requests retain their ordinary protected
+menu path. When the whole requested clinic calendar range is outside every
+selected practitioner's current rolling bounds, the host returns typed
+`outsideHorizon` public evidence before provider IO. Booking/rescheduling menu
+turns validate that evidence with fresh private time and speak the same limits.
+Partial days/ranges continue through the ordinary offer eligibility filters;
+existing appointment listing is not confused with destination booking dates.
+These checks do not change policy/offer lifetime or provider write semantics.
+Standalone call state remains transient under D-06/D-11; PostgreSQL tests exercise
+only the authorized embedded contract. E2E-321 supplies local synthetic evidence,
+not real email, clinic activation, caller audio or carrier qualification.

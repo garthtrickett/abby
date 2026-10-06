@@ -1,4 +1,5 @@
 import { hasSentPatientWork } from "../core/request-boundary.ts";
+import { readClinikoBookingHorizon, requestedDatesOutsideHorizon } from "./cliniko-booking-horizon.ts";
 import { validCallerIdentityDenial } from "../core/caller-identity.ts";
 import { bookingPreferenceLanguage } from "./booking-preference-language.ts";
 import { ClinikoCatalogueBookingHost } from "./cliniko-catalogue-booking-host.ts";
@@ -112,6 +113,23 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     return true;
   }
   binding() { return { callId: this.#config.receipt.callId, sessionId: this.#config.sessionId }; }
+  async readBookingHorizon(query: import("../core/host.ts").BookingHorizonQuery) {
+    return this.#readHorizon(query);
+  }
+  async #readHorizon(query: import("../core/host.ts").BookingHorizonQuery, incoming?: import("../core/booking-search-preference.ts").BookingSearchPreference) {
+    if (this.closed || this.#patientLifetime.signal.aborted || this.#staffActive || this.#workflow && !["book", "reschedule", "intake"].includes(this.#workflow))
+      return err({ kind: "bookingHorizonUnavailable" as const });
+    const host = this.#booking(), prior = host instanceof ClinikoCatalogueBookingHost ? host.currentSearchPreference() : undefined;
+    return readClinikoBookingHorizon(this.#config, { ...query, signal: AbortSignal.any([query.signal, this.#lifetime.signal]) }, this.#workflow === "reschedule" ? "reschedule" : "book",
+      incoming?.practitioner ?? prior?.practitioner);
+  }
+  async #horizonFailure(query: BookingMenuReadQuery | ReschedulingMenuReadQuery) {
+    const state = await this.#config.ledger.read(query.callId, query.scope);
+    if (!state.ok) return undefined;
+    const limits = await this.#readHorizon({ ...query, expectedConversationRevision: state.value.conversationRevision }, "preference" in query ? query.preference : undefined);
+    return limits.ok && requestedDatesOutsideHorizon(limits.value, query.from, query.to, this.#config.cliniko.timeZone)
+      ? { kind: "outsideHorizon" as const, target: "offer" as const, snapshot: limits.value } : undefined;
+  }
   get workflow(): ClinikoWorkflow | undefined { return this.#workflow; }
   get patientAccessDenied(): boolean { return this.#patientLifetime.signal.aborted; }
   get closed(): boolean { return this.#lifetime.signal.aborted; }
@@ -410,6 +428,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   bookingMenuAvailable(): boolean { return this.#booking()?.bookingMenuAvailable() === true; }
   async readBookingMenu(query: BookingMenuReadQuery) {
     this.#spokenMenu.clear();
+    if (this.#booking()) { const failure = await this.#horizonFailure(query); if (failure) return err(failure); }
     const result = await (this.#booking()?.readBookingMenu(query) ?? readDenied());
     if (result.ok && !this.closed && !this.#patientLifetime.signal.aborted) {
       this.#publicMenu = { kind: "booking", stage: null };
@@ -428,6 +447,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   reschedulingMenuAvailable(): boolean { return !this.#staffActive && this.#owner instanceof ClinikoReschedulingSession && this.#owner.effects.reschedulingMenuAvailable(); }
   async readReschedulingMenu(query: ReschedulingMenuReadQuery) {
     this.#spokenMenu.clear();
+    if (query.stage === "offers" && this.reschedulingMenuAvailable()) { const failure = await this.#horizonFailure(query); if (failure) return err(failure); }
     const result = await (!this.#staffActive && this.#owner instanceof ClinikoReschedulingSession ? this.#owner.effects.readReschedulingMenu(query) : readDenied());
     if (result.ok && !this.closed && !this.#patientLifetime.signal.aborted) {
       this.#publicMenu = { kind: "rescheduling", stage: query.stage };

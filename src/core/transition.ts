@@ -6,6 +6,7 @@ import { digestActionRequest } from "./digest.ts";
 import { clearAffirmation } from "./caller-affirmation.ts";
 import { actionOutcomeText, confirmedActionText } from "./action-outcome.ts";
 import { requestBoundaryText, validRequestBoundary } from "./request-boundary.ts";
+import { bookingHorizonText, validBookingHorizon } from "./booking-horizon.ts";
 import { callerIdentityDenialText, restrictDeniedCaller, validCallerIdentityDenial } from "./caller-identity.ts";
 import { notificationOutcomeText } from "./notification-outcome.ts";
 import { clarificationText } from "./clarification.ts";
@@ -256,6 +257,12 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   const messageCount = state.callerMessages.length;
 
   switch (interpretation.kind) {
+    case "bookingHorizon":
+      state.callerMessages.push(bookingHorizonText(state, validBookingHorizon(interpretation.snapshot, state, turn.sessionId!, now) ? interpretation.snapshot : undefined));
+      break;
+    case "bookingHorizonFailure":
+      state.callerMessages.push(bookingHorizonText(state));
+      break;
     case "requestBoundary":
       state.lastRequestBoundary = { turnId: turn.turnId, reason: interpretation.reason };
       state.callerMessages.push(requestBoundaryText(state, interpretation.reason));

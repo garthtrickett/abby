@@ -569,3 +569,52 @@ failures, two setup gaps, all 135 safety observations passing and clear PostgreS
 patient-data canaries. Twelve candidate turns make actual model requests, with
 33 trusted interpretations. Its intentional nonzero result preserves the same
 remaining gaps and every prose acceptance condition remains unassessed.
+
+## Approved destination search horizon
+
+The signed-call reproduction on main `a10891c67452c7017319b471de9ac6fc5f3ec64c`
+failed before production changes: “Can we move it several months from now?”
+received a generic repair instead of the clinic's approved search limits.
+Abby now reads current public approvals through a scoped, cancelable host port
+and gives a canonical limit explanation without provider, patient or email work.
+The agent command is `booking.horizon.read.v1`. Numeric limits are withheld on
+revoked membership, changed approvals, expired evidence, foreign bindings or
+invalid evidence. An unsent proposal is canceled before the public read;
+known sent outcomes remain truthful and a later write needs fresh confirmation.
+
+Precise dated offer requests outside the whole approved range receive the same
+typed explanation. Partial ranges continue through ordinary protected offer
+filtering. Direct review of the write path established that the rescheduling
+policy's advance limit concerns the **original appointment's eligibility**;
+the booking policy governs the **destination start**. These are checked
+separately, rather than taking a minimum across unlike limits. Selected approved
+practitioners retain their individual destination limits.
+
+The first expanded signed fixture failed because its clock jump expired the
+entire call lease. The corrected fixture expires only the approval, preserving
+the lease guard. The [first model sample](baselines/clinical-intent-after-horizon-v1.json)
+also preserves an observed failure: a reported past question from a friend was
+classified as the caller's own horizon question (17 of 18 passed). After prompt
+refinement, the [second sample](baselines/clinical-intent-after-horizon-v2.json)
+passes 18 of 18 with 15 actual model requests. Both are classification samples,
+not statistical reliability or clinical acceptance evidence.
+
+Final validation commands and results:
+
+- `node --test --test-concurrency=3 test/text/booking-horizon.test.ts test/cliniko/booking-horizon.test.ts test/voice/booking-horizon.test.ts test/voice/conversation-baseline.test.ts test/voice/approved-booking-search.test.ts test/voice/appointment-change-intent.test.ts test/voice/booking-request-boundaries.test.ts test/contract/scenario-manifest.test.ts`: all 12 tests passed. Coverage includes 16 parallel signed horizon journeys, memory/PostgreSQL agent commands, held public reads, consumer cancellation and existing search/change/boundary behavior.
+- `npm run typecheck`: passed on final production and test source.
+- `git diff --check`: passed.
+- `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinical-intent.ts --model gpt-4o-mini --out eval/results/20261006-horizon-intent-v16-v2.json`: final archived classification sample above; 18 of 18 passed with 15 actual requests.
+- `node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/results/20261006-conversations-horizon-v1.json`: intentionally nonzero partial baseline, not a release gate.
+
+The [all-45 horizon report](baselines/clinic-conversation-after-horizon-v1.json)
+records 39 passing named conversation observations, six failing, zero harness
+failures, two setup gaps, all 135 safety checks passing and a clear PostgreSQL
+patient-data canary scan. Source remains stable across all 460 recorded
+production, fixture and runner files. Eleven candidate turns make actual model
+requests and 34 use trusted interpretation. CCP-029 now passes; CCP-030, CCP-033,
+CCP-034, CCP-035, CCP-040 and CCP-044 remain visible. Service ambiguity, unknown
+fees, invoice/refund/waitlist handling and pending-read setup still need work;
+unchanged generic scoring does not award unsupported capabilities. Every prose
+acceptance condition remains unassessed. Synthetic signed calls and current demo
+approvals do not establish real carrier/email operation or clinic activation.
