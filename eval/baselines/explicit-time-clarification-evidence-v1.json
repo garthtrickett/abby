@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "kind": "explicit-played-time-ambiguity-acceptance",
+  "baseRevision": "abd12f37d59af05b6010c48776132a853934122e",
+  "before": "explicit-time-clarification-before-v1.json",
+  "after": "clinic-conversation-after-explicit-time-v24-v1.json",
+  "testFile": "test/voice/explicit-time-clarification.test.ts",
+  "testSha256": "24bc9eb5f8d9b72bf26b1396025610d78e786873b23ec2dd353a05f1df2272cf",
+  "modes": [
+    "different-day-period",
+    "same-day-period",
+    "same-period-different-days"
+  ],
+  "result": "passed",
+  "productionChange": "Shared menuAmbiguous wording explicitly asks the displayed day and AM or PM; matcher/authority unchanged.",
+  "regression": {
+    "testsPassed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "canceled": 0
+  },
+  "typecheck": "passed",
+  "privacy": "Private OTP excluded from ordinary transcript and disposable PostgreSQL patient canaries clear; synthetic clinical/email/audio fixtures, no real carrier/activation claim."
+}

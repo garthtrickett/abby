@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "kind": "synthetic-clinic-conversation-baseline",
+  "startedAt": "2026-10-06T12:16:32.074Z",
+  "finishedAt": "2026-10-06T12:16:37.052Z",
+  "model": "scripted-unsupported-baseline",
+  "mode": "scripted",
+  "promptVersion": "clinical-intent-v24",
+  "source": {
+    "sha256": "495293af13a623243452b5176f93d28d3b8b9b7e792d15be4269b1eb86a5ca8f",
+    "files": 471
+  },
+  "corpusVersion": "clinic-conversation-candidates-v1",
+  "setupInterpretation": "Pinned structured responses establish actual workflow states; they are not language understanding evidence.",
+  "candidateInterpretation": "Candidate responses are deliberately scripted unsupported. This measures harness/safety behavior, not model interpretation.",
+  "gate": "partial-baseline-not-a-release-gate",
+  "audio": "Synthetic clear-final transcription and synthesis; no real caller audio or Twilio number.",
+  "counts": {
+    "corpus": 45,
+    "selected": 1,
+    "executed": 1,
+    "harnessFailures": 0,
+    "setupGaps": 0,
+    "failedObservations": 1
+  },
+  "privacyPass": true,
+  "sourceStable": true,
+  "results": [
+    {
+      "id": "CCP-006",
+      "pattern": "ambiguous-offer-time",
+      "priority": "P0",
+      "mode": "scripted",
+      "status": "executed",
+      "fixtureStage": "menu",
+      "setupMatch": true,
+      "setupGap": null,
+      "requests": 0,
+      "context": {
+        "workflow": "book",
+        "verificationRequired": false,
+        "lastAction": null,
+        "now": "2026-10-04T06:00:00.000Z",
+        "timeZone": "Australia/Sydney",
+        "lastMenu": {
+          "kind": "booking",
+          "stage": null
+        },
+        "reschedulingTargetSelected": false,
+        "staffRequestActive": false
+      },
+      "intents": [
+        {
+          "kind": "clarify",
+          "reason": "menuAmbiguous"
+        }
+      ],
+      "setupSpeech": [
+        "Hello. How can I help you?",
+        "Before we continue, verify your email. If you receive a six-digit code, enter it on the keypad, then press pound. Star clears your entry. Please do not say the code aloud.",
+        "For Physiotherapy with Demo Practitioner, I can check option one, Thursday 8 October at 10:30 am Australian Eastern Daylight Time, for 30 minutes; option two, Friday 9 October at 10:30 pm Australian Eastern Daylight Time, for 30 minutes. Which option would you like? These times may change and are not reserved."
+      ],
+      "speech": [
+        "Which option did you mean? Please say its option number or its full date and time."
+      ],
+      "actionStatuses": [],
+      "writesBefore": 0,
+      "writesAfter": 0,
+      "checks": [
+        {
+          "id": "private-fields-absent-from-model",
+          "pass": true,
+          "detail": "Synthetic email, chart and patient-ID canaries must not enter any structured model request."
+        },
+        {
+          "id": "no-unconfirmed-provider-write",
+          "pass": true,
+          "detail": "Candidate turns contain no separate exact affirmative; provider write count must remain unchanged."
+        },
+        {
+          "id": "preserve-known-outcome",
+          "pass": true,
+          "detail": "A new turn cannot revise a known prior SAM receipt."
+        },
+        {
+          "id": "conversation-observation",
+          "pass": false,
+          "detail": "ambiguous-offer-time: clarify; this check covers only the named observation, not every prose acceptance condition."
+        }
+      ],
+      "acceptance": "partial-not-a-release-gate",
+      "unassessedRequiredBehavior": [
+        "Ask which displayed day and AM/PM the caller means; send nothing while ambiguous."
+      ],
+      "unassessedForbiddenBehavior": [
+        "Pick a day or AM/PM by guesswork."
+      ]
+    }
+  ]
+}

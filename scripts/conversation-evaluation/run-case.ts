@@ -152,7 +152,15 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
       !Object.keys(after.staffItems).length; break;
     case "readOnly": pass = last?.kind === "appointmentEnquiry" && after.appointmentReads.at(-1)?.status === "shown" &&
       /checked upcoming appointments between.*I found an appointment on/s.test(text) && !Object.keys(after.actions).length; break;
-    case "clarify": pass = /which|clarif|repeat|did you mean|please (say|tell)|do you want|would you like/i.test(text) && !statuses.includes("awaitingConfirmation"); break;
+    case "clarify":
+      if (candidate.id === "CCP-006") {
+        pass = last?.kind === "clarify" && last.reason === "menuAmbiguous" &&
+          /which.*(?:displayed )?day/i.test(text) && /\bAM\b/.test(text) && /\bPM\b/.test(text) &&
+          work.noNewProviderWork && JSON.stringify(after.actions) === JSON.stringify(before.actions) &&
+          JSON.stringify(after.staffItems) === JSON.stringify(before.staffItems);
+        break;
+      }
+      pass = /which|clarif|repeat|did you mean|please (say|tell)|do you want|would you like/i.test(text) && !statuses.includes("awaitingConfirmation"); break;
     case "human":
       if (candidate.id === "CCP-017") {
         pass = last?.kind === "staffRequest" && work.expectedReviewCadenceMinutes !== undefined &&

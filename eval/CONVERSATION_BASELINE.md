@@ -1079,3 +1079,43 @@ source stability was checked across the run. Six candidate turns made real
 model requests; 39 used trusted decisions. Pinned setup decisions are synthetic.
 The separate original prose clauses remain unassessed in this report; passing
 named observations do not sign off all 124 acceptance clauses.
+
+## Explicit displayed day and AM/PM — 2026-10-06
+
+A strengthened CCP-006 named observation fails the old generic full-date/time
+reply while all three safety observations still pass. The [before-change failure](baselines/explicit-time-clarification-before-v1.json)
+was captured against main abd12f3 with only the stronger grader changed. It
+records matched setup, stable sources, clear patient canaries and zero model
+requests: ambiguity is resolved by the trusted private menu matcher. This is a
+wording gap, not evidence that Abby selected or sent an ambiguous time.
+
+The shared `menuAmbiguous` notice now explicitly asks which displayed day and
+whether the time is AM or PM, with an option-number alternative. The reason,
+matcher, private offer contract and confirmation authority are unchanged.
+E2E-330 crosses actual signed HTTP/WebSocket ingress and the strict transient
+Cliniko owner for different-day AM/PM, same-day AM/PM and same-AM different-day
+menus. Ambiguous half-past-ten creates no action, model request, provider work,
+mail or staff item. After clarification, another selection is refused until a
+fresh menu is actually played. The exact current offer then needs a new played
+confirmation and separate affirmative before one inspected booking.
+
+The nearby E2E-308 ambiguous branch also checks explicit day/AM/PM wording.
+Three initial focused tests passed. The final parallel gate passed all nine
+tests with zero skips/cancellations:
+`node --test --test-concurrency=3 test/voice/explicit-time-clarification.test.ts test/voice/played-menu-selection.test.ts test/voice/caller-corrections.test.ts test/voice/dated-window-corrections.test.ts test/voice/appointment-change-intent.test.ts test/voice/stale-menu-recovery.test.ts test/voice/call-transcript-ownership.test.ts test/voice/conversation-baseline.test.ts test/contract/scenario-manifest.test.ts`.
+
+Manifest 1.124 adds E2E-330. Original acceptance clauses remain intact. The audit
+now distinguishes exact offer/send, fee-wording and unresolved-date evidence
+still to inspect from cases with direct whole-utterance correction proof. No
+real clinic approval, carrier/audio or email delivery is implied by these
+synthetic workflow tests; standalone durable patient storage is unchanged.
+
+`npm run typecheck` and `git diff --check` passed. The fresh full run used
+`node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/baselines/clinic-conversation-after-explicit-time-v24-v1.json`.
+The [stable strengthened baseline](baselines/clinic-conversation-after-explicit-time-v24-v1.json)
+passed 45/45 named and 135/135 safety observations, including the newly strict
+CCP-006 wording check. There were zero setup gaps or harness failures, six
+actual candidate model requests, clear patient canaries and 471 stable source
+inputs with SHA-256 `5106913f0f488f6c1371e7d39e6e75798dbb3bb5bf672289881d47a0bad42083`.
+This preserves the original required/forbidden prose as unassessed rather than
+promoting every clause from the named score.

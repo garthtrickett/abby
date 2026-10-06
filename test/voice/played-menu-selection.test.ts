@@ -48,6 +48,7 @@ test("E2E-308 signed calls resolve spoken time and relative selections from actu
           assert.equal(Object.values((await call.state()).actions).at(-1)?.status, "committed");
         } else {
           assert.equal(actions.length, 0); assert.match(call.spoken.at(-1)!, /which option|other date or time|fresh appointment options/i);
+          if (item.ambiguous) assert.match(call.spoken.at(-1)!, /which displayed day.*AM or PM/);
           if (item.text === "None of those work.") assert.match(call.spoken.at(-1)!, /won't choose any of those options/);
           if (item.text !== "The train one, please.") assert.ok(!requests.includes(item.text));
         }
