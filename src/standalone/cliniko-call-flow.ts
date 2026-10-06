@@ -15,6 +15,7 @@ import type { ClinikoIntakeDraft } from "../cliniko/patient-intake.ts";
 import type { FinalCallerTurn } from "../core/model.ts";
 import type { VoiceIntent } from "../voice/voice-session.ts";
 import { PlayedMenuSelection } from "./played-menu-selection.ts";
+import { noticePresentationId } from "../core/transition.ts";
 
 export type ClinikoWorkflow = "book" | "cancel" | "reschedule" | "intake";
 export type ClinikoCallFlowConfig = Omit<ClinikoBookingSessionConfig, "callerApprovalPath" | "bookingApprovalPath"> & Readonly<{
@@ -26,7 +27,7 @@ type Failure = Readonly<{ kind: "workflowUnavailable" }>;
 const unavailable = <T>(): Result<T, Failure> => err({ kind: "workflowUnavailable" });
 const readDenied = () => err({ kind: "unavailable" as const, target: "appointment" as const });
 
-/** One admitted call chooses one workflow. No eager verifier, model credential, cross-operation grant or implicit intake booking.
+/** An admitted call owns its current workflow. No eager verifier, model credential, cross-operation grant or implicit intake booking.
  * Concrete workflow owners retain all permission, public approval, SAM, inspection and single-send checks. */
 export class ClinikoCallFlow extends NoStoredKnowledge {
   readonly effectDeadlineMs = 30_000;
@@ -120,7 +121,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     const config = this.#config;
     if (!sameScope(query.scope, config.receipt.scope) || query.callId !== config.receipt.callId || query.sessionId !== config.sessionId ||
         query.policyVersion !== config.policyVersion || query.signal.aborted) return unavailable<Readonly<{ kind: "codeRequired" | "intakeRequired" }>>();
-    const selected = await this.choose(query.operation, query.signal);
+    const selected = await this.choose(query.operation, query.signal, query.replaceCanceledChange === true, query.expectedConversationRevision);
     if (selected.ok && !query.signal.aborted && selected.value.kind === "codeRequired") this.beginVerification();
     return selected;
   }
@@ -142,17 +143,25 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       found.value.admission?.key.accountRef === config.inbound.key.accountRef && found.value.admission.key.providerCallRef === config.inbound.key.providerCallRef &&
       found.value.admission.dialedNumber === config.inbound.dialedNumber;
   }
-  async choose(operation: ClinikoWorkflow, external?: AbortSignal): Promise<Result<Readonly<{ kind: "codeRequired" | "intakeRequired" }>, Failure>> {
+  async choose(operation: ClinikoWorkflow, external?: AbortSignal, replaceCanceledChange = false, expectedRevision?: number): Promise<Result<Readonly<{ kind: "codeRequired" | "intakeRequired" }>, Failure>> {
     if (!["book", "cancel", "reschedule", "intake"].includes(operation) || this.#selecting || this.#lifetime.signal.aborted || external?.aborted) return unavailable();
-    // A workflow cannot be changed by a later model suggestion. All proof and menus belong to the first selected request.
-    if (this.#owner) return this.#workflow === operation && await this.#active(operation, external) ? ok({ kind: operation === "intake" ? "intakeRequired" : "codeRequired" }) : unavailable();
+    if (this.#owner && this.#workflow === operation) return await this.#active(operation, external)
+      ? ok({ kind: operation === "intake" ? "intakeRequired" : "codeRequired" }) : unavailable();
     this.#selecting = true;
-    const signal = AbortSignal.any([this.#lifetime.signal, this.#config.signal, ...(external ? [external] : [])]);
+    const signal = AbortSignal.any([this.#lifetime.signal, this.#config.signal, AbortSignal.timeout(20_000), ...(external ? [external] : [])]);
     const buildLifetime = new AbortController();
     let published = false;
     let building: Promise<Result<Owner, Readonly<{ kind: string }>>> | undefined;
     let created: Owner | undefined;
     try {
+      const previousOwner = this.#owner;
+      const before = await awaitUntilAbort(this.#config.ledger.read(this.#config.receipt.callId, this.#config.receipt.scope), signal);
+      if (!before?.ok || expectedRevision !== undefined && before.value.conversationRevision !== expectedRevision) return unavailable();
+      // Only an explicitly requested unsent cancellation/move may be replaced.
+      // New owners issue new operation-bound verification; no prior grant or target transfers.
+      if (previousOwner && (!replaceCanceledChange || !["cancel", "reschedule"].includes(operation) ||
+          !["cancel", "reschedule"].includes(this.#workflow!) ||
+          Object.values(before.value.actions).some(action => action.status !== "canceled"))) return unavailable();
       if (!await this.#active(operation, signal) || signal.aborted) return unavailable();
       const config = { ...this.#config, signal: AbortSignal.any([this.#lifetime.signal, this.#config.signal, buildLifetime.signal]) }, paths = config.approvals;
       building = operation === "book" ? ClinikoBookingSession.create({ ...config, callerApprovalPath: paths.bookCaller, bookingApprovalPath: paths.booking }) :
@@ -163,6 +172,10 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       if (!result?.ok) return unavailable();
       created = result.value;
       if (signal.aborted || !await this.#active(operation, signal)) return unavailable();
+      const after = await awaitUntilAbort(this.#config.ledger.read(this.#config.receipt.callId, this.#config.receipt.scope), signal);
+      if (!after?.ok || after.value.conversationRevision !== before.value.conversationRevision || this.#owner !== previousOwner ||
+          signal.aborted || previousOwner && Object.values(after.value.actions).some(action => action.status !== "canceled")) return unavailable();
+      previousOwner?.dispose(); this.#publicMenu = undefined; this.#spokenMenu.clear(); this.#reschedulingTargetSelected = false;
       this.#owner = created; this.#workflow = operation; this.#verificationRequired = operation !== "intake"; created = undefined; published = true;
       return ok({ kind: operation === "intake" ? "intakeRequired" : "codeRequired" });
     } catch { return unavailable(); }
@@ -186,6 +199,30 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   }
   async cancellationProof(): Promise<Readonly<{ verificationRef: string; expiresAt: string }> | undefined> {
     return this.#owner instanceof ClinikoCancellationSession && !this.#lifetime.signal.aborted ? this.#owner.verified() : undefined;
+  }
+  /** Exact bounded cancellation selection over the latest actually played list.
+   * Only private host state is selected; the ordinary SAM proposal still owns
+   * action preparation, exact playback and separate affirmation. */
+  async selectCancellationIntent(turn: FinalCallerTurn, choice: 1 | 2 | 3, external?: AbortSignal): Promise<VoiceIntent> {
+    const denied = { kind: "clarify", reason: "menuUnavailable" } as const, owner = this.#owner;
+    if (!(owner instanceof ClinikoCancellationSession) || this.closed || this.#verificationRequired ||
+        turn.callId !== this.#config.receipt.callId || turn.sessionId !== this.#config.sessionId) return denied;
+    const signal = AbortSignal.any([this.#lifetime.signal, AbortSignal.timeout(15_000), ...(external ? [external] : [])]);
+    const config = this.#config, before = await awaitUntilAbort(config.ledger.read(turn.callId, config.receipt.scope), signal);
+    if (!before?.ok) return denied;
+    const last = before.value.appointmentReads.at(-1), notice = last && before.value.presentations[noticePresentationId(turn.callId, last.turnId)];
+    if (!last || last.status !== "shown" || (last.shownCount ?? 0) < 2 || before.value.pendingPresentationId ||
+        before.value.processedTurnIds.at(-1) !== last.turnId || notice?.status !== "played") return denied;
+    const proof = await owner.verified(signal);
+    if (!proof) return denied;
+    const now = (config.clock ?? (() => new Date().toISOString()))();
+    const selected = await awaitUntilAbort(owner.appointments.select(config.receipt.scope, proof.verificationRef, choice, now, signal), signal);
+    const after = await awaitUntilAbort(config.ledger.read(turn.callId, config.receipt.scope), signal);
+    if (!selected?.ok || !after?.ok || signal.aborted || this.closed || this.#owner !== owner ||
+        after.value.conversationRevision !== before.value.conversationRevision || after.value.lifecycle !== "active" ||
+        after.value.sessionLease?.sessionId !== config.sessionId || selected.value.snapshot.verificationRef !== proof.verificationRef ||
+        selected.value.snapshot.appointments.length !== 1) return denied;
+    return { kind: "cancel", verificationRef: proof.verificationRef, targetRef: "selected" };
   }
   get appointments() { return this.#owner instanceof ClinikoCancellationSession ? this.#owner.appointments : undefined; }
   #booking() { return this.#owner instanceof ClinikoBookingSession ? this.#owner.effects : this.#owner instanceof ClinikoIntakeBookingSession ? this.#owner : undefined; }

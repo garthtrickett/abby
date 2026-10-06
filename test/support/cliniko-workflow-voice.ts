@@ -51,7 +51,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   const base = "https://api.au5.cliniko.com/v1", port = config.fetchPort!;
   const provider: typeof fetch = async (value, init) => {
     const url = new URL(String(value)), method = init?.method ?? "GET";
-    if (after && method === "GET" && url.pathname === "/v1/individual_appointments/91") return Response.json(after);
+    if (after && method === "GET" && url.pathname === `/v1/individual_appointments/${after.id}`) return Response.json(after);
     if (method === "GET" && url.pathname === "/v1/individual_appointments/91/conflicts") return Response.json({ conflicts: { exist: false } });
     if ((method === "POST" && url.pathname === "/v1/individual_appointments") ||
         (method === "PATCH" && url.pathname.startsWith("/v1/individual_appointments/"))) {
@@ -61,9 +61,10 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       assert.ok(Object.values(state.effects).some(effect => effect.kind === "hostWrite" && effect.actionKey === action.key));
       writes.push(`${method} ${url.pathname}`); assert.equal(writes.length, 1);
       const body = JSON.parse(String(init?.body));
-      const before = method === "PATCH" ? await (await port(`${base}/individual_appointments/91`, { method: "GET", redirect: "error", ...(init?.signal ? { signal: init.signal } : {}) })).json() : {};
+      const appointmentId = method === "PATCH" ? url.pathname.split("/")[3]! : "91";
+      const before = method === "PATCH" ? await (await port(`${base}/individual_appointments/${appointmentId}`, { method: "GET", redirect: "error", ...(init?.signal ? { signal: init.signal } : {}) })).json() : {};
       const starts = body.starts_at ?? before.starts_at;
-      after = { ...before, id: "91", notes: body.notes ?? before.notes, starts_at: starts, ends_at: new Date(Date.parse(starts) + 1_800_000).toISOString(), archived_at: null, deleted_at: null,
+      after = { ...before, id: appointmentId, notes: body.notes ?? before.notes, starts_at: starts, ends_at: new Date(Date.parse(starts) + 1_800_000).toISOString(), archived_at: null, deleted_at: null,
         cancelled_at: url.pathname.endsWith("/cancel") ? now() : null,
         patient: { links: { self: `${base}/patients/${body.patient_id ?? verificationCanaries[2]}` } },
         business: { links: { self: `${base}/businesses/11` } }, practitioner: { links: { self: `${base}/practitioners/22` } },

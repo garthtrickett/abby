@@ -120,8 +120,8 @@ test("E2E-303 structured model decisions select four signed clinical workflows a
           assert.equal(call.spoken.at(-1), firstNotice, "model affirmation after uncertainty must restate the actual unresolved outcome");
         }
         assert.equal(call.writes.length, operation === "intake" && lost ? 0 : 1);
-        assert.ok(seen.length >= (operation === "book" || operation === "intake" && lost ? 3 : 4)); assert.deepEqual(seen[0]!.workflow, null);
-        const trustedChoices = ["The second time, please.", "My first existing appointment.", "Move it to option two."];
+        assert.ok(seen.length >= (operation === "book" || operation === "cancel" || operation === "intake" && lost ? 3 : 4)); assert.deepEqual(seen[0]!.workflow, null);
+        const trustedChoices = ["The second time, please.", "My first existing appointment.", "Move it to option two.", "Cancel that appointment."];
         assert.deepEqual(call.modelTurns.filter(text => text !== "Yes" && !trustedChoices.includes(text)), seen.map(item => item.callerText));
         assert.ok(seen.every(item => !trustedChoices.includes(String(item.callerText))), "known menu selections must use trusted facts without model guesses");
       } finally { await call?.close(); await f.close(); }

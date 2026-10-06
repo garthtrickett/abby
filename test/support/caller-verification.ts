@@ -56,9 +56,10 @@ export async function callerVerificationFixture(options: { scope?: LocationScope
   try {
     await replace(path, approval); await replace(accountPath, [account]);
     resultValue(await policies.changeAutomationEnabled(scope, "0", true, "synthetic-admin"));
-    if (options.bookingExecute) resultValue(await policies.changeBookingEnabled(scope, "0", true, "synthetic-admin"));
-    if (options.cancellationExecute) resultValue(await policies.changeCancellationEnabled(scope, "0", true, "synthetic-admin"));
-    if (options.reschedulingExecute) resultValue(await policies.changeReschedulingEnabled(scope, "0", true, "synthetic-admin"));
+    const currentVersion = async () => resultValue(await policies.read(scope)).policyVersion;
+    if (options.bookingExecute) resultValue(await policies.changeBookingEnabled(scope, await currentVersion(), true, "synthetic-admin"));
+    if (options.cancellationExecute) resultValue(await policies.changeCancellationEnabled(scope, await currentVersion(), true, "synthetic-admin"));
+    if (options.reschedulingExecute) resultValue(await policies.changeReschedulingEnabled(scope, await currentVersion(), true, "synthetic-admin"));
     const captured = approvedSyntheticPolicy(resultValue(await policies.read(scope)));
     const inbound = { key: { accountRef: "synthetic-account", providerCallRef: `provider-${crypto.randomUUID()}` },
       dialedNumber: "+6125550199", presentedCallerNumber: phone, receivedAt: now };

@@ -20,7 +20,7 @@ import { standaloneReschedulingFixture } from "./standalone-rescheduling.ts";
 
 /** Concrete public policies/selection/verifier/SAM/review/write; independent permission, email and HTTP remain synthetic. */
 export async function reschedulingAuthorityFixture(options: { scope?: LocationScope; folder?: string; fetchPort?: typeof fetch; rateBudget?: ClinikoRequestBudget;
-  verificationBudget?: PatientVerificationBudget; timeoutMs?: number; operation?: PatientOperation; multiple?: boolean; lostMove?: boolean; startsAt?: string } = {}) {
+  verificationBudget?: PatientVerificationBudget; timeoutMs?: number; operation?: PatientOperation; multiple?: boolean; lostMove?: boolean; startsAt?: string; cancellationExecute?: boolean } = {}) {
   const folder = options.folder ?? await mkdtemp(join(tmpdir(), "abby-move-authority-"));
   const path = join(folder, "rescheduling.json"), destinationPath = join(folder, "destination.json"), accountPath = join(folder, "accounts.json");
   let approval: ReschedulingApproval, destinationApproval: BookingApproval, source: ClinikoReschedulingAuthority;

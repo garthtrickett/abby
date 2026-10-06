@@ -13,7 +13,7 @@ import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 
 export type VoiceIntent =
   | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason }>
-  | Readonly<{ kind: "workflow"; operation: "book" | "cancel" | "reschedule" | "intake" }>
+  | Readonly<{ kind: "workflow"; operation: "book" | "cancel" | "reschedule" | "intake"; replaceCanceledChange?: true }>
   | Readonly<{ kind: "outcome" }>
   | Readonly<{ kind: "bookingMenu"; from: string; to: string }>
   | Readonly<{ kind: "bookingChoice"; choice: 1 | 2 | 3 }>
@@ -330,7 +330,8 @@ export class VoiceSession {
     } else if (this.cachedIntent.kind === "workflow") {
       const controller = new AbortController(), pending = { cancel: () => controller.abort() };
       this.pendingIntent = pending;
-      try { result = await this.reception.startWorkflow(this.scope, turn, this.cachedIntent.operation, now, existing.value.conversationRevision, controller.signal); }
+      try { result = await this.reception.startWorkflow(this.scope, turn, this.cachedIntent.operation, now, existing.value.conversationRevision,
+        controller.signal, this.cachedIntent.replaceCanceledChange); }
       finally { if (this.pendingIntent === pending) this.pendingIntent = undefined; }
     } else if (this.cachedIntent.kind === "outcome") {
       result = await this.runtime.acceptTurn(turn, { kind: "outcomeQuery" }, now, existing.value.conversationRevision);

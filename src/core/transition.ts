@@ -4,6 +4,8 @@ import { supportedVoiceLocale } from "./voice-presentation.ts";
 import { createHash } from "node:crypto";
 import { digestActionRequest } from "./digest.ts";
 import { clearAffirmation } from "./caller-affirmation.ts";
+import { confirmedActionText } from "./action-outcome.ts";
+import { clarificationText } from "./clarification.ts";
 import { notificationDirective, queueCommittedNotification, transitionNotification } from "./notification-effects.ts";
 import { availabilityPresentation } from "./availability-presentation.ts";
 import { appointmentPresentation } from "./appointment-presentation.ts";
@@ -65,15 +67,6 @@ function describe(request: ActionRequest, locale: string): string {
       return `Please confirm moving your ${detail ? `${detail.appointmentTypeName} appointment with ${detail.practitionerName}` : "appointment"} on ${appointmentTime(request.target.startsAt, request.target.timeZone, locale)} to ${appointmentTime(request.offer.startsAt, request.target.timeZone, locale)}${detail ? `, for ${detail.durationMinutes} minutes` : ""}. ${request.terms.approvedText}`;
     }
     case "intake": return "Please confirm that your approved intake details may be saved. This does not book an appointment.";
-  }
-}
-
-function confirmedActionText(kind: ActionRequest["kind"]): string {
-  switch (kind) {
-    case "book": return "Your booking is confirmed.";
-    case "cancel": return "Your appointment cancellation is confirmed.";
-    case "reschedule": return "Your appointment move is confirmed.";
-    case "intake": return "Your details were saved. No appointment is confirmed yet.";
   }
 }
 
@@ -286,15 +279,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       break;
     }
     case "clarify":
-      state.callerMessages.push(interpretation.reason === "proposalCorrection"
-        ? "Which details would you like to change? I'll ask for a new confirmation before continuing."
-        : interpretation.reason === "menuRejected"
-        ? "I won't choose any of those options. What other date or time would work for you?"
-        : interpretation.reason === "menuAmbiguous"
-          ? "Which option did you mean? Please say its option number or its full date and time."
-          : interpretation.reason === "menuUnavailable"
-            ? "Please ask for fresh appointment options before choosing a time."
-            : "Could you repeat that for me?");
+      state.callerMessages.push(clarificationText(interpretation.reason, Object.values(state.actions).at(-1)));
       break;
     case "modelFallback":
       addStaffTask(state, "systemFailure", now);

@@ -149,7 +149,7 @@ export interface BookingEvidenceHost {
 }
 
 export type WorkflowQuery = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
-  operation: import("./model.ts").ActionKind; signal: AbortSignal }>;
+  operation: import("./model.ts").ActionKind; signal: AbortSignal; replaceCanceledChange?: true; expectedConversationRevision?: number }>;
 /** Trusted workflow routing issues neither patient proof nor a clinical action. */
 export interface WorkflowHost {
   startWorkflow(query: WorkflowQuery): Promise<Result<Readonly<{ kind: "codeRequired" | "intakeRequired" }>, Readonly<{ kind: "workflowUnavailable" }>>>;
