@@ -8,6 +8,7 @@ import { bookingCallFlowFixture, cancellationCallFlowFixture, reschedulingCallFl
 import { clinikoWorkflowVoiceFixture, voiceUntil } from "../../test/support/cliniko-workflow-voice.ts";
 import { verificationCanaries } from "../../test/support/caller-verification.ts";
 import { clinikoStaffCallFlowFixture } from "../../test/support/cliniko-staff-call-flow.ts";
+import { appointmentEnquiryFixture } from "../../test/support/cliniko-appointment-enquiry.ts";
 import type { CallState } from "../../src/core/model.ts";
 import type { Candidate, Plan } from "./plans.ts";
 
@@ -18,6 +19,7 @@ type Decision = { kind: string; operation: ClinikoWorkflow | null; stage: "targe
 const decision = (kind: string, change: Partial<Decision> = {}): Decision =>
   ({ kind, operation: null, stage: null, from: null, to: null, choice: null, ...change });
 const setupDecisions: Record<string, Decision> = {
+  "I only want to check my appointments.": decision("workflow", { operation: "appointments.read" }),
   "I need to book an appointment.": decision("workflow", { operation: "book" }),
   "I need to cancel an appointment.": decision("workflow", { operation: "cancel" }),
   "I need to move an appointment.": decision("workflow", { operation: "reschedule" }),
@@ -40,11 +42,11 @@ async function prepare(call: Call, plan: Plan, mail: { code: string }[], id: str
     if (plan.stage === "staffUncertain") { await call.turn("Please send that request."); await call.mark(); }
     return;
   }
-  const operation = plan.stage.startsWith("cancel") ? "cancel" : plan.stage.startsWith("move") ? "reschedule" : "book";
+  const operation = plan.stage === "enquiry" ? "appointments.read" : plan.stage.startsWith("cancel") ? "cancel" : plan.stage.startsWith("move") ? "reschedule" : "book";
   const play = async (text: string) => { await call.turn(text); await call.mark(); };
-  await play({ book: "I need to book an appointment.", cancel: "I need to cancel an appointment.", reschedule: "I need to move an appointment." }[operation]);
+  await play({ book: "I need to book an appointment.", cancel: "I need to cancel an appointment.", reschedule: "I need to move an appointment.", "appointments.read": "I only want to check my appointments." }[operation]);
   await voiceUntil(() => mail.length === 1, "synthetic verification email"); await call.verify(mail[0]!.code);
-  if (plan.stage === "book" || plan.stage === "move") return;
+  if (plan.stage === "book" || plan.stage === "move" || plan.stage === "enquiry") return;
   if (operation === "cancel") {
     await play("Show me my appointments from October 4 through October 9.");
     if (plan.stage === "cancel") return;
@@ -85,7 +87,8 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
     case "revisedDate": pass = last?.kind === "bookingMenu" && last.from === "2026-10-07" && last.to === "2026-10-07"; break;
     case "outcome": pass = (last?.kind === "outcome" || last?.kind === "clarify" && last.reason === "changeAfterSend") &&
       /confirmed|can't confirm|contact the clinic/i.test(text); break;
-    case "readOnly": pass = last?.kind === "appointments" && !statuses.includes("awaitingConfirmation"); break;
+    case "readOnly": pass = last?.kind === "appointmentEnquiry" && after.appointmentReads.at(-1)?.status === "shown" &&
+      /checked upcoming appointments between.*I found an appointment on/s.test(text) && !Object.keys(after.actions).length; break;
     case "clarify": pass = /which|clarif|repeat|did you mean|please (say|tell)|do you want|would you like/i.test(text) && !statuses.includes("awaitingConfirmation"); break;
     case "human": pass = /reception|clinic|staff|person/i.test(text) && /contact the clinic|transfer.*unavailable|request.*saved|can't confirm.*request/i.test(text); break;
     case "unsupported": pass = (last === null || last?.kind === "clarify" && last.reason === "changeUnsupported") &&
@@ -116,7 +119,7 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
 /** Exercise the same signed HTTP/WS owner, private OTP and SAM/playback path as
  * E2E-303. Setup decisions are pinned; only candidate turns use the live model. */
 export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: Plan, model: ModelConfig) {
-  const f = ["CCP-011", "CCP-025", "CCP-026"].includes(candidate.id) ? await bookingCatalogueFixture() : plan.stage.startsWith("staff") ? await clinikoStaffCallFlowFixture({ lostResponse: plan.stage === "staffUncertain" })
+  const f = plan.stage === "enquiry" ? await appointmentEnquiryFixture() : ["CCP-011", "CCP-025", "CCP-026"].includes(candidate.id) ? await bookingCatalogueFixture() : plan.stage.startsWith("staff") ? await clinikoStaffCallFlowFixture({ lostResponse: plan.stage === "staffUncertain" })
     : plan.stage.startsWith("cancel") ? await cancellationCallFlowFixture({ multiple: candidate.id === "CCP-036" })
     : plan.stage.startsWith("move") ? await reschedulingCallFlowFixture() : await bookingCallFlowFixture();
   f.flow.dispose();

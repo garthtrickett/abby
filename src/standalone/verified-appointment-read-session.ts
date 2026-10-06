@@ -7,6 +7,7 @@ import { callIdFor } from "../voice/admission.ts";
 import type { AuthenticatedInboundCall } from "../voice/admission.ts";
 import { TransientPatientProofHost } from "./transient-patient-proof.ts";
 import type { TransientPatientProofConfig, VerificationFailure, VerificationToken } from "./transient-patient-proof.ts";
+import { CallerVerificationSession } from "./caller-verification-session.ts";
 
 export type VerifiedAppointmentReadConfig = Omit<TransientPatientProofConfig, "scope" | "callId" | "presentedCallerNumber"> & Readonly<{
   receipt: AdmissionReceipt;
@@ -15,7 +16,7 @@ export type VerifiedAppointmentReadConfig = Omit<TransientPatientProofConfig, "s
   fetchPort?: typeof fetch;
 }>;
 
-/** One call's verified read capability. The live runner does not construct this until a clinic verification flow exists. */
+/** One call's verified read capability. All appointment/proof state is transient. */
 export class VerifiedAppointmentReadSession {
   readonly #proof: TransientPatientProofHost;
   readonly #reader: ClinikoAppointmentReader;
@@ -60,6 +61,16 @@ export class VerifiedAppointmentReadSession {
       return reader;
     }
     return ok(new VerifiedAppointmentReadSession(proof, reader.value, config.receipt.scope));
+  }
+
+  /** Trusted composition only: reuse the admitted call's independent read verifier. */
+  static fromVerification(config: Readonly<{ verification: CallerVerificationSession; scope: LocationScope;
+    cliniko: Omit<ClinikoAppointmentConfig, "scope">; fetchPort?: typeof fetch; clock?: () => string }>):
+    Result<VerifiedAppointmentReadSession, AppointmentReadFailure> {
+    if (!(config.verification instanceof CallerVerificationSession)) return err({ kind: "invalidConfig" });
+    const reader = ClinikoAppointmentReader.create({ ...config.cliniko, scope: config.scope }, config.verification.proof,
+      config.fetchPort, config.clock);
+    return reader.ok ? ok(new VerifiedAppointmentReadSession(config.verification.proof, reader.value, config.scope)) : reader;
   }
 
   async #stillVerified(scope: LocationScope, verificationRef: string, now: string):

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 export type Candidate = Readonly<{ id: string; pattern: string; priority: string; coverage: string;
   setup: string; callerTurns: string[]; requiredBehavior: string[]; forbiddenBehavior: string[] }>;
 export type Stage = "initial" | "book" | "menu" | "proposal" | "committed" | "uncertain" |
-  "cancel" | "cancelTarget" | "cancelCommitted" | "move" | "moveOffers" | "staff" | "staffUncertain";
+  "cancel" | "cancelTarget" | "cancelCommitted" | "move" | "moveOffers" | "staff" | "staffUncertain" | "enquiry";
 export type Expectation = "clarify" | "cancelProposal" | "spokenChoice" | "revisedProposal" | "revisedDate" |
   "outcome" | "human" | "readOnly" | "constraints" | "publicFacts" | "boundedSearch" | "unsupported";
 export type Plan = Readonly<{ stage: Stage; expectation: Expectation; missingSetup?: string }>;
@@ -29,7 +29,7 @@ export const plans: Readonly<Record<string, Plan>> = {
   "CCP-016": { stage: "initial", expectation: "human" },
   "CCP-017": { stage: "staff", expectation: "human" },
   "CCP-018": { stage: "staffUncertain", expectation: "human" },
-  "CCP-019": { stage: "cancel", expectation: "readOnly", missingSetup: "Independent read-only verification route is unavailable; cancellation-bound verification is explicitly a substitute." },
+  "CCP-019": { stage: "enquiry", expectation: "readOnly" },
   "CCP-020": { stage: "cancelCommitted", expectation: "outcome" },
   "CCP-021": { stage: "uncertain", expectation: "outcome" },
   "CCP-022": { stage: "committed", expectation: "human" },

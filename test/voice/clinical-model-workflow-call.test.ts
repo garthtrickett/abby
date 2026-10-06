@@ -15,7 +15,7 @@ type Decision = { kind: string; operation: ClinikoWorkflow | null; stage: "targe
 const decide = (kind: Decision["kind"], changes: Partial<Decision> = {}): Decision =>
   ({ kind, operation: null, stage: null, from: null, to: null, choice: null, ...changes });
 
-function modelFor(operation: ClinikoWorkflow, seen: Record<string, unknown>[], observed: Record<string, unknown>[], live: boolean) {
+function modelFor(operation: Exclude<ClinikoWorkflow, "appointments.read">, seen: Record<string, unknown>[], observed: Record<string, unknown>[], live: boolean) {
   const start = { book: "I need to book an appointment.", cancel: "I need to cancel an appointment.",
     reschedule: "I need to move an appointment.", intake: "I'm new to this clinic and want to register." }[operation];
   const answers: Record<string, Decision> = {
