@@ -1008,7 +1008,7 @@ for (const kind of kinds) {
 
   for (const scenario of [
     { name: "online booking disabled", options: { businessOnline: false }, reason: "notEligible", requestCount: 1 },
-    { name: "practitioner outside business", options: { unrelated: "practitioner" as const }, reason: "notEligible", requestCount: 4 },
+    { name: "practitioner outside business", options: { unrelated: "practitioner" as const }, reason: "notEligible", requestCount: 5 },
     { name: "appointment type outside practitioner", options: { unrelated: "appointmentType" as const }, reason: "notEligible", requestCount: 5 },
     { name: "rate limited", options: { status: 429 }, reason: "rateLimited", requestCount: 1 },
     { name: "invalid business timezone", options: { timeZone: "invalid/timezone" }, reason: "malformed", requestCount: 1 },
@@ -1025,6 +1025,15 @@ for (const kind of kinds) {
       assert.equal(state.callerMessages.at(-1), "I can't check available times right now. I'll request staff follow-up.");
       assert.equal(Object.values(state.staffItems)[0]?.reason, "systemFailure");
       assert.equal(requests.length, scenario.requestCount);
+      if (scenario.options.unrelated) {
+        // Both relationship reads run in parallel. Their completion is not
+        // permission to fetch times when either approved relationship fails.
+        assert.deepEqual(requests.map(request => request.pathname).sort(), [
+          "/v1/businesses/11", "/v1/practitioners/22", "/v1/appointment_types/33",
+          "/v1/businesses/11/practitioners", "/v1/practitioners/22/appointment_types",
+        ].sort());
+        assert.ok(requests.every(request => !request.pathname.endsWith("/available_times")));
+      }
       const delivery = value(await app.session.dispatchPending(at(4)));
       assert.equal(delivery.kind, "queued");
       assert.deepEqual(app.playback.queuedTexts, ["I can't check available times right now. I'll request staff follow-up."]);

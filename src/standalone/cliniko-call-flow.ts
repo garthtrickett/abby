@@ -42,6 +42,7 @@ type Owner = ClinikoBookingSession | ClinikoCancellationSession | ClinikoResched
 type Failure = Readonly<{ kind: "workflowUnavailable" }>;
 const unavailable = <T>(): Result<T, Failure> => err({ kind: "workflowUnavailable" });
 const readDenied = () => err({ kind: "unavailable" as const, target: "appointment" as const });
+export const clinikoStaffPreparationDeadlineMs = 20_000;
 
 /** An admitted call owns its current workflow. No eager verifier, model credential, cross-operation grant or implicit intake booking.
  * Concrete workflow owners retain all permission, public approval, SAM, inspection and single-send checks. */
@@ -243,7 +244,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     if (!c.staff || c.staff.recallTypeId === c.cliniko.recallTypeId || this.#patientLifetime.signal.aborted || this.closed || this.#preparingStaff || !sameScope(query.scope, c.receipt.scope) || query.callId !== c.receipt.callId ||
         query.sessionId !== c.sessionId || query.policyVersion !== c.policyVersion || query.signal.aborted) return denied();
     this.#preparingStaff = true;
-    const signal = AbortSignal.any([query.signal, this.#workflowLifetime.signal, this.#patientLifetime.signal, this.#lifetime.signal, AbortSignal.timeout(20_000)]);
+    const signal = AbortSignal.any([query.signal, this.#workflowLifetime.signal, this.#patientLifetime.signal, this.#lifetime.signal, AbortSignal.timeout(clinikoStaffPreparationDeadlineMs)]);
     let building: ReturnType<typeof ClinikoStaffSession.create> | undefined;
     try {
       if (!this.#staff) {

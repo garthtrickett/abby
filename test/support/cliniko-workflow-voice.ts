@@ -8,7 +8,7 @@ import type Database from "../../src/storage/generated/Database.ts";
 import type { MemoryLedger } from "../../src/core/ledger.ts";
 import { ok } from "../../src/core/model.ts";
 import { ReferenceNumberRoutingHost } from "../../src/reference/clinic-number-routing.ts";
-import { ClinikoCallFlow } from "../../src/standalone/cliniko-call-flow.ts";
+import { ClinikoCallFlow, clinikoStaffPreparationDeadlineMs } from "../../src/standalone/cliniko-call-flow.ts";
 import type { ClinikoCallFlowConfig } from "../../src/standalone/cliniko-call-flow.ts";
 import { createStandaloneTransientVoiceCall } from "../../src/standalone/transient-voice-composition.ts";
 import { createTwilioIngressServer } from "../../src/voice/twilio-ingress-server.ts";
@@ -53,6 +53,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   let disposedState: ReturnType<MemoryLedger["read"]> | undefined, closeCode: number | undefined;
   let after: Record<string, unknown> | undefined, sequence = 1, chunk = 0, utterance = 0, transcriptionFrames = 0;
   let processedChunk = 0, processedSequence = 0, hostWritesStarted = 0, hostWritesSettled = 0;
+  let staffPreparationsStarted = 0, staffPreparationsSettled = 0, staffWritesStarted = 0, staffWritesSettled = 0;
   const callId = callIdFor({ accountRef: accountSid, providerCallRef: callSid });
   const base = "https://api.au5.cliniko.com/v1", port = config.fetchPort!;
   const provider: typeof fetch = async (value, init) => {
@@ -100,6 +101,15 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
           flow.write = async (...args: Parameters<ClinikoCallFlow["write"]>) => {
             hostWritesStarted++;
             try { return await write(...args); } finally { hostWritesSettled++; }
+          };
+          const prepareStaff = flow.prepareStaffRequest.bind(flow), openStaff = flow.openTask.bind(flow);
+          flow.prepareStaffRequest = async (...args: Parameters<ClinikoCallFlow["prepareStaffRequest"]>) => {
+            staffPreparationsStarted++;
+            try { return await prepareStaff(...args); } finally { staffPreparationsSettled++; }
+          };
+          flow.openTask = async (...args: Parameters<ClinikoCallFlow["openTask"]>) => {
+            staffWritesStarted++;
+            try { return await openStaff(...args); } finally { staffWritesSettled++; }
           };
           return flow; },
         intent(owner) { const resolve = intent(owner); return async (turn, signal) => { modelTurns.push(turn.text); return resolve(turn, signal); }; },
@@ -175,7 +185,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         const interruptedMark = sent.filter(item => item.event === "mark").at(-1)?.mark;
         const pending = text === "Yes" && !options.expectedFailure
           ? Object.values(resultValue(await ledger!.read(callId, scope)).actions).find(action => action.status === "awaitingConfirmation") : undefined;
-        const beforeWrites = hostWritesStarted;
+        const beforeWrites = hostWritesStarted, beforePreparations = staffPreparationsStarted, beforeStaffWrites = staffWritesStarted;
         inputs.push(text); media(true); media(true);
         if (options.interrupt) {
           assert.ok(interruptedMark); await voiceUntil(() => sent.filter(item => item.event === "clear").length > clears, "interrupted speech clear");
@@ -187,23 +197,28 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         for (let frame = 0; frame < 5; frame++) media(false);
         const finalChunk = chunk;
         try {
-          if (pending) {
-            // Observe the actual host boundary without repeatedly cloning the SAM
-            // state. Confirmation validation and playback retain their own waits.
-            await voiceUntil(() => hostWritesStarted > beforeWrites || processedChunk >= finalChunk || failures.length > 0,
-              "confirmed caller turn dispatch");
-            if (hostWritesStarted > beforeWrites) {
-              // EffectWorker starts the host's declared dispatch deadline before
-              // invoking write; start this observation only after that invocation.
-              await voiceUntil(() => hostWritesSettled > beforeWrites || failures.length > 0, "host write settlement", 15_000);
-            }
+          const hasReply = () => sent.filter(item => item.event === "mark").length >= marks + (options.interrupt ? 2 : 1);
+          // Observe invocation before starting each declared business deadline.
+          // A generic speech wait is not the preparation or effect contract.
+          await voiceUntil(() => hostWritesStarted > beforeWrites || staffPreparationsStarted > beforePreparations ||
+            staffWritesStarted > beforeStaffWrites || processedChunk >= finalChunk || hasReply() || failures.length > 0,
+            "caller turn dispatch");
+          if (staffPreparationsStarted > beforePreparations) {
+            await voiceUntil(() => staffPreparationsSettled > beforePreparations || failures.length > 0,
+              "staff preparation settlement", clinikoStaffPreparationDeadlineMs);
+            await voiceUntil(() => staffWritesStarted > beforeStaffWrites || processedChunk >= finalChunk || hasReply() || failures.length > 0,
+              "prepared staff turn dispatch");
           }
+          if (pending && hostWritesStarted > beforeWrites)
+            await voiceUntil(() => hostWritesSettled > beforeWrites || failures.length > 0, "host write settlement", flow!.effectDeadlineMs);
+          if (staffWritesStarted > beforeStaffWrites)
+            await voiceUntil(() => staffWritesSettled > beforeStaffWrites || failures.length > 0, "staff write settlement", flow!.effectDeadlineMs);
           await voiceUntil(() => sent.filter(item => item.event === "mark").length >= marks + (options.interrupt ? 2 : 1) || failures.length > 0, "caller turn speech");
         } catch (error) {
           const state = resultValue(await ledger!.read(callId, scope));
           throw new Error(`caller turn delivery stalled: ${JSON.stringify({ closed, workflowClosed: flow?.closed,
             workflow: flow?.workflow, lifecycle: state.lifecycle, queuedInputs: inputs.length, processedChunk, chunk,
-            modelTurns: modelTurns.length, transcriptionFrames, writes: writes.length, hostWritesStarted, hostWritesSettled, failures, stageFailure: error instanceof Error ? error.message : "unknown",
+            modelTurns: modelTurns.length, transcriptionFrames, writes: writes.length, hostWritesStarted, hostWritesSettled, staffPreparationsStarted, staffPreparationsSettled, staffWritesStarted, staffWritesSettled, failures, stageFailure: error instanceof Error ? error.message : "unknown",
             actions: Object.values(state.actions).map(action => action.status),
             presentations: Object.values(state.presentations).map(presentation => presentation.status),
             effects: Object.values(state.effects).map(effect => ({ kind: effect.kind, status: effect.status })) })}`, { cause: error });

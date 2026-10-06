@@ -145,3 +145,39 @@ test("E2E-311 signed staff requests use independent verification, approved peopl
     assert.deepEqual(resultValue(await scanPatientDataCanaries(db, [...verificationCanaries, "Morgan", "abby.staff-request.v1"].map((value, index) => ({ label: `staff_${index}`, value })))), []);
   });
 });
+
+
+test("E2E-311 a signed staff preparation can settle within its actual deadline after the fixture's old generic speech wait", { timeout: 90_000 }, async () => {
+  await withDisposablePostgres(async db => {
+    const f = await clinikoStaffCallFlowFixture(); f.flow.dispose();
+    let call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined;
+    let armed = false, held = false, release = () => {};
+    const waiting = new Promise<void>(resolve => { release = resolve; });
+    const permission = f.flowConfig.staff.permission;
+    try {
+      call = await clinikoWorkflowVoiceFixture(db, { ...f.flowConfig, timeoutMs: 15_000, staff: { ...f.flowConfig.staff, permission: {
+        allows: async (...args: Parameters<typeof permission.allows>) => {
+          if (armed) { armed = false; held = true; await waiting; }
+          return permission.allows(...args);
+        },
+      } } }, owner => createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-key", model: "synthetic-model", clinicDate: () => "2026-10-04",
+        fetch: async () => { throw new Error("bounded staff wording must not require a model request"); } }));
+      await call.turn("Could I speak to a receptionist?"); await call.mark();
+      await voiceUntil(() => f.mail.length === 1, "independent staff email"); await call.verify(f.mail[0]!.code);
+      armed = true;
+      const pending = call.turn("Please send that request.").then(() => ({ ok: true as const }), error => ({ ok: false as const, error }));
+      await voiceUntil(() => held, "actual staff permission preparation");
+      assert.equal(f.staffPosts, 0); assert.equal(call.writes.length, 0);
+      // The production inner preparation allows 15 seconds, its outer boundary
+      // 20 seconds. Release at 11 seconds to expose the old 10-second observer.
+      await new Promise<void>(resolve => setTimeout(resolve, 11_000)); release();
+      const settled = await pending;
+      assert.ok(settled.ok, settled.ok ? undefined : String(settled.error));
+      await call.mark();
+      assert.equal(f.staffPosts, 1); assert.equal(call.writes.length, 0);
+      assert.match(call.spoken.at(-1)!, /staff request.*was saved.*can't confirm.*read/);
+      assert.equal(Object.values((await call.state()).staffItems).at(-1)?.status, "open");
+      assert.deepEqual(resultValue(await scanPatientDataCanaries(db, verificationCanaries.map((value, i) => ({ label: `bounded_staff_${i}`, value })))), []);
+    } finally { release(); await call?.close(); await f.close(); }
+  });
+});
