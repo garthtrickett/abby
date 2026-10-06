@@ -1189,6 +1189,7 @@ The initial corpus has these minimum journeys. One scenario may cover several re
 | `E2E-321` | Current approved destination notice/horizon limits answer vague future questions without guessed dates or provider/patient work; wholly outside dated searches, selected practitioner scope, stale/malformed evidence, cancellation and late expiry retain protected appointments and actual prior receipts | FR-04, FR-06, FR-11, FR-12, FR-18, FR-22 |
 | `E2E-322` | Service uncertainty and price/fee questions use exact current approved public descriptions or explicit clinic guidance; model/agent inventions, stale approvals, held expiry and cancellation cannot choose a clinical type, waive a fee, preserve an unsent confirmation or create patient-specific work | FR-04, FR-06, FR-11, FR-12, FR-22 |
 | `E2E-323` | Invoice-copy, charge-review and waitlist-interest staff requests preserve their finite purpose through independent verification and exact Cliniko receipts; stale clocks, held preparation, revoked authority and changed purposes cannot send, while document delivery, refunds, enrollment and callback remain unproven | FR-03, FR-09, FR-11, FR-12, FR-22 |
+| `E2E-324` | Qualified caller speech repairs or corrects held booking/rescheduling menus and selections before provider completion; late results cannot revive menus/proposals, noise cannot cancel a read, and native presence replies fence scope/session/time without guessing availability or promising a result | FR-04, FR-06, FR-11, FR-22 |
 
 The corpus runs with deterministic synthetic media frames, partial hypotheses and segment-final transcription events, synthesis chunks, playback acknowledgments, typed model effect results, clock, and host effects against the reference host and standalone adapters. It enters through `VoiceSession.begin` and its media/transcript methods, not by calling `CallRuntime.acceptTurn` directly as a substitute for voice E2E. The harness can delay a playback acknowledgment or deliver it after a clear to prove that queued/cleared audio does not count as played. It can race a caller correction with `startNextPresentation`, drop a commit wake-up, restart the dispatcher task while retaining the live session, or lose the entire session process before activation or after atomic start. Assertions distinguish superseded pending speech from unproven started speech, reject `played` for a pending or transfer intent, and verify exactly one terminal resolution without duplicate media. `E2E-035` and `E2E-082` through `E2E-084` separately submit invalid presentation outcomes through T4 and prove each is rejected before a second SAM transition. `E2E-019` through `E2E-026` individually cover final turn, playback, interruption, transfer, and fallback behavior. Each independently triggerable voice or effect fault has its own scenario ID so cases can run in parallel and a failure identifies one behavior. Every provider runs the same scenario IDs; assertions use its approved support-matrix row and fail if its declared capability snapshot disagrees. Provider-specific contract tests separately cover permission limits, pagination, rate limits, availability rules, unsupported mutations, and lost responses. Scheduled smoke tests use sanctioned provider test accounts and a limited real telephony path, including an actual interruption and transfer. Tests contain no live patient data.
 
@@ -1688,3 +1689,51 @@ CCP-034/035/040 retain their missing billing/refund/waitlist authorities; their
 named observation requires the exact typed unavailable response, not a generic
 fallback or a claim that the missing workflow exists. Full prose acceptance,
 actual clinic activation, real email and carrier calls remain separately gated.
+
+### Presence repair during an unfinished appointment lookup
+
+A new qualified speech onset fences the current read consumer before serialized
+wire processing continues. Booking/rescheduling menus and selections participate
+in the same voice `pendingIntent` cancellation path as classifiers and other
+transient reads. `VoiceSession.withPendingIntent` owns the current controller;
+`TextReception` passes its signal to `BookingMenuTurns`/`ReschedulingMenuTurns`.
+They combine caller cancellation with the existing fifteen-second read deadline,
+return `staleTurn` after external cancellation, and retain revision/policy/lease
+checks. Cancellation is not a provider-failure staff request. Direct booking and
+appointment-change proposal reads also accept a bounded consumer signal. The
+call-flow appointment-change adapter forwards that signal to its concrete host.
+
+A provider can ignore cancellation and complete its read later. Neither the
+aborted consumer nor the call-flow menu cache may publish that result. A fresh
+search remains independent and its menu cannot be overwritten by the old read.
+Subthreshold noise does not cancel the current operation; disconnect stops
+transient work. Pending appointment reads retain their fifteen-second deadline;
+no repeated polling, automatic retry or result guarantee is introduced.
+
+The presence grammar recognizes whole current questions such as “Are you still
+there?” and “Can you hear me?”. Other paraphrases may select strict model kind
+`presence`, with all other decision fields null. The canonical public repair
+reply says Abby is here, offers another request or clinic contact, and makes no
+new options, booking or change claim. It does not claim the upstream provider
+actually stopped. Quotes, past questions and negated background context do not
+become current presence requests. Existing bounded “No, wait” and weekday
+correction parsing remains the correction owner.
+
+`calls.presence.respond.v1` carries only a current caller turn and a parseable
+public timestamp. `TextReception.respondPresence` uses its private current clock,
+active scoped session and clear final quality, then accepts `conversationPresence`
+through SAM. It cannot accept a custom script, host reference or guessed result.
+The negative turn supersedes unsent proposals while retaining sent receipts.
+Presence remains public after identity denial and restores no patient authority.
+The response exposes ordinary redacted command progress, with no patient detail.
+Standalone state remains transient; rich PostgreSQL command fixtures exercise an
+explicit unsafe lab contract rather than changing durable storage permission.
+
+E2E-324 covers signed held reads and selections, fresh searches before old
+responses release, wait/weekday correction, below-threshold noise, transport
+loss, native scoped commands and held direct proposal cancellation. CCP-044 now
+starts a real adapter availability read, holds its synthetic provider response,
+then sends the corpus caller question. Its named observation requires repair
+before release, aborted consumer evidence, no late speech/menu, one availability
+read and unchanged actions/staff items. This is synthetic concurrency evidence;
+real carrier timing and broader prose acceptance remain separate verification.

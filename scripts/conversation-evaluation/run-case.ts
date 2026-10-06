@@ -3,6 +3,8 @@ import { requestBoundaryText } from "../../src/core/request-boundary.ts";
 import type { RequestBoundary } from "../../src/core/request-boundary.ts";
 import { clinicFAQFixture, publicDirections } from "../../test/support/clinic-faqs.ts";
 import { publicServiceInformationFixture, publicServices } from "../../test/support/public-service-information.ts";
+import { conversationPresenceText } from "../../src/core/conversation-presence.ts";
+import { pendingClinikoLookupFixture } from "../../test/support/pending-cliniko-lookup.ts";
 import { publicInformationUnavailable } from "../../src/core/public-information.ts";
 import { staffSubjectUnavailable } from "../../src/core/staff-request-subject.ts";
 import type { StaffRequestSubject } from "../../src/core/staff-request-subject.ts";
@@ -55,7 +57,7 @@ async function prepare(call: Call, plan: Plan, mail: { code: string }[], id: str
   const play = async (text: string) => { await call.turn(text); await call.mark(); };
   await play({ book: "I need to book an appointment.", cancel: "I need to cancel an appointment.", reschedule: "I need to move an appointment.", "appointments.read": "I only want to check my appointments." }[operation]);
   await voiceUntil(() => mail.length === 1, "synthetic verification email"); await call.verify(mail[0]!.code);
-  if (plan.stage === "book" || plan.stage === "move" || plan.stage === "enquiry") return;
+  if (plan.stage === "book" || plan.stage === "move" || plan.stage === "enquiry" || plan.stage === "pendingLookup") return;
   if (operation === "cancel") {
     await play("Show me my appointments from October 4 through October 9.");
     if (plan.stage === "cancel") return;
@@ -84,11 +86,14 @@ function publicIntent(intent: VoiceIntent | null): Record<string, string | numbe
   return result;
 }
 function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceIntent | null)[], speech: string[], before: CallState, after: CallState,
-  work: Readonly<{ noNewProviderWork: boolean; workflowReleased: boolean; expectedHorizonDays?: number; expectedNoticeMinutes?: number }>): Check {
+  work: Readonly<{ noNewProviderWork: boolean; workflowReleased: boolean; pendingLookupMatched?: boolean; expectedHorizonDays?: number; expectedNoticeMinutes?: number }>): Check {
   const last = intents.at(-1), text = speech.join(" ");
   const statuses = Object.values(after.actions).map(action => action.status), latest = Object.values(after.actions).at(-1);
   let pass = false;
   switch (plan.expectation) {
+    case "presence": pass = last?.kind === "presence" && speech.length === 1 && speech[0] === conversationPresenceText &&
+      work.pendingLookupMatched === true && work.noNewProviderWork &&
+      JSON.stringify(after.actions) === JSON.stringify(before.actions) && JSON.stringify(after.staffItems) === JSON.stringify(before.staffItems); break;
     case "staffPurpose": {
       const subjects: Record<string, StaffRequestSubject> = { "CCP-034": "invoiceCopy", "CCP-035": "chargeReview", "CCP-040": "waitlistInterest" };
       const subject = subjects[candidate.id];
@@ -176,9 +181,10 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
 /** Exercise the same signed HTTP/WS owner, private OTP and SAM/playback path as
  * E2E-303. Setup decisions are pinned; only candidate turns use the live model. */
 export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: Plan, model: ModelConfig) {
-  const f = candidate.id === "CCP-015" ? await urgentConversationFixture() : ["CCP-030", "CCP-033"].includes(candidate.id) ? await publicServiceInformationFixture({ prices: false }) : candidate.id === "CCP-032" ? await clinicFAQFixture() : plan.stage === "enquiry" ? await appointmentEnquiryFixture() : ["CCP-011", "CCP-025", "CCP-026"].includes(candidate.id) ? await bookingCatalogueFixture() : plan.stage.startsWith("staff") ? await clinikoStaffCallFlowFixture({ lostResponse: plan.stage === "staffUncertain" })
+  const lookup = candidate.id === "CCP-044" ? await pendingClinikoLookupFixture() : undefined;
+  const f = lookup ?? (candidate.id === "CCP-015" ? await urgentConversationFixture() : ["CCP-030", "CCP-033"].includes(candidate.id) ? await publicServiceInformationFixture({ prices: false }) : candidate.id === "CCP-032" ? await clinicFAQFixture() : plan.stage === "enquiry" ? await appointmentEnquiryFixture() : ["CCP-011", "CCP-025", "CCP-026"].includes(candidate.id) ? await bookingCatalogueFixture() : plan.stage.startsWith("staff") ? await clinikoStaffCallFlowFixture({ lostResponse: plan.stage === "staffUncertain" })
     : plan.stage.startsWith("cancel") ? await cancellationCallFlowFixture({ multiple: candidate.id === "CCP-036" })
-    : plan.stage.startsWith("move") ? await reschedulingCallFlowFixture() : await bookingCallFlowFixture();
+    : plan.stage.startsWith("move") ? await reschedulingCallFlowFixture() : await bookingCallFlowFixture());
   f.flow.dispose();
   if ("setStarts" in f) f.setStarts(candidate.id === "CCP-004"
     ? ["2026-10-06T22:00:00.000Z", "2026-10-07T05:30:00.000Z"] : candidate.id === "CCP-006"
@@ -200,6 +206,7 @@ export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: 
   let providerRequests = 0;
   const fetchPort: typeof fetch = async (...args) => { providerRequests++; return baseFetchPort(...args); };
   let call: Call | undefined, evaluating = false, requests = 0, modelPrivacyPass = true;
+  let pendingRead: Promise<{ ok: boolean; error?: unknown }> | undefined;
   const intents: (VoiceIntent | null)[] = [];
   try {
     call = await clinikoWorkflowVoiceFixture(db, { ...f.flowConfig, fetchPort }, owner => {
@@ -218,11 +225,23 @@ export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: 
         if (evaluating) intents.push(result.ok ? result.value : null); return result; };
     }, { lostWrite: plan.stage === "uncertain" });
     await prepare(call, plan, f.mail, candidate.id);
+    if (lookup) {
+      lookup.arm(); pendingRead = call.turn("What times are available on October 8?").then(() => ({ ok: true }), error => ({ ok: false, error }));
+      await voiceUntil(() => lookup.held, "actual pending availability read");
+    }
     const before = await call.state(), writes = call.writes.length, speechStart = call.spoken.length;
     const context = await call.flow.publicIntentContext();
     const readsBefore = providerRequests, mailBefore = f.mail.length;
     evaluating = true;
     for (const text of candidate.callerTurns) { await call.turn(text); await call.mark(); }
+    let pendingLookupEvidence;
+    if (lookup) {
+      const heldBeforeRelease = lookup.held, canceledBeforeRelease = lookup.canceled, spoken = call.spoken.length;
+      lookup.release(); const settled = await pendingRead; if (!settled?.ok) throw settled?.error ?? new Error("pending setup turn failed");
+      const menu = (await call.flow.publicIntentContext())?.lastMenu;
+      pendingLookupEvidence = { heldBeforeRelease, canceledBeforeRelease, noLateSpeech: call.spoken.length === spoken,
+        noLateMenu: menu === null, providerReads: lookup.reads };
+    }
     const after = await call.state(), speech = call.spoken.slice(speechStart);
     const statuses = Object.values(after.actions).map(action => action.status);
     const checks: Check[] = [
@@ -233,14 +252,16 @@ export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: 
       conversationCheck(candidate, plan, intents, speech, before, after,
         { noNewProviderWork: providerRequests === readsBefore && f.mail.length === mailBefore && call.writes.length === writes,
           workflowReleased: call.flow.workflow === undefined && !call.flow.verificationRequired,
+          ...(pendingLookupEvidence ? { pendingLookupMatched: pendingLookupEvidence.heldBeforeRelease && pendingLookupEvidence.canceledBeforeRelease &&
+            pendingLookupEvidence.noLateSpeech && pendingLookupEvidence.noLateMenu && pendingLookupEvidence.providerReads === 1 } : {}),
           ...("destinationApproval" in f ? { expectedHorizonDays: f.destinationApproval.maxAdvanceDays,
             expectedNoticeMinutes: f.destinationApproval.minNoticeMinutes } : {}) }),
     ];
     return { id: candidate.id, pattern: candidate.pattern, priority: candidate.priority, mode: model.mode,
       status: "executed" as const, fixtureStage: plan.stage, setupMatch: !plan.missingSetup,
-      setupGap: plan.missingSetup ?? null, requests, context, intents: intents.map(publicIntent), setupSpeech: call.spoken.slice(0, speechStart), speech, actionStatuses: statuses,
+      setupGap: plan.missingSetup ?? null, ...(pendingLookupEvidence ? { pendingLookupEvidence } : {}), requests, context, intents: intents.map(publicIntent), setupSpeech: call.spoken.slice(0, speechStart), speech, actionStatuses: statuses,
       writesBefore: writes, writesAfter: call.writes.length, checks,
       acceptance: "partial-not-a-release-gate", unassessedRequiredBehavior: candidate.requiredBehavior,
       unassessedForbiddenBehavior: candidate.forbiddenBehavior };
-  } finally { try { await call?.close(); } finally { await f.close(); } }
+  } finally { lookup?.release(); await pendingRead; try { await call?.close(); } finally { await f.close(); } }
 }

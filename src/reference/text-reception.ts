@@ -166,6 +166,15 @@ export class TextReception {
   reschedulingMenuEnabled(): boolean {
     return !!this.host.resolveAppointmentChange && new ReschedulingMenuTurns(this.ledger, this.policy, this.host, this.clock).enabled();
   }
+  async respondPresence(scope: LocationScope, turn: FinalCallerTurn, expectedRevision?: number) {
+    const now = this.currentInstant();
+    if (!now || !turn.sessionId || turn.quality !== "clear") return err({ kind: "invalidTransition" as const });
+    const state = await this.ledger.read(turn.callId, scope); if (!state.ok) return state;
+    if (state.value.lifecycle !== "active" || state.value.sessionLease?.sessionId !== turn.sessionId ||
+        Date.parse(state.value.sessionLease.expiresAt) <= Date.parse(now)) return err({ kind: "leaseLost" as const });
+    return this.runtime(scope).acceptTurn(turn, { kind: "conversationPresence" }, now, expectedRevision);
+  }
+
   async requestStaff(scope: LocationScope, turn: FinalCallerTurn, requestedPerson: string | undefined, now: string,
     expectedConversationRevision?: number, external?: AbortSignal, requestSubject?: import("../core/staff-request-subject.ts").StaffRequestSubject) {
     if (requestSubject !== undefined && !validStaffRequestSubject(requestSubject)) return err({ kind: "invalidTransition" as const });
@@ -207,27 +216,27 @@ export class TextReception {
     return this.runtime(scope).acceptTurn(turn, { kind: "staffOutcomeQuery" }, now);
   }
   staffRequestEnabled(): boolean { return typeof this.host.prepareStaffRequest === "function"; }
-  async readReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", from: string, to: string, now: string, correcting = false, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null) {
+  async readReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", from: string, to: string, now: string, correcting = false, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null, signal?: AbortSignal) {
     const denied = await this.patientAccessDenied(scope, turn, undefined);
     if (denied) return denied;
-    return new ReschedulingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, stage, { from, to, ...(window !== undefined ? { window } : {}), ...(correcting ? { correcting: true as const } : {}) });
+    return new ReschedulingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, stage, { from, to, ...(window !== undefined ? { window } : {}), ...(correcting ? { correcting: true as const } : {}) }, signal);
   }
-  async selectReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", choice: 1 | 2 | 3, now: string) {
+  async selectReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", choice: 1 | 2 | 3, now: string, signal?: AbortSignal) {
     const denied = await this.patientAccessDenied(scope, turn, undefined);
     if (denied) return denied;
-    return new ReschedulingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, stage, { choice });
+    return new ReschedulingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, stage, { choice }, signal);
   }
 
   bookingMenuEnabled(): boolean { return new BookingMenuTurns(this.ledger, this.policy, this.host, this.clock).enabled(); }
-  async readBookingMenu(scope: LocationScope, turn: FinalCallerTurn, from: string, to: string, now: string, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null, preference?: import("../core/booking-search-preference.ts").BookingSearchPreference) {
+  async readBookingMenu(scope: LocationScope, turn: FinalCallerTurn, from: string, to: string, now: string, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null, preference?: import("../core/booking-search-preference.ts").BookingSearchPreference, signal?: AbortSignal) {
     const denied = await this.patientAccessDenied(scope, turn, undefined);
     if (denied) return denied;
-    return new BookingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, { from, to, ...(window !== undefined ? { window } : {}), ...(preference ? { preference } : {}) });
+    return new BookingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, { from, to, ...(window !== undefined ? { window } : {}), ...(preference ? { preference } : {}) }, signal);
   }
-  async selectBookingMenu(scope: LocationScope, turn: FinalCallerTurn, choice: 1 | 2 | 3, now: string) {
+  async selectBookingMenu(scope: LocationScope, turn: FinalCallerTurn, choice: 1 | 2 | 3, now: string, signal?: AbortSignal) {
     const denied = await this.patientAccessDenied(scope, turn, undefined);
     if (denied) return denied;
-    return new BookingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, { choice });
+    return new BookingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, { choice }, signal);
   }
 
   availabilityEnabled(): boolean { return this.availability !== undefined; }
@@ -338,7 +347,8 @@ export class TextReception {
     this.model?.forgetCall(scope, callId);
   }
 
-  async proposeBooking(scope: LocationScope, turn: FinalCallerTurn, verificationRef: string, offerRef: string, now: string, expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
+  async proposeBooking(scope: LocationScope, turn: FinalCallerTurn, verificationRef: string, offerRef: string, now: string, expectedConversationRevision?: number, external?: AbortSignal): Promise<Result<CallState, TextReceptionFailure>> {
+    if (external?.aborted) return err({ kind: "staleTurn" as const });
     const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision);
     if (denied) return denied;
     const runtime = this.runtime(scope);
@@ -351,7 +361,10 @@ export class TextReception {
     if (turn.quality !== "clear") {
       interpretation = { kind: "ambiguousTarget" };
     } else {
-      const evidence = await this.host.resolveBooking(scope, verificationRef, offerRef, now);
+      const signal = AbortSignal.any([AbortSignal.timeout(15_000), ...(external ? [external] : [])]);
+      const evidence = await awaitUntilAbort(this.host.resolveBooking(scope, verificationRef, offerRef, now, signal), signal);
+      if (external?.aborted) return err({ kind: "staleTurn" as const });
+      if (!evidence) return err({ kind: "effectFailure" as const });
       if (evidence.ok) {
         interpretation = { kind: "requestAction", request: evidence.value };
       } else if (evidence.error.kind === "ambiguous" || evidence.error.kind === "expired") {
@@ -365,7 +378,8 @@ export class TextReception {
 
   async proposeAppointmentChange(scope: LocationScope, turn: FinalCallerTurn,
                                  selection: AppointmentChangeSelection,
-                                 now: string, expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
+                                 now: string, expectedConversationRevision?: number, external?: AbortSignal): Promise<Result<CallState, TextReceptionFailure>> {
+    if (external?.aborted) return err({ kind: "staleTurn" as const });
     const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision);
     if (denied) return denied;
     const runtime = this.runtime(scope);
@@ -392,7 +406,10 @@ export class TextReception {
             targetRef: selection.targetRef }
           : { ...context, kind: "reschedule", verificationRef: selection.verificationRef,
             targetRef: selection.targetRef, offerRef: selection.offerRef };
-        const evidence = await this.host.resolveAppointmentChange(query);
+        const signal = AbortSignal.any([AbortSignal.timeout(15_000), ...(external ? [external] : [])]);
+        const evidence = await awaitUntilAbort(this.host.resolveAppointmentChange(query, signal), signal);
+        if (external?.aborted) return err({ kind: "staleTurn" as const });
+        if (!evidence) return err({ kind: "effectFailure" as const });
         if (!evidence.ok) {
           interpretation = evidence.error.kind === "ambiguous" || evidence.error.kind === "expired"
             ? { kind: "ambiguousTarget" }
@@ -403,6 +420,7 @@ export class TextReception {
           interpretation = { kind: "readFailure", target: "appointment", failure: "unavailable" };
         } else interpretation = { kind: "requestAction", request: evidence.value };
       } catch {
+        if (external?.aborted) return err({ kind: "staleTurn" as const });
         interpretation = { kind: "readFailure", target: "appointment", failure: "unavailable" };
       }
     }

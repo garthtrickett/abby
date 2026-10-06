@@ -62,6 +62,10 @@ async function main(): Promise<void> {
     { name: "waitlist-interest-model-paraphrase", text: "Please register my interest in being notified if an earlier vacancy becomes available.", expected: { kind: "staffRequest", requestSubject: "waitlistInterest" }, fixture: bookingCallFlowFixture },
     { name: "reported-invoice-question", text: "My friend asked 'could the clinic send my paid receipt again' yesterday.", expected: { kind: "intentUnavailable" }, fixture: bookingCallFlowFixture },
     { name: "negated-invoice-question", text: "I don't need an invoice copy or a refund.", expected: { kind: "intentUnavailable" }, fixture: bookingCallFlowFixture },
+    { name: "presence-trusted", text: "Are you still there?", expected: { kind: "presence" }, fixture: bookingCallFlowFixture },
+    { name: "presence-model-paraphrase", text: "Have we lost our connection, or are you able to hear me?", expected: { kind: "presence" }, fixture: bookingCallFlowFixture },
+    { name: "reported-presence-question", text: "My friend asked 'are you still there' yesterday.", expected: { kind: "intentUnavailable" }, fixture: bookingCallFlowFixture },
+    { name: "negated-presence-own-booking", text: "I am not asking if you can hear me. I want to book an appointment for myself.", expected: { kind: "workflow", operation: "book" }, fixture: bookingCallFlowFixture },
   ] as const;
   const results = await Promise.all(cases.map(async item => {
     const f = await item.fixture();
@@ -74,7 +78,7 @@ async function main(): Promise<void> {
       return { name: item.name, requests, pass: JSON.stringify(actual) === JSON.stringify(item.expected), expected: item.expected, actual };
     } finally { f.flow.dispose(); await f.close(); }
   }));
-  const adapter = await Promise.all(["src/standalone/openai-clinical-intent.ts", "src/standalone/cliniko-call-flow.ts", "src/standalone/caller-identity-language.ts", "src/standalone/appointment-change-language.ts", "src/standalone/request-boundary-language.ts", "src/core/request-boundary.ts", "src/standalone/booking-horizon-language.ts", "src/standalone/cliniko-booking-horizon.ts", "src/core/booking-horizon.ts", "src/standalone/clinic-information-language.ts", "src/standalone/owner-file-clinic-faqs.ts", "src/core/public-information.ts", "src/standalone/staff-request-language.ts", "src/standalone/staff-request-subject-language.ts", "src/core/staff-request-subject.ts"]
+  const adapter = await Promise.all(["src/standalone/openai-clinical-intent.ts", "src/standalone/cliniko-call-flow.ts", "src/standalone/caller-identity-language.ts", "src/standalone/appointment-change-language.ts", "src/standalone/request-boundary-language.ts", "src/core/request-boundary.ts", "src/standalone/booking-horizon-language.ts", "src/standalone/cliniko-booking-horizon.ts", "src/core/booking-horizon.ts", "src/standalone/clinic-information-language.ts", "src/standalone/owner-file-clinic-faqs.ts", "src/core/public-information.ts", "src/standalone/staff-request-language.ts", "src/standalone/staff-request-subject-language.ts", "src/core/staff-request-subject.ts", "src/core/conversation-presence.ts"]
     .map(path => readFile(resolve(path))));
   const hash = createHash("sha256"); for (const source of adapter) hash.update(source);
   const report = { version: 1, kind: "clinical-intent-live-evaluation", at: new Date().toISOString(), model: args[1],
