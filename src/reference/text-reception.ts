@@ -91,16 +91,16 @@ export class TextReception {
     return this.runtime(scope).acceptTurn(turn, { kind: "staffOutcomeQuery" }, now);
   }
   staffRequestEnabled(): boolean { return typeof this.host.prepareStaffRequest === "function"; }
-  readReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", from: string, to: string, now: string, correcting = false) {
-    return new ReschedulingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, stage, { from, to, ...(correcting ? { correcting: true as const } : {}) });
+  readReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", from: string, to: string, now: string, correcting = false, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null) {
+    return new ReschedulingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, stage, { from, to, ...(window !== undefined ? { window } : {}), ...(correcting ? { correcting: true as const } : {}) });
   }
   selectReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", choice: 1 | 2 | 3, now: string) {
     return new ReschedulingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, stage, { choice });
   }
 
   bookingMenuEnabled(): boolean { return new BookingMenuTurns(this.ledger, this.policy, this.host).enabled(); }
-  readBookingMenu(scope: LocationScope, turn: FinalCallerTurn, from: string, to: string, now: string) {
-    return new BookingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, { from, to });
+  readBookingMenu(scope: LocationScope, turn: FinalCallerTurn, from: string, to: string, now: string, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null) {
+    return new BookingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, { from, to, ...(window !== undefined ? { window } : {}) });
   }
   selectBookingMenu(scope: LocationScope, turn: FinalCallerTurn, choice: 1 | 2 | 3, now: string) {
     return new BookingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, { choice });

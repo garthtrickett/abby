@@ -1,3 +1,5 @@
+import { matchesBookingSearchWindow, validBookingSearchWindow } from "../core/booking-search-window.ts";
+import type { BookingSearchWindow } from "../core/booking-search-window.ts";
 import { randomBytes } from "node:crypto";
 import { ClinikoAvailabilityReader } from "../cliniko/availability.ts";
 import { clinikoCredentialFingerprint, isClinikoRequestBudget } from "../cliniko/read-budget.ts";
@@ -21,7 +23,7 @@ export type ClinikoBookingOffersConfig = Readonly<{
 }>;
 export type BookingChoices = Readonly<{
   scope: LocationScope; callId: string; sessionId: string; policyVersion: string; observedAt: string; timeZone: string;
-  serviceRef: string; practitionerName: string; appointmentTypeName: string; reservable: false;
+  window?: BookingSearchWindow; serviceRef: string; practitionerName: string; appointmentTypeName: string; reservable: false;
   choices: readonly (BookableOffer & Readonly<{ endsAt: string }>)[];
 }>;
 type Selected = Readonly<{ evidence: ClinikoBookingEvidence; verificationRef: string; practitionerName: string; appointmentTypeName: string }>;
@@ -88,9 +90,10 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
   #expiry(policy: BookingApproval, proofExpiry: string, at: number): string {
     return new Date(Math.min(at + policy.offerTtlSeconds * 1000, Date.parse(policy.effectiveUntil), Date.parse(proofExpiry))).toISOString();
   }
-  async list(scope: LocationScope, verificationRef: string, from: string, to: string, now: string, external?: AbortSignal):
+  async list(scope: LocationScope, verificationRef: string, from: string, to: string, now: string, external?: AbortSignal, incomingWindow?: BookingSearchWindow):
     Promise<Result<BookingChoices, HostReadFailure>> {
-    const config = this.#config;
+    const config = this.#config, window = incomingWindow ? Object.freeze({ ...incomingWindow }) : undefined;
+    if (incomingWindow !== undefined && !validBookingSearchWindow(incomingWindow)) return denied();
     if (!sameScope(scope, config.scope) || !ref(verificationRef) || this.#time(now) === undefined || this.#lifetime.signal.aborted) return denied();
     const epoch = ++this.#epoch; this.#offers.clear();
     const result = await this.#bounded(async signal => {
@@ -104,7 +107,8 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
       const at = this.#time(now);
       if (at === undefined || signal.aborted) return undefined;
       const expiresAt = this.#expiry(fresh.policy, fresh.patient.expiresAt, at);
-      const offered = read.value.startsAt.filter(start => OwnerFileBookingPolicy.allows(fresh.policy, start, new Date(at).toISOString())).slice(0, 3);
+      const offered = read.value.startsAt.filter(start => OwnerFileBookingPolicy.allows(fresh.policy, start, new Date(at).toISOString()) &&
+        matchesBookingSearchWindow(start, fresh.policy.timeZone, window)).slice(0, 3);
       const offering = read.value.offering;
       const selections = offered.map(startsAt => {
         const offer = { scope: config.scope, offerRef: randomBytes(24).toString("base64url"), serviceRef: fresh.policy.serviceRef, startsAt, expiresAt,
@@ -119,7 +123,7 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
       for (const selected of selections) this.#offers.set(selected.evidence.offer.offerRef, selected);
       return structuredClone({ scope: config.scope, callId: config.callId, sessionId: config.sessionId, policyVersion: config.policyVersion,
         observedAt: new Date(at).toISOString(), timeZone: fresh.policy.timeZone, serviceRef: fresh.policy.serviceRef, ...offering,
-        reservable: false as const, choices: selections.map(({ evidence }) => ({ ...evidence.offer, endsAt: evidence.endsAt })) });
+        ...(window ? { window } : {}), reservable: false as const, choices: selections.map(({ evidence }) => ({ ...evidence.offer, endsAt: evidence.endsAt })) });
     }, external);
     return result ? ok(result) : denied();
   }

@@ -1,3 +1,4 @@
+import { validBookingSearchWindow } from "../core/booking-search-window.ts";
 import type { AppointmentChangeEvidenceHost, ReschedulingMenuHost, PolicyStore } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err } from "../core/model.ts";
@@ -34,7 +35,7 @@ export class ReschedulingMenuTurns {
         live.value.conversationRevision !== state.value.conversationRevision) return err({ kind: "invalidTransition" });
     return live;
   }
-  async run(incomingScope: LocationScope, incomingTurn: FinalCallerTurn, now: string, stage: "targets" | "offers", incomingOperation: Readonly<{ from: string; to: string; correcting?: true }> | Readonly<{ choice: 1|2|3 }>):
+  async run(incomingScope: LocationScope, incomingTurn: FinalCallerTurn, now: string, stage: "targets" | "offers", incomingOperation: Readonly<{ from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null; correcting?: true }> | Readonly<{ choice: 1|2|3 }>):
     Promise<Result<CallState, Failure>> {
     const scope = Object.freeze({ ...incomingScope }), turn = Object.freeze(structuredClone(incomingTurn)), operation = Object.freeze({ ...incomingOperation });
     const runtime = new CallRuntime(this.ledger, scope);
@@ -56,9 +57,13 @@ export class ReschedulingMenuTurns {
             action.mutation.request.kind === "reschedule" ? action.mutation.request.target.appointmentRef : undefined;
           const blocked = operation.correcting ? !correctingAppointmentRef : stage === "offers" && prior?.status !== "played";
           const read = blocked ? undefined : await untilAbort(this.host.readReschedulingMenu!({ ...query,
-            from: operation.from, to: operation.to, ...(priorTurnId ? { priorTurnId } : {}),
+            from: operation.from, to: operation.to, ...(operation.window !== undefined ? { window: operation.window } : {}), ...(priorTurnId ? { priorTurnId } : {}),
             ...(correctingAppointmentRef ? { correctingAppointmentRef } : {}) }), signal);
-          if (read?.ok && !signal.aborted) interpretation = { kind: "reschedulingMenu", snapshot: structuredClone(read.value) };
+          const expectedWindow = operation.window;
+          const matchesWindow = expectedWindow === undefined || expectedWindow === null ?
+            expectedWindow === undefined || read?.ok && read.value.window === undefined :
+            validBookingSearchWindow(expectedWindow) && read?.ok && read.value.window?.startMinute === expectedWindow.startMinute && read.value.window.endMinute === expectedWindow.endMinute && read.value.window.startInclusive === expectedWindow.startInclusive;
+          if (read?.ok && matchesWindow && !signal.aborted) interpretation = { kind: "reschedulingMenu", snapshot: structuredClone(read.value) };
         } else {
           const menuTurnId = initial.value.processedTurnIds.at(-1);
           const notice = menuTurnId ? initial.value.presentations[noticePresentationId(turn.callId, menuTurnId)] : undefined;

@@ -3,7 +3,7 @@ import type { ClinikoBookingFailure, ClinikoBookingWrite } from "../cliniko/book
 import { ClinikoRecallWriter } from "../cliniko/recall-write.ts";
 import type { ClinikoReviewRequest } from "../cliniko/review-request.ts";
 import { digestActionRequest } from "../core/digest.ts";
-import type { BookingEvidenceHost, BookingMenuHost, BookingMenuQuery, HostEffects, HostReadFailure } from "../core/host.ts";
+import type { BookingEvidenceHost, BookingMenuHost, BookingMenuQuery, BookingMenuReadQuery, HostEffects, HostReadFailure } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { ActionRequest, HostMutation, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffItem,
   StaffTaskObservation, StaffTaskReceipt } from "../core/model.ts";
@@ -39,7 +39,7 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
       recallTypeId: config.recallTypeId, writer: config.recallWriter, clock: () => Date.parse(this.#now()) });
   }
   bookingMenuAvailable(): boolean { return !this.#lifetime.signal.aborted && this.#config.menu?.bookingMenuAvailable() === true; }
-  async readBookingMenu(query: BookingMenuQuery & Readonly<{ from: string; to: string }>) {
+  async readBookingMenu(query: BookingMenuReadQuery) {
     return this.bookingMenuAvailable() ? this.#config.menu!.readBookingMenu(query) : err({ kind: "unavailable" as const, target: "offer" as const });
   }
   async selectBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>) {

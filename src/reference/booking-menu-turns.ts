@@ -1,3 +1,4 @@
+import { validBookingSearchWindow } from "../core/booking-search-window.ts";
 import type { BookingEvidenceHost, BookingMenuHost, PolicyStore } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err } from "../core/model.ts";
@@ -34,7 +35,7 @@ export class BookingMenuTurns {
         live.value.conversationRevision !== state.value.conversationRevision) return err({ kind: "invalidTransition" });
     return live;
   }
-  async run(scope: LocationScope, turn: FinalCallerTurn, now: string, operation: Readonly<{ from: string; to: string }> | Readonly<{ choice: 1|2|3 }>):
+  async run(scope: LocationScope, turn: FinalCallerTurn, now: string, operation: Readonly<{ from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null }> | Readonly<{ choice: 1|2|3 }>):
     Promise<Result<CallState, Failure>> {
     const runtime = new CallRuntime(this.ledger, scope);
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15_000), signal = controller.signal;
@@ -49,7 +50,11 @@ export class BookingMenuTurns {
           policyVersion: initial.value.policy.policyVersion, now, signal });
         if ("from" in operation) {
           const read = await untilAbort(this.host.readBookingMenu!({ ...query, ...operation }), signal);
-          if (read?.ok && !signal.aborted) interpretation = { kind: "bookingMenu", snapshot: structuredClone(read.value) };
+          const expectedWindow = operation.window;
+          const matchesWindow = expectedWindow === undefined || expectedWindow === null ?
+            expectedWindow === undefined || read?.ok && read.value.window === undefined :
+            validBookingSearchWindow(expectedWindow) && read?.ok && read.value.window?.startMinute === expectedWindow.startMinute && read.value.window.endMinute === expectedWindow.endMinute && read.value.window.startInclusive === expectedWindow.startInclusive;
+          if (read?.ok && matchesWindow && !signal.aborted) interpretation = { kind: "bookingMenu", snapshot: structuredClone(read.value) };
         } else {
           const menuTurnId = initial.value.processedTurnIds.at(-1);
           const notice = menuTurnId ? initial.value.presentations[noticePresentationId(turn.callId, menuTurnId)] : undefined;

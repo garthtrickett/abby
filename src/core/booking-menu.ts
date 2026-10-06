@@ -1,3 +1,5 @@
+import { bookingSearchWindowText, matchesBookingSearchWindow, validBookingSearchWindow } from "./booking-search-window.ts";
+import type { BookingSearchWindow } from "./booking-search-window.ts";
 import { err, ok } from "./model.ts";
 import type { BookableOffer, LocationScope, Result } from "./model.ts";
 import { supportedVoiceLocale } from "./voice-presentation.ts";
@@ -6,6 +8,7 @@ import { supportedVoiceLocale } from "./voice-presentation.ts";
 export type BookingMenuRead = Readonly<{
   scope: LocationScope; callId: string; sessionId: string; policyVersion: string; observedAt: string; timeZone: string;
   practitionerName: string; appointmentTypeName: string; reservable: false;
+  window?: BookingSearchWindow;
   choices: readonly Readonly<{ startsAt: string; endsAt: string; expiresAt: string }>[];
 }>;
 const name = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 120 &&
@@ -23,7 +26,8 @@ export function bookingMenuPresentation(read: BookingMenuRead, binding: Readonly
         read.callId !== binding.callId || read.sessionId !== binding.sessionId || read.policyVersion !== binding.policyVersion ||
         at === undefined || observed === undefined || Math.abs(observed - at) > 30_000 ||
         !name(read.practitionerName) || !name(read.appointmentTypeName) || !Array.isArray(read.choices) || read.choices.length > 3 ||
-        typeof read.timeZone !== "string" || read.timeZone.length > 128) return err({ kind: "invalidEvidence" });
+        typeof read.timeZone !== "string" || read.timeZone.length > 128 ||
+        read.window !== undefined && !validBookingSearchWindow(read.window)) return err({ kind: "invalidEvidence" });
     const clock = new Intl.DateTimeFormat(locale, { timeZone: read.timeZone, weekday: "long", day: "numeric", month: "long",
       hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "long" });
     let prior = -Infinity;
@@ -31,12 +35,13 @@ export function bookingMenuPresentation(read: BookingMenuRead, binding: Readonly
     for (const choice of read.choices) {
       const start = instant(choice.startsAt), end = instant(choice.endsAt), expiry = instant(choice.expiresAt);
       if (start === undefined || end === undefined || expiry === undefined || start <= Math.max(at, observed) || start <= prior || end <= start ||
-          end - start > 480 * 60_000 || !Number.isSafeInteger((end-start)/60_000) || expiry <= Math.max(at, observed)) return err({ kind: "invalidEvidence" });
+          end - start > 480 * 60_000 || !Number.isSafeInteger((end-start)/60_000) || expiry <= Math.max(at, observed) || !matchesBookingSearchWindow(choice.startsAt, read.timeZone, read.window)) return err({ kind: "invalidEvidence" });
       prior = start;
       choices.push(`option ${["one", "two", "three"][choices.length]}, ${clock.format(new Date(start))}, for ${(end-start)/60_000} minutes`);
     }
-    return ok(choices.length ? `For ${read.appointmentTypeName} with ${read.practitionerName}, I can check ${choices.join("; ")}. `+
-      `Which option would you like? These times may change and are not reserved.` : "I couldn't find an eligible booking time for those dates. Please contact the clinic directly.");
+    const constraint = read.window ? `I checked appointment start times ${bookingSearchWindowText(read.window)} in the clinic local time. ` : "";
+    return ok(constraint + (choices.length ? `For ${read.appointmentTypeName} with ${read.practitionerName}, I can check ${choices.join("; ")}. `+
+      `Which option would you like? These times may change and are not reserved.` : "I couldn't find an eligible booking time for those dates. Please contact the clinic directly."));
   } catch { return err({ kind: "invalidEvidence" }); }
 }
 
