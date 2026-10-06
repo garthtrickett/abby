@@ -254,11 +254,11 @@ export type TurnInterpretation =
   | Readonly<{ kind: "staffUnavailable" }>
   | Readonly<{ kind: "staffRequestReady"; requestedPerson?: string }>
   | Readonly<{ kind: "modelPending"; taskRef: string }>
-  | Readonly<{ kind: "modelFallback" }>
+  | Readonly<{ kind: "modelFallback"; staffWorkUnavailable?: true }>
   | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason; approvedLocation?: string }>
   | Readonly<{ kind: "requestAction"; request: ActionRequest }>
   | Readonly<{ kind: "affirm"; actionKey: string; digest: string; affirmative: boolean }>
-  | Readonly<{ kind: "handoff"; reason: StaffReason; requestedPerson?: string }>
+  | Readonly<{ kind: "handoff"; reason: StaffReason; requestedPerson?: string; staffWorkUnavailable?: true }>
   | Readonly<{ kind: "transfer"; reason: StaffReason }>
   | Readonly<{ kind: "readFailure"; target: "patient" | "offer" | "appointment"; failure: "unavailable" | "notFound" }>
   | Readonly<{ kind: "intakeFailure"; reason: "missing" | "unavailable" }>

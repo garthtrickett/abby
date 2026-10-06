@@ -8,7 +8,7 @@ test("E2E-307 conversation baseline distinguishes trusted spoken selection and m
   const corpus = await candidates();
   assert.equal(corpus.length, 45);
   await withDisposablePostgres(async db => {
-    const ids = ["CCP-005", "CCP-006", "CCP-017", "CCP-021"];
+    const ids = ["CCP-005", "CCP-006", "CCP-015", "CCP-017", "CCP-021"];
     const results = await Promise.all(ids.map(async id => {
       const item = corpus.find(candidate => candidate.id === id)!;
       return runCase(db, item, plans[id]!, { mode: "scripted", model: "synthetic-baseline", apiKey: "synthetic-key" });
@@ -28,6 +28,10 @@ test("E2E-307 conversation baseline distinguishes trusted spoken selection and m
     assert.deepEqual(spokenTime.intents, [{ kind: "bookingChoice", choice: 2 }]);
     const ambiguous = results.find(result => result.id === "CCP-006")!;
     assert.ok(ambiguous.setupSpeech.some(text => /10:30 am/.test(text) && /10:30 pm/.test(text)), "both ambiguous times must actually be offered");
+    const urgent = results.find(result => result.id === "CCP-015")!;
+    assert.equal(urgent.setupMatch, true); assert.equal(urgent.setupGap, null);
+    assert.deepEqual(urgent.intents, [{ kind: "handoff", reason: "potentiallyUrgent" }]);
+    assert.equal(urgent.checks.find(check => check.id === "conversation-observation")?.pass, true);
     const staff = results.find(result => result.id === "CCP-017")!;
     assert.equal(staff.setupMatch, true); assert.equal(staff.setupGap, null);
     assert.equal(staff.checks.find(check => check.id === "conversation-observation")?.pass, true);

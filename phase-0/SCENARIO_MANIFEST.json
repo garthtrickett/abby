@@ -1,5 +1,5 @@
 {
-  "version": "1.111",
+  "version": "1.112",
   "source": "TECHNICAL_DESIGN.md Section 11",
   "fixtureIdPattern": "fixture-{lowercase scenario id}",
   "executionOverrides": {
@@ -7,6 +7,7 @@
     "test/runner/ordered-node-e2e.test.ts": "nodeCoordinator"
   },
   "capabilityMappings": {
+    "calls.urgent.respond.v1": ["E2E-317"],
     "appointments.enquiry.start.v1": ["E2E-314"],
     "appointments.enquiry.read.v1": ["E2E-314"],
     "appointments.enquiry.select.v1": ["E2E-314"],
@@ -37,7 +38,7 @@
     "settings.notifications.options.v1": ["E2E-257"],
     "settings.routing.afterHours.change.v1": ["E2E-229", "E2E-253"],
     "settings.routing.afterHours.audit.v1": ["E2E-229"],
-    "settings.routing.urgent.change.v1": ["E2E-232", "E2E-253"],
+    "settings.routing.urgent.change.v1": ["E2E-232", "E2E-253", "E2E-317"],
     "settings.routing.urgent.audit.v1": ["E2E-232"],
     "settings.routing.staffSchedule.change.v1": ["E2E-244", "E2E-253"],
     "settings.routing.staffSchedule.audit.v1": ["E2E-244"],
@@ -89,7 +90,7 @@
     "routing.staffedDestination": ["E2E-256"],
     "notifications.owner": ["E2E-257"],
     "routing.afterHoursMode": ["E2E-229", "E2E-253"],
-    "routing.urgentResponse": ["E2E-232", "E2E-253"],
+    "routing.urgentResponse": ["E2E-232", "E2E-253", "E2E-317"],
     "routing.staffSchedule": ["E2E-244", "E2E-253"],
     "routing.greeting": ["E2E-245", "E2E-246", "E2E-247", "E2E-253", "E2E-260"],
     "voice.locale": ["E2E-258", "E2E-262"],
@@ -411,6 +412,7 @@
     {"id": "E2E-313", "requirements": ["FR-03", "FR-06", "FR-11", "FR-18", "FR-22"], "fixtureFamily": "cliniko-write", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/approved-booking-search.test.ts"]}, "observableAssertions": {"caller": "Approved same-location practitioner preferences remain restricted and any-practitioner searches compare every declared member within a disclosed date range; exact provider and location are played in the final confirmation", "fault": "Partial provider reads, changed labels, revoked approvals/proof, unknown people and foreign locations cannot select; corrections cancel the old proposal and any possible send has no duplicate retry", "privacy": "Independent member write approvals retain provider IDs and proof privately; public agent names never select IDs and PostgreSQL patient-data canaries remain clear"}},
     {"id": "E2E-314", "requirements": ["FR-03", "FR-06", "FR-11", "FR-18", "FR-22"], "fixtureFamily": "cliniko-read", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/appointment-enquiries.test.ts"]}, "observableAssertions": {"caller": "Independent appointment enquiries verify only reads, disclose the approved date range and select exact appointments only after the latest list was played", "fault": "Disabled or revoked approvals/permission, changed provider evidence, unplayed menus and attempted mutations cannot disclose stale details or create clinical actions; read capability remains independent of write stop", "privacy": "Read proofs and patient/appointment data stay transient and private to the owner; model/agent inputs contain no proof and PostgreSQL patient-data canaries remain clear"}},
     {"id": "E2E-315", "requirements": ["FR-03", "FR-09", "FR-11", "FR-18", "FR-22"], "fixtureFamily": "clinic-knowledge", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/clinic-faqs.test.ts"]}, "observableAssertions": {"caller": "Public directions, parking, hours and contact use exact currently approved call-pinned facts without requiring patient verification; repeated or interrupted questions can repeat those facts", "fault": "Draft, disabled, expired, changed, foreign or unreadable sources and changed approving membership cannot provide stale facts; model-invented wording cannot enter an answer", "privacy": "Public configuration has no caller, intake, patient-note or model write path; signed and agent answers create no clinical mutation or verification email and PostgreSQL patient-data canaries remain clear"}},
-    {"id": "E2E-316", "requirements": ["FR-03", "FR-06", "FR-11", "FR-18", "FR-22"], "fixtureFamily": "cliniko-write", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/dated-window-corrections.test.ts"]}, "observableAssertions": {"caller": "Final in-sentence date corrections carry their explicit local time window into a fresh booking or move menu, retaining or explicitly clearing it across subsequent date searches", "fault": "Ambiguous meridiem and extra qualifiers cannot drop constraints; revoked approvals and unplayed replacement menus/confirmations cannot send; a move retains its protected original and prior commits remain unchanged", "privacy": "Dates and windows stay transient and contain no patient proof; signed scenarios use independent private verification and actual PostgreSQL patient-data canaries stay clear"}}
+    {"id": "E2E-316", "requirements": ["FR-03", "FR-06", "FR-11", "FR-18", "FR-22"], "fixtureFamily": "cliniko-write", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/dated-window-corrections.test.ts"]}, "observableAssertions": {"caller": "Final in-sentence date corrections carry their explicit local time window into a fresh booking or move menu, retaining or explicitly clearing it across subsequent date searches", "fault": "Ambiguous meridiem and extra qualifiers cannot drop constraints; revoked approvals and unplayed replacement menus/confirmations cannot send; a move retains its protected original and prior commits remain unchanged", "privacy": "Dates and windows stay transient and contain no patient proof; signed scenarios use independent private verification and actual PostgreSQL patient-data canaries stay clear"}},
+    {"id": "E2E-317", "requirements": ["FR-09", "FR-11", "FR-18", "FR-22"], "fixtureFamily": "routing", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/urgent-conversation-routing.test.ts"]}, "observableAssertions": {"caller": "Urgent cues use only the admitted approved script; standalone callers hear that no staff request or transfer can be sent on this route", "fault": "Missing, expired, foreign or draft scripts cannot speak approval words; expiry during interpretation uses fresh owner time; setting changes retain admitted wording; forged model output repairs without unsupported staff work", "privacy": "No patient proof or script authority comes from the model or agent input; urgent turns create no ordinary Cliniko recall, clinical write or verification email, preserve prior receipts and leave PostgreSQL patient-data canaries clear"}}
   ]
 }

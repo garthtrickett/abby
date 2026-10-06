@@ -1182,6 +1182,7 @@ The initial corpus has these minimum journeys. One scenario may cover several re
 | `E2E-314` | Signed and agent-native appointment enquiries use independent read-only approval, patient verification and a disclosed upcoming range without clinical write activation; exact played selections re-read the appointment, while stale permissions, changed records, foreign scopes and unplayed lists cannot disclose details or create a mutation | FR-03, FR-06, FR-11, FR-18, FR-22 |
 | `E2E-315` | Signed and agent-native public clinic FAQs use exact current call-pinned approval without patient verification; changed content or membership, expired or revoked approval and model-invented wording cannot disclose unapproved facts or prepare clinical writes | FR-03, FR-09, FR-11, FR-18, FR-22 |
 | `E2E-316` | Final date corrections carry explicit local time windows into fresh booking/move menus without dropping qualifiers; old proposals are fenced, original move targets remain protected and unplayed replacement menus or confirmations cannot send | FR-03, FR-06, FR-11, FR-18, FR-22 |
+| `E2E-317` | Urgent conversation cues speak only the admitted approved script at its effective time, report unavailable standalone escalation truthfully and cannot use an ordinary recall queue, fabricate a transfer or revise prior clinical receipts | FR-09, FR-11, FR-18, FR-22 |
 
 The corpus runs with deterministic synthetic media frames, partial hypotheses and segment-final transcription events, synthesis chunks, playback acknowledgments, typed model effect results, clock, and host effects against the reference host and standalone adapters. It enters through `VoiceSession.begin` and its media/transcript methods, not by calling `CallRuntime.acceptTurn` directly as a substitute for voice E2E. The harness can delay a playback acknowledgment or deliver it after a clear to prove that queued/cleared audio does not count as played. It can race a caller correction with `startNextPresentation`, drop a commit wake-up, restart the dispatcher task while retaining the live session, or lose the entire session process before activation or after atomic start. Assertions distinguish superseded pending speech from unproven started speech, reject `played` for a pending or transfer intent, and verify exactly one terminal resolution without duplicate media. `E2E-035` and `E2E-082` through `E2E-084` separately submit invalid presentation outcomes through T4 and prove each is rejected before a second SAM transition. `E2E-019` through `E2E-026` individually cover final turn, playback, interruption, transfer, and fallback behavior. Each independently triggerable voice or effect fault has its own scenario ID so cases can run in parallel and a failure identifies one behavior. Every provider runs the same scenario IDs; assertions use its approved support-matrix row and fail if its declared capability snapshot disagrees. Provider-specific contract tests separately cover permission limits, pagination, rate limits, availability rules, unsupported mutations, and lost responses. Scheduled smoke tests use sanctioned provider test accounts and a limited real telephony path, including an actual interruption and transfer. Tests contain no live patient data.
 
@@ -1371,3 +1372,41 @@ grants no clinical authority. E2E-316 covers initial searches, corrected booking
 and move proposals, retained/cleared windows, the final of multiple corrections,
 ambiguous/qualified language, revoked approval, interrupted menus/confirmations,
 read-filter refusal, committed outcome preservation and PostgreSQL canaries.
+
+### Standalone urgent conversation responses
+
+The Cliniko resolver accepts a bounded explicit urgent-help cue or a strict
+structured `urgent` decision. The cue selects the existing SAM urgent response;
+it cannot supply script text, diagnose symptoms, clear attendance, select a
+transfer destination or claim staff receipt. Negated urgency and background
+phrases are delegated to the classifier rather than trusted as positive cues.
+
+The urgent script remains the call's admitted policy snapshot. A later setting
+change affects new calls; an active call retains its original approved words
+only while that script is still effective and valid for its exact scope. The
+resolver supplies its private fresh owner check time after interpretation;
+voice acceptance bounds it against the turn clock and revalidates at the later
+time, so a script expiring during model interpretation cannot be spoken.
+
+Standalone Cliniko has no proven urgent staff destination. Its ordinary approved
+recall process permits independently verified caller-requested work only. Urgent
+responses therefore state that Abby cannot send a staff request from this call,
+create no ordinary recall or email, and cannot initiate a transfer. Automatic
+model-failure and generic handoff fallback also respect this restriction; an
+uninterpretable turn asks the caller to repeat or contact the clinic directly.
+The separate verified staff-request workflow retains its own approval and proof.
+Authorized embedded compositions retain their existing host-owned staff route.
+
+The agent command `calls.urgent.respond.v1` exposes the same public response and
+restriction with exact input validation, scoped ownership and turn idempotency.
+It accepts no script, approval or route fields and cannot authorize patient work.
+E2E-317 covers 18 parallel signed scenarios, agent commands, negated/background
+language, invalid sources, captured-policy setting changes, expiry during
+interpretation, interrupted response, rejected forged wording, unavailable
+transfer cues and preservation of prior committed/uncertain actions and review
+work. Its synthetic approvals do not activate a real clinic or carrier route.
+
+Agent urgent responses use a trusted reception clock (injected by the composition
+or system UTC), never the command's public `now` as script-validity authority.
+A fresh agent turn with an old timestamp therefore cannot revive expired wording;
+repeated commands still share the normal SAM turn-idempotency contract.

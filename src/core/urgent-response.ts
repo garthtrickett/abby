@@ -41,7 +41,7 @@ export function approvedUrgentText(policy: CallPolicy, now: string): string | un
 }
 
 /** An urgent model classification is a routing cue, never a diagnosis or authority to invent advice. */
-export function urgentHandoffNotice(state: CallState, now: string): string {
+export function urgentHandoffNotice(state: CallState, now: string, staffWorkUnavailable = false): string {
   const approved = approvedUrgentText(state.policy, now);
-  return approved ? `${approved} ${staffRequestNotice(state)}` : NO_APPROVED_URGENT_RESPONSE;
+  return approved ? `${approved} ${staffRequestNotice(state, staffWorkUnavailable)}` : NO_APPROVED_URGENT_RESPONSE;
 }

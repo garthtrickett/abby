@@ -32,9 +32,10 @@ export class TextReception {
   private readonly appointments: AppointmentHost | undefined;
   private readonly model: ModelWork | undefined;
   private readonly effectLeases: EffectCallLeaseCoordinator;
+  private readonly clock: () => string;
 
   constructor(ledger: LedgerStore & EffectCallLeaseStore, policy: PolicyStore, host: TextHost, availability?: AvailabilityHost, appointments?: AppointmentHost, model?: ModelWork,
-              knowledge?: KnowledgeHost & Partial<ModelKnowledgeContextHost>) {
+              knowledge?: KnowledgeHost & Partial<ModelKnowledgeContextHost>, clock: () => string = () => new Date().toISOString()) {
     this.ledger = ledger;
     this.effectLeases = new EffectCallLeaseCoordinator(ledger);
     this.policy = policy;
@@ -44,6 +45,16 @@ export class TextReception {
     this.availability = availability;
     this.appointments = appointments;
     this.model = model;
+    this.clock = clock;
+  }
+
+  /** A public urgent cue cannot treat an ordinary task queue as a proven urgent route. */
+  async respondUrgent(scope: LocationScope, turn: FinalCallerTurn) {
+    // Public command timestamps cannot revive an expired admitted script.
+    let now: string;
+    try { now = this.clock(); } catch { return err({ kind: "invalidTransition" as const }); }
+    if (!Number.isFinite(Date.parse(now))) return err({ kind: "invalidTransition" as const });
+    return this.runtime(scope).acceptTurn(turn, { kind: "handoff", reason: "potentiallyUrgent", staffWorkUnavailable: true }, now);
   }
 
   async startWorkflow(scope: LocationScope, turn: FinalCallerTurn, operation: import("../core/model.ts").WorkflowOperation, now: string,

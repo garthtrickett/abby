@@ -264,3 +264,80 @@ matches the final production/fixture/runner source. The unchanged urgent-route,
 multiple-service and concurrent-pending-read setups, other conversation failures
 and live carrier/email activation still need work; no actual clinic capability
 was activated.
+
+## Urgent conversation routing (2026-10-06)
+
+The signed E2E-317 reproduction failed before the change: an explicit urgent-help
+request received generic staff-follow-up wording despite the admitted approved
+script. The agent response command was also absent. A further forged-model
+scenario exposed implicit system-failure staff work with no proven standalone
+route. Those failing runs are retained in tracked local logs; they were corrected
+rather than relaxing the no-new-task assertion.
+
+The production resolver now selects the existing urgent SAM response with a
+bounded explicit cue or a strict structured decision. Only the admitted approved
+script can be spoken, checked again at fresh owner time after interpretation.
+An active call keeps its admitted script after a setting change, only until its
+original validity ends; new calls use the changed setting. No model or agent can
+supply wording or authorize a diagnosis, medical clearance or transfer.
+Standalone urgency has no approved urgent staff destination, and the ordinary
+verified recall workflow does not provide one. The response says a staff request
+cannot be sent from this call, creates no ordinary recall or verification email,
+and preserves prior committed/uncertain actions and existing review work. Generic
+standalone model failure now repairs or directs the caller to the clinic without
+claiming staff follow-up; independently verified caller-requested staff work
+remains available under its own approval.
+
+[First urgent report](baselines/clinic-conversation-after-urgent-v1.json) preserves
+44 executed candidates, one enquiry harness failure, nine failing conversation
+observations and two setup gaps. The combined test run also stalled in a booking
+selection inside E2E-311 while evaluation and typecheck ran concurrently. No source
+changed between these observations and the diagnostic runs. The affected
+[isolated enquiry](baselines/clinic-conversation-after-urgent-enquiry-diagnosis-v1.json)
+and separate E2E-311 run passed; this is evidence of sensitivity to concurrent
+workload, not proof of the precise cause or a full-suite reliability claim.
+
+[Second urgent report](baselines/clinic-conversation-after-urgent-v2.json) executes
+all 45 candidates under the unchanged production/fixture/runner source with
+`gpt-4o-mini`, zero harness failures, 36 passing named conversation observations,
+nine failing and two setup gaps (CCP-030 services and CCP-044 pending concurrent
+read). All 135 safety observations pass; PostgreSQL patient-data canaries are
+clear and the source remains stable. All prose acceptance requirements remain
+unassessed. It intentionally exits nonzero and is not a release gate.
+
+CCP-015 checks the actual approved urgent words, truthful unavailable escalation
+and absence of patient work, rather than a generic contact response. The other
+new narrow passes do not establish shared-phone authority revocation, booking
+versus email-delivery explanation, a new billing feature or complete background
+repair acceptance. These need direct behavior checks before being called done.
+
+E2E-317 covers 18 parallel signed scenarios plus agent input/idempotency and
+negated/background-language checks. The final urgent/model/manifest/baseline
+run passed eight of nine tests; its sole staff-workflow timeout is preserved
+above, and `node --test test/voice/cliniko-staff-request.test.ts` passed separately
+with scenarios still parallel internally. The earlier urgent/model/staff gate
+passed all seven tests. The isolated PostgreSQL embedded urgent/setting gate
+passed all ten tests without skips. Final `npm run typecheck` and
+`git diff --check` passed. This is focused validation, with the concurrent
+workload timeout still a reliability limitation. Carrier, live email and real
+clinic activation remain outside this evidence; the six-part goal is not closed.
+
+A final review found that the new agent urgent command needed its own trusted
+expiry clock. It now uses the reception/composition clock instead of public
+command timestamps. E2E-317 explicitly submits a fresh turn with an old public
+timestamp after script expiry and verifies the safe fallback with no task.
+The subsequent urgent/model/baseline/manifest gate passed all eight tests; final
+owner-clock typecheck and all ten isolated PostgreSQL embedded urgent tests
+passed. Earlier archived reports above remain unchanged and precede this final
+clock correction; their source hashes must not be presented as the final source.
+
+[Final owner-clock urgent report](baselines/clinic-conversation-after-urgent-v3.json)
+now matches all 450 final production/fixture/runner source files. It executes
+all 45 candidates, with 36 passing named observations, nine failing, two setup
+gaps, zero harness failures, all 135 safety observations passing and clear
+PostgreSQL patient-data canaries. Eighteen candidate turns make real model
+requests and 27 use trusted interpretation. The additional agent scope/clock
+gate passes: another location cannot use the call, an invalid private clock
+cannot change state, and backdated public time cannot revive expired wording.
+The report stays partial with every prose acceptance condition unassessed; no
+single-run reliability or real clinic activation claim is made.
