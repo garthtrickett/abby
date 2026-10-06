@@ -1183,6 +1183,7 @@ The initial corpus has these minimum journeys. One scenario may cover several re
 | `E2E-315` | Signed and agent-native public clinic FAQs use exact current call-pinned approval without patient verification; changed content or membership, expired or revoked approval and model-invented wording cannot disclose unapproved facts or prepare clinical writes | FR-03, FR-09, FR-11, FR-18, FR-22 |
 | `E2E-316` | Final date corrections carry explicit local time windows into fresh booking/move menus without dropping qualifiers; old proposals are fenced, original move targets remain protected and unplayed replacement menus or confirmations cannot send | FR-03, FR-06, FR-11, FR-18, FR-22 |
 | `E2E-317` | Urgent conversation cues speak only the admitted approved script at its effective time, report unavailable standalone escalation truthfully and cannot use an ordinary recall queue, fabricate a transfer or revise prior clinical receipts | FR-09, FR-11, FR-18, FR-22 |
+| `E2E-318` | Email-proof and delivery queries separately report actual action and captured notification receipts, cannot promise inbox delivery or authorize a send/resend/owner change, and preserve clinical and staff outcomes across standalone signed calls and embedded notification reconciliation | FR-07, FR-11, FR-12, FR-18, FR-22 |
 
 The corpus runs with deterministic synthetic media frames, partial hypotheses and segment-final transcription events, synthesis chunks, playback acknowledgments, typed model effect results, clock, and host effects against the reference host and standalone adapters. It enters through `VoiceSession.begin` and its media/transcript methods, not by calling `CallRuntime.acceptTurn` directly as a substitute for voice E2E. The harness can delay a playback acknowledgment or deliver it after a clear to prove that queued/cleared audio does not count as played. It can race a caller correction with `startNextPresentation`, drop a commit wake-up, restart the dispatcher task while retaining the live session, or lose the entire session process before activation or after atomic start. Assertions distinguish superseded pending speech from unproven started speech, reject `played` for a pending or transfer intent, and verify exactly one terminal resolution without duplicate media. `E2E-035` and `E2E-082` through `E2E-084` separately submit invalid presentation outcomes through T4 and prove each is rejected before a second SAM transition. `E2E-019` through `E2E-026` individually cover final turn, playback, interruption, transfer, and fallback behavior. Each independently triggerable voice or effect fault has its own scenario ID so cases can run in parallel and a failure identifies one behavior. Every provider runs the same scenario IDs; assertions use its approved support-matrix row and fail if its declared capability snapshot disagrees. Provider-specific contract tests separately cover permission limits, pagination, rate limits, availability rules, unsupported mutations, and lost responses. Scheduled smoke tests use sanctioned provider test accounts and a limited real telephony path, including an actual interruption and transfer. Tests contain no live patient data.
 
@@ -1410,3 +1411,41 @@ Agent urgent responses use a trusted reception clock (injected by the compositio
 or system UTC), never the command's public `now` as script-validity authority.
 A fresh agent turn with an old timestamp therefore cannot revive expired wording;
 repeated commands still share the normal SAM turn-idempotency contract.
+
+### Confirmation email and notification receipt questions
+
+A bounded email-proof/delivery cue or strict structured `notificationOutcome`
+decision selects a SAM status query. It cannot carry response wording, an email
+recipient, owner changes, delivery observations or permission to send. The query
+uses the current call's actual latest action status and its uniquely linked,
+valid captured notification effect. Committed booking/cancellation/move, uncertain
+mutation, unconfirmed action and absent action remain different outcomes.
+
+A missing or unproven notification path says Abby cannot verify an email was
+sent or deliver one from this call and directs the caller to the clinic for
+written confirmation. A valid pending receipt reports pending delivery; a valid
+completed definitive-unsent receipt reports that it was not sent. A valid
+completed sent receipt reports only that the approved notification service said
+it sent a confirmation. Notification observations do not prove a channel or
+inbox receipt, so that response explicitly does not claim email or inbox delivery.
+
+The query creates no notification, resend, observation, ownership change or staff
+work. Existing authorized reconciliation can still drain through the ordinary
+voice runner; its new receipt can change a later status answer without resending.
+Setting edits affect future admission and cannot rewrite captured receipts. The
+agent command `calls.notifications.outcome.v1` has exact scoped input and normal
+turn idempotency; trusted reception time, not public command time, controls the
+active session lease. It cannot expose recipient, patient or provider payloads.
+
+E2E-318 covers ten parallel signed standalone scenarios (committed, uncertain,
+unconfirmed, no action, independent enquiry, cancellation, rescheduling, forged
+model wording, a malformed structured choice and a billing receipt request),
+agent scope/input/idempotency/stale-lease checks, both approved embedded owners,
+known/unknown/unproven/unset receipts, owner edits, prior reconciliation and
+pending/definitively-unsent text receipts. It does not activate email delivery or
+verify a real carrier/provider inbox.
+
+Paid receipt and invoice requests use the existing clinic staff/contact path,
+including its independent approval and verification requirements. They cannot
+become booking-notification status questions or invented billing actions. Explicit
+requests for a person retain priority over generic notification classification.

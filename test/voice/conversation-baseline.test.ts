@@ -8,7 +8,7 @@ test("E2E-307 conversation baseline distinguishes trusted spoken selection and m
   const corpus = await candidates();
   assert.equal(corpus.length, 45);
   await withDisposablePostgres(async db => {
-    const ids = ["CCP-005", "CCP-006", "CCP-015", "CCP-017", "CCP-021"];
+    const ids = ["CCP-005", "CCP-006", "CCP-015", "CCP-017", "CCP-021", "CCP-022"];
     const results = await Promise.all(ids.map(async id => {
       const item = corpus.find(candidate => candidate.id === id)!;
       return runCase(db, item, plans[id]!, { mode: "scripted", model: "synthetic-baseline", apiKey: "synthetic-key" });
@@ -39,5 +39,9 @@ test("E2E-307 conversation baseline distinguishes trusted spoken selection and m
     const unknown = results.find(result => result.id === "CCP-021")!;
     assert.equal(unknown.writesBefore, 1); assert.equal(unknown.writesAfter, 1);
     assert.equal(unknown.context?.lastAction?.status, "uncertain"); assert.deepEqual(unknown.actionStatuses, ["uncertain"]);
+    const email = results.find(result => result.id === "CCP-022")!;
+    assert.equal(email.checks.find(check => check.id === "conversation-observation")?.pass, true);
+    assert.deepEqual(email.intents, [{ kind: "notificationOutcome" }]);
+    assert.deepEqual(email.actionStatuses, ["committed"]); assert.equal(email.writesBefore, 1); assert.equal(email.writesAfter, 1);
   });
 });

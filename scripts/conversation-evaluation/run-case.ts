@@ -91,6 +91,10 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
       /before 12:00 pm.*Wednesday 7 October.*9:00 am/s.test(text) && !/4:30 pm/.test(text) && !statuses.includes("awaitingConfirmation"); break;
     case "outcome": pass = (last?.kind === "outcome" || last?.kind === "clarify" && last.reason === "changeAfterSend") &&
       /confirmed|can't confirm|contact the clinic/i.test(text); break;
+    case "notificationOutcome": pass = last?.kind === "notificationOutcome" && latest?.kind === "book" && latest.status === "committed" &&
+      speech.includes("Your booking is confirmed. I can't verify that an email confirmation was sent or deliver one from this call. Please contact the clinic for written confirmation.") &&
+      !Object.values(after.effects).some(effect => effect.kind === "notification" || effect.kind === "notificationReconcile") &&
+      !Object.keys(after.staffItems).length; break;
     case "readOnly": pass = last?.kind === "appointmentEnquiry" && after.appointmentReads.at(-1)?.status === "shown" &&
       /checked upcoming appointments between.*I found an appointment on/s.test(text) && !Object.keys(after.actions).length; break;
     case "clarify": pass = /which|clarif|repeat|did you mean|please (say|tell)|do you want|would you like/i.test(text) && !statuses.includes("awaitingConfirmation"); break;

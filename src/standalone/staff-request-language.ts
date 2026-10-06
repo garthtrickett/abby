@@ -11,7 +11,8 @@ export function staffRequestLanguage(text: string): VoiceIntent | undefined {
   const call = value.match(/^(?:please )?(?:ask|have) (.+?) (?:to )?call me(?: back)?(?: about (?:this|that))?$/i);
   const message = value.match(/^(?:(?:please|can you|could you) )?(?:send|pass|leave)(?: that| the| a| my)? (?:staff )?(?:message|request)(?: (?:to|for) (.+))?$/i);
   const preference = (speak?.[1] ?? call?.[1] ?? message?.[1])?.replace(/,? please$/i, "");
-  if (!speak && !call && !message) return undefined;
+  if (!speak && !call && !message) return /\b(?:paid receipt|invoice)\b/i.test(value) &&
+    /\b(?:send|resend|email|forward|get|have|request)\b/i.test(value) ? { kind: "staffRequest" } : undefined;
   if (!preference || /^(?:a |the )?(?:receptionist|reception|staff|staff member|team|person|human|human being|someone|somebody|anyone)$/i.test(preference)) return { kind: "staffRequest" };
   return { kind: "staffRequest", requestedPerson: preference };
 }

@@ -249,6 +249,7 @@ export type MenuClarificationReason = "menuAmbiguous" | "menuRejected" | "menuUn
 export type TurnInterpretation =
   | Readonly<{ kind: "workflowStarted"; operation: WorkflowOperation; next: "codeRequired" | "intakeRequired" }>
   | Readonly<{ kind: "outcomeQuery" }>
+  | Readonly<{ kind: "notificationOutcomeQuery" }>
   | Readonly<{ kind: "staffOutcomeQuery" }>
   | Readonly<{ kind: "staffVerificationRequired" }>
   | Readonly<{ kind: "staffUnavailable" }>
