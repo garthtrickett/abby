@@ -118,15 +118,24 @@ export interface AppointmentHost {
 export type BookingMenuQuery = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
   turnId: string; now: string; signal: AbortSignal }>;
 export type ReschedulingMenuQuery = BookingMenuQuery & Readonly<{ stage: import("./rescheduling-menu.ts").ReschedulingMenuStage }>;
+export type ReschedulingMenuReadQuery = ReschedulingMenuQuery & Readonly<{ from: string; to: string; priorTurnId?: string;
+  /** Derived from the canceled SAM request, never a caller/model provider ID. */
+  correctingAppointmentRef?: string }>;
 export interface ReschedulingMenuHost {
+  correctReschedulingMenu?(query: ReschedulingMenuQuery & Readonly<{ menuTurnId: string; startsAt: string }>):
+    Promise<Result<Readonly<{ verificationRef: string; targetRef: string; offerRef: string }>, HostReadFailure>>;
   reschedulingMenuAvailable(): boolean;
-  readReschedulingMenu(query: ReschedulingMenuQuery & Readonly<{ from: string; to: string; priorTurnId?: string }>):
+  readReschedulingMenu(query: ReschedulingMenuReadQuery):
     Promise<Result<import("./rescheduling-menu.ts").ReschedulingMenuRead, HostReadFailure>>;
   selectReschedulingMenu(query: ReschedulingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>):
     Promise<Result<Readonly<{ kind: "targetSelected"; snapshot: import("./rescheduling-menu.ts").ReschedulingMenuRead }> |
       Readonly<{ kind: "actionSelection"; verificationRef: string; targetRef: string; offerRef: string }>, HostReadFailure>>;
 }
 export interface BookingMenuHost {
+  /** A trusted correction to an unsent proposal. Re-read this exact previously
+   * offered time; never accept a model/provider reference or reuse its old proof. */
+  correctBookingMenu?(query: BookingMenuQuery & Readonly<{ menuTurnId: string; startsAt: string }>):
+    Promise<Result<Readonly<{ verificationRef: string; offerRef: string }>, HostReadFailure>>;
   bookingMenuAvailable(): boolean;
   readBookingMenu(query: BookingMenuQuery & Readonly<{ from: string; to: string }>):
     Promise<Result<import("./booking-menu.ts").BookingMenuRead, HostReadFailure>>;

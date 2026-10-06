@@ -1,4 +1,4 @@
-import type { AppointmentChangeEvidenceQuery, BookingMenuQuery, IntakeEvidenceQuery, ReschedulingMenuQuery, WorkflowQuery } from "../core/host.ts";
+import type { AppointmentChangeEvidenceQuery, BookingMenuQuery, IntakeEvidenceQuery, ReschedulingMenuQuery, ReschedulingMenuReadQuery, WorkflowQuery } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { HostMutation, HostWriteReceipt, LocationScope, Result, StaffItem } from "../core/model.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
@@ -12,6 +12,8 @@ import type { ClinikoIntakeBookingSessionConfig } from "./cliniko-intake-booking
 import { ClinikoReschedulingSession } from "./cliniko-rescheduling-session.ts";
 import { NoStoredKnowledge } from "./no-stored-knowledge.ts";
 import type { ClinikoIntakeDraft } from "../cliniko/patient-intake.ts";
+import type { FinalCallerTurn } from "../core/model.ts";
+import type { VoiceIntent } from "../voice/voice-session.ts";
 import { PlayedMenuSelection } from "./played-menu-selection.ts";
 
 export type ClinikoWorkflow = "book" | "cancel" | "reschedule" | "intake";
@@ -63,6 +65,30 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     const state = await this.#config.ledger.read(this.#config.receipt.callId, this.#config.receipt.scope);
     if (!state.ok || this.closed || state.value.sessionLease?.sessionId !== this.#config.sessionId) return undefined;
     return this.#spokenMenu.resolve(text, state.value, (this.#config.clock ?? (() => new Date().toISOString()))());
+  }
+  async correctionIntent(turn: FinalCallerTurn, external?: AbortSignal): Promise<VoiceIntent | undefined> {
+    if (this.closed || this.#verificationRequired || turn.callId !== this.#config.receipt.callId || turn.sessionId !== this.#config.sessionId) return undefined;
+    const found = await this.#config.ledger.read(turn.callId, this.#config.receipt.scope);
+    if (!found.ok || this.closed) return undefined;
+    const now = (this.#config.clock ?? (() => new Date().toISOString()))();
+    const correction = this.#spokenMenu.correction(turn.text, found.value, now);
+    if (!correction) return undefined;
+    if (correction.kind === "clarify") return correction;
+    const signal = AbortSignal.any([this.#lifetime.signal, AbortSignal.timeout(15_000), ...(external ? [external] : [])]);
+    const query = { scope: this.#config.receipt.scope,
+      callId: turn.callId, sessionId: this.#config.sessionId, policyVersion: this.#config.policyVersion,
+      turnId: turn.turnId, now, signal, menuTurnId: correction.menuTurnId, startsAt: correction.startsAt };
+    let intent: VoiceIntent | undefined;
+    if (correction.menuKind === "booking") {
+      const selection = await awaitUntilAbort(this.#booking()?.correctBookingMenu(query) ?? Promise.resolve(readDenied()), signal);
+      if (selection?.ok) intent = { kind: "book", ...selection.value };
+    } else if (this.#owner instanceof ClinikoReschedulingSession) {
+      const selection = await awaitUntilAbort(this.#owner.effects.correctReschedulingMenu({ ...query, stage: "offers" }), signal);
+      if (selection?.ok) intent = { kind: "reschedule", ...selection.value };
+    }
+    if (!intent || signal.aborted || this.closed) return { kind: "clarify", reason: "menuUnavailable" };
+    this.#spokenMenu.corrected(turn.turnId, correction.startsAt);
+    return intent;
   }
   /** The model sees only routing and action-status enums; patient data and host refs stay in this owner. */
   async publicIntentContext(): Promise<Readonly<{ workflow: ClinikoWorkflow | null; verificationRequired: boolean;
@@ -174,14 +200,14 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     return result;
   }
   async selectBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>) {
-    this.#spokenMenu.clear();
     const result = await (this.#booking()?.selectBookingMenu(query) ?? readDenied());
-    if (result.ok && !this.closed) this.#publicMenu = undefined;
+    if (result.ok && !this.closed) { this.#publicMenu = undefined; this.#spokenMenu.consumed(query.turnId, query.choice); }
+    else this.#spokenMenu.clear();
     return result;
   }
   async resolveBooking(scope: LocationScope, verificationRef: string, offerRef: string, now: string, signal?: AbortSignal) { return this.#booking()?.resolveBooking(scope, verificationRef, offerRef, now, signal) ?? readDenied(); }
   reschedulingMenuAvailable(): boolean { return this.#owner instanceof ClinikoReschedulingSession && this.#owner.effects.reschedulingMenuAvailable(); }
-  async readReschedulingMenu(query: ReschedulingMenuQuery & Readonly<{ from: string; to: string; priorTurnId?: string }>) {
+  async readReschedulingMenu(query: ReschedulingMenuReadQuery) {
     this.#spokenMenu.clear();
     const result = await (this.#owner instanceof ClinikoReschedulingSession ? this.#owner.effects.readReschedulingMenu(query) : readDenied());
     if (result.ok && !this.closed) {
@@ -191,12 +217,13 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     return result;
   }
   async selectReschedulingMenu(query: ReschedulingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>) {
-    this.#spokenMenu.clear();
     const result = await (this.#owner instanceof ClinikoReschedulingSession ? this.#owner.effects.selectReschedulingMenu(query) : readDenied());
     if (result.ok && !this.closed) {
       this.#publicMenu = undefined;
-      if (result.value.kind === "targetSelected") this.#reschedulingTargetSelected = true;
+      if (result.value.kind === "targetSelected") { this.#reschedulingTargetSelected = true; this.#spokenMenu.clear(); }
+      else this.#spokenMenu.consumed(query.turnId, query.choice);
     }
+    else this.#spokenMenu.clear();
     return result;
   }
   async resolveAppointmentChange(query: AppointmentChangeEvidenceQuery) { return this.#owner instanceof ClinikoCancellationSession || this.#owner instanceof ClinikoReschedulingSession ? this.#owner.effects.resolveAppointmentChange(query) : readDenied(); }

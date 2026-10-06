@@ -100,6 +100,7 @@ export class ClinikoIntakeBookingSession extends NoStoredKnowledge implements In
   bookingMenuAvailable(): boolean { return this.#booking.bookingMenuAvailable(); }
   readBookingMenu(query: BookingMenuQuery & Readonly<{ from: string; to: string }>) { return this.#booking.readBookingMenu(query); }
   selectBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>) { return this.#booking.selectBookingMenu(query); }
+  correctBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; startsAt: string }>) { return this.#booking.correctBookingMenu(query); }
   write(mutation: HostMutation, now: string, signal?: AbortSignal): Promise<HostWriteReceipt> {
     return mutation.kind === "intake" ? this.intake.write(mutation, now, signal) : this.#booking.write(mutation, now, signal);
   }

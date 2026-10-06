@@ -72,6 +72,10 @@ export class CallRuntime {
   beginSpeech(callId: string, sessionId: string, now: string): Promise<Result<CallState, TransitionFailure>> {
     return this.update(callId, { kind: "speechBegan", sessionId, now });
   }
+  /** Fence a prior unsent proposal before any asynchronous intent interpretation. */
+  nonAffirmativeFinal(turn: FinalCallerTurn, expectedConversationRevision: number, now: string) {
+    return this.update(turn.callId, { kind: "nonAffirmativeFinal", turn, expectedConversationRevision, now });
+  }
 
   silenceTimeout(callId: string, sessionId: string, stage: "retry" | "final", now: string): Promise<Result<CallState, TransitionFailure>> {
     return this.update(callId, { kind: "silenceTimeout", sessionId, stage, now });

@@ -3,6 +3,7 @@ import { bookingConfirmation, bookingMenuPresentation } from "./booking-menu.ts"
 import { supportedVoiceLocale } from "./voice-presentation.ts";
 import { createHash } from "node:crypto";
 import { digestActionRequest } from "./digest.ts";
+import { clearAffirmation } from "./caller-affirmation.ts";
 import { notificationDirective, queueCommittedNotification, transitionNotification } from "./notification-effects.ts";
 import { availabilityPresentation } from "./availability-presentation.ts";
 import { appointmentPresentation } from "./appointment-presentation.ts";
@@ -285,7 +286,9 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       break;
     }
     case "clarify":
-      state.callerMessages.push(interpretation.reason === "menuRejected"
+      state.callerMessages.push(interpretation.reason === "proposalCorrection"
+        ? "Which details would you like to change? I'll ask for a new confirmation before continuing."
+        : interpretation.reason === "menuRejected"
         ? "I won't choose any of those options. What other date or time would work for you?"
         : interpretation.reason === "menuAmbiguous"
           ? "Which option did you mean? Please say its option number or its full date and time."
@@ -558,6 +561,18 @@ export function transition(current: CallState, action: TransitionAction): Result
       state.presentations[action.presentationId] = { ...presentation, status: "played" };
       delete state.pendingPresentationId;
       endMedia(state, now, "textCompleted");
+      break;
+    }
+    case "nonAffirmativeFinal": {
+      const turn = action.turn, lease = state.sessionLease;
+      if (state.lifecycle !== "active" || !state.admission || !lease || lease.sessionId !== turn.sessionId ||
+          turn.callId !== state.callId || !turn.turnId || !Number.isFinite(Date.parse(turn.at)) ||
+          state.processedTurnIds.includes(turn.turnId) || turn.quality !== "clear" || !turn.text.trim() || clearAffirmation(turn.text) ||
+          Date.parse(action.now) >= Date.parse(lease.expiresAt)) return err({ kind: "invalidTransition" });
+      if (state.conversationRevision !== action.expectedConversationRevision) return err({ kind: "staleTurn" });
+      supersedeUnsent(state);
+      state.conversationRevision += 1;
+      cancelModelWork(state);
       break;
     }
     case "speechBegan": {

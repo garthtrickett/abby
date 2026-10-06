@@ -48,8 +48,34 @@ function match(text: string, menu: Menu): Selection {
  * the ordinary host selection/proposal seam for private proof revalidation. */
 export class PlayedMenuSelection {
   #menu: Menu | undefined;
-  remember(menu: Menu): void { this.#menu = structuredClone(menu); }
-  clear(): void { this.#menu = undefined; }
+  #previous: Readonly<{ menu: Menu; selectionTurnId: string; selectedStartsAt: string }> | undefined;
+  remember(menu: Menu): void { this.#previous = undefined; this.#menu = structuredClone(menu); }
+  clear(): void { this.#menu = undefined; this.#previous = undefined; }
+  consumed(turnId: string, choice: 1 | 2 | 3): void {
+    const menu = this.#menu, selected = menu?.snapshot.choices[choice - 1];
+    this.#previous = menu && selected ? { menu, selectionTurnId: turnId, selectedStartsAt: selected.startsAt } : undefined;
+    this.#menu = undefined;
+  }
+  correction(text: string, state: CallState, now: string) {
+    const previous = this.#previous, action = Object.values(state.actions).at(-1);
+    const expectedKind = previous?.menu.kind === "booking" ? "book" : "reschedule";
+    if (!previous || previous.menu.kind === "rescheduling" && previous.menu.stage !== "offers" || !action || action.kind !== expectedKind ||
+        action.mutation.request.kind !== expectedKind || !("offer" in action.mutation.request) ||
+        !["awaitingConfirmation", "canceled"].includes(action.status) ||
+        action.mutation.request.offer.startsAt !== previous.selectedStartsAt || state.processedTurnIds.at(-1) !== previous.selectionTurnId ||
+        state.presentations[noticePresentationId(state.callId, previous.menu.turnId)]?.status !== "played") return undefined;
+    const value = text.trim().replace(/^(?:(?:wait|actually|no)[,.]?\s*)+/i, "");
+    const selection = match(value, previous.menu);
+    if (selection.kind === "notSelection") return undefined;
+    if (selection.kind === "clarify") return { kind: "clarify" as const, reason: selection.reason };
+    const selected = previous.menu.snapshot.choices[selection.choice - 1]!;
+    if (!Number.isFinite(Date.parse(now)) || !Number.isFinite(Date.parse(selected.expiresAt)) ||
+        Date.parse(selected.expiresAt) <= Date.parse(now)) return { kind: "clarify" as const, reason: "menuUnavailable" as const };
+    return { kind: "correction" as const, menuKind: previous.menu.kind, menuTurnId: previous.menu.turnId, startsAt: selected.startsAt };
+  }
+  corrected(turnId: string, startsAt: string): void {
+    if (this.#previous) this.#previous = { ...this.#previous, selectionTurnId: turnId, selectedStartsAt: startsAt };
+  }
   resolve(text: string, state: CallState, now: string): VoiceIntent | undefined {
     const menu = this.#menu; if (!menu) return undefined;
     const result = match(text, menu); if (result.kind === "notSelection") return undefined;

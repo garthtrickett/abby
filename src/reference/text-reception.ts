@@ -66,8 +66,8 @@ export class TextReception {
   reschedulingMenuEnabled(): boolean {
     return !!this.host.resolveAppointmentChange && new ReschedulingMenuTurns(this.ledger, this.policy, this.host).enabled();
   }
-  readReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", from: string, to: string, now: string) {
-    return new ReschedulingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, stage, { from, to });
+  readReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", from: string, to: string, now: string, correcting = false) {
+    return new ReschedulingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, stage, { from, to, ...(correcting ? { correcting: true as const } : {}) });
   }
   selectReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", choice: 1 | 2 | 3, now: string) {
     return new ReschedulingMenuTurns(this.ledger, this.policy, this.host).run(scope, turn, now, stage, { choice });
