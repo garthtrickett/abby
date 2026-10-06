@@ -25,6 +25,14 @@ export class AppointmentEnquiryTurns {
     const query: AppointmentEnquiryQuery = { scope, callId: turn.callId, sessionId: turn.sessionId, policyVersion: state.policy.policyVersion!,
       expectedConversationRevision: state.conversationRevision, now, signal };
     let interpretation: TurnInterpretation = { kind: "appointmentsFailure", reason: "notConfigured" };
+    let acceptedAt = now;
+    const checkedTime = (checkedAt: string, observedAt: string): boolean => {
+      const checked = Date.parse(checkedAt), observed = Date.parse(observedAt), requested = Date.parse(now);
+      if (![checked, observed, requested].every(Number.isFinite) || observed > checked || Math.abs(checked - requested) > 30_000) return false;
+      // A host rechecks proof/session after I/O. Keep the actual provider observation
+      // intact and validate it at that fresh time, rather than an older media timestamp.
+      acceptedAt = new Date(Math.max(checked, requested)).toISOString(); return true;
+    };
     try {
       if ("choice" in request) {
         const last = state.appointmentReads.at(-1);
@@ -35,16 +43,18 @@ export class AppointmentEnquiryTurns {
         } else {
           const selected = await awaitUntilAbort(this.#host.selectAppointmentEnquiry?.({ ...query, ...request }) ?? Promise.resolve(undefined), signal);
           interpretation = !selected ? { kind: "appointmentsFailure", reason: "unavailable" } : !selected.ok
-            ? { kind: "appointmentsFailure", reason: selected.error.kind } : selected.value.snapshot.appointments.length !== 1
-              ? { kind: "appointmentsFailure", reason: "malformed" } : { kind: "appointments", ...selected.value, declareRange: true };
+            ? { kind: "appointmentsFailure", reason: selected.error.kind } : selected.value.snapshot.appointments.length !== 1 || !checkedTime(selected.value.checkedAt, selected.value.snapshot.observedAt)
+              ? { kind: "appointmentsFailure", reason: "malformed" } : { kind: "appointments", snapshot: selected.value.snapshot,
+                from: selected.value.from, to: selected.value.to, declareRange: true };
         }
       } else {
         const read = await awaitUntilAbort(this.#host.readAppointmentEnquiry?.({ ...query, ...request }) ?? Promise.resolve(undefined), signal);
-        interpretation = !read ? { kind: "appointmentsFailure", reason: "unavailable" } : read.ok
-          ? { kind: "appointments", ...request, snapshot: read.value, declareRange: true } : { kind: "appointmentsFailure", reason: read.error.kind };
+        interpretation = !read ? { kind: "appointmentsFailure", reason: "unavailable" } : !read.ok
+          ? { kind: "appointmentsFailure", reason: read.error.kind } : !checkedTime(read.value.checkedAt, read.value.snapshot.observedAt)
+            ? { kind: "appointmentsFailure", reason: "malformed" } : { kind: "appointments", ...request, snapshot: read.value.snapshot, declareRange: true };
       }
     } catch { interpretation = { kind: "appointmentsFailure", reason: "unavailable" }; }
     if (signal.aborted) return err({ kind: "staleTurn" });
-    return new CallRuntime(this.#ledger, scope).acceptTurn(turn, interpretation, now, state.conversationRevision);
+    return new CallRuntime(this.#ledger, scope).acceptTurn(turn, interpretation, acceptedAt, state.conversationRevision);
   }
 }

@@ -160,9 +160,10 @@ export interface WorkflowHost {
 export type AppointmentEnquiryQuery = Omit<WorkflowQuery, "operation" | "replaceCanceledChange"> & Readonly<{ now: string }>;
 /** An operation-bound read owner resolves its private proof. Caller/model commands never supply it. */
 export interface AppointmentEnquiryHost {
-  readAppointmentEnquiry(query: AppointmentEnquiryQuery & Readonly<{ from: string; to: string }>): Promise<Result<AppointmentRead, AppointmentReadFailure>>;
+  readAppointmentEnquiry(query: AppointmentEnquiryQuery & Readonly<{ from: string; to: string }>): Promise<Result<Readonly<{
+    snapshot: AppointmentRead; checkedAt: string }>, AppointmentReadFailure>>;
   selectAppointmentEnquiry(query: AppointmentEnquiryQuery & Readonly<{ choice: 1 | 2 | 3 }>): Promise<Result<Readonly<{
-    snapshot: AppointmentRead; from: string; to: string }>, AppointmentReadFailure>>;
+    snapshot: AppointmentRead; from: string; to: string; checkedAt: string }>, AppointmentReadFailure>>;
 }
 
 /** Opaque selections and proof are resolved by the host; neither is a provider ID from the model. */
