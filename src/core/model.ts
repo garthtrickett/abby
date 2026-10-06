@@ -242,12 +242,13 @@ export type AppointmentRead = Readonly<{
   appointments: readonly Readonly<{ appointmentRef: string; startsAt: string; endsAt: string }>[];
 }>;
 
+export type MenuClarificationReason = "menuAmbiguous" | "menuRejected" | "menuUnavailable";
 export type TurnInterpretation =
   | Readonly<{ kind: "workflowStarted"; operation: ActionKind; next: "codeRequired" | "intakeRequired" }>
   | Readonly<{ kind: "outcomeQuery" }>
   | Readonly<{ kind: "modelPending"; taskRef: string }>
   | Readonly<{ kind: "modelFallback" }>
-  | Readonly<{ kind: "clarify" }>
+  | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason }>
   | Readonly<{ kind: "requestAction"; request: ActionRequest }>
   | Readonly<{ kind: "affirm"; actionKey: string; digest: string; affirmative: boolean }>
   | Readonly<{ kind: "handoff"; reason: StaffReason }>

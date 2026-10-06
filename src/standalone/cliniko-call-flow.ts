@@ -12,6 +12,7 @@ import type { ClinikoIntakeBookingSessionConfig } from "./cliniko-intake-booking
 import { ClinikoReschedulingSession } from "./cliniko-rescheduling-session.ts";
 import { NoStoredKnowledge } from "./no-stored-knowledge.ts";
 import type { ClinikoIntakeDraft } from "../cliniko/patient-intake.ts";
+import { PlayedMenuSelection } from "./played-menu-selection.ts";
 
 export type ClinikoWorkflow = "book" | "cancel" | "reschedule" | "intake";
 export type ClinikoCallFlowConfig = Omit<ClinikoBookingSessionConfig, "callerApprovalPath" | "bookingApprovalPath"> & Readonly<{
@@ -37,6 +38,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   #intakeDraftRef: string | undefined;
   #publicMenu: Readonly<{ kind: "booking" | "rescheduling"; stage: "targets" | "offers" | null }> | undefined;
   #reschedulingTargetSelected = false;
+  readonly #spokenMenu = new PlayedMenuSelection();
   private constructor(config: ClinikoCallFlowConfig) {
     super(); this.#config = Object.freeze({ ...config, receipt: structuredClone(config.receipt), inbound: structuredClone(config.inbound),
       cliniko: Object.freeze({ ...config.cliniko }), approvals: Object.freeze({ ...config.approvals }), ...(config.intake ? { intake: Object.freeze({ ...config.intake }) } : {}) });
@@ -56,6 +58,12 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   get closed(): boolean { return this.#lifetime.signal.aborted; }
   /** Non-secret transport state. The input owner closes ordinary media before mail starts. */
   get verificationRequired(): boolean { return this.#verificationRequired; }
+  async spokenMenuIntent(text: string) {
+    if (this.closed || this.#verificationRequired) return undefined;
+    const state = await this.#config.ledger.read(this.#config.receipt.callId, this.#config.receipt.scope);
+    if (!state.ok || this.closed || state.value.sessionLease?.sessionId !== this.#config.sessionId) return undefined;
+    return this.#spokenMenu.resolve(text, state.value, (this.#config.clock ?? (() => new Date().toISOString()))());
+  }
   /** The model sees only routing and action-status enums; patient data and host refs stay in this owner. */
   async publicIntentContext(): Promise<Readonly<{ workflow: ClinikoWorkflow | null; verificationRequired: boolean;
     lastAction: Readonly<{ kind: "book" | "cancel" | "reschedule" | "intake"; status: string; confirmationPlayed: boolean }> | null;
@@ -157,11 +165,16 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   #booking() { return this.#owner instanceof ClinikoBookingSession ? this.#owner.effects : this.#owner instanceof ClinikoIntakeBookingSession ? this.#owner : undefined; }
   bookingMenuAvailable(): boolean { return this.#booking()?.bookingMenuAvailable() === true; }
   async readBookingMenu(query: BookingMenuQuery & Readonly<{ from: string; to: string }>) {
+    this.#spokenMenu.clear();
     const result = await (this.#booking()?.readBookingMenu(query) ?? readDenied());
-    if (result.ok && !this.closed) this.#publicMenu = { kind: "booking", stage: null };
+    if (result.ok && !this.closed) {
+      this.#publicMenu = { kind: "booking", stage: null };
+      this.#spokenMenu.remember({ kind: "booking", stage: null, turnId: query.turnId, snapshot: result.value });
+    }
     return result;
   }
   async selectBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>) {
+    this.#spokenMenu.clear();
     const result = await (this.#booking()?.selectBookingMenu(query) ?? readDenied());
     if (result.ok && !this.closed) this.#publicMenu = undefined;
     return result;
@@ -169,11 +182,16 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   async resolveBooking(scope: LocationScope, verificationRef: string, offerRef: string, now: string, signal?: AbortSignal) { return this.#booking()?.resolveBooking(scope, verificationRef, offerRef, now, signal) ?? readDenied(); }
   reschedulingMenuAvailable(): boolean { return this.#owner instanceof ClinikoReschedulingSession && this.#owner.effects.reschedulingMenuAvailable(); }
   async readReschedulingMenu(query: ReschedulingMenuQuery & Readonly<{ from: string; to: string; priorTurnId?: string }>) {
+    this.#spokenMenu.clear();
     const result = await (this.#owner instanceof ClinikoReschedulingSession ? this.#owner.effects.readReschedulingMenu(query) : readDenied());
-    if (result.ok && !this.closed) this.#publicMenu = { kind: "rescheduling", stage: query.stage };
+    if (result.ok && !this.closed) {
+      this.#publicMenu = { kind: "rescheduling", stage: query.stage };
+      this.#spokenMenu.remember({ kind: "rescheduling", stage: query.stage, turnId: query.turnId, snapshot: result.value });
+    }
     return result;
   }
   async selectReschedulingMenu(query: ReschedulingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>) {
+    this.#spokenMenu.clear();
     const result = await (this.#owner instanceof ClinikoReschedulingSession ? this.#owner.effects.selectReschedulingMenu(query) : readDenied());
     if (result.ok && !this.closed) {
       this.#publicMenu = undefined;
@@ -191,5 +209,5 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   async reconcile(mutation: HostMutation) { return { kind: "stillUnknown" as const, actionKey: mutation.actionKey }; }
   async openTask(item: StaffItem) { return { kind: "rejected" as const, taskKey: item.key }; }
   async reconcileTask(item: StaffItem) { return { kind: "stillUnknown" as const, taskKey: item.key }; }
-  dispose(): void { this.#lifetime.abort(); this.#config.signal.removeEventListener("abort", this.#onClose); this.#owner?.dispose(); this.#owner = undefined; this.#workflow = undefined; this.#verificationRequired = false; this.#intakeDraftRef = undefined; this.#publicMenu = undefined; this.#reschedulingTargetSelected = false; }
+  dispose(): void { this.#spokenMenu.clear(); this.#lifetime.abort(); this.#config.signal.removeEventListener("abort", this.#onClose); this.#owner?.dispose(); this.#owner = undefined; this.#workflow = undefined; this.#verificationRequired = false; this.#intakeDraftRef = undefined; this.#publicMenu = undefined; this.#reschedulingTargetSelected = false; }
 }
