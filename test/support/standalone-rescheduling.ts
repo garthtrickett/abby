@@ -25,8 +25,9 @@ export async function standaloneReschedulingFixture(options: { scope?: LocationS
   verificationBudget?: PatientVerificationBudget; rateBudget?: ClinikoRequestBudget; fetchPort?: typeof fetch;
   fetchAround?: (port: typeof fetch) => typeof fetch;
   authorityFor?: (config: Omit<ClinikoReschedulingAuthorityConfig, "policy" | "feePolicy">, port: typeof fetch) => Promise<AppointmentChangeAuthority>;
-  staffWorkEnabled?: boolean; lostRecall?: boolean; lostMove?: boolean } = {}) {
+  staffWorkEnabled?: boolean; lostRecall?: boolean; lostMove?: boolean; cancellationExecute?: boolean } = {}) {
   const f = await callerVerificationFixture({ operation: options.operation ?? "appointments.reschedule", reschedulingExecute:true,
+    ...(options.cancellationExecute ? { cancellationExecute: true } : {}),
     ...(options.scope ? { scope:options.scope } : {}), ...(options.folder ? { folder:options.folder } : {}),
     ...(options.staffWorkEnabled === undefined ? {} : { staffWorkEnabled:options.staffWorkEnabled }) });
   f.session.dispose();

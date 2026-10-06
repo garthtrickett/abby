@@ -45,7 +45,8 @@ export class TextReception {
     this.model = model;
   }
 
-  async startWorkflow(scope: LocationScope, turn: FinalCallerTurn, operation: import("../core/model.ts").ActionKind, now: string, expectedConversationRevision?: number, external?: AbortSignal) {
+  async startWorkflow(scope: LocationScope, turn: FinalCallerTurn, operation: import("../core/model.ts").ActionKind, now: string,
+    expectedConversationRevision?: number, external?: AbortSignal, replaceCanceledChange = false) {
     const state = await this.ledger.read(turn.callId, scope);
     if (!state.ok) return state;
     if (!this.host.startWorkflow || !state.value.policy.policyVersion || !turn.sessionId || turn.quality !== "clear" || state.value.sessionLease?.sessionId !== turn.sessionId ||
@@ -55,7 +56,8 @@ export class TextReception {
     if (signal.aborted) return err({ kind: "staleTurn" as const });
     let selected;
     try { selected = await awaitUntilAbort(this.host.startWorkflow({ scope, callId: turn.callId, sessionId: turn.sessionId,
-      policyVersion: state.value.policy.policyVersion, operation, signal }), signal); }
+      policyVersion: state.value.policy.policyVersion, operation, signal, expectedConversationRevision: state.value.conversationRevision,
+      ...(replaceCanceledChange ? { replaceCanceledChange: true as const } : {}) }), signal); }
     catch { selected = undefined; }
     if (external?.aborted) return err({ kind: "staleTurn" as const });
     const runtime = new CallRuntime(this.ledger, scope);

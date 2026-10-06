@@ -242,7 +242,8 @@ export type AppointmentRead = Readonly<{
   appointments: readonly Readonly<{ appointmentRef: string; startsAt: string; endsAt: string }>[];
 }>;
 
-export type MenuClarificationReason = "menuAmbiguous" | "menuRejected" | "menuUnavailable" | "proposalCorrection";
+export type MenuClarificationReason = "menuAmbiguous" | "menuRejected" | "menuUnavailable" | "proposalCorrection" |
+  "changeAmbiguous" | "targetDisagreement" | "changeUnsupported" | "changeAfterSend";
 export type TurnInterpretation =
   | Readonly<{ kind: "workflowStarted"; operation: ActionKind; next: "codeRequired" | "intakeRequired" }>
   | Readonly<{ kind: "outcomeQuery" }>

@@ -6,11 +6,12 @@ import { clearAffirmation } from "../voice/voice-session.ts";
 import type { ClinikoCallFlow, ClinikoWorkflow } from "./cliniko-call-flow.ts";
 import { clinicDateAt, clinicDayStartUtc } from "./clinic-clock.ts";
 import { callerCorrection } from "./caller-correction.ts";
+import { appointmentChangeLanguage } from "./appointment-change-language.ts";
 
 const endpoint = "https://api.openai.com/v1/responses";
 const unavailable = { kind: "intentUnavailable" } as const;
 const maxBytes = 16 * 1024;
-export const clinicalIntentPromptVersion = "clinical-intent-v5";
+export const clinicalIntentPromptVersion = "clinical-intent-v6";
 
 const schema = { type: "object", additionalProperties: false,
   properties: {
@@ -167,7 +168,27 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     const corrected = await config.owner.correctionIntent(turn, signal);
     if (signal?.aborted) return err(unavailable);
     if (corrected) return ok(corrected);
+    const selection = await config.owner.spokenMenuIntent(turn.text);
+    if (signal?.aborted) return err(unavailable);
+    if (selection) return ok(selection);
+    const change = appointmentChangeLanguage(turn.text);
     const correction = callerCorrection(turn.text, date);
+    if ((change || correction) && before.lastAction && ["committed", "uncertain", "needsReview", "dispatched"].includes(before.lastAction.status))
+      return ok({ kind: "clarify", reason: "changeAfterSend" });
+    if (change?.kind === "clarify") {
+      if (change.reason === "targetDisagreement") config.owner.appointments?.clearSelection();
+      return ok(change);
+    }
+    if (change?.kind === "request" && before.workflow !== null && !before.verificationRequired) {
+      if (change.operation !== before.workflow) return ok({ kind: "workflow", operation: change.operation,
+        ...(["cancel", "reschedule"].includes(before.workflow) ? { replaceCanceledChange: true as const } : {}) });
+      if (change.operation === "cancel") {
+        if (change.choice) return ok(await config.owner.selectCancellationIntent(turn, change.choice, signal));
+        const proof = await config.owner.cancellationProof();
+        return proof ? ok({ kind: "cancel", verificationRef: proof.verificationRef, targetRef: "selected" }) : err(unavailable);
+      }
+      return ok({ kind: "clarify", reason: "proposalCorrection" });
+    }
     if (correction && before.workflow !== null && !before.verificationRequired &&
         (!before.lastAction || ["awaitingConfirmation", "canceled"].includes(before.lastAction.status))) {
       if (correction.kind === "date" && before.workflow === "book") return ok({ kind: "bookingMenu", from: correction.date, to: correction.date });
@@ -176,9 +197,6 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
           ...(before.lastAction?.kind === "reschedule" ? { correcting: true as const } : {}) });
       return ok({ kind: "clarify", reason: "proposalCorrection" });
     }
-    const selection = await config.owner.spokenMenuIntent(turn.text);
-    if (signal?.aborted) return err(unavailable);
-    if (selection) return ok(selection);
     const controller = new AbortController(), cancel = () => controller.abort();
     signal?.addEventListener("abort", cancel, { once: true }); if (signal?.aborted) controller.abort();
     const timer = setTimeout(() => controller.abort(), 5_000);
@@ -201,6 +219,7 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
             "If lastAction is present and the caller asks whether it worked, succeeded, was booked, was canceled, moved or saved, return kind outcome with every other field null. The exact question 'Did that work?' is always outcome, never unsupported.",
             "An exact yes is handled by the trusted call owner before this model request. Do not classify confirmation here.",
             "Use unsupported when an operation, stage, date or selection is ambiguous. Never infer identity or permission from caller text.",
+            "A request containing both cancellation and moving needs clarification. Questions about an appointment time, disagreement with a listed target, and changing the patient/type/duration are not cancellation requests.",
             `Resolve dates relative to clinic local date ${date}. For menu or appointments return unambiguous YYYY-MM-DD from/to dates spanning at most seven days. Set operation only for kind workflow; it must be null for every other kind. All unused fields must be null.`,
           ].join(" ") },
           { role: "user", content: JSON.stringify({ callerText: turn.text, workflow: before.workflow, phase: publicPhase(before),
@@ -214,6 +233,11 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
       if (!decision || !after || controller.signal.aborted || after.workflow !== before.workflow ||
           after.verificationRequired !== before.verificationRequired || JSON.stringify(after.lastAction) !== JSON.stringify(before.lastAction) ||
           JSON.stringify(after.lastMenu) !== JSON.stringify(before.lastMenu) || after.reschedulingTargetSelected !== before.reschedulingTargetSelected) return err(unavailable);
+      if ((decision.kind === "cancel" || decision.kind === "workflow" && decision.operation === "cancel") &&
+          (change?.kind !== "request" || change.operation !== "cancel"))
+        return ok({ kind: "clarify", reason: "changeAmbiguous" });
+      if (decision.kind === "workflow" && change?.kind === "request" && decision.operation !== change.operation)
+        return ok({ kind: "clarify", reason: "changeAmbiguous" });
       return await awaitUntilAbort(mapDecision(decision, after, today, config.owner), controller.signal) ?? err(unavailable);
     } catch { return err(unavailable); }
     finally { clearTimeout(timer); signal?.removeEventListener("abort", cancel); }

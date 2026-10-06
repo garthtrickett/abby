@@ -21,6 +21,7 @@ export class ClinikoCancellationAuthority implements AppointmentChangeAuthority,
   }
   list(...args: Parameters<ClinikoAppointmentSelection["list"]>) { return this.#source.list(...args); }
   select(...args: Parameters<ClinikoAppointmentSelection["select"]>) { return this.#source.select(...args); }
+  clearSelection(): void { this.#source.clearSelection(); }
   async resolve(query: Parameters<AppointmentChangeAuthority["resolve"]>[0]): ReturnType<AppointmentChangeAuthority["resolve"]> {
     if (query.kind !== "cancel") return err({ kind: "unavailable", target: "appointment" });
     const result = await this.#source.resolveTarget(query);

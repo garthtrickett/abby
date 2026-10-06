@@ -75,11 +75,13 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
       latest.mutation.request.offer.startsAt === "2026-10-07T23:30:00.000Z" && Object.values(before.actions)
         .some(action => action.status === "awaitingConfirmation" && after.actions[action.key]?.status === "canceled"); break;
     case "revisedDate": pass = last?.kind === "bookingMenu" && last.from === "2026-10-07" && last.to === "2026-10-07"; break;
-    case "outcome": pass = last?.kind === "outcome" && /confirmed|can't confirm|contact the clinic/i.test(text); break;
+    case "outcome": pass = (last?.kind === "outcome" || last?.kind === "clarify" && last.reason === "changeAfterSend") &&
+      /confirmed|can't confirm|contact the clinic/i.test(text); break;
     case "readOnly": pass = last?.kind === "appointments" && !statuses.includes("awaitingConfirmation"); break;
-    case "clarify": pass = /which|clarif|repeat|did you mean|please (say|tell)|do you want/i.test(text) && !statuses.includes("awaitingConfirmation"); break;
+    case "clarify": pass = /which|clarif|repeat|did you mean|please (say|tell)|do you want|would you like/i.test(text) && !statuses.includes("awaitingConfirmation"); break;
     case "human": pass = /reception|clinic|staff|person/i.test(text) && /contact the clinic|transfer.*unavailable|request.*saved|can't confirm.*request/i.test(text); break;
-    case "unsupported": pass = last === null && /can't|cannot|not supported|contact.*clinic|unavailable/i.test(text); break;
+    case "unsupported": pass = (last === null || last?.kind === "clarify" && last.reason === "changeUnsupported") &&
+      /can't|cannot|not supported|contact.*clinic|unavailable/i.test(text) && !statuses.includes("awaitingConfirmation"); break;
     // The current public intent cannot carry these constraints/facts. An empty
     // provider response or unsupported model decision is not evidence of them.
     case "constraints": case "boundedSearch": case "publicFacts": pass = false; break;

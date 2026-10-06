@@ -44,6 +44,7 @@ export class ClinikoAppointmentSelection implements AppointmentHost {
   readonly #targets = new Map<string, Selection>();
   #choices: Readonly<{ snapshot: AppointmentRead; from: string; to: string }> | undefined;
   #listing = 0;
+  clearSelection(): void { ++this.#listing; this.#targets.clear(); this.#choices = undefined; }
   private constructor(config: Config, shard: string, fetchPort: typeof fetch) {
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }) });
     this.#base = `https://api.${shard}.cliniko.com/v1`; this.#budget = config.rateBudget ?? new ClinikoReadBudget(); this.#fetch = fetchPort;
@@ -123,16 +124,17 @@ export class ClinikoAppointmentSelection implements AppointmentHost {
     return found ? ok(found) : err({ kind: "unavailable" });
   }
 
-  async select(scope: LocationScope, verificationRef: string, choice: 1 | 2 | 3, now: string):
+  async select(scope: LocationScope, verificationRef: string, choice: 1 | 2 | 3, now: string, external?: AbortSignal):
     Promise<Result<Readonly<{ snapshot: AppointmentRead; from: string; to: string }>, AppointmentReadFailure>> {
     const prior = this.#choices; this.#choices = undefined;
+    const epoch = ++this.#listing, signal = AbortSignal.any([this.#lifetime.signal, ...(external ? [external] : [])]);
     const selected = prior?.snapshot.appointments[choice - 1];
     if (!sameScope(scope, this.#config.scope) || ![1, 2, 3].includes(choice) || !prior || !selected ||
-        prior.snapshot.verificationRef !== verificationRef || !this.#currentTime(now) || Date.parse(now) >= Date.parse(prior.to)) return err({ kind: "notFound" });
+        prior.snapshot.verificationRef !== verificationRef || signal.aborted || !this.#currentTime(now) || Date.parse(now) >= Date.parse(prior.to)) return err({ kind: "notFound" });
     const fresh = await this.resolveTarget({ scope, callId: this.#config.callId, sessionId: this.#config.sessionId,
       policyVersion: this.#config.policyVersion, kind: this.#config.policy instanceof OwnerFileCancellationPolicy ? "cancel" : "reschedule", targetRef: selected.appointmentRef, verificationRef,
-      patientId: prior.snapshot.patientRef, phase: "proposal", now, signal: this.#lifetime.signal });
-    if (!fresh.ok || this.#lifetime.signal.aborted || this.#targets.get(selected.appointmentRef)?.verificationRef !== verificationRef) return err({ kind: "notFound" });
+      patientId: prior.snapshot.patientRef, phase: "proposal", now, signal });
+    if (!fresh.ok || signal.aborted || epoch !== this.#listing || this.#targets.get(selected.appointmentRef)?.verificationRef !== verificationRef) return err({ kind: "notFound" });
     this.#targets.set("selected", this.#targets.get(selected.appointmentRef)!);
     return ok({ snapshot: { ...prior.snapshot, observedAt: now, appointments: [selected] },
       from: new Date(Math.max(Date.parse(now), Date.parse(prior.from))).toISOString(), to: prior.to });

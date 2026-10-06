@@ -121,7 +121,7 @@ export class ClinikoCancellationSession {
   beginVerification(): ReturnType<CallerVerificationSession["begin"]> { return this.#verification.begin(); }
   submitCode(code: string): ReturnType<CallerVerificationSession["submitCode"]> { return this.#verification.submitCode(code); }
   /** Private owner wiring for existing SAM/gateway commands; never send this grant to a model. */
-  verified(): ReturnType<CallerVerificationSession["verified"]> { return this.#verification.verified(); }
+  verified(signal?: AbortSignal): ReturnType<CallerVerificationSession["verified"]> { return this.#verification.verified(signal); }
   get appointments(): ClinikoCancellationAuthority { return this.#authority; }
   get effects(): ClinikoCancellationHost { return this.#host; }
   dispose(): void {
