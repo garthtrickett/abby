@@ -80,6 +80,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       routingHost: new ReferenceNumberRoutingHost([{ accountRef: accountSid, dialedNumber: config.inbound.dialedNumber, ...scope, routeVersion: "workflow-voice" }]),
       stream, send, closeTransport: close, readiness: async () => ok(true), now, resolveIntent: async () => ok({ kind: "model" }),
       clinicalWorkflow: { policies: policy,
+        ...(config.publicKnowledge ? { publicKnowledge: config.publicKnowledge } : {}),
         create(context) { ledger = context.ledger; flow = resultValue(ClinikoCallFlow.create({ ...config, ...context,
           policyVersion: config.policyVersion, fetchPort: provider,
           ...(config.intake ? { intake: { ...config.intake, presentation: context.privatePresentation } } : {}) }));

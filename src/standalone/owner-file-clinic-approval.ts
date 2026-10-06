@@ -57,6 +57,8 @@ export class OwnerFileClinicApproval<Value extends ClinicApproval> {
       return ok(new OwnerFileClinicApproval(config, captured, found.value, sourceHash));
     } catch { return err({ kind: "unavailable" }); }
   }
+  /** Opaque identity of this exact source and approving membership snapshot. */
+  bindingFingerprint(): string { return hash([this.#sourceHash, this.#membershipHash]); }
   async current(scope: LocationScope): Promise<Result<Value | undefined, ClinicApprovalFailure>> {
     const config = this.#config;
     try {

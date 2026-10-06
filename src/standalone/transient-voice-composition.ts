@@ -33,12 +33,14 @@ import { DisabledStandaloneHost } from "./disabled-host.ts";
 import { VerifiedAppointmentReadSession } from "./verified-appointment-read-session.ts";
 import { ClinikoCallFlow } from "./cliniko-call-flow.ts";
 import { PrivateWorkflowKeypad } from "./private-workflow-keypad.ts";
+import { OwnerFileClinicFAQs } from "./owner-file-clinic-faqs.ts";
 import { PrivateIntakeVoiceInput } from "./private-intake-voice-input.ts";
 
 export type ClinikoVoiceWorkflow = Readonly<{
   /** A trusted host supplies current scoped activation evidence and settings. The runnable CLI
    * leaves this entire seam unset while clinic, mail and speech activation remain unproven. */
   policies: PolicyStore;
+  publicKnowledge?: OwnerFileClinicFAQs;
   create(context: Readonly<{ receipt: AdmissionReceipt; inbound: AuthenticatedInboundCall; sessionId: string;
     ledger: MemoryLedger; policies: PolicyStore; signal: AbortSignal; clock: () => string;
     privatePresentation: Readonly<{ play(text: string, signal: AbortSignal): Promise<boolean> }> }>): ClinikoCallFlow;
@@ -110,7 +112,9 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
     if (loaded.ok) greeting = loaded.value.greeting;
     return loaded;
   } });
-  const admission = new CallAdmissionService(ledger, router.resolve, now, readiness);
+  const publicKnowledge = config.clinicalWorkflow?.publicKnowledge;
+  if (publicKnowledge !== undefined && !(publicKnowledge instanceof OwnerFileClinicFAQs)) throw new TypeError("invalid public clinic facts");
+  const admission = new CallAdmissionService(ledger, router.resolve, now, readiness, publicKnowledge);
   const intake = new SharedNumberIntakeService(ledger, router, admission, now);
   const host = new DisabledStandaloneHost();
   const lifetime = new AbortController();
@@ -159,7 +163,7 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
         list: (...args: Parameters<NonNullable<ClinikoCallFlow["appointments"]>["list"]>) => workflow?.appointments?.list(...args) ?? Promise.resolve(err({ kind: "unavailable" as const })),
         select: (...args: Parameters<NonNullable<ClinikoCallFlow["appointments"]>["select"]>) => workflow?.appointments?.select(...args) ?? Promise.resolve(err({ kind: "unavailable" as const })),
       } : verifiedRead?.appointments;
-      const reception = new TextReception(ledger, policy, workflow ?? host, availability, appointments, undefined, host);
+      const reception = new TextReception(ledger, policy, workflow ?? host, availability, appointments, undefined, publicKnowledge ?? host);
       voice = new VoiceSession(receipt.callId, sessionId, receipt.scope, ledger, reception, playback,
         workflow ? config.clinicalWorkflow!.intent(workflow) : config.resolveIntent, undefined, config.monotonicNow, { greeting });
       return voice;

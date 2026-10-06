@@ -1180,6 +1180,7 @@ The initial corpus has these minimum journeys. One scenario may cover several re
 | `E2E-312` | Signed booking and rescheduling calls filter clinic-local start-time windows before the three-choice limit, retain and explicitly clear constraints, re-read a bounded later-week range, and require fresh played confirmation; ambiguous clocks, unplayed menus and failed reads cannot select, and agent commands share the same seam without durable patient data | FR-03, FR-06, FR-11, FR-18, FR-22 |
 | `E2E-313` | Signed and agent-native searches use independently approved same-location practitioners, retain caller preferences and local windows, disclose a bounded earliest comparison and confirm the exact provider/location; incomplete reads, stale labels, foreign locations, revoked authority and interrupted menus cannot select or send, while correction and uncertain outcomes preserve one-send and privacy contracts | FR-03, FR-06, FR-11, FR-18, FR-22 |
 | `E2E-314` | Signed and agent-native appointment enquiries use independent read-only approval, patient verification and a disclosed upcoming range without clinical write activation; exact played selections re-read the appointment, while stale permissions, changed records, foreign scopes and unplayed lists cannot disclose details or create a mutation | FR-03, FR-06, FR-11, FR-18, FR-22 |
+| `E2E-315` | Signed and agent-native public clinic FAQs use exact current call-pinned approval without patient verification; changed content or membership, expired or revoked approval and model-invented wording cannot disclose unapproved facts or prepare clinical writes | FR-03, FR-09, FR-11, FR-18, FR-22 |
 
 The corpus runs with deterministic synthetic media frames, partial hypotheses and segment-final transcription events, synthesis chunks, playback acknowledgments, typed model effect results, clock, and host effects against the reference host and standalone adapters. It enters through `VoiceSession.begin` and its media/transcript methods, not by calling `CallRuntime.acceptTurn` directly as a substitute for voice E2E. The harness can delay a playback acknowledgment or deliver it after a clear to prove that queued/cleared audio does not count as played. It can race a caller correction with `startNextPresentation`, drop a commit wake-up, restart the dispatcher task while retaining the live session, or lose the entire session process before activation or after atomic start. Assertions distinguish superseded pending speech from unproven started speech, reject `played` for a pending or transfer intent, and verify exactly one terminal resolution without duplicate media. `E2E-035` and `E2E-082` through `E2E-084` separately submit invalid presentation outcomes through T4 and prove each is rejected before a second SAM transition. `E2E-019` through `E2E-026` individually cover final turn, playback, interruption, transfer, and fallback behavior. Each independently triggerable voice or effect fault has its own scenario ID so cases can run in parallel and a failure identifies one behavior. Every provider runs the same scenario IDs; assertions use its approved support-matrix row and fail if its declared capability snapshot disagrees. Provider-specific contract tests separately cover permission limits, pagination, rate limits, availability rules, unsupported mutations, and lost responses. Scheduled smoke tests use sanctioned provider test accounts and a limited real telephony path, including an actual interruption and transfer. Tests contain no live patient data.
 
@@ -1297,3 +1298,46 @@ After the protected source finishes, the read host rechecks admitted ownership a
 Agents use `appointments.enquiry.start.v1`, `appointments.enquiry.read.v1` and `appointments.enquiry.select.v1` through the same turn owner. These inputs contain no patient ID, verification reference or provider appointment ID; extra authority fields are rejected by the exact command schema. Private verification remains a trusted transport step, and progress replies strip patient data. The legacy host-issued `appointments.read.v1` contract remains available to existing protected compositions.
 
 A new explicit clinical request after a pure enquiry may select its own independently enabled owner only after fresh operation-bound verification; no read proof, private list or selected appointment transfers. It still requires protected clinical evidence, exact played details and a separate affirmation. A disabled clinical workflow is unavailable even after a successful enquiry. This patch does not replace an active clinical owner with a read owner, read another patient's chart, bypass standalone privacy, or activate the live runner. E2E-314 covers parallel signed synthetic calls, operation-switch confirmation, agent commands and PostgreSQL canaries. Approved FAQs, multiple services, full conversational acceptance and carrier/email activation remain separate work.
+
+
+### Standalone public clinic FAQs
+
+The trusted standalone host may provide `OwnerFileClinicFAQs` alongside its
+clinical composition. Its owner-only file contains already published clinic
+facts for directions/parking, opening hours and contact, with exact admitted
+scope, policy version, current clinic-admin approval and effective interval.
+These are public configuration, separate from patient information under D-06 and
+D-11. The operator must provision public material only: neither schema validation
+nor an approval flag establishes that arbitrary prose is free of patient data.
+There is no caller, intake, patient-note, model or database editor for this file;
+the database free-text knowledge gate remains closed. Synthetic fixtures use only
+invented public facts and do not approve any actual clinic's directions.
+
+Admission captures source versions including both the full approval content and
+the approving membership snapshot. An old call cannot adopt newly approved or
+changed material, even if the operator reuses a revision label. Each new query
+checks owner-file permissions, current content, membership, effective interval
+and call scope again. New calls can capture a newly approved version. Missing or
+invalid configured content cannot supply an admission snapshot; revoked or
+draft content supplies no approved facts. Current automation/session ownership
+also gates the classifier and SAM turn. Reads are bounded to five seconds and
+files to the existing eight-kilobyte owner-approval limit.
+
+The structured classifier receives only the available public topic choices and
+exact approved text, alongside existing public routing enums. A `faq` decision
+selects a bounded public choice; it supplies no generated answer, clinical ID,
+patient permission or write authority. The trusted mapper resolves the original
+choice against fresh current source versions. `TextReception.answer` then reads
+the source again and SAM accepts exactly one call-pinned source with exactly its
+approved text. Unknown information produces the existing truthful unavailable
+notice. A bounded patient-clearance language guard directs the caller to their
+clinician/clinic and provides no medical advice, diagnosis or urgency assessment;
+the model cannot turn those matched questions into a public FAQ. Public answers do not require patient verification or change clinical
+workflow. Repetition uses the same current approved words; this does not claim
+that the speech provider implements slower prosody.
+
+The existing `knowledge.answer.v2` agent command uses the same evidence path and
+cannot substitute invented wording. E2E-315 exercises signed HTTP/WSS calls,
+approval changes during model interpretation, repeat/interruption, agent answers
+and PostgreSQL canaries. The runnable listener still leaves the optional clinical
+and FAQ source seam unset until its own activation requirements are satisfied.
