@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "kind": "signed-stale-menu-recovery-sequence",
+  "sourceRevision": "903bcdadf3c8ec555e50590c94c2d0a980087ca2",
+  "testFile": "test/voice/stale-menu-recovery.test.ts",
+  "testSha256": "730b1f9b50357397c5364210897a80deb43c4f92883a6b2ca4a43fcab22196f9",
+  "command": "node --test test/voice/stale-menu-recovery.test.ts",
+  "result": "passed-on-existing-behavior-after-fixture-correction",
+  "productionBehaviorChanged": false,
+  "modes": [
+    "superseded",
+    "expired",
+    "unplayedMenu",
+    "unplayedConfirmation",
+    "vanished",
+    "duplicateFinal"
+  ],
+  "assertedSequence": [
+    "old menu actually played",
+    "old reference clarified with zero proposals/writes",
+    "further selection denied before fresh representation",
+    "old native host menu binding denied",
+    "current options read and actually played",
+    "current offer revalidated and exact fresh proposal created",
+    "fresh confirmation actually played",
+    "separate yes yields exactly one committed booking",
+    "old offered starts never resolved into a proposal"
+  ],
+  "privacy": "Synthetic private code excluded from ordinary transcripts; disposable PostgreSQL patient-data canary scan clear",
+  "fixtureCorrection": "The first run placed the denied old native selection before voice; its intended spoken-menu invalidation changed the tested state. Moving that probe after ordinary caller turns isolates the required voice sequence. Presentation IDs use the actual hashed notice helper."
+}

@@ -24,10 +24,13 @@ approved preferences, windows, appointment enquiries and public facts.
    assignment, notification or response-time promise. The 25-test focused gate,
    final typecheck and strengthened stable all-45 baseline pass. This closes the
    demonstrated process-wording gap; the remaining clause map is still open.
-3. **CCP-007: incomplete stale-menu sequence proof, still open.** The baseline
-   checks only clarification. Required next: exercise old menu reference, fresh
-   representation, later selection, fresh exact confirmation and one possible
-   send; demonstrate that the old offer can never be reused.
+3. **CCP-007: connected stale-menu sequence now proved.** E2E-327 runs six
+   signed journeys on the existing behavior: old/expired reference, clarification,
+   denial without fresh representation, current played options, exact selected
+   start, new played confirmation and one inspected booking send. Interrupted
+   playback, provider-removed slots and repeated affirmation remain fenced.
+   The [before-change sequence evidence](baselines/stale-menu-sequence-before-v1.json)
+   records the implementation and separate test hash; no production fix was needed.
 4. **CCP-043/044: incomplete ownership/termination proof, still open.** The named
    cases prove safe text handling and prompt repair respectively. Their setup and
    approved termination clauses need direct transport/generation and finite-limit
@@ -37,7 +40,7 @@ approved preferences, windows, appointment enquiries and public facts.
    identify the ambiguous day/meridiem. This is partial wording evidence, not a
    proven unsafe selection.
 
-The next implementation order is 3, 4, then the wording check. These are
+The next implementation order is 4, then the wording check. These are
 local synthetic tasks; real carrier and email setup is outside these test goals
 and remains a separate release gate.
 
@@ -63,7 +66,7 @@ for standalone durable patient-specific records.
 | Goal | Evidence inspected | Remaining completion work |
 | --- | --- | --- |
 | 1. Runnable baseline and real model interpretation | Actual signed HTTP/WS setup, synthetic Cliniko/private email/playback, stable-source all-45 report; separate strict live model sample; failing reports preserved | Strengthen the acceptance clauses below; a named observation remains narrower than full prose |
-| 2. Latest played spoken choices | E2E-308 time/relative choice, rejected offers, ambiguity, evil model ordinal and interrupted menu; E2E-312 later bounded search | Complete stale-menu sequence and inspect explicit meridiem wording |
+| 2. Latest played spoken choices | E2E-308 time/relative choice, rejected offers, ambiguity, evil model ordinal and interrupted menu; E2E-312 later bounded search | Inspect explicit meridiem wording; stale-menu sequence now has connected evidence |
 | 3. Corrections | E2E-309 cancels old proposals before held interpretation, rereads replacements, rejects unplayed confirmation and requires a new affirmative; dated/window correction tests | Match each original clause to exact assertions and current passing run |
 | 4. Cancel versus move | E2E-310 mixed-operation clarification, denied switches, fresh operation verification, original target equality, one exact PATCH, sent/uncertain receipt preservation | Match original target and operation clauses to current passing evidence |
 | 5. Human/staff requests | E2E-311 independent permission/code, approved people, saved/uncertain receipts, no duplicate request; E2E-323 finite purpose; E2E-325 unknown missed-call reason | Map late-arrival and background-context clauses; real staff workflow acceptance remains separate |
@@ -135,9 +138,9 @@ Evidence to inspect: [targeted test](../test/voice/played-menu-selection.test.ts
 
 ### CCP-007 — stale-menu-selection
 
-Assessment: **Missing sequence evidence**. The named observation proves clarification only. E2E-308 tests an unplayed menu, not this full older-menu → fresh representation → new selection journey. Add a connected sequence before claiming the entire clause.
+Assessment: **Supported with connected sequence evidence**. E2E-327 proves both clauses across six signed synthetic journeys. Old/expired references produce no action, and another selection without fresh representation is refused. Fresh options and exact confirmation must actually play before one inspected booking. Interrupted playback and vanished slots require another representation/proposal. Old native menu bindings are denied, original offered starts never resolve into a proposal, and a repeated affirmative does not send again. No production behavior change was needed.
 
-Evidence to inspect: [targeted test](../test/voice/played-menu-selection.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [connected sequence test](../test/voice/stale-menu-recovery.test.ts), [sequence evidence](baselines/stale-menu-sequence-before-v1.json), [partial named baseline](baselines/clinic-conversation-after-staff-review-v24-v1.json).
 
 - `CCP-007-R01`: Clarify and re-present a current offer before any selection or confirmation.
 - `CCP-007-F01`: Reuse a stale or expired offer.
