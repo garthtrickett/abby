@@ -1199,3 +1199,57 @@ outside `test/support` are excluded from the baseline hash and bound separately
 in the direct evidence record; this added test does not change evaluator source.
 
 The added seven-case E2E-308 focus passed: `node --test test/voice/played-menu-selection.test.ts`. All earlier assertions remain intact; the latest test hash is recorded separately.
+
+## Identity, protected target, location and staff acceptance — 2026-10-06
+
+The original clause audit continues beyond the first eight cases. The direct
+[evidence record](baselines/identity-location-boundary-evidence-v1.json) binds main
+4ace885 and separate test hashes. All strengthened assertions pass on existing
+production behavior; no production code, capability, setting or patient storage
+change was needed.
+
+E2E-319 now measures the denial itself using counters captured beforehand, not
+only the later denied turns. Admission has zero patient/appointment reads before
+verification and no private appointment speech. Denial creates no provider work,
+mail or clinical write; synthetic patient first/last-name canaries remain absent
+from ordinary speech, model requests and PostgreSQL tables. Private workflows
+and old codes cannot revive; known sent receipts survive; approved public facts
+and urgent wording remain independent.
+
+E2E-310’s discrepancy fixture actually speaks a protected appointment at nine
+before the caller remembers ten. The private target is discarded, a bare
+cancellation is denied, and another source read returns the unchanged nine-o’clock
+target. Its exact played confirmation and separate affirmative cause one
+non-recurring cancellation PATCH, without writing caller recollection into time.
+
+E2E-313 checks the private offer scope and Demo North presentation, then observes
+the actual POST business, approved practitioner, type, verified patient and start.
+This avoids relying on the synthetic provider’s normalized response to prove
+routing. Another focused run verifies the actual earliest eligible start across
+both approved schedules, the tied start, and the same minimum on the native agent
+path. Preferred/retained dates, windows and location keep the approved practitioner.
+
+E2E-311 directly rejects saved/read/received/callback claims at the initial human
+request and verifies unavailable contact cannot force a booking or write. Existing
+signed/native proxy, child-intake, medical-clearance, urgent-script and exact
+staff-receipt assertions were inspected against the original clauses. The audit
+updates CCP-009 through CCP-018 and practitioner/earliest CCP-025/026 while
+preserving every original requirement and prohibition. Actual clinic activation,
+carrier/audio and email delivery remain outside these synthetic tests.
+
+Validation:
+
+- `node --test --test-concurrency=3 test/voice/caller-identity-denial.test.ts test/voice/appointment-change-intent.test.ts test/voice/approved-booking-search.test.ts`: four tests passed, including 52 signed scenarios and one native case on existing behavior.
+- `node --test --test-concurrency=3 test/voice/caller-identity-denial.test.ts test/voice/appointment-change-intent.test.ts test/voice/approved-booking-search.test.ts test/voice/booking-request-boundaries.test.ts test/voice/clinic-faqs.test.ts test/voice/urgent-conversation-routing.test.ts test/voice/cliniko-staff-request.test.ts test/voice/staff-review-expectations.test.ts test/voice/conversation-baseline.test.ts test/contract/scenario-manifest.test.ts`: 15 tests passed, zero failures/skips/cancellations; parallel workers settle before disposable PostgreSQL teardown.
+- `node --test test/voice/approved-booking-search.test.ts`: two tests passed after the additional exact-minimum/tie assertions.
+- `npm run typecheck`: passed on the final TypeScript sources.
+- `git diff --check`: passed; manifest 1.126 retains all 330 IDs.
+
+Every evaluator input is byte-for-byte unchanged: 471 inputs, SHA-256
+`942e7de1dcaf7870f72e3d9677fe78b6b1226b6cbc77eedc54d0ebacb007b915`.
+The existing [stable all-45 baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json)
+therefore remains current (45/45 named, 135/135 safety, six actual candidate model
+requests). No redundant live run is claimed. Added test files are excluded from
+that evaluator hash and independently bound in this patch’s evidence record.
+The remaining appointment-read/outcome, late-arrival and search/information
+clauses stay open; the named baseline is not full acceptance sign-off.

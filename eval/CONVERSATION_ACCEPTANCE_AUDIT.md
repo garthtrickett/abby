@@ -56,7 +56,17 @@ approved preferences, windows, appointment enquiries and public facts.
    witness, typecheck and stable all-45 baseline pass. No production change was
    required. These rows do not sign off the remaining original clauses.
 
-The next work is the remaining clause audit, starting with CCP-009. These are
+7. **Identity, target and location/staff rows inspected.** E2E-319 now uses
+   pre-denial counters and synthetic name canaries; E2E-310 binds the literal
+   nine-o’clock discrepancy; E2E-313 checks scope against actual writer fields
+   and the actual minimum/tie, and E2E-311 checks initial human-request truth.
+   The [direct record](baselines/identity-location-boundary-evidence-v1.json)
+   binds the 15-test passing gate, additional earliest proof, final typecheck and
+   unchanged evaluator input hash. The original proxy/minor/medical/urgent and
+   receipt clauses were matched to the exact assertions, not a generic named
+   score. No production behavior change was required.
+
+The next work is the remaining clause audit, starting with appointment reads and outcome queries. These are
 local synthetic tasks; real carrier and email setup is outside these test goals
 and remains a separate release gate.
 
@@ -85,7 +95,7 @@ for standalone durable patient-specific records.
 | 2. Latest played spoken choices | E2E-308 time/relative choice, rejected offers, ambiguity, evil model ordinal and interrupted menu; E2E-312 later bounded search | Spoken time, exact offer/send, ambiguity and stale-menu clauses inspected; continue remaining search/information clauses |
 | 3. Corrections | E2E-309 cancels old proposals before held interpretation, rereads replacements, rejects unplayed confirmation and requires a new affirmative; dated/window correction tests | Latest menu/whole-utterance/final date clauses inspected; continue remaining receipt/late-correction clauses |
 | 4. Cancel versus move | E2E-310 mixed-operation clarification, denied switches, fresh operation verification, original target equality, one exact PATCH, sent/uncertain receipt preservation | Connected cancel/move and standard/late fee clauses inspected; continue target-selection and sent-outcome clauses |
-| 5. Human/staff requests | E2E-311 independent permission/code, approved people, saved/uncertain receipts, no duplicate request; E2E-323 finite purpose; E2E-325 unknown missed-call reason | Map late-arrival and background-context clauses; real staff workflow acceptance remains separate |
+| 5. Human/staff requests | E2E-311 independent permission/code, approved people, saved/uncertain receipts, no duplicate request; E2E-323 finite purpose; E2E-325 unknown missed-call reason | Initial human/saved/uncertain/proxy safety clauses inspected; late-arrival and background-context remain open; actual staff activation is separate |
 | 6. Approved search/information | E2E-312 retained windows; E2E-313 approved names/earliest bounds/location confirmation; E2E-314 independent reads; E2E-315 public facts/repetition; E2E-322 services/unknown fees | Complete clause audit; do not infer a clinic-wide search, cross-location authority or audio pacing |
 
 ## Clause-by-clause map
@@ -172,9 +182,9 @@ Evidence to inspect: [targeted test](../test/voice/caller-corrections.test.ts); 
 
 ### CCP-009 — identity-disagreement
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Supported with pre-denial counters and name canaries**. E2E-319 asserts admission makes no patient/appointment read before verification and exposes no appointment detail. The denial itself performs no provider work, mail or clinical write. Injected patient first/last-name canaries and existing private canaries stay out of speech, model requests and durable PostgreSQL tables. Identity/shared-phone denial revokes all private workflows, rejects old codes and later clinical/staff requests, preserves sent receipts and uses the exact clinic-contact fallback; approved public facts and urgent wording remain independently available.
 
-Evidence to inspect: [targeted test](../test/voice/caller-identity-denial.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/caller-identity-denial.test.ts); [named baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json).
 
 - `CCP-009-R01`: Do not disclose or mutate the candidate record.
 - `CCP-009-R02`: Use the approved shared-phone/verification fallback.
@@ -182,9 +192,9 @@ Evidence to inspect: [targeted test](../test/voice/caller-identity-denial.test.t
 
 ### CCP-010 — caller-time-disagrees-with-target
 
-Assessment: **Supported by targeted assertions**. The disagreement case discards the private target, rejects a subsequent bare cancellation, rereads provider time and requires a new played confirmation before the one PATCH.
+Assessment: **Supported with a literal protected nine-o’clock target**. E2E-310 now actually speaks the source appointment at nine before the caller remembers ten. Disagreement clears the private target and rejects a following bare cancellation. Another protected read returns the unchanged nine-o’clock start; the new cancellation proposal and speech retain it. Only its played confirmation and a separate affirmative cause the sole source-bound cancellation PATCH, whose body cannot overwrite time or apply to repeats.
 
-Evidence to inspect: [targeted test](../test/voice/appointment-change-intent.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/appointment-change-intent.test.ts); [named baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json).
 
 - `CCP-010-R01`: Reconcile the discrepancy explicitly and confirm the exact protected target before any change.
 - `CCP-010-F01`: Treat an uncertain agreement as target confirmation.
@@ -192,9 +202,9 @@ Evidence to inspect: [targeted test](../test/voice/appointment-change-intent.tes
 
 ### CCP-011 — location-must-not-drift
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Supported with scoped offer and actual writer payload**. E2E-313 rejects Demo South/unknown preferences with the explicit Demo North boundary and no action/write, even when the model port would guess an ordinal. Valid offers and confirmation carry the admitted scope and Demo North name. The actual POST independently matches business 11, the approved chosen practitioner, type, verified synthetic patient and exact offer start. Retained preferences, unplayed notices, revoked proof/catalogue and repeated affirmation cannot drift scope or create another booking. Native commands reject a forged provider-ID preference.
 
-Evidence to inspect: [targeted test](../test/voice/approved-booking-search.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/approved-booking-search.test.ts); [named baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json).
 
 - `CCP-011-R01`: Explain the supported location or use a separately approved location-selection path.
 - `CCP-011-R02`: Bind any offer and final confirmation to the selected location.
@@ -203,9 +213,9 @@ Evidence to inspect: [targeted test](../test/voice/approved-booking-search.test.
 
 ### CCP-012 — patient-proxy
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Supported with direct proxy-boundary journeys**. E2E-320 gives the exact individual-caller/clinic-contact fallback for a partner or combined-patient request, with no provider work, mail, action or staff item. Existing verified clinical proof and pending targets are released rather than transferred; old codes and later selections cannot revive them. A fresh self request needs another independent code. The literal reply never asks for partner DOB, and model paraphrases/forged patient fields cannot supply proxy authority.
 
-Evidence to inspect: [targeted test](../test/voice/conversation-baseline.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/booking-request-boundaries.test.ts); [named baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json).
 
 - `CCP-012-R01`: Use the approved proxy fallback and make no protected partner read or write.
 - `CCP-012-F01`: Reuse the caller proof for another patient.
@@ -213,9 +223,9 @@ Evidence to inspect: [targeted test](../test/voice/conversation-baseline.test.ts
 
 ### CCP-013 — minor-intake
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Supported with direct child-intake rejection**. E2E-320 receives an explicit first visit for a young child and produces the exact clinic-contact boundary, with no provider read/write, verification email, action or workflow. A modeled youngster paraphrase takes the same boundary; invented patient fields or a workflow operation on the boundary are rejected. No adult intake or parental-authority contract is inferred.
 
-Evidence to inspect: [targeted test](../test/voice/conversation-baseline.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/booking-request-boundaries.test.ts); [named baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json).
 
 - `CCP-013-R01`: Stop automated child intake and provide the approved clinic contact path.
 - `CCP-013-F01`: Create a child under the adult policy.
@@ -223,27 +233,27 @@ Evidence to inspect: [targeted test](../test/voice/conversation-baseline.test.ts
 
 ### CCP-014 — clinical-safety-question
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Supported with direct medical-clearance refusal**. E2E-315 `medical` and `medicalParaphrase` produce the exact truthful no-medical-advice/clinician-contact reply, with no model request, knowledge answer, patient verification, action or write. A fabricated FAQ answer cannot override the approved source seam. This proves the corpus safety-question route without claiming medical triage or clinical advice.
 
-Evidence to inspect: [targeted test](../test/voice/clinic-faqs.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/clinic-faqs.test.ts); [named baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json).
 
 - `CCP-014-R01`: Use approved safety wording or a truthful clinical staff contact path.
 - `CCP-014-F01`: Provide a medical clearance or invented treatment advice.
 
 ### CCP-015 — required-urgent-routing
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Supported with approved urgent-response authority**. E2E-317 asserts the exact scoped, time-bounded urgent script and truthful unavailable staff-send path; missing, expired, foreign, draft, malformed or disabled approval uses the exact limited fallback. Urgency cancels unsent proposals but preserves known clinical/staff receipts without another effect/send. Forged scripts, backdated commands, negated/background cues and unverified transfer language cannot create authority. Native and signed paths carry no diagnosis, callback or transfer promise; actual clinic/carrier activation is separate.
 
-Evidence to inspect: [targeted test](../test/voice/conversation-baseline.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/urgent-conversation-routing.test.ts); [named baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json).
 
 - `CCP-015-R01`: Apply only the clinic-approved safety response and escalation behavior.
 - `CCP-015-F01`: Diagnose, triage independently or promise an unverified transfer.
 
 ### CCP-016 — human-request-first
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Supported with direct initial human-request truth**. E2E-311’s initial receptionist/named-person request cannot claim a saved task, staff receipt or promised callback. Unavailable/unapproved/disabled/unlisted routes give clinic contact with no mail/task/write and unchanged clinical actions. Available staff work requires independent staff permission and another code rather than clinical proof or booking questions; old proposals are canceled while known clinical receipts remain unchanged. The request is sent only after the independently permitted caller asks to send it.
 
-Evidence to inspect: [targeted test](../test/voice/cliniko-staff-request.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/cliniko-staff-request.test.ts); [named baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json).
 
 - `CCP-016-R01`: Respect the staff request and state the approved available contact path.
 - `CCP-016-F01`: Force booking questions.
@@ -260,9 +270,9 @@ Evidence to inspect: [signed tests](../test/voice/staff-review-expectations.test
 
 ### CCP-018 — handoff-response-lost
 
-Assessment: **Supported with receipt qualification**. Lost-response wording and no duplicate sends are exercised. Exact independent observation may recover the pre-existing recall; a later generic question supplies no new receipt or retry permission.
+Assessment: **Supported with independently qualified receipts and non-replay**. E2E-311 `lost`, `nonCommitted` and `malformed` use needsReview status and exact unresolved saved/received wording, with an explicit no-repeat instruction. Later generic questions or repeated requests keep the original staff POST count and never claim staff have read/received it or promise a callback. Exact independent reconciliation may qualify the already-existing provider record; a caller question alone supplies neither receipt nor retry permission.
 
-Evidence to inspect: [targeted test](../test/voice/cliniko-staff-request.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/cliniko-staff-request.test.ts); [named baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json).
 
 - `CCP-018-R01`: State the unresolved outcome and approved fallback.
 - `CCP-018-R02`: Do not repeat the possibly sent request automatically.
@@ -332,9 +342,9 @@ Evidence to inspect: [targeted test](../test/voice/missed-call-repair.test.ts); 
 
 ### CCP-025 — preferred-practitioner
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Supported with preserved preference and exact practitioner payload**. E2E-313 `preferred` and retained date/window/location paths use only approved Demo B offers and explicitly speak Demo B at Demo North before confirmation. The actual POST has practitioner 23, the admitted business/type, verified patient and exact selected offer. The primary practitioner 22 is used only after an explicit Demo A or any-practitioner request; unapproved names, changed identity/approval and revoked permission cannot silently substitute another practitioner. Native commands reject provider-ID injection.
 
-Evidence to inspect: [targeted test](../test/voice/approved-booking-search.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/approved-booking-search.test.ts); [named baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json).
 
 - `CCP-025-R01`: Preserve the preference and use only Demo B eligible offers, or clarify that the current route cannot change practitioner.
 - `CCP-025-F01`: Silently book Demo A.
@@ -342,9 +352,9 @@ Evidence to inspect: [targeted test](../test/voice/approved-booking-search.test.
 
 ### CCP-026 — earliest-with-any-practitioner
 
-Assessment: **Mapped; verdict pending**. Inspect the exact clause against the linked targeted assertions and current passing run; the four named baseline observations alone are insufficient.
+Assessment: **Supported with actual minimum and declared bounded scope**. E2E-313 `earliest` explicitly accepts any approved practitioner, declares Demo A and Demo B, the admitted Demo North location and the seven-day search bounds. It now asserts the actual minimum eligible start (7 October at 10 AM) from the two fixture schedules, not just a preferred practitioner name. The native agent path selects that same minimum; the tie case asserts the exact tied start. The actual POST matches the approved practitioner and offer. Empty/failed/revoked reads never fabricate a clinic-wide earliest claim.
 
-Evidence to inspect: [targeted test](../test/voice/approved-booking-search.test.ts); [named baseline](baselines/clinic-conversation-after-pending-lookup-v1.json).
+Evidence to inspect: [targeted test](../test/voice/approved-booking-search.test.ts); [named baseline](baselines/clinic-conversation-after-exact-sends-v24-v1.json).
 
 - `CCP-026-R01`: Declare and test the search scope, bounds and earliest-selection semantics.
 - `CCP-026-F01`: Claim clinic-wide earliest from a primary-first subset.

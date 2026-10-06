@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "kind": "identity-target-location-human-request-acceptance",
+  "baseRevision": "4ace8859e544bc057c467a66ee4fcc892c0bb083",
+  "productionBehaviorChanged": false,
+  "testInputs": {
+    "test/voice/caller-identity-denial.test.ts": "e8d342ef03ced488828bb39a84b555d084fa8cbabd6612e12f0b32c03952824e",
+    "test/voice/appointment-change-intent.test.ts": "29810ac3bbdd5384354d12221bbdad65e96ce533d2c490f2566c4ecea20e81f7",
+    "test/voice/approved-booking-search.test.ts": "5c9e0414f1259c141c9ed08cd3ee9e6ab3c0b295489199e836c3049c5c6e9c13",
+    "test/voice/cliniko-staff-request.test.ts": "fce81390140fbe2d87ea0f4196d535ccb92313c9bf6c0836e7d824c0c218d4c9",
+    "test/voice/booking-request-boundaries.test.ts": "d18e0c571514df678509299c8db06cd0aad957ec144de388c138f7b98eb280d3",
+    "test/voice/clinic-faqs.test.ts": "090745c003707c0b3ba22ee2a937aff273043e5ba7c55bca1de570325f9146fa",
+    "test/voice/urgent-conversation-routing.test.ts": "c4d01c6900c360b9c53c8eb7d79c37fe24020c7463c6029d9e1cde786770099c",
+    "test/voice/staff-review-expectations.test.ts": "9df50e912642748bb0e25111a507567dbe5cdd5e22b6abc249b7bd22ff79e966"
+  },
+  "initialGate": {
+    "passed": 4,
+    "failed": 0,
+    "signedScenarios": 52,
+    "nativeScenarios": 1
+  },
+  "acceptanceGate": {
+    "command": "node --test --test-concurrency=3 test/voice/caller-identity-denial.test.ts test/voice/appointment-change-intent.test.ts test/voice/approved-booking-search.test.ts test/voice/booking-request-boundaries.test.ts test/voice/clinic-faqs.test.ts test/voice/urgent-conversation-routing.test.ts test/voice/cliniko-staff-request.test.ts test/voice/staff-review-expectations.test.ts test/voice/conversation-baseline.test.ts test/contract/scenario-manifest.test.ts",
+    "passed": 15,
+    "failed": 0,
+    "skipped": 0,
+    "canceled": 0
+  },
+  "additionalEarliestGate": {
+    "command": "node --test test/voice/approved-booking-search.test.ts",
+    "passed": 2,
+    "failed": 0,
+    "assertions": [
+      "Actual minimum eligible start across two approved practitioners",
+      "Deterministic tie start",
+      "Same exact minimum in native agent selection"
+    ]
+  },
+  "assertions": [
+    "No patient/appointment read or private appointment speech at admission, nor provider work/mail/write at identity denial; synthetic patient-name/model/speech/PostgreSQL canaries clear.",
+    "Literal nine-o\u2019clock target is played, discarded on ten-o\u2019clock disagreement, reread unchanged and separately confirmed before one exact non-recurring cancellation PATCH.",
+    "Actual scoped offer and POST business/practitioner/type/patient/start match Demo North and the approved selected practitioner.",
+    "Initial human requests do not invent saved/read/received/callback status; unavailable contact cannot start a booking or write.",
+    "Inspected proxy, minor-intake, medical-clearance and urgent-response paths use exact bounded clinic contact/approved public replies and cannot create unauthorized patient or staff authority."
+  ],
+  "baselineReused": {
+    "file": "clinic-conversation-after-exact-sends-v24-v1.json",
+    "source": {
+      "sha256": "942e7de1dcaf7870f72e3d9677fe78b6b1226b6cbc77eedc54d0ebacb007b915",
+      "files": 471
+    },
+    "reason": "Every evaluator input is byte-for-byte unchanged; added tests are independently hashed rather than silently treated as part of that baseline."
+  },
+  "privacy": "Only synthetic patient names are injected in test responses; no production provider logging/storage, new patient persistence or real clinic/email/carrier activation is added.",
+  "remainingScope": "Appointment read/outcome, late-arrival and remaining original search/information clauses remain open; all original required/forbidden clauses are preserved.",
+  "typecheck": "passed"
+}
