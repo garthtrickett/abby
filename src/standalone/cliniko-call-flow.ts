@@ -15,6 +15,8 @@ import { ClinikoCancellationSession } from "./cliniko-cancellation-session.ts";
 import { ClinikoIntakeBookingSession } from "./cliniko-intake-booking-session.ts";
 import type { ClinikoIntakeBookingSessionConfig } from "./cliniko-intake-booking-session.ts";
 import { ClinikoReschedulingSession } from "./cliniko-rescheduling-session.ts";
+import { validCallKnowledgeSource } from "../core/knowledge-evidence.ts";
+import { OwnerFileClinicFAQs } from "./owner-file-clinic-faqs.ts";
 import { NoStoredKnowledge } from "./no-stored-knowledge.ts";
 import type { ClinikoIntakeDraft } from "../cliniko/patient-intake.ts";
 import type { FinalCallerTurn } from "../core/model.ts";
@@ -30,6 +32,7 @@ export type ClinikoCallFlowConfig = Omit<ClinikoBookingSessionConfig, "callerApp
   approvals: Readonly<{ bookCaller: string; cancelCaller: string; rescheduleCaller: string; booking: string; cancellation: string; rescheduling: string }>;
   intake?: Pick<ClinikoIntakeBookingSessionConfig, "policy" | "permission" | "presentation">;
   staff?: Readonly<{ callerApprovalPath: string; staffApprovalPath: string; recallTypeId: string; permission: PatientVerificationPermission }>;
+  publicKnowledge?: OwnerFileClinicFAQs;
   enquiry?: Readonly<{ callerApprovalPath: string; readApprovalPath: string; permission: PatientVerificationPermission }>;
 }>;
 type Owner = ClinikoBookingSession | ClinikoCancellationSession | ClinikoReschedulingSession | ClinikoIntakeBookingSession | ClinikoAppointmentEnquirySession;
@@ -69,6 +72,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       if (!config || !(config.signal instanceof AbortSignal) || config.signal.aborted || config.receipt.callId !== callIdFor(config.inbound.key) ||
           config.receipt.admission.key.accountRef !== config.inbound.key.accountRef || config.receipt.admission.key.providerCallRef !== config.inbound.key.providerCallRef ||
           config.receipt.admission.dialedNumber !== config.inbound.dialedNumber || !config.sessionId || !config.policyVersion ||
+          (config.publicKnowledge !== undefined && !(config.publicKnowledge instanceof OwnerFileClinicFAQs)) ||
           !config.approvals || Object.values(config.approvals).some(path => typeof path !== "string" || !path.trim())) return unavailable();
       return ok(new ClinikoCallFlow(config));
     } catch { return unavailable(); }
@@ -153,6 +157,26 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
         confirmationPlayed: found.value.presentations[last.presentationId]?.status === "played" } : null,
       now: (this.#config.clock ?? (() => new Date().toISOString()))(), timeZone: this.#config.cliniko.timeZone,
       lastMenu: this.#publicMenu ?? null, reschedulingTargetSelected: this.#reschedulingTargetSelected, staffRequestActive: this.#staffActive };
+  }
+  /** Only current, call-pinned public facts may enter the classifier. */
+  async publicFAQChoices() {
+    if (this.closed || !this.#config.publicKnowledge) return [];
+    const found = await this.#config.ledger.read(this.#config.receipt.callId, this.#config.receipt.scope);
+    const policy = await this.#config.policies.read(this.#config.receipt.scope);
+    if (!found.ok || !policy.ok || !policy.value.automationEnabled || this.closed ||
+        policy.value.policyVersion !== this.#config.policyVersion || found.value.lifecycle !== "active" ||
+        found.value.sessionLease?.sessionId !== this.#config.sessionId) return [];
+    const now = (this.#config.clock ?? (() => new Date().toISOString()))();
+    const facts = await this.#config.publicKnowledge.listModelKnowledge(this.#config.receipt.scope, now);
+    return facts.ok && !this.closed ? facts.value.filter(fact => validCallKnowledgeSource(fact, found.value.policy, now)) : [];
+  }
+  override async readKnowledge(scope: LocationScope, refs: readonly string[]) {
+    if (this.closed) return err({ kind: "unavailable" as const });
+    return this.#config.publicKnowledge?.readKnowledge(scope, refs) ?? super.readKnowledge(scope, refs);
+  }
+  override async listModelKnowledge(scope: LocationScope, now: string) {
+    if (this.closed) return err({ kind: "unavailable" as const });
+    return this.#config.publicKnowledge?.listModelKnowledge(scope, now) ?? super.listModelKnowledge(scope, now);
   }
   /** Trusted owner wiring only; the classifier receives no private draft reference. */
   get intakeDraftRef(): string | undefined { return !this.closed && !this.#verificationRequired ? this.#intakeDraftRef : undefined; }

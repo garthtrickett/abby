@@ -42,7 +42,7 @@ export const plans: Readonly<Record<string, Plan>> = {
   "CCP-029": { stage: "moveOffers", expectation: "constraints" },
   "CCP-030": { stage: "book", expectation: "constraints", missingSetup: "Only one approved service exists in the current call fixture." },
   "CCP-031": { stage: "moveOffers", expectation: "unsupported" },
-  "CCP-032": { stage: "initial", expectation: "publicFacts", missingSetup: "Standalone call flow has no approved public knowledge source; no approved address was fabricated." },
+  "CCP-032": { stage: "initial", expectation: "publicFacts" },
   "CCP-033": { stage: "initial", expectation: "human" },
   "CCP-034": { stage: "initial", expectation: "unsupported" },
   "CCP-035": { stage: "initial", expectation: "unsupported" },

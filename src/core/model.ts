@@ -245,7 +245,7 @@ export type AppointmentRead = Readonly<{
 }>;
 
 export type MenuClarificationReason = "menuAmbiguous" | "menuRejected" | "menuUnavailable" | "proposalCorrection" |
-  "changeAmbiguous" | "targetDisagreement" | "changeUnsupported" | "changeAfterSend" | "searchPreferenceUnavailable";
+  "changeAmbiguous" | "targetDisagreement" | "changeUnsupported" | "changeAfterSend" | "searchPreferenceUnavailable" | "clinicalAdviceUnavailable";
 export type TurnInterpretation =
   | Readonly<{ kind: "workflowStarted"; operation: WorkflowOperation; next: "codeRequired" | "intakeRequired" }>
   | Readonly<{ kind: "outcomeQuery" }>

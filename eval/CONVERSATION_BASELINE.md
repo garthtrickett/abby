@@ -23,7 +23,7 @@ response being evaluated. All prose requirements and forbidden behaviors are
 also retained as **unassessed**: these narrow observations do not prove full
 acceptance, audio quality, actual telephony or production activation.
 
-Four candidate setups require capabilities the current standalone call flow or
+Three candidate setups require capabilities the current standalone call flow or
 baseline fixture cannot supply. The runner exercises a declared substitute
 state and reports `setupMatch: false`, an explicit `setupGap`, and a failed
 conversation observation. It does not invent staff receipts, public knowledge
@@ -160,3 +160,58 @@ CCP-015 (urgent-route fixture), CCP-030 (multiple services), CCP-032 (approved p
 An additional signed journey advances the owner clock by two seconds during model interpretation. On the initially merged enquiry implementation, the protected read succeeds but SAM rejects its observation against the older media-turn timestamp. The follow-up host now supplies a private post-read authority-check timestamp; the turn owner validates the original snapshot at that fresh time, within the existing 30-second request-clock bound. Provider observations remain unchanged, and the existing core future/freshness checks still apply.
 
 E2E-314 now covers 25 isolated signed cases plus the separate signed enquiry-to-booking journey and agent commands. The focused enquiry/model/manifest gate passes all seven tests including the advancing-clock reproduction. The [fresh-clock live report](baselines/clinic-conversation-after-enquiries-v3.json) executes all 45 candidates with unchanged source, zero harness failures, all 135 safety observations and PostgreSQL canaries passing, 29 passing narrow conversation observations and 16 failing, and the same four setup gaps. Its 20 model requests/25 trusted interpretations and every observation's pass/fail status match the preceding final enquiry report; it is not a broader acceptance or reliability claim.
+
+
+## Approved public clinic FAQs
+
+[Initial FAQ report](baselines/clinic-conversation-after-faqs-v1.json) and
+[refined FAQ report](baselines/clinic-conversation-after-faqs-v2.json), run with
+`gpt-4o-mini` on 2026-10-06, each execute all 45 candidates with unchanged source,
+zero harness failures, all 135 safety observations passing and clear PostgreSQL
+patient-data canaries. The initial report records 29 passing narrow observations
+and 16 failing, with three setup gaps. CCP-032 now speaks actual synthetic
+clinic-approved directions, but CCP-014 regresses to a generic information
+unavailable notice for a medical-clearance question. That failure is preserved.
+
+Refinement adds a bounded clinical-advice boundary: matched requests for safety
+clearance after treatment direct the caller to their clinician/clinic without
+advice, diagnosis or urgency assessment. The refined report records 31 passing
+narrow observations and 14 failing, three setup gaps, 19 actual model requests
+and 26 trusted interpretations. CCP-032 remains passing and CCP-014 no longer
+regresses. CCP-022's generic staff-contact observation also passes this run, but
+that was not a notification implementation change and does not prove the
+required booking-versus-email explanation or actual delivery. This is neither a
+causal reliability estimate nor full prose acceptance; every prose acceptance
+requirement remains listed as unassessed. Both reports intentionally exit
+nonzero for the unresolved observations.
+
+The FAQ source is an optional operator-provisioned public configuration adapter,
+not patient notes or a general persisted knowledge editor. Exact scope, policy
+version, owner-only file, current clinic-admin membership, approval and effective
+interval are checked. Admission pins versions covering both full source content
+and approving membership. An old call cannot adopt changed facts or a new
+approval, even when its revision label is reused; a newly admitted call can use
+new approved material. Current automation also gates voice and direct agent
+reads. The trusted mapper copies exact current facts, then SAM independently
+re-reads and validates the source. Unavailable information cannot produce an
+invented address. The operator must supply already public facts; schema checks
+and approval are not patient-data detection. The existing database knowledge
+gate remains closed.
+
+`E2E-315` covers 26 parallel isolated signed-call scenarios and the existing
+agent answer command: directions/parking, hours, contact, repetition and
+interruption; drafts, revocation, expiration, unreadable/foreign content,
+permission changes, text/revision/membership changes, approval changes during
+model interpretation, newly admitted replacement facts, automation disablement,
+invented model wording and the clinical-clearance boundary. Public answers
+create no clinical action or verification email. The final focused gate
+`node --test --test-concurrency=3 test/voice/clinic-faqs.test.ts test/voice/openai-clinical-intent.test.ts test/contract/scenario-manifest.test.ts`
+passed all six tests. The preceding FAQ/enquiry/model/text-knowledge/manifest
+gate passed, and final `npm run typecheck` and `git diff --check` passed.
+
+Remaining setup gaps are CCP-015 (urgent-route fixture), CCP-030 (multiple
+services) and CCP-044 (concurrent pending read). Conversation failures, richer
+service/location support, actual notifications and full acceptance still need
+work. No actual clinic FAQ approval, real email delivery, carrier traffic or
+production clinical capability was activated. The previously documented broad
+voice request-count assertion remains outside these passing focused gates.
