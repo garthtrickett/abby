@@ -14,6 +14,7 @@ import { createStandaloneTransientVoiceCall } from "../../src/standalone/transie
 import { createTwilioIngressServer } from "../../src/voice/twilio-ingress-server.ts";
 import { TwilioSignedIngress } from "../../src/voice/twilio-signed-ingress.ts";
 import type { IntentResolver } from "../../src/voice/voice-session.ts";
+import type { TranscriptEvent } from "../../src/voice/turn-assembler.ts";
 import { callIdFor } from "../../src/voice/admission.ts";
 import { approvedSyntheticPolicy, syntheticSpeech } from "./approved-voice.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
@@ -28,7 +29,8 @@ export async function voiceUntil(check: () => boolean, label: string, timeoutMs 
 /** Real HTTP/WS ingress and serving composition; public clinical approvals, mail,
  * Cliniko HTTP, clear-final transcription and speech synthesis are explicitly synthetic. */
 export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: ClinikoCallFlowConfig,
-  intent: (flow: ClinikoCallFlow) => IntentResolver, options: { lostWrite?: boolean } = {}) {
+  intent: (flow: ClinikoCallFlow) => IntentResolver, options: { lostWrite?: boolean;
+    transcriptFinal?: (event: Extract<TranscriptEvent, { kind: "segmentFinal" }>) => readonly TranscriptEvent[] } = {}) {
   const accountSid = `AC${"4".repeat(32)}`, callSid = `CA${randomUUID().replaceAll("-", "")}`, streamSid = `MZ${randomUUID().replaceAll("-", "")}`;
   const webhookUrl = "https://workflow.example.test/twilio/inbound", streamUrl = "wss://workflow.example.test/twilio/media/";
   const authToken = "synthetic-workflow-voice-token", now = config.clock ?? (() => verificationNow), scope = config.receipt.scope;
@@ -45,6 +47,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   const failures: string[] = [];
   const acknowledged = new Set<string>();
   let ledger: MemoryLedger | undefined, flow: ClinikoCallFlow | undefined, socket: WebSocket | undefined, closed = false;
+  let disposedState: ReturnType<MemoryLedger["read"]> | undefined, closeCode: number | undefined;
   let after: Record<string, unknown> | undefined, sequence = 1, chunk = 0, utterance = 0, transcriptionFrames = 0;
   let processedChunk = 0, processedSequence = 0, hostWritesStarted = 0, hostWritesSettled = 0;
   const callId = callIdFor({ accountRef: accountSid, providerCallRef: callSid });
@@ -81,7 +84,12 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       stream, send, closeTransport: close, readiness: async () => ok(true), now, resolveIntent: async () => ok({ kind: "model" }),
       clinicalWorkflow: { policies: policy,
         ...(config.publicKnowledge ? { publicKnowledge: config.publicKnowledge } : {}),
-        create(context) { ledger = context.ledger; flow = resultValue(ClinikoCallFlow.create({ ...config, ...context,
+        create(context) { ledger = context.ledger;
+          // Test-only observation before actual transient disposal; nothing is
+          // persisted and the production ledger still releases every call.
+          const callLedger = ledger, dispose = callLedger.dispose.bind(callLedger);
+          callLedger.dispose = () => { disposedState ??= callLedger.read(callId, scope); dispose(); };
+          flow = resultValue(ClinikoCallFlow.create({ ...config, ...context,
           policyVersion: config.policyVersion, fetchPort: provider,
           ...(config.intake ? { intake: { ...config.intake, presentation: context.privatePresentation } } : {}) }));
           const write = flow.write.bind(flow);
@@ -99,7 +107,8 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
         transcriptionFactory: sessionId => ({ async accept() { transcriptionFrames++; return ok([]); }, async flush(generation) {
           const text = inputs.shift(); assert.ok(text, "every ordinary final must have a caller-supplied text fixture"); transcripts.push(text);
-          return ok([{ kind: "segmentFinal", sessionId, generation, utteranceId: `workflow-${++utterance}`, text, quality: "clear" }]);
+          const event = { kind: "segmentFinal" as const, sessionId, generation, utteranceId: `workflow-${++utterance}`, text, quality: "clear" as const };
+          return ok(options.transcriptFinal ? options.transcriptFinal(event) : [event]);
         } }) }), mediaOptions: { silenceMs: 100 },
     }));
     return { receive: async raw => { const result = await composed.receive(raw);
@@ -124,11 +133,12 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     const binding = (await response.text()).match(/<Parameter name="abbyBinding" value="([^"]+)"\/>/)?.[1]; assert.ok(binding);
     socket = new WebSocket(`ws://127.0.0.1:${address.port}/twilio/media/`, { headers: { "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, streamUrl, {}) } });
     await once(socket, "open"); socket.on("message", data => sent.push(JSON.parse(data.toString())));
+    socket.on("close", code => { closeCode = code; });
     socket.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
     socket.send(JSON.stringify({ event: "start", sequenceNumber: String(sequence++), streamSid,
       start: { accountSid, callSid, streamSid, tracks: ["inbound"], mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 }, customParameters: { abbyBinding: binding } } }));
     await voiceUntil(() => sent.some(item => item.event === "mark"), "greeting mark");
-    const sendEvent = (event: Record<string, unknown>) => socket!.send(JSON.stringify({ ...event, streamSid, sequenceNumber: String(sequence++) }));
+    const sendEvent = (event: Record<string, unknown>) => socket!.send(JSON.stringify({ ...event, streamSid: event.streamSid ?? streamSid, sequenceNumber: String(sequence++) }));
     const media = (voiced: boolean) => sendEvent({ event: "media", media: { track: "inbound", chunk: String(++chunk), timestamp: String((chunk - 1) * 20),
       payload: Buffer.alloc(160, voiced ? 0x9f : 0xff).toString("base64") } });
     const mark = async () => {
@@ -142,7 +152,8 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     await mark();
     return { callId, sent, spoken, transcripts, privateTranscripts, modelTurns, writes, close, mark, media, sendEvent,
       get flow() { assert.ok(flow); return flow; }, get transcriptionFrames() { return transcriptionFrames; },
-      state: async () => resultValue(await ledger!.read(callId, scope)),
+      get closed() { return closed; }, get closeCode() { return closeCode; },
+      state: async () => resultValue(await (disposedState ?? ledger!.read(callId, scope))),
       async privateField(text: string) {
         const marks = sent.filter(item => item.event === "mark").length; privateInputs.push(text);
         for (let frame = 0; frame < 7; frame++) media(frame < 2);
@@ -155,7 +166,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         await voiceUntil(() => sent.filter(item => item.event === "mark").length > marks || failures.length > 0, "private registration prompt");
         assert.deepEqual(failures, []);
       },
-      async turn(text: string, options: { expectedFailure?: "confirmationMissing"; interrupt?: boolean } = {}) {
+      async turn(text: string, options: { expectedFailure?: "confirmationMissing" | "staleGeneration"; interrupt?: boolean } = {}) {
         const marks = sent.filter(item => item.event === "mark").length, clears = sent.filter(item => item.event === "clear").length;
         const interruptedMark = sent.filter(item => item.event === "mark").at(-1)?.mark;
         const pending = text === "Yes" && !options.expectedFailure

@@ -1025,3 +1025,57 @@ standalone voice composition and includes a denied native host selection.
 Caller-ownership/approved-limit proof, explicit meridiem wording and remaining
 clause inspection stay open. Real carrier/audio, delivery and clinic approval
 remain outside these synthetic observations.
+
+## Protocol ownership and actual waiting limits — 2026-10-06
+
+E2E-328/329 close the missing direct setup/limit evidence for CCP-043/044
+on existing main 3bfaf74 behavior. No production source or privacy permission
+changed. The [source-pinned witness](baselines/call-ownership-waiting-before-v1.json)
+records the base, separate fixture/test hashes and the actual finite paths.
+
+Eight signed proposed-call journeys cover foreign session, old/future
+generation, a mixed valid/foreign final batch, foreign stream, outbound track,
+owned unrelated background text and unclear affirmation. Six foreign protocol
+faults close with code 1008, unchanged unconfirmed action records, no new
+processed turns, model requests, provider traffic or host-write effects, and
+terminal caller-message redaction. The two owned-text cases clarify and cancel
+the unsent proposal. Protocol ownership does not prove physical speaker identity.
+
+The first ownership runs failed two overspecified fixture assertions: expecting
+an ended unconfirmed action to become canceled, then expecting ended caller text
+to be retained. Existing terminal contracts instead fence authority through the
+ended lifecycle and redact caller text. Corrected assertions pass all eight
+cases without modifying production behavior. These failures are not presented
+as product defects. Test-only snapshots occur just before real transient ledger
+disposal and remain synthetic fixture memory.
+
+The held-provider deadline journey closed after 15,033 ms with code 1008; it did
+not fabricate a waiting result. The presence journey replied while the provider
+remained held, then used the default 15-second retry and 15-second final notice,
+with actual played marks, closing after 30,239 ms with code 1000. Timers were
+neither manually fired nor shortened. The provider ignored cancellation and was
+released only after closure; no late speech or private menu context appeared.
+Both journeys created no action, staff request or clinical write. Parallel
+workers settled before disposable PostgreSQL teardown, and patient canaries
+were clear; private codes were excluded from ordinary transcripts.
+
+Commands and results:
+
+- `node --test test/voice/call-transcript-ownership.test.ts`: passed after the fixture assertion corrections.
+- `node --test --test-concurrency=2 test/voice/call-transcript-ownership.test.ts test/voice/call-waiting-limits.test.ts`: first run proved existing waiting behavior; ownership failures are described above.
+- `node --test --test-concurrency=3 test/voice/call-transcript-ownership.test.ts test/voice/call-waiting-limits.test.ts test/voice/media-turn-controller.test.ts test/voice/twilio-media-stream.test.ts test/voice/transport-media-normalizer.test.ts test/voice/pending-lookup-repair.test.ts test/voice/caller-corrections.test.ts test/voice/stale-menu-recovery.test.ts test/voice/conversation-baseline.test.ts test/contract/scenario-manifest.test.ts`: 23 passed, zero failures, skips or cancellations.
+
+Manifest 1.123 maps E2E-328/329. These tests strengthen specific original clauses;
+remaining acceptance clauses are still open. Actual clinic approval, real email,
+carrier calls and audible behavior remain separate release evidence.
+
+Final typecheck and `git diff --check` passed. A fresh full run used
+`node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/baselines/clinic-conversation-after-ownership-waiting-v24-v1.json`.
+The [new stable baseline](baselines/clinic-conversation-after-ownership-waiting-v24-v1.json)
+passed 45/45 named and 135/135 safety observations, with zero setup gaps or
+harness failures and clear PostgreSQL canaries. It records 471 source inputs
+with SHA-256 `972ca630e4f0e8f04754bf88bf69df35bb667e93e6cc9e34df487ae04ee79a8e`;
+source stability was checked across the run. Six candidate turns made real
+model requests; 39 used trusted decisions. Pinned setup decisions are synthetic.
+The separate original prose clauses remain unassessed in this report; passing
+named observations do not sign off all 124 acceptance clauses.
