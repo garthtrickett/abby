@@ -188,6 +188,16 @@ export interface PatientProofHost {
   verifyPatient(scope: LocationScope, verificationRef: string, now: string): Promise<Result<VerifiedPatient, HostReadFailure>>;
 }
 
+export type StaffRequestQuery = Readonly<{
+  scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
+  turnId: string; callerText: string; expectedConversationRevision: number; requestedPerson?: string; signal: AbortSignal;
+}>;
+export type StaffRequestPreparation = Readonly<{ kind: "codeRequired" | "existing" }> |
+  Readonly<{ kind: "ready"; requestedPerson?: string }>;
+export interface StaffRequestHost {
+  prepareStaffRequest(query: StaffRequestQuery): Promise<Result<StaffRequestPreparation, Readonly<{ kind: "staffUnavailable" }>>>;
+}
+
 export interface HostEffects {
   /** Trusted adapter budget for its complete effect protocol, including review
    * and readback. Dispatcher validates 1..120000 ms; absent means 15000 ms.

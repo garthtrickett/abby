@@ -6,6 +6,7 @@ import type { VoiceIntent } from "../../src/voice/voice-session.ts";
 import { bookingCallFlowFixture, cancellationCallFlowFixture, reschedulingCallFlowFixture } from "../../test/support/cliniko-call-flow.ts";
 import { clinikoWorkflowVoiceFixture, voiceUntil } from "../../test/support/cliniko-workflow-voice.ts";
 import { verificationCanaries } from "../../test/support/caller-verification.ts";
+import { clinikoStaffCallFlowFixture } from "../../test/support/cliniko-staff-call-flow.ts";
 import type { CallState } from "../../src/core/model.ts";
 import type { Candidate, Plan } from "./plans.ts";
 
@@ -32,6 +33,12 @@ const setupDecisions: Record<string, Decision> = {
 
 async function prepare(call: Call, plan: Plan, mail: { code: string }[], id: string): Promise<void> {
   if (plan.stage === "initial") return;
+  if (plan.stage === "staff" || plan.stage === "staffUncertain") {
+    await call.turn("Could I speak to a receptionist?"); await call.mark();
+    await voiceUntil(() => mail.length === 1, "independent staff verification email"); await call.verify(mail[0]!.code);
+    if (plan.stage === "staffUncertain") { await call.turn("Please send that request."); await call.mark(); }
+    return;
+  }
   const operation = plan.stage.startsWith("cancel") ? "cancel" : plan.stage.startsWith("move") ? "reschedule" : "book";
   const play = async (text: string) => { await call.turn(text); await call.mark(); };
   await play({ book: "I need to book an appointment.", cancel: "I need to cancel an appointment.", reschedule: "I need to move an appointment." }[operation]);
@@ -93,7 +100,8 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
 /** Exercise the same signed HTTP/WS owner, private OTP and SAM/playback path as
  * E2E-303. Setup decisions are pinned; only candidate turns use the live model. */
 export async function runCase(db: Kysely<Database>, candidate: Candidate, plan: Plan, model: ModelConfig) {
-  const f = plan.stage.startsWith("cancel") ? await cancellationCallFlowFixture({ multiple: candidate.id === "CCP-036" })
+  const f = plan.stage.startsWith("staff") ? await clinikoStaffCallFlowFixture({ lostResponse: plan.stage === "staffUncertain" })
+    : plan.stage.startsWith("cancel") ? await cancellationCallFlowFixture({ multiple: candidate.id === "CCP-036" })
     : plan.stage.startsWith("move") ? await reschedulingCallFlowFixture() : await bookingCallFlowFixture();
   f.flow.dispose();
   if ("setStarts" in f) f.setStarts(candidate.id === "CCP-006"

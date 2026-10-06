@@ -103,3 +103,20 @@ test("unknown or mismatched task reconciliation stays visible for operator revie
     assert.equal((await app.state()).staffItems[item.key]?.hostTaskRef, undefined);
   }
 });
+
+test("invalid opened staff receipts cannot claim a saved request or authorize replay", async () => {
+  for (const fault of ["emptyRef", "wrongDestination"] as const) {
+    const app = await setup(`staff-invalid-open-${fault}`);
+    await app.turn("handoff", "Please have staff call me", { kind: "handoff", reason: "callerRequested" });
+    const item = Object.values((await app.state()).staffItems)[0]!;
+    app.host.taskResult = task => ({ kind: "opened", taskKey: task.key,
+      hostTaskRef: fault === "emptyRef" ? "" : "possible-foreign-task",
+      destination: fault === "wrongDestination" ? app.policy.operatorQueue : task.destination });
+    await app.worker.process(app.callId, `${item.key}:open`, now);
+    const state = await app.state();
+    assert.equal(state.effects[`${item.key}:open`]?.status, "uncertain");
+    assert.equal(state.staffItems[item.key]?.hostTaskRef, undefined);
+    assert.match(state.callerMessages.at(-1)!, /can't confirm whether.*staff request.*won't send.*again/);
+    assert.equal(app.host.tasks.length, 1);
+  }
+});

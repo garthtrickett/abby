@@ -11,14 +11,14 @@ export type CallerVerificationApproval = ClinicApproval & Readonly<{
   sharedNumbers: "deny"; representatives: "deny"; patientPermission: "independentClinicHost";
   operations: readonly PatientOperation[];
 }>;
-const operations: readonly PatientOperation[] = ["appointments.read", "appointments.book", "appointments.cancel", "appointments.reschedule"];
+const operations: readonly PatientOperation[] = ["appointments.read", "appointments.book", "appointments.cancel", "appointments.reschedule", "staff.request"];
 function approval(value: unknown, scope: LocationScope): CallerVerificationApproval | undefined {
   const common = decodeClinicApproval(value, scope, [...clinicApprovalKeys, "method", "maxAnswers", "lifetimeSeconds", "sharedNumbers", "representatives", "patientPermission", "operations"]);
   if (!common) return undefined;
   const row = value as Record<string, unknown>;
   if (row.method !== "emailOtp" || row.maxAnswers !== 3 || row.lifetimeSeconds !== 300 || row.sharedNumbers !== "deny" ||
       row.representatives !== "deny" || row.patientPermission !== "independentClinicHost" ||
-      !Array.isArray(row.operations) || !row.operations.length || row.operations.length > 4 ||
+      !Array.isArray(row.operations) || !row.operations.length || row.operations.length > operations.length ||
       row.operations.some(value => !operations.includes(value)) || new Set(row.operations).size !== row.operations.length) return undefined;
   return row as unknown as CallerVerificationApproval;
 }

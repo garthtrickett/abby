@@ -247,12 +247,16 @@ export type MenuClarificationReason = "menuAmbiguous" | "menuRejected" | "menuUn
 export type TurnInterpretation =
   | Readonly<{ kind: "workflowStarted"; operation: ActionKind; next: "codeRequired" | "intakeRequired" }>
   | Readonly<{ kind: "outcomeQuery" }>
+  | Readonly<{ kind: "staffOutcomeQuery" }>
+  | Readonly<{ kind: "staffVerificationRequired" }>
+  | Readonly<{ kind: "staffUnavailable" }>
+  | Readonly<{ kind: "staffRequestReady"; requestedPerson?: string }>
   | Readonly<{ kind: "modelPending"; taskRef: string }>
   | Readonly<{ kind: "modelFallback" }>
   | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason }>
   | Readonly<{ kind: "requestAction"; request: ActionRequest }>
   | Readonly<{ kind: "affirm"; actionKey: string; digest: string; affirmative: boolean }>
-  | Readonly<{ kind: "handoff"; reason: StaffReason }>
+  | Readonly<{ kind: "handoff"; reason: StaffReason; requestedPerson?: string }>
   | Readonly<{ kind: "transfer"; reason: StaffReason }>
   | Readonly<{ kind: "readFailure"; target: "patient" | "offer" | "appointment"; failure: "unavailable" | "notFound" }>
   | Readonly<{ kind: "intakeFailure"; reason: "missing" | "unavailable" }>
@@ -372,6 +376,7 @@ export type OperatorAlert = Readonly<{
 export type OperatorAlertReceipt = Readonly<{ kind: "delivered" | "failed" | "uncertain"; alertKey: string }>;
 export type OperatorAlertObservation = Readonly<{ kind: "exactDelivered" | "definitiveNotDelivered" | "stillUnknown"; alertKey: string }>;
 export type StaffItem = Readonly<{
+  requestedPerson?: string;
   key: string;
   scope: LocationScope;
   reason: StaffReason;
