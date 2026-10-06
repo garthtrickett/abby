@@ -15,7 +15,7 @@ const enquire = "Could you tell me when my next visit is? I do not want to chang
 test("E2E-314 signed independent appointment enquiries verify only reads and preserve clinical appointments", { timeout: 180_000 }, async () => {
   await withDisposablePostgres(async db => {
     const scenarios = ["shown", "empty", "multiple", "select", "changedSelection", "unplayed", "permission", "duringRead", "caller", "terms", "admin",
-      "zone", "business", "unavailable", "closed", "noVerification", "mutation", "modelCancel", "email", "range", "dated", "disabledBefore", "datedCorrection", "automation"] as const;
+      "zone", "business", "unavailable", "closed", "noVerification", "mutation", "modelCancel", "email", "range", "dated", "disabledBefore", "datedCorrection", "automation", "clockAdvance"] as const;
     const run = async (scenario: typeof scenarios[number]) => {
       const f = await appointmentEnquiryFixture(); f.flow.dispose();
       let call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined;
@@ -32,6 +32,7 @@ test("E2E-314 signed independent appointment enquiries verify only reads and pre
             const body = String(init?.body); requests.push(body);
             const text = JSON.parse(JSON.parse(body).input[1].content).callerText;
             const initial = text === begin, wrong = scenario === "modelCancel";
+            if (!initial && scenario === "clockAdvance") f.setTime("2026-10-04T06:00:02.000Z");
             const answer = { kind: wrong ? "cancel" : initial ? "workflow" : "appointments", operation: initial && !wrong ? "appointments.read" : null,
               stage: null, from: !initial && scenario === "dated" ? "2026-10-08" : null, to: !initial && scenario === "dated" ? "2026-10-09" : null, choice: null };
             return Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [{ type: "output_text", text: JSON.stringify(answer) }] }] });

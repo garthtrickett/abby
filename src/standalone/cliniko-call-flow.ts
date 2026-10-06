@@ -308,12 +308,14 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   async readAppointmentEnquiry(query: AppointmentEnquiryQuery & Readonly<{ from: string; to: string }>) {
     const owner = await this.#enquiryOwner(query);
     const result = owner ? await owner.read(query.from, query.to, query.now, query.signal) : undefined;
-    return result && owner === await this.#enquiryOwner(query) ? result : err({ kind: "invalidProof" as const });
+    if (!result || owner !== await this.#enquiryOwner(query)) return err({ kind: "invalidProof" as const });
+    return result.ok ? ok({ snapshot: result.value, checkedAt: (this.#config.clock ?? (() => new Date().toISOString()))() }) : result;
   }
   async selectAppointmentEnquiry(query: AppointmentEnquiryQuery & Readonly<{ choice: 1 | 2 | 3 }>) {
     const owner = await this.#enquiryOwner(query);
     const result = owner ? await owner.select(query.choice, query.now, query.signal) : undefined;
-    return result && owner === await this.#enquiryOwner(query) ? result : err({ kind: "invalidProof" as const });
+    if (!result || owner !== await this.#enquiryOwner(query)) return err({ kind: "invalidProof" as const });
+    return result.ok ? ok({ ...result.value, checkedAt: (this.#config.clock ?? (() => new Date().toISOString()))() }) : result;
   }
   /** Exact bounded cancellation selection over the latest actually played list.
    * Only private host state is selected; the ordinary SAM proposal still owns
