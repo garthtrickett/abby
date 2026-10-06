@@ -247,6 +247,7 @@ export type AppointmentRead = Readonly<{
 export type MenuClarificationReason = "menuAmbiguous" | "menuRejected" | "menuUnavailable" | "proposalCorrection" |
   "changeAmbiguous" | "targetDisagreement" | "changeUnsupported" | "changeAfterSend" | "searchPreferenceUnavailable" | "clinicalAdviceUnavailable";
 export type TurnInterpretation =
+  | Readonly<{ kind: "requestBoundary"; reason: import("./request-boundary.ts").RequestBoundary }>
   | Readonly<{ kind: "callerIdentityDenied"; reason: import("./caller-identity.ts").CallerIdentityDenial }>
   | Readonly<{ kind: "workflowStarted"; operation: WorkflowOperation; next: "codeRequired" | "intakeRequired" }>
   | Readonly<{ kind: "outcomeQuery" }>
@@ -431,6 +432,8 @@ export type RecoverableEffectRef = Readonly<{
 export type CallState = {
   /** Call-scoped denial; standalone clinical calls keep this state transiently. */
   callerIdentityDenied?: import("./caller-identity.ts").CallerIdentityDenial;
+  /** Negative-command receipt only; no patient identity or permission. */
+  lastRequestBoundary?: Readonly<{ turnId: string; reason: import("./request-boundary.ts").RequestBoundary }>;
   callId: string;
   policy: CallPolicy;
   lifecycle: "starting" | "active" | "ended";

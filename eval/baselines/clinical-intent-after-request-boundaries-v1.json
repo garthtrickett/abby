@@ -1,0 +1,193 @@
+{
+  "version": 1,
+  "kind": "clinical-intent-live-evaluation",
+  "at": "2026-10-06T08:34:27.639Z",
+  "model": "gpt-4o-mini",
+  "promptVersion": "clinical-intent-v15",
+  "adapterSha256": "bcef73bf31c55b3d531482d63b4d5be990a842c9d5b28bffe11a4dee069c109f",
+  "gate": "classification-sample-only",
+  "pass": 12,
+  "total": 14,
+  "results": [
+    {
+      "name": "book",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "workflow",
+        "operation": "book"
+      },
+      "actual": {
+        "kind": "workflow",
+        "operation": "book"
+      }
+    },
+    {
+      "name": "cancel",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "workflow",
+        "operation": "cancel"
+      },
+      "actual": {
+        "kind": "workflow",
+        "operation": "cancel"
+      }
+    },
+    {
+      "name": "reschedule",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "workflow",
+        "operation": "reschedule"
+      },
+      "actual": {
+        "kind": "workflow",
+        "operation": "reschedule"
+      }
+    },
+    {
+      "name": "new-patient",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "workflow",
+        "operation": "intake"
+      },
+      "actual": {
+        "kind": "workflow",
+        "operation": "intake"
+      }
+    },
+    {
+      "name": "identity-disagreement-paraphrase",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "callerIdentityDenied",
+        "reason": "identityDisagreement"
+      },
+      "actual": {
+        "kind": "callerIdentityDenied",
+        "reason": "identityDisagreement"
+      }
+    },
+    {
+      "name": "shared-phone-paraphrase",
+      "requests": 0,
+      "pass": true,
+      "expected": {
+        "kind": "callerIdentityDenied",
+        "reason": "sharedPhone"
+      },
+      "actual": {
+        "kind": "callerIdentityDenied",
+        "reason": "sharedPhone"
+      }
+    },
+    {
+      "name": "shared-line-model-paraphrase",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "callerIdentityDenied",
+        "reason": "sharedPhone"
+      },
+      "actual": {
+        "kind": "callerIdentityDenied",
+        "reason": "sharedPhone"
+      }
+    },
+    {
+      "name": "minor-intake-model-paraphrase",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "requestBoundary",
+        "reason": "minorIntake"
+      },
+      "actual": {
+        "kind": "requestBoundary",
+        "reason": "minorIntake"
+      }
+    },
+    {
+      "name": "proxy-patient-model-paraphrase",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "requestBoundary",
+        "reason": "proxyPatient"
+      },
+      "actual": {
+        "kind": "requestBoundary",
+        "reason": "proxyPatient"
+      }
+    },
+    {
+      "name": "joint-practitioner-model-paraphrase",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "requestBoundary",
+        "reason": "jointPractitioners"
+      },
+      "actual": {
+        "kind": "requestBoundary",
+        "reason": "jointPractitioners"
+      }
+    },
+    {
+      "name": "group-class-model-paraphrase",
+      "requests": 0,
+      "pass": false,
+      "expected": {
+        "kind": "requestBoundary",
+        "reason": "groupClass"
+      },
+      "actual": {
+        "kind": "clarify",
+        "reason": "changeAmbiguous"
+      }
+    },
+    {
+      "name": "own-booking-with-background-partner",
+      "requests": 0,
+      "pass": false,
+      "expected": {
+        "kind": "workflow",
+        "operation": "book"
+      },
+      "actual": {
+        "kind": "clarify",
+        "reason": "changeUnsupported"
+      }
+    },
+    {
+      "name": "own-booking-single-practitioner",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "workflow",
+        "operation": "book"
+      },
+      "actual": {
+        "kind": "workflow",
+        "operation": "book"
+      }
+    },
+    {
+      "name": "outcome",
+      "requests": 1,
+      "pass": true,
+      "expected": {
+        "kind": "outcome"
+      },
+      "actual": {
+        "kind": "outcome"
+      }
+    }
+  ]
+}

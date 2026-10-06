@@ -67,6 +67,11 @@ test("E2E-319 signed caller denial revokes every private workflow, preserves pri
         for (const text of ["This is not a shared phone.", "My neighbour said 'that is not me' yesterday.", "Can you book an appointment for my partner?"]) {
           await play(text); assert.equal((await call.state()).callerIdentityDenied, undefined);
         }
+        // The proxy boundary releases unsent patient selections but is not a
+        // permanent identity denial. A fresh self request needs new proof.
+        await play("I need to book an appointment.");
+        await voiceUntil(() => f.mail.length === 2, "fresh self verification after proxy boundary");
+        await call.verify(f.mail[1]!.code);
         await play("What times are available on October 8?");
         assert.match(call.spoken.at(-1)!, /Option one/i); return;
       }

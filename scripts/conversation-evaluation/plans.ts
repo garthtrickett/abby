@@ -5,7 +5,7 @@ export type Candidate = Readonly<{ id: string; pattern: string; priority: string
 export type Stage = "initial" | "book" | "menu" | "proposal" | "committed" | "uncertain" |
   "cancel" | "cancelTarget" | "cancelCommitted" | "move" | "moveOffers" | "staff" | "staffUncertain" | "enquiry";
 export type Expectation = "clarify" | "cancelProposal" | "spokenChoice" | "revisedProposal" | "revisedDate" |
-  "identityDenied" | "outcome" | "notificationOutcome" | "human" | "readOnly" | "constraints" | "publicFacts" | "boundedSearch" | "urgent" | "unsupported";
+  "identityDenied" | "requestBoundary" | "outcome" | "notificationOutcome" | "human" | "readOnly" | "constraints" | "publicFacts" | "boundedSearch" | "urgent" | "unsupported";
 export type Plan = Readonly<{ stage: Stage; expectation: Expectation; missingSetup?: string }>;
 
 /** These are explicit fixture contracts, not model answers. An absent production
@@ -22,8 +22,8 @@ export const plans: Readonly<Record<string, Plan>> = {
   "CCP-009": { stage: "initial", expectation: "identityDenied" },
   "CCP-010": { stage: "cancelTarget", expectation: "clarify" },
   "CCP-011": { stage: "book", expectation: "constraints" },
-  "CCP-012": { stage: "move", expectation: "unsupported" },
-  "CCP-013": { stage: "initial", expectation: "unsupported" },
+  "CCP-012": { stage: "move", expectation: "requestBoundary" },
+  "CCP-013": { stage: "initial", expectation: "requestBoundary" },
   "CCP-014": { stage: "initial", expectation: "unsupported" },
   "CCP-015": { stage: "initial", expectation: "urgent" },
   "CCP-016": { stage: "initial", expectation: "human" },
@@ -47,11 +47,11 @@ export const plans: Readonly<Record<string, Plan>> = {
   "CCP-034": { stage: "initial", expectation: "unsupported" },
   "CCP-035": { stage: "initial", expectation: "unsupported" },
   "CCP-036": { stage: "cancel", expectation: "cancelProposal" },
-  "CCP-037": { stage: "move", expectation: "unsupported" },
+  "CCP-037": { stage: "move", expectation: "requestBoundary" },
   "CCP-038": { stage: "cancelTarget", expectation: "unsupported" },
-  "CCP-039": { stage: "initial", expectation: "unsupported" },
+  "CCP-039": { stage: "initial", expectation: "requestBoundary" },
   "CCP-040": { stage: "initial", expectation: "unsupported" },
-  "CCP-041": { stage: "initial", expectation: "unsupported" },
+  "CCP-041": { stage: "initial", expectation: "requestBoundary" },
   "CCP-042": { stage: "menu", expectation: "clarify" },
   "CCP-043": { stage: "proposal", expectation: "clarify" },
   "CCP-044": { stage: "book", expectation: "clarify", missingSetup: "Concurrent pending availability read is not reproduced by the serialized baseline setup." },
