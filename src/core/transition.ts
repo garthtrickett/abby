@@ -263,9 +263,9 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       state.callerMessages.push("Before saving a staff request, verify your registered email. If you receive a six-digit code, enter it on the keypad, then press pound. Star clears your entry. Please do not say the code aloud. After verification, ask me to send the request.");
       break;
     case "workflowStarted": {
-      if (!["book", "cancel", "reschedule", "intake"].includes(interpretation.operation) ||
+      if (!["book", "cancel", "reschedule", "intake", "appointments.read"].includes(interpretation.operation) ||
           (interpretation.operation === "intake" ? interpretation.next !== "intakeRequired" : interpretation.next !== "codeRequired") ||
-          state.policy.capabilities[interpretation.operation] !== "execute" || !state.policy.automationEnabled) return err({ kind: "invalidTransition" });
+          (interpretation.operation !== "appointments.read" && state.policy.capabilities[interpretation.operation] !== "execute") || !state.policy.automationEnabled) return err({ kind: "invalidTransition" });
       state.callerMessages.push(interpretation.next === "codeRequired"
         ? "Before we continue, verify your email. If you receive a six-digit code, enter it on the keypad, then press pound. Star clears your entry. Please do not say the code aloud."
         : "Before registration, we will explain privacy and what happens if the call fails, then review your details. Registration does not book an appointment. Press one to start private registration, or star to stop.");
@@ -429,7 +429,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       state.callerMessages.push("I can't check or select those booking options right now. Please request fresh options or contact the clinic directly.");
       break;
     case "appointments": {
-      const presentation = appointmentPresentation(interpretation.snapshot, state.policy.scope, interpretation.from, interpretation.to, now, state.policy.voiceProfile?.locale ?? "en-AU");
+      const presentation = appointmentPresentation(interpretation.snapshot, state.policy.scope, interpretation.from, interpretation.to, now, state.policy.voiceProfile?.locale ?? "en-AU", interpretation.declareRange === true);
       if (turn.quality !== "clear" || !presentation.ok) {
         addStaffTask(state, "systemFailure", now);
         state.callerMessages.push(staffFallbackText(state, "I can't check appointments right now. I'll request staff follow-up."));

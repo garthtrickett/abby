@@ -23,7 +23,7 @@ response being evaluated. All prose requirements and forbidden behaviors are
 also retained as **unassessed**: these narrow observations do not prove full
 acceptance, audio quality, actual telephony or production activation.
 
-Five candidate setups require capabilities the current standalone call flow or
+Four candidate setups require capabilities the current standalone call flow or
 baseline fixture cannot supply. The runner exercises a declared substitute
 state and reports `setupMatch: false`, an explicit `setupGap`, and a failed
 conversation observation. It does not invent staff receipts, public knowledge
@@ -54,7 +54,7 @@ privacy failure, harness failure or changed source; inspect these separately.
 an explicitly absent saved staff request, and a lost booking response that stays
 uncertain without replay. It does not claim the 45 acceptance scenarios pass.
 
-## Next changes
+## Implementation sequence
 
 1. Resolve natural spoken choices against authoritative, latest played offers;
    clarify ambiguous times and near matches.
@@ -142,3 +142,15 @@ Each practitioner keeps its own current booking approval, provider binding and w
 `E2E-313` covers 20 signed synthetic-call scenarios plus the agent command path: earlier alternate openings, named preferences, an empty preferred practitioner, failed or changed provider evidence, catalogue and member-policy revocation, a changed patient proof, interrupted menus, retained dates/windows/location, unknown names and other branches, ties, corrections and a response-lost send without replay. The final gate `node --test --test-concurrency=3 test/voice/approved-booking-search.test.ts test/voice/booking-search-windows.test.ts test/voice/openai-clinical-intent.test.ts test/contract/scenario-manifest.test.ts` passed all nine tests; `npm run typecheck` passed.
 
 The remaining setup gaps are CCP-015 (urgent-route fixture), CCP-019 (independent appointment enquiry), CCP-030 (multiple services), CCP-032 (approved public knowledge) and CCP-044 (concurrent pending read). CCP-022's email-proof explanation and the other conversation failures remain unresolved. This patch does not activate a real clinic, email delivery or carrier traffic, and it does not close the six-part goal or claim a green full suite.
+
+## Independent appointment-enquiry follow-up
+
+[Initial enquiry report](baselines/clinic-conversation-after-enquiries-v1.json) and [final date-correction report](baselines/clinic-conversation-after-enquiries-v2.json), run on 2026-10-06 with `gpt-4o-mini`, each execute all 45 candidates with stable source, zero harness failures, all 135 safety observations passing and clear PostgreSQL patient-data canaries. Both record 29 passing narrow conversation observations and 16 failing, with four setup gaps. Twenty candidate turns make actual model requests; 25 use trusted interpretation. Both intentionally exit nonzero for unresolved observations. They do not establish full prose acceptance or release readiness.
+
+CCP-019 now starts in an actual independently verified `appointments.read` owner rather than cancellation-bound verification. Its live-model enquiry uses the clinic-approved upcoming range, speaks the searched dates and actual provider appointment, and prepares no clinical action. That setup gap is removed. CCP-024's missed-call human-route observation also passes both runs, having failed in the preceding approved-search report; this response was not a targeted behavior change and is not a causal reliability claim. No previously passing observation regresses in either run relative to that report.
+
+The independent read owner captures exact current caller/read approvals, patient permission and admitted session bindings. It has no writer, cancellation policy or clinical proof. Existing protected reader limits remain for other compositions; this read approval can authorize a bounded future start within its own horizon. Played ordinal selection re-reads unchanged private appointment evidence. A date correction performs a new read; changed records, unplayed lists, changed contact, revoked permission/admin approval and automation disablement produce no personal appointment detail. A write stop does not itself revoke independently permitted reads. A later booking request needs a separate booking verification, protected offer and freshly played confirmation; no read proof or selection transfers.
+
+`E2E-314` covers 24 parallel isolated signed scenarios, a separate signed enquiry-to-booking journey and the agent commands. The final gate `node --test --test-concurrency=3 test/voice/appointment-enquiries.test.ts test/voice/openai-clinical-intent.test.ts test/contract/scenario-manifest.test.ts` passed all seven tests. The preceding enquiry/existing-reader/manifest gate passed; the enquiry/four-clinical-workflows/call-flow/manifest gate passed all 17 tests including its subtests. `npm run typecheck` passed. Early failures found and corrected a valid read rejected by media-turn clock advancement and a test supplying the policy revision instead of the automation setting revision; their failed runs are not counted as passing evidence.
+
+CCP-015 (urgent-route fixture), CCP-030 (multiple services), CCP-032 (approved public knowledge) and CCP-044 (concurrent pending read) remain setup gaps. The other conversation failures, including CCP-022's email-proof explanation, remain visible. Approved FAQs, service guidance, broader location admission and complete conversational acceptance still need work. The live runner remains unactivated; carrier/email evidence and the documented preexisting broad voice request-count assertion are unresolved.

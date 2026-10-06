@@ -218,7 +218,7 @@ export type CapabilityPrecondition = "expectedPolicyVersion" | "expectedAutomati
   "appointmentHostConfigured" | "hostIssuedPatientProof" |
   "callReviewAvailable" | "outcomeReportAvailable" | "staffQueueAvailable" | "operationalDailyAvailable" |
   "hostConfirmedTask" | "expectedCallVersion" | "availabilitySetupAvailable" | "expectedAvailabilityApprovalVersion" |
-  "independentStaffVerification" | "approvedClinikoQueue";
+  "independentStaffVerification" | "approvedClinikoQueue" | "independentAppointmentReadVerification" | "approvedAppointmentReadRange";
 
 function entry(id: string, input: JsonSchema, success: JsonSchema, effect: CapabilityDescriptor["effect"],
                authority: CapabilityDescriptor["authority"], approval: CapabilityDescriptor["approval"] = "none",
@@ -444,6 +444,15 @@ export const capabilityCatalogue = {
   "availability.read.v2": entry("availability.read.v2",
     object({ kind: { const: "availability.read.v2" }, turn, from: str, to: str, now: str }),
     reply("availabilityAnswer", "progress", progress), "read", "permittedActor", "none", ["activeCall", "availabilityHostConfigured"]),
+  "appointments.enquiry.start.v1": entry("appointments.enquiry.start.v1",
+    object({ kind: { const: "appointments.enquiry.start.v1" }, turn: sessionTurn, now: str }),
+    reply("appointmentAnswer", "progress", progress), "read", "permittedActor", "none", ["activeCall", "currentCallSession", "appointmentHostConfigured", "independentAppointmentReadVerification"]),
+  "appointments.enquiry.read.v1": entry("appointments.enquiry.read.v1",
+    object({ kind: { const: "appointments.enquiry.read.v1" }, turn: sessionTurn, from: str, to: str, now: str }),
+    reply("appointmentAnswer", "progress", progress), "read", "permittedActor", "none", ["activeCall", "currentCallSession", "independentAppointmentReadVerification", "approvedAppointmentReadRange"]),
+  "appointments.enquiry.select.v1": entry("appointments.enquiry.select.v1",
+    object({ kind: { const: "appointments.enquiry.select.v1" }, turn: sessionTurn, choice: { enum: [1, 2, 3] }, now: str }),
+    reply("appointmentAnswer", "progress", progress), "read", "permittedActor", "none", ["activeCall", "currentCallSession", "independentAppointmentReadVerification", "approvedAppointmentReadRange"]),
   "appointments.read.v1": entry("appointments.read.v1",
     object({ kind: { const: "appointments.read.v1" }, turn, verificationRef: key, from: str, to: str, now: str }),
     reply("appointmentAnswer", "progress", progress), "read", "permittedActor", "none", ["activeCall", "appointmentHostConfigured", "hostIssuedPatientProof"]),

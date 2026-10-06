@@ -104,6 +104,9 @@ export type GatewayCommand =
   | Readonly<{ kind: "booking.offers.select.v1"; turn: FinalCallerTurn; choice: 1 | 2 | 3; now: string }>
   | Readonly<{ kind: "availability.read.v2"; turn: FinalCallerTurn; from: string; to: string; now: string }>
   | Readonly<{ kind: "appointments.read.v1"; turn: FinalCallerTurn; verificationRef: string; from: string; to: string; now: string }>
+  | Readonly<{ kind: "appointments.enquiry.start.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; now: string }>
+  | Readonly<{ kind: "appointments.enquiry.read.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; from: string; to: string; now: string }>
+  | Readonly<{ kind: "appointments.enquiry.select.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; choice: 1 | 2 | 3; now: string }>
   | Readonly<{ kind: "calls.read.v1"; callId: string }>
   | Readonly<{ kind: "calls.outcomes.v1"; afterCallId?: string }>
   | Readonly<{ kind: "staff.list.v1"; afterTaskKey?: string }>
@@ -209,6 +212,7 @@ export class CommandGateway {
     if (this.reception.modelEnabled()) permitted.push("calls.turn.model.v1");
     if (this.reception.availabilityEnabled()) permitted.push("availability.read.v2");
     if (this.reception.appointmentReadEnabled()) permitted.push("appointments.read.v1");
+    if (this.reception.appointmentEnquiryEnabled()) permitted.push("appointments.enquiry.start.v1", "appointments.enquiry.read.v1", "appointments.enquiry.select.v1");
     if (this.reception.staffRequestEnabled()) permitted.push("staff.requests.prepare.v1", "staff.requests.outcome.v1");
     if (this.review) permitted.push("calls.read.v1");
     if (this.outcomeReport) permitted.push("calls.outcomes.v1");
@@ -553,6 +557,16 @@ export class CommandGateway {
             typeof command.now !== "string" || !Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
         const result = await this.reception.checkAvailability(this.actor.scope, command.turn, command.from, command.to, command.now);
         return result.ok ? ok({ kind: "availabilityAnswer", progress: commandProgress(result.value, command.turn.turnId) }) : result;
+      }
+      case "appointments.enquiry.start.v1": {
+        const result = await this.reception.startWorkflow(this.actor.scope, command.turn, "appointments.read", command.now);
+        return result.ok ? ok({ kind: "appointmentAnswer", progress: commandProgress(result.value, command.turn.turnId) }) : result;
+      }
+      case "appointments.enquiry.read.v1":
+      case "appointments.enquiry.select.v1": {
+        const request = command.kind === "appointments.enquiry.read.v1" ? { from: command.from, to: command.to } : { choice: command.choice };
+        const result = await this.reception.enquireAppointments(this.actor.scope, command.turn, request, command.now);
+        return result.ok ? ok({ kind: "appointmentAnswer", progress: commandProgress(result.value, command.turn.turnId) }) : result;
       }
       case "appointments.read.v1": {
         if (!command.turn || !command.turn.turnId || !command.turn.callId || !command.turn.text ||

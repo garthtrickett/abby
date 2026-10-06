@@ -10,6 +10,8 @@ export type ClinikoAppointmentConfig = Readonly<{
   contactEmail: string;
   businessId: string;
   rateBudget?: ClinikoRequestBudget;
+  /** Trusted independent read approval may authorize a future start; default remains one day. */
+  maxStartAdvanceDays?: number;
 }>;
 
 export type { AppointmentRead, AppointmentReadFailure } from "../core/model.ts";
@@ -75,6 +77,7 @@ export class ClinikoAppointmentReader {
   private readonly fetchPort: typeof fetch;
   private readonly clock: () => string;
   private readonly rateBudget: ClinikoRequestBudget;
+  private readonly maxStartAdvanceMs: number;
 
   private constructor(config: ClinikoAppointmentConfig, shard: string, proof: PatientProofHost, fetchPort: typeof fetch, clock: () => string) {
     this.scope = structuredClone(config.scope);
@@ -86,6 +89,7 @@ export class ClinikoAppointmentReader {
     this.fetchPort = fetchPort;
     this.clock = clock;
     this.rateBudget = config.rateBudget ?? new ClinikoReadBudget();
+    this.maxStartAdvanceMs = (config.maxStartAdvanceDays ?? 1) * 86_400_000;
   }
 
   static create(config: ClinikoAppointmentConfig, proof: PatientProofHost, fetchPort: typeof fetch = fetch,
@@ -96,7 +100,8 @@ export class ClinikoAppointmentReader {
         [config.scope.tenantId, config.scope.clinicId, config.scope.locationId].some(part => typeof part !== "string" || !part.trim()) ||
         !validId(config.businessId) || !proof || typeof proof.verifyPatient !== "function" ||
         typeof fetchPort !== "function" || typeof clock !== "function" ||
-        (config.rateBudget !== undefined && !isClinikoRequestBudget(config.rateBudget))) return err({ kind: "invalidConfig" });
+        (config.rateBudget !== undefined && !isClinikoRequestBudget(config.rateBudget)) ||
+        (config.maxStartAdvanceDays !== undefined && (!Number.isSafeInteger(config.maxStartAdvanceDays) || config.maxStartAdvanceDays < 1 || config.maxStartAdvanceDays > 90))) return err({ kind: "invalidConfig" });
     return ok(new ClinikoAppointmentReader(config, shard, proof, fetchPort, clock));
   }
 
@@ -129,7 +134,7 @@ export class ClinikoAppointmentReader {
     const suppliedNowMs = instant(now);
     if (fromMs === undefined || toMs === undefined || nowMs === undefined || toMs <= fromMs || toMs - fromMs > maxRangeMs ||
         suppliedNowMs === undefined || Math.abs(suppliedNowMs - nowMs) > 30_000 ||
-        fromMs < nowMs - 30_000 || fromMs - nowMs > 86_400_000) return err({ kind: "invalidRange" });
+        fromMs < nowMs - 30_000 || fromMs - nowMs > this.maxStartAdvanceMs) return err({ kind: "invalidRange" });
 
     let verified: Awaited<ReturnType<PatientProofHost["verifyPatient"]>>;
     try { verified = await this.proof.verifyPatient(scope, verificationRef, observedAt); }

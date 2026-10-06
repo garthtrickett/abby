@@ -14,7 +14,7 @@ function millis(value: string): number | undefined {
 }
 
 /** Converts a complete, recently verified host read into limited caller-safe wording. */
-export function appointmentPresentation(snapshot: AppointmentRead, scope: LocationScope, from: string, to: string, now: string, locale = "en-AU"): Result<Presentation, Readonly<{ kind: "invalidEvidence" }>> {
+export function appointmentPresentation(snapshot: AppointmentRead, scope: LocationScope, from: string, to: string, now: string, locale = "en-AU", declareRange = false): Result<Presentation, Readonly<{ kind: "invalidEvidence" }>> {
   const fromMs = millis(from);
   const toMs = millis(to);
   const nowMs = millis(now);
@@ -40,11 +40,13 @@ export function appointmentPresentation(snapshot: AppointmentRead, scope: Locati
     times.push(start);
   }
   times.sort((left, right) => left - right);
-  if (times.length === 0) return ok({ text: "I couldn't find an appointment in that time range.", status: "empty", sourceRef: snapshot.sourceRef, shownCount: 0 });
+  const dates = new Intl.DateTimeFormat(locale, { timeZone: snapshot.timeZone, day: "numeric", month: "long", year: "numeric" });
+  const rangeText = declareRange ? `I checked upcoming appointments between ${dates.format(new Date(fromMs))} and ${dates.format(new Date(toMs))}. ` : "";
+  if (times.length === 0) return ok({ text: `${rangeText}I couldn't find an appointment in that time range.`, status: "empty", sourceRef: snapshot.sourceRef, shownCount: 0 });
   const shown = times.slice(0, 3).map(time => formatter.format(new Date(time)));
   const numbered = shown.map((time, index) => `option ${["one", "two", "three"][index]}, ${time}`);
   const text = times.length === 1
     ? `I found an appointment on ${shown[0]}.`
     : `I found ${times.length} appointments in that time range. The first ${shown.length} are ${numbered.join("; ")}.`;
-  return ok({ text, status: "shown", sourceRef: snapshot.sourceRef, shownCount: shown.length });
+  return ok({ text: rangeText + text, status: "shown", sourceRef: snapshot.sourceRef, shownCount: shown.length });
 }

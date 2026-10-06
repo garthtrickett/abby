@@ -56,6 +56,8 @@ export type StaffDestination =
   | Readonly<{ kind: "owner"; ownerRef: string }>
   | Readonly<{ kind: "queue"; queueRef: string }>;
 export type ActionKind = "book" | "cancel" | "reschedule" | "intake";
+/** Routing to patient information is not a clinical mutation capability. */
+export type WorkflowOperation = ActionKind | "appointments.read";
 export type CapabilityId = ActionKind | "transfer";
 export type CapabilityMode = "execute" | "requestOnly" | "unavailable";
 
@@ -245,7 +247,7 @@ export type AppointmentRead = Readonly<{
 export type MenuClarificationReason = "menuAmbiguous" | "menuRejected" | "menuUnavailable" | "proposalCorrection" |
   "changeAmbiguous" | "targetDisagreement" | "changeUnsupported" | "changeAfterSend" | "searchPreferenceUnavailable";
 export type TurnInterpretation =
-  | Readonly<{ kind: "workflowStarted"; operation: ActionKind; next: "codeRequired" | "intakeRequired" }>
+  | Readonly<{ kind: "workflowStarted"; operation: WorkflowOperation; next: "codeRequired" | "intakeRequired" }>
   | Readonly<{ kind: "outcomeQuery" }>
   | Readonly<{ kind: "staffOutcomeQuery" }>
   | Readonly<{ kind: "staffVerificationRequired" }>
@@ -265,7 +267,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "knowledgeFailure"; reason: "invalidQuery" | "unavailable" }>
   | Readonly<{ kind: "availability"; from: string; to: string; snapshot: AvailabilitySnapshot }>
   | Readonly<{ kind: "availabilityFailure"; reason: AvailabilityReadFailure["kind"] | "notEligible" | "notConfigured" | "unclear" }>
-  | Readonly<{ kind: "appointments"; from: string; to: string; snapshot: AppointmentRead }>
+  | Readonly<{ kind: "appointments"; from: string; to: string; snapshot: AppointmentRead; declareRange?: true }>
   | Readonly<{ kind: "appointmentsFailure"; reason: AppointmentReadFailure["kind"] | "notConfigured" | "unclear" }>
   | Readonly<{ kind: "bookingMenu"; snapshot: import("./booking-menu.ts").BookingMenuRead }>
   | Readonly<{ kind: "bookingMenuFailure" }>

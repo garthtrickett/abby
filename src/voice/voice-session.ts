@@ -13,7 +13,7 @@ import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 
 export type VoiceIntent =
   | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason; approvedLocation?: string }>
-  | Readonly<{ kind: "workflow"; operation: "book" | "cancel" | "reschedule" | "intake"; replaceCanceledChange?: true }>
+  | Readonly<{ kind: "workflow"; operation: import("../core/model.ts").WorkflowOperation; replaceCanceledChange?: true }>
   | Readonly<{ kind: "outcome" }>
   | Readonly<{ kind: "staffOutcome" }>
   | Readonly<{ kind: "staffRequest"; requestedPerson?: string }>
@@ -30,6 +30,8 @@ export type VoiceIntent =
   | Readonly<{ kind: "availability"; from: string; to: string }>
   | Readonly<{ kind: "appointments"; verificationRef: string; from: string; to: string }>
   | Readonly<{ kind: "appointmentSelection"; verificationRef: string; choice: 1 | 2 | 3 }>
+  | Readonly<{ kind: "appointmentEnquiry"; from: string; to: string }>
+  | Readonly<{ kind: "appointmentEnquiryChoice"; choice: 1 | 2 | 3 }>
   | Readonly<{ kind: "affirm" }>
   | Readonly<{ kind: "handoff"; reason: StaffReason }>
   | Readonly<{ kind: "transfer"; reason: StaffReason }>;
@@ -360,6 +362,12 @@ export class VoiceSession {
       result = await this.reception.answer(this.scope, turn, this.cachedIntent.sourceRefs, this.cachedIntent.proposedText, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "availability") {
       result = await this.reception.checkAvailability(this.scope, turn, this.cachedIntent.from, this.cachedIntent.to, now, existing.value.conversationRevision);
+    } else if (this.cachedIntent.kind === "appointmentEnquiry" || this.cachedIntent.kind === "appointmentEnquiryChoice") {
+      const controller = new AbortController(), pending = { cancel: () => controller.abort() };
+      this.pendingIntent = pending;
+      const request = this.cachedIntent.kind === "appointmentEnquiry" ? { from: this.cachedIntent.from, to: this.cachedIntent.to } : { choice: this.cachedIntent.choice };
+      try { result = await this.reception.enquireAppointments(this.scope, turn, request, now, existing.value.conversationRevision, controller.signal); }
+      finally { if (this.pendingIntent === pending) this.pendingIntent = undefined; }
     } else if (this.cachedIntent.kind === "appointments") {
       result = await this.reception.checkAppointments(this.scope, turn, this.cachedIntent.verificationRef,
         this.cachedIntent.from, this.cachedIntent.to, now, existing.value.conversationRevision);

@@ -1,4 +1,5 @@
 import { ReschedulingMenuTurns } from "./rescheduling-menu-turns.ts";
+import { AppointmentEnquiryTurns } from "./appointment-enquiry-turns.ts";
 import { BookingMenuTurns } from "./booking-menu-turns.ts";
 import { EffectWorker } from "../core/effect-worker.ts";
 import { EffectCallLeaseCoordinator } from "../core/effect-call-lease.ts";
@@ -14,7 +15,7 @@ import { modelTaskRef } from "../model/work.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 function validIntakeRef(value: unknown): value is string {
@@ -45,7 +46,7 @@ export class TextReception {
     this.model = model;
   }
 
-  async startWorkflow(scope: LocationScope, turn: FinalCallerTurn, operation: import("../core/model.ts").ActionKind, now: string,
+  async startWorkflow(scope: LocationScope, turn: FinalCallerTurn, operation: import("../core/model.ts").WorkflowOperation, now: string,
     expectedConversationRevision?: number, external?: AbortSignal, replaceCanceledChange = false) {
     const state = await this.ledger.read(turn.callId, scope);
     if (!state.ok) return state;
@@ -62,7 +63,13 @@ export class TextReception {
     if (external?.aborted) return err({ kind: "staleTurn" as const });
     const runtime = new CallRuntime(this.ledger, scope);
     return selected?.ok ? runtime.acceptTurn(turn, { kind: "workflowStarted", operation, next: selected.value.kind }, now, expectedConversationRevision)
-      : runtime.acceptTurn(turn, { kind: "unavailableAction", actionKind: operation }, now, expectedConversationRevision);
+      : runtime.acceptTurn(turn, operation === "appointments.read" ? { kind: "appointmentsFailure", reason: "notConfigured" } : { kind: "unavailableAction", actionKind: operation }, now, expectedConversationRevision);
+  }
+
+  appointmentEnquiryEnabled(): boolean { return !!this.host.startWorkflow && new AppointmentEnquiryTurns(this.ledger, this.host).enabled(); }
+  enquireAppointments(scope: LocationScope, turn: FinalCallerTurn, request: Readonly<{ from: string; to: string }> | Readonly<{ choice: 1 | 2 | 3 }>,
+    now: string, expectedRevision?: number, signal?: AbortSignal) {
+    return new AppointmentEnquiryTurns(this.ledger, this.host).accept(scope, turn, request, now, expectedRevision, signal);
   }
 
   reschedulingMenuEnabled(): boolean {
