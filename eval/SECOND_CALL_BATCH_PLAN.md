@@ -19,8 +19,8 @@ Cliniko mutation payloads and call receipts.
 | 9 | Staff message additions and corrections saved in Cliniko | Merged PR #428; twenty-one signed message journeys |
 | 10 | Shared phones and changing patient identity | Merged PR #429; seventeen signed identity journeys |
 | 11 | Bounded pauses, writing time and reopening after goodbye | Merged PR #430; fourteen signed pause/goodbye journeys |
-| 12 | External appointment changes and previous-call claims | Implemented; E2E-341 passes eighteen signed journeys; publication pending |
-| 13 | Private intake spelling and field repairs | Pending |
+| 12 | External appointment changes and previous-call claims | Merged PR #431; eighteen signed external-change journeys |
+| 13 | Private intake spelling and field repairs | Implemented; E2E-342 passes sixteen signed journeys; publication pending |
 | 14 | Payment, deposit, currency, refund and insurance evidence | Pending |
 | 15 | Clinical request boundaries and approved routing | Pending |
 | 16 | Conflicting public facts and unusable arrival instructions | Pending |
@@ -549,3 +549,46 @@ No model prompt revision, general past-call understanding, live mail delivery,
 real carrier or clinic activation. Families 13–18 remain open.
 
 Final `npm run typecheck` passed (1m52s). Exact source hashes, synthetic privacy scan and `git diff --check` passed. Publication follows the operator-authorized local-check merge policy; no CI pass is claimed.
+
+PR #431 merged at `e736fc62d456b3ae6d12bee6e8884f04d61c6d9a` on 2026-10-07 05:57:00 UTC. Exact branch HEAD `05c27d9f4a3439514bf5396b9a959f55fa690d64`: Actions 37578855386 (pull_request) and 37578842843 (push) were queued at merge. No CI pass claimed; normal local-check merge was operator-authorized.
+
+## Private spelling and field repairs: E2E-342
+
+The private field parser now decodes explicit single letters and complete NATO
+runs, validates letter/phonetic pairs, and accepts calendar-valid day/month/full
+year numeric dates without guessing a century. Literal name punctuation and
+compact email punctuation are preserved. Email fragments remain in private
+call memory; continuation is explicit, full replacement drops the old fragment,
+and invalid replacement clears it before retry. Waits and fragments use the
+existing three-attempt limit. No ordinary caller/model context receives fields.
+
+Exact private readback still must play before OTP mail; keypad proof and separate
+saving confirmation precede one patient POST. Unplayed readback sends no mail;
+a lost patient response remains unknown and cannot retry. Provider payload and
+durable PostgreSQL canaries are independently checked. Existing adult self-only
+intake policy and four fields remain; addresses and post-save field edits are
+outside this change.
+
+Baseline: 0 pass, 1 fail, 11589.74251 ms; fifteen signed journeys. The evidence
+qualifies the repeated-Yes test expectation error separately from parsing gaps.
+Initial focus: 0 pass, 1 fail, 12126.731783 ms; only email NATO readback failed.
+Corrected focus: 2 pass, 0 fail, 19352.926632 ms, before final fragment-reset
+refinement and sixteenth journey. Final regression on that source: 27 pass,
+0 fail, 46572.63616 ms.
+
+```sh
+node --test --test-concurrency=2 test/voice/private-intake-spelling.test.ts test/voice/cliniko-workflow-call.test.ts test/cliniko/caller-mediated-intake.test.ts test/contract/scenario-manifest.test.ts
+```
+
+Manifest 1.140, 342 IDs. No real model, carrier, mail or clinic activation claim.
+Families 14–18 remain open. Typecheck follows.
+
+PR #431 Actions 37578855386 and 37578842843 completed failure before steps ran;
+check 112653735567 reports failed account payments/spending limit. This is no CI
+validation result and no CI pass is claimed. Repository billing was not changed.
+
+Initial `npm run typecheck` failed (2m01s) at two RegExpExecArray tuple casts. Explicit non-null capture reads replace the casts without date behavior changes; exact-source signed focus and typecheck follow. The 27-test regression above predates that equivalent narrowing.
+
+Exact capture-read source: `node --test --test-concurrency=2 test/voice/private-intake-spelling.test.ts test/contract/scenario-manifest.test.ts` passed (3 pass, 0 fail, 15716.517792 ms), including all sixteen signed journeys.
+
+Final `npm run typecheck` passed (1m22s). Exact source hashes, synthetic privacy scan and `git diff --check` passed. No CI pass is claimed.

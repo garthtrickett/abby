@@ -6,6 +6,7 @@ import type { PrivateKeypadInput } from "../voice/private-keypad-input.ts";
 import { TurnAssembler } from "../voice/turn-assembler.ts";
 import type { TranscriptFailure } from "../voice/turn-assembler.ts";
 import type { ClinikoCallFlow } from "./cliniko-call-flow.ts";
+import { privateIntakeField } from "./private-intake-field.ts";
 import { PrivateWorkflowKeypad } from "./private-workflow-keypad.ts";
 
 const fields = ["firstName", "lastName", "dateOfBirth", "email"] as const;
@@ -15,19 +16,6 @@ const prompts: Record<Field, string> = {
   firstName: "Please say your first name.", lastName: "Please say your last name.",
   dateOfBirth: "Please say your date of birth, using the day, month name and year.", email: "Please say your email address. You may say at and dot.",
 };
-function fieldValue(field: Field, text: string): string | undefined {
-  const value = text.trim();
-  if (field === "firstName" || field === "lastName") return /^[\p{L}][\p{L}\p{M} '-]{0,99}$/u.test(value) ? value : undefined;
-  if (field === "email") {
-    const email = value.toLowerCase().replace(/\s+at\s+/g, "@").replace(/\s+dot\s+/g, ".").replace(/\s+/g, "");
-    return email.length <= 254 && /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(email) ? email : undefined;
-  }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const named = /^(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})$/i.exec(value);
-  if (!named) return undefined;
-  const month = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].indexOf(named[2]!.toLowerCase()) + 1;
-  return `${named[3]}-${String(month).padStart(2, "0")}-${named[1]!.padStart(2, "0")}`;
-}
 export type PrivateIntakeVoiceConfig = Readonly<{
   callId: string; sessionId: string; phone: string; owner: () => ClinikoCallFlow | undefined;
   present(text: string, signal: AbortSignal): Promise<boolean>;
@@ -45,6 +33,7 @@ export class PrivateIntakeVoiceInput implements PrivateKeypadInput {
   #stage: Stage = "routing";
   #draft: Partial<Record<Field, string>> = {};
   #field = 0;
+  #fragment: string | undefined;
   #attempts = 0;
   #sequence = 0;
   #working = false;
@@ -61,11 +50,16 @@ export class PrivateIntakeVoiceInput implements PrivateKeypadInput {
       finishTurn: async now => {
         const final = assembler.finish(now); if (!final.ok) return final;
         if (this.#stage !== "field" || this.#working) return err({ kind: "invalidTranscript" });
-        const value = final.value.quality === "clear" ? fieldValue(fields[this.#field]!, final.value.text) : undefined;
+        const value = final.value.quality === "clear" ? privateIntakeField(fields[this.#field]!, final.value.text, this.#fragment) : undefined;
         this.#stage = "prompt";
         this.#launch(async () => {
-          if (!value) { if (++this.#attempts >= 3) { this.stop(); return; } await this.#prompt(); return; }
-          this.#draft[fields[this.#field]!] = value; this.#field++; this.#attempts = 0;
+          if (!value || value.kind !== "value") {
+            if (value?.kind === "fragment") this.#fragment = value.value;
+            if (value?.kind === "reset") this.#fragment = undefined;
+            if (++this.#attempts >= 3) { this.stop(); return; }
+            await this.#prompt(); return;
+          }
+          this.#draft[fields[this.#field]!] = value.value; this.#fragment = undefined; this.#field++; this.#attempts = 0;
           if (this.#field < fields.length) { await this.#prompt(); return; }
           this.#stage = "readback";
           const result = await this.#config.owner()!.collectIntake({ ...this.#draft, patientPhone: config.phone, phoneType: "Mobile" } as ClinikoIntakeDraft);
@@ -87,7 +81,7 @@ export class PrivateIntakeVoiceInput implements PrivateKeypadInput {
   }
   async #prompt(): Promise<void> {
     this.#stage = "prompt";
-    if (!await this.#config.present(prompts[fields[this.#field]!], this.#lifetime.signal) || this.#lifetime.signal.aborted) { this.stop(); return; }
+    if (!await this.#config.present(this.#fragment ? "Please continue your email address, starting with the word continue, or say actually followed by the full address to replace it." : prompts[fields[this.#field]!], this.#lifetime.signal) || this.#lifetime.signal.aborted) { this.stop(); return; }
     this.#stage = "field";
   }
   claim(callId: string, sessionId: string): boolean { return this.#keypad.claim(callId, sessionId); }
@@ -136,6 +130,6 @@ export class PrivateIntakeVoiceInput implements PrivateKeypadInput {
   stop(): void {
     if (this.#stage === "closed") return;
     this.#stage = "closed"; this.#lifetime.abort(); this.#config.signal.removeEventListener("abort", this.#onClose);
-    this.#draft = {}; this.#recoveryRef = undefined; this.#keypad.stop(); void this.#media.stop().catch(() => undefined);
+    this.#draft = {}; this.#fragment = undefined; this.#recoveryRef = undefined; this.#keypad.stop(); void this.#media.stop().catch(() => undefined);
   }
 }

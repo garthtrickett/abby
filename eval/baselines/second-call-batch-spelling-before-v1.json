@@ -1,0 +1,28 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "e736fc62d456b3ae6d12bee6e8884f04d61c6d9a",
+  "families": [
+    13
+  ],
+  "scenarioIds": [
+    "E2E-342"
+  ],
+  "command": "node --test test/voice/private-intake-spelling.test.ts",
+  "pass": 0,
+  "fail": 1,
+  "durationMs": 11589.74251,
+  "signedJourneys": 15,
+  "observedFailures": [
+    "Spelled and NATO names reached literal incorrect readback.",
+    "Slash, eight-digit and spaced numeric dates reprompted instead of advancing.",
+    "Impossible named date advanced to email.",
+    "Email continuation and NATO produced incorrect readback.",
+    "A for Bravo was accepted as aforbravo@example.test.",
+    "Explicit first-name correction reprompted."
+  ],
+  "qualification": "The ambiguous-DOB, wait and lost-outcome cases reached a test-only repeated-Yes expectation error. That assertion was corrected to expect the existing confirmationMissing fence; no production retry authority changed. The unplayed-readback case passed. Other cases stopped at the stated first failure, later assertions not reached.",
+  "limits": [
+    "Synthetic signed ingress/provider only; no live carrier/mail or real-model pass.",
+    "Original 45-case corpus unchanged."
+  ]
+}
