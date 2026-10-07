@@ -2,6 +2,7 @@ import type { ClinicIntakeAuditPage } from "./clinic-intake-setting.ts";
 import type { StaffedDestinationAuditPage, StaffedDestinationCatalogue } from "./staffed-destination.ts";
 import type { ActionRequest, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, ApprovedKnowledge, AppointmentRead, AppointmentReadFailure, AvailabilityRead, AvailabilityReadFailure, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, OperatorAlert, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
 import type { ReadinessFailure } from "./readiness.ts";
+import type { CallState, FinalCallerTurn } from "./model.ts";
 
 export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable"; target: "patient" | "offer" | "appointment" }> |
   Readonly<{ kind: "outsideHorizon"; target: "offer"; snapshot: import("./booking-horizon.ts").BookingHorizonRead }>;
@@ -214,6 +215,8 @@ export interface StaffReviewProcessHost {
 
 export interface StaffRequestHost {
   prepareStaffRequest(query: StaffRequestQuery): Promise<Result<StaffRequestPreparation, Readonly<{ kind: "staffUnavailable" }>>>;
+  /** Transient draft owners may retain content across an accepted literal pause; this grants no send permission. */
+  conversationControlAccepted?(turn: FinalCallerTurn, state: CallState): void;
 }
 
 export interface HostEffects {

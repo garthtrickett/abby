@@ -171,6 +171,9 @@ export class TextReception {
   respondPresence(scope: LocationScope, turn: FinalCallerTurn, expectedRevision?: number) {
     return this.respondPublicRepair(scope, turn, "conversationPresence", expectedRevision);
   }
+  conversationControlAccepted(turn: FinalCallerTurn, state: CallState): void {
+    this.host.conversationControlAccepted?.(turn, state);
+  }
   respondMissedCall(scope: LocationScope, turn: FinalCallerTurn, expectedRevision?: number) {
     return this.respondPublicRepair(scope, turn, "missedCallReasonUnavailable", expectedRevision);
   }

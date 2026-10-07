@@ -8,7 +8,7 @@ import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
 import { ClinikoVerificationContactReader } from "../cliniko/verification-contact.ts";
 import type { StaffReviewProcessQuery, StaffRequestQuery, StaffRequestPreparation } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
-import type { Result, StaffItem, StaffTaskReceipt, StaffTaskObservation } from "../core/model.ts";
+import type { CallState, Result, StaffItem, StaffTaskReceipt, StaffTaskObservation } from "../core/model.ts";
 import { validStaffLabel } from "../core/staff-outcome.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { sameScope } from "./appointment-change-authority.ts";
@@ -45,6 +45,9 @@ export class ClinikoStaffSession {
   #receipt: StaffTaskReceipt | undefined;
   #verifiedOnce = false;
   #definitiveNoSend = false;
+  conversationControlAccepted(turn: import("../core/model.ts").FinalCallerTurn, state: CallState): void {
+    if (!this.#attempt && !this.#lifetime.signal.aborted) this.#message.retainAcrossControl(turn, state);
+  }
   private constructor(config: ClinikoStaffSessionConfig, policy: OwnerFileStaffPolicy, verification: CallerVerificationSession, writer: ClinikoRecallWriter) {
     this.#config = config; this.#policy = policy; this.#verification = verification; this.#writer = writer;
     config.signal.addEventListener("abort", this.#onClose, { once: true });

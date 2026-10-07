@@ -25,8 +25,9 @@ const scope = { tenantId: "silence-tenant", clinicId: "silence-clinic", location
 function manualTimer() {
   let next = 0;
   const scheduled = new Map<number, () => void>();
+  const delays = new Map<number, number>();
   const timer: TimerPort = {
-    schedule(callback) { const id = ++next; scheduled.set(id, callback); return id; },
+    schedule(callback, ms) { const id = ++next; scheduled.set(id, callback); delays.set(id, ms); return id; },
     cancel(handle) { scheduled.delete(handle as number); },
   };
   function fire(): void {
@@ -35,7 +36,7 @@ function manualTimer() {
     scheduled.delete(id);
     callback();
   }
-  return { timer, scheduled, fire };
+  return { timer, scheduled, fire, delay: () => delays.get([...scheduled.keys()][0]!) };
 }
 
 async function until(predicate: () => boolean): Promise<void> {
@@ -55,6 +56,7 @@ function fixture(shared = false) {
   let stops = 0;
   let closes = 0;
   const closeKinds: string[] = [];
+  let finalText: string | undefined, utterances = 0, chunks = 0;
   const router = new ClinicPolicyRouter(new ReferenceNumberRoutingHost([
     { accountRef: accountSid, dialedNumber: number, ...scope, routeVersion: "v1" },
     { accountRef: accountSid, dialedNumber: sharedNumber, ...scope, spokenName: "Main Street", routeVersion: "v1" },
@@ -75,7 +77,11 @@ function fixture(shared = false) {
         samples.setInt16(index * 2, Math.round(Math.sin(index / 9) * (1_000 + spoken.length * 2_000)), true);
       }
       yield bytes;
-    } }, transcription: { async accept() { return ok([]); }, async flush() { return ok([]); } } }),
+    } }, transcription: { async accept() { return ok([]); }, async flush(generation) {
+      if (!finalText) return ok([]);
+      const text = finalText; finalText = undefined;
+      return ok([{ kind: "segmentFinal", sessionId: "session", generation, utteranceId: `control-${++utterances}`, text, quality: "clear" }]);
+    } } }), mediaOptions: { silenceMs: 100 },
 
     streamStartedAt: now, now: () => now, silenceTimer: timer.timer,
     onCallStop: () => { stops += 1; }, closeTransport: kind => { closes += 1; closeKinds.push(kind); },
@@ -99,9 +105,38 @@ function fixture(shared = false) {
     const result = await receive({ event: "mark", mark: { name } });
     assert.ok(result.ok && result.value.kind === "played", result.ok ? "" : result.error.kind);
   }
+  async function say(text: string) {
+    finalText = text;
+    for (let frame = 0; frame < 7; frame++) {
+      const result = await receive({ event: "media", media: { track: "inbound", chunk: String(++chunks), timestamp: String((chunks - 1) * 20),
+        payload: Buffer.alloc(160, frame < 2 ? 0x9f : 0xff).toString("base64") } });
+      assert.ok(result.ok, result.ok ? "" : result.error.kind);
+    }
+  }
   return { call, ledger, event, timer, sent, spoken, start, mark, receive,
-    stops: () => stops, closes: () => closes, closeKinds };
+    stops: () => stops, closes: () => closes, closeKinds, say };
 }
+
+test("E2E-340 played pauses extend exactly two listening intervals and stale goodbye deadlines cannot close reopened speech", async () => {
+ const f = fixture();
+ try {
+  await f.start(); await f.mark(f.sent.length - 1); assert.equal(f.timer.delay(), 15_000);
+  await f.say("Please hold."); assert.equal(f.timer.delay(), 60_000, "queued pause still needs playback evidence");
+  const stalePlayback = f.timer.scheduled.values().next().value!; await f.mark(f.sent.length - 1); stalePlayback(); assert.equal(f.timer.delay(), 30_000);
+  await f.say("Please wait while I check my diary."); await f.mark(f.sent.length - 1); assert.equal(f.timer.delay(), 30_000);
+  await f.say("Please hold."); await f.mark(f.sent.length - 1); assert.equal(f.timer.delay(), 15_000, "third consecutive pause cannot extend the wait again");
+  await f.say("Actually, one more thing."); await f.mark(f.sent.length - 1); assert.equal(f.timer.delay(), 15_000);
+  await f.say("Please hold."); await f.mark(f.sent.length - 1); assert.equal(f.timer.delay(), 30_000, "a completed ordinary turn resets the pause bound");
+  f.timer.fire(); await until(() => f.spoken.at(-1)?.startsWith("Are you still there?") === true); await f.mark(f.sent.length - 1); assert.equal(f.timer.delay(), 15_000);
+  await f.say("Goodbye."); await f.mark(f.sent.length - 1); assert.equal(f.timer.delay(), 5_000);
+  const staleGoodbye = f.timer.scheduled.values().next().value!;
+  await f.say("Actually, I have more."); await f.mark(f.sent.length - 1); staleGoodbye(); assert.equal(f.closes(), 0); assert.equal(f.timer.delay(), 15_000);
+  await f.say("Goodbye."); await f.mark(f.sent.length - 1); const spoken = f.spoken.length; f.timer.fire(); await until(() => f.closes() === 1);
+  assert.deepEqual(f.closeKinds, ["normal"]); assert.equal(f.spoken.length, spoken); assert.equal(f.timer.scheduled.size, 0);
+  const late = await f.receive({ event: "media", media: { track: "inbound", chunk: "999", timestamp: "1000", payload: Buffer.alloc(160, 0x9f).toString("base64") } });
+  assert.ok(!late.ok); assert.equal(late.error.kind, "streamClosed");
+ } finally { await f.call.disconnect(); }
+});
 
 test("E2E-070 silent caller receives one retry and a final notice, then the call closes", async () => {
   const f = fixture();

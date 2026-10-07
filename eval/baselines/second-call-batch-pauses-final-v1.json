@@ -1,0 +1,82 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "fd539c229cd1e78fcf1f4dea0d285568feb02e26",
+  "families": [
+    11
+  ],
+  "scenarioIds": [
+    "E2E-340"
+  ],
+  "sourceFiles": {
+    "src/core/caller-identity.ts": "3b2b137ebf275bc184015fe77f8f8a496df1725b263470a511d6daf8d044236e",
+    "src/core/host.ts": "12a6db47001784aaf763076189a89fda78df080617f3b543ad6c565ab890278c",
+    "src/core/model.ts": "4579458a5c1862e3b269f1ef21aadc2330e0bd841ce1821a6b4743dd5f90498d",
+    "src/core/transition.ts": "7910eca72ab0049d9e9afa0477d69fbe2ee55d47d7952d334e9755b42be3e75a",
+    "src/reference/text-reception.ts": "9fa0b9b8175c127f4c85bec0ad6784aadbcf5569793528a8f70c3689711216f6",
+    "src/standalone/cliniko-call-flow.ts": "57654b1611613dde2fa79afb2e8ba174eaddab75035ecc600d2a6b98a9096ac8",
+    "src/standalone/cliniko-staff-session.ts": "09b7eff8995e0e5f75241bb5b90bdac4101f835cc5041fe9f424727600cc8400",
+    "src/standalone/staff-message-draft.ts": "a4b053ff93027e229b4199128fc159d0237335e16345465f5fbb7b4da1eb12ac",
+    "src/voice/twilio-connected-call.ts": "3d2d503b5510261ee7ba52f88bca57dfd61b1088a94f436bdf35f38691403f93",
+    "src/voice/voice-session.ts": "70ed63f5f76916a5494c771dd1a875a684db52596ada81f654048a12e9905fd1",
+    "test/contract/scenario-manifest.test.ts": "45afed65feab70486089ec39e788e2b85ca82e44caff2cda959936704635b705",
+    "test/voice/twilio-silence-timeout.test.ts": "faf9cd1c27b52f7cbc479bfcc5781ab09ceb7d64ad2442899245aece5ecee958",
+    "src/core/conversation-control.ts": "25d997ad178af57fc886de365f6d6944538328acdea27f88ac0fda965f95b575",
+    "test/voice/caller-pauses.test.ts": "3f2acb16238eca42a8ee4ad97769467ad58b6b02e945741675cccd734d6e3b74"
+  },
+  "beforeReport": "eval/baselines/second-call-batch-pauses-before-v1.json",
+  "focus": {
+    "command": "node --test --test-concurrency=2 test/voice/caller-pauses.test.ts test/voice/twilio-silence-timeout.test.ts",
+    "pass": 9,
+    "fail": 0,
+    "durationMs": 30194.003014,
+    "signedJourneys": 11,
+    "scope": "Before three final fence variants and explicit notice-kind narrowing; timing and consent behavior unchanged."
+  },
+  "regression": {
+    "command": "node --test --test-concurrency=2 test/voice/caller-pauses.test.ts test/voice/twilio-silence-timeout.test.ts test/voice/automated-call-consent.test.ts test/voice/call-waiting-limits.test.ts test/voice/staff-message-corrections.test.ts test/voice/caller-identity-denial.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 13,
+    "fail": 1,
+    "durationMs": 92778.900087,
+    "scope": "One new test expected confirmationMissing transport failure after affirming a canceled proposal. Actual behavior clarified without a write; that test expectation was corrected. All related regressions passed. No production change followed this run. Later explicit kind===notice narrowing resolves two type errors; no timing or consent behavior changed."
+  },
+  "finalFocus": {
+    "command": "node --test --test-concurrency=2 test/voice/caller-pauses.test.ts test/voice/twilio-silence-timeout.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 10,
+    "fail": 0,
+    "durationMs": 27865.517709,
+    "signedJourneys": 14,
+    "scope": "Before explicit notice-kind narrowing only."
+  },
+  "privacyCanaryScan": "passed",
+  "originalCorpus": "45 cases unchanged",
+  "limits": [
+    "Complete literal controls only; quoted, mixed, conditional and negated wording remains ordinary input. Automated multi-phrase scripts keep their cumulative bound.",
+    "Two consecutive thirty-second waits after actual playback, then ordinary idle deadline; five-second played-goodbye grace; private OTP/intake media fence unchanged.",
+    "Controls cancel unsent proposals and never affirm. They cannot reopen a closed call or repeat a possibly sent mutation.",
+    "Draft content remains transient; only exact accepted controls with matching previous played notice/revision retain it, and independent verification plus a separately explicit send after played notice is still required.",
+    "Synthetic signed voice/provider/mail/approval only, with actual default timer and manual stale-timer evidence; no real carrier, clinic activation, mail delivery or new real-model pass.",
+    "Families 12\u201318 remain open."
+  ],
+  "initialTypecheck": {
+    "command": "npm run typecheck",
+    "exitCode": 2,
+    "durationSeconds": 85,
+    "finding": "Two text accesses require narrowing Presentation to kind notice; transfer presentations do not have approvedText. Fixed by explicit kind checks."
+  },
+  "exactSourceFocus": {
+    "command": "node --test --test-concurrency=2 test/voice/caller-pauses.test.ts test/voice/twilio-silence-timeout.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 10,
+    "fail": 0,
+    "durationMs": 25750.760539,
+    "signedJourneys": 14
+  },
+  "finalTypecheck": {
+    "command": "npm run typecheck",
+    "exitCode": 0,
+    "durationSeconds": 70
+  },
+  "diffCheck": {
+    "command": "git diff --check",
+    "exitCode": 0
+  }
+}

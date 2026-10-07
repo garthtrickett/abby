@@ -9,6 +9,7 @@ import type { TextReceptionFailure } from "../reference/text-reception.ts";
 import { TextReception } from "../reference/text-reception.ts";
 import { TurnAssembler } from "./turn-assembler.ts";
 import { UnattendedTurnGuard } from "./unattended-turn-guard.ts";
+import { conversationControl, conversationControlText } from "../core/conversation-control.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 
@@ -65,7 +66,7 @@ export type TransferPort = Readonly<{ request(transferId: string, destinationRef
 export type TransientPresentationConfig = Readonly<{ greeting: ApprovedGreeting; staffWorkUnavailable?: true }>;
 export type VoiceSessionFailure = TransitionFailure | TextReceptionFailure | TranscriptFailure |
   Readonly<{ kind: "sessionUnknown" | "deliveryBlocked" | "playbackUnknown" | "transportUnavailable" | "intentUnavailable" | "automatedCallUnavailable" }>;
-export type DispatchResult = Readonly<{ kind: "none" | "queued" | "played" | "failed" | "unproven" | "interrupted" | "transferConnected" | "transferFailed" | "transferUnproven" | "transferCanceled"; playbackId?: string }>;
+export type DispatchResult = Readonly<{ kind: "none" | "queued" | "played" | "failed" | "unproven" | "interrupted" | "transferConnected" | "transferFailed" | "transferUnproven" | "transferCanceled"; playbackId?: string; conversationControl?: "pause" | "goodbye" }>;
 
 type ActivePlayback = { id: string; presentationId: string; generation: number };
 
@@ -104,6 +105,8 @@ export class VoiceSession {
   private pendingIntent: Readonly<{ cancel: () => void }> | undefined;
   private unclearTurns = 0;
   private readonly unattended = new UnattendedTurnGuard();
+  private consecutivePauses = 0;
+  private controlPresentation: Readonly<{ id: string; mode: "pause" | "goodbye" }> | undefined;
   private readonly privatePlayback = new Map<string, (played: boolean) => void>();
 
   /** A qualified new speech onset may fence a still-pending classifier or menu operation before wire-order work resumes. */
@@ -126,6 +129,8 @@ export class VoiceSession {
 
   /** Transport loss must release transient work before the serialized call owner can end. */
   stopTransientWork(): void {
+    this.consecutivePauses = 0;
+    this.controlPresentation = undefined;
     this.unattended.clear();
     this.pendingIntent?.cancel();
     this.reception.cancelPendingModel(this.scope, this.callId);
@@ -256,6 +261,7 @@ export class VoiceSession {
     const generation = this.assembler.beginSpeech();
     this.pendingIntent?.cancel();
     this.cachedIntent = undefined;
+    this.controlPresentation = undefined;
     this.speechOpen = true;
     const active = this.activePlayback;
     if (active) this.activePlayback = undefined;
@@ -323,6 +329,24 @@ export class VoiceSession {
       if (!existing.ok) return existing;
       if (generation !== this.assembler.currentGeneration()) return err({ kind: "staleTurn" });
     }
+    const control = conversationControl(turn.text);
+    if (control) {
+      const notice = control === "pause" && this.consecutivePauses >= 2 ? "pauseLimit" : control;
+      const accepted = await this.runtime.acceptTurn(turn, { kind: "conversationControl", notice }, now, existing.value.conversationRevision);
+      if (accepted.ok && generation === this.assembler.currentGeneration()) {
+        this.reception.conversationControlAccepted(turn, accepted.value);
+        this.consecutivePauses = control === "pause" ? Math.min(3, this.consecutivePauses + 1) : 0;
+        const id = accepted.value.pendingPresentationId;
+        const presentation = id ? accepted.value.presentations[id] : undefined;
+        if (id && presentation?.kind === "notice" && (notice === "pause" || notice === "goodbye") && presentation.approvedText === conversationControlText[notice])
+          this.controlPresentation = { id, mode: notice };
+        this.rememberPending(accepted.value);
+        this.speechOpen = false;
+        this.unclearTurns = 0;
+      }
+      return accepted;
+    }
+    this.consecutivePauses = 0;
     const unattended = this.unattended.accept(turn.text);
     if (unattended === "close") return err({ kind: "automatedCallUnavailable" });
     if (unattended === "notice") this.cachedIntent = { kind: "clarify", reason: "unattendedAnnouncement" };
@@ -568,7 +592,8 @@ export class VoiceSession {
     if (!this.canSend()) return this.closeAfterLeaseLoss(now);
     if (send === "queued") {
       if (!this.privatePlayback.has(presentationId)) this.unattended.rememberOutput(approvedText);
-      return ok({ kind: "queued", playbackId });
+      const control = this.controlPresentation?.id === presentationId ? this.controlPresentation.mode : undefined;
+      return ok({ kind: "queued", playbackId, ...(control ? { conversationControl: control } : {}) });
     }
     this.activePlayback = undefined;
     this.transientContent?.delete(presentationId);
