@@ -24,8 +24,8 @@ Cliniko mutation payloads and call receipts.
 | 14 | Payment, deposit, currency, refund and insurance evidence | Merged PR #433; thirty-two signed financial-evidence journeys |
 | 15 | Clinical request boundaries and approved routing | Merged PR #434; twenty-four signed clinical-boundary journeys |
 | 16 | Conflicting public facts and unusable arrival instructions | Merged PR #435; twenty-two signed arrival/public-fact journeys |
-| 17 | Practitioner and service preferences, history and duration | Implemented; E2E-346 passes twenty-one signed journeys; publication pending |
-| 18 | Home visits, classes, telehealth and practitioner changes | Pending |
+| 17 | Practitioner and service preferences, history and duration | Merged PR #436; twenty-one signed practitioner/service journeys |
+| 18 | Home visits, classes, telehealth and practitioner changes | Implemented; E2E-347 passes twenty-one signed journeys; publication pending |
 
 Each family needs a baseline observation, implementation where needed, focused
 end-to-end evidence, related regression checks and a merged publication. Existing
@@ -755,3 +755,47 @@ PR #435 push Actions 37583193286 failed before steps. Check112667324644 reports
 account payments/spending limit; no CI pass claimed.
 
 Final `npm run typecheck` passed (2m03s). Exact source hashes, synthetic privacy scan and `git diff --check` passed. No CI pass claimed.
+
+PR #436 merged at `78a65cbe76547ffe2a465931e9b59e60641f6e65` on 2026-10-07 06:52:16 UTC. Exact branch HEAD `7457fc76f40111c3f49117c340e8a2b80a30ddde`: Actions 37583899780 (pull_request) was queued and 37583893517 (push) completed failure at merge. No CI pass claimed; normal local-check merge was operator-authorized.
+
+## Special-service boundaries: E2E-347
+
+Explicit Pilates/mat/gym class and membership requests now use the existing group
+boundary rather than individual bookings. Complete home-visit, visit-mode and
+source-practitioner change requests receive truthful unsupported-service notices.
+No class inventory, membership redemption, home-visit arrangement, telehealth/type
+switch or cross-practitioner source change is implemented or inferred. Independently
+verified private class-absence and home-visit messages can be sent to Cliniko after
+a separate explicit confirmation; a message receipt is not a service reservation.
+
+Baseline: 0 pass, 1 fail, 14972.928338 ms. Fifteen journeys reached actual classifier
+HTTP; later assertions were not reached. Two requests reached existing ambiguous
+change notices rather than an explicit service boundary. Four cases already passed:
+exact native cancellation and same-practitioner movement with second source92
+untouched, and independent private class/home-service messages. A generic synthetic
+first-name class-absence fixture was renamed before final evidence; no real log
+identifiers or recordings are retained.
+
+Focus: 2 pass, 0 fail, 15027.996429 ms; twenty-one signed journeys. The positive
+individual changes use exact source91, preserve approved type/duration and need
+separate confirmation; repeated assent cannot send again. Pending proposals cancel,
+while actual known and unknown earlier sends retain their exact state and send fence.
+
+Manifest 1.145, 347 IDs. Complete bounded phrases only; no new positive patient
+or provider authority, durable patient field, dependency or repository configuration.
+Original 45-case corpus unchanged. Synthetic signed ingress/provider/mail/approval
+is not live carrier/mail/clinic activation or a new real-model pass. Real mail,
+carrier activation and Splose remain explicitly deferred by the operator.
+
+PR #436 push Actions 37583893517 failed before steps. Check112669535161 reports
+account payments/spending limit; no CI pass claimed.
+
+Final integration regression: 15 pass, 0 fail, 96015.283096 ms. All five latest boundary families together, existing unsupported-request and post-action receipt regressions passed on final production source.
+
+```sh
+node --test --test-concurrency=2 test/voice/special-service-boundaries.test.ts test/voice/preference-service-boundaries.test.ts test/voice/arrival-fact-boundaries.test.ts test/voice/clinical-suitability-boundaries.test.ts test/voice/financial-evidence-boundaries.test.ts test/voice/booking-request-boundaries.test.ts test/voice/post-action-followups.test.ts test/contract/scenario-manifest.test.ts
+```
+
+Typecheck follows.
+
+Final `npm run typecheck` passed (1m55s). Exact source hashes, synthetic privacy scan and `git diff --check` passed. The original corpus `eval/clinic-conversation-candidates-v1.json` is byte-identical to starting base `11c6e7236b17636c9bbdc9583f21c43259768de1`; SHA256 `2b537ef47b49a393c4916a43e0cbfc9e54f58a03daab6170b21ec3fa369e6e2c`. No CI pass claimed.
