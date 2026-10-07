@@ -17,8 +17,8 @@ Cliniko mutation payloads and call receipts.
 | 7 | Compound weekday, time and date constraints | Implemented; E2E-336 passes thirteen signed synthetic journeys; merged in PR #426; local checks passed |
 | 8 | Relative and source-relative dates and times | Merged PR #427; nineteen signed relative-date journeys |
 | 9 | Staff message additions and corrections saved in Cliniko | Merged PR #428; twenty-one signed message journeys |
-| 10 | Shared phones and changing patient identity | Implemented; E2E-339 passes seventeen signed journeys; publication pending |
-| 11 | Bounded pauses, writing time and reopening after goodbye | Pending |
+| 10 | Shared phones and changing patient identity | Merged PR #429; seventeen signed identity journeys |
+| 11 | Bounded pauses, writing time and reopening after goodbye | Implemented; E2E-340 passes fourteen signed journeys; publication pending |
 | 12 | External appointment changes and previous-call claims | Pending |
 | 13 | Private intake spelling and field repairs | Pending |
 | 14 | Payment, deposit, currency, refund and insurance evidence | Pending |
@@ -464,3 +464,47 @@ results: `eval/baselines/second-call-batch-patient-change-final-v1.json`.
 
 Final `npm run typecheck` passed (1m55s). Source hashes, real-call privacy scan
 and `git diff --check` passed on the final source.
+
+PR #429 merged at `fd539c229cd1e78fcf1f4dea0d285568feb02e26`. Exact branch HEAD `8b643016965eec8a2995f00f428a1c2c8d22cde1`: Actions 37575996545 (pull_request) and 37575978861 (push) failed before execution. Job 112644912831 reports the account billing/spending limit. Normal local-check merge was operator-authorized; no CI pass is claimed.
+
+## Caller waits and goodbye: E2E-340
+
+The baseline eleven signed journeys failed the immediate notice or actual-model
+HTTP assertion. Complete “please hold” matched the automated-announcement guard,
+writing requests reached model fallback, and goodbye used normal inference.
+Later timing, send and privacy assertions were not reached. Baseline: 0 pass,
+1 fail, 15167.138406 ms.
+
+Complete bounded control phrases now enter canonical fixed notices before
+inference or private message capture. Two consecutive played pauses each permit
+thirty seconds; the third uses the ordinary idle deadline. A played goodbye
+permits five seconds for another caller request, then closes normally without
+an idle retry. Qualified speech cancels the old deadline. Unplayed notices still
+require playback evidence and use the existing playback failure deadline.
+
+These controls grant no patient permission or mutation consent. Unsent proposals
+are canceled and require fresh options, proposal and separate affirmation. Prior
+known or unknown mutation receipts retain their one-send fence. A transient
+message draft can retain its exact content across accepted controls only when
+the preceding notice was played and revisions match; later explicit send still
+requires the new control notice to be played and current independent permission.
+No new durable patient field, write path, dependency or clinic policy.
+
+First corrected focus: 9 pass, 0 fail, 30194.003014 ms (eleven signed journeys
+and manual timer evidence, before three final fence journeys). Related regression
+on the final production source: 13 pass, 1 fail, 92778.900087 ms. The failure
+was the new test expecting a transport error after affirming a canceled proposal;
+the actual reply was a safe clarification. The test now asserts no mutation and
+all proposals canceled. Production code did not change after that regression.
+The related automated-announcement, pending-read/silence, message-draft and
+identity-denial tests passed in that run.
+
+Final focus before the explicit notice-kind narrowing: 10 pass, 0 fail,
+27865.517709 ms, fourteen signed journeys. Initial typecheck failed at two
+`Presentation.approvedText` accesses because a transfer has no text. Both now
+require `kind === "notice"` before comparison; timing and consent behavior were
+not changed. A focus and typecheck on that exact source follow.
+
+Exact notice-kind source focus: 10 pass, 0 fail, 25750.760539 ms; all fourteen signed journeys, timing/negative guards and manifest contract pass.
+
+Final `npm run typecheck` passed (1m10s). Exact source hashes, scoped privacy scan and `git diff --check` pass. No real-model or CI success is claimed. Families 12–18 remain open.

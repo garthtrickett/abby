@@ -1,4 +1,5 @@
-import type { CallState } from "../core/model.ts";
+import type { CallState, FinalCallerTurn } from "../core/model.ts";
+import { conversationControl, conversationControlText } from "../core/conversation-control.ts";
 import type { StaffMessageNotice } from "../core/staff-message-notice.ts";
 import { noticePresentationId } from "../core/transition.ts";
 
@@ -28,6 +29,17 @@ export class StaffMessageDraft {
   #last: Readonly<{ turnId: string; revision: number }> | undefined;
   get active() { return this.#last !== undefined; }
   clear() { this.#text = ""; this.#turnIds = []; this.#last = undefined; }
+  retainAcrossControl(turn: FinalCallerTurn, state: CallState): void {
+    const last = this.#last, control = conversationControl(turn.text), id = noticePresentationId(state.callId, turn.turnId);
+    const presentation = state.presentations[id];
+    if (!last || !control || turn.quality !== "clear" || state.callId !== turn.callId || state.sessionLease?.sessionId !== turn.sessionId ||
+        state.lifecycle !== "active" || state.callerIdentityDenied || state.processedTurnIds.at(-1) !== turn.turnId ||
+        state.processedTurnIds.at(-2) !== last.turnId || state.conversationRevision !== last.revision + 2 ||
+        state.presentations[noticePresentationId(state.callId, last.turnId)]?.status !== "played" ||
+        state.pendingPresentationId !== id || presentation?.kind !== "notice" || presentation.status !== "pending" ||
+        ![conversationControlText[control], ...(control === "pause" ? [conversationControlText.pauseLimit] : [])].includes(presentation.approvedText)) return;
+    this.#last = { turnId: turn.turnId, revision: state.conversationRevision };
+  }
   apply(turn: MessageTurn, turnId: string, revision: number): StaffMessageNotice {
     if (turn.kind === "discard") { this.clear(); return "discarded"; }
     if (turn.kind === "begin") { this.clear(); this.#last = { turnId, revision }; return "collecting"; }

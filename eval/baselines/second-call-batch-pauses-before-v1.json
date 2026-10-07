@@ -1,0 +1,16 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "fd539c229cd1e78fcf1f4dea0d285568feb02e26",
+  "families": [
+    11
+  ],
+  "scenarioIds": [
+    "E2E-340"
+  ],
+  "command": "node --test test/voice/caller-pauses.test.ts",
+  "pass": 0,
+  "fail": 1,
+  "durationMs": 15167.138406,
+  "signedJourneys": 11,
+  "finding": "Complete please-hold controls received the automated announcement notice, writing requests received model fallback, and goodbye entered actual model HTTP. All eleven journeys failed immediate notice or no-inference assertions; timing, later-send and durable privacy assertions were not reached."
+}

@@ -63,6 +63,7 @@ export class TwilioConnectedCall {
   private pendingPlayback: Readonly<{ id: string; kind: "normal" | "retry" | "final" }> | undefined;
   private retriedSilence = false;
   private blockedSilenceChecks = 0;
+  private listeningControl: "pause" | "goodbye" | undefined;
 
   constructor(config: TwilioConnectedCallConfig) {
     const silenceWaitMs = config.silenceWaitMs ?? 15_000;
@@ -118,7 +119,8 @@ export class TwilioConnectedCall {
   private scheduleSilenceTimer(kind: "listening" | "playback"): void {
     this.cancelSilenceTimer();
     if (this.closed) return;
-    const delay = kind === "playback" ? this.playbackDeadlineMs : this.silenceWaitMs;
+    const delay = kind === "playback" ? this.playbackDeadlineMs : this.listeningControl === "goodbye" ? 5_000 :
+      this.listeningControl === "pause" ? 30_000 : this.silenceWaitMs;
     const generation = this.silenceGeneration;
     this.silenceHandle = this.silenceTimer.schedule(() => {
       if (generation !== this.silenceGeneration) return;
@@ -141,7 +143,8 @@ export class TwilioConnectedCall {
     this.scheduleSilenceTimer("playback");
   }
 
-  private trackDelivery(delivery: Readonly<{ kind: string; playbackId?: string }>, kind: "normal" | "retry" | "final" = "normal"): void {
+  private trackDelivery(delivery: Readonly<{ kind: string; playbackId?: string; conversationControl?: "pause" | "goodbye" }>, kind: "normal" | "retry" | "final" = "normal"): void {
+    this.listeningControl = delivery.kind === "queued" ? delivery.conversationControl : undefined;
     if (delivery.kind === "queued" && delivery.playbackId) this.watchPlayback(delivery.playbackId, kind);
     else if (delivery.kind === "none" || delivery.kind === "played") this.scheduleSilenceTimer("listening");
   }
@@ -153,6 +156,8 @@ export class TwilioConnectedCall {
       return;
     }
     if (this.pendingPlayback) return;
+    if (this.listeningControl === "goodbye") { await this.closeSession("normal"); return; }
+    this.listeningControl = undefined;
     const stage = this.retriedSilence ? "final" : "retry";
     const result = await this.call.silenceTimeout(stage, this.now());
     if (!result.ok) {
@@ -189,6 +194,7 @@ export class TwilioConnectedCall {
     this.closed = true;
     this.cancelSilenceTimer();
     this.pendingPlayback = undefined;
+    this.listeningControl = undefined;
     this.stopCall();
     void this.lease.stop();
     this.stream.close();
@@ -268,6 +274,7 @@ export class TwilioConnectedCall {
       if (progressed.value.kind === "speaking") {
         this.cancelSilenceTimer();
         this.pendingPlayback = undefined;
+        this.listeningControl = undefined;
         this.retriedSilence = false;
         this.blockedSilenceChecks = 0;
       } else if (progressed.value.kind === "turnCompleted") this.trackDelivery(progressed.value.delivery);
@@ -283,6 +290,7 @@ export class TwilioConnectedCall {
       if (!progressed.ok) { await this.failSession(); return progressed; }
       this.cancelSilenceTimer();
       this.pendingPlayback = undefined;
+      this.listeningControl = undefined;
       this.retriedSilence = false;
       this.blockedSilenceChecks = 0;
       if (progressed.value.kind === "turnCompleted") this.trackDelivery(progressed.value.delivery);

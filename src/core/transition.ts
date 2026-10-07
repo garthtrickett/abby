@@ -1,4 +1,5 @@
 import { staffMessageNoticeText, validStaffMessageNotice } from "./staff-message-notice.ts";
+import { conversationControl, conversationControlText, validConversationControlNotice } from "./conversation-control.ts";
 import { reschedulingMenuPresentation } from "./rescheduling-menu.ts";
 import { bookingConfirmation, bookingMenuPresentation } from "./booking-menu.ts";
 import { supportedVoiceLocale } from "./voice-presentation.ts";
@@ -255,6 +256,8 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   if (Object.values(state.presentations).some(presentation => presentation.kind === "transfer" && (presentation.status === "started" || presentation.status === "possiblySent"))) return err({ kind: "invalidTransition" });
   if (interpretation.kind === "requestBoundary" && (!validRequestBoundary(interpretation.reason) || turn.quality !== "clear")) return err({ kind: "invalidTransition" });
   if (interpretation.kind === "callerIdentityDenied" && (!validCallerIdentityDenial(interpretation.reason) || turn.quality !== "clear")) return err({ kind: "invalidTransition" });
+  if (interpretation.kind === "conversationControl" && (turn.quality !== "clear" || !validConversationControlNotice(interpretation.notice) ||
+      conversationControl(turn.text) !== (interpretation.notice === "pauseLimit" ? "pause" : interpretation.notice))) return err({ kind: "invalidTransition" });
   interpretation = restrictDeniedCaller(state, interpretation);
   if (interpretation.kind !== "affirm") supersedeUnsent(state);
   cancelModelWork(state);
@@ -262,6 +265,9 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   const messageCount = state.callerMessages.length;
 
   switch (interpretation.kind) {
+    case "conversationControl":
+      state.callerMessages.push(conversationControlText[interpretation.notice]);
+      break;
     case "missedCallReasonUnavailable":
       if (turn.quality !== "clear") return err({ kind: "invalidTransition" });
       state.callerMessages.push(missedCallText);

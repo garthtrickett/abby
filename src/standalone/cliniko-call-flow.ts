@@ -22,7 +22,7 @@ import { validCallKnowledgeSource } from "../core/knowledge-evidence.ts";
 import { OwnerFileClinicFAQs } from "./owner-file-clinic-faqs.ts";
 import { NoStoredKnowledge } from "./no-stored-knowledge.ts";
 import type { ClinikoIntakeDraft } from "../cliniko/patient-intake.ts";
-import type { FinalCallerTurn } from "../core/model.ts";
+import type { CallState, FinalCallerTurn } from "../core/model.ts";
 import type { VoiceIntent } from "../voice/voice-session.ts";
 import { PlayedMenuSelection } from "./played-menu-selection.ts";
 import { noticePresentationId } from "../core/transition.ts";
@@ -263,6 +263,11 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       return selected;
     } catch { return denied(); }
     finally { this.#preparingStaff = false; }
+  }
+  conversationControlAccepted(turn: FinalCallerTurn, state: CallState): void {
+    if (!this.closed && !this.#patientLifetime.signal.aborted && !state.callerIdentityDenied &&
+        turn.callId === this.#config.receipt.callId && turn.sessionId === this.#config.sessionId)
+      this.#staff?.conversationControlAccepted(turn, state);
   }
   async collectIntake(draft: ClinikoIntakeDraft) {
     const source = this.intake;
