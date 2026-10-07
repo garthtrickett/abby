@@ -22,8 +22,8 @@ Cliniko mutation payloads and call receipts.
 | 12 | External appointment changes and previous-call claims | Merged PR #431; eighteen signed external-change journeys |
 | 13 | Private intake spelling and field repairs | Merged PR #432; sixteen signed private-intake journeys |
 | 14 | Payment, deposit, currency, refund and insurance evidence | Merged PR #433; thirty-two signed financial-evidence journeys |
-| 15 | Clinical request boundaries and approved routing | Implemented; E2E-344 passes twenty-four signed journeys; publication pending |
-| 16 | Conflicting public facts and unusable arrival instructions | Pending |
+| 15 | Clinical request boundaries and approved routing | Merged PR #434; twenty-four signed clinical-boundary journeys |
+| 16 | Conflicting public facts and unusable arrival instructions | Implemented; E2E-345 passes twenty-two signed journeys; publication pending |
 | 17 | Practitioner and service preferences, history and duration | Pending |
 | 18 | Home visits, classes, telehealth and practitioner changes | Pending |
 
@@ -683,3 +683,40 @@ node --test --test-concurrency=2 test/voice/clinical-suitability-boundaries.test
 Manifest 1.142, 344 IDs. Typecheck follows.
 
 Final `npm run typecheck` passed (1m19s). Exact source hashes, synthetic privacy scan and `git diff --check` passed. No CI pass is claimed.
+
+PR #434 merged at `5c7183c0b6c61451c7c0730ce1a6d63eaac4b1f3` on 2026-10-07 06:38:07 UTC. Exact branch HEAD `5d93b43f2f41e2ad376880f5105ea905bd8c9e88`: Actions 37582572516 (pull_request) and 37582566669 (push) were queued at merge. No CI pass claimed; normal local-check merge was operator-authorized.
+
+## Arrival and public fact boundaries: E2E-345
+
+Reported locked doors, absent staff, unusable intercoms, roadworks and wheelchair
+barriers select truthful negative access guidance before routine notification or
+model booking guesses. Address/hour conflict reports cannot choose an invented
+public fact. Independent private arrival messages keep literal content, fresh
+proof, question fencing and a separate explicit Cliniko send.
+
+Baseline: 0 pass, 1 fail, 12960.917918 ms. Twelve arrival journeys reached actual
+classifier HTTP; the address/email conflict reached notification status instead.
+Later assertions in those cases were not reached. Duplicate, changed, expired
+and revoked source cases already spoke unavailable, then hit a test's overly broad
+zero-internal-item assertion. Existing systemFailure/needsReview items are
+transient receipts; no provider write or patient-message send occurred. Corrected
+tests inspect those exact negative item kinds and use an actual private question
+instead of a freeform statement that correctly replaced its draft.
+
+Initial focus: 0 pass, 2 fail, 16374.222809 ms. Only the complete form "I arrived"
+was missing; added alongside "I have arrived". Final regression: 8 pass, 0 fail,
+49470.765494 ms, including twenty-two new signed journeys.
+
+```sh
+node --test --test-concurrency=2 test/voice/arrival-fact-boundaries.test.ts test/voice/clinic-faqs.test.ts test/voice/public-service-guidance.test.ts test/voice/staff-message-corrections.test.ts test/contract/scenario-manifest.test.ts
+```
+
+Manifest 1.143, 345 IDs. Complete bounded phrases only. No new patient authority,
+provider operation, durable patient field, dependency or configuration change.
+No promise of access, staff presence or transfer outcome. Competing, replaced,
+expired and revoked sources fail closed; arbitrary contradictions inside a single
+approved paragraph remain the operator's content responsibility. Original
+45-case corpus unchanged; synthetic evidence is not live carrier/mail/clinic
+activation or a new real-model pass. Families 17–18 remain open. Typecheck follows.
+
+Final `npm run typecheck` passed (1m34s). Exact source hashes, synthetic privacy scan and `git diff --check` passed. No CI pass claimed. PR #434 Actions 37582572516/37582566669 failed before steps; check112665365165 reports account payments/spending limit.

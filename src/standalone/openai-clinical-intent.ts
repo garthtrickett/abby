@@ -1,3 +1,4 @@
+import { arrivalInformationLanguage } from "./arrival-information-language.ts";
 import { financialEvidenceLanguage } from "./financial-evidence-language.ts";
 import { staffMessageLanguage } from "./staff-message-draft.ts";
 import { err, ok } from "../core/model.ts";
@@ -221,6 +222,8 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     // Explicit message prefixes still keep literal message content private.
     if (boundary === "externalAppointmentChange") return ok({ kind: "requestBoundary", reason: boundary });
     if (!before.callerIdentityDenied && staffMessageLanguage(turn.text, config.owner.collectingStaffMessage)) return ok({ kind: "staffRequest" });
+    const arrival = arrivalInformationLanguage(turn.text);
+    if (arrival) return ok({ kind: "clarify", reason: arrival });
     const clinicalAdvice = clinicalAdviceBoundary(turn.text);
     if (clinicalAdvice) return ok(clinicalAdvice);
     if (!before.callerIdentityDenied) {
