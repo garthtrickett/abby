@@ -1,3 +1,4 @@
+import { serviceConstraintLanguage } from "./service-constraint-language.ts";
 import { arrivalInformationLanguage } from "./arrival-information-language.ts";
 import { financialEvidenceLanguage } from "./financial-evidence-language.ts";
 import { staffMessageLanguage } from "./staff-message-draft.ts";
@@ -226,6 +227,8 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     if (arrival) return ok({ kind: "clarify", reason: arrival });
     const clinicalAdvice = clinicalAdviceBoundary(turn.text);
     if (clinicalAdvice) return ok(clinicalAdvice);
+    const serviceConstraint = serviceConstraintLanguage(turn.text);
+    if (serviceConstraint) return ok({ kind: "clarify", reason: serviceConstraint });
     if (!before.callerIdentityDenied) {
       const staff = staffRequestLanguage(turn.text);
       if (staff) return ok(staff);

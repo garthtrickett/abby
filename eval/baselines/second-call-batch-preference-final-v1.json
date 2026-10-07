@@ -1,0 +1,48 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "92cfd9eed518e4a1aa8d12f8318180238144ca15",
+  "families": [
+    17
+  ],
+  "scenarioIds": [
+    "E2E-346"
+  ],
+  "sourceFiles": {
+    "src/standalone/service-constraint-language.ts": "85d72d863eb1d5d34c576be516a4017ebbf7e80ea1a864f100f150d76ea88d98",
+    "src/standalone/openai-clinical-intent.ts": "1c6f48bfe3a93099e8b50f87cbf4686d1ea10b5af2fc5c5ea79acc6cc7296f2e",
+    "test/voice/preference-service-boundaries.test.ts": "01dd9e0d3c3e6e61e229f9375edf433709dda24208dc4f82fbe689e057e02c6d",
+    "test/contract/scenario-manifest.test.ts": "aaae0fedcd9484ed34ce58fa593abf6eda6c2dc1de658d26d84202e5a6485c53"
+  },
+  "beforeReport": "eval/baselines/second-call-batch-preference-before-v1.json",
+  "focus": {
+    "command": "node --test test/voice/preference-service-boundaries.test.ts",
+    "pass": 2,
+    "fail": 0,
+    "durationMs": 18238.523911,
+    "signedJourneys": 21
+  },
+  "finalRegression": {
+    "command": "node --test --test-concurrency=2 test/voice/preference-service-boundaries.test.ts test/voice/approved-booking-search.test.ts test/voice/appointment-change-intent.test.ts test/voice/public-service-guidance.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 8,
+    "fail": 0,
+    "durationMs": 76148.41755,
+    "signedJourneys": 21
+  },
+  "originalCorpus": "45 cases unchanged",
+  "limits": [
+    "Complete bounded negative service/gender/history/style/ranking/duration requests only.",
+    "No inferred gender, alias-to-ID mapping, history read, ranking, clinical recommendation or alternate type/duration.",
+    "Canonical and any-practitioner searches retain independently approved native location, type, practitioner and spoken duration; one explicit confirmation and one send.",
+    "Private prior-practitioner concerns use existing independently verified Cliniko message proof and separate explicit send.",
+    "No new provider operation, patient authority, durable patient field, dependency or configuration change.",
+    "Synthetic signed speech/provider/mail/approval only; no live activation, real delivery or new real-model pass.",
+    "Family 18 remains open."
+  ],
+  "privacyCanaryScan": "passed",
+  "diffCheck": "passed",
+  "typecheck": {
+    "command": "npm run typecheck",
+    "result": "passed",
+    "durationSeconds": 123
+  }
+}

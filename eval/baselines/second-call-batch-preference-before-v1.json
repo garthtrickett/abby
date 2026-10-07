@@ -1,0 +1,23 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "92cfd9eed518e4a1aa8d12f8318180238144ca15",
+  "families": [
+    17
+  ],
+  "scenarioIds": [
+    "E2E-346"
+  ],
+  "sourceFiles": {
+    "src/standalone/openai-clinical-intent.ts": "c144a706d3edefd94829de016e0f5f0452b05406fc85a60f150c47b8def2ccba",
+    "test/voice/preference-service-boundaries.test.ts": "839f68888d0499df33d7779769236718689efb1aa17e54a11ecb1b5a8c26f821"
+  },
+  "command": "node --test test/voice/preference-service-boundaries.test.ts",
+  "pass": 0,
+  "fail": 1,
+  "durationMs": 18734.102289,
+  "signedJourneys": 21,
+  "observations": [
+    "Fourteen journeys reached actual classifier HTTP; later assertions were not reached.",
+    "Canonical primary/alternate and any approved practitioner, unknown alias rejection, private history message, existing male-name rejection and duration-change boundary passed within the aggregate. Actual native type, practitioner, location and approved spoken duration were inspected."
+  ]
+}
