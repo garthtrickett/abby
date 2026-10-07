@@ -1,0 +1,46 @@
+{
+  "schema": "abby.second-call-batch-baseline.v1",
+  "baseCommit": "11c6e7236b17636c9bbdc9583f21c43259768de1",
+  "command": "node --test test/voice/automated-call-consent.test.ts",
+  "result": "fail",
+  "durationMs": 22471.517227,
+  "testSha256": "83807abcbaafbfba628f290f42d85d184a61fe0e54a47326aec408a84fb6570f",
+  "voiceSessionSha256": "94a05b3ef17a3696e7a0a950f096fc8a30bbd4301ea74a6a78b1822e23e354b8",
+  "observations": [
+    {
+      "mode": "bank",
+      "assertion": "whole script or exact outbound repetition must not reach the model",
+      "expectedRequests": 2,
+      "actualRequests": 3
+    },
+    {
+      "mode": "sms",
+      "assertion": "whole script or exact outbound repetition must not reach the model",
+      "expectedRequests": 2,
+      "actualRequests": 3
+    },
+    {
+      "mode": "hold",
+      "assertion": "whole script or exact outbound repetition must not reach the model",
+      "expectedRequests": 2,
+      "actualRequests": 3
+    },
+    {
+      "mode": "echo",
+      "assertion": "whole script or exact outbound repetition must not reach the model",
+      "expectedRequests": 2,
+      "actualRequests": 3
+    },
+    {
+      "mode": "pause",
+      "assertion": "a recognized hold pause must not require a model",
+      "expectedRequests": 2,
+      "actualRequests": 3
+    }
+  ],
+  "limitations": [
+    "This baseline demonstrates model dispatch for recognized announcements. It does not claim a booking occurred or prove infinite wall-clock duration.",
+    "The expanded final test also covers initial unverified hold announcements and inspects the successful booking payload; those additions were not present in this baseline.",
+    "Synthetic approvals, speech, mail and Cliniko; not real carrier or delivery evidence."
+  ]
+}

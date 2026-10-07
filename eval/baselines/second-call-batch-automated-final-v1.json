@@ -1,0 +1,75 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "11c6e7236b17636c9bbdc9583f21c43259768de1",
+  "families": [
+    1,
+    2
+  ],
+  "scenarioIds": [
+    "E2E-331"
+  ],
+  "sourceFiles": {
+    "src/core/clarification.ts": "71604faf2764c909ace552ae15725e10a1d5cb7f3d2e8ab5f8104c948ef7c408",
+    "src/core/model.ts": "4e8d017e1c8c9cc41fe2bdb0f19a6ba7fb58935347c11f6bf7dafb2c44dc2998",
+    "src/voice/unattended-turn-guard.ts": "f958b7913280e27c84315d0c1359bfe757339e5fdb356c3147b69ecca082158b",
+    "src/voice/voice-session.ts": "db389f0870ac568147b0118c99b74fa048b504c35a6a426f3d37e46b70bb86d9",
+    "test/voice/automated-call-consent.test.ts": "15f77e117e811dc3b2801b2f77ee965eb32c41afa77c633f8a173bc0ef995159",
+    "test/support/cliniko-workflow-voice.ts": "ade91b611bc405e2548cb530f2de496cdcdb7a492569baa259d44f30a3b6ee3d",
+    "test/contract/scenario-manifest.test.ts": "ad3a91f8a9af7e9ec21c4660601d95700fb5608fe2f4bd912bf4dbec60c0ee21"
+  },
+  "beforeReports": [
+    "eval/baselines/second-call-batch-automated-before-v1.json",
+    "eval/baselines/second-call-batch-batched-before-v1.json"
+  ],
+  "regression": {
+    "command": "node --test --test-concurrency=3 test/voice/automated-call-consent.test.ts test/voice/call-transcript-ownership.test.ts test/voice/caller-corrections.test.ts test/voice/pending-lookup-repair.test.ts test/voice/call-waiting-limits.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 7,
+    "fail": 0,
+    "durationMs": 102784.08461,
+    "scope": "before final bounded-parser refinement"
+  },
+  "finalFocus": {
+    "command": "node --test test/voice/automated-call-consent.test.ts",
+    "pass": 1,
+    "fail": 0,
+    "signedJourneys": 13,
+    "durationMs": 26052.396756,
+    "journeys": [
+      "initialHold",
+      "hold",
+      "batchedHold",
+      "bank",
+      "sms",
+      "echo",
+      "pause",
+      "quote",
+      "longHoldWithRequest",
+      "question",
+      "duration",
+      "presence",
+      "affirm"
+    ]
+  },
+  "finalManifest": {
+    "command": "node --test test/contract/scenario-manifest.test.ts",
+    "pass": 1,
+    "fail": 0,
+    "durationMs": 1495.818397
+  },
+  "finalTypecheck": {
+    "command": "npm run typecheck",
+    "exitCode": 0
+  },
+  "diffCheck": {
+    "command": "git diff --check",
+    "exitCode": 0
+  },
+  "privacyCanaryScan": "passed",
+  "originalCorpus": "45 cases unchanged",
+  "limits": [
+    "Synthetic speech, Cliniko, mail and approvals; no real carrier or clinic activation.",
+    "Bounded complete wording recognition, not speaker authentication or every robocall.",
+    "No model prompt changes or new real OpenAI evaluation claimed.",
+    "Remaining sixteen families remain open."
+  ]
+}

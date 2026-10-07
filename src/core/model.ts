@@ -245,7 +245,7 @@ export type AppointmentRead = Readonly<{
 }>;
 
 export type MenuClarificationReason = "menuAmbiguous" | "menuRejected" | "menuUnavailable" | "proposalCorrection" |
-  "changeAmbiguous" | "targetDisagreement" | "changeUnsupported" | "changeAfterSend" | "searchPreferenceUnavailable" | "clinicalAdviceUnavailable";
+  "changeAmbiguous" | "targetDisagreement" | "changeUnsupported" | "changeAfterSend" | "searchPreferenceUnavailable" | "clinicalAdviceUnavailable" | "unattendedAnnouncement";
 export type TurnInterpretation =
   | Readonly<{ kind: "conversationPresence" }>
   | Readonly<{ kind: "missedCallReasonUnavailable" }>

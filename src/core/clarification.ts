@@ -3,6 +3,7 @@ import { confirmedActionText } from "./action-outcome.ts";
 import type { ActionState, MenuClarificationReason } from "./model.ts";
 
 const notices: Record<Exclude<MenuClarificationReason, "changeAfterSend">, string> = {
+  unattendedAnnouncement: "I heard an automated announcement or repeated clinic message. Please tell me your request when you're ready. Repeated announcements will end this call; contact the clinic if you still need help.",
   clinicalAdviceUnavailable: "I can’t give medical advice or confirm it is safe to attend. Please contact your clinician or the clinic for advice.",
   proposalCorrection: "Which details would you like to change? I'll ask for a new confirmation before continuing.",
   menuRejected: "I won't choose any of those options. What other date or time would work for you?",

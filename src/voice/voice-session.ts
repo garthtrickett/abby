@@ -8,6 +8,7 @@ import { CallRuntime } from "../core/runtime.ts";
 import type { TextReceptionFailure } from "../reference/text-reception.ts";
 import { TextReception } from "../reference/text-reception.ts";
 import { TurnAssembler } from "./turn-assembler.ts";
+import { UnattendedTurnGuard } from "./unattended-turn-guard.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 
@@ -63,7 +64,7 @@ export type TransferPort = Readonly<{ request(transferId: string, destinationRef
 /** Speech content is kept in this live session; durable presentation rows may contain only status and opaque IDs. */
 export type TransientPresentationConfig = Readonly<{ greeting: ApprovedGreeting; staffWorkUnavailable?: true }>;
 export type VoiceSessionFailure = TransitionFailure | TextReceptionFailure | TranscriptFailure |
-  Readonly<{ kind: "sessionUnknown" | "deliveryBlocked" | "playbackUnknown" | "transportUnavailable" | "intentUnavailable" }>;
+  Readonly<{ kind: "sessionUnknown" | "deliveryBlocked" | "playbackUnknown" | "transportUnavailable" | "intentUnavailable" | "automatedCallUnavailable" }>;
 export type DispatchResult = Readonly<{ kind: "none" | "queued" | "played" | "failed" | "unproven" | "interrupted" | "transferConnected" | "transferFailed" | "transferUnproven" | "transferCanceled"; playbackId?: string }>;
 
 type ActivePlayback = { id: string; presentationId: string; generation: number };
@@ -102,6 +103,7 @@ export class VoiceSession {
   private cachedIntent: VoiceIntent | undefined;
   private pendingIntent: Readonly<{ cancel: () => void }> | undefined;
   private unclearTurns = 0;
+  private readonly unattended = new UnattendedTurnGuard();
   private readonly privatePlayback = new Map<string, (played: boolean) => void>();
 
   /** A qualified new speech onset may fence a still-pending classifier or menu operation before wire-order work resumes. */
@@ -124,6 +126,7 @@ export class VoiceSession {
 
   /** Transport loss must release transient work before the serialized call owner can end. */
   stopTransientWork(): void {
+    this.unattended.clear();
     this.pendingIntent?.cancel();
     this.reception.cancelPendingModel(this.scope, this.callId);
     for (const resolve of this.privatePlayback.values()) resolve(false);
@@ -320,6 +323,9 @@ export class VoiceSession {
       if (!existing.ok) return existing;
       if (generation !== this.assembler.currentGeneration()) return err({ kind: "staleTurn" });
     }
+    const unattended = this.unattended.accept(turn.text);
+    if (unattended === "close") return err({ kind: "automatedCallUnavailable" });
+    if (unattended === "notice") this.cachedIntent = { kind: "clarify", reason: "unattendedAnnouncement" };
     if (!this.cachedIntent) {
       let intent: Result<VoiceIntent, Readonly<{ kind: "intentUnavailable" }>>;
       const controller = new AbortController();
@@ -560,7 +566,10 @@ export class VoiceSession {
       return ok({ kind: "unproven" });
     }
     if (!this.canSend()) return this.closeAfterLeaseLoss(now);
-    if (send === "queued") return ok({ kind: "queued", playbackId });
+    if (send === "queued") {
+      if (!this.privatePlayback.has(presentationId)) this.unattended.rememberOutput(approvedText);
+      return ok({ kind: "queued", playbackId });
+    }
     this.activePlayback = undefined;
     this.transientContent?.delete(presentationId);
     const status = send === "notSent" ? "failed" : "unproven";
