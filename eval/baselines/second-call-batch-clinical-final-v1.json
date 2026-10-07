@@ -1,0 +1,48 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "1d9fef3687630709ca6126c9bcde6d3425021f46",
+  "families": [
+    15
+  ],
+  "scenarioIds": [
+    "E2E-344"
+  ],
+  "sourceFiles": {
+    "src/standalone/clinical-suitability-language.ts": "843354dac0f498a926f59989333fc55bb0cea0dbd64d0a0a8ac50c3e9df00ef4",
+    "src/standalone/clinic-information-language.ts": "989f047b9e61cfec660c0f36d4562ab0ae5d8333665c86abccc8a177793b9e3b",
+    "test/voice/clinical-suitability-boundaries.test.ts": "188a3897bbb0cf7ee65c5c9c75bd01133f6604167a56edae0cfc00974dcfb779",
+    "test/contract/scenario-manifest.test.ts": "26694fc8d7631a58bdd151a849ea9824afe88edb3e80c2f817a57adc60590651"
+  },
+  "beforeReport": "eval/baselines/second-call-batch-clinical-before-v1.json",
+  "initialFocus": {
+    "command": "node --test test/voice/clinical-suitability-boundaries.test.ts",
+    "pass": 1,
+    "fail": 1,
+    "durationMs": 11883.851315,
+    "scope": "Only test wording for the existing missing service description notice differed; corrected assertion, production unchanged."
+  },
+  "finalRegression": {
+    "command": "node --test --test-concurrency=2 test/voice/clinical-suitability-boundaries.test.ts test/voice/public-service-guidance.test.ts test/voice/urgent-conversation-routing.test.ts test/voice/staff-message-corrections.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 9,
+    "fail": 0,
+    "durationMs": 93705.91493,
+    "signedJourneys": 24
+  },
+  "originalCorpus": "45 cases unchanged",
+  "limits": [
+    "Complete bounded negative clinical requests, no general medical NLP or symptom triage.",
+    "No inferred vaccine eligibility, treatment benefit, clinical clearance, first-visit procedure guarantee or default appointment selection.",
+    "Approved urgent response stays authoritative; missing, expired and foreign scripts use existing fallback.",
+    "Active clinical reports use private Cliniko message proof and separate explicit send.",
+    "No new patient authority, native operation, durable patient field, dependency or configuration change.",
+    "Synthetic signed speech/provider/mail/approval only; no live activation, real delivery or new real-model pass.",
+    "Families 16\u201318 remain open."
+  ],
+  "privacyCanaryScan": "passed",
+  "diffCheck": "passed",
+  "typecheck": {
+    "command": "npm run typecheck",
+    "result": "passed",
+    "durationSeconds": 79
+  }
+}

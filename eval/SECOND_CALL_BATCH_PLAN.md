@@ -21,8 +21,8 @@ Cliniko mutation payloads and call receipts.
 | 11 | Bounded pauses, writing time and reopening after goodbye | Merged PR #430; fourteen signed pause/goodbye journeys |
 | 12 | External appointment changes and previous-call claims | Merged PR #431; eighteen signed external-change journeys |
 | 13 | Private intake spelling and field repairs | Merged PR #432; sixteen signed private-intake journeys |
-| 14 | Payment, deposit, currency, refund and insurance evidence | Implemented; E2E-343 passes thirty-two signed journeys; publication pending |
-| 15 | Clinical request boundaries and approved routing | Pending |
+| 14 | Payment, deposit, currency, refund and insurance evidence | Merged PR #433; thirty-two signed financial-evidence journeys |
+| 15 | Clinical request boundaries and approved routing | Implemented; E2E-344 passes twenty-four signed journeys; publication pending |
 | 16 | Conflicting public facts and unusable arrival instructions | Pending |
 | 17 | Practitioner and service preferences, history and duration | Pending |
 | 18 | Home visits, classes, telehealth and practitioner changes | Pending |
@@ -639,3 +639,47 @@ Initial `npm run typecheck` failed (1m21s) because the test fixture union did no
 Exact typed-fixture source: `node --test --test-concurrency=2 test/voice/financial-evidence-boundaries.test.ts test/contract/scenario-manifest.test.ts` passed (3 pass, 0 fail, 15922.901713 ms), including all thirty-two signed journeys.
 
 Final `npm run typecheck` passed (1m44s). Exact source hashes, synthetic privacy scan and `git diff --check` passed. No CI pass is claimed.
+
+PR #433 merged at `1d9fef3687630709ca6126c9bcde6d3425021f46` on 2026-10-07 06:31:20 UTC. Exact branch HEAD `c9cf63d9ed19a02a8318e0d1789a2b1a5398785b`: Actions 37581572327 (pull_request) and 37581567399 (push) were queued at merge. No CI pass claimed; normal local-check merge was operator-authorized.
+
+## Clinical suitability boundaries: E2E-344
+
+Complete bounded clinical questions now select the existing medical-advice
+boundary before classifier HTTP: treatment suitability, first-visit procedures,
+medication changes, post-treatment concerns and NHS vaccine eligibility. Neither
+caller symptoms nor approved general service text establishes a recommendation,
+clinical clearance, vaccine entitlement or an appointment type. General treatment
+listings read exact current approved descriptions; active private reports keep
+existing fresh proof, question fencing and a separate explicit Cliniko send.
+
+Baseline: 0 pass, 2 fail, 13751.889725 ms. Nineteen journeys reached actual
+classifier HTTP; later assertions were not reached. Four urgent script cases
+and the private message case passed within the aggregate. An earlier import
+failure (2125.225544 ms) provided no behavioral evidence and was corrected using
+the existing publicServices export and services option before the baseline.
+Initial focus: 1 pass, 1 fail, 11883.851315 ms. Only the missing-description
+assertion expected different wording; it now checks the existing approved-source
+unavailable notice. Production was unchanged after that run.
+
+The new signed journeys inspect approved, missing, expired and foreign urgent
+scripts, pending and actual known/unknown action status, denied identity, model
+HTTP and native provider/mail counts, private note content and PostgreSQL
+canaries. No symptom triage, diagnosis, inferred eligibility, promise of benefit,
+new provider operation or durable patient field. Bounded complete phrases only;
+other wording retains existing protected classification. Synthetic speech,
+approvals, provider and mail do not establish live carrier, mail, clinic activation
+or a new real-model pass. Families 16–18 remain open.
+
+PR #433 Actions 37581572327 and 37581567399 failed before any steps ran.
+Check 112662218208 reports failed account payments/spending limit; no CI
+validation pass is claimed and repository billing was not changed.
+
+Final regression: 9 pass, 0 fail, 93705.91493 ms, including twenty-four new signed journeys.
+
+```sh
+node --test --test-concurrency=2 test/voice/clinical-suitability-boundaries.test.ts test/voice/public-service-guidance.test.ts test/voice/urgent-conversation-routing.test.ts test/voice/staff-message-corrections.test.ts test/contract/scenario-manifest.test.ts
+```
+
+Manifest 1.142, 344 IDs. Typecheck follows.
+
+Final `npm run typecheck` passed (1m19s). Exact source hashes, synthetic privacy scan and `git diff --check` passed. No CI pass is claimed.

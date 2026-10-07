@@ -1,0 +1,24 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "1d9fef3687630709ca6126c9bcde6d3425021f46",
+  "families": [
+    15
+  ],
+  "scenarioIds": [
+    "E2E-344"
+  ],
+  "command": "node --test test/voice/clinical-suitability-boundaries.test.ts",
+  "pass": 0,
+  "fail": 2,
+  "durationMs": 13751.889725,
+  "signedJourneys": 24,
+  "sourceFiles": {
+    "src/standalone/clinic-information-language.ts": "d3e35a43c231b8866444dd28fc5293159851a2ac79d8421bb2aec2c96af028d4",
+    "test/voice/clinical-suitability-boundaries.test.ts": "0fa4ee3ec0444fc335f60a3a0940d78725a6754046030151660a459537aa2c4d"
+  },
+  "observations": [
+    "Nineteen clinical/public-service journeys reached actual classifier HTTP despite a negative-boundary expectation. Later assertions in those journeys were not reached.",
+    "Four approved/missing/expired/foreign urgent-script cases and the private clinical-message case passed within the aggregate.",
+    "Earlier fixture import failure (2125.225544 ms) supplied no behavioral verdict; actual existing publicServices export and services option corrected before this baseline."
+  ]
+}
