@@ -1,0 +1,81 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "c59fe304732de0b46469de8104161a3285cd682a",
+  "families": [
+    14
+  ],
+  "scenarioIds": [
+    "E2E-343"
+  ],
+  "sourceFiles": {
+    "src/core/financial-evidence.ts": "2d929b544f1b442ff66c0c27d819eb81f1b4407cd66a0fa94fa116a5f365629a",
+    "src/core/model.ts": "0d83e2960814c322c3033e3e5c803e75a399f20fae34513ed01ebb0f68381b07",
+    "src/core/clarification.ts": "a63212de330071f01e7e892f5d4aa3cfc2bf4e393f5a9c35df1eb4dc2d038383",
+    "src/core/caller-identity.ts": "0beebd1d6fecde8b482dd08bdd4233368dfd9a8e23ed78ea9ab5910acd7b2665",
+    "src/standalone/financial-evidence-language.ts": "5f07390e00073610db1163814606fdf7a062415f08dfc55afd953ea352b989ca",
+    "src/standalone/openai-clinical-intent.ts": "34f045f6c440893326726cd36a9960a2b0edbffc1f6dc037ee3535811d9b883a",
+    "test/voice/financial-evidence-boundaries.test.ts": "d36460fbd8e2a70b7a7a5f4e4dd3e78a5204bf5958553d2da681004029db962a",
+    "test/contract/scenario-manifest.test.ts": "a5de05aeef179520c9660911d235cd7ad02b570ba3b98c345c4b72c454db970c"
+  },
+  "beforeReport": "eval/baselines/second-call-batch-financial-before-v1.json",
+  "initialFocus": {
+    "command": "node --test test/voice/financial-evidence-boundaries.test.ts",
+    "pass": 0,
+    "fail": 1,
+    "durationMs": 21789.226072,
+    "scope": "Only denied setup failed before the financial question; replaced unsupported paraphrase with existing complete denial cue."
+  },
+  "expandedFocus": {
+    "command": "node --test test/voice/financial-evidence-boundaries.test.ts",
+    "pass": 1,
+    "fail": 1,
+    "durationMs": 45688.671858,
+    "signedJourneys": 32,
+    "scope": "Only staff question expected zero reads instead of its existing one verified-patient refresh. Assertion corrected to the exact GET path; production unchanged."
+  },
+  "correctedFocus": {
+    "command": "node --test test/voice/financial-evidence-boundaries.test.ts",
+    "pass": 2,
+    "fail": 0,
+    "durationMs": 17970.099849,
+    "signedJourneys": 32
+  },
+  "originalCorpus": "45 cases unchanged",
+  "limits": [
+    "Complete bounded current payment/refund/coverage/reservation requests and explicit card-number disclosures; no general financial NLP or model prompt revision.",
+    "No payment processor, payer coverage read, card collection, payment-link sender, refund authorization, automatic expiry or payment-dependent reservation. These require clinic handling; an appointment receipt does not establish payment.",
+    "Approved public price text is read verbatim from pinned current approval; currencies are not converted or inferred.",
+    "Active private payment-update messages use existing question and explicit-send proof fences. Card-number disclosure cannot enter model or Cliniko note and requires new literal safe content before send.",
+    "No new positive patient authority, native provider write path, durable patient field, dependency or repository configuration change.",
+    "Synthetic signed voice/provider/mail/approval only; no real carrier, clinic activation, live mail or new real-model pass.",
+    "Families 15\u201318 remain open."
+  ],
+  "finalRegression": {
+    "command": "node --test --test-concurrency=2 test/voice/financial-evidence-boundaries.test.ts test/voice/public-service-guidance.test.ts test/voice/staff-message-corrections.test.ts test/voice/post-action-followups.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 8,
+    "fail": 0,
+    "durationMs": 92995.82723,
+    "signedJourneys": 32,
+    "scope": "Before equivalent test fixture type narrowing; production source unchanged."
+  },
+  "initialTypecheck": {
+    "command": "npm run typecheck",
+    "result": "failed",
+    "durationSeconds": 81,
+    "scope": "Test fixture union did not narrow replaceFAQs/faqApproval. Use an explicit typed optional price-fixture reference; production unchanged."
+  },
+  "finalFocus": {
+    "command": "node --test --test-concurrency=2 test/voice/financial-evidence-boundaries.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 3,
+    "fail": 0,
+    "durationMs": 15922.901713,
+    "signedJourneys": 32
+  },
+  "finalTypecheck": {
+    "command": "npm run typecheck",
+    "result": "passed",
+    "durationSeconds": 104
+  },
+  "privacyCanaryScan": "passed",
+  "diffCheck": "passed"
+}

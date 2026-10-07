@@ -1,3 +1,4 @@
+import { isFinancialEvidenceReason } from "./financial-evidence.ts";
 import type { CallState, TurnInterpretation } from "./model.ts";
 
 export type CallerIdentityDenial = "identityDisagreement" | "sharedPhone";
@@ -12,7 +13,7 @@ export function restrictDeniedCaller(state: CallState, interpretation: TurnInter
   switch (interpretation.kind) {
     case "conversationControl": case "conversationPresence": case "missedCallReasonUnavailable": return interpretation;
     case "answer": case "knowledgeFailure": case "availability": case "availabilityFailure": return interpretation;
-    case "clarify": if (interpretation.reason === "clinicalAdviceUnavailable") return interpretation; break;
+    case "clarify": if (interpretation.reason === "clinicalAdviceUnavailable" || isFinancialEvidenceReason(interpretation.reason)) return interpretation; break;
     case "handoff": if (interpretation.reason === "potentiallyUrgent") return { ...interpretation, staffWorkUnavailable: true }; break;
   }
   return { kind: "callerIdentityDenied", reason: state.callerIdentityDenied };
