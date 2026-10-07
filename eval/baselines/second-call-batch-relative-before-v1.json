@@ -1,0 +1,16 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "0dc2c94990f34757427d608ed03ef9d5c76c08c9",
+  "families": [
+    8
+  ],
+  "command": "node --test test/voice/relative-booking-dates.test.ts",
+  "pass": 0,
+  "fail": 1,
+  "signedJourneys": 16,
+  "durationMs": 22033.804649,
+  "observations": [
+    "All sixteen owned relative/date requests triggered actual classifier HTTP (2 to 3 calls).",
+    "The test failed at that assertion, before its later date-query, provider-mutation and privacy checks. This baseline establishes none of those later outcomes."
+  ]
+}
