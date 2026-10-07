@@ -425,6 +425,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
         selected.value.snapshot.appointments.length !== 1) return denied;
     return { kind: "cancel", verificationRef: proof.verificationRef, targetRef: "selected" };
   }
+  get collectingStaffMessage() { return this.#staff?.collectingMessage === true; }
   get appointments() { return !this.#staffActive && this.#owner instanceof ClinikoCancellationSession ? this.#owner.appointments : undefined; }
   #booking() { return this.#staffActive ? undefined : this.#owner instanceof ClinikoBookingSession ? this.#owner.effects : this.#owner instanceof ClinikoIntakeBookingSession ? this.#owner : undefined; }
   bookingMenuAvailable(): boolean { return this.#booking()?.bookingMenuAvailable() === true; }

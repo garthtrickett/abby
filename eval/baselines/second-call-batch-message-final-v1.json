@@ -1,0 +1,73 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "8feafabf9f04412ec0d5938e2adf2e7edd65e10f",
+  "families": [
+    9
+  ],
+  "scenarioIds": [
+    "E2E-338"
+  ],
+  "sourceFiles": {
+    "src/core/host.ts": "f10e0d37bfba0548c6ebdb79fab4328147999c5b3e5c9d55315fb2bc3121be82",
+    "src/core/model.ts": "b98c66f35aaf00410b814be19f13b000f46b2e2a66dd960db286d246596c612e",
+    "src/core/transition.ts": "31543cc939534cc20439fa6eb48536a593fad56d32d3c3fdb6d32adc7e3b5d75",
+    "src/reference/text-reception.ts": "4e8ba5454e8c04e4e28ae30164c69c9c6bf2956cbf2452a6e992e79a365ef1c6",
+    "src/standalone/cliniko-call-flow.ts": "7a698a9d0dc95303210d0da9b95bb4df7683a9c0c0b7a1f8fac56dda716ece52",
+    "src/standalone/cliniko-staff-session.ts": "39ed4beb287b1cecca7ec282f8241eff777ee270193fe07a30957a2b3298cfd1",
+    "src/standalone/openai-clinical-intent.ts": "e6ba3f55fed1629d24fcdd8204a19bcb65c1953738c96c788d5b8547039b1bb0",
+    "test/contract/scenario-manifest.test.ts": "30a51a5eae590a8001edf612a37fe617e29ff2f60e9dc1ca30e30ac570bec05c",
+    "src/core/staff-message-notice.ts": "976c8d4882518827c65436087cf56ab1094ff2f2d153bdc08d21e0884b873479",
+    "src/standalone/staff-message-draft.ts": "9ee10bda208d23fc02735221c488738dd4a86c3e2f4ee631c558f126c7a84a23",
+    "test/voice/staff-message-corrections.test.ts": "dc1fe03d8c940904efbf1868458c94c4ed5dcef24b816e8af8194255b8be4765"
+  },
+  "beforeReport": "eval/baselines/second-call-batch-message-before-v1.json",
+  "initialFocus": {
+    "pass": 0,
+    "fail": 1,
+    "durationMs": 11203.113517,
+    "finding": "Valid sends were refused because voice speech-start advances the conversation revision before the caller final. Required the exact preceding content turn and zero/one admitted speech revision, preserving played-notice evidence. The remaining failure at 11080.342417 ms was a test wording mismatch: output says it will not send another request, not again. No send gate was weakened."
+  },
+  "firstCorrectedFocus": {
+    "command": "node --test --test-concurrency=2 test/voice/staff-message-corrections.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 2,
+    "fail": 0,
+    "durationMs": 17204.856812,
+    "signedJourneys": 17,
+    "scope": "Before bounded natural email/callback preferences and generic wording compatibility."
+  },
+  "relatedRegression": {
+    "command": "node --test --test-concurrency=2 test/voice/staff-message-corrections.test.ts test/voice/cliniko-staff-request.test.ts test/voice/staff-request-purpose.test.ts test/text/staff-request-purpose.test.ts test/text/staff-task.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 15,
+    "fail": 0,
+    "durationMs": 56310.705521,
+    "signedJourneys": 20,
+    "scope": "Before narrowing message-send interception to an active private draft; underlying literal content, proof/policy and private persistence included."
+  },
+  "finalFocus": {
+    "command": "node --test --test-concurrency=2 test/voice/staff-message-corrections.test.ts test/voice/cliniko-staff-request.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 4,
+    "fail": 0,
+    "durationMs": 46950.702157,
+    "signedJourneys": 21
+  },
+  "finalTypecheck": {
+    "command": "npm run typecheck",
+    "exitCode": 0,
+    "durationSeconds": 99
+  },
+  "diffCheck": {
+    "command": "git diff --check",
+    "exitCode": 0
+  },
+  "limits": [
+    "Bounded explicit draft, add, replacement and send wording; up to 350 characters, with full Cliniko summary validation before any possible send.",
+    "Generic callback requests retain existing semantics. Detailed content requires a protected verified staff session and an explicit send after the latest played notice.",
+    "Exact literal content is forwarded as a caller message, not clinical advice, verified facts, promised callback availability, a billed receipt or an email delivery action.",
+    "Content is transient in this call and only the approved Cliniko queue durably receives it. No model generation, patient table, appointment mutation, second write, automatic retry or late append.",
+    "Playback interruption, permission revocation and approval change/expiry fail closed. Lost responses retain unknown outcome even when late details are requested.",
+    "Synthetic signed voice, mail, provider and approval evidence only; no real carrier, live clinic activation or new real-model pass.",
+    "Families 10\u201318 remain open."
+  ],
+  "privacyCanaryScan": "passed",
+  "originalCorpus": "45 cases unchanged"
+}

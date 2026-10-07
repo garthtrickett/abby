@@ -1,0 +1,16 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "8feafabf9f04412ec0d5938e2adf2e7edd65e10f",
+  "families": [
+    9
+  ],
+  "scenarioIds": [
+    "E2E-338"
+  ],
+  "command": "node --test test/voice/staff-message-corrections.test.ts",
+  "pass": 0,
+  "fail": 1,
+  "durationMs": 9781.845488,
+  "signedJourneys": 12,
+  "finding": "All twelve journeys called the classifier for the explicit draft request. They failed at actual model HTTP count before verification, content, provider and persistence assertions; those later checks have no baseline verdict."
+}

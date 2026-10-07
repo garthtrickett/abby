@@ -1,3 +1,4 @@
+import { validStaffMessageNotice } from "../core/staff-message-notice.ts";
 import { StaffOutcomeTurns } from "./staff-outcome-turns.ts";
 import { ReschedulingMenuTurns } from "./rescheduling-menu-turns.ts";
 import { AppointmentEnquiryTurns } from "./appointment-enquiry-turns.ts";
@@ -208,7 +209,10 @@ export class TextReception {
     catch { selected = undefined; }
     if (external?.aborted) return err({ kind: "staleTurn" as const });
     const finalNow = this.currentInstant(); if (!finalNow) return err({ kind: "invalidTransition" as const });
-    if (selected?.ok && (!selected.value || typeof selected.value !== "object" || !["existing", "codeRequired", "ready"].includes(selected.value.kind))) selected = undefined;
+    if (selected?.ok && (!selected.value || typeof selected.value !== "object" || !["existing", "codeRequired", "ready", "messageNotice"].includes(selected.value.kind))) selected = undefined;
+    if (selected?.ok && selected.value.kind === "messageNotice") return validStaffMessageNotice(selected.value.notice)
+      ? this.runtime(scope).acceptTurn(turn, { kind: "staffMessageNotice", notice: selected.value.notice }, finalNow, revision)
+      : err({ kind: "invalidTransition" as const });
     const typed = selected?.ok && "requestSubject" in selected.value ? selected.value.requestSubject : undefined;
     if (typed !== undefined && !validStaffRequestSubject(typed) || requestSubject !== undefined && selected?.ok && selected.value.kind !== "existing" && typed !== requestSubject) selected = undefined;
     if (selected?.ok && selected.value.kind === "existing" && requestSubject !== undefined &&
@@ -216,7 +220,7 @@ export class TextReception {
     if (selected?.ok && selected.value.kind === "existing") return this.staffOutcome(scope, turn, finalNow, revision, external);
     const subject = requestSubject ?? (validStaffRequestSubject(typed) ? typed : undefined), detail = subject === undefined ? {} : { requestSubject: subject };
     const interpretation: TurnInterpretation = !selected?.ok ? { kind: "staffUnavailable", ...detail } : selected.value.kind === "codeRequired"
-      ? { kind: "staffVerificationRequired", ...detail } : { kind: "staffRequestReady", ...detail, ...("requestedPerson" in selected.value && selected.value.requestedPerson ? { requestedPerson: selected.value.requestedPerson } : {}) };
+      ? { kind: "staffVerificationRequired", ...detail, ...("messageDraft" in selected.value && selected.value.messageDraft === true ? { messageDraft: true as const } : {}) } : { kind: "staffRequestReady", ...detail, ...("requestedPerson" in selected.value && selected.value.requestedPerson ? { requestedPerson: selected.value.requestedPerson } : {}) };
     return this.runtime(scope).acceptTurn(turn, interpretation, finalNow, revision);
   }
   staffOutcome(scope: LocationScope, turn: FinalCallerTurn, _now: string, expectedRevision?: number, external?: AbortSignal) {

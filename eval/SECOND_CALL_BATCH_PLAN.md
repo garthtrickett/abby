@@ -15,8 +15,8 @@ Cliniko mutation payloads and call receipts.
 | 5 | Follow-ups after a confirmed action, including canceling the old moved appointment | Implemented; E2E-334 passes eight signed synthetic journeys; merged in PR #424; local checks passed |
 | 6 | Partial menu repetition and incremental navigation | Implemented; E2E-335 passes seventeen signed synthetic journeys; merged in PR #425; local checks passed |
 | 7 | Compound weekday, time and date constraints | Implemented; E2E-336 passes thirteen signed synthetic journeys; merged in PR #426; local checks passed |
-| 8 | Relative and source-relative dates and times | Implemented; E2E-337 passes nineteen signed synthetic journeys; publication pending |
-| 9 | Staff message additions and corrections saved in Cliniko | Pending |
+| 8 | Relative and source-relative dates and times | Merged PR #427; nineteen signed relative-date journeys |
+| 9 | Staff message additions and corrections saved in Cliniko | Implemented; E2E-338 validation and publication in progress |
 | 10 | Shared phones and changing patient identity | Pending |
 | 11 | Bounded pauses, writing time and reopening after goodbye | Pending |
 | 12 | External appointment changes and previous-call claims | Pending |
@@ -384,3 +384,48 @@ manifest guards: 3 pass, 0 fail, 46441.042885 ms. No date/window semantics chang
 
 Final `npm run typecheck` passed (1m43s). Source hashes, real-call privacy scan
 and `git diff --check` passed on the final source.
+
+PR #427 merged family 8 at `8feafabf9f04412ec0d5938e2adf2e7edd65e10f`. Runs 37574089154 (PR) and 37574075253 (push) failed before execution; check-run 112638985305 reports billing/spending limits. Local checks passed and normal merge followed the operator authorization. No CI pass is claimed.
+
+## Family 9: exact caller messages in Cliniko
+
+The previous staff request saved its subject/person, but had no private literal
+message field. E2E-338 now owns a transient draft before classifier inference.
+After independent staff verification, a caller can give, add or replace bounded
+details. Only a literal send request after a played notice captures the final
+content for the existing Cliniko recall writer. The prepared request rechecks
+conversation/source turn IDs, current patient permission, approval and summary
+limits before one possible send. No content enters model bodies or durable Abby
+state. Generic callback wording keeps its previous behavior.
+
+A late addition cannot append to an earlier request or produce a second send.
+The actual saved/unknown status is stated, with clinic-contact recovery. Requested
+email delivery and callback windows remain caller preferences; saving them is
+not a promise of staff availability or an email action.
+
+Validation:
+
+```sh
+node --test --test-concurrency=2 test/voice/staff-message-corrections.test.ts test/voice/cliniko-staff-request.test.ts test/voice/staff-request-purpose.test.ts test/text/staff-request-purpose.test.ts test/text/staff-task.test.ts test/contract/scenario-manifest.test.ts
+```
+
+15 pass, 0 fail, 56310.705521 ms, including twenty new signed message journeys;
+before narrowing detailed-message send interception to an active draft.
+
+```sh
+node --test --test-concurrency=2 test/voice/staff-message-corrections.test.ts test/voice/cliniko-staff-request.test.ts test/contract/scenario-manifest.test.ts
+```
+
+Final source: 4 pass, 0 fail, 46950.702157 ms. Twenty-one E2E-338 signed journeys
+include exact additions/replacements, natural email/callback preferences, generic
+request compatibility, explicit consent, unplayed/changed/expired/denied gates,
+unknown outcomes and late additions. Model HTTP, exact patient/queue notes and
+PostgreSQL canaries are checked independently. Manifest 1.136, 338 IDs.
+
+Bounded syntax and 350-character messages; full summaries still obey the writer
+limit. Replacement means replacing the complete message. No real carrier, clinic
+activation or new real-model pass. Families 10–18 remain open. Qualified baseline,
+failures, final hashes and results: `eval/baselines/second-call-batch-message-final-v1.json`.
+
+Final `npm run typecheck` passed (1m39s). Exact source hashes, real-call privacy
+scan and `git diff --check` passed on the final source.
