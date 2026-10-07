@@ -1,0 +1,69 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "e736fc62d456b3ae6d12bee6e8884f04d61c6d9a",
+  "families": [
+    13
+  ],
+  "scenarioIds": [
+    "E2E-342"
+  ],
+  "sourceFiles": {
+    "src/standalone/private-intake-field.ts": "f544eaacb09faa0974b66be6b259ccce96f1d23268583fb9d38f7d59a3f6584d",
+    "src/standalone/private-intake-voice-input.ts": "85543b33f8a378b2e0b45e3fbf422e41c04b93215c48b557cdb7fc1b32b5e4f6",
+    "test/voice/private-intake-spelling.test.ts": "6b708e57ee55f0375201e241dfa06bf0e510489cd6a9a824b6a42f1d593b8d79",
+    "test/contract/scenario-manifest.test.ts": "cccda9fbc5da5dc7165ca14f5b1289f8105ab2b6bae61ae378340681919da781"
+  },
+  "beforeReport": "eval/baselines/second-call-batch-spelling-before-v1.json",
+  "initialFocus": {
+    "command": "node --test test/voice/private-intake-spelling.test.ts",
+    "pass": 0,
+    "fail": 1,
+    "durationMs": 12126.731783,
+    "scope": "Only email NATO failed exact readback; bounded phonetic runs were corrected."
+  },
+  "correctedFocus": {
+    "command": "node --test test/voice/private-intake-spelling.test.ts",
+    "pass": 2,
+    "fail": 0,
+    "durationMs": 19352.926632,
+    "signedJourneys": 15,
+    "scope": "Before invalid-replacement fragment reset and sixteenth signed journey."
+  },
+  "finalRegression": {
+    "command": "node --test --test-concurrency=2 test/voice/private-intake-spelling.test.ts test/voice/cliniko-workflow-call.test.ts test/cliniko/caller-mediated-intake.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 27,
+    "fail": 0,
+    "durationMs": 46572.63616,
+    "signedJourneys": 16,
+    "scope": "Before the equivalent explicit date capture narrowing."
+  },
+  "originalCorpus": "45 cases unchanged",
+  "limits": [
+    "Only existing private adult self-intake first name, last name, DOB and email fields; no address expansion, patient matching, proxy registration or phone-number changes.",
+    "Explicit spelling and NATO runs; conflicting phonetic pairs reprompt. Full-year day/month dates only; no century guessing.",
+    "Email fragments require explicit continuation, remain private and are discarded after replacement or close. Existing three-attempt limit includes fragment/wait retries.",
+    "Exact private readback must play before mail proof; keypad OTP and separate played saving confirmation still gate one patient POST. Unknown outcomes cannot repeat.",
+    "Synthetic signed voice/provider/mail/approval only; no real carrier, clinic activation, live mail or new real-model pass.",
+    "Families 14\u201318 remain open."
+  ],
+  "initialTypecheck": {
+    "command": "npm run typecheck",
+    "result": "failed",
+    "durationSeconds": 121,
+    "scope": "Two RegExpExecArray tuple casts rejected by TypeScript. Replaced with explicit non-null capture reads; date behavior unchanged."
+  },
+  "finalFocus": {
+    "command": "node --test --test-concurrency=2 test/voice/private-intake-spelling.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 3,
+    "fail": 0,
+    "durationMs": 15716.517792,
+    "signedJourneys": 16
+  },
+  "finalTypecheck": {
+    "command": "npm run typecheck",
+    "result": "passed",
+    "durationSeconds": 82
+  },
+  "privacyCanaryScan": "passed",
+  "diffCheck": "passed"
+}
