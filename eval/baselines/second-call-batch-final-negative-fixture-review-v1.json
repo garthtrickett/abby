@@ -1,0 +1,18 @@
+{
+  "schema": "abby.second-call-batch-fixture-review.v1",
+  "baseline": "eval/baselines/second-call-batch-final-negative-before-v1.json",
+  "qualification": "The dispatch observation in the baseline did not prove an owned final correction. It is invalid as clinical correction evidence; the other four baseline wording failures remain valid.",
+  "cause": "The fixture returned an already played proposal mark again when the held writer queued a newer confirmation. Twilio rejected the duplicate receipt, causing mediaFailure before correction transcription.",
+  "repair": "Return only unacknowledged completion marks preceding the exact clear event plus its fence; wait for a reply mark after that fence. Assert the correction appears in an owned ordinary final.",
+  "finalFocus": {
+    "command": "node --test test/voice/final-negative-corrections.test.ts",
+    "pass": 1,
+    "fail": 0,
+    "durationMs": 13013.629743,
+    "signedJourneys": 6
+  },
+  "limits": [
+    "No source media transport or timeout policy was changed.",
+    "Synthetic signed transport, provider and speech; no real carrier evidence."
+  ]
+}

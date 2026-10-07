@@ -8,9 +8,9 @@ Cliniko mutation payloads and call receipts.
 
 | Order | Family | Completion evidence |
 | --- | --- | --- |
-| 1 | Repeated automated hold announcements, keypad scripts and outbound speech repetition | Implemented; E2E-331 passes thirteen signed synthetic journeys; local checks passed; publication prepared |
-| 2 | Questions and presence acknowledgements mistaken for consent | Existing exact confirmation preserved; direct E2E-331 offered-time, duration and presence questions pass; local checks passed; publication prepared |
-| 3 | Last-moment corrections before and after dispatch | Pending |
+| 1 | Repeated automated hold announcements, keypad scripts and outbound speech repetition | Implemented; E2E-331 passes thirteen signed synthetic journeys; merged in PR #421; local checks passed |
+| 2 | Questions and presence acknowledgements mistaken for consent | Existing exact confirmation preserved; direct E2E-331 offered-time, duration and presence questions pass; merged in PR #421; local checks passed |
+| 3 | Last-moment corrections before and after dispatch | Implemented; E2E-332 passes six signed synthetic journeys; publication pending |
 | 4 | Vanished slots with retained caller constraints | Pending |
 | 5 | Follow-ups after a confirmed action, including canceling the old moved appointment | Pending |
 | 6 | Partial menu repetition and incremental navigation | Pending |
@@ -70,3 +70,38 @@ manifest contract: pass (1495.818397 ms). Final `npm run typecheck` and
 `eval/baselines/second-call-batch-automated-final-v1.json`. The seven-test regression
 preceded the final bounded-parser refinement; the final focus and typecheck
 exercise its exact source. No unrelated full-suite or real-model pass is claimed.
+
+PR #421 merged at `f828fa73991d20b67bd7030bd4978bff886e19e4`. GitHub jobs were
+blocked before starting by account billing/spending limits; the operator
+authorized normal merge on passing local checks. No CI pass is claimed.
+
+## Final negatives: E2E-332
+
+A trailing “no”, “wait”, or “don't book/send/do it” now enters the existing
+correction path after a clock self-correction. Before sending, a new proposal
+and separate confirmation are required. After one possible send, the reply names
+the known confirmed or unknown outcome and directs the caller to the clinic
+without another mutation or a false cancellation. Curly apostrophes normalize
+to the same bounded syntax; no model prompt or clinic policy changes.
+
+The baseline generic-wording failures are preserved. Its dispatch observation
+is qualified separately: a duplicate played marker caused a transport failure,
+so it did not establish that the correction was heard. The repaired synthetic
+fixture returns only outstanding marks and the clear fence, and requires a
+reply after the fence. All six final journeys assert an owned final transcript,
+actual provider payload/count, unchanged receipt and a clean patient-data scan.
+
+Files: `src/standalone/caller-correction.ts`, the signed voice fixture and new
+`test/voice/final-negative-corrections.test.ts`, design/manifest E2E-332 (version
+1.130, 332 IDs), contract and scoped baseline/evidence documents. No real
+carrier, email, clinic activation or full real-model pass is claimed.
+
+Final focused run: 1 pass / 0 fail, six signed journeys (13013.629743 ms).
+Related regression: 8 pass / 0 fail (86325.519908 ms):
+
+```sh
+node --test --test-concurrency=3 test/voice/final-negative-corrections.test.ts test/voice/caller-corrections.test.ts test/voice/dated-window-corrections.test.ts test/voice/automated-call-consent.test.ts test/voice/notification-outcome-query.test.ts test/contract/scenario-manifest.test.ts
+```
+
+`npm run typecheck` and `git diff --check`: pass. Exact source hashes and
+validation scope are in `eval/baselines/second-call-batch-final-negative-final-v1.json`.

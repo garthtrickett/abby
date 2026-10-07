@@ -1,0 +1,49 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "f828fa73991d20b67bd7030bd4978bff886e19e4",
+  "families": [
+    3
+  ],
+  "scenarioIds": [
+    "E2E-332"
+  ],
+  "sourceFiles": {
+    "src/standalone/caller-correction.ts": "fcbfb48342a2e11b524a9debcec6efdb7045a427e3f048bf570f6ca7619ec967",
+    "test/support/cliniko-workflow-voice.ts": "318bf0a923352afb547ae789aa39175dca1c5a976a278bdfdc977cd59d1b6d38",
+    "test/voice/final-negative-corrections.test.ts": "9837dc56d970d6a97e6bacee3c9f5e3ffdd87d831c5ee302e10d6371c9c95909",
+    "test/contract/scenario-manifest.test.ts": "4d6adcfaaf1e042ff2148a16e71ad11e4f742749a197d8e8bbfc76c5bb71e58f"
+  },
+  "beforeReports": [
+    "eval/baselines/second-call-batch-final-negative-before-v1.json",
+    "eval/baselines/second-call-batch-final-negative-invalid-fixture-v1.json"
+  ],
+  "fixtureQualification": "eval/baselines/second-call-batch-final-negative-fixture-review-v1.json",
+  "finalFocus": {
+    "command": "node --test test/voice/final-negative-corrections.test.ts",
+    "pass": 1,
+    "fail": 0,
+    "signedJourneys": 6,
+    "durationMs": 13013.629743
+  },
+  "regression": {
+    "command": "node --test --test-concurrency=3 test/voice/final-negative-corrections.test.ts test/voice/caller-corrections.test.ts test/voice/dated-window-corrections.test.ts test/voice/automated-call-consent.test.ts test/voice/notification-outcome-query.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 8,
+    "fail": 0,
+    "durationMs": 86325.519908
+  },
+  "finalTypecheck": {
+    "command": "npm run typecheck",
+    "exitCode": 0
+  },
+  "diffCheck": {
+    "command": "git diff --check",
+    "exitCode": 0
+  },
+  "privacyCanaryScan": "passed",
+  "originalCorpus": "45 cases unchanged",
+  "limits": [
+    "Synthetic speech, Cliniko, mail and approvals; real carrier and clinic activation planned.",
+    "No model prompt revision or new real-model pass claimed.",
+    "Families 4\u201318 remain open."
+  ]
+}

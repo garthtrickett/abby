@@ -1,0 +1,12 @@
+{
+  "schema": "abby.second-call-batch-baseline.v1",
+  "baseCommit": "f828fa73991d20b67bd7030bd4978bff886e19e4",
+  "command": "node --test test/voice/final-negative-corrections.test.ts",
+  "status": "invalidFixture",
+  "testSha256": "79dd5b6be801ebdcb6c832b147d2c337a72b7998ad7f81810e2bc1f361dff0a9",
+  "correctionSourceSha256": "7ecaaaea95af409e829ebb2803ecf3a26b897e48c87e4010eb6977a717368193",
+  "observed": "The test timed out at 120 seconds while awaiting a hook on config.fetchPort. The signed fixture handles mutation responses itself, so that hook never observed the POST.",
+  "cleanup": "Terminated only the owned test worker after timeout; work wait recorded a cancelled test, not a clinical failure. Stopped the single disposable PostgreSQL container created by this run; earlier containers were untouched.",
+  "correction": "Observe the actual fixture mutation response through an explicit test-only beforeWriteResponse hook. Bound entry observation by the declared effect deadline.",
+  "clinicalVerdict": "none"
+}
