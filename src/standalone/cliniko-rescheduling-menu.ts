@@ -1,4 +1,4 @@
-import { validBookingSearchWindow } from "../core/booking-search-window.ts";
+import { copyBookingSearchWindow, validBookingSearchWindow } from "../core/booking-search-window.ts";
 import type { BookingSearchWindow } from "../core/booking-search-window.ts";
 import type { HostReadFailure, ReschedulingMenuHost, ReschedulingMenuQuery, ReschedulingMenuReadQuery } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
@@ -48,7 +48,7 @@ export class ClinikoReschedulingMenu implements ReschedulingMenuHost {
     const query = { ...incoming, scope: { ...incoming.scope } };
     if (!this.#matches(query) || !["targets", "offers"].includes(query.stage)) return denied();
     if (query.stage === "targets" && query.window !== undefined || query.window !== undefined && query.window !== null && !validBookingSearchWindow(query.window)) return denied();
-    if (query.window !== undefined) this.#window = query.window === null ? undefined : Object.freeze({ ...query.window });
+    if (query.window !== undefined) this.#window = query.window === null ? undefined : copyBookingSearchWindow(query.window);
     const correction = this.#previous;
     if (query.correctingAppointmentRef && (query.stage !== "offers" || !correction)) return denied();
     // A failed destination selection can be followed by a fresh read only

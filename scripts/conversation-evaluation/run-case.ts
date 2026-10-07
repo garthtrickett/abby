@@ -142,7 +142,7 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
       latest.mutation.request.offer.startsAt === "2026-10-07T23:30:00.000Z" && Object.values(before.actions)
         .some(action => action.status === "awaitingConfirmation" && after.actions[action.key]?.status === "canceled"); break;
     case "revisedDate": pass = last?.kind === "bookingMenu" && last.from === "2026-10-07" && last.to === "2026-10-07" &&
-      last.window?.startMinute === 0 && last.window.endMinute === 720 && last.window.startInclusive &&
+      !!last.window && !("anyOf" in last.window) && last.window.startMinute === 0 && last.window.endMinute === 720 && last.window.startInclusive &&
       /before 12:00 pm.*Wednesday 7 October.*9:00 am/s.test(text) && !/4:30 pm/.test(text) && !statuses.includes("awaitingConfirmation"); break;
     case "outcome": {
       const routed = last?.kind === "outcome" || last?.kind === "clarify" && last.reason === "changeAfterSend";
@@ -189,7 +189,7 @@ function conversationCheck(candidate: Candidate, plan: Plan, intents: (VoiceInte
       if (candidate.id === "CCP-025") { pass = last?.kind === "bookingMenu" && last.preference?.practitioner === "Demo B" &&
         /approved practitioners Demo B at Demo North.*with Demo B/s.test(text) && !/with Demo A/.test(text) && !statuses.includes("awaitingConfirmation"); break; }
       pass = candidate.id === "CCP-027" && last?.kind === "bookingMenu" && last.from === "2026-10-08" && last.to === "2026-10-08" &&
-        last.window?.startMinute === 960 && last.window.endMinute === 1440 && last.window.startInclusive === false &&
+        !!last.window && !("anyOf" in last.window) && last.window.startMinute === 960 && last.window.endMinute === 1440 && last.window.startInclusive === false &&
         /after 4:00 pm.*5:00 pm/s.test(text) && !/3:00 pm|option two/.test(text) && !statuses.includes("awaitingConfirmation");
       break;
     case "boundedSearch":

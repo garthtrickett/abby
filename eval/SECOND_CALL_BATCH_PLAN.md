@@ -13,8 +13,8 @@ Cliniko mutation payloads and call receipts.
 | 3 | Last-moment corrections before and after dispatch | Implemented; E2E-332 passes six signed synthetic journeys; merged in PR #422; local checks passed |
 | 4 | Vanished slots with retained caller constraints | Implemented; E2E-333 passes seven signed synthetic journeys; merged in PR #423; local checks passed |
 | 5 | Follow-ups after a confirmed action, including canceling the old moved appointment | Implemented; E2E-334 passes eight signed synthetic journeys; merged in PR #424; local checks passed |
-| 6 | Partial menu repetition and incremental navigation | Implemented; E2E-335 passes seventeen signed synthetic journeys; publication pending |
-| 7 | Compound weekday, time and date constraints | Pending |
+| 6 | Partial menu repetition and incremental navigation | Implemented; E2E-335 passes seventeen signed synthetic journeys; merged in PR #425; local checks passed |
+| 7 | Compound weekday, time and date constraints | Implemented; E2E-336 passes thirteen signed synthetic journeys; publication pending |
 | 8 | Relative and source-relative dates and times | Pending |
 | 9 | Staff message additions and corrections saved in Cliniko | Pending |
 | 10 | Shared phones and changing patient identity | Pending |
@@ -247,3 +247,78 @@ node --test --test-concurrency=2 test/voice/played-menu-navigation.test.ts test/
 
 Final `npm run typecheck`, `git diff --check` and patient-data canary scan pass.
 Exact source hashes and scope are in `eval/baselines/second-call-batch-navigation-final-v1.json`.
+
+
+PR #425 merged family 6 at `69982b2b4d90599d0706b3b575180b612cee0e75`.
+Runs 37570171134 (PR) and 37570163741 (push) failed before test execution;
+check-run 112626782594 reports the account billing/spending limit. Normal merge
+used the operator's existing local-validation authorization. No CI pass is claimed.
+
+## Compound constraints: E2E-336
+
+The search window now accepts bounded alternatives. Each clause combines its
+weekday, explicit date and clock fields; clauses are alternatives. Clinic-local
+filtering precedes the three-option limit, and fresh provider evidence must echo
+the exact constraints. Nested inputs are copied before asynchronous reads. Menu
+navigation intersects every branch with its display bound instead of dropping
+weekday/date limits or making a one-minute display bucket sticky.
+
+The baseline reached owned final speech but either clarified without another
+availability read or triggered classifier HTTP. It failed before later mutation
+and privacy assertions. The first implementation also clarified: punctuation
+normalization left a trailing space, preventing removal of “please.” A read-only
+parser probe diagnosed this; trimming before suffix removal fixed it. These
+failures are qualified in the scoped evidence rather than reported as successful
+clinical journeys.
+
+Thirteen final signed synthetic journeys cover clock alternatives, weekday
+alternatives, excluded Fridays, explicit date alternatives, shared and per-date
+clock limits and per-weekday morning/afternoon bands, rescheduling, refresh, incremental navigation, unplayed menus,
+contradictory bounds and unknown alternatives. Actual classifier HTTP, provider
+queries, POST/PATCH payloads, private patient/source binding, played confirmation,
+receipts and PostgreSQL canaries are inspected. Guard tests exercise invalid
+nested constraints, input mutation, strict read echoes and clinic-local matching.
+The related legacy windows, corrections, refresh, navigation and rescheduling
+session gates pass: 20 tests, 0 failures (131263.306495 ms).
+
+```sh
+node --test --test-concurrency=2 test/voice/compound-booking-constraints.test.ts test/voice/booking-search-windows.test.ts test/voice/retained-availability-refresh.test.ts test/voice/played-menu-navigation.test.ts test/voice/dated-window-corrections.test.ts test/cliniko/rescheduling-session.test.ts test/contract/scenario-manifest.test.ts
+```
+
+Files: the core search-window contract, bounded compound parser, existing played
+search, native booking/rescheduling read checks and host window capture,
+navigation intersection, signed voice tests, design/manifest E2E-336 (version
+1.134, 336 IDs), contract and scoped evidence documents. The original corpus is
+unchanged. This is a complete bounded grammar: unknown alternatives clarify;
+explicit dates span at most seven inclusive calendar days; weekday/clock-only
+constraints use played date context. Existing half-open clock bounds, private
+proof, provider/service authority, horizon, fresh confirmation and one possible
+send are preserved. No real carrier, mail, clinic activation or new real-model
+pass is claimed. Families 8–18 remain pending.
+
+Final word-clock and weekday-band focus passes 3 tests / 0 failures, thirteen
+signed journeys (33046.139026 ms):
+
+```sh
+node --test --test-concurrency=2 test/voice/compound-booking-constraints.test.ts test/contract/scenario-manifest.test.ts
+```
+
+The earlier 20-test regression precedes that bounded parser extension. Its core
+compound contract, private capture, read echo and intersection changes are the
+same. The added band's first test run correctly selected Monday morning but its
+new expected-payload expression defaulted to Thursday; only that expectation was
+corrected. The initial typecheck found two scalar-window accesses in the existing
+conversation evaluator. Explicit legacy-variant narrowing preserves their
+original criteria; no assertion is removed or relaxed. Both diagnostics are
+qualified in the scoped evidence.
+
+The existing agent input schema also allowed only scalar clocks. It now declares
+bounded weekday/date/clock clauses for both existing read capabilities; no write
+capability changes. Final focus passes 4 tests / 0 failures (24895.813395 ms),
+thirteen signed journeys plus actual native booking and move reads. A host that
+drops an OR branch cannot publish a menu through either native seam. The first
+read-only schema probe omitted the required turn timestamp and is qualified;
+a corrected complete command rejects the legacy window schema and accepts the
+new schema. Final source hashes include the native capability catalogue.
+
+Final `npm run typecheck`, `git diff --check` and signed PostgreSQL canary scans pass. Exact final source hashes and the qualified regression/focus scope are in `eval/baselines/second-call-batch-compound-final-v1.json`.

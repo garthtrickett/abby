@@ -26,7 +26,7 @@ export class PlayedMenuSearch {
     const navigation = menuNavigationLanguage(text);
     const refresh = /^(?:please )?(?:check (?:again|availability again)|refresh (?:the )?(?:times|options|availability))(?: please)?[.!?]*$/i.test(text.trim());
     const correction = callerCorrection(text, today);
-    const request = correction?.kind === "date" && correction.window !== undefined
+    const request: ReturnType<typeof bookingSearchLanguage> = correction?.kind === "date" && correction.window !== undefined
       ? { kind: "window" as const, date: correction.date, window: correction.window } : bookingSearchLanguage(text, today);
     if (!request && !refresh && !navigation) return undefined;
     if (request?.kind === "ambiguous") return { kind: "clarify", reason: "menuAmbiguous" };
@@ -67,7 +67,8 @@ export class PlayedMenuSearch {
       if (!days) return { kind: "clarify", reason: "menuRejected" };
       from = new Date(end + 86_400_000).toISOString().slice(0, 10);
       to = new Date(end + days * 86_400_000).toISOString().slice(0, 10);
-    } else if (request.date) from = to = request.date;
+    } else if (request.kind === "window" && request.from && request.to) { from = request.from; to = request.to; }
+    else if (request.date) from = to = request.date;
     else if (correcting && action && "offer" in action.mutation.request) from = to = clinicDateAt(timeZone, new Date(action.mutation.request.offer.startsAt));
     else if (current && menu) { from = menu.from; to = menu.to; }
     else return denied;

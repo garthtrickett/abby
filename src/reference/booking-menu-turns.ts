@@ -1,5 +1,5 @@
 import { normalizedSpokenName } from "../core/pending-location.ts";
-import { validBookingSearchWindow } from "../core/booking-search-window.ts";
+import { copyBookingSearchWindow, sameBookingSearchWindow, validBookingSearchWindow } from "../core/booking-search-window.ts";
 import type { BookingEvidenceHost, BookingMenuHost, PolicyStore } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err } from "../core/model.ts";
@@ -36,8 +36,10 @@ export class BookingMenuTurns {
         live.value.conversationRevision !== state.value.conversationRevision) return err({ kind: "invalidTransition" });
     return live;
   }
-  async run(scope: LocationScope, turn: FinalCallerTurn, now: string, operation: Readonly<{ from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null; preference?: import("../core/booking-search-preference.ts").BookingSearchPreference }> | Readonly<{ choice: 1|2|3 }>, external?: AbortSignal):
+  async run(scope: LocationScope, turn: FinalCallerTurn, now: string, incomingOperation: Readonly<{ from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null; preference?: import("../core/booking-search-preference.ts").BookingSearchPreference }> | Readonly<{ choice: 1|2|3 }>, external?: AbortSignal):
     Promise<Result<CallState, Failure>> {
+    const operation = Object.freeze({ ...incomingOperation, ...("window" in incomingOperation && validBookingSearchWindow(incomingOperation.window)
+      ? { window: copyBookingSearchWindow(incomingOperation.window) } : {}) });
     const runtime = new CallRuntime(this.ledger, scope);
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15_000), signal = AbortSignal.any([controller.signal, ...(external ? [external] : [])]);
     try {
@@ -54,7 +56,7 @@ export class BookingMenuTurns {
           const expectedWindow = operation.window;
           const matchesWindow = expectedWindow === undefined || expectedWindow === null ?
             expectedWindow === undefined || read?.ok && read.value.window === undefined :
-            validBookingSearchWindow(expectedWindow) && read?.ok && read.value.window?.startMinute === expectedWindow.startMinute && read.value.window.endMinute === expectedWindow.endMinute && read.value.window.startInclusive === expectedWindow.startInclusive;
+            read?.ok && sameBookingSearchWindow(expectedWindow, read.value.window);
           const preference = operation.preference;
           const matchesPreference = !preference || read?.ok && (!preference.practitioner ? true : preference.practitioner === "any" ? read.value.searchScope?.selection === "earliestApproved" :
             normalizedSpokenName(read.value.practitionerName) === normalizedSpokenName(preference.practitioner)) &&
