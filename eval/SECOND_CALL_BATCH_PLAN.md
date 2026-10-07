@@ -1,10 +1,22 @@
 # Second call batch: implementation and evidence
 
 The operator requested all eighteen scenario families from the conversation
-assessment. Work proceeds in the order below. Real transcripts, patient details
+assessment. Implementation followed the order below. Real transcripts, patient details
 and recording links are excluded. The original 45-case corpus and its historical
 evidence remain intact; new journeys use synthetic inputs and inspect actual
 Cliniko mutation payloads and call receipts.
+
+## Completion
+
+All eighteen requested scenario families are implemented and merged through PRs
+#421–#437. The final implementation is `54eee2d9a8a091a2e47b55dcf2dc8e7550ff762f`.
+[Machine-readable completion evidence](baselines/second-call-batch-completion-v1.json)
+records each merge and its local evidence. Final integration: 15 tests passed;
+final typecheck passed. CI jobs failed before starting due to account payments
+or spending limits; no CI pass or live activation is claimed. Unsupported
+services retain truthful clinic-contact paths. Real mail, carrier activation and
+Splose remain operator-deferred. Historical sections below retain the then-current
+open-family and publication status; this table records final completion.
 
 | Order | Family | Completion evidence |
 | --- | --- | --- |
@@ -25,7 +37,7 @@ Cliniko mutation payloads and call receipts.
 | 15 | Clinical request boundaries and approved routing | Merged PR #434; twenty-four signed clinical-boundary journeys |
 | 16 | Conflicting public facts and unusable arrival instructions | Merged PR #435; twenty-two signed arrival/public-fact journeys |
 | 17 | Practitioner and service preferences, history and duration | Merged PR #436; twenty-one signed practitioner/service journeys |
-| 18 | Home visits, classes, telehealth and practitioner changes | Implemented; E2E-347 passes twenty-one signed journeys; publication pending |
+| 18 | Home visits, classes, telehealth and practitioner changes | Merged PR #437; twenty-one signed special-service journeys |
 
 Each family needs a baseline observation, implementation where needed, focused
 end-to-end evidence, related regression checks and a merged publication. Existing
@@ -799,3 +811,5 @@ node --test --test-concurrency=2 test/voice/special-service-boundaries.test.ts t
 Typecheck follows.
 
 Final `npm run typecheck` passed (1m55s). Exact source hashes, synthetic privacy scan and `git diff --check` passed. The original corpus `eval/clinic-conversation-candidates-v1.json` is byte-identical to starting base `11c6e7236b17636c9bbdc9583f21c43259768de1`; SHA256 `2b537ef47b49a393c4916a43e0cbfc9e54f58a03daab6170b21ec3fa369e6e2c`. No CI pass claimed.
+
+PR #437 merged at `54eee2d9a8a091a2e47b55dcf2dc8e7550ff762f` on 2026-10-07 07:02:39 UTC. Exact branch HEAD `07dad868fe2468b728c584d06260554ea79af13f`: Actions 37584891569 (pull_request) and 37584885520 (push) failed before any steps ran. Check112672663103 reports account payments/spending limit. No CI pass claimed; normal local-check merge was operator-authorized. All requested families are complete.
