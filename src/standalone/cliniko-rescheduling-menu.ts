@@ -22,7 +22,7 @@ export class ClinikoReschedulingMenu implements ReschedulingMenuHost {
   readonly #lifetime = new AbortController();
   #menu: Menu | undefined;
   #target: Target | undefined;
-  #previous: Readonly<{ menu: Menu; target: Target }> | undefined;
+  #previous: Readonly<{ menu: Menu; target: Target; selectionTurnId: string }> | undefined;
   #epoch = 0;
   #window: BookingSearchWindow | undefined;
   constructor(config: Config) { this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }) }); }
@@ -51,7 +51,12 @@ export class ClinikoReschedulingMenu implements ReschedulingMenuHost {
     if (query.window !== undefined) this.#window = query.window === null ? undefined : Object.freeze({ ...query.window });
     const correction = this.#previous;
     if (query.correctingAppointmentRef && (query.stage !== "offers" || !correction)) return denied();
-    const epoch = ++this.#epoch, target = query.correctingAppointmentRef ? correction!.target : this.#target, previous = this.#menu; this.#menu = undefined;
+    // A failed destination selection can be followed by a fresh read only
+    // from its exact consumed turn. The existing proof and source are reread;
+    // no old destination offer or confirmation is reused.
+    const recovery = correction && query.stage === "offers" && !query.correctingAppointmentRef && correction.selectionTurnId === query.priorTurnId
+      ? correction.target : undefined;
+    const epoch = ++this.#epoch, target = query.correctingAppointmentRef ? correction!.target : recovery ?? this.#target, previous = this.#menu; this.#menu = undefined;
     this.#previous = undefined;
     if (query.stage === "targets") { this.#target = undefined; this.#window = undefined; }
     const signal = AbortSignal.any([query.signal, this.#lifetime.signal]);
@@ -71,11 +76,11 @@ export class ClinikoReschedulingMenu implements ReschedulingMenuHost {
       this.#menu = { stage: query.stage, turnId: query.turnId, verificationRef: grant.verificationRef, patientId: found.value.patientRef, choices };
       return ok(this.#snapshot(query, "targets", found.value.timeZone, choices));
     }
-    if (!target || (!query.correctingAppointmentRef && query.priorTurnId !== target.turnId && !(previous?.stage === "offers" && query.priorTurnId === previous.turnId && previous.verificationRef === target.verificationRef && previous.patientId === target.patientId)) || grant.verificationRef !== target.verificationRef) return denied();
+    if (!target || (!query.correctingAppointmentRef && !recovery && query.priorTurnId !== target.turnId && !(previous?.stage === "offers" && query.priorTurnId === previous.turnId && previous.verificationRef === target.verificationRef && previous.patientId === target.patientId)) || grant.verificationRef !== target.verificationRef) return denied();
     const current = await this.#config.authority.resolveTarget(this.#bound(query, grant.verificationRef, target.patientId, target.targetRef, signal));
     if (!current.ok || query.correctingAppointmentRef && current.value.target.appointmentRef !== query.correctingAppointmentRef) return denied();
     const found = await this.#config.authority.listOffers(query.scope, grant.verificationRef, query.from, query.to, query.now, signal, this.#window);
-    if (!found.ok || !await this.#fresh(query, grant.verificationRef, epoch, signal) || !query.correctingAppointmentRef && this.#target !== target) return denied();
+    if (!found.ok || !await this.#fresh(query, grant.verificationRef, epoch, signal) || !query.correctingAppointmentRef && !recovery && this.#target !== target) return denied();
     this.#target = target;
     const choices = found.value.choices.filter(item => item.startsAt !== current.value.target.startsAt);
     this.#menu = { stage: query.stage, turnId: query.turnId, verificationRef: grant.verificationRef, patientId: target.patientId, ...(found.value.window ? { window: found.value.window } : {}),
@@ -101,7 +106,7 @@ export class ClinikoReschedulingMenu implements ReschedulingMenuHost {
     }
     this.#target = undefined;
     if (!target || target.patientId !== menu.patientId || target.verificationRef !== grant.verificationRef) return denied();
-    this.#previous = { menu, target };
+    this.#previous = { menu, target, selectionTurnId: query.turnId };
     return ok({ kind: "actionSelection", verificationRef: grant.verificationRef, targetRef: target.targetRef, offerRef: chosen.ref });
   }
   async correctReschedulingMenu(incoming: ReschedulingMenuQuery & Readonly<{ menuTurnId: string; startsAt: string }>):

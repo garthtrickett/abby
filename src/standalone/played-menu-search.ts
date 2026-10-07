@@ -7,7 +7,7 @@ import { bookingSearchLanguage } from "./booking-search-language.ts";
 import { clinicDateAt } from "./clinic-clock.ts";
 
 type Menu = Readonly<{ turnId: string; from: string; to: string; kind: "booking" | "rescheduling";
-  snapshot: Pick<BookingMenuRead, "choices" | "timeZone"> }>;
+  snapshot: Pick<BookingMenuRead, "choices" | "timeZone" | "window"> }>;
 const denied = { kind: "clarify", reason: "menuUnavailable" } as const;
 /** Volatile search dates belong to the played menu, not to model context. Each
  * result goes through fresh host reads and the usual selection/confirmation. */
@@ -16,15 +16,27 @@ export class PlayedMenuSearch {
   remember(menu: Menu): void { this.#menu = structuredClone(menu); }
   clear(): void { this.#menu = undefined; }
   resolve(text: string, state: CallState, today: string, timeZone: string, kind: "booking" | "rescheduling"): VoiceIntent | undefined {
+    const refresh = /^(?:please )?(?:check (?:again|availability again)|refresh (?:the )?(?:times|options|availability))(?: please)?[.!?]*$/i.test(text.trim());
     const correction = callerCorrection(text, today);
     const request = correction?.kind === "date" && correction.window !== undefined
       ? { kind: "window" as const, date: correction.date, window: correction.window } : bookingSearchLanguage(text, today);
-    if (!request) return undefined;
-    if (request.kind === "ambiguous") return { kind: "clarify", reason: "menuAmbiguous" };
+    if (!request && !refresh) return undefined;
+    if (request?.kind === "ambiguous") return { kind: "clarify", reason: "menuAmbiguous" };
     const action = Object.values(state.actions).at(-1);
     if (action && action.kind !== "intake" && ["committed", "uncertain", "needsReview", "dispatched"].includes(action.status)) return { kind: "clarify", reason: "changeAfterSend" };
     const menu = this.#menu;
     const played = menu?.kind === kind && state.presentations[noticePresentationId(state.callId, menu.turnId)]?.status === "played";
+    // A refresh is a new read of the caller's played search, never permission
+    // to widen dates or retry a send. The host retains practitioner/location
+    // authority and independently revalidates the patient and every offer.
+    if (refresh) {
+      if (!played || !menu || state.pendingPresentationId) return denied;
+      const window = menu.snapshot.window ?? null;
+      return kind === "booking" ? { kind: "bookingMenu", from: menu.from, to: menu.to, window } :
+        { kind: "reschedulingMenu", stage: "offers", from: menu.from, to: menu.to, window,
+          ...(action?.kind === "reschedule" && action.status === "canceled" ? { correcting: true as const } : {}) };
+    }
+    if (!request) return undefined;
     const current = played && !state.pendingPresentationId && state.processedTurnIds.at(-1) === menu.turnId;
     const requestOffer = action && "offer" in action.mutation.request ? action.mutation.request.offer : undefined;
     const correcting = played && action?.status === "canceled" &&

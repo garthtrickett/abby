@@ -1,0 +1,17 @@
+{
+  "schema": "abby.second-call-batch-fixture-review.v1",
+  "qualifies": [
+    "eval/baselines/second-call-batch-refresh-invalid-fixture-v1.json",
+    "eval/baselines/second-call-batch-refresh-before-v1.json"
+  ],
+  "issues": [
+    "Initial month-long search exceeded the bounded reader; combined practitioner/location preference was not existing supported syntax.",
+    "An invocation counter wrapped the whole resolver, including trusted paths. Actual classifier fetch and provider query observations are in second-call-batch-refresh-actual-before-v1.json.",
+    "Replacement provider rows were unsorted and correctly rejected. The repaired synthetic provider returns ordered starts without weakening production evidence checks.",
+    "No-action affirmation should prove no write; it is not required to close the signed transport with confirmationMissing."
+  ],
+  "limits": [
+    "Invalid fixture attempts do not establish a clinical recovery defect.",
+    "No production reader, confirmation or transport gate was weakened."
+  ]
+}

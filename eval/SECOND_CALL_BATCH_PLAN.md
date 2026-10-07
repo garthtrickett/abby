@@ -10,8 +10,8 @@ Cliniko mutation payloads and call receipts.
 | --- | --- | --- |
 | 1 | Repeated automated hold announcements, keypad scripts and outbound speech repetition | Implemented; E2E-331 passes thirteen signed synthetic journeys; merged in PR #421; local checks passed |
 | 2 | Questions and presence acknowledgements mistaken for consent | Existing exact confirmation preserved; direct E2E-331 offered-time, duration and presence questions pass; merged in PR #421; local checks passed |
-| 3 | Last-moment corrections before and after dispatch | Implemented; E2E-332 passes six signed synthetic journeys; publication pending |
-| 4 | Vanished slots with retained caller constraints | Pending |
+| 3 | Last-moment corrections before and after dispatch | Implemented; E2E-332 passes six signed synthetic journeys; merged in PR #422; local checks passed |
+| 4 | Vanished slots with retained caller constraints | Implemented; E2E-333 passes seven signed synthetic journeys; publication pending |
 | 5 | Follow-ups after a confirmed action, including canceling the old moved appointment | Pending |
 | 6 | Partial menu repetition and incremental navigation | Pending |
 | 7 | Compound weekday, time and date constraints | Pending |
@@ -105,3 +105,49 @@ node --test --test-concurrency=3 test/voice/final-negative-corrections.test.ts t
 
 `npm run typecheck` and `git diff --check`: pass. Exact source hashes and
 validation scope are in `eval/baselines/second-call-batch-final-negative-final-v1.json`.
+
+## Retained refresh: E2E-333
+
+Bounded “please check again” / “refresh the options” wording now requests a new
+read using the prior played search's actual dates and window. It bypasses model
+date guesses, leaves practitioner/location authority in the existing approved
+host, and never retries a send. No previous played search gives clarification.
+A committed or unknown action keeps its existing outcome and clinic-contact
+path. Fresh options and a separate played confirmation remain required.
+
+A failed destination selection previously discarded the rescheduling source.
+The private menu now keeps its exact consumed selection turn with that source.
+Only a read immediately following that turn can recover it, and fresh patient
+proof and source validation must pass before destination availability is read.
+The source reference is call-local and clears on disposal; no durable patient
+state or host write authority is added.
+
+The actual before report captures classifier HTTP and provider queries: the
+old refresh searched October 16 after a November 2–8 offer. Earlier fixture
+reports are preserved and qualified: an initial month-long query exceeded the
+existing bounded reader; a resolver invocation counter was not a model HTTP
+counter; unsorted synthetic replacement rows were correctly rejected. The
+repaired test keeps the same constraints and sorts provider evidence.
+
+Files: the played search and private rescheduling menu, new signed refresh
+journeys, design/manifest E2E-333 (version 1.131, 333 IDs), contract and scoped
+evidence/plan documents. No real carrier, mail or clinic activation is claimed.
+
+PR #422 merged family 3 at `e58b1e342260fef372b5f573afaf142e7edec416`.
+Its GitHub runs were queued at the normal locally authorized merge and later
+failed before starting: check-run 112617087173 reports account billing/spending
+limits. Runs 37567063961 (PR) and 37567060294 (push) supplied no test execution
+evidence; no CI pass is claimed. Families 5–18 remain pending.
+
+Refresh validation: focused seven-journey test passes (23880.481118 ms).
+Related regression passes 18 tests (103974.988766 ms), before the final explicit
+previous-selection guard. Final guard regression passes 12 tests
+(33242.46397 ms):
+
+```sh
+node --test --test-concurrency=2 test/voice/retained-availability-refresh.test.ts test/cliniko/rescheduling-session.test.ts test/contract/scenario-manifest.test.ts
+```
+
+Final `npm run typecheck`, `git diff --check` and patient-data canary scan pass.
+Exact commands, scope and source hashes are in
+`eval/baselines/second-call-batch-refresh-final-v1.json`.
