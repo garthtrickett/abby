@@ -12,8 +12,8 @@ Cliniko mutation payloads and call receipts.
 | 2 | Questions and presence acknowledgements mistaken for consent | Existing exact confirmation preserved; direct E2E-331 offered-time, duration and presence questions pass; merged in PR #421; local checks passed |
 | 3 | Last-moment corrections before and after dispatch | Implemented; E2E-332 passes six signed synthetic journeys; merged in PR #422; local checks passed |
 | 4 | Vanished slots with retained caller constraints | Implemented; E2E-333 passes seven signed synthetic journeys; merged in PR #423; local checks passed |
-| 5 | Follow-ups after a confirmed action, including canceling the old moved appointment | Implemented; E2E-334 passes eight signed synthetic journeys; publication pending |
-| 6 | Partial menu repetition and incremental navigation | Pending |
+| 5 | Follow-ups after a confirmed action, including canceling the old moved appointment | Implemented; E2E-334 passes eight signed synthetic journeys; merged in PR #424; local checks passed |
+| 6 | Partial menu repetition and incremental navigation | Implemented; E2E-335 passes seventeen signed synthetic journeys; publication pending |
 | 7 | Compound weekday, time and date constraints | Pending |
 | 8 | Relative and source-relative dates and times | Pending |
 | 9 | Staff message additions and corrections saved in Cliniko | Pending |
@@ -196,3 +196,54 @@ carrier, clinic activation, email or new real-model pass is claimed. Families
 6–18 remain pending.
 
 Final `npm run typecheck`, `git diff --check` and patient-data canary scan pass. Exact source hashes and validation scope are in `eval/baselines/second-call-batch-followups-final-v1.json`.
+
+PR #424 merged family 5 at `d7527d3a639c95ac5ed813b75bd7916bd9d9738e`. GitHub runs 37569142323 (PR) and 37569138438 (push) failed before starting; check-run 112623596246 reports account billing/spending limits. No CI pass is claimed.
+
+## Played menu navigation: E2E-335
+
+Complete repetition questions now derive fresh reads from an actually played
+menu: all options, an offered weekday/date, or a numbered option. They never
+propose a choice. A later/next question with one reference offer reads later
+starts on that offer's actual clinic date. Multiple references or a missing day
+clarify without model guesses or provider search. Unplayed menus and sent
+receipts retain their existing boundaries.
+
+A one-minute filter for repeating a particular option is temporary display
+state. The search owner keeps the original caller window separately, and only
+the exact incoming read turn may inherit it after a successful fresh menu read.
+Thus a later question can leave that display filter while retaining “before
+10 AM.” Failed, canceled or unrelated reads cannot inherit it. The host still
+owns practitioner/location authority, proof, offer revalidation and one-send
+policy. No selection command or write interface is expanded.
+
+The thirteen-journey baseline reached owned final requests but all triggered
+classifier HTTP. It failed at that assertion, so it does not establish later
+read/write/privacy outcomes. Initial focus: 1 pass / 0 fail (22885.817974 ms).
+Expanded final focus: 3 pass / 0 fail (25558.3078 ms), seventeen signed journeys,
+negation/quotation/hidden-second guards and the manifest contract:
+
+```sh
+node --test --test-concurrency=2 test/voice/played-menu-navigation.test.ts test/contract/scenario-manifest.test.ts
+```
+
+Files: the bounded navigation module, played search owner and its existing
+call/resolver seam; signed voice journeys; design/manifest E2E-335 (version
+1.133, 335 IDs), contract and scoped evidence/plan documents. Missing or changed
+provider times, denied proof and interrupted repeat playback cannot restore a
+proposal. Fresh exact selection and separately played confirmation precede one
+inspected POST/PATCH. PostgreSQL patient-data canaries remain empty.
+
+The module recognizes bounded complete questions, not arbitrary speech. Later
+navigation stays on the displayed date; it neither expands the date horizon nor
+switches practitioners. General compound constraints and relative dates remain
+families 7 and 8. No real carrier, mail, clinic activation or new real-model pass
+is claimed. Families 7–18 remain pending.
+
+Navigation regression: 9 pass / 0 fail (104324.845203 ms):
+
+```sh
+node --test --test-concurrency=2 test/voice/played-menu-navigation.test.ts test/voice/booking-search-windows.test.ts test/voice/retained-availability-refresh.test.ts test/voice/stale-menu-recovery.test.ts test/voice/dated-window-corrections.test.ts test/contract/scenario-manifest.test.ts
+```
+
+Final `npm run typecheck`, `git diff --check` and patient-data canary scan pass.
+Exact source hashes and scope are in `eval/baselines/second-call-batch-navigation-final-v1.json`.

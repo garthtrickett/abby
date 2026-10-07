@@ -1,0 +1,57 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "d7527d3a639c95ac5ed813b75bd7916bd9d9738e",
+  "families": [
+    6
+  ],
+  "scenarioIds": [
+    "E2E-335"
+  ],
+  "sourceFiles": {
+    "src/standalone/menu-navigation-language.ts": "66e2b311c1111d2b28e3677dd7f8b016e9ca40a4fa2701319ad209b812c1ad6d",
+    "src/standalone/played-menu-search.ts": "c9e0ca54717b50181379b5e3e7c22bddbfb91a4fc96ba9c7846dbbd63568bc49",
+    "src/standalone/cliniko-call-flow.ts": "eeb14dcb1dcec1f3708f7c43b89622c10d7f0c893e0151f858faf314fef3b74f",
+    "src/standalone/openai-clinical-intent.ts": "e8c16dd9fca35605ba02bca4a5f7be1e8b35715bc20ea70ca037b0532506e890",
+    "test/voice/played-menu-navigation.test.ts": "6b82ec790da9d6e588784daaf47b0c8d5f855b477a1369b8eb834364e445b7cd",
+    "test/contract/scenario-manifest.test.ts": "2dc5ea1f82c400c0e6ca63d00e513b7434ba720daf49865765b36ffef4ea9b75"
+  },
+  "beforeReport": "eval/baselines/second-call-batch-navigation-before-v1.json",
+  "initialFocus": {
+    "command": "node --test test/voice/played-menu-navigation.test.ts",
+    "pass": 1,
+    "fail": 0,
+    "signedJourneys": 13,
+    "durationMs": 22885.817974,
+    "scope": "before extra signed date, window, vanished-slot and interrupted-repeat journeys and guard test"
+  },
+  "finalFocus": {
+    "command": "node --test --test-concurrency=2 test/voice/played-menu-navigation.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 3,
+    "fail": 0,
+    "signedJourneys": 17,
+    "durationMs": 25558.3078
+  },
+  "finalRegression": {
+    "command": "node --test --test-concurrency=2 test/voice/played-menu-navigation.test.ts test/voice/booking-search-windows.test.ts test/voice/retained-availability-refresh.test.ts test/voice/stale-menu-recovery.test.ts test/voice/dated-window-corrections.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 9,
+    "fail": 0,
+    "durationMs": 104324.845203
+  },
+  "finalTypecheck": {
+    "command": "npm run typecheck",
+    "exitCode": 0
+  },
+  "diffCheck": {
+    "command": "git diff --check",
+    "exitCode": 0
+  },
+  "privacyCanaryScan": "passed",
+  "originalCorpus": "45 cases unchanged",
+  "limits": [
+    "Only bounded complete repetition/navigation requests derived from actually played menu evidence.",
+    "Later/next navigation needs one offered reference and stays on its clinic date with the original caller window.",
+    "Fresh reads, played menus, exact selection, private proof and separate confirmation remain required; no second send.",
+    "Synthetic voice, mail, approval and Cliniko; no real carrier/clinic activation or new real-model pass.",
+    "Families 7\u201318 remain open."
+  ]
+}

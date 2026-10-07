@@ -1,0 +1,15 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "d7527d3a639c95ac5ed813b75bd7916bd9d9738e",
+  "families": [6],
+  "command": "node --test test/voice/played-menu-navigation.test.ts",
+  "pass": 0,
+  "fail": 1,
+  "durationMs": 15309.20805,
+  "signedJourneys": 13,
+  "observations": [
+    "All thirteen owned final navigation/repetition requests triggered classifier HTTP: 2 to 3 requests for booking and 3 to 4 for move journeys.",
+    "The aggregate failed at the classifier-count assertion, so later read, mutation and privacy assertions do not establish a baseline verdict.",
+    "The final fixture allows a genuine later-time search to present more than one later provider slot; it still requires the exact actual first-slot writer payload and fresh confirmation. No production behavior was changed before this baseline."
+  ]
+}

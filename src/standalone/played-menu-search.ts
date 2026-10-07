@@ -5,6 +5,8 @@ import type { VoiceIntent } from "../voice/voice-session.ts";
 import { callerCorrection } from "./caller-correction.ts";
 import { bookingSearchLanguage } from "./booking-search-language.ts";
 import { clinicDateAt } from "./clinic-clock.ts";
+import { menuNavigationLanguage, menuNavigationQuery } from "./menu-navigation-language.ts";
+import type { BookingSearchWindow } from "../core/booking-search-window.ts";
 
 type Menu = Readonly<{ turnId: string; from: string; to: string; kind: "booking" | "rescheduling";
   snapshot: Pick<BookingMenuRead, "choices" | "timeZone" | "window"> }>;
@@ -13,19 +15,35 @@ const denied = { kind: "clarify", reason: "menuUnavailable" } as const;
  * result goes through fresh host reads and the usual selection/confirmation. */
 export class PlayedMenuSearch {
   #menu: Menu | undefined;
-  remember(menu: Menu): void { this.#menu = structuredClone(menu); }
-  clear(): void { this.#menu = undefined; }
-  resolve(text: string, state: CallState, today: string, timeZone: string, kind: "booking" | "rescheduling"): VoiceIntent | undefined {
+  #callerWindow: BookingSearchWindow | null = null;
+  #navigation: Readonly<{ turnId: string; callerWindow: BookingSearchWindow | null }> | undefined;
+  remember(menu: Menu): void {
+    this.#callerWindow = structuredClone(this.#navigation?.turnId === menu.turnId ? this.#navigation.callerWindow : menu.snapshot.window ?? null);
+    this.#navigation = undefined; this.#menu = structuredClone(menu);
+  }
+  clear(): void { this.#menu = undefined; this.#navigation = undefined; this.#callerWindow = null; }
+  resolve(text: string, state: CallState, today: string, timeZone: string, kind: "booking" | "rescheduling", turnId: string): VoiceIntent | undefined {
+    const navigation = menuNavigationLanguage(text);
     const refresh = /^(?:please )?(?:check (?:again|availability again)|refresh (?:the )?(?:times|options|availability))(?: please)?[.!?]*$/i.test(text.trim());
     const correction = callerCorrection(text, today);
     const request = correction?.kind === "date" && correction.window !== undefined
       ? { kind: "window" as const, date: correction.date, window: correction.window } : bookingSearchLanguage(text, today);
-    if (!request && !refresh) return undefined;
+    if (!request && !refresh && !navigation) return undefined;
     if (request?.kind === "ambiguous") return { kind: "clarify", reason: "menuAmbiguous" };
     const action = Object.values(state.actions).at(-1);
     if (action && action.kind !== "intake" && ["committed", "uncertain", "needsReview", "dispatched"].includes(action.status)) return { kind: "clarify", reason: "changeAfterSend" };
     const menu = this.#menu;
     const played = menu?.kind === kind && state.presentations[noticePresentationId(state.callId, menu.turnId)]?.status === "played";
+    if (navigation) {
+      if (!played || !menu || state.pendingPresentationId || state.processedTurnIds.at(-1) !== menu.turnId) return denied;
+      const query = menuNavigationQuery(navigation, menu, this.#callerWindow);
+      if (query.kind === "clarify") return query;
+      // Only this incoming read turn can inherit the caller window. A canceled,
+      // failed or unrelated read cannot make a display filter sticky authority.
+      this.#navigation = { turnId, callerWindow: this.#callerWindow };
+      return kind === "booking" ? { kind: "bookingMenu", from: query.from, to: query.to, window: query.window }
+        : { kind: "reschedulingMenu", stage: "offers", from: query.from, to: query.to, window: query.window };
+    }
     // A refresh is a new read of the caller's played search, never permission
     // to widen dates or retry a send. The host retains practitioner/location
     // authority and independently revalidates the patient and every offer.
