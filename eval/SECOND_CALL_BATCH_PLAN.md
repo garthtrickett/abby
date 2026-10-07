@@ -20,8 +20,8 @@ Cliniko mutation payloads and call receipts.
 | 10 | Shared phones and changing patient identity | Merged PR #429; seventeen signed identity journeys |
 | 11 | Bounded pauses, writing time and reopening after goodbye | Merged PR #430; fourteen signed pause/goodbye journeys |
 | 12 | External appointment changes and previous-call claims | Merged PR #431; eighteen signed external-change journeys |
-| 13 | Private intake spelling and field repairs | Implemented; E2E-342 passes sixteen signed journeys; publication pending |
-| 14 | Payment, deposit, currency, refund and insurance evidence | Pending |
+| 13 | Private intake spelling and field repairs | Merged PR #432; sixteen signed private-intake journeys |
+| 14 | Payment, deposit, currency, refund and insurance evidence | Implemented; E2E-343 passes thirty-two signed journeys; publication pending |
 | 15 | Clinical request boundaries and approved routing | Pending |
 | 16 | Conflicting public facts and unusable arrival instructions | Pending |
 | 17 | Practitioner and service preferences, history and duration | Pending |
@@ -592,3 +592,50 @@ Initial `npm run typecheck` failed (2m01s) at two RegExpExecArray tuple casts. E
 Exact capture-read source: `node --test --test-concurrency=2 test/voice/private-intake-spelling.test.ts test/contract/scenario-manifest.test.ts` passed (3 pass, 0 fail, 15716.517792 ms), including all sixteen signed journeys.
 
 Final `npm run typecheck` passed (1m22s). Exact source hashes, synthetic privacy scan and `git diff --check` passed. No CI pass is claimed.
+
+PR #432 merged at `c59fe304732de0b46469de8104161a3285cd682a` on 2026-10-07 06:09:21 UTC. Exact branch HEAD `73349d4b691a95b6f405b2b65ac31bdd0983c76d`: Actions 37579965660 (pull_request) and 37579959705 (push) were queued at merge and at the last check. No CI pass claimed; normal local-check merge was operator-authorized.
+
+## Financial evidence boundaries: E2E-343
+
+Complete bounded current payment/link failure, refund, coverage and reservation
+questions now select fixed negative notices before classification. No caller
+statement or appointment receipt establishes payment, a refund, policy coverage
+or a paid reservation. Pending proposals are canceled; known and unknown actual
+appointment sends retain their exact status and one-send fence. Public price
+facts remain pinned approved text and retain GBP, EUR and NZD exactly.
+
+Explicit card-number disclosure cannot reach model HTTP or private Cliniko note
+content. Other active private payment-update messages preserve existing question
+and explicit-send proof fences; the only read on that question is the exact
+existing verified-patient refresh. No financial operation or extra send occurs.
+International caller/link requests cannot trigger a promised payment link.
+
+Baseline: 0 pass, 1 fail, 21802.632665 ms. Twenty journeys failed immediate
+no-classifier assertions; five approved-price cases passed. The denied setup
+failed before its financial question and was corrected to an existing literal
+cue. Initial focus: 0 pass, 1 fail, 21789.226072 ms, only that setup failure.
+Expanded focus: 1 pass, 1 fail, 45688.671858 ms; only the new staff question's
+zero-read expectation was wrong. The corrected assertion requires the exact
+verified-patient GET, while forbidding payment work and extra sends. Production
+was unchanged after that run. Corrected focus: 2 pass, 0 fail, 17970.099849 ms.
+
+Final regression on the published source: 8 pass, 0 fail, 92995.82723 ms,
+including thirty-two new signed journeys, approved-price, private-message and
+post-action receipt regressions.
+
+```sh
+node --test --test-concurrency=2 test/voice/financial-evidence-boundaries.test.ts test/voice/public-service-guidance.test.ts test/voice/staff-message-corrections.test.ts test/voice/post-action-followups.test.ts test/contract/scenario-manifest.test.ts
+```
+
+Manifest 1.141, 343 IDs. No payment processor, card collection, coverage decision,
+payment-link sender, automatic expiry/refund or payment-dependent reservation.
+These require clinic handling. No new patient authority, provider mutation path,
+durable patient field, dependency or repository configuration change. No live
+carrier/mail/clinic activation or new real-model pass. Families 15–18 remain open.
+Typecheck follows.
+
+Initial `npm run typecheck` failed (1m21s) because the test fixture union did not narrow the optional price fixture. An explicit typed price-fixture reference fixes the test without changing production. The eight-test regression predates that equivalent fixture narrowing; exact-source focus and final typecheck follow.
+
+Exact typed-fixture source: `node --test --test-concurrency=2 test/voice/financial-evidence-boundaries.test.ts test/contract/scenario-manifest.test.ts` passed (3 pass, 0 fail, 15922.901713 ms), including all thirty-two signed journeys.
+
+Final `npm run typecheck` passed (1m44s). Exact source hashes, synthetic privacy scan and `git diff --check` passed. No CI pass is claimed.

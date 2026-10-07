@@ -1,0 +1,21 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "c59fe304732de0b46469de8104161a3285cd682a",
+  "families": [
+    14
+  ],
+  "scenarioIds": [
+    "E2E-343"
+  ],
+  "command": "node --test test/voice/financial-evidence-boundaries.test.ts",
+  "pass": 0,
+  "fail": 1,
+  "durationMs": 21802.632665,
+  "signedJourneys": 26,
+  "observation": "Twenty payment, card, coverage, reservation and refund journeys reached the deliberately wrong booking classifier, violating the immediate actual-HTTP assertion. Later assertions in those journeys were not reached.",
+  "qualification": "Five current/revoked/missing approved-price cases passed. The denial case failed during setup because its paraphrase was not a literal cue and the fixture classified it as booking; setup was corrected to the existing explicit denial cue. Six more journeys were added after baseline.",
+  "limits": [
+    "Synthetic signed ingress/provider/mail only; no live financial integration, carrier, mail or real-model pass.",
+    "Original 45-case corpus unchanged."
+  ]
+}

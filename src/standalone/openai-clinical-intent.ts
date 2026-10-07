@@ -1,3 +1,4 @@
+import { financialEvidenceLanguage } from "./financial-evidence-language.ts";
 import { staffMessageLanguage } from "./staff-message-draft.ts";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
@@ -211,6 +212,10 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     if (explicitUrgentRequest(turn.text)) return ok({ kind: "handoff", reason: "potentiallyUrgent", staffWorkUnavailable: true, checkedAt: before.now });
     if (isPresenceQuestion(turn.text)) return ok({ kind: "presence" });
     if (isMissedCallQuestion(turn.text)) return ok({ kind: "missedCall" });
+    const financial = financialEvidenceLanguage(turn.text);
+    // Active private message questions use the existing draft question fence;
+    // explicit card-number disclosure must never become message content.
+    if (financial && (!config.owner.collectingStaffMessage || /\bmy card number is\b/i.test(turn.text))) return ok({ kind: "clarify", reason: financial });
     const boundary = before.callerIdentityDenied ? undefined : requestBoundaryLanguage(turn.text);
     // A bare external-change claim cannot silently replace a private draft.
     // Explicit message prefixes still keep literal message content private.
