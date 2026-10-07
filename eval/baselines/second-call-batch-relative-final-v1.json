@@ -1,0 +1,82 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "0dc2c94990f34757427d608ed03ef9d5c76c08c9",
+  "families": [
+    8
+  ],
+  "scenarioIds": [
+    "E2E-337"
+  ],
+  "sourceFiles": {
+    "src/standalone/cliniko-call-flow.ts": "c671860996a0a98767bde291fe9494555882c23c413e862dfbb5d859b711c11b",
+    "src/standalone/played-menu-search.ts": "b0f0742057c5aa25f5e11b3cb8a6a8e15321371a11acf3036466d04af9785f64",
+    "test/contract/scenario-manifest.test.ts": "51a1ede1e559ff78084aa4d0a75e46cbe8326796a0f31f2a896bd4335c905c6b",
+    "src/standalone/relative-booking-search-language.ts": "9bbd10f45d5b833982d861f8d4c388a1e0c8e53a81264e882566ef55a1e6197a",
+    "test/voice/relative-booking-dates.test.ts": "b9c9ed7eefb4e97b35938064bbf663eab331adccde0424f779b1cdc2546f91e5"
+  },
+  "beforeReport": "eval/baselines/second-call-batch-relative-before-v1.json",
+  "initialFocusDiagnosis": {
+    "command": "node --test test/voice/relative-booking-dates.test.ts",
+    "pass": 0,
+    "fail": 1,
+    "durationMs": 24337.670597,
+    "finding": "The month-away request correctly stopped at the existing 30-day clinic horizon. Its initial test wrongly required an availability read. Changed that case to assert the actual boundary and no search; no clinic policy was weakened. Other fifteen journeys reported no failure."
+  },
+  "relatedRegression": {
+    "command": "node --test --test-concurrency=2 test/voice/relative-booking-dates.test.ts test/voice/dated-window-corrections.test.ts test/voice/booking-search-windows.test.ts test/voice/compound-booking-constraints.test.ts test/voice/retained-availability-refresh.test.ts test/voice/played-menu-navigation.test.ts",
+    "pass": 12,
+    "fail": 0,
+    "signedJourneys": 17,
+    "durationMs": 151901.847577,
+    "scope": "Before the additional canceled-source correction, literal named/ISO dates and explicit narrowing guard; underlying relative/source calculation, retention, source playback and clinic gates included."
+  },
+  "correctionFocus": {
+    "command": "node --test --test-concurrency=2 test/voice/relative-booking-dates.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 3,
+    "fail": 0,
+    "signedJourneys": 18,
+    "durationMs": 31440.670142
+  },
+  "finalFocus": {
+    "command": "node --test --test-concurrency=2 test/voice/relative-booking-dates.test.ts test/voice/compound-booking-constraints.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 6,
+    "fail": 0,
+    "signedJourneys": 19,
+    "durationMs": 61132.299988,
+    "scope": "Before the exact optional-field narrowing; compound semantics unchanged, nineteen relative journeys rerun on final source in optionalFieldFocus."
+  },
+  "finalTypecheck": {
+    "command": "npm run typecheck",
+    "exitCode": 0,
+    "durationSeconds": 103
+  },
+  "diffCheck": {
+    "command": "git diff --check",
+    "exitCode": 0
+  },
+  "privacyCanaryScan": "passed",
+  "originalCorpus": "45 cases unchanged",
+  "limits": [
+    "Bounded complete calendar wording; next week means next Monday through Sunday, one/two weeks means seven/fourteen calendar days, a month means the same calendar day next month.",
+    "Next weekday means that weekday in the next calendar week; plain weekday means the next occurrence; past this-week dates clarify. Resolved dates are spoken before any selection.",
+    "Named dates use the current clinic year; invalid/past dates and impossible month days clarify rather than guessing another year or clamping.",
+    "Only exact whole-minute selected source clocks support same time next week, same time on an explicit ISO date and thirty minutes earlier/later on the same day; missing/unplayed/expired sources cannot supply authority.",
+    "Unqualified relative searches retain caller clock constraints; explicit clock qualifiers provide the new disclosed search window.",
+    "Approved horizon, fresh Cliniko source/offer proof, separate played confirmation, one possible send and no automatic retry remain enforced.",
+    "Transient source starts/expiry never enter model context or durable Abby patient storage.",
+    "Synthetic voice, mail, clinic approval and provider evidence; no real carrier, clinic activation or new real-model pass.",
+    "Families 9\u201318 remain open."
+  ],
+  "initialTypecheck": {
+    "command": "npm run typecheck",
+    "exitCode": 2,
+    "finding": "Exact optional properties rejected a spread that could explicitly carry undefined. Narrowed the optional field before constructing the range; no date or window semantics changed."
+  },
+  "optionalFieldFocus": {
+    "command": "node --test --test-concurrency=2 test/voice/relative-booking-dates.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 3,
+    "fail": 0,
+    "signedJourneys": 19,
+    "durationMs": 46441.042885
+  }
+}

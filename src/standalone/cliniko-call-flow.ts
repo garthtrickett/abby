@@ -171,7 +171,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     if (!found.ok || this.closed || found.value.lifecycle !== "active" || found.value.sessionLease?.sessionId !== this.#config.sessionId) return undefined;
     const now = (this.#config.clock ?? (() => new Date().toISOString()))();
     return this.#searchMenu.resolve(turn.text, found.value, clinicDateAt(this.#config.cliniko.timeZone, new Date(now)), this.#config.cliniko.timeZone,
-      this.#workflow === "reschedule" ? "rescheduling" : "booking", turn.turnId);
+      this.#workflow === "reschedule" ? "rescheduling" : "booking", turn.turnId, now);
   }
   async correctionIntent(turn: FinalCallerTurn, external?: AbortSignal): Promise<VoiceIntent | undefined> {
     if (this.closed || this.#verificationRequired || turn.callId !== this.#config.receipt.callId || turn.sessionId !== this.#config.sessionId) return undefined;
@@ -463,7 +463,10 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     const result = await (!this.#staffActive && this.#owner instanceof ClinikoReschedulingSession ? this.#owner.effects.selectReschedulingMenu(query) : readDenied());
     if (result.ok && !query.signal.aborted && !this.closed && !this.#patientLifetime.signal.aborted) {
       this.#publicMenu = undefined;
-      if (result.value.kind === "targetSelected") { this.#reschedulingTargetSelected = true; this.#spokenMenu.clear(); }
+      if (result.value.kind === "targetSelected") {
+        this.#reschedulingTargetSelected = true; this.#spokenMenu.clear();
+        this.#searchMenu.rememberSource(query.turnId, result.value.snapshot);
+      }
       else this.#spokenMenu.consumed(query.turnId, query.choice);
     }
     else if (!query.signal.aborted) this.#spokenMenu.clear();

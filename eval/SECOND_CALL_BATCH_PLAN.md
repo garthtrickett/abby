@@ -14,8 +14,8 @@ Cliniko mutation payloads and call receipts.
 | 4 | Vanished slots with retained caller constraints | Implemented; E2E-333 passes seven signed synthetic journeys; merged in PR #423; local checks passed |
 | 5 | Follow-ups after a confirmed action, including canceling the old moved appointment | Implemented; E2E-334 passes eight signed synthetic journeys; merged in PR #424; local checks passed |
 | 6 | Partial menu repetition and incremental navigation | Implemented; E2E-335 passes seventeen signed synthetic journeys; merged in PR #425; local checks passed |
-| 7 | Compound weekday, time and date constraints | Implemented; E2E-336 passes thirteen signed synthetic journeys; publication pending |
-| 8 | Relative and source-relative dates and times | Pending |
+| 7 | Compound weekday, time and date constraints | Implemented; E2E-336 passes thirteen signed synthetic journeys; merged in PR #426; local checks passed |
+| 8 | Relative and source-relative dates and times | Implemented; E2E-337 passes nineteen signed synthetic journeys; publication pending |
 | 9 | Staff message additions and corrections saved in Cliniko | Pending |
 | 10 | Shared phones and changing patient identity | Pending |
 | 11 | Bounded pauses, writing time and reopening after goodbye | Pending |
@@ -322,3 +322,65 @@ a corrected complete command rejects the legacy window schema and accepts the
 new schema. Final source hashes include the native capability catalogue.
 
 Final `npm run typecheck`, `git diff --check` and signed PostgreSQL canary scans pass. Exact final source hashes and the qualified regression/focus scope are in `eval/baselines/second-call-batch-compound-final-v1.json`.
+
+
+PR #426 merged family 7 at `0dc2c94990f34757427d608ed03ef9d5c76c08c9`.
+The exact published head was `3d585d980b65f093d63ccd3995445e471aafad9d`.
+GitHub PR run 37572328386 failed before starting; check-run 112633498402
+reports account billing/spending limits. Push run 37572313757 was queued at the
+normal local-authorized merge and later failed before test execution. No CI pass is claimed.
+
+
+## Relative calendars and selected sources: E2E-337
+
+A bounded calendar parser now derives next-week, one/two-week, calendar-month,
+weekday and literal month/day/ISO reads from the clinic's date. A weekday stated
+with a date must agree. Invalid/past dates, month overflow and unknown qualifiers
+clarify rather than selecting an old option or dropping part of the request.
+Next week is the following Monday through Sunday; next weekday belongs to that
+week; plain weekday is the next occurrence. A month uses the corresponding
+calendar day, without clamping or guessing a different year.
+
+The protected move owner captures only the actual selected appointment's time,
+zone, expiry and selection turn. Its played receipt is required for “same time
+next week,” “same time on” an ISO date and a thirty-minute same-day shift. These
+are clinic-calendar and local-clock calculations, followed by the ordinary fresh
+Cliniko source/offer checks. Source facts stay transient and never enter model
+context. No patient grant, reference or previous-call claim can supply them.
+An unsent corrected move needs fresh offers, exact selection and a new separately
+played confirmation. Sent actions keep their actual outcome and cannot send again.
+
+The sixteen-journey baseline failed because each request triggered classifier
+HTTP; it establishes no later mutation/privacy verdict. Initial focus correctly
+stopped the month-away case at the approved 30-day clinic horizon. That test's
+expectation was corrected to assert the boundary and no search, preserving policy.
+The seventeen-journey related regression passed twelve tests (151901.847577 ms):
+
+```sh
+node --test --test-concurrency=2 test/voice/relative-booking-dates.test.ts test/voice/dated-window-corrections.test.ts test/voice/booking-search-windows.test.ts test/voice/compound-booking-constraints.test.ts test/voice/retained-availability-refresh.test.ts test/voice/played-menu-navigation.test.ts
+```
+
+It predates the final canceled-source and literal-date additions. Final focus
+passes six tests, nineteen signed journeys (61132.299988 ms), including the final
+compound/parser guard and manifest:
+
+```sh
+node --test --test-concurrency=2 test/voice/relative-booking-dates.test.ts test/voice/compound-booking-constraints.test.ts test/contract/scenario-manifest.test.ts
+```
+
+Actual provider query dates, POST/PATCH payloads, patient/source binding, receipts,
+model HTTP bodies and PostgreSQL canaries are inspected. Files: the bounded
+relative parser, played-search owner, call-flow selected-target seam, signed
+journeys, design/manifest E2E-337 (version 1.135, 337 IDs), contract and scoped
+baseline/evidence documents. The original corpus remains unchanged. No real
+carrier, mail, clinic activation or new real-model pass is claimed. Families
+9–18 remain pending. Exact source hashes and qualified run scope are retained in
+`eval/baselines/second-call-batch-relative-final-v1.json`.
+
+The initial final typecheck rejected an optional window spread that could carry
+`undefined` under exact optional properties. Narrowed the field before building
+the range, then reran nineteen signed relative-date journeys plus calendar and
+manifest guards: 3 pass, 0 fail, 46441.042885 ms. No date/window semantics changed.
+
+Final `npm run typecheck` passed (1m43s). Source hashes, real-call privacy scan
+and `git diff --check` passed on the final source.

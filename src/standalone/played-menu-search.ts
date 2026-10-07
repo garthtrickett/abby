@@ -7,6 +7,7 @@ import { bookingSearchLanguage } from "./booking-search-language.ts";
 import { clinicDateAt } from "./clinic-clock.ts";
 import { menuNavigationLanguage, menuNavigationQuery } from "./menu-navigation-language.ts";
 import type { BookingSearchWindow } from "../core/booking-search-window.ts";
+import { relativeBookingSearchLanguage } from "./relative-booking-search-language.ts";
 
 type Menu = Readonly<{ turnId: string; from: string; to: string; kind: "booking" | "rescheduling";
   snapshot: Pick<BookingMenuRead, "choices" | "timeZone" | "window"> }>;
@@ -17,23 +18,52 @@ export class PlayedMenuSearch {
   #menu: Menu | undefined;
   #callerWindow: BookingSearchWindow | null = null;
   #navigation: Readonly<{ turnId: string; callerWindow: BookingSearchWindow | null }> | undefined;
+  #source: Readonly<{ turnId: string; timeZone: string; choice: BookingMenuRead["choices"][number] }> | undefined;
   remember(menu: Menu): void {
     this.#callerWindow = structuredClone(this.#navigation?.turnId === menu.turnId ? this.#navigation.callerWindow : menu.snapshot.window ?? null);
     this.#navigation = undefined; this.#menu = structuredClone(menu);
   }
-  clear(): void { this.#menu = undefined; this.#navigation = undefined; this.#callerWindow = null; }
-  resolve(text: string, state: CallState, today: string, timeZone: string, kind: "booking" | "rescheduling", turnId: string): VoiceIntent | undefined {
+  rememberSource(turnId: string, snapshot: Pick<BookingMenuRead, "choices" | "timeZone">): void {
+    this.clear();
+    if (snapshot.choices.length === 1) this.#source = structuredClone({ turnId, timeZone: snapshot.timeZone, choice: snapshot.choices[0]! });
+  }
+  clear(): void { this.#menu = undefined; this.#navigation = undefined; this.#callerWindow = null; this.#source = undefined; }
+  resolve(text: string, state: CallState, today: string, timeZone: string, kind: "booking" | "rescheduling", turnId: string, now: string): VoiceIntent | undefined {
     const navigation = menuNavigationLanguage(text);
+    const relative = relativeBookingSearchLanguage(text, today);
     const refresh = /^(?:please )?(?:check (?:again|availability again)|refresh (?:the )?(?:times|options|availability))(?: please)?[.!?]*$/i.test(text.trim());
     const correction = callerCorrection(text, today);
     const request: ReturnType<typeof bookingSearchLanguage> = correction?.kind === "date" && correction.window !== undefined
       ? { kind: "window" as const, date: correction.date, window: correction.window } : bookingSearchLanguage(text, today);
-    if (!request && !refresh && !navigation) return undefined;
-    if (request?.kind === "ambiguous") return { kind: "clarify", reason: "menuAmbiguous" };
+    if (!request && !refresh && !navigation && !relative) return undefined;
+    if (request?.kind === "ambiguous" && !relative) return { kind: "clarify", reason: "menuAmbiguous" };
     const action = Object.values(state.actions).at(-1);
     if (action && action.kind !== "intake" && ["committed", "uncertain", "needsReview", "dispatched"].includes(action.status)) return { kind: "clarify", reason: "changeAfterSend" };
     const menu = this.#menu;
     const played = menu?.kind === kind && state.presentations[noticePresentationId(state.callId, menu.turnId)]?.status === "played";
+    if (relative && !(request?.kind === "window" && request.date)) {
+      if (relative.kind === "ambiguous") return { kind: "clarify", reason: "menuAmbiguous" };
+      let from: string, to: string, window: BookingSearchWindow | null;
+      if (relative.kind === "range") {
+        from = relative.from; to = relative.to;
+        window = relative.window === undefined ? this.#callerWindow : relative.window;
+      } else {
+        const source = this.#source;
+        if (kind !== "rescheduling" || !source || source.timeZone !== timeZone ||
+            state.presentations[noticePresentationId(state.callId, source.turnId)]?.status !== "played" || state.pendingPresentationId ||
+            !Number.isFinite(Date.parse(now)) || !Number.isFinite(Date.parse(source.choice.expiresAt)) || Date.parse(source.choice.expiresAt) <= Date.parse(now)) return denied;
+        const at = new Date(source.choice.startsAt);
+        if (!Number.isFinite(at.getTime()) || at.getUTCSeconds() || at.getUTCMilliseconds()) return denied;
+        const date = clinicDateAt(timeZone, at);
+        from = to = relative.date ?? new Date(Date.parse(`${date}T00:00:00.000Z`) + (relative.days ?? 0) * 86_400_000).toISOString().slice(0, 10);
+        const parts = new Intl.DateTimeFormat("en-AU", { timeZone, hour: "numeric", minute: "2-digit", hourCycle: "h23" }).formatToParts(at);
+        const minute = Number(parts.find(part => part.type === "hour")?.value) * 60 + Number(parts.find(part => part.type === "minute")?.value) + (relative.deltaMinute ?? 0);
+        if (from < today || !Number.isSafeInteger(minute) || minute < 0 || minute >= 1440) return { kind: "clarify", reason: "menuAmbiguous" };
+        window = { startMinute: minute, endMinute: minute + 1, startInclusive: true };
+      }
+      return kind === "booking" ? { kind: "bookingMenu", from, to, window } : { kind: "reschedulingMenu", stage: "offers", from, to, window,
+        ...(action?.kind === "reschedule" && action.status === "canceled" && this.#source ? { correcting: true as const } : {}) };
+    }
     if (navigation) {
       if (!played || !menu || state.pendingPresentationId || state.processedTurnIds.at(-1) !== menu.turnId) return denied;
       const query = menuNavigationQuery(navigation, menu, this.#callerWindow);
@@ -55,6 +85,7 @@ export class PlayedMenuSearch {
           ...(action?.kind === "reschedule" && action.status === "canceled" ? { correcting: true as const } : {}) };
     }
     if (!request) return undefined;
+    if (request.kind === "ambiguous") return { kind: "clarify", reason: "menuAmbiguous" };
     const current = played && !state.pendingPresentationId && state.processedTurnIds.at(-1) === menu.turnId;
     const requestOffer = action && "offer" in action.mutation.request ? action.mutation.request.offer : undefined;
     const correcting = played && action?.status === "canceled" &&
