@@ -1,0 +1,16 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "a8eaf820d5ca9d458b8afd478813510ac4b26980",
+  "families": [
+    12
+  ],
+  "scenarioIds": [
+    "E2E-341"
+  ],
+  "command": "node --test test/voice/external-appointment-claims.test.ts",
+  "pass": 1,
+  "fail": 1,
+  "durationMs": 14058.629167,
+  "signedJourneys": 17,
+  "finding": "All seventeen signed historical/external-change journeys failed the immediate no-classifier-HTTP assertion. Later cleanup, proof reuse, mutation/receipt and fresh-read assertions were not reached. Negative literal examples passed. The unexecuted post-claim classifier fixture and changed-time expectation were corrected before focus; those corrections do not alter this baseline finding."
+}
