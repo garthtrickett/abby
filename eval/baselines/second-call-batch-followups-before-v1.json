@@ -1,0 +1,16 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "40221d2c34f289dc02dfb53c1e4f482a8aca234b",
+  "families": [5],
+  "command": "node --test test/voice/post-action-followups.test.ts",
+  "pass": 0,
+  "fail": 1,
+  "durationMs": 32060.684842,
+  "signedJourneys": 8,
+  "observations": [
+    "After a real known or unknown move receipt, the complete 'So I'd like to cancel my old appointment, please' reached an owned final transcript but triggered classifier HTTP (3 to 4 requests).",
+    "After a known move, 'Please cancel my original appointment' bypassed the classifier but replied generically: Your appointment move is confirmed. I haven't made another change. Please contact the clinic to review it before trying another change.",
+    "Confirmed booking cancellation, don't-book and email-proof follow-ups and both unsent controls reported no assertion failures. No second mutation or false cancellation was observed.",
+    "The earlier incorrect move-slot fixture expectation is retained and qualified separately."
+  ]
+}

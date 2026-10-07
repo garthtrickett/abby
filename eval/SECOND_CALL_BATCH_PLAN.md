@@ -11,8 +11,8 @@ Cliniko mutation payloads and call receipts.
 | 1 | Repeated automated hold announcements, keypad scripts and outbound speech repetition | Implemented; E2E-331 passes thirteen signed synthetic journeys; merged in PR #421; local checks passed |
 | 2 | Questions and presence acknowledgements mistaken for consent | Existing exact confirmation preserved; direct E2E-331 offered-time, duration and presence questions pass; merged in PR #421; local checks passed |
 | 3 | Last-moment corrections before and after dispatch | Implemented; E2E-332 passes six signed synthetic journeys; merged in PR #422; local checks passed |
-| 4 | Vanished slots with retained caller constraints | Implemented; E2E-333 passes seven signed synthetic journeys; publication pending |
-| 5 | Follow-ups after a confirmed action, including canceling the old moved appointment | Pending |
+| 4 | Vanished slots with retained caller constraints | Implemented; E2E-333 passes seven signed synthetic journeys; merged in PR #423; local checks passed |
+| 5 | Follow-ups after a confirmed action, including canceling the old moved appointment | Implemented; E2E-334 passes eight signed synthetic journeys; publication pending |
 | 6 | Partial menu repetition and incremental navigation | Pending |
 | 7 | Compound weekday, time and date constraints | Pending |
 | 8 | Relative and source-relative dates and times | Pending |
@@ -151,3 +151,48 @@ node --test --test-concurrency=2 test/voice/retained-availability-refresh.test.t
 Final `npm run typecheck`, `git diff --check` and patient-data canary scan pass.
 Exact commands, scope and source hashes are in
 `eval/baselines/second-call-batch-refresh-final-v1.json`.
+
+PR #423 merged family 4 at `40221d2c34f289dc02dfb53c1e4f482a8aca234b`. Its queued GitHub runs later failed before starting: check-run 112620546452 cites account billing/spending limits. Runs 37568161891 (PR) and 37568157811 (push) supplied no test execution evidence. No CI pass is claimed.
+
+## Post-action follow-ups: E2E-334
+
+A bounded complete request to cancel the old/original/previous appointment now
+selects a receipt explanation. A committed move explains that the source was
+moved and the replacement was not canceled. The explanation reads the actual
+call action kind/status; caller wording cannot establish a successful move.
+Unknown actions retain their unknown receipt and clinic-contact path, while
+unsent or absent actions require a fresh target check. No second write, model
+prompt change, notification delivery or saved patient context is introduced.
+
+The corrected before observation found classifier HTTP on “cancel my old
+appointment” and generic wording on “cancel my original appointment.” The
+initial move fixture expected the booking fixture's time, so it failed before
+three follow-ups and is separately qualified. Existing confirmed-booking
+reversals and email-proof questions passed their direct baseline controls.
+
+Files: core clarification/reason, bounded appointment language and trusted
+intent mapping, the new voice journeys, design/manifest E2E-334 (version 1.132,
+334 IDs), contract and evidence/plan documents. Eight signed journeys inspect
+owned final transcripts, actual POST/PATCH payloads, receipt/effect preservation,
+model HTTP and a clean durable PostgreSQL patient-data scan. Additional guard
+checks reject negation, quotation, mixed changes and guessed move status.
+
+Focused eight-journey test: 1 pass / 0 fail (37285.551655 ms). Final related
+regression: 7 pass / 0 fail (61085.103342 ms). Its invocation included an incorrect
+nonexistent appointment-change test filename; Node did not execute that path.
+The actual guard was then run separately, with 1 pass / 0 fail
+(23983.154713 ms):
+
+```sh
+node --test --test-concurrency=2 test/voice/post-action-followups.test.ts test/voice/notification-outcome-query.test.ts test/voice/appointment-change-language.test.ts test/voice/final-negative-corrections.test.ts test/contract/scenario-manifest.test.ts
+node --test test/voice/appointment-change-intent.test.ts
+```
+
+The one-possible-send policy still requires the caller to contact the clinic
+for a further change after an action was sent. Dated old-appointment references
+use the existing generic sent-action boundary; only explicit old/original/
+previous wording receives the new source/replacement explanation. No real
+carrier, clinic activation, email or new real-model pass is claimed. Families
+6–18 remain pending.
+
+Final `npm run typecheck`, `git diff --check` and patient-data canary scan pass. Exact source hashes and validation scope are in `eval/baselines/second-call-batch-followups-final-v1.json`.

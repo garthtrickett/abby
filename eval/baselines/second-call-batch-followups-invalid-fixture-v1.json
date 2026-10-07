@@ -1,0 +1,14 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "40221d2c34f289dc02dfb53c1e4f482a8aca234b",
+  "families": [5],
+  "command": "node --test test/voice/post-action-followups.test.ts",
+  "pass": 0,
+  "fail": 1,
+  "durationMs": 29917.725035,
+  "scope": "Invalid rescheduling fixture expectation, not a follow-up behavior verdict.",
+  "observations": [
+    "All three sent move journeys stopped before their follow-up: the actual selected synthetic move slot is 05:00 UTC, while the test incorrectly expected the booking fixture's 04:00 UTC.",
+    "The five other journeys did not report assertion failures. Production source was unchanged. The corrected baseline must reach and inspect each follow-up."
+  ]
+}
