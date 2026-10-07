@@ -6,7 +6,7 @@ import { clearAffirmation } from "../voice/voice-session.ts";
 import type { ClinikoCallFlow, ClinikoWorkflow } from "./cliniko-call-flow.ts";
 import { clinicDateAt, clinicDayStartUtc } from "./clinic-clock.ts";
 import { callerCorrection } from "./caller-correction.ts";
-import { appointmentChangeLanguage } from "./appointment-change-language.ts";
+import { appointmentChangeLanguage, oldAppointmentCancellation } from "./appointment-change-language.ts";
 import { explicitUrgentRequest } from "./urgent-request-language.ts";
 import { notificationQuestion } from "./notification-question-language.ts";
 import { clinicalAdviceBoundary, publicInformationLanguage } from "./clinic-information-language.ts";
@@ -225,6 +225,7 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     const publicTopic = publicInformationLanguage(turn.text);
     if (publicTopic) return publicAnswer(publicTopic, signal);
     if (!before.callerIdentityDenied) {
+      if (oldAppointmentCancellation(turn.text)) return ok({ kind: "clarify", reason: "oldAppointmentAfterMove" });
       // Confirmation is an exact caller utterance over an actually played SAM
       // prompt. The model cannot decide that "yes" grants an action or retry.
       if (clearAffirmation(turn.text)) {

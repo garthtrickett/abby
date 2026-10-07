@@ -3,6 +3,14 @@ import type { MenuClarificationReason } from "../core/model.ts";
 type Request = Readonly<{ kind: "request"; operation: "cancel" | "reschedule"; choice?: 1 | 2 | 3 }>;
 type Clarification = Readonly<{ kind: "clarify"; reason: MenuClarificationReason }>;
 
+/** An explicit old/original target is a receipt question after a move, never
+ * permission to cancel the replacement. Negated, quoted and mixed requests
+ * cannot match this complete utterance. */
+export function oldAppointmentCancellation(text: string): boolean {
+  const value = text.toLowerCase().replace(/[’]/g, "'").replace(/[,.!?]/g, " ").replace(/\s+/g, " ").trim();
+  return /^(?:so )?(?:(?:please|could you|can you|i (?:want|need|would like) to|i'd like to) )?cancel (?:my|the) (?:old|original|previous) (?:appointment|booking|visit)(?: please)?$/.test(value);
+}
+
 /** Bounded operation syntax. A classifier cannot turn questions, disagreement,
  * mixed operations or patient reassignment into cancellation authority. */
 export function appointmentChangeLanguage(text: string): Request | Clarification | undefined {

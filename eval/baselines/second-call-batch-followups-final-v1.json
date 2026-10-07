@@ -1,0 +1,57 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "40221d2c34f289dc02dfb53c1e4f482a8aca234b",
+  "families": [
+    5
+  ],
+  "scenarioIds": [
+    "E2E-334"
+  ],
+  "sourceFiles": {
+    "src/core/clarification.ts": "bbe1754851930ec5c019b6c31d6f8f00d71ffe23fd582f601c554b598c0df309",
+    "src/core/model.ts": "ae4212acaf458f1621cfe1b1946e1054db4f7314e33d866914be5b064bad4f0c",
+    "src/standalone/appointment-change-language.ts": "6c055e6bfe0bf94f36896ba68345239192b434ef4bc0a502170c8fe5407ef8a1",
+    "src/standalone/openai-clinical-intent.ts": "9d74a159cdf59e314e96d7065e124ca152272a1a6f893f61a3e88f39a9615303",
+    "test/voice/post-action-followups.test.ts": "db51fdd3cfcb837c1c9b0b44f86e3a9aa2c977a5ae55a9e2073649ecc0f15ac6",
+    "test/contract/scenario-manifest.test.ts": "c1adf6013a466adf9d142c3633209cc5715aab9655ec838c8ccea26148e2bff8"
+  },
+  "beforeReport": "eval/baselines/second-call-batch-followups-before-v1.json",
+  "fixtureReview": "eval/baselines/second-call-batch-followups-invalid-fixture-v1.json",
+  "focused": {
+    "command": "node --test test/voice/post-action-followups.test.ts",
+    "pass": 1,
+    "fail": 0,
+    "signedJourneys": 8,
+    "durationMs": 37285.551655,
+    "scope": "before additional receipt/negation guard test and patient-payload assertion"
+  },
+  "finalRegression": {
+    "command": "node --test --test-concurrency=2 test/voice/post-action-followups.test.ts test/voice/notification-outcome-query.test.ts test/voice/appointment-change-language.test.ts test/voice/final-negative-corrections.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 7,
+    "fail": 0,
+    "durationMs": 61085.103342,
+    "scope": "Four existing test files executed. Incorrect nonexistent appointment-change-language.test.ts argument did not run; actual guard checked separately."
+  },
+  "changeIntentRegression": {
+    "command": "node --test test/voice/appointment-change-intent.test.ts",
+    "pass": 1,
+    "fail": 0,
+    "durationMs": 23983.154713
+  },
+  "finalTypecheck": {
+    "command": "npm run typecheck",
+    "exitCode": 0
+  },
+  "diffCheck": {
+    "command": "git diff --check",
+    "exitCode": 0
+  },
+  "privacyCanaryScan": "passed",
+  "originalCorpus": "45 cases unchanged",
+  "limits": [
+    "One possible send per call remains; no second cancellation, send retry or notification delivery.",
+    "Only explicit old/original/previous wording uses the new source/replacement explanation; dated references retain the generic sent-action boundary.",
+    "Synthetic speech, mail, permissions and Cliniko; no real carrier/clinic activation or new real-model pass.",
+    "Families 6\u201318 remain open."
+  ]
+}
