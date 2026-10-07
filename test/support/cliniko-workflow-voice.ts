@@ -180,7 +180,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         await voiceUntil(() => sent.filter(item => item.event === "mark").length > marks || failures.length > 0, "private registration prompt");
         assert.deepEqual(failures, []);
       },
-      async turn(text: string, options: { expectedFailure?: "confirmationMissing" | "staleGeneration"; interrupt?: boolean } = {}) {
+      async turn(text: string, options: { expectedFailure?: "confirmationMissing" | "staleGeneration" | "automatedCallUnavailable"; interrupt?: boolean } = {}) {
         const marks = sent.filter(item => item.event === "mark").length, clears = sent.filter(item => item.event === "clear").length;
         const interruptedMark = sent.filter(item => item.event === "mark").at(-1)?.mark;
         const pending = text === "Yes" && !options.expectedFailure

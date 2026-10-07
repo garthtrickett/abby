@@ -1,0 +1,27 @@
+{
+  "schema": "abby.second-call-batch-baseline.v1",
+  "baseCommit": "11c6e7236b17636c9bbdc9583f21c43259768de1",
+  "uncommittedSource": "initial unattended guard plus cleanup, before batched hold and banking preamble recognition",
+  "command": "node --test test/voice/automated-call-consent.test.ts",
+  "result": "fail",
+  "durationMs": 31310.581774,
+  "testSha256": "2c9988aa9f6407f051b0babd9c1c9c3c1a682e444b75360e090e4f5ea1583d1c",
+  "guardSha256": "e43af7d1f8eeaccc909529dd65d1c7d73f230809ca8248ee30add283aa65ce45",
+  "observations": [
+    {
+      "mode": "batchedHold",
+      "assertion": "recognized script must not reach the model",
+      "expectedRequests": 2,
+      "actualRequests": 3
+    },
+    {
+      "mode": "bank",
+      "assertion": "recognized script must not reach the model",
+      "expectedRequests": 2,
+      "actualRequests": 3
+    }
+  ],
+  "limitations": [
+    "Synthetic wording recognizer coverage; no claim that a mutation occurred or that speaker identity is known."
+  ]
+}
