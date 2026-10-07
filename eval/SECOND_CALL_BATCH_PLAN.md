@@ -23,8 +23,8 @@ Cliniko mutation payloads and call receipts.
 | 13 | Private intake spelling and field repairs | Merged PR #432; sixteen signed private-intake journeys |
 | 14 | Payment, deposit, currency, refund and insurance evidence | Merged PR #433; thirty-two signed financial-evidence journeys |
 | 15 | Clinical request boundaries and approved routing | Merged PR #434; twenty-four signed clinical-boundary journeys |
-| 16 | Conflicting public facts and unusable arrival instructions | Implemented; E2E-345 passes twenty-two signed journeys; publication pending |
-| 17 | Practitioner and service preferences, history and duration | Pending |
+| 16 | Conflicting public facts and unusable arrival instructions | Merged PR #435; twenty-two signed arrival/public-fact journeys |
+| 17 | Practitioner and service preferences, history and duration | Implemented; E2E-346 passes twenty-one signed journeys; publication pending |
 | 18 | Home visits, classes, telehealth and practitioner changes | Pending |
 
 Each family needs a baseline observation, implementation where needed, focused
@@ -720,3 +720,38 @@ approved paragraph remain the operator's content responsibility. Original
 activation or a new real-model pass. Families 17–18 remain open. Typecheck follows.
 
 Final `npm run typecheck` passed (1m34s). Exact source hashes, synthetic privacy scan and `git diff --check` passed. No CI pass claimed. PR #434 Actions 37582572516/37582566669 failed before steps; check112665365165 reports account payments/spending limit.
+
+PR #435 merged at `92cfd9eed518e4a1aa8d12f8318180238144ca15` on 2026-10-07 06:44:45 UTC. Exact branch HEAD `f7ed7d9e30340de7e5b98a2533555206bbd9f9f8`: Actions 37583198848 (pull_request) was queued and 37583193286 (push) completed failure at merge. No CI pass claimed; normal local-check merge was operator-authorized.
+
+## Practitioner and service constraints: E2E-346
+
+Complete unsupported gender, history, style, ranking, service and duration
+requests now use negative existing notices before a classifier can guess a default
+booking. No gender is inferred from a name, alias from spelling, previous provider
+from familiarity, treatment style from a comparison or service from symptoms.
+Exact independently approved names and any-practitioner search retain the existing
+native cohort. Three new positive signed journeys inspect the exact practitioner,
+location, type, approved spoken duration, final confirmation and one provider send.
+
+Baseline: 0 pass, 1 fail, 18734.102289 ms. Fourteen journeys reached actual
+classifier HTTP; later assertions were not reached. Seven cases passed within the
+aggregate: canonical primary/alternate and any-practitioner sends, unknown alias,
+private prior-practitioner message, existing male-name rejection and duration
+boundary. Focus: 2 pass, 0 fail, 18238.523911 ms; twenty-one signed journeys.
+Final regression: 8 pass, 0 fail, 76148.41755 ms.
+
+```sh
+node --test --test-concurrency=2 test/voice/preference-service-boundaries.test.ts test/voice/approved-booking-search.test.ts test/voice/appointment-change-intent.test.ts test/voice/public-service-guidance.test.ts test/contract/scenario-manifest.test.ts
+```
+
+Manifest 1.144, 346 IDs. No new catalogue metadata, gender/alias/history source,
+clinical recommendation, duration/type switching, provider operation, positive
+patient authority, durable patient field, dependency or repository configuration.
+Complete bounded phrases only. Original 45-case corpus unchanged; synthetic
+evidence is not live carrier/mail/clinic activation or a new real-model pass.
+Family18 remains open. Typecheck follows.
+
+PR #435 push Actions 37583193286 failed before steps. Check112667324644 reports
+account payments/spending limit; no CI pass claimed.
+
+Final `npm run typecheck` passed (2m03s). Exact source hashes, synthetic privacy scan and `git diff --check` passed. No CI pass claimed.
