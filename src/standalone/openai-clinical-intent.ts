@@ -211,13 +211,16 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     if (explicitUrgentRequest(turn.text)) return ok({ kind: "handoff", reason: "potentiallyUrgent", staffWorkUnavailable: true, checkedAt: before.now });
     if (isPresenceQuestion(turn.text)) return ok({ kind: "presence" });
     if (isMissedCallQuestion(turn.text)) return ok({ kind: "missedCall" });
+    const boundary = before.callerIdentityDenied ? undefined : requestBoundaryLanguage(turn.text);
+    // A bare external-change claim cannot silently replace a private draft.
+    // Explicit message prefixes still keep literal message content private.
+    if (boundary === "externalAppointmentChange") return ok({ kind: "requestBoundary", reason: boundary });
     if (!before.callerIdentityDenied && staffMessageLanguage(turn.text, config.owner.collectingStaffMessage)) return ok({ kind: "staffRequest" });
     const clinicalAdvice = clinicalAdviceBoundary(turn.text);
     if (clinicalAdvice) return ok(clinicalAdvice);
     if (!before.callerIdentityDenied) {
       const staff = staffRequestLanguage(turn.text);
       if (staff) return ok(staff);
-      const boundary = requestBoundaryLanguage(turn.text);
       if (boundary) return ok({ kind: "requestBoundary", reason: boundary });
       if (bookingHorizonLanguage(turn.text)) return ok({ kind: "bookingHorizon" });
       if (notificationQuestion(turn.text)) return ok({ kind: "notificationOutcome" });

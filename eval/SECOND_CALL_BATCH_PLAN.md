@@ -18,8 +18,8 @@ Cliniko mutation payloads and call receipts.
 | 8 | Relative and source-relative dates and times | Merged PR #427; nineteen signed relative-date journeys |
 | 9 | Staff message additions and corrections saved in Cliniko | Merged PR #428; twenty-one signed message journeys |
 | 10 | Shared phones and changing patient identity | Merged PR #429; seventeen signed identity journeys |
-| 11 | Bounded pauses, writing time and reopening after goodbye | Implemented; E2E-340 passes fourteen signed journeys; publication pending |
-| 12 | External appointment changes and previous-call claims | Pending |
+| 11 | Bounded pauses, writing time and reopening after goodbye | Merged PR #430; fourteen signed pause/goodbye journeys |
+| 12 | External appointment changes and previous-call claims | Implemented; E2E-341 passes eighteen signed journeys; publication pending |
 | 13 | Private intake spelling and field repairs | Pending |
 | 14 | Payment, deposit, currency, refund and insurance evidence | Pending |
 | 15 | Clinical request boundaries and approved routing | Pending |
@@ -508,3 +508,44 @@ not changed. A focus and typecheck on that exact source follow.
 Exact notice-kind source focus: 10 pass, 0 fail, 25750.760539 ms; all fourteen signed journeys, timing/negative guards and manifest contract pass.
 
 Final `npm run typecheck` passed (1m10s). Exact source hashes, scoped privacy scan and `git diff --check` pass. No real-model or CI success is claimed. Families 12–18 remain open.
+
+PR #430 merged at `a8eaf820d5ca9d458b8afd478813510ac4b26980` on 2026-10-07 05:43:35 UTC. Exact branch HEAD `915f24e4593469b02fd76dc3f9b662620629b047`: Actions 37577722942 (pull_request) and 37577707521 (push) were queued at merge and still queued at the last check. No CI pass is claimed. Normal local-check merge was operator-authorized.
+
+## External and previous-call changes: E2E-341
+
+Complete literal claims about an appointment changed online, directly with a
+provider, or on an earlier call cannot start default booking inference or
+confirm a past outcome. A started online booking is also treated as unverified.
+The existing negative request boundary clears unsent proposals, source/menu
+owners, private message drafts and old proof. Known and unknown actual sends
+keep their earlier receipt and cannot repeat. The guard precedes private draft
+capture; explicitly prefixed message content continues as private content.
+
+Current appointment checks require a separately explicit enquiry and fresh
+read-specific verification, policy and Cliniko evidence. Signed evidence shows
+current records, empty results, changed clocks, denied permission and provider
+failure after an earlier played menu; no past claim selects or mutates a future
+target. No durable appointments or previous-call state, new write path or
+positive patient authority.
+
+Baseline: 1 pass, 1 fail, 14058.629167 ms; all seventeen signed journeys failed
+immediate actual-model-HTTP assertions. Later assertions were not reached.
+First focus: 1 pass, 1 fail, 15964.712191 ms; only the new unknown-outcome
+wording assertion was wrong and was corrected to the existing exact receipt.
+Related regression: 9 pass, 0 fail, 52747.450004 ms, before the final draft
+precedence refinement and eighteenth signed journey.
+
+```sh
+node --test --test-concurrency=2 test/voice/external-appointment-claims.test.ts test/voice/appointment-enquiries.test.ts test/voice/booking-request-boundaries.test.ts test/text/request-boundary.test.ts test/contract/scenario-manifest.test.ts
+node --test --test-concurrency=2 test/voice/external-appointment-claims.test.ts test/voice/staff-message-corrections.test.ts test/contract/scenario-manifest.test.ts
+```
+
+Final source focus: 4 pass, 0 fail, 36652.523689 ms; eighteen signed claims and
+existing private-message regression. Manifest 1.139, 341 IDs. Exact provider
+read/write counts, fresh mail proof, code revocation, earlier receipts, current
+clock/empty/failure replies and durable PostgreSQL canaries are checked.
+Scoped evidence: `eval/baselines/second-call-batch-external-final-v1.json`.
+No model prompt revision, general past-call understanding, live mail delivery,
+real carrier or clinic activation. Families 13–18 remain open.
+
+Final `npm run typecheck` passed (1m52s). Exact source hashes, synthetic privacy scan and `git diff --check` passed. Publication follows the operator-authorized local-check merge policy; no CI pass is claimed.

@@ -1,0 +1,56 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "a8eaf820d5ca9d458b8afd478813510ac4b26980",
+  "families": [
+    12
+  ],
+  "scenarioIds": [
+    "E2E-341"
+  ],
+  "sourceFiles": {
+    "src/core/request-boundary.ts": "3dfbfdf5ae9813e67e28d98df8ca04a944a6d9d40a494f339142164fcc0a1bc0",
+    "src/standalone/request-boundary-language.ts": "6d6d8b8c018f679c69c5e18e2d04e4d4e83f66223a796bb7c627e17039e44387",
+    "src/standalone/openai-clinical-intent.ts": "0289da9771fcbe176be59e3ffb0981c203cc566940a3148bcf36ef945aab0d63",
+    "test/voice/external-appointment-claims.test.ts": "b5dbe5eef4b5e74f40cc565ea8bd8468b154efa8935662b33e4929bc69e5aacc",
+    "test/contract/scenario-manifest.test.ts": "1e8f2cb52be751500d16a214ab49966c42d2450fa05ca3c089722f1f64e03fe2"
+  },
+  "beforeReport": "eval/baselines/second-call-batch-external-before-v1.json",
+  "initialFocus": {
+    "command": "node --test test/voice/external-appointment-claims.test.ts",
+    "pass": 1,
+    "fail": 1,
+    "durationMs": 15964.712191,
+    "scope": "Only a new assertion expected unknown-booking wording instead of the existing exact unknown-action receipt. Corrected test only; no receipt behavior changed."
+  },
+  "regression": {
+    "command": "node --test --test-concurrency=2 test/voice/external-appointment-claims.test.ts test/voice/appointment-enquiries.test.ts test/voice/booking-request-boundaries.test.ts test/text/request-boundary.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 9,
+    "fail": 0,
+    "durationMs": 52747.450004,
+    "signedJourneys": 17,
+    "scope": "Before literal external-change guard moved ahead of private draft capture and an eighteenth signed draft journey."
+  },
+  "finalFocus": {
+    "command": "node --test --test-concurrency=2 test/voice/external-appointment-claims.test.ts test/voice/staff-message-corrections.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 4,
+    "fail": 0,
+    "durationMs": 36652.523689,
+    "signedJourneys": 18
+  },
+  "privacyCanaryScan": "passed",
+  "originalCorpus": "45 cases unchanged",
+  "limits": [
+    "Bounded complete literal external or previous-call changes and started-online-booking claims; no general NLP understanding or recovery of earlier call state.",
+    "Claims select only an existing negative boundary: unsent proposals, private source/menu/draft owners and proof are cleared; known/unknown sent receipts remain truthful and at most one mutation attempt is possible.",
+    "A fresh current enquiry requires a separately explicit read request and new read-specific verification and approval; missing records do not prove cancellation, failed/revoked/changed reads cannot reuse older menus.",
+    "No new positive patient permission, receipt, appointment matching, provider mutation or durable patient field; explicit message prefixes continue as private literal content.",
+    "Synthetic signed voice/provider/mail/approval only; no real carrier, clinic activation, live mail delivery or new real-model pass.",
+    "Families 13\u201318 remain open."
+  ],
+  "finalTypecheck": {
+    "command": "npm run typecheck",
+    "result": "passed",
+    "durationSeconds": 112
+  },
+  "diffCheck": "passed"
+}
