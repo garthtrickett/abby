@@ -1,0 +1,55 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "e58b1e342260fef372b5f573afaf142e7edec416",
+  "families": [
+    4
+  ],
+  "scenarioIds": [
+    "E2E-333"
+  ],
+  "sourceFiles": {
+    "src/standalone/played-menu-search.ts": "4d37309833175c8c35c7d53c02d77208fc5109c255efdb1155158a40be30dafc",
+    "src/standalone/cliniko-rescheduling-menu.ts": "d4e657f5d10bc1da87293f7bac806a22fb2cf0fa88d67f55925b13f99a1c75d8",
+    "test/voice/retained-availability-refresh.test.ts": "ef8d6f1b490dd35e0d28d6206cc0986b051d7c85e08444a21ad911ebd96b89cc",
+    "test/contract/scenario-manifest.test.ts": "4001dde39fd7309b3285601ea890bb1d2b9319c4f69fb8a68565c45d46a587f2"
+  },
+  "beforeReport": "eval/baselines/second-call-batch-refresh-actual-before-v1.json",
+  "fixtureReview": "eval/baselines/second-call-batch-refresh-fixture-review-v1.json",
+  "focused": {
+    "command": "node --test test/voice/retained-availability-refresh.test.ts",
+    "pass": 1,
+    "fail": 0,
+    "signedJourneys": 7,
+    "durationMs": 23880.481118,
+    "scope": "before explicit previous-selection guard"
+  },
+  "regression": {
+    "command": "node --test --test-concurrency=2 test/voice/retained-availability-refresh.test.ts test/voice/stale-menu-recovery.test.ts test/voice/booking-search-windows.test.ts test/voice/approved-booking-search.test.ts test/cliniko/rescheduling-session.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 18,
+    "fail": 0,
+    "durationMs": 103974.988766,
+    "scope": "before final explicit previous-selection guard"
+  },
+  "finalRegression": {
+    "command": "node --test --test-concurrency=2 test/voice/retained-availability-refresh.test.ts test/cliniko/rescheduling-session.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 12,
+    "fail": 0,
+    "durationMs": 33242.46397
+  },
+  "finalTypecheck": {
+    "command": "npm run typecheck",
+    "exitCode": 0
+  },
+  "diffCheck": {
+    "command": "git diff --check",
+    "exitCode": 0
+  },
+  "privacyCanaryScan": "passed",
+  "originalCorpus": "45 cases unchanged",
+  "limits": [
+    "Only bounded caller-requested refresh; no automatic retry or new send authority.",
+    "Only an exact immediately preceding consumed selection can recover a rescheduling source, after proof and source revalidation.",
+    "Synthetic speech, Cliniko, mail and approval; no real carrier/clinic activation or new real-model pass.",
+    "Families 5\u201318 remain open."
+  ]
+}

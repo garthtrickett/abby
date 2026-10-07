@@ -1,0 +1,43 @@
+{
+  "schema": "abby.second-call-batch-baseline.v1",
+  "baseCommit": "e58b1e342260fef372b5f573afaf142e7edec416",
+  "command": "node --test test/voice/retained-availability-refresh.test.ts",
+  "status": "fail",
+  "durationMs": 19124.200708,
+  "sourceFiles": {
+    "src/standalone/played-menu-search.ts": "a0dbbf2e3f5d48f8c2352bba3efd9b1361f369d87f74238c0ee4b700ee933931",
+    "src/standalone/cliniko-rescheduling-menu.ts": "deadf14678ab148b8acf61a7a494968c6d3a3b5dd5e8e2517ceac58f22fd35b8",
+    "test/voice/retained-availability-refresh.test.ts": "1aa05b3fbd6ebece8539bb11e2f5648f7abdf90348c24e2755788215df8e1492"
+  },
+  "qualifies": "eval/baselines/second-call-batch-refresh-before-v1.json",
+  "qualification": "The earlier model counter measured resolver invocations, not actual model HTTP. This baseline captures the actual synthetic fetch and provider queries independently.",
+  "observations": [
+    {
+      "modes": [
+        "book",
+        "empty",
+        "unplayed"
+      ],
+      "actual": "After a vanished November offer, Please check again increments actual model HTTP from 2 to 3 and searches October 16 at business 11 / practitioner 23.",
+      "intended": "Fresh availability within November 2\u20138 and the afternoon window; no guessed dates."
+    },
+    {
+      "modes": [
+        "move"
+      ],
+      "actual": "Actual model HTTP increases from 3 to 4; no availability reread occurs after vanished selection.",
+      "intended": "Reread a fresh target and the same constrained November availability."
+    },
+    {
+      "modes": [
+        "noPrevious"
+      ],
+      "actual": "One guessed-date provider search occurs without a prior played search.",
+      "intended": "Clarify without provider work."
+    }
+  ],
+  "limits": [
+    "No unauthorized mutation was observed.",
+    "Synthetic voice/provider/mail/approval; no real carrier or clinic evidence."
+  ]
+}

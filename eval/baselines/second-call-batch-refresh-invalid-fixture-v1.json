@@ -1,0 +1,17 @@
+{
+  "schema": "abby.second-call-batch-invalid-fixture.v1",
+  "status": "invalidFixture",
+  "attempts": [
+    {
+      "durationMs": 12013.984022,
+      "issue": "Combined practitioner/location preference was not supported syntax; month-long initial search exceeded bounded reader range."
+    },
+    {
+      "durationMs": 12450.702193,
+      "issue": "Empty preference-search disclosure lacks with wording; initial month-long search exceeded bounded reader range."
+    }
+  ],
+  "testSha256BeforeRepair": "879da319fdc26182c1e81fb65e46b3cc93a00baae57a9442bc1351008da71a4f",
+  "clinicalVerdict": "Neither run established an initially offered November slot; neither is evidence about vanished-slot recovery. The no-previous refresh did perform an unrequested guessed-date search.",
+  "repair": "Use separate existing preference syntax, actual empty-search disclosure, and an explicit November 2\u20138 bounded search; keep October distractors."
+}

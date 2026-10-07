@@ -1,0 +1,36 @@
+{
+  "schema": "abby.second-call-batch-baseline.v1",
+  "baseCommit": "e58b1e342260fef372b5f573afaf142e7edec416",
+  "command": "node --test test/voice/retained-availability-refresh.test.ts",
+  "status": "fail",
+  "durationMs": 12769.601573,
+  "sourceFiles": {
+    "src/standalone/played-menu-search.ts": "a0dbbf2e3f5d48f8c2352bba3efd9b1361f369d87f74238c0ee4b700ee933931",
+    "src/standalone/cliniko-rescheduling-menu.ts": "deadf14678ab148b8acf61a7a494968c6d3a3b5dd5e8e2517ceac58f22fd35b8",
+    "test/voice/retained-availability-refresh.test.ts": "1b8b45ce988b35c1a810df72720ad6c2a5af99b1040012f4c683df33ff571c42"
+  },
+  "observations": [
+    {
+      "modes": [
+        "book",
+        "empty",
+        "move",
+        "unplayed"
+      ],
+      "actual": "Please check again reaches the model after an actually offered November slot disappears; model count increases from 6 to 7.",
+      "intended": "Fresh host availability within the previously played November 2\u20138 range and afternoon window, using existing practitioner/location authority."
+    },
+    {
+      "modes": [
+        "noPrevious"
+      ],
+      "actual": "Please check again with no previous menu performs one guessed-date availability search.",
+      "intended": "Clarify without guessing a date or searching."
+    }
+  ],
+  "limits": [
+    "Earlier invalid fixture runs are preserved separately.",
+    "This baseline proves classifier fallthrough, not an unauthorized mutation or an automatic retry.",
+    "Synthetic speech, mail, approvals and Cliniko only."
+  ]
+}
