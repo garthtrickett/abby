@@ -1,0 +1,15 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "69982b2b4d90599d0706b3b575180b612cee0e75",
+  "families": [7],
+  "command": "node --test test/voice/compound-booking-constraints.test.ts",
+  "pass": 0,
+  "fail": 1,
+  "durationMs": 13487.226897,
+  "signedJourneys": 11,
+  "observations": [
+    "Clock OR, weekday-plus-clock, per-date clock alternatives, move and refresh cases reached owned final requests but made no new availability read.",
+    "Weekday OR, excluded Friday, date OR and an unresolved weekday alternative triggered classifier HTTP (2 to 3 requests).",
+    "The malformed AND and unplayed controls reported no assertion failures. Positive journeys failed before later write/selection/privacy assertions, so these establish no baseline mutation or privacy verdict."
+  ]
+}

@@ -1,5 +1,6 @@
 import type { BookingMenuRead } from "../core/booking-menu.ts";
 import type { BookingSearchWindow } from "../core/booking-search-window.ts";
+import { intersectBookingSearchWindow } from "../core/booking-search-window.ts";
 import { clinicDateAt } from "./clinic-clock.ts";
 
 type Navigation = Readonly<{ kind: "all" | "later" }> | Readonly<{ kind: "choice"; index: number }> |
@@ -46,9 +47,9 @@ export function menuNavigationQuery(request: Navigation, menu: Menu, callerWindo
     if (at.getUTCSeconds() || at.getUTCMilliseconds()) return ambiguous;
     const clock = new Intl.DateTimeFormat("en-AU", { timeZone, hour: "numeric", minute: "2-digit", hourCycle: "h23" }).formatToParts(at);
     const minute = Number(clock.find(part => part.type === "hour")?.value) * 60 + Number(clock.find(part => part.type === "minute")?.value);
-    const date = clinicDateAt(timeZone, at), endMinute = Math.min(request.kind === "choice" ? minute + 1 : 1440, callerWindow?.endMinute ?? 1440);
-    if (!Number.isSafeInteger(minute) || minute >= endMinute) return { kind: "clarify", reason: "menuRejected" } as const;
-    return { kind: "read" as const, from: date, to: date,
-      window: { startMinute: minute, endMinute, startInclusive: request.kind === "choice" } };
+    const date = clinicDateAt(timeZone, at), endMinute = request.kind === "choice" ? minute + 1 : 1440;
+    const window = Number.isSafeInteger(minute) && minute < endMinute
+      ? intersectBookingSearchWindow(callerWindow, { startMinute: minute, endMinute, startInclusive: request.kind === "choice" }) : undefined;
+    return window ? { kind: "read" as const, from: date, to: date, window } : { kind: "clarify", reason: "menuRejected" } as const;
   } catch { return ambiguous; }
 }

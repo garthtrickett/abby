@@ -1,4 +1,4 @@
-import { validBookingSearchWindow } from "../core/booking-search-window.ts";
+import { copyBookingSearchWindow, validBookingSearchWindow } from "../core/booking-search-window.ts";
 import type { BookingSearchWindow } from "../core/booking-search-window.ts";
 import type { BookingEvidenceHost, BookingMenuHost, BookingMenuQuery, BookingMenuReadQuery, HostEffects, HostReadFailure } from "../core/host.ts";
 import type { BookingMenuRead } from "../core/booking-menu.ts";
@@ -54,7 +54,7 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
     const query = structuredClone({ ...incoming, signal: undefined }) as Omit<BookingMenuReadQuery, "signal">;
     if (query.preference !== undefined && !validBookingSearchPreference(query.preference)) return denied();
     if (query.window !== undefined && query.window !== null && !validBookingSearchWindow(query.window)) return denied();
-    if (query.window !== undefined) this.#window = query.window === null ? undefined : Object.freeze({ ...query.window });
+    if (query.window !== undefined) this.#window = query.window === null ? undefined : copyBookingSearchWindow(query.window);
     const bound = { ...query, window: this.#window ?? null, signal: AbortSignal.any([incoming.signal, this.#lifetime.signal]) };
     if (!this.#matches(bound) || this.#attempted || this.#busy || query.preference !== undefined && !validBookingSearchPreference(query.preference)) return denied();
     const epoch = ++this.#epoch; this.#menu = undefined; this.#selection = undefined;

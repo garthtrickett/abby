@@ -1,0 +1,89 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "69982b2b4d90599d0706b3b575180b612cee0e75",
+  "families": [
+    7
+  ],
+  "scenarioIds": [
+    "E2E-336"
+  ],
+  "sourceFiles": {
+    "scripts/conversation-evaluation/run-case.ts": "9b9ace9d6ad8a99ae08e1ba0af9d20443f40fd786364d89afc8a0141db8a5d3a",
+    "src/core/booking-search-window.ts": "febfbbaeab976b85783342c86c26816e7e556df607d26e224f6c9d2ea2995e28",
+    "src/reference/booking-menu-turns.ts": "8f811deda3bb82796e12bfb91528adfb73f31c178484ec0fcd19b45339a41206",
+    "src/reference/capability-catalogue.ts": "7efd1a02b9f1da8c14f5a53ea14443189eacf48d4b9287990c438e9eed77808d",
+    "src/reference/rescheduling-menu-turns.ts": "2679db522f227665676950d563a079a72731138b2bc1c9ce212e628564e86f20",
+    "src/standalone/booking-search-language.ts": "5c6683dc41184460423d210ddd4616d4a4797ebd166d1f9a2e7b31f07d5066cc",
+    "src/standalone/cliniko-booking-menu.ts": "26e613c3fad3ee4813ad22b82632c4b9e52aa068e812c35dba3c2d6585318884",
+    "src/standalone/cliniko-booking-offers.ts": "84575cb90d433a95d018e66f9bb0a22202ee3185130e8eb1b350ce119d3d5eb5",
+    "src/standalone/cliniko-catalogue-booking-host.ts": "156066157114896372cc041a938478e19e2cb8e79e2eef6d9a7fad7c92c5983e",
+    "src/standalone/cliniko-rescheduling-menu.ts": "ad809546adcad1837c84e711024914f360258866133682cdbf09b5918e533909",
+    "src/standalone/menu-navigation-language.ts": "14a015d8edb1b24d64759e71d9d64ddaac6f5d5a06137e59ed85d93cc8be1257",
+    "src/standalone/played-menu-search.ts": "f38dcc8df092e8c5a7dbbdbc6f866f3442c5ede9cde0d3cdbdb8e9864e30f0ff",
+    "test/contract/scenario-manifest.test.ts": "0fd77215f95019e3ce24230f3139307cfbef40b5fac0ab9f71e7c2a83609f0aa",
+    "src/standalone/compound-booking-search-language.ts": "9051cd572a020277f9559b2fd66a5f4d8b611d0dbdcf5cf546be8a21ce5dedc8",
+    "test/voice/compound-booking-constraints.test.ts": "e610ca0e7562abaef577c48ad778a074d3d1c7714814b960b04f2767f64f8855"
+  },
+  "beforeReport": "eval/baselines/second-call-batch-compound-before-v1.json",
+  "implementationDiagnosis": {
+    "initialFailureDurationMs": 12587.989407,
+    "diagnosticFailureDurationMs": 14167.30864,
+    "finding": "Punctuation normalization left trailing whitespace before removing please. All positive requests clarified and made no availability query; a read-only parser probe confirmed ambiguous results. Trimming before suffix removal repaired the grammar. These failed runs establish no later mutation/privacy verdict."
+  },
+  "initialFocus": {
+    "command": "node --test test/voice/compound-booking-constraints.test.ts",
+    "pass": 1,
+    "fail": 0,
+    "signedJourneys": 11,
+    "durationMs": 20502.856904,
+    "scope": "before added signed incremental navigation, guards and native immutable operation capture"
+  },
+  "finalRegression": {
+    "command": "node --test --test-concurrency=2 test/voice/compound-booking-constraints.test.ts test/voice/booking-search-windows.test.ts test/voice/retained-availability-refresh.test.ts test/voice/played-menu-navigation.test.ts test/voice/dated-window-corrections.test.ts test/cliniko/rescheduling-session.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 20,
+    "fail": 0,
+    "signedJourneys": 12,
+    "durationMs": 131263.306495,
+    "scope": "Before final AM/PM word clocks and per-weekday bands; all underlying compound contract, echo, copy and intersection changes included."
+  },
+  "finalTypecheck": {
+    "command": "npm run typecheck",
+    "exitCode": 0
+  },
+  "diffCheck": {
+    "command": "git diff --check",
+    "exitCode": 0
+  },
+  "privacyCanaryScan": "passed",
+  "originalCorpus": "45 cases unchanged",
+  "limits": [
+    "Complete bounded grammar; unresolved alternatives clarify rather than disappearing.",
+    "Explicit date alternatives span at most seven inclusive calendar days; weekday and clock-only constraints need existing played date context.",
+    "Before and between end bounds retain the existing half-open start-time semantics; no fuzzy clock or next-year guesses.",
+    "Cliniko proof, practitioner/location authority, policy horizon, fresh selection, played confirmation and one possible send remain required.",
+    "Transient nested inputs only; no durable patient data beyond the existing phone index.",
+    "Synthetic voice, mail, approval and provider evidence; no real carrier/clinic activation or new real-model pass.",
+    "Families 8\u201318 remain open."
+  ],
+  "finalFocus": {
+    "command": "node --test --test-concurrency=2 test/voice/compound-booking-constraints.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 4,
+    "fail": 0,
+    "signedJourneys": 13,
+    "durationMs": 24895.813395,
+    "scope": "Final bounded word/band parser and full native read schema; booking and move commands accept compound windows and reject a host that drops a branch."
+  },
+  "bandsFixtureDiagnosis": {
+    "failedDurationMs": 23019.237119,
+    "finding": "The new weekday-band journey correctly sent the selected Monday 09:00 slot, but its added expected-payload expression defaulted to Thursday 09:00. Fixed only that expectation. The failed run established no receipt/privacy verdict for that new journey."
+  },
+  "typecheckDiagnosis": "Initial compiler run rejected two scalar-window accesses in the existing conversation evaluator. Explicitly narrowed those assertions to the legacy clock variant, preserving their exact original fixture criteria; intermediate corrected compile and final compile both pass.",
+  "wordClockFocus": {
+    "command": "node --test --test-concurrency=2 test/voice/compound-booking-constraints.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 3,
+    "fail": 0,
+    "signedJourneys": 13,
+    "durationMs": 33046.139026
+  },
+  "nativeSchemaDiagnosis": "The existing agent input schema accepted only a scalar clock range. An initial read-only probe omitted required turn.at and therefore established no compound-schema verdict. A corrected complete command was rejected with the exact legacy window schema substituted into the unchanged command schema and accepted with the full window schema, for both booking and move. Final admitted commands independently pass actual host reads and dropped-branch checks."
+}

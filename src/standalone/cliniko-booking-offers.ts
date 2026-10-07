@@ -1,4 +1,4 @@
-import { matchesBookingSearchWindow, validBookingSearchWindow } from "../core/booking-search-window.ts";
+import { copyBookingSearchWindow, matchesBookingSearchWindow, validBookingSearchWindow } from "../core/booking-search-window.ts";
 import type { BookingSearchWindow } from "../core/booking-search-window.ts";
 import { randomBytes } from "node:crypto";
 import { ClinikoAvailabilityReader } from "../cliniko/availability.ts";
@@ -92,8 +92,8 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
   }
   async list(scope: LocationScope, verificationRef: string, from: string, to: string, now: string, external?: AbortSignal, incomingWindow?: BookingSearchWindow):
     Promise<Result<BookingChoices, HostReadFailure>> {
-    const config = this.#config, window = incomingWindow ? Object.freeze({ ...incomingWindow }) : undefined;
     if (incomingWindow !== undefined && !validBookingSearchWindow(incomingWindow)) return denied();
+    const config = this.#config, window = incomingWindow ? copyBookingSearchWindow(incomingWindow) : undefined;
     if (!sameScope(scope, config.scope) || !ref(verificationRef) || this.#time(now) === undefined || this.#lifetime.signal.aborted) return denied();
     const epoch = ++this.#epoch; this.#offers.clear();
     const result = await this.#bounded(async signal => {

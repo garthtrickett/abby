@@ -1,6 +1,7 @@
 import type { BookingSearchWindow } from "../core/booking-search-window.ts";
+import { compoundBookingSearchLanguage } from "./compound-booking-search-language.ts";
 
-type Search = Readonly<{ kind: "window"; window: BookingSearchWindow | null; date?: string }> |
+type Search = Readonly<{ kind: "window"; window: BookingSearchWindow | null; date?: string; from?: string; to?: string }> |
   Readonly<{ kind: "laterWeek" }> | Readonly<{ kind: "ambiguous" }>;
 const ambiguous = { kind: "ambiguous" } as const;
 const words = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
@@ -19,6 +20,8 @@ function minute(text: string): number | undefined {
 }
 /** Only bounded caller syntax. The model never supplies clock constraints. */
 export function bookingSearchLanguage(text: string, today: string): Search | undefined {
+  const compound = compoundBookingSearchLanguage(text, today);
+  if (compound) return compound;
   let value = text.toLowerCase().trim().replace(/[,.!?]/g, " ").replace(/\s+/g, " ").trim();
   if (/^(?:none of those work |none of those |not those )?(?:is there something |anything )?later (?:that|this) week$/.test(value)) return { kind: "laterWeek" };
   value = value.replace(/\s+after all$/, "").trim();

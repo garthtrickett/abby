@@ -9,8 +9,15 @@ const optional = (properties: Record<string, JsonSchema>, required: readonly str
 const bookingName: JsonSchema = { type: "string", minLength: 1, maxLength: 80 };
 const bookingPreference: JsonSchema = { oneOf: [object({ practitioner: bookingName }), object({ location: bookingName }),
   object({ practitioner: bookingName, location: bookingName })] };
-const bookingWindow: JsonSchema = { oneOf: [{ const: null }, object({ startMinute: { type: "integer", minimum: 0, maximum: 1439 },
-  endMinute: { type: "integer", minimum: 1, maximum: 1440 }, startInclusive: bool })] };
+const bookingClock: JsonSchema = object({ startMinute: { type: "integer", minimum: 0, maximum: 1439 },
+  endMinute: { type: "integer", minimum: 1, maximum: 1440 }, startInclusive: bool });
+const bookingClause: JsonSchema = optional({
+  weekdays: { type: "array", minItems: 1, maxItems: 7, uniqueItems: true, items: { type: "integer", minimum: 0, maximum: 6 } },
+  dates: { type: "array", minItems: 1, maxItems: 7, uniqueItems: true, items: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" } },
+  window: bookingClock,
+}, []);
+const bookingWindow: JsonSchema = { oneOf: [{ const: null }, bookingClock,
+  object({ anyOf: { type: "array", minItems: 1, maxItems: 8, items: bookingClause } })] };
 const nonEmpty: JsonSchema = { type: "string", minLength: 1 };
 const result = (value: JsonSchema): JsonSchema => root({ oneOf: [
   object({ ok: { const: true }, value }),

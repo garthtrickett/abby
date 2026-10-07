@@ -1,4 +1,4 @@
-import { validBookingSearchWindow } from "../core/booking-search-window.ts";
+import { copyBookingSearchWindow, sameBookingSearchWindow, validBookingSearchWindow } from "../core/booking-search-window.ts";
 import type { AppointmentChangeEvidenceHost, ReschedulingMenuHost, PolicyStore } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err } from "../core/model.ts";
@@ -37,7 +37,9 @@ export class ReschedulingMenuTurns {
   }
   async run(incomingScope: LocationScope, incomingTurn: FinalCallerTurn, now: string, stage: "targets" | "offers", incomingOperation: Readonly<{ from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null; correcting?: true }> | Readonly<{ choice: 1|2|3 }>, external?: AbortSignal):
     Promise<Result<CallState, Failure>> {
-    const scope = Object.freeze({ ...incomingScope }), turn = Object.freeze(structuredClone(incomingTurn)), operation = Object.freeze({ ...incomingOperation });
+    const scope = Object.freeze({ ...incomingScope }), turn = Object.freeze(structuredClone(incomingTurn));
+    const operation = Object.freeze({ ...incomingOperation, ...("window" in incomingOperation && validBookingSearchWindow(incomingOperation.window)
+      ? { window: copyBookingSearchWindow(incomingOperation.window) } : {}) });
     const runtime = new CallRuntime(this.ledger, scope);
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15_000), signal = AbortSignal.any([controller.signal, ...(external ? [external] : [])]);
     try {
@@ -62,7 +64,7 @@ export class ReschedulingMenuTurns {
           const expectedWindow = operation.window;
           const matchesWindow = expectedWindow === undefined || expectedWindow === null ?
             expectedWindow === undefined || read?.ok && read.value.window === undefined :
-            validBookingSearchWindow(expectedWindow) && read?.ok && read.value.window?.startMinute === expectedWindow.startMinute && read.value.window.endMinute === expectedWindow.endMinute && read.value.window.startInclusive === expectedWindow.startInclusive;
+            read?.ok && sameBookingSearchWindow(expectedWindow, read.value.window);
           if (read?.ok && matchesWindow && !signal.aborted) interpretation = { kind: "reschedulingMenu", snapshot: structuredClone(read.value) };
           else if (read && !read.ok && read.error.kind === "outsideHorizon" && !signal.aborted) interpretation = { kind: "bookingHorizon", snapshot: structuredClone(read.error.snapshot) };
         } else {

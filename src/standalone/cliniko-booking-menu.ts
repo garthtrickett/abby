@@ -1,4 +1,4 @@
-import { validBookingSearchWindow } from "../core/booking-search-window.ts";
+import { copyBookingSearchWindow, validBookingSearchWindow } from "../core/booking-search-window.ts";
 import type { BookingSearchWindow } from "../core/booking-search-window.ts";
 import type { BookingMenuHost, BookingMenuQuery, BookingMenuReadQuery, HostReadFailure } from "../core/host.ts";
 import type { BookingMenuRead } from "../core/booking-menu.ts";
@@ -34,7 +34,7 @@ export class ClinikoBookingMenu implements BookingMenuHost {
     const query = { ...incoming, scope: { ...incoming.scope } };
     if (!this.#matches(query)) return denied();
     if (query.window !== undefined && query.window !== null && !validBookingSearchWindow(query.window)) return denied();
-    if (query.window !== undefined) this.#window = query.window === null ? undefined : Object.freeze({ ...query.window });
+    if (query.window !== undefined) this.#window = query.window === null ? undefined : copyBookingSearchWindow(query.window);
     const epoch = ++this.#epoch; this.#menu = undefined;
     this.#previous = undefined;
     const signal = AbortSignal.any([query.signal, this.#lifetime.signal]);
