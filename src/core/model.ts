@@ -246,7 +246,7 @@ export type AppointmentRead = Readonly<{
 
 export type MenuClarificationReason = "menuAmbiguous" | "menuRejected" | "menuUnavailable" | "proposalCorrection" |
   "changeAmbiguous" | "targetDisagreement" | "changeUnsupported" | "changeAfterSend" | "oldAppointmentAfterMove" | "searchPreferenceUnavailable" | "clinicalAdviceUnavailable" | "unattendedAnnouncement" |
-  "paymentEvidenceUnavailable" | "coverageEvidenceUnavailable" | "refundEvidenceUnavailable" | "reservationEvidenceUnavailable" | "arrivalAccessUnavailable" | "publicFactConflict";
+  "paymentEvidenceUnavailable" | "coverageEvidenceUnavailable" | "refundEvidenceUnavailable" | "reservationEvidenceUnavailable" | "arrivalAccessUnavailable" | "publicFactConflict" | "serviceArrangementUnavailable";
 export type TurnInterpretation =
   | Readonly<{ kind: "conversationControl"; notice: import("./conversation-control.ts").ConversationControlNotice }>
   | Readonly<{ kind: "conversationPresence" }>

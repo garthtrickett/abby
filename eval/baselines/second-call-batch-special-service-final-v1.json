@@ -1,0 +1,59 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "78a65cbe76547ffe2a465931e9b59e60641f6e65",
+  "families": [
+    18
+  ],
+  "scenarioIds": [
+    "E2E-347"
+  ],
+  "sourceFiles": {
+    "src/standalone/special-service-language.ts": "0c99e2334fd8737ce0963ae5cd47bd9a7b60c2b77f9ff078f70e8a44fbd4e799",
+    "src/standalone/request-boundary-language.ts": "be273ff7949d2607b18ced63602aa37332464a9d1b25e911dca8726b7b5a0c00",
+    "src/standalone/openai-clinical-intent.ts": "0bc53bba9098d8fdb957705726c38e85d0b4dd907f8197ab4b95f722258217b5",
+    "src/core/model.ts": "16173300510bdad56c88e7cc5818160f18f32bdfdc0d99cdd1e9b121d0745f94",
+    "src/core/clarification.ts": "d4572e8ddf77db038fbcc63c799dbfcc1ebe983500d30ad089b1269a67e77352",
+    "src/core/caller-identity.ts": "7110b05f7f2c10ce26d47abd17da876c65000fc724e7d1a8e2739c76b254f47e",
+    "test/voice/special-service-boundaries.test.ts": "d8ea8faab7b189eac39a82cecd8e323c717c2c62fd405dc77c127a7fcb7d89da",
+    "test/contract/scenario-manifest.test.ts": "77352f573197d88e02459a8759ce8c8a5957b107ea80e76590af71902027f2ff"
+  },
+  "beforeReport": "eval/baselines/second-call-batch-special-service-before-v1.json",
+  "focus": {
+    "command": "node --test test/voice/special-service-boundaries.test.ts",
+    "pass": 2,
+    "fail": 0,
+    "durationMs": 15027.996429,
+    "signedJourneys": 21
+  },
+  "finalRegression": {
+    "command": "node --test --test-concurrency=2 test/voice/special-service-boundaries.test.ts test/voice/preference-service-boundaries.test.ts test/voice/arrival-fact-boundaries.test.ts test/voice/clinical-suitability-boundaries.test.ts test/voice/financial-evidence-boundaries.test.ts test/voice/booking-request-boundaries.test.ts test/voice/post-action-followups.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 15,
+    "fail": 0,
+    "durationMs": 96015.283096,
+    "signedJourneys": 21,
+    "scope": "All five latest second-batch boundary families together, existing request boundaries and post-action receipts on the final production source."
+  },
+  "originalCorpus": "45 cases unchanged",
+  "limits": [
+    "Complete bounded negative special-service requests only.",
+    "No class inventory, membership redemption, home-visit arrangement, visit-mode/type switch or cross-practitioner source change. Unsupported requests need clinic handling.",
+    "Exact supported individual cancel and same-practitioner move use source91, preserve source92 and approved service/duration, require separate confirmation and send once. These are individual native changes, not evidence of home-visit or class semantics.",
+    "Private class absence and home-service messages require independent proof and separate explicit Cliniko send; a message receipt does not establish service arrangement.",
+    "No new native provider operation, positive patient authority, durable patient field, dependency or repository configuration.",
+    "Synthetic signed ingress/provider/mail/approval only; no live activation, real delivery or new real-model pass.",
+    "Real mail, carrier activation and Splose remain operator-deferred."
+  ],
+  "privacyCanaryScan": "passed",
+  "diffCheck": "passed",
+  "typecheck": {
+    "command": "npm run typecheck",
+    "result": "passed",
+    "durationSeconds": 115
+  },
+  "originalCorpusEvidence": {
+    "path": "eval/clinic-conversation-candidates-v1.json",
+    "baseCommit": "11c6e7236b17636c9bbdc9583f21c43259768de1",
+    "sha256": "2b537ef47b49a393c4916a43e0cbfc9e54f58a03daab6170b21ec3fa369e6e2c",
+    "unchanged": true
+  }
+}

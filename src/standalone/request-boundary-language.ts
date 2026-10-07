@@ -3,6 +3,11 @@ import type { RequestBoundary } from "../core/request-boundary.ts";
 /** Exact public requests only. Other turns retain ordinary protected
  * interpretation; these routing cues never issue patient authority. */
 const patterns: readonly Readonly<{ reason: RequestBoundary; pattern: RegExp }>[] = [
+  { reason: "groupClass", pattern: /^(?:can you |could you |please )?(?:book|cancel|move|reschedule|switch) (?:(?:me (?:into|onto) )?(?:my|the|a) )?(?:pilates|mat|gym) class(?: tonight|today|tomorrow)?(?: please)?$/ },
+  { reason: "groupClass", pattern: /^can you switch my mat class from (?:[01]\d|2[0-3]):[0-5]\d to (?:[01]\d|2[0-3]):[0-5]\d tonight$/ },
+  { reason: "groupClass", pattern: /^i have a membership pass can you book the (?:[01]\d|2[0-3]):[0-5]\d mat class$/ },
+  { reason: "groupClass", pattern: /^[a-z][a-z -]{0,79} will not attend (?:gym|pilates|mat) class today$/ },
+  { reason: "groupClass", pattern: /^(?:can you switch my class tonight|i already have a mat pass book the pilates class tonight)$/ },
   { reason: "externalAppointmentChange", pattern: /^(?:i|you|the clinic|the practitioner) (?:(?:have|had) )?(?:already )?(?:cancelled|canceled|changed|moved|rescheduled|booked) (?:my|the) appointment(?: for (?:today|tomorrow|\d{4}-\d{2}-\d{2}))? (?:online|on (?:the|your) (?:website|app)|directly with (?:the )?(?:provider|practitioner|clinic)|(?:on|during) (?:my|the) (?:last|previous|earlier) call)$/ },
   { reason: "externalAppointmentChange", pattern: /^i started booking (?:my|the) appointment (?:online|on (?:the|your) (?:website|app))$/ },
   { reason: "minorIntake", pattern: /^(?:i (?:want|need|would like) (?:a |an )?(?:first visit|first appointment|new patient appointment) for (?:my|our) (?:young |little )?(?:child|son|daughter|baby)|(?:please |can you |could you )?(?:register|book) (?:my|our) (?:young |little )?(?:child|son|daughter|baby)(?: for (?:a |their )?first (?:visit|appointment))?)(?: please)?$/ },

@@ -1,0 +1,29 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "78a65cbe76547ffe2a465931e9b59e60641f6e65",
+  "families": [
+    18
+  ],
+  "scenarioIds": [
+    "E2E-347"
+  ],
+  "sourceFiles": {
+    "src/standalone/openai-clinical-intent.ts": "1c6f48bfe3a93099e8b50f87cbf4686d1ea10b5af2fc5c5ea79acc6cc7296f2e",
+    "src/standalone/request-boundary-language.ts": "6d6d8b8c018f679c69c5e18e2d04e4d4e83f66223a796bb7c627e17039e44387",
+    "src/core/model.ts": "5f11684e8d84e80623a57f89ca792dc94eb54f2dd5b77327408d1f8dd0653ac0",
+    "src/core/clarification.ts": "b827e0e4acbd6752575b026ec5c016e5df617372ca38a92416133e5006beaad7",
+    "src/core/caller-identity.ts": "1e3556712a956aece76a20ba7f17f2b0470deb45d4f9b4f40e85505e437a35e1",
+    "test/voice/special-service-boundaries.test.ts": "88d32a3ef9a8b9446d22edfaf612718e7c19d0b4b7f47c46a1e96689e6a5a554"
+  },
+  "command": "node --test test/voice/special-service-boundaries.test.ts",
+  "pass": 0,
+  "fail": 1,
+  "durationMs": 14972.928338,
+  "signedJourneys": 21,
+  "observations": [
+    "Fifteen special-service cases reached actual classifier HTTP; later assertions were not reached.",
+    "Two exact home-visit/practitioner requests reached existing changeAmbiguous instead of a service-specific unavailable notice.",
+    "Four cases passed within aggregate: exact supported cancel/move with second source preserved and two independent private class/home-service messages.",
+    "Generic synthetic first-name class absence fixture renamed before final evidence; no real call identifiers or logs retained."
+  ]
+}

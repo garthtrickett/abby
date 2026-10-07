@@ -6,6 +6,7 @@ import type { ActionState, MenuClarificationReason } from "./model.ts";
 
 const notices: Record<Exclude<MenuClarificationReason, "changeAfterSend" | "oldAppointmentAfterMove" | FinancialEvidenceReason>, string> = {
   unattendedAnnouncement: "I heard an automated announcement or repeated clinic message. Please tell me your request when you're ready. Repeated announcements will end this call; contact the clinic if you still need help.",
+  serviceArrangementUnavailable: "I can't arrange or change home-visit services from this call. Please contact the clinic about your home visit. I haven't sent a home-visit request or made another appointment change for this request.",
   arrivalAccessUnavailable: "I can't verify access or get someone to open the door from this call. Please contact the clinic directly for arrival assistance. I haven't sent an arrival message or made another appointment change for this request.",
   publicFactConflict: "I can't verify those conflicting details or choose an address or opening time from them. Please contact the clinic to confirm the current information. I haven't changed an appointment for this request.",
   clinicalAdviceUnavailable: "I can’t give medical advice or confirm it is safe to attend. Please contact your clinician or the clinic for advice.",
