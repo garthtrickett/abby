@@ -1,0 +1,50 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "3720d4e5fac3fa2b9da53fa02dd41a6f8dfda4c2",
+  "families": [
+    10
+  ],
+  "scenarioIds": [
+    "E2E-339"
+  ],
+  "sourceFiles": {
+    "src/standalone/caller-identity-language.ts": "a6c7b3ce8839275750ec1a14a3ba29faa473f44472a0592e9fd40d70e4cd6e32",
+    "test/contract/scenario-manifest.test.ts": "6c625e2c095ab42d0b6c04a139249b5d25b3bac6080a59504b43bdc2ca2de9ec",
+    "test/voice/patient-change-authority.test.ts": "af614d4b774b4a0185a84c5761328eaaee4661320f40cfb4b964c88b6b28ba03"
+  },
+  "beforeReport": "eval/baselines/second-call-batch-patient-change-before-v1.json",
+  "focused": {
+    "command": "node --test test/voice/patient-change-authority.test.ts",
+    "pass": 2,
+    "fail": 0,
+    "durationMs": 23364.560372,
+    "signedJourneys": 14,
+    "scope": "Before three additional borrowed-phone, named not-me and explicit proxy journeys; underlying monotonic denial unchanged."
+  },
+  "finalRegression": {
+    "command": "node --test --test-concurrency=2 test/voice/patient-change-authority.test.ts test/voice/caller-identity-denial.test.ts test/voice/staff-message-corrections.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 5,
+    "fail": 0,
+    "durationMs": 59866.755399,
+    "signedJourneys": 17
+  },
+  "finalTypecheck": {
+    "command": "npm run typecheck",
+    "exitCode": 0,
+    "durationSeconds": 115
+  },
+  "diffCheck": {
+    "command": "git diff --check",
+    "exitCode": 0
+  },
+  "privacyCanaryScan": "passed",
+  "originalCorpus": "45 cases unchanged",
+  "limits": [
+    "Bounded explicit complete patient/name changes and caller roles, borrowed-phone ownership and shared-number appointments; quoted/negated/background and ordinary introductions do not revoke authority.",
+    "Declarations revoke access conservatively; they do not identify a new patient, compare unverified names to records or establish proxy consent. Clinic contact is required for recovery.",
+    "The existing monotonic denial disposes grants, source/menu and message owners, cancels unsent proposals and retains public sent/unknown receipts.",
+    "No new patient lookup, name-to-record match, proxy permission, durable patient field or write path.",
+    "Synthetic signed voice/provider/mail/approval evidence only; no real carrier or clinic activation and no new real-model pass.",
+    "Families 11\u201318 remain open."
+  ]
+}
