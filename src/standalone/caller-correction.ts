@@ -5,7 +5,10 @@ import { bookingSearchLanguage } from "./booking-search-language.ts";
  * require clarification rather than silently discarding a time constraint. */
 export function callerCorrection(text: string, today: string): Readonly<{ kind: "date"; date: string; window?: BookingSearchWindow | null }> |
   Readonly<{ kind: "stop" }> | undefined {
-  const value = text.toLowerCase().trim();
+  const value = text.toLowerCase().replace(/[’]/g, "'").trim();
+  // A final negative governs the complete utterance, even when it follows a
+  // clock self-correction. It must never be treated as the last positive time.
+  if (/\b(?:no|wait|hold on|don't (?:book|send|do)(?: (?:it|that))?)[.!?]*$/.test(value)) return { kind: "stop" };
   const marker = value.lastIndexOf("actually");
   const part = (marker >= 0 ? value.slice(marker + "actually".length) : value)
     .replace(/^[,\s]+/, "").replace(/^(?:make (?:that|it)|change (?:that|it) to)\s+/, "")

@@ -30,6 +30,7 @@ export async function voiceUntil(check: () => boolean, label: string, timeoutMs 
  * Cliniko HTTP, clear-final transcription and speech synthesis are explicitly synthetic. */
 export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: ClinikoCallFlowConfig,
   intent: (flow: ClinikoCallFlow) => IntentResolver, options: { lostWrite?: boolean;
+    beforeWriteResponse?: () => Promise<void>;
     transcriptFinal?: (event: Extract<TranscriptEvent, { kind: "segmentFinal" }>) => readonly TranscriptEvent[] } = {}) {
   const accountSid = `AC${"4".repeat(32)}`, callSid = `CA${randomUUID().replaceAll("-", "")}`, streamSid = `MZ${randomUUID().replaceAll("-", "")}`;
   const webhookUrl = "https://workflow.example.test/twilio/inbound", streamUrl = "wss://workflow.example.test/twilio/media/";
@@ -77,6 +78,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         patient: { links: { self: `${base}/patients/${body.patient_id ?? verificationCanaries[2]}` } },
         business: { links: { self: `${base}/businesses/11` } }, practitioner: { links: { self: `${base}/practitioners/${body.practitioner_id ?? "22"}` } },
         appointment_type: { links: { self: `${base}/appointment_types/33` } } };
+      if (options.beforeWriteResponse) await options.beforeWriteResponse();
       if (options.lostWrite) throw new Error("synthetic lost voice write response");
       if (url.pathname.endsWith("/cancel")) return new Response(null, { status: 204 });
       return Response.json(after, { status: method === "POST" ? 201 : 200 });
@@ -182,22 +184,30 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       },
       async turn(text: string, options: { expectedFailure?: "confirmationMissing" | "staleGeneration" | "automatedCallUnavailable"; interrupt?: boolean } = {}) {
         const marks = sent.filter(item => item.event === "mark").length, clears = sent.filter(item => item.event === "clear").length;
-        const interruptedMark = sent.filter(item => item.event === "mark").at(-1)?.mark;
+        let replyAfterMarks = marks;
         const pending = text === "Yes" && !options.expectedFailure
           ? Object.values(resultValue(await ledger!.read(callId, scope)).actions).find(action => action.status === "awaitingConfirmation") : undefined;
         const beforeWrites = hostWritesStarted, beforePreparations = staffPreparationsStarted, beforeStaffWrites = staffWritesStarted;
         inputs.push(text); media(true); media(true);
         if (options.interrupt) {
-          assert.ok(interruptedMark); await voiceUntil(() => sent.filter(item => item.event === "clear").length > clears, "interrupted speech clear");
-          const fenceMark = sent.filter(item => item.event === "mark").at(-1)?.mark; assert.ok(fenceMark); assert.notEqual(fenceMark.name, interruptedMark.name);
-          sendEvent({ event: "mark", mark: { name: interruptedMark.name } });
+          await voiceUntil(() => sent.filter(item => item.event === "clear").length > clears, "interrupted speech clear");
+          const fenceIndex = sent.findIndex((item, index) => item.event === "clear" && sent.slice(0, index + 1).filter(item => item.event === "clear").length > clears);
+          const clearedMarks = sent.slice(0, fenceIndex).filter(item => item.event === "mark" && item.mark && !acknowledged.has(item.mark.name));
+          const fenceMark = clearedMarks.at(-1)?.mark; assert.ok(fenceMark);
+          // Twilio returns only outstanding completion marks and the clear
+          // fence. A previously played mark must never be returned twice.
+          for (const item of clearedMarks.slice(0, -1)) {
+            sendEvent({ event: "mark", mark: { name: item.mark!.name } });
+            acknowledged.add(item.mark!.name);
+          }
           sendEvent({ event: "mark", mark: { name: fenceMark.name } });
-          acknowledged.add(interruptedMark.name); acknowledged.add(fenceMark.name);
+          acknowledged.add(fenceMark.name);
+          replyAfterMarks = sent.slice(0, fenceIndex).filter(item => item.event === "mark").length;
         }
         for (let frame = 0; frame < 5; frame++) media(false);
         const finalChunk = chunk;
         try {
-          const hasReply = () => sent.filter(item => item.event === "mark").length >= marks + (options.interrupt ? 2 : 1);
+          const hasReply = () => sent.filter(item => item.event === "mark").length > replyAfterMarks;
           // Observe invocation before starting each declared business deadline.
           // A generic speech wait is not the preparation or effect contract.
           await voiceUntil(() => hostWritesStarted > beforeWrites || staffPreparationsStarted > beforePreparations ||
@@ -213,7 +223,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
             await voiceUntil(() => hostWritesSettled > beforeWrites || failures.length > 0, "host write settlement", flow!.effectDeadlineMs);
           if (staffWritesStarted > beforeStaffWrites)
             await voiceUntil(() => staffWritesSettled > beforeStaffWrites || failures.length > 0, "staff write settlement", flow!.effectDeadlineMs);
-          await voiceUntil(() => sent.filter(item => item.event === "mark").length >= marks + (options.interrupt ? 2 : 1) || failures.length > 0, "caller turn speech");
+          await voiceUntil(() => hasReply() || failures.length > 0, "caller turn speech");
         } catch (error) {
           const state = resultValue(await ledger!.read(callId, scope));
           throw new Error(`caller turn delivery stalled: ${JSON.stringify({ closed, workflowClosed: flow?.closed,
