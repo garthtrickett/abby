@@ -16,8 +16,8 @@ Cliniko mutation payloads and call receipts.
 | 6 | Partial menu repetition and incremental navigation | Implemented; E2E-335 passes seventeen signed synthetic journeys; merged in PR #425; local checks passed |
 | 7 | Compound weekday, time and date constraints | Implemented; E2E-336 passes thirteen signed synthetic journeys; merged in PR #426; local checks passed |
 | 8 | Relative and source-relative dates and times | Merged PR #427; nineteen signed relative-date journeys |
-| 9 | Staff message additions and corrections saved in Cliniko | Implemented; E2E-338 validation and publication in progress |
-| 10 | Shared phones and changing patient identity | Pending |
+| 9 | Staff message additions and corrections saved in Cliniko | Merged PR #428; twenty-one signed message journeys |
+| 10 | Shared phones and changing patient identity | Implemented; E2E-339 passes seventeen signed journeys; publication pending |
 | 11 | Bounded pauses, writing time and reopening after goodbye | Pending |
 | 12 | External appointment changes and previous-call claims | Pending |
 | 13 | Private intake spelling and field repairs | Pending |
@@ -429,3 +429,38 @@ failures, final hashes and results: `eval/baselines/second-call-batch-message-fi
 
 Final `npm run typecheck` passed (1m39s). Exact source hashes, real-call privacy
 scan and `git diff --check` passed on the final source.
+
+PR #428 merged family 9 at `3720d4e5fac3fa2b9da53fa02dd41a6f8dfda4c2`. Runs 37575187512 (PR) and 37575168566 (push) were queued at merge and subsequently failed before execution; check-run 112642382649 reports billing/spending limits. Local checks passed. No CI pass is claimed.
+
+## Family 10: patient changes cannot inherit old authority
+
+The bounded identity recognizer now catches explicit name/patient changes,
+third-party caller roles and borrowed/shared-number ownership before classifier
+inference and private message capture. Each declaration uses the existing
+monotonic patient denial. It does not switch patients or assume proxy consent.
+Private owners/grants are disposed, unsent proposals cancel and earlier committed,
+unknown or staff receipts remain in SAM. Clinic contact is the supported recovery.
+
+Baseline: fourteen signed journeys failed the immediate no-inference or denial
+assertion; later grant/write/privacy assertions were not reached. One negative
+literal guard passed. Focus: 2 pass, 0 fail, 23364.560372 ms.
+
+```sh
+node --test --test-concurrency=2 test/voice/patient-change-authority.test.ts test/voice/caller-identity-denial.test.ts test/voice/staff-message-corrections.test.ts test/contract/scenario-manifest.test.ts
+```
+
+Final source: 5 pass, 0 fail, 59866.755399 ms, including seventeen new signed
+identity journeys, existing monotonic-denial regression and message-draft
+regression. Provider reads, proof emails, POST/PATCH counts, prior receipts, old
+code rejection, exact subsequent denial and durable PostgreSQL canaries are
+checked. Manifest 1.137, 339 IDs.
+
+Scope remains bounded explicit language. Ordinary introductions, quotations,
+negations and unrelated medical statements do not trigger the new declarations.
+No identity comparison, patient switching, proxy authorization or new private
+lookup. Synthetic evidence only; no real carrier, clinic activation or new
+real-model pass. Families 11–18 remain open. Exact source hashes and qualified
+results: `eval/baselines/second-call-batch-patient-change-final-v1.json`.
+
+Final `npm run typecheck` passed (1m55s). Source hashes, real-call privacy scan
+and `git diff --check` passed on the final source.

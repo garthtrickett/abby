@@ -1,0 +1,16 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "3720d4e5fac3fa2b9da53fa02dd41a6f8dfda4c2",
+  "families": [
+    10
+  ],
+  "scenarioIds": [
+    "E2E-339"
+  ],
+  "command": "node --test test/voice/patient-change-authority.test.ts",
+  "pass": 1,
+  "fail": 1,
+  "durationMs": 54404.354225,
+  "signedJourneys": 14,
+  "finding": "All fourteen signed identity-change journeys failed the immediate no-classifier or monotonic denial assertion. Some existing correction/menu routes clarified instead; the active message draft treated the identity change as message content. Later grant-revocation, second-write and durable canary assertions were not reached. Existing negative literal examples passed."
+}
