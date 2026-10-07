@@ -1,0 +1,27 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "5c7183c0b6c61451c7c0730ce1a6d63eaac4b1f3",
+  "families": [
+    16
+  ],
+  "scenarioIds": [
+    "E2E-345"
+  ],
+  "sourceFiles": {
+    "src/standalone/openai-clinical-intent.ts": "34f045f6c440893326726cd36a9960a2b0edbffc1f6dc037ee3535811d9b883a",
+    "src/core/model.ts": "0d83e2960814c322c3033e3e5c803e75a399f20fae34513ed01ebb0f68381b07",
+    "src/core/clarification.ts": "a63212de330071f01e7e892f5d4aa3cfc2bf4e393f5a9c35df1eb4dc2d038383",
+    "src/core/caller-identity.ts": "0beebd1d6fecde8b482dd08bdd4233368dfd9a8e23ed78ea9ab5910acd7b2665",
+    "test/voice/arrival-fact-boundaries.test.ts": "0147cfe472c656f4fcfbd584b3701ddea3db479a3f06da4c4346812d4f1e2ea5"
+  },
+  "command": "node --test test/voice/arrival-fact-boundaries.test.ts",
+  "pass": 0,
+  "fail": 1,
+  "durationMs": 12960.917918,
+  "signedJourneys": 22,
+  "observations": [
+    "Twelve arrival cases reached classifier HTTP; address/email conflict reached existing notification status instead of conflicting-fact notice. Later assertions were not reached.",
+    "Duplicate, changed, expired and revoked public facts already spoke unavailable and created the existing transient systemFailure/needsReview receipt; initial zero-internal-item assertion was too broad. No provider write or patient-message send occurred.",
+    "Initial staff input was a freeform statement replacing the draft as designed; changed to an actual door-opening question to exercise private question fencing."
+  ]
+}

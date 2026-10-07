@@ -1,0 +1,52 @@
+{
+  "schema": "abby.second-call-batch-evidence.v1",
+  "baseCommit": "5c7183c0b6c61451c7c0730ce1a6d63eaac4b1f3",
+  "families": [
+    16
+  ],
+  "scenarioIds": [
+    "E2E-345"
+  ],
+  "sourceFiles": {
+    "src/standalone/arrival-information-language.ts": "4e1738acc7c27acba5c9fac518d21a21eda707b9f4622ad2da6b5a63264a1038",
+    "src/standalone/openai-clinical-intent.ts": "c144a706d3edefd94829de016e0f5f0452b05406fc85a60f150c47b8def2ccba",
+    "src/core/model.ts": "5f11684e8d84e80623a57f89ca792dc94eb54f2dd5b77327408d1f8dd0653ac0",
+    "src/core/clarification.ts": "b827e0e4acbd6752575b026ec5c016e5df617372ca38a92416133e5006beaad7",
+    "src/core/caller-identity.ts": "1e3556712a956aece76a20ba7f17f2b0470deb45d4f9b4f40e85505e437a35e1",
+    "test/voice/arrival-fact-boundaries.test.ts": "1cc306591af377405f108ce35d84c71ce68c922e82ea2b854fba7348439fdc8c",
+    "test/contract/scenario-manifest.test.ts": "78868f4a66701e5b956bfb6c01fb8dad565cc1752fa7ae98b5f1df43de16f7bf"
+  },
+  "beforeReport": "eval/baselines/second-call-batch-arrival-before-v1.json",
+  "initialFocus": {
+    "command": "node --test test/voice/arrival-fact-boundaries.test.ts",
+    "pass": 0,
+    "fail": 2,
+    "durationMs": 16374.222809,
+    "scope": "Only I arrived (without have) missing from complete guard; expanded that literal negative form."
+  },
+  "finalRegression": {
+    "command": "node --test --test-concurrency=2 test/voice/arrival-fact-boundaries.test.ts test/voice/clinic-faqs.test.ts test/voice/public-service-guidance.test.ts test/voice/staff-message-corrections.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 8,
+    "fail": 0,
+    "durationMs": 49470.765494,
+    "signedJourneys": 22
+  },
+  "originalCorpus": "45 cases unchanged",
+  "limits": [
+    "Complete bounded arrival/conflict reports only.",
+    "No door access, staff presence, transfer success or corrected public fact inferred.",
+    "Existing competing/duplicate, replaced/pinned, expired and revoked approved source fences remain authoritative. No general semantic contradiction detector for a single approved paragraph; operator owns published public source contents.",
+    "Existing transient systemFailure/needsReview items for public host failure do not send patient messages or establish external staff work.",
+    "Private arrival message requires independent proof and separate explicit send.",
+    "No new provider operation, patient authority, durable patient field, dependency or configuration change.",
+    "Synthetic signed speech/provider/mail/approval only; no live activation, real delivery or new real-model pass.",
+    "Families 17\u201318 remain open."
+  ],
+  "privacyCanaryScan": "passed",
+  "diffCheck": "passed",
+  "typecheck": {
+    "command": "npm run typecheck",
+    "result": "passed",
+    "durationSeconds": 94
+  }
+}
