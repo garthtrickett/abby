@@ -163,14 +163,15 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     const to = new Date(Date.parse(`${from}T00:00:00.000Z`) + (profile.searchDays - 1) * 86_400_000).toISOString().slice(0, 10);
     return { kind: "bookingMenu", from, to, preference };
   }
-  async searchMenuIntent(text: string): Promise<VoiceIntent | undefined> {
+  async searchMenuIntent(turn: FinalCallerTurn): Promise<VoiceIntent | undefined> {
+    if (turn.callId !== this.#config.receipt.callId || turn.sessionId !== this.#config.sessionId) return undefined;
     if (this.closed || this.#staffActive || this.#verificationRequired ||
         this.#workflow !== "book" && this.#workflow !== "intake" && !(this.#workflow === "reschedule" && this.#reschedulingTargetSelected)) return undefined;
     const found = await this.#config.ledger.read(this.#config.receipt.callId, this.#config.receipt.scope);
     if (!found.ok || this.closed || found.value.lifecycle !== "active" || found.value.sessionLease?.sessionId !== this.#config.sessionId) return undefined;
     const now = (this.#config.clock ?? (() => new Date().toISOString()))();
-    return this.#searchMenu.resolve(text, found.value, clinicDateAt(this.#config.cliniko.timeZone, new Date(now)), this.#config.cliniko.timeZone,
-      this.#workflow === "reschedule" ? "rescheduling" : "booking");
+    return this.#searchMenu.resolve(turn.text, found.value, clinicDateAt(this.#config.cliniko.timeZone, new Date(now)), this.#config.cliniko.timeZone,
+      this.#workflow === "reschedule" ? "rescheduling" : "booking", turn.turnId);
   }
   async correctionIntent(turn: FinalCallerTurn, external?: AbortSignal): Promise<VoiceIntent | undefined> {
     if (this.closed || this.#verificationRequired || turn.callId !== this.#config.receipt.callId || turn.sessionId !== this.#config.sessionId) return undefined;

@@ -239,7 +239,7 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
       const preference = await config.owner.preferenceMenuIntent(turn.text);
       if (signal?.aborted) return err(unavailable);
       if (preference) return ok(preference);
-      const search = await config.owner.searchMenuIntent(turn.text);
+      const search = await config.owner.searchMenuIntent(turn);
       if (signal?.aborted) return err(unavailable);
       if (search) return ok(search);
       const corrected = await config.owner.correctionIntent(turn, signal);
