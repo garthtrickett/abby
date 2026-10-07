@@ -1,0 +1,221 @@
+{
+  "schema": "abby.second-call-batch-completion.v1",
+  "status": "requestedFamiliesComplete",
+  "implementationHead": "54eee2d9a8a091a2e47b55dcf2dc8e7550ff762f",
+  "familiesComplete": 18,
+  "scenarioManifest": {
+    "version": "1.145",
+    "ids": 347,
+    "newIds": 17,
+    "fullCallEvidence": "Synthetic evidence only; no live carrier/mail/clinic activation or new real-model pass."
+  },
+  "mergedPatches": [
+    {
+      "families": [
+        1,
+        2
+      ],
+      "scenarioId": "E2E-331",
+      "pr": 421,
+      "mergeCommit": "f828fa73991d20b67bd7030bd4978bff886e19e4",
+      "localEvidence": "eval/baselines/second-call-batch-automated-final-v1.json"
+    },
+    {
+      "families": [
+        3
+      ],
+      "scenarioId": "E2E-332",
+      "pr": 422,
+      "mergeCommit": "e58b1e342260fef372b5f573afaf142e7edec416",
+      "localEvidence": "eval/baselines/second-call-batch-final-negative-final-v1.json"
+    },
+    {
+      "families": [
+        4
+      ],
+      "scenarioId": "E2E-333",
+      "pr": 423,
+      "mergeCommit": "40221d2c34f289dc02dfb53c1e4f482a8aca234b",
+      "localEvidence": "eval/baselines/second-call-batch-refresh-final-v1.json"
+    },
+    {
+      "families": [
+        5
+      ],
+      "scenarioId": "E2E-334",
+      "pr": 424,
+      "mergeCommit": "d7527d3a639c95ac5ed813b75bd7916bd9d9738e",
+      "localEvidence": "eval/baselines/second-call-batch-followups-final-v1.json"
+    },
+    {
+      "families": [
+        6
+      ],
+      "scenarioId": "E2E-335",
+      "pr": 425,
+      "mergeCommit": "69982b2b4d90599d0706b3b575180b612cee0e75",
+      "localEvidence": "eval/baselines/second-call-batch-navigation-final-v1.json"
+    },
+    {
+      "families": [
+        7
+      ],
+      "scenarioId": "E2E-336",
+      "pr": 426,
+      "mergeCommit": "0dc2c94990f34757427d608ed03ef9d5c76c08c9",
+      "localEvidence": "eval/baselines/second-call-batch-compound-final-v1.json"
+    },
+    {
+      "families": [
+        8
+      ],
+      "scenarioId": "E2E-337",
+      "pr": 427,
+      "mergeCommit": "8feafabf9f04412ec0d5938e2adf2e7edd65e10f",
+      "localEvidence": "eval/baselines/second-call-batch-relative-final-v1.json"
+    },
+    {
+      "families": [
+        9
+      ],
+      "scenarioId": "E2E-338",
+      "pr": 428,
+      "mergeCommit": "3720d4e5fac3fa2b9da53fa02dd41a6f8dfda4c2",
+      "localEvidence": "eval/baselines/second-call-batch-message-final-v1.json"
+    },
+    {
+      "families": [
+        10
+      ],
+      "scenarioId": "E2E-339",
+      "pr": 429,
+      "mergeCommit": "fd539c229cd1e78fcf1f4dea0d285568feb02e26",
+      "localEvidence": "eval/baselines/second-call-batch-patient-change-final-v1.json"
+    },
+    {
+      "families": [
+        11
+      ],
+      "scenarioId": "E2E-340",
+      "pr": 430,
+      "mergeCommit": "a8eaf820d5ca9d458b8afd478813510ac4b26980",
+      "localEvidence": "eval/baselines/second-call-batch-pauses-final-v1.json"
+    },
+    {
+      "families": [
+        12
+      ],
+      "scenarioId": "E2E-341",
+      "pr": 431,
+      "mergeCommit": "e736fc62d456b3ae6d12bee6e8884f04d61c6d9a",
+      "localEvidence": "eval/baselines/second-call-batch-external-final-v1.json"
+    },
+    {
+      "families": [
+        13
+      ],
+      "scenarioId": "E2E-342",
+      "pr": 432,
+      "mergeCommit": "c59fe304732de0b46469de8104161a3285cd682a",
+      "localEvidence": "eval/baselines/second-call-batch-spelling-final-v1.json"
+    },
+    {
+      "families": [
+        14
+      ],
+      "scenarioId": "E2E-343",
+      "pr": 433,
+      "mergeCommit": "1d9fef3687630709ca6126c9bcde6d3425021f46",
+      "localEvidence": "eval/baselines/second-call-batch-financial-final-v1.json"
+    },
+    {
+      "families": [
+        15
+      ],
+      "scenarioId": "E2E-344",
+      "pr": 434,
+      "mergeCommit": "5c7183c0b6c61451c7c0730ce1a6d63eaac4b1f3",
+      "localEvidence": "eval/baselines/second-call-batch-clinical-final-v1.json"
+    },
+    {
+      "families": [
+        16
+      ],
+      "scenarioId": "E2E-345",
+      "pr": 435,
+      "mergeCommit": "92cfd9eed518e4a1aa8d12f8318180238144ca15",
+      "localEvidence": "eval/baselines/second-call-batch-arrival-final-v1.json"
+    },
+    {
+      "families": [
+        17
+      ],
+      "scenarioId": "E2E-346",
+      "pr": 436,
+      "mergeCommit": "78a65cbe76547ffe2a465931e9b59e60641f6e65",
+      "localEvidence": "eval/baselines/second-call-batch-preference-final-v1.json"
+    },
+    {
+      "families": [
+        18
+      ],
+      "scenarioId": "E2E-347",
+      "pr": 437,
+      "mergeCommit": "54eee2d9a8a091a2e47b55dcf2dc8e7550ff762f",
+      "localEvidence": "eval/baselines/second-call-batch-special-service-final-v1.json"
+    }
+  ],
+  "finalIntegration": {
+    "command": "node --test --test-concurrency=2 test/voice/special-service-boundaries.test.ts test/voice/preference-service-boundaries.test.ts test/voice/arrival-fact-boundaries.test.ts test/voice/clinical-suitability-boundaries.test.ts test/voice/financial-evidence-boundaries.test.ts test/voice/booking-request-boundaries.test.ts test/voice/post-action-followups.test.ts test/contract/scenario-manifest.test.ts",
+    "pass": 15,
+    "fail": 0,
+    "durationMs": 96015.283096,
+    "signedJourneys": 21,
+    "scope": "All five latest second-batch boundary families together, existing request boundaries and post-action receipts on the final production source."
+  },
+  "finalTypecheck": {
+    "command": "npm run typecheck",
+    "result": "passed",
+    "durationSeconds": 115
+  },
+  "sourceHashes": {
+    "src/standalone/special-service-language.ts": "0c99e2334fd8737ce0963ae5cd47bd9a7b60c2b77f9ff078f70e8a44fbd4e799",
+    "src/standalone/request-boundary-language.ts": "be273ff7949d2607b18ced63602aa37332464a9d1b25e911dca8726b7b5a0c00",
+    "src/standalone/openai-clinical-intent.ts": "0bc53bba9098d8fdb957705726c38e85d0b4dd907f8197ab4b95f722258217b5",
+    "src/core/model.ts": "16173300510bdad56c88e7cc5818160f18f32bdfdc0d99cdd1e9b121d0745f94",
+    "src/core/clarification.ts": "d4572e8ddf77db038fbcc63c799dbfcc1ebe983500d30ad089b1269a67e77352",
+    "src/core/caller-identity.ts": "7110b05f7f2c10ce26d47abd17da876c65000fc724e7d1a8e2739c76b254f47e",
+    "test/voice/special-service-boundaries.test.ts": "d8ea8faab7b189eac39a82cecd8e323c717c2c62fd405dc77c127a7fcb7d89da",
+    "test/contract/scenario-manifest.test.ts": "77352f573197d88e02459a8759ce8c8a5957b107ea80e76590af71902027f2ff"
+  },
+  "originalCorpus": {
+    "path": "eval/clinic-conversation-candidates-v1.json",
+    "cases": 45,
+    "sha256": "2b537ef47b49a393c4916a43e0cbfc9e54f58a03daab6170b21ec3fa369e6e2c",
+    "baseCommit": "11c6e7236b17636c9bbdc9583f21c43259768de1",
+    "unchanged": true
+  },
+  "publicationPolicy": "Normal codex branch PR squash merges after passing local checks, explicitly authorized by operator; no admin bypass or self-approval.",
+  "ci": {
+    "validationPassClaimed": false,
+    "lastImplementationHead": "07dad868fe2468b728c584d06260554ea79af13f",
+    "pullRequestRun": 37584891569,
+    "pushRun": 37584885520,
+    "status": "completed failure before steps",
+    "annotationCheck": 112672663103,
+    "reason": "Recent account payments failed or spending limit needs increase; jobs not started.",
+    "repositoryConfigurationChanged": false
+  },
+  "limits": [
+    "Complete bounded language and current independently approved native cohort; unfamiliar wording retains protected classification.",
+    "Unsupported payment/refund/coverage/reservation, clinical recommendation/eligibility, class/membership/home arrangement, visit-mode/type/duration and cross-practitioner source changes need clinic handling; no unsupported positive behavior is claimed.",
+    "No new durable patient content; Abby keeps phone-to-Cliniko-ID index only. Private drafts/proof/outcomes are transient; authorized messages and appointments belong to Cliniko.",
+    "Signed call/provider/mail/approval evidence is synthetic and qualified by each report; historical source fingerprints belong to their published patch, not every later HEAD.",
+    "Original 45-case corpus unchanged; not claiming a new real-model run of that corpus."
+  ],
+  "operatorDeferred": [
+    "Real mail delivery",
+    "Carrier/Twilio activation",
+    "Splose"
+  ]
+}
