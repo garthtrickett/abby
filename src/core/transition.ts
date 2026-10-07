@@ -1,3 +1,4 @@
+import { staffMessageNoticeText, validStaffMessageNotice } from "./staff-message-notice.ts";
 import { reschedulingMenuPresentation } from "./rescheduling-menu.ts";
 import { bookingConfirmation, bookingMenuPresentation } from "./booking-menu.ts";
 import { supportedVoiceLocale } from "./voice-presentation.ts";
@@ -291,6 +292,10 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       state.callerMessages.push(interpretation.requestSubject ?
         (Object.values(state.staffItems).some(item => item.reason === "callerRequested") ? staffOutcomeText(state) + " " : "") + staffSubjectUnavailable(interpretation.requestSubject) : staffUnavailableText);
       break;
+    case "staffMessageNotice":
+      if (!validStaffMessageNotice(interpretation.notice)) return err({ kind: "invalidTransition" });
+      state.callerMessages.push((interpretation.notice === "alreadySent" ? staffOutcomeText(state) + " " : "") + staffMessageNoticeText[interpretation.notice]);
+      break;
     case "staffRequestReady":
       if (state.policy.staffWorkEnabled === false || interpretation.requestedPerson !== undefined && !validStaffLabel(interpretation.requestedPerson) ||
           interpretation.requestSubject !== undefined && !validStaffRequestSubject(interpretation.requestSubject)) return err({ kind: "invalidTransition" });
@@ -299,7 +304,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
     case "staffVerificationRequired":
       if (interpretation.requestSubject !== undefined && !validStaffRequestSubject(interpretation.requestSubject)) return err({ kind: "invalidTransition" });
       state.callerMessages.push((interpretation.requestSubject ? `You are asking staff about ${staffRequestSubjectLabel[interpretation.requestSubject]}. ${staffRequestSubjectLimit[interpretation.requestSubject]} ` : "") +
-        "Before saving a staff request, verify your registered email. If you receive a six-digit code, enter it on the keypad, then press pound. Star clears your entry. Please do not say the code aloud. After verification, ask me to send the request.");
+        "Before saving a staff request, verify your registered email. If you receive a six-digit code, enter it on the keypad, then press pound. Star clears your entry. Please do not say the code aloud. " + (interpretation.messageDraft === true ? "After verification, tell me your message. You can add or correct details before asking me to send it." : "After verification, ask me to send the request."));
       break;
     case "workflowStarted": {
       if (!["book", "cancel", "reschedule", "intake", "appointments.read"].includes(interpretation.operation) ||

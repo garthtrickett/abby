@@ -1,3 +1,6 @@
+import { StaffMessageDraft, staffMessageLanguage } from "./staff-message-draft.ts";
+import type { PrivateStaffMessage } from "./staff-message-draft.ts";
+import { validRecallSummary } from "../cliniko/recall-note.ts";
 import { randomUUID } from "node:crypto";
 import { ClinikoRecallWriter } from "../cliniko/recall-write.ts";
 import type { ClinikoRecallWriteRequest } from "../cliniko/recall-write.ts";
@@ -22,7 +25,7 @@ import type { StaffReviewProcess } from "../core/staff-review-process.ts";
 export type ClinikoStaffSessionConfig = Omit<ClinikoCancellationSessionConfig, "cancellationApprovalPath"> & Readonly<{ staffApprovalPath: string }>;
 type Failure = Readonly<{ kind: "staffUnavailable" }>;
 const unavailable = (): Result<never, Failure> => err({ kind: "staffUnavailable" });
-type Prepared = Readonly<{ turnId: string; revision: number; requestedPerson?: string; requestSubject?: StaffRequestSubject }>;
+type Prepared = Readonly<{ turnId: string; revision: number; requestedPerson?: string; requestSubject?: StaffRequestSubject; message?: PrivateStaffMessage }>;
 
 /** One admitted call owns an independently authorized staff verification and at
  * most one request send. Only the approved Cliniko queue durably owns its detail. */
@@ -33,6 +36,8 @@ export class ClinikoStaffSession {
   readonly #writer: ClinikoRecallWriter;
   readonly #lifetime = new AbortController();
   readonly #onClose = () => this.dispose();
+  readonly #message = new StaffMessageDraft();
+  get collectingMessage() { return this.#message.active; }
   #pendingPerson: string | undefined;
   #pendingSubject: Readonly<{ subject: StaffRequestSubject; turnId: string; revision: number }> | undefined;
   #prepared: Prepared | undefined;
@@ -120,7 +125,7 @@ export class ClinikoStaffSession {
     const c = this.#config, signal = AbortSignal.any([query.signal, this.#lifetime.signal, AbortSignal.timeout(15_000)]);
     if (!sameScope(query.scope, c.receipt.scope) || query.callId !== c.receipt.callId || query.sessionId !== c.sessionId ||
         query.policyVersion !== c.policyVersion || !query.turnId || typeof query.callerText !== "string" || query.callerText.length > 4000) return unavailable();
-    const explicit = staffRequestLanguage(query.callerText);
+    const explicit = staffRequestLanguage(query.callerText), messageTurn = staffMessageLanguage(query.callerText, this.#message.active);
     if (query.requestedPerson !== undefined && (explicit?.kind !== "staffRequest" || explicit.requestedPerson?.toLowerCase() !== query.requestedPerson.toLowerCase())) return unavailable();
     if (query.requestSubject !== undefined && (!validStaffRequestSubject(query.requestSubject) ||
         explicit?.kind === "staffRequest" && explicit.requestSubject !== undefined && explicit.requestSubject !== query.requestSubject)) return unavailable();
@@ -128,6 +133,7 @@ export class ClinikoStaffSession {
     const active = await this.#active(signal);
     if (!active || active.state.conversationRevision !== query.expectedConversationRevision) return unavailable();
     const existing = Object.values(active.state.staffItems).find(item => item.reason === "callerRequested");
+    if (existing && messageTurn) return ok({ kind: "messageNotice", notice: "alreadySent" });
     if (existing) return (query.requestedPerson === undefined || query.requestedPerson.toLowerCase() === existing.requestedPerson?.toLowerCase()) &&
       (askedSubject === undefined || askedSubject === existing.requestSubject)
       ? ok({ kind: "existing" }) : unavailable();
@@ -137,20 +143,27 @@ export class ClinikoStaffSession {
     const grant = await this.#verification.verified(signal);
     if (!grant) {
       if (signal.aborted || this.#verifiedOnce) return unavailable();
+      if (messageTurn?.kind === "begin") this.#message.apply(messageTurn, query.turnId, query.expectedConversationRevision + 1);
       if (askedSubject !== undefined) this.#pendingSubject = { subject: askedSubject, turnId: query.turnId, revision: query.expectedConversationRevision + 1 };
-      return ok({ kind: "codeRequired", ...(askedSubject === undefined ? {} : { requestSubject: askedSubject }) });
+      return ok({ kind: "codeRequired", ...(this.#message.active ? { messageDraft: true as const } : {}), ...(askedSubject === undefined ? {} : { requestSubject: askedSubject }) });
     }
     // A model classification can offer verification but never authorize the
     // send. After verification require a bounded actual caller request.
-    if (explicit?.kind !== "staffRequest") return unavailable();
-    if (askedSubject !== undefined && explicit.requestSubject !== askedSubject) return unavailable();
+    let message: PrivateStaffMessage | undefined;
+    if (messageTurn) {
+      if (messageTurn.kind === "send") {
+        message = this.#message.ready(active.state);
+        if (!message) return ok({ kind: "messageNotice", notice: "notReady" });
+      } else return ok({ kind: "messageNotice", notice: this.#message.apply(messageTurn, query.turnId, query.expectedConversationRevision + 1) });
+    } else if (explicit?.kind !== "staffRequest" || this.#message.active) return unavailable();
+    if (askedSubject !== undefined && explicit?.kind === "staffRequest" && explicit.requestSubject !== askedSubject) return unavailable();
     const pending = this.#pendingSubject;
     if (pending && (!active.state.processedTurnIds.includes(pending.turnId) || active.state.conversationRevision < pending.revision)) return unavailable();
     const subject = askedSubject ?? pending?.subject;
     const after = await this.#active(signal);
     if (!after || after.state.conversationRevision !== query.expectedConversationRevision) return unavailable();
     this.#prepared = { turnId: query.turnId, revision: query.expectedConversationRevision + 1,
-      ...(this.#pendingPerson ? { requestedPerson: this.#pendingPerson } : {}), ...(subject ? { requestSubject: subject } : {}) };
+      ...(this.#pendingPerson ? { requestedPerson: this.#pendingPerson } : {}), ...(subject ? { requestSubject: subject } : {}), ...(message ? { message } : {}) };
     return ok({ kind: "ready", ...(this.#pendingPerson ? { requestedPerson: this.#pendingPerson } : {}), ...(subject ? { requestSubject: subject } : {}) });
   }
   async openTask(item: StaffItem, external?: AbortSignal): Promise<StaffTaskReceipt> {
@@ -160,11 +173,13 @@ export class ClinikoStaffSession {
     // Claim before any async proof/policy/provider work. A concurrent second
     // invocation cannot reinterpret the same call as a new send attempt.
     this.#prepared = undefined;
+    this.#message.clear();
     if (!prepared || item.reason !== "callerRequested" || item.linkedActionKey || item.request || item.requestedPerson !== prepared.requestedPerson || item.requestSubject !== prepared.requestSubject ||
         !sameScope(item.scope, this.#config.receipt.scope)) return rejected;
     const signal = AbortSignal.any([this.#lifetime.signal, AbortSignal.timeout(20_000), ...(external ? [external] : [])]);
     const active = await this.#active(signal), grant = await this.#verification.verified(signal);
     if (!active || !grant || active.state.conversationRevision !== prepared.revision || !active.state.processedTurnIds.includes(prepared.turnId) ||
+        prepared.message && !prepared.message.turnIds.every(id => active.state.processedTurnIds.includes(id)) ||
         JSON.stringify(active.state.staffItems[item.key]) !== JSON.stringify(item)) return rejected;
     const now = (this.#config.clock ?? (() => new Date().toISOString()))();
     const patient = await this.#verification.proof.verifyOperation(item.scope, grant.verificationRef, "staff.request", now, signal);
@@ -177,7 +192,9 @@ export class ClinikoStaffSession {
       summary: JSON.stringify({ schema: "abby.staff-request.v1", locationId: item.scope.locationId, businessId: a.businessId,
         policyVersion: a.policyVersion, approvalRevision: a.revision, reason: "callerRequested", requestedPerson: item.requestedPerson ?? null,
         ...(item.requestSubject === undefined ? {} : { requestSubject: item.requestSubject }),
+        ...(prepared.message ? { messageText: prepared.message.text } : {}),
         reviewOwnerRef: a.reviewOwnerRef, reviewBackupRef: a.reviewBackupRef, reviewCadenceMinutes: a.reviewCadenceMinutes }) };
+    if (!validRecallSummary(request.summary)) return rejected;
     this.#attempt = { item: structuredClone(item), request, revision: prepared.revision };
     let result;
     try { result = await awaitUntilAbort(this.#writer.openOnce(request, signal), signal); } catch { result = undefined; }
@@ -219,5 +236,5 @@ export class ClinikoStaffSession {
       ? { kind: "exactOpen", taskKey: item.key, hostTaskRef: result.value.recallRef, destination: item.destination } : unknown;
   }
   dispose() { this.#lifetime.abort(); this.#config.signal.removeEventListener("abort", this.#onClose); this.#verification.dispose();
-    this.#prepared = undefined; this.#pendingPerson = undefined; this.#pendingSubject = undefined; this.#attempt = undefined; this.#receipt = undefined; }
+    this.#message.clear(); this.#prepared = undefined; this.#pendingPerson = undefined; this.#pendingSubject = undefined; this.#attempt = undefined; this.#receipt = undefined; }
 }

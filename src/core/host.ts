@@ -205,7 +205,7 @@ export type StaffRequestQuery = Readonly<{
   turnId: string; callerText: string; expectedConversationRevision: number; requestedPerson?: string;
   requestSubject?: import("./staff-request-subject.ts").StaffRequestSubject; signal: AbortSignal;
 }>;
-export type StaffRequestPreparation = Readonly<{ kind: "existing" }> | Readonly<{ kind: "codeRequired"; requestSubject?: import("./staff-request-subject.ts").StaffRequestSubject }> |
+export type StaffRequestPreparation = Readonly<{ kind: "messageNotice"; notice: import("./staff-message-notice.ts").StaffMessageNotice }> | Readonly<{ kind: "existing" }> | Readonly<{ kind: "codeRequired"; messageDraft?: true; requestSubject?: import("./staff-request-subject.ts").StaffRequestSubject }> |
   Readonly<{ kind: "ready"; requestedPerson?: string; requestSubject?: import("./staff-request-subject.ts").StaffRequestSubject }>;
 export type StaffReviewProcessQuery = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string; taskKey: string; expectedConversationRevision: number; signal: AbortSignal }>;
 export interface StaffReviewProcessHost {

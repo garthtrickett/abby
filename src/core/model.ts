@@ -257,8 +257,9 @@ export type TurnInterpretation =
   | Readonly<{ kind: "outcomeQuery" }>
   | Readonly<{ kind: "notificationOutcomeQuery" }>
   | Readonly<{ kind: "staffOutcomeQuery"; reviewProcess?: import("./staff-review-process.ts").StaffReviewProcess }>
-  | Readonly<{ kind: "staffVerificationRequired"; requestSubject?: import("./staff-request-subject.ts").StaffRequestSubject }>
+  | Readonly<{ kind: "staffVerificationRequired"; messageDraft?: true; requestSubject?: import("./staff-request-subject.ts").StaffRequestSubject }>
   | Readonly<{ kind: "staffUnavailable"; requestSubject?: import("./staff-request-subject.ts").StaffRequestSubject }>
+  | Readonly<{ kind: "staffMessageNotice"; notice: import("./staff-message-notice.ts").StaffMessageNotice }>
   | Readonly<{ kind: "staffRequestReady"; requestedPerson?: string; requestSubject?: import("./staff-request-subject.ts").StaffRequestSubject }>
   | Readonly<{ kind: "modelPending"; taskRef: string }>
   | Readonly<{ kind: "modelFallback"; staffWorkUnavailable?: true }>

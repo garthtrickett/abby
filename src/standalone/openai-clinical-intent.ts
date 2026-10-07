@@ -1,3 +1,4 @@
+import { staffMessageLanguage } from "./staff-message-draft.ts";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
@@ -210,6 +211,7 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     if (explicitUrgentRequest(turn.text)) return ok({ kind: "handoff", reason: "potentiallyUrgent", staffWorkUnavailable: true, checkedAt: before.now });
     if (isPresenceQuestion(turn.text)) return ok({ kind: "presence" });
     if (isMissedCallQuestion(turn.text)) return ok({ kind: "missedCall" });
+    if (!before.callerIdentityDenied && staffMessageLanguage(turn.text, config.owner.collectingStaffMessage)) return ok({ kind: "staffRequest" });
     const clinicalAdvice = clinicalAdviceBoundary(turn.text);
     if (clinicalAdvice) return ok(clinicalAdvice);
     if (!before.callerIdentityDenied) {
