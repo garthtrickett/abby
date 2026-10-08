@@ -1,0 +1,299 @@
+{
+  "schema": "abby.file-whisper-screen.v1",
+  "date": "2026-10-08",
+  "baseHead": "9290d314b960e8a18646a25fa8b8b85b2664805d",
+  "status": "diagnosticCompleteCandidateRejected",
+  "report": {
+    "file": "eval/results/20261008-file-whisper-screen.json",
+    "sha256": "d7acfa722dfc5b6bdba77109642b214fb9ab4019c40286a655336b7e02cce12f",
+    "ownerOnly": true
+  },
+  "runner": {
+    "path": "eval/results/screen-file-whisper-20261008.mjs",
+    "sha256": "cfd170c7564771eea49ef54632c6a062794054d29eb0145630fa6d39df1d1acb",
+    "ownerOnly": true
+  },
+  "sourceFiles": [
+    {
+      "path": "src/voice/openai-realtime-transcription.ts",
+      "sha256": "2104a7321c544d8fddd5939b7613c00968979dc888d22aa61730bb6c721c1df0"
+    },
+    {
+      "path": "src/voice/transcription-evaluation.ts",
+      "sha256": "3ea30413b80cd28ecf337aaf9ad156dc6d5fd946ee74f81678654f9f2a41943d"
+    },
+    {
+      "path": "src/voice/transcription-evaluation-gate.ts",
+      "sha256": "44f7973d65f8de8261db8030bfbb14ce827a0c14b9b35756c2640133c956357c"
+    },
+    {
+      "path": "scripts/evaluate-file-transcription.ts",
+      "sha256": "758f441292c4b6feb90db122fec8eee9bd7a26af32089fed3ba32e27e7db246b"
+    }
+  ],
+  "originalCorpora": [
+    {
+      "path": "eval/transcription-v1.json",
+      "sha256": "2d3fabc12d13699ffecc4017d64ba9cedc91373e001529abf135a6f311357905"
+    },
+    {
+      "path": "eval/transcription-telephony-v1.json",
+      "sha256": "65645afaeeaca6c91342b8e690c184affd58e004f3438cfa0cccfdd18e3f8e1a"
+    },
+    {
+      "path": "eval/transcription-noise-v1.json",
+      "sha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2"
+    },
+    {
+      "path": "eval/transcription-safety-v1.json",
+      "sha256": "fb261dfa87cfd036307346874b439b63596a7b9390109cc3d22965f5fda795da"
+    }
+  ],
+  "configuration": {
+    "endpoint": "https://api.openai.com/v1/audio/transcriptions",
+    "requestedModel": "whisper-1",
+    "responseFormat": "json",
+    "context": "none",
+    "languageHint": null,
+    "temperature": "providerDefault",
+    "repeats": 1,
+    "concurrency": 2,
+    "timeoutMs": 30000,
+    "nodeVersion": "v22.23.2"
+  },
+  "summary": {
+    "counts": {
+      "match": 2,
+      "mismatch": 0,
+      "critical": 4,
+      "providerFailure": 0
+    },
+    "criticalMisses": [
+      {
+        "caseId": "NS-001",
+        "missingCriticalTerms": [
+          "Thursday"
+        ]
+      },
+      {
+        "caseId": "NS-004",
+        "missingCriticalTerms": [
+          "Thursday"
+        ]
+      },
+      {
+        "caseId": "NS-005",
+        "missingCriticalTerms": [
+          "book"
+        ]
+      },
+      {
+        "caseId": "NS-006",
+        "missingCriticalTerms": [
+          "chest"
+        ]
+      }
+    ],
+    "empty": 0,
+    "truncated": 0,
+    "referenceWords": 44,
+    "editCount": 6,
+    "wordErrorRate": 0.13636363636363635,
+    "completeFileRequestP95Ms": 2579,
+    "modelEchoes": 0
+  },
+  "requests": [
+    {
+      "caseId": "NS-001",
+      "repeat": 1,
+      "pcmSha256": "4c0f89cf66ad975b340162747bca58162569a8d496f01cdb71c4dbb20cf0c5e9",
+      "pcmBytes": 83840,
+      "wavSha256": "06627e654175598252a4ee2d6d68865a577872a7b45b756029fd3a6ca7872939",
+      "wavBytes": 83884,
+      "requestBodyPath": "eval/results/file-whisper-20261008/NS-001.multipart",
+      "requestBodySha256": "39f1051e8d9f5e754256913999a6e0dfc1857f2378dc9eff9429166e5fad8172",
+      "requestBodyBytes": 84253,
+      "contentType": "multipart/form-data; boundary=----formdata-undici-042023153752",
+      "requestFields": [
+        "model",
+        "response_format",
+        "file"
+      ],
+      "requestedModel": "whisper-1",
+      "responseModel": null,
+      "modelApplication": "unverified",
+      "httpStatus": 200,
+      "verdict": "critical",
+      "quality": "needsClarification",
+      "completeFileRequestMs": 1491
+    },
+    {
+      "caseId": "NS-002",
+      "repeat": 1,
+      "pcmSha256": "ede31b5da32bb6222b982dfafdc17134d01d2a5e35bb6b7ec7c05455af7f610e",
+      "pcmBytes": 90240,
+      "wavSha256": "2234c30fcb3d6364a9c2631434cf35479af447ad060c6baa2c8f7e4b5b4be902",
+      "wavBytes": 90284,
+      "requestBodyPath": "eval/results/file-whisper-20261008/NS-002.multipart",
+      "requestBodySha256": "3ced678eeed7a7390717a0c62002d569d3d174d05f9f98035f41cee3c18e752e",
+      "requestBodyBytes": 90653,
+      "contentType": "multipart/form-data; boundary=----formdata-undici-025726334238",
+      "requestFields": [
+        "model",
+        "response_format",
+        "file"
+      ],
+      "requestedModel": "whisper-1",
+      "responseModel": null,
+      "modelApplication": "unverified",
+      "httpStatus": 200,
+      "verdict": "match",
+      "quality": "needsClarification",
+      "completeFileRequestMs": 2531
+    },
+    {
+      "caseId": "NS-003",
+      "repeat": 1,
+      "pcmSha256": "185a21430c72e911d092ea578f0748ad6ca35d7289b764f0c97fac3f2d2f0495",
+      "pcmBytes": 110080,
+      "wavSha256": "cd568f5e767d4c2afb9517733796a39b4ed0fa82ad658ff46d58f3c4e0a52581",
+      "wavBytes": 110124,
+      "requestBodyPath": "eval/results/file-whisper-20261008/NS-003.multipart",
+      "requestBodySha256": "b944cde1e93bd8459c5245f49a3ce6778ee53c7cb90b438688fef1908e2d80dd",
+      "requestBodyBytes": 110493,
+      "contentType": "multipart/form-data; boundary=----formdata-undici-076179698158",
+      "requestFields": [
+        "model",
+        "response_format",
+        "file"
+      ],
+      "requestedModel": "whisper-1",
+      "responseModel": null,
+      "modelApplication": "unverified",
+      "httpStatus": 200,
+      "verdict": "match",
+      "quality": "needsClarification",
+      "completeFileRequestMs": 1368
+    },
+    {
+      "caseId": "NS-004",
+      "repeat": 1,
+      "pcmSha256": "476b330c032d23f0acb2ea1d88d0d00b447d2ade928d405afe5de1a0e13cce08",
+      "pcmBytes": 92800,
+      "wavSha256": "f147fe75fb56f6f0741762482939ff56107e3da0def74612a82f3e04d9ee1302",
+      "wavBytes": 92844,
+      "requestBodyPath": "eval/results/file-whisper-20261008/NS-004.multipart",
+      "requestBodySha256": "50f4c2ced79a2fab7829647e5919b4ef84bd0180aac4c9b0f95a94c763596c14",
+      "requestBodyBytes": 93213,
+      "contentType": "multipart/form-data; boundary=----formdata-undici-076701302088",
+      "requestFields": [
+        "model",
+        "response_format",
+        "file"
+      ],
+      "requestedModel": "whisper-1",
+      "responseModel": null,
+      "modelApplication": "unverified",
+      "httpStatus": 200,
+      "verdict": "critical",
+      "quality": "needsClarification",
+      "completeFileRequestMs": 1031
+    },
+    {
+      "caseId": "NS-005",
+      "repeat": 1,
+      "pcmSha256": "9aae18f17d26c003055c5726ba9e28d9226e3ab2b5a394dc933dc632a3c4d6df",
+      "pcmBytes": 94080,
+      "wavSha256": "7d31d01b2fbf873e98f6cacd2cb2dd9f65ba8deef5cc91c4ecbe1c00c404df21",
+      "wavBytes": 94124,
+      "requestBodyPath": "eval/results/file-whisper-20261008/NS-005.multipart",
+      "requestBodySha256": "2518a07994707d1fb3f6759242b635879616cb2b5f905987496cc98c5be5826f",
+      "requestBodyBytes": 94493,
+      "contentType": "multipart/form-data; boundary=----formdata-undici-034277788799",
+      "requestFields": [
+        "model",
+        "response_format",
+        "file"
+      ],
+      "requestedModel": "whisper-1",
+      "responseModel": null,
+      "modelApplication": "unverified",
+      "httpStatus": 200,
+      "verdict": "critical",
+      "quality": "needsClarification",
+      "completeFileRequestMs": 2579
+    },
+    {
+      "caseId": "NS-006",
+      "repeat": 1,
+      "pcmSha256": "5f8dee408c6a256936a02b6db29bdea788c41161fb277d4970ab8217c20ebb10",
+      "pcmBytes": 100480,
+      "wavSha256": "f13ea32c3bbf3d68b8797dac686c67ad8136ae0610ef3d188b562c0708a881fd",
+      "wavBytes": 100524,
+      "requestBodyPath": "eval/results/file-whisper-20261008/NS-006.multipart",
+      "requestBodySha256": "2fb38d75e9c4f09dca45981916033cc90362b17d6159c73e494ab9bda32a6b9b",
+      "requestBodyBytes": 100893,
+      "contentType": "multipart/form-data; boundary=----formdata-undici-026354550222",
+      "requestFields": [
+        "model",
+        "response_format",
+        "file"
+      ],
+      "requestedModel": "whisper-1",
+      "responseModel": null,
+      "modelApplication": "unverified",
+      "httpStatus": 200,
+      "verdict": "critical",
+      "quality": "needsClarification",
+      "completeFileRequestMs": 1475
+    }
+  ],
+  "job": {
+    "label": "Abby original noisy file Whisper diagnostic October 8",
+    "exitCode": 0,
+    "elapsedSeconds": 5,
+    "startedAt": "2026-10-08T02:20:15.495Z",
+    "completedAt": "2026-10-08T02:20:21.069Z",
+    "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791426015244.log",
+    "exitMeaning": "Instrumentation complete; accuracy screen fails."
+  },
+  "timingMeaning": "Complete-file HTTP time; not live post-commit or audible response latency.",
+  "inference": "Four critical omissions and 6/44 word errors reject this one-pass completed-file candidate. A complete live gate is not assessed.",
+  "limitations": [
+    "One repeat per case is below the unchanged three-repeat gate minimum.",
+    "The request names whisper-1 but no response echoes the model; remote model application is unverified.",
+    "The completed-file endpoint and HTTP timing do not exercise the live adapter or post-commit latency.",
+    "whisper-1 is deprecated, with removal announced for 2027-02-26; this is a diagnostic comparison, not a production migration.",
+    "Real carrier, microphone/accent and human listening evidence remain absent."
+  ],
+  "gateStatus": {
+    "syntheticGate": "notAssessed",
+    "completeStoredCandidateGate": "fail",
+    "statusExitCode": 2,
+    "representativeCallGate": "notRun",
+    "humanReviewStatus": "pending",
+    "releaseGate": "unverified"
+  },
+  "validation": {
+    "syntaxCommand": "node --check eval/results/screen-file-whisper-20261008.mjs",
+    "syntaxResult": "pass",
+    "evidenceCommand": "python3 /home/gust/code/abby/eval/results/verify-file-whisper-20261008.py /home/gust/code/abby-file-whisper-screen/eval/baselines/file-whisper-screen-20261008-v1.json",
+    "evidenceValidation": "pass",
+    "diffCheck": "pass",
+    "evidenceRunnerSha256": "c16c9f3b202be68752b54f1296cfec746b0b7332bba1c3d02acd0f04923edc2c"
+  },
+  "requiredSpeechMigration": {
+    "source": "https://developers.openai.com/api/docs/deprecations",
+    "verifiedOn": "2026-10-08",
+    "speechModels": [
+      "tts-1",
+      "tts-1-hd",
+      "gpt-4o-mini-tts-2025-03-20",
+      "gpt-4o-mini-tts-2025-12-15"
+    ],
+    "announcedRemoval": "2027-01-06",
+    "recommendedReplacement": "gpt-realtime-2.1-mini",
+    "status": "open",
+    "existingSpeechLatencyEvidence": "Historical only; replacement needs output integrity, cancellation, latency and source-matched complete-gate evidence."
+  }
+}
