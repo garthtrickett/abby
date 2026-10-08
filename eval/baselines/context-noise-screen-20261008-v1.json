@@ -1,0 +1,365 @@
+{
+  "schema": "abby.context-noise-screen.v1",
+  "date": "2026-10-08",
+  "baseHead": "f0653c2f07397c88dcf203401345cb37e1d436cd",
+  "status": "screenCompleteAllCandidatesRejected",
+  "sourcePaths": [
+    "src/voice/openai-realtime-transcription.ts",
+    "src/voice/transcription-evaluation.ts",
+    "src/voice/transcription-evaluation-gate.ts"
+  ],
+  "sourceSha256": "281edbfc25ff7c4e08ae6d37dc29a1594e6cb92dec3f7a023c6213de34bfd9d8",
+  "sourceStable": true,
+  "corpus": {
+    "file": "eval/transcription-noise-v1.json",
+    "sha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+    "stable": true,
+    "fixturesStable": true
+  },
+  "configuration": {
+    "model": "gpt-transcribe",
+    "contextVersion": "clinic-v1",
+    "context": {
+      "prompt": "English physiotherapy clinic calls about appointments, booking, and urgent symptoms.",
+      "languages": [
+        "en"
+      ]
+    },
+    "contextSha256": "42dbea5fbfc5f75818c30776f1561d4464d62b94b57e5ccbef51a02a96fcaf97",
+    "repeats": 1,
+    "concurrency": 2,
+    "paceMs": 20,
+    "nodeVersion": "v22.23.2"
+  },
+  "report": {
+    "file": "eval/results/20261008-context-noise-three-arm-screen.json",
+    "sha256": "a099e63e8642c2fdd6a32d1ead098ae59218b4ae9999239b8cad7477a1273bcc",
+    "ownerOnly": true
+  },
+  "runner": {
+    "file": "eval/results/screen-context-noise-20261008.mjs",
+    "sha256": "91d628876d9c6315d0d0609f07405e883771a1388db1916dba0f92771ff2a4a2",
+    "ownerOnly": true
+  },
+  "job": {
+    "label": "Abby contextual transcription noise comparison October 8",
+    "exitCode": 0,
+    "elapsedSeconds": 46,
+    "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791422071971.log",
+    "startedAt": "2026-10-08T01:14:32.514Z",
+    "completedAt": "2026-10-08T01:15:18.937Z",
+    "exitMeaning": "Diagnostic and configuration/input checks completed; each quality assessment fails."
+  },
+  "fixtureMetadata": [
+    {
+      "caseId": "NS-001",
+      "pcmSha256": "4c0f89cf66ad975b340162747bca58162569a8d496f01cdb71c4dbb20cf0c5e9",
+      "pcmBytes": 83840,
+      "paddedInputSha256": "4c0f89cf66ad975b340162747bca58162569a8d496f01cdb71c4dbb20cf0c5e9"
+    },
+    {
+      "caseId": "NS-002",
+      "pcmSha256": "ede31b5da32bb6222b982dfafdc17134d01d2a5e35bb6b7ec7c05455af7f610e",
+      "pcmBytes": 90240,
+      "paddedInputSha256": "ede31b5da32bb6222b982dfafdc17134d01d2a5e35bb6b7ec7c05455af7f610e"
+    },
+    {
+      "caseId": "NS-003",
+      "pcmSha256": "185a21430c72e911d092ea578f0748ad6ca35d7289b764f0c97fac3f2d2f0495",
+      "pcmBytes": 110080,
+      "paddedInputSha256": "185a21430c72e911d092ea578f0748ad6ca35d7289b764f0c97fac3f2d2f0495"
+    },
+    {
+      "caseId": "NS-004",
+      "pcmSha256": "476b330c032d23f0acb2ea1d88d0d00b447d2ade928d405afe5de1a0e13cce08",
+      "pcmBytes": 92800,
+      "paddedInputSha256": "476b330c032d23f0acb2ea1d88d0d00b447d2ade928d405afe5de1a0e13cce08"
+    },
+    {
+      "caseId": "NS-005",
+      "pcmSha256": "9aae18f17d26c003055c5726ba9e28d9226e3ab2b5a394dc933dc632a3c4d6df",
+      "pcmBytes": 94080,
+      "paddedInputSha256": "9aae18f17d26c003055c5726ba9e28d9226e3ab2b5a394dc933dc632a3c4d6df"
+    },
+    {
+      "caseId": "NS-006",
+      "pcmSha256": "5f8dee408c6a256936a02b6db29bdea788c41161fb277d4970ab8217c20ebb10",
+      "pcmBytes": 100480,
+      "paddedInputSha256": "5f8dee408c6a256936a02b6db29bdea788c41161fb277d4970ab8217c20ebb10"
+    }
+  ],
+  "identicalWireAudioAcrossArms": true,
+  "commonWireAudio": [
+    {
+      "caseId": "NS-001",
+      "wireSha256": "ecdf3ed00f0b99190f596ce99b269070a5aff6698387fdaedbf9b507cb10fbf7",
+      "wireBytes": 125760,
+      "inputSha256": "4c0f89cf66ad975b340162747bca58162569a8d496f01cdb71c4dbb20cf0c5e9",
+      "inputBytes": 83840,
+      "appends": 132,
+      "commits": 1
+    },
+    {
+      "caseId": "NS-002",
+      "wireSha256": "409eca02beced538409f9b80363ecd7e490a33ae789a286305e37d7a37d58cc3",
+      "wireBytes": 135360,
+      "inputSha256": "ede31b5da32bb6222b982dfafdc17134d01d2a5e35bb6b7ec7c05455af7f610e",
+      "inputBytes": 90240,
+      "appends": 142,
+      "commits": 1
+    },
+    {
+      "caseId": "NS-003",
+      "wireSha256": "0ee9318dda5826bbc07c7adc75aecad44af55f85c294b792b01b8a0f5bff5d6a",
+      "wireBytes": 165120,
+      "inputSha256": "185a21430c72e911d092ea578f0748ad6ca35d7289b764f0c97fac3f2d2f0495",
+      "inputBytes": 110080,
+      "appends": 173,
+      "commits": 1
+    },
+    {
+      "caseId": "NS-004",
+      "wireSha256": "aba4be733c835248149d2f27aae41d0ae024c1fce64e4c7df9217e490f84939d",
+      "wireBytes": 139200,
+      "inputSha256": "476b330c032d23f0acb2ea1d88d0d00b447d2ade928d405afe5de1a0e13cce08",
+      "inputBytes": 92800,
+      "appends": 146,
+      "commits": 1
+    },
+    {
+      "caseId": "NS-005",
+      "wireSha256": "b6c3b158d7221615b3035780376d9257d05b7fba66a860ac76ec2bff2b25a515",
+      "wireBytes": 141120,
+      "inputSha256": "9aae18f17d26c003055c5726ba9e28d9226e3ab2b5a394dc933dc632a3c4d6df",
+      "inputBytes": 94080,
+      "appends": 148,
+      "commits": 1
+    },
+    {
+      "caseId": "NS-006",
+      "wireSha256": "e92dad72e74581cd0898d2c53288547c5dce6b7305d5bd1645a6142bd8d32205",
+      "wireBytes": 150720,
+      "inputSha256": "5f8dee408c6a256936a02b6db29bdea788c41161fb277d4970ab8217c20ebb10",
+      "inputBytes": 100480,
+      "appends": 158,
+      "commits": 1
+    }
+  ],
+  "arms": [
+    {
+      "mode": "disabled",
+      "assessment": {
+        "status": "fail",
+        "failures": [
+          "insufficientRepeats",
+          "critical",
+          "wordErrorRate"
+        ],
+        "metrics": {
+          "cases": 6,
+          "runs": 6,
+          "critical": 2,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0.18181818181818182,
+          "finalP95Ms": 967,
+          "missingRepeats": [
+            "NS-001",
+            "NS-002",
+            "NS-003",
+            "NS-004",
+            "NS-005",
+            "NS-006"
+          ]
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      },
+      "counts": {
+        "match": 3,
+        "mismatch": 1,
+        "critical": 2,
+        "providerFailure": 0
+      },
+      "criticalMisses": [
+        {
+          "caseId": "NS-005",
+          "missingCriticalTerms": [
+            "book"
+          ]
+        },
+        {
+          "caseId": "NS-006",
+          "missingCriticalTerms": [
+            "chest"
+          ]
+        }
+      ],
+      "exactConfigurationAcknowledged": true,
+      "completeInputObserved": true,
+      "acknowledgedSessions": 6
+    },
+    {
+      "mode": "near_field",
+      "assessment": {
+        "status": "fail",
+        "failures": [
+          "insufficientRepeats",
+          "critical",
+          "wordErrorRate"
+        ],
+        "metrics": {
+          "cases": 6,
+          "runs": 6,
+          "critical": 2,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0.2727272727272727,
+          "finalP95Ms": 1319,
+          "missingRepeats": [
+            "NS-001",
+            "NS-002",
+            "NS-003",
+            "NS-004",
+            "NS-005",
+            "NS-006"
+          ]
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      },
+      "counts": {
+        "match": 2,
+        "mismatch": 2,
+        "critical": 2,
+        "providerFailure": 0
+      },
+      "criticalMisses": [
+        {
+          "caseId": "NS-005",
+          "missingCriticalTerms": [
+            "book"
+          ]
+        },
+        {
+          "caseId": "NS-006",
+          "missingCriticalTerms": [
+            "chest",
+            "pain"
+          ]
+        }
+      ],
+      "exactConfigurationAcknowledged": true,
+      "completeInputObserved": true,
+      "acknowledgedSessions": 6
+    },
+    {
+      "mode": "far_field",
+      "assessment": {
+        "status": "fail",
+        "failures": [
+          "insufficientRepeats",
+          "critical"
+        ],
+        "metrics": {
+          "cases": 6,
+          "runs": 6,
+          "critical": 2,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0.06818181818181818,
+          "finalP95Ms": 833,
+          "missingRepeats": [
+            "NS-001",
+            "NS-002",
+            "NS-003",
+            "NS-004",
+            "NS-005",
+            "NS-006"
+          ]
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      },
+      "counts": {
+        "match": 4,
+        "mismatch": 0,
+        "critical": 2,
+        "providerFailure": 0
+      },
+      "criticalMisses": [
+        {
+          "caseId": "NS-005",
+          "missingCriticalTerms": [
+            "book"
+          ]
+        },
+        {
+          "caseId": "NS-006",
+          "missingCriticalTerms": [
+            "chest"
+          ]
+        }
+      ],
+      "exactConfigurationAcknowledged": true,
+      "completeInputObserved": true,
+      "acknowledgedSessions": 6
+    }
+  ],
+  "gateStatus": {
+    "syntheticGate": "notAssessed",
+    "representativeCallGate": "notRun",
+    "releaseGate": "unverified",
+    "completeStoredCandidateGate": "fail",
+    "statusCommand": "node scripts/read-speech-gate-status.ts",
+    "statusExitCode": 2
+  },
+  "limitations": [
+    "One repeat per case is a diagnostic, not a complete gate or statistically reliable ranking.",
+    "Provider acknowledgment establishes selected configuration, not independently measured internal filtering.",
+    "Generated voices do not establish real caller, microphone, accent or carrier performance.",
+    "No production adapter, prompt, threshold, pinned corpus, dependency or admission changed."
+  ],
+  "validation": {
+    "syntaxCommand": "node --check eval/results/screen-context-noise-20261008.mjs",
+    "syntaxResult": "pass",
+    "evidenceValidation": "pass",
+    "diffCheck": "pass",
+    "evidenceCommand": "node eval/results/verify-context-noise-evidence-20261008.mjs",
+    "evidenceRunnerSha256": "2af1dfae74d2bb4d0ccecbb1a907dd8c6268e808e40953de3e1eb37fa4707fe2",
+    "evidenceRunnerOwnerOnly": true
+  }
+}

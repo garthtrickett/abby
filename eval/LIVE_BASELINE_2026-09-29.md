@@ -2,6 +2,30 @@
 
 All runs used patient-free synthetic fixtures, an account-provided OpenAI API key, and owner-only reports under ignored `eval/results/`. No key value or real patient content is in this file. The reports retain repeat-level proposals or transcripts for local review; this summary records only counts and configuration evidence.
 
+## Context with acknowledged noise reduction — 2026-10-08
+
+The owner selected continued synthetic audio. A bounded three-arm screen combined Realtime `gpt-transcribe` with the existing generic `clinic-v1` prompt and English language hint, comparing explicit noise-reduction `null`, `near_field` and `far_field`. [OpenAI's transcription-session reference](https://developers.openai.com/api/reference/resources/realtime/client-events#session.update) documents these settings; its [Realtime transcription guide](https://developers.openai.com/api/docs/guides/realtime-transcription#transcribe-a-committed-turn) documents post-commit `gpt-transcribe`. The screen used the unchanged six-case 10 dB noisy corpus, one repeat, two concurrent sessions and actual adapter conversion with 20 ms paced frames. The prompt contained no expected sentence or case-specific terms.
+
+| Noise reduction | Exact matches | Critical misses | WER | Final p95 |
+| --- | ---: | ---: | ---: | ---: |
+| Disabled (`null`) | 3/6 | 2 | 18.18% | 967 ms |
+| Near field | 2/6 | 2 | 27.27% | 1,319 ms |
+| Far field | 4/6 | 2 | 6.82% | 833 ms |
+
+Every arm missed `book` in `NS-005` and `chest` in `NS-006`; near field also missed `pain`. All had zero provider failures, empty transcripts, prefix truncations or late finals. Far field meets the aggregate WER bound in this one screen but still fails the zero-critical requirement. Every arm also lacks the required three repetitions. None was extended to the safety corpus or promoted. These small sequential arms do not establish a statistically reliable mode ranking.
+
+Instrumentation records append bytes during `send`, rather than relying on socket close. All eighteen sessions returned the exact requested model, context, language, audio format, turn detection and noise setting. Full padded input hashes identify each fixture; every session sent one commit and the expected 24 kHz byte count. Each fixture's transmitted audio hash and byte count match across all three arms. Source, corpus and fixtures remained unchanged. Provider acknowledgment proves the selected configuration, not an independent measurement of the internal filter.
+
+Exact command:
+
+```sh
+node --env-file=/home/gust/code/abby/.env /home/gust/code/abby/eval/results/screen-context-noise-20261008.mjs
+```
+
+Tracked job `Abby contextual transcription noise comparison October 8` completed exit 0 in 46 seconds; log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791422071971.log`. Exit 0 means the diagnostic and configuration/input checks completed, not that quality passed. Owner-only report SHA-256 is `a099e63e8642c2fdd6a32d1ead098ae59218b4ae9999239b8cad7477a1273bcc`; runner SHA-256 is `91d628876d9c6315d0d0609f07405e883771a1388db1916dba0f92771ff2a4a2`; three-file source SHA-256 is `281edbfc25ff7c4e08ae6d37dc29a1594e6cb92dec3f7a023c6213de34bfd9d8`. [Aggregate evidence and exact input/wire hashes](baselines/context-noise-screen-20261008-v1.json) contain no transcripts. The full report and runner remain ignored and owner-only.
+
+Validation: diagnostic syntax and independent artifact/hash/assessment checks passed; `git diff --check` passed. The existing complete stored gate still validates and exits `2`: noisy and safety transcription fail. This screen changes no production adapter, prompt, dependency, threshold, pinned gate corpus or admission. All real provider finals remain untrusted; representative-call testing is unrun and release readiness remains unverified. Real email and Twilio activation stay owner-deferred.
+
 ## Latest synthetic investigation — 2026-10-07
 
 The [number-free checkpoint](NUMBER_FREE_CHECKPOINT_2026-10-07.md#speech-investigation) records nine one-repeat Realtime screens on the unchanged pinned noisy corpus: implicit/disabled provider noise reduction, fixed FFT filtering with three models, native PCMU with two models, an audio-derived FFT floor and nonlocal means filtering. Each still loses critical terms and exceeds 10% WER. Two also exceed the latency bound. No candidate is promoted. The native PCMU remote wire-hash instrumentation failed; a separate exact six-case round-trip verifies only the offline transform. Complete-clip preprocessing and the adaptive future-audio estimate do not prove streaming suitability.
