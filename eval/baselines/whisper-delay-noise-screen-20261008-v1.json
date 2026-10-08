@@ -1,0 +1,347 @@
+{
+  "schema": "abby.whisper-delay-noise-screen.v1",
+  "date": "2026-10-08",
+  "baseHead": "aa608dbbcd7b8fe87833f4ed74b6a95724585aad",
+  "status": "screenCompleteBothCandidatesRejected",
+  "sourcePaths": [
+    "src/voice/openai-realtime-transcription.ts",
+    "src/voice/transcription-evaluation.ts",
+    "src/voice/transcription-evaluation-gate.ts"
+  ],
+  "sourceSha256": "281edbfc25ff7c4e08ae6d37dc29a1594e6cb92dec3f7a023c6213de34bfd9d8",
+  "sourceStable": true,
+  "configuration": {
+    "model": "gpt-realtime-whisper",
+    "delay": "high",
+    "contextVersion": "none",
+    "repeats": 1,
+    "concurrency": 2,
+    "paceMs": 20,
+    "nodeVersion": "v22.23.2"
+  },
+  "corpus": {
+    "file": "eval/transcription-noise-v1.json",
+    "sha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+    "stable": true,
+    "fixturesStable": true
+  },
+  "report": {
+    "file": "eval/results/20261008-whisper-high-noise-two-arm-screen.json",
+    "sha256": "ae8fc3d9699faeb1a1697482ffd2e6fe85f2df5e06ce11aac4d4c7299ea480e5",
+    "ownerOnly": true
+  },
+  "runner": {
+    "file": "eval/results/screen-whisper-high-noise-20261008.mjs",
+    "sha256": "7ec248c750d9f07ab595a870e50cdd2358bc2d86497f78dd5ff6557724bda5d7",
+    "ownerOnly": true
+  },
+  "job": {
+    "label": "Abby Realtime Whisper high-delay noise comparison October 8",
+    "exitCode": 0,
+    "elapsedSeconds": 30,
+    "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791422915560.log",
+    "startedAt": "2026-10-08T01:28:36.022Z",
+    "completedAt": "2026-10-08T01:29:05.994Z",
+    "exitMeaning": "Diagnostic and model/noise/input checks completed; both quality assessments failed; delay not verified."
+  },
+  "fixtureMetadata": [
+    {
+      "caseId": "NS-001",
+      "pcmSha256": "4c0f89cf66ad975b340162747bca58162569a8d496f01cdb71c4dbb20cf0c5e9",
+      "pcmBytes": 83840,
+      "paddedInputSha256": "4c0f89cf66ad975b340162747bca58162569a8d496f01cdb71c4dbb20cf0c5e9"
+    },
+    {
+      "caseId": "NS-002",
+      "pcmSha256": "ede31b5da32bb6222b982dfafdc17134d01d2a5e35bb6b7ec7c05455af7f610e",
+      "pcmBytes": 90240,
+      "paddedInputSha256": "ede31b5da32bb6222b982dfafdc17134d01d2a5e35bb6b7ec7c05455af7f610e"
+    },
+    {
+      "caseId": "NS-003",
+      "pcmSha256": "185a21430c72e911d092ea578f0748ad6ca35d7289b764f0c97fac3f2d2f0495",
+      "pcmBytes": 110080,
+      "paddedInputSha256": "185a21430c72e911d092ea578f0748ad6ca35d7289b764f0c97fac3f2d2f0495"
+    },
+    {
+      "caseId": "NS-004",
+      "pcmSha256": "476b330c032d23f0acb2ea1d88d0d00b447d2ade928d405afe5de1a0e13cce08",
+      "pcmBytes": 92800,
+      "paddedInputSha256": "476b330c032d23f0acb2ea1d88d0d00b447d2ade928d405afe5de1a0e13cce08"
+    },
+    {
+      "caseId": "NS-005",
+      "pcmSha256": "9aae18f17d26c003055c5726ba9e28d9226e3ab2b5a394dc933dc632a3c4d6df",
+      "pcmBytes": 94080,
+      "paddedInputSha256": "9aae18f17d26c003055c5726ba9e28d9226e3ab2b5a394dc933dc632a3c4d6df"
+    },
+    {
+      "caseId": "NS-006",
+      "pcmSha256": "5f8dee408c6a256936a02b6db29bdea788c41161fb277d4970ab8217c20ebb10",
+      "pcmBytes": 100480,
+      "paddedInputSha256": "5f8dee408c6a256936a02b6db29bdea788c41161fb277d4970ab8217c20ebb10"
+    }
+  ],
+  "identicalWireAudioAcrossArms": true,
+  "commonWireAudio": [
+    {
+      "caseId": "NS-001",
+      "wireSha256": "ecdf3ed00f0b99190f596ce99b269070a5aff6698387fdaedbf9b507cb10fbf7",
+      "wireBytes": 125760,
+      "inputSha256": "4c0f89cf66ad975b340162747bca58162569a8d496f01cdb71c4dbb20cf0c5e9",
+      "inputBytes": 83840,
+      "appends": 132,
+      "commits": 1
+    },
+    {
+      "caseId": "NS-002",
+      "wireSha256": "409eca02beced538409f9b80363ecd7e490a33ae789a286305e37d7a37d58cc3",
+      "wireBytes": 135360,
+      "inputSha256": "ede31b5da32bb6222b982dfafdc17134d01d2a5e35bb6b7ec7c05455af7f610e",
+      "inputBytes": 90240,
+      "appends": 142,
+      "commits": 1
+    },
+    {
+      "caseId": "NS-003",
+      "wireSha256": "0ee9318dda5826bbc07c7adc75aecad44af55f85c294b792b01b8a0f5bff5d6a",
+      "wireBytes": 165120,
+      "inputSha256": "185a21430c72e911d092ea578f0748ad6ca35d7289b764f0c97fac3f2d2f0495",
+      "inputBytes": 110080,
+      "appends": 173,
+      "commits": 1
+    },
+    {
+      "caseId": "NS-004",
+      "wireSha256": "aba4be733c835248149d2f27aae41d0ae024c1fce64e4c7df9217e490f84939d",
+      "wireBytes": 139200,
+      "inputSha256": "476b330c032d23f0acb2ea1d88d0d00b447d2ade928d405afe5de1a0e13cce08",
+      "inputBytes": 92800,
+      "appends": 146,
+      "commits": 1
+    },
+    {
+      "caseId": "NS-005",
+      "wireSha256": "b6c3b158d7221615b3035780376d9257d05b7fba66a860ac76ec2bff2b25a515",
+      "wireBytes": 141120,
+      "inputSha256": "9aae18f17d26c003055c5726ba9e28d9226e3ab2b5a394dc933dc632a3c4d6df",
+      "inputBytes": 94080,
+      "appends": 148,
+      "commits": 1
+    },
+    {
+      "caseId": "NS-006",
+      "wireSha256": "e92dad72e74581cd0898d2c53288547c5dce6b7305d5bd1645a6142bd8d32205",
+      "wireBytes": 150720,
+      "inputSha256": "5f8dee408c6a256936a02b6db29bdea788c41161fb277d4970ab8217c20ebb10",
+      "inputBytes": 100480,
+      "appends": 158,
+      "commits": 1
+    }
+  ],
+  "arms": [
+    {
+      "mode": "disabled",
+      "assessment": {
+        "status": "fail",
+        "failures": [
+          "insufficientRepeats",
+          "critical",
+          "wordErrorRate"
+        ],
+        "metrics": {
+          "cases": 6,
+          "runs": 6,
+          "critical": 5,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0.6363636363636364,
+          "finalP95Ms": 711,
+          "missingRepeats": [
+            "NS-001",
+            "NS-002",
+            "NS-003",
+            "NS-004",
+            "NS-005",
+            "NS-006"
+          ]
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      },
+      "counts": {
+        "match": 1,
+        "mismatch": 0,
+        "critical": 5,
+        "providerFailure": 0
+      },
+      "criticalMisses": [
+        {
+          "caseId": "NS-001",
+          "missingCriticalTerms": [
+            "Thursday"
+          ]
+        },
+        {
+          "caseId": "NS-002",
+          "missingCriticalTerms": [
+            "book"
+          ]
+        },
+        {
+          "caseId": "NS-004",
+          "missingCriticalTerms": [
+            "Thursday"
+          ]
+        },
+        {
+          "caseId": "NS-005",
+          "missingCriticalTerms": [
+            "book",
+            "Friday"
+          ]
+        },
+        {
+          "caseId": "NS-006",
+          "missingCriticalTerms": [
+            "chest",
+            "pain"
+          ]
+        }
+      ],
+      "modelAndNoiseConfigurationAcknowledged": true,
+      "completeInputObserved": true,
+      "acknowledgedSessions": 6,
+      "delayAcknowledgment": "notEchoed",
+      "delayApplicationVerified": false
+    },
+    {
+      "mode": "far_field",
+      "assessment": {
+        "status": "fail",
+        "failures": [
+          "insufficientRepeats",
+          "critical",
+          "wordErrorRate"
+        ],
+        "metrics": {
+          "cases": 6,
+          "runs": 6,
+          "critical": 6,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0.5454545454545454,
+          "finalP95Ms": 778,
+          "missingRepeats": [
+            "NS-001",
+            "NS-002",
+            "NS-003",
+            "NS-004",
+            "NS-005",
+            "NS-006"
+          ]
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      },
+      "counts": {
+        "match": 0,
+        "mismatch": 0,
+        "critical": 6,
+        "providerFailure": 0
+      },
+      "criticalMisses": [
+        {
+          "caseId": "NS-001",
+          "missingCriticalTerms": [
+            "Thursday"
+          ]
+        },
+        {
+          "caseId": "NS-002",
+          "missingCriticalTerms": [
+            "book"
+          ]
+        },
+        {
+          "caseId": "NS-003",
+          "missingCriticalTerms": [
+            "chest",
+            "pain"
+          ]
+        },
+        {
+          "caseId": "NS-004",
+          "missingCriticalTerms": [
+            "Thursday"
+          ]
+        },
+        {
+          "caseId": "NS-005",
+          "missingCriticalTerms": [
+            "book"
+          ]
+        },
+        {
+          "caseId": "NS-006",
+          "missingCriticalTerms": [
+            "chest",
+            "pain"
+          ]
+        }
+      ],
+      "modelAndNoiseConfigurationAcknowledged": true,
+      "completeInputObserved": true,
+      "acknowledgedSessions": 6,
+      "delayAcknowledgment": "notEchoed",
+      "delayApplicationVerified": false
+    }
+  ],
+  "gateStatus": {
+    "syntheticGate": "notAssessed",
+    "representativeCallGate": "notRun",
+    "releaseGate": "unverified",
+    "completeStoredCandidateGate": "fail",
+    "statusCommand": "node scripts/read-speech-gate-status.ts",
+    "statusExitCode": 2
+  },
+  "limitations": [
+    "Requested delay was not echoed; its application and effects remain unverified.",
+    "The private report field exactConfigurationAcknowledged covers model, no prompt/language hint, format, turn detection and noise reduction; it excludes the separately recorded unverified delay.",
+    "One repeat is below the minimum and does not establish a reliable model or mode ranking.",
+    "Synthetic voices do not prove real caller, microphone, accent or carrier performance.",
+    "No production adapter, prompt, dependency, gate threshold, pinned corpus or admission changed."
+  ],
+  "validation": {
+    "syntaxCommand": "node --check eval/results/screen-whisper-high-noise-20261008.mjs",
+    "syntaxResult": "pass",
+    "evidenceValidation": "pass",
+    "diffCheck": "pass",
+    "evidenceCommand": "node /home/gust/code/abby/eval/results/verify-whisper-delay-evidence-20261008.mjs file:///home/gust/code/abby-whisper-delay-screen/eval/baselines/whisper-delay-noise-screen-20261008-v1.json",
+    "evidenceRunnerSha256": "61253a10349eff7a71643c2d6c208fa0d24ed3efc929717c71c1366d43da681d",
+    "evidenceRunnerOwnerOnly": true,
+    "independentWholeBufferWireInterpolation": "pass"
+  }
+}

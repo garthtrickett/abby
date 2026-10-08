@@ -2,6 +2,30 @@
 
 All runs used patient-free synthetic fixtures, an account-provided OpenAI API key, and owner-only reports under ignored `eval/results/`. No key value or real patient content is in this file. The reports retain repeat-level proposals or transcripts for local review; this summary records only counts and configuration evidence.
 
+## Realtime Whisper with requested delay and acknowledged noise settings — 2026-10-08
+
+A bounded follow-up used `gpt-realtime-whisper`, requested `delay: high`, and compared explicit noise-reduction `null` with `far_field`. [Official OpenAI's transcription-session reference](https://developers.openai.com/api/reference/resources/realtime/client-events#session.update) documents the delay option and says prompts are unsupported for this model in GA Realtime; this screen supplied no prompt, keyword or language hint. It used the unchanged six-case 10 dB noisy corpus, one repeat, two concurrent sessions and the actual adapter with 20 ms paced input.
+
+| Noise setting | Exact matches | Critical misses | WER | Final p95 | Delay echoed |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Disabled (`null`) | 1/6 | 5 | 63.64% | 711 ms | No |
+| Far field | 0/6 | 6 | 54.55% | 778 ms | No |
+
+Both configurations already fail zero-critical and at-most-10%-WER, and one repeat is below the minimum. Neither had provider failures, empty transcripts, prefix truncations or late finals. The safety corpus and full gate were not expanded for either failed candidate. These results neither rank models/modes reliably nor establish the effect of increased delay: the provider omitted delay in all twelve configuration acknowledgments, so its application is unverified.
+
+All twelve sessions did echo the requested model, audio format, turn detection and noise setting, with no prompt or language hint. Each sent one commit and complete fixture input. Per-fixture transmitted audio hashes match across arms. An independent whole-buffer interpolation also reproduces every transmitted 24 kHz hash, including frame seams and the last padded sample. Source, corpus and fixture hashes remained stable. This establishes input/configuration evidence; it does not measure the provider's internal filter or establish real-caller accuracy. The private report's `exactConfigurationAcknowledged` field excludes the separately recorded unverified delay; the aggregate names its coverage explicitly as `modelAndNoiseConfigurationAcknowledged`.
+
+Exact commands:
+
+```sh
+node --env-file=/home/gust/code/abby/.env /home/gust/code/abby/eval/results/screen-whisper-high-noise-20261008.mjs
+node /home/gust/code/abby/eval/results/verify-whisper-delay-evidence-20261008.mjs file:///home/gust/code/abby-whisper-delay-screen/eval/baselines/whisper-delay-noise-screen-20261008-v1.json
+```
+
+Tracked job `Abby Realtime Whisper high-delay noise comparison October 8` completed exit 0 in 30 seconds; log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791422915560.log`. Exit 0 means the diagnostic and model/noise/input checks completed, not that quality or delay verification passed. Owner-only report SHA-256 is `ae8fc3d9699faeb1a1697482ffd2e6fe85f2df5e06ce11aac4d4c7299ea480e5`; runner SHA-256 is `7ec248c750d9f07ab595a870e50cdd2358bc2d86497f78dd5ff6557724bda5d7`; unchanged three-file source SHA-256 is `281edbfc25ff7c4e08ae6d37dc29a1594e6cb92dec3f7a023c6213de34bfd9d8`. [Transcript-free aggregate evidence](baselines/whisper-delay-noise-screen-20261008-v1.json) pins counts, critical omissions, exact input/wire hashes and the retained owner-only artifacts. The verifier also accepts the canonical aggregate path after publication.
+
+Diagnostic syntax, independent artifact/hash/assessment verification and `git diff --check` passed. The stored complete gate still validates and exits `2`, failing noisy and safety transcription. No production adapter, prompt, dependency, threshold, corpus or admission changed. Higher-delay effects remain unverified; representative-call testing remains unrun and release readiness unverified. Real email and Twilio activation stay owner-deferred.
+
 ## Context with acknowledged noise reduction — 2026-10-08
 
 The owner selected continued synthetic audio. A bounded three-arm screen combined Realtime `gpt-transcribe` with the existing generic `clinic-v1` prompt and English language hint, comparing explicit noise-reduction `null`, `near_field` and `far_field`. [OpenAI's transcription-session reference](https://developers.openai.com/api/reference/resources/realtime/client-events#session.update) documents these settings; its [Realtime transcription guide](https://developers.openai.com/api/docs/guides/realtime-transcription#transcribe-a-committed-turn) documents post-commit `gpt-transcribe`. The screen used the unchanged six-case 10 dB noisy corpus, one repeat, two concurrent sessions and actual adapter conversion with 20 ms paced frames. The prompt contained no expected sentence or case-specific terms.
