@@ -19,6 +19,8 @@ import { callIdFor } from "../../src/voice/admission.ts";
 import { approvedSyntheticPolicy, syntheticSpeech } from "./approved-voice.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 import { verificationCanaries, verificationNow } from "./caller-verification.ts";
+import { bookingMenuDeadlineMs } from "../../src/reference/booking-menu-turns.ts";
+import { reschedulingMenuDeadlineMs } from "../../src/reference/rescheduling-menu-turns.ts";
 
 export async function voiceUntil(check: () => boolean, label: string, timeoutMs = 10_000) {
   const deadline = Date.now() + timeoutMs;
@@ -50,6 +52,18 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   const writeRequests: { method: string; path: string; body: Record<string, unknown> }[] = [];
   const failures: string[] = [];
   const acknowledged = new Set<string>();
+  // Fixed stage names and timings only; diagnostics never retain caller text,
+  // provider paths, patient refs or verification material.
+  const stages: { name: string; started: number; settled?: number; deadlineMs?: number; signal?: AbortSignal }[] = [];
+  const observe = <Args extends unknown[], Value>(name: string, run: (...args: Args) => Promise<Value>, deadlineMs?: number,
+    signalFor?: (...args: Args) => AbortSignal) =>
+    async (...args: Args): Promise<Value> => {
+      const stage: typeof stages[number] = { name, started: performance.now(), ...(deadlineMs === undefined ? {} : { deadlineMs }),
+        ...(signalFor ? { signal: signalFor(...args) } : {}) };
+      if (stages.length >= 64) stages.shift();
+      stages.push(stage);
+      try { return await run(...args); } finally { stage.settled = performance.now(); }
+    };
   let ledger: MemoryLedger | undefined, flow: ClinikoCallFlow | undefined, socket: WebSocket | undefined, closed = false;
   let disposedState: ReturnType<MemoryLedger["read"]> | undefined, closeCode: number | undefined;
   let after: Record<string, unknown> | undefined, sequence = 1, chunk = 0, utterance = 0, transcriptionFrames = 0;
@@ -57,7 +71,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   let staffPreparationsStarted = 0, staffPreparationsSettled = 0, staffWritesStarted = 0, staffWritesSettled = 0;
   const callId = callIdFor({ accountRef: accountSid, providerCallRef: callSid });
   const base = "https://api.au5.cliniko.com/v1", port = config.fetchPort!;
-  const provider: typeof fetch = async (value, init) => {
+  const provider: typeof fetch = observe("providerRequest", async (value: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
     const url = new URL(String(value)), method = init?.method ?? "GET";
     if (after && method === "GET" && url.pathname === `/v1/individual_appointments/${after.id}`) return Response.json(after);
     if (method === "GET" && url.pathname === "/v1/individual_appointments/91/conflicts") return Response.json({ conflicts: { exist: false } });
@@ -84,7 +98,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       return Response.json(after, { status: method === "POST" ? 201 : 200 });
     }
     return port(value, init);
-  };
+  });
   const server = createTwilioIngressServer({ ingress, createCall: async (stream, send, close) => {
     const composed = resultValue(await createStandaloneTransientVoiceCall({ db,
       routingHost: new ReferenceNumberRoutingHost([{ accountRef: accountSid, dialedNumber: config.inbound.dialedNumber, ...scope, routeVersion: "workflow-voice" }]),
@@ -99,6 +113,13 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
           flow = resultValue(ClinikoCallFlow.create({ ...config, ...context,
           policyVersion: config.policyVersion, fetchPort: provider,
           ...(config.intake ? { intake: { ...config.intake, presentation: context.privatePresentation } } : {}) }));
+          flow.readBookingMenu = observe("bookingMenuRead", flow.readBookingMenu.bind(flow), bookingMenuDeadlineMs, query => query.signal);
+          flow.selectBookingMenu = observe("bookingMenuSelect", flow.selectBookingMenu.bind(flow), bookingMenuDeadlineMs, query => query.signal);
+          flow.readReschedulingMenu = observe("reschedulingMenuRead", flow.readReschedulingMenu.bind(flow), reschedulingMenuDeadlineMs, query => query.signal);
+          flow.selectReschedulingMenu = observe("reschedulingMenuSelect", flow.selectReschedulingMenu.bind(flow), reschedulingMenuDeadlineMs, query => query.signal);
+          flow.resolveBooking = observe("bookingEvidence", flow.resolveBooking.bind(flow));
+          flow.resolveAppointmentChange = observe("appointmentChangeEvidence", flow.resolveAppointmentChange.bind(flow));
+          flow.correctionIntent = observe("menuCorrection", flow.correctionIntent.bind(flow));
           const write = flow.write.bind(flow);
           flow.write = async (...args: Parameters<ClinikoCallFlow["write"]>) => {
             hostWritesStarted++;
@@ -114,7 +135,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
             try { return await openStaff(...args); } finally { staffWritesSettled++; }
           };
           return flow; },
-        intent(owner) { const resolve = intent(owner); return async (turn, signal) => { modelTurns.push(turn.text); return resolve(turn, signal); }; },
+        intent(owner) { const resolve = intent(owner); return observe("intentResolution", async (turn, signal) => { modelTurns.push(turn.text); return resolve(turn, signal); }); },
         ...(config.intake ? { privateIntakeTranscription: (sessionId: string) => ({ async accept() { return ok([]); }, async flush(generation: number) {
           const text = privateInputs.shift(); assert.ok(text); privateTranscripts.push(text);
           return ok([{ kind: "segmentFinal" as const, sessionId, generation, utteranceId: `private-${privateTranscripts.length}`, text, quality: "clear" as const }]);
@@ -183,6 +204,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         assert.deepEqual(failures, []);
       },
       async turn(text: string, options: { expectedFailure?: "confirmationMissing" | "staleGeneration" | "automatedCallUnavailable"; interrupt?: boolean } = {}) {
+        stages.length = 0;
         const marks = sent.filter(item => item.event === "mark").length, clears = sent.filter(item => item.event === "clear").length;
         let replyAfterMarks = marks;
         const pending = text === "Yes" && !options.expectedFailure
@@ -211,8 +233,19 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
           // Observe invocation before starting each declared business deadline.
           // A generic speech wait is not the preparation or effect contract.
           await voiceUntil(() => hostWritesStarted > beforeWrites || staffPreparationsStarted > beforePreparations ||
-            staffWritesStarted > beforeStaffWrites || processedChunk >= finalChunk || hasReply() || failures.length > 0,
+            staffWritesStarted > beforeStaffWrites || stages.some(stage => stage.deadlineMs !== undefined) ||
+            processedChunk >= finalChunk || hasReply() || failures.length > 0,
             "caller turn dispatch");
+          // The core releases its menu signal in finally after selection,
+          // evidence resolution and acceptance. Host selection alone is not
+          // the end of that budget. Observe the whole operation before the
+          // unchanged media-dispatch and speech waits.
+          for (const stage of stages.filter(stage => stage.deadlineMs !== undefined)) {
+            const remainingMs = Math.max(1, stage.deadlineMs! - Math.round(performance.now() - stage.started));
+            await voiceUntil(() => (stage.signal ? stage.signal.aborted : stage.settled !== undefined) ||
+              processedChunk >= finalChunk || hasReply() || failures.length > 0,
+              `${stage.name} settlement`, remainingMs);
+          }
           if (staffPreparationsStarted > beforePreparations) {
             await voiceUntil(() => staffPreparationsSettled > beforePreparations || failures.length > 0,
               "staff preparation settlement", clinikoStaffPreparationDeadlineMs);
@@ -231,6 +264,8 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
             modelTurns: modelTurns.length, transcriptionFrames, writes: writes.length, hostWritesStarted, hostWritesSettled, staffPreparationsStarted, staffPreparationsSettled, staffWritesStarted, staffWritesSettled, failures, stageFailure: error instanceof Error ? error.message : "unknown",
             actions: Object.values(state.actions).map(action => action.status),
             presentations: Object.values(state.presentations).map(presentation => presentation.status),
+            stages: stages.map(stage => ({ name: stage.name, pending: stage.settled === undefined,
+              elapsedMs: Math.round((stage.settled ?? performance.now()) - stage.started) })),
             effects: Object.values(state.effects).map(effect => ({ kind: effect.kind, status: effect.status })) })}`, { cause: error });
         }
         assert.deepEqual(failures, options.expectedFailure ? [options.expectedFailure] : [], `wire failure after ${modelTurns.length} model turns and ${transcriptionFrames} transcribed frames`);

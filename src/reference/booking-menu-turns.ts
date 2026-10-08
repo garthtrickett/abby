@@ -9,6 +9,7 @@ import { noticePresentationId } from "../core/transition.ts";
 
 type Host = BookingEvidenceHost & Partial<BookingMenuHost>;
 type Failure = TransitionFailure | Readonly<{ kind: "effectFailure" }>;
+export const bookingMenuDeadlineMs = 15_000;
 async function untilAbort<T>(pending: Promise<T>, signal: AbortSignal): Promise<T | undefined> {
   let stop: () => void = () => undefined;
   const stopped = new Promise<undefined>(resolve => { stop = () => resolve(undefined); signal.addEventListener("abort", stop); if (signal.aborted) stop(); });
@@ -41,7 +42,7 @@ export class BookingMenuTurns {
     const operation = Object.freeze({ ...incomingOperation, ...("window" in incomingOperation && validBookingSearchWindow(incomingOperation.window)
       ? { window: copyBookingSearchWindow(incomingOperation.window) } : {}) });
     const runtime = new CallRuntime(this.ledger, scope);
-    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15_000), signal = AbortSignal.any([controller.signal, ...(external ? [external] : [])]);
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), bookingMenuDeadlineMs), signal = AbortSignal.any([controller.signal, ...(external ? [external] : [])]);
     try {
       const initial = await this.#ready(scope, turn, now, signal);
       if (!initial.ok) return external?.aborted ? err({ kind: "staleTurn" }) : initial;

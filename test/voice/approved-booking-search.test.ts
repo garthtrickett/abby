@@ -139,3 +139,47 @@ test("E2E-313 agent searches use approved public names and never use a model/pro
     assert.equal(f.posts, 0);
   } finally { await f.close(); }
 });
+
+for (const stage of ["read", "selection evidence"] as const) test(`E2E-313 a signed menu ${stage} settles within the core deadline after the fixture's old dispatch wait`, { timeout: 90_000 }, async () => {
+  await withDisposablePostgres(async db => {
+    const f = await bookingCatalogueFixture(); f.flow.dispose();
+    let call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined;
+    let held = false, armed = true, release = () => {};
+    const waiting = new Promise<void>(resolve => { release = resolve; });
+    try {
+      f.setOnAlternateTimes(async () => {
+        if (stage === "read" && armed) { armed = false; held = true; await waiting; }
+      });
+      call = await clinikoWorkflowVoiceFixture(db, f.flowConfig, owner => createOpenAIClinicalIntentResolver({ owner,
+        apiKey: "synthetic-key", model: "synthetic-model", clinicDate: () => "2026-10-04", fetch: async () =>
+          Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [{ type: "output_text",
+            text: JSON.stringify({ kind: "workflow", operation: "book", stage: null, from: null, to: null, choice: null }) }] }] }) }));
+      await call.turn("I need to book an appointment."); await call.mark();
+      await voiceUntil(() => f.mail.length === 1, "bounded menu verification"); await call.verify(f.mail[0]!.code);
+      if (stage === "selection evidence") {
+        await call.turn(preferred); await call.mark();
+        const resolveBooking = call.flow.resolveBooking.bind(call.flow);
+        call.flow.resolveBooking = async (...args: Parameters<typeof resolveBooking>) => {
+          held = true; await waiting; return resolveBooking(...args);
+        };
+      }
+      const pending = call.turn(stage === "read" ? preferred : "The first time, please.")
+        .then(() => ({ ok: true as const }), error => ({ ok: false as const, error }));
+      await voiceUntil(() => held, "held approved availability read");
+      assert.equal(call.writeRequests.length, 0);
+      // Release after the old 10-second observer, within the unchanged
+      // production 15-second menu deadline. No appointment write is sent.
+      await new Promise<void>(resolve => setTimeout(resolve, 11_000)); release();
+      const settled = await pending;
+      assert.ok(settled.ok, settled.ok ? undefined : String(settled.error));
+      await call.mark();
+      assert.match(call.spoken.at(-1)!, /Demo B/);
+      assert.match(call.spoken.at(-1)!, stage === "read" ? /option one/ : /confirm/i);
+      assert.equal(call.writeRequests.length, 0);
+      const actions = Object.values((await call.state()).actions);
+      assert.equal(actions.length, stage === "read" ? 0 : 1);
+      if (stage === "selection evidence") assert.equal(actions[0]!.status, "awaitingConfirmation");
+      assert.deepEqual(resultValue(await scanPatientDataCanaries(db, verificationCanaries.map((value, i) => ({ label: `bounded_menu_${i}`, value })))), []);
+    } finally { release(); await call?.close(); await f.close(); }
+  });
+});
