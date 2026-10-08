@@ -2,6 +2,26 @@
 
 All runs used patient-free synthetic fixtures, an account-provided OpenAI API key, and owner-only reports under ignored `eval/results/`. No key value or real patient content is in this file. The reports retain repeat-level proposals or transcripts for local review; this summary records only counts and configuration evidence.
 
+## Completed-file Whisper diagnostic — 2026-10-08
+
+After the failed input-gain screen, a different completed-file decoder was screened on the same six original 10 dB noisy synthetic clips. The [official transcription API reference](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create) accepts WAV and `whisper-1`; each request specified only `model`, `response_format: json` and the WAV file. There was no prompt, language or keyword hint, and temperature was left at the provider default. This was a bounded diagnostic comparison: [OpenAI's deprecation notice](https://developers.openai.com/api/docs/deprecations#2026-08-26-transcription-models) announces removal of `whisper-1` on 26 February 2027 and recommends the newer transcription models already tested here.
+
+One repeat per case, two concurrent requests and a 30-second request timeout produced:
+
+| Runs | Exact matches | Critical misses | Provider failures | WER | Completed-file request p95 |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 6 | 2 | 4 | 0 | 6/44 = 13.64% | 2,579 ms |
+
+`NS-001` and `NS-004` omitted “Thursday”, `NS-005` omitted “book”, and `NS-006` omitted “chest”. No response was empty or a truncated literal prefix. The zero-critical and 10% WER criteria fail, so larger repeats and the safety corpus are not justified for this candidate. One repeat is also below the unchanged three-repeat requirement. File timing starts after the whole clip is available; it is not live post-commit or audible response latency, and was not substituted into the live gate assessor.
+
+The private runner reserved its owner-only report before sending requests and retained each complete serialized multipart body with mode `0600`. An independent parser verified exactly three fields, the requested model and JSON format, the actual file content type/name, every WAV header and the byte-exact original PCM payload. All four original corpus hashes and the executable/evaluator source hashes remain pinned. The six responses were HTTP 200, but none echoed the model; remote model application remains unverified. Expected phrases and critical terms were used only for local scoring. No supplied patient recording, patient details or per-fixture recognition hint was sent.
+
+Tracked job `Abby original noisy file Whisper diagnostic October 8` completed exit 0 in five seconds; log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791426015244.log`. Exit 0 records completed instrumentation, not a quality pass. Owner-only report SHA-256 is `d7acfa722dfc5b6bdba77109642b214fb9ab4019c40286a655336b7e02cce12f`; runner SHA-256 is `cfd170c7564771eea49ef54632c6a062794054d29eb0145630fa6d39df1d1acb`. The [transcript-free aggregate](baselines/file-whisper-screen-20261008-v1.json) pins all request-body, WAV, PCM, source, corpus, runner and private-report hashes, along with independently recomputed accuracy and timing. `node scripts/read-speech-gate-status.ts` still exits 2: stored noisy and safety transcription fail, the representative carrier gate is not run, and release readiness is unverified. Production models, adapter, scoring, thresholds and admission remain unchanged.
+
+### Speech-output retirement is an additional open requirement
+
+The same dated documentation check found a [1 October speech-model deprecation notice](https://developers.openai.com/api/docs/deprecations#2026-10-01-text-to-speech-models): `tts-1`, `tts-1-hd`, `gpt-4o-mini-tts-2025-03-20` and `gpt-4o-mini-tts-2025-12-15` are scheduled for removal on 6 January 2027, with `gpt-realtime-2.1-mini` recommended. Existing primary/fallback and `tts-1` candidate latency measurements remain historical evidence for those requested profiles. They do not establish replacement behavior or continuing availability after retirement. The next step is to investigate the supported replacement protocol, then validate exact spoken content, transport conversion, cancellation, timeout/fallback behavior and the unchanged output latency gate. Real human listening and carrier evidence remain separate. This diagnostic implements no model migration and makes no new activation claim.
+
 ## Gain-only original-noise diagnostic — 2026-10-08
 
 The preceding audit found lower absolute levels in the successful provider voices. This bounded follow-up applies only post-codec gain to the unchanged original six noisy PCM clips: 0 dB, -6 dB and -12 dB. Speech and noise scale together; sample rounding changes each ideal scaled value by at most half a PCM unit, with zero clipping. Attenuation cannot undo existing G.711 distortion and does not measure pre-codec level effects. Condition order rotates within each case, with two overlapping provider sessions and 20 ms paced input. The actual unprompted `gpt-live-transcribe` model, scoring, expected words and critical terms remain fixed.
