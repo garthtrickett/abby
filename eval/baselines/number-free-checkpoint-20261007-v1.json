@@ -1,0 +1,983 @@
+{
+  "schema": "abby.number-free-checkpoint.v1",
+  "date": "2026-10-07",
+  "baseHead": "42701b5e7cc0cb2459ef112b418a6a76f46bb060",
+  "status": "localRegressionPassedSpeechGateFailed",
+  "scenarioManifest": {
+    "version": "1.145",
+    "ids": 347,
+    "changed": false
+  },
+  "reports": [
+    {
+      "file": "eval/results/20261007-next-all45-v24.json",
+      "sha256": "68b31470dda80ae28354d471f6e560b6a25cef4d4fb59732ae9e0beb6ea89822",
+      "ownerOnly": true,
+      "sourceStable": true,
+      "counts": {
+        "corpus": 45,
+        "selected": 45,
+        "executed": 45,
+        "harnessFailures": 0,
+        "setupGaps": 0,
+        "failedObservations": 0
+      },
+      "source": {
+        "sha256": "142bd3cffa440973185f298a736ed9d7bdb5185040bedd0b5b2391a8a14aef01",
+        "files": 485
+      },
+      "model": "gpt-4o-mini",
+      "promptVersion": "clinical-intent-v24",
+      "privacyPass": true,
+      "candidateModelRequests": 6,
+      "trustedPaths": 39,
+      "observationsPassed": 45,
+      "safetyChecksPassed": 135
+    },
+    {
+      "file": "eval/results/20261007-noise-disabled-paired-screen.json",
+      "sha256": "65e5a7da48fb0db84494d6925fc086f57c0afd5979c4a96ff48b8653c7d017c7",
+      "ownerOnly": true,
+      "corpusSha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+      "sourceSha256": "281edbfc25ff7c4e08ae6d37dc29a1594e6cb92dec3f7a023c6213de34bfd9d8",
+      "runnerSha256": "ab2927a5034fc86b7764aad0fcbaae4bfe34019852cae35c1049ba1936ab5a04",
+      "screens": [
+        {
+          "candidate": "implicit",
+          "metrics": {
+            "cases": 6,
+            "runs": 6,
+            "critical": 4,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 0,
+            "wordErrorRate": 0.4318181818181818,
+            "finalP95Ms": 819,
+            "missingRepeats": [
+              "NS-001",
+              "NS-002",
+              "NS-003",
+              "NS-004",
+              "NS-005",
+              "NS-006"
+            ]
+          },
+          "failures": [
+            "insufficientRepeats",
+            "critical",
+            "wordErrorRate"
+          ]
+        },
+        {
+          "candidate": "disabled",
+          "metrics": {
+            "cases": 6,
+            "runs": 6,
+            "critical": 4,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 0,
+            "wordErrorRate": 0.4090909090909091,
+            "finalP95Ms": 860,
+            "missingRepeats": [
+              "NS-001",
+              "NS-002",
+              "NS-003",
+              "NS-004",
+              "NS-005",
+              "NS-006"
+            ]
+          },
+          "failures": [
+            "insufficientRepeats",
+            "critical",
+            "wordErrorRate"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "eval/results/20261007-filter-realtime-screen.json",
+      "sha256": "b0489079d416b984604c18dfdab5cace17e341fe489f5cc41a1a5e6b688cbeb5",
+      "ownerOnly": true,
+      "corpusSha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+      "sourceSha256": "281edbfc25ff7c4e08ae6d37dc29a1594e6cb92dec3f7a023c6213de34bfd9d8",
+      "runnerSha256": "a1757dc623493af1467962249cf654fc454b2cfe16a1b651c63595f4ffeab226",
+      "screens": [
+        {
+          "candidate": "gpt-live-transcribe",
+          "metrics": {
+            "cases": 6,
+            "runs": 6,
+            "critical": 3,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 0,
+            "wordErrorRate": 0.36363636363636365,
+            "finalP95Ms": 842,
+            "missingRepeats": [
+              "NS-001",
+              "NS-002",
+              "NS-003",
+              "NS-004",
+              "NS-005",
+              "NS-006"
+            ]
+          },
+          "failures": [
+            "insufficientRepeats",
+            "critical",
+            "wordErrorRate"
+          ]
+        },
+        {
+          "candidate": "gpt-transcribe",
+          "metrics": {
+            "cases": 6,
+            "runs": 6,
+            "critical": 2,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 0,
+            "wordErrorRate": 0.1590909090909091,
+            "finalP95Ms": 893,
+            "missingRepeats": [
+              "NS-001",
+              "NS-002",
+              "NS-003",
+              "NS-004",
+              "NS-005",
+              "NS-006"
+            ]
+          },
+          "failures": [
+            "insufficientRepeats",
+            "critical",
+            "wordErrorRate"
+          ]
+        },
+        {
+          "candidate": "gpt-4o-transcribe",
+          "metrics": {
+            "cases": 6,
+            "runs": 6,
+            "critical": 2,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 1,
+            "wordErrorRate": 0.3409090909090909,
+            "finalP95Ms": 9493,
+            "missingRepeats": [
+              "NS-001",
+              "NS-002",
+              "NS-003",
+              "NS-004",
+              "NS-005",
+              "NS-006"
+            ]
+          },
+          "failures": [
+            "insufficientRepeats",
+            "critical",
+            "wordErrorRate",
+            "finalP95",
+            "delayed"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "eval/results/20261007-native-pcmu-screen.json",
+      "sha256": "7d3fbc45c584a9acc81ba1b3b438d76d82cf1ab8446134990033b29238de518a",
+      "ownerOnly": true,
+      "corpusSha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+      "sourceSha256": "281edbfc25ff7c4e08ae6d37dc29a1594e6cb92dec3f7a023c6213de34bfd9d8",
+      "runnerSha256": "91101e837ed4cb9c04eedf62ee4fe5b2d64fcab7c058c5d9f552645c7c35d111",
+      "screens": [
+        {
+          "candidate": "gpt-live-transcribe",
+          "metrics": {
+            "cases": 6,
+            "runs": 6,
+            "critical": 1,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 0,
+            "wordErrorRate": 0.29545454545454547,
+            "finalP95Ms": 1104,
+            "missingRepeats": [
+              "NS-001",
+              "NS-002",
+              "NS-003",
+              "NS-004",
+              "NS-005",
+              "NS-006"
+            ]
+          },
+          "failures": [
+            "insufficientRepeats",
+            "critical",
+            "wordErrorRate"
+          ]
+        },
+        {
+          "candidate": "gpt-transcribe",
+          "metrics": {
+            "cases": 6,
+            "runs": 6,
+            "critical": 2,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 0,
+            "wordErrorRate": 0.20454545454545456,
+            "finalP95Ms": 767,
+            "missingRepeats": [
+              "NS-001",
+              "NS-002",
+              "NS-003",
+              "NS-004",
+              "NS-005",
+              "NS-006"
+            ]
+          },
+          "failures": [
+            "insufficientRepeats",
+            "critical",
+            "wordErrorRate"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "eval/results/20261007-native-pcmu-projection-check.json",
+      "sha256": "31b2692d71a1eb30b0e1dcd4b3dab3d17a2658667a14798fc6a94d098fe84032",
+      "ownerOnly": true,
+      "corpusSha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+      "runnerSha256": "da28faee9771153206289630c21983474903b101fbd9b4edd23ff24eac7cba9a",
+      "pass": true,
+      "limits": "Offline transformation check; paid screen did not retain wire checks because close used terminate. No remote wire hash or speech gate pass is claimed."
+    },
+    {
+      "file": "eval/results/20261007-adaptive-floor-realtime-screen.json",
+      "sha256": "148e25404662e8b4f58b4283742178ad7e07024703138297a63bdc81a26a681b",
+      "ownerOnly": true,
+      "corpusSha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+      "sourceSha256": "281edbfc25ff7c4e08ae6d37dc29a1594e6cb92dec3f7a023c6213de34bfd9d8",
+      "runnerSha256": "8c64bab62dd359abdadd26d138350bb3f01d4b9fb20c0cc2d9c838c67f829c10",
+      "metrics": {
+        "cases": 6,
+        "runs": 6,
+        "critical": 1,
+        "providerFailures": 0,
+        "empty": 0,
+        "truncated": 0,
+        "delayed": 0,
+        "wordErrorRate": 0.1590909090909091,
+        "finalP95Ms": 1223,
+        "missingRepeats": [
+          "NS-001",
+          "NS-002",
+          "NS-003",
+          "NS-004",
+          "NS-005",
+          "NS-006"
+        ]
+      },
+      "failures": [
+        "insufficientRepeats",
+        "critical",
+        "wordErrorRate"
+      ]
+    },
+    {
+      "file": "eval/results/20261007-nonlocal-means-realtime-screen.json",
+      "sha256": "1edbaad91479d5c81f38b9d612120c4f40d9a62293514834ae31482b6cf88d7c",
+      "ownerOnly": true,
+      "corpusSha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+      "sourceSha256": "281edbfc25ff7c4e08ae6d37dc29a1594e6cb92dec3f7a023c6213de34bfd9d8",
+      "runnerSha256": "6e61a26314d808383c313511c2130189d9abdf685b57899d28c0f7e23db15027",
+      "metrics": {
+        "cases": 6,
+        "runs": 6,
+        "critical": 1,
+        "providerFailures": 0,
+        "empty": 0,
+        "truncated": 0,
+        "delayed": 1,
+        "wordErrorRate": 0.18181818181818182,
+        "finalP95Ms": 10627,
+        "missingRepeats": [
+          "NS-001",
+          "NS-002",
+          "NS-003",
+          "NS-004",
+          "NS-005",
+          "NS-006"
+        ]
+      },
+      "failures": [
+        "insufficientRepeats",
+        "critical",
+        "wordErrorRate",
+        "finalP95",
+        "delayed"
+      ]
+    },
+    {
+      "file": "eval/results/20261007-supplemental-correction-screen.json",
+      "sha256": "f01af8f560941124ffcb5879e8b81f51af2f5a90efcaedb1cd59e497223773d4",
+      "ownerOnly": true,
+      "corpusSha256": "a56e5ce1c891c21bdf0d91389dd89db061269c86a9b10c68c8b190bed693ea9c",
+      "sourceSha256": "769f65d4b3298240017b0cd3d398b54a9b1e990689b09607faba54c8f6616736",
+      "runnerSha256": "349f2517f8d9e9c0c089c5ad18365b4f322174cc25e49544477b2a3ceb8a1627",
+      "sourceStable": true,
+      "metrics": {
+        "cases": 16,
+        "runs": 16,
+        "critical": 4,
+        "providerFailures": 0,
+        "empty": 0,
+        "truncated": 0,
+        "delayed": 0,
+        "wordErrorRate": 0.09558823529411764,
+        "finalP95Ms": 823,
+        "missingRepeats": [
+          "SC-001",
+          "SC-002",
+          "SC-003",
+          "SC-004",
+          "SC-005",
+          "SC-006",
+          "SC-007",
+          "SC-008",
+          "SC-009",
+          "SC-010",
+          "SC-011",
+          "SC-012",
+          "SC-013",
+          "SC-014",
+          "SC-015",
+          "SC-016"
+        ]
+      },
+      "groups": {
+        "quiet": {
+          "metrics": {
+            "cases": 8,
+            "runs": 8,
+            "critical": 0,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 0,
+            "wordErrorRate": 0,
+            "finalP95Ms": 823,
+            "missingRepeats": [
+              "SC-001",
+              "SC-003",
+              "SC-005",
+              "SC-007",
+              "SC-009",
+              "SC-011",
+              "SC-013",
+              "SC-015"
+            ]
+          },
+          "failures": [
+            "insufficientRepeats"
+          ]
+        },
+        "noise": {
+          "metrics": {
+            "cases": 8,
+            "runs": 8,
+            "critical": 4,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 0,
+            "wordErrorRate": 0.19117647058823528,
+            "finalP95Ms": 822,
+            "missingRepeats": [
+              "SC-002",
+              "SC-004",
+              "SC-006",
+              "SC-008",
+              "SC-010",
+              "SC-012",
+              "SC-014",
+              "SC-016"
+            ]
+          },
+          "failures": [
+            "insufficientRepeats",
+            "critical",
+            "wordErrorRate"
+          ]
+        }
+      },
+      "fixtureMetadata": [
+        {
+          "id": "SC-001",
+          "voice": "awb",
+          "condition": "quiet",
+          "cleanSourceSha256": "7d63d53e179430cb2b62c46d0dc78139271e5031e49879dcfea99d663972beb5",
+          "bytes": 95360,
+          "nominalSnrDb": null,
+          "noiseSeed": null
+        },
+        {
+          "id": "SC-002",
+          "voice": "awb",
+          "condition": "noise",
+          "cleanSourceSha256": "7d63d53e179430cb2b62c46d0dc78139271e5031e49879dcfea99d663972beb5",
+          "bytes": 95360,
+          "nominalSnrDb": 10,
+          "noiseSeed": 307824
+        },
+        {
+          "id": "SC-003",
+          "voice": "awb",
+          "condition": "quiet",
+          "cleanSourceSha256": "65d5e691af851d5c3a25c7b3abf1ef095a9f7c143e144512ecf6a3aafbe25705",
+          "bytes": 90240,
+          "nominalSnrDb": null,
+          "noiseSeed": null
+        },
+        {
+          "id": "SC-004",
+          "voice": "awb",
+          "condition": "noise",
+          "cleanSourceSha256": "65d5e691af851d5c3a25c7b3abf1ef095a9f7c143e144512ecf6a3aafbe25705",
+          "bytes": 90240,
+          "nominalSnrDb": 10,
+          "noiseSeed": 307825
+        },
+        {
+          "id": "SC-005",
+          "voice": "awb",
+          "condition": "quiet",
+          "cleanSourceSha256": "813246a36611d6471bcf04fcb5f0f561734e5f026e64ee6f6682235c739aa802",
+          "bytes": 94720,
+          "nominalSnrDb": null,
+          "noiseSeed": null
+        },
+        {
+          "id": "SC-006",
+          "voice": "awb",
+          "condition": "noise",
+          "cleanSourceSha256": "813246a36611d6471bcf04fcb5f0f561734e5f026e64ee6f6682235c739aa802",
+          "bytes": 94720,
+          "nominalSnrDb": 10,
+          "noiseSeed": 307826
+        },
+        {
+          "id": "SC-007",
+          "voice": "awb",
+          "condition": "quiet",
+          "cleanSourceSha256": "138e09b718c34ed10a95e7fc0955148fa039ac24191da3d7e73fb95403b65ddf",
+          "bytes": 124800,
+          "nominalSnrDb": null,
+          "noiseSeed": null
+        },
+        {
+          "id": "SC-008",
+          "voice": "awb",
+          "condition": "noise",
+          "cleanSourceSha256": "138e09b718c34ed10a95e7fc0955148fa039ac24191da3d7e73fb95403b65ddf",
+          "bytes": 124800,
+          "nominalSnrDb": 10,
+          "noiseSeed": 307827
+        },
+        {
+          "id": "SC-009",
+          "voice": "rms",
+          "condition": "quiet",
+          "cleanSourceSha256": "43d330b71c690a3df02a7dfc22ef2e61e6d3adbfd109f1b3eac88cf8384f576d",
+          "bytes": 109440,
+          "nominalSnrDb": null,
+          "noiseSeed": null
+        },
+        {
+          "id": "SC-010",
+          "voice": "rms",
+          "condition": "noise",
+          "cleanSourceSha256": "43d330b71c690a3df02a7dfc22ef2e61e6d3adbfd109f1b3eac88cf8384f576d",
+          "bytes": 109440,
+          "nominalSnrDb": 10,
+          "noiseSeed": 307828
+        },
+        {
+          "id": "SC-011",
+          "voice": "rms",
+          "condition": "quiet",
+          "cleanSourceSha256": "4eebea962f04c83fb8b9fd777bfb42a94d6a6082827f936aa4fd955707b6a23e",
+          "bytes": 116480,
+          "nominalSnrDb": null,
+          "noiseSeed": null
+        },
+        {
+          "id": "SC-012",
+          "voice": "rms",
+          "condition": "noise",
+          "cleanSourceSha256": "4eebea962f04c83fb8b9fd777bfb42a94d6a6082827f936aa4fd955707b6a23e",
+          "bytes": 116480,
+          "nominalSnrDb": 10,
+          "noiseSeed": 307829
+        },
+        {
+          "id": "SC-013",
+          "voice": "rms",
+          "condition": "quiet",
+          "cleanSourceSha256": "150ec5a841a5ece3f5477f72c4b62c1ad1638033b6261e87e464081ae55d541b",
+          "bytes": 99840,
+          "nominalSnrDb": null,
+          "noiseSeed": null
+        },
+        {
+          "id": "SC-014",
+          "voice": "rms",
+          "condition": "noise",
+          "cleanSourceSha256": "150ec5a841a5ece3f5477f72c4b62c1ad1638033b6261e87e464081ae55d541b",
+          "bytes": 99840,
+          "nominalSnrDb": 10,
+          "noiseSeed": 307830
+        },
+        {
+          "id": "SC-015",
+          "voice": "rms",
+          "condition": "quiet",
+          "cleanSourceSha256": "3e6db907e32b13d5a6cf9d27249751fb85a39b2934cff788f5645c9420543083",
+          "bytes": 131840,
+          "nominalSnrDb": null,
+          "noiseSeed": null
+        },
+        {
+          "id": "SC-016",
+          "voice": "rms",
+          "condition": "noise",
+          "cleanSourceSha256": "3e6db907e32b13d5a6cf9d27249751fb85a39b2934cff788f5645c9420543083",
+          "bytes": 131840,
+          "nominalSnrDb": 10,
+          "noiseSeed": 307831
+        }
+      ]
+    },
+    {
+      "counts": {
+        "corpus": 45,
+        "selected": 45,
+        "executed": 45,
+        "harnessFailures": 0,
+        "setupGaps": 0,
+        "failedObservations": 0
+      },
+      "source": {
+        "sha256": "c763db58d51c538929af96f5173938c9bfb5e54a42bb4ed73df9a781e1416c29",
+        "files": 485
+      },
+      "sourceStable": true,
+      "model": "gpt-4o-mini",
+      "promptVersion": "clinical-intent-v24",
+      "privacyPass": true,
+      "file": "eval/results/20261008-corrected-all45-v24.json",
+      "sha256": "ec56d7353d3a8025a462e4640404af97d7558453031a2d54ff168fc5abbdfc33",
+      "ownerOnly": true,
+      "gate": "partial-baseline-not-a-release-gate",
+      "candidateModelRequests": 6,
+      "trustedPaths": 39,
+      "observationsPassed": 45,
+      "safetyChecksPassed": 135
+    }
+  ],
+  "initialTextRegression": {
+    "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791415550059.log",
+    "tests": 1163,
+    "passed": 1098,
+    "failed": 1,
+    "skipped": 64,
+    "cancelled": 0,
+    "failure": "Stale five-command catalogue assertion; actual production catalogue already has nine."
+  },
+  "focusedCorrection": {
+    "command": "node --test test/composition/reference.test.ts",
+    "tests": 14,
+    "passed": 11,
+    "failed": 0,
+    "skipped": 3,
+    "cancelled": 0
+  },
+  "speechCandidatePromoted": false,
+  "pinnedCorporaChanged": false,
+  "thresholdsChanged": false,
+  "productionSpeechChanged": false,
+  "limitations": [
+    "Conversation evaluation checks 45 named observations and 135 safety checks, not all prose acceptance clauses or statistical model reliability.",
+    "All new speech screens use one repeat; no complete candidate gate pass.",
+    "Native PCMU remote screen lost wire-hash instrumentation because terminate bypassed close. Its separate six-case exact round-trip is offline only.",
+    "Complete-clip filtering and the adaptive future-audio estimate are not streaming implementation evidence.",
+    "Supplemental two-voice correction corpus does not replace pinned gate corpora.",
+    "Twilio carrier, real email, clinic activation and Splose remain deferred or unverified."
+  ],
+  "diagnosticCommands": [
+    {
+      "command": "node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out eval/results/20261007-next-all45-v24.json",
+      "job": "Abby current main 45 live conversation evaluation",
+      "exitCode": 0,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791415364328.log"
+    },
+    {
+      "command": "node --env-file=/home/gust/code/abby/.env eval/results/screen-noise-disabled-20261007.mjs",
+      "job": "Abby paired realtime input noise disabled screen",
+      "exitCode": 0,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791415442553.log",
+      "exitMeaning": "Diagnostic completed; speech gate did not pass."
+    },
+    {
+      "command": "node --env-file=/home/gust/code/abby/.env eval/results/screen-filter-realtime-20261007.mjs",
+      "job": "Abby fixed filter realtime candidate screens",
+      "exitCode": 0,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791415532501.log",
+      "exitMeaning": "Diagnostic completed; speech gate did not pass."
+    },
+    {
+      "command": "node --env-file=/home/gust/code/abby/.env eval/results/screen-native-pcmu-20261007.mjs",
+      "job": "Abby native G711 realtime fixed corpus screen",
+      "exitCode": 0,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791415713692.log",
+      "exitMeaning": "Diagnostic completed; speech gate did not pass."
+    },
+    {
+      "command": "node --env-file=/home/gust/code/abby/.env eval/results/screen-adaptive-floor-20261007.mjs",
+      "job": "Abby audio-derived noise floor realtime screen",
+      "exitCode": 0,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791416065049.log",
+      "exitMeaning": "Diagnostic completed; speech gate did not pass."
+    },
+    {
+      "command": "node --env-file=/home/gust/code/abby/.env eval/results/screen-nonlocal-means-20261007.mjs",
+      "job": "Abby fixed nonlocal means realtime screen",
+      "exitCode": 0,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791416145713.log",
+      "exitMeaning": "Diagnostic completed; speech gate did not pass."
+    },
+    {
+      "command": "node --env-file=/home/gust/code/abby/.env eval/results/screen-synthetic-corrections-20261007.mjs",
+      "job": "Abby supplemental synthetic correction complete screen",
+      "exitCode": 0,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791416643909.log",
+      "exitMeaning": "Diagnostic completed; speech gate did not pass."
+    },
+    {
+      "command": "node eval/results/check-native-pcmu-projection-20261007.mjs",
+      "exitCode": 0,
+      "scope": "Six offline exact round-trips; no provider request."
+    },
+    {
+      "command": "node scripts/read-speech-gate-status.ts",
+      "exitCode": 2,
+      "scope": "Valid current report set with failing quality thresholds."
+    },
+    {
+      "command": "node --env-file=/home/gust/code/abby/.env scripts/evaluate-clinic-conversations.ts --model gpt-4o-mini --out /home/gust/code/abby/eval/results/20261008-corrected-all45-v24.json",
+      "job": "Abby corrected source 45 conversation evaluation October 8",
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791419153763.log",
+      "exitCode": 0
+    }
+  ],
+  "supplementalInitialFailure": {
+    "job": "Abby supplemental synthetic booking correction screen",
+    "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791416601793.log",
+    "exitCode": 1,
+    "providerRequests": 0,
+    "reason": "Commas in inline Flite text were parsed as filter separators; corrected with a text file, preserving the sentence."
+  },
+  "supplementalListeningExports": {
+    "manifest": "eval/results/synthetic-booking-corrections-v1-complete/wav-exports.json",
+    "manifestSha256": "43e910fe6fc8615a8b06cd18530836c98de488ff0517a66f9af8c75133607cdd",
+    "clips": 16,
+    "pcmPayloadsMatchPinnedFixtures": true,
+    "humanReviewStatus": "pending",
+    "changesToAudio": "None; WAV headers wrap the same original PCM."
+  },
+  "initialBroadRegression": {
+    "job": "Abby corrected full local regression October 7",
+    "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791416491732.log",
+    "status": "failed",
+    "stages": [
+      {
+        "command": "npm run typecheck",
+        "status": "pass"
+      },
+      {
+        "command": "npm run test:text",
+        "status": "pass",
+        "pool": {
+          "tests": 1163,
+          "passed": 1099,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 64,
+          "durationMs": 721561.741111
+        },
+        "orderingCoordinator": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "skipped": 0,
+          "cancelled": 0,
+          "durationMs": 7200.879773
+        }
+      },
+      {
+        "command": "npm run probe:postgres",
+        "status": "failed",
+        "pool": {
+          "tests": 1627,
+          "passed": 1620,
+          "failed": 5,
+          "cancelled": 1,
+          "skipped": 1,
+          "durationMs": 1420746.570179
+        },
+        "orderingCoordinator": {
+          "status": "notRun"
+        },
+        "failures": [
+          "Six-case cancellation crash test exceeded its unchanged 90-second aggregate deadline.",
+          "Shared request-budget test equated failed reader outcomes with denied concrete claims.",
+          "Three signed voice assertions used stale model fallback wording; synthetic corrected PCM tone matched the provisional tone."
+        ]
+      },
+      {
+        "command": "npm run test:browser",
+        "status": "notRun"
+      },
+      {
+        "command": "git diff --check",
+        "status": "notRun"
+      }
+    ],
+    "exitCode": 1
+  },
+  "baselineFailureReproduction": {
+    "job": "Abby PostgreSQL cancellation and budget failure reproduction",
+    "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791418745934.log",
+    "exitCode": 1,
+    "tests": 9,
+    "passed": 8,
+    "failed": 1,
+    "skipped": 0,
+    "cancelled": 0,
+    "budgetRace": "Actual SQL claims with deterministic availability-first scheduling reproduce three denied claims versus two denied reader outcomes.",
+    "cancellation": "All six crash checkpoints passed in isolation in 54400.91384 ms; this did not reproduce the broad-run timeout.",
+    "timing": "Six recovery process runs each loaded both sender fixture graphs, taking 989\u20133249 ms in this focused run.",
+    "command": "work run 'Abby PostgreSQL cancellation and budget failure reproduction' -- systemd-run --user --scope --quiet bash scripts/with-postgres.sh bash /tmp/abby-postgres-failure-reproduction-20261008.sh"
+  },
+  "focusedFixtureCorrections": {
+    "job": "Abby focused PostgreSQL and signed voice fixture corrections",
+    "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791419030561.log",
+    "status": "failed",
+    "changes": [
+      "Count exact budget diagnostic events against observed concrete claim denials.",
+      "Load sender fixture graphs only in cancellation send branches; recovery retains actual recall reads and assertions.",
+      "Assert the current model-fallback sentence for the three model paths and assign it distinct synthetic PCM."
+    ],
+    "preserved": [
+      "All six crash cases",
+      "90-second aggregate and 25-second child deadlines",
+      "Four test workers",
+      "Five signed-voice subtest workers",
+      "Budget outbound limit and exact diagnostics",
+      "Stale classifier suppression and distinct replacement audio",
+      "Privacy row and backup scans"
+    ],
+    "postgres": {
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "durationMs": 64990.070026,
+      "cancellationDurationMs": 60417.572324,
+      "recoveryStartupMs": [
+        2345,
+        2419,
+        2095,
+        1461,
+        1019,
+        1706
+      ],
+      "scheduling": "availability-first uses actual SQL; deadlines and concurrency unchanged"
+    },
+    "exitCode": 1,
+    "typecheck": "pass",
+    "signedVoice": {
+      "tests": 35,
+      "passed": 33,
+      "failed": 2,
+      "cancelled": 0,
+      "skipped": 0,
+      "durationMs": 150401.858477,
+      "failedLeaf": "E2E-204 asserted a total arrival order for two concurrent relationship reads; the suite parent also failed.",
+      "modelFallbackCorrections": "All three repaired fallback/correction subtests passed."
+    },
+    "command": "work run 'Abby focused PostgreSQL and signed voice fixture corrections' -- bash /tmp/abby-focused-fixture-fixes-20261008.sh"
+  },
+  "trackedExecutableChanges": [
+    {
+      "path": "test/composition/reference.test.ts",
+      "sha256": "71095c2c3b3d56cd53af205e95b4225f8f063be615b6a9a85d262722fba46d4f",
+      "reason": "Assert the current nine permitted agent commands while retaining host-write and admin-denial checks."
+    },
+    {
+      "path": "test/storage/postgres-cliniko-request-budget.test.ts",
+      "sha256": "9ec3cea4ffa1dea92db968c9744c1ba96096b76572d8d57b7135da764bc1649f"
+    },
+    {
+      "path": "test/support/standalone-cancellation-worker.ts",
+      "sha256": "78bde67abc5d735d7a83ee2a6dac1cd7ce32677130665732b070bfccd4e32653"
+    },
+    {
+      "path": "test/support/start-synthetic-voice-runner.ts",
+      "sha256": "ccc3a017004ccbaf61286d635df55ab75162f8ddf5de8d825943bb24058c1c68"
+    },
+    {
+      "path": "test/voice/standalone-voice-failures.test.ts",
+      "sha256": "906899efb1b7f9493c6eb9c146a0a5a8ba0b0cfe409f31f735dca0e203f3e8a8"
+    }
+  ],
+  "updatedDate": "2026-10-08",
+  "signedVoiceParallelCorrection": {
+    "job": "Abby signed voice parallel request assertion correction",
+    "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791419351123.log",
+    "command": "bash scripts/with-postgres.sh bash /tmp/abby-focused-signed-voice-20261008.sh",
+    "status": "pass",
+    "reason": "Assert the exact business read and two ordered validation stages, accepting either arrival order within each concurrent pair; retain zero available-times read and GET-only checks.",
+    "exitCode": 0,
+    "tests": 35,
+    "passed": 35,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "durationMs": 170359.209296
+  },
+  "finalRegression": {
+    "job": "Abby final PostgreSQL and browser checkpoint October 8",
+    "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791419558841.log",
+    "status": "pass",
+    "stages": [
+      {
+        "command": "npm run typecheck",
+        "status": "pass"
+      },
+      {
+        "command": "npm run probe:postgres",
+        "status": "pass",
+        "pool": {
+          "tests": 1627,
+          "passed": 1626,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 1,
+          "durationMs": 1529700.384559
+        },
+        "skip": "C-LIVE-40 opt-in real demo-provider patient creation is not enabled; no passing live-case claim.",
+        "orderingCoordinator": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "skipped": 0,
+          "cancelled": 0,
+          "durationMs": 14504.260754
+        }
+      },
+      {
+        "command": "npm run test:browser",
+        "status": "pass",
+        "pool": {
+          "tests": 75,
+          "passed": 75,
+          "failed": 0,
+          "skipped": 0,
+          "duration": "4.1m"
+        },
+        "orderingCoordinator": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "skipped": 0,
+          "cancelled": 0,
+          "durationMs": 32086.312185
+        }
+      },
+      {
+        "command": "git diff --check",
+        "status": "pass"
+      }
+    ],
+    "textSweep": "The earlier full corrected text sweep passed. Final PostgreSQL reruns all text/voice pool files plus storage and ordered-node checks on the final fixtures.",
+    "cancellationCrashTest": {
+      "status": "pass",
+      "cases": 6,
+      "durationMs": 86724.521488,
+      "aggregateDeadlineMs": 90000,
+      "childDeadlineMs": 25000,
+      "timeoutsChanged": false
+    },
+    "command": "work run 'Abby final PostgreSQL and browser checkpoint October 8' -- systemd-run --user --scope --quiet bash /tmp/abby-final-regression-20261008.sh",
+    "generatedSchemaUnchanged": true,
+    "exitCode": 0,
+    "duration": "31m55s"
+  },
+  "regressionDiagnosticRunners": [
+    {
+      "file": "eval/results/abby-cancellation-process-timing-20261008.mjs",
+      "sha256": "bf630228ac9731461bf898e43ebfecc1d89e85360a5ee761d1b0c7078ad50e7f",
+      "ownerOnly": true,
+      "note": "Exact diagnostic runner bytes; original absolute worktree paths are retained for provenance."
+    },
+    {
+      "file": "eval/results/abby-postgres-failure-reproduction-20261008.sh",
+      "sha256": "235c44b38dd9b662560b5b6de541549e713d5d36b17182a9ecdd484aa8bf7407",
+      "ownerOnly": true,
+      "note": "Exact diagnostic runner bytes; original absolute worktree paths are retained for provenance."
+    },
+    {
+      "file": "eval/results/abby-focused-fixture-fixes-20261008.sh",
+      "sha256": "68f389e8ecaa8428d197cb80001ab0d326762fcbc5204c3cfedc8332c8a9ca21",
+      "ownerOnly": true,
+      "note": "Exact diagnostic runner bytes; original absolute worktree paths are retained for provenance."
+    },
+    {
+      "file": "eval/results/abby-focused-signed-voice-20261008.sh",
+      "sha256": "e44b1996d468299cb149144722667ca1fa10c9adff51c66c5b1bc34e9e86bcb0",
+      "ownerOnly": true,
+      "note": "Exact diagnostic runner bytes; original absolute worktree paths are retained for provenance."
+    },
+    {
+      "file": "eval/results/abby-final-regression-20261008.sh",
+      "sha256": "508004e950f9ec9d2210d7b25eed1e427b9582ebe331b421b3ddd0fd820cc3c6",
+      "ownerOnly": true,
+      "note": "Exact diagnostic runner bytes; original absolute worktree paths are retained for provenance."
+    }
+  ],
+  "completedDate": "2026-10-08",
+  "finalSource": {
+    "sha256": "c763db58d51c538929af96f5173938c9bfb5e54a42bb4ed73df9a781e1416c29",
+    "files": 485,
+    "matchesCorrectedConversationReport": true
+  },
+  "ci": {
+    "validationPassClaimed": false,
+    "status": "notObservedAtCheckpointCommit",
+    "publicationRecord": "Exact-head CI observations are recorded separately in the pull request."
+  }
+}

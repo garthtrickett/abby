@@ -39,6 +39,7 @@ const operationalTokenHex = "a".repeat(64);
 const webhookUrl = "https://calls.example.test/twilio/inbound";
 const streamUrl = "wss://calls.example.test/twilio/media/";
 const noStaffNotice = "I can't send a staff request from this call. Please contact the clinic directly.";
+const modelFallbackNotice = "I couldn't understand that safely. Could you repeat your request, or contact the clinic directly?";
 const weekInstruction = "Press 3 for possible times over the next week.";
 const root = new URL("../../", import.meta.url);
 const execFileAsync = promisify(execFile);
@@ -334,7 +335,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         assert.deepEqual(fixture.modelRequests, ["request"]);
         assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 0);
         assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
-        assert.equal(fixture.speech[1], noStaffNotice);
+        assert.equal(fixture.speech[1], modelFallbackNotice);
         assert.doesNotMatch(fixture.speech[1]!, /booked|reserved|confirmed/i);
         const lifetime = await fixture.operationalSnapshot();
         const daily = await fixture.operationalDaily();
@@ -359,7 +360,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         await waitFor(() => fixture.modelAborts.length === 1 && fixture.modelRequests.length === 2 &&
           call.messages.length >= 4 && fixture.speech.length >= 2, "corrected response");
         assertResponseAudio(call);
-        assert.equal(fixture.speech[1], noStaffNotice);
+        assert.equal(fixture.speech[1], modelFallbackNotice);
         assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 0);
         assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
         assert.equal((await fixture.operationalSnapshot()).intentClassificationUnavailable, 0);
@@ -398,7 +399,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         const provisionalAudio = (call.messages[2]!.media as { payload: string }).payload;
         const correctedAudio = (call.messages[6]!.media as { payload: string }).payload;
         assert.notEqual(correctedAudio, provisionalAudio, "the corrected response must replace the old audio");
-        assert.equal(fixture.speech[2], noStaffNotice);
+        assert.equal(fixture.speech[2], modelFallbackNotice);
         assert.equal(fixture.modelRequests.length, 2);
         assert.equal(fixture.clinikoPaths.filter(path => path.endsWith("/available_times")).length, 1);
         assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
@@ -470,10 +471,12 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
           assert.deepEqual(fixture.clinikoPaths, ["/v1/businesses/11"]);
         }
         if (fault === "cliniko-practitioner-type-removed") {
-          assert.deepEqual(fixture.clinikoPaths, [
-            "/v1/businesses/11", "/v1/practitioners/22", "/v1/appointment_types/33",
-            "/v1/businesses/11/practitioners", "/v1/practitioners/22/appointment_types",
-          ]);
+          assert.equal(fixture.clinikoPaths[0], "/v1/businesses/11");
+          // Each stage completes before the next, but its two reads run in parallel.
+          assert.deepEqual(fixture.clinikoPaths.slice(1, 3).sort(),
+            ["/v1/practitioners/22", "/v1/appointment_types/33"].sort());
+          assert.deepEqual(fixture.clinikoPaths.slice(3).sort(),
+            ["/v1/businesses/11/practitioners", "/v1/practitioners/22/appointment_types"].sort());
           assert.equal(fixture.clinikoPaths.some(path => path.endsWith("/available_times")), false);
         }
         await closeCaller(call);

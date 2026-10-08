@@ -199,7 +199,7 @@ const openaiFetch: typeof fetch = async (input, init) => {
   // from both greeting and provisional audio independently of IPC timing.
   const sample = request.input.startsWith("This is an Abby test call.") ? 1_000 :
     fault === "clear-playback-correction" &&
-      request.input === "I can't send a staff request from this call. Please contact the clinic directly."
+      request.input === "I couldn't understand that safely. Could you repeat your request, or contact the clinic directly?"
       ? 3_000 : 2_000;
   const audio = Buffer.alloc(960);
   for (let offset = 0; offset < audio.length; offset += 2) audio.writeInt16LE(sample, offset);
