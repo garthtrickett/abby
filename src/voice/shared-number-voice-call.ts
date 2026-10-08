@@ -42,6 +42,7 @@ export class SharedNumberVoiceCall {
   private beginning = false;
   private attachingBound = false;
   private inFlight: Promise<void> | undefined;
+  private renewalInFlight: Promise<Result<CallState, VoiceSessionFailure>> | undefined;
   private closing = false;
   private terminal: PendingLocationCall | CallState | undefined;
 
@@ -180,11 +181,20 @@ export class SharedNumberVoiceCall {
 
   async renew(now: string): Promise<Result<PendingLocationCall | CallState, SharedVoiceFailure>> {
     if (this.closing || this.terminal) return err({ kind: "disconnected" });
+    // A bound session cannot switch clinic. Its lease must stay live while
+    // caller interpretation or evidence reads await their own deadlines.
+    // Location selection and attachment retain their serialized transition.
+    if (this.full) {
+      if (this.renewalInFlight) return err({ kind: "deliveryBlocked" });
+      const renewal = this.full.renew(now);
+      this.renewalInFlight = renewal;
+      try { return await renewal; }
+      finally { if (this.renewalInFlight === renewal) this.renewalInFlight = undefined; }
+    }
     if (this.inFlight) return err({ kind: "deliveryBlocked" });
     const done = this.trackTransition();
     try {
       if (this.prelocation) return await this.prelocation.renew();
-      if (this.full) return await this.full.renew(now);
       return err({ kind: "sessionUnknown" });
     } finally { done(); }
   }
@@ -248,7 +258,7 @@ export class SharedNumberVoiceCall {
     if (this.closing) return err({ kind: "deliveryBlocked" });
     this.closing = true;
     try {
-      await this.inFlight;
+      await Promise.allSettled([this.inFlight, this.renewalInFlight]);
       const closed = this.full ? await this.full.end(now, reason)
         : this.prelocation ? await this.prelocation.end(now, reason)
         : await closeUnattachedCall({ ledger: this.ledger, intake: this.intake, event: this.event,

@@ -55,6 +55,7 @@ export class TwilioConnectedCall {
   private readonly stopCall: () => void;
   private callStopDelivered = false;
   private tail: Promise<void> = Promise.resolve();
+  private locationBound = false;
   private outstanding = 0;
   private begun = false;
   private closed = false;
@@ -183,8 +184,11 @@ export class TwilioConnectedCall {
   }
 
   private renew(now: string): Promise<Result<PendingLocationCall | CallState, ConnectedVoiceFailure>> {
+    if (this.locationBound) return (this.closed
+      ? Promise.resolve(err<ConnectedVoiceFailure>({ kind: "sessionUnknown" })) : this.call.renew(now))
+      .catch(() => err<ConnectedVoiceFailure>({ kind: "targetUnavailable" }));
     const handled = this.tail.then(() => this.closed
-      ? err<ConnectedVoiceFailure>({ kind: "sessionUnknown" }) : this.call.renew(now))
+      ? err<ConnectedVoiceFailure>({ kind: "sessionUnknown" }) : this.call.renew(this.now()))
       .catch(() => err<ConnectedVoiceFailure>({ kind: "targetUnavailable" }));
     this.tail = handled.then(() => undefined);
     return handled;
@@ -258,6 +262,7 @@ export class TwilioConnectedCall {
       const started = await this.call.begin(this.now());
       if (!started.ok) { await this.failSession(); return started; }
       this.begun = true;
+      this.locationBound = started.value.kind === "admitted";
       if (this.privateKeypadInput && (started.value.kind !== "admitted" || !this.privateKeypadInput.start())) {
         await this.failSession(); return err({ kind: "privateInputUnavailable" });
       }
@@ -277,7 +282,10 @@ export class TwilioConnectedCall {
         this.listeningControl = undefined;
         this.retriedSilence = false;
         this.blockedSilenceChecks = 0;
-      } else if (progressed.value.kind === "turnCompleted") this.trackDelivery(progressed.value.delivery);
+      } else if (progressed.value.kind === "turnCompleted") {
+        if (progressed.value.turn.kind === "locationBound") this.locationBound = true;
+        this.trackDelivery(progressed.value.delivery);
+      }
       return ok({ kind: "media", value: progressed.value });
     }
     if (event.kind === "dtmf") {
