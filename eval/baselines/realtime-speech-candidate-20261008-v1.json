@@ -1,0 +1,265 @@
+{
+  "schema": "abby.realtime-speech-candidate.v1",
+  "date": "2026-10-08",
+  "baseHead": "d1bc60a85142e40c96a0483530c0aaedb9e3ff85",
+  "status": "optInCandidateImplementedLatencySubgatePass",
+  "model": "gpt-realtime-2.1-mini",
+  "voice": "coral",
+  "reports": [
+    {
+      "file": "eval/results/20261008-realtime-speech-protocol.json",
+      "sha256": "83cee94385e77d36d8d29dfb93c06447d9331ab7fed0f02549a69befced281ff",
+      "ownerOnly": true
+    },
+    {
+      "file": "eval/results/20261008-realtime-speech-corrected-screen.json",
+      "sha256": "c1a4740840865842326284f505379f5d2d29a6d970214a0462bb5912e3ac0c52",
+      "ownerOnly": true
+    },
+    {
+      "file": "eval/results/20261008-realtime-speech-full40.json",
+      "sha256": "9ed0bb830af38c527964b2d9f17967e4d11491b588039e291ae8e9095440b462",
+      "ownerOnly": true
+    },
+    {
+      "file": "eval/results/20261008-realtime-approved-text.json",
+      "sha256": "08a3badd0a8fd3206eaa933e3fd48ed63ec2dc3959202996f6bc6f9b1d099647",
+      "ownerOnly": true
+    }
+  ],
+  "sourceFiles": [
+    {
+      "path": "src/voice/openai-realtime-speech-synthesis.ts",
+      "sha256": "cb5308593d5f9ef9db1a8b139be58ab0134b37d382d6e33dd112f06ae2bcf5bd"
+    },
+    {
+      "path": "src/voice/streamed-playback-port.ts",
+      "sha256": "083bc84aea1ade0af7407ce4593d344f3275070c9208fc4c457ab950f218c5e9"
+    },
+    {
+      "path": "src/voice/speech-loop-evaluation.ts",
+      "sha256": "267c3d38fae367bdeb456061e79bbd131a7ccc97ced615d1d765e5ceb2897110"
+    },
+    {
+      "path": "src/voice/speech-latency-gate.ts",
+      "sha256": "f9d757f09bc17198cca7ae31254982619e317c4e7b6a84f53edb244deabc4839"
+    },
+    {
+      "path": "scripts/evaluate-realtime-speech.ts",
+      "sha256": "bda1c771785fc65c17d7b9ffd0711fb7f1c1ec8ec9c925cd2de615a275be611c"
+    }
+  ],
+  "latencyGate": {
+    "status": "pass",
+    "failures": [],
+    "metrics": {
+      "jobs": 40,
+      "failedJobs": 0,
+      "lateJobs": 0,
+      "firstChunkP95Ms": 2699,
+      "utteranceP95Ms": 2702
+    },
+    "thresholds": {
+      "version": "speech-synthetic-latency-v1",
+      "minJobs": 40,
+      "repeatsPerCase": 20,
+      "maxP95FirstChunkMs": 3500,
+      "maxIndividualFirstChunkMs": 5000,
+      "maxP95UtteranceMs": 6000,
+      "maxFailedJobs": 0
+    }
+  },
+  "configuration": {
+    "model": "gpt-realtime-2.1-mini",
+    "voice": "coral",
+    "validation": "completeProviderTranscriptBeforeAudio",
+    "corpusVersion": "speech-loop-v1",
+    "corpusSha256": "b02fc915affa082502d417bf3eaaecb4435c14c00947c40ecda3e57ee7578857",
+    "sourceFiles": [
+      {
+        "path": "src/voice/openai-realtime-speech-synthesis.ts",
+        "sha256": "cb5308593d5f9ef9db1a8b139be58ab0134b37d382d6e33dd112f06ae2bcf5bd"
+      },
+      {
+        "path": "src/voice/streamed-playback-port.ts",
+        "sha256": "083bc84aea1ade0af7407ce4593d344f3275070c9208fc4c457ab950f218c5e9"
+      },
+      {
+        "path": "src/voice/speech-loop-evaluation.ts",
+        "sha256": "267c3d38fae367bdeb456061e79bbd131a7ccc97ced615d1d765e5ceb2897110"
+      },
+      {
+        "path": "src/voice/speech-latency-gate.ts",
+        "sha256": "f9d757f09bc17198cca7ae31254982619e317c4e7b6a84f53edb244deabc4839"
+      },
+      {
+        "path": "scripts/evaluate-realtime-speech.ts",
+        "sha256": "bda1c771785fc65c17d7b9ffd0711fb7f1c1ec8ec9c925cd2de615a275be611c"
+      }
+    ],
+    "repeats": 20,
+    "concurrency": 4,
+    "firstChunkDeadlineMs": 5000,
+    "laterStepMs": 2000,
+    "maxUtteranceMs": 20000,
+    "nodeVersion": "v22.23.2"
+  },
+  "supplement": {
+    "runs": 4,
+    "queued": 4,
+    "notSent": 0,
+    "uncertain": 0,
+    "repeats": 1,
+    "concurrency": 2,
+    "firstChunkP95Ms": 3237,
+    "sourceFiles": [
+      {
+        "path": "src/voice/openai-realtime-speech-synthesis.ts",
+        "sha256": "cb5308593d5f9ef9db1a8b139be58ab0134b37d382d6e33dd112f06ae2bcf5bd"
+      },
+      {
+        "path": "src/voice/streamed-playback-port.ts",
+        "sha256": "083bc84aea1ade0af7407ce4593d344f3275070c9208fc4c457ab950f218c5e9"
+      }
+    ],
+    "runner": {
+      "file": "eval/results/screen-realtime-approved-text-20261008.mjs",
+      "sha256": "ffc5f288958bba9b1e44ca9f9e3db96b051b2522a772301faebfb98b790c9af1",
+      "ownerOnly": true
+    }
+  },
+  "protocol": {
+    "runs": 4,
+    "completed": 4,
+    "requestedModelAcknowledged": 4,
+    "normalizedProviderTranscriptsMatched": 4,
+    "firstRawAudioRangeMs": [
+      1699,
+      2662
+    ],
+    "responseDoneRangeMs": [
+      2426,
+      3043
+    ],
+    "runner": {
+      "file": "eval/results/probe-realtime-speech-20261008.mjs",
+      "sha256": "360125f992bb80ca650e12bf3940f4e8403588a8a0d0f4128f592f070e8e947a",
+      "ownerOnly": true
+    }
+  },
+  "initialFailures": [
+    {
+      "kind": "localTypecheck",
+      "reason": "RawData narrowing and fake-socket structural typing; corrected before final validation."
+    },
+    {
+      "kind": "protocolCompatibility",
+      "reportFile": "eval/results/20261008-realtime-speech-adapter-screen.json",
+      "sha256": "0816bd90bca1462aa32e0313223b162a4c17d7860d5263c41f983d630a9d07db",
+      "outcome": "2 notSent; zero queued audio."
+    },
+    {
+      "kind": "protocolTrace",
+      "reportFile": "eval/results/20261008-realtime-speech-event-trace.json",
+      "sha256": "7157957233d85caddfd07720650c741b3f545f563fc87dc6806ee554014a7aa7",
+      "rootCause": "Content-part events use audio; completed response content uses output_audio. Official schema and actual event trace confirm distinct types."
+    }
+  ],
+  "jobs": [
+    {
+      "label": "Abby replacement Realtime speech protocol diagnostic October 8",
+      "exitCode": 0,
+      "elapsedSeconds": 6,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791426438650.log"
+    },
+    {
+      "label": "Abby Realtime speech corrected protocol compatibility October 8",
+      "exitCode": 1,
+      "elapsedSeconds": 3,
+      "exitMeaning": "Both replies queued; minimum corpus coverage not met by two-job screen.",
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791427165123.log"
+    },
+    {
+      "label": "Abby Realtime speech full forty-job latency gate October 8",
+      "exitCode": 0,
+      "elapsedSeconds": 26,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791427244276.log"
+    },
+    {
+      "label": "Abby Realtime speech numeric approved text supplement October 8",
+      "exitCode": 0,
+      "elapsedSeconds": 7,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791427397090.log"
+    }
+  ],
+  "limitations": [
+    "Complete provider-reported transcript verification precedes release; this is not an independent acoustic or human listening proof.",
+    "The unchanged 40-job output latency corpus contains only its two original phrases. Numeric/date/fee/correction coverage is a four-case, one-repeat supplement.",
+    "Full buffering adds utterance-dependent latency; maximum supported provider audio is twenty seconds and generation deadline is twenty seconds.",
+    "The adapter is opt-in and not composed into the standalone caller runner. Default models, original transcription corpora and thresholds remain unchanged.",
+    "No human, carrier, clinic approval or real patient evidence; noisy/safety transcription still fails."
+  ],
+  "gateStatus": {
+    "replacementSpeechLatencySubgate": "pass",
+    "completeStoredDefaultCandidateGate": "fail",
+    "representativeCallGate": "notRun",
+    "humanReviewStatus": "pending",
+    "releaseGate": "unverified",
+    "productionAdmission": "hold"
+  },
+  "validation": {
+    "focusedNineChecks": "pass",
+    "typecheckAndVoiceRegression": "fail",
+    "evidenceVerification": "pass",
+    "diffCheck": "pass",
+    "evidenceVerifierSha256": "41a43d14af580111b7ed33bc44451e9ef277d91878d59993f37cc183e42ec9a5",
+    "typecheck": "pass",
+    "broadVoiceRegression": {
+      "command": "npm run typecheck && node --test --test-concurrency=4 test/voice/*.test.ts test/contract/scenario-manifest.test.ts",
+      "tests": 466,
+      "pass": 438,
+      "fail": 2,
+      "skipped": 26,
+      "durationMs": 718986.109068,
+      "exitCode": 1,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791427244921.log",
+      "failure": "E2E-310 and E2E-313 caller turn dispatch timed out; existing workflow and support source unchanged from base. Cause not established."
+    },
+    "isolatedWorkflowReproduction": {
+      "command": "node --test --test-concurrency=1 test/voice/appointment-change-intent.test.ts test/voice/approved-booking-search.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "exitCode": 0,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791428416946.log",
+      "durationMs": 121067.775015,
+      "meaning": "Both formerly failing tests pass in isolation with their original internal workers and deadlines; this does not establish a full broad regression pass."
+    },
+    "candidateTestSha256": "6249dbc0f6f51aaa63036fd6223a3d7231eac1f382cc5c0e2ed38ed8c830a5ca",
+    "completeStoredGateCommand": "ABBY_SPEECH_GATE_REPORT_SET=/home/gust/code/abby/eval/results/current-speech-gate.json node scripts/read-speech-gate-status.ts",
+    "completeStoredGateExitCode": 2,
+    "unchangedMainConcurrentControl": {
+      "head": "d1bc60a85142e40c96a0483530c0aaedb9e3ff85",
+      "command": "node --test --test-concurrency=4 test/voice/appointment-change-intent.test.ts test/voice/approved-booking-search.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "exitCode": 0,
+      "durationMs": 66123.228888,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791428589240.log",
+      "meaning": "Pass on unchanged main; larger-sweep timeout remains unexplained and no full regression pass is claimed."
+    },
+    "evidenceVerificationLog": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791428627912.log",
+    "focusedRegression": {
+      "command": "npm run typecheck && node --test --test-concurrency=4 test/voice/openai-realtime-speech-synthesis.test.ts test/voice/openai-speech-synthesis.test.ts test/voice/first-chunk-fallback-speech.test.ts test/voice/streamed-playback-port.test.ts test/voice/speech-loop-evaluation.test.ts test/voice/speech-latency-gate.test.ts test/voice/speech-gate-status.test.ts test/contract/scenario-manifest.test.ts",
+      "typecheck": "pass",
+      "tests": 27,
+      "pass": 27,
+      "fail": 0,
+      "skipped": 0,
+      "durationMs": 4838.613641,
+      "exitCode": 0,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791428589915.log"
+    }
+  }
+}

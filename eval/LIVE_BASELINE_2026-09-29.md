@@ -2,6 +2,39 @@
 
 All runs used patient-free synthetic fixtures, an account-provided OpenAI API key, and owner-only reports under ignored `eval/results/`. No key value or real patient content is in this file. The reports retain repeat-level proposals or transcripts for local review; this summary records only counts and configuration evidence.
 
+## Opt-in Realtime speech candidate — 2026-10-08
+
+The owner selected continued synthetic audio. The [recommended replacement model](https://developers.openai.com/api/docs/models/gpt-realtime-2.1-mini) uses the Realtime WebSocket protocol. `OpenAIRealtimeSpeechSynthesis` is an additive, opt-in implementation with one isolated session per approved utterance, no tools, no input audio, null turn detection and an out-of-band response. It checks the actual model, voice and 24 kHz PCM acknowledgment, correlated response/item/content events and completed status. The [server-event schema](https://developers.openai.com/api/reference/resources/realtime/server-events#response.content_part.added) distinguishes content-part `audio` from completed response-item `output_audio`; the first two-job adapter screen rejected that mismatch before queuing audio. The corrected implementation uses those documented shapes.
+
+The adapter buffers the whole utterance until the completed provider transcript matches approved text. Comparison ignores case, spacing and ordinary punctuation while preserving words, digits, currency and negation; numbers are not converted to words for scoring. This checks provider-reported text, not independent acoustic fidelity. Audio is bounded to twenty seconds, generation is bounded to twenty seconds, and interruption, first-chunk fallback or failure discards unvalidated audio. Validated PCM converts to Abby's 16 kHz transport chunks before yielding; a transport queue receipt is not a played receipt.
+
+The actual adapter and `StreamedPlaybackPort` ran the unchanged two-case output corpus twenty times per case with four concurrent jobs:
+
+| Jobs | Failed | Late | First queued chunk p95 | Complete queue p95 | Unchanged output latency gate |
+| ---: | ---: | ---: | ---: | ---: | --- |
+| 40 | 0 | 0 | 2,699 ms | 2,702 ms | Pass |
+
+The first-chunk measurement includes complete provider-transcript validation. Every session acknowledged `gpt-realtime-2.1-mini`, `coral` and 24 kHz PCM. A separate four-case, one-repeat supplement queued numeric dates/times, a pound-denominated deposit, a changed time with negation and an unchanged appointment with a callback preference; all provider transcripts matched approved text. Its first-chunk p95 was 3,237 ms. This small supplement is not additional statistical gate coverage. Full buffering makes latency depend on utterance length, and the original forty-job corpus contains only its two existing phrases.
+
+Owner-only reports retain exact synthetic request bodies and both raw and normalized audio. An independent Python verifier checked source/corpus/report hashes, permissions, literal transcripts, model acknowledgments, all forty case/repeat pairs, thresholds and p95s. It independently recomputed every retained PCM conversion and padding byte for the corrected screen, full gate and supplement. The [transcript-free aggregate](baselines/realtime-speech-candidate-20261008-v1.json) records hashes, tracked jobs, initial failures and validation status. No real call recording or patient details were used.
+
+Reproduction commands (choose a fresh owner-only report path):
+
+```sh
+node --env-file=/home/gust/code/abby/.env scripts/evaluate-realtime-speech.ts --out /home/gust/code/abby/eval/results/realtime-speech-fresh.json --repeats 20 --concurrency 4
+python3 /home/gust/code/abby/eval/results/verify-realtime-speech-20261008.py /home/gust/code/abby-realtime-speech
+npm run typecheck
+node --test --test-concurrency=4 test/voice/openai-realtime-speech-synthesis.test.ts test/voice/openai-speech-synthesis.test.ts test/voice/first-chunk-fallback-speech.test.ts test/voice/streamed-playback-port.test.ts test/voice/speech-loop-evaluation.test.ts test/voice/speech-latency-gate.test.ts test/voice/speech-gate-status.test.ts test/contract/scenario-manifest.test.ts
+ABBY_SPEECH_GATE_REPORT_SET=/home/gust/code/abby/eval/results/current-speech-gate.json node scripts/read-speech-gate-status.ts
+git diff --check
+```
+
+Final typecheck and the eight-file focused regression passed all 27 tests, including nine replacement-adapter checks. Independent artifact verification and `git diff --check` passed.
+
+The broad voice sweep passed typecheck, then recorded 438 passed tests, two failed and 26 skipped. Existing E2E-310 and E2E-313 workflow tests timed out dispatching caller turns. Both passed with their original deadlines and internal workers in an isolated three-test run, then passed together with four file workers on unchanged `main` at `d1bc60a85142e40c96a0483530c0aaedb9e3ff85`. The larger-sweep timeout cause remains undetermined; this is not a full regression pass. Exact commands, logs and counts are retained in the aggregate.
+
+The replacement output latency subgate passes. The complete stored default gate remains source-matched and fails noisy/safety transcription; release admission stays on hold. Human listening, carrier calls and caller-runner composition have not run for this replacement. Current runtime models, default configuration, original transcription corpora, thresholds and scenario-manifest rows are unchanged.
+
 ## Completed-file Whisper diagnostic — 2026-10-08
 
 After the failed input-gain screen, a different completed-file decoder was screened on the same six original 10 dB noisy synthetic clips. The [official transcription API reference](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create) accepts WAV and `whisper-1`; each request specified only `model`, `response_format: json` and the WAV file. There was no prompt, language or keyword hint, and temperature was left at the provider default. This was a bounded diagnostic comparison: [OpenAI's deprecation notice](https://developers.openai.com/api/docs/deprecations#2026-08-26-transcription-models) announces removal of `whisper-1` on 26 February 2027 and recommends the newer transcription models already tested here.
