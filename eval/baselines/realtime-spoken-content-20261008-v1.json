@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-08",
+  "baseHead": "0c9ca889085be5f4ca631047bdc91c863135f01b",
+  "patientFree": true,
+  "configuration": {
+    "synthesisModel": "gpt-realtime-2.1-mini",
+    "requestedRecognizer": "whisper-1",
+    "endpoint": "https://api.openai.com/v1/audio/transcriptions",
+    "prompt": null,
+    "languageHint": null,
+    "context": "none",
+    "responseFormat": "json",
+    "temperature": "providerDefault",
+    "concurrency": 2,
+    "repeatsPerRetainedAudio": 1,
+    "timeoutMs": 30000,
+    "scoring": "strict-unicode-word-tokens.v1",
+    "criticalScoring": "predeclared-word-and-phrase-presence.v1",
+    "inputFormat": "WAV mono PCM16LE 8000 decoded from actual-equivalent PCMU output",
+    "timingMeaning": "completed-file HTTP time, not live or audible latency"
+  },
+  "sourceFiles": [
+    {
+      "path": "src/voice/openai-realtime-speech-synthesis.ts",
+      "sha256": "cb5308593d5f9ef9db1a8b139be58ab0134b37d382d6e33dd112f06ae2bcf5bd"
+    },
+    {
+      "path": "src/voice/openai-speech-provider.ts",
+      "sha256": "980d8a0b428638f386b05084d86e3f3cca4d3b92b509bc6a4251cf57258e36f9"
+    },
+    {
+      "path": "src/voice/openai-voice-profile.ts",
+      "sha256": "a3ee0ad1b98933bde5e4be82c721c180c01b1f3a031f96342bd885c1b8f9675f"
+    },
+    {
+      "path": "src/standalone/cliniko-voice-server.ts",
+      "sha256": "2a3b20200fa9c73d9e7b5bd93c0971db524ddeba612ff12c2559095af084c6fe"
+    },
+    {
+      "path": "scripts/serve-cliniko-voice.ts",
+      "sha256": "6d88192706c0ce87ba2612074213de08344cdd783fb93a3c6df3cc51915f84f8"
+    },
+    {
+      "path": "src/voice/twilio-media-stream.ts",
+      "sha256": "4dec7f4b1eaf76478018259ae8039f580f792c4bad5a2c92ffdcbfbe7a66e32b"
+    }
+  ],
+  "originalCorpora": [
+    {
+      "path": "eval/transcription-v1.json",
+      "sha256": "2d3fabc12d13699ffecc4017d64ba9cedc91373e001529abf135a6f311357905"
+    },
+    {
+      "path": "eval/transcription-telephony-v1.json",
+      "sha256": "65645afaeeaca6c91342b8e690c184affd58e004f3438cfa0cccfdd18e3f8e1a"
+    },
+    {
+      "path": "eval/transcription-noise-v1.json",
+      "sha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2"
+    },
+    {
+      "path": "eval/transcription-safety-v1.json",
+      "sha256": "fb261dfa87cfd036307346874b439b63596a7b9390109cc3d22965f5fda795da"
+    },
+    {
+      "path": "eval/speech-loop-v1.json",
+      "sha256": "b02fc915affa082502d417bf3eaaecb4435c14c00947c40ecda3e57ee7578857"
+    }
+  ],
+  "sourceReports": [
+    {
+      "file": "eval/results/20261008-realtime-speech-full40.json",
+      "sha256": "9ed0bb830af38c527964b2d9f17967e4d11491b588039e291ae8e9095440b462",
+      "ownerOnly": true
+    },
+    {
+      "file": "eval/results/20261008-realtime-approved-text.json",
+      "sha256": "08a3badd0a8fd3206eaa933e3fd48ed63ec2dc3959202996f6bc6f9b1d099647",
+      "ownerOnly": true
+    },
+    {
+      "file": "eval/results/20261008-signed-realtime-binding.json",
+      "sha256": "920c4a5a3f8acd1b606f5a9d6c737934a2e1ed693e928c20d4369b4bee5f0287"
+    }
+  ],
+  "privateReport": {
+    "path": "eval/results/20261008-realtime-spoken-content.json",
+    "sha256": "82d493db6f3b401651caecc9ba7d63cca17a27249c143ee1ae912515a6aaf62e"
+  },
+  "runner": {
+    "path": "eval/results/check-realtime-spoken-content-20261008.mjs",
+    "sha256": "484cfd0f1dea2bb0b1c8c1b985366ac2714df471603a2aa1f308dc161e953d7f"
+  },
+  "verifier": {
+    "path": "eval/results/verify-realtime-spoken-content-20261008.py",
+    "sha256": "d376ae9c94eb530625438a3052db30f01695b1def6ebb4bf239f0182367a24ec",
+    "status": "passed"
+  },
+  "coverage": {
+    "completeRetainedWaveforms": 48,
+    "originalLatencyGenerations": 40,
+    "originalLatencyPhrases": 2,
+    "generationsPerOriginalPhrase": 20,
+    "numericSupplement": 4,
+    "signedCallerReplies": 4,
+    "requestsPerWaveform": 1,
+    "http200Responses": 48
+  },
+  "summary": {
+    "counts": {
+      "match": 41,
+      "mismatch": 6,
+      "critical": 1,
+      "providerFailure": 0
+    },
+    "referenceWords": 521,
+    "editCount": 20,
+    "wordErrorRate": 0.03838771593090211,
+    "requestP95Ms": 2315,
+    "modelEchoes": 0,
+    "criticalMisses": [
+      {
+        "caseId": "AC-RA-004",
+        "terms": [
+          "callback"
+        ],
+        "phrases": []
+      }
+    ]
+  },
+  "groups": {
+    "latency-corpus": {
+      "counts": {
+        "match": 40,
+        "mismatch": 0,
+        "critical": 0,
+        "providerFailure": 0
+      },
+      "referenceWords": 360,
+      "editCount": 0,
+      "wordErrorRate": 0,
+      "requestP95Ms": 2270,
+      "modelEchoes": 0,
+      "criticalMisses": []
+    },
+    "numeric-supplement": {
+      "counts": {
+        "match": 1,
+        "mismatch": 2,
+        "critical": 1,
+        "providerFailure": 0
+      },
+      "referenceWords": 55,
+      "editCount": 11,
+      "wordErrorRate": 0.2,
+      "requestP95Ms": 1875,
+      "modelEchoes": 0,
+      "criticalMisses": [
+        {
+          "caseId": "AC-RA-004",
+          "terms": [
+            "callback"
+          ],
+          "phrases": []
+        }
+      ]
+    },
+    "signed-caller": {
+      "counts": {
+        "match": 0,
+        "mismatch": 4,
+        "critical": 0,
+        "providerFailure": 0
+      },
+      "referenceWords": 106,
+      "editCount": 9,
+      "wordErrorRate": 0.08490566037735849,
+      "requestP95Ms": 3258,
+      "modelEchoes": 0,
+      "criticalMisses": []
+    }
+  },
+  "interpretation": [
+    "all forty original output samples match under strict word scoring",
+    "seven strict differences include digit/word and time formatting; the critical callback token appears as two words in the recognizer response",
+    "the strict critical result is retained without post hoc normalization or rescoring",
+    "response did not echo its model; requested whisper-1 application remains unverified"
+  ],
+  "limits": [
+    "separate unprompted recognizer request, same provider; not independent human listening",
+    "one request per retained synthetic waveform, no noisy live input or representative carrier calls",
+    "completed-file HTTP p95 is not speech output, post-commit or live latency; one request took 16707 ms",
+    "does not pass or replace the original failing noise and safety transcription gates",
+    "no release admission or repeatable acoustic qualification"
+  ],
+  "humanReviewStatus": "pending",
+  "carrierGate": "notRun",
+  "releaseGate": "unverified",
+  "productionAdmission": "hold"
+}

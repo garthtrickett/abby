@@ -585,3 +585,77 @@ added. The original noise/safety ASR gates remain failing and production speech
 admission remains on hold. Next speech work: independent spoken-content evidence
 and complete repeatable qualification for the exact replacement configuration;
 real clips, representative listening and carrier checks remain deferred.
+
+
+## Independent spoken-content screen — 2026-10-08
+
+A separate unprompted recognizer assessed complete retained synthetic Realtime
+output after telephone codec conversion. The screen covers all **40** original
+latency generations (two phrases, twenty generations each), the **four** numeric
+supplements and the **four** actual signed caller replies. The first 44 retained
+16 kHz outputs use Abby's exact adjacent-pair 8 kHz reduction and PCMU encoder;
+the signed replies use every actual outgoing PCMU frame up to each playback mark.
+Whole PCMU utterances are decoded into mono PCM16LE 8 kHz WAV files.
+
+Each complete file was sent once to `/v1/audio/transcriptions`, requesting
+`whisper-1` and JSON. [OpenAI's speech-to-text guide](https://developers.openai.com/api/docs/guides/speech-to-text)
+documents the completed-file endpoint and WAV uploads. The retained multipart
+bodies contain only model, response format and the synthetic audio file: no
+prompt, expected wording, language or context hints. All **48** requests returned
+HTTP 200 with no provider failure. The responses do not echo a model; model
+application remains **unverified**. This is a separate recognition request from
+the same provider, not a separate provider or human assessment.
+
+| Retained output | Clips | Strict matches | Mismatches | Critical results | WER | Complete-file request p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Original latency corpus | 40 | 40 | 0 | 0 | 0% | 2,270 ms |
+| Numeric supplement | 4 | 1 | 2 | 1 | 20% | 1,875 ms |
+| Signed caller replies | 4 | 0 | 4 | 0 | 8.49% | 3,258 ms |
+| Overall | 48 | 41 | 6 | 1 | 3.84% | 2,315 ms |
+
+The unchanged strict Unicode word-token scorer records **20 edits / 521 reference
+words**. All forty original output samples match. The payment supplement also
+matches, including the amount and payment prerequisite. Other responses differ
+in digits versus words, date/time formatting and token boundaries. The critical
+result, `AC-RA-004`, lacks the predeclared single token “callback”; its recognition
+response uses “call back”. That result stays critical, with no post hoc
+normalization or threshold change. Retained transcript inspection suggests
+formatting differences rather than changed meaning, but cannot establish what a
+human hears. One complete-file request took **16,707 ms**; p95 does not hide that
+tail. These timings exclude synthesis and do not measure audible or live latency.
+
+The [transcript-free aggregate](baselines/realtime-spoken-content-20261008-v1.json)
+pins the unchanged source, original corpora, three source reports, private runner,
+private report and independent verifier. The private artifacts retain complete
+request bodies, audio hashes and recognition responses with owner-only
+permissions. Independent verification reproduces all waveform conversion and
+actual wire inputs, parses every complete multipart and WAV header, checks the
+absence of hints, and recomputes every verdict, critical term, edit count and
+aggregate. It also reruns the prior whole native-conversion and signed-wire
+verifiers. This verifies the reported experiment; it does not turn the strict
+results into an admission pass.
+
+### Commands and scope
+
+- `node --env-file=.env eval/results/check-realtime-spoken-content-20261008.mjs`:
+  completed all 48 requests in 41 seconds through tracked work. Exit 0 means the
+  diagnostic completed, not that the spoken-content gate passed.
+- `python3 eval/results/verify-realtime-spoken-content-20261008.py`:
+  passed on the first run; no additional provider requests were made for verification.
+- `python3 /home/gust/code/abby/eval/results/verify-realtime-spoken-content-20261008.py /home/gust/code/abby-realtime-acoustic-check`:
+  passed against the publication's source and aggregate using the same complete private evidence.
+- `node scripts/read-speech-gate-status.ts`: the default source-matched gate still
+  exits 2 for failing noisy and safety transcription, with carrier `notRun`,
+  release `unverified` and production admission on hold.
+- `git diff --check`: passed; this patch changes only documentation and an aggregate.
+
+Tracked work logs: requests `4590eee3-1791432288747.log`; independent verification
+`4590eee3-1791432463758.log`; publication verification
+`4590eee3-1791432744978.log`, under `/home/gust/paseo/paseo-home/work/logs/`.
+The private report is `eval/results/20261008-realtime-spoken-content.json`;
+its exact hash and the verifier hash are in the aggregate.
+
+No patient recording or real email was used. This one-pass output recognition
+screen does not replace the original noise/safety ASR gate, repeatable replacement
+qualification, human listening or representative carrier calls. Those remain open;
+production speech admission remains **hold**.
