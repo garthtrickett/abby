@@ -2,6 +2,38 @@
 
 All runs used patient-free synthetic fixtures, an account-provided OpenAI API key, and owner-only reports under ignored `eval/results/`. No key value or real patient content is in this file. The reports retain repeat-level proposals or transcripts for local review; this summary records only counts and configuration evidence.
 
+## Provider voice fixtures and fresh original-noise control — 2026-10-08
+
+The owner selected continued patient-free synthetic audio. This bounded diagnostic generated the original three noisy-corpus phrases and one new afternoon-time correction with `tts-1` voices `alloy` and `nova`. These voices and headerless PCM output are documented in [OpenAI's speech guide](https://developers.openai.com/api/docs/guides/text-to-speech). Eight source clips yielded paired quiet/noisy clips through FFmpeg G.711 μ-law encoding at 8 kHz and the actual transport normalizer back to 16 kHz. Seeded white noise targets 10 dB before codec conversion; measured values range from 9.961703 to 10.029949 dB, with zero clipped samples. Post-codec SNR is not measured. Sixteen owner-only WAV exports reproduce the normalized PCM exactly; human listening remains pending.
+
+The actual unprompted `gpt-live-transcribe` adapter ran one repeat per clip, two concurrent sessions and 20 ms paced input. A fresh control then ran the unchanged original six noisy clips with the same transcription configuration and scoring. Neither supplied context, keywords, language hints, delay or noise-reduction settings.
+
+| Dataset | Exact matches | Critical misses | WER | Post-commit final p95 |
+| --- | ---: | ---: | ---: | ---: |
+| New provider voices, quiet | 8/8 | 0 | 0% | 988 ms |
+| New provider voices, nominal 10 dB noise | 8/8 | 0 | 0% | 912 ms |
+| Original noisy clips, fresh control | 1/6 | 4 | 40.91% | 847 ms |
+
+All groups had zero provider failures, empty transcripts, prefix truncations or late finals. The new clips fail assessment only on insufficient repeats; they do **not** pass the original gate. The fresh original control also fails critical-term and WER limits. Among just the three common phrases, all six new noisy clips matched, while four of six original noisy clips missed critical terms. This suggests recognition depends on the synthetic speech source. It does not isolate the cause: voices, duration and acoustics differ, the order was not randomized, and the same provider synthesizes and transcribes the new audio. One pass does not establish reliable human accuracy, a model ranking or whole-call/carrier quality.
+
+All 22 sessions acknowledged the same model, no prompt/language hint, null noise reduction and turn detection, and 24 kHz PCM format. Independent whole-buffer interpolation reproduces the 22 transmitted audio hashes, including frame seams and final padding. Fixture replay regenerates all sixteen noise/codec outputs and verifies exact WAV payloads; eight recorded synthesis requests contain only the approved synthetic phrases. Original corpus and noisy PCM hashes remain unchanged. Every final retains `needsClarification`.
+
+Exact commands, using ignored owner-only runners and retained artifacts:
+
+```sh
+node --check eval/results/screen-provider-voices-20261008.mjs
+node --check eval/results/screen-original-live-control-20261008.mjs
+node --env-file=/home/gust/code/abby/.env /home/gust/code/abby/eval/results/screen-provider-voices-20261008.mjs
+node --env-file=/home/gust/code/abby/.env /home/gust/code/abby/eval/results/screen-original-live-control-20261008.mjs
+node /home/gust/code/abby/eval/results/verify-provider-voice-evidence-20261008.mjs file:///home/gust/code/abby-provider-voice-screen/eval/baselines/provider-voice-screen-20261008-v1.json
+node scripts/read-speech-gate-status.ts
+git diff --check
+```
+
+The paid runners reserve their output paths exclusively before spending; the commands document this run and do not overwrite existing evidence. Tracked jobs `Abby synthetic provider voice noise diagnostic October 8` and `Abby original noisy corpus contemporary control October 8` finished exit 0 in 67 and 17 seconds, respectively. Those exits mean diagnostics completed, not gate admission. Report SHA-256 values are `7e710616c92b2fc78549e000ef2af04ef9a7dadcdaebc92800ea69c199250f34` and `2eb83e045f2ef8adfd2a3d081736e3e4a2cce547406b2a5a60ccf50c1920b213`; the generated corpus hash is `3ea0ad269e4a7cbe7a81e3e199b852018a11e9388a9cb99001d4c6224a14e6b3`. The [transcript-free aggregate](baselines/provider-voice-screen-20261008-v1.json) pins source/runner hashes, fixture transformations, jobs and unchanged assessments. Its verifier accepts the canonical aggregate path after publication.
+
+Syntax, independent artifact verification and diff checks passed. The complete stored gate still validates and exits `2`, failing noisy and safety transcription. No production source, dependency, threshold, original fixture or manifest row changed. Supplemental audio never replaces the pinned failing gate. Real email and Twilio activation remain deferred; representative-call testing is unrun and release readiness unverified.
+
 ## Realtime Whisper with requested delay and acknowledged noise settings — 2026-10-08
 
 A bounded follow-up used `gpt-realtime-whisper`, requested `delay: high`, and compared explicit noise-reduction `null` with `far_field`. [Official OpenAI's transcription-session reference](https://developers.openai.com/api/reference/resources/realtime/client-events#session.update) documents the delay option and says prompts are unsupported for this model in GA Realtime; this screen supplied no prompt, keyword or language hint. It used the unchanged six-case 10 dB noisy corpus, one repeat, two concurrent sessions and the actual adapter with 20 ms paced input.
