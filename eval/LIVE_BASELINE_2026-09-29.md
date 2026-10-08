@@ -2,6 +2,38 @@
 
 All runs used patient-free synthetic fixtures, an account-provided OpenAI API key, and owner-only reports under ignored `eval/results/`. No key value or real patient content is in this file. The reports retain repeat-level proposals or transcripts for local review; this summary records only counts and configuration evidence.
 
+## Original fixture reconstruction and noise-level diagnostic — 2026-10-08
+
+The next patient-free investigation regenerated the original `kal` speech and reused the pinned `slt` clean sources, then independently replayed the unchanged noise builder and telephone normalization. **All six original 10 dB noisy PCM hashes reproduced exactly.** Measured pre-codec SNR was 9.9678–10.0007 dB, with zero clipped samples. Paired normalized noisy-versus-clean delta SNR was 13.2170–13.2794 dB. That delta includes differential codec distortion and final-frame padding; it is not a separately measured noise channel. This audit found no mismatch between the builder and pinned files, and supports neither replacing the stress fixtures nor identifying the provider's internal recognition failure.
+
+The same six sources and seeds produced quiet, nominal 20 dB and nominal 30 dB variants through the existing G.711/transport path. Condition order rotates within each source; sessions overlap, so this is not randomized evidence. The actual default, unprompted `gpt-live-transcribe` adapter ran one repeat per variant, two concurrent sessions and 20 ms paced input.
+
+| Condition | Exact matches | Critical misses | WER | Post-commit final p95 |
+| --- | ---: | ---: | ---: | ---: |
+| Quiet | 6/6 | 0 | 0% | 1,961 ms |
+| Nominal 20 dB noise | 2/6 | 3 | 20.45% | 897 ms |
+| Nominal 30 dB noise | 4/6 | 1 | 9.09% | 805 ms |
+
+There were no provider failures, empty transcripts, prefix truncations or late finals. At 20 dB, both booking voices missed “book” and the `slt` urgent clip missed “chest” and “pain.” At 30 dB, the `slt` urgent clip still missed both urgent terms. All three groups fail the three-repeat minimum; both noisy groups also fail zero-critical. Lighter noise improved this observed count, but a single pass cannot establish a reliable noise threshold. The quiet result and exact fixture reconstruction point toward noise-sensitive recognition on these voices, rather than an accidental fixture/noise/codec change. They do not prove how the provider causes the error.
+
+The earlier provider clips also differ in absolute level: the common-phrase sources range from -29.7714 to -24.4831 dBFS RMS, versus -21.6634 to -15.5095 dBFS for the original sources. Source level, duration and speech characteristics differ together; the earlier comparison does not isolate any one of them. A bounded gain-only comparison on the unchanged original noisy input is the next useful diagnostic for that level confound. The original failing audio and gate stay pinned.
+
+Independent verification reproduces the six original source derivations and noisy hashes, all eighteen new codec/noise outputs and SNR/level measurements, and eighteen complete transmitted input/wire hashes with exactly one commit and model/configuration acknowledgment per session. It also checks the six retained provider source/normalized levels against their pinned report and bytes, unchanged corpus/source hashes and literal critical-word scoring. Every final retains `needsClarification`.
+
+Exact commands:
+
+```sh
+node --check eval/results/screen-original-noise-levels-20261008.mjs
+node --env-file=/home/gust/code/abby/.env /home/gust/code/abby/eval/results/screen-original-noise-levels-20261008.mjs
+node /home/gust/code/abby/eval/results/verify-original-noise-levels-20261008.mjs file:///home/gust/code/abby-noise-level-audit/eval/baselines/original-noise-levels-20261008-v1.json
+node scripts/read-speech-gate-status.ts
+git diff --check
+```
+
+The first owner-only runner failed syntax before any provider request; an extra closing parenthesis was corrected and syntax passed before the actual run. Tracked job `Abby original fixture reconstruction and corrected noise level diagnostic October 8` completed exit 0 in 51 seconds; log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791424591909.log`. Report SHA-256 is `7f6fa935e2e09a9a1a5481a86fe29e0e8c619a9c1a0ba3fb5560f1681abda50b`; runner SHA-256 is `6150325d08df8d7262792b3ea59f51ba2cc0a049ea665cbfc5a8bc6837de0649`; new corpus hash is `ce8450f5a4569165231956acbb0c6d450c5d9f43505429fae165d0246dca01ad`. Exit 0 means the diagnostic completed, not a quality pass. The [transcript-free aggregate](baselines/original-noise-levels-20261008-v1.json) pins transformations, source/runner/report hashes, counts and limitations. Audio, corpus and report remain owner-only and ignored; the verifier accepts the canonical aggregate path after publication.
+
+Corrected syntax, independent artifact verification and diff checks passed. The complete stored gate remains source-matched and exits `2`, failing noisy and safety transcription. No production source, dependency, threshold, original fixture or manifest row changed. Human listening and representative carrier calls remain unrun, release readiness unverified, and real email/Twilio activation deferred.
+
 ## Provider voice fixtures and fresh original-noise control — 2026-10-08
 
 The owner selected continued patient-free synthetic audio. This bounded diagnostic generated the original three noisy-corpus phrases and one new afternoon-time correction with `tts-1` voices `alloy` and `nova`. These voices and headerless PCM output are documented in [OpenAI's speech guide](https://developers.openai.com/api/docs/guides/text-to-speech). Eight source clips yielded paired quiet/noisy clips through FFmpeg G.711 μ-law encoding at 8 kHz and the actual transport normalizer back to 16 kHz. Seeded white noise targets 10 dB before codec conversion; measured values range from 9.961703 to 10.029949 dB, with zero clipped samples. Post-codec SNR is not measured. Sixteen owner-only WAV exports reproduce the normalized PCM exactly; human listening remains pending.

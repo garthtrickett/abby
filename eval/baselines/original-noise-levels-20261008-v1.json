@@ -1,0 +1,810 @@
+{
+  "schema": "abby.original-noise-level-diagnostic.v1",
+  "date": "2026-10-08",
+  "baseHead": "3a70933cc525cf156f7a4a78ee87109399767e11",
+  "status": "diagnosticCompleteOriginalGateStillFails",
+  "report": {
+    "file": "eval/results/20261008-original-noise-levels-screen.json",
+    "sha256": "7f6fa935e2e09a9a1a5481a86fe29e0e8c619a9c1a0ba3fb5560f1681abda50b",
+    "ownerOnly": true
+  },
+  "runner": {
+    "file": "eval/results/screen-original-noise-levels-20261008.mjs",
+    "sha256": "6150325d08df8d7262792b3ea59f51ba2cc0a049ea665cbfc5a8bc6837de0649",
+    "ownerOnly": true
+  },
+  "sourcePaths": [
+    "scripts/build-noisy-transcription-fixtures.ts",
+    "src/voice/transport-media-normalizer.ts",
+    "src/voice/openai-realtime-transcription.ts",
+    "src/voice/transcription-evaluation.ts",
+    "src/voice/transcription-evaluation-gate.ts"
+  ],
+  "sourceSha256": "af3d60fef4b3fc00a1aa28b25e256fd2bc33cb209a810d98de9644e9833bf5e0",
+  "originalCorpora": [
+    {
+      "path": "eval/transcription-v1.json",
+      "sha256": "2d3fabc12d13699ffecc4017d64ba9cedc91373e001529abf135a6f311357905"
+    },
+    {
+      "path": "eval/transcription-telephony-v1.json",
+      "sha256": "65645afaeeaca6c91342b8e690c184affd58e004f3438cfa0cccfdd18e3f8e1a"
+    },
+    {
+      "path": "eval/transcription-noise-v1.json",
+      "sha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2"
+    },
+    {
+      "path": "eval/transcription-safety-v1.json",
+      "sha256": "fb261dfa87cfd036307346874b439b63596a7b9390109cc3d22965f5fda795da"
+    }
+  ],
+  "fixtureDirectory": "eval/results/synthetic-original-noise-levels-20261008",
+  "corpusSha256": "ce8450f5a4569165231956acbb0c6d450c5d9f43505429fae165d0246dca01ad",
+  "configuration": {
+    "model": "gpt-live-transcribe",
+    "contextVersion": "none",
+    "repeats": 1,
+    "concurrency": 2,
+    "paceMs": 20,
+    "nodeVersion": "v22.23.2",
+    "ffmpegVersion": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers"
+  },
+  "originalReconstruction": [
+    {
+      "caseId": "NS-001",
+      "voice": "kal",
+      "sourceFile": "availability-thursday-kal-source.pcm",
+      "sourceSha256": "620797668195bd00091849f2fc4fc9455a27b9ac17952a55ee46aa14ae2efa2c",
+      "sourceBytes": 83368,
+      "sourceRmsDbfs": -19.909966846051994,
+      "sourcePeak": 23595,
+      "noiseSeed": 23063,
+      "nominalSnrDb": 10,
+      "measuredPreCodecSnrDb": 9.990053352571513,
+      "clippedSamples": 0,
+      "reconstructedSha256": "4c0f89cf66ad975b340162747bca58162569a8d496f01cdb71c4dbb20cf0c5e9",
+      "matchesOriginal": true,
+      "pcmBytes": 83840,
+      "encodedSha256": "99ab809d8b7c056f7eb821aede38b23572068d9b4b72e3b48a4fe6dc1b1bf8e5",
+      "encodedBytes": 20842,
+      "codecDeltaSnrDb": 13.241116315684692
+    },
+    {
+      "caseId": "NS-002",
+      "voice": "kal",
+      "sourceFile": "book-friday-kal-source.pcm",
+      "sourceSha256": "4d6e6d282cfb7763bf748dcf38473158f12de9ff2fe9d5a42e081814e289a557",
+      "sourceBytes": 89700,
+      "sourceRmsDbfs": -21.66338758850904,
+      "sourcePeak": 22747,
+      "noiseSeed": 23064,
+      "nominalSnrDb": 10,
+      "measuredPreCodecSnrDb": 9.967765419048678,
+      "clippedSamples": 0,
+      "reconstructedSha256": "ede31b5da32bb6222b982dfafdc17134d01d2a5e35bb6b7ec7c05455af7f610e",
+      "matchesOriginal": true,
+      "pcmBytes": 90240,
+      "encodedSha256": "18b349a6089b54f5b037ad2417be21689dc5a2394ba993771a9f34cf9ffd317e",
+      "encodedBytes": 22425,
+      "codecDeltaSnrDb": 13.218464219157886
+    },
+    {
+      "caseId": "NS-003",
+      "voice": "kal",
+      "sourceFile": "urgent-monday-kal-source.pcm",
+      "sourceSha256": "af386e2fe8aa42c52a8dae90f9dee89cebfdf5887a7385abd8b1f9aca1121263",
+      "sourceBytes": 109552,
+      "sourceRmsDbfs": -19.770166396248243,
+      "sourcePeak": 25696,
+      "noiseSeed": 23065,
+      "nominalSnrDb": 10,
+      "measuredPreCodecSnrDb": 9.984115085976821,
+      "clippedSamples": 0,
+      "reconstructedSha256": "185a21430c72e911d092ea578f0748ad6ca35d7289b764f0c97fac3f2d2f0495",
+      "matchesOriginal": true,
+      "pcmBytes": 110080,
+      "encodedSha256": "4953355b1fd86b6b0c9be6da25ecd67354c46b8e29e6691cfa56f1e30c64a89a",
+      "encodedBytes": 27388,
+      "codecDeltaSnrDb": 13.21700534167694
+    },
+    {
+      "caseId": "NS-004",
+      "voice": "slt",
+      "sourceFile": "availability-thursday-slt-source.pcm",
+      "sourceSha256": "b0e92b75752d09bf09f9a0c9f8469643f9f9d3db9d2049830b5181f560c217e1",
+      "sourceBytes": 92320,
+      "sourceRmsDbfs": -15.714510638794629,
+      "sourcePeak": 20708,
+      "noiseSeed": 23066,
+      "nominalSnrDb": 10,
+      "measuredPreCodecSnrDb": 9.989098581563049,
+      "clippedSamples": 0,
+      "reconstructedSha256": "476b330c032d23f0acb2ea1d88d0d00b447d2ade928d405afe5de1a0e13cce08",
+      "matchesOriginal": true,
+      "pcmBytes": 92800,
+      "encodedSha256": "babbb822e5d202bfc2566ab4294fb2d8e8d3615a1f48a2b1169b352569949cd1",
+      "encodedBytes": 23080,
+      "codecDeltaSnrDb": 13.241018845591332
+    },
+    {
+      "caseId": "NS-005",
+      "voice": "slt",
+      "sourceFile": "book-friday-slt-source.pcm",
+      "sourceSha256": "0d1f4514b32cad77f78a0c7e96febdfe1b6a440517b12a6dc5daae4c940eb4e6",
+      "sourceBytes": 93600,
+      "sourceRmsDbfs": -15.952796916790815,
+      "sourcePeak": 26397,
+      "noiseSeed": 23067,
+      "nominalSnrDb": 10,
+      "measuredPreCodecSnrDb": 10.000746349320604,
+      "clippedSamples": 0,
+      "reconstructedSha256": "9aae18f17d26c003055c5726ba9e28d9226e3ab2b5a394dc933dc632a3c4d6df",
+      "matchesOriginal": true,
+      "pcmBytes": 94080,
+      "encodedSha256": "1877fc4dd9e496e125a88f2f7e31204a5bf3c91d4d7d67577e30b7e9e64e2e74",
+      "encodedBytes": 23400,
+      "codecDeltaSnrDb": 13.27939341475864
+    },
+    {
+      "caseId": "NS-006",
+      "voice": "slt",
+      "sourceFile": "urgent-monday-slt-source.pcm",
+      "sourceSha256": "dacf2061e13c6a162287dcc1a1bb8b88f19cf2de9c3d3f0806c0813fc43c3e85",
+      "sourceBytes": 100000,
+      "sourceRmsDbfs": -15.509468295386748,
+      "sourcePeak": 23807,
+      "noiseSeed": 23068,
+      "nominalSnrDb": 10,
+      "measuredPreCodecSnrDb": 9.987691616257685,
+      "clippedSamples": 0,
+      "reconstructedSha256": "5f8dee408c6a256936a02b6db29bdea788c41161fb277d4970ab8217c20ebb10",
+      "matchesOriginal": true,
+      "pcmBytes": 100480,
+      "encodedSha256": "c81442da6450df6122b9d838644f4816fe8d2b1e3a9d6b17306702dcdc371e6c",
+      "encodedBytes": 25000,
+      "codecDeltaSnrDb": 13.26841036510455
+    }
+  ],
+  "fixtureMetadata": [
+    {
+      "caseId": "NL-001",
+      "originalCaseId": "NS-001",
+      "condition": "quiet",
+      "voice": "kal",
+      "sourceFile": "availability-thursday-kal-source.pcm",
+      "sourceSha256": "620797668195bd00091849f2fc4fc9455a27b9ac17952a55ee46aa14ae2efa2c",
+      "sourceBytes": 83368,
+      "noiseSeed": null,
+      "nominalSnrDb": null,
+      "measuredPreCodecSnrDb": null,
+      "clippedSamples": 0,
+      "pcmBytes": 83840,
+      "pcmSha256": "f18b9a6db57b0dfe36359f4dbae3739a22c57cc067b88b858bfa7ba2c495dcb7",
+      "encodedBytes": 20842,
+      "encodedSha256": "a42ea342d6870641ee8487f8b84ec4442323bc4a80c7ae1eae5f7e3eba72bfee",
+      "codecDeltaSnrDb": null,
+      "normalizedRmsDbfs": -19.933073819781363
+    },
+    {
+      "caseId": "NL-002",
+      "originalCaseId": "NS-001",
+      "condition": "light",
+      "voice": "kal",
+      "sourceFile": "availability-thursday-kal-source.pcm",
+      "sourceSha256": "620797668195bd00091849f2fc4fc9455a27b9ac17952a55ee46aa14ae2efa2c",
+      "sourceBytes": 83368,
+      "noiseSeed": 23063,
+      "nominalSnrDb": 20,
+      "measuredPreCodecSnrDb": 19.990109645143562,
+      "clippedSamples": 0,
+      "pcmBytes": 83840,
+      "pcmSha256": "a229f436465010530f836f23892352384d953bde8fa6299749fbfbac597076a6",
+      "encodedBytes": 20842,
+      "encodedSha256": "acb94d7ee7b699feb470cd01649aa0809feab4900edc5410d8a6641a99db1cd5",
+      "codecDeltaSnrDb": 22.931412809286083,
+      "normalizedRmsDbfs": -19.912129863417302
+    },
+    {
+      "caseId": "NL-003",
+      "originalCaseId": "NS-001",
+      "condition": "faint",
+      "voice": "kal",
+      "sourceFile": "availability-thursday-kal-source.pcm",
+      "sourceSha256": "620797668195bd00091849f2fc4fc9455a27b9ac17952a55ee46aa14ae2efa2c",
+      "sourceBytes": 83368,
+      "noiseSeed": 23063,
+      "nominalSnrDb": 30,
+      "measuredPreCodecSnrDb": 29.99021250110747,
+      "clippedSamples": 0,
+      "pcmBytes": 83840,
+      "pcmSha256": "121f5ff5f61c1f3633a2a8cb5196c9cca2a6d0224da3f9a5e31114baf76e0988",
+      "encodedBytes": 20842,
+      "encodedSha256": "d9b85e1d8feea51d2c7fbdf03b61efcc545e74eaaefb92322d299d684806ff96",
+      "codecDeltaSnrDb": 31.43068681381446,
+      "normalizedRmsDbfs": -19.932238982614535
+    },
+    {
+      "caseId": "NL-004",
+      "originalCaseId": "NS-002",
+      "condition": "light",
+      "voice": "kal",
+      "sourceFile": "book-friday-kal-source.pcm",
+      "sourceSha256": "4d6e6d282cfb7763bf748dcf38473158f12de9ff2fe9d5a42e081814e289a557",
+      "sourceBytes": 89700,
+      "noiseSeed": 23064,
+      "nominalSnrDb": 20,
+      "measuredPreCodecSnrDb": 19.967794484110147,
+      "clippedSamples": 0,
+      "pcmBytes": 90240,
+      "pcmSha256": "eba4b3bcbbaa2c7a264e09c29b76c70708ef753f44a1fe9ef55c3c0621d2b424",
+      "encodedBytes": 22425,
+      "encodedSha256": "e46186a395a32d6aa99ca5456b72eded6a9a4a5b154201001c9910f78c25f923",
+      "codecDeltaSnrDb": 22.91647613754676,
+      "normalizedRmsDbfs": -21.6651904468679
+    },
+    {
+      "caseId": "NL-005",
+      "originalCaseId": "NS-002",
+      "condition": "faint",
+      "voice": "kal",
+      "sourceFile": "book-friday-kal-source.pcm",
+      "sourceSha256": "4d6e6d282cfb7763bf748dcf38473158f12de9ff2fe9d5a42e081814e289a557",
+      "sourceBytes": 89700,
+      "noiseSeed": 23064,
+      "nominalSnrDb": 30,
+      "measuredPreCodecSnrDb": 29.967966967917945,
+      "clippedSamples": 0,
+      "pcmBytes": 90240,
+      "pcmSha256": "d4d53ede229c5bfe427814b063a40c5b11b31eca986235cd516c9d0b87ea9f1f",
+      "encodedBytes": 22425,
+      "encodedSha256": "174ea8e66b1f417113e1c77b9bbf2380e5503031ae8c46015f8dfecbe3f92ff8",
+      "codecDeltaSnrDb": 31.425341111692802,
+      "normalizedRmsDbfs": -21.684204964217024
+    },
+    {
+      "caseId": "NL-006",
+      "originalCaseId": "NS-002",
+      "condition": "quiet",
+      "voice": "kal",
+      "sourceFile": "book-friday-kal-source.pcm",
+      "sourceSha256": "4d6e6d282cfb7763bf748dcf38473158f12de9ff2fe9d5a42e081814e289a557",
+      "sourceBytes": 89700,
+      "noiseSeed": null,
+      "nominalSnrDb": null,
+      "measuredPreCodecSnrDb": null,
+      "clippedSamples": 0,
+      "pcmBytes": 90240,
+      "pcmSha256": "e23a89b66a61df3c6d9e747a4f7461885fa0ecc1260ca2cf32435780113e2d04",
+      "encodedBytes": 22425,
+      "encodedSha256": "84572ef3b1d313b2adf0ad97dc6a31dd0cdac639641ea728b5c7c27166796d32",
+      "codecDeltaSnrDb": null,
+      "normalizedRmsDbfs": -21.68848001004642
+    },
+    {
+      "caseId": "NL-007",
+      "originalCaseId": "NS-003",
+      "condition": "faint",
+      "voice": "kal",
+      "sourceFile": "urgent-monday-kal-source.pcm",
+      "sourceSha256": "af386e2fe8aa42c52a8dae90f9dee89cebfdf5887a7385abd8b1f9aca1121263",
+      "sourceBytes": 109552,
+      "noiseSeed": 23065,
+      "nominalSnrDb": 30,
+      "measuredPreCodecSnrDb": 29.98383104513103,
+      "clippedSamples": 0,
+      "pcmBytes": 110080,
+      "pcmSha256": "adf81b25beb129b0ffe936191b674f564ce59b508c72eb9a6357fe783a9e7cb1",
+      "encodedBytes": 27388,
+      "encodedSha256": "923f43b19214c749bef80d7f3dced9117823022264405a826c0f6fdf0e8f6a57",
+      "codecDeltaSnrDb": 31.162492968870687,
+      "normalizedRmsDbfs": -19.78766059972274
+    },
+    {
+      "caseId": "NL-008",
+      "originalCaseId": "NS-003",
+      "condition": "quiet",
+      "voice": "kal",
+      "sourceFile": "urgent-monday-kal-source.pcm",
+      "sourceSha256": "af386e2fe8aa42c52a8dae90f9dee89cebfdf5887a7385abd8b1f9aca1121263",
+      "sourceBytes": 109552,
+      "noiseSeed": null,
+      "nominalSnrDb": null,
+      "measuredPreCodecSnrDb": null,
+      "clippedSamples": 0,
+      "pcmBytes": 110080,
+      "pcmSha256": "a20c048c5d3b507f2dbcd46839657282d1b089d916bba033c4c081e648624233",
+      "encodedBytes": 27388,
+      "encodedSha256": "f08f5636963f43719add7d174ec74586556a0f5b28de74916f2eb6d57b1541c1",
+      "codecDeltaSnrDb": null,
+      "normalizedRmsDbfs": -19.792578246200996
+    },
+    {
+      "caseId": "NL-009",
+      "originalCaseId": "NS-003",
+      "condition": "light",
+      "voice": "kal",
+      "sourceFile": "urgent-monday-kal-source.pcm",
+      "sourceSha256": "af386e2fe8aa42c52a8dae90f9dee89cebfdf5887a7385abd8b1f9aca1121263",
+      "sourceBytes": 109552,
+      "noiseSeed": 23065,
+      "nominalSnrDb": 20,
+      "measuredPreCodecSnrDb": 19.984033354090492,
+      "clippedSamples": 0,
+      "pcmBytes": 110080,
+      "pcmSha256": "33a01059d94689208a773ad55f90779857b5cb2e8879ecf429a5bac1e25841c6",
+      "encodedBytes": 27388,
+      "encodedSha256": "890a6642efc26b3ab804ef9160fde50566f46077733863a481899f1fa3733ffd",
+      "codecDeltaSnrDb": 22.91113662028476,
+      "normalizedRmsDbfs": -19.765203459574433
+    },
+    {
+      "caseId": "NL-010",
+      "originalCaseId": "NS-004",
+      "condition": "quiet",
+      "voice": "slt",
+      "sourceFile": "availability-thursday-slt-source.pcm",
+      "sourceSha256": "b0e92b75752d09bf09f9a0c9f8469643f9f9d3db9d2049830b5181f560c217e1",
+      "sourceBytes": 92320,
+      "noiseSeed": null,
+      "nominalSnrDb": null,
+      "measuredPreCodecSnrDb": null,
+      "clippedSamples": 0,
+      "pcmBytes": 92800,
+      "pcmSha256": "cfde01065c5fe4e14d28866a1a56f1894ec8b893e08a8224bf5edf12c9d9c21f",
+      "encodedBytes": 23080,
+      "encodedSha256": "d7c5649eb1d87780726cfbb7d96e5010aa33f2a9190be1134b2cc289612d653e",
+      "codecDeltaSnrDb": null,
+      "normalizedRmsDbfs": -15.744638503707844
+    },
+    {
+      "caseId": "NL-011",
+      "originalCaseId": "NS-004",
+      "condition": "light",
+      "voice": "slt",
+      "sourceFile": "availability-thursday-slt-source.pcm",
+      "sourceSha256": "b0e92b75752d09bf09f9a0c9f8469643f9f9d3db9d2049830b5181f560c217e1",
+      "sourceBytes": 92320,
+      "noiseSeed": 23066,
+      "nominalSnrDb": 20,
+      "measuredPreCodecSnrDb": 19.989075247113888,
+      "clippedSamples": 0,
+      "pcmBytes": 92800,
+      "pcmSha256": "ffc3ef0a2da0455338958393e60aa8614e76962025062017af920a6406c3e2cc",
+      "encodedBytes": 23080,
+      "encodedSha256": "1fcdc77f1d22ae07c6bd19b3b15528fa68283e7c6fb1efc0a9e7266430fd90f2",
+      "codecDeltaSnrDb": 22.94695565827761,
+      "normalizedRmsDbfs": -15.716015940960643
+    },
+    {
+      "caseId": "NL-012",
+      "originalCaseId": "NS-004",
+      "condition": "faint",
+      "voice": "slt",
+      "sourceFile": "availability-thursday-slt-source.pcm",
+      "sourceSha256": "b0e92b75752d09bf09f9a0c9f8469643f9f9d3db9d2049830b5181f560c217e1",
+      "sourceBytes": 92320,
+      "noiseSeed": 23066,
+      "nominalSnrDb": 30,
+      "measuredPreCodecSnrDb": 29.989000929598234,
+      "clippedSamples": 0,
+      "pcmBytes": 92800,
+      "pcmSha256": "2e3f46f37ba01a6bc727799ca42ffe281a8b7ec6c12fb9725f854b8d89422c18",
+      "encodedBytes": 23080,
+      "encodedSha256": "bc602cf6ec2c6c05b41c17999444069474a10591920e7924bd1c5a658e2664b4",
+      "codecDeltaSnrDb": 31.158790069217055,
+      "normalizedRmsDbfs": -15.738158781682598
+    },
+    {
+      "caseId": "NL-013",
+      "originalCaseId": "NS-005",
+      "condition": "light",
+      "voice": "slt",
+      "sourceFile": "book-friday-slt-source.pcm",
+      "sourceSha256": "0d1f4514b32cad77f78a0c7e96febdfe1b6a440517b12a6dc5daae4c940eb4e6",
+      "sourceBytes": 93600,
+      "noiseSeed": 23067,
+      "nominalSnrDb": 20,
+      "measuredPreCodecSnrDb": 20.000759139525975,
+      "clippedSamples": 0,
+      "pcmBytes": 94080,
+      "pcmSha256": "e161e3b3ca40d112d733dcdd18512501244b9ae614bd384bc2f92c8d5ef163d8",
+      "encodedBytes": 23400,
+      "encodedSha256": "6e76939cc5aba58d2ecc7630bb44f0ec4383f1d4b590848d7c634825b8b901ce",
+      "codecDeltaSnrDb": 22.989405710603144,
+      "normalizedRmsDbfs": -15.961989359625644
+    },
+    {
+      "caseId": "NL-014",
+      "originalCaseId": "NS-005",
+      "condition": "faint",
+      "voice": "slt",
+      "sourceFile": "book-friday-slt-source.pcm",
+      "sourceSha256": "0d1f4514b32cad77f78a0c7e96febdfe1b6a440517b12a6dc5daae4c940eb4e6",
+      "sourceBytes": 93600,
+      "noiseSeed": 23067,
+      "nominalSnrDb": 30,
+      "measuredPreCodecSnrDb": 30.00068061898803,
+      "clippedSamples": 0,
+      "pcmBytes": 94080,
+      "pcmSha256": "9b49b62436e7c251c97ba108e58af4e8d242dea1391e85d07f382db1ca76ac6c",
+      "encodedBytes": 23400,
+      "encodedSha256": "8c2cc20094eaaace82cf4160a94a8fdbbc7e6cb5670cd1460ad167395c16cc2b",
+      "codecDeltaSnrDb": 31.34578536862226,
+      "normalizedRmsDbfs": -15.98380833448241
+    },
+    {
+      "caseId": "NL-015",
+      "originalCaseId": "NS-005",
+      "condition": "quiet",
+      "voice": "slt",
+      "sourceFile": "book-friday-slt-source.pcm",
+      "sourceSha256": "0d1f4514b32cad77f78a0c7e96febdfe1b6a440517b12a6dc5daae4c940eb4e6",
+      "sourceBytes": 93600,
+      "noiseSeed": null,
+      "nominalSnrDb": null,
+      "measuredPreCodecSnrDb": null,
+      "clippedSamples": 0,
+      "pcmBytes": 94080,
+      "pcmSha256": "518eaa34a80ab1e12f3008af6e2d72e9670ac5006ed4bc24795f902f0fd6661e",
+      "encodedBytes": 23400,
+      "encodedSha256": "85b11ff5374f4734fbe2495f3eed7fb04b48b050eefefc455d25af3cae4fb3e3",
+      "codecDeltaSnrDb": null,
+      "normalizedRmsDbfs": -15.98475845214438
+    },
+    {
+      "caseId": "NL-016",
+      "originalCaseId": "NS-006",
+      "condition": "faint",
+      "voice": "slt",
+      "sourceFile": "urgent-monday-slt-source.pcm",
+      "sourceSha256": "dacf2061e13c6a162287dcc1a1bb8b88f19cf2de9c3d3f0806c0813fc43c3e85",
+      "sourceBytes": 100000,
+      "noiseSeed": 23068,
+      "nominalSnrDb": 30,
+      "measuredPreCodecSnrDb": 29.987689493601536,
+      "clippedSamples": 0,
+      "pcmBytes": 100480,
+      "pcmSha256": "42bc31f5ccf88520c807ae242221bc9fa590fbfc782256dbec239919ad920929",
+      "encodedBytes": 25000,
+      "encodedSha256": "c38165ed9fe28aff7c19352b3e5432e6388d7e4d27eb5011d4e26e84ac2226dc",
+      "codecDeltaSnrDb": 31.037319142577317,
+      "normalizedRmsDbfs": -15.541328866603335
+    },
+    {
+      "caseId": "NL-017",
+      "originalCaseId": "NS-006",
+      "condition": "quiet",
+      "voice": "slt",
+      "sourceFile": "urgent-monday-slt-source.pcm",
+      "sourceSha256": "dacf2061e13c6a162287dcc1a1bb8b88f19cf2de9c3d3f0806c0813fc43c3e85",
+      "sourceBytes": 100000,
+      "noiseSeed": null,
+      "nominalSnrDb": null,
+      "measuredPreCodecSnrDb": null,
+      "clippedSamples": 0,
+      "pcmBytes": 100480,
+      "pcmSha256": "9dce16b7a224fe2c564d08e60d7611565613922c3bd5a44c42c7256f9798e7d3",
+      "encodedBytes": 25000,
+      "encodedSha256": "72f4362e7c8521f57651ea20a7cb3306caa2ededafe82c34a808ab23a549ba63",
+      "codecDeltaSnrDb": null,
+      "normalizedRmsDbfs": -15.542892304977233
+    },
+    {
+      "caseId": "NL-018",
+      "originalCaseId": "NS-006",
+      "condition": "light",
+      "voice": "slt",
+      "sourceFile": "urgent-monday-slt-source.pcm",
+      "sourceSha256": "dacf2061e13c6a162287dcc1a1bb8b88f19cf2de9c3d3f0806c0813fc43c3e85",
+      "sourceBytes": 100000,
+      "noiseSeed": 23068,
+      "nominalSnrDb": 20,
+      "measuredPreCodecSnrDb": 19.98766622456461,
+      "clippedSamples": 0,
+      "pcmBytes": 100480,
+      "pcmSha256": "4144a040180709de7521f4c6596fc0987d80caffc5c12892081a72cbac08ede0",
+      "encodedBytes": 25000,
+      "encodedSha256": "35051cc87fe7fb801f60668a569e597dd4db26d86ff3531a80165d93f557c705",
+      "codecDeltaSnrDb": 22.96638381680538,
+      "normalizedRmsDbfs": -15.525102033076044
+    }
+  ],
+  "groups": {
+    "quiet": {
+      "assessment": {
+        "status": "fail",
+        "failures": [
+          "insufficientRepeats"
+        ],
+        "metrics": {
+          "cases": 6,
+          "runs": 6,
+          "critical": 0,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0,
+          "finalP95Ms": 1961,
+          "missingRepeats": [
+            "NL-001",
+            "NL-006",
+            "NL-008",
+            "NL-010",
+            "NL-015",
+            "NL-017"
+          ]
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      },
+      "counts": {
+        "match": 6,
+        "mismatch": 0,
+        "critical": 0,
+        "providerFailure": 0
+      },
+      "criticalMisses": []
+    },
+    "light": {
+      "assessment": {
+        "status": "fail",
+        "failures": [
+          "insufficientRepeats",
+          "critical",
+          "wordErrorRate"
+        ],
+        "metrics": {
+          "cases": 6,
+          "runs": 6,
+          "critical": 3,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0.20454545454545456,
+          "finalP95Ms": 897,
+          "missingRepeats": [
+            "NL-002",
+            "NL-004",
+            "NL-009",
+            "NL-011",
+            "NL-013",
+            "NL-018"
+          ]
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      },
+      "counts": {
+        "match": 2,
+        "mismatch": 1,
+        "critical": 3,
+        "providerFailure": 0
+      },
+      "criticalMisses": [
+        {
+          "caseId": "NL-004",
+          "originalCaseId": "NS-002",
+          "missingCriticalTerms": [
+            "book"
+          ]
+        },
+        {
+          "caseId": "NL-013",
+          "originalCaseId": "NS-005",
+          "missingCriticalTerms": [
+            "book"
+          ]
+        },
+        {
+          "caseId": "NL-018",
+          "originalCaseId": "NS-006",
+          "missingCriticalTerms": [
+            "chest",
+            "pain"
+          ]
+        }
+      ]
+    },
+    "faint": {
+      "assessment": {
+        "status": "fail",
+        "failures": [
+          "insufficientRepeats",
+          "critical"
+        ],
+        "metrics": {
+          "cases": 6,
+          "runs": 6,
+          "critical": 1,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0.09090909090909091,
+          "finalP95Ms": 805,
+          "missingRepeats": [
+            "NL-003",
+            "NL-005",
+            "NL-007",
+            "NL-012",
+            "NL-014",
+            "NL-016"
+          ]
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      },
+      "counts": {
+        "match": 4,
+        "mismatch": 1,
+        "critical": 1,
+        "providerFailure": 0
+      },
+      "criticalMisses": [
+        {
+          "caseId": "NL-016",
+          "originalCaseId": "NS-006",
+          "missingCriticalTerms": [
+            "chest",
+            "pain"
+          ]
+        }
+      ]
+    }
+  },
+  "job": {
+    "label": "Abby original fixture reconstruction and corrected noise level diagnostic October 8",
+    "exitCode": 0,
+    "elapsedSeconds": 51,
+    "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791424591909.log",
+    "startedAt": "2026-10-08T01:56:32.561Z",
+    "completedAt": "2026-10-08T01:57:23.739Z",
+    "exitMeaning": "Diagnostic completed; no passing gate inferred."
+  },
+  "preflightCorrection": {
+    "kind": "extra closing parenthesis in owner-only runner",
+    "firstJob": "Abby original fixture reconstruction and noise level diagnostic October 8",
+    "exitCode": 1,
+    "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791424569163.log",
+    "providerRequestsBeforeCorrection": 0,
+    "correctedSyntax": "pass"
+  },
+  "inference": "The six pinned noisy fixtures reproduce exactly without clipping. Their six clean telephone versions match, while lighter noise still loses critical terms in this single pass. This supports recognition sensitivity to noise on these synthetic voices, not an identified provider-internal root cause.",
+  "limitations": [
+    "One repeat is below the unchanged three-repeat minimum and does not establish a reliable noise threshold.",
+    "Condition order rotates within cases but provider sessions overlap; this is not a randomized or statistically powered experiment.",
+    "Higher SNR variants supplement rather than replace the original pinned 10 dB and safety corpora.",
+    "Codec-delta SNR compares normalized noisy and clean PCM; it includes differential codec distortion and frame padding, rather than measuring a separable noise channel.",
+    "No original fixture, production code, scoring threshold, dependency, scenario manifest row or speech admission changed.",
+    "Real human listening, microphone/accent distributions and carrier/complete-call evidence remain unavailable."
+  ],
+  "gateStatus": {
+    "syntheticGate": "notAssessed",
+    "completeStoredCandidateGate": "fail",
+    "statusCommand": "node scripts/read-speech-gate-status.ts",
+    "statusExitCode": 2,
+    "representativeCallGate": "notRun",
+    "humanReviewStatus": "pending",
+    "releaseGate": "unverified"
+  },
+  "validation": {
+    "syntaxCommand": "node --check eval/results/screen-original-noise-levels-20261008.mjs",
+    "syntaxResult": "pass",
+    "evidenceCommand": "node /home/gust/code/abby/eval/results/verify-original-noise-levels-20261008.mjs file:///home/gust/code/abby-noise-level-audit/eval/baselines/original-noise-levels-20261008-v1.json",
+    "evidenceRunnerSha256": "3ae8520b716a886d74df86ebc965f7866d32c6e2aa223bfa7c3c347068e82b8f",
+    "evidenceRunnerOwnerOnly": true,
+    "evidenceValidation": "pass",
+    "originalReconstruction": "pass",
+    "fixtureCodecReplay": "pass",
+    "independentWholeBufferWireInterpolation": "pass",
+    "diffCheck": "pass"
+  },
+  "providerLevelComparison": {
+    "report": {
+      "file": "eval/results/20261008-provider-voices-screen.json",
+      "sha256": "7e710616c92b2fc78549e000ef2af04ef9a7dadcdaebc92800ea69c199250f34",
+      "ownerOnly": true
+    },
+    "fixtureDirectory": "eval/results/synthetic-provider-voices-20261008",
+    "clips": [
+      {
+        "voice": "alloy",
+        "phrase": "availability",
+        "sourceSha256": "d7005e1f8fdbeff5049a3f314a2decec8d48cd2cbd20e5c75d84a929de8bf879",
+        "durationMs": 2370.0,
+        "sourceRmsDbfs": -24.51593197966485,
+        "sourcePeak": 10845,
+        "quietNormalizedRmsDbfs": -24.573379390957946,
+        "noisyNormalizedRmsDbfs": -24.364993840635208,
+        "codecDeltaSnrDb": 13.220506877204043
+      },
+      {
+        "voice": "alloy",
+        "phrase": "booking",
+        "sourceSha256": "70754b485321f1d600e4260a01a576729c200febba3a2ae945c3a567cd1bd8b3",
+        "durationMs": 2730.0,
+        "sourceRmsDbfs": -24.483104258195407,
+        "sourcePeak": 12738,
+        "quietNormalizedRmsDbfs": -24.55331211482188,
+        "noisyNormalizedRmsDbfs": -24.3486512820332,
+        "codecDeltaSnrDb": 13.18666582410522
+      },
+      {
+        "voice": "alloy",
+        "phrase": "urgent",
+        "sourceSha256": "d8a545efa6f3ae407c2e4404490618f8375dabe34ed02d930264238064ea11b9",
+        "durationMs": 2775.0,
+        "sourceRmsDbfs": -24.652679493303268,
+        "sourcePeak": 12121,
+        "quietNormalizedRmsDbfs": -24.805292251889433,
+        "noisyNormalizedRmsDbfs": -24.579802131945378,
+        "codecDeltaSnrDb": 13.016244124128775
+      },
+      {
+        "voice": "nova",
+        "phrase": "availability",
+        "sourceSha256": "4249e3728dd4de43473cf1beb20d5ce0ba688a14f4e5c63482a6e22d8a7188ee",
+        "durationMs": 2038.0,
+        "sourceRmsDbfs": -26.696493238759118,
+        "sourcePeak": 8960,
+        "quietNormalizedRmsDbfs": -26.716362685576577,
+        "noisyNormalizedRmsDbfs": -26.520791414382174,
+        "codecDeltaSnrDb": 13.162638490596429
+      },
+      {
+        "voice": "nova",
+        "phrase": "booking",
+        "sourceSha256": "bba02cb0940421b83140b0cfdb5cec63edd734eb2876791c966dacc16663fa92",
+        "durationMs": 2613.0,
+        "sourceRmsDbfs": -29.77140336146277,
+        "sourcePeak": 8445,
+        "quietNormalizedRmsDbfs": -29.812612607028008,
+        "noisyNormalizedRmsDbfs": -29.600300246634006,
+        "codecDeltaSnrDb": 13.19910856074381
+      },
+      {
+        "voice": "nova",
+        "phrase": "urgent",
+        "sourceSha256": "35fc16a047aadae0b01403f53781922121236342b5cd243a861b39cbf0a63159",
+        "durationMs": 2838.0,
+        "sourceRmsDbfs": -28.622400334458096,
+        "sourcePeak": 11433,
+        "quietNormalizedRmsDbfs": -28.687769936652543,
+        "noisyNormalizedRmsDbfs": -28.482871860651542,
+        "codecDeltaSnrDb": 13.170375375731274
+      }
+    ],
+    "interpretation": "Original source RMS spans -21.6634 to -15.5095 dBFS; provider common-phrase sources span -29.7714 to -24.4831 dBFS. Both source and absolute level differ. The experiment does not isolate them or prove level causes errors.",
+    "nextHypothesis": "A bounded gain-only comparison on unchanged original noisy input can isolate absolute level while retaining its words and noise ratio."
+  }
+}
