@@ -21,6 +21,7 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 import { verificationCanaries, verificationNow } from "./caller-verification.ts";
 import { bookingMenuDeadlineMs } from "../../src/reference/booking-menu-turns.ts";
 import { reschedulingMenuDeadlineMs } from "../../src/reference/rescheduling-menu-turns.ts";
+import { appointmentProposalEvidenceDeadlineMs } from "../../src/reference/text-reception.ts";
 
 export async function voiceUntil(check: () => boolean, label: string, timeoutMs = 10_000) {
   const deadline = Date.now() + timeoutMs;
@@ -56,10 +57,11 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   // provider paths, patient refs or verification material.
   const stages: { name: string; started: number; settled?: number; deadlineMs?: number; signal?: AbortSignal }[] = [];
   const observe = <Args extends unknown[], Value>(name: string, run: (...args: Args) => Promise<Value>, deadlineMs?: number,
-    signalFor?: (...args: Args) => AbortSignal) =>
+    signalFor?: (...args: Args) => AbortSignal | undefined) =>
     async (...args: Args): Promise<Value> => {
+      const signal = signalFor?.(...args);
       const stage: typeof stages[number] = { name, started: performance.now(), ...(deadlineMs === undefined ? {} : { deadlineMs }),
-        ...(signalFor ? { signal: signalFor(...args) } : {}) };
+        ...(signal ? { signal } : {}) };
       if (stages.length >= 64) stages.shift();
       stages.push(stage);
       try { return await run(...args); } finally { stage.settled = performance.now(); }
@@ -117,8 +119,10 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
           flow.selectBookingMenu = observe("bookingMenuSelect", flow.selectBookingMenu.bind(flow), bookingMenuDeadlineMs, query => query.signal);
           flow.readReschedulingMenu = observe("reschedulingMenuRead", flow.readReschedulingMenu.bind(flow), reschedulingMenuDeadlineMs, query => query.signal);
           flow.selectReschedulingMenu = observe("reschedulingMenuSelect", flow.selectReschedulingMenu.bind(flow), reschedulingMenuDeadlineMs, query => query.signal);
-          flow.resolveBooking = observe("bookingEvidence", flow.resolveBooking.bind(flow));
-          flow.resolveAppointmentChange = observe("appointmentChangeEvidence", flow.resolveAppointmentChange.bind(flow));
+          flow.resolveBooking = observe("bookingEvidence", flow.resolveBooking.bind(flow), appointmentProposalEvidenceDeadlineMs,
+            (_scope, _verificationRef, _offerRef, _now, signal) => signal);
+          flow.resolveAppointmentChange = observe("appointmentChangeEvidence", flow.resolveAppointmentChange.bind(flow), appointmentProposalEvidenceDeadlineMs,
+            (_query, signal) => signal);
           flow.correctionIntent = observe("menuCorrection", flow.correctionIntent.bind(flow));
           const write = flow.write.bind(flow);
           flow.write = async (...args: Parameters<ClinikoCallFlow["write"]>) => {
