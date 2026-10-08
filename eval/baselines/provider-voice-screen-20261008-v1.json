@@ -1,0 +1,745 @@
+{
+  "schema": "abby.provider-voice-screen.v1",
+  "date": "2026-10-08",
+  "baseHead": "66ace29587bc6ac3fee3c3a4526db08bb322feac",
+  "status": "diagnosticCompleteOriginalGateStillFails",
+  "configuration": {
+    "status": "complete",
+    "speechModel": "tts-1",
+    "voices": [
+      "alloy",
+      "nova"
+    ],
+    "transcriptionModel": "gpt-live-transcribe",
+    "contextVersion": "none",
+    "noiseReduction": "omitted",
+    "delay": "omitted",
+    "repeats": 1,
+    "concurrency": 2,
+    "paceMs": 20,
+    "nodeVersion": "v22.23.2",
+    "ffmpegVersion": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers"
+  },
+  "originalCorpora": [
+    {
+      "file": "eval/transcription-v1.json",
+      "sha256": "2d3fabc12d13699ffecc4017d64ba9cedc91373e001529abf135a6f311357905"
+    },
+    {
+      "file": "eval/transcription-telephony-v1.json",
+      "sha256": "65645afaeeaca6c91342b8e690c184affd58e004f3438cfa0cccfdd18e3f8e1a"
+    },
+    {
+      "file": "eval/transcription-noise-v1.json",
+      "sha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2"
+    },
+    {
+      "file": "eval/transcription-safety-v1.json",
+      "sha256": "fb261dfa87cfd036307346874b439b63596a7b9390109cc3d22965f5fda795da"
+    }
+  ],
+  "generated": {
+    "report": {
+      "file": "eval/results/20261008-provider-voices-screen.json",
+      "sha256": "7e710616c92b2fc78549e000ef2af04ef9a7dadcdaebc92800ea69c199250f34",
+      "ownerOnly": true
+    },
+    "runner": {
+      "file": "eval/results/screen-provider-voices-20261008.mjs",
+      "sha256": "02b1884595aae111a1968334159f4aac77c46ef69adf4f5bdd038e7696d47266",
+      "ownerOnly": true
+    },
+    "sourcePaths": [
+      "src/voice/openai-speech-synthesis.ts",
+      "src/voice/transport-media-normalizer.ts",
+      "src/voice/openai-realtime-transcription.ts",
+      "src/voice/transcription-evaluation.ts",
+      "src/voice/transcription-evaluation-gate.ts"
+    ],
+    "sourceSha256": "f1218a69ae1979f4230a74f2892d0eba05ef70cc8c7ea68f96bff5f70b1595ea",
+    "fixtureDirectory": "eval/results/synthetic-provider-voices-20261008",
+    "corpusSha256": "3ea0ad269e4a7cbe7a81e3e199b852018a11e9388a9cb99001d4c6224a14e6b3",
+    "fixtureMetadata": [
+      {
+        "caseId": "PV-001",
+        "voice": "alloy",
+        "phrase": "availability",
+        "condition": "quiet",
+        "sourceFile": "availability-alloy-source.pcm",
+        "sourceSha256": "d7005e1f8fdbeff5049a3f314a2decec8d48cd2cbd20e5c75d84a929de8bf879",
+        "sourceBytes": 75840,
+        "pcmBytes": 76160,
+        "pcmSha256": "e53df95744d6f249665dfeefc37bec5f3be88b577c9e88e1c670d7f7c8601de8",
+        "encodedBytes": 18960,
+        "encodedSha256": "43d74c46de6c7a2e8d30d261b3941c53dcaba2a6b7f40fe205f4a2c0928fcf13",
+        "wavFile": "availability-alloy-quiet.wav",
+        "wavSha256": "20ad04e2ba87dca652eaf243205bdc76cc65b853ebb0f7312cdc715efffb3782",
+        "nominalSnrDb": null,
+        "measuredPreCodecSnrDb": null,
+        "clippedSamples": 0,
+        "noiseSeed": null
+      },
+      {
+        "caseId": "PV-002",
+        "voice": "alloy",
+        "phrase": "availability",
+        "condition": "noise",
+        "sourceFile": "availability-alloy-source.pcm",
+        "sourceSha256": "d7005e1f8fdbeff5049a3f314a2decec8d48cd2cbd20e5c75d84a929de8bf879",
+        "sourceBytes": 75840,
+        "pcmBytes": 76160,
+        "pcmSha256": "389b32db4a832060a0a0516a917e0c1fda2dbbbf51328a26e852767e958eddfe",
+        "encodedBytes": 18960,
+        "encodedSha256": "02db7398ef7c251b3d59102ae49bc9dd8c9efd2ff2e83eac40520dbd31dca278",
+        "wavFile": "availability-alloy-noise.wav",
+        "wavSha256": "dd8b7c64154ed7846b661ddfb0fa83c0bfef71345266d02d08b2b8638d1ad14c",
+        "nominalSnrDb": 10,
+        "measuredPreCodecSnrDb": 10.018482892763526,
+        "clippedSamples": 0,
+        "noiseSeed": 440336
+      },
+      {
+        "caseId": "PV-003",
+        "voice": "alloy",
+        "phrase": "booking",
+        "condition": "quiet",
+        "sourceFile": "booking-alloy-source.pcm",
+        "sourceSha256": "70754b485321f1d600e4260a01a576729c200febba3a2ae945c3a567cd1bd8b3",
+        "sourceBytes": 87360,
+        "pcmBytes": 87680,
+        "pcmSha256": "d1f5c09057fcdbffebcc07b19d7a9b78dd25f7d83a494d4970b3b15c3bae4629",
+        "encodedBytes": 21840,
+        "encodedSha256": "b2fd04ad2460f8a3990bc0f4c474eecfd27415184caa383f489ac4e2e2ca4c70",
+        "wavFile": "booking-alloy-quiet.wav",
+        "wavSha256": "6809b053adff06e62e6d3278145fadf9e245fe71041b093cecc3b29d60cdb352",
+        "nominalSnrDb": null,
+        "measuredPreCodecSnrDb": null,
+        "clippedSamples": 0,
+        "noiseSeed": null
+      },
+      {
+        "caseId": "PV-004",
+        "voice": "alloy",
+        "phrase": "booking",
+        "condition": "noise",
+        "sourceFile": "booking-alloy-source.pcm",
+        "sourceSha256": "70754b485321f1d600e4260a01a576729c200febba3a2ae945c3a567cd1bd8b3",
+        "sourceBytes": 87360,
+        "pcmBytes": 87680,
+        "pcmSha256": "3c209b9af5c1c95ccafdd9593f61dc0b501061c9fb134bd829312acf0ce18ddd",
+        "encodedBytes": 21840,
+        "encodedSha256": "3e8abc87a34bec3ddbc206971012ea2c6b0d1680fdc23555d64e90c8e041ee03",
+        "wavFile": "booking-alloy-noise.wav",
+        "wavSha256": "a9b3f9b15c60438064fa264257a6df20897f7de0b8d27d5e330e5276d034c909",
+        "nominalSnrDb": 10,
+        "measuredPreCodecSnrDb": 10.015188225369894,
+        "clippedSamples": 0,
+        "noiseSeed": 440337
+      },
+      {
+        "caseId": "PV-005",
+        "voice": "alloy",
+        "phrase": "urgent",
+        "condition": "quiet",
+        "sourceFile": "urgent-alloy-source.pcm",
+        "sourceSha256": "d8a545efa6f3ae407c2e4404490618f8375dabe34ed02d930264238064ea11b9",
+        "sourceBytes": 88800,
+        "pcmBytes": 88960,
+        "pcmSha256": "7dcca6aaae893af61122b7bdf0c5bc20c14f475827a78d4035c95aaa88b9ed06",
+        "encodedBytes": 22200,
+        "encodedSha256": "614bc5201cdf9e6a7626ac7c2dbde596b7d4b8953fb76895867e6d800d692aac",
+        "wavFile": "urgent-alloy-quiet.wav",
+        "wavSha256": "ab0a77e33ee37555c13af8dcb8851ffe223d884284b936e6663c8ed8afc96986",
+        "nominalSnrDb": null,
+        "measuredPreCodecSnrDb": null,
+        "clippedSamples": 0,
+        "noiseSeed": null
+      },
+      {
+        "caseId": "PV-006",
+        "voice": "alloy",
+        "phrase": "urgent",
+        "condition": "noise",
+        "sourceFile": "urgent-alloy-source.pcm",
+        "sourceSha256": "d8a545efa6f3ae407c2e4404490618f8375dabe34ed02d930264238064ea11b9",
+        "sourceBytes": 88800,
+        "pcmBytes": 88960,
+        "pcmSha256": "e1e49cae30a34a1f17087d59398557b95ddf9a4943d1d11f87854a573037990e",
+        "encodedBytes": 22200,
+        "encodedSha256": "34fd2fe9e87fbf52c2ec876c9bf6efaca872373e9295d9f1443c8bf729e74a35",
+        "wavFile": "urgent-alloy-noise.wav",
+        "wavSha256": "7b58f8b2b24b759b1ecdbdbe9410af58e04e6f35307252620de758ecb5ea730e",
+        "nominalSnrDb": 10,
+        "measuredPreCodecSnrDb": 9.961703040200568,
+        "clippedSamples": 0,
+        "noiseSeed": 440338
+      },
+      {
+        "caseId": "PV-007",
+        "voice": "alloy",
+        "phrase": "correction",
+        "condition": "quiet",
+        "sourceFile": "correction-alloy-source.pcm",
+        "sourceSha256": "7b4e9fd288a19bc210dc6030da3731ec04f1ca96ec2b701c81756bdef46b15f8",
+        "sourceBytes": 160000,
+        "pcmBytes": 160000,
+        "pcmSha256": "d1cfe14a5828e1c26fe44ecf365a6f45d4016e8aafe6634faab1315d2c94ae31",
+        "encodedBytes": 40000,
+        "encodedSha256": "44f278a18f6b70e184940a70cd4b391fd9373d8912d9f7de7caea36585a3e12a",
+        "wavFile": "correction-alloy-quiet.wav",
+        "wavSha256": "63d0f4f3cc5948caefb95050d695b9d85d02936c8f4ae4ca2896d7ea7798cebd",
+        "nominalSnrDb": null,
+        "measuredPreCodecSnrDb": null,
+        "clippedSamples": 0,
+        "noiseSeed": null
+      },
+      {
+        "caseId": "PV-008",
+        "voice": "alloy",
+        "phrase": "correction",
+        "condition": "noise",
+        "sourceFile": "correction-alloy-source.pcm",
+        "sourceSha256": "7b4e9fd288a19bc210dc6030da3731ec04f1ca96ec2b701c81756bdef46b15f8",
+        "sourceBytes": 160000,
+        "pcmBytes": 160000,
+        "pcmSha256": "de7f0362efb51cb7ed934fc9eefc6d0a52e5743ac2c159114dc37f21dba304df",
+        "encodedBytes": 40000,
+        "encodedSha256": "10486f7a00c4a1258d7570ac59992edbcc3f9970c244338e41341c16329700d3",
+        "wavFile": "correction-alloy-noise.wav",
+        "wavSha256": "93fbaa7dbf3d877adc96e1b5cf2e73628b292b15d7d819ee32e5e3f0d1b47713",
+        "nominalSnrDb": 10,
+        "measuredPreCodecSnrDb": 9.99901585050676,
+        "clippedSamples": 0,
+        "noiseSeed": 440339
+      },
+      {
+        "caseId": "PV-009",
+        "voice": "nova",
+        "phrase": "availability",
+        "condition": "quiet",
+        "sourceFile": "availability-nova-source.pcm",
+        "sourceSha256": "4249e3728dd4de43473cf1beb20d5ce0ba688a14f4e5c63482a6e22d8a7188ee",
+        "sourceBytes": 65216,
+        "pcmBytes": 65280,
+        "pcmSha256": "66439dfabf9d3916ffef924718dec5fbccd83fb5c3d18dee7c02c1d50019146e",
+        "encodedBytes": 16304,
+        "encodedSha256": "86901d781976a8426f770f2d8711adda0e11496f8aea87bb7b179a7a074170c7",
+        "wavFile": "availability-nova-quiet.wav",
+        "wavSha256": "c403712e0d15e3cadca5c0fc6c30af236b269330fab64e8f6f88712c3b25932a",
+        "nominalSnrDb": null,
+        "measuredPreCodecSnrDb": null,
+        "clippedSamples": 0,
+        "noiseSeed": null
+      },
+      {
+        "caseId": "PV-010",
+        "voice": "nova",
+        "phrase": "availability",
+        "condition": "noise",
+        "sourceFile": "availability-nova-source.pcm",
+        "sourceSha256": "4249e3728dd4de43473cf1beb20d5ce0ba688a14f4e5c63482a6e22d8a7188ee",
+        "sourceBytes": 65216,
+        "pcmBytes": 65280,
+        "pcmSha256": "5cf3ca3a10a3b3d0923418c122af59b487fc5ad6ab37f637ea8eea5944c0b99e",
+        "encodedBytes": 16304,
+        "encodedSha256": "163231a1390f5ae0a45fccb596a1ce7884114b3e40c05d4cd0dfd69a4672be6f",
+        "wavFile": "availability-nova-noise.wav",
+        "wavSha256": "bd9fe0cabfa7d39a5c20eaaa9f9232d25099e6ad42bcaa3fee6e87d731cdb6f6",
+        "nominalSnrDb": 10,
+        "measuredPreCodecSnrDb": 9.977951584908443,
+        "clippedSamples": 0,
+        "noiseSeed": 440340
+      },
+      {
+        "caseId": "PV-011",
+        "voice": "nova",
+        "phrase": "booking",
+        "condition": "quiet",
+        "sourceFile": "booking-nova-source.pcm",
+        "sourceSha256": "bba02cb0940421b83140b0cfdb5cec63edd734eb2876791c966dacc16663fa92",
+        "sourceBytes": 83616,
+        "pcmBytes": 83840,
+        "pcmSha256": "2822b49a7e7b7efa3f6894811d77c5c298fae9790c57bfdf0aa1538e4cc35163",
+        "encodedBytes": 20904,
+        "encodedSha256": "0ee3fc9da810d5f920ecd3f2d4484cb878975ef28c25b1896175bbfa9bf02d07",
+        "wavFile": "booking-nova-quiet.wav",
+        "wavSha256": "e476938f58ecb3b2577b30bbc8fb70577744450484d7f85831f71ba106d25e66",
+        "nominalSnrDb": null,
+        "measuredPreCodecSnrDb": null,
+        "clippedSamples": 0,
+        "noiseSeed": null
+      },
+      {
+        "caseId": "PV-012",
+        "voice": "nova",
+        "phrase": "booking",
+        "condition": "noise",
+        "sourceFile": "booking-nova-source.pcm",
+        "sourceSha256": "bba02cb0940421b83140b0cfdb5cec63edd734eb2876791c966dacc16663fa92",
+        "sourceBytes": 83616,
+        "pcmBytes": 83840,
+        "pcmSha256": "a16e55b7fd69519d76d045a394d7ca5f0e6a7aa0879e8ec9a2bd148a42c59b58",
+        "encodedBytes": 20904,
+        "encodedSha256": "6a94538928b3b3a4e398a70980e06ac40208854162d31c047a6eabe953cd6da2",
+        "wavFile": "booking-nova-noise.wav",
+        "wavSha256": "81b26b837b9b1364e8e11f27ececdd1242ad2c84e5e6ded9000d7df5d8450398",
+        "nominalSnrDb": 10,
+        "measuredPreCodecSnrDb": 10.001810847948198,
+        "clippedSamples": 0,
+        "noiseSeed": 440341
+      },
+      {
+        "caseId": "PV-013",
+        "voice": "nova",
+        "phrase": "urgent",
+        "condition": "quiet",
+        "sourceFile": "urgent-nova-source.pcm",
+        "sourceSha256": "35fc16a047aadae0b01403f53781922121236342b5cd243a861b39cbf0a63159",
+        "sourceBytes": 90816,
+        "pcmBytes": 90880,
+        "pcmSha256": "16ab6a2c3652d1e834fca7d1dd649df363b7f53a40518d4c5db426fd5c5db90b",
+        "encodedBytes": 22704,
+        "encodedSha256": "aac5e30d0c244b99f2269fa25358da1ac275149527ea96cb684ec4b87acefe13",
+        "wavFile": "urgent-nova-quiet.wav",
+        "wavSha256": "15b424fbccaace1558ffc5a3f190630c69bf84b5ebe59794c2b17062dc55d217",
+        "nominalSnrDb": null,
+        "measuredPreCodecSnrDb": null,
+        "clippedSamples": 0,
+        "noiseSeed": null
+      },
+      {
+        "caseId": "PV-014",
+        "voice": "nova",
+        "phrase": "urgent",
+        "condition": "noise",
+        "sourceFile": "urgent-nova-source.pcm",
+        "sourceSha256": "35fc16a047aadae0b01403f53781922121236342b5cd243a861b39cbf0a63159",
+        "sourceBytes": 90816,
+        "pcmBytes": 90880,
+        "pcmSha256": "95cb74c4e11244089773cb1323b1fd86ce86c4320c0f52150122da421327968e",
+        "encodedBytes": 22704,
+        "encodedSha256": "30234db4ec67c09595d79e42579fa698e14f000fb03661606e28d251ed627e39",
+        "wavFile": "urgent-nova-noise.wav",
+        "wavSha256": "2caa1ae7dc7453a545c896db5953d55333616099a54472fffd3b8842202015f6",
+        "nominalSnrDb": 10,
+        "measuredPreCodecSnrDb": 10.029949386953248,
+        "clippedSamples": 0,
+        "noiseSeed": 440342
+      },
+      {
+        "caseId": "PV-015",
+        "voice": "nova",
+        "phrase": "correction",
+        "condition": "quiet",
+        "sourceFile": "correction-nova-source.pcm",
+        "sourceSha256": "cfa48ea9cacfeb0aaf62d4a3fa9c818917ca2d73b73596d11b756e2a7df9d266",
+        "sourceBytes": 150816,
+        "pcmBytes": 151040,
+        "pcmSha256": "a65fff2d50ee5a58e6c5f6f4e98b3f04782af2da8c5a75ec8a16badce9441b63",
+        "encodedBytes": 37704,
+        "encodedSha256": "f7661d323728b896b03dc2ed26113799ba46914657bde011b737a9f4179a7ae4",
+        "wavFile": "correction-nova-quiet.wav",
+        "wavSha256": "6e229d37a0db0fa3205d416379a7970d0eeb7a013c2eb0d9fae63a256e91e707",
+        "nominalSnrDb": null,
+        "measuredPreCodecSnrDb": null,
+        "clippedSamples": 0,
+        "noiseSeed": null
+      },
+      {
+        "caseId": "PV-016",
+        "voice": "nova",
+        "phrase": "correction",
+        "condition": "noise",
+        "sourceFile": "correction-nova-source.pcm",
+        "sourceSha256": "cfa48ea9cacfeb0aaf62d4a3fa9c818917ca2d73b73596d11b756e2a7df9d266",
+        "sourceBytes": 150816,
+        "pcmBytes": 151040,
+        "pcmSha256": "6ade0adce3d4baa2c42e8ac0eed066ea2bf3b174d6050968dedb7864fa2376bd",
+        "encodedBytes": 37704,
+        "encodedSha256": "2c70e6c2b8293a3e01a9276e4636a3029e6cf5720d19ecd5f9f78a0049f884ca",
+        "wavFile": "correction-nova-noise.wav",
+        "wavSha256": "14741c7542e79d717478051d18907d8ac895dc68b807a833062790edb47d083e",
+        "nominalSnrDb": 10,
+        "measuredPreCodecSnrDb": 9.974179248773059,
+        "clippedSamples": 0,
+        "noiseSeed": 440343
+      }
+    ],
+    "synthesisRequests": [
+      {
+        "voice": "alloy",
+        "phrase": "availability",
+        "model": "tts-1",
+        "inputSha256": "c6526ec02944b074fd17cec26fe31d7136dbb4b548d025d8077fddab61794de5",
+        "responseFormat": "pcm",
+        "streamFormat": "audio",
+        "sourceFile": "availability-alloy-source.pcm",
+        "sourceSha256": "d7005e1f8fdbeff5049a3f314a2decec8d48cd2cbd20e5c75d84a929de8bf879",
+        "sourceBytes": 75840,
+        "totalMs": 2318
+      },
+      {
+        "voice": "alloy",
+        "phrase": "booking",
+        "model": "tts-1",
+        "inputSha256": "1f5e8ec5d9d7d5fc031f7caee3f49cd5c7a052e7961ca9e4966d3b497cca62d9",
+        "responseFormat": "pcm",
+        "streamFormat": "audio",
+        "sourceFile": "booking-alloy-source.pcm",
+        "sourceSha256": "70754b485321f1d600e4260a01a576729c200febba3a2ae945c3a567cd1bd8b3",
+        "sourceBytes": 87360,
+        "totalMs": 1631
+      },
+      {
+        "voice": "alloy",
+        "phrase": "urgent",
+        "model": "tts-1",
+        "inputSha256": "8b07c660ec8f412f3e6e4cdc2a8d47e7531e189511eb939d340c709e59deaf1c",
+        "responseFormat": "pcm",
+        "streamFormat": "audio",
+        "sourceFile": "urgent-alloy-source.pcm",
+        "sourceSha256": "d8a545efa6f3ae407c2e4404490618f8375dabe34ed02d930264238064ea11b9",
+        "sourceBytes": 88800,
+        "totalMs": 1633
+      },
+      {
+        "voice": "alloy",
+        "phrase": "correction",
+        "model": "tts-1",
+        "inputSha256": "7b0d53d32cecebc1f07e974ff837add65a19756235b654b9c50aa3907d5d12cf",
+        "responseFormat": "pcm",
+        "streamFormat": "audio",
+        "sourceFile": "correction-alloy-source.pcm",
+        "sourceSha256": "7b4e9fd288a19bc210dc6030da3731ec04f1ca96ec2b701c81756bdef46b15f8",
+        "sourceBytes": 160000,
+        "totalMs": 2858
+      },
+      {
+        "voice": "nova",
+        "phrase": "availability",
+        "model": "tts-1",
+        "inputSha256": "c6526ec02944b074fd17cec26fe31d7136dbb4b548d025d8077fddab61794de5",
+        "responseFormat": "pcm",
+        "streamFormat": "audio",
+        "sourceFile": "availability-nova-source.pcm",
+        "sourceSha256": "4249e3728dd4de43473cf1beb20d5ce0ba688a14f4e5c63482a6e22d8a7188ee",
+        "sourceBytes": 65216,
+        "totalMs": 3435
+      },
+      {
+        "voice": "nova",
+        "phrase": "booking",
+        "model": "tts-1",
+        "inputSha256": "1f5e8ec5d9d7d5fc031f7caee3f49cd5c7a052e7961ca9e4966d3b497cca62d9",
+        "responseFormat": "pcm",
+        "streamFormat": "audio",
+        "sourceFile": "booking-nova-source.pcm",
+        "sourceSha256": "bba02cb0940421b83140b0cfdb5cec63edd734eb2876791c966dacc16663fa92",
+        "sourceBytes": 83616,
+        "totalMs": 2510
+      },
+      {
+        "voice": "nova",
+        "phrase": "urgent",
+        "model": "tts-1",
+        "inputSha256": "8b07c660ec8f412f3e6e4cdc2a8d47e7531e189511eb939d340c709e59deaf1c",
+        "responseFormat": "pcm",
+        "streamFormat": "audio",
+        "sourceFile": "urgent-nova-source.pcm",
+        "sourceSha256": "35fc16a047aadae0b01403f53781922121236342b5cd243a861b39cbf0a63159",
+        "sourceBytes": 90816,
+        "totalMs": 1580
+      },
+      {
+        "voice": "nova",
+        "phrase": "correction",
+        "model": "tts-1",
+        "inputSha256": "7b0d53d32cecebc1f07e974ff837add65a19756235b654b9c50aa3907d5d12cf",
+        "responseFormat": "pcm",
+        "streamFormat": "audio",
+        "sourceFile": "correction-nova-source.pcm",
+        "sourceSha256": "cfa48ea9cacfeb0aaf62d4a3fa9c818917ca2d73b73596d11b756e2a7df9d266",
+        "sourceBytes": 150816,
+        "totalMs": 1362
+      }
+    ],
+    "overall": {
+      "status": "fail",
+      "failures": [
+        "insufficientRepeats"
+      ],
+      "metrics": {
+        "cases": 16,
+        "runs": 16,
+        "critical": 0,
+        "providerFailures": 0,
+        "empty": 0,
+        "truncated": 0,
+        "delayed": 0,
+        "wordErrorRate": 0,
+        "finalP95Ms": 988,
+        "missingRepeats": [
+          "PV-001",
+          "PV-002",
+          "PV-003",
+          "PV-004",
+          "PV-005",
+          "PV-006",
+          "PV-007",
+          "PV-008",
+          "PV-009",
+          "PV-010",
+          "PV-011",
+          "PV-012",
+          "PV-013",
+          "PV-014",
+          "PV-015",
+          "PV-016"
+        ]
+      },
+      "thresholds": {
+        "version": "transcription-synthetic-gate-v1",
+        "minRepeatsPerCase": 3,
+        "maxCritical": 0,
+        "maxProviderFailures": 0,
+        "maxEmpty": 0,
+        "maxTruncated": 0,
+        "maxWordErrorRate": 0.1,
+        "maxFinalP95Ms": 2500,
+        "maxIndividualFinalMs": 5000
+      }
+    },
+    "groups": {
+      "quiet": {
+        "status": "fail",
+        "failures": [
+          "insufficientRepeats"
+        ],
+        "metrics": {
+          "cases": 8,
+          "runs": 8,
+          "critical": 0,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0,
+          "finalP95Ms": 988,
+          "missingRepeats": [
+            "PV-001",
+            "PV-003",
+            "PV-005",
+            "PV-007",
+            "PV-009",
+            "PV-011",
+            "PV-013",
+            "PV-015"
+          ]
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      },
+      "noise": {
+        "status": "fail",
+        "failures": [
+          "insufficientRepeats"
+        ],
+        "metrics": {
+          "cases": 8,
+          "runs": 8,
+          "critical": 0,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0,
+          "finalP95Ms": 912,
+          "missingRepeats": [
+            "PV-002",
+            "PV-004",
+            "PV-006",
+            "PV-008",
+            "PV-010",
+            "PV-012",
+            "PV-014",
+            "PV-016"
+          ]
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      }
+    },
+    "counts": {
+      "match": 16,
+      "mismatch": 0,
+      "critical": 0,
+      "providerFailure": 0
+    },
+    "job": {
+      "label": "Abby synthetic provider voice noise diagnostic October 8",
+      "exitCode": 0,
+      "elapsedSeconds": 67,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791423784773.log",
+      "startedAt": "2026-10-08T01:43:05.930Z",
+      "completedAt": "2026-10-08T01:44:12.214Z"
+    }
+  },
+  "control": {
+    "report": {
+      "file": "eval/results/20261008-default-live-original-control.json",
+      "sha256": "2eb83e045f2ef8adfd2a3d081736e3e4a2cce547406b2a5a60ccf50c1920b213",
+      "ownerOnly": true
+    },
+    "runner": {
+      "file": "eval/results/screen-original-live-control-20261008.mjs",
+      "sha256": "12e5800a331c73f43b27021573d9136763f0fb7981b8f343a2b9789005157ae1",
+      "ownerOnly": true
+    },
+    "sourcePaths": [
+      "src/voice/openai-realtime-transcription.ts",
+      "src/voice/transcription-evaluation.ts",
+      "src/voice/transcription-evaluation-gate.ts"
+    ],
+    "sourceSha256": "281edbfc25ff7c4e08ae6d37dc29a1594e6cb92dec3f7a023c6213de34bfd9d8",
+    "assessment": {
+      "status": "fail",
+      "failures": [
+        "insufficientRepeats",
+        "critical",
+        "wordErrorRate"
+      ],
+      "metrics": {
+        "cases": 6,
+        "runs": 6,
+        "critical": 4,
+        "providerFailures": 0,
+        "empty": 0,
+        "truncated": 0,
+        "delayed": 0,
+        "wordErrorRate": 0.4090909090909091,
+        "finalP95Ms": 847,
+        "missingRepeats": [
+          "NS-001",
+          "NS-002",
+          "NS-003",
+          "NS-004",
+          "NS-005",
+          "NS-006"
+        ]
+      },
+      "thresholds": {
+        "version": "transcription-synthetic-gate-v1",
+        "minRepeatsPerCase": 3,
+        "maxCritical": 0,
+        "maxProviderFailures": 0,
+        "maxEmpty": 0,
+        "maxTruncated": 0,
+        "maxWordErrorRate": 0.1,
+        "maxFinalP95Ms": 2500,
+        "maxIndividualFinalMs": 5000
+      }
+    },
+    "counts": {
+      "match": 1,
+      "mismatch": 1,
+      "critical": 4,
+      "providerFailure": 0
+    },
+    "criticalMisses": [
+      {
+        "caseId": "NS-002",
+        "missingCriticalTerms": [
+          "book"
+        ]
+      },
+      {
+        "caseId": "NS-004",
+        "missingCriticalTerms": [
+          "Thursday"
+        ]
+      },
+      {
+        "caseId": "NS-005",
+        "missingCriticalTerms": [
+          "book"
+        ]
+      },
+      {
+        "caseId": "NS-006",
+        "missingCriticalTerms": [
+          "chest",
+          "pain"
+        ]
+      }
+    ],
+    "job": {
+      "label": "Abby original noisy corpus contemporary control October 8",
+      "exitCode": 0,
+      "elapsedSeconds": 17,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791423861838.log",
+      "startedAt": "2026-10-08T01:44:23.144Z",
+      "completedAt": "2026-10-08T01:44:38.960Z"
+    }
+  },
+  "comparison": {
+    "commonOriginalPhrases": 3,
+    "newCorrectionPhrases": 1,
+    "generatedCommonNoisyClips": 6,
+    "generatedCommonNoisyMatches": 6,
+    "originalNoisyClips": 6,
+    "originalNoisyCriticalMisses": 4,
+    "inference": "Recognition differs by synthetic speech source in this bounded screen. This does not establish causality or reliable human-speech accuracy."
+  },
+  "gateStatus": {
+    "syntheticGate": "notAssessed",
+    "completeStoredCandidateGate": "fail",
+    "statusCommand": "node scripts/read-speech-gate-status.ts",
+    "statusExitCode": 2,
+    "representativeCallGate": "notRun",
+    "humanReviewStatus": "pending",
+    "releaseGate": "unverified"
+  },
+  "limitations": [
+    "One repeat per case is below the unchanged three-repeat minimum.",
+    "New audio supplements the original corpora; it does not replace the failing gate.",
+    "The same provider synthesizes and transcribes the new voices; coupling may make recognition easier.",
+    "Clips differ in speech source and duration; the experiment is not randomized or counterbalanced and does not rank models.",
+    "Noise is seeded white noise at nominal 10 dB before codec conversion; measured range is 9.961703 to 10.029949 dB, with zero clipped samples. Post-codec SNR is not measured.",
+    "Listening exports have exact PCM payloads but have not passed human review; synthetic voices do not prove microphone, accent, human, carrier or complete-call performance.",
+    "No production source, dependency, threshold, original fixture, manifest row or caller admission changed."
+  ],
+  "validation": {
+    "evidenceCommand": "node /home/gust/code/abby/eval/results/verify-provider-voice-evidence-20261008.mjs file:///home/gust/code/abby-provider-voice-screen/eval/baselines/provider-voice-screen-20261008-v1.json",
+    "evidenceRunnerSha256": "8d0933ef2022e8fb6e5b2446e5c84621be4100b8b191bcc8175ddce8feee20bc",
+    "evidenceRunnerOwnerOnly": true,
+    "syntaxCommands": [
+      "node --check eval/results/screen-provider-voices-20261008.mjs",
+      "node --check eval/results/screen-original-live-control-20261008.mjs",
+      "node --check eval/results/verify-provider-voice-evidence-20261008.mjs"
+    ],
+    "syntaxResult": "pass",
+    "evidenceValidation": "pass",
+    "diffCheck": "pass",
+    "independentWholeBufferWireInterpolation": "pass",
+    "fixtureCodecReplay": "pass",
+    "exactWavPayload": "pass"
+  }
+}
