@@ -9,17 +9,12 @@ import type { ReadinessFailure } from "../core/readiness.ts";
 import { voiceProfileUnready } from "../core/voice-profile-registry.ts";
 import type { VoiceProfileDeclaration, VoiceProfileRegistry } from "../core/voice-profile-registry.ts";
 import type { BoundSpeechAdapters, SpeechAdapterFactory, VoiceRuntimeOptions } from "./call-speech-binding.ts";
-import { OpenAISpeechSynthesis } from "./openai-speech-synthesis.ts";
+import { OpenAISpeechProvider, realtimeSpeechModel } from "./openai-speech-provider.ts";
+import type { OpenAISpeechProviderConfig } from "./openai-speech-provider.ts";
 import { OpenAIRealtimeTranscription } from "./openai-realtime-transcription.ts";
 import type { OpenAIRealtimeTranscriptionConfig } from "./openai-realtime-transcription.ts";
 import { FirstChunkFallbackSpeech } from "./first-chunk-fallback-speech.ts";
 
-const allVoices = ["alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer", "verse", "marin", "cedar"];
-const olderVoices = ["alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"];
-function supportedVoices(model: string): readonly string[] {
-  return ["gpt-4o-mini-tts", "gpt-4o-mini-tts-2025-12-15"].includes(model) ? allVoices
-    : ["tts-1", "tts-1-hd"].includes(model) ? olderVoices : [];
-}
 export type SpeechQualityEvidence = Readonly<{ configurationHash: string; qualityVersion: string }>;
 export type OpenAIVoiceProfileConfig = Readonly<{
   apiKey: string;
@@ -30,6 +25,7 @@ export type OpenAIVoiceProfileConfig = Readonly<{
   runtime?: VoiceRuntimeOptions;
   fetch?: typeof fetch;
   socketFactory?: OpenAIRealtimeTranscriptionConfig["socketFactory"];
+  speechSocketFactory?: OpenAISpeechProviderConfig["speechSocketFactory"];
   /** An embedding host may supply a different, explicitly versioned transcription adapter. */
   customTranscription?: Readonly<{ version: string; create: (sessionId: string) => TranscriptionPort }>;
   /** Patient-free evidence must prove this exact physical configuration and operating mode. */
@@ -45,32 +41,39 @@ function ordered(value: unknown): unknown {
 export class OpenAIVoiceProfileHost implements VoiceProfileRegistry, SpeechAdapterFactory {
   private readonly config: OpenAIVoiceProfileConfig;
   private readonly voices: readonly string[];
+  private readonly primary: OpenAISpeechProvider;
+  private readonly fallback?: OpenAISpeechProvider;
+  private readonly synthesisVersion: string;
   constructor(config: OpenAIVoiceProfileConfig) {
     if (!config || !["conversation", "keypadAvailability"].includes(config.mode)) throw new RangeError("invalid voice profile configuration");
     if (config.customTranscription && (!validVoiceRef(config.customTranscription.version) ||
       config.customTranscription.version === "openai-transcription.v1" || typeof config.customTranscription.create !== "function")) throw new RangeError("invalid custom transcription configuration");
     const primaryModel = config.primaryModel ?? "gpt-4o-mini-tts";
     // Preserve the existing model choice; unknown models advertise no proven pairs.
-    new OpenAISpeechSynthesis({ apiKey: config.apiKey, model: primaryModel });
+    this.primary = new OpenAISpeechProvider({ ...config, model: primaryModel });
+    this.synthesisVersion = [primaryModel, config.fallbackModel].includes(realtimeSpeechModel)
+      ? "openai-bound-speech.v2" : "openai-speech.v1";
     if (config.fallbackModel) {
-      new OpenAISpeechSynthesis({ apiKey: config.apiKey, model: config.fallbackModel });
+      this.fallback = new OpenAISpeechProvider({ ...config, model: config.fallbackModel });
       new FirstChunkFallbackSpeech({ primary: { async *stream() {} }, fallback: { async *stream() {} },
         primaryFirstChunkMs: config.primaryFirstChunkMs ?? 1_500 });
       if ((config.runtime?.playbackOptions?.firstChunkDeadlineMs ?? config.runtime?.playbackOptions?.stepDeadlineMs ?? 2_000) <= (config.primaryFirstChunkMs ?? 1_500)) throw new RangeError("speech fallback deadline unavailable");
     } else if (config.primaryFirstChunkMs !== undefined) throw new RangeError("speech fallback model required");
     this.config = { ...config, primaryModel, runtime: structuredClone(config.runtime ?? {}),
       ...(config.customTranscription ? { customTranscription: { ...config.customTranscription } } : {}) };
-    this.voices = supportedVoices(primaryModel).filter(voice => !config.fallbackModel || supportedVoices(config.fallbackModel).includes(voice));
+    this.voices = this.primary.voices.filter(voice => !this.fallback || this.fallback.voices.includes(voice));
   }
   private descriptor(locale: string, voiceId: string, runtime: VoiceRuntimeOptions) {
     return { schemaVersion: 1, mode: this.config.mode, locale, voiceId,
       presentationVersion: VOICE_PRESENTATION_VERSION, transcriptionVersion: this.config.customTranscription?.version ?? "openai-transcription.v1",
-      synthesisVersion: "openai-speech.v1", hostVersion: "openai-voice-profile.v1",
+      synthesisVersion: this.synthesisVersion, hostVersion: "openai-voice-profile.v1",
       transcription: this.config.customTranscription ? { provider: "host", version: this.config.customTranscription.version }
         : { provider: "openai", model: "gpt-live-transcribe", context: { prompt: "English clinic reception.", languages: ["en"] } },
       speech: { primaryModel: this.config.primaryModel!, fallbackModel: this.config.fallbackModel ?? null,
         primaryFirstChunkMs: this.config.fallbackModel ? this.config.primaryFirstChunkMs ?? 1_500 : null,
-        voice: voiceId, responseFormat: "pcm", streamFormat: "audio" }, runtime };
+        voice: voiceId, responseFormat: "pcm", streamFormat: "audio",
+        ...(this.synthesisVersion === "openai-bound-speech.v2" ? { primary: this.primary.descriptor(),
+          fallback: this.fallback?.descriptor() ?? null } : {}) }, runtime };
   }
   private hash(locale: string, voiceId: string, runtime: VoiceRuntimeOptions): string {
     return createHash("sha256").update(JSON.stringify(ordered(this.descriptor(locale, voiceId, runtime)))).digest("hex");
@@ -91,7 +94,7 @@ export class OpenAIVoiceProfileHost implements VoiceProfileRegistry, SpeechAdapt
         const hash = this.hash(locale, voiceId, this.config.runtime!);
         const evidence = this.quality(bound, hash);
         return { locale, voiceId, ready: !!evidence, configurationHash: hash,
-          transcriptionVersion: this.config.customTranscription?.version ?? "openai-transcription.v1", synthesisVersion: "openai-speech.v1",
+          transcriptionVersion: this.config.customTranscription?.version ?? "openai-transcription.v1", synthesisVersion: this.synthesisVersion,
           presentationVersion: VOICE_PRESENTATION_VERSION, qualityVersion: evidence?.qualityVersion ?? "unproven" };
       })) });
   }
@@ -104,11 +107,9 @@ export class OpenAIVoiceProfileHost implements VoiceProfileRegistry, SpeechAdapt
     if (hash !== profile.configurationHash || !evidence || evidence.qualityVersion !== profile.qualityVersion ||
         profile.hostVersion !== descriptor.hostVersion || profile.presentationVersion !== descriptor.presentationVersion ||
         profile.transcriptionVersion !== descriptor.transcriptionVersion || profile.synthesisVersion !== descriptor.synthesisVersion) return voiceProfileUnready();
-    const primary = new OpenAISpeechSynthesis({ apiKey: this.config.apiKey, model: this.config.primaryModel!, voice: profile.voiceId,
-      ...(this.config.fetch ? { fetchPort: this.config.fetch } : {}) });
-    const synthesis = this.config.fallbackModel ? new FirstChunkFallbackSpeech({ primary,
-      fallback: new OpenAISpeechSynthesis({ apiKey: this.config.apiKey, model: this.config.fallbackModel, voice: profile.voiceId,
-        ...(this.config.fetch ? { fetchPort: this.config.fetch } : {}) }), primaryFirstChunkMs: this.config.primaryFirstChunkMs ?? 1_500 }) : primary;
+    const primary = this.primary.create(profile.voiceId);
+    const synthesis = this.fallback ? new FirstChunkFallbackSpeech({ primary,
+      fallback: this.fallback.create(profile.voiceId), primaryFirstChunkMs: this.config.primaryFirstChunkMs ?? 1_500 }) : primary;
     const transcription = this.config.customTranscription ? this.config.customTranscription.create(sessionId) : new OpenAIRealtimeTranscription({ apiKey: this.config.apiKey, sessionId,
       model: "gpt-live-transcribe", context: { prompt: "English clinic reception.", languages: ["en"] },
       ...(this.config.socketFactory ? { socketFactory: this.config.socketFactory } : {}) });

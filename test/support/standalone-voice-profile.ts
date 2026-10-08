@@ -17,6 +17,7 @@ import { PostgresActiveCallClaims } from "../../src/storage/postgres-active-call
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 import { OpenAIVoiceProfileHost } from "../../src/voice/openai-voice-profile.ts";
 import { syntheticCatalogueApproval } from "./synthetic-catalogue-approval.ts";
+import type { syntheticRealtimeSpeech } from "./synthetic-realtime-speech.ts";
 import { syntheticSpeechQuality } from "./seed-synthetic-voice-preferences.ts";
 
 const now = "2026-10-03T01:00:00.000Z", number = "+6125550199", callerPhone = "+6145550101";
@@ -44,15 +45,17 @@ class SpeechSocket extends EventEmitter {
   terminate() { if (this.readyState === WebSocket.CLOSED) return; this.closeCount++; this.readyState = WebSocket.CLOSED; this.emit("close"); }
   close() { this.terminate(); }
 }
-export type ProfileCaller = Readonly<{ socket: WebSocket; ready: boolean; availability(): Promise<void>; close(): Promise<void> }>;
+export type ProfileCaller = Readonly<{ socket: WebSocket; ready: boolean; messages: readonly { event: string; mark?: { name: string } }[]; acknowledge(): Promise<void>; availability(): Promise<void>; close(): Promise<void> }>;
 export type StandaloneProfileFixture = Awaited<ReturnType<typeof fixture>>;
 async function fixture(db: ReturnType<typeof connectPostgres>, connectionString: string, assignServer: (server: Server) => void,
-                       callers: Set<WebSocket>) {
+                       callers: Set<WebSocket>, realtime?: ReturnType<typeof syntheticRealtimeSpeech>, firstChunkDeadlineMs = 5_000) {
   const scope = { tenantId: randomUUID(), clinicId: "clinic", locationId: "main" };
   const requests: Array<{ input: string; voice: string; model: string }> = [], providers: SpeechSocket[] = [];
   let qualityApproved = true, reads = 0;
   const quality = syntheticSpeechQuality(voiceClinicScope(scope));
   const host = new OpenAIVoiceProfileHost({ apiKey: "synthetic-profile-key", mode: "keypadAvailability",
+    ...(realtime ? { primaryModel: "gpt-realtime-2.1-mini", speechSocketFactory: realtime.socketFactory,
+      runtime: { playbackOptions: { firstChunkDeadlineMs } } } : {}),
     quality: (candidate, hash) => qualityApproved ? quality(candidate, hash) : err({ kind: "readinessFailed", missing: ["voiceProfile"] }),
     fetch: async (url, init) => {
       assert.equal(String(url), "https://api.openai.com/v1/audio/speech");
@@ -82,7 +85,10 @@ async function fixture(db: ReturnType<typeof connectPostgres>, connectionString:
     return Response.json({ total_entries: 1, available_times: [{ appointment_start: "2026-10-04T00:00:00.000Z", appointment_id: profilePatientCanary }] });
   }, () => now);
   assert.ok(availability.ok);
-  const server = await createStandaloneClinikoVoiceServer({ db, voiceProfiles: host,
+  const server = await createStandaloneClinikoVoiceServer({ db, ...(realtime ? {
+    playbackOptions: { firstChunkDeadlineMs },
+    speechQuality: (candidate, hash) => qualityApproved ? quality(candidate, hash) : err({ kind: "readinessFailed", missing: ["voiceProfile"] }),
+  } : { voiceProfiles: host }),
     activeCallClaims: new PostgresActiveCallClaims(connectionString, Buffer.alloc(32, 0x61)),
     twilio: { accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
       fallbackNumbers: { [number]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x62), now: () => new Date(now) },
@@ -90,12 +96,16 @@ async function fixture(db: ReturnType<typeof connectPostgres>, connectionString:
       approval: syntheticCatalogueApproval(availability.value, scope, { accountRef: accountSid, dialedNumber: number, routeVersion: "v1" }),
       timeZone: "Australia/Sydney", clinicDate: () => "2026-10-03", keypadAvailabilityGreeting: { scope, version: "profile-greeting.v1",
         approved: true, ownerRef: "synthetic-clinic-owner", approvedText: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow." } }],
-    openai: { apiKey: "synthetic-profile-key", intentModel: "synthetic-model" }, readiness: async () => ok(true), now: () => now,
+    openai: { apiKey: "synthetic-profile-key", intentModel: "synthetic-model", ...(realtime ? {
+      speechModel: "gpt-realtime-2.1-mini", speechSocketFactory: realtime.socketFactory, transcriptionSocketFactory: () => {
+        const provider = new SpeechSocket(); providers.push(provider); queueMicrotask(() => provider.open()); return provider as unknown as WebSocket;
+      } } : {}) }, readiness: async () => ok(true), now: () => now,
   });
   assert.ok(server.ok); assignServer(server.value); server.value.listen(0, "127.0.0.1"); await once(server.value, "listening");
   const address = server.value.address(); assert.ok(address && typeof address !== "string");
   const port = address.port;
-  async function openCall(): Promise<ProfileCaller> {
+  const observations: Array<Array<{ event: string; mark?: { name: string } }>> = [];
+  async function openCall(acknowledgeGreeting = true): Promise<ProfileCaller> {
     const callSid = `CA${randomUUID().replaceAll("-", "")}`, streamSid = `MZ${randomUUID().replaceAll("-", "")}`;
     const form = { AccountSid: accountSid, CallSid: callSid, To: number, From: callerPhone };
     const response = await fetch(`http://127.0.0.1:${port}/twilio/inbound`, { method: "POST", headers: {
@@ -108,6 +118,7 @@ async function fixture(db: ReturnType<typeof connectPostgres>, connectionString:
       "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, streamUrl, {}),
     } }); callers.add(socket);
     const messages: Array<{ event: string; mark?: { name: string } }> = [];
+    observations.push(messages);
     socket.on("message", raw => messages.push(JSON.parse(raw.toString())));
     await once(socket, "open"); let sequence = 1;
     const send = (event: object) => socket.send(JSON.stringify({ sequenceNumber: String(sequence++), streamSid, ...event }));
@@ -117,8 +128,10 @@ async function fixture(db: ReturnType<typeof connectPostgres>, connectionString:
     await waitFor(() => messages.some(message => message.event === "mark") || socket.readyState === WebSocket.CLOSED);
     const ready = socket.readyState !== WebSocket.CLOSED;
     async function acknowledge(mark: { name: string }) { send({ event: "mark", mark }); }
-    if (ready) { const mark = messages.find(message => message.event === "mark")?.mark; assert.ok(mark); await acknowledge(mark); }
-    return { socket, ready, async availability() {
+    if (ready && acknowledgeGreeting) { const mark = messages.find(message => message.event === "mark")?.mark; assert.ok(mark); await acknowledge(mark); }
+    return { socket, ready, messages, async acknowledge() {
+      const mark = messages.filter(message => message.event === "mark").at(-1)?.mark; assert.ok(mark); await acknowledge(mark);
+    }, async availability() {
       assert.equal(socket.readyState, WebSocket.OPEN);
       const prior = messages.filter(message => message.event === "mark").length;
       send({ event: "dtmf", dtmf: { track: "inbound_track", digit: "2" } });
@@ -127,9 +140,10 @@ async function fixture(db: ReturnType<typeof connectPostgres>, connectionString:
       const mark = messages.filter(message => message.event === "mark").at(-1)?.mark; assert.ok(mark); await acknowledge(mark);
     }, async close() { if (socket.readyState !== WebSocket.CLOSED) { socket.close(); await once(socket, "close"); } callers.delete(socket); } };
   }
-  return { scope, policy, db, requests, providers, openCall, reads: () => reads, withdraw: () => { qualityApproved = false; } };
+  return { scope, policy, db, requests, providers, openCall, observations, reads: () => reads, withdraw: () => { qualityApproved = false; } };
 }
-export async function withStandaloneVoiceProfile(run: (app: StandaloneProfileFixture) => Promise<void>): Promise<void> {
+export async function withStandaloneVoiceProfile(run: (app: StandaloneProfileFixture) => Promise<void>,
+  realtime?: ReturnType<typeof syntheticRealtimeSpeech>, firstChunkDeadlineMs?: number): Promise<void> {
   assert.equal(process.env.ABBY_ISOLATED_POSTGRES_PROBE, "1"); assert.ok(process.env.DATABASE_URL);
   const admin = connectPostgres(process.env.DATABASE_URL), name = `abby_profile_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(process.env.DATABASE_URL); target.pathname = `/${name}`;
@@ -138,7 +152,7 @@ export async function withStandaloneVoiceProfile(run: (app: StandaloneProfileFix
   try {
     await sql.raw(`create database "${name}"`).execute(admin); created = true;
     db = connectPostgres(target.toString()); await migrate(db);
-    await run(await fixture(db, target.toString(), value => { server = value; }, callers));
+    await run(await fixture(db, target.toString(), value => { server = value; }, callers, realtime, firstChunkDeadlineMs));
   } finally {
     for (const caller of callers) caller.terminate();
     if (server) await new Promise<void>(resolve => server!.close(() => resolve()));

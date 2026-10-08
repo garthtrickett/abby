@@ -3,12 +3,13 @@ import WebSocket from "ws";
 import { clinicDateAt, serveClinikoVoice } from "../../scripts/serve-cliniko-voice.ts";
 import { err, ok } from "../../src/core/model.ts";
 import type { TranscriptionPort } from "../../src/voice/media-turn-controller.ts";
+import { syntheticRealtimeSpeech } from "./synthetic-realtime-speech.ts";
 
 if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
     !["synthetic-key-au5", "synthetic-rotated-key-au5"].includes(process.env.ABBY_CLINIKO_API_KEY ?? "") ||
     process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}` ||
     !process.env.DATABASE_URL?.includes("/abby_test_voice_") ||
-    ![undefined, "openai-speech", "speech-primary-stall", "openai-transcription", "untrusted-transcript", "clear-availability", "clear-unsupported", "clear-model-failure", "cliniko-rate-limit", "cliniko-server-error", "cliniko-timeout", "cliniko-slow-read", "cliniko-zone-changed", "cliniko-partial-page", "cliniko-empty", "cliniko-business-type-removed", "cliniko-practitioner-type-removed", "week-alternative",
+    ![undefined, "openai-speech", "speech-realtime", "speech-realtime-mismatch", "speech-realtime-stall", "speech-primary-stall", "openai-transcription", "untrusted-transcript", "clear-availability", "clear-unsupported", "clear-model-failure", "cliniko-rate-limit", "cliniko-server-error", "cliniko-timeout", "cliniko-slow-read", "cliniko-zone-changed", "cliniko-partial-page", "cliniko-empty", "cliniko-business-type-removed", "cliniko-practitioner-type-removed", "week-alternative",
       "practitioner-alternative", "practitioner-alternative-rate-limit",
       "practitioner-alternative-malformed", "practitioner-alternative-second",
     "primary-selection-change", "clear-correction", "clear-playback-correction"].includes(process.env.ABBY_SYNTHETIC_VOICE_FAULT)) {
@@ -221,12 +222,18 @@ function syntheticClearTranscription(sessionId: string): TranscriptionPort {
   };
 }
 
+const realtime = fault?.startsWith("speech-realtime") ? syntheticRealtimeSpeech(process.env.ABBY_OPENAI_API_KEY!,
+  request => process.send?.({ kind: "speech", text: request.input, model: request.model, voice: request.voice })) : undefined;
+if (fault === "speech-realtime-mismatch") realtime!.mismatch();
+if (fault === "speech-realtime-stall") realtime!.hold();
+
 await serveClinikoVoice({ clinikoFetch, openaiFetch,
   speechQuality: (scope, configurationHash) => scope.tenantId === process.env.ABBY_TENANT_ID &&
     scope.clinicId === process.env.ABBY_CLINIC_ID ? ok({ configurationHash, qualityVersion: "synthetic-runner.v1" })
       : err({ kind: "readinessFailed", missing: ["voiceProfile"] }),
   ...(fault === "speech-primary-stall" ? { speechModels: { primary: "gpt-4o-mini-tts",
     fallback: "tts-1", primaryFirstChunkMs: 100 } } : {}),
+  ...(realtime ? { speechModels: { primary: "gpt-realtime-2.1-mini" }, speechSocketFactory: realtime.socketFactory } : {}),
   ...(clearTurn ? { transcriptionFactory: syntheticClearTranscription } : { transcriptionSocketFactory: () => {
     const socket = new SyntheticTranscriptionSocket();
     queueMicrotask(() => socket.open());

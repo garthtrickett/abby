@@ -513,3 +513,75 @@ The ignored owner-only reports are `eval/results/20261001-noise-option-source-{t
 One repeat per case with two concurrent requests returned three exact matches, one wording mismatch, two missing-critical-term results and zero provider failures. `NS-005` missed “book”; `NS-006` missed “chest”. Word error rate was 7/44, or **15.9%**, and completed-file request p95 was **1,730 ms**. The fixed synthetic candidate threshold requires zero critical misses, at most 10% WER and three repeats per case. This screen already fails, so the safety corpus and larger repeat were not run. Request timing starts after the entire clip is available; it is not audible response latency or a live-call measurement. This small screen does not rank file against Realtime transcription.
 
 The ignored owner-only report is `eval/results/20261002-file-clinic-noise-screen.json`, SHA-256 `3bbffb8af7464e2c5ac6ae5c3da0f06e14676b5c99770c8abdb827b60013ea52`, mode `0600`. It pins the unchanged noisy corpus SHA-256 `ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2`, context SHA-256 `8241f56c7e19445b09fe988c8c8a06506a81dad1c4d3440d14b78c8c07c18620` and evaluator source SHA-256 `758f441292c4b6feb90db122fec8eee9bd7a26af32089fed3ba32e27e7db246b`. The report remains `releaseGate: unverified`. No production transcription model, prompt or caller capability changed.
+
+
+## Caller Realtime speech binding — 2026-10-08
+
+The replacement is now an explicit opt-in model in `OpenAIVoiceProfileHost` and the
+standalone server. `OpenAISpeechProvider` owns model selection and voice support
+for catalogue and actual construction. Realtime configurations use synthesis
+version `openai-bound-speech.v2` with the physical transport, completed-transcript
+validation, rates, bounds and runtime in the quality hash. HTTP-only legacy
+configurations keep their exact previous hashes and `openai-speech.v1` version.
+Fallback voice support is intersected in either model direction. The server
+uses a five-second first-chunk deadline for the explicit Realtime selection;
+the applied runtime is part of its profile hash. CLI speech selections, socket
+fixtures and synthetic evidence require the existing isolated fixture guard.
+Defaults and real-caller admission are unchanged.
+
+The [transcript-free aggregate](baselines/realtime-speech-binding-20261008-v1.json)
+pins the source and private artifacts. A bounded actual-provider probe used two
+signed local HTTP/WebSocket calls through the standalone server with actual
+PostgreSQL policy/ownership and synthetic public clinic data and quality. Coral
+and Marin each generated a greeting and a public availability reply. All four
+completed provider transcripts matched the literal approved text and queued
+successfully. Provider generation completed in **3,085; 3,595; 2,310; 2,980 ms**.
+These four observations do not constitute a new latency gate.
+
+Independent verification reads every complete retained provider trace and native
+24 kHz PCM utterance. It checks exact requested model/voice, the session
+acknowledgment, literal input, completed correlated output and every audio delta.
+A separate conversion reproduces whole 24-to-16 kHz interpolation and chunk
+padding, then adjacent-pair 8 kHz reduction and standard PCMU encoding. Every one
+of **2,169** actual outgoing signed-call media frames matches byte for byte.
+The helper emits and echoes synthetic playback marks. This verifies local
+transport composition, not carrier playback, acoustic fidelity or human receipt.
+
+### Local verification
+
+- `npm run typecheck`: passed. Initial failure was a test's explicit undefined
+  optional field; the corrected exact source passes.
+- `node --test test/contract/scenario-manifest.test.ts test/text/voice-profile.test.ts test/voice/realtime-voice-profile.test.ts test/voice/voice-profile-call.test.ts test/voice/openai-speech-synthesis.test.ts test/voice/openai-realtime-speech-synthesis.test.ts test/voice/first-chunk-fallback-speech.test.ts test/voice/shared-number-voice-call.test.ts`: **56 passed**, zero failed/skipped.
+- `bash scripts/with-postgres.sh node --test test/voice/standalone-realtime-speech.test.ts test/voice/standalone-voice-profile.test.ts test/voice/standalone-cliniko-server.test.ts`: **7 passed**, zero failed/skipped.
+- `bash scripts/with-postgres.sh node --test --test-name-pattern='E2E-128 runnable' test/voice/standalone-voice-failures.test.ts`: **3 passed**, zero failed/skipped. These dispatch the actual runnable CLI with synthetic Realtime protocol responses. Success uses the selected model; mismatch/stall emits no media/mark and closes. `/readyz` remains 503. Caller/call/transcript database and backup canaries pass.
+- Final profile/manifest check after the optional-field correction and isolated
+  guard test: **5 passed**, zero failed/skipped.
+- `python3 eval/results/verify-signed-realtime-binding-20261008.py`: passed,
+  complete native/wire verification above. The first verifier incorrectly
+  required the provider's acknowledged audio object to omit default fields;
+  the next incorrectly required a response-level speed field that is present
+  only in the session acknowledgment. Corrected checks retain exact applied
+  format/voice, default speed and no VAD/input transcription/noise reduction.
+  No additional provider calls were made to correct the verifier.
+- `git diff --check`: passed.
+
+Logs: compatibility `4590eee3-1791431428657.log`; signed PostgreSQL
+`4590eee3-1791430998338.log`; runnable CLI `4590eee3-1791431184738.log`;
+final profile/manifest `4590eee3-1791431614683.log`; corrected typecheck
+`4590eee3-1791431614296.log`; actual provider `4590eee3-1791431541799.log`;
+independent verification `4590eee3-1791431730310.log`, under
+`/home/gust/paseo/paseo-home/work/logs/`.
+
+Early local failures are retained: a synthetic socket used a TypeScript
+parameter property unsupported by Node's strip mode, and one privacy canary
+label contained a space. Corrected fixtures preserve all behavior and privacy
+assertions. This focused patch does not claim the optional broad voice suite
+passes: the prior unchanged workflow timeout observations remain unresolved.
+
+Manifest **1.146** maps the replacement/binding checks to existing E2E-128,
+which remains `syntheticImplemented` with full carrier evidence planned.
+No scenario ID, patient recording, real email delivery or clinical write was
+added. The original noise/safety ASR gates remain failing and production speech
+admission remains on hold. Next speech work: independent spoken-content evidence
+and complete repeatable qualification for the exact replacement configuration;
+real clips, representative listening and carrier checks remain deferred.
