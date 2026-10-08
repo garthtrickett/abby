@@ -2,6 +2,34 @@
 
 All runs used patient-free synthetic fixtures, an account-provided OpenAI API key, and owner-only reports under ignored `eval/results/`. No key value or real patient content is in this file. The reports retain repeat-level proposals or transcripts for local review; this summary records only counts and configuration evidence.
 
+## Gain-only original-noise diagnostic — 2026-10-08
+
+The preceding audit found lower absolute levels in the successful provider voices. This bounded follow-up applies only post-codec gain to the unchanged original six noisy PCM clips: 0 dB, -6 dB and -12 dB. Speech and noise scale together; sample rounding changes each ideal scaled value by at most half a PCM unit, with zero clipping. Attenuation cannot undo existing G.711 distortion and does not measure pre-codec level effects. Condition order rotates within each case, with two overlapping provider sessions and 20 ms paced input. The actual unprompted `gpt-live-transcribe` model, scoring, expected words and critical terms remain fixed.
+
+| Gain | Exact matches | Critical misses | WER | Post-commit final p95 |
+| --- | ---: | ---: | ---: | ---: |
+| Original (0 dB) | 1/6 | 4 | 43.18% | 902 ms |
+| -6 dB | 2/6 | 4 | 27.27% | 878 ms |
+| -12 dB | 1/6 | 4 | 40.91% | 819 ms |
+
+All three conditions miss the zero-critical and at-most-10%-WER thresholds; one repeat also fails the declared repeat minimum. There were no provider failures, empty transcripts, prefix truncations or late finals. The same four original cases lose critical words at every level: both booking voices lose “book,” the `slt` date request loses “Thursday,” and the `slt` urgent phrase loses “chest” and “pain.” WER differs in this pass, but critical failures persist. These results do not support attenuation as a remedy or establish a reliable gain ranking. No further repeats or gain sweep were warranted for these failed candidates.
+
+Independent verification checks all eighteen gain transforms sample by sample, original and derived hashes and measured RMS/peak/rounding values, and reproduces eighteen complete 24 kHz transmitted hashes from the padded input without using the adapter's interpolation. Each session acknowledged the unchanged model, no prompt/language hint, null noise reduction/turn detection and PCM format, and sent exactly one commit. Original corpus/fixture and source hashes remained stable. All final transcripts remain `needsClarification`.
+
+Exact commands:
+
+```sh
+node --check eval/results/screen-original-gain-20261008.mjs
+node --env-file=/home/gust/code/abby/.env /home/gust/code/abby/eval/results/screen-original-gain-20261008.mjs
+node /home/gust/code/abby/eval/results/verify-original-gain-20261008.mjs file:///home/gust/code/abby-gain-screen/eval/baselines/original-gain-screen-20261008-v1.json
+node scripts/read-speech-gate-status.ts
+git diff --check
+```
+
+Tracked job `Abby original noisy input gain-only diagnostic October 8` completed exit 0 in 45 seconds; log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791425142362.log`. Exit 0 records completed instrumentation, not a quality pass. Owner-only report SHA-256 is `e0c26d8d288eaa904d2c9fc51037fba6f9ac94b86fba5607158df94ecb7359fa`; runner SHA-256 is `337cd1876ab700fc02a1ee2aa8bcdf4e267947571992bd15c3e25ca25bd122d3`; derived corpus SHA-256 is `ce6be00763ab3e199bc6cd284891504dc708ac900261c8433967cb06d1acb20d`. The [transcript-free aggregate](baselines/original-gain-screen-20261008-v1.json) pins transformations, exact source/runner/report hashes, counts and critical omissions. Audio, corpus and report are ignored and owner-only; the independent verifier accepts the canonical aggregate path after publication.
+
+Syntax, artifact verification and diff checks passed. The complete stored gate still validates and exits `2`, failing noisy/safety transcription. No production source, dependency, threshold, original fixture or manifest row changed. Neither attenuation candidate is promoted. Representative carrier calls and human listening remain unrun, release readiness unverified, and real email/Twilio activation deferred.
+
 ## Original fixture reconstruction and noise-level diagnostic — 2026-10-08
 
 The next patient-free investigation regenerated the original `kal` speech and reused the pinned `slt` clean sources, then independently replayed the unchanged noise builder and telephone normalization. **All six original 10 dB noisy PCM hashes reproduced exactly.** Measured pre-codec SNR was 9.9678–10.0007 dB, with zero clipped samples. Paired normalized noisy-versus-clean delta SNR was 13.2170–13.2794 dB. That delta includes differential codec distortion and final-frame padding; it is not a separately measured noise channel. This audit found no mismatch between the builder and pinned files, and supports neither replacing the stress fixtures nor identifying the provider's internal recognition failure.

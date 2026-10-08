@@ -1,0 +1,632 @@
+{
+  "schema": "abby.original-gain-screen.v1",
+  "date": "2026-10-08",
+  "baseHead": "14b5a42b45e5aeee5620b7020895887810f0b475",
+  "status": "diagnosticCompleteAttenuationCandidatesRejected",
+  "report": {
+    "file": "eval/results/20261008-original-gain-screen.json",
+    "sha256": "e0c26d8d288eaa904d2c9fc51037fba6f9ac94b86fba5607158df94ecb7359fa",
+    "ownerOnly": true
+  },
+  "runner": {
+    "file": "eval/results/screen-original-gain-20261008.mjs",
+    "sha256": "337cd1876ab700fc02a1ee2aa8bcdf4e267947571992bd15c3e25ca25bd122d3",
+    "ownerOnly": true
+  },
+  "sourcePaths": [
+    "src/voice/openai-realtime-transcription.ts",
+    "src/voice/transcription-evaluation.ts",
+    "src/voice/transcription-evaluation-gate.ts"
+  ],
+  "sourceSha256": "281edbfc25ff7c4e08ae6d37dc29a1594e6cb92dec3f7a023c6213de34bfd9d8",
+  "originalCorpora": [
+    {
+      "path": "eval/transcription-v1.json",
+      "sha256": "2d3fabc12d13699ffecc4017d64ba9cedc91373e001529abf135a6f311357905"
+    },
+    {
+      "path": "eval/transcription-telephony-v1.json",
+      "sha256": "65645afaeeaca6c91342b8e690c184affd58e004f3438cfa0cccfdd18e3f8e1a"
+    },
+    {
+      "path": "eval/transcription-noise-v1.json",
+      "sha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2"
+    },
+    {
+      "path": "eval/transcription-safety-v1.json",
+      "sha256": "fb261dfa87cfd036307346874b439b63596a7b9390109cc3d22965f5fda795da"
+    }
+  ],
+  "fixtureDirectory": "eval/results/synthetic-original-gain-20261008",
+  "corpusSha256": "ce6be00763ab3e199bc6cd284891504dc708ac900261c8433967cb06d1acb20d",
+  "configuration": {
+    "model": "gpt-live-transcribe",
+    "contextVersion": "none",
+    "repeats": 1,
+    "concurrency": 2,
+    "paceMs": 20,
+    "nodeVersion": "v22.23.2"
+  },
+  "fixtureMetadata": [
+    {
+      "caseId": "GN-001",
+      "originalCaseId": "NS-001",
+      "condition": "original",
+      "gainDb": 0,
+      "scale": 1,
+      "originalSha256": "4c0f89cf66ad975b340162747bca58162569a8d496f01cdb71c4dbb20cf0c5e9",
+      "originalBytes": 83840,
+      "originalRmsDbfs": -19.731402601965694,
+      "originalPeak": 22908,
+      "pcmSha256": "4c0f89cf66ad975b340162747bca58162569a8d496f01cdb71c4dbb20cf0c5e9",
+      "pcmBytes": 83840,
+      "normalizedRmsDbfs": -19.731402601965694,
+      "peak": 22908,
+      "maxRoundingError": 0,
+      "clippedSamples": 0
+    },
+    {
+      "caseId": "GN-002",
+      "originalCaseId": "NS-001",
+      "condition": "attenuated",
+      "gainDb": -6,
+      "scale": 0.5011872336272722,
+      "originalSha256": "4c0f89cf66ad975b340162747bca58162569a8d496f01cdb71c4dbb20cf0c5e9",
+      "originalBytes": 83840,
+      "originalRmsDbfs": -19.731402601965694,
+      "originalPeak": 22908,
+      "pcmSha256": "b32ded4073b7717b024bb204a183019c395c6299692e1bd98fd20ded986e25b6",
+      "pcmBytes": 83840,
+      "normalizedRmsDbfs": -25.731432873928753,
+      "peak": 11481,
+      "maxRoundingError": 0.4973115137102013,
+      "clippedSamples": 0
+    },
+    {
+      "caseId": "GN-003",
+      "originalCaseId": "NS-001",
+      "condition": "reduced",
+      "gainDb": -12,
+      "scale": 0.251188643150958,
+      "originalSha256": "4c0f89cf66ad975b340162747bca58162569a8d496f01cdb71c4dbb20cf0c5e9",
+      "originalBytes": 83840,
+      "originalRmsDbfs": -19.731402601965694,
+      "originalPeak": 22908,
+      "pcmSha256": "1429bf275eef5b46d5b3e52bf481231da7600a24c5e81357d9ab5febb77aa193",
+      "pcmBytes": 83840,
+      "normalizedRmsDbfs": -31.731511490250803,
+      "peak": 5754,
+      "maxRoundingError": 0.49434023778053415,
+      "clippedSamples": 0
+    },
+    {
+      "caseId": "GN-004",
+      "originalCaseId": "NS-002",
+      "condition": "attenuated",
+      "gainDb": -6,
+      "scale": 0.5011872336272722,
+      "originalSha256": "ede31b5da32bb6222b982dfafdc17134d01d2a5e35bb6b7ec7c05455af7f610e",
+      "originalBytes": 90240,
+      "originalRmsDbfs": -21.467627577307795,
+      "originalPeak": 21884,
+      "pcmSha256": "3ede221a3afe0311080585a11bf9a0a11d63861f17328e7354122da9ed1d0346",
+      "pcmBytes": 90240,
+      "normalizedRmsDbfs": -27.467632269804966,
+      "peak": 10968,
+      "maxRoundingError": 0.4973115137102013,
+      "clippedSamples": 0
+    },
+    {
+      "caseId": "GN-005",
+      "originalCaseId": "NS-002",
+      "condition": "reduced",
+      "gainDb": -12,
+      "scale": 0.251188643150958,
+      "originalSha256": "ede31b5da32bb6222b982dfafdc17134d01d2a5e35bb6b7ec7c05455af7f610e",
+      "originalBytes": 90240,
+      "originalRmsDbfs": -21.467627577307795,
+      "originalPeak": 21884,
+      "pcmSha256": "11aa3ec31d677062b1d7e165089053f6cf13896d0764fb83438bfe392cd29811",
+      "pcmBytes": 90240,
+      "normalizedRmsDbfs": -33.46768530585272,
+      "peak": 5497,
+      "maxRoundingError": 0.49434023778053415,
+      "clippedSamples": 0
+    },
+    {
+      "caseId": "GN-006",
+      "originalCaseId": "NS-002",
+      "condition": "original",
+      "gainDb": 0,
+      "scale": 1,
+      "originalSha256": "ede31b5da32bb6222b982dfafdc17134d01d2a5e35bb6b7ec7c05455af7f610e",
+      "originalBytes": 90240,
+      "originalRmsDbfs": -21.467627577307795,
+      "originalPeak": 21884,
+      "pcmSha256": "ede31b5da32bb6222b982dfafdc17134d01d2a5e35bb6b7ec7c05455af7f610e",
+      "pcmBytes": 90240,
+      "normalizedRmsDbfs": -21.467627577307795,
+      "peak": 21884,
+      "maxRoundingError": 0,
+      "clippedSamples": 0
+    },
+    {
+      "caseId": "GN-007",
+      "originalCaseId": "NS-003",
+      "condition": "reduced",
+      "gainDb": -12,
+      "scale": 0.251188643150958,
+      "originalSha256": "185a21430c72e911d092ea578f0748ad6ca35d7289b764f0c97fac3f2d2f0495",
+      "originalBytes": 110080,
+      "originalRmsDbfs": -19.573665618112784,
+      "originalPeak": 25980,
+      "pcmSha256": "2086b67befa177451e18b8c2396190a386cc3e1dc246736aa674b4aaee2f21ab",
+      "pcmBytes": 110080,
+      "normalizedRmsDbfs": -31.573777081953985,
+      "peak": 6526,
+      "maxRoundingError": 0.49434023778053415,
+      "clippedSamples": 0
+    },
+    {
+      "caseId": "GN-008",
+      "originalCaseId": "NS-003",
+      "condition": "original",
+      "gainDb": 0,
+      "scale": 1,
+      "originalSha256": "185a21430c72e911d092ea578f0748ad6ca35d7289b764f0c97fac3f2d2f0495",
+      "originalBytes": 110080,
+      "originalRmsDbfs": -19.573665618112784,
+      "originalPeak": 25980,
+      "pcmSha256": "185a21430c72e911d092ea578f0748ad6ca35d7289b764f0c97fac3f2d2f0495",
+      "pcmBytes": 110080,
+      "normalizedRmsDbfs": -19.573665618112784,
+      "peak": 25980,
+      "maxRoundingError": 0,
+      "clippedSamples": 0
+    },
+    {
+      "caseId": "GN-009",
+      "originalCaseId": "NS-003",
+      "condition": "attenuated",
+      "gainDb": -6,
+      "scale": 0.5011872336272722,
+      "originalSha256": "185a21430c72e911d092ea578f0748ad6ca35d7289b764f0c97fac3f2d2f0495",
+      "originalBytes": 110080,
+      "originalRmsDbfs": -19.573665618112784,
+      "originalPeak": 25980,
+      "pcmSha256": "27327d97dab44fab46e39cfc814de481e7e5cb389a864ca64ef9a3de9f8ac170",
+      "pcmBytes": 110080,
+      "normalizedRmsDbfs": -25.573697176505053,
+      "peak": 13021,
+      "maxRoundingError": 0.4973115137102013,
+      "clippedSamples": 0
+    },
+    {
+      "caseId": "GN-010",
+      "originalCaseId": "NS-004",
+      "condition": "original",
+      "gainDb": 0,
+      "scale": 1,
+      "originalSha256": "476b330c032d23f0acb2ea1d88d0d00b447d2ade928d405afe5de1a0e13cce08",
+      "originalBytes": 92800,
+      "originalRmsDbfs": -15.530040682934521,
+      "originalPeak": 21884,
+      "pcmSha256": "476b330c032d23f0acb2ea1d88d0d00b447d2ade928d405afe5de1a0e13cce08",
+      "pcmBytes": 92800,
+      "normalizedRmsDbfs": -15.530040682934521,
+      "peak": 21884,
+      "maxRoundingError": 0,
+      "clippedSamples": 0
+    },
+    {
+      "caseId": "GN-011",
+      "originalCaseId": "NS-004",
+      "condition": "attenuated",
+      "gainDb": -6,
+      "scale": 0.5011872336272722,
+      "originalSha256": "476b330c032d23f0acb2ea1d88d0d00b447d2ade928d405afe5de1a0e13cce08",
+      "originalBytes": 92800,
+      "originalRmsDbfs": -15.530040682934521,
+      "originalPeak": 21884,
+      "pcmSha256": "0f5ae86fc82099d8b7a91e4b195755b21f25738a63a50e19390d49d1b66b5381",
+      "pcmBytes": 92800,
+      "normalizedRmsDbfs": -21.530051590844863,
+      "peak": 10968,
+      "maxRoundingError": 0.4973115137102013,
+      "clippedSamples": 0
+    },
+    {
+      "caseId": "GN-012",
+      "originalCaseId": "NS-004",
+      "condition": "reduced",
+      "gainDb": -12,
+      "scale": 0.251188643150958,
+      "originalSha256": "476b330c032d23f0acb2ea1d88d0d00b447d2ade928d405afe5de1a0e13cce08",
+      "originalBytes": 92800,
+      "originalRmsDbfs": -15.530040682934521,
+      "originalPeak": 21884,
+      "pcmSha256": "8dcd51f70c4973dbb30f53cb0bf54ed686f63df59f1738d9e8dc53a84f99f0b7",
+      "pcmBytes": 92800,
+      "normalizedRmsDbfs": -27.530111090828573,
+      "peak": 5497,
+      "maxRoundingError": 0.49434023778053415,
+      "clippedSamples": 0
+    },
+    {
+      "caseId": "GN-013",
+      "originalCaseId": "NS-005",
+      "condition": "attenuated",
+      "gainDb": -6,
+      "scale": 0.5011872336272722,
+      "originalSha256": "9aae18f17d26c003055c5726ba9e28d9226e3ab2b5a394dc933dc632a3c4d6df",
+      "originalBytes": 94080,
+      "originalRmsDbfs": -15.777746518737068,
+      "originalPeak": 27004,
+      "pcmSha256": "4e732abb5deb0afd50fcc7a5279b7fac2292d725defacc7f20f45ae79311cac1",
+      "pcmBytes": 94080,
+      "normalizedRmsDbfs": -21.777753969736892,
+      "peak": 13534,
+      "maxRoundingError": 0.4973115137102013,
+      "clippedSamples": 0
+    },
+    {
+      "caseId": "GN-014",
+      "originalCaseId": "NS-005",
+      "condition": "reduced",
+      "gainDb": -12,
+      "scale": 0.251188643150958,
+      "originalSha256": "9aae18f17d26c003055c5726ba9e28d9226e3ab2b5a394dc933dc632a3c4d6df",
+      "originalBytes": 94080,
+      "originalRmsDbfs": -15.777746518737068,
+      "originalPeak": 27004,
+      "pcmSha256": "b5e600dc634ec41367aa68ea7a516b79991871b016096370143bf4ba281665cb",
+      "pcmBytes": 94080,
+      "normalizedRmsDbfs": -27.777810024435343,
+      "peak": 6783,
+      "maxRoundingError": 0.49434023778053415,
+      "clippedSamples": 0
+    },
+    {
+      "caseId": "GN-015",
+      "originalCaseId": "NS-005",
+      "condition": "original",
+      "gainDb": 0,
+      "scale": 1,
+      "originalSha256": "9aae18f17d26c003055c5726ba9e28d9226e3ab2b5a394dc933dc632a3c4d6df",
+      "originalBytes": 94080,
+      "originalRmsDbfs": -15.777746518737068,
+      "originalPeak": 27004,
+      "pcmSha256": "9aae18f17d26c003055c5726ba9e28d9226e3ab2b5a394dc933dc632a3c4d6df",
+      "pcmBytes": 94080,
+      "normalizedRmsDbfs": -15.777746518737068,
+      "peak": 27004,
+      "maxRoundingError": 0,
+      "clippedSamples": 0
+    },
+    {
+      "caseId": "GN-016",
+      "originalCaseId": "NS-006",
+      "condition": "reduced",
+      "gainDb": -12,
+      "scale": 0.251188643150958,
+      "originalSha256": "5f8dee408c6a256936a02b6db29bdea788c41161fb277d4970ab8217c20ebb10",
+      "originalBytes": 100480,
+      "originalRmsDbfs": -15.352764742265572,
+      "originalPeak": 23932,
+      "pcmSha256": "c86ebcb2139111e242be329a0f9d7578e5b663fef012b78290e8e74071fe73b9",
+      "pcmBytes": 100480,
+      "normalizedRmsDbfs": -27.352810274891745,
+      "peak": 6011,
+      "maxRoundingError": 0.49434023778053415,
+      "clippedSamples": 0
+    },
+    {
+      "caseId": "GN-017",
+      "originalCaseId": "NS-006",
+      "condition": "original",
+      "gainDb": 0,
+      "scale": 1,
+      "originalSha256": "5f8dee408c6a256936a02b6db29bdea788c41161fb277d4970ab8217c20ebb10",
+      "originalBytes": 100480,
+      "originalRmsDbfs": -15.352764742265572,
+      "originalPeak": 23932,
+      "pcmSha256": "5f8dee408c6a256936a02b6db29bdea788c41161fb277d4970ab8217c20ebb10",
+      "pcmBytes": 100480,
+      "normalizedRmsDbfs": -15.352764742265572,
+      "peak": 23932,
+      "maxRoundingError": 0,
+      "clippedSamples": 0
+    },
+    {
+      "caseId": "GN-018",
+      "originalCaseId": "NS-006",
+      "condition": "attenuated",
+      "gainDb": -6,
+      "scale": 0.5011872336272722,
+      "originalSha256": "5f8dee408c6a256936a02b6db29bdea788c41161fb277d4970ab8217c20ebb10",
+      "originalBytes": 100480,
+      "originalRmsDbfs": -15.352764742265572,
+      "originalPeak": 23932,
+      "pcmSha256": "a40459a2c7435cfcb66b19754a727d79052276faf5c841f77bc136534405c853",
+      "pcmBytes": 100480,
+      "normalizedRmsDbfs": -21.352763181048154,
+      "peak": 11994,
+      "maxRoundingError": 0.4973115137102013,
+      "clippedSamples": 0
+    }
+  ],
+  "groups": {
+    "original": {
+      "gainDb": 0,
+      "assessment": {
+        "status": "fail",
+        "failures": [
+          "insufficientRepeats",
+          "critical",
+          "wordErrorRate"
+        ],
+        "metrics": {
+          "cases": 6,
+          "runs": 6,
+          "critical": 4,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0.4318181818181818,
+          "finalP95Ms": 902,
+          "missingRepeats": [
+            "GN-001",
+            "GN-006",
+            "GN-008",
+            "GN-010",
+            "GN-015",
+            "GN-017"
+          ]
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      },
+      "counts": {
+        "match": 1,
+        "mismatch": 1,
+        "critical": 4,
+        "providerFailure": 0
+      },
+      "criticalMisses": [
+        {
+          "caseId": "GN-006",
+          "originalCaseId": "NS-002",
+          "missingCriticalTerms": [
+            "book"
+          ]
+        },
+        {
+          "caseId": "GN-010",
+          "originalCaseId": "NS-004",
+          "missingCriticalTerms": [
+            "Thursday"
+          ]
+        },
+        {
+          "caseId": "GN-015",
+          "originalCaseId": "NS-005",
+          "missingCriticalTerms": [
+            "book"
+          ]
+        },
+        {
+          "caseId": "GN-017",
+          "originalCaseId": "NS-006",
+          "missingCriticalTerms": [
+            "chest",
+            "pain"
+          ]
+        }
+      ]
+    },
+    "attenuated": {
+      "gainDb": -6,
+      "assessment": {
+        "status": "fail",
+        "failures": [
+          "insufficientRepeats",
+          "critical",
+          "wordErrorRate"
+        ],
+        "metrics": {
+          "cases": 6,
+          "runs": 6,
+          "critical": 4,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0.2727272727272727,
+          "finalP95Ms": 878,
+          "missingRepeats": [
+            "GN-002",
+            "GN-004",
+            "GN-009",
+            "GN-011",
+            "GN-013",
+            "GN-018"
+          ]
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      },
+      "counts": {
+        "match": 2,
+        "mismatch": 0,
+        "critical": 4,
+        "providerFailure": 0
+      },
+      "criticalMisses": [
+        {
+          "caseId": "GN-004",
+          "originalCaseId": "NS-002",
+          "missingCriticalTerms": [
+            "book"
+          ]
+        },
+        {
+          "caseId": "GN-011",
+          "originalCaseId": "NS-004",
+          "missingCriticalTerms": [
+            "Thursday"
+          ]
+        },
+        {
+          "caseId": "GN-013",
+          "originalCaseId": "NS-005",
+          "missingCriticalTerms": [
+            "book"
+          ]
+        },
+        {
+          "caseId": "GN-018",
+          "originalCaseId": "NS-006",
+          "missingCriticalTerms": [
+            "chest",
+            "pain"
+          ]
+        }
+      ]
+    },
+    "reduced": {
+      "gainDb": -12,
+      "assessment": {
+        "status": "fail",
+        "failures": [
+          "insufficientRepeats",
+          "critical",
+          "wordErrorRate"
+        ],
+        "metrics": {
+          "cases": 6,
+          "runs": 6,
+          "critical": 4,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0.4090909090909091,
+          "finalP95Ms": 819,
+          "missingRepeats": [
+            "GN-003",
+            "GN-005",
+            "GN-007",
+            "GN-012",
+            "GN-014",
+            "GN-016"
+          ]
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      },
+      "counts": {
+        "match": 1,
+        "mismatch": 1,
+        "critical": 4,
+        "providerFailure": 0
+      },
+      "criticalMisses": [
+        {
+          "caseId": "GN-005",
+          "originalCaseId": "NS-002",
+          "missingCriticalTerms": [
+            "book"
+          ]
+        },
+        {
+          "caseId": "GN-012",
+          "originalCaseId": "NS-004",
+          "missingCriticalTerms": [
+            "Thursday"
+          ]
+        },
+        {
+          "caseId": "GN-014",
+          "originalCaseId": "NS-005",
+          "missingCriticalTerms": [
+            "book"
+          ]
+        },
+        {
+          "caseId": "GN-016",
+          "originalCaseId": "NS-006",
+          "missingCriticalTerms": [
+            "chest",
+            "pain"
+          ]
+        }
+      ]
+    }
+  },
+  "job": {
+    "label": "Abby original noisy input gain-only diagnostic October 8",
+    "exitCode": 0,
+    "elapsedSeconds": 45,
+    "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791425142362.log",
+    "startedAt": "2026-10-08T02:05:42.845Z",
+    "completedAt": "2026-10-08T02:06:28.034Z",
+    "exitMeaning": "Diagnostic completed; all three accuracy assessments fail."
+  },
+  "inference": "Critical omissions persist in four of six cases at original, -6 dB and -12 dB levels. This bounded pass does not support attenuation as a remedy, and does not establish a reliable WER ranking or a provider-internal explanation.",
+  "limitations": [
+    "One repeat is below the unchanged three-repeat minimum.",
+    "Condition order rotates within cases but sessions overlap; the screen is not randomized or statistically powered.",
+    "Attenuation applies after G.711 decoding; it cannot undo existing codec distortion or isolate pre-codec level effects.",
+    "Speech and noise scale together, apart from at most half a PCM unit of sample rounding; this is not denoising.",
+    "Original corpus and fixture hashes, production adapter, thresholds, dependencies, manifest and admission remain unchanged.",
+    "Actual microphone/accent, human listening, carrier and complete-call quality are unverified."
+  ],
+  "gateStatus": {
+    "syntheticGate": "notAssessed",
+    "completeStoredCandidateGate": "fail",
+    "statusCommand": "node scripts/read-speech-gate-status.ts",
+    "statusExitCode": 2,
+    "representativeCallGate": "notRun",
+    "humanReviewStatus": "pending",
+    "releaseGate": "unverified"
+  },
+  "validation": {
+    "syntaxCommand": "node --check eval/results/screen-original-gain-20261008.mjs",
+    "syntaxResult": "pass",
+    "evidenceCommand": "node /home/gust/code/abby/eval/results/verify-original-gain-20261008.mjs file:///home/gust/code/abby-gain-screen/eval/baselines/original-gain-screen-20261008-v1.json",
+    "evidenceRunnerSha256": "12e730b7f50e259b308b5e3d03eebc5de9b730911ca834fc66a6c7c7a20f4ad8",
+    "evidenceRunnerOwnerOnly": true,
+    "evidenceValidation": "pass",
+    "exactGainSamples": "pass",
+    "independentWholeBufferWireInterpolation": "pass",
+    "diffCheck": "pass"
+  }
+}
