@@ -4,9 +4,9 @@ import { CallerVerificationSession, verificationPrompt } from "../../src/standal
 import { callerVerificationFixture, verificationCanaries } from "../support/caller-verification.ts";
 
 const tick = () => new Promise<void>(resolve => setImmediate(resolve));
-async function waitUntil(predicate: () => boolean) {
+async function waitUntil(predicate: () => boolean, pause = () => new Promise<void>(resolve => setTimeout(resolve, 5))) {
   const deadline = Date.now() + 5000;
-  while (!predicate() && Date.now() < deadline) await new Promise<void>(resolve => setTimeout(resolve, 5));
+  while (!predicate() && Date.now() < deadline) await pause();
   assert.ok(predicate(), "synthetic checkpoint must be reached");
 }
 async function issue(f: Awaited<ReturnType<typeof callerVerificationFixture>>) {
@@ -74,20 +74,64 @@ test("E2E-274 three wrong answers exhaust the challenge, repeated starts do not 
   } finally { await f.close(); }
 });
 
-test("E2E-274 close, timeout or revoked approval during pending mail cannot accept a late successful delivery", async () => {
+test("E2E-274 close, timeout or revoked approval during pending mail cannot accept a late successful delivery", async context => {
   for (const kind of ["close", "timeout", "approval"] as const) {
     let code = "", release: () => void = () => undefined;
-    const f = await callerVerificationFixture({ timeoutMs: kind === "timeout" ? 100 : 1000,
-      delivery: { send: async (_email, secret) => { code = secret; return new Promise<boolean>(resolve => { release = () => resolve(true); }); } } });
+    let deliverySignal: AbortSignal | undefined;
+    const timeoutMs = kind === "timeout" ? 100 : 1000;
+    const f = await callerVerificationFixture({ timeoutMs,
+      delivery: { send: async (_email, secret, signal) => {
+        code = secret; deliverySignal = signal;
+        return new Promise<boolean>(resolve => { release = () => resolve(true); });
+      } } });
     try {
-      f.session.begin(); await waitUntil(() => !!code); const pending = f.session.submitCode(code);
+      // Control deadline passage so this test reaches its pending-mail boundary.
+      // File/approval setup can consume the wall-clock budget before delivery.
+      context.mock.timers.enable({ apis: ["setTimeout"] });
+      f.session.begin(); await waitUntil(() => !!code, tick); const pending = f.session.submitCode(code);
       if (kind === "close") f.session.dispose();
       if (kind === "approval") await f.replaceApproval({ enabled: false });
+      if (kind === "timeout") {
+        context.mock.timers.tick(timeoutMs - 1); await tick();
+        assert.equal(deliverySignal?.aborted, false);
+        context.mock.timers.tick(1);
+        assert.equal(deliverySignal?.aborted, true);
+      }
       if (kind !== "timeout") release();
       assert.deepEqual(await pending, { verified: false }); release(); await tick();
       assert.equal(await f.session.verified(), undefined); await f.read("guessed-proof");
       assert.equal(f.provider.some(path => path.includes("appointments")), false);
-    } finally { await f.close(); }
+    } finally { f.session.dispose(); context.mock.timers.reset(); await f.close(); }
+  }
+});
+
+test("E2E-274 expiry during held approval cannot reach contact/mail or accept its late success", async context => {
+  const f = await callerVerificationFixture({ timeoutMs: 100 });
+  let entered = false, release: () => void = () => undefined, complete: () => void = () => undefined;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const finished = new Promise<void>(resolve => { complete = resolve; });
+  const created = CallerVerificationSession.create({ ...f.sessionConfig, policy: {
+    operation: f.sessionConfig.operation,
+    current: async scope => {
+      entered = true; await held;
+      try { return await f.policy.current(scope); }
+      finally { complete(); }
+    },
+  } });
+  try {
+    assert.ok(created.ok); const session = created.value;
+    context.mock.timers.enable({ apis: ["setTimeout"] });
+    session.begin(); await waitUntil(() => entered, tick);
+    let settled = false;
+    const pending = session.submitCode("123456").then(value => { settled = true; return value; });
+    context.mock.timers.tick(99); await tick(); assert.equal(settled, false);
+    context.mock.timers.tick(1); assert.deepEqual(await pending, { verified: false });
+    release(); await finished; await tick();
+    assert.equal(f.mail.length, 0); assert.equal(f.provider.length, 0);
+    assert.equal(await session.verified(), undefined);
+  } finally {
+    release(); if (created.ok) created.value.dispose();
+    context.mock.timers.reset(); await f.close();
   }
 });
 
