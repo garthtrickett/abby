@@ -26,15 +26,17 @@ export async function scanPatientDataCanaries(db: Kysely<Database>, canaries: re
         order by c.table_name, c.ordinal_position`.execute(trx);
       const hits: PatientDataCanaryHit[] = [];
       for (const column of columns.rows) {
-        const table = sql.ref(column.table_name);
-        const field = sql.ref(column.column_name);
-        for (const canary of canaries) {
-          const found = column.data_type === "bytea"
-            ? await sql<{ hit: boolean }>`select exists(select 1 from ${table}
-                where position(${canary.value} in encode(${field}, 'escape')) > 0) as hit`.execute(trx)
-            : await sql<{ hit: boolean }>`select exists(select 1 from ${table}
-                where position(${canary.value} in ${field}::text) > 0) as hit`.execute(trx);
-          if (found.rows[0]?.hit) hits.push({ label: canary.label, table: column.table_name, column: column.column_name });
+        const table = sql.id(column.table_name);
+        const field = sql.id("scan_row", column.column_name);
+        const text = column.data_type === "bytea" ? sql`encode(${field}, 'escape')` : sql`${field}::text`;
+        // Keep every substring check in the same snapshot, with one round trip per column.
+        const found = await sql<{ ordinal: number; hit: boolean }>`
+          select c.ordinality::int as ordinal,
+            exists(select 1 from ${table} as scan_row where position(c.value in ${text}) > 0) as hit
+          from unnest(${canaries.map(canary => canary.value)}::text[]) with ordinality as c(value, ordinality)
+          order by c.ordinality`.execute(trx);
+        for (const row of found.rows) {
+          if (row.hit) hits.push({ label: canaries[row.ordinal - 1]!.label, table: column.table_name, column: column.column_name });
         }
       }
       return ok(hits);
