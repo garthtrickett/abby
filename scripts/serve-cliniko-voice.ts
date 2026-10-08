@@ -44,13 +44,14 @@ export type VoiceRunnerPorts = Readonly<{
   clinikoFetch?: typeof fetch;
   openaiFetch?: typeof fetch;
   transcriptionSocketFactory?: NonNullable<ClinikoVoiceServerConfig["openai"]["transcriptionSocketFactory"]>;
+  speechSocketFactory?: NonNullable<ClinikoVoiceServerConfig["openai"]["speechSocketFactory"]>;
   /** Isolated synthetic runner only; never selected from an environment variable. */
   transcriptionFactory?: NonNullable<ClinikoVoiceServerConfig["transcriptionFactory"]>;
   /** Patient-free synthetic evidence, admitted only by the isolated fixture guard. */
   speechQuality?: NonNullable<ClinikoVoiceServerConfig["speechQuality"]>;
   operationalCounters?: OperationalCounterStore;
   /** Synthetic provider selection for the isolated voice runner. */
-  speechModels?: Readonly<{ primary: string; fallback: string; primaryFirstChunkMs: number }>;
+  speechModels?: Readonly<{ primary: string; fallback?: string; primaryFirstChunkMs?: number }>;
 }>;
 
 export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<void> {
@@ -72,10 +73,10 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       ports.transcriptionSocketFactory)) {
     throw new RangeError("synthetic transcription requires an isolated fixture");
   }
-  if (ports.speechQuality && (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || mode !== "1" ||
+  if ((ports.speechQuality || ports.speechModels || ports.speechSocketFactory) && (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || mode !== "1" ||
       !["synthetic-key-au5", "synthetic-rotated-key-au5"].includes(apiKey) ||
       !connectionString.includes("/abby_test_voice_") || accountSid !== `AC${"1".repeat(32)}`)) {
-    throw new RangeError("synthetic speech quality requires an isolated fixture");
+    throw new RangeError("synthetic speech configuration requires an isolated fixture");
   }
   const operationalTokenHex = process.env.ABBY_VOICE_OPERATIONS_TOKEN_HEX;
   if (operationalTokenHex !== undefined && !/^[a-f0-9]{64}$/i.test(operationalTokenHex)) {
@@ -131,9 +132,10 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
         sevenDayAvailabilityEnabled: weekMode === "1" }],
       openai: { apiKey: required("ABBY_OPENAI_API_KEY"), intentModel: required("ABBY_OPENAI_INTENT_MODEL"),
         ...(ports.openaiFetch ? { fetch: ports.openaiFetch } : {}),
+        ...(ports.speechSocketFactory ? { speechSocketFactory: ports.speechSocketFactory } : {}),
         ...(ports.speechModels ? { speechModel: ports.speechModels.primary,
-          speechFallbackModel: ports.speechModels.fallback,
-          speechPrimaryFirstChunkMs: ports.speechModels.primaryFirstChunkMs } : {}),
+          ...(ports.speechModels.fallback ? { speechFallbackModel: ports.speechModels.fallback } : {}),
+          ...(ports.speechModels.primaryFirstChunkMs !== undefined ? { speechPrimaryFirstChunkMs: ports.speechModels.primaryFirstChunkMs } : {}) } : {}),
         ...(ports.transcriptionSocketFactory ? { transcriptionSocketFactory: ports.transcriptionSocketFactory } : {}) },
       ...(ports.transcriptionFactory ? { transcriptionFactory: ports.transcriptionFactory } : {}),
       ...(ports.speechQuality ? { speechQuality: ports.speechQuality } : {}),

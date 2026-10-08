@@ -17,7 +17,7 @@ import { PostgresClinikoApprovalStore } from "../../src/storage/postgres-cliniko
 import type { OperationalDailyCounts } from "../../src/voice/operational-counts.ts";
 import { waitForVoiceListener } from "../support/child-voice-listener.ts";
 
-type Fault = "openai-speech" | "speech-primary-stall" | "openai-transcription" | "untrusted-transcript" | "clear-availability" | "clear-unsupported" | "clear-model-failure" | "clear-correction" | "clear-playback-correction" | "cliniko-rate-limit" | "cliniko-server-error" | "cliniko-timeout" | "cliniko-slow-read" | "cliniko-zone-changed" | "cliniko-partial-page" | "cliniko-empty" |
+type Fault = "openai-speech" | "speech-primary-stall" | "speech-realtime" | "speech-realtime-mismatch" | "speech-realtime-stall" | "openai-transcription" | "untrusted-transcript" | "clear-availability" | "clear-unsupported" | "clear-model-failure" | "clear-correction" | "clear-playback-correction" | "cliniko-rate-limit" | "cliniko-server-error" | "cliniko-timeout" | "cliniko-slow-read" | "cliniko-zone-changed" | "cliniko-partial-page" | "cliniko-empty" |
   "cliniko-business-type-removed" | "cliniko-practitioner-type-removed" | "week-alternative" | "practitioner-alternative" |
   "practitioner-alternative-rate-limit" | "practitioner-alternative-malformed" |
   "practitioner-alternative-second" | "primary-selection-change" | undefined;
@@ -290,6 +290,39 @@ function assertResponseAudio(call: Call): void {
 async function closeCaller(call: Call): Promise<void> {
   call.socket.close(1000);
   assert.equal((await bounded(call.closed, "caller close"))[0], 1000);
+}
+
+test("E2E-128 runnable signed synthetic Realtime call uses the selected provider and requires transport marks",
+  { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 60_000 }, async () => withFixture("speech-realtime", async fixture => {
+    assert.equal((await fetch(`http://127.0.0.1:${fixture.port}/readyz`)).status, 503);
+    const call = await fixture.openCall();
+    await waitFor(() => call.messages.some(m => m.event === "mark"), "Realtime greeting queue");
+    assert.equal(fixture.speechRequests[0]?.model, "gpt-realtime-2.1-mini");
+    assert.equal(fixture.clinikoMethods.length, 0);
+    assert.ok(call.messages.some(m => m.event === "media"));
+    const mark = call.messages.find(m => m.event === "mark")!.mark;
+    call.socket.send(JSON.stringify({ event: "mark", sequenceNumber: "2", streamSid: call.streamSid, mark }));
+    call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
+      dtmf: { track: "inbound_track", digit: "2" } }));
+    await waitFor(() => call.messages.filter(m => m.event === "mark").length === 2, "Realtime public availability queue");
+    assert.ok(fixture.clinikoPaths.some(path => path.endsWith("/available_times")));
+    assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
+    assert.equal(fixture.speechRequests.length, 2);
+    assert.ok(fixture.speechRequests.every(r => r.model === "gpt-realtime-2.1-mini"));
+    assert.doesNotMatch(fixture.speech[1]!, /booked|reserved|confirmed/);
+    await closeCaller(call);
+  }));
+
+for (const fault of ["speech-realtime-mismatch", "speech-realtime-stall"] as const) {
+  test(`E2E-128 runnable signed synthetic ${fault} sends no audio and closes for carrier fallback`,
+    { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 60_000 }, async () => withFixture(fault, async fixture => {
+      const call = await fixture.openCall();
+      await bounded(call.closed, "rejected Realtime greeting closes");
+      assert.deepEqual(call.messages, []);
+      assert.equal(fixture.speechRequests[0]?.model, "gpt-realtime-2.1-mini");
+      assert.equal(fixture.clinikoMethods.length, 0);
+      assert.equal((await fetch(`http://127.0.0.1:${fixture.port}/readyz`)).status, 503);
+    }));
 }
 
 test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1",

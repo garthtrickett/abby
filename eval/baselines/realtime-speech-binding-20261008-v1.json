@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-08",
+  "patientFree": true,
+  "model": "gpt-realtime-2.1-mini",
+  "voices": [
+    "coral",
+    "marin"
+  ],
+  "composition": {
+    "signedLocalPostgresCalls": 2,
+    "completedProviderGenerations": 4,
+    "verifiedWireFrames": 2169,
+    "runnableCliProviderProtocolCases": 3,
+    "runtimeFirstChunkDeadlineMs": 5000
+  },
+  "providerGenerationMs": [
+    3085,
+    3595,
+    2310,
+    2980
+  ],
+  "sourceHashes": {
+    "src/voice/openai-realtime-speech-synthesis.ts": "cb5308593d5f9ef9db1a8b139be58ab0134b37d382d6e33dd112f06ae2bcf5bd",
+    "src/voice/openai-speech-provider.ts": "980d8a0b428638f386b05084d86e3f3cca4d3b92b509bc6a4251cf57258e36f9",
+    "src/voice/openai-voice-profile.ts": "a3ee0ad1b98933bde5e4be82c721c180c01b1f3a031f96342bd885c1b8f9675f",
+    "src/standalone/cliniko-voice-server.ts": "2a3b20200fa9c73d9e7b5bd93c0971db524ddeba612ff12c2559095af084c6fe",
+    "scripts/serve-cliniko-voice.ts": "6d88192706c0ce87ba2612074213de08344cdd783fb93a3c6df3cc51915f84f8",
+    "test/support/standalone-voice-profile.ts": "7b3e8aeedaccb1bdcf136929cb4a7e902e3b386ba19b637f8016dcad8862cd5d"
+  },
+  "privateReport": {
+    "path": "eval/results/20261008-signed-realtime-binding.json",
+    "sha256": "920c4a5a3f8acd1b606f5a9d6c737934a2e1ed693e928c20d4369b4bee5f0287"
+  },
+  "independentVerifier": {
+    "path": "eval/results/verify-signed-realtime-binding-20261008.py",
+    "sha256": "15471f899dfd4f01994a9766a6cc33498b94b837179a2b93eba25e58dc65fa84",
+    "status": "passed"
+  },
+  "assertions": [
+    "exact selected model and configured voice acknowledged",
+    "completed provider transcript matches literal approved text",
+    "complete native PCM matches retained response deltas",
+    "independent 24-to-16 kHz interpolation, per-chunk padding and PCM-to-PCMU conversion match every actual outgoing wire frame",
+    "unproven quality denied before provider opening",
+    "legacy profile hashes preserved",
+    "mismatched and stalled speech closes without media or mark",
+    "synthetic runner guard rejects provider selection outside isolated fixture"
+  ],
+  "localChecks": {
+    "typecheck": "passed",
+    "compatibilityRegression": {
+      "passed": 56,
+      "failed": 0,
+      "skipped": 0
+    },
+    "signedPostgresRegression": {
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    "runnableCliCases": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    "finalProfileAndManifest": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "limits": [
+    "four generations are a composition smoke test, not a repeatable latency or acoustic gate",
+    "provider-reported wording is not independent acoustic fidelity",
+    "only local signed transport and synthetic playback marks; no Twilio carrier or human listening evidence",
+    "clinic, quality and metadata approvals remain synthetic; default providers unchanged",
+    "original noisy and safety transcription gates still fail"
+  ],
+  "releaseGate": {
+    "status": "hold",
+    "realCarrier": "notRun",
+    "humanListening": "notRun",
+    "realEmail": "deferred",
+    "productionAdmission": false
+  }
+}

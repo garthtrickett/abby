@@ -1,4 +1,11 @@
-# Scenario manifest, version 1.145
+# Scenario manifest, version 1.146
+
+E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
+standalone server and runnable signed synthetic caller. The replacement has a
+distinct physical configuration hash and intersects fallback voice support.
+Legacy hashes and defaults are preserved. Unproven or withdrawn quality denies
+new providers; incomplete or altered output cannot reach the transport. Local
+queue and synthetic mark receipts remain separate from real carrier playback.
 
 E2E-331 adds thirteen signed synthetic journeys for complete hold/keypad scripts,
 exact recent outbound repetition and consent. Recognized announcements bypass

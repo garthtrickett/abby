@@ -21,7 +21,7 @@ import { checkStandaloneTextDatabase } from "../storage/standalone-privacy-prefl
 import type { StandalonePrivacyPreflightFailure } from "../storage/standalone-privacy-preflight.ts";
 import type { MediaTurnOptions, TranscriptionPort } from "../voice/media-turn-controller.ts";
 import type { OpenAIRealtimeTranscriptionConfig } from "../voice/openai-realtime-transcription.ts";
-import { OpenAISpeechSynthesis } from "../voice/openai-speech-synthesis.ts";
+import { OpenAISpeechProvider, realtimeSpeechModel } from "../voice/openai-speech-provider.ts";
 import type { StreamedPlaybackOptions } from "../voice/streamed-playback-port.ts";
 import { createTwilioIngressServer } from "../voice/twilio-ingress-server.ts";
 import { TwilioSignedIngress } from "../voice/twilio-signed-ingress.ts";
@@ -87,6 +87,7 @@ export type ClinikoVoiceServerConfig = Readonly<{
     speechPrimaryFirstChunkMs?: number;
     fetch?: typeof fetch;
     transcriptionSocketFactory?: OpenAIRealtimeTranscriptionConfig["socketFactory"];
+    speechSocketFactory?: OpenAIVoiceProfileConfig["speechSocketFactory"];
   }>;
   /** Host-supplied transcription; the runnable server permits this only in an isolated test fixture. */
   transcriptionFactory?: (sessionId: string) => TranscriptionPort;
@@ -214,14 +215,14 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
   };
   // Validate provider configuration before exposing an HTTP listener.
   if ("voice" in config.openai) throw new RangeError("use clinic voice preferences instead of a global voice");
-  new OpenAISpeechSynthesis({ apiKey: openaiApiKey,
-    ...(config.openai.speechModel ? { model: config.openai.speechModel } : {}),
-    ...(config.openai.fetch ? { fetchPort: config.openai.fetch } : {}) });
+  new OpenAISpeechProvider({ apiKey: openaiApiKey, model: config.openai.speechModel ?? "gpt-4o-mini-tts",
+    ...(config.openai.fetch ? { fetch: config.openai.fetch } : {}),
+    ...(config.openai.speechSocketFactory ? { speechSocketFactory: config.openai.speechSocketFactory } : {}) });
   if (config.openai.speechPrimaryFirstChunkMs !== undefined && !config.openai.speechFallbackModel) {
     throw new RangeError("speech fallback model required");
   }
   const primaryFirstChunkMs = config.openai.speechPrimaryFirstChunkMs ?? 1_500;
-  const playbackOptions = config.openai.speechFallbackModel
+  const playbackOptions = config.openai.speechFallbackModel || config.openai.speechModel === realtimeSpeechModel
     ? { ...config.playbackOptions,
       firstChunkDeadlineMs: config.playbackOptions?.firstChunkDeadlineMs ?? 5_000 }
     : config.playbackOptions;
@@ -236,6 +237,7 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     runtime: { ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}), ...(playbackOptions ? { playbackOptions } : {}) },
     ...(config.openai.fetch ? { fetch: config.openai.fetch } : {}),
     ...(transcriptionSocketFactory ? { socketFactory: transcriptionSocketFactory } : {}),
+    ...(config.openai.speechSocketFactory ? { speechSocketFactory: config.openai.speechSocketFactory } : {}),
     ...(config.speechQuality ? { quality: config.speechQuality } : {}),
   });
   const privacy = await checkStandaloneTextDatabase(config.db);
