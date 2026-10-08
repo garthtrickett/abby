@@ -2,6 +2,12 @@
 
 All runs used patient-free synthetic fixtures, an account-provided OpenAI API key, and owner-only reports under ignored `eval/results/`. No key value or real patient content is in this file. The reports retain repeat-level proposals or transcripts for local review; this summary records only counts and configuration evidence.
 
+## Latest synthetic investigation — 2026-10-07
+
+The [number-free checkpoint](NUMBER_FREE_CHECKPOINT_2026-10-07.md#speech-investigation) records nine one-repeat Realtime screens on the unchanged pinned noisy corpus: implicit/disabled provider noise reduction, fixed FFT filtering with three models, native PCMU with two models, an audio-derived FFT floor and nonlocal means filtering. Each still loses critical terms and exceeds 10% WER. Two also exceed the latency bound. No candidate is promoted. The native PCMU remote wire-hash instrumentation failed; a separate exact six-case round-trip verifies only the offline transform. Complete-clip preprocessing and the adaptive future-audio estimate do not prove streaming suitability.
+
+The owner selected synthetic audio for continued investigation. A supplemental two-voice corpus adds ordinary booking, date, time and correction phrases in quiet and seeded 10 dB noise. All eight quiet clips matched; four of eight noisy clips missed critical words, with 19.12% WER. One repeat cannot meet the gate's repeat minimum. These clips supplement the diagnostic and do not replace any pinned gate corpus. The current complete report set remains source-matched and failing; no production adapter, prompt, threshold or admission changed. [Aggregate evidence, commands and hashes](baselines/number-free-checkpoint-20261007-v1.json) preserve the results without copying transcripts.
+
 ## Paired noise-filter diagnostic — 2026-10-05
 
 One bounded file-transcription screen compared the original six `transcription-noise-v1` clips with a fixed filter, one repeat per clip and two concurrent requests. Original PCM hashes were verified before processing. The existing installed FFmpeg 6.1.1 used `highpass=f=80,lowpass=f=3400,afftdn=nr=12:nf=-35:tn=1`, retaining 16 kHz mono PCM. Both arms used `gpt-transcribe`, the same generic patient-free English physiotherapy context and the unchanged exact critical-term/word-error checks. No production adapter, corpus, threshold or dependency changed.

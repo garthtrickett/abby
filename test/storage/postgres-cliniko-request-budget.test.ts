@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { ClinikoAvailabilityReader } from "../../src/cliniko/availability.ts";
 import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
-import type { ClinikoBudgetOperationalEvent } from "../../src/cliniko/read-budget.ts";
+import type { ClinikoBudgetDenial, ClinikoBudgetOperationalEvent } from "../../src/cliniko/read-budget.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 
@@ -20,6 +20,15 @@ test("E2E-156 separate standalone Cliniko readers share one PostgreSQL request b
     onEvent: event => { events.push(event); } });
   const second = new PostgresClinikoRequestBudget(secondDb, { apiKey, maxPerMinute: 1,
     onEvent: event => { events.push(event); } });
+  const claims: (ClinikoBudgetDenial | null)[] = [];
+  for (const budget of [first, second]) {
+    const claim = budget.claim.bind(budget);
+    budget.claim = async () => {
+      const result = await claim();
+      claims.push(result);
+      return result;
+    };
+  }
   let outbound = 0;
   const port: typeof fetch = async input => {
     outbound += 1;
@@ -42,7 +51,10 @@ test("E2E-156 separate standalone Cliniko readers share one PostgreSQL request b
   assert.equal(outbound, 1);
   const denied = results.filter(result => !result.ok && result.error.kind === "rateLimited").length;
   assert.ok(denied >= 1);
-  assert.deepEqual(events, Array(denied).fill("claimRateLimited"));
+  assert.equal(claims.filter(result => result === null).length, 1);
+  const deniedClaims = claims.filter(result => result?.kind === "rateLimited");
+  assert.ok(deniedClaims.length >= denied);
+  assert.deepEqual(events, Array(deniedClaims.length).fill("claimRateLimited"));
   const rows = await firstDb.selectFrom("cliniko_request_budgets").selectAll().execute();
   assert.equal(rows.length, 1);
   assert.match(rows[0]!.budget_ref, /^[0-9a-f]{64}$/);
