@@ -2,6 +2,43 @@
 
 All runs used patient-free synthetic fixtures, an account-provided OpenAI API key, and owner-only reports under ignored `eval/results/`. No key value or real patient content is in this file. The reports retain repeat-level proposals or transcripts for local review; this summary records only counts and configuration evidence.
 
+## Replacement voice fixtures and original-noise control — 2026-10-08
+
+Following PR #446, the actual opt-in `OpenAIRealtimeSpeechSynthesis` adapter generated the three existing noisy-corpus phrases and the previously declared afternoon-time correction using `gpt-realtime-2.1-mini`, voices `coral` and `marin`. Each isolated session acknowledged the requested model, voice, 24 kHz PCM, null turn detection and no tools; the complete provider transcript matched approved wording before audio was released. Exact synthetic request bodies, raw 24 kHz PCM and converted 16 kHz PCM remain owner-only. No real call recording or patient details were used.
+
+Eight sources produced paired quiet/noisy telephone clips through the existing FFmpeg G.711 μ-law encode at 8 kHz and transport normalizer back to 16 kHz. Seeded white noise targets 10 dB before codec conversion; measured pre-codec SNR was 9.975175–10.027213 dB, with zero clipped samples. Post-codec SNR is not measured. Sixteen owner-only WAV exports contain the exact normalized PCM and remain available for later human listening.
+
+The unchanged, unprompted `gpt-live-transcribe` adapter ran one repeat per clip, two concurrent sessions and 20 ms paced input. Its [documented transcription configuration](https://developers.openai.com/api/docs/guides/realtime-transcription#create-a-transcription-session) uses 24 kHz PCM and null turn detection. Actual acknowledgments confirmed the model, format, no prompt/language hint and null noise reduction. A subsequent fresh control ran the six unchanged original noisy clips with identical transcription configuration and scoring.
+
+| Dataset | Exact matches | Critical misses | WER | Post-commit final p95 |
+| --- | ---: | ---: | ---: | ---: |
+| Replacement voices, quiet | 8/8 | 0 | 0% | 885 ms |
+| Replacement voices, nominal 10 dB noise | 8/8 | 0 | 0% | 846 ms |
+| Original noisy clips, fresh control | 1/6 | 4 | 36.36% | 756 ms |
+
+Both noisy correction clips retained the changed weekday, afternoon time and negation. The original control lost “book” in `NS-002` and `NS-005`, “Thursday” in `NS-004`, and “chest” and “pain” in `NS-006`. None of the twenty-two sessions had a provider failure, empty transcript, truncated literal prefix or late final. Every result retains `needsClarification`.
+
+One repeat is below the unchanged three-repeat minimum. The same provider generates and transcribes the new voices; speech source, voice and duration differ together. This sequential comparison is not randomized or counterbalanced, cannot rank models or explain the original recognition failure, and does not establish microphone, accent, human, carrier or complete-call performance. The new fixtures supplement the original gate; the failed original control does not justify expanding that candidate into a passing-gate claim.
+
+Independent verification replayed all sixteen noise/codec fixtures and decoded every WAV payload. It recomputed the eight complete 24-to-16 kHz synthesis conversions and final chunk padding without calling the synthesis adapter, inspected exact request bodies and actual model/voice acknowledgments, verified all twenty-two complete input and 24 kHz wire hashes with one commit per session, recomputed verdicts and unchanged assessments, and checked corpus/source/report hashes and owner-only permissions. The first verifier syntax check rejected an unnecessary quote escape; corrected syntax passed. Initial aggregate construction referenced an absent control-report field and wrote no aggregate; the failed verifier could not open that file. The corrected construction pins the control runner's actual fixed three source paths. These instrumentation failures made no additional provider requests.
+
+Exact commands:
+
+```sh
+node --check eval/results/screen-realtime-voices-20261008.mjs
+node --check eval/results/screen-realtime-voice-original-control-20261008.mjs
+node --check eval/results/verify-realtime-voice-evidence-20261008.mjs
+node --env-file=/home/gust/code/abby/.env /home/gust/code/abby/eval/results/screen-realtime-voices-20261008.mjs
+node --env-file=/home/gust/code/abby/.env /home/gust/code/abby/eval/results/screen-realtime-voice-original-control-20261008.mjs
+node /home/gust/code/abby/eval/results/verify-realtime-voice-evidence-20261008.mjs file:///home/gust/code/abby-realtime-voice-screen/eval/baselines/realtime-voice-screen-20261008-v1.json
+node scripts/read-speech-gate-status.ts
+git diff --check
+```
+
+The two provider runners reserve fresh report paths and refuse overwrites; replay requires new report/fixture paths. The independent verifier can read the canonical aggregate after publication. Tracked generated-voice job completed exit 0 in 73 seconds; original control completed exit 0 in 15 seconds; corrected artifact verification completed exit 0 in 14 seconds. Exit 0 records instrumentation completion, not a speech-quality gate pass. Exact logs, report/runner/source/corpus/audio hashes, counts, configuration and limitations are in the [transcript-free aggregate](baselines/realtime-voice-screen-20261008-v1.json).
+
+Syntax, independent verification and diff checks passed. This publication changes documentation and aggregate evidence only. The complete stored gate remains source-matched and exits 2, failing noisy and safety transcription. Production defaults, original corpora, thresholds, scenario-manifest rows and admission hold remain unchanged. The replacement is still opt-in and not composed into the actual caller runner; that composition is the next engineering task. Human listening and representative carrier calls remain unrun, release readiness unverified, and real email/Twilio activation deferred.
+
 ## Opt-in Realtime speech candidate — 2026-10-08
 
 The owner selected continued synthetic audio. The [recommended replacement model](https://developers.openai.com/api/docs/models/gpt-realtime-2.1-mini) uses the Realtime WebSocket protocol. `OpenAIRealtimeSpeechSynthesis` is an additive, opt-in implementation with one isolated session per approved utterance, no tools, no input audio, null turn detection and an out-of-band response. It checks the actual model, voice and 24 kHz PCM acknowledgment, correlated response/item/content events and completed status. The [server-event schema](https://developers.openai.com/api/reference/resources/realtime/server-events#response.content_part.added) distinguishes content-part `audio` from completed response-item `output_audio`; the first two-job adapter screen rejected that mismatch before queuing audio. The corrected implementation uses those documented shapes.

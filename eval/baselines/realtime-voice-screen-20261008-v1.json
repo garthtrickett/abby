@@ -1,0 +1,797 @@
+{
+  "schema": "abby.realtime-voice-screen.v1",
+  "date": "2026-10-08",
+  "baseHead": "49fe8c0060fed3cc707335684684ef7a28c24fb9",
+  "status": "diagnosticCompleteOriginalGateStillFails",
+  "configuration": {
+    "status": "complete",
+    "speechModel": "gpt-realtime-2.1-mini",
+    "voices": [
+      "coral",
+      "marin"
+    ],
+    "transcriptionModel": "gpt-live-transcribe",
+    "contextVersion": "none",
+    "noiseReduction": "omitted",
+    "delay": "omitted",
+    "repeats": 1,
+    "concurrency": 2,
+    "paceMs": 20,
+    "nodeVersion": "v22.23.2",
+    "ffmpegVersion": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers"
+  },
+  "originalCorpora": [
+    {
+      "file": "eval/transcription-v1.json",
+      "sha256": "2d3fabc12d13699ffecc4017d64ba9cedc91373e001529abf135a6f311357905"
+    },
+    {
+      "file": "eval/transcription-telephony-v1.json",
+      "sha256": "65645afaeeaca6c91342b8e690c184affd58e004f3438cfa0cccfdd18e3f8e1a"
+    },
+    {
+      "file": "eval/transcription-noise-v1.json",
+      "sha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2"
+    },
+    {
+      "file": "eval/transcription-safety-v1.json",
+      "sha256": "fb261dfa87cfd036307346874b439b63596a7b9390109cc3d22965f5fda795da"
+    }
+  ],
+  "generated": {
+    "report": {
+      "file": "eval/results/20261008-realtime-voices-screen.json",
+      "sha256": "02acf6b684524141223dcc1bf8aeb1a09496efcd8b1d1732a678378d0f330c0f",
+      "ownerOnly": true
+    },
+    "runner": {
+      "file": "eval/results/screen-realtime-voices-20261008.mjs",
+      "sha256": "65822d11dff4918c067431eed5718a1b6563179a342315672a51a5c3c2a1c3de",
+      "ownerOnly": true
+    },
+    "sourcePaths": [
+      "src/voice/openai-realtime-speech-synthesis.ts",
+      "src/voice/transport-media-normalizer.ts",
+      "src/voice/openai-realtime-transcription.ts",
+      "src/voice/transcription-evaluation.ts",
+      "src/voice/transcription-evaluation-gate.ts"
+    ],
+    "sourceSha256": "86de41c0d5c94f032e79c2efebc18fbf683bd0f3ea778639fccafce818802901",
+    "fixtureDirectory": "eval/results/synthetic-realtime-voices-20261008",
+    "corpusSha256": "aa9b86b3a90c9b7968381dbb34574c5c1db780d1435d2d4a111859fb54933074",
+    "fixtureMetadata": [
+      {
+        "caseId": "RV-001",
+        "voice": "coral",
+        "phrase": "availability",
+        "condition": "quiet",
+        "sourceFile": "availability-coral-source.pcm",
+        "sourceSha256": "35cd9dd6f5fdf5cb3dbe199a186fb3599760cb40aaf6cfe404022bb441d70297",
+        "sourceBytes": 72000,
+        "pcmBytes": 72320,
+        "pcmSha256": "c2ed589179f8c1c4e9ddeeef9f37901cdef98b2ed36a668421f42ca5cd522299",
+        "encodedBytes": 18000,
+        "encodedSha256": "108fdd4a7af2fbe431675375b6113f7d0a2c56a32655ec11aad9b04df1fbfd58",
+        "wavFile": "availability-coral-quiet.wav",
+        "wavSha256": "f2f1d9a1dad3f1d5ebb7b66bb51ad72cc5761281cdf183ec5fb90cbcba63e52a",
+        "nominalSnrDb": null,
+        "measuredPreCodecSnrDb": null,
+        "clippedSamples": 0,
+        "noiseSeed": null
+      },
+      {
+        "caseId": "RV-002",
+        "voice": "coral",
+        "phrase": "availability",
+        "condition": "noise",
+        "sourceFile": "availability-coral-source.pcm",
+        "sourceSha256": "35cd9dd6f5fdf5cb3dbe199a186fb3599760cb40aaf6cfe404022bb441d70297",
+        "sourceBytes": 72000,
+        "pcmBytes": 72320,
+        "pcmSha256": "14268c81bb1a519f47f41003492efa3865595d2e492d68095e11e157d00a6bd0",
+        "encodedBytes": 18000,
+        "encodedSha256": "1bd3a2a2fec5976f3f8f09ee2106d58ceaa182cd296b58013e5544a405a9d894",
+        "wavFile": "availability-coral-noise.wav",
+        "wavSha256": "9bb83d9bb24cc9b5e9f3134d380345f101ee34797d3995af6bbbea7fb7bfb1c1",
+        "nominalSnrDb": 10,
+        "measuredPreCodecSnrDb": 10.023821541178544,
+        "clippedSamples": 0,
+        "noiseSeed": 440336
+      },
+      {
+        "caseId": "RV-003",
+        "voice": "coral",
+        "phrase": "booking",
+        "condition": "quiet",
+        "sourceFile": "booking-coral-source.pcm",
+        "sourceSha256": "27a9b071bda7888e6e4b9bf4d73322642fabcd35f614a32ea1a5de696ee562ca",
+        "sourceBytes": 96000,
+        "pcmBytes": 96000,
+        "pcmSha256": "69858bb7296b7b53b3cb4adbf0770011909ffe7a432cf33dbafbd6e8c055a3a1",
+        "encodedBytes": 24000,
+        "encodedSha256": "4c77777b905d8e036bbf2095d5bdd1e797d2b83c3e9788442d2e97430adf41a5",
+        "wavFile": "booking-coral-quiet.wav",
+        "wavSha256": "770f2ff29f055ef9703358f07a15e351e99c46acf825830bfbe834b13613a0b1",
+        "nominalSnrDb": null,
+        "measuredPreCodecSnrDb": null,
+        "clippedSamples": 0,
+        "noiseSeed": null
+      },
+      {
+        "caseId": "RV-004",
+        "voice": "coral",
+        "phrase": "booking",
+        "condition": "noise",
+        "sourceFile": "booking-coral-source.pcm",
+        "sourceSha256": "27a9b071bda7888e6e4b9bf4d73322642fabcd35f614a32ea1a5de696ee562ca",
+        "sourceBytes": 96000,
+        "pcmBytes": 96000,
+        "pcmSha256": "58783d133b9a766815c633500781b0ea8687135ca88e81194ddee96751a7ad43",
+        "encodedBytes": 24000,
+        "encodedSha256": "9150e5d78222a75d53c57f0d88844061984a71df0c838a7ff98da0325b62686a",
+        "wavFile": "booking-coral-noise.wav",
+        "wavSha256": "dc92b2b45ea94908aa0f119db38565b2227af74a21c870bd21d1babf1fc54ac4",
+        "nominalSnrDb": 10,
+        "measuredPreCodecSnrDb": 10.02316680522837,
+        "clippedSamples": 0,
+        "noiseSeed": 440337
+      },
+      {
+        "caseId": "RV-005",
+        "voice": "coral",
+        "phrase": "urgent",
+        "condition": "quiet",
+        "sourceFile": "urgent-coral-source.pcm",
+        "sourceSha256": "34a14e2ec2b89a2f4f02421008fdbcbc497247752227f6e28a097174bc3931c5",
+        "sourceBytes": 110400,
+        "pcmBytes": 110720,
+        "pcmSha256": "35a16ed5b2612741e59cba152f778d4d26be71252c0893163da0125f365ec83c",
+        "encodedBytes": 27600,
+        "encodedSha256": "4689a739976aceefa5e76d7f2ef6ccf647e9ca4d03c76abad770ab7407f7477b",
+        "wavFile": "urgent-coral-quiet.wav",
+        "wavSha256": "879b8426d695c111d59b4dade18b767966075999796a251d53213598187b656b",
+        "nominalSnrDb": null,
+        "measuredPreCodecSnrDb": null,
+        "clippedSamples": 0,
+        "noiseSeed": null
+      },
+      {
+        "caseId": "RV-006",
+        "voice": "coral",
+        "phrase": "urgent",
+        "condition": "noise",
+        "sourceFile": "urgent-coral-source.pcm",
+        "sourceSha256": "34a14e2ec2b89a2f4f02421008fdbcbc497247752227f6e28a097174bc3931c5",
+        "sourceBytes": 110400,
+        "pcmBytes": 110720,
+        "pcmSha256": "dae8e326d550ce80f7ade8eeb17465e9208c5173fd46b9c1382f4d7c0f5cd46c",
+        "encodedBytes": 27600,
+        "encodedSha256": "1e458b85123b4b4cce4b6319c609d9c3b23897d6666ad6768379601f37bd46f1",
+        "wavFile": "urgent-coral-noise.wav",
+        "wavSha256": "d3049e2f8d5d60c70b68057f03c2e9478b3d326f54be218481a804bc76011fa8",
+        "nominalSnrDb": 10,
+        "measuredPreCodecSnrDb": 9.975174873117929,
+        "clippedSamples": 0,
+        "noiseSeed": 440338
+      },
+      {
+        "caseId": "RV-007",
+        "voice": "coral",
+        "phrase": "correction",
+        "condition": "quiet",
+        "sourceFile": "correction-coral-source.pcm",
+        "sourceSha256": "c53e84ea98da07e7c621a610d7af39427ed70893f93089021cb3b3d80decd829",
+        "sourceBytes": 174400,
+        "pcmBytes": 174720,
+        "pcmSha256": "38966aaa7f160ce002098ba41f0514e2034a6796d7242dc46ab9dd08b5dfc483",
+        "encodedBytes": 43600,
+        "encodedSha256": "7b6692f349ce3ee24c58d03c8f482ca365c4cbf0ab96cd4799d4b2efdc3b4b1d",
+        "wavFile": "correction-coral-quiet.wav",
+        "wavSha256": "757b64049c44b9c952a35b6f4c11f2f70c7f9bdeb9e8fc2bb5d5cc66ff833bbe",
+        "nominalSnrDb": null,
+        "measuredPreCodecSnrDb": null,
+        "clippedSamples": 0,
+        "noiseSeed": null
+      },
+      {
+        "caseId": "RV-008",
+        "voice": "coral",
+        "phrase": "correction",
+        "condition": "noise",
+        "sourceFile": "correction-coral-source.pcm",
+        "sourceSha256": "c53e84ea98da07e7c621a610d7af39427ed70893f93089021cb3b3d80decd829",
+        "sourceBytes": 174400,
+        "pcmBytes": 174720,
+        "pcmSha256": "469a62d2b704984e24f5e864ef9d5687fed9542f7fa0e96f59fe1edff16bc44f",
+        "encodedBytes": 43600,
+        "encodedSha256": "dec56fc08db80f6125a9aa7dc210983f92ea8d15661c6a950184d3b965005f80",
+        "wavFile": "correction-coral-noise.wav",
+        "wavSha256": "6e559a0952b8161559c47f36354010eed30b2eae29f1b158817fd7f77786b617",
+        "nominalSnrDb": 10,
+        "measuredPreCodecSnrDb": 10.006147245338752,
+        "clippedSamples": 0,
+        "noiseSeed": 440339
+      },
+      {
+        "caseId": "RV-009",
+        "voice": "marin",
+        "phrase": "availability",
+        "condition": "quiet",
+        "sourceFile": "availability-marin-source.pcm",
+        "sourceSha256": "87fb4f0e21aa676a2845b4c9e104b37ec5879854896dacbf2d9fc3265ce5dd84",
+        "sourceBytes": 75200,
+        "pcmBytes": 75520,
+        "pcmSha256": "943d1d98d1959088f4acfa4f6dacb0d1cbd692fed4976cc83871ddba2f2c468a",
+        "encodedBytes": 18800,
+        "encodedSha256": "c0b54f936386347a1d1e1479e38bd8400709748bb9ba44717236461a75bd87d8",
+        "wavFile": "availability-marin-quiet.wav",
+        "wavSha256": "15c47f02b289ae6eb24da85364807d65e0b75fa7527b6f522da61ef27f601586",
+        "nominalSnrDb": null,
+        "measuredPreCodecSnrDb": null,
+        "clippedSamples": 0,
+        "noiseSeed": null
+      },
+      {
+        "caseId": "RV-010",
+        "voice": "marin",
+        "phrase": "availability",
+        "condition": "noise",
+        "sourceFile": "availability-marin-source.pcm",
+        "sourceSha256": "87fb4f0e21aa676a2845b4c9e104b37ec5879854896dacbf2d9fc3265ce5dd84",
+        "sourceBytes": 75200,
+        "pcmBytes": 75520,
+        "pcmSha256": "9bb8aaf0604ab0178b530eca65360f03a05fc0410dde214299212071c93008a4",
+        "encodedBytes": 18800,
+        "encodedSha256": "389021cca348b0750e637f1f60d402badca886b32387ebc9af655a3836d456f8",
+        "wavFile": "availability-marin-noise.wav",
+        "wavSha256": "9b41828c72bfe567be4288f69174bae0dca5b6a2b655d1678ee681e6d8e9d329",
+        "nominalSnrDb": 10,
+        "measuredPreCodecSnrDb": 9.977281985948965,
+        "clippedSamples": 0,
+        "noiseSeed": 440340
+      },
+      {
+        "caseId": "RV-011",
+        "voice": "marin",
+        "phrase": "booking",
+        "condition": "quiet",
+        "sourceFile": "booking-marin-source.pcm",
+        "sourceSha256": "61c9809b522c3b20d1b648c2f63d38a02c17a8c4bc6588f3f4e3698d8a92a422",
+        "sourceBytes": 96000,
+        "pcmBytes": 96000,
+        "pcmSha256": "a064f08bee3a3615b38b1459c853beaa1a77f453f71eeef98b63330b4d8731bf",
+        "encodedBytes": 24000,
+        "encodedSha256": "c8e6872ad2bf739ae0780f48e9397fef10fdf464f7873850adec8e0c502ace6a",
+        "wavFile": "booking-marin-quiet.wav",
+        "wavSha256": "85bc801b80d2262721847407c159cdd97e752633e4300ca50fe1b307c1745fc6",
+        "nominalSnrDb": null,
+        "measuredPreCodecSnrDb": null,
+        "clippedSamples": 0,
+        "noiseSeed": null
+      },
+      {
+        "caseId": "RV-012",
+        "voice": "marin",
+        "phrase": "booking",
+        "condition": "noise",
+        "sourceFile": "booking-marin-source.pcm",
+        "sourceSha256": "61c9809b522c3b20d1b648c2f63d38a02c17a8c4bc6588f3f4e3698d8a92a422",
+        "sourceBytes": 96000,
+        "pcmBytes": 96000,
+        "pcmSha256": "d30422498f94f494d1c3eed7e86fd6efa3d6a3a82ce5668823dd1c11b1bfd829",
+        "encodedBytes": 24000,
+        "encodedSha256": "16fd901effd602c16aee289203b29a6e6790f7a2fa6fc55ca81f49d5b36f06f0",
+        "wavFile": "booking-marin-noise.wav",
+        "wavSha256": "46764815a57c40d668ee373b2288ec7617acd70a53ad5beb0e2eb58b61e123dc",
+        "nominalSnrDb": 10,
+        "measuredPreCodecSnrDb": 9.992994536213896,
+        "clippedSamples": 0,
+        "noiseSeed": 440341
+      },
+      {
+        "caseId": "RV-013",
+        "voice": "marin",
+        "phrase": "urgent",
+        "condition": "quiet",
+        "sourceFile": "urgent-marin-source.pcm",
+        "sourceSha256": "2fb4b149bdc06653feff1a88b674d9029d57b008b55430d8e436fec66115adf7",
+        "sourceBytes": 116800,
+        "pcmBytes": 117120,
+        "pcmSha256": "0a788b5362dd746548716027d9d28a636305dd6ae431d0c0985e1bcfe94bd79a",
+        "encodedBytes": 29200,
+        "encodedSha256": "3aad76be17401a71446a63f6a54e8307a1060b81b382777c2665333c1de443f1",
+        "wavFile": "urgent-marin-quiet.wav",
+        "wavSha256": "cfaabbfa7fee592514d5e77f4f85d14e62865d9c583b0eeacc20118c800a7127",
+        "nominalSnrDb": null,
+        "measuredPreCodecSnrDb": null,
+        "clippedSamples": 0,
+        "noiseSeed": null
+      },
+      {
+        "caseId": "RV-014",
+        "voice": "marin",
+        "phrase": "urgent",
+        "condition": "noise",
+        "sourceFile": "urgent-marin-source.pcm",
+        "sourceSha256": "2fb4b149bdc06653feff1a88b674d9029d57b008b55430d8e436fec66115adf7",
+        "sourceBytes": 116800,
+        "pcmBytes": 117120,
+        "pcmSha256": "d7f5b3bc42fb49ce2012273af5ba2c3e8f9ba073b4a6386f7b94d387a34d92c2",
+        "encodedBytes": 29200,
+        "encodedSha256": "5edccf3e779755261dfed2e7aea08635fa3ce7c014f82419cd78e209f9a750df",
+        "wavFile": "urgent-marin-noise.wav",
+        "wavSha256": "95c16c9c8e24b8f6e2568c7969670149a790a2840858ff256f00679bc28f57f0",
+        "nominalSnrDb": 10,
+        "measuredPreCodecSnrDb": 10.027213336187044,
+        "clippedSamples": 0,
+        "noiseSeed": 440342
+      },
+      {
+        "caseId": "RV-015",
+        "voice": "marin",
+        "phrase": "correction",
+        "condition": "quiet",
+        "sourceFile": "correction-marin-source.pcm",
+        "sourceSha256": "8b29240a26f1db5db5edb692d6758adfe37e47de921d732558eca4fef3b1917f",
+        "sourceBytes": 164800,
+        "pcmBytes": 165120,
+        "pcmSha256": "221eaeb7e8fe8eb18d6c2bcede2a905e82b4315bae7f6bacf3400f033149184a",
+        "encodedBytes": 41200,
+        "encodedSha256": "329ea1765150988ff1573382bf2f885c8ceabdf31706d78ae05d907ba6d72f62",
+        "wavFile": "correction-marin-quiet.wav",
+        "wavSha256": "93defcfbcae13d24f647de57864c87eb463d93835a251aea1702ce708a1e8241",
+        "nominalSnrDb": null,
+        "measuredPreCodecSnrDb": null,
+        "clippedSamples": 0,
+        "noiseSeed": null
+      },
+      {
+        "caseId": "RV-016",
+        "voice": "marin",
+        "phrase": "correction",
+        "condition": "noise",
+        "sourceFile": "correction-marin-source.pcm",
+        "sourceSha256": "8b29240a26f1db5db5edb692d6758adfe37e47de921d732558eca4fef3b1917f",
+        "sourceBytes": 164800,
+        "pcmBytes": 165120,
+        "pcmSha256": "ca2d4f945573330fed5333416d3eb492ebaac654cace94f237f8be9698e2230c",
+        "encodedBytes": 41200,
+        "encodedSha256": "bc26e299c4b8c0e8b8bf46f31cf11108a68d4fa0bbb675ad54bf50e7e3fac140",
+        "wavFile": "correction-marin-noise.wav",
+        "wavSha256": "d0056cd263784e1bcab5a32c41556156bf49eb4a1e7e30fff9769b5cd5c54408",
+        "nominalSnrDb": 10,
+        "measuredPreCodecSnrDb": 9.979483436415535,
+        "clippedSamples": 0,
+        "noiseSeed": 440343
+      }
+    ],
+    "synthesisRequests": [
+      {
+        "voice": "coral",
+        "phrase": "availability",
+        "model": "gpt-realtime-2.1-mini",
+        "inputSha256": "c6526ec02944b074fd17cec26fe31d7136dbb4b548d025d8077fddab61794de5",
+        "sourceFile": "availability-coral-source.pcm",
+        "sourceSha256": "35cd9dd6f5fdf5cb3dbe199a186fb3599760cb40aaf6cfe404022bb441d70297",
+        "sourceBytes": 72000,
+        "rawFile": "availability-coral-source.raw.pcm",
+        "rawSha256": "966ba01c1bf7b3fb43c87636d25b1465ba689db58192a2baf91f636f108b5bc7",
+        "rawBytes": 108000,
+        "requestsSha256": "c520bf6c1a7d8c80773d0961f89b3ae354a45f7d2b2e2e9f0323e9a3fd6236f6",
+        "acknowledgedModel": "gpt-realtime-2.1-mini",
+        "acknowledgedVoice": "coral",
+        "responseStatus": "completed"
+      },
+      {
+        "voice": "coral",
+        "phrase": "booking",
+        "model": "gpt-realtime-2.1-mini",
+        "inputSha256": "1f5e8ec5d9d7d5fc031f7caee3f49cd5c7a052e7961ca9e4966d3b497cca62d9",
+        "sourceFile": "booking-coral-source.pcm",
+        "sourceSha256": "27a9b071bda7888e6e4b9bf4d73322642fabcd35f614a32ea1a5de696ee562ca",
+        "sourceBytes": 96000,
+        "rawFile": "booking-coral-source.raw.pcm",
+        "rawSha256": "210e5f5e98d7fde9614f15dcef36f323b8b0ef6fb37debe993a9bb173ad413d7",
+        "rawBytes": 144000,
+        "requestsSha256": "eccc3ac73857b9835bd5d3a710d51583ea213afe07448b44813f8fbfd325cdbf",
+        "acknowledgedModel": "gpt-realtime-2.1-mini",
+        "acknowledgedVoice": "coral",
+        "responseStatus": "completed"
+      },
+      {
+        "voice": "coral",
+        "phrase": "urgent",
+        "model": "gpt-realtime-2.1-mini",
+        "inputSha256": "8b07c660ec8f412f3e6e4cdc2a8d47e7531e189511eb939d340c709e59deaf1c",
+        "sourceFile": "urgent-coral-source.pcm",
+        "sourceSha256": "34a14e2ec2b89a2f4f02421008fdbcbc497247752227f6e28a097174bc3931c5",
+        "sourceBytes": 110400,
+        "rawFile": "urgent-coral-source.raw.pcm",
+        "rawSha256": "37593a36cf4974bdd14a5d722186b35c05a74b2dabe2aa419224d63a6d773bea",
+        "rawBytes": 165600,
+        "requestsSha256": "879ae22dbe0d2259b9b4132ff72c943c25f4efccb7064107bc2ad3d96fb82e61",
+        "acknowledgedModel": "gpt-realtime-2.1-mini",
+        "acknowledgedVoice": "coral",
+        "responseStatus": "completed"
+      },
+      {
+        "voice": "coral",
+        "phrase": "correction",
+        "model": "gpt-realtime-2.1-mini",
+        "inputSha256": "7b0d53d32cecebc1f07e974ff837add65a19756235b654b9c50aa3907d5d12cf",
+        "sourceFile": "correction-coral-source.pcm",
+        "sourceSha256": "c53e84ea98da07e7c621a610d7af39427ed70893f93089021cb3b3d80decd829",
+        "sourceBytes": 174400,
+        "rawFile": "correction-coral-source.raw.pcm",
+        "rawSha256": "032d4202da00e4413a15c06cc4232621289bac60da31baec171c89bf3a7a3981",
+        "rawBytes": 261600,
+        "requestsSha256": "27b579d5081e21b898a5805e800f9a8e2b94e8f470ab5161829d9c7368f65cd4",
+        "acknowledgedModel": "gpt-realtime-2.1-mini",
+        "acknowledgedVoice": "coral",
+        "responseStatus": "completed"
+      },
+      {
+        "voice": "marin",
+        "phrase": "availability",
+        "model": "gpt-realtime-2.1-mini",
+        "inputSha256": "c6526ec02944b074fd17cec26fe31d7136dbb4b548d025d8077fddab61794de5",
+        "sourceFile": "availability-marin-source.pcm",
+        "sourceSha256": "87fb4f0e21aa676a2845b4c9e104b37ec5879854896dacbf2d9fc3265ce5dd84",
+        "sourceBytes": 75200,
+        "rawFile": "availability-marin-source.raw.pcm",
+        "rawSha256": "c84202f9083a7dcd6d767fc1987bbf48f751bd6cd3bc0ac5efd5484e866fe613",
+        "rawBytes": 112800,
+        "requestsSha256": "a33800913ec15ca8f305068175fa7117bad3c39b06b46b2b6b8c7270a5a5baff",
+        "acknowledgedModel": "gpt-realtime-2.1-mini",
+        "acknowledgedVoice": "marin",
+        "responseStatus": "completed"
+      },
+      {
+        "voice": "marin",
+        "phrase": "booking",
+        "model": "gpt-realtime-2.1-mini",
+        "inputSha256": "1f5e8ec5d9d7d5fc031f7caee3f49cd5c7a052e7961ca9e4966d3b497cca62d9",
+        "sourceFile": "booking-marin-source.pcm",
+        "sourceSha256": "61c9809b522c3b20d1b648c2f63d38a02c17a8c4bc6588f3f4e3698d8a92a422",
+        "sourceBytes": 96000,
+        "rawFile": "booking-marin-source.raw.pcm",
+        "rawSha256": "c717d25d568ed6caaa6024467aa3a9f808c6a7cdee5ec2c7bda003529aa689b3",
+        "rawBytes": 144000,
+        "requestsSha256": "3044717d0d4c22b718151b7e435a4869b3ffc99241aefb87a5ecd85b5c9cc398",
+        "acknowledgedModel": "gpt-realtime-2.1-mini",
+        "acknowledgedVoice": "marin",
+        "responseStatus": "completed"
+      },
+      {
+        "voice": "marin",
+        "phrase": "urgent",
+        "model": "gpt-realtime-2.1-mini",
+        "inputSha256": "8b07c660ec8f412f3e6e4cdc2a8d47e7531e189511eb939d340c709e59deaf1c",
+        "sourceFile": "urgent-marin-source.pcm",
+        "sourceSha256": "2fb4b149bdc06653feff1a88b674d9029d57b008b55430d8e436fec66115adf7",
+        "sourceBytes": 116800,
+        "rawFile": "urgent-marin-source.raw.pcm",
+        "rawSha256": "b84afb362b9c4b103b679f942c5991636099028f5c16026a9eca1fe1ca9f956d",
+        "rawBytes": 175200,
+        "requestsSha256": "32b2ba94e3a2d72b6710ccbc796628b0f662a10f179f06e3041c1a33acd0b505",
+        "acknowledgedModel": "gpt-realtime-2.1-mini",
+        "acknowledgedVoice": "marin",
+        "responseStatus": "completed"
+      },
+      {
+        "voice": "marin",
+        "phrase": "correction",
+        "model": "gpt-realtime-2.1-mini",
+        "inputSha256": "7b0d53d32cecebc1f07e974ff837add65a19756235b654b9c50aa3907d5d12cf",
+        "sourceFile": "correction-marin-source.pcm",
+        "sourceSha256": "8b29240a26f1db5db5edb692d6758adfe37e47de921d732558eca4fef3b1917f",
+        "sourceBytes": 164800,
+        "rawFile": "correction-marin-source.raw.pcm",
+        "rawSha256": "0ba54171266b2ce03aaf5b41ee91d4dd0b4a4009343cd30ca318973f64db15f6",
+        "rawBytes": 247200,
+        "requestsSha256": "2b3c1bb65ebc659a243cdd37e9c8664558364ee4e8d967b6ba5567c9d2b1f016",
+        "acknowledgedModel": "gpt-realtime-2.1-mini",
+        "acknowledgedVoice": "marin",
+        "responseStatus": "completed"
+      }
+    ],
+    "overall": {
+      "status": "fail",
+      "failures": [
+        "insufficientRepeats"
+      ],
+      "metrics": {
+        "cases": 16,
+        "runs": 16,
+        "critical": 0,
+        "providerFailures": 0,
+        "empty": 0,
+        "truncated": 0,
+        "delayed": 0,
+        "wordErrorRate": 0,
+        "finalP95Ms": 885,
+        "missingRepeats": [
+          "RV-001",
+          "RV-002",
+          "RV-003",
+          "RV-004",
+          "RV-005",
+          "RV-006",
+          "RV-007",
+          "RV-008",
+          "RV-009",
+          "RV-010",
+          "RV-011",
+          "RV-012",
+          "RV-013",
+          "RV-014",
+          "RV-015",
+          "RV-016"
+        ]
+      },
+      "thresholds": {
+        "version": "transcription-synthetic-gate-v1",
+        "minRepeatsPerCase": 3,
+        "maxCritical": 0,
+        "maxProviderFailures": 0,
+        "maxEmpty": 0,
+        "maxTruncated": 0,
+        "maxWordErrorRate": 0.1,
+        "maxFinalP95Ms": 2500,
+        "maxIndividualFinalMs": 5000
+      }
+    },
+    "groups": {
+      "quiet": {
+        "status": "fail",
+        "failures": [
+          "insufficientRepeats"
+        ],
+        "metrics": {
+          "cases": 8,
+          "runs": 8,
+          "critical": 0,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0,
+          "finalP95Ms": 885,
+          "missingRepeats": [
+            "RV-001",
+            "RV-003",
+            "RV-005",
+            "RV-007",
+            "RV-009",
+            "RV-011",
+            "RV-013",
+            "RV-015"
+          ]
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      },
+      "noise": {
+        "status": "fail",
+        "failures": [
+          "insufficientRepeats"
+        ],
+        "metrics": {
+          "cases": 8,
+          "runs": 8,
+          "critical": 0,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0,
+          "finalP95Ms": 846,
+          "missingRepeats": [
+            "RV-002",
+            "RV-004",
+            "RV-006",
+            "RV-008",
+            "RV-010",
+            "RV-012",
+            "RV-014",
+            "RV-016"
+          ]
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      }
+    },
+    "counts": {
+      "match": 16,
+      "mismatch": 0,
+      "critical": 0,
+      "providerFailure": 0
+    },
+    "job": {
+      "label": "Abby Realtime generated voice telephone noise screen October 8",
+      "exitCode": 0,
+      "elapsedSeconds": 73,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791429051862.log",
+      "startedAt": "2026-10-08T03:10:52.742Z",
+      "completedAt": "2026-10-08T03:12:05.177Z"
+    }
+  },
+  "control": {
+    "report": {
+      "file": "eval/results/20261008-realtime-voice-original-control.json",
+      "sha256": "48da91428f10ce39404db0c02af5be3c09579ab1a2257e276e846984ba3de49d",
+      "ownerOnly": true
+    },
+    "runner": {
+      "file": "eval/results/screen-realtime-voice-original-control-20261008.mjs",
+      "sha256": "a1a1300a60cda17e70bc6aaef73cf7dd3a739bb2d7e84c42b6ade885355c1685",
+      "ownerOnly": true
+    },
+    "sourcePaths": [
+      "src/voice/openai-realtime-transcription.ts",
+      "src/voice/transcription-evaluation.ts",
+      "src/voice/transcription-evaluation-gate.ts"
+    ],
+    "sourceSha256": "281edbfc25ff7c4e08ae6d37dc29a1594e6cb92dec3f7a023c6213de34bfd9d8",
+    "assessment": {
+      "status": "fail",
+      "failures": [
+        "insufficientRepeats",
+        "critical",
+        "wordErrorRate"
+      ],
+      "metrics": {
+        "cases": 6,
+        "runs": 6,
+        "critical": 4,
+        "providerFailures": 0,
+        "empty": 0,
+        "truncated": 0,
+        "delayed": 0,
+        "wordErrorRate": 0.36363636363636365,
+        "finalP95Ms": 756,
+        "missingRepeats": [
+          "NS-001",
+          "NS-002",
+          "NS-003",
+          "NS-004",
+          "NS-005",
+          "NS-006"
+        ]
+      },
+      "thresholds": {
+        "version": "transcription-synthetic-gate-v1",
+        "minRepeatsPerCase": 3,
+        "maxCritical": 0,
+        "maxProviderFailures": 0,
+        "maxEmpty": 0,
+        "maxTruncated": 0,
+        "maxWordErrorRate": 0.1,
+        "maxFinalP95Ms": 2500,
+        "maxIndividualFinalMs": 5000
+      }
+    },
+    "counts": {
+      "match": 1,
+      "mismatch": 1,
+      "critical": 4,
+      "providerFailure": 0
+    },
+    "criticalMisses": [
+      {
+        "caseId": "NS-002",
+        "missingCriticalTerms": [
+          "book"
+        ]
+      },
+      {
+        "caseId": "NS-004",
+        "missingCriticalTerms": [
+          "Thursday"
+        ]
+      },
+      {
+        "caseId": "NS-005",
+        "missingCriticalTerms": [
+          "book"
+        ]
+      },
+      {
+        "caseId": "NS-006",
+        "missingCriticalTerms": [
+          "chest",
+          "pain"
+        ]
+      }
+    ],
+    "job": {
+      "label": "Abby Realtime voice fresh original noise control October 8",
+      "exitCode": 0,
+      "elapsedSeconds": 15,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791429161411.log",
+      "startedAt": "2026-10-08T03:12:42.191Z",
+      "completedAt": "2026-10-08T03:12:57.139Z"
+    }
+  },
+  "comparison": {
+    "commonOriginalPhrases": 3,
+    "newCorrectionPhrases": 1,
+    "generatedCommonNoisyClips": 6,
+    "generatedCommonNoisyMatches": 6,
+    "originalNoisyClips": 6,
+    "originalNoisyCriticalMisses": 4,
+    "inference": "Recognition differs by synthetic speech source in this bounded screen. This does not establish causality or reliable human-speech accuracy."
+  },
+  "gateStatus": {
+    "syntheticGate": "notAssessed",
+    "completeStoredCandidateGate": "fail",
+    "statusCommand": "node scripts/read-speech-gate-status.ts",
+    "statusExitCode": 2,
+    "representativeCallGate": "notRun",
+    "humanReviewStatus": "pending",
+    "releaseGate": "unverified",
+    "productionAdmission": "hold"
+  },
+  "limitations": [
+    "One repeat per case is below the unchanged three-repeat minimum.",
+    "New audio supplements the original corpora; it does not replace the failing gate.",
+    "The same provider synthesizes and transcribes the new voices; coupling may make recognition easier.",
+    "Speech source, voice and duration differ; this sequential comparison is not randomized or counterbalanced and cannot rank models.",
+    "Seeded white noise targets 10 dB before codec conversion; measured range is 9.975175 to 10.027213 dB, zero clipped samples. Post-codec SNR is not measured.",
+    "Listening exports have exact PCM payloads but have not passed human review; synthetic voices do not prove microphone, accent, human, carrier or complete-call performance.",
+    "No production source, dependency, threshold, original fixture, manifest row or caller admission changed."
+  ],
+  "validation": {
+    "evidenceCommand": "node /home/gust/code/abby/eval/results/verify-realtime-voice-evidence-20261008.mjs file:///home/gust/code/abby-realtime-voice-screen/eval/baselines/realtime-voice-screen-20261008-v1.json",
+    "evidenceRunnerSha256": "557675a05aad236071a7a6a9fc9be5efc2965bdc0ae7f89d8a902f7d5fbb6f7e",
+    "evidenceRunnerOwnerOnly": true,
+    "syntaxCommands": [
+      "node --check eval/results/screen-realtime-voices-20261008.mjs",
+      "node --check eval/results/screen-realtime-voice-original-control-20261008.mjs",
+      "node --check eval/results/verify-realtime-voice-evidence-20261008.mjs"
+    ],
+    "syntaxResult": "pass",
+    "initialFailures": [
+      "Independent verifier unnecessarily escaped a double quote in a Unicode regex; syntax rejected it before execution. Corrected and node --check passed.",
+      "Initial aggregate construction expected sourcePaths in the control report; field was absent and no aggregate was written. Subsequent verifier could not open that missing aggregate. Construction now uses the control runner's fixed three source paths and their pinned hash."
+    ],
+    "evidenceValidation": "pass",
+    "diffCheck": "pass",
+    "independentWholeBufferWireInterpolation": "pass",
+    "fixtureCodecReplay": "pass",
+    "exactWavPayload": "pass",
+    "independentSynthesisPcmConversion": "pass",
+    "completedProviderTranscriptAndRequest": "pass",
+    "evidenceJob": {
+      "label": "Abby Realtime voice corrected codec evidence verification October 8",
+      "exitCode": 0,
+      "elapsedSeconds": 14,
+      "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791429285948.log"
+    }
+  },
+  "noise": {
+    "nominalPreCodecSnrDb": 10,
+    "measuredPreCodecSnrMinDb": 9.975174873117929,
+    "measuredPreCodecSnrMaxDb": 10.027213336187044,
+    "clippedSamples": 0,
+    "postCodecSnr": "notMeasured"
+  }
+}
