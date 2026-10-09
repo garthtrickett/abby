@@ -22,6 +22,7 @@ export async function concreteCancellationFixture(options: { scope?: LocationSco
   const directory = new OwnerFileAdminDirectory(accountPath, scope);
   let record: CancellationApproval, source: ClinikoCancellationAuthority, policy: OwnerFileCancellationPolicy;
   let failure = "", holdExact = false, release: () => void = () => undefined;
+  let heldTargetSignal: AbortSignal | undefined;
   let onRecall: () => Promise<void> = async () => undefined;
   let sourceTime = cancellationNow;
   const traffic: string[] = [];
@@ -44,7 +45,7 @@ export async function concreteCancellationFixture(options: { scope?: LocationSco
         const response = await port(value, init);
         if (url.pathname === "/v1/recalls" && method === "POST") await onRecall();
         if (url.pathname === "/v1/individual_appointments/91" && method === "GET") {
-          if (holdExact) await new Promise<void>(resolve => { release = resolve; });
+          if (holdExact) await new Promise<void>(resolve => { heldTargetSignal = init?.signal ?? undefined; release = resolve; });
           const appointment = await response.json();
           if (options.startsAt) { appointment.starts_at = options.startsAt; appointment.ends_at = new Date(Date.parse(options.startsAt) + 1_800_000).toISOString(); }
           if (failure === "patient") appointment.patient.links.self = "https://api.au5.cliniko.com/v1/patients/43";
@@ -86,6 +87,7 @@ export async function concreteCancellationFixture(options: { scope?: LocationSco
       query: (verificationRef: string, targetRef: string) => ({ scope, callId: f.callId, sessionId: f.sessionId, policyVersion: record.policyVersion,
         kind: "cancel" as const, verificationRef, targetRef, patientId: "42", phase: "proposal" as const, now: cancellationNow, signal: new AbortController().signal }),
       setFailure: (value: string) => { failure = value; }, setHold: (value: boolean) => { holdExact = value; },
+      get heldTargetSignal() { return heldTargetSignal; },
       setSourceTime: (value: string) => { sourceTime = value; },
       release: () => release(), setOnRecall: (value: () => Promise<void>) => { onRecall = value; },
       close: async () => { source.dispose(); f.host.dispose(); f.email.close(); f.proof.dispose(); if (!options.folder) await rm(folder, { recursive: true, force: true }); },

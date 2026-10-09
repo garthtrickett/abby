@@ -1,11 +1,8 @@
+import assert from "node:assert/strict";
 import { ClinikoRecallReader } from "../../src/cliniko/recalls.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 import { PostgresPatientVerificationBudget } from "../../src/storage/postgres-patient-verification-budget.ts";
-import { reschedulingSessionFixture } from "./rescheduling-session.ts";
-import { reschedulingAuthorityFixture } from "./rescheduling-authority.ts";
-import { standaloneReschedulingFixture } from "./standalone-rescheduling.ts";
-import { resultValue } from "./agent-appointment-proposals.ts";
 const input = JSON.parse(await new Promise<string>(resolve => { let text = "";
   process.stdin.on("data", part => { text += String(part); }); process.stdin.on("end", () => resolve(text)); }));
 const providerPort: typeof fetch = async (value, init) => {
@@ -16,12 +13,18 @@ const db = connectPostgres(process.env.DATABASE_URL!), apiKey = "synthetic-sessi
 const rateBudget = new PostgresClinikoRequestBudget(db, { apiKey });
 try {
   if (input.mode === "recover") {
-    const reader = resultValue(ClinikoRecallReader.create({ scope: input.scope, apiKey, contactEmail: "test@example.test", rateBudget }, providerPort));
-    const found = resultValue(await reader.discoverPendingReviews(input.scope, "7"));
-    process.stdout.write(JSON.stringify({ pending: found.pending.length, valid: found.pending.filter(item => item.kind === "review").length,
+    const reader = ClinikoRecallReader.create({ scope: input.scope, apiKey, contactEmail: "test@example.test", rateBudget }, providerPort);
+    assert.ok(reader.ok, reader.ok ? undefined : reader.error.kind);
+    const found = await reader.value.discoverPendingReviews(input.scope, "7");
+    assert.ok(found.ok, found.ok ? undefined : found.error.kind);
+    process.stdout.write(JSON.stringify({ pending: found.value.pending.length, valid: found.value.pending.filter(item => item.kind === "review").length,
       clinicalWrites: 0, replayed: false })+"\n");
   } else {
-    const app = await (input.session ? reschedulingSessionFixture : input.concrete ? reschedulingAuthorityFixture : standaloneReschedulingFixture)({ scope: input.scope, fetchPort: providerPort, rateBudget, folder: input.folder,
+    const { resultValue } = await import("./agent-appointment-proposals.ts");
+    const fixture = input.session ? (await import("./rescheduling-session.ts")).reschedulingSessionFixture
+      : input.concrete ? (await import("./rescheduling-authority.ts")).reschedulingAuthorityFixture
+      : (await import("./standalone-rescheduling.ts")).standaloneReschedulingFixture;
+    const app = await fixture({ scope: input.scope, fetchPort: providerPort, rateBudget, folder: input.folder,
       verificationBudget: new PostgresPatientVerificationBudget(db, input.scope) });
     try {
       const ref = await app.verify();

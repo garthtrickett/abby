@@ -92,18 +92,32 @@ test("E2E-276 policy, membership, selected target and provider metadata changes 
   }
 });
 
-test("E2E-276 held target reads time out or close without late authority, mutation or restored selection", async () => {
+test("E2E-276 held target reads time out or close without late authority, mutation or restored selection", async context => {
   for (const close of [false, true]) {
     const f = await concreteCancellationFixture({ timeoutMs: 100 });
     try {
-      const ref = await f.verify(), target = await f.select(ref); f.setHold(true);
-      const pending = f.source.resolve(f.query(ref, target));
-      if (close) f.source.dispose();
+      const ref = await f.verify();
+      // Keep the 100 ms deadline, but advance it after fresh setup reaches
+      // the held provider boundary, rather than spending it on file reads.
+      context.mock.timers.enable({ apis: ["setTimeout"] });
+      const target = await f.select(ref); f.setHold(true);
+      let settled = false;
+      const pending = f.source.resolve(f.query(ref, target)).then(value => { settled = true; return value; });
+      const checkpointDeadline = Date.now() + 5000;
+      while (!f.heldTargetSignal && Date.now() < checkpointDeadline) await new Promise<void>(resolve => setImmediate(resolve));
+      assert.ok(f.heldTargetSignal, "the actual protected target read must be held");
+      assert.equal(f.heldTargetSignal.aborted, false);
+      context.mock.timers.tick(99); await new Promise<void>(resolve => setImmediate(resolve));
+      assert.equal(settled, false); assert.equal(f.heldTargetSignal.aborted, false);
+      if (close) f.source.dispose(); else context.mock.timers.tick(1);
+      assert.equal(f.heldTargetSignal.aborted, true);
       assert.equal((await pending).ok, false); f.release();
       await new Promise<void>(resolve => setImmediate(resolve));
       if (close) assert.equal((await f.source.resolve(f.query(ref, target))).ok, false);
       assert.equal(f.patches, 0);
-    } finally { await f.close(); }
+      assert.equal(f.recalls.length, 0);
+      assert.equal(Object.keys((await f.state()).actions).length, 0);
+    } finally { f.source.dispose(); f.release(); context.mock.timers.reset(); await f.close(); }
   }
 });
 

@@ -26,6 +26,8 @@ import type { ModelWork } from "../model/work.ts";
 export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").StaffReviewProcessHost & import("../core/host.ts").BookingHorizonHost & import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
+export const appointmentProposalEvidenceDeadlineMs = 15_000;
+
 function validIntakeRef(value: unknown): value is string {
   return typeof value === "string" && !!value.trim() && value.length <= 256;
 }
@@ -375,7 +377,7 @@ export class TextReception {
     if (turn.quality !== "clear") {
       interpretation = { kind: "ambiguousTarget" };
     } else {
-      const signal = AbortSignal.any([AbortSignal.timeout(15_000), ...(external ? [external] : [])]);
+      const signal = AbortSignal.any([AbortSignal.timeout(appointmentProposalEvidenceDeadlineMs), ...(external ? [external] : [])]);
       const evidence = await awaitUntilAbort(this.host.resolveBooking(scope, verificationRef, offerRef, now, signal), signal);
       if (external?.aborted) return err({ kind: "staleTurn" as const });
       if (!evidence) return err({ kind: "effectFailure" as const });
@@ -420,7 +422,7 @@ export class TextReception {
             targetRef: selection.targetRef }
           : { ...context, kind: "reschedule", verificationRef: selection.verificationRef,
             targetRef: selection.targetRef, offerRef: selection.offerRef };
-        const signal = AbortSignal.any([AbortSignal.timeout(15_000), ...(external ? [external] : [])]);
+        const signal = AbortSignal.any([AbortSignal.timeout(appointmentProposalEvidenceDeadlineMs), ...(external ? [external] : [])]);
         const evidence = await awaitUntilAbort(this.host.resolveAppointmentChange(query, signal), signal);
         if (external?.aborted) return err({ kind: "staleTurn" as const });
         if (!evidence) return err({ kind: "effectFailure" as const });

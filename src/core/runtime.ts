@@ -92,7 +92,21 @@ export class CallRuntime {
   private async update(callId: string, action: TransitionAction): Promise<Result<CallState, TransitionFailure>> {
     const current = await this.ledger.read(callId, this.scope);
     if (!current.ok) return current;
-    return this.ledger.apply(callId, this.scope, current.value.version, action, this.effectLease);
+    const applied = await this.ledger.apply(callId, this.scope, current.value.version, action, this.effectLease);
+    if (applied.ok || applied.error.kind !== "versionConflict" || action.kind === "sessionRenewed") return applied;
+    const latest = await this.ledger.read(callId, this.scope);
+    if (!latest.ok) return applied;
+    const before = current.value, after = latest.value;
+    // Exactly one sessionRenewed transition can advance both these versions
+    // by one without changing the conversation. Recheck the same action once
+    // against that lease advance; every transition and effect-lease guard
+    // still runs. Other concurrent changes keep their original conflict.
+    if (before.lifecycle !== "active" || after.lifecycle !== "active" ||
+        !before.sessionLease || !after.sessionLease ||
+        after.version !== before.version + 1 || after.conversationRevision !== before.conversationRevision ||
+        after.sessionLease.sessionId !== before.sessionLease.sessionId ||
+        after.sessionLease.version !== before.sessionLease.version + 1) return applied;
+    return this.ledger.apply(callId, this.scope, after.version, action, this.effectLease);
   }
 
   acceptTurn(turn: FinalCallerTurn, interpretation: TurnInterpretation, now: string, expectedConversationRevision?: number): Promise<Result<CallState, TransitionFailure>> {
