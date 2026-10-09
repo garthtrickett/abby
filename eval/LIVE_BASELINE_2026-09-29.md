@@ -659,3 +659,88 @@ No patient recording or real email was used. This one-pass output recognition
 screen does not replace the original noise/safety ASR gate, repeatable replacement
 qualification, human listening or representative carrier calls. Those remain open;
 production speech admission remains **hold**.
+
+
+## Repeated signed synthetic speech — 2026-10-09
+
+The replacement configuration was exercised through signed local HTTP/WebSocket
+callers and the existing PostgreSQL profile policy, actual Realtime synthesis,
+playback queue and telephone codec. The target was forty calls, twenty each for
+Coral and Marin, with an AI greeting and public availability reply per call.
+Calls ran sequentially, using patient-free fixtures and synthetic Cliniko reads,
+transcription and quality approval. This is a supplemental caller-composition
+experiment; it does not replace the original two-phrase speech-loop corpus.
+
+The fake-provider preflight verified two calls and four generations. Earlier
+preflights incorrectly expected caller profiles in the full calls ledger;
+standalone minimal sessions do not populate that ledger. The corrected observer
+captures the actual profile at the existing adapter factory boundary and delegates
+unchanged behavior. No stored profile schema, runtime code or test deadline changed.
+
+The real run stopped on the thirtieth call: **29 calls and 58 replies completed**.
+The 59th provider session returned `insufficient_quota` /
+`credit_balance_exhausted` before any audio. Its greeting was not delivered, and
+its availability reply was not attempted. Ten target calls were not attempted.
+No retry or additional paid recognition request was made.
+
+| Voice | Recorded timing samples / target | Delivered replies | Partial first-audio p95 | Partial queue-to-mark p95 | Result |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Coral | 30 / 40 | 30 | 4,061.99 ms | 4,067.10 ms | Incomplete coverage; first-audio target missed |
+| Marin | 30 / 40 | 28 | 4,318.99 ms | 4,323.41 ms | Incomplete coverage; one undelivered and one unattempted reply; first-audio target missed |
+
+The unchanged limits require forty samples per voice, twenty per phrase, zero
+failed samples, first-audio p95 at most 3,500 ms, individual first audio at most
+5,000 ms, and utterance queue p95 at most 6,000 ms. Both partial assessments fail.
+The two failed Marin samples distinguish an attempted provider failure from the
+subsequent unattempted reply; they do not mean two provider failures. These are
+local queue timings, not audible carrier timings. The observer's existing
+8,000 ms limit, 5,000 ms first-chunk limit and 20,000 ms provider limit remain.
+
+Independent offline verification reproduced all **31,497 transmitted PCMU
+frames** from **30,223,200 native audio bytes** for the 58 completed replies. It
+checked artifact permissions and hashes, frozen source, model/session/voice
+acknowledgments, response correlation and completion, exact literal provider
+transcripts, playback marks and observed times. It independently reconstructed
+each captured profile hash from the physical provider, transcription and runtime
+descriptors. The failed session had zero audio and zero outgoing media. A passing
+verifier means the retained experiment is internally verified; its result stays
+incomplete and failed. Provider transcripts do not establish acoustic correctness.
+Independent unprompted recognition and human listening remain unrun for this batch.
+
+[Transcript-free aggregate and provenance](baselines/bound-speech-repeatability-20261009-v1.json)
+pin the private report, runner and verifier. Commands:
+
+```sh
+bash scripts/with-postgres.sh node --env-file=/home/gust/code/abby/.env /home/gust/code/abby/eval/results/probe-bound-speech-repeatability-20261009-v4.mjs
+python3 /home/gust/code/abby/eval/results/verify-bound-speech-repeatability-partial-20261009.py
+node scripts/read-speech-gate-status.ts
+git diff --check
+```
+
+The provider command ran through tracked user-scope work and exited 1 after
+3m08s; log `4590eee3-1791507317445.log`. Offline verification exited 0 with no
+provider requests. The default status command still exits 2: noisy transcription
+has 12 critical results in 18 runs, safety has 10 in 24, and release is unverified.
+Production admission remains **hold**. The original corpora, scoring and
+thresholds are unchanged. No patient recording, real email, carrier or clinical
+write was used. Further paid probes require a restored API credit balance.
+
+### Latest full local regression
+
+Before this speech experiment, PR #450's frozen source
+`f7e02b95b691845ac0a8cfb976eab2481790b0db` passed:
+
+```sh
+bash scripts/with-postgres.sh bash -lc 'npm run db:migrate && ABBY_LEDGER=postgres npm run test:postgres && npm run test:browser && git diff --check'
+```
+
+The PostgreSQL pool ran 1,661 tests: **1,660 passed**, zero failed or cancelled,
+and one existing opt-in live-provider case skipped. Its ordering coordinator
+passed one test. Browser validation passed **75 tests** plus one ordering test.
+The command exited 0 after 30m04s; log `4590eee3-1791504469054.log`. Source hashes
+remained frozen. Focused typecheck passed earlier against that executable source.
+The merged main tree at `be51d54be8115fa5df1f5ac28075e7a11aee911b` exactly matches
+that validated tree. The eight exact-head PR jobs were individually verified
+billing-blocked before execution; GitHub CI is not claimed green. Earlier failed
+runs and their qualified diagnoses remain retained in the private investigation.
+This local regression pass does not satisfy speech or clinic activation gates.

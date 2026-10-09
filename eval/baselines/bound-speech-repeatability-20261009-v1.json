@@ -1,0 +1,170 @@
+{
+  "schema": "abby.bound-speech-repeatability.aggregate.v1",
+  "sourceHead": "be51d54be8115fa5df1f5ac28075e7a11aee911b",
+  "sourceFingerprint": "5a982e4a6aa66028b5bda9aa1dd88a2bd7df39874fb5cfaf9df7f74c9afa9fc9",
+  "patientFree": true,
+  "experiment": "supplemental signed local caller greeting and public availability; original speech-loop corpus unchanged",
+  "configuration": {
+    "model": "gpt-realtime-2.1-mini",
+    "voices": [
+      "coral",
+      "marin"
+    ],
+    "locale": "en-AU",
+    "mode": "keypadAvailability",
+    "repeatsPerVoice": 20,
+    "concurrency": 1,
+    "firstChunkDeadlineMs": 5000,
+    "laterStepMs": 2000,
+    "maxUtteranceMs": 20000,
+    "helperObservationDeadlineMs": 8000
+  },
+  "target": {
+    "signedLocalCalls": 40,
+    "speechGenerations": 80
+  },
+  "observed": {
+    "signedLocalCallsAttempted": 30,
+    "signedLocalCallsCompleted": 29,
+    "providerRequestsAttempted": 59,
+    "completedProviderGenerations": 58,
+    "providerFailures": 1,
+    "providerFailureCode": "credit_balance_exhausted",
+    "verifiedWireFrames": 31497,
+    "verifiedProviderBytes": 30223200
+  },
+  "result": "incomplete-failed; credits exhausted and observed partial timing exceeds target",
+  "timing": {
+    "coral": {
+      "status": "fail",
+      "failures": [
+        "insufficientJobs",
+        "corpusCoverage",
+        "firstChunkP95"
+      ],
+      "metrics": {
+        "jobs": 30,
+        "failedJobs": 0,
+        "lateJobs": 0,
+        "firstChunkP95Ms": 4061.987789000006,
+        "utteranceP95Ms": 4067.1024750000215
+      },
+      "coverage": "15 of 20 repeats completed per phrase; 10 target timing samples missing"
+    },
+    "marin": {
+      "status": "fail",
+      "failures": [
+        "insufficientJobs",
+        "corpusCoverage",
+        "failedJobs",
+        "firstChunkP95"
+      ],
+      "metrics": {
+        "jobs": 30,
+        "failedJobs": 2,
+        "lateJobs": 0,
+        "firstChunkP95Ms": 4318.9887949999975,
+        "utteranceP95Ms": 4323.407678
+      },
+      "coverage": "14 repeats completed per phrase; repeat 15 greeting undelivered and availability unattempted; repeats 16\u201320 unattempted"
+    }
+  },
+  "timingLimits": {
+    "maxP95FirstChunkMs": 3500,
+    "maxIndividualFirstChunkMs": 5000,
+    "maxP95UtteranceMs": 6000,
+    "minJobsPerVoice": 40,
+    "repeatsPerCase": 20,
+    "maxFailedJobs": 0
+  },
+  "failureAccounting": {
+    "providerFailures": 1,
+    "undeliveredAttemptedReplies": 1,
+    "unattemptedReplyOnLastCall": 1,
+    "unattemptedCalls": 10,
+    "failedSamplesInMarinAssessment": 2
+  },
+  "profileHashes": {
+    "coral": "3da94f00a0dded0fb797503b3474054cda8108c3e3da8cdfb03dfcad48346434",
+    "marin": "0f613ad27421ee991e9c271593831704e50ae8a7a44f41f8b4e353f41a8d6e1c"
+  },
+  "approvedTextHashes": {
+    "greeting": "f9ada1bdb4708fc43a018bf8499ce0814f7cb06aefd3f36f231795de8df22964",
+    "availability": "b57bdafda27ca77379af8ba7384ebeb019b85afaf2140925e20a8ace4d39a188"
+  },
+  "evidence": [
+    {
+      "path": "eval/results/20261009-bound-speech-repeatability.json",
+      "sha256": "9cdb568c67cca2a37c8cc2ec0c2ed124723d0caf5a7b95c793ba6b0c8ef26593"
+    },
+    {
+      "path": "eval/results/probe-bound-speech-repeatability-20261009-v4.mjs",
+      "sha256": "8ed9c8a9e600a35e371ceb4801fba9955d2c0372f4a48dea73103e8007b08326"
+    },
+    {
+      "path": "eval/results/20261009-bound-speech-repeatability-verification.json",
+      "sha256": "044b81d280effdeb05677b6620c3bcca577db7d53d99efacc4aa73c11f9558e8"
+    },
+    {
+      "path": "eval/results/verify-bound-speech-repeatability-partial-20261009.py",
+      "sha256": "88e23984965ee670c4277e31c82f828ac7fcabbf4ae0dbf98208ec850a11711c"
+    },
+    {
+      "path": "eval/results/20261009-bound-speech-repeatability-preflight-v4.json",
+      "sha256": "4e27570c2130ffb6c70a3be8a306037693b49fe7c52d28948b06be5e7fc26cb9"
+    },
+    {
+      "path": "eval/results/20261009-bound-speech-repeatability-preflight-v4-verification.json",
+      "sha256": "0973b8169ab4a7dadebcbd9682c9808246101b7d878fe26d1afc9985e80633b5"
+    }
+  ],
+  "run": {
+    "startedAt": "2026-10-09T00:55:24.659Z",
+    "completedAt": "2026-10-09T00:58:25.629Z",
+    "exitCode": 1,
+    "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791507317445.log",
+    "sourceStable": true
+  },
+  "speechContent": "58 completed provider transcripts match literal; independent acoustic recognition not run because credits exhausted",
+  "defaultGate": {
+    "syntheticCandidateGate": "fail",
+    "noiseCritical": 12,
+    "noiseRuns": 18,
+    "safetyCritical": 10,
+    "safetyRuns": 24,
+    "statusExitCode": 2
+  },
+  "release": {
+    "productionAdmission": "hold",
+    "releaseGate": "unverified",
+    "humanEvidence": false,
+    "carrierEvidence": false,
+    "realClinikoRequests": 0,
+    "realEmailRequests": 0,
+    "recognitionRequests": 0
+  },
+  "fullRegression": {
+    "sourceHead": "f7e02b95b691845ac0a8cfb976eab2481790b0db",
+    "mergeHead": "be51d54be8115fa5df1f5ac28075e7a11aee911b",
+    "treesEqual": true,
+    "pr": 450,
+    "postgres": {
+      "tests": 1661,
+      "passed": 1660,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 1,
+      "orderingPassed": 1
+    },
+    "browser": {
+      "passed": 75,
+      "orderingPassed": 1
+    },
+    "command": "bash scripts/with-postgres.sh bash -lc 'npm run db:migrate && ABBY_LEDGER=postgres npm run test:postgres && npm run test:browser && git diff --check'",
+    "exitCode": 0,
+    "typecheck": "focused source passed earlier",
+    "privateStatusSha256": "c9427f44606e83bb090b010870dd38fe89d30200d5b221f6aaf33051d1c9e37b",
+    "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791504469054.log",
+    "cloudCI": "eight current-head PR jobs billing-blocked before execution; no CI pass"
+  }
+}
