@@ -1,3 +1,4 @@
+import { compiledRuntimeEntrypoint } from "../test/support/compiled-runtime-entrypoint.ts";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -239,7 +240,7 @@ async function main() {
       ABBY_SEVEN_DAY_AVAILABILITY_ENABLED: "0",
       ABBY_OPENAI_API_KEY: "synthetic-openai", ABBY_OPENAI_INTENT_MODEL: "synthetic-model",
     };
-    const enable = spawnSync(process.execPath, ["scripts/set-voice-test-automation.ts", "enable"],
+    const enable = spawnSync(process.execPath, [compiledRuntimeEntrypoint("scripts/set-voice-test-automation.ts"), "enable"],
       { cwd: root, env, encoding: "utf8", timeout: 15_000 });
     assert.equal(enable.status, 0, "synthetic test policy could not be enabled");
     const approvalDb = connectPostgres(target.toString());
@@ -248,7 +249,7 @@ async function main() {
       accountRef: accountSid, dialedNumber: number, routeVersion: "public-probe-v1",
       apiKey: "synthetic-key-au5" }); }
     finally { await approvalDb.destroy(); }
-    runner = spawn(process.execPath, ["test/support/start-synthetic-voice-runner.ts"],
+    runner = spawn(process.execPath, [compiledRuntimeEntrypoint("test/support/start-synthetic-voice-runner.ts")],
       { cwd: root, env, stdio: ["ignore", "pipe", "pipe", "ipc"] });
     runner.stdout.resume();
     runner.stderr.resume();

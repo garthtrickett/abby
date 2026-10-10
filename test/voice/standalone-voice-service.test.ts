@@ -1,3 +1,4 @@
+import { compiledRuntimeEntrypoint } from "../support/compiled-runtime-entrypoint.ts";
 import { seedSyntheticVoicePreferences } from "../support/seed-synthetic-voice-preferences.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -63,38 +64,38 @@ test("E2E-171 E2E-218 local voice runner prunes expired operations at startup an
         (tenant_id, clinic_id, location_id, date, kind, count)
         values ('idle-clinic', 'clinic', 'main', date '2020-01-01', 'voiceFailure', 1)`.execute(db);
     } finally { await db.destroy(); }
-    const invalid = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
+    const invalid = spawn(process.execPath, [compiledRuntimeEntrypoint("scripts/serve-cliniko-voice.ts")], {
       cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_TWILIO_BINDING_KEY_HEX: "bad" },
       stdio: ["ignore", "pipe", "pipe"] });
     const [invalidCode] = await once(invalid, "exit");
     assert.equal(invalidCode, 1);
-    const invalidMode = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
+    const invalidMode = spawn(process.execPath, [compiledRuntimeEntrypoint("scripts/serve-cliniko-voice.ts")], {
       cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_VOICE_TEST_MODE: "yes" },
       stdio: ["ignore", "pipe", "pipe"] });
     assert.equal((await once(invalidMode, "exit"))[0], 1);
-    const unisolatedEphemeral = spawnSync(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
+    const unisolatedEphemeral = spawnSync(process.execPath, [compiledRuntimeEntrypoint("scripts/serve-cliniko-voice.ts")], {
       cwd: new URL("../../", import.meta.url),
       env: { ...env, ABBY_ISOLATED_POSTGRES_PROBE: undefined }, encoding: "utf8" });
     assert.equal(unisolatedEphemeral.status, 1);
     assert.equal(unisolatedEphemeral.stderr, "invalid ABBY_VOICE_PORT\n");
-    const invalidOperationalToken = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
+    const invalidOperationalToken = spawn(process.execPath, [compiledRuntimeEntrypoint("scripts/serve-cliniko-voice.ts")], {
       cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_VOICE_OPERATIONS_TOKEN_HEX: "short" },
       stdio: ["ignore", "pipe", "pipe"] });
     assert.equal((await once(invalidOperationalToken, "exit"))[0], 1);
-    const invalidWeekMode = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
+    const invalidWeekMode = spawn(process.execPath, [compiledRuntimeEntrypoint("scripts/serve-cliniko-voice.ts")], {
       cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_SEVEN_DAY_AVAILABILITY_ENABLED: "yes" },
       stdio: ["ignore", "pipe", "pipe"] });
     assert.equal((await once(invalidWeekMode, "exit"))[0], 1);
-    const missingWeekInstruction = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
+    const missingWeekInstruction = spawn(process.execPath, [compiledRuntimeEntrypoint("scripts/serve-cliniko-voice.ts")], {
       cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_SEVEN_DAY_AVAILABILITY_ENABLED: "1" },
       stdio: ["ignore", "pipe", "pipe"] });
     assert.equal((await once(missingWeekInstruction, "exit"))[0], 1);
-    const disabledWeekInstruction = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
+    const disabledWeekInstruction = spawn(process.execPath, [compiledRuntimeEntrypoint("scripts/serve-cliniko-voice.ts")], {
       cwd: new URL("../../", import.meta.url), env: { ...env,
         ABBY_GREETING_APPROVED_TEXT: `${env.ABBY_GREETING_APPROVED_TEXT} Press 3 for possible times over the next week.` },
       stdio: ["ignore", "pipe", "pipe"] });
     assert.equal((await once(disabledWeekInstruction, "exit"))[0], 1);
-    child = spawn(process.execPath, ["scripts/serve-cliniko-voice.ts"], {
+    child = spawn(process.execPath, [compiledRuntimeEntrypoint("scripts/serve-cliniko-voice.ts")], {
       cwd: new URL("../../", import.meta.url), env, stdio: ["ignore", "pipe", "pipe", "ipc"] });
     port = await waitForVoiceListener(child);
     const health = await healthy(port);
@@ -183,11 +184,11 @@ test("E2E-172 E2E-185 E2E-209 E2E-217 isolated voice runner enforces durable app
     created = true;
     const db = connectPostgres(target.toString());
     try { await migrate(db); } finally { await db.destroy(); }
-    const enable = spawnSync(process.execPath, ["scripts/set-voice-test-automation.ts", "enable"], {
+    const enable = spawnSync(process.execPath, [compiledRuntimeEntrypoint("scripts/set-voice-test-automation.ts"), "enable"], {
       cwd: new URL("../../", import.meta.url), env, encoding: "utf8",
     });
     assert.equal(enable.status, 0, enable.stderr);
-    child = spawn(process.execPath, ["test/support/start-synthetic-voice-runner.ts"], {
+    child = spawn(process.execPath, [compiledRuntimeEntrypoint("test/support/start-synthetic-voice-runner.ts")], {
       cwd: new URL("../../", import.meta.url), env, stdio: ["ignore", "pipe", "pipe", "ipc"] });
     child.on("message", message => {
       if (typeof message === "object" && message !== null && "kind" in message &&
@@ -376,7 +377,7 @@ test("E2E-172 E2E-185 E2E-209 E2E-217 isolated voice runner enforces durable app
       { label: "caller", value: callerNumber }, { label: "provider_call", value: callSid },
       { label: "appointment", value: "synthetic-only" },
     ]), []);
-    const disable = spawnSync(process.execPath, ["scripts/set-voice-test-automation.ts", "disable"], {
+    const disable = spawnSync(process.execPath, [compiledRuntimeEntrypoint("scripts/set-voice-test-automation.ts"), "disable"], {
       cwd: new URL("../../", import.meta.url), env: { ...env, ABBY_AUTOMATION_EXPECTED_VERSION: "1" },
       encoding: "utf8",
     });

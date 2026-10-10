@@ -1,3 +1,4 @@
+import { compiledRuntimeEntrypoint } from "../support/compiled-runtime-entrypoint.ts";
 import { seedSyntheticVoicePreferences } from "../support/seed-synthetic-voice-preferences.ts";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -143,7 +144,7 @@ test("E2E-212 E2E-246 E2E-248 E2E-249 durable admin settings pin a signed call a
         ABBY_GREETING_APPROVED_TEXT: "This is an Abby test call. Press 1 for possible times today. Press 2 for possible times tomorrow.",
         ABBY_SEVEN_DAY_AVAILABILITY_ENABLED: "0", ABBY_OPENAI_API_KEY: "synthetic-openai",
         ABBY_OPENAI_INTENT_MODEL: "synthetic-model" };
-      child = spawn(process.execPath, ["test/support/start-synthetic-voice-runner.ts"], { cwd: root,
+      child = spawn(process.execPath, [compiledRuntimeEntrypoint("test/support/start-synthetic-voice-runner.ts")], { cwd: root,
         env, stdio: ["ignore", "pipe", "pipe", "ipc"] });
       child.stdout?.on("data", data => { runnerOutput += String(data); });
       child.stderr?.on("data", data => { runnerOutput += String(data); });

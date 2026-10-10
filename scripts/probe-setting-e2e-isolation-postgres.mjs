@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { runOrderedBrowserE2E } from "./ordered-browser-e2e.mjs";
+import { BoundedCommandError, runBoundedCommand } from "./bounded-command.ts";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const args = process.argv.slice(2);
@@ -47,28 +47,25 @@ assert.ok(nodeFiles.size > 0 && browserFiles.size > 0);
 
 async function execute(command, args, timeoutMs, env = process.env) {
   process.stdout.write(`command ${command} ${args.join(" ")} (deadline ${timeoutMs}ms)\n`);
-  const child = spawn(command, args, { cwd: root, stdio: ["ignore", "pipe", "pipe"],
-    signal: AbortSignal.timeout(timeoutMs), env });
-  let output = "";
-  for (const stream of [child.stdout, child.stderr]) stream.on("data", chunk => {
-    output += chunk.toString();
-    if (output.length > 2_000_000) child.kill();
-  });
-  const code = await new Promise((resolve, reject) => {
-    child.once("error", error => reject(new Error(
-      `${command} ${args.join(" ")} failed: ${error.message}\n${output.split("\n").slice(-35).join("\n")}`,
-      { cause: error })));
-    child.once("close", resolve);
-  });
-  if (code !== 0) {
-    const lines = output.split("\n");
+  try { return await runBoundedCommand(command, args, timeoutMs, { cwd: root, env }); }
+  catch (error) {
+    if (!(error instanceof BoundedCommandError)) throw error;
+    const lines = error.output.split("\n");
     const failures = lines.flatMap((line, index) => /^\s*not ok \d+ - /.test(line) ? [index] : []);
     const excerpt = failures.length ? failures.flatMap(index =>
       lines.slice(Math.max(0, index - 3), index + 18)) : lines.slice(-35);
     const artifacts = [...new Set(lines.filter(line => line.includes("Browser artifacts: ")))];
-    throw new Error(`${command} ${args.join(" ")} exited ${code}:\n${excerpt.join("\n")}\n${artifacts.join("\n")}\n${lines.slice(-10).join("\n")}`);
+    const pending = new Set();
+    for (const line of lines.filter(line => line.startsWith("ABBY_NODE_EVENT "))) {
+      let event;
+      try { event = JSON.parse(line.slice("ABBY_NODE_EVENT ".length)); }
+      catch { continue; } // An interrupted final write may leave one partial diagnostic line.
+      if (typeof event?.file !== "string") continue;
+      if (event.kind === "dispatched") pending.add(event.file);
+      if (event.kind === "finished") pending.delete(event.file);
+    }
+    throw new Error(`${error.message}:\n${excerpt.join("\n")}\n${artifacts.join("\n")}\nUnfinished Node files: ${[...pending].join(", ")}\n${lines.slice(-10).join("\n")}`, { cause: error });
   }
-  return output;
 }
 
 function idsFor(entries) { return [...new Set(entries.flatMap(([, ids]) => [...ids]))]; }
@@ -127,6 +124,7 @@ async function runBrowser(entries, workers) {
 }
 
 await Promise.all([
+  ...(browserOnly ? [] : [execute("npm", ["run", "build:voice-tests"], 120_000)]),
   execute("npm", ["run", "build:cliniko-admin"], 120_000),
   execute("npm", ["run", "build:dashboard"], 120_000),
   execute("npm", ["run", "build:sign-in"], 120_000),

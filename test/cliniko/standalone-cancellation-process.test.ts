@@ -1,3 +1,4 @@
+import { compiledRuntimeEntrypoint } from "../support/compiled-runtime-entrypoint.ts";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -77,7 +78,7 @@ test("E2E-272/E2E-278 killed reference and composed text cancellation owners lea
         const address = server.address(); assert.ok(address && typeof address !== "string");
         const proxy = `http://127.0.0.1:${address.port}`;
         const launch = (mode: "send" | "recover") => {
-          const child = spawn(process.execPath, ["test/support/standalone-cancellation-worker.ts"], {
+          const child = spawn(process.execPath, [compiledRuntimeEntrypoint("test/support/standalone-cancellation-worker.ts")], {
             cwd: new URL("../../", import.meta.url), env: { DATABASE_URL: target.toString() },
             stdio: ["pipe", "pipe", "pipe"], signal: AbortSignal.timeout(25_000) });
           children.push(child); let stdout = "", stderr = "";

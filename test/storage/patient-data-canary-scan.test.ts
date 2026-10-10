@@ -24,9 +24,14 @@ test("canary scan retains exact substring locations and ordering with bounded da
   });
   const quoted = "quote'_%\\needle", unicode = "synthetic-雪-needle", escaped = "\\000";
   try {
+    await sql`create table canaries (value text)`.execute(isolated);
     await sql`create table "scan values" ("text value" text, metadata jsonb, bytes bytea, absent text)`.execute(isolated);
     await sql`insert into "scan values" values (${quoted + unicode}, ${JSON.stringify({ quoted, unicode })}::jsonb,
       ${Buffer.from([0])}, null), (null, null, null, null)`.execute(isolated);
+    const wideColumns = Array.from({ length: 16 }, (_, index) => sql`${sql.id(`part ${index}`)} text`);
+    await sql`create table "wide values" (${sql.join(wideColumns)})`.execute(isolated);
+    await sql`insert into "wide values" values (${sql.join(Array.from({ length: 16 }, (_, index) =>
+      index === 15 ? unicode : null))})`.execute(isolated);
     const canaries = [{ label: "unicode", value: unicode }, { label: "quoted", value: quoted },
       { label: "escaped", value: escaped }];
     assert.deepEqual(await scanPatientDataCanaries(observed, canaries), { ok: true, value: [
@@ -34,6 +39,7 @@ test("canary scan retains exact substring locations and ordering with bounded da
       { label: "quoted", table: "scan values", column: "text value" },
       { label: "unicode", table: "scan values", column: "metadata" },
       { label: "escaped", table: "scan values", column: "bytes" },
+      { label: "unicode", table: "wide values", column: "part 15" },
     ] });
     assert.ok(queries < 8, `small diagnostic requires too many database round trips: ${queries}`);
     assert.deepEqual(await scanPatientDataCanaries(isolated, [{ label: "missing", value: "not-present-needle" }]), { ok: true, value: [] });
@@ -43,10 +49,26 @@ test("canary scan retains exact substring locations and ordering with bounded da
       { label: "unicode", table: "c", column: "value" },
       { label: "unicode", table: "scan values", column: "text value" },
       { label: "unicode", table: "scan values", column: "metadata" },
+      { label: "unicode", table: "wide values", column: "part 15" },
     ] });
     const beforeInvalid = queries;
     assert.deepEqual(await scanPatientDataCanaries(observed, [{ label: "bad-label", value: quoted }]), { ok: false, error: { kind: "invalidInput" } });
     assert.equal(queries, beforeInvalid);
+    // Keep the original small-schema checks above and also cross multiple query boundaries.
+    const boundaryColumns = Array.from({ length: 130 }, (_, index) => sql`${sql.id(`boundary ${index}`)} text`);
+    await sql`create table "batch values" (${sql.join(boundaryColumns)})`.execute(isolated);
+    const boundaryIndexes = [0, 63, 64, 129];
+    await sql`insert into "batch values" values (${sql.join(Array.from({ length: 130 }, (_, index) =>
+      boundaryIndexes.includes(index) ? unicode : null))})`.execute(isolated);
+    const beforeBoundary = queries;
+    assert.deepEqual(await scanPatientDataCanaries(observed, [canaries[0]!]), { ok: true, value: [
+      ...boundaryIndexes.map(index => ({ label: "unicode", table: "batch values", column: `boundary ${index}` })),
+      { label: "unicode", table: "c", column: "value" },
+      { label: "unicode", table: "scan values", column: "text value" },
+      { label: "unicode", table: "scan values", column: "metadata" },
+      { label: "unicode", table: "wide values", column: "part 15" },
+    ] });
+    assert.ok(queries - beforeBoundary < 8, "batched scan requires too many database round trips");
   } finally {
     await isolated.destroy();
     await sql.raw(`drop schema "${schema}" cascade`).execute(db);

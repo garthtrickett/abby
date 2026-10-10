@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import twilio from "twilio";
+import { validateRequest } from "twilio/lib/webhooks/webhooks.js";
+import VoiceResponse from "twilio/lib/twiml/VoiceResponse.js";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import type { AuthenticatedInboundCall } from "./admission.ts";
@@ -143,7 +144,7 @@ export class TwilioSignedIngress {
       if (Object.hasOwn(form, key)) return err({ kind: "invalidTwilioRequest" });
       form[key] = value;
     }
-    if (!twilio.validateRequest(this.config.authToken, request.signature, this.config.publicWebhookUrl, form)) {
+    if (!validateRequest(this.config.authToken, request.signature, this.config.publicWebhookUrl, form)) {
       return err({ kind: "invalidTwilioSignature" });
     }
     if (form.AccountSid !== this.config.accountSid || !callSidPattern.test(form.CallSid ?? "") ||
@@ -157,7 +158,7 @@ export class TwilioSignedIngress {
     const token = this.binding([1, form.AccountSid, form.CallSid!, form.To!, from,
       receivedAt, issuedAt + TWILIO_BINDING_LIFETIME_MS]);
     if (token.length + "abbyBinding".length >= 500) return err({ kind: "invalidTwilioRequest" });
-    const response = new twilio.twiml.VoiceResponse();
+    const response = new VoiceResponse();
     response.connect().stream({ url: this.config.publicStreamUrl }).parameter({
       name: "abbyBinding", value: token,
     });
@@ -176,7 +177,7 @@ export class TwilioSignedIngress {
     if (request.method !== "GET" || request.requestTarget !== target(this.streamUrl) || !request.signature) {
       return err({ kind: "invalidTwilioRequest" });
     }
-    if (!twilio.validateRequest(this.config.authToken, request.signature, this.config.publicStreamUrl, {})) {
+    if (!validateRequest(this.config.authToken, request.signature, this.config.publicStreamUrl, {})) {
       return err({ kind: "invalidTwilioSignature" });
     }
     return ok(true);

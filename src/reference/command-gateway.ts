@@ -219,6 +219,10 @@ export class CommandGateway {
   }
 
   listPermitted(): readonly CapabilityDescriptor[] {
+    return this.permittedIds().map(capabilityDescriptor);
+  }
+
+  private permittedIds(): readonly CapabilityId[] {
     const permitted: CapabilityId[] = ["settings.read.v1", "booking.propose.v2", "appointments.change.propose.v1",
       "patients.intake.propose.v1", "knowledge.answer.v2", "calls.urgent.respond.v1", "calls.notifications.outcome.v1", "calls.presence.respond.v1", "calls.missedCall.respond.v1"];
     if (this.reception.bookingHorizonEnabled()) permitted.push("booking.horizon.read.v1");
@@ -258,15 +262,16 @@ export class CommandGateway {
       if (this.writeStopLedger) permitted.push("calls.writes.stop.v1", "calls.writes.stop.read.v1",
         "calls.writes.resume.v1", "calls.writes.stop.audit.v1");
     }
-    return permitted.map(capabilityDescriptor);
+    return permitted;
   }
 
   async submit(command: GatewayCommand): Promise<Result<GatewayReply, GatewayFailure>> {
     let kind: unknown;
     try { kind = command?.kind; }
     catch { return err({ kind: "invalid" }); }
-    const capability = this.listPermitted().find(item => item.id === kind);
-    if (!capability) return err({ kind: "forbidden" });
+    const id = this.permittedIds().find(item => item === kind);
+    if (!id) return err({ kind: "forbidden" });
+    const capability = capabilityDescriptor(id);
     try { if (!matchesSchema(capability.inputSchema, command)) return err({ kind: "invalid" }); }
     catch { return err({ kind: "invalid" }); }
     let result: Result<GatewayReply, GatewayFailure>;
