@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist/runtime",
+    "noEmit": false,
+    "noEmitOnError": true,
+    "rewriteRelativeImportExtensions": true
+  },
+  "files": ["scripts/serve-cliniko-voice.ts", "scripts/set-voice-test-automation.ts"],
+  "include": []
+}

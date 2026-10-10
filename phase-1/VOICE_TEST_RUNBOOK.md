@@ -40,6 +40,7 @@ To send those crossings to an owner-controlled receiver, configure an HTTPS `ABB
 
 ```sh
 npm run voice:preflight -- --config-only
+npm run build:runtime
 npm run voice:test-policy -- enable
 npm run voice:local
 ```
@@ -62,3 +63,5 @@ Record a pass or failure for each case with the test number, route version, time
 | Normal hangup | Confirm Twilio does not unexpectedly ring the fallback destination after a completed test call. If it does, revise the post-stream route before any clinic use. |
 
 After testing, stop the runner, set `ABBY_AUTOMATION_EXPECTED_VERSION` to the observed new version, and run `npm run voice:test-policy -- disable`. Keep the Twilio number pointed at the independent fallback Function until the next supervised test. General clinic readiness remains blocked by D-09 and D-12 until the real carrier fallback and other clinic approvals are proven.
+
+The fixture build also emits the cancellation and rescheduling workers used by process recovery tests. Run `npm run build:voice-tests` before invoking those files directly; their assertions and deadlines remain the same.

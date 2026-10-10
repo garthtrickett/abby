@@ -18,25 +18,36 @@ export async function scanPatientDataCanaries(db: Kysely<Database>, canaries: re
       new Set(canaries.map(canary => canary.label)).size !== canaries.length) return err({ kind: "invalidInput" });
   try {
     return await db.transaction().setIsolationLevel("repeatable read").execute(async trx => {
-      const columns = await sql<{ table_name: string; column_name: string; data_type: string }>`
-        select c.table_name, c.column_name, c.data_type
+      const columns = await sql<{ table_schema: string; table_name: string; column_name: string; data_type: string }>`
+        select c.table_schema, c.table_name, c.column_name, c.data_type
         from information_schema.columns c
         join information_schema.tables t on t.table_schema = c.table_schema and t.table_name = c.table_name
         where c.table_schema = current_schema() and t.table_type = 'BASE TABLE'
         order by c.table_name, c.ordinal_position`.execute(trx);
       const hits: PatientDataCanaryHit[] = [];
-      for (const column of columns.rows) {
-        const table = sql.id(column.table_name);
-        const field = sql.id("scan_row", column.column_name);
-        const text = column.data_type === "bytea" ? sql`encode(${field}, 'escape')` : sql`${field}::text`;
-        // Keep every substring check in the same snapshot, with one round trip per column.
-        const found = await sql<{ ordinal: number; hit: boolean }>`
-          select c.ordinality::int as ordinal,
+      const batchSize = 64;
+      for (let offset = 0; offset < columns.rows.length; offset += batchSize) {
+        const group = columns.rows.slice(offset, offset + batchSize);
+        const checks = group.map((column, index) => {
+          const table = sql.id(column.table_schema, column.table_name);
+          const field = sql.id("scan_row", column.column_name);
+          const text = column.data_type === "bytea" ? sql`encode(${field}, 'escape')` : sql`${field}::text`;
+          return sql`select ${offset + index}::int as column_ordinal, c.ordinal,
             exists(select 1 from ${table} as scan_row where position(c.value in ${text}) > 0) as hit
-          from unnest(${canaries.map(canary => canary.value)}::text[]) with ordinality as c(value, ordinality)
-          order by c.ordinality`.execute(trx);
+            from canaries c`;
+        });
+        // Preserve every column check and its order in the same snapshot, bounding each query's size.
+        const found = await sql<{ column_ordinal: number; ordinal: number; hit: boolean }>`
+          with canaries as (
+            select value, ordinality::int as ordinal
+            from unnest(${canaries.map(canary => canary.value)}::text[]) with ordinality as c(value, ordinality)
+          )
+          ${sql.join(checks, sql` union all `)}
+          order by column_ordinal, ordinal`.execute(trx);
         for (const row of found.rows) {
-          if (row.hit) hits.push({ label: canaries[row.ordinal - 1]!.label, table: column.table_name, column: column.column_name });
+          const column = columns.rows[row.column_ordinal]!;
+          if (row.hit) hits.push({ label: canaries[row.ordinal - 1]!.label,
+            table: column.table_name, column: column.column_name });
         }
       }
       return ok(hits);

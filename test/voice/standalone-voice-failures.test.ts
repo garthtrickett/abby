@@ -1,3 +1,4 @@
+import { compiledRuntimeEntrypoint } from "../support/compiled-runtime-entrypoint.ts";
 import { seedSyntheticVoicePreferences } from "../support/seed-synthetic-voice-preferences.ts";
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
@@ -131,10 +132,10 @@ async function withFixture(fault: Fault, run: (fixture: Fixture) => Promise<void
           ...(secondAlternativeApproved ? [{ practitionerId: "66", appointmentTypeId: "77" }] : []),
         ] } : {}) });
     } finally { await db.destroy(); }
-    await execFileAsync(process.execPath, ["scripts/set-voice-test-automation.ts", "enable"],
+    await execFileAsync(process.execPath, [compiledRuntimeEntrypoint("scripts/set-voice-test-automation.ts"), "enable"],
       { cwd: root, env, encoding: "utf8", timeout: 15_000 });
     const launch = async (): Promise<void> => {
-      child = spawn(process.execPath, ["test/support/start-synthetic-voice-runner.ts"],
+      child = spawn(process.execPath, [compiledRuntimeEntrypoint("test/support/start-synthetic-voice-runner.ts")],
         { cwd: root, env, stdio: ["ignore", "pipe", "pipe", "ipc"] });
       child.on("message", message => {
         if (typeof message === "object" && message !== null && "kind" in message &&

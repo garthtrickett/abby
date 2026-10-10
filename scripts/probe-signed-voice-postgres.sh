@@ -4,6 +4,7 @@ set -euo pipefail
 # One disposable PostgreSQL server; independent Node test files run with four
 # workers. Globs include new standalone and signed embedded voice files.
 npm run build:cliniko-admin >/dev/null
+npm run build:voice-tests >/dev/null
 npm run db:migrate >/dev/null
 ABBY_LEDGER=postgres node --test --test-concurrency=4 \
   test/voice/standalone-*.test.ts \

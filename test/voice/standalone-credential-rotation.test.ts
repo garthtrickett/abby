@@ -1,3 +1,4 @@
+import { compiledRuntimeEntrypoint } from "../support/compiled-runtime-entrypoint.ts";
 import { seedSyntheticVoicePreferences } from "../support/seed-synthetic-voice-preferences.ts";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -82,7 +83,7 @@ test("E2E-215 rotated Cliniko credential blocks signed calls until a clinic admi
       ABBY_SEVEN_DAY_AVAILABILITY_ENABLED: "0", ABBY_OPENAI_API_KEY: "synthetic-openai",
       ABBY_OPENAI_INTENT_MODEL: "synthetic-model" };
     const start = async (key: string) => {
-      child = spawn(process.execPath, ["test/support/start-synthetic-voice-runner.ts"], {
+      child = spawn(process.execPath, [compiledRuntimeEntrypoint("test/support/start-synthetic-voice-runner.ts")], {
         cwd: root, env: { ...envBase, ABBY_CLINIKO_API_KEY: key }, stdio: ["ignore", "pipe", "pipe", "ipc"],
       });
       child.stdout?.on("data", data => { output += String(data); });
