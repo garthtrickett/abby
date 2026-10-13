@@ -3,6 +3,8 @@
   "files": [
     "scripts/serve-cliniko-voice.ts",
     "scripts/set-voice-test-automation.ts",
+    "scripts/serve-voice-operational-alert-receiver.ts",
+    "scripts/read-voice-operational-alert-inbox.ts",
     "test/support/start-synthetic-voice-runner.ts",
     "test/support/start-synthetic-clinical-runner.ts",
     "test/support/standalone-cancellation-worker.ts",

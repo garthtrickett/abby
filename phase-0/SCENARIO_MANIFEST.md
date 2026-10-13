@@ -335,3 +335,6 @@ E2E-311 additionally proves named staff requests through a separately compiled s
 
 E2E-294 also records real loopback TLS/SMTP delivery through the actual caller verifier and protected read, with synthetic account/contact/certificate data. Independent permission denial stops before submission; authentication, certificate, malformed reply, abort and unknown acceptance faults cannot grant proof or trigger resend. This supplementary text evidence does not prove live mailbox receipt or carrier behavior; see [the SMTP delivery contract](../phase-2/VERIFICATION_SMTP_DELIVERY.md).
 
+
+
+E2E-220 additionally covers the optional durable aggregate receiver: authenticated exact payloads and clinic binding, retained days/configured thresholds, concurrent file/process deduplication, real HTTP response loss after storage, actual SIGKILL and compiled reader/receiver restart. Incomplete bodies, unsafe/corrupt storage and invalid records cannot report acceptance. Receipts contain only date/counter/first count/threshold, never patient, call, token or webhook key. This is local transport acceptance, not human paging or clinical activation.

@@ -1,24 +1,11 @@
 import { fileURLToPath } from "node:url";
 import { connectPostgres } from "../src/storage/connect.ts";
 import { PostgresOperationalCounters } from "../src/storage/postgres-operational-counters.ts";
-import { emptyOperationalCounts } from "../src/voice/operational-counts.ts";
 import type { OperationalCounterKind, OperationalDailyCounts } from "../src/voice/operational-counts.ts";
+import { parseThresholds } from "../src/standalone/operational-alert.ts";
+export { parseThresholds } from "../src/standalone/operational-alert.ts";
 
 type Thresholds = Readonly<Partial<Record<OperationalCounterKind, number>>>;
-
-/** An omitted code is disabled. Unknown codes and free-text values are never accepted. */
-export function parseThresholds(raw: string): Thresholds {
-  const value: unknown = JSON.parse(raw);
-  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new RangeError("invalid thresholds");
-  const fields = value as Record<string, unknown>;
-  if (Object.keys(fields).length === 0) throw new RangeError("invalid thresholds");
-  const allowed = emptyOperationalCounts();
-  for (const [kind, threshold] of Object.entries(fields)) {
-    if (!Object.hasOwn(allowed, kind) || !Number.isSafeInteger(threshold) ||
-        (threshold as number) < 1) throw new RangeError("invalid thresholds");
-  }
-  return fields as Thresholds;
-}
 
 function crossedDayThresholds(day: OperationalDailyCounts["days"][number], thresholds: Thresholds) {
   return Object.entries(thresholds).sort(([a], [b]) => a.localeCompare(b)).flatMap(([kind, threshold]) => {

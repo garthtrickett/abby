@@ -7,3 +7,12 @@
 The local demo runs alert staging before each periodic effect-recovery pass. An embedded or production host must start that loop for each active location, implement the operator alert port with an approved destination and authoritative key lookup, and route failed or unproven delivery through an independent operational channel. If the port is absent, the pending intent remains durable and the worker reports failure. The synthetic reference host is not a real notification channel; D-07 and the live FR-19 readiness gate remain open.
 
 Memory and PostgreSQL journeys cover overdue and review-required alerts, one logical delivery across repeats, crash-after-send reconciliation, failed delivery, obsolete alert cancellation, scope isolation, and loop ordering. A browser journey checks the staff-facing delivery status through the shared command path.
+
+The standalone aggregate health sender now has an optional [durable operational
+alert receiver](../deploy/voice/OPS_ALERT_RECEIVER.md). It accepts only
+authenticated configured clinic/day/counter/threshold alerts, persists no
+patient or call identifiers, and deduplicates across separate processes and
+actual receiver loss. A compiled owner reader recovers the scoped aggregate
+inbox. This is an infrastructure health channel; it does not replace Cliniko's
+patient-specific review queue, implement this reference task-alert port, page a
+human or prove duty ownership. Those live gap-3 requirements remain open.
