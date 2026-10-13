@@ -1,3 +1,4 @@
+import { readPatientCorrectionCarryover } from "./postgres-patient-correction-carryover.ts";
 import { readVoiceCarryover } from "./postgres-voice-carryover.ts";
 import { validClinicIntakeArchiveHistory } from "../portability/clinic-intake-history.ts";
 import { readNotificationCarryover } from "./postgres-notification-carryover.ts";
@@ -299,6 +300,7 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
         where tenant_id = ${sourceTenantId}`.execute(trx);
       const observedClinics = await sql<{ clinic_id: string }>`select clinic_id from clinic_automation where tenant_id = ${sourceTenantId}
         union select clinic_id from clinic_intake_settings where tenant_id = ${sourceTenantId}
+        union select clinic_id from clinic_patient_correction_settings where tenant_id = ${sourceTenantId}
         union select clinic_id from clinic_notification_settings where tenant_id = ${sourceTenantId}
         union select clinic_id from clinic_voice_settings where tenant_id = ${sourceTenantId}
         union select clinic_id from clinic_write_stop where tenant_id = ${sourceTenantId}
@@ -312,6 +314,9 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
         from clinic_automation where tenant_id = ${sourceTenantId} order by clinic_id, version`.execute(trx);
       const clinicIntake = await sql<AutomationRow>`select clinic_id, version, enabled, changed_by, previous_enabled, changed_at
         from clinic_intake_settings where tenant_id = ${sourceTenantId} order by clinic_id, version`.execute(trx);
+      let clinicPatientCorrections: Awaited<ReturnType<typeof readPatientCorrectionCarryover>>;
+      try { clinicPatientCorrections = await readPatientCorrectionCarryover(trx, sourceTenantId); }
+      catch { throw new ExportAbort("storageCorrupt"); }
       let clinicNotifications: Awaited<ReturnType<typeof readNotificationCarryover>>;
       try { clinicNotifications = await readNotificationCarryover(trx, sourceTenantId); }
       catch { throw new ExportAbort("storageCorrupt"); }
@@ -335,7 +340,7 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
           effective_from, effective_until, actor_ref, changed_at from clinic_knowledge_events
           where tenant_id = ${sourceTenantId} and status in ('approved', 'revoked')
           order by clinic_id, location_id, source_ref, version`.execute(trx)).rows;
-      return { schemaVersion, settings: settings.rows, automation: automation.rows, clinicIntake: clinicIntake.rows, clinicNotifications, clinicVoice, stops: stops.rows,
+      return { schemaVersion, settings: settings.rows, automation: automation.rows, clinicIntake: clinicIntake.rows, clinicPatientCorrections, clinicNotifications, clinicVoice, stops: stops.rows,
         knowledge, omittedTextCalls: callScan.value.count,
         omittedTextCallsByLocation: callScan.value.countsByLocation,
         sourceFenceVersion: request.expectedFenceVersion };
@@ -394,6 +399,8 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
         sourceClinicId: row.clinic_id, kind: "clinicIntake", version: row.version,
         isHead: intakeHeads.get(row.clinic_id) === row.version, enabled: row.enabled,
         changedBy: row.changed_by, previousEnabled: row.previous_enabled, changedAt: instant(row.changed_at) })),
+      ...snapshot.clinicPatientCorrections.map(row => ({ ...common(recordId("patientCorrections", row.sourceClinicId, row.version)),
+        kind: "clinicPatientCorrections", ...row })),
       ...snapshot.clinicNotifications.map(row => ({ ...common(recordId("notifications", row.sourceClinicId, row.version)),
         kind: "clinicNotifications", ...row })),
       ...snapshot.clinicVoice.map(row => ({ ...common(recordId("voice", row.sourceClinicId, row.version)),
