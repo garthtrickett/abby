@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 
 type RuntimeEntrypoint = "scripts/serve-cliniko-voice.ts" |
   "scripts/set-voice-test-automation.ts" | "test/support/start-synthetic-voice-runner.ts" |
+  "test/support/start-synthetic-clinical-runner.ts" |
   "test/support/standalone-cancellation-worker.ts" | "test/support/standalone-rescheduling-worker.ts";
 
 /** Resolve a separately compiled service or test worker without a source fallback. */

@@ -2,6 +2,8 @@ import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
 import type { ClinikoRequestBudget } from "../cliniko/read-budget.ts";
 import type { ClinikoSelectionApproval } from "../cliniko/catalogue-setup.ts";
 import type { ApprovedGreeting, LocationScope } from "../core/model.ts";
+import { err } from "../core/model.ts";
+import type { PolicyStore } from "../core/host.ts";
 import { validGreetingShape } from "../core/greeting.ts";
 import { sameScope } from "./appointment-change-authority.ts";
 import { ClinikoCallFlow } from "./cliniko-call-flow.ts";
@@ -36,6 +38,10 @@ export class ClinikoVoiceClinicalHost {
       ...(config.enquiry ? { enquiry: Object.freeze({ ...config.enquiry }) } : {}) });
   }
   get greeting(): ApprovedGreeting { return structuredClone(this.#config.greeting); }
+  get cataloguePolicy(): Pick<PolicyStore, "read"> {
+    return { read: scope => sameScope(scope, this.#config.scope) ? this.#config.policies.read(scope)
+      : Promise.resolve(err({ kind: "invalidValue" })) };
+  }
   usesBudget(budget: ClinikoRequestBudget): boolean { return this.#config.cliniko.rateBudget === budget; }
 
   /** Rechecked on webhook admission AND stream construction. A changed route,

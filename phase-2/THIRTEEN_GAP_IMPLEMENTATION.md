@@ -6,7 +6,7 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 
 | Order | Requirement | Current work and completion evidence |
 | --- | --- | --- |
-| 1 | Wire existing booking, enquiry, cancellation, rescheduling and intake into the running receptionist. | In progress: clinic-owned composition through the standalone server and exported runner. Require actual signed serving-path journeys, private verification, played confirmation, denial/revocation and no replay. Real clinical activation remains separately gated. |
+| 1 | Wire existing booking, enquiry, cancellation, rescheduling and intake into the running receptionist. | Local engineering proof now covers all five workflows through separately compiled runner subprocesses, signed serving paths, private verification, played confirmation, current-policy denial, independent permission, delivery loss and no replay. CI and real activation remain open under gaps 2–4. |
 | 2 | Connect caller verification and clinic-approved permissions. | Existing operation-bound interfaces; complete delivery integration and deploying-host permission wiring. Channel possession alone cannot grant proxy/minor authority. Require operation-specific positive/denied/lost-delivery journeys. |
 | 3 | Establish message delivery, staff handoff, monitoring and recovery ownership. | Existing recall/review/aggregate contracts; deployed receiver, real sender and human clinic process remain open. Build and test all independent adapters before external provisioning. |
 | 4 | Complete synthetic speech, public transport and eventual carrier qualification. | Prior synthetic runtime evidence exists; noisy/safety and repeated speech gates remain open. Paid probes require restored credits; public tunnel requires a dedicated usable route. Twilio-number carrier evidence is deferred, not substituted with synthetic results. |
@@ -42,3 +42,28 @@ The first actual standalone-server booking proof passed both tests with zero ski
 - Manifest 1.147 retains 347 scenarios and planned full-call evidence; E2E-299 adds the standalone clinical-host test file.
 
 This qualifies the initial serving-layer binding change. It does not close the complete first gap: exported clinical-runner subprocess journeys for every operation, real deploying-host permissions/delivery and admission evidence remain open. Remaining gaps 2–13 are unchanged and are not marked complete.
+
+## Compiled runner follow-up
+
+The exported runner now uses the clinical host's current scoped policy for
+catalogue validation and the host-selected qualified voice registry for adapter
+construction. Nine subprocess journeys passed with zero skips: booking,
+cancellation, rescheduling, enquiry, private intake then separate booking,
+unknown-write no-replay, independent permission denial, current-policy change
+and failed verification transport. Each actual runner remains unready for
+ordinary patient routing and denies a non-allowlisted caller.
+
+Command: `bash scripts/with-postgres.sh node --test --test-concurrency=4 test/voice/standalone-clinical-runner.test.ts`.
+Tracked result: `Abby complete compiled clinical runner policy and mail failure gate October 13`, exit 0; log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791860537566.log`.
+
+Initial fixture failures were diagnosed: default runner silence is 700 ms (the
+new caller initially sent only 100 ms), its IPC listener required explicit
+shutdown disconnection, and booking approvals lived outside the caller-policy
+folder and needed their own explicit synthetic credential rebinding. These
+fixture corrections preserve runtime silence, timeouts, concurrency and
+approval checks. Final typecheck, compiled entrypoint build and neighbouring default-route
+qualification passed: 14 checks, zero failures or skips. Production admission stays on hold; real permissions, sender,
+clinic staff process and speech qualification are not supplied by these tests.
+
+Final command: `npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh node --test --test-concurrency=4 test/voice/standalone-clinical-runner.test.ts test/voice/standalone-voice-service.test.ts test/voice/standalone-voice-profile.test.ts test/contract/scenario-manifest.test.ts`.
+Tracked job `Abby compiled clinical runner final type build and regression October 13` completed exit 0; log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791860823649.log`. This closes the local exported-runner journey evidence listed in the initial qualification. Gaps 2–13 and production activation remain open.

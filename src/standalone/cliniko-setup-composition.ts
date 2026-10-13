@@ -1,5 +1,6 @@
 import type { VoiceProfileRegistry } from "../core/voice-profile-registry.ts";
 import type { Kysely } from "kysely";
+import type { PolicyStore } from "../core/host.ts";
 import { ClinikoCatalogueReader } from "../cliniko/catalogue.ts";
 import type { ClinikoCatalogueFailure } from "../cliniko/catalogue.ts";
 import { ClinikoCatalogueSetup } from "../cliniko/catalogue-setup.ts";
@@ -24,6 +25,8 @@ export type StandaloneClinikoSetupConfig = Readonly<{
   voiceProfiles?: VoiceProfileRegistry;
   fetch?: typeof fetch;
   now?: () => string;
+  /** The same independently provisioned policy used by a clinical serving host. */
+  runtimePolicy?: Pick<PolicyStore, "read">;
 }>;
 
 /** Both admin and voice use this exact route, policy, credential and approval binding. */
@@ -41,7 +44,7 @@ export function createStandaloneClinikoSetup(config: StandaloneClinikoSetupConfi
     const policy = new PostgresPolicyStore(config.db, standaloneDefaultPolicy, "unavailable",
       unprovenReadiness, false, "standaloneMinimal", false, undefined, undefined, undefined, config.voiceProfiles);
     const routing = new ReferenceNumberRoutingHost([{ ...config.scope, ...config.route }]);
-    const setup = new ClinikoCatalogueSetup(catalogue.value, routing, policy,
+    const setup = new ClinikoCatalogueSetup(catalogue.value, routing, config.runtimePolicy ?? policy,
       new PostgresClinikoApprovalStore(config.db), config.now);
     return ok({ setup, policy });
   } catch { return err({ kind: "invalidConfig" }); }

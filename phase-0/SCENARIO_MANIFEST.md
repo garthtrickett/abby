@@ -1,4 +1,6 @@
-# Scenario manifest, version 1.147
+# Scenario manifest, version 1.148
+
+E2E-299, E2E-300 and E2E-314 now also run the separately compiled exported clinical runner: booking, cancellation, movement, enquiry and private first-time intake followed by separate booking. Exact provider requests, no-replay after loss, current-policy denial, independent permission, failed email transport and privacy are observed with patient-free ports. All full-call evidence remains planned.
 
 E2E-299 now also exercises the actual standalone server with a separately approved clinical host, shared PostgreSQL budget, signed ingress, private OTP and played booking confirmation. Changed clinical bindings deny host reuse. This is synthetic evidence; the default CLI remains availability-only until a deploying host is supplied and activation gates pass.
 
