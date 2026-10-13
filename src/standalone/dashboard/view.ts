@@ -1,3 +1,4 @@
+import type { ClinicPatientCorrectionAuditPage } from "../../core/clinic-patient-correction-setting.ts";
 import { voiceProfileView } from "./voice-profile-control.ts";
 import type { VoiceProfileState, VoiceProfileControl } from "./voice-profile-control.ts";
 import type { ClinicIntakeAuditPage } from "../../core/clinic-intake-setting.ts";
@@ -39,6 +40,7 @@ export type DashboardState = {
   cancellationAuditPage: CancellationSettingAuditPage | undefined;
   reschedulingAuditPage: ReschedulingSettingAuditPage | undefined;
   firstTimeIntakeAuditPage: ClinicIntakeAuditPage | undefined;
+  patientCorrectionsAuditPage: ClinicPatientCorrectionAuditPage | undefined;
   afterHoursAuditPage: AfterHoursSettingAuditPage | undefined;
   afterHoursInfoVersion: string;
   afterHoursApprovedText: string;
@@ -87,12 +89,15 @@ export type DashboardActions = Readonly<{
   toggleCancellation(): void;
   toggleRescheduling(): void;
   toggleFirstTimeIntake(): void;
+  togglePatientCorrections(): void;
   loadCancellationAudit(): void;
   loadReschedulingAudit(): void;
   loadFirstTimeIntakeAudit(): void;
+  loadPatientCorrectionsAudit(): void;
   loadMoreCancellationAudit(): void;
   loadMoreReschedulingAudit(): void;
   loadMoreFirstTimeIntakeAudit(): void;
+  loadMorePatientCorrectionsAudit(): void;
   loadAudit(): void;
   loadMoreAudit(): void;
   setAfterHoursField(field: "afterHoursInfoVersion" | "afterHoursApprovedText", value: string): void;
@@ -213,6 +218,17 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
         </div>
         ${state.policy ? html`<p class="muted">First-time intake capability: ${state.policy.capabilities.intake}</p>
           ${state.policy.capabilities.intake !== "execute" ? html`<p class="muted">This setting cannot grant patient creation permission the clinic's host does not support.</p>` : ""}` : ""}
+      </section>
+      <section class="card" aria-labelledby="patient-corrections-title">
+        <div class="row"><div><h2 id="patient-corrections-title">Patient detail corrections</h2>
+          <p class="status">${state.policy ? state.policy.patientCorrectionsEnabled === true ? "Patient corrections enabled" : "Patient corrections disabled" : "Patient corrections unavailable"}</p>
+          <p class="muted">Enable for new calls at every clinic location. Disabling also stops active correction calls.</p></div>
+          ${state.capabilities.some(item => item.id === "settings.patients.corrections.enabled.change.v1")
+            ? html`<button type="button" ?disabled=${state.busy || !state.policy} @click=${() => actions.togglePatientCorrections()}>${!state.policy ? "Patient corrections state unavailable" : state.policy.patientCorrectionsEnabled ? "Disable patient corrections" : "Enable patient corrections"}</button>`
+            : html`<span class="pill">View only</span>`}
+        </div>
+        ${state.policy ? html`<p class="muted">Patient correction availability: ${state.policy.capabilities.patientUpdate ?? "unavailable"}</p>
+          ${state.policy.capabilities.patientUpdate !== "execute" ? html`<p class="muted">Corrections are not currently available through this receptionist.</p>` : ""}` : ""}
       </section>
       <section class="card" aria-labelledby="after-hours-title">
         <h2 id="after-hours-title">After-hours information</h2>
@@ -385,6 +401,15 @@ export function dashboardView(state: DashboardState, actions: DashboardActions) 
           ${state.firstTimeIntakeAuditPage.entries.length ? html`<ul>${state.firstTimeIntakeAuditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.enabled ? "enabled" : "disabled"} · ${entry.actorRef} · ${entry.changedAt}</li>`)}</ul>`
             : html`<p>No first-time intake setting changes recorded.</p>`}
           ${state.firstTimeIntakeAuditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMoreFirstTimeIntakeAudit()}>Load more first-time intake history</button>` : ""}
+        </div>` : html`<p class="muted">Setting history unavailable.</p>`}
+      </section>` : ""}
+      ${state.capabilities.some(item => item.id === "settings.patients.corrections.audit.v1") ? html`<section class="card" aria-labelledby="patient-corrections-audit-title">
+        <div class="row"><h2 id="patient-corrections-audit-title">Patient corrections setting history</h2>
+          <button type="button" ?disabled=${state.busy} @click=${() => actions.loadPatientCorrectionsAudit()}>Refresh patient corrections history</button></div>
+        ${state.patientCorrectionsAuditPage ? html`<div aria-label="Patient corrections setting audit">
+          ${state.patientCorrectionsAuditPage.entries.length ? html`<ul>${state.patientCorrectionsAuditPage.entries.map(entry => html`<li>Version ${entry.version} · ${entry.enabled ? "enabled" : "disabled"} · ${entry.actorRef} · ${entry.changedAt}</li>`)}</ul>`
+            : html`<p>No patient corrections setting changes recorded.</p>`}
+          ${state.patientCorrectionsAuditPage.nextAfterVersion !== undefined ? html`<button type="button" ?disabled=${state.busy} @click=${() => actions.loadMorePatientCorrectionsAudit()}>Load more patient corrections history</button>` : ""}
         </div>` : html`<p class="muted">Setting history unavailable.</p>`}
       </section>` : ""}
       <section class="card" aria-labelledby="review-title">

@@ -38,11 +38,12 @@ export async function callerVerificationFixture(options: { scope?: LocationScope
       const found = await super.read(bound);
       return found.ok && (options.cancellationExecute || options.bookingExecute || options.reschedulingExecute || options.patientUpdateExecute)
         ? ok({ ...found.value, staffWorkEnabled: options.staffWorkEnabled ?? true,
-          capabilities: { ...found.value.capabilities, ...(options.patientUpdateExecute ? { patientUpdate: "execute" as const } : {}) } }) : found;
+          capabilities: { ...found.value.capabilities } }) : found;
     }
   }
   const policies = new FixturePolicy(options.bookingExecute ? "execute" : "requestOnly", () => now, async () => ok(true),
-    { ...(options.cancellationExecute ? { cancellation: "execute" as const } : {}), ...(options.reschedulingExecute ? { rescheduling: "execute" as const } : {}) });
+    { ...(options.cancellationExecute ? { cancellation: "execute" as const } : {}), ...(options.reschedulingExecute ? { rescheduling: "execute" as const } : {}),
+      ...(options.patientUpdateExecute ? { patientUpdate: "execute" as const } : {}) });
   let now = verificationNow, permitted = true, email = verificationCanaries[0]!, phone = "+61400111222";
   let candidates: CallerCandidates = { kind: "one", candidateIds: [verificationCanaries[2]!] };
   let approval: CallerVerificationApproval = { scope, revision: "demo-revision-1", approverRef: "synthetic-admin",
@@ -62,6 +63,7 @@ export async function callerVerificationFixture(options: { scope?: LocationScope
     if (options.bookingExecute) resultValue(await policies.changeBookingEnabled(scope, await currentVersion(), true, "synthetic-admin"));
     if (options.cancellationExecute) resultValue(await policies.changeCancellationEnabled(scope, await currentVersion(), true, "synthetic-admin"));
     if (options.reschedulingExecute) resultValue(await policies.changeReschedulingEnabled(scope, await currentVersion(), true, "synthetic-admin"));
+    if (options.patientUpdateExecute) resultValue(await policies.changePatientCorrectionsEnabled(scope, "0", true, "synthetic-admin"));
     const captured = approvedSyntheticPolicy(resultValue(await policies.read(scope)));
     const inbound = { key: { accountRef: "synthetic-account", providerCallRef: `provider-${crypto.randomUUID()}` },
       dialedNumber: "+6125550199", presentedCallerNumber: phone, receivedAt: now };

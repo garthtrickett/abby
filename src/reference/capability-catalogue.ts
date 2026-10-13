@@ -49,7 +49,8 @@ const notificationKind = choice("bookingConfirmation", "cancellationConfirmation
 const notificationBinding = (kind: string): JsonSchema => object({ scope, kind: { const: kind },
   owner: choice("host", "abby"), settingsVersion: key, hostVersion: key });
 const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: nonEmpty, automationEnabled: bool, bookingEnabled: bool,
-  cancellationEnabled: bool, reschedulingEnabled: bool, firstTimeIntakeEnabled: bool, firstTimeIntakeVersion: key, afterHoursMode, afterHoursInfo,
+  cancellationEnabled: bool, reschedulingEnabled: bool, firstTimeIntakeEnabled: bool, firstTimeIntakeVersion: key,
+  patientCorrectionsEnabled: bool, patientCorrectionsVersion: key, afterHoursMode, afterHoursInfo,
   voiceSettings: voicePreferences, voiceProfile,
   notificationSettings: object({ version: key, owners: object({ bookingConfirmation: notificationOwner,
     cancellationConfirmation: notificationOwner, reschedulingConfirmation: notificationOwner }) }),
@@ -220,7 +221,7 @@ export type CapabilityDescriptor = Readonly<{
 
 export type CapabilityPrecondition = "expectedPolicyVersion" | "expectedAutomationVersion" | "expectedClinicIntakeVersion" | "expectedClinicNotificationVersion" | "expectedClinicVoiceVersion" | "hostVoiceProfileForSet" |
   "hostManagedNotificationForSet" | "hostStaffedDestinationForSet" | "readinessForEnable" | "activeCall" | "bookingEnabledForExecution" |
-  "currentCallSession" | "appointmentChangeEnabledForExecution" | "intakeEnabledForExecution" |
+  "currentCallSession" | "appointmentChangeEnabledForExecution" | "intakeEnabledForExecution" | "expectedClinicCorrectionVersion" |
   "hostEvidenceForExecution" | "approvedKnowledgeForAnswer" | "availabilityHostConfigured" |
   "appointmentHostConfigured" | "hostIssuedPatientProof" |
   "callReviewAvailable" | "outcomeReportAvailable" | "staffQueueAvailable" | "operationalDailyAvailable" |
@@ -298,6 +299,12 @@ export const capabilityCatalogue = {
   "settings.patients.firstTimeIntake.audit.v1": entry("settings.patients.firstTimeIntake.audit.v1",
     optional({ kind: { const: "settings.patients.firstTimeIntake.audit.v1" }, afterVersion: uint }, ["kind"]),
     reply("firstTimeIntakeSettingAudit", "page", clinicIntakeAuditPage), "read", "clinicAdmin"),
+  "settings.patients.corrections.enabled.change.v1": entry("settings.patients.corrections.enabled.change.v1",
+    object({ kind: { const: "settings.patients.corrections.enabled.change.v1" }, expectedVersion: key, enabled: bool }),
+    reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedClinicCorrectionVersion"]),
+  "settings.patients.corrections.audit.v1": entry("settings.patients.corrections.audit.v1",
+    optional({ kind: { const: "settings.patients.corrections.audit.v1" }, afterVersion: uint }, ["kind"]),
+    reply("patientCorrectionSettingAudit", "page", clinicIntakeAuditPage), "read", "clinicAdmin"),
   "settings.routing.staffedDestination.change.v1": entry("settings.routing.staffedDestination.change.v1",
     object({ kind: { const: "settings.routing.staffedDestination.change.v1" }, expectedVersion: key, destinationRef: nullableRouteRef }),
     reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedPolicyVersion", "hostStaffedDestinationForSet"]),

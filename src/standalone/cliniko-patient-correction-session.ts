@@ -112,8 +112,10 @@ export class ClinikoPatientCorrectionSession extends NoStoredKnowledge implement
     const state = await c.ledger.read(c.receipt.callId, scope), now = Date.parse(this.#now());
     if (!policy.ok || !stop.ok || stop.value.stopped || !approval.ok || !state.ok || !Number.isFinite(now) || signal.aborted || this.#lifetime.signal.aborted ||
         !sameScope(policy.value.scope, scope) || !policy.value.automationEnabled || policy.value.policyVersion !== c.policyVersion || policy.value.capabilities.patientUpdate !== "execute" ||
+        policy.value.patientCorrectionsEnabled !== true || policy.value.patientCorrectionsVersion !== c.policy.binding().correctionVersion ||
         state.value.lifecycle !== "active" || !sameScope(state.value.policy.scope, scope) || !state.value.policy.automationEnabled || state.value.policy.policyVersion !== c.policyVersion ||
-        state.value.policy.capabilities.patientUpdate !== "execute" || state.value.callerIdentityDenied || state.value.sessionLease?.sessionId !== c.sessionId ||
+        state.value.policy.capabilities.patientUpdate !== "execute" || state.value.policy.patientCorrectionsEnabled !== true ||
+        state.value.policy.patientCorrectionsVersion !== c.policy.binding().correctionVersion || state.value.callerIdentityDenied || state.value.sessionLease?.sessionId !== c.sessionId ||
         !Number.isFinite(Date.parse(state.value.sessionLease.expiresAt)) || Date.parse(state.value.sessionLease.expiresAt) <= now ||
         state.value.admission?.key.accountRef !== c.inbound.key.accountRef || state.value.admission.key.providerCallRef !== c.inbound.key.providerCallRef ||
         state.value.admission.dialedNumber !== c.inbound.dialedNumber) return false;

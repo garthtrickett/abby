@@ -64,7 +64,7 @@ export type CapabilityMode = "execute" | "requestOnly" | "unavailable";
 
 /** Host permissions are independent of saved clinic toggles. */
 export type AppointmentSettingModes = Readonly<{ cancellation?: CapabilityMode; rescheduling?: CapabilityMode }>;
-export type PatientSettingModes = AppointmentSettingModes & Readonly<{ intake?: CapabilityMode }>;
+export type PatientSettingModes = AppointmentSettingModes & Readonly<{ intake?: CapabilityMode; patientUpdate?: CapabilityMode }>;
 export type StaffedInterval = Readonly<{ startsAt: string; endsAt: string }>;
 /** Sunday is 0; endMinute before startMinute crosses midnight. */
 export type LocalStaffWindow = Readonly<{ weekday: number; startMinute: number; endMinute: number }>;
@@ -122,6 +122,9 @@ export type CallPolicy = Readonly<{
   /** Clinic-wide; absent legacy snapshots are disabled at version 0. */
   firstTimeIntakeEnabled?: boolean;
   firstTimeIntakeVersion?: string;
+  /** Independent clinic-wide preference; legacy snapshots are disabled at version 0. */
+  patientCorrectionsEnabled?: boolean;
+  patientCorrectionsVersion?: string;
   /** Clinic preferences are public configuration; they are not host send authority. */
   notificationSettings?: import("./notification-policy.ts").NotificationSettings;
   /** Current scoped host declarations captured at admission; absent means no managed delivery. */

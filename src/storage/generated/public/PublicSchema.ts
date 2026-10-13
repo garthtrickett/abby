@@ -26,6 +26,7 @@ import type { default as ClinikoCatalogueApprovalsTable } from './ClinikoCatalog
 import type { default as StaffItemsTable } from './StaffItems.js';
 import type { default as ClinicKnowledgeEventsTable } from './ClinicKnowledgeEvents.js';
 import type { default as CallsTable } from './Calls.js';
+import type { default as ClinicPatientCorrectionSettingsTable } from './ClinicPatientCorrectionSettings.js';
 import type { default as AdminSignInChallengesTable } from './AdminSignInChallenges.js';
 import type { default as NumberRoutesTable } from './NumberRoutes.js';
 import type { default as AdminSignInRateLimitsTable } from './AdminSignInRateLimits.js';
@@ -88,6 +89,8 @@ export default interface PublicSchema {
   clinic_knowledge_events: ClinicKnowledgeEventsTable;
 
   calls: CallsTable;
+
+  clinic_patient_correction_settings: ClinicPatientCorrectionSettingsTable;
 
   admin_sign_in_challenges: AdminSignInChallengesTable;
 

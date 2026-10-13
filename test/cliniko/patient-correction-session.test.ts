@@ -180,3 +180,16 @@ test("E2E-362 caller verification from another Cliniko credential cannot bind a 
     assert.equal(result.ok, false); assert.equal(f.traffic.length, 0);
   } finally { await f.close(); }
 });
+
+test("E2E-363 disable and re-enable correction setting cannot revive captured consent or a ready native write", async () => {
+  const f = await fixture();
+  try {
+    const collected = resultValue(await f.collect()); assert.equal((await f.owner.answer(f.mail[0]!.code)).verified, true);
+    const action = await f.propose(collected.correctionRef); await f.confirm(action);
+    assert.equal((await f.f.policies.changePatientCorrectionsEnabled(f.f.scope, "1", false, "owner")).ok, true);
+    assert.equal((await f.f.policies.changePatientCorrectionsEnabled(f.f.scope, "2", true, "owner")).ok, true);
+    await f.worker.process(f.f.callId, `${action.key}:write`, verificationNow);
+    assert.equal((await f.f.state()).actions[action.key]?.status, "rejected"); assert.equal(f.traffic.some(t => t.method === "PATCH"), false);
+    assert.equal(f.traffic.some(t => t.path === "/v1/recalls"), false);
+  } finally { await f.close(); }
+});
