@@ -315,6 +315,20 @@ remains active.
 
 ## Gap8 patient-correction provider foundation
 
+Follow-up qualification reproduced a mutable contact callback changing the
+returned patient ID from the actual native target 42 to 43. The provider now
+passes independent copies of both the request and inspected snapshot to that
+callback. The red witness failed its single assertion before the fix (log
+`4590eee3-1791913476263.log`). The corrected focused gate passed typecheck,
+56 tests with zero failures/skips and diff check in tracked work
+`Abby patient correction callback isolation final focused gate`, log
+`4590eee3-1791913499875.log`. Command: `npm run typecheck && node --test
+--test-concurrency=4 test/cliniko/patient-update.test.ts
+test/cliniko/patient-intake.test.ts test/cliniko/patient-intake-lifecycle.test.ts
+test/cliniko/transient-intake-authority.test.ts
+test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts
+&& git diff --check`. Caller policy/flow and contact synchronization remain open.
+
 [Cliniko's patient update operation](https://docs.api.cliniko.com/openapi/patient/updatepatient-patch) supports a PATCH to the existing patient. Its fields were checked against the current official API and downloaded OpenAPI request body. The patient record is shared across the Cliniko account; the authority contract names that scope explicitly. This source does not create a new patient or touch appointment endpoints.
 
 `patient-details.ts` projects transient identity/contact snapshots, excluding chart, billing and marketing fields. Native identity/self-link, unarchived/unmerged status, complete contact fields and a valid updated timestamp are required. Before-state and correction digests bind the private payload. Field limits, Gregorian dates, canonical email, phone types, address fields and syntactic country codes are checked; future self birth dates and newly introduced noncanonical phone numbers cannot send. Missing fields are never invented.

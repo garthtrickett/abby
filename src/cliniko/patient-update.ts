@@ -145,7 +145,7 @@ export class ClinikoPatientUpdateEdge {
         if (!resultRow || !observed || JSON.stringify(resultRow.details) !== JSON.stringify(expected) || JSON.stringify(observed.details) !== JSON.stringify(expected) ||
             !await this.#authorized(request, "inspect", signal) || signal.aborted) return uncertain();
         let contact: boolean | undefined;
-        try { contact = await awaitUntilAbort(this.#authority.contactChanged(request, observed, signal), signal); }
+        try { contact = await awaitUntilAbort(this.#authority.contactChanged(structuredClone(request), structuredClone(observed), signal), signal); }
         catch { return ok({ kind: "needsContactReview" as const }); }
         return contact === true && !signal.aborted ? ok({ kind: "updated" as const, patientId: request.patientId }) : ok({ kind: "needsContactReview" as const });
       }, external);

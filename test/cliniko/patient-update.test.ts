@@ -18,7 +18,7 @@ function fixture() {
     address_1: "1 Example Road", address_2: null, address_3: null, city: "Example", state: "VIC", post_code: "3000", country_code: "AU",
     notes: "private-chart-canary", invoice_email: "billing-canary@example.test", accepted_email_marketing: false };
   let permitted = true, prospective = true, confirmed = true, allowed = [...patientDetailFields], mode = "", claims = 0, syncs = 0;
-  let onClaim = async () => {}, onRead = async () => {}, onPatch = async () => {}, onSync = async () => true;
+  let onClaim = async () => {}, onRead = async () => {}, onPatch = async () => {}, onSync = async (_request: PatientUpdateRequest) => true;
   const traffic: { method: string; body?: Record<string, unknown> }[] = [];
   const authority: PatientUpdateAuthority = {
     attest: async (incoming, phase) => {
@@ -30,7 +30,7 @@ function fixture() {
           ...(prospective && incoming.prospectiveEmailRef ? { prospectiveEmailRef: incoming.prospectiveEmailRef,
             prospectiveEmailDigest: createHash("sha256").update(JSON.stringify(incoming.changes.email ?? null)).digest("hex") } : {}) } : {}) };
     },
-    contactChanged: async () => { syncs++; return onSync(); },
+    contactChanged: async request => { syncs++; return onSync(request); },
   };
   const fetchPort: typeof fetch = async (value, init) => {
     assert.equal(String(value), `${base}/patients/42`); assert.equal(init?.redirect, "error");
@@ -187,5 +187,14 @@ test("E2E-361 incomplete or malformed versioned snapshots cannot establish a cor
     assert.equal(patientDetailsSnapshot({ ...f.row, updated_at: "0" }, "42", base), undefined);
     assert.equal(patientDetailsSnapshot({ ...f.row, updated_at: "2026-02-30T10:00:00Z" }, "42", base), undefined);
     assert.equal(patientDetailsSnapshot({ ...f.row, patient_phone_numbers: null }, "42", base), undefined);
+  } finally { f.edge.dispose(); }
+});
+
+test("E2E-361 contact synchronization cannot mutate the owned correction or retarget its receipt", async () => {
+  const f = fixture();
+  try {
+    f.onSync(async request => { (request as { patientId: string }).patientId = "43"; return true; });
+    assert.deepEqual(resultValue(await f.edge.updateOnce(f.request())), { kind: "updated", patientId: "42" });
+    assert.equal(f.row.id, "42"); assert.equal(f.traffic.filter(t => t.method === "PATCH").length, 1);
   } finally { f.edge.dispose(); }
 });
