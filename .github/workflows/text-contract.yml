@@ -25,6 +25,8 @@ jobs:
           node-version: '22.23.0'
           cache: npm
       - run: npm ci
+      - name: Prepare PostgreSQL fixture image
+        run: docker pull postgres:17-alpine
       - run: npm run test:text
 
   postgres-proof:

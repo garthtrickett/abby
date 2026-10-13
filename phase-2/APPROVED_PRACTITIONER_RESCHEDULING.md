@@ -97,3 +97,29 @@ npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh 
 
 Tracked job: `Abby practitioner change final source core compiled and registry gate`,
 exit0. These are local results; authoritative cloud CI must execute before merge.
+
+## First executing cloud qualification
+
+Head6b41282 received an actual successful PR workflow: run38417234095 completed
+success across typecheck, text-contract, browser-contract and postgres-proof.
+The push workflow38417224138 failed its first text guard, E2E-321 in
+`test/text/booking-horizon.test.ts`, while its disposable PostgreSQL fixture was
+pulling the uncached postgres:17-alpine image inside the existing10-second
+Docker startup limit. The completed job log records unfinished layer pulls and
+SIGTERM/exit143; no horizon assertion executed in that failing backend setup.
+
+The exact guard passes locally with the image available (log
+`4590eee3-1791903978592.log`). The text job now prepares that already-required
+image before the suite; the Docker fixture limit and test deadline remain
+unchanged. The prerequisite command plus the exact guard and diff check passed
+(log`4590eee3-1791904090785.log`). This is a CI prerequisite correction; it adds
+no dependency and changes no repository variable, secret or permission. The
+corrected published head still requires fresh authoritative qualification.
+
+Commands:
+
+```sh
+docker image inspect postgres:17-alpine --format '{{.Id}}'
+node --test --test-concurrency=4 test/text/booking-horizon.test.ts
+docker pull postgres:17-alpine && node --test --test-concurrency=4 test/text/booking-horizon.test.ts && git diff --check
+```
