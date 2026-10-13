@@ -7,6 +7,8 @@ import type { AdminDirectory } from "./identity/magic-link.ts";
 import { approvalInstant, approvalRef, clinicApprovalKeys, decodeClinicApproval, OwnerFileClinicApproval } from "./owner-file-clinic-approval.ts";
 import type { ClinicApproval } from "./owner-file-clinic-approval.ts";
 import { OwnerFileServiceCatalogue } from "./owner-file-service-catalogue.ts";
+import { validRosterSearchPlan } from "../cliniko/roster-calendar.ts";
+import type { RosterSearchPlan } from "../cliniko/roster-calendar.ts";
 
 export type BookingApproval = ClinicApproval & Readonly<{
   policyVersion: string; businessId: string; practitionerId: string; appointmentTypeId: string;
@@ -14,7 +16,7 @@ export type BookingApproval = ClinicApproval & Readonly<{
   notificationOwner: "cliniko"; serviceRef: string; bookingPolicyVersion: string;
   durationMinutes: number; minNoticeMinutes: number; maxAdvanceDays: number; offerTtlSeconds: number;
   /** Independently approved extent of a complete search. Existing approvals retain seven days. */
-  availabilityPlan?: Readonly<{ mode: "online"; maxSearchDays: number }>;
+  availabilityPlan?: Readonly<{ mode: "online"; maxSearchDays: number }> | RosterSearchPlan;
 }>;
 export type BookingPolicyBinding = Pick<BookingApproval, "scope" | "policyVersion" | "businessId" | "practitionerId" |
   "appointmentTypeId" | "credentialFingerprint" | "recallTypeId" | "timeZone">;
@@ -38,10 +40,10 @@ function decode(value: unknown, scope: LocationScope): BookingApproval | undefin
   try { new Intl.DateTimeFormat("en", { timeZone: row.timeZone }); } catch { return undefined; }
   if (row.availabilityPlan !== undefined) {
     const plan = row.availabilityPlan;
-    if (!plan || typeof plan !== "object" || Array.isArray(plan) ||
+    if (!validRosterSearchPlan(plan) && (!plan || typeof plan !== "object" || Array.isArray(plan) ||
         Object.keys(plan).sort().join(",") !== "maxSearchDays,mode" ||
         !("mode" in plan) || plan.mode !== "online" || !("maxSearchDays" in plan) ||
-        !Number.isSafeInteger(plan.maxSearchDays) || Number(plan.maxSearchDays) < 1 || Number(plan.maxSearchDays) > 90) return undefined;
+        !Number.isSafeInteger(plan.maxSearchDays) || Number(plan.maxSearchDays) < 1 || Number(plan.maxSearchDays) > 90)) return undefined;
   }
   return row as unknown as BookingApproval;
 }

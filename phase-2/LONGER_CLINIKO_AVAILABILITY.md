@@ -60,25 +60,78 @@ request, concurrency, deadlines and legacy bounds were retained. A qualification
 command also named a nonexistent test path; the final command uses the existing
 compound-constraint file. No earlier failure is counted as a pass.
 
-## Offline services remain the next part of gap6
+## Independently approved offline calendars
+
+An explicit owner/admin approval can now select a separate source plan:
+
+```json
+"availabilityPlan": {
+  "mode": "roster",
+  "maxSearchDays": 30,
+  "slotIntervalMinutes": 15,
+  "weekdayOrigin": "sunday",
+  "busyScope": "practitionerAllBusinesses"
+}
+```
+
+The mode, grid and weekday mapping are approved data, not caller/model choices.
+The mode never follows automatically from an online-disabled flag. Native
+business/service/member relationships, active/archive state, duration, names,
+zone, notice/advance limits and independent patient permissions remain checked.
+The approval decoder retains exact keys and rejects malformed plans.
 
 [Cliniko's available-time API](https://docs.api.cliniko.com/openapi/available-time)
-respects online-booking settings and its native request-range limit. It cannot
-establish an offline service's full calendar. Supporting that service needs a
-separately approved calculation using the native
-[daily roster](https://docs.api.cliniko.com/openapi/daily-availability),
-[extra availability blocks](https://docs.api.cliniko.com/openapi/availability-block)
-and all overlapping individual appointments, group appointments and
+respects online booking settings. The explicit offline path instead reads the
+native [daily roster](https://docs.api.cliniko.com/openapi/daily-availability),
+[extra availability](https://docs.api.cliniko.com/openapi/availability-block),
+individual appointments, group appointments and
 [unavailable blocks](https://docs.api.cliniko.com/openapi/unavailable-block).
+Busy queries cover the practitioner across every business. Each source must be
+complete and agree across two reads, followed by a fresh metadata check. Every
+request shares the existing credential budget and deadline; no provider-supplied
+next link is followed. Collection limits are ten pages/1,000 rows; exceeding
+those limits denies the result rather than silently truncating it.
 
-The current official OpenAPI schema was inspected without clinic credentials or
-patient access. Availability-block recurrence is raw rule data; recurring busy
-records also expose repeat relationships. Weekday/recurrence, DST, native links,
-pagination, cross-business practitioner conflicts and withdrawn source evidence
-need explicit coverage. Incomplete or unsupported source interpretation must
-deny the result. The chosen-day calculation must be repeated before proposal
-and commit. No offline mode is accepted by the current approval decoder.
+The calculator unions openings, preserves the opening's approved grid, removes
+all overlapping busy intervals and requires the full appointment duration to
+fit. Real UTC instants cover both DST folds without inventing spring-gap clocks.
+Adjacent windows are joined before range filtering, so next-day capacity and
+busy intervals govern midnight-spanning appointments. Only interval data and
+public labels leave the reader; notes and patient relationships are not retained
+in offers. Proposal and final send recalculate the chosen day.
 
-Gap6 is incomplete until that engine and its serving journeys are qualified.
+### Qualification and remaining work
+
+E2E-357 now has 34 passing focused source/calendar checks and three compiled
+synthetic caller journeys: one inspected hour booking, missing group-busy data
+preventing publication, and a slot occupied after proposal preventing sending.
+The compiled gate also retained the longer online caller journey (four checks,
+zero skips; log `4590eee3-1791897723307.log`). Final combined qualification passed source typecheck, compiled voice build and
+86 checks with zero failures/skips in `4590eee3-1791898132162.log`. It includes
+existing longer online, multi-location and integrated caller journeys plus
+manifest1.164/357 IDs.
+
+Earlier failures are retained: fixture spreads copied live counters as fixed
+values, the legacy fixture accidentally received the default roster plan, and
+a boundary test found next-day openings were filtered before merging. Corrected
+fixtures preserve real write/status assertions; the calculator now retains the
+next-day opening. Label-change tests inspect the protected authority response,
+not the gateway's separate command-envelope acceptance. No runtime deadline,
+concurrency, permission or source-completeness check was relaxed.
+
+Recurrence interpretation is still unfinished: a non-null or missing
+`repeat_rule` denies the source. The weekday convention requires explicit
+approved mapping; the public schema alone does not establish that mapping.
+Real-calendar recurrence/zone acceptance, larger calendar completeness and
+full service/location serving coverage remain to qualify before gap6 can close.
 Gaps7–13, real clinic/recipient acceptance, acoustic quality and carrier/CI gates
 remain open. The full thirteen-gap objective remains active.
+
+Final command:
+
+```sh
+npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh node --test --test-concurrency=4 test/voice/compiled-roster-booking.test.ts test/voice/compiled-long-booking-search.test.ts test/voice/compiled-location-runner.test.ts test/voice/integrated-clinical-runner.test.ts test/cliniko/roster-booking.test.ts test/cliniko/roster-calendar.test.ts test/cliniko/availability.test.ts test/cliniko/long-booking-search.test.ts test/cliniko/booking-offers.test.ts test/cliniko/booking-clinic-policy.test.ts test/contract/scenario-manifest.test.ts
+```
+
+Tracked job: `Abby offline calendar final compiled and source qualification`,
+exit0. These are local results; exact-head CI must execute before merge readiness.

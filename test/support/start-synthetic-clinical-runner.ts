@@ -21,6 +21,7 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 import { withApprovedSyntheticVoice } from "./approved-voice.ts";
 import { captureVoicePolicy } from "../../src/core/voice-policy.ts";
 import { OpenAIVoiceProfileHost } from "../../src/voice/openai-voice-profile.ts";
+import { rosterPlan, rosterInterval, syntheticRosterProvider } from "./roster-booking.ts";
 
 const operation = process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION;
 if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
@@ -33,6 +34,10 @@ const services = process.env.ABBY_SYNTHETIC_SERVICE_MODE === "1", smtpMode = pro
 if (services && !["book", "intake"].includes(operation!) || process.env.ABBY_SYNTHETIC_SERVICE_MODE && !services || process.env.ABBY_SYNTHETIC_SMTP_MODE && !smtpMode) throw new Error("invalid synthetic integration mode");
 const multiLocation = process.env.ABBY_SYNTHETIC_LOCATION_MODE === "1";
 const longSearch = process.env.ABBY_SYNTHETIC_LONG_SEARCH_MODE === "1";
+const offlineCalendar = process.env.ABBY_SYNTHETIC_OFFLINE_CALENDAR === "1", missingBusy = process.env.ABBY_SYNTHETIC_MISSING_BUSY === "1";
+if (offlineCalendar && (!services || operation !== "book" || multiLocation || longSearch) || missingBusy && !offlineCalendar) throw new Error("invalid synthetic calendar mode");
+const calendar = offlineCalendar ? syntheticRosterProvider() : undefined;
+if (missingBusy) calendar!.fail("group_appointments");
 if (longSearch && (!services || operation !== "book" || multiLocation)) throw new Error("invalid synthetic long search mode");
 if (multiLocation && (!services || !["book", "intake"].includes(operation!))) throw new Error("invalid synthetic location mode");
 const locationFixture = multiLocation ? operation === "intake" ? await intakeLocationServiceFixture() : await locationServiceFixture() : undefined;
@@ -73,6 +78,7 @@ for (const path of approvalPaths) {
     await writeFile(path, JSON.stringify({ ...value, credentialFingerprint: fingerprint,
       ...("policyVersion" in value ? { policyVersion: c.policyVersion } : {}),
       ...(longSearch && "bookingPolicyVersion" in value ? { maxAdvanceDays: 90, availabilityPlan: { mode: "online", maxSearchDays: 90 } } : {}),
+      ...(offlineCalendar && "bookingPolicyVersion" in value ? { availabilityPlan: rosterPlan } : {}),
       ...(longSearch && "services" in value && Array.isArray(value.services)
         ? { services: value.services.map(service => ({ ...service, searchDays: 90 })) } : {}) }), { mode: 0o600 });
   }
@@ -89,6 +95,10 @@ process.on("message", message => {
   if (message.kind === "loseWrite") lostWrite = true;
   if (message.kind === "loseMail") mailLost = true;
   if (message.kind === "changePolicy") mutatePolicy = true;
+  if (offlineCalendar && message.kind === "occupyCalendar") {
+    calendar!.rows.unavailable_blocks!.push(rosterInterval("unavailable_blocks", "106", "2026-10-08T02:00:00.000Z", "2026-10-08T03:00:00.000Z"));
+    process.send?.({ kind: "calendarOccupied" });
+  }
 });
 function policyFor(c: typeof f.flowConfig) {
 const policies = withApprovedSyntheticVoice(c.policies);
@@ -104,7 +114,9 @@ return new Proxy(policies, { get(target, key) {
 }
 const base = "https://api.au5.cliniko.com/v1";
 let after: Record<string, unknown> | undefined, patient: Record<string, unknown> | undefined;
-function providerFor(c: typeof f.flowConfig): typeof fetch { return async (value, init) => {
+function providerFor(c: typeof f.flowConfig): typeof fetch {
+const calendarPort = calendar ? calendar.wrap(c.fetchPort!) : c.fetchPort!;
+return async (value, init) => {
   const url = new URL(String(value)), method = init?.method ?? "GET";
   process.send?.({ kind: "providerRequest", method, path: url.pathname, scope: c.receipt.scope });
   if (operation === "staff.request" && method === "POST" && url.pathname === "/v1/recalls") {
@@ -137,7 +149,7 @@ function providerFor(c: typeof f.flowConfig): typeof fetch { return async (value
     if (lostWrite) throw new Error("synthetic unknown appointment write");
     return url.pathname.endsWith("/cancel") ? new Response(null, { status: 204 }) : Response.json(after, { status: method === "POST" ? 201 : 200 });
   }
-  const response = await c.fetchPort!(value, init);
+  const response = await calendarPort(value, init);
   if (multiLocation && c.receipt.scope.locationId === "south" && method === "GET" && url.pathname.startsWith("/v1/patients/")) {
     return Response.json({ ...await response.json(), email: "south-registered@example.test" }, { status: response.status });
   }

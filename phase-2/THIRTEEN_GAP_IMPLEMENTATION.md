@@ -11,7 +11,7 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 | 3 | Establish message delivery, staff handoff, monitoring and recovery ownership. | Four compiled-runner staff journeys now pass: named saved request, unknown write without replay, permission denial before mail and revocation before send. Existing recall/review/aggregate contracts remain. Deployed monitoring receiver, real sender and human clinic process remain open. |
 | 4 | Complete synthetic speech, public transport and eventual carrier qualification. | Prior synthetic runtime evidence exists; noisy/safety and repeated speech gates remain open. Paid probes require restored credits; public tunnel requires a dedicated usable route. Twilio-number carrier evidence is deferred, not substituted with synthetic results. |
 | 5 | Expand services, duration choices, locations and initial/follow-up rules. | Current service/intake variants, return rules and independently provisioned multi-location compiled hosts are locally qualified in draft457. Actual clinic configuration/acceptance and authoritative CI remain open. |
-| 6 | Extend searches and support online-disabled services where required. | E2E-356 locally qualifies complete approved longer online searches and a compiled two-month late-range booking. Offline roster/extra availability minus all busy sources remains incomplete; preserve incomplete-source denial, date bounds and offer/commit agreement. |
+| 6 | Extend searches and support online-disabled services where required. | E2E-356 locally qualifies complete approved longer online searches and a compiled two-month late-range booking. E2E-357 adds independently approved non-recurring native roster/extra availability minus all cross-business busy sources and fresh chosen-day reads. Recurrence and broader real-calendar/serving qualification remain incomplete; preserve incomplete-source denial, date bounds and offer/commit agreement. |
 | 7 | Support another approved practitioner during rescheduling. | Current movement requires the same practitioner. Require destination approval, single in-place movement and truthful recovery for conflicts/unknown writes. |
 | 8 | Add patient detail corrections, required registration fields and resends. | Minimal intake exists; existing-patient correction and delivered resend are incomplete. Require independently authorized updates, contact/index consistency and separate registration/booking outcomes. |
 | 9 | Handle multiple patients/actions in one call. | Restricted proxy/identity foundations exist. Require authority for each person, exact appointment selection and independent outcomes; no implicit household disclosure. |
@@ -204,3 +204,28 @@ Next is the offline roster/extra-availability/busy-source calculation. Gap6
 remains incomplete, followed by gaps7–13. Production admission, real clinic/mail
 acceptance, failed acoustic quality and authoritative CI/carrier gates remain
 open; the full13 objective is unchanged.
+
+## Gap6 independently approved offline calendar progress
+
+The current booking source can use an explicit scoped roster plan for services
+excluded from online bookings. Native daily/extra openings and all individual,
+group and unavailable conflicts are read completely across practitioner
+businesses, twice compared and freshly rechecked for the chosen day. DTOs
+retain intervals/public labels; private chart fields do not enter offers.
+DST and grid rules, full duration across midnight, native pages and approval
+withdrawal are covered by E2E-357. Source typecheck, compiled voice build and86
+combined checks passed without failures/skips in tracked work
+`Abby offline calendar final compiled and source qualification` (log
+`4590eee3-1791898132162.log`). Manifest1.164 retains357 stable scenario IDs.
+
+The boundary test exposed filtering next-day openings before merging; this was
+fixed and qualified with the original expectation. Fixture counter/default and
+command-envelope assertions were corrected without relaxing native write,
+authority, privacy, concurrency or deadline requirements. Details and the exact
+command are in `phase-2/LONGER_CLINIKO_AVAILABILITY.md`.
+
+Gap6 is still incomplete: non-null/missing recurrence rules deny results, the
+weekday mapping needs accepted native evidence, large-source handling and full
+service/location serving coverage remain to qualify. Gaps7–13, real clinic/mail
+acceptance, acoustic quality, CI execution and carrier evidence remain open.
+The full13 objective remains active.

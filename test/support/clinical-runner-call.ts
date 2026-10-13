@@ -25,7 +25,7 @@ export type ClinicalRunnerOperation = "book" | "cancel" | "reschedule" | "intake
 /** Actual compiled runner in a separate process and database. All network
  * providers are fixtures; private caller material is kept in this test memory. */
 export async function withClinicalRunner(operation: ClinicalRunnerOperation,
-  run: (call: Awaited<ReturnType<typeof start>>) => Promise<void>, options: { services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean } = {}): Promise<void> {
+  run: (call: Awaited<ReturnType<typeof start>>) => Promise<void>, options: { services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean } = {}): Promise<void> {
   const adminUrl = process.env.DATABASE_URL; assert.ok(adminUrl);
   const admin = connectPostgres(adminUrl), name = `abby_test_voice_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl); target.pathname = `/${name}`;
@@ -45,7 +45,7 @@ export async function withClinicalRunner(operation: ClinicalRunnerOperation,
     if (failures.length) throw new AggregateError(originalFailure === undefined ? failures : [originalFailure, ...failures], "clinical runner test or cleanup failed");
   }
 }
-async function start(operation: ClinicalRunnerOperation, connectionString: string, db: ReturnType<typeof connectPostgres>, options: { services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean }) {
+async function start(operation: ClinicalRunnerOperation, connectionString: string, db: ReturnType<typeof connectPostgres>, options: { services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean }) {
   const accountSid = `AC${"1".repeat(32)}`, authToken = "synthetic-clinical-runner-token", number = "+6125550199", caller = "+61400111222";
   const webhookUrl = "https://clinical-runner.example.test/twilio/inbound", streamUrl = "wss://clinical-runner.example.test/twilio/media/";
   const messages: Message[] = [], output: string[] = [];
@@ -55,6 +55,8 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
       ABBY_SYNTHETIC_CLINICAL_OPERATION: operation,
       ABBY_SYNTHETIC_LOCATION_MODE: options.locations ? "1" : undefined,
       ABBY_SYNTHETIC_LONG_SEARCH_MODE: options.longSearch ? "1" : undefined,
+      ABBY_SYNTHETIC_OFFLINE_CALENDAR: options.offlineCalendar ? "1" : undefined,
+      ABBY_SYNTHETIC_MISSING_BUSY: options.missingBusy ? "1" : undefined,
       ABBY_SYNTHETIC_SERVICE_MODE: options.services ? "1" : undefined, ABBY_SYNTHETIC_SMTP_MODE: options.smtp ? "1" : undefined, ABBY_TENANT_ID: "pending", ABBY_CLINIC_ID: "clinic", ABBY_LOCATION_ID: "main",
       ABBY_TWILIO_TEST_CALLER_NUMBER: caller, ABBY_TWILIO_TEST_NUMBER: number, ABBY_TWILIO_FALLBACK_NUMBER: "+6125550188",
       ABBY_TWILIO_ACCOUNT_SID: accountSid, ABBY_TWILIO_AUTH_TOKEN: authToken, ABBY_TWILIO_BINDING_KEY_HEX: "66".repeat(32),

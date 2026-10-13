@@ -2,6 +2,7 @@ import { copyBookingSearchWindow, matchesBookingSearchWindow, validBookingSearch
 import type { BookingSearchWindow } from "../core/booking-search-window.ts";
 import { randomBytes } from "node:crypto";
 import { ClinikoAvailabilityReader } from "../cliniko/availability.ts";
+import { ClinikoRosterAvailabilityReader } from "../cliniko/roster-availability.ts";
 import { clinikoCredentialFingerprint, isClinikoRequestBudget } from "../cliniko/read-budget.ts";
 import type { ClinikoRequestBudget } from "../cliniko/read-budget.ts";
 import type { HostReadFailure } from "../core/host.ts";
@@ -35,11 +36,13 @@ const denied = <T>(): Result<T, HostReadFailure> => err({ kind: "unavailable", t
 export class ClinikoBookingOffers implements ClinikoBookingAuthority {
   readonly #config: ClinikoBookingOffersConfig;
   readonly #reader: ClinikoAvailabilityReader;
+  readonly #roster: ClinikoRosterAvailabilityReader;
   readonly #lifetime = new AbortController();
   readonly #offers = new Map<string, Selected>();
   #epoch = 0;
-  private constructor(config: ClinikoBookingOffersConfig, reader: ClinikoAvailabilityReader) {
+  private constructor(config: ClinikoBookingOffersConfig, reader: ClinikoAvailabilityReader, fetchPort: typeof fetch) {
     this.#config = config; this.#reader = reader;
+    this.#roster = new ClinikoRosterAvailabilityReader(config, fetchPort, config.clock);
   }
   static create(incoming: ClinikoBookingOffersConfig, fetchPort: typeof fetch = fetch):
     Result<ClinikoBookingOffers, Readonly<{ kind: "invalidConfig" }>> {
@@ -58,7 +61,7 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
           bound.businessId !== config.businessId || bound.practitionerId !== config.practitionerId || bound.appointmentTypeId !== config.appointmentTypeId ||
           bound.credentialFingerprint !== clinikoCredentialFingerprint(config.apiKey)) return err({ kind: "invalidConfig" });
       const reader = ClinikoAvailabilityReader.create(config, fetchPort, config.clock);
-      return reader.ok ? ok(new ClinikoBookingOffers(config, reader.value)) : err({ kind: "invalidConfig" });
+      return reader.ok ? ok(new ClinikoBookingOffers(config, reader.value, fetchPort)) : err({ kind: "invalidConfig" });
     } catch { return err({ kind: "invalidConfig" }); }
   }
   #now(): string { return (this.#config.clock ?? (() => new Date().toISOString()))(); }
@@ -98,6 +101,13 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
   #expiry(policy: BookingApproval, proofExpiry: string, at: number): string {
     return new Date(Math.min(at + policy.offerTtlSeconds * 1000, Date.parse(policy.effectiveUntil), Date.parse(proofExpiry))).toISOString();
   }
+  #availability(policy: BookingApproval, from: string, to: string, signal: AbortSignal) {
+    const plan = policy.availabilityPlan;
+    return plan?.mode === "roster"
+      ? this.#roster.listBooking(this.#config.scope, from, to, policy.durationMinutes, plan, signal)
+      : plan ? this.#reader.listBookingRange(this.#config.scope, from, to, policy.durationMinutes, plan.maxSearchDays, signal)
+        : this.#reader.listBooking(this.#config.scope, from, to, policy.durationMinutes, signal);
+  }
   async list(scope: LocationScope, verificationRef: string, from: string, to: string, now: string, external?: AbortSignal, incomingWindow?: BookingSearchWindow):
     Promise<Result<BookingChoices, HostReadFailure>> {
     if (incomingWindow !== undefined && !validBookingSearchWindow(incomingWindow)) return denied();
@@ -107,9 +117,7 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
     const result = await this.#bounded(async signal => {
       const before = await this.#current(verificationRef, now, signal);
       if (!before) return undefined;
-      const read = before.policy.availabilityPlan
-        ? await this.#reader.listBookingRange(config.scope, from, to, before.policy.durationMinutes, before.policy.availabilityPlan.maxSearchDays, signal)
-        : await this.#reader.listBooking(config.scope, from, to, before.policy.durationMinutes, signal);
+      const read = await this.#availability(before.policy, from, to, signal);
       if (!read.ok || read.value.kind !== "times" || !read.value.offering || read.value.timeZone !== before.policy.timeZone || signal.aborted) return undefined;
       const fresh = await this.#current(verificationRef, now, signal);
       if (!fresh || fresh.patient.patientRef !== before.patient.patientRef || epoch !== this.#epoch ||
@@ -148,7 +156,7 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
       if (!before || before.patient.patientRef !== evidence.patientId || Date.parse(evidence.offer.expiresAt) <= before.at ||
           !OwnerFileBookingPolicy.allows(before.policy, evidence.offer.startsAt, new Date(before.at).toISOString())) return undefined;
       const date = clinicDateAt(evidence.timeZone, new Date(evidence.offer.startsAt));
-      const read = await this.#reader.listBooking(config.scope, date, date, before.policy.durationMinutes, signal);
+      const read = await this.#availability(before.policy, date, date, signal);
       if (!read.ok || read.value.kind !== "times" || read.value.timeZone !== evidence.timeZone ||
           read.value.offering?.practitionerName !== selected.practitionerName || read.value.offering?.appointmentTypeName !== selected.appointmentTypeName ||
           !read.value.startsAt.includes(evidence.offer.startsAt) || signal.aborted) return undefined;
