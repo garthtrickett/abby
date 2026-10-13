@@ -49,3 +49,7 @@ A clinic-approved combination of service, initial or follow-up visit, and durati
 ## Caller attestation
 
 The caller's explicit answers about previous attendance and a new problem, evaluated under the clinic's approved return-visit rules. They do not establish a Cliniko-verified treatment history.
+
+## Practitioner preference
+
+The caller's choice of any eligible practitioner, a named practitioner, or a clinic-declared gender within the chosen service. It narrows eligibility without establishing clinical suitability or permission to use a different practitioner for an existing appointment.

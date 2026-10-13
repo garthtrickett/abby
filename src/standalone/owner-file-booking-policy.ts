@@ -1,3 +1,5 @@
+import type { BookingPractitionerPreference } from "../core/booking-practitioner-preference.ts";
+import { eligibleServicePractitioners } from "./service-practitioner-preference.ts";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
 import { validClinikoId } from "./appointment-change-authority.ts";
@@ -14,7 +16,7 @@ export type BookingApproval = ClinicApproval & Readonly<{
 }>;
 export type BookingPolicyBinding = Pick<BookingApproval, "scope" | "policyVersion" | "businessId" | "practitionerId" |
   "appointmentTypeId" | "credentialFingerprint" | "recallTypeId" | "timeZone">;
-export type BookingServiceBinding = Readonly<{ catalogue: OwnerFileServiceCatalogue; serviceRef: string }>;
+export type BookingServiceBinding = Readonly<{ catalogue: OwnerFileServiceCatalogue; serviceRef: string; preference?: BookingPractitionerPreference }>;
 type Config = BookingPolicyBinding & Readonly<{ path: string; directory: AdminDirectory; clock?: () => string; serviceBinding?: BookingServiceBinding }>;
 type Failure = Readonly<{ kind: "bookingPolicyUnavailable" }>;
 function decode(value: unknown, scope: LocationScope): BookingApproval | undefined {
@@ -43,7 +45,7 @@ export class OwnerFileBookingPolicy {
   }
   static async capture(incoming: Config): Promise<Result<OwnerFileBookingPolicy, Failure>> {
     const config = Object.freeze({ ...incoming, scope: Object.freeze({ ...incoming.scope }),
-      ...(incoming.serviceBinding ? { serviceBinding: Object.freeze({ ...incoming.serviceBinding }) } : {}) });
+      ...(incoming.serviceBinding ? { serviceBinding: Object.freeze({ ...incoming.serviceBinding, ...(incoming.serviceBinding.preference ? { preference: Object.freeze({ ...incoming.serviceBinding.preference }) } : {}) }) } : {}) });
     const source = await OwnerFileClinicApproval.capture({ ...config, decode });
     if (!source.ok) return err({ kind: "bookingPolicyUnavailable" });
     const policy = new OwnerFileBookingPolicy(config, source.value);
@@ -64,7 +66,7 @@ export class OwnerFileBookingPolicy {
       if (!current.ok || !row || current.value.policyVersion !== found.value.policyVersion || current.value.businessId !== found.value.businessId ||
           current.value.credentialFingerprint !== found.value.credentialFingerprint || current.value.timeZone !== found.value.timeZone ||
           row.serviceRef !== found.value.serviceRef || row.appointmentTypeId !== found.value.appointmentTypeId || row.durationMinutes !== found.value.durationMinutes ||
-          !row.practitioners.some(member => member.practitionerId === found.value!.practitionerId)) return err({ kind: "bookingPolicyUnavailable" });
+          !eligibleServicePractitioners(row.practitioners, parent.preference).some(member => member.practitionerId === found.value!.practitionerId)) return err({ kind: "bookingPolicyUnavailable" });
     }
     return ok(found.value);
   }

@@ -29,7 +29,7 @@ export type ClinikoBookingSessionConfig = Readonly<{
   directory: AdminDirectory; callerApprovalPath: string; bookingApprovalPath: string;
   cliniko: Readonly<{ apiKey: string; contactEmail: string; businessId: string; practitionerId: string; appointmentTypeId: string; recallTypeId: string;
     timeZone: string; countryCallingCode: string; rateBudget: ClinikoRequestBudget }>;
-  catalogue?: Readonly<{ approvalPath: string; practitioners: readonly Readonly<{ practitionerId: string; bookingApprovalPath: string }>[]; serviceBinding?: BookingServiceBinding }>;
+  catalogue?: Readonly<{ approvalPath: string; practitioners: readonly Readonly<{ practitionerId: string; bookingApprovalPath: string }>[]; serviceBinding?: BookingServiceBinding; initialSearchPreference?: import("../core/booking-search-preference.ts").BookingSearchPreference }>;
   signal: AbortSignal; fetchPort?: typeof fetch; clock?: () => string; timeoutMs?: number;
 }>;
 type Failure = Readonly<{ kind: "bookingSessionUnavailable" }>;
@@ -68,7 +68,7 @@ export class ClinikoBookingSession {
       // Freeze caller/provider bindings before the first async approval read.
       const config = Object.freeze({ ...incoming, receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound),
         cliniko: Object.freeze({ ...incoming.cliniko }),
-        ...(incoming.catalogue ? { catalogue: Object.freeze({ ...incoming.catalogue, practitioners: Object.freeze(incoming.catalogue.practitioners.map(member => Object.freeze({ ...member }))) }) } : {}), clock: incoming.clock ?? (() => new Date().toISOString()) });
+        ...(incoming.catalogue ? { catalogue: Object.freeze({ ...incoming.catalogue, ...(incoming.catalogue.initialSearchPreference ? { initialSearchPreference: Object.freeze({ ...incoming.catalogue.initialSearchPreference }) } : {}), practitioners: Object.freeze(incoming.catalogue.practitioners.map(member => Object.freeze({ ...member }))) }) } : {}), clock: incoming.clock ?? (() => new Date().toISOString()) });
       const scope = config.receipt.scope, fetchPort = config.fetchPort ?? fetch;
       const stopped = new Promise<undefined>(resolve => {
         const abort = () => { settled = true; dispose(); completed?.dispose(); resolve(undefined); };
@@ -160,7 +160,7 @@ export class ClinikoBookingSession {
             members.push({ practitionerId: member.practitionerId, name: profile.value.practitioners[index]!.name, host: selectionHost });
           }
           host = new ClinikoCatalogueBookingHost({ scope, callId: config.receipt.callId, sessionId: config.sessionId, policyVersion: config.policyVersion,
-            ledger: config.ledger, catalogue: catalogue.value, members });
+            ledger: config.ledger, catalogue: catalogue.value, members, ...(config.catalogue.initialSearchPreference ? { initialPreference: config.catalogue.initialSearchPreference } : {}) });
         }
         if (settled || config.signal.aborted || !await active() || settled) return undefined;
         completed = new ClinikoBookingSession(verification, authority, host, menu, config.signal, extra);

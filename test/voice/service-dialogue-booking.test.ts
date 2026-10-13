@@ -70,6 +70,8 @@ test("E2E-348 signed guided service dialogue requires played questions, current 
               }
             }
           }
+          assert.match(call.spoken.at(-1)!, /practitioner preference/); assert.equal(f.mail.length, 0);
+          await play("No preference.");
           assert.equal(models.length, 0, "service and return facts must not reach the classifier");
           await voiceUntil(() => f.mail.length === 1, "guided service verification");
           await call.verify(f.mail[0]!.code); await play("Show times on October 8."); await play("The first time, please.");

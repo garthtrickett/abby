@@ -238,12 +238,13 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     if (!before.callerIdentityDenied) {
       const service = config.owner.serviceChoiceIntent?.(turn.text);
       if (service) return ok(service);
+      const practitioner = await config.owner.servicePractitionerIntent?.(turn, signal);
+      if (signal?.aborted) return err(unavailable);
+      if (practitioner) return ok(practitioner);
       const duration = await config.owner.serviceDurationIntent?.(turn, signal);
       if (signal?.aborted) return err(unavailable);
       if (duration) return ok(duration);
     }
-    const serviceConstraint = serviceConstraintLanguage(turn.text);
-    if (serviceConstraint) return ok({ kind: "clarify", reason: serviceConstraint });
     if (!before.callerIdentityDenied) {
       const staff = staffRequestLanguage(turn.text);
       if (staff) return ok(staff);
@@ -259,6 +260,10 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
       const dialogue = await config.owner.serviceDialogueIntent?.(turn, signal);
       if (signal?.aborted) return err(unavailable);
       if (dialogue) return ok(dialogue);
+    }
+    const serviceConstraint = serviceConstraintLanguage(turn.text);
+    if (serviceConstraint) return ok({ kind: "clarify", reason: serviceConstraint });
+    if (!before.callerIdentityDenied) {
       if (oldAppointmentCancellation(turn.text)) return ok({ kind: "clarify", reason: "oldAppointmentAfterMove" });
       // Confirmation is an exact caller utterance over an actually played SAM
       // prompt. The model cannot decide that "yes" grants an action or retry.

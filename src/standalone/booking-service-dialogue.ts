@@ -1,3 +1,4 @@
+import { eligibleServicePractitioners, servicePractitionerPreferenceLanguage } from "./service-practitioner-preference.ts";
 import type { BookingServiceChoice } from "../core/booking-service-choice.ts";
 import type { BookingServiceQuestion } from "../core/booking-service-question.ts";
 import type { CallState, FinalCallerTurn } from "../core/model.ts";
@@ -27,7 +28,7 @@ export class BookingServiceDialogue {
     const start = startsServiceDialogue(turn.text), previous = this.#pending;
     if (!start && !previous) return undefined;
     if (turn.quality !== "clear" || state.lifecycle !== "active" || state.callerIdentityDenied || turn.callId !== state.callId ||
-        turn.sessionId !== state.sessionLease?.sessionId || !Number.isFinite(Date.parse(now)) || Date.parse(state.sessionLease?.expiresAt ?? "") <= Date.parse(now) ||
+        turn.sessionId !== state.sessionLease?.sessionId || !Number.isFinite(Date.parse(now)) || (!Number.isFinite(Date.parse(state.sessionLease?.expiresAt ?? "")) || Date.parse(state.sessionLease!.expiresAt) <= Date.parse(now)) ||
         state.processedTurnIds.includes(turn.turnId)) return changed;
     if (start) this.clear();
     else {
@@ -61,6 +62,12 @@ export class BookingServiceDialogue {
       } else if (field === "newProblem") {
         if (/^(?:yes|yes it is|it is a new problem|this is a new problem)$/.test(answer)) this.#choice.newProblem = true;
         else if (/^(?:no|no it isn't|it is not a new problem|this is not a new problem)$/.test(answer)) this.#choice.newProblem = false;
+      } else if (field === "practitionerPreference") {
+        const preference = servicePractitionerPreferenceLanguage(turn.text, true);
+        const service = services.find(service => normalizedSpokenName(service.name) === normalizedSpokenName(this.#choice.name) &&
+          service.visitKind === this.#choice.visitKind && service.durationMinutes === this.#choice.durationMinutes);
+        if (preference && service && eligibleServicePractitioners(service.practitioners, preference).length) this.#choice.practitionerPreference = Object.freeze({ ...preference });
+        else if (preference?.kind === "gender") { this.clear(); return { kind: "clarify", reason: "searchPreferenceUnavailable" }; }
       } else {
         const months = answer.match(/^(?:(?:my last visit was|it was) )?(\d{1,4})(?: months?(?: ago)?)?$/);
         if (months && Number(months[1]) <= 2400) this.#choice.monthsSinceLastVisit = Number(months[1]);
@@ -85,6 +92,7 @@ export class BookingServiceDialogue {
         question = { field: "monthsSinceLastVisit", options: [] };
       else if (rule?.maxMonthsSinceLastVisit !== null && rule?.maxMonthsSinceLastVisit !== undefined && choice.monthsSinceLastVisit! > rule.maxMonthsSinceLastVisit) { this.clear(); return changed; }
     }
+    if (!question && !choice.practitionerPreference) question = { field: "practitionerPreference", options: candidates[0]!.practitioners.map(member => member.name) };
     if (question) {
       this.#pending = { turnId: turn.turnId, revision: state.conversationRevision, question, catalogue, expiresAt: Date.parse(now) + 120_000 };
       return { kind: "serviceQuestion", question };

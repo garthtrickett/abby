@@ -1,3 +1,4 @@
+import { eligibleServicePractitioners } from "./service-practitioner-preference.ts";
 import { normalizedSpokenName } from "../core/pending-location.ts";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
@@ -39,7 +40,7 @@ export class OwnerFileBookingCatalogue {
   private constructor(config: Config, source?: OwnerFileClinicApproval<BookingCatalogueApproval>) { this.#config = config; this.#source = source; }
   static async capture(incoming: Config): Promise<Result<OwnerFileBookingCatalogue, Readonly<{ kind: "unavailable" }>>> {
     const config = Object.freeze({ ...incoming, scope: Object.freeze({ ...incoming.scope }),
-      ...(incoming.serviceBinding ? { serviceBinding: Object.freeze({ ...incoming.serviceBinding }) } : {}) });
+      ...(incoming.serviceBinding ? { serviceBinding: Object.freeze({ ...incoming.serviceBinding, ...(incoming.serviceBinding.preference ? { preference: Object.freeze({ ...incoming.serviceBinding.preference }) } : {}) }) } : {}) });
     if (config.serviceBinding) {
       if (!(config.serviceBinding.catalogue instanceof OwnerFileServiceCatalogue)) return err({ kind: "unavailable" });
       const catalogue = new OwnerFileBookingCatalogue(config);
@@ -56,9 +57,11 @@ export class OwnerFileBookingCatalogue {
     if (parent) {
       const current = await parent.catalogue.current(scope), selected = current.ok && current.value.services.find(row => row.serviceRef === parent.serviceRef);
       if (!current.ok || !selected) return err({ kind: "unavailable" });
+      const members = eligibleServicePractitioners(selected.practitioners, parent.preference);
+      if (!members.length) return err({ kind: "unavailable" });
       const { services: _services, eligibilityBasis: _basis, ...common } = current.value;
       found = ok({ ...common, appointmentTypeId: selected.appointmentTypeId, appointmentTypeName: selected.appointmentTypeName,
-        searchDays: selected.searchDays, practitioners: selected.practitioners });
+        searchDays: selected.searchDays, practitioners: members.map(({ practitionerId, name }) => ({ practitionerId, name })) });
     } else {
       if (!this.#source) return err({ kind: "unavailable" });
       found = await this.#source.current(scope);

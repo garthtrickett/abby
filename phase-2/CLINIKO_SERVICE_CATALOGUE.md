@@ -131,9 +131,9 @@ request with no old-variant fallback, and corrected return answers followed by
 new selection/proof. No post-send service change or unknown write can start
 another appointment mutation.
 
-This is engineering progress, not complete product parity. Gender preferences,
-prior-practitioner lookup, multi-location service discovery, and
-selection for first-time intake remain open in gap 5/8. Expanded horizons and
+This is engineering progress, not complete product parity. Prior-practitioner
+lookup, multi-location service discovery, broader classifier-routed booking
+starters and selection for first-time intake remain open in gap 5/8. Expanded horizons and
 online-disabled services belong to gap 6; this patch still refuses them.
 Actual speech quality, real clinic approvals/recipients and carrier evidence
 remain separate. The original thirteen-gap objective is still active.
@@ -224,3 +224,70 @@ A subsequent focused run exposed non-ascending duration options; sorting the
 public minute choices fixed that. The final gate preserves timeouts, worker
 counts, exact writer assertions, played-receipt fences and PostgreSQL canaries.
 GitHub execution and participating-clinic acceptance remain separate gates.
+
+## Approved practitioner preferences (E2E-349)
+
+Each service member still requires exactly `practitionerId` and `name`; the
+clinic may additionally declare `gender` as `female`, `male` or `nonBinary`.
+No gender is inferred from a name, voice or a provider response. Contradictory
+declared names or genders for the same practitioner within the source invalidate
+the catalogue. Absent metadata remains unknown for that service.
+
+`BookingServiceChoice` may additionally carry a strictly validated public
+`practitionerPreference`: `{kind: "any"}`, `{kind: "name", name: "Demo B"}` or
+`{kind: "gender", gender: "female"}`. No IDs or private paths can be supplied.
+Choices and nested preferences are copied/frozen before asynchronous approval
+reads. Guided selection now asks the practitioner question after service and
+return-rule answers and before patient lookup/verification. Unsupported names
+repeat the question; unknown gender metadata cannot choose a default.
+
+The private configuration maps the full approved service membership first, then
+creates only the eligible member hosts. Each still uses an independent current
+booking approval and native writer. The selected catalogue and every writer bind
+the same preference to the current parent approval. A male writer cannot borrow
+a female subset. Metadata changes or revocation invalidate that captured source
+before offer selection, confirmation and the final write.
+
+Gender and any preferences perform complete serialized reads over the eligible
+set; partial evidence cannot establish earliest availability. Empty or failed
+groups do not broaden to another practitioner. Named preferences select only the
+exact approved canonical name. The ordinary menu/proposal/confirmation seams
+retain native location, type and duration. Changing an unsent preference keeps
+the service but cancels the proposal, discards old verification and requires a
+fresh proof/confirmation. A prior known/unknown send remains final for this call.
+
+An explicit contextual request such as “I prefer a female physiotherapist” uses
+the same path after verification; ordinary dates such as “I prefer Mondays”
+cannot become a service/practitioner replacement. No ranking, treatment-style
+recommendation, inferred previous practitioner, existing-appointment practitioner
+switch, real carrier proof or acoustic qualification is supplied here.
+
+Sixteen signed synthetic journeys cover female/male/named/any positive writes,
+unknown metadata/gender, unplayed question, missing member approval, current
+metadata change/revocation, failed/empty groups, deterministic ties, preference
+correction and lost-write recovery fences. Native provider metadata deliberately
+contains no gender, making the approval source independent evidence. Durable
+PostgreSQL canaries and classifier HTTP inspection remain in the qualification.
+
+### Practitioner-preference local qualification
+
+Final frozen-source gate: `npm run typecheck`, `npm run build:voice-tests`,
+then `node --test --test-concurrency=4` over service-practitioner-preference
+text/voice, service-dialogue text/voice, service-catalogue, booking-session,
+booking-offers, call-flow and booking-horizon text checks; service-catalogue
+booking, preference-service boundaries, approved-booking-search, booking-horizon,
+booking-search-windows and appointment-change-intent voice checks; and the
+scenario-manifest/no-number-gap-trace contract checks. `git diff --check` passed.
+All 53 checks passed with zero skips, including sixteen signed preference
+journeys and the earlier guided/service-variant cases. Work label:
+`Abby approved preference final source qualification October 13`. Log:
+`/home/gust/paseo/paseo-home/work/logs/4590eee3-1791879560289.log`.
+
+The first signed run exposed a test's incorrect assumed confirmation word
+order; the existing exact service/practitioner/duration notice was correct.
+The broader gate caught an unknown-record-field type-narrowing error in the
+contradictory-label check. It was fixed with the actual gender validator rather
+than removing the check. Timeouts, workers, native writer assertions, current
+approval fences and privacy canaries remain unchanged. These local synthetic
+results do not establish GitHub execution, acoustic accuracy or clinic/carrier
+acceptance.

@@ -1,3 +1,5 @@
+import { copyBookingServiceChoice } from "../core/booking-service-choice.ts";
+import { servicePractitionerPreferenceLanguage } from "./service-practitioner-preference.ts";
 import { hasSentPatientWork } from "../core/request-boundary.ts";
 import { readClinikoBookingHorizon, requestedDatesOutsideHorizon } from "./cliniko-booking-horizon.ts";
 import { validCallerIdentityDenial } from "../core/caller-identity.ts";
@@ -191,6 +193,29 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     this.#publicMenu = undefined; this.#spokenMenu.clear(); this.#searchMenu.clear(); this.#reschedulingTargetSelected = false;
     return { kind: "clarify", reason: "serviceChoiceChanged" };
   }
+  async servicePractitionerIntent(turn: FinalCallerTurn, signal?: AbortSignal): Promise<VoiceIntent | undefined> {
+    const choice = this.#serviceChoice, c = this.#config, preference = servicePractitionerPreferenceLanguage(turn.text);
+    if (!choice || !preference || !c.serviceCatalogue || this.#workflow !== "book" || this.closed || this.#staffActive ||
+        this.#verificationRequired || this.patientAccessDenied || turn.quality !== "clear" || turn.callId !== c.receipt.callId ||
+        turn.sessionId !== c.sessionId || signal?.aborted) return undefined;
+    const current = await awaitUntilAbort(c.ledger.read(turn.callId, c.receipt.scope), AbortSignal.any([this.#lifetime.signal, AbortSignal.timeout(5000), ...(signal ? [signal] : [])]));
+    const now = Date.parse((c.clock ?? (() => new Date().toISOString()))());
+    if (!current?.ok || signal?.aborted || this.closed || this.#serviceChoice !== choice || current.value.lifecycle !== "active" ||
+        current.value.sessionLease?.sessionId !== c.sessionId || !Number.isFinite(now) || Date.parse(current.value.sessionLease.expiresAt) <= now) return undefined;
+    if (hasSentPatientWork(current.value)) return { kind: "clarify", reason: "changeAfterSend" };
+    // A generic "I prefer" may describe dates or times. Only a current approved
+    // canonical name can make it a practitioner change; explicit see/book-with
+    // commands can still ask for an unavailable named practitioner.
+    if (preference.kind === "name" && !/^(?:Can I see|Could I see|Please book me with) /i.test(turn.text.trim())) {
+      const source = await awaitUntilAbort(currentServiceCatalogue(c), AbortSignal.any([this.#lifetime.signal, AbortSignal.timeout(5000), ...(signal ? [signal] : [])]));
+      if (!source?.ok || signal?.aborted || this.closed || this.#serviceChoice !== choice) return undefined;
+      const name = preference.name;
+      const service = source.value.services.find(service => normalizedSpokenName(service.name) === normalizedSpokenName(choice.name) &&
+        service.visitKind === choice.visitKind && service.durationMinutes === choice.durationMinutes);
+      if (!service?.practitioners.some(member => normalizedSpokenName(member.name) === normalizedSpokenName(name))) return undefined;
+    }
+    return { kind: "workflow", operation: "book", serviceChoice: { ...choice, practitionerPreference: Object.freeze({ ...preference }) } };
+  }
   async serviceDurationIntent(turn: FinalCallerTurn, signal?: AbortSignal): Promise<VoiceIntent | undefined> {
     const durationMinutes = bookingDurationLanguage(turn.text), choice = this.#serviceChoice, c = this.#config;
     if (!durationMinutes || !choice || this.closed || this.#staffActive || this.#verificationRequired || this.patientAccessDenied ||
@@ -372,7 +397,8 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   }
   async choose(operation: ClinikoWorkflow, external?: AbortSignal, replaceCanceledChange = false, expectedRevision?: number, incomingServiceChoice?: BookingServiceChoice): Promise<Result<Readonly<{ kind: "codeRequired" | "intakeRequired" }>, Failure>> {
     this.#serviceDialogue.clear();
-    const serviceChoice = incomingServiceChoice ? Object.freeze({ ...incomingServiceChoice }) : undefined;
+    const serviceChoice = incomingServiceChoice ? copyBookingServiceChoice(incomingServiceChoice) : undefined;
+    if (incomingServiceChoice && !serviceChoice) return unavailable();
     if (!["book", "cancel", "reschedule", "intake", "appointments.read"].includes(operation) || this.#staffActive || this.#selecting || this.#patientLifetime.signal.aborted || this.#lifetime.signal.aborted || external?.aborted) return unavailable();
     if (serviceChoice && operation !== "book" || operation === "book" && this.#config.serviceCatalogue && !serviceChoice ||
         serviceChoice && this.#owner && this.#verificationRequired) return unavailable();
@@ -418,7 +444,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
           signal.aborted || previousOwner && (replacingService ? hasSentPatientWork(after.value) : Object.values(after.value.actions).some(action => action.status !== "canceled"))) return unavailable();
       previousOwner?.dispose(); this.#publicMenu = undefined; this.#spokenMenu.clear(); this.#searchMenu.clear(); this.#reschedulingTargetSelected = false;
       this.#owner = created; this.#workflow = operation; this.#bookingConfig = operation === "book" ? selectedConfig : undefined;
-      this.#serviceChoice = operation === "book" && serviceChoice ? Object.freeze({ ...serviceChoice }) : undefined;
+      this.#serviceChoice = operation === "book" && serviceChoice ? copyBookingServiceChoice(serviceChoice) : undefined;
       this.#verificationRequired = operation !== "intake"; created = undefined; published = true;
       return ok({ kind: operation === "intake" ? "intakeRequired" : "codeRequired" });
     } catch { return unavailable(); }
