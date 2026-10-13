@@ -32,6 +32,7 @@ export class VoiceOperationalAlertInbox {
     this.#directory = join(config.directory, createHash("sha256").update(JSON.stringify([config.scope.tenantId, config.scope.clinicId, config.scope.locationId])).digest("hex"));
   }
   #days() { return operationalDays((this.#config.clock ?? (() => new Date().toISOString()))()); }
+  binding(): LocationScope { return { ...this.#config.scope }; }
   async #privateDirectory(path: string) {
     const stat = await lstat(path);
     if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid!() || (stat.mode & 0o077) !== 0 || await realpath(path) !== path) throw unavailable();

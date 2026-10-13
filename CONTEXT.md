@@ -41,3 +41,18 @@ Before first-time registration, the caller separately acknowledges that a failur
 ## Newly registered patient
 
 A patient whose registration was proven during the current call. Registration success is separate from appointment success. Booking for this patient requires independently approved permission and a separate caller confirmation; a rejected or uncertain booking leaves the patient record intact.
+
+## Operational alert
+
+A notice about clinic infrastructure or aggregate queue health that requires operational attention. It is separate from a patient-specific review request.
+_Avoid_: Patient message, saved patient request.
+
+## Operator acknowledgment
+
+An authenticated, currently authorized operator explicitly accepts responsibility for an operational alert for an approved period. It establishes neither the outcome of a patient request nor completion of the underlying recovery work.
+_Avoid_: Transport acceptance, clinical completion.
+
+## Responsibility escalation
+
+An unacknowledged alert or expired responsibility period becomes the responsibility of the clinic's currently approved backup. Assignment alone does not establish that the backup has read or acknowledged it.
+_Avoid_: Delivered callback, completed recovery.
