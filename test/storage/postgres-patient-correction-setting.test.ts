@@ -5,13 +5,13 @@ import { PostgresClinicPatientCorrectionSettingStore } from "../../src/storage/p
 import { PostgresPolicyStore } from "../../src/storage/postgres-policy-store.ts";
 import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
 import { withDisposablePostgres } from "../support/disposable-postgres.ts";
-import { migrate } from "../../src/storage/migrate.ts";
+import { migrate, migrateTo } from "../../src/storage/migrate.ts";
 
 test("E2E-363 PostgreSQL correction settings survive restart, have one clinic-wide CAS winner and no location duplicate", async () => {
   await withDisposablePostgres(async db => {
     const scope = { tenantId: "correction-db", clinicId: "clinic", locationId: "first" }, other = { ...scope, locationId: "second" };
     const store = new PostgresClinicPatientCorrectionSettingStore(db);
-    await migrate(db, "down");
+    await migrateTo(db, "042_patient_verification_budget");
     assert.equal((await store.read(scope)).ok, false, "an older schema cannot silently substitute default settings");
     await migrate(db);
     assert.deepEqual(await store.read(scope), { ok: true, value: { version: "0", enabled: false } });
@@ -30,6 +30,6 @@ test("E2E-363 PostgreSQL correction settings survive restart, have one clinic-wi
     assert.deepEqual(Object.keys(history.value.entries[0]!).sort(), ["version", "enabled", "previousEnabled", "actorRef", "changedAt"].sort());
     assert.equal((await restarted.changeEnabled(scope, "1", false, "stale")).ok, false);
     const foreign = await restarted.read({ ...scope, tenantId: "foreign" }); assert.ok(foreign.ok); assert.equal(foreign.value.version, "0");
-    await assert.rejects(migrate(db, "down"), /history must be removed/);
+    await assert.rejects(migrateTo(db, "042_patient_verification_budget"), /history must be removed/);
   });
 });

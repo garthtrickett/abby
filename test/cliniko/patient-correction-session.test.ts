@@ -32,8 +32,8 @@ async function fixture() {
     override async read(fingerprint: string): ReturnType<import("../../src/cliniko/contact-revision.ts").ClinikoContactRevisionOwner["read"]> {
       return backend ? backend.read(fingerprint) : super.read(fingerprint);
     }
-    override async begin(): ReturnType<import("../../src/cliniko/contact-revision.ts").ClinikoContactRevisionOwner["begin"]> {
-      return mode === "failedFence" ? err({ kind: "storageFailure" }) : backend ? backend.begin() : super.begin();
+    override async begin(ref?: string): ReturnType<import("../../src/cliniko/contact-revision.ts").ClinikoContactRevisionOwner["begin"]> {
+      return mode === "failedFence" ? err({ kind: "storageFailure" }) : backend ? backend.begin(ref) : super.begin(ref);
     }
     override async complete(ref: string) {
       synced++;

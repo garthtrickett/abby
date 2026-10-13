@@ -10,8 +10,8 @@ import { ClinikoCallFlow } from "../../src/standalone/cliniko-call-flow.ts";
 import type { ClinikoCallFlowConfig } from "../../src/standalone/cliniko-call-flow.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 
-export async function patientCorrectionCallFlowFixture() {
-  const f = await callerVerificationFixture({ operation: "patients.update", patientUpdateExecute: true });
+export async function patientCorrectionCallFlowFixture(options: Pick<NonNullable<Parameters<typeof callerVerificationFixture>[0]>, "scope"> = {}) {
+  const f = await callerVerificationFixture({ ...options, operation: "patients.update", patientUpdateExecute: true });
   const apiKey = "synthetic-session-au5", credentialFingerprint = clinikoCredentialFingerprint(apiKey);
   const contactRevision = new SyntheticContactRevision(f.scope.tenantId, [credentialFingerprint]);
   const path = join(f.folder, "correction.json"), base = "https://api.au5.cliniko.com/v1", patientId = verificationCanaries[2]!;

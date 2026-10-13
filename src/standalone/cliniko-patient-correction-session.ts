@@ -68,7 +68,7 @@ export class ClinikoPatientCorrectionSession extends NoStoredKnowledge implement
       attest: (query, phase, signal) => this.#attest(query, phase, signal),
       claim: async (request, signal) => {
         if (this.#claimed || !this.#matchesRequest(request) || !await this.#currentPending(signal, true) || signal.aborted || this.#claimed) return false;
-        const begun = await config.contactRevision.begin();
+        const begun = await config.contactRevision.begin(this.#pending!.ref);
         if (!begun.ok) return false;
         this.#contactChange = begun.value;
         this.#claimed = true;

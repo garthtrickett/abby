@@ -31,6 +31,7 @@ import type { default as CallsTable } from './Calls.js';
 import type { default as ClinicPatientCorrectionSettingsTable } from './ClinicPatientCorrectionSettings.js';
 import type { default as AdminSignInChallengesTable } from './AdminSignInChallenges.js';
 import type { default as NumberRoutesTable } from './NumberRoutes.js';
+import type { default as ClinikoContactChangeRegistryTable } from './ClinikoContactChangeRegistry.js';
 import type { default as AdminSignInRateLimitsTable } from './AdminSignInRateLimits.js';
 import type { default as ClinicWriteStopEventsTable } from './ClinicWriteStopEvents.js';
 import type { default as CallEventsTable } from './CallEvents.js';
@@ -101,6 +102,8 @@ export default interface PublicSchema {
   admin_sign_in_challenges: AdminSignInChallengesTable;
 
   number_routes: NumberRoutesTable;
+
+  cliniko_contact_change_registry: ClinikoContactChangeRegistryTable;
 
   admin_sign_in_rate_limits: AdminSignInRateLimitsTable;
 
