@@ -20,6 +20,7 @@ import type { PatientCodeDelivery, PatientVerificationBudget, PatientVerificatio
 import type { AdminDirectory } from "./identity/magic-link.ts";
 import { OwnerFileCallerPolicy } from "./owner-file-caller-policy.ts";
 import { OwnerFileBookingPolicy } from "./owner-file-booking-policy.ts";
+import type { BookingServiceBinding } from "./owner-file-booking-policy.ts";
 
 export type ClinikoBookingSessionConfig = Readonly<{
   receipt: AdmissionReceipt; inbound: AuthenticatedInboundCall; sessionId: string; policyVersion: string;
@@ -28,7 +29,7 @@ export type ClinikoBookingSessionConfig = Readonly<{
   directory: AdminDirectory; callerApprovalPath: string; bookingApprovalPath: string;
   cliniko: Readonly<{ apiKey: string; contactEmail: string; businessId: string; practitionerId: string; appointmentTypeId: string; recallTypeId: string;
     timeZone: string; countryCallingCode: string; rateBudget: ClinikoRequestBudget }>;
-  catalogue?: Readonly<{ approvalPath: string; practitioners: readonly Readonly<{ practitionerId: string; bookingApprovalPath: string }>[] }>;
+  catalogue?: Readonly<{ approvalPath: string; practitioners: readonly Readonly<{ practitionerId: string; bookingApprovalPath: string }>[]; serviceBinding?: BookingServiceBinding }>;
   signal: AbortSignal; fetchPort?: typeof fetch; clock?: () => string; timeoutMs?: number;
 }>;
 type Failure = Readonly<{ kind: "bookingSessionUnavailable" }>;
@@ -92,11 +93,12 @@ export class ClinikoBookingSession {
         const policy = await OwnerFileBookingPolicy.capture({ path: config.bookingApprovalPath, scope,
           policyVersion: config.policyVersion, businessId: config.cliniko.businessId, practitionerId: config.cliniko.practitionerId, appointmentTypeId: config.cliniko.appointmentTypeId, recallTypeId: config.cliniko.recallTypeId,
           credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey), timeZone: config.cliniko.timeZone,
-          directory: config.directory, clock: config.clock });
+          directory: config.directory, clock: config.clock, ...(config.catalogue?.serviceBinding ? { serviceBinding: config.catalogue.serviceBinding } : {}) });
         if (!policy.ok || settled) return undefined;
         const catalogue = config.catalogue ? await OwnerFileBookingCatalogue.capture({ path: config.catalogue.approvalPath, scope,
           policyVersion: config.policyVersion, businessId: config.cliniko.businessId, appointmentTypeId: config.cliniko.appointmentTypeId,
-          credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey), timeZone: config.cliniko.timeZone, directory: config.directory, clock: config.clock }) : undefined;
+          credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey), timeZone: config.cliniko.timeZone, directory: config.directory, clock: config.clock,
+          ...(config.catalogue.serviceBinding ? { serviceBinding: config.catalogue.serviceBinding } : {}) }) : undefined;
         if (config.catalogue && (!catalogue?.ok || settled)) return undefined;
         const profile = catalogue?.ok ? await catalogue.value.current(scope) : undefined;
         if (config.catalogue && (!profile?.ok || profile.value.practitioners[0]?.practitionerId !== config.cliniko.practitionerId ||
@@ -140,7 +142,8 @@ export class ClinikoBookingSession {
             if (index === 0) continue;
             const selection = { ...config.cliniko, practitionerId: member.practitionerId };
             const terms = await OwnerFileBookingPolicy.capture({ path: member.bookingApprovalPath, scope,
-              policyVersion: config.policyVersion, ...selection, credentialFingerprint: clinikoCredentialFingerprint(selection.apiKey), directory: config.directory, clock: config.clock });
+              policyVersion: config.policyVersion, ...selection, credentialFingerprint: clinikoCredentialFingerprint(selection.apiKey), directory: config.directory, clock: config.clock,
+              ...(config.catalogue.serviceBinding ? { serviceBinding: config.catalogue.serviceBinding } : {}) });
             if (!terms.ok || settled) return undefined;
             const offers = ClinikoBookingOffers.create({ ...selection, scope, callId: config.receipt.callId, sessionId: config.sessionId,
               policyVersion: config.policyVersion, proof: verification.proof, policy: terms.value, clock: config.clock }, fetchPort);

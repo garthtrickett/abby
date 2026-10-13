@@ -33,6 +33,7 @@ export async function voiceUntil(check: () => boolean, label: string, timeoutMs 
  * Cliniko HTTP, clear-final transcription and speech synthesis are explicitly synthetic. */
 export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: ClinikoCallFlowConfig,
   intent: (flow: ClinikoCallFlow) => IntentResolver, options: { lostWrite?: boolean;
+    appointmentTypeMetadata?: Readonly<Record<string, Readonly<{ durationMinutes: number }>>>;
     beforeWriteResponse?: () => Promise<void>;
     transcriptFinal?: (event: Extract<TranscriptEvent, { kind: "segmentFinal" }>) => readonly TranscriptEvent[] } = {}) {
   const accountSid = `AC${"4".repeat(32)}`, callSid = `CA${randomUUID().replaceAll("-", "")}`, streamSid = `MZ${randomUUID().replaceAll("-", "")}`;
@@ -89,11 +90,13 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       const appointmentId = method === "PATCH" ? url.pathname.split("/")[3]! : "91";
       const before = method === "PATCH" ? await (await port(`${base}/individual_appointments/${appointmentId}`, { method: "GET", redirect: "error", ...(init?.signal ? { signal: init.signal } : {}) })).json() : {};
       const starts = body.starts_at ?? before.starts_at;
-      after = { ...before, id: appointmentId, notes: body.notes ?? before.notes, starts_at: starts, ends_at: new Date(Date.parse(starts) + 1_800_000).toISOString(), archived_at: null, deleted_at: null,
+      const typeId = body.appointment_type_id ?? "33", metadata = options.appointmentTypeMetadata?.[typeId];
+      if (options.appointmentTypeMetadata) assert.ok(metadata && Number.isSafeInteger(metadata.durationMinutes) && metadata.durationMinutes > 0 && metadata.durationMinutes <= 480);
+      after = { ...before, id: appointmentId, notes: body.notes ?? before.notes, starts_at: starts, ends_at: new Date(Date.parse(starts) + (metadata?.durationMinutes ?? 30) * 60_000).toISOString(), archived_at: null, deleted_at: null,
         cancelled_at: url.pathname.endsWith("/cancel") ? now() : null,
         patient: { links: { self: `${base}/patients/${body.patient_id ?? verificationCanaries[2]}` } },
         business: { links: { self: `${base}/businesses/11` } }, practitioner: { links: { self: `${base}/practitioners/${body.practitioner_id ?? "22"}` } },
-        appointment_type: { links: { self: `${base}/appointment_types/33` } } };
+        appointment_type: { links: { self: `${base}/appointment_types/${typeId}` } } };
       if (options.beforeWriteResponse) await options.beforeWriteResponse();
       if (options.lostWrite) throw new Error("synthetic lost voice write response");
       if (url.pathname.endsWith("/cancel")) return new Response(null, { status: 204 });

@@ -138,7 +138,7 @@ export class TextReception {
   }
 
   async startWorkflow(scope: LocationScope, turn: FinalCallerTurn, operation: import("../core/model.ts").WorkflowOperation, now: string,
-    expectedConversationRevision?: number, external?: AbortSignal, replaceCanceledChange = false) {
+    expectedConversationRevision?: number, external?: AbortSignal, replaceCanceledChange = false, serviceChoice?: import("../core/booking-service-choice.ts").BookingServiceChoice) {
     const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision);
     if (denied) return denied;
     const state = await this.ledger.read(turn.callId, scope);
@@ -151,6 +151,7 @@ export class TextReception {
     let selected;
     try { selected = await awaitUntilAbort(this.host.startWorkflow({ scope, callId: turn.callId, sessionId: turn.sessionId,
       policyVersion: state.value.policy.policyVersion, operation, signal, expectedConversationRevision: state.value.conversationRevision,
+      ...(serviceChoice ? { serviceChoice } : {}),
       ...(replaceCanceledChange ? { replaceCanceledChange: true as const } : {}) }), signal); }
     catch { selected = undefined; }
     if (external?.aborted) return err({ kind: "staleTurn" as const });

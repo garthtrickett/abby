@@ -20,7 +20,7 @@ export type VoiceIntent =
   | Readonly<{ kind: "requestBoundary"; reason: import("../core/request-boundary.ts").RequestBoundary }>
   | Readonly<{ kind: "callerIdentityDenied"; reason: import("../core/caller-identity.ts").CallerIdentityDenial }>
   | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason; approvedLocation?: string }>
-  | Readonly<{ kind: "workflow"; operation: import("../core/model.ts").WorkflowOperation; replaceCanceledChange?: true }>
+  | Readonly<{ kind: "workflow"; operation: import("../core/model.ts").WorkflowOperation; replaceCanceledChange?: true; serviceChoice?: import("../core/booking-service-choice.ts").BookingServiceChoice }>
   | Readonly<{ kind: "outcome" }>
   | Readonly<{ kind: "notificationOutcome" }>
   | Readonly<{ kind: "staffOutcome" }>
@@ -394,7 +394,7 @@ export class VoiceSession {
       const controller = new AbortController(), pending = { cancel: () => controller.abort() };
       this.pendingIntent = pending;
       try { result = await this.reception.startWorkflow(this.scope, turn, this.cachedIntent.operation, now, existing.value.conversationRevision,
-        controller.signal, this.cachedIntent.replaceCanceledChange); }
+        controller.signal, this.cachedIntent.replaceCanceledChange, this.cachedIntent.serviceChoice); }
       finally { if (this.pendingIntent === pending) this.pendingIntent = undefined; }
     } else if (this.cachedIntent.kind === "outcome") {
       result = await this.runtime.acceptTurn(turn, { kind: "outcomeQuery" }, now, existing.value.conversationRevision);

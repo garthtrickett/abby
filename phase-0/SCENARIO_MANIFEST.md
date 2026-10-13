@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.146
+# Scenario manifest, version 1.154
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -315,3 +315,5 @@ E2E-345 covers twenty-two signed arrival, competing-fact and private-message jou
 E2E-346 covers twenty-one signed practitioner/service constraint journeys, including three independently approved canonical/any-practitioner sends with exact native location, type and approved spoken duration. Gender, aliases, prior practitioner history, style and ranking are not inferred. Different durations or types need clinic handling. Real carrier/mail/clinic activation remains planned.
 
 E2E-347 covers twenty-one signed class/home/mode/practitioner-boundary journeys, exact individually verified cancellation and same-practitioner movement, and private class/home-service messages. No class inventory, membership redemption, home-visit arrangement, mode switch or cross-practitioner source change is implemented or inferred. Unsupported requests need clinic handling. Real carrier/mail/clinic activation remains planned.
+
+E2E-346 also covers optional exact multi-service booking: independently approved provider types/durations and declared initial/follow-up rules, actual signed calls, fresh verification after replacing an unsent service, stale parent authority before and after review, provider duration/online flags, unknown writes and prevention of guessed defaults. Caller-attested return answers are evaluated only under the approved self-report basis; they are not inferred Cliniko history. Cross-location routing, gender, guided service questions and intake variant selection remain open. Full-call and real speech qualification remain separate.

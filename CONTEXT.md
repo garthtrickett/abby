@@ -41,3 +41,11 @@ Before first-time registration, the caller separately acknowledges that a failur
 ## Newly registered patient
 
 A patient whose registration was proven during the current call. Registration success is separate from appointment success. Booking for this patient requires independently approved permission and a separate caller confirmation; a rejected or uncertain booking leaves the patient record intact.
+
+## Booking service
+
+A clinic-approved combination of service, initial or follow-up visit, and duration offered at a particular location. Choosing it grants neither patient permission nor a reserved appointment time.
+
+## Caller attestation
+
+The caller's explicit answers about previous attendance and a new problem, evaluated under the clinic's approved return-visit rules. They do not establish a Cliniko-verified treatment history.

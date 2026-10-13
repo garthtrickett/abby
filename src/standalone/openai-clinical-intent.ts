@@ -223,6 +223,11 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     // A bare external-change claim cannot silently replace a private draft.
     // Explicit message prefixes still keep literal message content private.
     if (boundary === "externalAppointmentChange") return ok({ kind: "requestBoundary", reason: boundary });
+    if (!before.callerIdentityDenied) {
+      const changed = await config.owner.serviceEligibilityChangeIntent?.(turn, signal);
+      if (signal?.aborted) return err(unavailable);
+      if (changed) return ok(changed);
+    }
     if (!before.callerIdentityDenied && staffMessageLanguage(turn.text, config.owner.collectingStaffMessage)) return ok({ kind: "staffRequest" });
     const arrival = arrivalInformationLanguage(turn.text);
     if (arrival) return ok({ kind: "clarify", reason: arrival });
@@ -230,6 +235,13 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     if (clinicalAdvice) return ok(clinicalAdvice);
     const specialService = specialServiceLanguage(turn.text);
     if (specialService) return ok({ kind: "clarify", reason: specialService });
+    if (!before.callerIdentityDenied) {
+      const service = config.owner.serviceChoiceIntent?.(turn.text);
+      if (service) return ok(service);
+      const duration = await config.owner.serviceDurationIntent?.(turn, signal);
+      if (signal?.aborted) return err(unavailable);
+      if (duration) return ok(duration);
+    }
     const serviceConstraint = serviceConstraintLanguage(turn.text);
     if (serviceConstraint) return ok({ kind: "clarify", reason: serviceConstraint });
     if (!before.callerIdentityDenied) {

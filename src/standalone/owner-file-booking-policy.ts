@@ -4,6 +4,7 @@ import { validClinikoId } from "./appointment-change-authority.ts";
 import type { AdminDirectory } from "./identity/magic-link.ts";
 import { approvalInstant, approvalRef, clinicApprovalKeys, decodeClinicApproval, OwnerFileClinicApproval } from "./owner-file-clinic-approval.ts";
 import type { ClinicApproval } from "./owner-file-clinic-approval.ts";
+import { OwnerFileServiceCatalogue } from "./owner-file-service-catalogue.ts";
 
 export type BookingApproval = ClinicApproval & Readonly<{
   policyVersion: string; businessId: string; practitionerId: string; appointmentTypeId: string;
@@ -13,7 +14,8 @@ export type BookingApproval = ClinicApproval & Readonly<{
 }>;
 export type BookingPolicyBinding = Pick<BookingApproval, "scope" | "policyVersion" | "businessId" | "practitionerId" |
   "appointmentTypeId" | "credentialFingerprint" | "recallTypeId" | "timeZone">;
-type Config = BookingPolicyBinding & Readonly<{ path: string; directory: AdminDirectory; clock?: () => string }>;
+export type BookingServiceBinding = Readonly<{ catalogue: OwnerFileServiceCatalogue; serviceRef: string }>;
+type Config = BookingPolicyBinding & Readonly<{ path: string; directory: AdminDirectory; clock?: () => string; serviceBinding?: BookingServiceBinding }>;
 type Failure = Readonly<{ kind: "bookingPolicyUnavailable" }>;
 function decode(value: unknown, scope: LocationScope): BookingApproval | undefined {
   const common = decodeClinicApproval(value, scope, [...clinicApprovalKeys, "policyVersion", "businessId", "practitionerId", "appointmentTypeId",
@@ -40,7 +42,8 @@ export class OwnerFileBookingPolicy {
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }) }); this.#source = source;
   }
   static async capture(incoming: Config): Promise<Result<OwnerFileBookingPolicy, Failure>> {
-    const config = Object.freeze({ ...incoming, scope: Object.freeze({ ...incoming.scope }) });
+    const config = Object.freeze({ ...incoming, scope: Object.freeze({ ...incoming.scope }),
+      ...(incoming.serviceBinding ? { serviceBinding: Object.freeze({ ...incoming.serviceBinding }) } : {}) });
     const source = await OwnerFileClinicApproval.capture({ ...config, decode });
     if (!source.ok) return err({ kind: "bookingPolicyUnavailable" });
     const policy = new OwnerFileBookingPolicy(config, source.value);
@@ -54,6 +57,15 @@ export class OwnerFileBookingPolicy {
     const found = await this.#source.current(scope), binding = this.binding();
     if (!found.ok || !found.value || Object.entries(binding).some(([key, value]) => key !== "scope" && found.value![key as keyof BookingApproval] !== value))
       return err({ kind: "bookingPolicyUnavailable" });
+    if (this.#config.serviceBinding) {
+      const parent = this.#config.serviceBinding;
+      if (!(parent.catalogue instanceof OwnerFileServiceCatalogue)) return err({ kind: "bookingPolicyUnavailable" });
+      const current = await parent.catalogue.current(scope), row = current.ok && current.value.services.find(service => service.serviceRef === parent.serviceRef);
+      if (!current.ok || !row || current.value.policyVersion !== found.value.policyVersion || current.value.businessId !== found.value.businessId ||
+          current.value.credentialFingerprint !== found.value.credentialFingerprint || current.value.timeZone !== found.value.timeZone ||
+          row.serviceRef !== found.value.serviceRef || row.appointmentTypeId !== found.value.appointmentTypeId || row.durationMinutes !== found.value.durationMinutes ||
+          !row.practitioners.some(member => member.practitionerId === found.value!.practitionerId)) return err({ kind: "bookingPolicyUnavailable" });
+    }
     return ok(found.value);
   }
   static allows(approval: BookingApproval, startsAt: string, now: string): boolean {
