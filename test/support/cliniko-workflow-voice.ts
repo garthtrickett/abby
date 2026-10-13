@@ -262,10 +262,16 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
           // the end of that budget. Observe the whole operation before the
           // unchanged media-dispatch and speech waits.
           for (const stage of stages.filter(stage => stage.deadlineMs !== undefined)) {
-            const remainingMs = Math.max(1, stage.deadlineMs! - Math.round(performance.now() - stage.started));
-            await voiceUntil(() => (stage.signal ? stage.signal.aborted : stage.settled !== undefined) ||
-              processedChunk >= finalChunk || hasReply() || failures.length > 0,
-              `${stage.name} settlement`, remainingMs);
+            const remainingMs = Math.max(1, Math.ceil(stage.deadlineMs! - (performance.now() - stage.started)));
+            const settled = () => (stage.signal ? stage.signal.aborted : stage.settled !== undefined) ||
+              processedChunk >= finalChunk || hasReply() || failures.length > 0;
+            try { await voiceUntil(settled, `${stage.name} settlement`, remainingMs); }
+            catch (error) {
+              // Observe delivery of already-due runtime deadline timers before
+              // declaring a stall. This does not renew the production budget.
+              await new Promise<void>(resolve => setTimeout(resolve, 0));
+              if (!settled()) throw error;
+            }
           }
           if (staffPreparationsStarted > beforePreparations) {
             await voiceUntil(() => staffPreparationsSettled > beforePreparations || failures.length > 0,

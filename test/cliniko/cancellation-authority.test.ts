@@ -3,6 +3,33 @@ import test from "node:test";
 import { concreteCancellationFixture } from "../support/cancellation-authority.ts";
 import { cancellationCanaries, cancellationNow } from "../support/standalone-cancellation.ts";
 
+test("E2E-276 caller abort reaches a held cancellation read and denies late proposal evidence", { timeout: 5_000 }, async () => {
+  let readHeld = () => {};
+  const held = new Promise<void>(resolve => { readHeld = resolve; });
+  const f = await concreteCancellationFixture({ onHeldTarget: () => readHeld() });
+  try {
+    const ref = await f.verify(), target = await f.select(ref), query = f.query(ref, target);
+    const alreadyStopped = new AbortController(); alreadyStopped.abort();
+    const before = f.traffic.length;
+    assert.equal((await f.host.resolveAppointmentChange(query, alreadyStopped.signal)).ok, false);
+    assert.equal(f.traffic.length, before, "an aborted caller must not start provider reads");
+
+    f.setHold(true);
+    const caller = new AbortController();
+    const pending = f.host.resolveAppointmentChange(query, caller.signal);
+    await Promise.race([held, pending.then(() => { throw new Error("cancellation evidence settled before reaching the held read"); })]);
+    assert.ok(f.heldTargetSignal, "the protected provider read must be held before abort");
+    assert.equal(f.heldTargetSignal.aborted, false);
+    caller.abort();
+    assert.equal((await pending).ok, false);
+    assert.equal(f.heldTargetSignal.aborted, true);
+    f.release();
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.equal(Object.keys((await f.state()).actions).length, 0);
+    assert.equal(f.patches, 0); assert.equal(f.recalls.length, 0);
+  } finally { f.release(); await f.close(); }
+});
+
 test("E2E-276 actual protected selection, current owner policy and fresh target reach SAM confirmation/review/one cancellation", async () => {
   const f = await concreteCancellationFixture();
   try {

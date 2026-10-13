@@ -123,3 +123,43 @@ docker image inspect postgres:17-alpine --format '{{.Id}}'
 node --test --test-concurrency=4 test/text/booking-horizon.test.ts
 docker pull postgres:17-alpine && node --test --test-concurrency=4 test/text/booking-horizon.test.ts && git diff --check
 ```
+
+## Cancellation deadline correction
+
+Both workflows on `656daba` finished with failures. PR run38419696139 failed
+text-contract, and push run38419690065 failed postgres-proof, at E2E-299's
+expired cancellation-evidence observer. The observer could declare a stall at
+the 15-second boundary before an already-due runtime timer was delivered. Code
+inspection also found that the cancellation host ignored the external evidence
+abort signal, leaving the provider read governed by a later host deadline.
+
+The host now combines caller, lifetime and unchanged 15-second deadline signals
+before resolving evidence and rejects a result if that combined signal has
+aborted. The test observer rounds the remaining budget upward and observes one
+event-loop delivery of already-due timers before declaring a stall. It does not
+renew a runtime deadline. The signed expiry test now requires the provider
+signal to be aborted when the caller operation settles, before releasing the
+held response, and retains its no-action/no-write assertions.
+
+A direct protected-read regression also checks that a pre-aborted caller
+starts no provider read, and an abort during a held read settles without a
+proposal or clinical/review write. Its fixture signals when the provider read
+is held. The first version instead polled 100 immediate turns and failed before
+the approval-file reads completed; that failed result is retained in
+`4590eee3-1791905784634.log` (50 passed, 1 failed, zero skips). The explicit-held
+fixture regression passed 8 checks in `4590eee3-1791905995212.log`. Earlier
+typecheck and 36 affected checks passed in `4590eee3-1791905525287.log`.
+An earlier 16-check observer command included nonexistent
+`test/voice/rescheduling-menu.test.ts`; it provides no evidence for that file.
+The final command below names existing files explicitly.
+
+```sh
+npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh node --test --test-concurrency=4 test/cliniko/cancellation-authority.test.ts test/cliniko/standalone-cancellation.test.ts test/voice/appointment-evidence-observer.test.ts test/voice/cliniko-workflow-call.test.ts test/voice/clinical-model-workflow-call.test.ts test/voice/standalone-clinical-runner.test.ts test/contract/scenario-manifest.test.ts && git diff --check
+```
+
+Final exact-source qualification passed typecheck, compiled build, all 51
+checks and diff check, without failures or skips, in tracked job
+`Abby cancellation deadline final exact source qualification`, exit 0, log
+`4590eee3-1791906029224.log`. Fresh cloud qualification is required after
+publication. Caller choice among approved practitioners and the other remaining
+gap work above are still open.
