@@ -227,3 +227,25 @@ The preceding a56dec8 workflows did not start because of GitHub billing/payment
 or spending-limit annotations. This source revision requires fresh exact-head
 CI after publication. The PR remains draft while authoritative qualification
 is unavailable, and the original thirteen-gap objective remains active.
+
+## Practitioner label correction
+
+Final review found that an invalid native label and an unrecognized caller name
+could both normalize to `undefined`, allowing the matcher to return option one
+from a malformed cached page. The regression reproduced that exact result in
+`4590eee3-1791909446236.log` (1 failed). The owner now rejects native labels
+outside SAM's existing public-name grammar, discards malformed cached pages
+and never matches an absent caller-name key. Unsupported names require fresh
+valid options or clinic help; private identifiers are never substituted.
+
+The corrected source passed typecheck, compiled build, all 20 affected directory,
+signed/compiled caller and registry checks and diff check without failures/skips.
+Tracked work: `Abby practitioner label correction type signed compiled and private choice gate`,
+log `4590eee3-1791909517011.log`, exit 0. The broader 99-check result above
+belongs to the preceding directory source. Both cd35f04 cloud workflows
+(PR38431377342, push38431371507) stopped before any step with GitHub billing/
+payment or spending-limit annotations; they provide no cloud test evidence.
+
+```sh
+npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh node --test --test-concurrency=4 test/cliniko/practitioner-directory-rescheduling.test.ts test/voice/practitioner-directory-call.test.ts test/voice/compiled-practitioner-directory.test.ts test/voice/compiled-practitioner-move.test.ts test/contract/scenario-manifest.test.ts && git diff --check
+```

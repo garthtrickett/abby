@@ -8,6 +8,16 @@ import { verificationNow } from "../support/caller-verification.ts";
 import { reschedulingAuthorityFixture } from "../support/rescheduling-authority.ts";
 
 const move = { fromPractitionerId: "22", toPractitionerId: "23", appointmentTypeId: "33", durationMinutes: 30 };
+test("E2E-360 invalid native practitioner names cannot publish a directory choice", async () => {
+  const f = await reschedulingAuthorityFixture({ practitionerChoices: [] });
+  try {
+    const proof = await f.verify();
+    const found = resultValue(await f.source.list(f.scope, proof, verificationNow, "2026-10-09T06:00:00.000Z", verificationNow));
+    f.setFailure("invalidName");
+    assert.equal((await f.source.practitioners(f.query(proof, found.appointments[0]!.appointmentRef, "unselected"))).ok, false);
+    assert.equal(f.patches, 0); assert.equal(f.recalls.length, 0);
+  } finally { await f.close(); }
+});
 async function source(f: Awaited<ReturnType<typeof reschedulingSessionFixture>>) {
   await f.verify(); resultValue(await f.readMenu("targets")); await f.playPending();
   resultValue(await f.selectMenu("targets")); await f.playPending();
@@ -91,6 +101,8 @@ test("E2E-360 caller name and ordinal map only to a current played directory pag
     assert.deepEqual(selector.resolve("Option two", { ...await f.state(), callId: "another-call" }, verificationNow), { kind: "clarify", reason: "menuUnavailable" });
     assert.equal(selector.resolve("With someone we have not heard", await f.state(), verificationNow), undefined);
     assert.deepEqual(selector.resolve("Option three", await f.state(), verificationNow), { kind: "clarify", reason: "menuAmbiguous" });
+    selector.remember("menu-practitioners", { ...read, choices: [{ ...read.choices[0]!, name: "Unsupported / label" }] });
+    assert.equal(selector.resolve("???", await f.state(), verificationNow), undefined, "an unrecognized caller name must not match an invalid provider label");
   } finally { await f.close(); }
 });
 

@@ -110,7 +110,7 @@ export class ClinikoReschedulingAuthority implements AppointmentChangeAuthority,
     const native = await reader.value.describeBookingOffering(this.#config.scope, before.value.durationMinutes, signal,
       before.value.availabilityPlan?.mode === "roster");
     const after = await route.current(this.#config.scope);
-    return native.ok && native.value.kind === "offering" && native.value.offering && native.value.timeZone === before.value.timeZone &&
+    return native.ok && native.value.kind === "offering" && native.value.offering && normalizedSpokenName(native.value.offering.practitionerName) && native.value.timeZone === before.value.timeZone &&
       after.ok && JSON.stringify(before.value) === JSON.stringify(after.value) && !signal.aborted ? native.value.offering : undefined;
   }
   /** Reset only when an appointment is newly selected. A directory does not silently switch members. */

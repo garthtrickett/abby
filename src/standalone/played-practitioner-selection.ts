@@ -9,14 +9,16 @@ import type { VoiceIntent } from "../voice/voice-session.ts";
 export class PlayedPractitionerSelection {
   #menu: Readonly<{ turnId: string; snapshot: ReschedulingPractitionerRead }> | undefined;
   clear(): void { this.#menu = undefined; }
-  remember(turnId: string, snapshot: ReschedulingPractitionerRead): void { this.#menu = structuredClone({ turnId, snapshot }); }
+  remember(turnId: string, snapshot: ReschedulingPractitionerRead): void {
+    this.#menu = snapshot.choices.every(choice => !!normalizedSpokenName(choice.name)) ? structuredClone({ turnId, snapshot }) : undefined;
+  }
   resolve(text: string, state: CallState, now: string): VoiceIntent | undefined {
     const menu = this.#menu; if (!menu) return undefined;
     const raw = text.trim().replace(/[.!?,]+$/g, "").replace(/\s+(?:please|thanks)$/i, "");
     const ordinal = raw.match(/^(?:(?:the|with)\s+)?(?:option\s+)?(first|second|third|one|two|three|1|2|3)(?:\s+(?:one|practitioner))?$/i);
     const label = normalizedSpokenName(raw.replace(/^(?:(?:with|choose|see|switch to|can i see|i would like|i'd like)\s+)/i, ""));
     const index = ordinal ? ["first", "one", "1"].includes(ordinal[1]!.toLowerCase()) ? 0 : ["second", "two", "2"].includes(ordinal[1]!.toLowerCase()) ? 1 : 2
-      : menu.snapshot.choices.findIndex(choice => normalizedSpokenName(choice.name) === label);
+      : label ? menu.snapshot.choices.findIndex(choice => normalizedSpokenName(choice.name) === label) : -1;
     if (!ordinal && index < 0) return undefined;
     const notice = state.presentations[noticePresentationId(state.callId, menu.turnId)];
     if (state.callId !== menu.snapshot.callId || state.sessionLease?.sessionId !== menu.snapshot.sessionId ||
