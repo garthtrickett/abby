@@ -17,6 +17,11 @@ const minute = (value: unknown): number | undefined => {
   return Number(value.slice(0, 2)) * 60 + Number(value.slice(3));
 };
 type Snapshot = Readonly<{ daily: readonly DailyRoster[]; extra: readonly CalendarInterval[]; busy: readonly CalendarInterval[] }>;
+class CalendarPageLimit extends Error {
+  readonly total: number;
+  constructor(total: number) { super("calendar page limit"); this.total = total; }
+}
+type BusyRecord = Readonly<{ id: string; interval?: CalendarInterval }>;
 
 /** No patient/chart information leaves this edge. Each protected caller read
  * requires complete, twice-observed calendar sources and current metadata. */
@@ -59,9 +64,10 @@ export class ClinikoRosterAvailabilityReader {
       for (const filter of filters) query.append("q[]", filter);
       const result = await this.#get(`/${name}?${query}`, signal); if (!result.ok) throw new Error("calendar source unavailable");
       const body = object(result.value), entries = body?.[name];
-      if (!body || !Array.isArray(entries) || !Number.isSafeInteger(body.total_entries) || Number(body.total_entries) < 0 || Number(body.total_entries) > 1000 ||
+      if (!body || !Array.isArray(entries) || !Number.isSafeInteger(body.total_entries) || Number(body.total_entries) < 0 ||
           total !== undefined && total !== body.total_entries) throw new Error("incomplete calendar source");
       total = Number(body.total_entries);
+      if (total > 1000) throw new CalendarPageLimit(total);
       if (entries.length !== Math.min(100, Math.max(0, total - (page - 1) * 100))) throw new Error("incomplete calendar page");
       for (const entry of entries) {
         const row = object(entry);
@@ -81,23 +87,43 @@ export class ClinikoRosterAvailabilityReader {
     if (start === undefined || end === undefined || start >= end || row.repeat_rule !== null) throw new Error("unsupported calendar interval");
     return { start, end };
   }
-  async #snapshot(lower: string, upper: string, zone: string, signal: AbortSignal): Promise<Snapshot> {
-    const c = this.#config, practitioner = `practitioner_id:=${c.practitionerId}`, business = `business_id:=${c.businessId}`;
-    const overlap = [practitioner, `starts_at:<${upper}`, `ends_at:>${lower}`];
-    const busy = async (name: string) => (await this.#collection(name, overlap, row => {
+  async #busy(name: string, lower: string, upper: string, signal: AbortSignal, depth = 0): Promise<BusyRecord[]> {
+    try {
+      return await this.#collection(name, [`practitioner_id:=${this.#config.practitionerId}`, `starts_at:<${upper}`, `ends_at:>${lower}`], row => {
       if (!this.#link(row.business, "businesses")) throw new Error("missing busy business");
       for (const flag of ["archived_at", "deleted_at", ...(name === "individual_appointments" ? ["cancelled_at"] : [])]) {
         if (row[flag] !== null && calendarInstant(row[flag]) === undefined) throw new Error("unknown busy activity");
       }
-      if ([row.archived_at, row.deleted_at, ...(name === "individual_appointments" ? [row.cancelled_at] : [])].some(flag => flag !== null)) return undefined;
+      if ([row.archived_at, row.deleted_at, ...(name === "individual_appointments" ? [row.cancelled_at] : [])].some(flag => flag !== null)) return { id: String(row.id) };
       const interval = this.#interval(row);
       if (interval.start >= Date.parse(upper) || interval.end <= Date.parse(lower)) throw new Error("foreign busy range");
-      return interval;
-    }, signal)).filter((value): value is CalendarInterval => value !== undefined);
+      return { id: String(row.id), interval };
+      }, signal);
+    } catch (error) {
+      const first = Date.parse(lower), last = Date.parse(upper);
+      if (!(error instanceof CalendarPageLimit) || signal.aborted || depth >= 7 || last - first <= 86_400_000) throw error;
+      const middle = new Date(first + Math.floor((last - first) / 2)).toISOString();
+      // Both half-open overlap queries include an interval crossing the split.
+      // The same native record must agree before it can be deduplicated.
+      const left = await this.#busy(name, lower, middle, signal, depth + 1);
+      const right = await this.#busy(name, middle, upper, signal, depth + 1);
+      const merged = new Map(left.map(row => [row.id, row]));
+      for (const row of right) {
+        const previous = merged.get(row.id);
+        if (previous && JSON.stringify(previous) !== JSON.stringify(row)) throw new Error("changing split calendar record");
+        merged.set(row.id, row);
+      }
+      if (merged.size !== error.total) throw new Error("incomplete split calendar total");
+      return [...merged.values()].sort((a, b) => a.id.localeCompare(b.id));
+    }
+  }
+  async #snapshot(lower: string, upper: string, zone: string, signal: AbortSignal): Promise<Snapshot> {
+    const c = this.#config, practitioner = `practitioner_id:=${c.practitionerId}`, business = `business_id:=${c.businessId}`;
+    const busy = async (name: string) => (await this.#busy(name, lower, upper, signal)).flatMap(row => row.interval ? [row.interval] : []);
     const [daily, extra, individual, group, unavailable] = await Promise.all([
       this.#collection("daily_availabilities", [practitioner, business], row => {
         if (this.#link(row.business, "businesses") !== c.businessId || !Number.isInteger(row.day_of_week) ||
-            Number(row.day_of_week) < 0 || Number(row.day_of_week) > 6 || row.availabilities !== null && !Array.isArray(row.availabilities) ||
+            Number(row.day_of_week) < 0 || Number(row.day_of_week) > 7 || row.availabilities !== null && !Array.isArray(row.availabilities) ||
             Array.isArray(row.availabilities) && row.availabilities.length > 0 && row.time_zone_identifier !== zone) throw new Error("invalid daily roster");
         return { dayOfWeek: Number(row.day_of_week), intervals: (row.availabilities as unknown[] | null ?? []).map(value => {
           const window = object(value), startMinute = minute(window?.starts_at), endMinute = window?.ends_at === "24:00" ? 1440 : minute(window?.ends_at);

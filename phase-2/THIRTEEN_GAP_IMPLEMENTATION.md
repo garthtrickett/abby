@@ -11,7 +11,7 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 | 3 | Establish message delivery, staff handoff, monitoring and recovery ownership. | Four compiled-runner staff journeys now pass: named saved request, unknown write without replay, permission denial before mail and revocation before send. Existing recall/review/aggregate contracts remain. Deployed monitoring receiver, real sender and human clinic process remain open. |
 | 4 | Complete synthetic speech, public transport and eventual carrier qualification. | Prior synthetic runtime evidence exists; noisy/safety and repeated speech gates remain open. Paid probes require restored credits; public tunnel requires a dedicated usable route. Twilio-number carrier evidence is deferred, not substituted with synthetic results. |
 | 5 | Expand services, duration choices, locations and initial/follow-up rules. | Current service/intake variants, return rules and independently provisioned multi-location compiled hosts are locally qualified in draft457. Actual clinic configuration/acceptance and authoritative CI remain open. |
-| 6 | Extend searches and support online-disabled services where required. | E2E-356 locally qualifies complete approved longer online searches and a compiled two-month late-range booking. E2E-357 adds independently approved non-recurring native roster/extra availability minus all cross-business busy sources and fresh chosen-day reads. Recurrence and broader real-calendar/serving qualification remain incomplete; preserve incomplete-source denial, date bounds and offer/commit agreement. |
+| 6 | Extend searches and support online-disabled services where required. | E2E-356 locally qualifies complete approved longer online searches and a compiled two-month late-range booking. E2E-357/358 add independently approved non-recurring native calendars, complete adaptive busy reads, Sunday0/7 and compiled returning/first-time location/member coverage with fresh chosen-day reads. Recurrence and broader real-calendar/serving qualification remain incomplete; preserve incomplete-source denial, date bounds and offer/commit agreement. |
 | 7 | Support another approved practitioner during rescheduling. | Current movement requires the same practitioner. Require destination approval, single in-place movement and truthful recovery for conflicts/unknown writes. |
 | 8 | Add patient detail corrections, required registration fields and resends. | Minimal intake exists; existing-patient correction and delivered resend are incomplete. Require independently authorized updates, contact/index consistency and separate registration/booking outcomes. |
 | 9 | Handle multiple patients/actions in one call. | Restricted proxy/identity foundations exist. Require authority for each person, exact appointment selection and independent outcomes; no implicit household disclosure. |
@@ -229,3 +229,34 @@ weekday mapping needs accepted native evidence, large-source handling and full
 service/location serving coverage remain to qualify. Gaps7–13, real clinic/mail
 acceptance, acoustic quality, CI execution and carrier evidence remain open.
 The full13 objective remains active.
+
+
+## Gap6 larger calendar and serving qualification
+
+E2E-358 now covers busy ranges over1,000 records through complete smaller reads.
+Each child range retains its original page/deadline/credential budget; crossing
+native IDs must agree and unique child totals must equal each parent total.
+Failed halves, disappearing records, budget exhaustion and dense leaf overflow
+cannot publish partial menus. Sunday7 and legacy0 produce the same approved
+clinic day, following the inspected Aeva source convention; Abby's own native
+provider acceptance remains separate.
+
+Four added compiled journeys qualify North/South45/60-minute offline services,
+distinct TLS recipients/scopes, a two-month late booking after a large busy
+read, and first-time South registration followed by separate booking with an
+approved female member. Typecheck, compiled build, diff check and98 combined
+checks passed without failures/skips in work
+`Abby adaptive offline parent count corrected full gate`
+(log`4590eee3-1791900442880.log`). Manifest1.165 retains358 stable IDs.
+
+The report retains the readonly-budget fixture error, nonexistent private
+prompt expectation, a red missing-parent-record witness, and the constructor
+syntax restriction. Each correction was verified without weakening runtime
+limits or source-completeness checks. Exact commands and source references:
+`phase-2/LONGER_CLINIKO_AVAILABILITY.md`.
+
+Gap6 remains open for raw recurrence contract/qualification, large historical
+additive sources and real provider/clinic acceptance. Patient-free sandbox
+recurrence evidence has been requested asynchronously; independent work can
+continue while it is pending. Gaps7–13 and real mail/acoustic/CI/carrier gates
+remain open; the full thirteen-gap objective is unchanged.

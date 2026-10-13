@@ -35,9 +35,8 @@ if (services && !["book", "intake"].includes(operation!) || process.env.ABBY_SYN
 const multiLocation = process.env.ABBY_SYNTHETIC_LOCATION_MODE === "1";
 const longSearch = process.env.ABBY_SYNTHETIC_LONG_SEARCH_MODE === "1";
 const offlineCalendar = process.env.ABBY_SYNTHETIC_OFFLINE_CALENDAR === "1", missingBusy = process.env.ABBY_SYNTHETIC_MISSING_BUSY === "1";
-if (offlineCalendar && (!services || operation !== "book" || multiLocation || longSearch) || missingBusy && !offlineCalendar) throw new Error("invalid synthetic calendar mode");
-const calendar = offlineCalendar ? syntheticRosterProvider() : undefined;
-if (missingBusy) calendar!.fail("group_appointments");
+if (offlineCalendar && (!services || !["book", "intake"].includes(operation!)) || missingBusy && !offlineCalendar) throw new Error("invalid synthetic calendar mode");
+const calendars = new Map<string, ReturnType<typeof syntheticRosterProvider>>();
 if (longSearch && (!services || operation !== "book" || multiLocation)) throw new Error("invalid synthetic long search mode");
 if (multiLocation && (!services || !["book", "intake"].includes(operation!))) throw new Error("invalid synthetic location mode");
 const locationFixture = multiLocation ? operation === "intake" ? await intakeLocationServiceFixture() : await locationServiceFixture() : undefined;
@@ -78,7 +77,7 @@ for (const path of approvalPaths) {
     await writeFile(path, JSON.stringify({ ...value, credentialFingerprint: fingerprint,
       ...("policyVersion" in value ? { policyVersion: c.policyVersion } : {}),
       ...(longSearch && "bookingPolicyVersion" in value ? { maxAdvanceDays: 90, availabilityPlan: { mode: "online", maxSearchDays: 90 } } : {}),
-      ...(offlineCalendar && "bookingPolicyVersion" in value ? { availabilityPlan: rosterPlan } : {}),
+      ...(offlineCalendar && "bookingPolicyVersion" in value ? { availabilityPlan: { ...rosterPlan, maxSearchDays: longSearch ? 90 : 30 } } : {}),
       ...(longSearch && "services" in value && Array.isArray(value.services)
         ? { services: value.services.map(service => ({ ...service, searchDays: 90 })) } : {}) }), { mode: 0o600 });
   }
@@ -96,7 +95,10 @@ process.on("message", message => {
   if (message.kind === "loseMail") mailLost = true;
   if (message.kind === "changePolicy") mutatePolicy = true;
   if (offlineCalendar && message.kind === "occupyCalendar") {
-    calendar!.rows.unavailable_blocks!.push(rosterInterval("unavailable_blocks", "106", "2026-10-08T02:00:00.000Z", "2026-10-08T03:00:00.000Z"));
+    for (const [selection, calendar] of calendars) {
+      const [businessId, practitionerId] = selection.split(":");
+      calendar.rows.unavailable_blocks!.push(rosterInterval("unavailable_blocks", "106", "2026-10-08T02:00:00.000Z", "2026-10-08T03:00:00.000Z", businessId!, practitionerId!));
+    }
     process.send?.({ kind: "calendarOccupied" });
   }
 });
@@ -115,7 +117,28 @@ return new Proxy(policies, { get(target, key) {
 const base = "https://api.au5.cliniko.com/v1";
 let after: Record<string, unknown> | undefined, patient: Record<string, unknown> | undefined;
 function providerFor(c: typeof f.flowConfig): typeof fetch {
-const calendarPort = calendar ? calendar.wrap(c.fetchPort!) : c.fetchPort!;
+let calendarPort = c.fetchPort!;
+if (offlineCalendar) {
+  const members = new Set(c.serviceCatalogue!.services.flatMap(service => service.practitioners.map(p => p.practitionerId)));
+  for (const practitionerId of members) {
+    const businessId = c.cliniko.businessId, key = `${businessId}:${practitionerId}`;
+    let calendar = calendars.get(key);
+    if (!calendar) {
+      calendar = syntheticRosterProvider({ businessId, practitionerId }); calendars.set(key, calendar);
+      if (missingBusy) calendar.fail("group_appointments");
+      if (practitionerId === "24") calendar.rows.availability_blocks = [rosterInterval("availability_blocks", "102", "2026-10-08T01:00:00.000Z", "2026-10-08T03:00:00.000Z", businessId, practitionerId)];
+      if (longSearch) {
+        calendar.rows.daily_availabilities = [];
+        calendar.rows.availability_blocks = [rosterInterval("availability_blocks", "102", "2026-11-20T04:00:00.000Z", "2026-11-20T06:00:00.000Z", businessId, practitionerId)];
+        calendar.rows.group_appointments = Array.from({ length: 1200 }, (_, n) => {
+          const start = Date.parse("2026-10-08T08:00:00Z") + Math.floor(n / 20) * 86_400_000 + (n % 20) * 60_000;
+          return rosterInterval("group_appointments", String(200 + n), new Date(start).toISOString(), new Date(start + 5 * 60_000).toISOString(), n % 2 ? "12" : "11", practitionerId);
+        });
+      }
+    }
+    calendarPort = calendar.wrap(calendarPort);
+  }
+}
 return async (value, init) => {
   const url = new URL(String(value)), method = init?.method ?? "GET";
   process.send?.({ kind: "providerRequest", method, path: url.pathname, scope: c.receipt.scope });

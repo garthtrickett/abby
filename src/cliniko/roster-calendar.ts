@@ -39,7 +39,7 @@ export function rosterStarts(input: Readonly<{ from: string; to: string; timeZon
   if (first === undefined || last === undefined || last < first || (last - first) / 86_400_000 + 1 > input.plan.maxSearchDays ||
       !validRosterSearchPlan(input.plan) || !Number.isSafeInteger(input.durationMinutes) || input.durationMinutes < 1 || input.durationMinutes > 480 ||
       !Array.isArray(input.daily) || !Array.isArray(input.extra) || !Array.isArray(input.busy) ||
-      input.daily.some(row => !Number.isInteger(row.dayOfWeek) || row.dayOfWeek < 0 || row.dayOfWeek > 6 || !Array.isArray(row.intervals) ||
+      input.daily.some(row => !Number.isInteger(row.dayOfWeek) || row.dayOfWeek < 0 || row.dayOfWeek > (input.plan.weekdayOrigin === "sunday" ? 7 : 6) || !Array.isArray(row.intervals) ||
         row.intervals.some((w: DailyRoster["intervals"][number]) => !Number.isInteger(w.startMinute) || !Number.isInteger(w.endMinute) || w.startMinute < 0 || w.endMinute > 1440 || w.startMinute >= w.endMinute)) ||
       [...input.extra, ...input.busy].some(i => !Number.isFinite(i.start) || !Number.isFinite(i.end) || i.start >= i.end)) throw new TypeError("invalid roster search");
   const openings: CalendarInterval[] = [], step = 60_000;
@@ -49,7 +49,7 @@ export function rosterStarts(input: Readonly<{ from: string; to: string; timeZon
     const date = new Date(day).toISOString().slice(0, 10), next = new Date(day + 86_400_000).toISOString().slice(0, 10);
     const start = Date.parse(clinicDayStartUtc(input.timeZone, date)), end = Date.parse(clinicDayStartUtc(input.timeZone, next));
     const weekday = (new Date(day).getUTCDay() + (input.plan.weekdayOrigin === "monday" ? 6 : 0)) % 7;
-    const windows = input.daily.filter(row => row.dayOfWeek === weekday).flatMap(row => row.intervals);
+    const windows = input.daily.filter(row => row.dayOfWeek === weekday || input.plan.weekdayOrigin === "sunday" && row.dayOfWeek === 7 && weekday === 0).flatMap(row => row.intervals);
     if (!windows.length) continue;
     if (end - start === 86_400_000) {
       for (const window of windows) openings.push({ start: start + window.startMinute * step, end: start + window.endMinute * step });
