@@ -1,9 +1,36 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { SyntheticContactRevision } from "../support/contact-revision.ts";
+import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
+import { intakeCredential } from "../support/intake-edge.ts";
 import { ClinikoIntakeBookingSession } from "../../src/standalone/cliniko-intake-booking-session.ts";
 import { intakeBookingSessionFixture } from "../support/intake-booking-session.ts";
 import { intakeDraft } from "../support/intake-edge.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
+
+for (const phase of ["duringContact", "afterProof"] as const) {
+  test(`E2E-364 account correction ${phase} invalidates the new-registration booking proof`, async () => {
+    const scope = { tenantId: `intake-revision-${crypto.randomUUID()}`, clinicId: "clinic", locationId: "main" };
+    const owner = new SyntheticContactRevision(scope.tenantId, [clinikoCredentialFingerprint(intakeCredential)]);
+    const f = await intakeBookingSessionFixture({ scope, contactRevision: owner });
+    try {
+      await f.register(); await f.playPending();
+      const change = async () => { const ref = resultValue(await owner.begin()); resultValue(await owner.complete(ref)); };
+      if (phase === "duringContact") {
+        let changed = false;
+        f.provider.onContact(async () => { if (!changed) { changed = true; await change(); } });
+        await f.readMenu(); resultValue(await f.drain());
+        assert.equal(Object.values((await f.state()).actions).some(a => a.kind === "book"), false);
+      } else {
+        await f.readMenu(); resultValue(await f.drain()); await f.playPending();
+        resultValue(await f.select()); await change();
+        await f.confirm("book"); resultValue(await f.drain());
+      }
+      assert.equal(f.provider.patientPosts, 1);
+      assert.equal(f.provider.bookingPosts, 0);
+    } finally { await f.close(); }
+  });
+}
 
 test("E2E-296 one admitted caller privately registers then separately selects, confirms and creates one reviewed booking", async () => {
   const f = await intakeBookingSessionFixture();

@@ -111,6 +111,10 @@ export class CallerVerificationSession {
     return selection.credentialFingerprint === credentialFingerprint && selection.scope.tenantId === scope.tenantId && selection.scope.clinicId === scope.clinicId;
   }
 
+  usesContactRevision(owner: import("../cliniko/contact-revision.ts").ClinikoContactRevisionReader): boolean {
+    return !this.#closed && this.#config.contact instanceof ClinikoVerificationContactReader && this.#config.contact.usesContactRevision(owner);
+  }
+
   /** Immediate, identical wording even if lookup, approval or mail is unavailable. No resend. */
   begin(): Readonly<{ prompt: string }> {
     if (!this.#closed && !this.#pending) {

@@ -56,6 +56,12 @@ export class ClinikoVoiceClinicalHost {
   }
   usesBudget(budget: ClinikoRequestBudget): boolean { return this.#config.cliniko.rateBudget === budget; }
 
+  /** Runner-owned shared revocation store; caller and model inputs cannot select it. */
+  withContactRevision(owner: import("../cliniko/contact-revision.ts").ClinikoContactRevisionReader): ClinikoVoiceClinicalHost {
+    if (!owner.matches(this.#config.scope.tenantId, clinikoCredentialFingerprint(this.#config.cliniko.apiKey))) throw new RangeError("contact account mismatch");
+    return new ClinikoVoiceClinicalHost({ ...this.#config, cliniko: { ...this.#config.cliniko, contactRevision: owner } });
+  }
+
   /** Rechecked on webhook admission AND stream construction. A changed route,
    * credential, policy, zone or cohort cannot silently reuse this host. */
   matches(approval: ClinikoSelectionApproval): boolean {

@@ -43,7 +43,8 @@ function bindingKey(): Buffer {
 
 /** Provider ports and independently provisioned clinic/operational hosts. */
 type ClinicalHostContext = Readonly<{ db: ReturnType<typeof connectPostgres>; scope: LocationScope;
-  apiKey: string; contactEmail: string; rateBudget: PostgresClinikoRequestBudget }>;
+  apiKey: string; contactEmail: string; rateBudget: PostgresClinikoRequestBudget;
+  contactRevision: import("../src/storage/postgres-cliniko-contact-revision.ts").PostgresClinikoContactRevision }>;
 export type ClinicalRunnerLocation = Readonly<{ scope: LocationScope; spokenName: string; host: ClinikoVoiceClinicalHost }>;
 export type VoiceRunnerPorts = Readonly<{
   clinikoFetch?: typeof fetch;
@@ -122,7 +123,11 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       ...(process.env.ABBY_CLINIKO_BUDGET_USER_REF
         ? { sharedUserRef: process.env.ABBY_CLINIKO_BUDGET_USER_REF } : {}) });
     if (ports.clinicalHost && ports.clinicalLocations) throw new RangeError("conflicting clinical runner hosts");
-    const context = { db, scope: Object.freeze({ ...scope }), apiKey, contactEmail, rateBudget };
+    const { PostgresClinikoContactRevision } = await import("../src/storage/postgres-cliniko-contact-revision.ts");
+    // All routes in this runner use this configured key. Additional account keys
+    // require an explicit complete alias binding before enabling corrections.
+    const contactRevision = new PostgresClinikoContactRevision(db, scope.tenantId, [clinikoCredentialFingerprint(apiKey)]);
+    const context = { db, scope: Object.freeze({ ...scope }), apiKey, contactEmail, rateBudget, contactRevision };
     const clinicalHost = ports.clinicalHost?.(context);
     const locations = ports.clinicalLocations?.(context)?.map(row => ({ ...row, scope: Object.freeze({ ...row.scope }) }));
     if (locations && (!locations.length || locations.length > 32 ||
@@ -133,7 +138,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       throw new RangeError("invalid clinical runner locations");
     }
     const configuredRoutes = (locations ?? [{ scope, host: clinicalHost }]).map(location => {
-      const currentScope = location.scope, host = location.host;
+      const currentScope = location.scope, host = location.host?.withContactRevision(contactRevision);
       const configured = createStandaloneClinikoSetup({ db, scope: currentScope, apiKey, contactEmail, rateBudget,
         ...(host ? { runtimePolicy: host.cataloguePolicy } : {}),
         route: { accountRef: accountSid, dialedNumber, routeVersion },

@@ -34,7 +34,8 @@ export type ClinikoIntakeSessionConfig = Readonly<{
   presentation: Readonly<{ play(text: string, signal: AbortSignal): Promise<boolean> }>;
   /** Optional current service authority, checked on every protected registration use. */
   workflowApproval?: (signal: AbortSignal) => Promise<boolean>;
-  cliniko: Readonly<{ apiKey: string; contactEmail: string; rateBudget: ClinikoRequestBudget }>;
+  cliniko: Readonly<{ apiKey: string; contactEmail: string; rateBudget: ClinikoRequestBudget;
+    contactRevision?: import("../cliniko/contact-revision.ts").ClinikoContactRevisionReader }>;
   signal: AbortSignal; fetchPort?: typeof fetch; clock?: () => string; timeoutMs?: number;
 }>;
 

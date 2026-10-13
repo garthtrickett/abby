@@ -6,9 +6,12 @@ import { claimClinikoBudget, ClinikoReadBudget, clinikoCredentialFingerprint, ob
 import type { ClinikoRequestBudget } from "./read-budget.ts";
 import { boundedClinikoJson } from "./bounded-json.ts";
 import type { ClinikoPatientConfig } from "./patients.ts";
+import type { ClinikoContactRevisionReader } from "./contact-revision.ts";
 
 export type VerificationContactFailure = Readonly<{ kind: "denied" | "unavailable" }>;
 export interface VerificationContact {
+  /** Private account revision. Undefined is legacy composition without correction support. */
+  revision?(scope: LocationScope, signal: AbortSignal): Promise<Result<number | undefined, VerificationContactFailure>>;
   /** Transient registered address only. Neither appointment facts nor a caller-supplied destination. */
   read(scope: LocationScope, patientId: string, normalizedPhone: string, signal: AbortSignal):
     Promise<Result<string, VerificationContactFailure>>;
@@ -42,6 +45,23 @@ export class ClinikoVerificationContactReader implements VerificationContact {
   /** Private composition identity; no key or patient/contact value leaves this reader. */
   selection(): Readonly<{ scope: Pick<LocationScope, "tenantId" | "clinicId">; credentialFingerprint: string }> {
     return { scope: { tenantId: this.#config.scope.tenantId, clinicId: this.#config.scope.clinicId }, credentialFingerprint: clinikoCredentialFingerprint(this.#config.apiKey) };
+  }
+
+  usesContactRevision(owner: ClinikoContactRevisionReader): boolean {
+    const selection = this.selection();
+    return this.#config.contactRevision === owner && owner.matches(selection.scope.tenantId, selection.credentialFingerprint);
+  }
+  async revision(scope: LocationScope, signal: AbortSignal): Promise<Result<number | undefined, VerificationContactFailure>> {
+    if (signal.aborted || scope.tenantId !== this.#config.scope.tenantId || scope.clinicId !== this.#config.scope.clinicId) return err({ kind: "denied" });
+    const owner = this.#config.contactRevision;
+    if (!owner) return ok(undefined);
+    const selection = this.selection();
+    try {
+      if (!owner.matches(scope.tenantId, selection.credentialFingerprint)) return err({ kind: "denied" });
+      const revision = await owner.read(selection.credentialFingerprint);
+      return revision.ok && !revision.value.blocked && Number.isSafeInteger(revision.value.version) && revision.value.version >= 0 && !signal.aborted
+        ? ok(revision.value.version) : err({ kind: "denied" });
+    } catch { return err({ kind: "unavailable" }); }
   }
 
   async read(scope: LocationScope, patientId: string, normalizedPhone: string, signal: AbortSignal):

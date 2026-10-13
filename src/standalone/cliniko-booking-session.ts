@@ -26,7 +26,8 @@ export type ClinikoBookingSessionConfig = Readonly<{
   permission: PatientVerificationPermission; verificationBudget: PatientVerificationBudget; delivery: PatientCodeDelivery;
   directory: AdminDirectory; callerApprovalPath: string; bookingApprovalPath: string;
   cliniko: Readonly<{ apiKey: string; contactEmail: string; businessId: string; practitionerId: string; appointmentTypeId: string; recallTypeId: string;
-    timeZone: string; countryCallingCode: string; rateBudget: ClinikoRequestBudget }>;
+    timeZone: string; countryCallingCode: string; rateBudget: ClinikoRequestBudget;
+    contactRevision?: import("../cliniko/contact-revision.ts").ClinikoContactRevisionReader }>;
   catalogue?: Readonly<{ approvalPath: string; practitioners: readonly Readonly<{ practitionerId: string; bookingApprovalPath: string }>[]; serviceBinding?: BookingServiceBinding; initialSearchPreference?: import("../core/booking-search-preference.ts").BookingSearchPreference }>;
   signal: AbortSignal; fetchPort?: typeof fetch; clock?: () => string; timeoutMs?: number;
 }>;

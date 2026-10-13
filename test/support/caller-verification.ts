@@ -28,6 +28,7 @@ export const verificationNow = "2026-10-04T06:00:00.000Z";
 export const verificationCanaries = ["registered-session@example.test", "private-session-chart", "482746192837465"];
 
 export async function callerVerificationFixture(options: { scope?: LocationScope; folder?: string; approved?: boolean; enabled?: boolean;
+  contactRevision?: import("../../src/cliniko/contact-revision.ts").ClinikoContactRevisionReader;
   operation?: PatientOperation; budget?: PatientVerificationBudget; delivery?: PatientCodeDelivery; timeoutMs?: number; cancellationExecute?: boolean; bookingExecute?: boolean; reschedulingExecute?: boolean; patientUpdateExecute?: boolean; staffWorkEnabled?: boolean } = {}) {
   const scope = options.scope ?? { tenantId: `verification-${crypto.randomUUID()}`, clinicId: "clinic", locationId: "main" };
   const folder = options.folder ?? await mkdtemp(join(tmpdir(), "abby-caller-policy-"));
@@ -86,7 +87,8 @@ export async function callerVerificationFixture(options: { scope?: LocationScope
     const apiKey = "synthetic-session-au5", contactEmail = "test@example.test";
     const sessionConfig = { receipt, inbound, sessionId, policyVersion: captured.policyVersion, operation: options.operation ?? "appointments.read",
       ledger, policyStore: policies, policy, lookup: { candidates: async () => ok(candidates) },
-      contact: new ClinikoVerificationContactReader({ scope, apiKey, contactEmail, countryCallingCode: "61" }, fetchPort),
+      contact: new ClinikoVerificationContactReader({ scope, apiKey, contactEmail, countryCallingCode: "61",
+        ...(options.contactRevision ? { contactRevision: options.contactRevision } : {}) }, fetchPort),
       permission: { allows: async () => permitted }, budget: options.budget ?? { reserve: async () => true },
       delivery: options.delivery ?? { send: async (address: string, code: string) => { mail.push({ email: address, code }); return true; } },
       clock: () => now, ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }) };

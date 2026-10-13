@@ -62,7 +62,8 @@ export function intakeBookingProvider() {
     onRecall: (run: () => Promise<void>) => { onRecall = run; }, onBook: (run: () => Promise<void>) => { onBook = run; }, onContact: (run: () => Promise<void>) => { onContact = run; } };
 }
 
-export async function intakeBookingSessionFixture(options: Parameters<typeof intakeSessionFixture>[0] = {}) {
+export async function intakeBookingSessionFixture(options: Parameters<typeof intakeSessionFixture>[0] & {
+  contactRevision?: import("../../src/cliniko/contact-revision.ts").ClinikoContactRevisionReader } = {}) {
   const provider = intakeBookingProvider();
   const f = await intakeSessionFixture({ ...options, bookingExecute: options.bookingExecute ?? true, fetchPort: options.fetchPort ?? provider.fetchPort });
   f.owner.dispose(); let owner: ClinikoIntakeBookingSession | undefined, permitted = true, now = intakeNow;
@@ -78,7 +79,8 @@ export async function intakeBookingSessionFixture(options: Parameters<typeof int
     await replacePolicy({});
     const config: ClinikoIntakeBookingSessionConfig = { ...f.config, ledger: f.ledger, policies: f.policies, directory: f.directory, bookingApprovalPath: path,
       bookingPermission: { allows: async (_scope, id, operation) => { assert.equal(id, "42"); assert.equal(operation, "appointments.book"); await onPermission(); return permitted; } },
-      cliniko: { ...f.config.cliniko, businessId: "11", practitionerId: "22", appointmentTypeId: "33", recallTypeId: "7", timeZone: "Australia/Sydney", countryCallingCode: "61" } };
+      cliniko: { ...f.config.cliniko, ...(options.contactRevision ? { contactRevision: options.contactRevision } : {}),
+        businessId: "11", practitionerId: "22", appointmentTypeId: "33", recallTypeId: "7", timeZone: "Australia/Sydney", countryCallingCode: "61" } };
     owner = resultValue(await ClinikoIntakeBookingSession.create(config));
     const reception = new TextReception(f.ledger, f.policies, owner), agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope: f.scope }, f.policies, reception, undefined, undefined, undefined, f.ledger);
     const turn = (turnId: string, text = "Book an appointment") => ({ callId: f.callId, sessionId: f.sessionId, turnId, text, quality: "clear" as const, at: now });

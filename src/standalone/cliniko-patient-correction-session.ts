@@ -23,6 +23,7 @@ import { NoStoredKnowledge } from "./no-stored-knowledge.ts";
 import { OwnerFilePatientUpdatePolicy } from "./owner-file-patient-update-policy.ts";
 import type { PatientCorrectionPolicyQuery } from "./owner-file-patient-update-policy.ts";
 import { ProspectiveEmailCode } from "./prospective-email-code.ts";
+import type { ClinikoContactRevisionOwner } from "../cliniko/contact-revision.ts";
 
 type Failure = Readonly<{ kind: "patientCorrectionUnavailable" }>;
 type Pending = Readonly<{ ref: string; before: PatientDetailsSnapshot; query: PatientCorrectionPolicyQuery; request: PatientUpdateRequest }>;
@@ -34,8 +35,8 @@ export type PatientCorrectionSessionConfig = Readonly<{
   /** Completion of private playback/display, never enqueue acknowledgment. */
   presentation: Readonly<{ play(text: string, signal: AbortSignal): Promise<boolean> }>;
   reviewedSend: ClinikoReviewedSend;
-  /** Required account-wide contact owner; failure cannot produce a committed receipt. */
-  synchronize(request: PatientUpdateRequest, observed: PatientDetailsSnapshot, signal: AbortSignal): Promise<boolean>;
+  /** Same durable account owner used by registered-channel verification and phone scans. */
+  contactRevision: ClinikoContactRevisionOwner;
   cliniko: Readonly<{ apiKey: string; contactEmail: string; rateBudget: ClinikoRequestBudget }>;
   signal: AbortSignal; fetchPort?: typeof fetch; clock?: () => string; timeoutMs?: number;
 }>;
@@ -59,6 +60,7 @@ export class ClinikoPatientCorrectionSession extends NoStoredKnowledge implement
   #collections = 0;
   #attempted = false;
   #claimed = false;
+  #contactChange: string | undefined;
   private constructor(incoming: PatientCorrectionSessionConfig) {
     super();
     const config = this.#config = Object.freeze({ ...incoming, receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound), cliniko: Object.freeze({ ...incoming.cliniko }) });
@@ -66,13 +68,19 @@ export class ClinikoPatientCorrectionSession extends NoStoredKnowledge implement
       attest: (query, phase, signal) => this.#attest(query, phase, signal),
       claim: async (request, signal) => {
         if (this.#claimed || !this.#matchesRequest(request) || !await this.#currentPending(signal, true) || signal.aborted || this.#claimed) return false;
+        const begun = await config.contactRevision.begin();
+        if (!begun.ok) return false;
+        this.#contactChange = begun.value;
         this.#claimed = true;
         // Consume the old channel grant before a possible contact mutation. It
         // cannot authorize another action or be reused for post-write inspection.
-        config.verification.dispose(); return true;
+        config.verification.dispose(); return !signal.aborted;
       },
-      contactChanged: async (request, observed, signal) => this.#claimed && this.#matchesRequest(request) && await this.#currentPending(signal, true) &&
-        await config.synchronize(structuredClone(request), structuredClone(observed), signal) === true && !signal.aborted,
+      contactChanged: async (request, _observed, signal) => {
+        if (!this.#claimed || !this.#contactChange || !this.#matchesRequest(request) || !await this.#currentPending(signal, true) || signal.aborted) return false;
+        const completed = await config.contactRevision.complete(this.#contactChange);
+        return completed.ok && !signal.aborted;
+      },
     }, config.fetchPort ?? fetch, () => this.#now());
     if (!edge.ok) throw new TypeError("invalid correction provider");
     this.#edge = edge.value;
@@ -84,7 +92,9 @@ export class ClinikoPatientCorrectionSession extends NoStoredKnowledge implement
       const binding = config.policy.binding();
       if (!(config.policy instanceof OwnerFilePatientUpdatePolicy) || !(config.verification instanceof CallerVerificationSession) ||
           !(config.reviewedSend instanceof ClinikoReviewedSend) || !(config.signal instanceof AbortSignal) || config.signal.aborted ||
-          typeof config.synchronize !== "function" || typeof config.presentation?.play !== "function" || typeof config.permission?.allows !== "function" ||
+          typeof config.contactRevision?.begin !== "function" || typeof config.contactRevision?.complete !== "function" ||
+          !config.verification.usesContactRevision(config.contactRevision) ||
+          typeof config.presentation?.play !== "function" || typeof config.permission?.allows !== "function" ||
           typeof config.delivery?.send !== "function" || typeof config.verificationBudget?.reserve !== "function" ||
           !sameScope(binding.scope, config.receipt.scope) || binding.policyVersion !== config.policyVersion ||
           binding.credentialFingerprint !== clinikoCredentialFingerprint(config.cliniko.apiKey) ||

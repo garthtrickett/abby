@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
+import { err } from "../../src/core/model.ts";
 import { EffectWorker } from "../../src/core/effect-worker.ts";
 import { ClinikoRecallWriter } from "../../src/cliniko/recall-write.ts";
 import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
@@ -14,10 +15,33 @@ import { TextReception } from "../../src/reference/text-reception.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import type { PatientUpdateApproval } from "../../src/standalone/owner-file-patient-update-policy.ts";
 import { callerVerificationFixture, verificationNow, verificationCanaries } from "../support/caller-verification.ts";
+import { SyntheticContactRevision } from "../support/contact-revision.ts";
+import { connectPostgres } from "../../src/storage/connect.ts";
+import { PostgresClinikoContactRevision } from "../../src/storage/postgres-cliniko-contact-revision.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
 
+const db = process.env.ABBY_ISOLATED_POSTGRES_PROBE === "1" && process.env.DATABASE_URL
+  ? connectPostgres(process.env.DATABASE_URL) : undefined;
+after(async () => { await db?.destroy(); });
+
 async function fixture() {
-  const f = await callerVerificationFixture({ operation: "patients.update", patientUpdateExecute: true });
+  const scope = { tenantId: `correction-${crypto.randomUUID()}`, clinicId: "clinic", locationId: "main" };
+  let mode = "", synced = 0;
+  const backend = db ? new PostgresClinikoContactRevision(db, scope.tenantId, [clinikoCredentialFingerprint("synthetic-session-au5")]) : undefined;
+  class Revision extends SyntheticContactRevision {
+    override async read(fingerprint: string): ReturnType<import("../../src/cliniko/contact-revision.ts").ClinikoContactRevisionOwner["read"]> {
+      return backend ? backend.read(fingerprint) : super.read(fingerprint);
+    }
+    override async begin(): ReturnType<import("../../src/cliniko/contact-revision.ts").ClinikoContactRevisionOwner["begin"]> {
+      return mode === "failedFence" ? err({ kind: "storageFailure" }) : backend ? backend.begin() : super.begin();
+    }
+    override async complete(ref: string) {
+      synced++;
+      return mode === "failedSync" ? err({ kind: "storageFailure" as const }) : backend ? backend.complete(ref) : super.complete(ref);
+    }
+  }
+  const contactRevision = new Revision(scope.tenantId, [clinikoCredentialFingerprint("synthetic-session-au5")]);
+  const f = await callerVerificationFixture({ scope, operation: "patients.update", patientUpdateExecute: true, contactRevision });
   const apiKey = "synthetic-session-au5", base = "https://api.au5.cliniko.com/v1", patientId = verificationCanaries[2]!;
   const path = join(f.folder, "correction.json");
   const approval: PatientUpdateApproval = { scope: f.scope, revision: "correction-1", approverRef: f.account.actor.actorRef, approved: true, enabled: true,
@@ -34,7 +58,7 @@ async function fixture() {
     let row: Record<string, unknown> = { id: patientId, archived_at: null, merged_at: null, updated_at: verificationNow, links: { self: `${base}/patients/${patientId}` },
       first_name: "Synthetic", last_name: "Patient", date_of_birth: "1980-01-02", email: verificationCanaries[0], patient_phone_numbers: [{ number: "+61400111222", phone_type: "Mobile" }],
       address_1: "1 Example Road", address_2: null, address_3: null, city: "Example", state: "VIC", post_code: "3000", country_code: "AU", notes: "private-chart-canary" };
-    let mode = "", synced = 0, playback = true;
+    let playback = true;
     let onRecall = async () => {}, onPatch = async () => {};
     const traffic: Array<{ method: string; path: string; body?: Record<string, unknown> }> = [], played: string[] = [], mail: Array<{ email: string; code: string }> = [];
     const fetchPort: typeof fetch = async (url, init) => {
@@ -63,7 +87,7 @@ async function fixture() {
       policyVersion: f.config.policyVersion, ledger: f.ledger, policies: f.policies, policy, verification: f.session, permission: f.sessionConfig.permission,
       verificationBudget: { reserve: async () => true }, delivery: { send: async (email, code) => { mail.push({ email, code }); return mode !== "lostCode"; } },
       presentation: { play: async text => { played.push(text); return playback; } }, reviewedSend: reviewed,
-      synchronize: async () => { synced++; return mode !== "failedSync"; }, cliniko: { apiKey, contactEmail: "test@example.test", rateBudget },
+      contactRevision, cliniko: { apiKey, contactEmail: "test@example.test", rateBudget },
       signal: new AbortController().signal, fetchPort, clock: f.config.clock };
     session = resultValue(await ClinikoPatientCorrectionSession.create(config));
     const owner = session, worker = new EffectWorker(f.runtime, owner, undefined, undefined, { clock: f.config.clock });
@@ -87,7 +111,7 @@ async function fixture() {
       resultValue(await f.runtime.acceptTurn({ callId: f.callId, sessionId: f.sessionId, turnId: crypto.randomUUID(), text: "Yes", quality: "clear", at: f.config.clock() },
         { kind: "affirm", actionKey: action.key, digest: action.digest, affirmative: true }, f.config.clock()));
     };
-    return { f, config, approval, path, owner, gateway, traffic, played, mail, collect, resolve, propose, confirm, worker, get row() { return row; }, get synced() { return synced; },
+    return { f, config, approval, path, owner, gateway, traffic, played, mail, collect, resolve, propose, confirm, worker, contactRevision, get row() { return row; }, get synced() { return synced; },
       mode(value: string) { mode = value; }, playback(value: boolean) { playback = value; }, onRecall(fn: typeof onRecall) { onRecall = fn; }, onPatch(fn: typeof onPatch) { onPatch = fn; },
       close: async () => { owner.dispose(); reviewed.close(); await f.close(); } };
   } catch (error) { session?.dispose(); await f.close(); throw error; }
@@ -122,11 +146,34 @@ for (const mode of ["lostPatch", "failedSync", "lostReview"] as const) {
       await f.worker.process(f.f.callId, `${action.key}:write`, verificationNow);
       assert.equal((await f.f.state()).actions[action.key]?.status, "uncertain");
       assert.equal(f.traffic.filter(t => t.method === "PATCH").length, mode === "lostReview" ? 0 : 1);
+      const revision = resultValue(await f.contactRevision.read(f.approval.credentialFingerprint));
+      assert.equal(revision.blocked, mode !== "lostReview");
       assert.equal((await f.owner.write(action.mutation, verificationNow)).kind, "rejected");
       assert.equal((await f.f.state()).callerMessages.some(text => text.includes("Your details were saved")), false);
     } finally { await f.close(); }
   });
 }
+
+test("E2E-364 failure to persist the account fence rejects correction before PATCH", async () => {
+  const f = await fixture();
+  try {
+    const collected = resultValue(await f.collect()); assert.equal((await f.owner.answer(f.mail[0]!.code)).verified, true);
+    const action = await f.propose(collected.correctionRef); await f.confirm(action); f.mode("failedFence");
+    await f.worker.process(f.f.callId, `${action.key}:write`, verificationNow);
+    assert.equal((await f.f.state()).actions[action.key]?.status, "rejected");
+    assert.equal(f.traffic.filter(t => t.method === "PATCH").length, 0);
+    assert.deepEqual(resultValue(await f.contactRevision.read(f.approval.credentialFingerprint)), { version: 0, blocked: false });
+  } finally { await f.close(); }
+});
+
+test("E2E-364 correction cannot use a revision owner different from its registered-channel verifier", async () => {
+  const f = await fixture();
+  try {
+    const other = new SyntheticContactRevision(f.f.scope.tenantId, [f.approval.credentialFingerprint]);
+    assert.equal((await ClinikoPatientCorrectionSession.create({ ...f.config, contactRevision: other })).ok, false);
+    assert.equal(f.traffic.some(t => t.method === "PATCH"), false);
+  } finally { await f.close(); }
+});
 
 test("E2E-362 recollection destroys old correction/code references and unplayed private readback cannot prepare", async () => {
   const f = await fixture();
