@@ -23,9 +23,9 @@ export class BookingServiceDialogue {
   #choice: { -readonly [K in keyof BookingServiceChoice]?: BookingServiceChoice[K] } = {};
   get active() { return this.#pending !== undefined; }
   clear() { this.#pending = undefined; this.#choice = {}; }
-  resolve(turn: FinalCallerTurn, state: CallState, services: readonly ApprovedBookingService[], catalogue: string, now: string): VoiceIntent | undefined {
+  resolve(turn: FinalCallerTurn, state: CallState, services: readonly ApprovedBookingService[], catalogue: string, now: string, startRequested = false): VoiceIntent | undefined {
     if (/^(?:please )?(?:cancel|reschedule|move|change) (?:my |the |an? )?appointment[.!?]*$/i.test(turn.text.trim())) { this.clear(); return undefined; }
-    const start = startsServiceDialogue(turn.text), previous = this.#pending;
+    const start = startRequested || startsServiceDialogue(turn.text), previous = this.#pending;
     if (!start && !previous) return undefined;
     if (turn.quality !== "clear" || state.lifecycle !== "active" || state.callerIdentityDenied || turn.callId !== state.callId ||
         turn.sessionId !== state.sessionLease?.sessionId || !Number.isFinite(Date.parse(now)) || (!Number.isFinite(Date.parse(state.sessionLease?.expiresAt ?? "")) || Date.parse(state.sessionLease!.expiresAt) <= Date.parse(now)) ||

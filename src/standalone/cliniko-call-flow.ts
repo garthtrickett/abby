@@ -158,10 +158,10 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       ? { kind: "clarify", reason: "changeUnsupported" }
       : { kind: "workflow", operation: "book", serviceChoice };
   }
-  async serviceDialogueIntent(turn: FinalCallerTurn, external?: AbortSignal): Promise<VoiceIntent | undefined> {
-    const c = this.#config, starting = startsServiceDialogue(turn.text);
+  async serviceDialogueIntent(turn: FinalCallerTurn, external?: AbortSignal, routedBookingRequest = false): Promise<VoiceIntent | undefined> {
+    const c = this.#config, starting = routedBookingRequest || startsServiceDialogue(turn.text);
     if (!c.serviceCatalogue || (!starting && !this.#serviceDialogue.active)) return undefined;
-    const denied = { kind: "clarify", reason: "serviceChoiceChanged" } as const;
+    const denied = { kind: "clarify", reason: starting ? "serviceSelectionUnavailable" : "serviceChoiceChanged" } as const;
     if (this.closed || this.#staffActive || this.#verificationRequired || this.patientAccessDenied || this.#selecting ||
         turn.quality !== "clear" || turn.callId !== c.receipt.callId || turn.sessionId !== c.sessionId || external?.aborted) return denied;
     const signal = AbortSignal.any([this.#lifetime.signal, AbortSignal.timeout(5000), ...(external ? [external] : [])]);
@@ -178,7 +178,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       this.#publicMenu = undefined; this.#spokenMenu.clear(); this.#searchMenu.clear();
     }
     return this.#serviceDialogue.resolve(turn, current.value, source.value.services, JSON.stringify(source.value),
-      (c.clock ?? (() => new Date().toISOString()))());
+      (c.clock ?? (() => new Date().toISOString()))(), routedBookingRequest);
   }
   async serviceEligibilityChangeIntent(turn: FinalCallerTurn, signal?: AbortSignal): Promise<VoiceIntent | undefined> {
     const owner = this.#owner, c = this.#config;

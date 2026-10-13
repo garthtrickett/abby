@@ -396,6 +396,14 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
         return ok({ kind: "clarify", reason: "changeAmbiguous" });
       if (decision.kind === "workflow" && change?.kind === "request" && decision.operation !== change.operation)
         return ok({ kind: "clarify", reason: "changeAmbiguous" });
+      // A validated public booking route may start questions, never supply a
+      // service choice, infer return facts or issue patient verification.
+      if (decision.kind === "workflow" && decision.operation === "book" && decision.stage === null && decision.from === null &&
+          decision.to === null && decision.choice === null && !after.verificationRequired && !after.staffRequestActive && !after.callerIdentityDenied) {
+        const guided = await awaitUntilAbort(config.owner.serviceDialogueIntent?.(turn, controller.signal, true) ?? Promise.resolve(undefined), controller.signal);
+        if (controller.signal.aborted) return err(unavailable);
+        if (guided) return ok(guided);
+      }
       return await awaitUntilAbort(mapDecision(decision, after, today, config.owner), controller.signal) ?? err(unavailable);
     } catch { return err(unavailable); }
     finally { clearTimeout(timer); signal?.removeEventListener("abort", cancel); }

@@ -132,8 +132,8 @@ new selection/proof. No post-send service change or unknown write can start
 another appointment mutation.
 
 This is engineering progress, not complete product parity. Prior-practitioner
-lookup, multi-location service discovery, broader classifier-routed booking
-starters and selection for first-time intake remain open in gap 5/8. Expanded horizons and
+lookup, multi-location service discovery and selection for first-time intake
+remain open in gap 5/8. Expanded horizons and
 online-disabled services belong to gap 6; this patch still refuses them.
 Actual speech quality, real clinic approvals/recipients and carrier evidence
 remain separate. The original thirteen-gap objective is still active.
@@ -291,3 +291,66 @@ than removing the check. Timeouts, workers, native writer assertions, current
 approval fences and privacy canaries remain unchanged. These local synthetic
 results do not establish GitHub execution, acoustic accuracy or clinic/carrier
 acceptance.
+
+## Generic booking entry (E2E-350)
+
+A caller need not start with the exact short starter or a complete service
+request. The existing clinical intent router may return a structurally validated
+`workflow/book` route for the current ordinary request. With the optional service
+catalogue configured, the owner starts the current approved service question
+before any patient lookup or verification. The actual caller turn, session,
+conversation revision, policy, source approval and cancellation signal are retained.
+No invented caller wording or implicit service/visit/return answer is introduced.
+
+The model response schema remains unchanged: no service choice, provider binding,
+return facts or preference fields are accepted. Responses with extra choice data,
+malformed fields, abort or an incompatible change intent cannot start this path.
+When the catalogue is not configured, legacy routing is unchanged. Direct private
+`choose("book")` without a complete public choice remains denied in multi-service
+mode; the routing hook starts questions rather than authorizing booking.
+
+Each answer still needs the previous question's actual played receipt and current
+source. A generic restart of an unsent proposal discards the old owner and proof,
+starts new questions and needs fresh verification/confirmation. Earlier known or
+unknown writes keep their one-send fence. If initial service options cannot be
+read, the new service-unavailable notice asks the caller to contact the clinic
+without referring to a nonexistent previous choice.
+
+Ten signed synthetic cases cover ordinary/make-booking/next-week wording, source
+revocation during classification, source change after the question, interrupted
+question, forged choice fields, provider 503, unsent restart to a different
+service and lost-write outcome. These use actual signed ingress, volatile call
+state, private keypad verification, exact native writers and PostgreSQL canaries.
+The classifier's business-route accuracy and acoustic quality remain separate
+qualification requirements.
+
+### Remaining history work: verified API capability
+
+Cliniko documents patient/business/time and cancellation filters on its
+[individual appointment list](https://docs.api.cliniko.com/openapi/individual-appointment/individualappointment),
+and [custom ordering](https://docs.api.cliniko.com/#ordering). This supports
+investigating a scoped prior-practitioner reader. It does not itself grant
+patient permission, establish attendance or provide booking authority. That
+feature remains unimplemented; it needs approved read-specific permission,
+current subject/source checks, honest bounded-history/ambiguity outcomes and a
+separate approved practitioner choice/booking proof. No live history was read.
+
+### Generic-entry local qualification
+
+Final frozen-source gate: `npm run typecheck`, `npm run build:voice-tests`, and
+`node --test --test-concurrency=4` over service-booking-entry text/voice,
+openai-clinical-intent, service-practitioner-preference text/voice, service-dialogue
+text/voice, service-catalogue, booking-session, booking-offers, call-flow and
+booking-horizon text checks; service-catalogue booking, preference-service
+boundaries, approved-booking-search, booking-horizon, booking-search-windows
+and appointment-change-intent voice checks; and scenario-manifest/no-number-gap-trace
+contract checks. `git diff --check` passed. All 61 checks passed, zero skips.
+Work label: `Abby generic booking entry final regression October 13`. Log:
+`/home/gust/paseo/paseo-home/work/logs/4590eee3-1791881098725.log`.
+
+The focused gate also passed all twelve checks. Final qualification preserved
+worker counts, deadlines, exact provider type, played-question/confirmation
+receipts, fresh verification and PostgreSQL canaries. The slower final run
+finished under shared machine load without a restart or relaxed gates. These
+are local synthetic results; GitHub execution, real model/acoustic quality and
+clinic/carrier acceptance remain separate.

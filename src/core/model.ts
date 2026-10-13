@@ -245,7 +245,7 @@ export type AppointmentRead = Readonly<{
 }>;
 
 export type MenuClarificationReason = "menuAmbiguous" | "menuRejected" | "menuUnavailable" | "proposalCorrection" |
-  "changeAmbiguous" | "targetDisagreement" | "changeUnsupported" | "serviceChoiceChanged" | "changeAfterSend" | "oldAppointmentAfterMove" | "searchPreferenceUnavailable" | "clinicalAdviceUnavailable" | "unattendedAnnouncement" |
+  "changeAmbiguous" | "targetDisagreement" | "changeUnsupported" | "serviceChoiceChanged" | "serviceSelectionUnavailable" | "changeAfterSend" | "oldAppointmentAfterMove" | "searchPreferenceUnavailable" | "clinicalAdviceUnavailable" | "unattendedAnnouncement" |
   "paymentEvidenceUnavailable" | "coverageEvidenceUnavailable" | "refundEvidenceUnavailable" | "reservationEvidenceUnavailable" | "arrivalAccessUnavailable" | "publicFactConflict" | "serviceArrangementUnavailable";
 export type TurnInterpretation =
   | Readonly<{ kind: "serviceQuestion"; question: import("./booking-service-question.ts").BookingServiceQuestion }>
