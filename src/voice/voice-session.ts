@@ -14,6 +14,7 @@ import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 
 export type VoiceIntent =
+  | Readonly<{ kind: "serviceQuestion"; question: import("../core/booking-service-question.ts").BookingServiceQuestion }>
   | Readonly<{ kind: "presence" }>
   | Readonly<{ kind: "missedCall" }>
   | Readonly<{ kind: "bookingHorizon" }>
@@ -388,7 +389,7 @@ export class VoiceSession {
       result = await this.reception.respondRequestBoundary(this.scope, turn, this.cachedIntent.reason, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "callerIdentityDenied") {
       result = await this.reception.denyCallerIdentity(this.scope, turn, this.cachedIntent.reason, existing.value.conversationRevision);
-    } else if (this.cachedIntent.kind === "clarify") {
+    } else if (this.cachedIntent.kind === "clarify" || this.cachedIntent.kind === "serviceQuestion") {
       result = await this.runtime.acceptTurn(turn, this.cachedIntent, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "workflow") {
       const controller = new AbortController(), pending = { cancel: () => controller.abort() };

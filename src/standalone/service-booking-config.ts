@@ -28,3 +28,13 @@ export async function serviceBookingConfig(config: ClinikoCallFlowConfig, incomi
     approvals: Object.freeze({ ...config.approvals, booking: primary.bookingApprovalPath }), catalogue: Object.freeze({ approvalPath: c.approvalPath,
       practitioners: mappings[0]!.practitioners, serviceBinding: Object.freeze({ catalogue: result.value, serviceRef: service.serviceRef }) }) });
 }
+
+/** Re-read the complete current approval before each public selection question. */
+export async function currentServiceCatalogue(config: ClinikoCallFlowConfig) {
+  const c = config.serviceCatalogue;
+  if (!c) return err({ kind: "unavailable" as const });
+  const result = await OwnerFileServiceCatalogue.capture({ path: c.approvalPath, scope: config.receipt.scope, policyVersion: config.policyVersion,
+    businessId: config.cliniko.businessId, credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey), timeZone: config.cliniko.timeZone,
+    directory: config.directory, ...(config.clock ? { clock: config.clock } : {}) });
+  return result.ok ? result.value.current(config.receipt.scope) : result;
+}

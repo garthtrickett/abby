@@ -256,6 +256,9 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     const publicTopic = publicInformationLanguage(turn.text);
     if (publicTopic) return publicAnswer(publicTopic, signal);
     if (!before.callerIdentityDenied) {
+      const dialogue = await config.owner.serviceDialogueIntent?.(turn, signal);
+      if (signal?.aborted) return err(unavailable);
+      if (dialogue) return ok(dialogue);
       if (oldAppointmentCancellation(turn.text)) return ok({ kind: "clarify", reason: "oldAppointmentAfterMove" });
       // Confirmation is an exact caller utterance over an actually played SAM
       // prompt. The model cannot decide that "yes" grants an action or retry.

@@ -31,7 +31,8 @@ import { ClinikoAppointmentEnquirySession } from "./cliniko-appointment-enquiry-
 import type { PatientVerificationPermission } from "./email-patient-authority.ts";
 import type { BookingServiceChoice } from "../core/booking-service-choice.ts";
 import { bookingServiceLanguage, bookingEligibilityChanged, bookingDurationLanguage } from "./booking-service-language.ts";
-import { serviceBookingConfig } from "./service-booking-config.ts";
+import { BookingServiceDialogue, startsServiceDialogue } from "./booking-service-dialogue.ts";
+import { currentServiceCatalogue, serviceBookingConfig } from "./service-booking-config.ts";
 import type { ServiceCatalogueConfig } from "./service-booking-config.ts";
 
 export type ClinikoWorkflow = import("../core/model.ts").WorkflowOperation;
@@ -71,6 +72,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   #intakeDraftRef: string | undefined;
   #publicMenu: Readonly<{ kind: "booking" | "rescheduling"; stage: "targets" | "offers" | null }> | undefined;
   #reschedulingTargetSelected = false;
+  readonly #serviceDialogue = new BookingServiceDialogue();
   readonly #searchMenu = new PlayedMenuSearch();
   readonly #spokenMenu = new PlayedMenuSelection();
   private constructor(config: ClinikoCallFlowConfig) {
@@ -107,7 +109,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     if (hasSentPatientWork(state.value)) return true; // Do not dispose a sent owner's receipt/recovery state or saved intake proof.
     this.#workflowLifetime.abort(); this.#workflowLifetime = new AbortController();
     this.#owner?.dispose(); this.#staff?.dispose(); this.#owner = undefined; this.#staff = undefined;
-    this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#staffActive = false; this.#verificationRequired = false; this.#intakeDraftRef = undefined;
+    this.#serviceDialogue.clear(); this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#staffActive = false; this.#verificationRequired = false; this.#intakeDraftRef = undefined;
     return true;
   }
   async revokeCallerPatientAccess(query: Readonly<{ scope: LocationScope; callId: string; sessionId: string;
@@ -120,7 +122,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
         !Number.isFinite(now) || Date.parse(state.value.sessionLease.expiresAt) <= now || state.value.callerIdentityDenied !== query.reason) return false;
     this.#patientLifetime.abort();
     this.#owner?.dispose(); this.#staff?.dispose(); this.#owner = undefined; this.#staff = undefined;
-    this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#staffActive = false; this.#verificationRequired = false; this.#intakeDraftRef = undefined;
+    this.#serviceDialogue.clear(); this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#staffActive = false; this.#verificationRequired = false; this.#intakeDraftRef = undefined;
     this.#publicMenu = undefined; this.#reschedulingTargetSelected = false; this.#spokenMenu.clear(); this.#searchMenu.clear();
     return true;
   }
@@ -154,6 +156,28 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       ? { kind: "clarify", reason: "changeUnsupported" }
       : { kind: "workflow", operation: "book", serviceChoice };
   }
+  async serviceDialogueIntent(turn: FinalCallerTurn, external?: AbortSignal): Promise<VoiceIntent | undefined> {
+    const c = this.#config, starting = startsServiceDialogue(turn.text);
+    if (!c.serviceCatalogue || (!starting && !this.#serviceDialogue.active)) return undefined;
+    const denied = { kind: "clarify", reason: "serviceChoiceChanged" } as const;
+    if (this.closed || this.#staffActive || this.#verificationRequired || this.patientAccessDenied || this.#selecting ||
+        turn.quality !== "clear" || turn.callId !== c.receipt.callId || turn.sessionId !== c.sessionId || external?.aborted) return denied;
+    const signal = AbortSignal.any([this.#lifetime.signal, AbortSignal.timeout(5000), ...(external ? [external] : [])]);
+    if (!await this.#active("book", signal)) { this.#serviceDialogue.clear(); return denied; }
+    const state = await awaitUntilAbort(c.ledger.read(turn.callId, c.receipt.scope), signal);
+    if (!state?.ok || signal.aborted) return denied;
+    if (hasSentPatientWork(state.value)) { this.#serviceDialogue.clear(); return { kind: "clarify", reason: "changeAfterSend" }; }
+    const source = await awaitUntilAbort(currentServiceCatalogue(c), signal);
+    const current = await awaitUntilAbort(c.ledger.read(turn.callId, c.receipt.scope), signal);
+    if (!source?.ok || !current?.ok || signal.aborted || current.value.conversationRevision !== state.value.conversationRevision ||
+        current.value.sessionLease?.sessionId !== c.sessionId || current.value.lifecycle !== "active") { this.#serviceDialogue.clear(); return denied; }
+    if (starting) {
+      this.#owner?.dispose(); this.#owner = undefined; this.#serviceDialogue.clear(); this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#reschedulingTargetSelected = false;
+      this.#publicMenu = undefined; this.#spokenMenu.clear(); this.#searchMenu.clear();
+    }
+    return this.#serviceDialogue.resolve(turn, current.value, source.value.services, JSON.stringify(source.value),
+      (c.clock ?? (() => new Date().toISOString()))());
+  }
   async serviceEligibilityChangeIntent(turn: FinalCallerTurn, signal?: AbortSignal): Promise<VoiceIntent | undefined> {
     const owner = this.#owner, c = this.#config;
     if (!c.serviceCatalogue || !this.#bookingConfig || this.#workflow !== "book" || !owner || this.closed || this.#staffActive ||
@@ -163,7 +187,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     if (!current?.ok || this.#owner !== owner || this.closed || signal?.aborted || current.value.sessionLease?.sessionId !== c.sessionId ||
         current.value.lifecycle !== "active") return undefined;
     if (hasSentPatientWork(current.value)) return { kind: "clarify", reason: "changeAfterSend" };
-    owner.dispose(); this.#owner = undefined; this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined;
+    owner.dispose(); this.#owner = undefined; this.#serviceDialogue.clear(); this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined;
     this.#publicMenu = undefined; this.#spokenMenu.clear(); this.#searchMenu.clear(); this.#reschedulingTargetSelected = false;
     return { kind: "clarify", reason: "serviceChoiceChanged" };
   }
@@ -347,6 +371,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       found.value.admission.dialedNumber === config.inbound.dialedNumber;
   }
   async choose(operation: ClinikoWorkflow, external?: AbortSignal, replaceCanceledChange = false, expectedRevision?: number, incomingServiceChoice?: BookingServiceChoice): Promise<Result<Readonly<{ kind: "codeRequired" | "intakeRequired" }>, Failure>> {
+    this.#serviceDialogue.clear();
     const serviceChoice = incomingServiceChoice ? Object.freeze({ ...incomingServiceChoice }) : undefined;
     if (!["book", "cancel", "reschedule", "intake", "appointments.read"].includes(operation) || this.#staffActive || this.#selecting || this.#patientLifetime.signal.aborted || this.#lifetime.signal.aborted || external?.aborted) return unavailable();
     if (serviceChoice && operation !== "book" || operation === "book" && this.#config.serviceCatalogue && !serviceChoice ||
@@ -546,5 +571,5 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   }
   async openTask(item: StaffItem, signal?: AbortSignal) { return this.#staff?.openTask(item, signal) ?? { kind: "rejected" as const, taskKey: item.key }; }
   async reconcileTask(item: StaffItem, signal?: AbortSignal) { return this.#staff?.reconcileTask(item, signal) ?? { kind: "stillUnknown" as const, taskKey: item.key }; }
-  dispose(): void { this.#searchMenu.clear(); this.#spokenMenu.clear(); this.#workflowLifetime.abort(); this.#patientLifetime.abort(); this.#lifetime.abort(); this.#config.signal.removeEventListener("abort", this.#onClose); this.#owner?.dispose(); this.#staff?.dispose(); this.#staff = undefined; this.#owner = undefined; this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#verificationRequired = false; this.#intakeDraftRef = undefined; this.#publicMenu = undefined; this.#reschedulingTargetSelected = false; }
+  dispose(): void { this.#searchMenu.clear(); this.#spokenMenu.clear(); this.#workflowLifetime.abort(); this.#patientLifetime.abort(); this.#lifetime.abort(); this.#config.signal.removeEventListener("abort", this.#onClose); this.#owner?.dispose(); this.#staff?.dispose(); this.#staff = undefined; this.#owner = undefined; this.#serviceDialogue.clear(); this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#verificationRequired = false; this.#intakeDraftRef = undefined; this.#publicMenu = undefined; this.#reschedulingTargetSelected = false; }
 }

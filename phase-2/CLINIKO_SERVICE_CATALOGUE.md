@@ -131,9 +131,8 @@ request with no old-variant fallback, and corrected return answers followed by
 new selection/proof. No post-send service change or unknown write can start
 another appointment mutation.
 
-This is engineering progress, not complete product parity. Guided service
-questions, accumulation of return answers across ordinary turns, gender
-preferences, prior-practitioner lookup, multi-location service discovery, and
+This is engineering progress, not complete product parity. Gender preferences,
+prior-practitioner lookup, multi-location service discovery, and
 selection for first-time intake remain open in gap 5/8. Expanded horizons and
 online-disabled services belong to gap 6; this patch still refuses them.
 Actual speech quality, real clinic approvals/recipients and carrier evidence
@@ -178,3 +177,50 @@ The public classifier context now returns to choose-service instead of reusing
 the old menu. The final gate retains the original worker count, timeouts,
 authority/privacy assertions and zero-skip requirement. These are local
 synthetic results, not an executed GitHub CI or live acceptance claim.
+
+## Guided selection (E2E-348)
+
+The same optional catalogue now supports “I'd like to book an appointment”
+followed by ordinary service, initial/follow-up and duration answers. Approved
+durations are read aloud in ascending order, including when an unsupported
+length is requested. The exact selected follow-up rule determines which caller
+attestations are needed: attended before, new problem and months since last
+visit. No patient lookup or verification email begins before these are complete.
+These answers are self-reported facts, not verified appointment history.
+
+`BookingServiceDialogue` owns partial answers and a question binding in volatile
+call memory. Each next answer needs the latest question's exact turn ID, played
+notice receipt, current call/session, bounded conversation revision and two-minute
+question expiry. Settled text is erased by existing presentation retention; the
+receipt is checked without restoring it. Every turn re-reads the current source;
+a changed or revoked approval discards the partial choice. Unsupported or unclear
+answers repeat the question, and explicit “Actually, an initial assessment” or
+service-name corrections discard dependent old answers. Disallowed follow-ups
+require fresh service selection. No clinical recommendation or automatic initial
+booking is made. Existing single-send and private verification gates remain.
+
+The new core notice has a strictly validated public field/options schema. Neither
+model-generated service attributes nor private provider references can supply
+these notices. Return answers are not added to the classifier or durable database.
+Ten signed synthetic journeys cover actual positive native writes, ineligible
+follow-ups, unsupported lengths, correction, changed/revoked source and interrupted
+questions. These fixtures qualify dialogue and transport wiring; they do not
+qualify acoustic speech accuracy or carrier/clinic acceptance.
+
+### Guided-selection local qualification
+
+Final unchanged-source gate: `npm run typecheck`, `npm run build:voice-tests`,
+then `node --test --test-concurrency=4` over the new service-dialogue text/voice
+files, existing service-catalogue, booking-session, booking-offers, call-flow,
+booking-horizon text checks, service-catalogue booking, preference-service
+boundaries, approved-booking-search, booking-horizon, booking-search-windows,
+appointment-change-intent voice checks and scenario-manifest/no-number-gap-trace
+contract checks, followed by `git diff --check`. All 48 checks passed, no skips.
+Work label: `Abby guided service final affected regression October 13`.
+Log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791877650455.log`.
+
+The first run exposed the settled-presentation text comparison described above.
+A subsequent focused run exposed non-ascending duration options; sorting the
+public minute choices fixed that. The final gate preserves timeouts, worker
+counts, exact writer assertions, played-receipt fences and PostgreSQL canaries.
+GitHub execution and participating-clinic acceptance remain separate gates.

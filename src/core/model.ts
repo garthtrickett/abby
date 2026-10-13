@@ -248,6 +248,7 @@ export type MenuClarificationReason = "menuAmbiguous" | "menuRejected" | "menuUn
   "changeAmbiguous" | "targetDisagreement" | "changeUnsupported" | "serviceChoiceChanged" | "changeAfterSend" | "oldAppointmentAfterMove" | "searchPreferenceUnavailable" | "clinicalAdviceUnavailable" | "unattendedAnnouncement" |
   "paymentEvidenceUnavailable" | "coverageEvidenceUnavailable" | "refundEvidenceUnavailable" | "reservationEvidenceUnavailable" | "arrivalAccessUnavailable" | "publicFactConflict" | "serviceArrangementUnavailable";
 export type TurnInterpretation =
+  | Readonly<{ kind: "serviceQuestion"; question: import("./booking-service-question.ts").BookingServiceQuestion }>
   | Readonly<{ kind: "conversationControl"; notice: import("./conversation-control.ts").ConversationControlNotice }>
   | Readonly<{ kind: "conversationPresence" }>
   | Readonly<{ kind: "missedCallReasonUnavailable" }>
