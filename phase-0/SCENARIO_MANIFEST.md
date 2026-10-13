@@ -338,3 +338,6 @@ E2E-294 also records real loopback TLS/SMTP delivery through the actual caller v
 
 
 E2E-220 additionally covers the optional durable aggregate receiver: authenticated exact payloads and clinic binding, retained days/configured thresholds, concurrent file/process deduplication, real HTTP response loss after storage, actual SIGKILL and compiled reader/receiver restart. Incomplete bodies, unsafe/corrupt storage and invalid records cannot report acceptance. Receipts contain only date/counter/first count/threshold, never patient, call, token or webhook key. This is local transport acceptance, not human paging or clinical activation.
+
+
+E2E-220 also covers independently approved Cliniko full-type queue monitoring through actual provider reads and durable receiver delivery. Current approver membership, declared duty/backup, cadence, credential/type/zone and destination/token bindings are rechecked after scanning and before every alert. Incomplete/rate-limited/failed reads are unavailable rather than healthy zero; revocation, abort, partial acceptance and lost results cannot invent success or retry within one run. Compiled monitor processes qualify known/unavailable outcomes with no patient persistence. Human paging, acknowledgment and clinic acceptance remain open.
