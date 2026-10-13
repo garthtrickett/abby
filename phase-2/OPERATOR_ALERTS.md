@@ -16,3 +16,11 @@ actual receiver loss. A compiled owner reader recovers the scoped aggregate
 inbox. This is an infrastructure health channel; it does not replace Cliniko's
 patient-specific review queue, implement this reference task-alert port, page a
 human or prove duty ownership. Those live gap-3 requirements remain open.
+
+The optional [authenticated operational response](../deploy/voice/OPERATOR_RESPONSE.md)
+application adds explicit acceptance of bounded infrastructure responsibility by
+a currently approved signed-in owner or backup. Unacknowledged alerts and
+expired responsibility become the backup's assignment. Receiver acceptance
+alone cannot acknowledge. This remains separate from the patient task-alert
+port and Cliniko resolution; actual recipient provisioning, external paging
+and a clinic acceptance witness remain open.

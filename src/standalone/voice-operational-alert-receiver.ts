@@ -1,6 +1,8 @@
 import { createServer } from "node:http";
 import type { IncomingMessage } from "node:http";
 import { VoiceOperationalAlertInbox } from "./voice-operational-alert-inbox.ts";
+import { OperatorAlertWorkflow } from "./operator-alert-workflow.ts";
+import { sameScope } from "./appointment-change-authority.ts";
 
 async function body(request: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = []; let size = 0;
@@ -13,9 +15,13 @@ async function body(request: IncomingMessage): Promise<unknown> {
 
 /** Loopback listener behind owner-managed HTTPS; never binds a public address.
  * 202 means durable inbox acceptance, not paging or human acknowledgment. */
-export async function startVoiceOperationalAlertReceiver(inbox: VoiceOperationalAlertInbox, port = 0) {
+export async function startVoiceOperationalAlertReceiver(inbox: VoiceOperationalAlertInbox, port = 0, workflow?: OperatorAlertWorkflow) {
   if (!(inbox instanceof VoiceOperationalAlertInbox) || !Number.isSafeInteger(port) || port < 0 || port > 65_535) throw new RangeError("invalid operational alert receiver");
   await inbox.snapshot();
+  if (workflow) {
+    if (!(workflow instanceof OperatorAlertWorkflow) || !sameScope(inbox.binding(), workflow.binding())) throw new RangeError("invalid operational alert workflow");
+    await workflow.observe();
+  }
   const tasks = new Set<Promise<void>>(), controllers = new Set<AbortController>();
   const server = createServer({ headersTimeout: 5_000, requestTimeout: 5_000, maxHeaderSize: 4_096 }, (request, response) => {
     const reply = (status: number) => { if (!response.destroyed) response.writeHead(status, { "cache-control": "no-store" }).end(); };
@@ -31,6 +37,9 @@ export async function startVoiceOperationalAlertReceiver(inbox: VoiceOperational
     const task = (async () => {
       try {
         const result = await inbox.accept(await body(request), request.headers.authorization, request.headers["idempotency-key"], controller.signal);
+        if (result === "accepted" && workflow) {
+          try { await workflow.observe(); } catch { reply(503); return; }
+        }
         reply(result === "accepted" ? 202 : result === "invalid" ? 400 : 503);
       } catch { reply(400); }
       finally { clearTimeout(timer); controllers.delete(controller); }

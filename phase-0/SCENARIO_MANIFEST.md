@@ -341,3 +341,6 @@ E2E-220 additionally covers the optional durable aggregate receiver: authenticat
 
 
 E2E-220 also covers independently approved Cliniko full-type queue monitoring through actual provider reads and durable receiver delivery. Current approver membership, declared duty/backup, cadence, credential/type/zone and destination/token bindings are rechecked after scanning and before every alert. Incomplete/rate-limited/failed reads are unavailable rather than healthy zero; revocation, abort, partial acceptance and lost results cannot invent success or retry within one run. Compiled monitor processes qualify known/unavailable outcomes with no patient persistence. Human paging, acknowledgment and clinic acceptance remain open.
+
+
+E2E-220 also qualifies optional authenticated operator responsibility: approved owner/backup identity, first observation, explicit acknowledgment, concurrent one-winner storage, restart reconstruction, expiry and current authority. Actual TLS and PostgreSQL sign-in browser actions reject forged identity, wrong hosts and cross-origin writes. Incomplete or oversized HTTP bodies cannot acknowledge. Transport acceptance remains distinct from a real operator action and patient completion; external paging and clinic recipient acceptance remain open. The full-call gate remains planned.

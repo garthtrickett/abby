@@ -65,3 +65,19 @@ A caller asks which services are listed at the locations sharing a clinic number
 ## Registration service choice
 
 An explicitly new patient chooses an approved initial service and duration before registration. This choice permits neither saving patient details nor booking: each requires its own permission and confirmation. A pre-registration correction discards the previous private draft; a completed or uncertain registration is never repeated to change the service.
+
+
+## Operational alert
+
+A notice about clinic infrastructure or aggregate queue health that requires operational attention. It is separate from a patient-specific review request.
+_Avoid_: Patient message, saved patient request.
+
+## Operator acknowledgment
+
+An authenticated, currently authorized operator explicitly accepts responsibility for an operational alert for an approved period. It establishes neither the outcome of a patient request nor completion of the underlying recovery work.
+_Avoid_: Transport acceptance, clinical completion.
+
+## Responsibility escalation
+
+An unacknowledged alert or expired responsibility period becomes the responsibility of the clinic's currently approved backup. Assignment alone does not establish that the backup has read or acknowledged it.
+_Avoid_: Delivered callback, completed recovery.

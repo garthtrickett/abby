@@ -12,8 +12,10 @@ columns or ordinary caller commands.
 
 A 202 means the receiver durably stored that logical alert. It does not mean an
 operator was paged, read it, accepted a staff request or completed recovery.
-Clinic-approved paging, duty and backup ownership, acknowledgment and escalation
-remain deployment requirements. Patient-specific request details remain in the
+The optional [authenticated response workflow](OPERATOR_RESPONSE.md) now adds
+approved owner/backup responsibility, explicit acknowledgment and lease expiry.
+Real paging, operator provisioning and recipient acceptance remain deployment
+requirements. Patient-specific request details remain in the
 approved Cliniko queue and never enter this inbox.
 
 ## Provision and run
@@ -58,8 +60,9 @@ The receiver starts only after checking storage. Readiness stdout contains only
 the chosen local port; failures use fixed stderr without configuration, token or
 payload. SIGTERM/SIGINT close ingress, abort active requests and await owned
 work. HTTP bodies are limited to 1 KiB; requests expire after five seconds;
-connections and simultaneous requests are bounded. There is no remote inbox
-reader or human acknowledgment endpoint.
+connections and simultaneous requests are bounded. This CLI has no remote inbox
+reader or human acknowledgment endpoint. The optional response application is
+a separately authenticated companion host.
 
 ## Acceptance and recovery
 
