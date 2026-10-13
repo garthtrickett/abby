@@ -5,6 +5,11 @@ voice health alerts. It authenticates one configured clinic/location, accepts
 only configured thresholds and seven retained UTC days, and stores one receipt
 per day/counter/threshold. It needs no Twilio number or email account.
 
+It now also accepts the three finite counters from the separately approved
+[Cliniko queue monitor](CLINIKO_QUEUE_MONITOR.md). Existing voice daily-counter
+configuration remains separate; queue counters do not become runtime database
+columns or ordinary caller commands.
+
 A 202 means the receiver durably stored that logical alert. It does not mean an
 operator was paged, read it, accepted a staff request or completed recovery.
 Clinic-approved paging, duty and backup ownership, acknowledgment and escalation

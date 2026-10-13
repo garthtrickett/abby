@@ -1,12 +1,12 @@
 import { fileURLToPath } from "node:url";
-import { parseThresholds } from "../src/standalone/operational-alert.ts";
+import { parseAggregateAlertThresholds } from "../src/standalone/operational-alert.ts";
 import { VoiceOperationalAlertInbox } from "../src/standalone/voice-operational-alert-inbox.ts";
 import { startVoiceOperationalAlertReceiver } from "../src/standalone/voice-operational-alert-receiver.ts";
 
 export function voiceAlertInboxFromEnvironment(env: NodeJS.ProcessEnv) {
   const required = (name: string) => { const value = env[name]?.trim(); if (!value) throw new Error("operational alert inbox unavailable"); return value; };
   return new VoiceOperationalAlertInbox({ scope: { tenantId: required("ABBY_TENANT_ID"), clinicId: required("ABBY_CLINIC_ID"), locationId: required("ABBY_LOCATION_ID") },
-    tokenHex: required("ABBY_VOICE_ALERT_TOKEN_HEX"), thresholds: parseThresholds(required("ABBY_VOICE_OPS_THRESHOLDS_JSON")),
+    tokenHex: required("ABBY_VOICE_ALERT_TOKEN_HEX"), thresholds: parseAggregateAlertThresholds(required("ABBY_VOICE_OPS_THRESHOLDS_JSON")),
     directory: required("ABBY_VOICE_ALERT_INBOX_DIRECTORY") });
 }
 

@@ -5,6 +5,8 @@
     "scripts/set-voice-test-automation.ts",
     "scripts/serve-voice-operational-alert-receiver.ts",
     "scripts/read-voice-operational-alert-inbox.ts",
+    "scripts/monitor-cliniko-queue.ts",
+    "test/support/start-synthetic-queue-monitor.ts",
     "test/support/start-synthetic-voice-runner.ts",
     "test/support/standalone-cancellation-worker.ts",
     "test/support/standalone-rescheduling-worker.ts"

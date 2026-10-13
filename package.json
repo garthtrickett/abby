@@ -27,6 +27,7 @@
     "cliniko:review-rehearsal": "node scripts/rehearse-cliniko-review.ts",
     "cliniko:lifecycle-rehearsal": "node scripts/rehearse-cliniko-lifecycle.ts",
     "voice:ops:recalls": "node scripts/read-cliniko-recall-queue.ts",
+    "voice:ops:monitor-queue": "node dist/runtime/scripts/monitor-cliniko-queue.js",
     "voice:ops:speech": "node scripts/read-speech-gate-status.ts",
     "voice:test-policy": "node dist/runtime/scripts/set-voice-test-automation.js",
     "voice:preflight": "node scripts/preflight-voice-public.ts",

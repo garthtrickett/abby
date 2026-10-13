@@ -5,10 +5,10 @@ import { isAbsolute, join, resolve } from "node:path";
 import type { LocationScope } from "../core/model.ts";
 import { readOwnerJson } from "../shared/owner-json.ts";
 import { operationalDays } from "../voice/operational-counts.ts";
-import { decodeOperationalAlert, operationalAlertKey, parseThresholds, validAlertScope, validOperationalAlert } from "./operational-alert.ts";
-import type { OperationalAlert, OperationalAlertThresholds } from "./operational-alert.ts";
+import { decodeOperationalAlert, operationalAlertKey, parseAggregateAlertThresholds, validAlertScope, validOperationalAlert } from "./operational-alert.ts";
+import type { OperationalAlert, AggregateAlertThresholds } from "./operational-alert.ts";
 
-export type VoiceAlertInboxConfig = Readonly<{ scope: LocationScope; tokenHex: string; thresholds: OperationalAlertThresholds;
+export type VoiceAlertInboxConfig = Readonly<{ scope: LocationScope; tokenHex: string; thresholds: AggregateAlertThresholds;
   directory: string; clock?: () => string }>;
 const unavailable = () => new Error("operational alert inbox unavailable");
 const pendingName = /^\.pending-[a-f0-9-]{36}$/;
@@ -27,7 +27,7 @@ export class VoiceOperationalAlertInbox {
     if (!config || !validAlertScope(config.scope) || typeof config.tokenHex !== "string" || !/^[a-f0-9]{64}$/i.test(config.tokenHex) ||
         typeof config.directory !== "string" || !isAbsolute(config.directory) || resolve(config.directory) !== config.directory ||
         typeof process.getuid !== "function" || (config.clock !== undefined && typeof config.clock !== "function")) throw new RangeError("invalid operational alert inbox configuration");
-    const thresholds = Object.freeze({ ...parseThresholds(JSON.stringify(config.thresholds)) });
+    const thresholds = Object.freeze({ ...parseAggregateAlertThresholds(JSON.stringify(config.thresholds)) });
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }), thresholds });
     this.#directory = join(config.directory, createHash("sha256").update(JSON.stringify([config.scope.tenantId, config.scope.clinicId, config.scope.locationId])).digest("hex"));
   }

@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.151
+# Scenario manifest, version 1.152
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -317,3 +317,5 @@ E2E-346 covers twenty-one signed practitioner/service constraint journeys, inclu
 E2E-347 covers twenty-one signed class/home/mode/practitioner-boundary journeys, exact individually verified cancellation and same-practitioner movement, and private class/home-service messages. No class inventory, membership redemption, home-visit arrangement, mode switch or cross-practitioner source change is implemented or inferred. Unsupported requests need clinic handling. Real carrier/mail/clinic activation remains planned.
 
 E2E-220 additionally covers the optional durable aggregate receiver: authenticated exact payloads and clinic binding, retained days/configured thresholds, concurrent file/process deduplication, real HTTP response loss after storage, actual SIGKILL and compiled reader/receiver restart. Incomplete bodies, unsafe/corrupt storage and invalid records cannot report acceptance. Receipts contain only date/counter/first count/threshold, never patient, call, token or webhook key. This is local transport acceptance, not human paging or clinical activation.
+
+E2E-220 also covers independently approved Cliniko full-type queue monitoring through actual provider reads and durable receiver delivery. Current approver membership, declared duty/backup, cadence, credential/type/zone and destination/token bindings are rechecked after scanning and before every alert. Incomplete/rate-limited/failed reads are unavailable rather than healthy zero; revocation, abort, partial acceptance and lost results cannot invent success or retry within one run. Compiled monitor processes qualify known/unavailable outcomes with no patient persistence. Human paging, acknowledgment and clinic acceptance remain open.
