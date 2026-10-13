@@ -8,8 +8,8 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 
 /** Approved synthetic public variants; the same actual proof, offer, policy,
  * review and writer classes are exercised for every selected provider type. */
-export async function serviceBookingFixture() {
-  const f = await bookingCallFlowFixture(); f.flow.dispose();
+export async function serviceBookingFixture(options: Parameters<typeof bookingCallFlowFixture>[0] = {}) {
+  const f = await bookingCallFlowFixture(options); f.flow.dispose();
   const path = join(f.folder, "service-catalogue.json"), initialPath = join(f.folder, "initial-booking.json"), massagePath = join(f.folder, "massage-booking.json"), shortInitialPath = join(f.folder, "short-initial-booking.json");
   const { scope, policyVersion, businessId, credentialFingerprint, timeZone, approverRef, approvedAt, effectiveFrom, effectiveUntil } = f.approval;
   const followUp = { serviceRef: "physiotherapy", name: "Physiotherapy", appointmentTypeName: "Physiotherapy follow-up", appointmentTypeId: "33", durationMinutes: 30,

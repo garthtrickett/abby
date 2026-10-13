@@ -1,3 +1,4 @@
+import { validLocationServices } from "../core/location-services.ts";
 import { validVoicePresentation } from "../core/voice-presentation.ts";
 import { validVoicePolicy, sameVoiceProfile } from "../core/voice-profile.ts";
 import type { VoiceProfile } from "../core/voice-profile.ts";
@@ -8,6 +9,7 @@ import type { PolicyResolver, RouteFailure } from "../voice/admission.ts";
 import { validCandidateNames } from "../core/pending-location.ts";
 
 export type ClinicIdentity = Readonly<{
+  candidateServices?: import("../core/location-services.ts").LocationServices;
   accountRef: string;
   dialedNumber: string;
   tenantId: string;
@@ -37,7 +39,8 @@ function validIdentity(identity: unknown, accountRef: string, dialedNumber: stri
     Array.isArray(value.candidateLocationIds) && value.candidateLocationIds.length >= 1 &&
     value.candidateLocationIds.length <= 32 && value.candidateLocationIds.every(validRef) &&
     new Set(value.candidateLocationIds).size === value.candidateLocationIds.length &&
-    (value.candidateLocationIds.length === 1 || validCandidateNames(value.candidateLocationIds, value.candidateNames));
+    (value.candidateLocationIds.length === 1 || validCandidateNames(value.candidateLocationIds, value.candidateNames)) &&
+    (value.candidateServices === undefined || validLocationServices(value.candidateLocationIds, value.candidateServices));
 }
 
 /** Resolves only an unambiguous location; a shared-number choice needs its own call transition. */

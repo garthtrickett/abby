@@ -426,3 +426,82 @@ without removing checks or broadening permission; the final84-check gate include
 the reproduction and retains all worker/deadline/privacy/native-write assertions.
 These are synthetic local results, not CI execution or clinic/model/speech/carrier
 acceptance.
+
+
+## Shared-number location service discovery (E2E-352)
+
+The transient serving composition can accept `locationServiceSources`, one
+independently approved public service catalogue for each candidate location.
+The directory checks current owner approval, membership, binding and location
+name, then publishes only service name, visit kind and duration. The route
+version includes approval and membership fingerprints. A changed or revoked
+source prevents an older pending location choice from binding.
+
+Before admission, callers can ask “Which locations offer Massage?”, “Where can
+I book Physiotherapy?” or “What services are available at South?”. Replies
+list approved variants and ask for an explicit location. Even a service listed
+at just one location does not choose that location. No patient session,
+verification, classifier invocation, provider read or writer starts during
+this interval. The reply has its own transport playback receipt; subsequent
+selection requires that receipt to be played and the current routing and lease
+to match. Location selection then starts the existing scoped clinical workflow.
+
+The signed synthetic journey uses two separate approval sets and distinct
+Cliniko business IDs. It discovers public services, explicitly selects a
+location, obtains fresh selected-location verification, plays the proposal and
+confirmation, and inspects the exact native business/type mutation. Owner-file
+tests separately cover changed revision, withdrawn approval/membership,
+mismatched names and duplicate sources. This extends the trusted transient
+composition; the existing single-location production CLI and the unmerged
+clinical-runner branch still require reconciliation. Real clinic activation,
+speech quality and carrier evidence remain separate gates.
+
+
+### Location service local qualification
+
+Final source passed `npm run typecheck`, `npm run build:voice-tests`, isolated
+PostgreSQL migrations, the following affected regression command, and
+`git diff --check`. All **135** checks passed, zero skips. Work label:
+`Abby location services final source qualification October13`; log:
+`/home/gust/paseo/paseo-home/work/logs/4590eee3-1791886711985.log`.
+
+```sh
+npm run db:migrate
+ABBY_LEDGER=postgres node --test --test-concurrency=4 \
+  test/voice/location-service-booking.test.ts \
+  test/voice/prelocation-service-discovery.test.ts \
+  test/cliniko/location-service-directory.test.ts \
+  test/voice/prelocation-voice-session.test.ts \
+  test/voice/shared-number-voice-call.test.ts \
+  test/admission/pending-location.test.ts \
+  test/voice/private-keypad-verification.test.ts \
+  test/voice/twilio-connected-call.test.ts \
+  test/voice/previous-practitioner.test.ts \
+  test/cliniko/previous-practitioner.test.ts \
+  test/cliniko/service-booking-entry.test.ts \
+  test/voice/service-booking-entry.test.ts \
+  test/voice/service-practitioner-preference.test.ts \
+  test/voice/service-dialogue-booking.test.ts \
+  test/voice/service-catalogue-booking.test.ts \
+  test/voice/preference-service-boundaries.test.ts \
+  test/voice/cliniko-workflow-call.test.ts \
+  test/voice/embedded-intake-booking-call.test.ts \
+  test/contract/scenario-manifest.test.ts \
+  test/contract/no-number-gap-trace.test.ts
+```
+
+Earlier checks identified an interrupted service reply still permitting
+admission and private input starting before shared-number admission. The core
+binding guard and delayed private-input startup corrected those failures. The
+accelerated signed fixture now advances its host clock with media timestamps.
+The first broad run passed 123 checks and failed three: missing scenario IDs
+in supporting test names, and two suites waiting for speech before observing
+punctuated affirmative writes. Scenario names now carry the actual ID; write
+waiting follows the awaiting action and real invocation, within the existing
+30-second effect deadline. The targeted 11-check correction and final135-check
+run passed without changing worker counts, deadlines or native/privacy
+assertions. Earlier failure logs remain recorded:
+`4590eee3-1791885878782.log`, `4590eee3-1791886091213.log`,
+`4590eee3-1791886279237.log`. Manifest version1.159 tracks352 scenarios;
+E2E-352 is synthetic evidence only. First-time intake variant selection and
+combined runner reconciliation remain open within gap5; gaps6–13 remain in scope.

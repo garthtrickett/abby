@@ -67,6 +67,7 @@ export class OwnerFileServiceCatalogue {
     const catalogue = new OwnerFileServiceCatalogue(config, source.value);
     return (await catalogue.current(config.scope)).ok ? ok(catalogue) : err({ kind: "unavailable" as const });
   }
+  bindingFingerprint(): string { return this.#source.bindingFingerprint(); }
   async current(scope: LocationScope): Promise<Result<ServiceCatalogueApproval, Readonly<{ kind: "unavailable" }>>> {
     const found = await this.#source.current(scope);
     if (!found.ok || !found.value || ["policyVersion", "businessId", "credentialFingerprint", "timeZone"].some(

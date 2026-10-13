@@ -8,6 +8,8 @@ import type Database from "../../src/storage/generated/Database.ts";
 import type { MemoryLedger } from "../../src/core/ledger.ts";
 import { ok } from "../../src/core/model.ts";
 import { ReferenceNumberRoutingHost } from "../../src/reference/clinic-number-routing.ts";
+import type { ClinicNumberRoutingHost } from "../../src/reference/clinic-number-routing.ts";
+import type { OwnerFileServiceCatalogue } from "../../src/standalone/owner-file-service-catalogue.ts";
 import { ClinikoCallFlow, clinikoStaffPreparationDeadlineMs } from "../../src/standalone/cliniko-call-flow.ts";
 import type { ClinikoCallFlowConfig } from "../../src/standalone/cliniko-call-flow.ts";
 import { createStandaloneTransientVoiceCall } from "../../src/standalone/transient-voice-composition.ts";
@@ -33,12 +35,19 @@ export async function voiceUntil(check: () => boolean, label: string, timeoutMs 
  * Cliniko HTTP, clear-final transcription and speech synthesis are explicitly synthetic. */
 export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: ClinikoCallFlowConfig,
   intent: (flow: ClinikoCallFlow) => IntentResolver, options: { lostWrite?: boolean;
+    routingHost?: (accountSid: string) => ClinicNumberRoutingHost;
+    locationServiceSources?: readonly Parameters<typeof OwnerFileServiceCatalogue.capture>[0][];
     appointmentTypeMetadata?: Readonly<Record<string, Readonly<{ durationMinutes: number }>>>;
     beforeWriteResponse?: () => Promise<void>;
     transcriptFinal?: (event: Extract<TranscriptEvent, { kind: "segmentFinal" }>) => readonly TranscriptEvent[] } = {}) {
   const accountSid = `AC${"4".repeat(32)}`, callSid = `CA${randomUUID().replaceAll("-", "")}`, streamSid = `MZ${randomUUID().replaceAll("-", "")}`;
   const webhookUrl = "https://workflow.example.test/twilio/inbound", streamUrl = "wss://workflow.example.test/twilio/media/";
-  const authToken = "synthetic-workflow-voice-token", now = config.clock ?? (() => verificationNow), scope = config.receipt.scope;
+  let mediaElapsedMs = 0;
+  const sourceClock = config.clock ?? (() => verificationNow);
+  // Shared-number admission checks capture times against its host clock. This
+  // accelerated synthetic stream advances that clock with its media timestamps.
+  const now = () => options.routingHost ? new Date(Date.parse(sourceClock()) + mediaElapsedMs).toISOString() : sourceClock();
+  const authToken = "synthetic-workflow-voice-token", scope = config.receipt.scope;
   const ingress = new TwilioSignedIngress({ accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
     fallbackNumbers: { [config.inbound.dialedNumber]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x38), now: () => new Date(now()) });
   const policy = new Proxy(config.policies, { get(target, key) {
@@ -95,7 +104,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       after = { ...before, id: appointmentId, notes: body.notes ?? before.notes, starts_at: starts, ends_at: new Date(Date.parse(starts) + (metadata?.durationMinutes ?? 30) * 60_000).toISOString(), archived_at: null, deleted_at: null,
         cancelled_at: url.pathname.endsWith("/cancel") ? now() : null,
         patient: { links: { self: `${base}/patients/${body.patient_id ?? verificationCanaries[2]}` } },
-        business: { links: { self: `${base}/businesses/11` } }, practitioner: { links: { self: `${base}/practitioners/${body.practitioner_id ?? "22"}` } },
+        business: { links: { self: `${base}/businesses/${body.business_id ?? config.cliniko.businessId}` } }, practitioner: { links: { self: `${base}/practitioners/${body.practitioner_id ?? "22"}` } },
         appointment_type: { links: { self: `${base}/appointment_types/${typeId}` } } };
       if (options.beforeWriteResponse) await options.beforeWriteResponse();
       if (options.lostWrite) throw new Error("synthetic lost voice write response");
@@ -106,7 +115,8 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   });
   const server = createTwilioIngressServer({ ingress, createCall: async (stream, send, close) => {
     const composed = resultValue(await createStandaloneTransientVoiceCall({ db,
-      routingHost: new ReferenceNumberRoutingHost([{ accountRef: accountSid, dialedNumber: config.inbound.dialedNumber, ...scope, routeVersion: "workflow-voice" }]),
+      routingHost: options.routingHost?.(accountSid) ?? new ReferenceNumberRoutingHost([{ accountRef: accountSid, dialedNumber: config.inbound.dialedNumber, ...scope, routeVersion: "workflow-voice" }]),
+      ...(options.locationServiceSources ? { locationServiceSources: options.locationServiceSources } : {}),
       stream, send, closeTransport: close, readiness: async () => ok(true), now, resolveIntent: async () => ok({ kind: "model" }),
       clinicalWorkflow: { policies: policy,
         ...(config.publicKnowledge ? { publicKnowledge: config.publicKnowledge } : {}),
@@ -183,8 +193,11 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       start: { accountSid, callSid, streamSid, tracks: ["inbound"], mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 }, customParameters: { abbyBinding: binding } } }));
     await voiceUntil(() => sent.some(item => item.event === "mark"), "greeting mark");
     const sendEvent = (event: Record<string, unknown>) => socket!.send(JSON.stringify({ ...event, streamSid: event.streamSid ?? streamSid, sequenceNumber: String(sequence++) }));
-    const media = (voiced: boolean) => sendEvent({ event: "media", media: { track: "inbound", chunk: String(++chunk), timestamp: String((chunk - 1) * 20),
-      payload: Buffer.alloc(160, voiced ? 0x9f : 0xff).toString("base64") } });
+    const media = (voiced: boolean) => {
+      chunk++; mediaElapsedMs = (chunk - 1) * 20;
+      sendEvent({ event: "media", media: { track: "inbound", chunk: String(chunk), timestamp: String(mediaElapsedMs),
+        payload: Buffer.alloc(160, voiced ? 0x9f : 0xff).toString("base64") } });
+    };
     const mark = async () => {
       await voiceUntil(() => sent.some(item => item.event === "mark" && item.mark && !acknowledged.has(item.mark.name)), "fresh queued playback marker");
       const marker = sent.filter(item => item.event === "mark" && item.mark && !acknowledged.has(item.mark.name)).at(-1)?.mark; assert.ok(marker);
@@ -195,6 +208,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     };
     await mark();
     return { callId, sent, spoken, transcripts, privateTranscripts, modelTurns, writes, writeRequests, close, mark, media, sendEvent,
+      get workflowStarted() { return flow !== undefined; },
       get flow() { assert.ok(flow); return flow; }, get transcriptionFrames() { return transcriptionFrames; },
       get closed() { return closed; }, get closeCode() { return closeCode; },
       state: async () => resultValue(await (disposedState ?? ledger!.read(callId, scope))),
@@ -214,7 +228,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         stages.length = 0;
         const marks = sent.filter(item => item.event === "mark").length, clears = sent.filter(item => item.event === "clear").length;
         let replyAfterMarks = marks;
-        const pending = text === "Yes" && !options.expectedFailure
+        const pending = ledger && !options.expectedFailure
           ? Object.values(resultValue(await ledger!.read(callId, scope)).actions).find(action => action.status === "awaitingConfirmation") : undefined;
         const beforeWrites = hostWritesStarted, beforePreparations = staffPreparationsStarted, beforeStaffWrites = staffWritesStarted;
         inputs.push(text); media(true); media(true);
@@ -265,15 +279,15 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
             await voiceUntil(() => staffWritesSettled > beforeStaffWrites || failures.length > 0, "staff write settlement", flow!.effectDeadlineMs);
           await voiceUntil(() => hasReply() || failures.length > 0, "caller turn speech");
         } catch (error) {
-          const state = resultValue(await ledger!.read(callId, scope));
+          const state = ledger ? resultValue(await ledger.read(callId, scope)) : undefined;
           throw new Error(`caller turn delivery stalled: ${JSON.stringify({ closed, workflowClosed: flow?.closed,
-            workflow: flow?.workflow, lifecycle: state.lifecycle, queuedInputs: inputs.length, processedChunk, chunk,
+            workflow: flow?.workflow, lifecycle: state?.lifecycle, queuedInputs: inputs.length, processedChunk, chunk,
             modelTurns: modelTurns.length, transcriptionFrames, writes: writes.length, hostWritesStarted, hostWritesSettled, staffPreparationsStarted, staffPreparationsSettled, staffWritesStarted, staffWritesSettled, failures, stageFailure: error instanceof Error ? error.message : "unknown",
-            actions: Object.values(state.actions).map(action => action.status),
-            presentations: Object.values(state.presentations).map(presentation => presentation.status),
+            actions: Object.values(state?.actions ?? {}).map(action => action.status),
+            presentations: Object.values(state?.presentations ?? {}).map(presentation => presentation.status),
             stages: stages.map(stage => ({ name: stage.name, pending: stage.settled === undefined,
               elapsedMs: Math.round((stage.settled ?? performance.now()) - stage.started) })),
-            effects: Object.values(state.effects).map(effect => ({ kind: effect.kind, status: effect.status })) })}`, { cause: error });
+            effects: Object.values(state?.effects ?? {}).map(effect => ({ kind: effect.kind, status: effect.status })) })}`, { cause: error });
         }
         assert.deepEqual(failures, options.expectedFailure ? [options.expectedFailure] : [], `wire failure after ${modelTurns.length} model turns and ${transcriptionFrames} transcribed frames`);
         await voiceUntil(() => processedChunk >= finalChunk, "completed caller media turn"); },

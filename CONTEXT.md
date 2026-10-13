@@ -57,3 +57,7 @@ The caller's choice of any eligible practitioner, a named practitioner, or a cli
 ## Previous practitioner
 
 The practitioner named by the latest eligible past appointment record in the clinic's approved history period. This identifies a recorded booking relationship without establishing attendance, treatment suitability or permission to book with that practitioner.
+
+## Location service discovery
+
+A caller asks which services are listed at the locations sharing a clinic number before choosing one location. Public service information grants neither patient disclosure nor appointment availability, verification or booking authority.

@@ -21,6 +21,7 @@ export type CallTerminal = Readonly<{ reason: CallTerminalReason; at: string }>;
 export type AdmissionReceipt = Readonly<{ callId: string; scope: LocationScope; admission: Admission; lifecycle: "starting" | "active" | "ended" }>;
 export type AdmissionResult = Readonly<{ kind: "created" | "duplicate"; receipt: AdmissionReceipt }>;
 export type PendingLocationRoute = Readonly<{
+  candidateServices?: import("./location-services.ts").LocationServices;
   tenantId: string;
   clinicId: string;
   /** Captured before a shared-number prompt. Legacy stored routes without it grant no new voice authority. */

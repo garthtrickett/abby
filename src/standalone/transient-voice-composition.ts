@@ -35,6 +35,8 @@ import { ClinikoCallFlow } from "./cliniko-call-flow.ts";
 import { PrivateWorkflowKeypad } from "./private-workflow-keypad.ts";
 import { OwnerFileClinicFAQs } from "./owner-file-clinic-faqs.ts";
 import { PrivateIntakeVoiceInput } from "./private-intake-voice-input.ts";
+import { ClinikoLocationServiceDirectory } from "./cliniko-location-service-directory.ts";
+import type { OwnerFileServiceCatalogue } from "./owner-file-service-catalogue.ts";
 
 export type ClinikoVoiceWorkflow = Readonly<{
   /** A trusted host supplies current scoped activation evidence and settings. The runnable CLI
@@ -52,6 +54,8 @@ export type ClinikoVoiceWorkflow = Readonly<{
 export type TransientVoiceConfig = Readonly<{
   db: Kysely<Database>;
   routingHost: ClinicNumberRoutingHost;
+  /** Independently approved public catalogues for shared-number locations. */
+  locationServiceSources?: readonly Parameters<typeof OwnerFileServiceCatalogue.capture>[0][];
   expectedPolicyVersion?: string;
   stream: AuthenticatedTwilioStream;
   send: (json: string) => "queued" | "notSent" | "uncertain";
@@ -102,7 +106,9 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
     ...(config.approvedGreeting ? { greeting: structuredClone(config.approvedGreeting) } : {}) });
   const policy = config.clinicalWorkflow?.policies ?? new PostgresPolicyStore(config.db, defaultPolicy, "unavailable", readiness, false, "standaloneMinimal", true, undefined, undefined, undefined, config.voiceProfiles);
   let greeting: ApprovedGreeting | undefined;
-  const router = new ClinicPolicyRouter(config.routingHost, { read: async scope => {
+  const routingHost = config.locationServiceSources
+    ? new ClinikoLocationServiceDirectory(config.routingHost, config.locationServiceSources) : config.routingHost;
+  const router = new ClinicPolicyRouter(routingHost, { read: async scope => {
     const loaded = await policy.read(scope);
     if (loaded.ok && config.expectedPolicyVersion !== undefined &&
         loaded.value.policyVersion !== config.expectedPolicyVersion) return err({ kind: "versionConflict" });

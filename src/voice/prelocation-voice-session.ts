@@ -6,6 +6,7 @@ import type { AdmissionResult, PendingLocationCall, Result, TransitionFailure } 
 import { callIdFor } from "./admission.ts";
 import type { AuthenticatedInboundCall, RouteFailure } from "./admission.ts";
 import { locationChoicePrompt } from "./location-choice.ts";
+import { locationServiceDiscovery } from "./location-service-discovery.ts";
 import { SharedNumberIntakeService } from "./shared-number-intake.ts";
 import type { PlaybackPort } from "./voice-session.ts";
 import { TurnAssembler } from "./turn-assembler.ts";
@@ -14,6 +15,7 @@ import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 export type PrelocationVoiceFailure = TransitionFailure | RouteFailure | TranscriptFailure |
   Readonly<{ kind: "sessionUnknown" | "deliveryBlocked" | "playbackUnknown" | "transportUnavailable" | "locationChoiceUnclear" }>;
 export type PrelocationPromptResult = Readonly<{ kind: "queued" | "played" | "failed" | "unproven" | "interrupted"; playbackId: string }>;
+export type LocationInformation = Readonly<{ kind: "locationInformation"; pending: PendingLocationCall }>;
 
 /** Owns only the media interval before a shared-number call gains a location scope. */
 export class PrelocationVoiceSession {
@@ -33,6 +35,7 @@ export class PrelocationVoiceSession {
   private localDeadlineMs: number | undefined;
   private activePlaybackId: string | undefined;
   private pending: PendingLocationCall | undefined;
+  private discoveryReply: string | undefined;
 
   constructor(event: AuthenticatedInboundCall, sessionId: string,
               ledger: LedgerStore, intake: SharedNumberIntakeService,
@@ -89,11 +92,13 @@ export class PrelocationVoiceSession {
     if (!this.attached || !this.pending || this.leaseVersion === undefined) return err({ kind: "sessionUnknown" });
     if (this.speechOpen) return err({ kind: "deliveryBlocked" });
     if (!this.canSend()) return err({ kind: "leaseLost" });
-    const text = notice === "finalSilence" ? SILENCE_FINAL_NOTICE : locationChoicePrompt(this.pending.route);
+    const locationPrompt = locationChoicePrompt(this.pending.route);
+    const text = notice === "finalSilence" ? SILENCE_FINAL_NOTICE :
+      this.discoveryReply ? `${this.discoveryReply} ${locationPrompt}` : locationPrompt;
     if (!text) return err({ kind: "invalidTransition" });
     const playbackId = `${this.callId}:location:${randomUUID()}`;
     const started = await this.ledger.startPendingLocationPrompt(this.callId, playbackId, this.sessionId, this.leaseVersion,
-      now, notice !== undefined);
+      now, notice !== undefined || this.discoveryReply !== undefined);
     if (!started.ok) return started;
     const prompt = started.value.pending.prompt!;
     this.pending = started.value.pending;
@@ -138,6 +143,7 @@ export class PrelocationVoiceSession {
     if (settled.ok) {
       this.pending = settled.value;
       this.activePlaybackId = undefined;
+      if (status === "played") this.discoveryReply = undefined;
     }
     return settled;
   }
@@ -171,7 +177,7 @@ export class PrelocationVoiceSession {
     return this.assembler.accept(event);
   }
 
-  async finishTurn(now: string): Promise<Result<AdmissionResult, PrelocationVoiceFailure>> {
+  async finishTurn(now: string): Promise<Result<AdmissionResult | LocationInformation, PrelocationVoiceFailure>> {
     if (this.ending) return err({ kind: "deliveryBlocked" });
     if (!this.attached || !this.speechOpen || this.leaseVersion === undefined) return err({ kind: "sessionUnknown" });
     if (this.finishing) return err({ kind: "deliveryBlocked" });
@@ -180,6 +186,16 @@ export class PrelocationVoiceSession {
     if (!finished.ok) return finished;
     this.finishing = true;
     try {
+      const reply = this.pending && locationServiceDiscovery(this.pending.route, finished.value.text);
+      if (reply) {
+        const current = await this.intake.currentDiscovery(this.event, finished.value, this.leaseVersion);
+        if (!current.ok) return current;
+        if (!this.canSend()) return err({ kind: "leaseLost" });
+        this.pending = current.value;
+        this.discoveryReply = reply;
+        this.speechOpen = false;
+        return ok({ kind: "locationInformation", pending: current.value });
+      }
       const result = await this.intake.chooseFromTurn(this.event, finished.value, this.leaseVersion);
       if (result.ok || result.error.kind === "locationChoiceUnclear") this.speechOpen = false;
       if (result.ok) this.attached = false;

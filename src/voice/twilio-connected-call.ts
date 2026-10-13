@@ -214,6 +214,7 @@ export class TwilioConnectedCall {
   }
 
   private privateInputMode(): "collecting" | "draining" | undefined {
+    if (!this.locationBound) return undefined;
     if (this.privateKeypadInput?.blocked()) return "collecting";
     return this.privateResuming ? "draining" : undefined;
   }
@@ -263,7 +264,7 @@ export class TwilioConnectedCall {
       if (!started.ok) { await this.failSession(); return started; }
       this.begun = true;
       this.locationBound = started.value.kind === "admitted";
-      if (this.privateKeypadInput && (started.value.kind !== "admitted" || !this.privateKeypadInput.start())) {
+      if (this.privateKeypadInput && this.locationBound && !this.privateKeypadInput.start()) {
         await this.failSession(); return err({ kind: "privateInputUnavailable" });
       }
       try { this.lease.start(); }
@@ -283,7 +284,12 @@ export class TwilioConnectedCall {
         this.retriedSilence = false;
         this.blockedSilenceChecks = 0;
       } else if (progressed.value.kind === "turnCompleted") {
-        if (progressed.value.turn.kind === "locationBound") this.locationBound = true;
+        if (progressed.value.turn.kind === "locationBound") {
+          this.locationBound = true;
+          if (this.privateKeypadInput && !this.privateKeypadInput.start()) {
+            await this.failSession(); return err({ kind: "privateInputUnavailable" });
+          }
+        }
         this.trackDelivery(progressed.value.delivery);
       }
       return ok({ kind: "media", value: progressed.value });
