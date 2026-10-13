@@ -14,6 +14,8 @@ import { OwnerFileIntakePolicy } from "../../src/standalone/owner-file-intake-po
 import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 import { err, ok } from "../../src/core/model.ts";
 import { bookingCallFlowFixture, cancellationCallFlowFixture, reschedulingCallFlowFixture, intakeCallFlowFixture } from "./cliniko-call-flow.ts";
+import { patientCorrectionCallFlowFixture } from "./patient-correction-call-flow.ts";
+import { OwnerFilePatientUpdatePolicy } from "../../src/standalone/owner-file-patient-update-policy.ts";
 import { appointmentEnquiryFixture } from "./cliniko-appointment-enquiry.ts";
 import { clinikoStaffCallFlowFixture } from "./cliniko-staff-call-flow.ts";
 import { staffRequestLanguage } from "../../src/standalone/staff-request-language.ts";
@@ -27,7 +29,7 @@ const operation = process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION;
 if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
     process.env.ABBY_CLINIKO_API_KEY !== "synthetic-key-au5" || !process.env.DATABASE_URL?.includes("/abby_test_voice_") ||
     process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}` ||
-    !["book", "cancel", "reschedule", "intake", "appointments.read", "staff.request"].includes(operation ?? "")) {
+    !["book", "cancel", "reschedule", "intake", "patientUpdate", "appointments.read", "staff.request"].includes(operation ?? "")) {
   throw new Error("synthetic clinical runner requires an isolated fixture");
 }
 const services = process.env.ABBY_SYNTHETIC_SERVICE_MODE === "1", smtpMode = process.env.ABBY_SYNTHETIC_SMTP_MODE === "1";
@@ -44,7 +46,7 @@ if (multiLocation && (!services || !["book", "intake"].includes(operation!))) th
 const locationFixture = multiLocation ? operation === "intake" ? await intakeLocationServiceFixture() : await locationServiceFixture() : undefined;
 const f = locationFixture?.north ?? (services ? operation === "book" ? await serviceBookingFixture() : await intakeServiceFixture() : operation === "staff.request" ? await clinikoStaffCallFlowFixture() : operation === "book" ? await bookingCallFlowFixture() : operation === "cancel" ? await cancellationCallFlowFixture() :
   operation === "reschedule" ? await reschedulingCallFlowFixture(practitionerMove ? { ...(practitionerMove === "directory" ? { practitionerChoices: ["23"] } : { destinationPractitionerId: "23" }), sameTime: practitionerMove === "sameTime",
-    practitionerMoves: [{ fromPractitionerId: "22", toPractitionerId: "23", appointmentTypeId: "33", durationMinutes: 30 }] } : {}) : operation === "intake" ? await intakeCallFlowFixture() : await appointmentEnquiryFixture());
+    practitionerMoves: [{ fromPractitionerId: "22", toPractitionerId: "23", appointmentTypeId: "33", durationMinutes: 30 }] } : {}) : operation === "intake" ? await intakeCallFlowFixture() : operation === "patientUpdate" ? await patientCorrectionCallFlowFixture() : await appointmentEnquiryFixture());
 f.flow.dispose();
 if (longSearch && "setStarts" in f) f.setStarts(["2026-11-20T04:00:00.000Z"]);
 if (locationFixture && operation === "book") {
@@ -146,6 +148,12 @@ if (offlineCalendar) {
 return async (value, init) => {
   const url = new URL(String(value)), method = init?.method ?? "GET";
   process.send?.({ kind: "providerRequest", method, path: url.pathname, scope: c.receipt.scope });
+  if (operation === "patientUpdate" && (method === "PATCH" && url.pathname.startsWith("/v1/patients/") || method === "POST" && url.pathname === "/v1/recalls")) {
+    const body = JSON.parse(String(init?.body)); process.send?.({ kind: "providerMutation", method, path: url.pathname, body });
+    const response = await c.fetchPort!(value, init);
+    if (lostWrite && method === "PATCH") throw new Error("synthetic unknown correction write");
+    return response;
+  }
   if (operation === "staff.request" && method === "POST" && url.pathname === "/v1/recalls") {
     const body = JSON.parse(String(init?.body));
     process.send?.({ kind: "providerMutation", method, path: url.pathname, body });
@@ -213,20 +221,23 @@ const locationRows = await Promise.all(fixtureRows.map(async ({ fixture, config 
     await writeFile(path, JSON.stringify({ ...approval, businessId: config.cliniko.businessId }), { mode: 0o600 });
   }
   const intake = await intakeFor(config, fixture.folder);
-  return { intake, scope: fixture.scope, config, policies, snapshot: resultValue(await policies.read(fixture.scope)), provider: providerFor(config) };
+  const correction = config.correction ? { ...config.correction, policy: resultValue(await OwnerFilePatientUpdatePolicy.capture({ ...config.correction.policy.binding(),
+    credentialFingerprint: fingerprint, path: join(fixture.folder, "correction.json"), directory: config.directory, correctionsEnabled: true, clock: now })) } : undefined;
+  return { intake, correction, scope: fixture.scope, config, policies, snapshot: resultValue(await policies.read(fixture.scope)), provider: providerFor(config) };
 }));
 process.send?.({ kind: "fixtureReady", scope: f.scope, policyVersion: c.policyVersion, locations: locationRows.map(row => ({ scope: row.scope, policyVersion: row.config.policyVersion, businessId: row.config.cliniko.businessId })) });
 async function run(delivery?: PatientCodeDelivery) {
   await serveClinikoVoice({ clinikoFetch: provider, openaiFetch: speech, syntheticClock: now, transcriptionFactory: transcription(false), voiceProfiles,
+    ...(operation === "patientUpdate" ? { clinikoCredentialAliases: [fingerprint, clinikoCredentialFingerprint("synthetic-secondary-au5")] } : {}),
     speechQuality: (_scope, configurationHash) => ok({ configurationHash, qualityVersion: "synthetic-clinical-runner.v1" }),
     ...(multiLocation ? { clinicalLocations: (context: Parameters<NonNullable<VoiceRunnerPorts["clinicalHost"]>>[0]) => locationRows.map((row, index) => ({ scope: row.scope, spokenName: index ? "South" : "North", host: createHost({ ...context, scope: row.scope }, row) })) }
       : { clinicalHost: (context: Parameters<NonNullable<VoiceRunnerPorts["clinicalHost"]>>[0]) => createHost(context, locationRows[0]!) }),
   });
   function createHost(context: Parameters<NonNullable<VoiceRunnerPorts["clinicalHost"]>>[0], row: typeof locationRows[number]) {
-      const c = row.config, clinicPolicy = row.policies, provider = row.provider, intake = row.intake;
+      const c = row.config, clinicPolicy = row.policies, provider = row.provider, intake = row.intake, correction = row.correction;
       const greeting = row.snapshot.greeting!;
       return new ClinikoVoiceClinicalHost({ ...c, scope: context.scope, policies: clinicPolicy, greeting,
-        cliniko: { ...c.cliniko, apiKey: context.apiKey, contactEmail: context.contactEmail, rateBudget: context.rateBudget }, fetchPort: provider,
+        cliniko: { ...c.cliniko, apiKey: context.apiKey, contactEmail: context.contactEmail, rateBudget: context.rateBudget, contactRevision: context.contactRevision }, fetchPort: provider,
         permission: { allows: async (...args) => { const allowed = !denied && await c.permission.allows(...args);
           process.send?.({ kind: "permissionDecision", operation: args[2], allowed, scope: context.scope }); return allowed; } },
         delivery: { send: async (email, code, signal) => {
@@ -239,9 +250,18 @@ async function run(delivery?: PatientCodeDelivery) {
           process.send?.({ kind: "permissionDecision", operation: args[2], allowed }); return allowed;
         } } } } : {}),
         ...(intake ? { intake, privateIntakeTranscription: transcription(true, context.scope) } : {}),
+        ...(correction ? { correction: { ...correction, contactRevision: context.contactRevision,
+          permission: { allows: async (...args: Parameters<typeof correction.permission.allows>) => !denied && correction.permission.allows(...args) } },
+          privateCorrectionTranscription: transcription(true, context.scope) } : {}),
         intent(owner) {
           const submit = owner.submitCode.bind(owner);
           owner.submitCode = async code => { const result = await submit(code); process.send?.({ kind: "verificationResult", verified: result.verified }); return result; };
+          if (operation === "patientUpdate") return createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-intent", model: "synthetic-model", clinicDate: () => "2026-10-04",
+            fetch: async (_value, init) => {
+              const text = JSON.parse(JSON.parse(String(init?.body)).input[1].content).callerText;
+              process.send?.({ kind: "modelTurn", text });
+              return Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [{ type: "output_text", text: JSON.stringify({ kind: "outcome", operation: null, stage: null, from: null, to: null, choice: null }) }] }] });
+            } });
           if (practitionerMove === "directory") return createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-intent", model: "synthetic-model", clinicDate: () => "2026-10-04",
             fetch: async (_value, init) => {
               const text = JSON.parse(JSON.parse(String(init?.body)).input[1].content).callerText;

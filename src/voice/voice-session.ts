@@ -36,6 +36,7 @@ export type VoiceIntent =
   | Readonly<{ kind: "cancel"; verificationRef: string; targetRef: string }>
   | Readonly<{ kind: "reschedule"; verificationRef: string; targetRef: string; offerRef: string }>
   | Readonly<{ kind: "intake"; draftRef: string }>
+  | Readonly<{ kind: "patientCorrection"; correctionRef: string }>
   | Readonly<{ kind: "answer"; sourceRefs: readonly string[]; proposedText: string }>
   | Readonly<{ kind: "availability"; from: string; to: string }>
   | Readonly<{ kind: "appointments"; verificationRef: string; from: string; to: string }>
@@ -429,6 +430,9 @@ export class VoiceSession {
         now, existing.value.conversationRevision, signal));
     } else if (this.cachedIntent.kind === "intake") {
       result = await this.reception.proposeIntake(this.scope, turn, this.cachedIntent.draftRef, now, existing.value.conversationRevision);
+    } else if (this.cachedIntent.kind === "patientCorrection") {
+      const intent = this.cachedIntent;
+      result = await this.withPendingIntent(signal => this.reception.proposePatientCorrection(this.scope, turn, intent.correctionRef, now, existing.value.conversationRevision, signal));
     } else if (this.cachedIntent.kind === "answer") {
       const controller = new AbortController(), pending = { cancel: () => controller.abort() };
       this.pendingIntent = pending;
@@ -520,10 +524,17 @@ export class VoiceSession {
   /** Private intake speech is absent from SAM text/history and the model. Only the exact
    * transport completion can fulfill this promise. The source owns consent/draft authority. */
   async presentPrivateIntake(text: string, signal: AbortSignal, now: string): Promise<boolean> {
+    return this.presentPrivatePatientPrompt(text, signal, now, "intake");
+  }
+  async presentPrivateCorrection(text: string, signal: AbortSignal, now: string): Promise<boolean> {
+    return this.presentPrivatePatientPrompt(text, signal, now, "patientUpdate");
+  }
+  private async presentPrivatePatientPrompt(text: string, signal: AbortSignal, now: string, operation: "intake" | "patientUpdate"): Promise<boolean> {
     if (!this.transientContent || signal.aborted || !this.canSend() || this.speechOpen || this.activePlayback ||
         typeof text !== "string" || !text.trim() || text.length > 2_000) return false;
     const id = randomUUID();
-    const queued = await this.runtime.privateIntakePrompt(this.callId, id, this.sessionId, now);
+    const queued = operation === "intake" ? await this.runtime.privateIntakePrompt(this.callId, id, this.sessionId, now)
+      : await this.runtime.privateCorrectionPrompt(this.callId, id, this.sessionId, now);
     if (!queued.ok || signal.aborted) return false;
     this.transientContent.set(id, text);
     let resolve!: (played: boolean) => void;

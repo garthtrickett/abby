@@ -117,6 +117,9 @@ export class CallRuntime {
   privateIntakePrompt(callId: string, presentationId: string, sessionId: string, now: string) {
     return this.update(callId, { kind: "privateIntakePrompt", presentationId, sessionId, now });
   }
+  privateCorrectionPrompt(callId: string, presentationId: string, sessionId: string, now: string) {
+    return this.update(callId, { kind: "privateCorrectionPrompt", presentationId, sessionId, now });
+  }
 
   acceptModelResult(callId: string, effectId: string,
                     result: Extract<TransitionAction, { kind: "modelResolved" }>["result"], now: string): Promise<Result<CallState, TransitionFailure>> {

@@ -47,6 +47,9 @@ type ClinicalHostContext = Readonly<{ db: ReturnType<typeof connectPostgres>; sc
   contactRevision: import("../src/storage/postgres-cliniko-contact-revision.ts").PostgresClinikoContactRevision }>;
 export type ClinicalRunnerLocation = Readonly<{ scope: LocationScope; spokenName: string; host: ClinikoVoiceClinicalHost }>;
 export type VoiceRunnerPorts = Readonly<{
+  /** Complete owner-provisioned Cliniko credential fingerprint set for this tenant/account.
+   * Never discovered from caller input or selected through an environment variable. */
+  clinikoCredentialAliases?: readonly string[];
   clinikoFetch?: typeof fetch;
   openaiFetch?: typeof fetch;
   transcriptionSocketFactory?: NonNullable<ClinikoVoiceServerConfig["openai"]["transcriptionSocketFactory"]>;
@@ -124,9 +127,9 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
         ? { sharedUserRef: process.env.ABBY_CLINIKO_BUDGET_USER_REF } : {}) });
     if (ports.clinicalHost && ports.clinicalLocations) throw new RangeError("conflicting clinical runner hosts");
     const { PostgresClinikoContactRevision } = await import("../src/storage/postgres-cliniko-contact-revision.ts");
-    // All routes in this runner use this configured key. Additional account keys
-    // require an explicit complete alias binding before enabling corrections.
-    const contactRevision = new PostgresClinikoContactRevision(db, scope.tenantId, [clinikoCredentialFingerprint(apiKey)]);
+    const credentialFingerprint = clinikoCredentialFingerprint(apiKey);
+    const contactRevision = new PostgresClinikoContactRevision(db, scope.tenantId, ports.clinikoCredentialAliases ?? [credentialFingerprint]);
+    if (!contactRevision.matches(scope.tenantId, credentialFingerprint)) throw new RangeError("configured credential missing from account aliases");
     const context = { db, scope: Object.freeze({ ...scope }), apiKey, contactEmail, rateBudget, contactRevision };
     const clinicalHost = ports.clinicalHost?.(context);
     const locations = ports.clinicalLocations?.(context)?.map(row => ({ ...row, scope: Object.freeze({ ...row.scope }) }));

@@ -29,12 +29,12 @@ import { staffRequestLanguage } from "./staff-request-language.ts";
 const endpoint = "https://api.openai.com/v1/responses";
 const unavailable = { kind: "intentUnavailable" } as const;
 const maxBytes = 16 * 1024;
-export const clinicalIntentPromptVersion = "clinical-intent-v26";
+export const clinicalIntentPromptVersion = "clinical-intent-v27";
 
 const schema = { type: "object", additionalProperties: false,
   properties: {
     kind: { type: "string", enum: ["workflow", "menu", "choice", "appointments", "cancel", "save", "outcome", "staffRequest", "staffOutcome", "faq", "urgent", "notificationOutcome", "identityDisagreement", "sharedPhone", "minorIntake", "proxyPatient", "jointPractitioners", "groupClass", "bookingHorizon", "presence", "missedCall", ...publicInformationTopics, ...staffRequestSubjects, "unsupported"] },
-    operation: { type: ["string", "null"], enum: ["book", "cancel", "reschedule", "intake", "appointments.read", null] },
+    operation: { type: ["string", "null"], enum: ["book", "cancel", "reschedule", "intake", "patientUpdate", "appointments.read", null] },
     stage: { type: ["string", "null"], enum: ["targets", "practitioners", "offers", null] },
     from: { type: ["string", "null"] }, to: { type: ["string", "null"] },
     choice: { type: ["integer", "null"], enum: [1, 2, 3, null] },
@@ -68,6 +68,7 @@ function publicPhase(context: Context): string {
     return context.reschedulingTargetSelected ? "listNewTimes" : "listExistingAppointments";
   }
   if (context.workflow === "cancel") return "listOrCancelAppointment";
+  if (context.workflow === "patientUpdate") return "preparePatientCorrection";
   if (context.workflow === "intake" && context.lastAction?.status !== "committed") return "saveRegistration";
   return context.lastMenu?.kind === "booking" ? "chooseBookingTime" : "listBookingTimes";
 }
@@ -80,13 +81,13 @@ function schemaFor(context: Context, hasPublicFacts: boolean) {
         ? ["choice", "menu", "outcome", "unsupported"] : context.workflow === "appointments.read"
           ? ["appointments", "workflow", "outcome", "unsupported"] : context.workflow === "cancel"
           ? ["appointments", "cancel", "outcome", "unsupported"] : context.workflow === "intake" && context.lastAction?.status !== "committed"
-          ? ["save", "outcome", "unsupported"] : ["menu", "choice", "outcome", "unsupported"];
+          ? ["save", "outcome", "unsupported"] : context.workflow === "patientUpdate" ? ["save", "outcome", "unsupported"] : ["menu", "choice", "outcome", "unsupported"];
   const stages = phase === "listExistingAppointments" || phase === "chooseExistingAppointment" ? ["targets", null]
     : phase === "listNewTimes" || phase === "chooseNewTime" || phase === "choosePractitioner" ? ["practitioners", "offers", null] : [null];
   return { ...schema, properties: { ...schema.properties,
     kind: { type: "string", enum: [...kinds, "staffRequest", "staffOutcome", "faq", "urgent", "notificationOutcome", "identityDisagreement", "sharedPhone", "minorIntake", "proxyPatient", "jointPractitioners", "groupClass", "bookingHorizon", "presence", "missedCall", ...publicInformationTopics, ...staffRequestSubjects] },
     operation: { type: ["string", "null"], enum: context.workflow === null || context.workflow === "appointments.read"
-      ? ["book", "cancel", "reschedule", "intake", "appointments.read", null] : [null] },
+      ? ["book", "cancel", "reschedule", "intake", "patientUpdate", "appointments.read", null] : [null] },
     stage: { type: ["string", "null"], enum: stages },
     choice: { type: ["integer", "null"], enum: kinds.includes("choice") || hasPublicFacts ? [1, 2, 3, null] : [null] },
   } };
@@ -118,7 +119,7 @@ async function boundedResponse(response: Response): Promise<Decision | undefined
   let decision: Record<string, unknown> | undefined;
   try { decision = record(JSON.parse(content.text)); } catch { return undefined; }
   if (!decision || Object.keys(decision).sort().join(",") !== "choice,from,kind,operation,stage,to" ||
-      typeof decision.kind !== "string" || !["book", "cancel", "reschedule", "intake", "appointments.read", null].includes(decision.operation as string | null) ||
+      typeof decision.kind !== "string" || !["book", "cancel", "reschedule", "intake", "patientUpdate", "appointments.read", null].includes(decision.operation as string | null) ||
       !["targets", "practitioners", "offers", null].includes(decision.stage as string | null) ||
       !(decision.from === null || typeof decision.from === "string") || !(decision.to === null || typeof decision.to === "string") ||
       ![1, 2, 3, null].includes(decision.choice as number | null)) return undefined;
@@ -174,6 +175,10 @@ async function mapDecision(decision: Decision, context: Context, today: number, 
     const draftRef = owner.intakeDraftRef;
     return draftRef ? ok({ kind: "intake", draftRef }) : err(unavailable);
   }
+  if (decision.kind === "save" && none && context.workflow === "patientUpdate" && !context.lastAction) {
+    const correctionRef = owner.patientCorrectionRef;
+    return correctionRef ? ok({ kind: "patientCorrection", correctionRef }) : err(unavailable);
+  }
   if (decision.kind === "menu" && decision.operation === null && decision.choice === null &&
       dates(context.workflow === "book" || context.workflow === "intake" ? context.maxBookingSearchDays ?? 7 : 7)) {
     if ((context.workflow === "book" || (context.workflow === "intake" && context.lastAction?.kind === "intake" && context.lastAction.status === "committed")) &&
@@ -219,10 +224,21 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     if (explicitUrgentRequest(turn.text)) return ok({ kind: "handoff", reason: "potentiallyUrgent", staffWorkUnavailable: true, checkedAt: before.now });
     if (isPresenceQuestion(turn.text)) return ok({ kind: "presence" });
     if (isMissedCallQuestion(turn.text)) return ok({ kind: "missedCall" });
+    if (/\bmy card number is\b/i.test(turn.text)) return ok({ kind: "clarify", reason: "paymentEvidenceUnavailable" });
     const financial = financialEvidenceLanguage(turn.text);
     // Active private message questions use the existing draft question fence;
     // explicit card-number disclosure must never become message content.
     if (financial && (!config.owner.collectingStaffMessage || /\bmy card number is\b/i.test(turn.text))) return ok({ kind: "clarify", reason: financial });
+    // Contact values supplied alongside an explicit correction request never go to the public model.
+    if (!before.callerIdentityDenied && /\b(?:change|correct|update)\b.{0,48}\b(?:my (?:email|address|name|phone|date of birth|postcode)|patient details|contact details)\b/i.test(turn.text) &&
+        !/\b(?:not|don't|do not|someone else|daughter|son|husband|wife)\b/i.test(turn.text)) {
+      return ok(before.workflow === null || before.workflow === "appointments.read" ? { kind: "workflow", operation: "patientUpdate" } : { kind: "clarify", reason: "menuUnavailable" });
+    }
+    if (before.workflow === "patientUpdate" && /^(?:please )?(?:prepare|save|review)(?: the| my)? correction[.!]?$/i.test(turn.text.trim())) {
+      if (before.lastAction && ["dispatched", "committed", "uncertain", "needsReview"].includes(before.lastAction.status)) return ok({ kind: "outcome" });
+      const correctionRef = config.owner.patientCorrectionRef;
+      return ok(correctionRef ? { kind: "patientCorrection", correctionRef } : { kind: "clarify", reason: "menuUnavailable" });
+    }
     const boundary = before.callerIdentityDenied ? undefined : requestBoundaryLanguage(turn.text);
     // A bare external-change claim cannot silently replace a private draft.
     // Explicit message prefixes still keep literal message content private.
@@ -365,6 +381,7 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
             "In phase listNewTimes, a caller asking for move times on an explicit date is kind menu stage offers with that date in from/to. In chooseNewTime, a numbered new time is kind choice stage offers. Do not return unsupported for these clear in-phase requests.",
             "When workflow is cancel, appointments lists current appointments with dates; cancel requests the previously selected appointment. Operation and stage must be null.",
             "When workflow is appointments.read, a request to list appointments or ask when the next visit is uses kind appointments. If no dates are supplied, all other fields are null: the owner supplies the clinic-approved upcoming range. Explicit dates use from/to. A request not to change an appointment is still a read, never cancellation. An explicit new booking/cancellation/move request uses workflow and its operation and requires separate verification; no read proof authorizes it.",
+            "An existing patient requesting corrections to their own contact or identity details uses workflow patientUpdate. Values are collected by the separate private input owner; never collect, repeat, infer or include those values in public output. When workflow is patientUpdate, save requests preparation of the privately collected correction for a separate confirmation, and outcome asks what happened. It never authorizes an immediate update, appointment change, refund or email delivery.",
             "When workflow is intake, save requests registration after separately collected private details; after saved registration menu and choice handle booking. Outcome asks whether the last action succeeded.",
             "If lastAction is present and the caller asks whether it worked, succeeded, was booked, was canceled, moved or saved, return kind outcome with every other field null. The exact question 'Did that work?' is always outcome, never unsupported.",
             "An exact yes is handled by the trusted call owner before this model request. Do not classify confirmation here.",

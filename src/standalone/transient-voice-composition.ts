@@ -35,6 +35,8 @@ import { ClinikoCallFlow } from "./cliniko-call-flow.ts";
 import { PrivateWorkflowKeypad } from "./private-workflow-keypad.ts";
 import { OwnerFileClinicFAQs } from "./owner-file-clinic-faqs.ts";
 import { PrivateIntakeVoiceInput } from "./private-intake-voice-input.ts";
+import { PrivatePatientCorrectionInput } from "./private-patient-correction-input.ts";
+import { PrivatePatientVoiceInput } from "./private-patient-voice-input.ts";
 import { ClinikoLocationServiceDirectory } from "./cliniko-location-service-directory.ts";
 import type { OwnerFileServiceCatalogue } from "./owner-file-service-catalogue.ts";
 
@@ -51,6 +53,7 @@ export type ClinikoVoiceWorkflow = Readonly<{
   intent(owner: ClinikoCallFlow): IntentResolver;
   /** A separate approved adapter for registration fields; it is never used during code entry. */
   privateIntakeTranscription?: (sessionId: string) => TranscriptionPort;
+  privateCorrectionTranscription?: (sessionId: string) => TranscriptionPort;
 }>;
 
 export type TransientVoiceConfig = Readonly<{
@@ -153,12 +156,17 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
   let verifiedRead: VerifiedAppointmentReadSession | undefined;
   let workflow: ClinikoCallFlow | undefined;
   let voice: VoiceSession | undefined;
-  const privatePresentation = { play: (text: string, signal: AbortSignal) => voice?.presentPrivateIntake(text, signal, now()) ?? Promise.resolve(false) };
+  const privatePresentation = { play: (text: string, signal: AbortSignal) => (workflow?.workflow === "patientUpdate"
+    ? voice?.presentPrivateCorrection(text, signal, now()) : voice?.presentPrivateIntake(text, signal, now())) ?? Promise.resolve(false) };
   const privateBinding = { callId: callIdFor(config.stream.event.key), sessionId, owner: () => workflow };
-  const privateInput = config.clinicalWorkflow?.privateIntakeTranscription ? new PrivateIntakeVoiceInput({ ...privateBinding,
+  const ordinaryPrivateInput = config.clinicalWorkflow?.privateIntakeTranscription ? new PrivateIntakeVoiceInput({ ...privateBinding,
     phone: config.stream.event.presentedCallerNumber ?? "", present: privatePresentation.play, signal: lifetime.signal,
     transcriptionFactory: config.clinicalWorkflow.privateIntakeTranscription, ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}) }) :
     config.clinicalWorkflow ? new PrivateWorkflowKeypad(privateBinding) : undefined;
+  const privateInput = config.clinicalWorkflow?.privateCorrectionTranscription && ordinaryPrivateInput
+    ? new PrivatePatientVoiceInput(() => workflow, ordinaryPrivateInput, new PrivatePatientCorrectionInput({ ...privateBinding,
+      present: privatePresentation.play, signal: lifetime.signal, transcriptionFactory: config.clinicalWorkflow.privateCorrectionTranscription,
+      ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}) })) : ordinaryPrivateInput;
   let call: TwilioConnectedCall | undefined = new TwilioConnectedCall({
     event: config.stream.event, streamStartedAt: config.stream.streamStartedAt,
     sessionId, ledger, intake, speech: config.voiceProfiles, send: config.send, now,

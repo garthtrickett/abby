@@ -20,7 +20,7 @@ type Message = { kind: string; text?: string; method?: string; path?: string; bo
   stage?: "fixtureProcessKilled" | "runnerStartupUnavailable";
   locations?: readonly { scope: LocationScope; policyVersion: string; businessId: string }[];
   messages?: number; envelopeMatches?: boolean; codeMatches?: boolean; email?: string; code?: string; scope?: LocationScope; policyVersion?: string; operation?: string; allowed?: boolean; accepted?: boolean; verified?: boolean };
-export type ClinicalRunnerOperation = "book" | "cancel" | "reschedule" | "intake" | "appointments.read" | "staff.request";
+export type ClinicalRunnerOperation = "book" | "cancel" | "reschedule" | "intake" | "patientUpdate" | "appointments.read" | "staff.request";
 
 /** Actual compiled runner in a separate process and database. All network
  * providers are fixtures; private caller material is kept in this test memory. */
@@ -123,6 +123,8 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
     };
     await mark();
     return { child, messages, output, scope, locations, db, mark, say, media, close, signedWebhook,
+      async keypad(entry: string) { for (const digit of entry) send({ event: "dtmf", dtmf: { track: "inbound_track", digit } }); },
+      async quietAfterPrivateInput() { for (let i = 0; i < 40; i++) { media(false); await new Promise<void>(resolve => setTimeout(resolve, 20)); } },
       get spoken() { return messages.filter(m => m.kind === "speech").map(m => m.text!); },
       get mutations() { return messages.filter(m => m.kind === "providerMutation"); },
       async digit(digit: string) { const before = count("speech"); send({ event: "dtmf", dtmf: { track: "inbound_track", digit } });

@@ -152,7 +152,7 @@ export class ClinikoPatientCorrectionSession extends NoStoredKnowledge implement
     return { scope: { ...c.receipt.scope }, callId: c.receipt.callId, sessionId: c.sessionId, patientId: subject.patientRef,
       policyVersion: c.policyVersion, verificationRef: subject.verificationRef };
   }
-  async begin(): Promise<Result<Readonly<{ consentRef: string }>, Failure>> {
+  async begin(): Promise<Result<Readonly<{ consentRef: string; allowedFields: readonly import("../cliniko/patient-details.ts").PatientDetailField[] }>, Failure>> {
     if (this.#busy || this.#terms || this.#attempted) return err({ kind: "patientCorrectionUnavailable" });
     this.#busy = true;
     try {
@@ -161,10 +161,11 @@ export class ClinikoPatientCorrectionSession extends NoStoredKnowledge implement
         this.#subject = subject;
         const approval = await this.#config.policy.current(subject.scope, signal); if (!approval.ok) return undefined;
         if (await this.#config.presentation.play(`${approval.value.privacyTerms.approvedText} ${approval.value.correctionTerms.approvedText}`, signal) !== true || !await this.#currentSubject(signal)) return undefined;
-        return { consentRef: randomUUID(), privacyVersion: approval.value.privacyTerms.version, correctionVersion: approval.value.correctionTerms.version };
+        return { consentRef: randomUUID(), privacyVersion: approval.value.privacyTerms.version, correctionVersion: approval.value.correctionTerms.version,
+          allowedFields: [...approval.value.allowedFields] };
       });
       if (!terms || this.#lifetime.signal.aborted) return err({ kind: "patientCorrectionUnavailable" });
-      this.#terms = terms; return ok({ consentRef: terms.consentRef });
+      this.#terms = terms; return ok({ consentRef: terms.consentRef, allowedFields: [...terms.allowedFields] });
     } finally { this.#busy = false; }
   }
   async acknowledge(ref: string, accepted: boolean): Promise<boolean> {

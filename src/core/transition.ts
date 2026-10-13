@@ -569,7 +569,7 @@ function recordHostResult(state: CallState, effectId: string, receipt: import(".
 export function transition(current: CallState, action: TransitionAction): Result<CallState, TransitionFailure> {
   if ("now" in action && action.now !== undefined && !Number.isFinite(Date.parse(action.now))) return err({ kind: "invalidTransition" });
   if (current.callerIdentityDenied && ["markHostPossiblySent", "markStaffPossiblySent", "markStaffChangePossiblySent",
-    "markNotificationPossiblySent", "markOperatorAlertPossiblySent", "transferPossiblySent", "privateIntakePrompt"].includes(action.kind))
+    "markNotificationPossiblySent", "markOperatorAlertPossiblySent", "transferPossiblySent", "privateIntakePrompt", "privateCorrectionPrompt"].includes(action.kind))
     return err({ kind: "invalidTransition" });
   const state = structuredClone(current);
   const now = "now" in action && action.now !== undefined ? action.now : new Date(0).toISOString();
@@ -664,11 +664,14 @@ export function transition(current: CallState, action: TransitionAction): Result
       cancelModelWork(state);
       break;
     }
-    case "privateIntakePrompt": {
+    case "privateIntakePrompt":
+    case "privateCorrectionPrompt": {
       const lease = state.sessionLease;
       if (state.lifecycle !== "active" || !state.admission || !lease || lease.sessionId !== action.sessionId ||
           Date.parse(action.now) >= Date.parse(lease.expiresAt) || !state.policy.automationEnabled ||
-          state.policy.capabilities.intake !== "execute" || state.policy.firstTimeIntakeEnabled !== true) return err({ kind: "leaseLost" });
+          (action.kind === "privateIntakePrompt"
+            ? state.policy.capabilities.intake !== "execute" || state.policy.firstTimeIntakeEnabled !== true
+            : state.policy.capabilities.patientUpdate !== "execute" || state.policy.patientCorrectionsEnabled !== true)) return err({ kind: "leaseLost" });
       if (!/^[a-f0-9-]{36}$/.test(action.presentationId) || state.pendingPresentationId || state.presentations[action.presentationId] ||
           Object.values(state.presentations).some(item => item.status === "started" || item.status === "possiblySent")) return err({ kind: "invalidTransition" });
       state.presentations[action.presentationId] = { kind: "notice", id: action.presentationId, approvedText: "", status: "pending" };
