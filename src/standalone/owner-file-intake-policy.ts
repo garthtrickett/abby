@@ -1,4 +1,4 @@
-import { validClinikoIntakeDraft } from "../cliniko/patient-intake.ts";
+import { clinikoIntakeAdditionalFields, validClinikoIntakeDraft } from "../cliniko/patient-intake.ts";
 import type { ClinikoIntakeDraft } from "../cliniko/patient-intake.ts";
 import { normalizePatientPhone } from "../cliniko/phone-number.ts";
 import { err, ok } from "../core/model.ts";
@@ -14,6 +14,7 @@ export const callerMediatedRecoveryText = "If this call or connection fails, you
 
 export const intakeRequiredFields = Object.freeze(["firstName", "lastName", "email", "dateOfBirth", "patientPhone", "phoneType"] as const);
 type Terms = Readonly<{ version: string; approvedText: string }>;
+export const intakeAllowedFields = Object.freeze([...intakeRequiredFields, ...clinikoIntakeAdditionalFields] as const);
 export type IntakeApproval = ClinicApproval & Readonly<{
   policyVersion: string; intakeVersion: string; businessId: string; credentialFingerprint: string;
   countryCallingCode: string; timeZone: string; operation: "patients.intake";
@@ -21,7 +22,7 @@ export type IntakeApproval = ClinicApproval & Readonly<{
   leapDayBirthday: "march1"; callerPhone: "admittedCallerOnly"; verificationMethod: "prospectiveEmailOtp";
   patientPermission: "independentClinicHost"; duplicatePolicy: "exactEmailAndBirthDateDenyCandidates";
   recoveryContract: "callerMediated"; recoveryTerms: Terms;
-  requiredFields: readonly (typeof intakeRequiredFields)[number][]; privacyTerms: Terms; intakeTerms: Terms;
+  requiredFields: readonly (typeof intakeAllowedFields)[number][]; privacyTerms: Terms; intakeTerms: Terms;
 }>;
 export type IntakePolicyBinding = Pick<IntakeApproval, "scope" | "policyVersion" | "intakeVersion" | "businessId" |
   "credentialFingerprint" | "countryCallingCode" | "timeZone">;
@@ -52,6 +53,7 @@ function decode(value: unknown, bound: LocationScope): IntakeApproval | undefine
     "countryCallingCode", "timeZone", "operation", "callerEligibility", "minors", "representatives", "minimumAgeYears", "leapDayBirthday",
     "callerPhone", "verificationMethod", "patientPermission", "duplicatePolicy", "requiredFields", "privacyTerms", "intakeTerms", "recoveryContract", "recoveryTerms"]);
   if (!common || !record(value)) return undefined;
+  const requiredFields = value.requiredFields;
   if (!approvalRef(value.policyVersion) || typeof value.intakeVersion !== "string" || !/^[1-9][0-9]*$/.test(value.intakeVersion) ||
       !Number.isSafeInteger(Number(value.intakeVersion)) || !validClinikoId(value.businessId) ||
       typeof value.credentialFingerprint !== "string" || !/^[0-9a-f]{64}$/.test(value.credentialFingerprint) ||
@@ -61,8 +63,9 @@ function decode(value: unknown, bound: LocationScope): IntakeApproval | undefine
       !Number.isSafeInteger(value.minimumAgeYears) || Number(value.minimumAgeYears) < 18 || Number(value.minimumAgeYears) > 120 ||
       value.leapDayBirthday !== "march1" || value.callerPhone !== "admittedCallerOnly" || value.verificationMethod !== "prospectiveEmailOtp" ||
       value.patientPermission !== "independentClinicHost" || value.duplicatePolicy !== "exactEmailAndBirthDateDenyCandidates" ||
-      !Array.isArray(value.requiredFields) || value.requiredFields.length !== intakeRequiredFields.length ||
-      new Set(value.requiredFields).size !== intakeRequiredFields.length || value.requiredFields.some(field => !intakeRequiredFields.includes(field)) ||
+      !Array.isArray(requiredFields) || requiredFields.length < intakeRequiredFields.length || requiredFields.length > intakeAllowedFields.length ||
+      new Set(requiredFields).size !== requiredFields.length || intakeRequiredFields.some(field => !requiredFields.includes(field)) ||
+      requiredFields.some(field => !intakeAllowedFields.includes(field)) ||
       !terms(value.privacyTerms) || !terms(value.intakeTerms) || value.recoveryContract !== "callerMediated" ||
       !terms(value.recoveryTerms) || value.recoveryTerms.approvedText !== callerMediatedRecoveryText) return undefined;
   try { new Intl.DateTimeFormat("en", { timeZone: value.timeZone }); } catch { return undefined; }
@@ -117,10 +120,11 @@ export class OwnerFileIntakePolicy {
     try {
       query = structuredClone(query);
       if (!record(query) || Object.keys(query).sort().join(",") !== "admittedCallerPhone,caller,draft,intakeAccepted,intakeTermsVersion,privacyAccepted,privacyTermsVersion,recoveryAccepted,recoveryTermsVersion,scope" || !scope(query.scope) ||
-          !record(query.draft) || Object.keys(query.draft).sort().join(",") !== [...intakeRequiredFields].sort().join(",") ||
+          !record(query.draft) ||
           !validClinikoIntakeDraft(query.draft) || query.caller !== "patient" || query.privacyAccepted !== true || query.intakeAccepted !== true || query.recoveryAccepted !== true) return err({ kind: "intakeDraftDenied" });
       const found = await this.current(query.scope, signal);
       if (!found.ok) return found;
+      if (Object.keys(query.draft).sort().join(",") !== [...found.value.requiredFields].sort().join(",")) return err({ kind: "intakeDraftDenied" });
       const approval = found.value, now = approvalInstant((this.#config.clock ?? (() => new Date().toISOString()))());
       if (now === undefined || now < Date.parse(approval.effectiveFrom) || now >= Date.parse(approval.effectiveUntil) || signal?.aborted) {
         return err({ kind: "intakePolicyUnavailable" });

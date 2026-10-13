@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { clinikoIntakeDraftDigest, validClinikoIntakeRequest } from "../cliniko/patient-intake.ts";
+import { clinikoIntakePrivateDraft, clinikoIntakeDraftDigest, validClinikoIntakeDraft, validClinikoIntakeRequest } from "../cliniko/patient-intake.ts";
 import type { ClinikoIntakeAttestation, ClinikoIntakeAuthority, ClinikoIntakeDraft, ClinikoIntakeRequest } from "../cliniko/patient-intake.ts";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
@@ -133,6 +133,7 @@ export class TransientIntakeAuthority implements ClinikoIntakeAuthority {
       ? Date.parse(evidence.expiresAt) : NaN;
     return !!evidence && validScope(evidence.scope) && sameScope(evidence.scope, this.#scope) &&
       evidence.draft !== null && typeof evidence.draft === "object" && !Array.isArray(evidence.draft) &&
+      validClinikoIntakeDraft(clinikoIntakePrivateDraft(evidence.draft)) &&
       evidence.callId === this.#callId && evidence.sessionId === this.#sessionId &&
       evidence.policyVersion === this.#policyVersion && evidence.draftRef === refs.draftRef &&
       evidence.consentRef === refs.consentRef && evidence.authorityRef === refs.authorityRef &&
@@ -159,9 +160,7 @@ export class TransientIntakeAuthority implements ClinikoIntakeAuthority {
       if (!this.#validEvidence(evidence, { draftRef, consentRef, authorityRef })) return err({ kind: "denied" });
       const request: ClinikoIntakeRequest = { scope: this.#scope, callId: this.#callId,
         sessionId: this.#sessionId, attemptRef: randomUUID(), policyVersion: this.#policyVersion,
-        firstName: evidence.draft.firstName, lastName: evidence.draft.lastName, email: evidence.draft.email,
-        dateOfBirth: evidence.draft.dateOfBirth, patientPhone: evidence.draft.patientPhone,
-        phoneType: evidence.draft.phoneType, caller: evidence.caller, consentRef, authorityRef };
+        ...clinikoIntakePrivateDraft(evidence.draft), caller: evidence.caller, consentRef, authorityRef };
       if (!validClinikoIntakeRequest(request)) return err({ kind: "denied" });
       const pending: Pending = { request: structuredClone(request), draftRef,
         digest: clinikoIntakeDraftDigest(request) };
@@ -191,9 +190,9 @@ export class TransientIntakeAuthority implements ClinikoIntakeAuthority {
         !this.#validEvidence(evidence, { draftRef: pending.draftRef,
           consentRef: request.consentRef, authorityRef: request.authorityRef }) ||
         evidence.caller !== request.caller) return null;
-    const refreshed: ClinikoIntakeRequest = { ...request,
-      firstName: evidence.draft.firstName, lastName: evidence.draft.lastName, email: evidence.draft.email,
-      dateOfBirth: evidence.draft.dateOfBirth, patientPhone: evidence.draft.patientPhone, phoneType: evidence.draft.phoneType };
+    const refreshed: ClinikoIntakeRequest = { scope: request.scope, callId: request.callId, sessionId: request.sessionId,
+      attemptRef: request.attemptRef, policyVersion: request.policyVersion, caller: request.caller,
+      consentRef: request.consentRef, authorityRef: request.authorityRef, ...clinikoIntakePrivateDraft(evidence.draft) };
     if (!validClinikoIntakeRequest(refreshed) ||
         clinikoIntakeDraftDigest(refreshed) !== pending.digest) return null;
     if (this.#sendClaimed) return null;

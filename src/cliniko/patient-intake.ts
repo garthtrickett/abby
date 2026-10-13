@@ -12,10 +12,17 @@ export type ClinikoIntakeConfig = ClinikoPatientConfig & Readonly<{
   countryCallingCode: string;
 }>;
 export type ClinikoIntakeOptions = Readonly<{ signal?: AbortSignal; timeoutMs?: number }>;
+export const clinikoIntakeAdditionalFields = ["address1", "address2", "address3", "city", "state", "postCode", "countryCode"] as const;
+export type ClinikoIntakeAdditionalField = typeof clinikoIntakeAdditionalFields[number];
+const additionalNativeFields = { address1: "address_1", address2: "address_2", address3: "address_3", city: "city",
+  state: "state", postCode: "post_code", countryCode: "country_code" } as const;
+const draftFields = ["firstName", "lastName", "email", "dateOfBirth", "patientPhone", "phoneType", ...clinikoIntakeAdditionalFields];
+const requestFields = [...draftFields, "scope", "callId", "sessionId", "attemptRef", "policyVersion", "caller", "consentRef", "authorityRef"];
+
 export type ClinikoIntakeDraft = Readonly<{
   firstName: string; lastName: string; email: string; dateOfBirth: string;
   patientPhone: string; phoneType: "Mobile" | "Home" | "Work";
-}>;
+}> & Readonly<Partial<Record<ClinikoIntakeAdditionalField, string>>>;
 
 /** Provider edge only. The caller runtime does not construct this adapter. */
 export type ClinikoIntakeRequest = ClinikoIntakeDraft & Readonly<{
@@ -86,7 +93,7 @@ function validName(value: unknown, max: number): value is string {
 export function validClinikoIntakeRequest(value: unknown): value is ClinikoIntakeRequest {
   const request = record(value);
   const scope = record(request?.scope);
-  return !!request && !!scope && [scope.tenantId, scope.clinicId, scope.locationId].every(value =>
+  return !!request && Object.keys(request).every(key => requestFields.includes(key)) && !!scope && [scope.tenantId, scope.clinicId, scope.locationId].every(value =>
     typeof value === "string" && value.trim().length > 0 && value.length <= 256) &&
     typeof request.callId === "string" && refPattern.test(request.callId) &&
     typeof request.sessionId === "string" && refPattern.test(request.sessionId) &&
@@ -94,13 +101,15 @@ export function validClinikoIntakeRequest(value: unknown): value is ClinikoIntak
     typeof request.policyVersion === "string" && refPattern.test(request.policyVersion) &&
     (request.caller === "patient" || request.caller === "proxy") &&
     typeof request.consentRef === "string" && refPattern.test(request.consentRef) &&
-    typeof request.authorityRef === "string" && refPattern.test(request.authorityRef) && validClinikoIntakeDraft(request);
+    typeof request.authorityRef === "string" && refPattern.test(request.authorityRef) && validClinikoIntakeDraft(clinikoIntakePrivateDraft(request as unknown as ClinikoIntakeDraft));
 }
 
 /** Shared provider-field validation; it supplies no caller consent or permission. */
 export function validClinikoIntakeDraft(value: unknown): value is ClinikoIntakeDraft {
   const request = record(value);
-  return !!request && validName(request.firstName, 50) && validName(request.lastName, 255) &&
+  return !!request && Object.keys(request).every(key => draftFields.includes(key)) &&
+    clinikoIntakeAdditionalFields.every(field => !Object.hasOwn(request, field) || validName(request[field], 255) && !/[\p{Cc}\p{Cf}]/u.test(request[field] as string) &&
+      (field !== "countryCode" || /^[A-Z]{2}$/.test(request[field] as string))) && validName(request.firstName, 50) && validName(request.lastName, 255) &&
     typeof request.email === "string" && request.email.length <= 254 && emailPattern.test(request.email) &&
     validDate(request.dateOfBirth) && typeof request.patientPhone === "string" &&
     request.patientPhone.length > 0 && request.patientPhone.length <= 50 &&
@@ -108,11 +117,23 @@ export function validClinikoIntakeDraft(value: unknown): value is ClinikoIntakeD
     (request.phoneType === "Mobile" || request.phoneType === "Home" || request.phoneType === "Work");
 }
 
+/** Rebuild a private draft from its allowlisted fields; removed optional fields cannot survive a refresh. */
+export function clinikoIntakePrivateDraft(input: ClinikoIntakeDraft): ClinikoIntakeDraft {
+  return { firstName: input.firstName, lastName: input.lastName, email: input.email, dateOfBirth: input.dateOfBirth,
+    patientPhone: input.patientPhone, phoneType: input.phoneType,
+    ...Object.fromEntries(clinikoIntakeAdditionalFields.filter(field => Object.hasOwn(input, field)).map(field => [field, input[field]])) };
+}
+function additionalBody(input: ClinikoIntakeDraft): Record<string, string> {
+  return Object.fromEntries(clinikoIntakeAdditionalFields.filter(field => Object.hasOwn(input, field))
+    .map(field => [additionalNativeFields[field], input[field]!])) as Record<string, string>;
+}
+
 /** Transient digest lets the host attest to every field that will enter Cliniko. */
 export function clinikoIntakeDraftDigest(request: ClinikoIntakeRequest): string {
   return createHash("sha256").update(JSON.stringify([
     request.firstName, request.lastName, request.email, request.dateOfBirth,
     request.patientPhone, request.phoneType,
+    ...(clinikoIntakeAdditionalFields.some(field => Object.hasOwn(request, field)) ? [additionalBody(request)] : []),
   ])).digest("hex");
 }
 
@@ -244,6 +265,7 @@ export class ClinikoPatientIntakeEdge {
     return !!row && typeof row.id === "string" && idPattern.test(row.id) && (expectedId === undefined || row.id === expectedId) &&
       row.first_name === input.firstName && row.last_name === input.lastName && typeof row.email === "string" &&
       row.email.toLowerCase() === input.email.toLowerCase() && row.date_of_birth === input.dateOfBirth &&
+      Object.entries(additionalBody(input)).every(([field, value]) => row[field] === value) &&
       row.accepted_privacy_policy === true && row.archived_at === null && !!phone && phone.phone_type === input.phoneType &&
       typeof phone.number === "string" && normalizePatientPhone(phone.number, this.countryCallingCode) ===
       normalizePatientPhone(input.patientPhone, this.countryCallingCode);
@@ -274,7 +296,7 @@ export class ClinikoPatientIntakeEdge {
         body: JSON.stringify({ first_name: input.firstName, last_name: input.lastName,
           date_of_birth: input.dateOfBirth, email: input.email,
           patient_phone_numbers: [{ number: input.patientPhone, phone_type: input.phoneType }],
-          accepted_privacy_policy: true }),
+          ...additionalBody(input), accepted_privacy_policy: true }),
         redirect: "error", signal,
       }), signal);
       if (!received || signal.aborted) return ok({ kind: "uncertain" });

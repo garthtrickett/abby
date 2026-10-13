@@ -10,7 +10,7 @@ import { join } from "node:path";
 import type { VoiceRunnerPorts } from "../../scripts/serve-cliniko-voice.ts";
 import { serveClinikoVoice } from "../../scripts/serve-cliniko-voice.ts";
 import { ClinikoVoiceClinicalHost } from "../../src/standalone/cliniko-voice-clinical-host.ts";
-import { OwnerFileIntakePolicy } from "../../src/standalone/owner-file-intake-policy.ts";
+import { intakeAllowedFields, OwnerFileIntakePolicy } from "../../src/standalone/owner-file-intake-policy.ts";
 import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 import { err, ok } from "../../src/core/model.ts";
 import { bookingCallFlowFixture, cancellationCallFlowFixture, reschedulingCallFlowFixture, intakeCallFlowFixture } from "./cliniko-call-flow.ts";
@@ -32,6 +32,8 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     !["book", "cancel", "reschedule", "intake", "patientUpdate", "appointments.read", "staff.request"].includes(operation ?? "")) {
   throw new Error("synthetic clinical runner requires an isolated fixture");
 }
+const intakeFields = process.env.ABBY_SYNTHETIC_INTAKE_FIELDS === "1";
+if (intakeFields && operation !== "intake") throw new Error("invalid synthetic intake field mode");
 const services = process.env.ABBY_SYNTHETIC_SERVICE_MODE === "1", smtpMode = process.env.ABBY_SYNTHETIC_SMTP_MODE === "1";
 if (services && !["book", "intake"].includes(operation!) || process.env.ABBY_SYNTHETIC_SERVICE_MODE && !services || process.env.ABBY_SYNTHETIC_SMTP_MODE && !smtpMode) throw new Error("invalid synthetic integration mode");
 const multiLocation = process.env.ABBY_SYNTHETIC_LOCATION_MODE === "1";
@@ -58,6 +60,10 @@ if (locationFixture && operation === "book") {
   config.policyVersion = resultValue(await config.policies.read(locationFixture.south.scope)).policyVersion;
 }
 const c = f.flowConfig;
+if (intakeFields) {
+  const path = join(f.folder, "intake.json"), approval = JSON.parse(await readFile(path, "utf8"));
+  await writeFile(path, JSON.stringify({ ...approval, requiredFields: [...intakeAllowedFields] }), { mode: 0o600 });
+}
 let mediaElapsedMs = 0;
 const now = () => new Date(Date.parse(c.clock!()) + mediaElapsedMs).toISOString();
 const apiKey = process.env.ABBY_CLINIKO_API_KEY!, fingerprint = clinikoCredentialFingerprint(apiKey);
@@ -90,7 +96,7 @@ for (const path of approvalPaths) {
 }
 }
 const publicInputs: string[] = [], privateInputs: string[] = [];
-let denied = false, lostWrite = false, mailLost = false, mutatePolicy = false;
+let denied = false, lostWrite = false, mailLost = false, mutatePolicy = false, intakeFieldMismatch = false;
 let readCorrectionStatus: (() => Promise<string | undefined>) | undefined;
 process.on("message", message => {
   if (!message || typeof message !== "object" || !("kind" in message)) return;
@@ -101,6 +107,7 @@ process.on("message", message => {
     void readCorrectionStatus().then(actionStatus => process.send?.({ kind: "correctionState", actionStatus }))
       .catch(() => process.send?.({ kind: "correctionState", actionStatus: "unavailable" }));
   }
+  if (message.kind === "mismatchIntakeField") intakeFieldMismatch = true;
   if (message.kind === "denyPermission") denied = true;
   if (message.kind === "loseWrite") lostWrite = true;
   if (message.kind === "loseMail") mailLost = true;
@@ -166,7 +173,7 @@ return async (value, init) => {
     if (lostWrite) throw new Error("synthetic unknown staff request write");
     return response;
   }
-  if (patient && method === "GET" && url.pathname === "/v1/patients/42") return Response.json(patient);
+  if (patient && method === "GET" && url.pathname === "/v1/patients/42") return Response.json(intakeFieldMismatch ? { ...patient, post_code: "inspection-mismatch" } : patient);
   if (method === "POST" && url.pathname === "/v1/patients") {
     const body = JSON.parse(String(init?.body)); patient = { ...body, id: "42", archived_at: null };
     process.send?.({ kind: "providerMutation", method, path: url.pathname, body });

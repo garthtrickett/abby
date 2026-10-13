@@ -1,3 +1,4 @@
+import { clinikoIntakeAdditionalFields } from "../cliniko/patient-intake.ts";
 import { randomUUID } from "node:crypto";
 import { ClinikoPatientIntakeEdge } from "../cliniko/patient-intake.ts";
 import type { ClinikoIntakeDraft, ClinikoIntakeRequest } from "../cliniko/patient-intake.ts";
@@ -153,7 +154,7 @@ export class ClinikoIntakeSession extends NoStoredKnowledge implements IntakeEvi
     return !signal.aborted && !this.#lifetime.signal.aborted && this.#draft === draft && this.#recoveryAccepted && this.#mail?.verified(draft.query.draft.email) === true;
   }
   /** Private presentation of approved public terms, before any patient draft is accepted. */
-  async begin(): Promise<Result<Readonly<{ recoveryRef: string }>, Failure>> {
+  async begin(): Promise<Result<Readonly<{ recoveryRef: string; requiredFields: readonly (typeof import("./owner-file-intake-policy.ts").intakeAllowedFields)[number][] }>, Failure>> {
     if (this.#busy || this.#recoveryRef || this.#attempted) return err({ kind: "intakeSessionUnavailable" });
     this.#busy = true;
     try {
@@ -163,10 +164,10 @@ export class ClinikoIntakeSession extends NoStoredKnowledge implements IntakeEvi
         if (!approval.ok || signal.aborted) return undefined;
         if (await this.#config.presentation.play(`${approval.value.privacyTerms.approvedText} ${approval.value.intakeTerms.approvedText} ${approval.value.recoveryTerms.approvedText}`, signal) !== true ||
             !await this.#ready(signal)) return undefined;
-        return randomUUID();
+        return { recoveryRef: randomUUID(), requiredFields: [...approval.value.requiredFields] };
       });
       if (!result || this.#lifetime.signal.aborted) return err({ kind: "intakeSessionUnavailable" });
-      this.#recoveryRef = result; return ok({ recoveryRef: result });
+      this.#recoveryRef = result.recoveryRef; return ok(result);
     } finally { this.#busy = false; }
   }
   /** A separate observed acknowledgment, never combined with final SAM affirmation or mailbox possession. */
@@ -193,8 +194,20 @@ export class ClinikoIntakeSession extends NoStoredKnowledge implements IntakeEvi
           privacyAccepted: consent.privacyAccepted, intakeAccepted: consent.intakeAccepted, recoveryAccepted: this.#recoveryAccepted,
           privacyTermsVersion: approval.value.privacyTerms.version, intakeTermsVersion: approval.value.intakeTerms.version, recoveryTermsVersion: approval.value.recoveryTerms.version };
         if (!(await this.#config.policy.checkDraft(query, signal)).ok || signal.aborted) return undefined;
-        const text = `Registration details: first name ${draft.firstName}; last name ${draft.lastName}; date of birth ${draft.dateOfBirth}; email ${draft.email}; phone ${draft.patientPhone}; phone type ${draft.phoneType}. Saving these does not book an appointment.`;
-        if (await this.#config.presentation.play(text, signal) !== true || !await this.#ready(signal)) return undefined;
+        const fields = [`first name ${draft.firstName}`, `last name ${draft.lastName}`, `date of birth ${draft.dateOfBirth}`,
+          `email ${draft.email}`, `phone ${draft.patientPhone}`, `phone type ${draft.phoneType}`,
+          ...clinikoIntakeAdditionalFields.filter(field => Object.hasOwn(draft, field)).map(field =>
+            `${field.replace(/([A-Z])/g, " $1").replace(/([1-3])$/, " line $1").toLowerCase()}: ${draft[field]}`)];
+        const chunks: string[] = []; let chunk = "";
+        for (const field of fields) {
+          if (chunk && chunk.length + field.length + 2 > 1800) { chunks.push(chunk); chunk = ""; }
+          chunk += `${chunk ? "; " : ""}${field}`;
+        }
+        if (chunk) chunks.push(chunk);
+        for (const details of chunks) {
+          if (await this.#config.presentation.play(`Registration details: ${details}. Saving these does not book an appointment.`, signal) !== true ||
+              !await this.#ready(signal)) return undefined;
+        }
         return { ref: randomUUID(), query: structuredClone(query) };
       });
       if (!result || this.#lifetime.signal.aborted) return err({ kind: "intakeSessionUnavailable" });
