@@ -1,0 +1,67 @@
+import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
+import type { ClinikoRequestBudget } from "../cliniko/read-budget.ts";
+import type { ClinikoSelectionApproval } from "../cliniko/catalogue-setup.ts";
+import type { ApprovedGreeting, LocationScope } from "../core/model.ts";
+import { validGreetingShape } from "../core/greeting.ts";
+import { sameScope } from "./appointment-change-authority.ts";
+import { ClinikoCallFlow } from "./cliniko-call-flow.ts";
+import type { ClinikoCallFlowConfig } from "./cliniko-call-flow.ts";
+import type { ClinikoVoiceWorkflow } from "./transient-voice-composition.ts";
+
+type CallOwned = "receipt" | "inbound" | "sessionId" | "ledger" | "signal" | "clock";
+export type ClinikoVoiceClinicalHostConfig = Omit<ClinikoCallFlowConfig, CallOwned | "intake"> & Readonly<{
+  scope: LocationScope;
+  greeting: ApprovedGreeting;
+  intake?: Omit<NonNullable<ClinikoCallFlowConfig["intake"]>, "presentation">;
+  intent: ClinikoVoiceWorkflow["intent"];
+  privateIntakeTranscription?: ClinikoVoiceWorkflow["privateIntakeTranscription"];
+}>;
+
+/** Clinic-owned clinical composition. A catalogue approval remains read-only:
+ * each session still checks separate caller, operation, policy and review authority.
+ * This host cannot change admission readiness or manufacture a verification result. */
+export class ClinikoVoiceClinicalHost {
+  readonly #config: ClinikoVoiceClinicalHostConfig;
+  constructor(config: ClinikoVoiceClinicalHostConfig) {
+    if (!validGreetingShape(config.greeting, config.scope) || typeof config.intent !== "function") {
+      throw new RangeError("invalid clinical voice host");
+    }
+    this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }),
+      greeting: Object.freeze(structuredClone(config.greeting)), cliniko: Object.freeze({ ...config.cliniko }),
+      approvals: Object.freeze({ ...config.approvals }),
+      ...(config.catalogue ? { catalogue: Object.freeze({ ...config.catalogue,
+        practitioners: Object.freeze(config.catalogue.practitioners.map(member => Object.freeze({ ...member }))) }) } : {}),
+      ...(config.intake ? { intake: Object.freeze({ ...config.intake }) } : {}),
+      ...(config.staff ? { staff: Object.freeze({ ...config.staff }) } : {}),
+      ...(config.enquiry ? { enquiry: Object.freeze({ ...config.enquiry }) } : {}) });
+  }
+  get greeting(): ApprovedGreeting { return structuredClone(this.#config.greeting); }
+  usesBudget(budget: ClinikoRequestBudget): boolean { return this.#config.cliniko.rateBudget === budget; }
+
+  /** Rechecked on webhook admission AND stream construction. A changed route,
+   * credential, policy, zone or cohort cannot silently reuse this host. */
+  matches(approval: ClinikoSelectionApproval): boolean {
+    const c = this.#config, p = approval.selection;
+    return sameScope(c.scope, approval.scope) && c.policyVersion === p.policyVersion &&
+      c.cliniko.businessId === p.businessId && c.cliniko.practitionerId === p.practitionerId &&
+      c.cliniko.appointmentTypeId === p.appointmentTypeId && c.cliniko.timeZone === approval.businessTimeZone &&
+      clinikoCredentialFingerprint(c.cliniko.apiKey) === approval.credentialFingerprint;
+  }
+  workflow(approval: ClinikoSelectionApproval): ClinikoVoiceWorkflow {
+    if (!this.matches(approval)) throw new RangeError("clinical voice host binding mismatch");
+    const c = this.#config;
+    const { intake, ...base } = c;
+    return { policies: c.policies, ...(c.publicKnowledge ? { publicKnowledge: c.publicKnowledge } : {}),
+      ...(c.privateIntakeTranscription ? { privateIntakeTranscription: c.privateIntakeTranscription } : {}),
+      intent: c.intent,
+      create(context) {
+        if (!sameScope(context.receipt.scope, c.scope)) {
+          throw new RangeError("clinical voice admission mismatch");
+        }
+        const flow = ClinikoCallFlow.create({ ...base, ...context, policyVersion: c.policyVersion,
+          ...(intake ? { intake: { ...intake, presentation: context.privatePresentation } } : {}) });
+        if (!flow.ok) throw new Error("clinical voice workflow unavailable");
+        return flow.value;
+      } };
+  }
+}
