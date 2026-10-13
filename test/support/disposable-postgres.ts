@@ -12,7 +12,7 @@ const execute = promisify(execFile);
 const docker = async (...args: string[]) => (await execute("docker", args, { timeout: 10_000, maxBuffer: 65_536 })).stdout.trim();
 
 /** Each case owns fresh PostgreSQL and a private socket; Docker leaves the browser's host network alone. */
-export async function withDisposablePostgres(run: (db: ReturnType<typeof connectPostgres>) => Promise<void>): Promise<void> {
+export async function withDisposablePostgres(run: (db: ReturnType<typeof connectPostgres>, connectionString: string) => Promise<void>): Promise<void> {
   const folder = await mkdtemp(join(tmpdir(), "abby-browser-pg-"));
   const socket = join(folder, "socket");
   let container: string | undefined;
@@ -25,7 +25,8 @@ export async function withDisposablePostgres(run: (db: ReturnType<typeof connect
       `type=bind,source=${socket},target=/tmp/abby-browser-socket`, "-e", "POSTGRES_HOST_AUTH_METHOD=trust",
       "--label", "abby.phase0.probe=true", "postgres:17-alpine", "postgres", "-c", "listen_addresses=",
       "-c", "unix_socket_directories=/var/run/postgresql,/tmp/abby-browser-socket");
-    db = connectPostgres(`postgresql://postgres@localhost:5432/postgres?host=${encodeURIComponent(socket)}`);
+    const connectionString = `postgresql://postgres@localhost:5432/postgres?host=${encodeURIComponent(socket)}`;
+    db = connectPostgres(connectionString);
     const deadline = Date.now() + 15_000;
     while (true) {
       try {
@@ -35,7 +36,7 @@ export async function withDisposablePostgres(run: (db: ReturnType<typeof connect
       }
       catch { if (Date.now() >= deadline) throw new Error("disposable PostgreSQL did not become ready"); await delay(50); }
     }
-    await migrate(db); await run(db);
+    await migrate(db); await run(db, connectionString);
   } catch (error) { originalFailure = error; throw error; }
   finally {
     const cleanupFailures: unknown[] = [];

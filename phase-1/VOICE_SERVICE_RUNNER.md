@@ -1,5 +1,36 @@
 # Local Cliniko voice service runner
 
+## Clinical host composition
+
+The exported `serveClinikoVoice` now accepts a deploying-host `clinicalHost`
+factory. It receives the runner's database, clinic scope, Cliniko credential,
+contact address and shared request budget. The returned `ClinikoVoiceClinicalHost`
+owns explicit operation approval paths, current policies, patient permission,
+verification delivery, patient lookup, model intent and any private intake
+transcription. It constructs `ClinikoCallFlow` only after signed admission and
+binds its ledger, session, cancellation signal and private playback to that call.
+
+The standalone server checks the clinical host against fresh catalogue approval
+at the webhook and again at stream construction: scope, policy version, primary
+business/practitioner/type, credential fingerprint and time zone must match.
+Its request budget must be the runner's shared budget. A changed approval denies
+admission rather than silently selecting another clinical cohort. Each clinical
+operation still checks its separate current approval and permission before any
+disclosure or write; the catalogue approval itself remains read-only.
+
+Clinical routes use the host's independently approved conversation greeting and
+private keypad verification, not the availability keypad menu. The conversation
+speech configuration has its own quality hash and must qualify independently.
+The existing default command-line launch supplies no clinical host and retains
+availability-only behaviour. Supplying a host does not change `/readyz`, signed
+test-caller restrictions, clinic readiness or production admission. The real
+sender, clinic staff acceptance, speech and carrier gates are still required.
+
+`test/voice/standalone-clinical-host.test.ts` extends E2E-299 to the actual
+standalone server, shared PostgreSQL budget and active-call claims. Its provider,
+permission, verification email and speech are patient-free fixtures. This is
+synthetic serving-path evidence, not live clinical activation.
+
 Run `npm run build:runtime` after installation or source changes. It emits separate JavaScript modules under `dist/runtime`; `npm run voice:local` and `npm run voice:test-policy` use those executables. Build once before starting or restarting the service. The modules retain the source entry-point checks and provider configuration. Synthetic subprocess tests build the same executables plus their guarded provider fixture with `npm run build:voice-tests`; direct focused Node test commands need that build first.
 
 `npm run voice:local` starts the standalone composition on `127.0.0.1:ABBY_VOICE_PORT`. It validates the route and provider configuration, verifies the PostgreSQL privacy boundary and active-call lock database, then exposes signed Twilio webhook and media paths. `GET /healthz` returns 200 only while PostgreSQL answers a probe; it is an operational liveness check. `GET /readyz` returns 503 while patient calls are disabled. Deployment routing must use readiness, not liveness, to decide whether to send calls. `SIGINT` and `SIGTERM` close active sockets and the database connection.

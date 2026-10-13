@@ -40,7 +40,8 @@ import type { OwnerFileServiceCatalogue } from "./owner-file-service-catalogue.t
 
 export type ClinikoVoiceWorkflow = Readonly<{
   /** A trusted host supplies current scoped activation evidence and settings. The runnable CLI
-   * leaves this entire seam unset while clinic, mail and speech activation remain unproven. */
+   * leaves this seam unset by default; a deploying host must provide it independently of
+   * catalogue settings while clinic, mail and speech activation remain unproven. */
   policies: PolicyStore;
   publicKnowledge?: OwnerFileClinicFAQs;
   create(context: Readonly<{ receipt: AdmissionReceipt; inbound: AuthenticatedInboundCall; sessionId: string;

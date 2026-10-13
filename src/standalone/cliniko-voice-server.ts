@@ -34,6 +34,7 @@ import { validKeypadGreetingText } from "./keypad-greeting.ts";
 import { StandaloneOperationalCounters } from "./operational-counters.ts";
 import type { OperationalCounterKind, OperationalCounterStore } from "../voice/operational-counts.ts";
 import { createStandaloneTransientVoiceCall } from "./transient-voice-composition.ts";
+import { ClinikoVoiceClinicalHost } from "./cliniko-voice-clinical-host.ts";
 
 type ClinikoVoiceRouteBase = Readonly<{
   dialedNumber: string;
@@ -45,6 +46,8 @@ type ClinikoVoiceRouteBase = Readonly<{
   keypadAvailabilityGreeting: ApprovedGreeting;
   /** Must agree with the approved keypad wording; absent means disabled. */
   sevenDayAvailabilityEnabled?: boolean;
+  /** Independently provisioned clinic host; does not grant admission readiness. */
+  clinicalHost?: ClinikoVoiceClinicalHost;
 }>;
 
 export type ClinikoVoiceRoute = ClinikoVoiceRouteBase & (
@@ -141,6 +144,10 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       throw new RangeError("invalid clinic voice route");
     }
     const greeting = route.keypadAvailabilityGreeting;
+    if (route.clinicalHost !== undefined && (!(route.clinicalHost instanceof ClinikoVoiceClinicalHost) ||
+        !route.clinicalHost.usesBudget(route.rateBudget))) {
+      throw new RangeError("invalid clinical voice host");
+    }
     if ((route.sevenDayAvailabilityEnabled !== undefined && typeof route.sevenDayAvailabilityEnabled !== "boolean") ||
         !validKeypadGreeting(greeting, route.scope, route.sevenDayAvailabilityEnabled === true)) {
       throw new RangeError("invalid keypad availability greeting");
@@ -173,6 +180,7 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       const result = await route.approval.readApprovedRoute(route.scope, binding);
       if (!result.ok) return null;
       const approval = result.value;
+      if (route.clinicalHost && !route.clinicalHost.matches(approval)) return null;
       const dynamic = isDynamicRoute(route);
       if (!isClinikoApprovalState({ version: 1, approval }) ||
           !approval.scope || approval.scope.tenantId !== route.scope.tenantId ||
@@ -231,7 +239,7 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     throw new RangeError("speech fallback deadline unavailable");
   }
   const voiceProfiles = config.voiceProfiles ?? new OpenAIVoiceProfileHost({ apiKey: openaiApiKey,
-    mode: "keypadAvailability", ...(config.transcriptionFactory ? { customTranscription: {
+    mode: [...routes.values()].some(route => route.clinicalHost) ? "conversation" : "keypadAvailability", ...(config.transcriptionFactory ? { customTranscription: {
       version: "host-transcription.v1", create: config.transcriptionFactory } } : {}), ...(config.openai.speechModel ? { primaryModel: config.openai.speechModel } : {}),
     ...(config.openai.speechFallbackModel ? { fallbackModel: config.openai.speechFallbackModel, primaryFirstChunkMs } : {}),
     runtime: { ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}), ...(playbackOptions ? { playbackOptions } : {}) },
@@ -280,11 +288,13 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       expectedPolicyVersion: approved.approval.selection.policyVersion,
       stream, send, closeTransport: close, voiceProfiles,
       availability,
-      approvedGreeting: route.keypadAvailabilityGreeting,
-      greetingValidator: greeting => validKeypadGreeting(greeting, route.scope,
-        route.sevenDayAvailabilityEnabled === true),
-      keypadAvailabilityRange: (digit: string) => keypadAvailabilityRange(approved.clinicDate, digit,
-        route.sevenDayAvailabilityEnabled === true),
+      approvedGreeting: route.clinicalHost?.greeting ?? route.keypadAvailabilityGreeting,
+      greetingValidator: greeting => route.clinicalHost
+        ? validGreetingShape(greeting, route.scope) && JSON.stringify(greeting) === JSON.stringify(route.clinicalHost.greeting)
+        : validKeypadGreeting(greeting, route.scope, route.sevenDayAvailabilityEnabled === true),
+      ...(route.clinicalHost ? { clinicalWorkflow: route.clinicalHost.workflow(approved.approval) } : {
+        keypadAvailabilityRange: (digit: string) => keypadAvailabilityRange(approved.clinicDate, digit,
+          route.sevenDayAvailabilityEnabled === true) }),
       resolveIntent: async (turn, signal) => {
         try {
           const result = await classifyIntent(turn, signal);

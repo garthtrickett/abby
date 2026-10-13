@@ -13,6 +13,8 @@ import { PostgresOperationalCounters } from "../src/storage/postgres-operational
 import type { ClinikoVoiceServerConfig } from "../src/standalone/cliniko-voice-server.ts";
 import { boundedHealthCheck } from "../src/standalone/bounded-health-check.ts";
 import { clinikoCredentialFingerprint } from "../src/cliniko/read-budget.ts";
+import type { ClinikoVoiceClinicalHost } from "../src/standalone/cliniko-voice-clinical-host.ts";
+import type { LocationScope } from "../src/core/model.ts";
 export { clinicDateAt } from "../src/standalone/clinic-clock.ts";
 
 function required(name: string): string {
@@ -39,7 +41,7 @@ function bindingKey(): Buffer {
   return Buffer.from(hex, "hex");
 }
 
-/** Test provider ports and an optional host-owned operational store. */
+/** Provider ports and independently provisioned clinic/operational hosts. */
 export type VoiceRunnerPorts = Readonly<{
   clinikoFetch?: typeof fetch;
   openaiFetch?: typeof fetch;
@@ -52,6 +54,10 @@ export type VoiceRunnerPorts = Readonly<{
   operationalCounters?: OperationalCounterStore;
   /** Synthetic provider selection for the isolated voice runner. */
   speechModels?: Readonly<{ primary: string; fallback?: string; primaryFirstChunkMs?: number }>;
+  /** Deployment host owns clinic approvals, verification delivery and permission.
+   * No environment flag or catalogue setting can supply this authority. */
+  clinicalHost?: (context: Readonly<{ db: ReturnType<typeof connectPostgres>; scope: LocationScope;
+    apiKey: string; contactEmail: string; rateBudget: PostgresClinikoRequestBudget }>) => ClinikoVoiceClinicalHost;
 }>;
 
 export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<void> {
@@ -110,6 +116,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       route: { accountRef: accountSid, dialedNumber, routeVersion },
       ...(ports.clinikoFetch ? { fetch: ports.clinikoFetch } : {}) });
     if (!configured.ok) throw new RangeError(`invalid Cliniko catalogue configuration: ${configured.error.kind}`);
+    const clinicalHost = ports.clinicalHost?.({ db, scope: Object.freeze({ ...scope }), apiKey, contactEmail, rateBudget });
     const prepared = await createStandaloneClinikoVoiceServer({ db,
       activeCallClaims: new PostgresActiveCallClaims(connectionString, key),
       twilio: { accountSid,
@@ -118,6 +125,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
         publicStreamUrl: required("ABBY_TWILIO_PUBLIC_STREAM_URL"),
         fallbackNumbers: { [dialedNumber]: fallbackNumber }, bindingKey: key },
       routes: [{ dialedNumber, scope, routeVersion,
+        ...(clinicalHost ? { clinicalHost } : {}),
         approval: configured.value.setup, rateBudget, credentialFingerprint: clinikoCredentialFingerprint(apiKey),
         availabilityForSelection: choice => {
           const reader = ClinikoAvailabilityReader.create({ scope, apiKey, rateBudget, contactEmail,

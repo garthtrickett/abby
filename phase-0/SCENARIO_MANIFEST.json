@@ -7,100 +7,508 @@
     "test/runner/ordered-node-e2e.test.ts": "nodeCoordinator"
   },
   "capabilityMappings": {
-    "calls.missedCall.respond.v1": ["E2E-325"],
-    "calls.presence.respond.v1": ["E2E-324", "E2E-329"],
-    "booking.horizon.read.v1": ["E2E-321"],
-    "calls.requestBoundary.respond.v1": ["E2E-320"],
-    "calls.callerIdentity.deny.v1": ["E2E-319"],
-    "calls.notifications.outcome.v1": ["E2E-318"],
-    "calls.urgent.respond.v1": ["E2E-317"],
-    "appointments.enquiry.start.v1": ["E2E-314"],
-    "appointments.enquiry.read.v1": ["E2E-314"],
-    "appointments.enquiry.select.v1": ["E2E-314"],
-    "staff.requests.prepare.v1": ["E2E-311", "E2E-323", "E2E-326"],
-    "staff.requests.outcome.v1": ["E2E-311", "E2E-323", "E2E-326"],
-    "rescheduling.menu.read.v1": ["E2E-289", "E2E-290", "E2E-312", "E2E-321", "E2E-324"],
-    "rescheduling.menu.select.v1": ["E2E-289", "E2E-290", "E2E-312", "E2E-324"],
-    "settings.read.v1": ["E2E-010", "E2E-260", "E2E-262"],
-    "settings.automation.enabled.change.v1": ["E2E-018", "E2E-223", "E2E-248", "E2E-249", "E2E-250", "E2E-251", "E2E-253"],
-    "settings.automation.audit.v1": ["E2E-018", "E2E-248"],
-    "calls.writes.stop.v1": ["E2E-074", "E2E-222", "E2E-226", "E2E-251", "E2E-253", "E2E-261"],
-    "calls.writes.stop.read.v1": ["E2E-074"],
-    "calls.writes.resume.v1": ["E2E-074", "E2E-253", "E2E-261"],
-    "calls.writes.stop.audit.v1": ["E2E-074"],
-    "settings.appointments.booking.enabled.change.v1": ["E2E-010", "E2E-222", "E2E-226", "E2E-251", "E2E-253", "E2E-260"],
-    "settings.appointments.booking.audit.v1": ["E2E-010"],
-    "settings.appointments.cancellation.enabled.change.v1": ["E2E-252", "E2E-253", "E2E-261"],
-    "settings.appointments.rescheduling.enabled.change.v1": ["E2E-254", "E2E-253", "E2E-261"],
-    "settings.appointments.cancellation.audit.v1": ["E2E-252"],
-    "settings.appointments.rescheduling.audit.v1": ["E2E-254"],
-    "settings.patients.firstTimeIntake.enabled.change.v1": ["E2E-255", "E2E-253", "E2E-261"],
-    "settings.patients.firstTimeIntake.audit.v1": ["E2E-255"],
-    "settings.routing.staffedDestination.change.v1": ["E2E-256"],
-    "settings.routing.staffedDestination.audit.v1": ["E2E-256"],
-    "settings.routing.staffedDestination.options.v1": ["E2E-256"],
-    "settings.notifications.owner.change.v1": ["E2E-257", "E2E-318"],
-    "settings.notifications.audit.v1": ["E2E-257"],
-    "settings.notifications.options.v1": ["E2E-257"],
-    "settings.routing.afterHours.change.v1": ["E2E-229", "E2E-253"],
-    "settings.routing.afterHours.audit.v1": ["E2E-229"],
-    "settings.routing.urgent.change.v1": ["E2E-232", "E2E-253", "E2E-317"],
-    "settings.routing.urgent.audit.v1": ["E2E-232"],
-    "settings.routing.staffSchedule.change.v1": ["E2E-244", "E2E-253"],
-    "settings.routing.staffSchedule.audit.v1": ["E2E-244"],
-    "settings.routing.greeting.change.v1": ["E2E-245", "E2E-246", "E2E-247", "E2E-253", "E2E-260"],
-    "settings.routing.greeting.audit.v1": ["E2E-245", "E2E-246", "E2E-247"],
-    "booking.offers.read.v1": ["E2E-283", "E2E-284", "E2E-296", "E2E-312", "E2E-313", "E2E-316", "E2E-321", "E2E-324", "E2E-327"],
-    "booking.offers.select.v1": ["E2E-283", "E2E-284", "E2E-296", "E2E-312", "E2E-313", "E2E-316", "E2E-324", "E2E-327"],
-    "booking.propose.v2": ["E2E-006", "E2E-064", "E2E-222", "E2E-226", "E2E-264", "E2E-266", "E2E-279", "E2E-281", "E2E-296"],
-    "calls.turn.model.v1": ["E2E-030", "E2E-076", "E2E-077", "E2E-078", "E2E-230", "E2E-231"],
-    "knowledge.answer.v2": ["E2E-004", "E2E-058", "E2E-059", "E2E-060", "E2E-061", "E2E-223", "E2E-315", "E2E-322"],
-    "knowledge.list.v1": ["E2E-004", "E2E-058", "E2E-223"],
-    "knowledge.draft.save.v1": ["E2E-004", "E2E-059", "E2E-223", "E2E-253"],
-    "knowledge.approve.v1": ["E2E-004", "E2E-223", "E2E-253"],
-    "knowledge.revoke.v1": ["E2E-004", "E2E-059", "E2E-253"],
-    "clinic.availability.businesses.list.v1": ["E2E-194", "E2E-195", "E2E-214", "E2E-215", "E2E-262"],
-    "clinic.availability.practitioners.list.v1": ["E2E-227"],
-    "clinic.availability.types.list.v1": ["E2E-227"],
-    "clinic.availability.selection.inspect.v1": ["E2E-194", "E2E-195", "E2E-214", "E2E-215"],
-    "clinic.availability.approval.read.v1": ["E2E-194", "E2E-195", "E2E-212", "E2E-214", "E2E-215", "E2E-262"],
-    "clinic.availability.route.check.v1": ["E2E-216"],
-    "clinic.availability.approval.change.v1": ["E2E-194", "E2E-195", "E2E-211", "E2E-212", "E2E-214", "E2E-215", "E2E-253"],
-    "clinic.availability.approval.change.v2": ["E2E-200", "E2E-201", "E2E-210", "E2E-253"],
-    "clinic.availability.approval.revoke.v1": ["E2E-194", "E2E-195", "E2E-212", "E2E-214", "E2E-253"],
-    "availability.read.v2": ["E2E-125"],
-    "appointments.read.v1": ["E2E-003", "E2E-117", "E2E-263", "E2E-274", "E2E-275", "E2E-276", "E2E-278", "E2E-294"],
-    "calls.read.v1": ["E2E-010", "E2E-014", "E2E-223", "E2E-257"],
-    "calls.outcomes.v1": ["E2E-014", "E2E-257"],
-    "staff.list.v1": ["E2E-009", "E2E-068", "E2E-263"],
-    "staff.health.v1": ["E2E-221"],
-    "operations.daily.v1": ["E2E-235", "E2E-237", "E2E-262"],
-    "staff.change.v1": ["E2E-098", "E2E-109", "E2E-253"],
-    "settings.voice.locale.change.v1": ["E2E-258", "E2E-262"],
-    "settings.voice.voiceId.change.v1": ["E2E-259"],
-    "settings.voice.options.v1": ["E2E-258", "E2E-259"],
-    "settings.voice.audit.v1": ["E2E-258", "E2E-259"],
-    "appointments.change.propose.v1": ["E2E-261", "E2E-264", "E2E-276", "E2E-277", "E2E-278", "E2E-285"],
-    "patients.intake.propose.v1": ["E2E-261", "E2E-264", "E2E-292", "E2E-293", "E2E-295", "E2E-296"]
+    "calls.missedCall.respond.v1": [
+      "E2E-325"
+    ],
+    "calls.presence.respond.v1": [
+      "E2E-324",
+      "E2E-329"
+    ],
+    "booking.horizon.read.v1": [
+      "E2E-321"
+    ],
+    "calls.requestBoundary.respond.v1": [
+      "E2E-320"
+    ],
+    "calls.callerIdentity.deny.v1": [
+      "E2E-319"
+    ],
+    "calls.notifications.outcome.v1": [
+      "E2E-318"
+    ],
+    "calls.urgent.respond.v1": [
+      "E2E-317"
+    ],
+    "appointments.enquiry.start.v1": [
+      "E2E-314"
+    ],
+    "appointments.enquiry.read.v1": [
+      "E2E-314"
+    ],
+    "appointments.enquiry.select.v1": [
+      "E2E-314"
+    ],
+    "staff.requests.prepare.v1": [
+      "E2E-311",
+      "E2E-323",
+      "E2E-326"
+    ],
+    "staff.requests.outcome.v1": [
+      "E2E-311",
+      "E2E-323",
+      "E2E-326"
+    ],
+    "rescheduling.menu.read.v1": [
+      "E2E-289",
+      "E2E-290",
+      "E2E-312",
+      "E2E-321",
+      "E2E-324"
+    ],
+    "rescheduling.menu.select.v1": [
+      "E2E-289",
+      "E2E-290",
+      "E2E-312",
+      "E2E-324"
+    ],
+    "settings.read.v1": [
+      "E2E-010",
+      "E2E-260",
+      "E2E-262"
+    ],
+    "settings.automation.enabled.change.v1": [
+      "E2E-018",
+      "E2E-223",
+      "E2E-248",
+      "E2E-249",
+      "E2E-250",
+      "E2E-251",
+      "E2E-253"
+    ],
+    "settings.automation.audit.v1": [
+      "E2E-018",
+      "E2E-248"
+    ],
+    "calls.writes.stop.v1": [
+      "E2E-074",
+      "E2E-222",
+      "E2E-226",
+      "E2E-251",
+      "E2E-253",
+      "E2E-261"
+    ],
+    "calls.writes.stop.read.v1": [
+      "E2E-074"
+    ],
+    "calls.writes.resume.v1": [
+      "E2E-074",
+      "E2E-253",
+      "E2E-261"
+    ],
+    "calls.writes.stop.audit.v1": [
+      "E2E-074"
+    ],
+    "settings.appointments.booking.enabled.change.v1": [
+      "E2E-010",
+      "E2E-222",
+      "E2E-226",
+      "E2E-251",
+      "E2E-253",
+      "E2E-260"
+    ],
+    "settings.appointments.booking.audit.v1": [
+      "E2E-010"
+    ],
+    "settings.appointments.cancellation.enabled.change.v1": [
+      "E2E-252",
+      "E2E-253",
+      "E2E-261"
+    ],
+    "settings.appointments.rescheduling.enabled.change.v1": [
+      "E2E-254",
+      "E2E-253",
+      "E2E-261"
+    ],
+    "settings.appointments.cancellation.audit.v1": [
+      "E2E-252"
+    ],
+    "settings.appointments.rescheduling.audit.v1": [
+      "E2E-254"
+    ],
+    "settings.patients.firstTimeIntake.enabled.change.v1": [
+      "E2E-255",
+      "E2E-253",
+      "E2E-261"
+    ],
+    "settings.patients.firstTimeIntake.audit.v1": [
+      "E2E-255"
+    ],
+    "settings.routing.staffedDestination.change.v1": [
+      "E2E-256"
+    ],
+    "settings.routing.staffedDestination.audit.v1": [
+      "E2E-256"
+    ],
+    "settings.routing.staffedDestination.options.v1": [
+      "E2E-256"
+    ],
+    "settings.notifications.owner.change.v1": [
+      "E2E-257",
+      "E2E-318"
+    ],
+    "settings.notifications.audit.v1": [
+      "E2E-257"
+    ],
+    "settings.notifications.options.v1": [
+      "E2E-257"
+    ],
+    "settings.routing.afterHours.change.v1": [
+      "E2E-229",
+      "E2E-253"
+    ],
+    "settings.routing.afterHours.audit.v1": [
+      "E2E-229"
+    ],
+    "settings.routing.urgent.change.v1": [
+      "E2E-232",
+      "E2E-253",
+      "E2E-317"
+    ],
+    "settings.routing.urgent.audit.v1": [
+      "E2E-232"
+    ],
+    "settings.routing.staffSchedule.change.v1": [
+      "E2E-244",
+      "E2E-253"
+    ],
+    "settings.routing.staffSchedule.audit.v1": [
+      "E2E-244"
+    ],
+    "settings.routing.greeting.change.v1": [
+      "E2E-245",
+      "E2E-246",
+      "E2E-247",
+      "E2E-253",
+      "E2E-260"
+    ],
+    "settings.routing.greeting.audit.v1": [
+      "E2E-245",
+      "E2E-246",
+      "E2E-247"
+    ],
+    "booking.offers.read.v1": [
+      "E2E-283",
+      "E2E-284",
+      "E2E-296",
+      "E2E-312",
+      "E2E-313",
+      "E2E-316",
+      "E2E-321",
+      "E2E-324",
+      "E2E-327"
+    ],
+    "booking.offers.select.v1": [
+      "E2E-283",
+      "E2E-284",
+      "E2E-296",
+      "E2E-312",
+      "E2E-313",
+      "E2E-316",
+      "E2E-324",
+      "E2E-327"
+    ],
+    "booking.propose.v2": [
+      "E2E-006",
+      "E2E-064",
+      "E2E-222",
+      "E2E-226",
+      "E2E-264",
+      "E2E-266",
+      "E2E-279",
+      "E2E-281",
+      "E2E-296"
+    ],
+    "calls.turn.model.v1": [
+      "E2E-030",
+      "E2E-076",
+      "E2E-077",
+      "E2E-078",
+      "E2E-230",
+      "E2E-231"
+    ],
+    "knowledge.answer.v2": [
+      "E2E-004",
+      "E2E-058",
+      "E2E-059",
+      "E2E-060",
+      "E2E-061",
+      "E2E-223",
+      "E2E-315",
+      "E2E-322"
+    ],
+    "knowledge.list.v1": [
+      "E2E-004",
+      "E2E-058",
+      "E2E-223"
+    ],
+    "knowledge.draft.save.v1": [
+      "E2E-004",
+      "E2E-059",
+      "E2E-223",
+      "E2E-253"
+    ],
+    "knowledge.approve.v1": [
+      "E2E-004",
+      "E2E-223",
+      "E2E-253"
+    ],
+    "knowledge.revoke.v1": [
+      "E2E-004",
+      "E2E-059",
+      "E2E-253"
+    ],
+    "clinic.availability.businesses.list.v1": [
+      "E2E-194",
+      "E2E-195",
+      "E2E-214",
+      "E2E-215",
+      "E2E-262"
+    ],
+    "clinic.availability.practitioners.list.v1": [
+      "E2E-227"
+    ],
+    "clinic.availability.types.list.v1": [
+      "E2E-227"
+    ],
+    "clinic.availability.selection.inspect.v1": [
+      "E2E-194",
+      "E2E-195",
+      "E2E-214",
+      "E2E-215"
+    ],
+    "clinic.availability.approval.read.v1": [
+      "E2E-194",
+      "E2E-195",
+      "E2E-212",
+      "E2E-214",
+      "E2E-215",
+      "E2E-262"
+    ],
+    "clinic.availability.route.check.v1": [
+      "E2E-216"
+    ],
+    "clinic.availability.approval.change.v1": [
+      "E2E-194",
+      "E2E-195",
+      "E2E-211",
+      "E2E-212",
+      "E2E-214",
+      "E2E-215",
+      "E2E-253"
+    ],
+    "clinic.availability.approval.change.v2": [
+      "E2E-200",
+      "E2E-201",
+      "E2E-210",
+      "E2E-253"
+    ],
+    "clinic.availability.approval.revoke.v1": [
+      "E2E-194",
+      "E2E-195",
+      "E2E-212",
+      "E2E-214",
+      "E2E-253"
+    ],
+    "availability.read.v2": [
+      "E2E-125"
+    ],
+    "appointments.read.v1": [
+      "E2E-003",
+      "E2E-117",
+      "E2E-263",
+      "E2E-274",
+      "E2E-275",
+      "E2E-276",
+      "E2E-278",
+      "E2E-294"
+    ],
+    "calls.read.v1": [
+      "E2E-010",
+      "E2E-014",
+      "E2E-223",
+      "E2E-257"
+    ],
+    "calls.outcomes.v1": [
+      "E2E-014",
+      "E2E-257"
+    ],
+    "staff.list.v1": [
+      "E2E-009",
+      "E2E-068",
+      "E2E-263"
+    ],
+    "staff.health.v1": [
+      "E2E-221"
+    ],
+    "operations.daily.v1": [
+      "E2E-235",
+      "E2E-237",
+      "E2E-262"
+    ],
+    "staff.change.v1": [
+      "E2E-098",
+      "E2E-109",
+      "E2E-253"
+    ],
+    "settings.voice.locale.change.v1": [
+      "E2E-258",
+      "E2E-262"
+    ],
+    "settings.voice.voiceId.change.v1": [
+      "E2E-259"
+    ],
+    "settings.voice.options.v1": [
+      "E2E-258",
+      "E2E-259"
+    ],
+    "settings.voice.audit.v1": [
+      "E2E-258",
+      "E2E-259"
+    ],
+    "appointments.change.propose.v1": [
+      "E2E-261",
+      "E2E-264",
+      "E2E-276",
+      "E2E-277",
+      "E2E-278",
+      "E2E-285"
+    ],
+    "patients.intake.propose.v1": [
+      "E2E-261",
+      "E2E-264",
+      "E2E-292",
+      "E2E-293",
+      "E2E-295",
+      "E2E-296"
+    ]
   },
   "settingMappings": {
-    "availability.sevenDay.enabled": ["E2E-199", "E2E-247"],
-    "appointments.cancellation.enabled": ["E2E-252", "E2E-253", "E2E-261", "E2E-276", "E2E-278"],
-    "appointments.rescheduling.enabled": ["E2E-254", "E2E-253", "E2E-261", "E2E-285", "E2E-290", "E2E-316"],
-    "patients.firstTimeIntake.enabled": ["E2E-255", "E2E-253", "E2E-261", "E2E-293", "E2E-295", "E2E-296"],
-    "appointments.booking.enabled": ["E2E-010", "E2E-222", "E2E-226", "E2E-251", "E2E-253", "E2E-260", "E2E-279", "E2E-281", "E2E-284", "E2E-296", "E2E-316"],
-    "automation.enabled": ["E2E-018", "E2E-223", "E2E-248", "E2E-249", "E2E-250", "E2E-251", "E2E-253", "E2E-274", "E2E-278", "E2E-279", "E2E-281", "E2E-284", "E2E-285", "E2E-296", "E2E-315"],
-    "calls.writes.stop": ["E2E-074", "E2E-222", "E2E-226", "E2E-251", "E2E-253", "E2E-261", "E2E-274", "E2E-278", "E2E-279", "E2E-281", "E2E-284", "E2E-285", "E2E-296"],
-    "clinic.availability.approval": ["E2E-194", "E2E-195", "E2E-200", "E2E-201", "E2E-209", "E2E-210", "E2E-211", "E2E-212", "E2E-214", "E2E-215", "E2E-253", "E2E-262"],
-    "knowledge.approval": ["E2E-004", "E2E-223", "E2E-253", "E2E-315"],
-    "routing.staffedDestination": ["E2E-256"],
-    "notifications.owner": ["E2E-257", "E2E-318"],
-    "routing.afterHoursMode": ["E2E-229", "E2E-253"],
-    "routing.urgentResponse": ["E2E-232", "E2E-253", "E2E-317"],
-    "routing.staffSchedule": ["E2E-244", "E2E-253"],
-    "routing.greeting": ["E2E-245", "E2E-246", "E2E-247", "E2E-253", "E2E-260"],
-    "voice.locale": ["E2E-258", "E2E-262"],
-    "voice.voiceId": ["E2E-259"]
+    "availability.sevenDay.enabled": [
+      "E2E-199",
+      "E2E-247"
+    ],
+    "appointments.cancellation.enabled": [
+      "E2E-252",
+      "E2E-253",
+      "E2E-261",
+      "E2E-276",
+      "E2E-278"
+    ],
+    "appointments.rescheduling.enabled": [
+      "E2E-254",
+      "E2E-253",
+      "E2E-261",
+      "E2E-285",
+      "E2E-290",
+      "E2E-316"
+    ],
+    "patients.firstTimeIntake.enabled": [
+      "E2E-255",
+      "E2E-253",
+      "E2E-261",
+      "E2E-293",
+      "E2E-295",
+      "E2E-296"
+    ],
+    "appointments.booking.enabled": [
+      "E2E-010",
+      "E2E-222",
+      "E2E-226",
+      "E2E-251",
+      "E2E-253",
+      "E2E-260",
+      "E2E-279",
+      "E2E-281",
+      "E2E-284",
+      "E2E-296",
+      "E2E-316"
+    ],
+    "automation.enabled": [
+      "E2E-018",
+      "E2E-223",
+      "E2E-248",
+      "E2E-249",
+      "E2E-250",
+      "E2E-251",
+      "E2E-253",
+      "E2E-274",
+      "E2E-278",
+      "E2E-279",
+      "E2E-281",
+      "E2E-284",
+      "E2E-285",
+      "E2E-296",
+      "E2E-315"
+    ],
+    "calls.writes.stop": [
+      "E2E-074",
+      "E2E-222",
+      "E2E-226",
+      "E2E-251",
+      "E2E-253",
+      "E2E-261",
+      "E2E-274",
+      "E2E-278",
+      "E2E-279",
+      "E2E-281",
+      "E2E-284",
+      "E2E-285",
+      "E2E-296"
+    ],
+    "clinic.availability.approval": [
+      "E2E-194",
+      "E2E-195",
+      "E2E-200",
+      "E2E-201",
+      "E2E-209",
+      "E2E-210",
+      "E2E-211",
+      "E2E-212",
+      "E2E-214",
+      "E2E-215",
+      "E2E-253",
+      "E2E-262"
+    ],
+    "knowledge.approval": [
+      "E2E-004",
+      "E2E-223",
+      "E2E-253",
+      "E2E-315"
+    ],
+    "routing.staffedDestination": [
+      "E2E-256"
+    ],
+    "notifications.owner": [
+      "E2E-257",
+      "E2E-318"
+    ],
+    "routing.afterHoursMode": [
+      "E2E-229",
+      "E2E-253"
+    ],
+    "routing.urgentResponse": [
+      "E2E-232",
+      "E2E-253",
+      "E2E-317"
+    ],
+    "routing.staffSchedule": [
+      "E2E-244",
+      "E2E-253"
+    ],
+    "routing.greeting": [
+      "E2E-245",
+      "E2E-246",
+      "E2E-247",
+      "E2E-253",
+      "E2E-260"
+    ],
+    "voice.locale": [
+      "E2E-258",
+      "E2E-262"
+    ],
+    "voice.voiceId": [
+      "E2E-259"
+    ]
   },
   "scenarios": [
     {"id": "E2E-001", "requirements": ["FR-01", "FR-20"], "fixtureFamily": "routing", "fixtureState": "planned", "intendedCompositions": ["standalone", "embedded"], "earliestPhase": 1, "providerProfile": "reference", "fullCallEvidence": {"status": "planned", "testFiles": []}},
@@ -401,7 +809,7 @@
     {"id": "E2E-296", "requirements": ["FR-03", "FR-06", "FR-11", "FR-18", "FR-22"], "fixtureFamily": "cliniko-write", "fixtureState": "textImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/cliniko/intake-booking-session.test.ts", "test/cliniko/intake-booking-postgres.test.ts", "test/cliniko/intake-booking-process.test.ts"]}, "observableAssertions": {"caller": "One admitted caller obtains proven registration, independently permitted offers, played selection and separate booking affirmation before an acknowledged Cliniko review and one inspected appointment send; registration alone never books", "fault": "Denied or revoked booking authority, changed contact or approvals, original mailbox expiry, unavailable review, rejected or lost sends and actual owner SIGKILL preserve the patient without replay, compensation or invented appointment/staff receipts", "privacy": "Actual shared PostgreSQL provider and mailbox budgets, full patient/proof/review/booking canaries in tables and backups, and parallel fresh-process recovery retain private work only transiently or in Cliniko; real mail, clinical permission and voice activation remain separate"}},
     {"id": "E2E-297", "requirements": ["FR-03", "FR-06", "FR-18", "FR-22"], "fixtureFamily": "cliniko-write", "fixtureState": "textImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/cliniko/cliniko-call-flow.test.ts"]}, "observableAssertions": {"caller": "The actual call owner routes all four operations into separately played and affirmed SAM actions with private grants and one reviewed appointment write", "fault": "Foreign scope, call, session, policy or aborted queries cannot start work; owner disposal closes private code input and prevents later reads or writes", "privacy": "Only the trusted owner retains draft and verification references; code is absent from ordinary SAM caller messages and operation grants cannot be exchanged"}},
     {"id": "E2E-298", "requirements": ["FR-03", "FR-11", "FR-22"], "fixtureFamily": "cliniko-write", "fixtureState": "textImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "textEvidence": {"status": "passed", "testFiles": ["test/cliniko/cliniko-call-flow.test.ts"]}, "observableAssertions": {"caller": "After an abandoned construction a new request can independently select and verify one workflow without waiting for the old request to finish", "fault": "An actual held administrator lookup finishes after cancellation without publishing its owner or sending mail; the subsequent owner remains usable", "privacy": "The abandoned owner retains no usable verification grant and cannot turn its late setup result into caller identity or another patient mutation"}},
-    {"id": "E2E-299", "requirements": ["FR-03", "FR-06", "FR-11", "FR-18", "FR-22"], "fixtureFamily": "cliniko-write", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/cliniko-workflow-call.test.ts"]}, "observableAssertions": {"caller": "Each signed HTTP/WebSocket call hears played menus, exact clinical confirmation and the actual confirmed or uncertain SAM receipt for its chosen workflow", "fault": "All three lost write responses remain uncertain and a later erroneous affirmation cannot dispatch again; concurrent isolated calls actually overlap", "privacy": "Code audio and post-code quiet never enter ordinary transcription or model input; patient/code canaries remain absent from PostgreSQL tables"}},
+    {"id": "E2E-299", "requirements": ["FR-03", "FR-06", "FR-11", "FR-18", "FR-22"], "fixtureFamily": "cliniko-write", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/cliniko-workflow-call.test.ts", "test/voice/standalone-clinical-host.test.ts"]}, "observableAssertions": {"caller": "Each signed HTTP/WebSocket call hears played menus, exact clinical confirmation and the actual confirmed or uncertain SAM receipt for its chosen workflow", "fault": "All three lost write responses remain uncertain and a later erroneous affirmation cannot dispatch again; concurrent isolated calls actually overlap", "privacy": "Code audio and post-code quiet never enter ordinary transcription or model input; patient/code canaries remain absent from PostgreSQL tables"}},
     {"id": "E2E-300", "requirements": ["FR-03", "FR-06", "FR-11", "FR-18", "FR-22"], "fixtureFamily": "cliniko-write", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/cliniko-workflow-call.test.ts"]}, "observableAssertions": {"caller": "The actual stream plays loss terms, separate consent prompt, private field prompts and exact detail readback before independently confirmed registration and booking", "fault": "No patient is created before intake confirmation and no appointment is sent before separate booking confirmation and an acknowledged Cliniko-owned review", "privacy": "Private registration fields and codes are absent from ordinary transcription, model turns, SAM caller messages and PostgreSQL; code audio never enters private STT"}},
     {"id": "E2E-301", "requirements": ["FR-03", "FR-06", "FR-11", "FR-22"], "fixtureFamily": "cliniko-write", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/cliniko-workflow-call.test.ts"]}, "observableAssertions": {"caller": "Qualified interruption obtains a fresh played booking menu and socket disconnect disposes the private workflow owner without committing old confirmation", "fault": "Both the flushed playback marker and new clear fence are acknowledged; the canceled action cannot dispatch review or an appointment write", "privacy": "After disconnect no private code can recover the disposed owner or revive its patient authority; call-specific working state remains transient"}},
     {"id": "E2E-302", "requirements": ["FR-03", "FR-06", "FR-11", "FR-22"], "fixtureFamily": "cliniko-write", "fixtureState": "syntheticImplemented", "intendedCompositions": ["standalone"], "earliestPhase": 2, "providerProfile": "cliniko", "fullCallEvidence": {"status": "planned", "testFiles": []}, "syntheticVoiceEvidence": {"status": "passed", "testFiles": ["test/voice/cliniko-workflow-call.test.ts"]}, "observableAssertions": {"caller": "Unplayed loss terms cannot be acknowledged by an early digit; the separate consent prompt must still be played before collection can start", "fault": "Star decline and socket disconnect close the actual intake owner with zero verification emails, patients, recalls and appointment mutations", "privacy": "Premature speech never enters private field transcription; disposal clears the draft reference and prevents subsequent private work"}},
