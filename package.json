@@ -22,6 +22,8 @@
     "voice:ops:prune": "node scripts/prune-voice-operations.ts",
     "voice:ops:check": "node scripts/check-voice-operations.ts",
     "voice:ops:send": "node scripts/send-voice-operational-alerts.ts",
+    "voice:ops:receive": "node dist/runtime/scripts/serve-voice-operational-alert-receiver.js",
+    "voice:ops:inbox": "node dist/runtime/scripts/read-voice-operational-alert-inbox.js",
     "cliniko:review-rehearsal": "node scripts/rehearse-cliniko-review.ts",
     "cliniko:lifecycle-rehearsal": "node scripts/rehearse-cliniko-lifecycle.ts",
     "voice:ops:recalls": "node scripts/read-cliniko-recall-queue.ts",
