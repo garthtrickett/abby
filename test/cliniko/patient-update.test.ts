@@ -11,7 +11,8 @@ import { resultValue } from "../support/agent-appointment-proposals.ts";
 const now = "2026-10-13T10:00:00.000Z", base = "https://api.au5.cliniko.com/v1", apiKey = "synthetic-patient-update-au5";
 const scope = { tenantId: "update-test", clinicId: "clinic", locationId: "main" };
 const query: PatientUpdateQuery = { scope, callId: "call-1", sessionId: "session-1", patientId: "42", policyVersion: "1", verificationRef: "private-proof" };
-function fixture() {
+function fixture(verificationRef = query.verificationRef) {
+  const ownedQuery = { ...query, verificationRef };
   let row = { id: "42", archived_at: null, merged_at: null, updated_at: now, links: { self: `${base}/patients/42` },
     first_name: "Synthetic", last_name: "Patient", date_of_birth: "1980-01-02", email: "old@example.test",
     patient_phone_numbers: [{ number: "+61400111222", phone_type: "Mobile" }],
@@ -21,9 +22,10 @@ function fixture() {
   let onClaim = async () => {}, onRead = async () => {}, onPatch = async () => {}, onSync = async (_request: PatientUpdateRequest) => true;
   const traffic: { method: string; body?: Record<string, unknown> }[] = [];
   const authority: PatientUpdateAuthority = {
+    claim: async () => permitted,
     attest: async (incoming, phase) => {
       if (!permitted) return null;
-      return { ...query, operation: "patients.update", recordScope: "clinikoAccount", credentialFingerprint: clinikoCredentialFingerprint(apiKey),
+      return { ...ownedQuery, operation: "patients.update", recordScope: "clinikoAccount", credentialFingerprint: clinikoCredentialFingerprint(apiKey),
         allowedFields: allowed, expiresAt: "2026-10-13T10:04:00.000Z", independentPermission: true, selfAuthorized: true,
         ...(phase !== "read" && "changes" in incoming ? { attemptRef: incoming.attemptRef, consentRef: incoming.consentRef,
           expectedDigest: incoming.expectedDigest, changesDigest: patientDetailChangesDigest(incoming.changes), ...(confirmed ? { confirmationPlayed: true as const } : {}),
@@ -51,7 +53,7 @@ function fixture() {
     rateBudget: { claim: async () => { claims++; await onClaim(); return mode === "budget" ? { kind: "unavailable" } : null; },
       observe429: async () => ({ kind: "rateLimited" }) } }, authority, fetchPort, () => now));
   const snapshot = patientDetailsSnapshot(row, "42", base)!;
-  const request = (changes: PatientDetailChanges = { email: "new@example.test", post_code: "3001" }): PatientUpdateRequest => ({ ...query,
+  const request = (changes: PatientDetailChanges = { email: "new@example.test", post_code: "3001" }): PatientUpdateRequest => ({ ...ownedQuery,
     attemptRef: "attempt-1", consentRef: "private-played-correction", expectedDigest: patientDetailsDigest(snapshot), changes,
     ...(Object.hasOwn(changes, "email") ? { prospectiveEmailRef: "private-prospective-email-proof" } : {}) });
   return { edge, traffic, request, snapshot, get row() { return row; }, get syncs() { return syncs; }, get claims() { return claims; },
@@ -73,6 +75,16 @@ test("E2E-361 verified field correction sends one narrow PATCH, retains identity
     assert.equal((await f.edge.updateOnce({ ...request, attemptRef: "another-attempt" })).ok, false);
     assert.equal(f.traffic.filter(t => t.method === "PATCH").length, 1);
   } finally { f.edge.dispose(); }
+});
+
+test("E2E-362 native correction accepts the full base64url alphabet of issued verification references", async () => {
+  for (const verificationRef of ["_private-proof", "-private-proof"]) {
+    const f = fixture(verificationRef);
+    try {
+      assert.equal((await f.edge.readTarget({ ...query, verificationRef })).ok, true);
+      assert.equal(resultValue(await f.edge.updateOnce(f.request())).kind, "updated");
+    } finally { f.edge.dispose(); }
+  }
 });
 
 for (const failure of ["permission", "confirmation", "prospective", "allowedFields", "stale", "merged", "archived", "foreignLink", "budget", "latePermission", "futureBirth", "badPhone"] as const) {
@@ -196,5 +208,14 @@ test("E2E-361 contact synchronization cannot mutate the owned correction or reta
     f.onSync(async request => { (request as { patientId: string }).patientId = "43"; return true; });
     assert.deepEqual(resultValue(await f.edge.updateOnce(f.request())), { kind: "updated", patientId: "42" });
     assert.equal(f.row.id, "42"); assert.equal(f.traffic.filter(t => t.method === "PATCH").length, 1);
+  } finally { f.edge.dispose(); }
+});
+
+test("E2E-362 authority withdrawn during contact synchronization cannot publish updated success", async () => {
+  const f = fixture();
+  try {
+    f.onSync(async () => { f.permission(false); return true; });
+    assert.deepEqual(resultValue(await f.edge.updateOnce(f.request())), { kind: "uncertain" });
+    assert.equal(f.traffic.filter(t => t.method === "PATCH").length, 1);
   } finally { f.edge.dispose(); }
 });

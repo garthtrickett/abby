@@ -56,7 +56,7 @@ export const POSSIBLE_SEND_RECOVERY_DELAY_MS = 60_000;
 export type StaffDestination =
   | Readonly<{ kind: "owner"; ownerRef: string }>
   | Readonly<{ kind: "queue"; queueRef: string }>;
-export type ActionKind = "book" | "cancel" | "reschedule" | "intake";
+export type ActionKind = "book" | "cancel" | "reschedule" | "intake" | "patientUpdate";
 /** Routing to patient information is not a clinical mutation capability. */
 export type WorkflowOperation = ActionKind | "appointments.read";
 export type CapabilityId = ActionKind | "transfer";
@@ -136,7 +136,8 @@ export type CallPolicy = Readonly<{
   afterHoursInfo?: ApprovedAfterHoursInfo;
   /** Host-approved, location-scoped public safety wording; absent means generic fallback. */
   urgentResponse?: ApprovedUrgentResponse;
-  capabilities: Readonly<Record<CapabilityId, CapabilityMode>>;
+  /** Existing hosts omit patientUpdate; absence denies the new operation. */
+  capabilities: Readonly<Record<Exclude<CapabilityId, "patientUpdate">, CapabilityMode> & { patientUpdate?: CapabilityMode }>;
   transferDestinationRef?: string;
   /** Current host route declaration captured at admission, never setting authority. */
   transferDestinationVersion?: string;
@@ -190,7 +191,9 @@ export type ActionRequest =
   | Readonly<{ kind: "book"; patient: VerifiedPatient; offer: BookableOffer }>
   | Readonly<{ kind: "cancel"; patient: VerifiedPatient; target: AppointmentTarget; terms: AppointmentChangeTerms }>
   | Readonly<{ kind: "reschedule"; patient: VerifiedPatient; target: AppointmentTarget; offer: BookableOffer; terms: AppointmentChangeTerms; practitionerChange?: true }>
-  | Readonly<{ kind: "intake"; scope: LocationScope; approvedDraftRef: string; consentRef: string; duplicateCheckRef: string; recoveryContract?: "callerMediated" }>;
+  | Readonly<{ kind: "intake"; scope: LocationScope; approvedDraftRef: string; consentRef: string; duplicateCheckRef: string; recoveryContract?: "callerMediated" }>
+  /** Patient values and value digests remain in the private owner, never in SAM. */
+  | Readonly<{ kind: "patientUpdate"; patient: VerifiedPatient; correctionRef: string; consentRef: string; correctionVersion: string; expiresAt: string }>;
 
 export type FinalCallerTurn = Readonly<{
   callId: string;

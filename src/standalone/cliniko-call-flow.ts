@@ -41,7 +41,8 @@ import { BookingServiceDialogue, startsServiceDialogue, startsIntakeServiceDialo
 import { currentServiceCatalogue, serviceBookingConfig } from "./service-booking-config.ts";
 import type { ServiceCatalogueConfig } from "./service-booking-config.ts";
 
-export type ClinikoWorkflow = import("../core/model.ts").WorkflowOperation;
+/** Patient corrections require their private owner before ordinary runner routing. */
+export type ClinikoWorkflow = Exclude<import("../core/model.ts").WorkflowOperation, "patientUpdate">;
 export type ClinikoCallFlowConfig = Omit<ClinikoBookingSessionConfig, "callerApprovalPath" | "bookingApprovalPath"> & Readonly<{
   approvals: Readonly<{ bookCaller: string; cancelCaller: string; rescheduleCaller: string; booking: string; cancellation: string; rescheduling: string }>;
   intake?: Pick<ClinikoIntakeBookingSessionConfig, "policy" | "permission" | "presentation">;
@@ -335,7 +336,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   }
   /** The model sees only routing and action-status enums; patient data and host refs stay in this owner. */
   async publicIntentContext(): Promise<Readonly<{ workflow: ClinikoWorkflow | null; verificationRequired: boolean; callerIdentityDenied?: import("../core/caller-identity.ts").CallerIdentityDenial;
-    lastAction: Readonly<{ kind: "book" | "cancel" | "reschedule" | "intake"; status: string; confirmationPlayed: boolean }> | null;
+    lastAction: Readonly<{ kind: import("../core/model.ts").ActionKind; status: string; confirmationPlayed: boolean }> | null;
     now: string; timeZone: string; maxBookingSearchDays?: number;
     lastMenu: Readonly<{ kind: "booking" | "rescheduling"; stage: "targets" | "practitioners" | "offers" | null }> | null;
     reschedulingTargetSelected: boolean; staffRequestActive: boolean }> | undefined> {
@@ -420,7 +421,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   async startWorkflow(query: WorkflowQuery) {
     const config = this.#config;
     if (!sameScope(query.scope, config.receipt.scope) || query.callId !== config.receipt.callId || query.sessionId !== config.sessionId ||
-        query.policyVersion !== config.policyVersion || query.signal.aborted) return unavailable<Readonly<{ kind: "codeRequired" | "intakeRequired" }>>();
+        query.policyVersion !== config.policyVersion || query.signal.aborted || query.operation === "patientUpdate") return unavailable<Readonly<{ kind: "codeRequired" | "intakeRequired" }>>();
     const selected = await this.choose(query.operation, query.signal, query.replaceCanceledChange === true, query.expectedConversationRevision, query.serviceChoice);
     if (selected.ok && !query.signal.aborted && selected.value.kind === "codeRequired") this.beginVerification();
     return selected;

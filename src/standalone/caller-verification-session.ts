@@ -1,4 +1,5 @@
 import type { VerificationContact } from "../cliniko/verification-contact.ts";
+import { ClinikoVerificationContactReader } from "../cliniko/verification-contact.ts";
 import type { PolicyStore } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
@@ -101,12 +102,23 @@ export class CallerVerificationSession {
     return { callId: this.#config.receipt.callId, sessionId: this.#config.sessionId };
   }
 
+  /** Private native composition only. Scope/call matching cannot substitute for
+   * the Cliniko account that supplied the registered verification channel. */
+  matchesClinikoAccount(credentialFingerprint: string): boolean {
+    const contact = this.#config.contact;
+    if (this.#closed || !(contact instanceof ClinikoVerificationContactReader)) return false;
+    const selection = contact.selection(), scope = this.#config.receipt.scope;
+    return selection.credentialFingerprint === credentialFingerprint && selection.scope.tenantId === scope.tenantId && selection.scope.clinicId === scope.clinicId;
+  }
+
   /** Immediate, identical wording even if lookup, approval or mail is unavailable. No resend. */
   begin(): Readonly<{ prompt: string }> {
     if (!this.#closed && !this.#pending) {
       this.#pending = this.#email.start(this.#config.operation).catch(() => undefined);
     }
-    return { prompt: verificationPrompt };
+    return { prompt: this.#config.operation === "patients.update"
+      ? "If you receive a verification code at your registered email, enter it here. I cannot access or change your patient details until verification succeeds."
+      : verificationPrompt };
   }
 
   /** Only the trusted secret-entry owner calls this. Do not create a FinalCallerTurn from its input. */

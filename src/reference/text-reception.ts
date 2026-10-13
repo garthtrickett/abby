@@ -21,9 +21,10 @@ import { CallRuntime } from "../core/runtime.ts";
 import { appointmentChangeEvidenceFailure, noticePresentationId } from "../core/transition.ts";
 import { modelTaskRef } from "../model/work.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
+import { patientCorrectionEvidenceFailure } from "../core/patient-correction.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").StaffReviewProcessHost & import("../core/host.ts").BookingHorizonHost & import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").PreviousPractitionerHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").StaffReviewProcessHost & import("../core/host.ts").BookingHorizonHost & import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").PreviousPractitionerHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost & import("../core/host.ts").PatientCorrectionEvidenceHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 export const appointmentProposalEvidenceDeadlineMs = 15_000;
@@ -492,6 +493,29 @@ export class TextReception {
         interpretation = { kind: "intakeFailure", reason: "unavailable" };
       }
     }
+    return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);
+  }
+
+  patientCorrectionEnabled(): boolean { return typeof this.host.resolvePatientCorrection === "function"; }
+  async proposePatientCorrection(scope: LocationScope, turn: FinalCallerTurn, correctionRef: string, now: string,
+                                expectedConversationRevision?: number, external?: AbortSignal): Promise<Result<CallState, TextReceptionFailure>> {
+    const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision); if (denied) return denied;
+    const runtime = this.runtime(scope), state = await runtime.read(turn.callId); if (!state.ok) return state;
+    if (state.value.policy.capabilities.patientUpdate !== "execute" || !this.host.resolvePatientCorrection) {
+      return runtime.acceptTurn(turn, { kind: "unavailableAction", actionKind: "patientUpdate" }, now, expectedConversationRevision);
+    }
+    if (turn.quality !== "clear" || typeof turn.sessionId !== "string" || state.value.sessionLease?.sessionId !== turn.sessionId ||
+        typeof correctionRef !== "string" || !/^[A-Za-z0-9][A-Za-z0-9:_-]{0,127}$/.test(correctionRef)) return err({ kind: "invalidTransition" });
+    const signal = external ? AbortSignal.any([external, AbortSignal.timeout(appointmentProposalEvidenceDeadlineMs)]) : AbortSignal.timeout(appointmentProposalEvidenceDeadlineMs);
+    let interpretation: TurnInterpretation = { kind: "readFailure", target: "patient", failure: "unavailable" };
+    try {
+      const evidence = await awaitUntilAbort(this.host.resolvePatientCorrection({ scope, callId: turn.callId, sessionId: turn.sessionId,
+        policyVersion: state.value.policy.policyVersion, correctionRef, now }), signal);
+      if (external?.aborted) return err({ kind: "staleTurn" });
+      if (evidence?.ok && evidence.value.correctionRef === correctionRef && !patientCorrectionEvidenceFailure(scope, evidence.value, now)) {
+        interpretation = { kind: "requestAction", request: evidence.value };
+      }
+    } catch { if (external?.aborted) return err({ kind: "staleTurn" }); }
     return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);
   }
 

@@ -35,7 +35,7 @@ function safePolicy(policy: CallPolicy | undefined): CallPolicy | undefined {
   if (!scope || ![scope.tenantId, scope.clinicId, scope.locationId].every(value => typeof value === "string" && SCOPE_ID.test(value)) ||
       !/^\d+$/.test(policy.policyVersion) || !/^\d+$/.test(policy.automationVersion) ||
       policy.automationEnabled !== false || typeof policy.bookingEnabled !== "boolean" || policy.staffWorkEnabled !== false ||
-      !policy.capabilities || ["book", "cancel", "reschedule", "intake", "transfer"].some(kind =>
+      !policy.capabilities || (policy.capabilities.patientUpdate ?? "unavailable") !== "unavailable" || ["book", "cancel", "reschedule", "intake", "transfer"].some(kind =>
         policy.capabilities[kind as keyof CallPolicy["capabilities"]] !== "unavailable") ||
       (policy.knowledgeSnapshot !== undefined && (!Array.isArray(policy.knowledgeSnapshot) ||
         policy.knowledgeSnapshot.some(item => !item || !SCOPE_ID.test(item.sourceRef) || !/^\d+$/.test(item.version))))) return undefined;

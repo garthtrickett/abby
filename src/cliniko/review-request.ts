@@ -8,7 +8,8 @@ type Selection = Readonly<{ practitionerId: string; appointmentTypeId: string }>
 export type ClinikoReviewOperation =
   | Readonly<{ kind: "book" }> & Interval & Selection
   | Readonly<{ kind: "cancel"; appointmentId: string; cancellationReason: ClinikoCancellationRequest["cancellationReason"] }> & Interval & Selection
-  | Readonly<{ kind: "reschedule"; appointmentId: string; newStartsAt: string; newEndsAt: string; newPractitionerId?: string }> & Interval & Selection;
+  | Readonly<{ kind: "reschedule"; appointmentId: string; newStartsAt: string; newEndsAt: string; newPractitionerId?: string }> & Interval & Selection
+  | Readonly<{ kind: "patientUpdate"; correctionRef: string }>;
 
 /** Provider-owned confirmed context, including patient-link binding. Never a send permit. */
 export type ClinikoReviewRequest = Readonly<{
@@ -25,6 +26,7 @@ export type ClinikoReviewRequest = Readonly<{
 export type ClinikoReviewRequestFailure = Readonly<{ kind: "invalidReviewRequest" }>;
 export type ClinikoDecodedReview = Readonly<{ marker: string; request: ClinikoReviewRequest }>;
 const header = "Abby appointment review v2";
+const correctionHeader = "Abby patient correction review v1";
 const instruction = "Staff review required. Do not replay automatically.";
 const idPattern = /^[1-9][0-9]{0,18}$/;
 
@@ -52,6 +54,7 @@ function interval(value: Record<string, unknown>, start: string, end: string): b
 }
 function operation(value: unknown): value is ClinikoReviewOperation {
   const row = record(value);
+  if (row?.kind === "patientUpdate") return keys(row, ["kind", "correctionRef"]) && typeof row.correctionRef === "string" && /^[A-Za-z0-9][A-Za-z0-9:_-]{0,127}$/.test(row.correctionRef);
   if (!row || !id(row.practitionerId) || !id(row.appointmentTypeId) || !interval(row, "startsAt", "endsAt")) return false;
   const common = ["kind", "practitionerId", "appointmentTypeId", "startsAt", "endsAt"];
   switch (row.kind) {
@@ -79,7 +82,7 @@ function validRequest(value: unknown): value is ClinikoReviewRequest {
 /** This bounded protocol fits the existing recall writer. No transcript or free-text field is accepted. */
 export function encodeClinikoReview(marker: string, request: ClinikoReviewRequest): Result<string, ClinikoReviewRequestFailure> {
   if (!validRecallMarker(marker) || !validRequest(request)) return err({ kind: "invalidReviewRequest" });
-  const summary = `${header}\n${JSON.stringify(request)}\n${instruction}`;
+  const summary = `${request.operation.kind === "patientUpdate" ? correctionHeader : header}\n${JSON.stringify(request)}\n${instruction}`;
   return validRecallSummary(summary) ? ok(formatRecallNote(marker, summary)) : err({ kind: "invalidReviewRequest" });
 }
 
@@ -87,7 +90,7 @@ export function encodeClinikoReview(marker: string, request: ClinikoReviewReques
 export function decodeClinikoReview(notes: unknown): Result<ClinikoDecodedReview, ClinikoReviewRequestFailure> {
   if (typeof notes !== "string") return err({ kind: "invalidReviewRequest" });
   const parts = notes.split("\n");
-  if (parts.length !== 4 || !parts[0]?.startsWith("Abby request ") || parts[1] !== header ||
+  if (parts.length !== 4 || !parts[0]?.startsWith("Abby request ") || ![header, correctionHeader].includes(parts[1]!) ||
       parts[3] !== instruction || !validRecallSummary(parts.slice(1).join("\n"))) {
     return err({ kind: "invalidReviewRequest" });
   }
@@ -95,5 +98,6 @@ export function decodeClinikoReview(notes: unknown): Result<ClinikoDecodedReview
   if (!validRecallMarker(marker)) return err({ kind: "invalidReviewRequest" });
   let request: unknown;
   try { request = JSON.parse(parts[2]!); } catch { return err({ kind: "invalidReviewRequest" }); }
-  return validRequest(request) ? ok({ marker, request }) : err({ kind: "invalidReviewRequest" });
+  return validRequest(request) && (request.operation.kind === "patientUpdate" ? parts[1] === correctionHeader : parts[1] === header)
+    ? ok({ marker, request }) : err({ kind: "invalidReviewRequest" });
 }

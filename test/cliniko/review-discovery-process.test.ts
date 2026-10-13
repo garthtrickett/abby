@@ -20,7 +20,7 @@ test("E2E-267 killed senders lose all context; replacement owners discover only 
   const databaseName = `abby_review_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl); target.pathname = `/${databaseName}`;
   const scope = { tenantId: `review-${randomUUID()}`, clinicId: "clinic" };
-  const request: ClinikoReviewRequest = { scope: { ...scope, locationId: "review-location" }, patientId: "918273645546372",
+  const request: ClinikoReviewRequest & { operation: Extract<ClinikoReviewRequest["operation"], { kind: "book" }> } = { scope: { ...scope, locationId: "review-location" }, patientId: "918273645546372",
     businessId: "11", credentialFingerprint: "a".repeat(64), policyVersion: "private-review-policy-canary",
     termsVersion: "private-review-terms-canary", timeZone: "Asia/Jakarta", createdAt: "2026-10-04T04:00:00Z",
     operation: { kind: "book", practitionerId: "22", appointmentTypeId: "33",

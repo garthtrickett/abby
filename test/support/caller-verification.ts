@@ -28,7 +28,7 @@ export const verificationNow = "2026-10-04T06:00:00.000Z";
 export const verificationCanaries = ["registered-session@example.test", "private-session-chart", "482746192837465"];
 
 export async function callerVerificationFixture(options: { scope?: LocationScope; folder?: string; approved?: boolean; enabled?: boolean;
-  operation?: PatientOperation; budget?: PatientVerificationBudget; delivery?: PatientCodeDelivery; timeoutMs?: number; cancellationExecute?: boolean; bookingExecute?: boolean; reschedulingExecute?: boolean; staffWorkEnabled?: boolean } = {}) {
+  operation?: PatientOperation; budget?: PatientVerificationBudget; delivery?: PatientCodeDelivery; timeoutMs?: number; cancellationExecute?: boolean; bookingExecute?: boolean; reschedulingExecute?: boolean; patientUpdateExecute?: boolean; staffWorkEnabled?: boolean } = {}) {
   const scope = options.scope ?? { tenantId: `verification-${crypto.randomUUID()}`, clinicId: "clinic", locationId: "main" };
   const folder = options.folder ?? await mkdtemp(join(tmpdir(), "abby-caller-policy-"));
   const path = join(folder, "approval.json"), accountPath = join(folder, "accounts.json");
@@ -36,7 +36,9 @@ export async function callerVerificationFixture(options: { scope?: LocationScope
   class FixturePolicy extends MemoryPolicyStore {
     override async read(bound: LocationScope) {
       const found = await super.read(bound);
-      return found.ok && (options.cancellationExecute || options.bookingExecute || options.reschedulingExecute) ? ok({ ...found.value, staffWorkEnabled: options.staffWorkEnabled ?? true }) : found;
+      return found.ok && (options.cancellationExecute || options.bookingExecute || options.reschedulingExecute || options.patientUpdateExecute)
+        ? ok({ ...found.value, staffWorkEnabled: options.staffWorkEnabled ?? true,
+          capabilities: { ...found.value.capabilities, ...(options.patientUpdateExecute ? { patientUpdate: "execute" as const } : {}) } }) : found;
     }
   }
   const policies = new FixturePolicy(options.bookingExecute ? "execute" : "requestOnly", () => now, async () => ok(true),

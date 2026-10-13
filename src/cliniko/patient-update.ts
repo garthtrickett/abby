@@ -22,6 +22,9 @@ export type PatientUpdateAttestation = PatientUpdateQuery & Readonly<{ operation
   confirmationPlayed?: true; prospectiveEmailRef?: string; prospectiveEmailDigest?: string }>;
 export type PatientUpdateAuthority = Readonly<{
   attest(query: PatientUpdateQuery | PatientUpdateRequest, phase: "read" | "send" | "inspect", signal: AbortSignal): Promise<PatientUpdateAttestation | null>;
+  /** Atomically consume this exact confirmed attempt immediately before PATCH.
+   * Subsequent inspection is transaction-bound, not reuse of the old contact proof. */
+  claim(request: PatientUpdateRequest, signal: AbortSignal): Promise<boolean>;
   /** An explicit owner dependency: revoke old contact grants and synchronize
    * affected lookup state after known native readback. Failure needs review. */
   contactChanged(request: PatientUpdateRequest, snapshot: PatientDetailsSnapshot, signal: AbortSignal): Promise<boolean>;
@@ -53,7 +56,7 @@ export class ClinikoPatientUpdateEdge {
     if (!config || !config.scope || ![config.scope.tenantId, config.scope.clinicId, config.scope.locationId].every(ref) ||
         typeof config.apiKey !== "string" || !/^.+-[a-z]{2}[0-9]{1,2}$/.test(config.apiKey) || /[\p{Cc}\p{Cf}]/u.test(config.apiKey) ||
         !normalizeEmailAddress(config.contactEmail) || !isClinikoRequestBudget(config.rateBudget) ||
-        typeof authority?.attest !== "function" || typeof authority.contactChanged !== "function" || typeof fetchPort !== "function" || typeof clock !== "function") return err({ kind: "invalidConfig" });
+        typeof authority?.attest !== "function" || typeof authority.claim !== "function" || typeof authority.contactChanged !== "function" || typeof fetchPort !== "function" || typeof clock !== "function") return err({ kind: "invalidConfig" });
     return ok(new ClinikoPatientUpdateEdge(config, authority, fetchPort, clock));
   }
   #query(query: PatientUpdateQuery, update = false): boolean {
@@ -61,7 +64,8 @@ export class ClinikoPatientUpdateEdge {
     const keys = ["scope", "callId", "sessionId", "patientId", "policyVersion", "verificationRef",
       ...(update ? ["attemptRef", "consentRef", "expectedDigest", "changes", ...(Object.hasOwn(query, "prospectiveEmailRef") ? ["prospectiveEmailRef"] : [])] : [])];
     return Object.keys(query).sort().join(",") === keys.sort().join(",") && sameScope(query.scope, this.#config.scope) &&
-      [query.callId, query.sessionId, query.policyVersion, query.verificationRef].every(ref) && validClinikoId(query.patientId);
+      [query.callId, query.sessionId, query.policyVersion].every(ref) && typeof query.verificationRef === "string" &&
+      /^[A-Za-z0-9_-]{1,128}$/.test(query.verificationRef) && validClinikoId(query.patientId);
   }
   #key(query: PatientUpdateQuery): string { return JSON.stringify([query.callId, query.sessionId, query.patientId]); }
   async #bounded<T>(run: (signal: AbortSignal) => Promise<T>, external?: AbortSignal): Promise<T | undefined> {
@@ -131,6 +135,7 @@ export class ClinikoPatientUpdateEdge {
         const limited = await awaitUntilAbort(claimClinikoBudget(this.#config.rateBudget), signal);
         if (limited !== null || signal.aborted) return err({ kind: "unavailable" as const });
         if (!await this.#authorized(request, "send", signal) || signal.aborted) return err({ kind: "forbidden" as const });
+        if (await awaitUntilAbort(this.#authority.claim(structuredClone(request), signal), signal) !== true || signal.aborted) return err({ kind: "forbidden" as const });
         this.#attempted.add(key!); sent = true;
         const response = await awaitUntilAbort(this.#fetch(`${this.#base}/patients/${request.patientId}`, { method: "PATCH", redirect: "error", signal,
           headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Basic ${Buffer.from(`${this.#config.apiKey}:`).toString("base64")}`, "User-Agent": `Abby (${this.#config.contactEmail})` },
@@ -147,6 +152,7 @@ export class ClinikoPatientUpdateEdge {
         let contact: boolean | undefined;
         try { contact = await awaitUntilAbort(this.#authority.contactChanged(structuredClone(request), structuredClone(observed), signal), signal); }
         catch { return ok({ kind: "needsContactReview" as const }); }
+        if (contact === true && !await this.#authorized(request, "inspect", signal)) return uncertain();
         return contact === true && !signal.aborted ? ok({ kind: "updated" as const, patientId: request.patientId }) : ok({ kind: "needsContactReview" as const });
       }, external);
       return result ?? (sent ? ok({ kind: "uncertain" }) : err({ kind: "unavailable" }));

@@ -59,8 +59,8 @@ const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: non
   urgentResponse: object({ scope, version: key, ownerRef: key,
     approvedText: { type: "string", minLength: 1, maxLength: 1_500 }, approved: { const: true },
     effectiveFrom: str, effectiveUntil: str }),
-  capabilities: object({ book: capabilityMode, cancel: capabilityMode, reschedule: capabilityMode,
-    intake: capabilityMode, transfer: capabilityMode }), transferDestinationRef: key, transferDestinationVersion: key,
+  capabilities: optional({ book: capabilityMode, cancel: capabilityMode, reschedule: capabilityMode,
+    intake: capabilityMode, transfer: capabilityMode, patientUpdate: capabilityMode }, ["book", "cancel", "reschedule", "intake", "transfer"]), transferDestinationRef: key, transferDestinationVersion: key,
   staffedIntervals: { type: "array", items: object({ startsAt: str, endsAt: str }), maxItems: 512 },
   staffedCoverage: object({ startsAt: str, endsAt: str }),
   staffSchedule: object({ scope, version: key, ownerRef: key, approved: { const: true },
@@ -101,7 +101,7 @@ const staffScheduleAuditPage = optional({ entries: array(optional({ version: key
 const greetingAuditPage = optional({ entries: array(optional({ version: key, enabled: bool,
   previousEnabled: bool, greetingVersion: key, actorRef: key, changedAt: str },
 ["version", "enabled", "previousEnabled", "actorRef", "changedAt"])), nextAfterVersion: uint }, ["entries"]);
-const actionKind = choice("book", "cancel", "reschedule", "intake");
+const actionKind = choice("book", "cancel", "reschedule", "intake", "patientUpdate");
 const actionStatus = choice("awaitingConfirmation", "ready", "dispatched", "committed", "rejected",
   "unsupported", "uncertain", "needsReview", "canceled");
 const staffReason = choice(...STAFF_REASONS);
@@ -376,6 +376,10 @@ export const capabilityCatalogue = {
     object({ kind: { const: "patients.intake.propose.v1" }, turn: sessionTurn, draftRef: key, now: str }),
     reply("intakeProposal", "progress", progress), "proposalOnly", "permittedActor", "callerConfirmation",
     ["activeCall", "currentCallSession", "intakeEnabledForExecution", "hostEvidenceForExecution"]),
+  "patients.correction.propose.v1": entry("patients.correction.propose.v1",
+    object({ kind: { const: "patients.correction.propose.v1" }, turn: sessionTurn, correctionRef: key, now: str }),
+    reply("patientCorrectionProposal", "progress", progress), "proposalOnly", "permittedActor", "callerConfirmation",
+    ["activeCall", "currentCallSession", "hostEvidenceForExecution"]),
   "calls.urgent.respond.v1": entry("calls.urgent.respond.v1",
     object({ kind: { const: "calls.urgent.respond.v1" }, turn, now: str }),
     reply("urgentResponseProgress", "progress", progress), "proposalOnly", "permittedActor", "none", ["activeCall"]),

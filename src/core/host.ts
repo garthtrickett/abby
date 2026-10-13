@@ -203,6 +203,12 @@ export interface IntakeEvidenceHost {
   resolveIntake(query: IntakeEvidenceQuery): Promise<Result<Extract<ActionRequest, { kind: "intake" }>, HostReadFailure>>;
 }
 
+export type PatientCorrectionEvidenceQuery = Omit<IntakeEvidenceQuery, "draftRef"> & Readonly<{ correctionRef: string }>;
+export interface PatientCorrectionEvidenceHost {
+  /** Resolve privately collected/read-back details, consent and current patient authority. */
+  resolvePatientCorrection(query: PatientCorrectionEvidenceQuery): Promise<Result<Extract<ActionRequest, { kind: "patientUpdate" }>, HostReadFailure>>;
+}
+
 /** The host issues this proof after its own caller verification; a provider ID is never proof. */
 export interface PatientProofHost {
   verifyPatient(scope: LocationScope, verificationRef: string, now: string): Promise<Result<VerifiedPatient, HostReadFailure>>;

@@ -19,7 +19,7 @@ test("E2E-268 crash before, during and after the clinical send preserves discove
   const databaseName = `abby_reviewed_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl); target.pathname = `/${databaseName}`;
   const scope = { tenantId: `reviewed-${randomUUID()}`, clinicId: "clinic", locationId: "location" };
-  const request: ClinikoReviewRequest = { scope, patientId: "917263544536271", businessId: "11",
+  const request: ClinikoReviewRequest & { operation: Extract<ClinikoReviewRequest["operation"], { kind: "cancel" }> } = { scope, patientId: "917263544536271", businessId: "11",
     credentialFingerprint: clinikoCredentialFingerprint("synthetic-review-key-au5"), policyVersion: "reviewed-policy-canary",
     termsVersion: "reviewed-terms-canary", timeZone: "Asia/Jakarta", createdAt: "2026-10-04T04:00:00Z",
     operation: { kind: "cancel", appointmentId: "71", cancellationReason: 10, practitionerId: "22", appointmentTypeId: "33",

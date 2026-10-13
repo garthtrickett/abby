@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 import { digestActionRequest } from "./digest.ts";
 import { clearAffirmation } from "./caller-affirmation.ts";
 import { actionOutcomeText, confirmedActionText } from "./action-outcome.ts";
+import { patientCorrectionEvidenceFailure } from "./patient-correction.ts";
 import { requestBoundaryText, validRequestBoundary } from "./request-boundary.ts";
 import { bookingHorizonText, validBookingHorizon } from "./booking-horizon.ts";
 import { publicInformationUnavailable } from "./public-information.ts";
@@ -87,6 +88,7 @@ function describe(request: ActionRequest, locale: string): string {
       return `Please confirm moving your ${detail ? `${detail.appointmentTypeName} appointment with ${detail.practitionerName}` : "appointment"} on ${appointmentTime(request.target.startsAt, request.target.timeZone, locale)} to ${appointmentTime(request.offer.startsAt, request.target.timeZone, locale)}${detail ? `, for ${detail.durationMinutes} minutes` : ""}. ${request.terms.approvedText}`;
     }
     case "intake": return "Please confirm that your approved intake details may be saved. This does not book an appointment.";
+    case "patientUpdate": return "Please confirm saving the patient-detail correction that was read back privately. Your appointments will remain unchanged.";
   }
 }
 
@@ -136,6 +138,7 @@ export function appointmentChangeEvidenceFailure(scope: LocationScope,
 }
 
 function evidenceFailure(state: CallState, request: ActionRequest, now: string): TransitionFailure | undefined {
+  if (request.kind === "patientUpdate") return patientCorrectionEvidenceFailure(state.policy.scope, request, now);
   if (request.kind === "cancel" || request.kind === "reschedule") {
     return appointmentChangeEvidenceFailure(state.policy.scope, request, now);
   }
@@ -230,7 +233,7 @@ function endMedia(state: CallState, now: string, reason: CallTerminalReason): vo
 function handleRequest(state: CallState, turn: FinalCallerTurn, request: ActionRequest, now: string): Result<void, TransitionFailure> {
   const failure = evidenceFailure(state, request, now);
   if (failure) return err(failure);
-  const mode = state.policy.capabilities[request.kind];
+  const mode = state.policy.capabilities[request.kind] ?? "unavailable";
   if (mode === "unavailable") {
     state.callerMessages.push("I can't complete that request here.");
     return ok(undefined);
@@ -322,7 +325,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
         "Before saving a staff request, verify your registered email. If you receive a six-digit code, enter it on the keypad, then press pound. Star clears your entry. Please do not say the code aloud. " + (interpretation.messageDraft === true ? "After verification, tell me your message. You can add or correct details before asking me to send it." : "After verification, ask me to send the request."));
       break;
     case "workflowStarted": {
-      if (!["book", "cancel", "reschedule", "intake", "appointments.read"].includes(interpretation.operation) ||
+      if (!["book", "cancel", "reschedule", "intake", "patientUpdate", "appointments.read"].includes(interpretation.operation) ||
           (interpretation.operation === "intake" ? interpretation.next !== "intakeRequired" : interpretation.next !== "codeRequired") ||
           (interpretation.operation !== "appointments.read" && state.policy.capabilities[interpretation.operation] !== "execute") || !state.policy.automationEnabled) return err({ kind: "invalidTransition" });
       state.callerMessages.push(interpretation.next === "codeRequired"

@@ -2,7 +2,7 @@ import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
 import { normalizePatientPhone } from "./phone-number.ts";
 import { normalizeEmailAddress } from "../shared/email-address.ts";
-import { claimClinikoBudget, ClinikoReadBudget, observeCliniko429 } from "./read-budget.ts";
+import { claimClinikoBudget, ClinikoReadBudget, clinikoCredentialFingerprint, observeCliniko429 } from "./read-budget.ts";
 import type { ClinikoRequestBudget } from "./read-budget.ts";
 import { boundedClinikoJson } from "./bounded-json.ts";
 import type { ClinikoPatientConfig } from "./patients.ts";
@@ -37,6 +37,11 @@ export class ClinikoVerificationContactReader implements VerificationContact {
     this.#budget = config.rateBudget ?? new ClinikoReadBudget();
     this.#country = config.countryCallingCode;
     this.#fetch = fetchPort;
+  }
+
+  /** Private composition identity; no key or patient/contact value leaves this reader. */
+  selection(): Readonly<{ scope: Pick<LocationScope, "tenantId" | "clinicId">; credentialFingerprint: string }> {
+    return { scope: { tenantId: this.#config.scope.tenantId, clinicId: this.#config.scope.clinicId }, credentialFingerprint: clinikoCredentialFingerprint(this.#config.apiKey) };
   }
 
   async read(scope: LocationScope, patientId: string, normalizedPhone: string, signal: AbortSignal):
