@@ -26,6 +26,7 @@ export type ClinikoReschedulingSessionConfig = Readonly<{
   permission: PatientVerificationPermission; verificationBudget: PatientVerificationBudget; delivery: PatientCodeDelivery;
   directory: AdminDirectory; callerApprovalPath: string; bookingApprovalPath: string; reschedulingApprovalPath: string;
   destination?: Readonly<{ practitionerId: string; bookingApprovalPath: string }>;
+  practitioners?: readonly Readonly<{ practitionerId: string; bookingApprovalPath: string }>[];
   cliniko: Readonly<{ apiKey: string; contactEmail: string; businessId: string; practitionerId: string; appointmentTypeId: string; recallTypeId: string;
     timeZone: string; countryCallingCode: string; rateBudget: ClinikoRequestBudget }>;
   signal: AbortSignal; fetchPort?: typeof fetch; clock?: () => string; timeoutMs?: number;
@@ -59,11 +60,14 @@ export class ClinikoReschedulingSession {
     const dispose = () => { host?.dispose(); menu?.dispose(); authority?.dispose(); verification?.dispose(); };
     try {
       if (!incoming || !(incoming.signal instanceof AbortSignal) || incoming.signal.aborted ||
+          incoming.destination && incoming.practitioners !== undefined ||
+          incoming.practitioners !== undefined && (!Array.isArray(incoming.practitioners) || incoming.practitioners.length > 23) ||
           !isClinikoRequestBudget(incoming.cliniko?.rateBudget) ||
           (incoming.timeoutMs !== undefined && (!Number.isSafeInteger(incoming.timeoutMs) || incoming.timeoutMs < 1 || incoming.timeoutMs > 20_000))) return unavailable();
       // Freeze caller/provider bindings before the first async approval read.
       const config = Object.freeze({ ...incoming, receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound),
         ...(incoming.destination ? { destination: Object.freeze({ ...incoming.destination }) } : {}),
+        ...(incoming.practitioners ? { practitioners: Object.freeze(incoming.practitioners.map(member => Object.freeze({ ...member }))) } : {}),
         cliniko: Object.freeze({ ...incoming.cliniko }), clock: incoming.clock ?? (() => new Date().toISOString()) });
       const scope = config.receipt.scope, fetchPort = config.fetchPort ?? fetch;
       const stopped = new Promise<undefined>(resolve => {
@@ -97,6 +101,16 @@ export class ClinikoReschedulingSession {
           credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey), timeZone: config.cliniko.timeZone,
           directory: config.directory, clock: config.clock });
         if (!fees.ok || settled) return undefined;
+        const practitionerPolicies: OwnerFileBookingPolicy[] = [];
+        for (const member of config.practitioners ?? []) {
+          const captured = await OwnerFileBookingPolicy.capture({ path: member.bookingApprovalPath, scope,
+            policyVersion: config.policyVersion, businessId: config.cliniko.businessId, practitionerId: member.practitionerId,
+            appointmentTypeId: config.cliniko.appointmentTypeId, recallTypeId: config.cliniko.recallTypeId,
+            credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey), timeZone: config.cliniko.timeZone,
+            directory: config.directory, clock: config.clock });
+          if (!captured.ok || settled) return undefined;
+          practitionerPolicies.push(captured.value);
+        }
         if (destinationId !== config.cliniko.practitionerId) {
           const destination = await policy.value.current(scope), current = await fees.value.current(scope);
           if (!destination.ok || !current.ok || !current.value.practitionerMoves?.some(move => move.fromPractitionerId === config.cliniko.practitionerId &&
@@ -122,7 +136,7 @@ export class ClinikoReschedulingSession {
         verification = session.value;
         const source = ClinikoReschedulingAuthority.create({ ...config.cliniko, practitionerId: destinationId, scope, callId: config.receipt.callId,
           sessionId: config.sessionId, policyVersion: config.policyVersion, proof: verification.proof,
-          policy: policy.value, feePolicy: fees.value, clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) }, fetchPort);
+          policy: policy.value, feePolicy: fees.value, ...(config.practitioners !== undefined ? { practitionerPolicies } : {}), clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) }, fetchPort);
         const cancellation = ClinikoCancellationWriter.create({ ...config.cliniko, scope }, fetchPort, config.clock);
         const rescheduling = ClinikoRescheduleWriter.create({ ...config.cliniko, scope }, fetchPort, config.clock);
         const recalls = ClinikoRecallWriter.create({ ...config.cliniko, scope }, fetchPort);

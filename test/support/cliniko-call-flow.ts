@@ -35,7 +35,7 @@ export async function cancellationCallFlowFixture(options: Parameters<typeof can
 }
 export async function reschedulingCallFlowFixture(options: Parameters<typeof reschedulingSessionFixture>[0] = {}) {
   const f = await reschedulingSessionFixture(options); f.owner.dispose();
-  try { return { ...f, ...connect({ ...f.config, ...(f.config.destination ? { reschedulingDestination: f.config.destination } : {}), approvals: paths(f.config.callerApprovalPath, f.config.bookingApprovalPath,
+  try { return { ...f, ...connect({ ...f.config, ...(f.config.destination ? { reschedulingDestination: f.config.destination } : {}), ...(f.config.practitioners !== undefined ? { reschedulingPractitioners: f.config.practitioners } : {}), approvals: paths(f.config.callerApprovalPath, f.config.bookingApprovalPath,
     f.config.reschedulingApprovalPath, f.config.reschedulingApprovalPath) }), get patches() { return f.patches; }, get claims() { return f.claims; } }; }
   catch (error) { await f.close(); throw error; }
 }

@@ -12,7 +12,7 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 | 4 | Complete synthetic speech, public transport and eventual carrier qualification. | Prior synthetic runtime evidence exists; noisy/safety and repeated speech gates remain open. Paid probes require restored credits; public tunnel requires a dedicated usable route. Twilio-number carrier evidence is deferred, not substituted with synthetic results. |
 | 5 | Expand services, duration choices, locations and initial/follow-up rules. | Current service/intake variants, return rules and independently provisioned multi-location compiled hosts are locally qualified in draft457. Actual clinic configuration/acceptance and authoritative CI remain open. |
 | 6 | Extend searches and support online-disabled services where required. | E2E-356 locally qualifies complete approved longer online searches and a compiled two-month late-range booking. E2E-357/358 add independently approved non-recurring native calendars, complete adaptive busy reads, Sunday0/7 and compiled returning/first-time location/member coverage with fresh chosen-day reads. Recurrence and broader real-calendar/serving qualification remain incomplete; preserve incomplete-source denial, date bounds and offer/commit agreement. |
-| 7 | Support another approved practitioner during rescheduling. | E2E-359 locally qualifies explicit approved practitioner pairs, independent destination policy, named played confirmation and one inspected in-place move at a changed or retained time. Destination is currently trusted host setup; caller directory selection and dialogue remain incomplete. |
+| 7 | Support another approved practitioner during rescheduling. | E2E-359 locally qualifies explicit approved practitioner pairs, independent destination policy, named played confirmation and one inspected in-place move at a changed or retained time. E2E-360 adds the current approved directory, retained original preference, played name/ordinal choice, pagination, fresh-time invalidation and ordinary signed/compiled dialogue. Final type/build and 99 checks passed; current exact-head cloud, real model/acoustic and clinic acceptance remain open. |
 | 8 | Add patient detail corrections, required registration fields and resends. | Minimal intake exists; existing-patient correction and delivered resend are incomplete. Require independently authorized updates, contact/index consistency and separate registration/booking outcomes. |
 | 9 | Handle multiple patients/actions in one call. | Restricted proxy/identity foundations exist. Require authority for each person, exact appointment selection and independent outcomes; no implicit household disclosure. |
 | 10 | Add class attendance booking, cancellation and movement. | Individual endpoints are insufficient. Require existing session/attendee identities, capacity and duplicate checks, compensating move recovery and truthful concurrent-result handling. Membership credits/passes require their own evidence. |
@@ -288,3 +288,26 @@ when availability does not suit. Gap6 recurrence/provider/historical additive
 work remains open with optional patient-free evidence pending. Gaps8–13, real
 clinic/mail, acoustic, cloud CI and carrier acceptance remain open. The full13
 objective is active.
+
+
+## Gap7 caller practitioner choice qualification
+
+Current directory provisioning retains the original member until a played name
+or ordinal choice. Independent scoped approvals and native metadata govern up
+to 24 members in pages of three. A choice clears the old member's time references,
+retains appointment identity/location/type/duration and requires fresh named
+confirmation before one PATCH. Empty original searches offer an explicit switch;
+uncertain compiled writes retain one attempt.
+
+Typecheck, compiled build, all 99 source/core/model/signed/compiled/registry
+checks and diff check passed without failures/skips in tracked work
+`Abby caller practitioner choice final source compiled model and registry gate`,
+log `4590eee3-1791908652163.log`. Manifest 1.167 registers 360 stable IDs, with
+full carrier evidence still planned. Exact commands, earlier failures and
+remaining qualification are in
+[APPROVED_PRACTITIONER_RESCHEDULING.md](APPROVED_PRACTITIONER_RESCHEDULING.md).
+
+This is local synthetic qualification. Current cloud CI, real clinic/provider/
+recipient and actual model/acoustic acceptance remain open. Preserve gap6
+recurrence/historical calendar evidence and gaps8–13; the complete objective
+remains active.

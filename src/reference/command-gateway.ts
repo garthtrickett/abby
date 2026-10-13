@@ -105,8 +105,8 @@ export type GatewayCommand =
   | Readonly<{ kind: "clinic.availability.approval.change.v2"; route: ClinicAvailabilityRoute; selection: ClinicAvailabilitySelection;
     alternatives: readonly ClinicAvailabilitySelection[]; expectedVersion: number }>
   | Readonly<{ kind: "clinic.availability.approval.revoke.v1"; expectedVersion: number }>
-  | Readonly<{ kind: "rescheduling.menu.read.v1"; turn: FinalCallerTurn; stage: "targets" | "offers"; from: string; to: string; now: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null }>
-  | Readonly<{ kind: "rescheduling.menu.select.v1"; turn: FinalCallerTurn; stage: "targets" | "offers"; choice: 1 | 2 | 3; now: string }>
+  | Readonly<{ kind: "rescheduling.menu.read.v1"; turn: FinalCallerTurn; stage: "targets" | "practitioners" | "offers"; from: string; to: string; now: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null; nextPractitioners?: true }>
+  | Readonly<{ kind: "rescheduling.menu.select.v1"; turn: FinalCallerTurn; stage: "targets" | "practitioners" | "offers"; choice: 1 | 2 | 3; now: string }>
   | Readonly<{ kind: "booking.offers.read.v1"; turn: FinalCallerTurn; from: string; to: string; now: string; preference?: import("../core/booking-search-preference.ts").BookingSearchPreference; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null }>
   | Readonly<{ kind: "booking.offers.select.v1"; turn: FinalCallerTurn; choice: 1 | 2 | 3; now: string }>
   | Readonly<{ kind: "availability.read.v2"; turn: FinalCallerTurn; from: string; to: string; now: string }>
@@ -594,7 +594,7 @@ export class CommandGateway {
       }
       case "rescheduling.menu.read.v1": {
         const turn = structuredClone(command.turn);
-        const result = await this.reception.readReschedulingMenu(this.actor.scope, turn, command.stage, command.from, command.to, command.now, false, command.window);
+        const result = await this.reception.readReschedulingMenu(this.actor.scope, turn, command.stage, command.from, command.to, command.now, false, command.window, undefined, command.nextPractitioners);
         return result.ok ? ok({ kind: "appointmentChangeProposal", progress: commandProgress(result.value, turn.turnId) }) : result;
       }
       case "rescheduling.menu.select.v1": {

@@ -250,12 +250,12 @@ export class TextReception {
     return new StaffOutcomeTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, expectedRevision, external);
   }
   staffRequestEnabled(): boolean { return typeof this.host.prepareStaffRequest === "function"; }
-  async readReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", from: string, to: string, now: string, correcting = false, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null, signal?: AbortSignal) {
+  async readReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "practitioners" | "offers", from: string, to: string, now: string, correcting = false, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null, signal?: AbortSignal, nextPractitioners?: true) {
     const denied = await this.patientAccessDenied(scope, turn, undefined);
     if (denied) return denied;
-    return new ReschedulingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, stage, { from, to, ...(window !== undefined ? { window } : {}), ...(correcting ? { correcting: true as const } : {}) }, signal);
+    return new ReschedulingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, stage, { from, to, ...(window !== undefined ? { window } : {}), ...(correcting ? { correcting: true as const } : {}), ...(nextPractitioners ? { nextPractitioners } : {}) }, signal);
   }
-  async selectReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", choice: 1 | 2 | 3, now: string, signal?: AbortSignal) {
+  async selectReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "practitioners" | "offers", choice: 1 | 2 | 3, now: string, signal?: AbortSignal) {
     const denied = await this.patientAccessDenied(scope, turn, undefined);
     if (denied) return denied;
     return new ReschedulingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, stage, { choice }, signal);

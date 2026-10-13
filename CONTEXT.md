@@ -29,6 +29,12 @@ The patient, appointment identity, location, service and duration are retained.
 The caller confirms the destination practitioner under current authority for
 that appointment.
 
+## Practitioner directory
+
+Clinic-approved practitioner options for an existing appointment that preserve
+its location, service and duration. A directory choice identifies whose
+availability to check; only a confirmed practitioner change alters the appointment.
+
 ## Best-effort write
 
 A confirmed request is checked and attempted once, then inspected under the approved external provider contract. Competing edits, overlaps or duplicates may still occur; unknown outcomes require owned review rather than replay or a completion claim. It does not promise commit protection.

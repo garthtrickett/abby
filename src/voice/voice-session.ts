@@ -29,8 +29,8 @@ export type VoiceIntent =
   | Readonly<{ kind: "staffRequest"; requestedPerson?: string; requestSubject?: import("../core/staff-request-subject.ts").StaffRequestSubject }>
   | Readonly<{ kind: "bookingMenu"; from: string; to: string; preference?: import("../core/booking-search-preference.ts").BookingSearchPreference; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null }>
   | Readonly<{ kind: "bookingChoice"; choice: 1 | 2 | 3 }>
-  | Readonly<{ kind: "reschedulingMenu"; stage: "targets" | "offers"; from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null; correcting?: true }>
-  | Readonly<{ kind: "reschedulingChoice"; stage: "targets" | "offers"; choice: 1 | 2 | 3 }>
+  | Readonly<{ kind: "reschedulingMenu"; stage: "targets" | "practitioners" | "offers"; from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null; correcting?: true; nextPractitioners?: true }>
+  | Readonly<{ kind: "reschedulingChoice"; stage: "targets" | "practitioners" | "offers"; choice: 1 | 2 | 3 }>
   | Readonly<{ kind: "model" }>
   | Readonly<{ kind: "book"; verificationRef: string; offerRef: string }>
   | Readonly<{ kind: "cancel"; verificationRef: string; targetRef: string }>
@@ -412,7 +412,7 @@ export class VoiceSession {
       result = await this.withPendingIntent(signal => this.reception.selectBookingMenu(this.scope, turn, intent.choice, now, signal));
     } else if (this.cachedIntent.kind === "reschedulingMenu") {
       const intent = this.cachedIntent;
-      result = await this.withPendingIntent(signal => this.reception.readReschedulingMenu(this.scope, turn, intent.stage, intent.from, intent.to, now, intent.correcting, intent.window, signal));
+      result = await this.withPendingIntent(signal => this.reception.readReschedulingMenu(this.scope, turn, intent.stage, intent.from, intent.to, now, intent.correcting, intent.window, signal, intent.nextPractitioners));
     } else if (this.cachedIntent.kind === "reschedulingChoice") {
       const intent = this.cachedIntent;
       result = await this.withPendingIntent(signal => this.reception.selectReschedulingMenu(this.scope, turn, intent.stage, intent.choice, now, signal));

@@ -320,9 +320,13 @@ export class ClinikoAvailabilityReader {
   /** Metadata validation for the separately approved offline calculator. No
    * times, patient authority or reservation are produced by this read. */
   async describeRosterBooking(scope: LocationScope, durationMinutes: number, signal: AbortSignal) {
+    return this.describeBookingOffering(scope, durationMinutes, signal, true);
+  }
+  /** Current native labels and relationships without observing or reserving a slot. */
+  async describeBookingOffering(scope: LocationScope, durationMinutes: number, signal: AbortSignal, allowOffline = false) {
     if (!sameScope(this.scope, scope)) return err({ kind: "scopeMismatch" as const });
     if (!Number.isSafeInteger(durationMinutes) || durationMinutes < 1 || durationMinutes > 480 || signal.aborted) return err({ kind: "invalidConfig" as const });
-    return this.offering(signal, true, durationMinutes, true);
+    return this.offering(signal, true, durationMinutes, allowOffline);
   }
   private async offering(signal: AbortSignal, withLabel: boolean, bookingDuration?: number, allowOffline = false):
     Promise<Result<Readonly<{ kind: "notEligible"; reason: "business" | "practitioner" | "appointmentType" }> |

@@ -123,6 +123,7 @@ export type BookingMenuQuery = Readonly<{ scope: LocationScope; callId: string; 
   turnId: string; now: string; signal: AbortSignal }>;
 export type ReschedulingMenuQuery = BookingMenuQuery & Readonly<{ stage: import("./rescheduling-menu.ts").ReschedulingMenuStage }>;
 export type ReschedulingMenuReadQuery = ReschedulingMenuQuery & Readonly<{ from: string; to: string; window?: BookingSearchWindow | null; priorTurnId?: string;
+  nextPractitioners?: true;
   /** Derived from the canceled SAM request, never a caller/model provider ID. */
   correctingAppointmentRef?: string }>;
 export interface ReschedulingMenuHost {
@@ -132,7 +133,8 @@ export interface ReschedulingMenuHost {
   readReschedulingMenu(query: ReschedulingMenuReadQuery):
     Promise<Result<import("./rescheduling-menu.ts").ReschedulingMenuRead, HostReadFailure>>;
   selectReschedulingMenu(query: ReschedulingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>):
-    Promise<Result<Readonly<{ kind: "targetSelected"; snapshot: import("./rescheduling-menu.ts").ReschedulingMenuRead }> |
+    Promise<Result<Readonly<{ kind: "targetSelected"; snapshot: Exclude<import("./rescheduling-menu.ts").ReschedulingMenuRead, import("./rescheduling-menu.ts").ReschedulingPractitionerRead> }> |
+      Readonly<{ kind: "practitionerSelected"; snapshot: import("./rescheduling-menu.ts").ReschedulingPractitionerRead }> |
       Readonly<{ kind: "actionSelection"; verificationRef: string; targetRef: string; offerRef: string }>, HostReadFailure>>;
 }
 export interface BookingMenuHost {

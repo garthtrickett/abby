@@ -34,7 +34,7 @@ const services = process.env.ABBY_SYNTHETIC_SERVICE_MODE === "1", smtpMode = pro
 if (services && !["book", "intake"].includes(operation!) || process.env.ABBY_SYNTHETIC_SERVICE_MODE && !services || process.env.ABBY_SYNTHETIC_SMTP_MODE && !smtpMode) throw new Error("invalid synthetic integration mode");
 const multiLocation = process.env.ABBY_SYNTHETIC_LOCATION_MODE === "1";
 const practitionerMove = process.env.ABBY_SYNTHETIC_PRACTITIONER_MOVE;
-if (practitionerMove && (!["changedTime", "sameTime"].includes(practitionerMove) || operation !== "reschedule" || services || multiLocation)) throw new Error("invalid synthetic practitioner move mode");
+if (practitionerMove && (!["changedTime", "sameTime", "directory"].includes(practitionerMove) || operation !== "reschedule" || services || multiLocation)) throw new Error("invalid synthetic practitioner move mode");
 const longSearch = process.env.ABBY_SYNTHETIC_LONG_SEARCH_MODE === "1";
 const offlineCalendar = process.env.ABBY_SYNTHETIC_OFFLINE_CALENDAR === "1", missingBusy = process.env.ABBY_SYNTHETIC_MISSING_BUSY === "1";
 if (offlineCalendar && (!services || !["book", "intake"].includes(operation!)) || missingBusy && !offlineCalendar) throw new Error("invalid synthetic calendar mode");
@@ -43,7 +43,7 @@ if (longSearch && (!services || operation !== "book" || multiLocation)) throw ne
 if (multiLocation && (!services || !["book", "intake"].includes(operation!))) throw new Error("invalid synthetic location mode");
 const locationFixture = multiLocation ? operation === "intake" ? await intakeLocationServiceFixture() : await locationServiceFixture() : undefined;
 const f = locationFixture?.north ?? (services ? operation === "book" ? await serviceBookingFixture() : await intakeServiceFixture() : operation === "staff.request" ? await clinikoStaffCallFlowFixture() : operation === "book" ? await bookingCallFlowFixture() : operation === "cancel" ? await cancellationCallFlowFixture() :
-  operation === "reschedule" ? await reschedulingCallFlowFixture(practitionerMove ? { destinationPractitionerId: "23", sameTime: practitionerMove === "sameTime",
+  operation === "reschedule" ? await reschedulingCallFlowFixture(practitionerMove ? { ...(practitionerMove === "directory" ? { practitionerChoices: ["23"] } : { destinationPractitionerId: "23" }), sameTime: practitionerMove === "sameTime",
     practitionerMoves: [{ fromPractitionerId: "22", toPractitionerId: "23", appointmentTypeId: "33", durationMinutes: 30 }] } : {}) : operation === "intake" ? await intakeCallFlowFixture() : await appointmentEnquiryFixture());
 f.flow.dispose();
 if (longSearch && "setStarts" in f) f.setStarts(["2026-11-20T04:00:00.000Z"]);
@@ -71,6 +71,7 @@ const approvalPaths = new Set([
   ...(c.enquiry ? [c.enquiry.callerApprovalPath, c.enquiry.readApprovalPath] : []),
   ...(c.staff ? [c.staff.callerApprovalPath, c.staff.staffApprovalPath] : []),
   ...(c.catalogue ? [c.catalogue.approvalPath, ...c.catalogue.practitioners.map(p => p.bookingApprovalPath)] : []),
+  ...(c.reschedulingPractitioners ? c.reschedulingPractitioners.map(member => member.bookingApprovalPath) : []),
 ]);
 for (const path of approvalPaths) {
   let value: unknown;
@@ -241,6 +242,18 @@ async function run(delivery?: PatientCodeDelivery) {
         intent(owner) {
           const submit = owner.submitCode.bind(owner);
           owner.submitCode = async code => { const result = await submit(code); process.send?.({ kind: "verificationResult", verified: result.verified }); return result; };
+          if (practitionerMove === "directory") return createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-intent", model: "synthetic-model", clinicDate: () => "2026-10-04",
+            fetch: async (_value, init) => {
+              const text = JSON.parse(JSON.parse(String(init?.body)).input[1].content).callerText;
+              process.send?.({ kind: "modelTurn", text });
+              const decisions = {
+                "I need to move an appointment.": { kind: "workflow", operation: "reschedule", stage: null, from: null, to: null, choice: null },
+                "Show my existing appointments from October 4 through October 9.": { kind: "menu", operation: null, stage: "targets", from: "2026-10-04", to: "2026-10-09", choice: null },
+                "Show move times on October 8.": { kind: "menu", operation: null, stage: "offers", from: "2026-10-08", to: "2026-10-08", choice: null },
+              };
+              const decision = decisions[text as keyof typeof decisions]; if (!decision) throw new Error("unexpected synthetic directory classified turn");
+              return Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [{ type: "output_text", text: JSON.stringify(decision) }] }] });
+            } });
           if (services) return createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-intent", model: "synthetic-model", clinicDate: () => "2026-10-04",
             fetch: async (_value, init) => {
               const text = JSON.parse(JSON.parse(String(init?.body)).input[1].content).callerText;

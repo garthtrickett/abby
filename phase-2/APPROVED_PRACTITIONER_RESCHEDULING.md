@@ -80,13 +80,12 @@ full carrier evidence remains planned.
 
 ## Remaining gap7 work
 
-The destination is currently fixed by trusted host setup. General caller choice
-among a current approved practitioner directory, retained source-practitioner
-preference, a spoken switch when no suitable time exists, and new dialogue/model
-qualification remain implementation work. No clinic/provider/carrier activation
-or acoustic acceptance follows from these synthetic journeys. Gap6 recurrence
-and historical additive-volume evidence, gaps8–13 and authoritative CI/real
-clinic/mail gates remain open. The full thirteen-gap objective remains active.
+The caller directory, original-practitioner preference and spoken switch are
+now implemented and locally qualified below. Actual model and acoustic
+acceptance, real clinic/provider configuration and current authoritative CI
+remain unestablished. Gap6 recurrence and historical additive-volume evidence,
+gaps8–13 and real clinic/mail/carrier gates remain open. The full thirteen-gap
+objective remains active.
 
 
 Final command:
@@ -163,3 +162,68 @@ checks and diff check, without failures or skips, in tracked job
 `4590eee3-1791906029224.log`. Fresh cloud qualification is required after
 publication. Caller choice among approved practitioners and the other remaining
 gap work above are still open.
+
+## Caller practitioner directory
+
+Trusted clinical hosts can provision `reschedulingPractitioners`, a list of
+independent practitioner/booking-approval paths in addition to the primary
+booking approval. A session freezes that list before reading approvals and
+retains one verifier, protected appointment selection and send attempt. This
+configuration cannot be combined with the earlier fixed `reschedulingDestination`.
+Up to 24 total practitioners are supported; duplicate members, foreign scope,
+credential, business, service, zone or policy bindings are rejected.
+
+An appointment's original practitioner remains preferred until an explicit
+played directory choice. The directory checks current directional pair approval,
+unchanged duration/type and native activity/relationships/labels. It presents
+three public names at a time. `nextPractitioners` reads the next page only after
+the previous page was played; native identifiers stay in the private owner.
+Only names or ordinals from that current played page resolve a choice. An
+unheard name or model ordinal cannot select a member. New selection rechecks
+the original appointment, patient permission, approvals and displayed name.
+
+Changing the practitioner destroys all previous time references and creates a
+fresh destination offer owner. The caller then chooses a new time and hears
+named confirmation before one in-place PATCH. An empty original search can ask
+whether to check alternatives; answering yes opens the directory and cannot
+affirm an appointment change. Listing alternatives alone leaves the original
+preference and appointment intact. Strict per-call scope/session/played-page
+checks and current final-send authority remain in place.
+
+E2E-360 registers text, signed and compiled evidence at manifest 1.167 / 360 IDs.
+The signed journeys use the actual clinical resolver at prompt v26 and inspect
+changed/same-time practitioner PATCH bodies. Two compiled ordinary-caller
+journeys use PostgreSQL and TLS verification, inspecting a confirmed native move
+and an uncertain one-attempt response. Neither real acoustic quality nor actual
+recipient/provider/carrier acceptance is inferred from those fixtures.
+
+The following failed runs are retained: the first type gate exposed name/time
+snapshot narrowing; the first 54-test run rejected the new stage at the old
+command schema (45 passed, 9 failed). The next 9-test run reached the final
+writer, but the synthetic provider still asserted only a preset destination
+(8 passed, 1 failed). Its fixture now strictly validates the configured member
+cohort, exact body keys and applied member readback. The first signed run also
+used the business ID in a per-member availability fixture key and observed an
+unused original-provider counter; corrected tests inspect the signed fixture's
+exact native PATCH body. Finally, the first compiled run returned before
+installing its verification-result observer. Moving that observer ahead of the
+new branch preserves the original wait and real verification path.
+
+Corrected runs passed 27 source checks (`4590eee3-1791907647357.log`), 13 signed/
+directory checks (`4590eee3-1791907949662.log`) and 16 compiled/directory checks
+(`4590eee3-1791908358915.log`). Final exact-source qualification passed
+typecheck, compiled build, all 99 checks and diff check with no skips/failures:
+tracked work `Abby caller practitioner choice final source compiled model and registry gate`,
+log `4590eee3-1791908652163.log`, exit 0. No worker count, runtime deadline,
+permission, privacy or mutation-inspection gate was relaxed.
+
+Final command:
+
+```sh
+npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh node --test --test-concurrency=4 test/cliniko/practitioner-directory-rescheduling.test.ts test/voice/practitioner-directory-call.test.ts test/voice/compiled-practitioner-directory.test.ts test/voice/compiled-practitioner-move.test.ts test/cliniko/practitioner-rescheduling.test.ts test/cliniko/rescheduling-authority.test.ts test/cliniko/rescheduling-session.test.ts test/cliniko/rescheduling-clinic-policy.test.ts test/cliniko/reschedule-write.test.ts test/voice/clinical-model-workflow-call.test.ts test/voice/openai-clinical-intent.test.ts test/voice/standalone-clinical-runner.test.ts test/text/rescheduling-setting.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts && git diff --check
+```
+
+The preceding a56dec8 workflows did not start because of GitHub billing/payment
+or spending-limit annotations. This source revision requires fresh exact-head
+CI after publication. The PR remains draft while authoritative qualification
+is unavailable, and the original thirteen-gap objective remains active.

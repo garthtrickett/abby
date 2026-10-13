@@ -21,7 +21,7 @@ import { standaloneReschedulingFixture } from "./standalone-rescheduling.ts";
 /** Concrete public policies/selection/verifier/SAM/review/write; independent permission, email and HTTP remain synthetic. */
 export async function reschedulingAuthorityFixture(options: { scope?: LocationScope; folder?: string; fetchPort?: typeof fetch; rateBudget?: ClinikoRequestBudget;
   verificationBudget?: PatientVerificationBudget; timeoutMs?: number; operation?: PatientOperation; multiple?: boolean; lostMove?: boolean; startsAt?: string; cancellationExecute?: boolean;
-  destinationPractitionerId?: string; sameTime?: boolean; practitionerMoves?: readonly ApprovedPractitionerMove[] } = {}) {
+  destinationPractitionerId?: string; sameTime?: boolean; practitionerMoves?: readonly ApprovedPractitionerMove[]; practitionerChoices?: readonly string[] } = {}) {
   const folder = options.folder ?? await mkdtemp(join(tmpdir(), "abby-move-authority-"));
   const path = join(folder, "rescheduling.json"), destinationPath = join(folder, "destination.json"), accountPath = join(folder, "accounts.json");
   let approval: ReschedulingApproval, destinationApproval: BookingApproval, source: ClinikoReschedulingAuthority;
@@ -31,6 +31,9 @@ export async function reschedulingAuthorityFixture(options: { scope?: LocationSc
   let sourceTime = verificationNow, failure = "", starts = ["2026-10-08T05:00:00.000Z", "2026-10-08T06:00:00.000Z"];
   let onTimes = async () => {}, onBusiness = async () => {};
   const destinationId = options.destinationPractitionerId ?? "22";
+  const practitionerPaths = (options.practitionerChoices ?? []).map(practitionerId => ({ practitionerId, bookingApprovalPath: join(folder, `practitioner-${practitionerId}.json`) }));
+  const allPractitioners = [...new Set(["22", destinationId, ...(options.practitionerChoices ?? [])])];
+  const practitionerStarts = new Map<string, string[]>();
   if (options.sameTime) starts = ["2026-10-08T04:00:00.000Z"];
   const replace = async (file: string, value: unknown) => { await writeFile(`${file}.new`, JSON.stringify(value), { mode: 0o600 }); await rename(`${file}.new`, file); };
   try {
@@ -39,16 +42,16 @@ export async function reschedulingAuthorityFixture(options: { scope?: LocationSc
         const url = new URL(String(value));
         if (url.pathname === "/v1/businesses/11") { await onBusiness(); return Response.json({ id: "11", archived_at: failure === "businessArchive" ? verificationNow : null,
           time_zone_identifier: failure === "zone" ? "Asia/Jakarta" : "Australia/Sydney", show_in_online_bookings: failure !== "businessOnline", appointment_type_ids: ["33"] }); }
-        if (["/v1/practitioners/22", `/v1/practitioners/${destinationId}`].includes(url.pathname)) return Response.json({ id: url.pathname.split("/").at(-1), archived_at: null, active: failure !== "inactive",
-          show_in_online_bookings: true, display_name: failure === "name" ? "Changed practitioner" : destinationId === "22" ? "Demo Practitioner" : "Demo Destination" });
+        if (allPractitioners.some(id => url.pathname === `/v1/practitioners/${id}`)) return Response.json({ id: url.pathname.split("/").at(-1), archived_at: null, active: failure !== "inactive",
+          show_in_online_bookings: true, display_name: failure === "name" ? "Changed practitioner" : options.practitionerChoices ? url.pathname.endsWith("/22") ? "Demo Practitioner" : url.pathname.endsWith("/23") ? "Demo Destination" : `Demo Practitioner ${url.pathname.split("/").at(-1)}` : destinationId === "22" ? "Demo Practitioner" : "Demo Destination" });
         if (url.pathname === "/v1/appointment_types/33") return Response.json({ id: "33", archived_at: null, show_in_online_bookings: true,
           name: "Physiotherapy", duration_in_minutes: failure === "duration" ? 60 : 30 });
-        if (url.pathname === "/v1/businesses/11/practitioners") { const ids = failure === "relationship" ? [destinationId === "22" ? "23" : "22"] : [...new Set(["22", destinationId])]; return Response.json({ total_entries: ids.length, practitioners: ids.map(id => ({ id })) }); }
-        if (["/v1/practitioners/22/appointment_types", `/v1/practitioners/${destinationId}/appointment_types`].includes(url.pathname)) return Response.json({ total_entries: 1, appointment_types: [{ id: "33" }] });
+        if (url.pathname === "/v1/businesses/11/practitioners") { const ids = failure === "relationship" ? [destinationId === "22" ? "23" : "22"] : allPractitioners; return Response.json({ total_entries: ids.length, practitioners: ids.map(id => ({ id })) }); }
+        if (allPractitioners.some(id => url.pathname === `/v1/practitioners/${id}/appointment_types`)) return Response.json({ total_entries: 1, appointment_types: [{ id: "33" }] });
         if (url.pathname.endsWith("/available_times")) {
           await onTimes();
           if (failure === "unavailable") return new Response(null, { status: 503 });
-          const times = starts.filter(start => {
+          const times = (practitionerStarts.get(url.pathname.match(/\/practitioners\/([^/]+)/)?.[1] ?? "") ?? starts).filter(start => {
             const day = clinicDateAt("Australia/Sydney", new Date(start));
             return day >= url.searchParams.get("from")! && day <= url.searchParams.get("to")!;
           });
@@ -91,11 +94,18 @@ export async function reschedulingAuthorityFixture(options: { scope?: LocationSc
         const clock = () => sourceTime;
         feePolicy = resultValue(await OwnerFileReschedulingPolicy.capture({ ...config, ...common, path, directory, clock }));
         destinationPolicy = resultValue(await OwnerFileBookingPolicy.capture({ ...config, ...destinationApproval, path: destinationPath, directory, clock }));
+        const practitionerPolicies = [];
+        for (const member of practitionerPaths) {
+          const row = { ...destinationApproval, practitionerId: member.practitionerId };
+          await replace(member.bookingApprovalPath, row);
+          practitionerPolicies.push(resultValue(await OwnerFileBookingPolicy.capture({ ...config, ...row, path: member.bookingApprovalPath, directory, clock })));
+        }
         sourceConfig = { ...config, practitionerId: destinationId, feePolicy, policy: destinationPolicy, clock,
+          ...(options.practitionerChoices !== undefined ? { practitionerPolicies } : {}),
           ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}) }; sourceFetch = port;
         source = resultValue(ClinikoReschedulingAuthority.create(sourceConfig, port)); return source;
       } });
-    return { ...f, source: source!, ownerPorts: { fetchPort: sourceFetch!, rateBudget: sourceConfig!.rateBudget }, feePolicy: feePolicy!, destinationPolicy: destinationPolicy!, path, destinationPath, directory: directory!, account: account!, accountPath,
+    return { ...f, source: source!, practitionerPaths, ownerPorts: { fetchPort: sourceFetch!, rateBudget: sourceConfig!.rateBudget }, feePolicy: feePolicy!, destinationPolicy: destinationPolicy!, path, destinationPath, directory: directory!, account: account!, accountPath,
       createSource: (patch: Partial<ClinikoReschedulingAuthorityConfig>) => ClinikoReschedulingAuthority.create({ ...sourceConfig, ...patch }, sourceFetch),
       get approval() { return approval; }, get destinationApproval() { return destinationApproval; }, get patches() { return f.patches; }, get claims() { return f.claims; },
       query: (verificationRef: string, targetRef: string, offerRef: string) => ({ scope: f.scope, callId: f.callId, sessionId: f.sessionId,
@@ -109,6 +119,8 @@ export async function reschedulingAuthorityFixture(options: { scope?: LocationSc
       proposeSelection: (proof: string, selection: { targetRef: string; offerRef: string }) => f.propose(proof, "proposal", selection.targetRef, selection.offerRef),
       replacePolicy: async (patch: Partial<ReschedulingApproval>) => { approval = { ...approval, ...patch }; await replace(path, approval); },
       replaceDestination: async (patch: Partial<BookingApproval>) => { destinationApproval = { ...destinationApproval, ...patch }; await replace(destinationPath, destinationApproval); },
+      replacePractitioner: async (id: string, patch: Partial<BookingApproval>) => replace(practitionerPaths.find(member => member.practitionerId === id)!.bookingApprovalPath, { ...destinationApproval, practitionerId: id, ...patch }),
+      setPractitionerStarts: (id: string, times: string[]) => { practitionerStarts.set(id, times); },
       replaceAccount: (value: unknown) => replace(accountPath, value), setFailure: (value: string) => { failure = value; },
       setTime: (value: string) => { sourceTime = value; f.setTime(value); }, setStarts: (value: string[]) => { starts = value; },
       setOnTimes: (run: () => Promise<void>) => { onTimes = run; }, setOnBusiness: (run: () => Promise<void>) => { onBusiness = run; },

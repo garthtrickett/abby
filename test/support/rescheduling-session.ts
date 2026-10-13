@@ -20,6 +20,7 @@ export async function reschedulingSessionFixture(options: Parameters<typeof resc
       delivery: { send: async (email, code) => { f.mail.push({ email, code }); return true; } },
       directory: f.directory, callerApprovalPath: join(f.folder, "approval.json"), bookingApprovalPath: f.destinationPath, reschedulingApprovalPath: f.path,
       ...(options.destinationPractitionerId ? { destination: { practitionerId: options.destinationPractitionerId, bookingApprovalPath: f.destinationPath } } : {}),
+      ...(options.practitionerChoices !== undefined ? { practitioners: f.practitionerPaths } : {}),
       cliniko: { apiKey: "synthetic-session-au5", contactEmail: "test@example.test", businessId: "11", practitionerId: "22", appointmentTypeId: "33",
         recallTypeId: "7", timeZone: "Australia/Sydney", countryCallingCode: "61", rateBudget: f.ownerPorts.rateBudget },
       signal: lifetime.signal, fetchPort: f.ownerPorts.fetchPort, clock: f.sessionConfig.clock,
@@ -44,9 +45,9 @@ export async function reschedulingSessionFixture(options: Parameters<typeof resc
     }
     if ((await f.state()).pendingPresentationId) await playPending(); // Rehearse the actual initial greeting receipt.
     return { ...f, owner, config, lifetime, reception, agent, verify, playPending, confirm,
-      readMenu: (stage: "targets" | "offers", turnId = `menu-${stage}`) => agent.submit({ kind: "rescheduling.menu.read.v1", turn: f.turn(turnId, "What appointments or times can I move?"), stage,
+      readMenu: (stage: "targets" | "practitioners" | "offers", turnId = `menu-${stage}`) => agent.submit({ kind: "rescheduling.menu.read.v1", turn: f.turn(turnId, "What appointments or times can I move?"), stage,
         from: stage === "targets" ? verificationNow : "2026-10-08", to: stage === "targets" ? "2026-10-09T06:00:00.000Z" : "2026-10-08", now: verificationNow }),
-      selectMenu: (stage: "targets" | "offers", choice: 1|2|3 = 1, turnId = `select-${stage}`) => agent.submit({ kind: "rescheduling.menu.select.v1", turn: f.turn(turnId, "Option one"), stage, choice, now: verificationNow }),
+      selectMenu: (stage: "targets" | "practitioners" | "offers", choice: 1|2|3 = 1, turnId = `select-${stage}`) => agent.submit({ kind: "rescheduling.menu.select.v1", turn: f.turn(turnId, "Option one"), stage, choice, now: verificationNow }),
       get patches() { return f.patches; }, get claims() { return f.claims; }, drain: () => reception.drain(f.scope, f.callId, verificationNow),
       proposalJourney: async () => {
         assert.ok((await agent.submit({ kind: "rescheduling.menu.read.v1", turn: f.turn("menu-targets"), stage: "targets", from: verificationNow, to: "2026-10-09T06:00:00.000Z", now: verificationNow })).ok);
