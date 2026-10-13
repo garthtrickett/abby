@@ -24,6 +24,7 @@ export type ClinikoBookingOffersConfig = Readonly<{
 export type BookingChoices = Readonly<{
   scope: LocationScope; callId: string; sessionId: string; policyVersion: string; observedAt: string; timeZone: string;
   window?: BookingSearchWindow; serviceRef: string; practitionerName: string; appointmentTypeName: string; reservable: false;
+  maxSearchDays?: number;
   choices: readonly (BookableOffer & Readonly<{ endsAt: string }>)[];
 }>;
 type Selected = Readonly<{ evidence: ClinikoBookingEvidence; verificationRef: string; practitionerName: string; appointmentTypeName: string }>;
@@ -61,6 +62,13 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
     } catch { return err({ kind: "invalidConfig" }); }
   }
   #now(): string { return (this.#config.clock ?? (() => new Date().toISOString()))(); }
+  async maxBookingSearchDays(): Promise<number | undefined> {
+    if (this.#lifetime.signal.aborted) return undefined;
+    return this.#bounded(async signal => {
+      const current = await this.#config.policy.current(this.#config.scope);
+      return current.ok && !signal.aborted ? current.value.availabilityPlan?.maxSearchDays ?? 7 : undefined;
+    });
+  }
   #time(now: string): number | undefined {
     try {
       const supplied = approvalInstant(now), actual = approvalInstant(this.#now());
@@ -99,7 +107,9 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
     const result = await this.#bounded(async signal => {
       const before = await this.#current(verificationRef, now, signal);
       if (!before) return undefined;
-      const read = await this.#reader.listBooking(config.scope, from, to, before.policy.durationMinutes, signal);
+      const read = before.policy.availabilityPlan
+        ? await this.#reader.listBookingRange(config.scope, from, to, before.policy.durationMinutes, before.policy.availabilityPlan.maxSearchDays, signal)
+        : await this.#reader.listBooking(config.scope, from, to, before.policy.durationMinutes, signal);
       if (!read.ok || read.value.kind !== "times" || !read.value.offering || read.value.timeZone !== before.policy.timeZone || signal.aborted) return undefined;
       const fresh = await this.#current(verificationRef, now, signal);
       if (!fresh || fresh.patient.patientRef !== before.patient.patientRef || epoch !== this.#epoch ||
@@ -123,6 +133,7 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
       for (const selected of selections) this.#offers.set(selected.evidence.offer.offerRef, selected);
       return structuredClone({ scope: config.scope, callId: config.callId, sessionId: config.sessionId, policyVersion: config.policyVersion,
         observedAt: new Date(at).toISOString(), timeZone: fresh.policy.timeZone, serviceRef: fresh.policy.serviceRef, ...offering,
+        ...(fresh.policy.availabilityPlan ? { maxSearchDays: fresh.policy.availabilityPlan.maxSearchDays } : {}),
         ...(window ? { window } : {}), reservable: false as const, choices: selections.map(({ evidence }) => ({ ...evidence.offer, endsAt: evidence.endsAt })) });
     }, external);
     return result ? ok(result) : denied();

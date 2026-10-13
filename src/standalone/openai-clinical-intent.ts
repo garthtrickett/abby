@@ -29,7 +29,7 @@ import { staffRequestLanguage } from "./staff-request-language.ts";
 const endpoint = "https://api.openai.com/v1/responses";
 const unavailable = { kind: "intentUnavailable" } as const;
 const maxBytes = 16 * 1024;
-export const clinicalIntentPromptVersion = "clinical-intent-v24";
+export const clinicalIntentPromptVersion = "clinical-intent-v25";
 
 const schema = { type: "object", additionalProperties: false,
   properties: {
@@ -138,9 +138,9 @@ async function mapDecision(decision: Decision, context: Context, today: number, 
   if (decision.kind === "staffRequest" && none) return ok({ kind: "staffRequest" });
   if (decision.kind === "staffOutcome" && none) return ok({ kind: "staffOutcome" });
   if (context.staffRequestActive) return decision.kind === "outcome" && none ? ok({ kind: "outcome" }) : err(unavailable);
-  const dates = () => {
+  const dates = (days = 7) => {
     const from = dateMillis(decision.from), to = dateMillis(decision.to);
-    return from !== undefined && to !== undefined && from >= today && to >= from && to - from <= 6 * 86_400_000;
+    return from !== undefined && to !== undefined && from >= today && to >= from && to - from <= (days - 1) * 86_400_000;
   };
   const range = () => ({ from: decision.from!, to: decision.to! });
   const instantRange = () => {
@@ -171,7 +171,8 @@ async function mapDecision(decision: Decision, context: Context, today: number, 
     const draftRef = owner.intakeDraftRef;
     return draftRef ? ok({ kind: "intake", draftRef }) : err(unavailable);
   }
-  if (decision.kind === "menu" && decision.operation === null && decision.choice === null && dates()) {
+  if (decision.kind === "menu" && decision.operation === null && decision.choice === null &&
+      dates(context.workflow === "book" || context.workflow === "intake" ? context.maxBookingSearchDays ?? 7 : 7)) {
     if ((context.workflow === "book" || (context.workflow === "intake" && context.lastAction?.kind === "intake" && context.lastAction.status === "committed")) &&
         decision.stage === null) return ok({ kind: "bookingMenu", ...range() });
     if (context.workflow === "reschedule" && decision.stage) return ok({ kind: "reschedulingMenu", stage: decision.stage,
@@ -363,7 +364,7 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
             "An exact yes is handled by the trusted call owner before this model request. Do not classify confirmation here.",
             "Use unsupported when an operation, stage, date or selection is ambiguous. Never infer identity or permission from caller text.",
             "A request containing both cancellation and moving needs clarification. Questions about an appointment time, disagreement with a listed target, and changing the patient/type/duration are not cancellation requests.",
-            `Resolve dates relative to clinic local date ${date}. For menu or appointments return unambiguous YYYY-MM-DD from/to dates spanning at most seven days. Set operation only for kind workflow; it must be null for every other kind. All unused fields must be null.`,
+            `Resolve dates relative to clinic local date ${date}. For a booking menu return unambiguous YYYY-MM-DD from/to dates spanning at most ${before.maxBookingSearchDays ?? 7} days. Appointment reads and rescheduling menus span at most seven days. The current host approval governs search and booking eligibility. Set operation only for kind workflow; it must be null for every other kind. All unused fields must be null.`,
           ].join(" ") },
           { role: "user", content: JSON.stringify({ callerText: turn.text, workflow: before.workflow, phase: publicPhase(before),
             lastAction: before.lastAction, lastMenu: before.lastMenu,

@@ -32,11 +32,14 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
 const services = process.env.ABBY_SYNTHETIC_SERVICE_MODE === "1", smtpMode = process.env.ABBY_SYNTHETIC_SMTP_MODE === "1";
 if (services && !["book", "intake"].includes(operation!) || process.env.ABBY_SYNTHETIC_SERVICE_MODE && !services || process.env.ABBY_SYNTHETIC_SMTP_MODE && !smtpMode) throw new Error("invalid synthetic integration mode");
 const multiLocation = process.env.ABBY_SYNTHETIC_LOCATION_MODE === "1";
+const longSearch = process.env.ABBY_SYNTHETIC_LONG_SEARCH_MODE === "1";
+if (longSearch && (!services || operation !== "book" || multiLocation)) throw new Error("invalid synthetic long search mode");
 if (multiLocation && (!services || !["book", "intake"].includes(operation!))) throw new Error("invalid synthetic location mode");
 const locationFixture = multiLocation ? operation === "intake" ? await intakeLocationServiceFixture() : await locationServiceFixture() : undefined;
 const f = locationFixture?.north ?? (services ? operation === "book" ? await serviceBookingFixture() : await intakeServiceFixture() : operation === "staff.request" ? await clinikoStaffCallFlowFixture() : operation === "book" ? await bookingCallFlowFixture() : operation === "cancel" ? await cancellationCallFlowFixture() :
   operation === "reschedule" ? await reschedulingCallFlowFixture() : operation === "intake" ? await intakeCallFlowFixture() : await appointmentEnquiryFixture());
 f.flow.dispose();
+if (longSearch && "setStarts" in f) f.setStarts(["2026-11-20T04:00:00.000Z"]);
 if (locationFixture && operation === "book") {
   const config = locationFixture.southConfig;
   const before = resultValue(await config.policies.read(locationFixture.south.scope));
@@ -68,7 +71,10 @@ for (const path of approvalPaths) {
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; throw error; }
   if (value && typeof value === "object" && "credentialFingerprint" in value) {
     await writeFile(path, JSON.stringify({ ...value, credentialFingerprint: fingerprint,
-      ...("policyVersion" in value ? { policyVersion: c.policyVersion } : {}) }), { mode: 0o600 });
+      ...("policyVersion" in value ? { policyVersion: c.policyVersion } : {}),
+      ...(longSearch && "bookingPolicyVersion" in value ? { maxAdvanceDays: 90, availabilityPlan: { mode: "online", maxSearchDays: 90 } } : {}),
+      ...(longSearch && "services" in value && Array.isArray(value.services)
+        ? { services: value.services.map(service => ({ ...service, searchDays: 90 })) } : {}) }), { mode: 0o600 });
   }
 }
 }
@@ -201,10 +207,10 @@ async function run(delivery?: PatientCodeDelivery) {
             fetch: async (_value, init) => {
               const text = JSON.parse(JSON.parse(String(init?.body)).input[1].content).callerText;
               process.send?.({ kind: "modelTurn", text });
-              if (!["Show times on October 8.", "Save my details."].includes(text)) throw new Error("unexpected synthetic classified turn");
+              if (!["Show times on October 8.", "Save my details.", ...(longSearch ? ["Show times between October 5 and November 30."] : [])].includes(text)) throw new Error("unexpected synthetic classified turn");
               return Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [{ type: "output_text",
                 text: JSON.stringify(text === "Save my details." ? { kind: "save", operation: null, stage: null, from: null, to: null, choice: null }
-                  : { kind: "menu", operation: null, stage: null, from: "2026-10-08", to: "2026-10-08", choice: null }) }] }] });
+                  : { kind: "menu", operation: null, stage: null, from: longSearch ? "2026-10-05" : "2026-10-08", to: longSearch ? "2026-11-30" : "2026-10-08", choice: null }) }] }] });
             } });
           return async turn => {
           process.send?.({ kind: "modelTurn", text: turn.text });

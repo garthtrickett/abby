@@ -46,6 +46,7 @@ export class ClinikoBookingMenu implements BookingMenuHost {
     this.#menu = { turnId: query.turnId, verificationRef: grant.verificationRef, choices };
     const { scope, callId, sessionId, policyVersion, observedAt, timeZone, practitionerName, appointmentTypeName, reservable } = choices;
     return ok({ scope: { ...scope }, callId, sessionId, policyVersion, observedAt, timeZone, practitionerName, appointmentTypeName, reservable, ...(choices.window ? { window: choices.window } : {}),
+      ...(choices.maxSearchDays !== undefined ? { maxSearchDays: choices.maxSearchDays } : {}),
       choices: choices.choices.map(({ startsAt, endsAt, expiresAt }) => ({ startsAt, endsAt, expiresAt })) });
   }
   async selectBookingMenu(incoming: BookingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>):

@@ -16,7 +16,7 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 import { standaloneBookingFixture } from "./standalone-booking.ts";
 import { verificationNow } from "./caller-verification.ts";
 
-export async function bookingOffersFixture(options: { budget?: ClinikoRequestBudget; timeoutMs?: number; scope?: LocationScope; verificationBudget?: PatientVerificationBudget; fetchPort?: typeof fetch; folder?: string; offerTtlSeconds?: number } = {}) {
+export async function bookingOffersFixture(options: { budget?: ClinikoRequestBudget; timeoutMs?: number; scope?: LocationScope; verificationBudget?: PatientVerificationBudget; fetchPort?: typeof fetch; folder?: string; offerTtlSeconds?: number; availabilityPlan?: BookingApproval["availabilityPlan"]; maxAdvanceDays?: number } = {}) {
   const folder = options.folder ?? await mkdtemp(join(tmpdir(), "abby-booking-offers-")), path = join(folder, "booking.json"), accountPath = join(folder, "accounts.json");
   let sourceConfig: ClinikoBookingOffersConfig, sourceFetch: typeof fetch;
   let approval: BookingApproval, source: ClinikoBookingOffers, policy: OwnerFileBookingPolicy, directory: OwnerFileAdminDirectory;
@@ -57,7 +57,8 @@ export async function bookingOffersFixture(options: { budget?: ClinikoRequestBud
           enabled: true, approved: true, policyVersion: config.policyVersion, businessId: "11", practitionerId: "22", appointmentTypeId: "33",
           credentialFingerprint: clinikoCredentialFingerprint(config.apiKey), recallTypeId: "7", timeZone: "Australia/Sydney", writeContract: "bestEffort",
           notificationOwner: "cliniko", serviceRef: "physiotherapy", bookingPolicyVersion: "book-policy-1", durationMinutes: 30,
-          minNoticeMinutes: 60, maxAdvanceDays: 30, offerTtlSeconds: options.offerTtlSeconds ?? 120 };
+          minNoticeMinutes: 60, maxAdvanceDays: options.maxAdvanceDays ?? 30, offerTtlSeconds: options.offerTtlSeconds ?? 120,
+          ...(options.availabilityPlan ? { availabilityPlan: options.availabilityPlan } : {}) };
         await replace(path, approval);
         policy = resultValue(await OwnerFileBookingPolicy.capture({ path, ...config, credentialFingerprint: approval.credentialFingerprint,
           recallTypeId: "7", timeZone: "Australia/Sydney", directory, clock: () => sourceTime }));
@@ -66,7 +67,7 @@ export async function bookingOffersFixture(options: { budget?: ClinikoRequestBud
         return source;
       } });
     return { ...f, source: source!, ownerPorts: { fetchPort: sourceFetch!, rateBudget: sourceConfig!.rateBudget }, bookingPolicy: policy!, directory: directory!, path, accountPath, account: account!, allTraffic: traffic,
-      createSource: (patch: Partial<ClinikoBookingOffersConfig>) => ClinikoBookingOffers.create({ ...sourceConfig, ...patch }, sourceFetch),
+      createSource: (patch: Partial<ClinikoBookingOffersConfig>, fetchPort: typeof fetch = sourceFetch) => ClinikoBookingOffers.create({ ...sourceConfig, ...patch }, fetchPort),
       freshSource: () => resultValue(ClinikoBookingOffers.create(sourceConfig, sourceFetch)),
       get approval() { return approval; }, get posts() { return f.posts; }, get claims() { return f.claims; },
       replacePolicy: async (patch: Partial<BookingApproval>) => { approval = { ...approval, ...patch }; await replace(path, approval); },

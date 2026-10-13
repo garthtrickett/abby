@@ -32,7 +32,7 @@ function decode(value: unknown, scope: LocationScope): ServiceCatalogueApproval 
   for (const service of row.services) {
     if (!exact(service, "appointmentTypeId,appointmentTypeName,durationMinutes,followUpRule,name,practitioners,searchDays,serviceRef,visitKind") ||
         !approvalRef(service.serviceRef) || !validClinikoId(service.appointmentTypeId) || !normalizedSpokenName(service.name) || !normalizedSpokenName(service.appointmentTypeName) ||
-        !integer(service.durationMinutes, 1, 480) || !integer(service.searchDays, 1, 7) || typeof service.visitKind !== "string" || !["initial", "followUp"].includes(service.visitKind) ||
+        !integer(service.durationMinutes, 1, 480) || !integer(service.searchDays, 1, 90) || typeof service.visitKind !== "string" || !["initial", "followUp"].includes(service.visitKind) ||
         refs.has(service.serviceRef) || types.has(service.appointmentTypeId) || !Array.isArray(service.practitioners) || service.practitioners.length < 1 || service.practitioners.length > 3) return undefined;
     const key = JSON.stringify([normalizedSpokenName(service.name), service.visitKind, service.durationMinutes]);
     if (choices.has(key)) return undefined; refs.add(service.serviceRef); types.add(service.appointmentTypeId); choices.add(key);

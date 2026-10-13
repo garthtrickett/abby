@@ -13,6 +13,8 @@ export type BookingApproval = ClinicApproval & Readonly<{
   credentialFingerprint: string; recallTypeId: string; timeZone: string; writeContract: "bestEffort";
   notificationOwner: "cliniko"; serviceRef: string; bookingPolicyVersion: string;
   durationMinutes: number; minNoticeMinutes: number; maxAdvanceDays: number; offerTtlSeconds: number;
+  /** Independently approved extent of a complete search. Existing approvals retain seven days. */
+  availabilityPlan?: Readonly<{ mode: "online"; maxSearchDays: number }>;
 }>;
 export type BookingPolicyBinding = Pick<BookingApproval, "scope" | "policyVersion" | "businessId" | "practitionerId" |
   "appointmentTypeId" | "credentialFingerprint" | "recallTypeId" | "timeZone">;
@@ -22,7 +24,8 @@ type Failure = Readonly<{ kind: "bookingPolicyUnavailable" }>;
 function decode(value: unknown, scope: LocationScope): BookingApproval | undefined {
   const common = decodeClinicApproval(value, scope, [...clinicApprovalKeys, "policyVersion", "businessId", "practitionerId", "appointmentTypeId",
     "credentialFingerprint", "recallTypeId", "timeZone", "writeContract", "notificationOwner", "serviceRef", "bookingPolicyVersion",
-    "durationMinutes", "minNoticeMinutes", "maxAdvanceDays", "offerTtlSeconds"]);
+    "durationMinutes", "minNoticeMinutes", "maxAdvanceDays", "offerTtlSeconds",
+    ...(value && typeof value === "object" && Object.hasOwn(value, "availabilityPlan") ? ["availabilityPlan"] : [])]);
   if (!common) return undefined;
   const row = value as Record<string, unknown>;
   const integer = (key: string, min: number, max: number) => Number.isSafeInteger(row[key]) && Number(row[key]) >= min && Number(row[key]) <= max;
@@ -33,6 +36,13 @@ function decode(value: unknown, scope: LocationScope): BookingApproval | undefin
       !integer("durationMinutes", 1, 480) || !integer("minNoticeMinutes", 1, 10080) || !integer("maxAdvanceDays", 1, 90) ||
       !integer("offerTtlSeconds", 15, 300) || Number(row.minNoticeMinutes) >= Number(row.maxAdvanceDays) * 1440) return undefined;
   try { new Intl.DateTimeFormat("en", { timeZone: row.timeZone }); } catch { return undefined; }
+  if (row.availabilityPlan !== undefined) {
+    const plan = row.availabilityPlan;
+    if (!plan || typeof plan !== "object" || Array.isArray(plan) ||
+        Object.keys(plan).sort().join(",") !== "maxSearchDays,mode" ||
+        !("mode" in plan) || plan.mode !== "online" || !("maxSearchDays" in plan) ||
+        !Number.isSafeInteger(plan.maxSearchDays) || Number(plan.maxSearchDays) < 1 || Number(plan.maxSearchDays) > 90) return undefined;
+  }
   return row as unknown as BookingApproval;
 }
 
@@ -66,6 +76,7 @@ export class OwnerFileBookingPolicy {
       if (!current.ok || !row || current.value.policyVersion !== found.value.policyVersion || current.value.businessId !== found.value.businessId ||
           current.value.credentialFingerprint !== found.value.credentialFingerprint || current.value.timeZone !== found.value.timeZone ||
           row.serviceRef !== found.value.serviceRef || row.appointmentTypeId !== found.value.appointmentTypeId || row.durationMinutes !== found.value.durationMinutes ||
+          row.searchDays > (found.value.availabilityPlan?.maxSearchDays ?? 7) ||
           !eligibleServicePractitioners(row.practitioners, parent.preference).some(member => member.practitionerId === found.value!.practitionerId)) return err({ kind: "bookingPolicyUnavailable" });
     }
     return ok(found.value);

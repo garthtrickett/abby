@@ -283,6 +283,40 @@ export class ClinikoAvailabilityReader {
     return settleBeforeAbort(this.listInternal(scope, from, to, true, signal, durationMinutes), signal, err({ kind: "unavailable" }));
   }
 
+  /** A clinic-approved longer search is split into disjoint native seven-day
+   * requests. Every chunk must succeed and agree on its offering metadata. */
+  async listBookingRange(scope: LocationScope, from: string, to: string, durationMinutes: number,
+    maxSearchDays: number, parentSignal?: AbortSignal): Promise<Result<ClinikoAvailability, ClinikoAvailabilityFailure>> {
+    if (!sameScope(this.scope, scope)) return err({ kind: "scopeMismatch" });
+    const first = Date.parse(`${from}T00:00:00.000Z`), last = Date.parse(`${to}T00:00:00.000Z`);
+    if (!validDate(from) || !validDate(to) || !Number.isSafeInteger(maxSearchDays) || maxSearchDays < 1 || maxSearchDays > 90 ||
+        last < first || (last - first) / 86_400_000 + 1 > maxSearchDays) return err({ kind: "invalidRange" });
+    const local = AbortSignal.timeout(availabilityReadDeadlineMs);
+    const signal = parentSignal ? AbortSignal.any([parentSignal, local]) : local;
+    return settleBeforeAbort((async (): Promise<Result<ClinikoAvailability, ClinikoAvailabilityFailure>> => {
+      let captured: Extract<ClinikoAvailability, { kind: "times" }> | undefined;
+      const startsAt: string[] = [];
+      const days: number[] = [];
+      for (let day = first; day <= last; day += 7 * 86_400_000) days.push(day);
+      for (let index = 0; index < days.length; index += 3) {
+        if (signal.aborted) return err({ kind: "unavailable" });
+        const reads = await Promise.all(days.slice(index, index + 3).map(day => {
+          const end = Math.min(last, day + 6 * 86_400_000);
+          return this.listBooking(scope, new Date(day).toISOString().slice(0, 10), new Date(end).toISOString().slice(0, 10), durationMinutes, signal);
+        }));
+        for (const read of reads) {
+          if (!read.ok || read.value.kind !== "times") return read;
+          const value = read.value;
+          if (captured && (value.timeZone !== captured.timeZone || JSON.stringify(value.offering) !== JSON.stringify(captured.offering) ||
+              value.businessRef !== captured.businessRef || value.practitionerRef !== captured.practitionerRef || value.appointmentTypeRef !== captured.appointmentTypeRef)) return err({ kind: "unavailable" });
+          captured ??= value;
+          startsAt.push(...value.startsAt);
+        }
+      }
+      return !signal.aborted && captured ? ok({ ...captured, startsAt, observedAt: this.observedClock() }) : err({ kind: "unavailable" });
+    })(), signal, err({ kind: "unavailable" }));
+  }
+
   private async listInternal(scope: LocationScope, from: string, to: string, withLabel: boolean,
                              signal: AbortSignal, bookingDuration?: number):
     Promise<Result<ClinikoAvailability, ClinikoAvailabilityFailure>> {

@@ -96,6 +96,7 @@ export class ClinikoIntakeBookingSession extends NoStoredKnowledge implements In
     finally { if (timer) clearTimeout(timer); if (!completed) { controller?.abort(); dispose(); } }
   }
   get effects() { return this.#composition.host; }
+  maxBookingSearchDays() { return this.#composition.offers.maxBookingSearchDays(); }
   resolveIntake(query: IntakeEvidenceQuery) { return this.intake.resolveIntake(query); }
   resolveBooking(scope: LocationScope, verificationRef: string, offerRef: string, now: string, signal?: AbortSignal) {
     return this.#composition.host.resolveBooking(scope, verificationRef, offerRef, now, signal);

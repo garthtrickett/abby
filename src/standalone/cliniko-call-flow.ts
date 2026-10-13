@@ -8,6 +8,7 @@ import { validCallerIdentityDenial } from "../core/caller-identity.ts";
 import { bookingPreferenceLanguage } from "./booking-preference-language.ts";
 import { ClinikoCatalogueBookingHost } from "./cliniko-catalogue-booking-host.ts";
 import { normalizedSpokenName } from "../core/pending-location.ts";
+import { bookingDateRangeLanguage } from "./booking-date-range-language.ts";
 import { PlayedMenuSearch } from "./played-menu-search.ts";
 import { clinicDateAt } from "./clinic-clock.ts";
 import type { AppointmentEnquiryQuery, AppointmentChangeEvidenceQuery, BookingMenuQuery, BookingMenuReadQuery, IntakeEvidenceQuery, ReschedulingMenuQuery, ReschedulingMenuReadQuery, StaffRequestQuery, WorkflowQuery } from "../core/host.ts";
@@ -272,6 +273,15 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     const found = await this.#config.ledger.read(this.#config.receipt.callId, this.#config.receipt.scope);
     if (!found.ok || this.closed || found.value.lifecycle !== "active" || found.value.sessionLease?.sessionId !== this.#config.sessionId) return undefined;
     const now = (this.#config.clock ?? (() => new Date().toISOString()))();
+    const dates = bookingDateRangeLanguage(turn.text, clinicDateAt(this.#config.cliniko.timeZone, new Date(now)));
+    if (dates && (this.#workflow === "book" || this.#workflow === "intake")) {
+      if (dates.kind === "ambiguous") return { kind: "clarify", reason: "menuAmbiguous" };
+      const maxDays = this.#owner instanceof ClinikoBookingSession || this.#owner instanceof ClinikoIntakeBookingSession
+        ? await this.#owner.maxBookingSearchDays() : undefined;
+      if (!maxDays || this.closed || (Date.parse(dates.to) - Date.parse(dates.from)) / 86_400_000 + 1 > maxDays)
+        return { kind: "clarify", reason: "searchPreferenceUnavailable" };
+      return { kind: "bookingMenu", from: dates.from, to: dates.to };
+    }
     return this.#searchMenu.resolve(turn.text, found.value, clinicDateAt(this.#config.cliniko.timeZone, new Date(now)), this.#config.cliniko.timeZone,
       this.#workflow === "reschedule" ? "rescheduling" : "booking", turn.turnId, now);
   }
@@ -302,7 +312,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   /** The model sees only routing and action-status enums; patient data and host refs stay in this owner. */
   async publicIntentContext(): Promise<Readonly<{ workflow: ClinikoWorkflow | null; verificationRequired: boolean; callerIdentityDenied?: import("../core/caller-identity.ts").CallerIdentityDenial;
     lastAction: Readonly<{ kind: "book" | "cancel" | "reschedule" | "intake"; status: string; confirmationPlayed: boolean }> | null;
-    now: string; timeZone: string;
+    now: string; timeZone: string; maxBookingSearchDays?: number;
     lastMenu: Readonly<{ kind: "booking" | "rescheduling"; stage: "targets" | "offers" | null }> | null;
     reschedulingTargetSelected: boolean; staffRequestActive: boolean }> | undefined> {
     if (this.closed) return undefined;
@@ -313,10 +323,14 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       now: (this.#config.clock ?? (() => new Date().toISOString()))(), timeZone: this.#config.cliniko.timeZone,
       lastMenu: null, reschedulingTargetSelected: false, staffRequestActive: false };
     const last = Object.values(found.value.actions).at(-1);
+    const maxBookingSearchDays = !this.#verificationRequired && (this.#owner instanceof ClinikoBookingSession || this.#owner instanceof ClinikoIntakeBookingSession)
+      ? await this.#owner.maxBookingSearchDays() : undefined;
+    if (this.closed) return undefined;
     return { workflow: this.#owner instanceof ClinikoPractitionerHistorySession || this.#config.serviceCatalogue && ["book", "intake"].includes(this.#workflow!) && !this.#serviceChoice ? null : this.#workflow ?? null, verificationRequired: this.#verificationRequired,
       lastAction: last ? { kind: last.kind, status: last.status,
         confirmationPlayed: found.value.presentations[last.presentationId]?.status === "played" } : null,
       now: (this.#config.clock ?? (() => new Date().toISOString()))(), timeZone: this.#config.cliniko.timeZone,
+      ...(maxBookingSearchDays !== undefined && maxBookingSearchDays > 7 ? { maxBookingSearchDays } : {}),
       lastMenu: this.#publicMenu ?? null, reschedulingTargetSelected: this.#reschedulingTargetSelected, staffRequestActive: this.#staffActive };
   }
   /** Only current, call-pinned public facts may enter the classifier. */

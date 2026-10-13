@@ -10,8 +10,8 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 | 2 | Connect caller verification and clinic-approved permissions. | Separate draft PR 454 adds real TLS SMTP to the actual verifier/protected read with synthetic data; typecheck and 22 checks passed, including failed delivery and independent permission denial. Real sender/mailbox, accepted clinic policy and deploying-host permission source remain open. Channel possession alone cannot grant proxy/minor authority. |
 | 3 | Establish message delivery, staff handoff, monitoring and recovery ownership. | Four compiled-runner staff journeys now pass: named saved request, unknown write without replay, permission denial before mail and revocation before send. Existing recall/review/aggregate contracts remain. Deployed monitoring receiver, real sender and human clinic process remain open. |
 | 4 | Complete synthetic speech, public transport and eventual carrier qualification. | Prior synthetic runtime evidence exists; noisy/safety and repeated speech gates remain open. Paid probes require restored credits; public tunnel requires a dedicated usable route. Twilio-number carrier evidence is deferred, not substituted with synthetic results. |
-| 5 | Expand services, duration choices, locations and initial/follow-up rules. | Current one-type/one-business clinical cohort is insufficient. Require several independently approved services and correct routing of corrections and initial/follow-up/return rules. |
-| 6 | Extend searches and support online-disabled services where required. | Current bounded online cohort is insufficient. Require roster/extra availability minus all busy sources, incomplete-source denial, date bounds and offer/commit agreement. |
+| 5 | Expand services, duration choices, locations and initial/follow-up rules. | Current service/intake variants, return rules and independently provisioned multi-location compiled hosts are locally qualified in draft457. Actual clinic configuration/acceptance and authoritative CI remain open. |
+| 6 | Extend searches and support online-disabled services where required. | E2E-356 locally qualifies complete approved longer online searches and a compiled two-month late-range booking. Offline roster/extra availability minus all busy sources remains incomplete; preserve incomplete-source denial, date bounds and offer/commit agreement. |
 | 7 | Support another approved practitioner during rescheduling. | Current movement requires the same practitioner. Require destination approval, single in-place movement and truthful recovery for conflicts/unknown writes. |
 | 8 | Add patient detail corrections, required registration fields and resends. | Minimal intake exists; existing-patient correction and delivered resend are incomplete. Require independently authorized updates, contact/index consistency and separate registration/booking outcomes. |
 | 9 | Handle multiple patients/actions in one call. | Restricted proxy/identity foundations exist. Require authority for each person, exact appointment selection and independent outcomes; no implicit household disclosure. |
@@ -188,3 +188,19 @@ acceptance, failed acoustic quality, CI execution and carrier gates remain open.
 The next implementation is gap6: longer searches and independently approved
 availability for services disabled in online booking. Gaps6–13 remain incomplete;
 the complete thirteen-gap goal remains active.
+
+## Gap6 longer online search qualification
+
+The first part of gap6 is implemented and locally qualified in
+`phase-2/LONGER_CLINIKO_AVAILABILITY.md`: independent scoped search approval,
+complete native window reads, preserved date/time constraints, current-host
+presentation bounds and fresh proposal/commit evidence. Fifty affected checks,
+source typecheck and compiled voice build passed with zero skips. The same
+compiled caller request exposed and then verified fixes to both calendar parsing
+and the existing menu presentation bound. No test deadline, concurrency,
+authority or legacy limit was relaxed.
+
+Next is the offline roster/extra-availability/busy-source calculation. Gap6
+remains incomplete, followed by gaps7–13. Production admission, real clinic/mail
+acceptance, failed acoustic quality and authoritative CI/carrier gates remain
+open; the full13 objective is unchanged.

@@ -20,7 +20,7 @@ function decode(value: unknown, scope: LocationScope): BookingCatalogueApproval 
   const row = value as BookingCatalogueApproval;
   if (!approvalRef(row.policyVersion) || !validClinikoId(row.businessId) || !validClinikoId(row.appointmentTypeId) ||
       !/^[0-9a-f]{64}$/.test(row.credentialFingerprint) || !normalizedSpokenName(row.locationName) || !normalizedSpokenName(row.appointmentTypeName) ||
-      !Number.isSafeInteger(row.searchDays) || row.searchDays < 1 || row.searchDays > 7 || !Array.isArray(row.practitioners) ||
+      !Number.isSafeInteger(row.searchDays) || row.searchDays < 1 || row.searchDays > 90 || !Array.isArray(row.practitioners) ||
       row.practitioners.length < 1 || row.practitioners.length > 3) return undefined;
   const ids = new Set<string>(), names = new Set<string>();
   for (const item of row.practitioners) {

@@ -139,6 +139,7 @@ export class ClinikoBookingSession {
   verified(): ReturnType<CallerVerificationSession["verified"]> { return this.#verification.verified(); }
   get offers(): ClinikoBookingOffers { return this.#composition.offers; }
   get effects(): ClinikoBookingHost | ClinikoCatalogueBookingHost { return this.#composition.host; }
+  maxBookingSearchDays() { return this.#composition.offers.maxBookingSearchDays(); }
   dispose(): void {
     this.#closed = true; this.#signal.removeEventListener("abort", this.#onClose);
     this.#composition.dispose(); this.#verification.dispose();

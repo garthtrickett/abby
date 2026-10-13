@@ -87,7 +87,9 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
     this.#menu = { turnId: query.turnId, member: winner.member };
     return ok({ ...winner.read, locationName: profile.locationName, searchScope: { locationName: profile.locationName,
       practitioners: members.map(member => member.name), from: query.from, to: query.to,
-      selection: preference?.practitioner === "any" ? "earliestApproved" : preference?.practitioner ? "preferred" : "default" } });
+      selection: preference?.practitioner === "any" ? "earliestApproved" : preference?.practitioner ? "preferred" : "default" },
+      ...(completed.some(item => item.read.maxSearchDays !== undefined)
+        ? { maxSearchDays: Math.min(...completed.map(item => item.read.maxSearchDays ?? 7)) } : {}) });
   }
   async selectBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>) {
     const menu = this.#menu;
