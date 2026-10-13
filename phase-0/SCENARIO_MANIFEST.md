@@ -332,3 +332,6 @@ E2E-353 covers sixteen signed new-patient service journeys with independently ap
 
 
 E2E-311 additionally proves named staff requests through a separately compiled standalone runner, actual signed ingress and private verification. Four local cases cover one saved Cliniko recall, unknown write without replay or a human-receipt claim, independent permission denial before mail, and revocation before send. Status queries retain truthful uncertainty and do not resend. Real staff acceptance and deployment remain open.
+
+E2E-294 also records real loopback TLS/SMTP delivery through the actual caller verifier and protected read, with synthetic account/contact/certificate data. Independent permission denial stops before submission; authentication, certificate, malformed reply, abort and unknown acceptance faults cannot grant proof or trigger resend. This supplementary text evidence does not prove live mailbox receipt or carrier behavior; see [the SMTP delivery contract](../phase-2/VERIFICATION_SMTP_DELIVERY.md).
+
