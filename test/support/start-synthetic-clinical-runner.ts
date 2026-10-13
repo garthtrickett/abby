@@ -1,3 +1,9 @@
+import { withSmtpVerificationServer } from "./smtp-verification-server.ts";
+import { SmtpPatientCodeDelivery } from "../../src/standalone/smtp-patient-code-delivery.ts";
+import type { PatientCodeDelivery } from "../../src/standalone/email-patient-authority.ts";
+import { serviceBookingFixture } from "./service-booking-catalogue.ts";
+import { intakeServiceFixture } from "./intake-service-catalogue.ts";
+import { createOpenAIClinicalIntentResolver } from "../../src/standalone/openai-clinical-intent.ts";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { serveClinikoVoice } from "../../scripts/serve-cliniko-voice.ts";
@@ -21,7 +27,9 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     !["book", "cancel", "reschedule", "intake", "appointments.read", "staff.request"].includes(operation ?? "")) {
   throw new Error("synthetic clinical runner requires an isolated fixture");
 }
-const f = operation === "staff.request" ? await clinikoStaffCallFlowFixture() : operation === "book" ? await bookingCallFlowFixture() : operation === "cancel" ? await cancellationCallFlowFixture() :
+const services = process.env.ABBY_SYNTHETIC_SERVICE_MODE === "1", smtpMode = process.env.ABBY_SYNTHETIC_SMTP_MODE === "1";
+if (services && !["book", "intake"].includes(operation!) || process.env.ABBY_SYNTHETIC_SERVICE_MODE && !services || process.env.ABBY_SYNTHETIC_SMTP_MODE && !smtpMode) throw new Error("invalid synthetic integration mode");
+const f = services ? operation === "book" ? await serviceBookingFixture() : await intakeServiceFixture() : operation === "staff.request" ? await clinikoStaffCallFlowFixture() : operation === "book" ? await bookingCallFlowFixture() : operation === "cancel" ? await cancellationCallFlowFixture() :
   operation === "reschedule" ? await reschedulingCallFlowFixture() : operation === "intake" ? await intakeCallFlowFixture() : await appointmentEnquiryFixture();
 f.flow.dispose();
 const c = f.flowConfig, now = c.clock!, apiKey = process.env.ABBY_CLINIKO_API_KEY!, fingerprint = clinikoCredentialFingerprint(apiKey);
@@ -92,10 +100,10 @@ const provider: typeof fetch = async (value, init) => {
     const before = method === "PATCH" ? await (await c.fetchPort!(`${base}/individual_appointments/${id}`, { method: "GET", redirect: "error", ...(init?.signal ? { signal: init.signal } : {}) })).json() : {};
     const starts = body.starts_at ?? before.starts_at, patientId = body.patient_id ?? (operation === "intake" ? "42" : "482746192837465");
     after = { ...before, id, notes: body.notes ?? before.notes, starts_at: starts,
-      ends_at: new Date(Date.parse(starts) + 1_800_000).toISOString(), archived_at: null, deleted_at: null,
+      ends_at: new Date(Date.parse(starts) + (services ? body.appointment_type_id === "34" ? 60 : body.appointment_type_id === "33" ? 30 : 45 : 30) * 60_000).toISOString(), archived_at: null, deleted_at: null,
       cancelled_at: url.pathname.endsWith("/cancel") ? now() : null,
       patient: { links: { self: `${base}/patients/${patientId}` } }, business: { links: { self: `${base}/businesses/11` } },
-      practitioner: { links: { self: `${base}/practitioners/22` } }, appointment_type: { links: { self: `${base}/appointment_types/33` } } };
+      practitioner: { links: { self: `${base}/practitioners/${body.practitioner_id ?? "22"}` } }, appointment_type: { links: { self: `${base}/appointment_types/${body.appointment_type_id ?? "33"}` } } };
     process.send?.({ kind: "providerMutation", method, path: url.pathname, body });
     if (lostWrite) throw new Error("synthetic unknown appointment write");
     return url.pathname.endsWith("/cancel") ? new Response(null, { status: 204 }) : Response.json(after, { status: method === "POST" ? 201 : 200 });
@@ -127,7 +135,7 @@ const intake = c.intake ? { policy: resultValue(await OwnerFileIntakePolicy.capt
     const allowed = !denied && await c.intake!.permission.allows(...args); process.send?.({ kind: "permissionDecision", operation: "patients.intake", allowed }); return allowed;
   } } } : undefined;
 process.send?.({ kind: "fixtureReady", scope: f.scope, policyVersion: c.policyVersion });
-try {
+async function run(delivery?: PatientCodeDelivery) {
   await serveClinikoVoice({ clinikoFetch: provider, openaiFetch: speech, syntheticClock: now, transcriptionFactory: transcription(false), voiceProfiles,
     speechQuality: (_scope, configurationHash) => ok({ configurationHash, qualityVersion: "synthetic-clinical-runner.v1" }),
     clinicalHost(context) {
@@ -136,7 +144,10 @@ try {
         cliniko: { ...c.cliniko, apiKey: context.apiKey, contactEmail: context.contactEmail, rateBudget: context.rateBudget }, fetchPort: provider,
         permission: { allows: async (...args) => { const allowed = !denied && await c.permission.allows(...args);
           process.send?.({ kind: "permissionDecision", operation: args[2], allowed }); return allowed; } },
-        delivery: { send: async (email, code) => { process.send?.({ kind: "verificationEmail", email, code, accepted: !mailLost }); return !mailLost; } },
+        delivery: { send: async (email, code, signal) => {
+          const accepted = !mailLost && (delivery ? await delivery.send(email, code, signal) : true);
+          process.send?.({ kind: "verificationEmail", email, code, accepted }); return accepted;
+        } },
         ...(c.enquiry ? { enquiry: { ...c.enquiry, permission: { allows: async (...args) => !denied && c.enquiry!.permission.allows(...args) } } } : {}),
         ...(c.staff ? { staff: { ...c.staff, permission: { allows: async (...args) => {
           const allowed = !denied && await c.staff!.permission.allows(...args);
@@ -146,6 +157,15 @@ try {
         intent(owner) {
           const submit = owner.submitCode.bind(owner);
           owner.submitCode = async code => { const result = await submit(code); process.send?.({ kind: "verificationResult", verified: result.verified }); return result; };
+          if (services) return createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-intent", model: "synthetic-model", clinicDate: () => "2026-10-04",
+            fetch: async (_value, init) => {
+              const text = JSON.parse(JSON.parse(String(init?.body)).input[1].content).callerText;
+              process.send?.({ kind: "modelTurn", text });
+              if (!["Show times on October 8.", "Save my details."].includes(text)) throw new Error("unexpected synthetic classified turn");
+              return Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [{ type: "output_text",
+                text: JSON.stringify(text === "Save my details." ? { kind: "save", operation: null, stage: null, from: null, to: null, choice: null }
+                  : { kind: "menu", operation: null, stage: null, from: "2026-10-08", to: "2026-10-08", choice: null }) }] }] });
+            } });
           return async turn => {
           process.send?.({ kind: "modelTurn", text: turn.text });
           if (operation === "staff.request") {
@@ -168,6 +188,18 @@ try {
       });
     },
   });
+}
+try {
+  if (smtpMode) await withSmtpVerificationServer(async smtp => {
+    const actual = new SmtpPatientCodeDelivery(smtp.config);
+    await run({ send: async (email, code, signal) => {
+      const accepted = await actual.send(email, code, signal);
+      process.send?.({ kind: "smtpDelivery", accepted, messages: smtp.messages.length,
+        envelopeMatches: smtp.commands.includes(`RCPT TO:<${email}>`), codeMatches: smtp.messages.at(-1)?.includes(code) === true });
+      return accepted;
+    } });
+  });
+  else await run();
 } catch {
   process.stderr.write("synthetic clinical runner unavailable\n"); process.exitCode = 1;
 } finally { await f.close(); if (process.connected) process.disconnect(); }

@@ -17,13 +17,13 @@ import { voiceUntil } from "./cliniko-workflow-voice.ts";
 import type { LocationScope } from "../../src/core/model.ts";
 
 type Message = { kind: string; text?: string; method?: string; path?: string; body?: Record<string, unknown>;
-  email?: string; code?: string; scope?: LocationScope; policyVersion?: string; operation?: string; allowed?: boolean; accepted?: boolean; verified?: boolean };
+  messages?: number; envelopeMatches?: boolean; codeMatches?: boolean; email?: string; code?: string; scope?: LocationScope; policyVersion?: string; operation?: string; allowed?: boolean; accepted?: boolean; verified?: boolean };
 export type ClinicalRunnerOperation = "book" | "cancel" | "reschedule" | "intake" | "appointments.read" | "staff.request";
 
 /** Actual compiled runner in a separate process and database. All network
  * providers are fixtures; private caller material is kept in this test memory. */
 export async function withClinicalRunner(operation: ClinicalRunnerOperation,
-  run: (call: Awaited<ReturnType<typeof start>>) => Promise<void>): Promise<void> {
+  run: (call: Awaited<ReturnType<typeof start>>) => Promise<void>, options: { services?: boolean; smtp?: boolean } = {}): Promise<void> {
   const adminUrl = process.env.DATABASE_URL; assert.ok(adminUrl);
   const admin = connectPostgres(adminUrl), name = `abby_test_voice_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl); target.pathname = `/${name}`;
@@ -32,7 +32,7 @@ export async function withClinicalRunner(operation: ClinicalRunnerOperation,
   try {
     await sql.raw(`create database "${name}"`).execute(admin); created = true;
     db = connectPostgres(target.toString()); await migrate(db);
-    call = await start(operation, target.toString(), db); await run(call);
+    call = await start(operation, target.toString(), db, options); await run(call);
   } catch (error) { originalFailure = error; throw error; }
   finally {
     const failures: unknown[] = [];
@@ -43,14 +43,15 @@ export async function withClinicalRunner(operation: ClinicalRunnerOperation,
     if (failures.length) throw new AggregateError(originalFailure === undefined ? failures : [originalFailure, ...failures], "clinical runner test or cleanup failed");
   }
 }
-async function start(operation: ClinicalRunnerOperation, connectionString: string, db: ReturnType<typeof connectPostgres>) {
+async function start(operation: ClinicalRunnerOperation, connectionString: string, db: ReturnType<typeof connectPostgres>, options: { services?: boolean; smtp?: boolean }) {
   const accountSid = `AC${"1".repeat(32)}`, authToken = "synthetic-clinical-runner-token", number = "+6125550199", caller = "+61400111222";
   const webhookUrl = "https://clinical-runner.example.test/twilio/inbound", streamUrl = "wss://clinical-runner.example.test/twilio/media/";
   const messages: Message[] = [], output: string[] = [];
   const child = spawn(process.execPath, [compiledRuntimeEntrypoint("test/support/start-synthetic-clinical-runner.ts")], {
     cwd: new URL("../../", import.meta.url), stdio: ["ignore", "pipe", "pipe", "ipc"],
     env: { ...process.env, DATABASE_URL: connectionString, ABBY_ISOLATED_POSTGRES_PROBE: "1", ABBY_VOICE_TEST_MODE: "1", ABBY_VOICE_PORT: "0",
-      ABBY_SYNTHETIC_CLINICAL_OPERATION: operation, ABBY_TENANT_ID: "pending", ABBY_CLINIC_ID: "clinic", ABBY_LOCATION_ID: "main",
+      ABBY_SYNTHETIC_CLINICAL_OPERATION: operation,
+      ABBY_SYNTHETIC_SERVICE_MODE: options.services ? "1" : undefined, ABBY_SYNTHETIC_SMTP_MODE: options.smtp ? "1" : undefined, ABBY_TENANT_ID: "pending", ABBY_CLINIC_ID: "clinic", ABBY_LOCATION_ID: "main",
       ABBY_TWILIO_TEST_CALLER_NUMBER: caller, ABBY_TWILIO_TEST_NUMBER: number, ABBY_TWILIO_FALLBACK_NUMBER: "+6125550188",
       ABBY_TWILIO_ACCOUNT_SID: accountSid, ABBY_TWILIO_AUTH_TOKEN: authToken, ABBY_TWILIO_BINDING_KEY_HEX: "66".repeat(32),
       ABBY_TWILIO_PUBLIC_WEBHOOK_URL: webhookUrl, ABBY_TWILIO_PUBLIC_STREAM_URL: streamUrl, ABBY_VOICE_ROUTE_VERSION: "clinical-runner-v1",

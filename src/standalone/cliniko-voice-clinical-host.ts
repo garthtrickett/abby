@@ -35,7 +35,11 @@ export class ClinikoVoiceClinicalHost {
         practitioners: Object.freeze(config.catalogue.practitioners.map(member => Object.freeze({ ...member }))) }) } : {}),
       ...(config.intake ? { intake: Object.freeze({ ...config.intake }) } : {}),
       ...(config.staff ? { staff: Object.freeze({ ...config.staff }) } : {}),
-      ...(config.enquiry ? { enquiry: Object.freeze({ ...config.enquiry }) } : {}) });
+      ...(config.enquiry ? { enquiry: Object.freeze({ ...config.enquiry }) } : {}),
+      ...(config.history ? { history: Object.freeze({ ...config.history }) } : {}),
+      ...(config.serviceCatalogue ? { serviceCatalogue: Object.freeze({ ...config.serviceCatalogue,
+        services: Object.freeze(config.serviceCatalogue.services.map(service => Object.freeze({ ...service,
+          practitioners: Object.freeze(service.practitioners.map(member => Object.freeze({ ...member }))) }))) }) } : {}) });
   }
   get greeting(): ApprovedGreeting { return structuredClone(this.#config.greeting); }
   get cataloguePolicy(): Pick<PolicyStore, "read"> {

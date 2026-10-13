@@ -118,3 +118,46 @@ clinical provider path and lost-appointment-write proof. The other failure was
 a rescheduling response timeout; the corrected full run passed it with the same
 worker counts and deadlines. The timeout's independent cause is not established.
 No failing result is presented as a pass, and no real human receipt is inferred.
+
+
+## Combined clinical runner qualification, 2026-10-13
+
+Dedicated branch `codex/abby-integrated-runner` reconciles the committed heads
+of drafts453 (clinical runner),454 (TLS SMTP),455 (aggregate monitoring/operator
+responsibility) and456 (current services/history/location/intake). All originated
+from main `9a29e51e7f7e0a765db7674c6c75ff2087260473`. Source additions merged;
+scenario evidence arrays were united, existing353 scenario meanings retained,
+and the new E2E-354 compiled integration was registered at version1.161/354 IDs.
+No policy, permission, admission, deadline, privacy or test gate was relaxed.
+
+`ClinikoVoiceClinicalHost` freezes current service mappings and history settings
+before constructing calls. The guarded compiled fixture uses the actual initial
+service and private-registration components, with real loopback TLS SMTP
+certificate/authentication/envelope/message validation. The existing-patient
+journey inspects native type34; the first-time journey separately confirms
+patient42 and type34/member24. Both scan private fields/codes in PostgreSQL and
+runner output. This is synthetic provider/media evidence, not real recipient,
+clinic, acoustic or carrier acceptance.
+
+Exact qualification: `npm run typecheck`, `npm run build:voice-tests`,
+`npm run build:cliniko-admin`, `npm run build:dashboard`,
+`npm run build:sign-in`, isolated PostgreSQL
+`node --test --test-concurrency=4` over integrated-clinical-runner,
+standalone-clinical-host/runner, smtp-patient-code-delivery, queue-monitor,
+operational-alert-inbox/receiver-postgres, operator-alert-workflow/http/process,
+cliniko-queue-monitor-systemd and scenario-manifest/no-number-gap-trace files,
+then `npx playwright test test/browser/operator-alert-responsibility.spec.ts`
+and `git diff --check`. All62 Node checks and the browser journey passed, zero
+skips. Work: `Abby combined runner SMTP and monitoring final qualification
+October13`. Log:
+`/home/gust/paseo/paseo-home/work/logs/4590eee3-1791890158011.log`.
+The required sign-in asset build was separately tracked and completed before
+browser startup in `4590eee3-1791890281469.log`. Earlier merged-source typecheck/
+registry and17-check compiled clinical qualification also passed.
+
+The production CLI still provisions one location. Shared-number public service
+discovery and exact different-business binding are qualified in the transient
+composition; multi-location CLI provisioning/current per-location host selection
+remain the next integration work. Real clinic permission/recipient/operating
+acceptance, failed acoustic quality, exact-head CI and carrier admission gates
+remain separate. The full13 objective is active; gaps6–13 remain incomplete.
