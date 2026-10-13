@@ -13,7 +13,7 @@ import { PostgresOperationalCounters } from "../src/storage/postgres-operational
 import type { ClinikoVoiceServerConfig } from "../src/standalone/cliniko-voice-server.ts";
 import { boundedHealthCheck } from "../src/standalone/bounded-health-check.ts";
 import { clinikoCredentialFingerprint } from "../src/cliniko/read-budget.ts";
-import type { ClinikoVoiceClinicalHost } from "../src/standalone/cliniko-voice-clinical-host.ts";
+import { ClinikoVoiceClinicalHost } from "../src/standalone/cliniko-voice-clinical-host.ts";
 import type { LocationScope } from "../src/core/model.ts";
 export { clinicDateAt } from "../src/standalone/clinic-clock.ts";
 
@@ -42,6 +42,9 @@ function bindingKey(): Buffer {
 }
 
 /** Provider ports and independently provisioned clinic/operational hosts. */
+type ClinicalHostContext = Readonly<{ db: ReturnType<typeof connectPostgres>; scope: LocationScope;
+  apiKey: string; contactEmail: string; rateBudget: PostgresClinikoRequestBudget }>;
+export type ClinicalRunnerLocation = Readonly<{ scope: LocationScope; spokenName: string; host: ClinikoVoiceClinicalHost }>;
 export type VoiceRunnerPorts = Readonly<{
   clinikoFetch?: typeof fetch;
   openaiFetch?: typeof fetch;
@@ -60,8 +63,10 @@ export type VoiceRunnerPorts = Readonly<{
   syntheticClock?: NonNullable<ClinikoVoiceServerConfig["now"]>;
   /** Deployment host owns clinic approvals, verification delivery and permission.
    * No environment flag or catalogue setting can supply this authority. */
-  clinicalHost?: (context: Readonly<{ db: ReturnType<typeof connectPostgres>; scope: LocationScope;
-    apiKey: string; contactEmail: string; rateBudget: PostgresClinikoRequestBudget }>) => ClinikoVoiceClinicalHost;
+  clinicalHost?: (context: ClinicalHostContext) => ClinikoVoiceClinicalHost;
+  /** Independently provisioned locations of one clinic sharing the configured number.
+   * Each host retains its own approval, caller permission and private input. */
+  clinicalLocations?: (context: ClinicalHostContext) => readonly ClinicalRunnerLocation[];
 }>;
 
 export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<void> {
@@ -116,12 +121,40 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       },
       ...(process.env.ABBY_CLINIKO_BUDGET_USER_REF
         ? { sharedUserRef: process.env.ABBY_CLINIKO_BUDGET_USER_REF } : {}) });
-    const clinicalHost = ports.clinicalHost?.({ db, scope: Object.freeze({ ...scope }), apiKey, contactEmail, rateBudget });
-    const configured = createStandaloneClinikoSetup({ db, scope, apiKey, contactEmail, rateBudget,
-      ...(clinicalHost ? { runtimePolicy: clinicalHost.cataloguePolicy } : {}),
-      route: { accountRef: accountSid, dialedNumber, routeVersion },
-      ...(ports.clinikoFetch ? { fetch: ports.clinikoFetch } : {}) });
-    if (!configured.ok) throw new RangeError(`invalid Cliniko catalogue configuration: ${configured.error.kind}`);
+    if (ports.clinicalHost && ports.clinicalLocations) throw new RangeError("conflicting clinical runner hosts");
+    const context = { db, scope: Object.freeze({ ...scope }), apiKey, contactEmail, rateBudget };
+    const clinicalHost = ports.clinicalHost?.(context);
+    const locations = ports.clinicalLocations?.(context)?.map(row => ({ ...row, scope: Object.freeze({ ...row.scope }) }));
+    if (locations && (!locations.length || locations.length > 32 ||
+        !locations.some(row => row.scope.locationId === scope.locationId) ||
+        new Set(locations.map(row => row.scope.locationId)).size !== locations.length ||
+        locations.some(row => row.scope.tenantId !== scope.tenantId || row.scope.clinicId !== scope.clinicId ||
+          !row.scope.locationId || !row.spokenName.trim() || !(row.host instanceof ClinikoVoiceClinicalHost)))) {
+      throw new RangeError("invalid clinical runner locations");
+    }
+    const configuredRoutes = (locations ?? [{ scope, host: clinicalHost }]).map(location => {
+      const currentScope = location.scope, host = location.host;
+      const configured = createStandaloneClinikoSetup({ db, scope: currentScope, apiKey, contactEmail, rateBudget,
+        ...(host ? { runtimePolicy: host.cataloguePolicy } : {}),
+        route: { accountRef: accountSid, dialedNumber, routeVersion },
+        ...(ports.clinikoFetch ? { fetch: ports.clinikoFetch } : {}) });
+      if (!configured.ok) throw new RangeError(`invalid Cliniko catalogue configuration: ${configured.error.kind}`);
+      return { dialedNumber, scope: currentScope, routeVersion,
+        ...("spokenName" in location ? { spokenName: location.spokenName } : {}),
+        ...(host ? { clinicalHost: host } : {}),
+        approval: configured.value.setup, rateBudget, credentialFingerprint: clinikoCredentialFingerprint(apiKey),
+        availabilityForSelection: (choice: import("../src/cliniko/catalogue.ts").ClinikoSelection) => {
+          const reader = ClinikoAvailabilityReader.create({ scope: currentScope, apiKey, rateBudget, contactEmail,
+            onProviderUnavailable: () => operationalCounters.record(currentScope, "clinikoProviderUnavailable"),
+            businessId: choice.businessId, practitionerId: choice.practitionerId,
+            appointmentTypeId: choice.appointmentTypeId }, ports.clinikoFetch);
+          return reader.ok ? reader.value : null;
+        },
+        keypadAvailabilityGreeting: { scope: currentScope, version: required("ABBY_GREETING_VERSION"),
+          ownerRef: required("ABBY_GREETING_APPROVAL_OWNER_REF"), approved: true as const,
+          approvedText: required("ABBY_GREETING_APPROVED_TEXT") },
+        sevenDayAvailabilityEnabled: weekMode === "1" };
+    });
     const prepared = await createStandaloneClinikoVoiceServer({ db,
       activeCallClaims: new PostgresActiveCallClaims(connectionString, key),
       twilio: { accountSid,
@@ -130,20 +163,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
         publicStreamUrl: required("ABBY_TWILIO_PUBLIC_STREAM_URL"),
         fallbackNumbers: { [dialedNumber]: fallbackNumber }, bindingKey: key,
         ...(ports.syntheticClock ? { now: () => new Date(ports.syntheticClock!()) } : {}) },
-      routes: [{ dialedNumber, scope, routeVersion,
-        ...(clinicalHost ? { clinicalHost } : {}),
-        approval: configured.value.setup, rateBudget, credentialFingerprint: clinikoCredentialFingerprint(apiKey),
-        availabilityForSelection: choice => {
-          const reader = ClinikoAvailabilityReader.create({ scope, apiKey, rateBudget, contactEmail,
-            onProviderUnavailable: () => operationalCounters.record(scope, "clinikoProviderUnavailable"),
-            businessId: choice.businessId, practitionerId: choice.practitionerId,
-            appointmentTypeId: choice.appointmentTypeId }, ports.clinikoFetch);
-          return reader.ok ? reader.value : null;
-        },
-        keypadAvailabilityGreeting: { scope, version: required("ABBY_GREETING_VERSION"),
-          ownerRef: required("ABBY_GREETING_APPROVAL_OWNER_REF"), approved: true,
-          approvedText: required("ABBY_GREETING_APPROVED_TEXT") },
-        sevenDayAvailabilityEnabled: weekMode === "1" }],
+      routes: configuredRoutes,
       openai: { apiKey: required("ABBY_OPENAI_API_KEY"), intentModel: required("ABBY_OPENAI_INTENT_MODEL"),
         ...(ports.openaiFetch ? { fetch: ports.openaiFetch } : {}),
         ...(ports.speechSocketFactory ? { speechSocketFactory: ports.speechSocketFactory } : {}),
@@ -155,8 +175,8 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       ...(ports.voiceProfiles ? { voiceProfiles: ports.voiceProfiles } : {}),
       ...(ports.speechQuality ? { speechQuality: ports.speechQuality } : {}),
       ...(ports.syntheticClock ? { now: ports.syntheticClock } : {}),
-      readiness: testCaller ? async current => current.tenantId === scope.tenantId &&
-        current.clinicId === scope.clinicId && current.locationId === scope.locationId
+      readiness: testCaller ? async current => configuredRoutes.some(route => current.tenantId === route.scope.tenantId &&
+        current.clinicId === route.scope.clinicId && current.locationId === route.scope.locationId)
         ? ok(true) : unprovenReadiness(current) : unprovenReadiness,
       admitWebhook: async event => !!testCaller && !!event && event.key.accountRef === accountSid &&
         event.dialedNumber === dialedNumber && event.presentedCallerNumber === testCaller && await healthy(),

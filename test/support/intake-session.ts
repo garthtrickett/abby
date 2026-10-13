@@ -17,8 +17,8 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 import { intakePolicyFixture } from "./intake-policy.ts";
 import { intakeCredential, intakeDraft, intakeNow } from "./intake-edge.ts";
 
-export async function intakeSessionFixture(options: { rateBudget?: ClinikoRequestBudget; verificationBudget?: PatientVerificationBudget; timeoutMs?: number; fetchPort?: typeof fetch; folder?: string; bookingExecute?: boolean } = {}) {
-  const f = await intakePolicyFixture(options.folder), scope = f.scope;
+export async function intakeSessionFixture(options: { scope?: LocationScope; rateBudget?: ClinikoRequestBudget; verificationBudget?: PatientVerificationBudget; timeoutMs?: number; fetchPort?: typeof fetch; folder?: string; bookingExecute?: boolean } = {}) {
+  const f = await intakePolicyFixture(options.folder, options.scope), scope = f.scope;
   let now = intakeNow, allowed = true, played = true, posts = 0, claims = 0, candidates = 0, loss = false, readMismatch = false;
   let mailAccepted = true, row: Record<string, unknown> | undefined;
   let onMail: () => Promise<void> = async () => undefined, onSearch: () => Promise<void> = async () => undefined, onPost: () => Promise<void> = async () => undefined, onRead: () => Promise<void> = async () => undefined;

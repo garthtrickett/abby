@@ -44,6 +44,7 @@ export type ClinikoVoiceWorkflow = Readonly<{
    * catalogue settings while clinic, mail and speech activation remain unproven. */
   policies: PolicyStore;
   publicKnowledge?: OwnerFileClinicFAQs;
+  publicKnowledgeByLocation?: readonly Readonly<{ scope: LocationScope; source: OwnerFileClinicFAQs }>[];
   create(context: Readonly<{ receipt: AdmissionReceipt; inbound: AuthenticatedInboundCall; sessionId: string;
     ledger: MemoryLedger; policies: PolicyStore; signal: AbortSignal; clock: () => string;
     privatePresentation: Readonly<{ play(text: string, signal: AbortSignal): Promise<boolean> }> }>): ClinikoCallFlow;
@@ -58,6 +59,7 @@ export type TransientVoiceConfig = Readonly<{
   /** Independently approved public catalogues for shared-number locations. */
   locationServiceSources?: readonly Parameters<typeof OwnerFileServiceCatalogue.capture>[0][];
   expectedPolicyVersion?: string;
+  expectedPolicyVersions?: readonly Readonly<{ scope: LocationScope; policyVersion: string }>[];
   stream: AuthenticatedTwilioStream;
   send: (json: string) => "queued" | "notSent" | "uncertain";
   voiceProfiles: VoiceProfileRegistry & SpeechAdapterFactory;
@@ -67,6 +69,8 @@ export type TransientVoiceConfig = Readonly<{
   approvedGreeting?: ApprovedGreeting;
   /** The serving route checks the stored opening words against its offered keypad choices. */
   greetingValidator?: (greeting: ApprovedGreeting | undefined) => boolean;
+  /** Aggregate diagnostics bind only after the location admission succeeds. */
+  onLocationBound?: (scope: LocationScope) => void;
   keypadAvailabilityRange?: (digit: string) => Readonly<{ from: string; to: string }> | null | undefined;
   closeTransport?: () => void;
   callerCandidateLookup?: CallerCandidateLookup;
@@ -106,22 +110,38 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
   const defaultPolicy = (scope: LocationScope) => ({ ...standaloneDefaultPolicy(scope),
     ...(config.approvedGreeting ? { greeting: structuredClone(config.approvedGreeting) } : {}) });
   const policy = config.clinicalWorkflow?.policies ?? new PostgresPolicyStore(config.db, defaultPolicy, "unavailable", readiness, false, "standaloneMinimal", true, undefined, undefined, undefined, config.voiceProfiles);
-  let greeting: ApprovedGreeting | undefined;
+  const greetings = new Map<string, ApprovedGreeting>();
+  const scopeKey = (scope: LocationScope) => JSON.stringify([scope.tenantId, scope.clinicId, scope.locationId]);
+  const versions = config.expectedPolicyVersions?.map(row => ({ scope: { ...row.scope }, policyVersion: row.policyVersion }));
+  if (versions && (config.expectedPolicyVersion !== undefined || !versions.length || versions.length > 32 ||
+      new Set(versions.map(row => scopeKey(row.scope))).size !== versions.length || versions.some(row => !row.policyVersion.trim()))) {
+    throw new TypeError("invalid location policy versions");
+  }
   const routingHost = config.locationServiceSources
     ? new ClinikoLocationServiceDirectory(config.routingHost, config.locationServiceSources) : config.routingHost;
   const router = new ClinicPolicyRouter(routingHost, { read: async scope => {
     const loaded = await policy.read(scope);
+    if (loaded.ok && versions && versions.find(row => sameScope(row.scope, scope))?.policyVersion !== loaded.value.policyVersion)
+      return err({ kind: "versionConflict" });
     if (loaded.ok && config.expectedPolicyVersion !== undefined &&
         loaded.value.policyVersion !== config.expectedPolicyVersion) return err({ kind: "versionConflict" });
     if (loaded.ok && config.greetingValidator && !config.greetingValidator(loaded.value.greeting)) {
       return err({ kind: "invalidValue" });
     }
-    if (loaded.ok) greeting = loaded.value.greeting;
+    if (loaded.ok && loaded.value.greeting) greetings.set(scopeKey(scope), structuredClone(loaded.value.greeting));
     return loaded;
   } });
   const publicKnowledge = config.clinicalWorkflow?.publicKnowledge;
   if (publicKnowledge !== undefined && !(publicKnowledge instanceof OwnerFileClinicFAQs)) throw new TypeError("invalid public clinic facts");
-  const admission = new CallAdmissionService(ledger, router.resolve, now, readiness, publicKnowledge);
+  const publicByLocation = config.clinicalWorkflow?.publicKnowledgeByLocation?.map(row => ({ scope: { ...row.scope }, source: row.source }));
+  if (publicByLocation && (publicKnowledge || publicByLocation.length > 32 ||
+      new Set(publicByLocation.map(row => scopeKey(row.scope))).size !== publicByLocation.length ||
+      publicByLocation.some(row => !(row.source instanceof OwnerFileClinicFAQs)))) throw new TypeError("invalid location clinic facts");
+  const knowledge = publicByLocation ? { listModelKnowledge: (scope: LocationScope, at: string) => {
+    const source = publicByLocation.find(row => sameScope(row.scope, scope))?.source;
+    return source ? source.listModelKnowledge(scope, at) : Promise.resolve(ok([]));
+  } } : publicKnowledge;
+  const admission = new CallAdmissionService(ledger, router.resolve, now, readiness, knowledge);
   const intake = new SharedNumberIntakeService(ledger, router, admission, now);
   const host = new DisabledStandaloneHost();
   const lifetime = new AbortController();
@@ -151,6 +171,7 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
     ...(privateInput ? { privateKeypadInput: privateInput } : {}),
     onCallStop: () => lifetime.abort(),
     fullFactory: (receipt, sessionId, playback) => {
+      const greeting = greetings.get(scopeKey(receipt.scope));
       if (!greeting || !sameScope(greeting.scope, receipt.scope)) throw new Error("approved greeting unavailable");
       verifiedRead?.dispose();
       verifiedRead = undefined;
@@ -170,9 +191,11 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
         list: (...args: Parameters<NonNullable<ClinikoCallFlow["appointments"]>["list"]>) => workflow?.appointments?.list(...args) ?? Promise.resolve(err({ kind: "unavailable" as const })),
         select: (...args: Parameters<NonNullable<ClinikoCallFlow["appointments"]>["select"]>) => workflow?.appointments?.select(...args) ?? Promise.resolve(err({ kind: "unavailable" as const })),
       } : verifiedRead?.appointments;
-      const reception = new TextReception(ledger, policy, workflow ?? host, availability, appointments, undefined, publicKnowledge ?? host, config.now);
+      const selectedKnowledge = publicByLocation?.find(row => sameScope(row.scope, receipt.scope))?.source ?? publicKnowledge;
+      const reception = new TextReception(ledger, policy, workflow ?? host, availability, appointments, undefined, selectedKnowledge ?? host, config.now);
       voice = new VoiceSession(receipt.callId, sessionId, receipt.scope, ledger, reception, playback,
         workflow ? config.clinicalWorkflow!.intent(workflow) : config.resolveIntent, undefined, config.monotonicNow, { greeting, staffWorkUnavailable: true });
+      try { config.onLocationBound?.({ ...receipt.scope }); } catch { /* diagnostics cannot alter admission */ }
       return voice;
     },
   });
@@ -181,7 +204,7 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
     const active = call;
     call = undefined;
     try { await active?.disconnect(); }
-    finally { lifetime.abort(); workflow?.dispose(); workflow = undefined; voice = undefined; verifiedRead?.dispose(); verifiedRead = undefined; ledger.dispose(); greeting = undefined; }
+    finally { lifetime.abort(); workflow?.dispose(); workflow = undefined; voice = undefined; verifiedRead?.dispose(); verifiedRead = undefined; ledger.dispose(); greetings.clear(); }
   })();
   return ok({
     async receive(raw) {

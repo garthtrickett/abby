@@ -42,6 +42,12 @@ export class ClinikoVoiceClinicalHost {
           practitioners: Object.freeze(service.practitioners.map(member => Object.freeze({ ...member }))) }))) }) } : {}) });
   }
   get greeting(): ApprovedGreeting { return structuredClone(this.#config.greeting); }
+  get locationServiceSource() {
+    const c = this.#config;
+    return c.serviceCatalogue ? Object.freeze({ path: c.serviceCatalogue.approvalPath, scope: c.scope, policyVersion: c.policyVersion,
+      businessId: c.cliniko.businessId, credentialFingerprint: clinikoCredentialFingerprint(c.cliniko.apiKey), timeZone: c.cliniko.timeZone,
+      directory: c.directory }) : undefined;
+  }
   get cataloguePolicy(): Pick<PolicyStore, "read"> {
     return { read: scope => sameScope(scope, this.#config.scope) ? this.#config.policies.read(scope)
       : Promise.resolve(err({ kind: "invalidValue" })) };

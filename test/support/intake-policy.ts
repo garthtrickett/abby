@@ -7,12 +7,13 @@ import type { AdminAccount } from "../../src/standalone/identity/magic-link.ts";
 import { OwnerFileAdminDirectory } from "../../src/standalone/identity/owner-file-admin-directory.ts";
 import { callerMediatedRecoveryText, intakeRequiredFields, OwnerFileIntakePolicy } from "../../src/standalone/owner-file-intake-policy.ts";
 import type { IntakeApproval, IntakeDraftQuery } from "../../src/standalone/owner-file-intake-policy.ts";
+import type { LocationScope } from "../../src/core/model.ts";
 import { intakeCredential, intakeDraft, intakeNow } from "./intake-edge.ts";
 
-export async function intakePolicyFixture(suppliedFolder?: string) {
+export async function intakePolicyFixture(suppliedFolder?: string, suppliedScope?: LocationScope) {
   const folder = suppliedFolder ?? await mkdtemp(join(tmpdir(), "abby-intake-policy-"));
   const path = join(folder, "intake.json"), accountPath = join(folder, "accounts.json");
-  const scope = { tenantId: "intake-policy", clinicId: "clinic", locationId: "main" };
+  const scope = suppliedScope ?? { tenantId: "intake-policy", clinicId: "clinic", locationId: "main" };
   let now = intakeNow;
   let approval: IntakeApproval = { scope, revision: "intake-clinic-1", approverRef: "intake-admin",
     approvedAt: "2026-01-01T00:00:00.000Z", effectiveFrom: "2026-01-01T00:00:00.000Z", effectiveUntil: "2027-01-01T00:00:00.000Z",

@@ -1,11 +1,16 @@
 import { readFile, writeFile, rename } from "node:fs/promises";
 import { serviceBookingFixture } from "./service-booking-catalogue.ts";
+import { intakeServiceFixture } from "./intake-service-catalogue.ts";
+import type { LocationScope } from "../../src/core/model.ts";
 import { ReferenceNumberRoutingHost } from "../../src/reference/clinic-number-routing.ts";
 
 /** Two independently approved locations with distinct native Cliniko businesses. */
-export async function locationServiceFixture() {
+export function locationServiceFixture() { return buildLocationServices(scope => serviceBookingFixture({ scope })); }
+export function intakeLocationServiceFixture() { return buildLocationServices(scope => intakeServiceFixture({ scope })); }
+async function buildLocationServices<T extends Awaited<ReturnType<typeof serviceBookingFixture>> | Awaited<ReturnType<typeof intakeServiceFixture>>>(createSouth: (scope: LocationScope) => Promise<T>) {
   const north = await serviceBookingFixture(); north.flow.dispose();
-  const south = await serviceBookingFixture({ scope: { ...north.scope, locationId: "south" } }); south.flow.dispose();
+  const scope = { ...north.scope, locationId: "south" };
+  const south = await createSouth(scope); south.flow.dispose();
   const initial = south.serviceApproval.services.find(service => service.serviceRef === "physiotherapy-initial")!;
   await north.replaceServices({ locationName: "North" });
   await south.replaceServices({ locationName: "South", businessId: "12", services: [initial] });

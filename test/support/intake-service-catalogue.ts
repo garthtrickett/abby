@@ -6,8 +6,8 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 import type { ServiceCatalogueApproval } from "../../src/standalone/owner-file-service-catalogue.ts";
 
 /** First-time registration and independent approved initial-service native writers. */
-export async function intakeServiceFixture() {
-  const f = await intakeCallFlowFixture(); f.flow.dispose();
+export async function intakeServiceFixture(options: Parameters<typeof intakeCallFlowFixture>[0] = {}) {
+  const f = await intakeCallFlowFixture(options); f.flow.dispose();
   const base = JSON.parse(await readFile(f.config.bookingApprovalPath, "utf8"));
   const members = [{ practitionerId: "22", name: "Demo Practitioner", gender: "male" as const },
     { practitionerId: "23", name: "Demo B", gender: "female" as const }, { practitionerId: "24", name: "Demo C", gender: "female" as const }];
@@ -54,7 +54,7 @@ export async function intakeServiceFixture() {
   };
   const flowConfig = { ...f.flowConfig, fetchPort, serviceCatalogue: { approvalPath: path, services: mappings } };
   const flow = resultValue(ClinikoCallFlow.create(flowConfig));
-  return { ...f, flow, flowConfig, types, failMember: (id: string) => { failMember = id; },
+  return { ...f, flow, flowConfig, serviceApproval: approval, servicePath: path, types, failMember: (id: string) => { failMember = id; },
     replaceServices: async (patch: Partial<ServiceCatalogueApproval>) => { approval = { ...approval, ...patch }; await replace(path, approval); },
     close: async () => { flow.dispose(); await f.close(); } };
 }

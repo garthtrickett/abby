@@ -1,11 +1,13 @@
 import { withSmtpVerificationServer } from "./smtp-verification-server.ts";
 import { SmtpPatientCodeDelivery } from "../../src/standalone/smtp-patient-code-delivery.ts";
 import type { PatientCodeDelivery } from "../../src/standalone/email-patient-authority.ts";
+import { locationServiceFixture, intakeLocationServiceFixture } from "./location-service-catalogue.ts";
 import { serviceBookingFixture } from "./service-booking-catalogue.ts";
 import { intakeServiceFixture } from "./intake-service-catalogue.ts";
 import { createOpenAIClinicalIntentResolver } from "../../src/standalone/openai-clinical-intent.ts";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { VoiceRunnerPorts } from "../../scripts/serve-cliniko-voice.ts";
 import { serveClinikoVoice } from "../../scripts/serve-cliniko-voice.ts";
 import { ClinikoVoiceClinicalHost } from "../../src/standalone/cliniko-voice-clinical-host.ts";
 import { OwnerFileIntakePolicy } from "../../src/standalone/owner-file-intake-policy.ts";
@@ -29,14 +31,30 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
 }
 const services = process.env.ABBY_SYNTHETIC_SERVICE_MODE === "1", smtpMode = process.env.ABBY_SYNTHETIC_SMTP_MODE === "1";
 if (services && !["book", "intake"].includes(operation!) || process.env.ABBY_SYNTHETIC_SERVICE_MODE && !services || process.env.ABBY_SYNTHETIC_SMTP_MODE && !smtpMode) throw new Error("invalid synthetic integration mode");
-const f = services ? operation === "book" ? await serviceBookingFixture() : await intakeServiceFixture() : operation === "staff.request" ? await clinikoStaffCallFlowFixture() : operation === "book" ? await bookingCallFlowFixture() : operation === "cancel" ? await cancellationCallFlowFixture() :
-  operation === "reschedule" ? await reschedulingCallFlowFixture() : operation === "intake" ? await intakeCallFlowFixture() : await appointmentEnquiryFixture();
+const multiLocation = process.env.ABBY_SYNTHETIC_LOCATION_MODE === "1";
+if (multiLocation && (!services || !["book", "intake"].includes(operation!))) throw new Error("invalid synthetic location mode");
+const locationFixture = multiLocation ? operation === "intake" ? await intakeLocationServiceFixture() : await locationServiceFixture() : undefined;
+const f = locationFixture?.north ?? (services ? operation === "book" ? await serviceBookingFixture() : await intakeServiceFixture() : operation === "staff.request" ? await clinikoStaffCallFlowFixture() : operation === "book" ? await bookingCallFlowFixture() : operation === "cancel" ? await cancellationCallFlowFixture() :
+  operation === "reschedule" ? await reschedulingCallFlowFixture() : operation === "intake" ? await intakeCallFlowFixture() : await appointmentEnquiryFixture());
 f.flow.dispose();
-const c = f.flowConfig, now = c.clock!, apiKey = process.env.ABBY_CLINIKO_API_KEY!, fingerprint = clinikoCredentialFingerprint(apiKey);
+if (locationFixture && operation === "book") {
+  const config = locationFixture.southConfig;
+  const before = resultValue(await config.policies.read(locationFixture.south.scope));
+  resultValue(await config.policies.changeGreeting(locationFixture.south.scope, before.policyVersion,
+    { ...before.greeting!, ownerRef: "synthetic-admin", effectiveFrom: "2026-10-04T05:59:00.000Z",
+      effectiveUntil: "2026-10-05T06:00:00.000Z", approvedText: "Welcome to the South clinic. How can I help?" }, "synthetic-admin"));
+  config.policyVersion = resultValue(await config.policies.read(locationFixture.south.scope)).policyVersion;
+}
+const c = f.flowConfig;
+let mediaElapsedMs = 0;
+const now = () => new Date(Date.parse(c.clock!()) + mediaElapsedMs).toISOString();
+const apiKey = process.env.ABBY_CLINIKO_API_KEY!, fingerprint = clinikoCredentialFingerprint(apiKey);
 process.env.ABBY_TENANT_ID = f.scope.tenantId; process.env.ABBY_CLINIC_ID = f.scope.clinicId; process.env.ABBY_LOCATION_ID = f.scope.locationId;
 process.env.ABBY_TWILIO_TEST_CALLER_NUMBER = f.inbound.presentedCallerNumber;
 // These files contain synthetic public approval data only. Rebind the fixture
 // to the runner's guarded credential; no real key or patient record is read.
+const fixtureRows = locationFixture ? [{ fixture: locationFixture.north, config: c }, { fixture: locationFixture.south, config: locationFixture.southConfig }] : [{ fixture: f, config: c }];
+for (const { fixture: f, config: c } of fixtureRows) {
 const approvalPaths = new Set([
   ...(await readdir(f.folder)).filter(file => file.endsWith(".json")).map(file => join(f.folder, file)),
   ...Object.values(c.approvals),
@@ -49,8 +67,10 @@ for (const path of approvalPaths) {
   try { value = JSON.parse(await readFile(path, "utf8")); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; throw error; }
   if (value && typeof value === "object" && "credentialFingerprint" in value) {
-    await writeFile(path, JSON.stringify({ ...value, credentialFingerprint: fingerprint }), { mode: 0o600 });
+    await writeFile(path, JSON.stringify({ ...value, credentialFingerprint: fingerprint,
+      ...("policyVersion" in value ? { policyVersion: c.policyVersion } : {}) }), { mode: 0o600 });
   }
+}
 }
 const publicInputs: string[] = [], privateInputs: string[] = [];
 let denied = false, lostWrite = false, mailLost = false, mutatePolicy = false;
@@ -58,13 +78,15 @@ process.on("message", message => {
   if (!message || typeof message !== "object" || !("kind" in message)) return;
   if (message.kind === "input" && "text" in message && typeof message.text === "string") { publicInputs.push(message.text); process.send?.({ kind: "inputAccepted" }); }
   if (message.kind === "privateInput" && "text" in message && typeof message.text === "string") { privateInputs.push(message.text); process.send?.({ kind: "privateInputAccepted" }); }
+  if (multiLocation && message.kind === "advanceClock" && "milliseconds" in message && typeof message.milliseconds === "number") { mediaElapsedMs = Math.max(mediaElapsedMs, message.milliseconds); process.send?.({ kind: "clockAdvanced" }); }
   if (message.kind === "denyPermission") denied = true;
   if (message.kind === "loseWrite") lostWrite = true;
   if (message.kind === "loseMail") mailLost = true;
   if (message.kind === "changePolicy") mutatePolicy = true;
 });
+function policyFor(c: typeof f.flowConfig) {
 const policies = withApprovedSyntheticVoice(c.policies);
-const clinicPolicy = new Proxy(policies, { get(target, key) {
+return new Proxy(policies, { get(target, key) {
   if (key === "read") return async (...args: Parameters<typeof target.read>) => {
     const value = await target.read(...args);
     if (!value.ok) return value;
@@ -73,11 +95,12 @@ const clinicPolicy = new Proxy(policies, { get(target, key) {
   };
   const value = Reflect.get(target, key); return typeof value === "function" ? value.bind(target) : value;
 } });
+}
 const base = "https://api.au5.cliniko.com/v1";
 let after: Record<string, unknown> | undefined, patient: Record<string, unknown> | undefined;
-const provider: typeof fetch = async (value, init) => {
+function providerFor(c: typeof f.flowConfig): typeof fetch { return async (value, init) => {
   const url = new URL(String(value)), method = init?.method ?? "GET";
-  process.send?.({ kind: "providerRequest", method, path: url.pathname });
+  process.send?.({ kind: "providerRequest", method, path: url.pathname, scope: c.receipt.scope });
   if (operation === "staff.request" && method === "POST" && url.pathname === "/v1/recalls") {
     const body = JSON.parse(String(init?.body));
     process.send?.({ kind: "providerMutation", method, path: url.pathname, body });
@@ -102,58 +125,75 @@ const provider: typeof fetch = async (value, init) => {
     after = { ...before, id, notes: body.notes ?? before.notes, starts_at: starts,
       ends_at: new Date(Date.parse(starts) + (services ? body.appointment_type_id === "34" ? 60 : body.appointment_type_id === "33" ? 30 : 45 : 30) * 60_000).toISOString(), archived_at: null, deleted_at: null,
       cancelled_at: url.pathname.endsWith("/cancel") ? now() : null,
-      patient: { links: { self: `${base}/patients/${patientId}` } }, business: { links: { self: `${base}/businesses/11` } },
+      patient: { links: { self: `${base}/patients/${patientId}` } }, business: { links: { self: `${base}/businesses/${body.business_id ?? c.cliniko.businessId}` } },
       practitioner: { links: { self: `${base}/practitioners/${body.practitioner_id ?? "22"}` } }, appointment_type: { links: { self: `${base}/appointment_types/${body.appointment_type_id ?? "33"}` } } };
     process.send?.({ kind: "providerMutation", method, path: url.pathname, body });
     if (lostWrite) throw new Error("synthetic unknown appointment write");
     return url.pathname.endsWith("/cancel") ? new Response(null, { status: 204 }) : Response.json(after, { status: method === "POST" ? 201 : 200 });
   }
-  return c.fetchPort!(value, init);
-};
+  const response = await c.fetchPort!(value, init);
+  if (multiLocation && c.receipt.scope.locationId === "south" && method === "GET" && url.pathname.startsWith("/v1/patients/")) {
+    return Response.json({ ...await response.json(), email: "south-registered@example.test" }, { status: response.status });
+  }
+  return response;
+}; }
+const provider = providerFor(c);
 const speech: typeof fetch = async (url, init) => {
   if (String(url) !== "https://api.openai.com/v1/audio/speech") throw new Error("synthetic speech endpoint required");
   const body = JSON.parse(String(init?.body)); process.send?.({ kind: "speech", text: body.input });
   const pcm = Buffer.alloc(960); for (let i = 0; i < pcm.length; i += 2) pcm.writeInt16LE(1000, i);
   return new Response(pcm, { headers: { "content-type": "audio/pcm" } });
 };
-const transcription = (privateField: boolean) => (sessionId: string) => ({
-  async accept() { process.send?.({ kind: privateField ? "privateFrame" : "ordinaryFrame" }); return ok([]); },
+const transcription = (privateField: boolean, scope?: typeof f.scope) => (sessionId: string) => ({
+  async accept() { process.send?.({ kind: privateField ? "privateFrame" : "ordinaryFrame", ...(scope ? { scope } : {}) }); return ok([]); },
   async flush(generation: number) {
     const text = (privateField ? privateInputs : publicInputs).shift();
     if (!text) throw new Error("synthetic caller input missing");
-    process.send?.({ kind: privateField ? "privateFinal" : "ordinaryFinal", text });
+    process.send?.({ kind: privateField ? "privateFinal" : "ordinaryFinal", text, ...(scope ? { scope } : {}) });
     return ok([{ kind: "segmentFinal" as const, sessionId, generation, utteranceId: crypto.randomUUID(), text, quality: "clear" as const }]);
   },
 });
 const voiceProfiles = new OpenAIVoiceProfileHost({ apiKey: "synthetic-openai", mode: "conversation", fetch: speech,
   customTranscription: { version: "host-transcription.v1", create: transcription(false) },
   quality: (_scope, configurationHash) => ok({ configurationHash, qualityVersion: "synthetic-clinical-runner.v1" }) });
-const snapshot = resultValue(await clinicPolicy.read(f.scope));
-const intake = c.intake ? { policy: resultValue(await OwnerFileIntakePolicy.capture({ ...c.intake.policy.binding(),
-  credentialFingerprint: fingerprint, path: join(f.folder, "intake.json"), directory: c.directory, intakeEnabled: true, clock: now })),
+async function intakeFor(c: typeof f.flowConfig, folder: string) { return c.intake ? { policy: resultValue(await OwnerFileIntakePolicy.capture({ ...c.intake.policy.binding(),
+  credentialFingerprint: fingerprint, businessId: c.cliniko.businessId, path: join(folder, "intake.json"), directory: c.directory, intakeEnabled: true, clock: now })),
   permission: { allows: async (...args: Parameters<typeof c.intake.permission.allows>) => {
-    const allowed = !denied && await c.intake!.permission.allows(...args); process.send?.({ kind: "permissionDecision", operation: "patients.intake", allowed }); return allowed;
-  } } } : undefined;
-process.send?.({ kind: "fixtureReady", scope: f.scope, policyVersion: c.policyVersion });
+    const allowed = !denied && await c.intake!.permission.allows(...args); process.send?.({ kind: "permissionDecision", operation: "patients.intake", allowed, scope: c.receipt.scope }); return allowed;
+  } } } : undefined; }
+const locationRows = await Promise.all(fixtureRows.map(async ({ fixture, config }) => {
+  const policies = policyFor(config);
+  if (config.intake) {
+    const path = join(fixture.folder, "intake.json"), approval = JSON.parse(await readFile(path, "utf8"));
+    await writeFile(path, JSON.stringify({ ...approval, businessId: config.cliniko.businessId }), { mode: 0o600 });
+  }
+  const intake = await intakeFor(config, fixture.folder);
+  return { intake, scope: fixture.scope, config, policies, snapshot: resultValue(await policies.read(fixture.scope)), provider: providerFor(config) };
+}));
+process.send?.({ kind: "fixtureReady", scope: f.scope, policyVersion: c.policyVersion, locations: locationRows.map(row => ({ scope: row.scope, policyVersion: row.config.policyVersion, businessId: row.config.cliniko.businessId })) });
 async function run(delivery?: PatientCodeDelivery) {
   await serveClinikoVoice({ clinikoFetch: provider, openaiFetch: speech, syntheticClock: now, transcriptionFactory: transcription(false), voiceProfiles,
     speechQuality: (_scope, configurationHash) => ok({ configurationHash, qualityVersion: "synthetic-clinical-runner.v1" }),
-    clinicalHost(context) {
-      const greeting = snapshot.greeting!;
+    ...(multiLocation ? { clinicalLocations: (context: Parameters<NonNullable<VoiceRunnerPorts["clinicalHost"]>>[0]) => locationRows.map((row, index) => ({ scope: row.scope, spokenName: index ? "South" : "North", host: createHost({ ...context, scope: row.scope }, row) })) }
+      : { clinicalHost: (context: Parameters<NonNullable<VoiceRunnerPorts["clinicalHost"]>>[0]) => createHost(context, locationRows[0]!) }),
+  });
+  function createHost(context: Parameters<NonNullable<VoiceRunnerPorts["clinicalHost"]>>[0], row: typeof locationRows[number]) {
+      const c = row.config, clinicPolicy = row.policies, provider = row.provider, intake = row.intake;
+      const greeting = row.snapshot.greeting!;
       return new ClinikoVoiceClinicalHost({ ...c, scope: context.scope, policies: clinicPolicy, greeting,
         cliniko: { ...c.cliniko, apiKey: context.apiKey, contactEmail: context.contactEmail, rateBudget: context.rateBudget }, fetchPort: provider,
         permission: { allows: async (...args) => { const allowed = !denied && await c.permission.allows(...args);
-          process.send?.({ kind: "permissionDecision", operation: args[2], allowed }); return allowed; } },
+          process.send?.({ kind: "permissionDecision", operation: args[2], allowed, scope: context.scope }); return allowed; } },
         delivery: { send: async (email, code, signal) => {
           const accepted = !mailLost && (delivery ? await delivery.send(email, code, signal) : true);
-          process.send?.({ kind: "verificationEmail", email, code, accepted }); return accepted;
+          process.send?.({ kind: "verificationEmail", email, code, accepted, scope: context.scope }); return accepted;
         } },
         ...(c.enquiry ? { enquiry: { ...c.enquiry, permission: { allows: async (...args) => !denied && c.enquiry!.permission.allows(...args) } } } : {}),
         ...(c.staff ? { staff: { ...c.staff, permission: { allows: async (...args) => {
           const allowed = !denied && await c.staff!.permission.allows(...args);
           process.send?.({ kind: "permissionDecision", operation: args[2], allowed }); return allowed;
         } } } } : {}),
-        ...(intake ? { intake, privateIntakeTranscription: transcription(true) } : {}),
+        ...(intake ? { intake, privateIntakeTranscription: transcription(true, context.scope) } : {}),
         intent(owner) {
           const submit = owner.submitCode.bind(owner);
           owner.submitCode = async code => { const result = await submit(code); process.send?.({ kind: "verificationResult", verified: result.verified }); return result; };
@@ -186,8 +226,7 @@ async function run(delivery?: PatientCodeDelivery) {
             ok({ kind: "cancel", verificationRef: grant.verificationRef, targetRef: "selected" });
         }; },
       });
-    },
-  });
+  }
 }
 try {
   if (smtpMode) await withSmtpVerificationServer(async smtp => {
@@ -200,6 +239,8 @@ try {
     } });
   });
   else await run();
-} catch {
+} catch (error) {
+  process.send?.({ kind: "fixtureFailure", stage: error instanceof Error && "killed" in error && error.killed === true
+    ? "fixtureProcessKilled" : "runnerStartupUnavailable" });
   process.stderr.write("synthetic clinical runner unavailable\n"); process.exitCode = 1;
-} finally { await f.close(); if (process.connected) process.disconnect(); }
+} finally { await (locationFixture ? locationFixture.close() : f.close()); if (process.connected) process.disconnect(); }

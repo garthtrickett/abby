@@ -155,9 +155,36 @@ The required sign-in asset build was separately tracked and completed before
 browser startup in `4590eee3-1791890281469.log`. Earlier merged-source typecheck/
 registry and17-check compiled clinical qualification also passed.
 
-The production CLI still provisions one location. Shared-number public service
-discovery and exact different-business binding are qualified in the transient
-composition; multi-location CLI provisioning/current per-location host selection
-remain the next integration work. Real clinic permission/recipient/operating
+At that qualification point the production CLI provisioned one location.
+Shared-number discovery was qualified in the transient composition; the
+subsequent qualification below connects the actual runner. Real clinic permission/recipient/operating
 acceptance, failed acoustic quality, exact-head CI and carrier admission gates
 remain separate. The full13 objective is active; gaps6–13 remain incomplete.
+
+## Shared-number clinical runner qualification, 2026-10-13
+
+Gap5 now includes trusted CLI provisioning of named independent location hosts,
+current per-location route rechecks and explicit location binding. Public
+catalogue questions precede patient lookup, permission, mail, classification and
+private intake. Scope-specific policy versions, greetings, FAQs and private input
+are retained; no location can supply another location's patient authority.
+Credential-wide PostgreSQL budgets remain shared. Clinical counters begin only
+after binding and use the chosen location.
+
+Six E2E-355 compiled journeys inspect both exact native businesses/types,
+distinct TLS recipients and greetings, route withdrawal before binding and after
+verification, independent denial and South's private first-time registration
+followed by a separately confirmed type34/member24 booking. Typecheck, compiled
+voice build and37 affected checks passed without failures/skips. Exact command:
+`npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh node --test --test-concurrency=4 test/voice/compiled-location-runner.test.ts test/voice/integrated-clinical-runner.test.ts test/voice/standalone-clinical-runner.test.ts test/voice/standalone-voice-service.test.ts test/voice/standalone-voice-profile.test.ts test/voice/prelocation-service-discovery.test.ts test/voice/location-service-booking.test.ts test/voice/intake-service-catalogue.test.ts test/cliniko/location-service-directory.test.ts`.
+Work `Abby shared-number returning and first-time final clinical gate October13`
+completed exit0; log `4590eee3-1791892462458.log` in the shared work log directory.
+Manifest1.162 registers355 stable IDs and preserves existing scenario meanings.
+
+The fixture faults and one earlier unreproduced startup exit are recorded in
+`phase-1/VOICE_SERVICE_RUNNER.md`; none is hidden as a pass or used to relax a
+deadline, worker count or authority check. Real clinic configuration/operating
+acceptance, failed acoustic quality, CI execution and carrier gates remain open.
+The next implementation is gap6: longer searches and independently approved
+availability for services disabled in online booking. Gaps6–13 remain incomplete;
+the complete thirteen-gap goal remains active.

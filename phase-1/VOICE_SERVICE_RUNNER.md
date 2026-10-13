@@ -100,9 +100,54 @@ The required sign-in asset build was separately tracked and completed before
 browser startup in `4590eee3-1791890281469.log`. Earlier merged-source typecheck/
 registry and17-check compiled clinical qualification also passed.
 
-The production CLI still provisions one location. Shared-number public service
-discovery and exact different-business binding are qualified in the transient
-composition; multi-location CLI provisioning/current per-location host selection
-remain the next integration work. Real clinic permission/recipient/operating
+At that qualification point the production CLI provisioned one location.
+Shared-number service discovery and exact different-business binding were
+qualified in the transient composition. The follow-up below connects the CLI
+to those location capabilities. Real clinic permission/recipient/operating
 acceptance, failed acoustic quality, exact-head CI and carrier admission gates
 remain separate. The full13 objective is active; gaps6–13 remain incomplete.
+
+## Independently provisioned locations on a shared number
+
+The trusted `clinicalLocations(context)` port supplies 1–32 named location hosts
+for the configured clinic and number. It is mutually exclusive with
+`clinicalHost(context)`. Each host keeps its own greeting, policy version,
+approved service catalogue, patient permission, verification delivery and private
+input adapter. Environment variables do not construct these authorities.
+
+For shared numbers, every location needs independent current catalogue approval
+and an approved public service catalogue whose location name agrees with the
+directory. Public service questions expose only names, visit kinds and durations.
+An explicitly chosen location selects the clinical owner and its private adapter;
+patient reads and verification cannot start during location discovery. Candidate
+locations must agree on the complete qualified voice profile.
+
+The group rechecks the captured route approval on each policy use. Approval
+withdrawal or replacement cannot reuse a pending location choice or verified
+booking. Credentials share the existing PostgreSQL request budget across the
+locations; each native provider request remains scoped to the selected host.
+Admission denials before location selection belong to the number's first route;
+clinical owner starts and subsequent failure/end counters use the bound location.
+
+E2E-355 qualifies six compiled shared-number journeys: both location choices,
+approval withdrawal before binding and before sending, independent permission
+denial, and first-time registration followed by separate booking at South.
+Distinct greetings, policy versions, TLS recipients, private adapter scope,
+native business/type/member bodies and selected-location counters are inspected.
+Source typecheck, compiled voice build and 37 related checks passed with zero
+failures/skips in `Abby shared-number returning and first-time final clinical
+gate October13`, log
+`/home/gust/paseo/paseo-home/work/logs/4590eee3-1791892462458.log`.
+
+Earlier attempts exposed fixture faults: the email setter did not affect the
+native fixture response; a changed greeting lacked the required owner/effective
+dates; a denial assertion ran before its asynchronous decision. Each was fixed
+without changing authority, deadlines or concurrency. One earlier runner startup
+exit was not reproduced in the focused or final broader run; its cause remains
+unestablished and fixed-code diagnostics now preserve a future occurrence.
+The shared helper's initial union type obscured the returning fixture's methods;
+separate typed fixture constructors preserve both existing and intake evidence.
+
+This implementation supplies no real clinic acceptance, mailbox receipt,
+acoustic qualification or carrier admission evidence. Exact-head CI is a
+separate publication gate.
