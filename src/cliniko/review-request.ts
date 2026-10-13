@@ -8,7 +8,7 @@ type Selection = Readonly<{ practitionerId: string; appointmentTypeId: string }>
 export type ClinikoReviewOperation =
   | Readonly<{ kind: "book" }> & Interval & Selection
   | Readonly<{ kind: "cancel"; appointmentId: string; cancellationReason: ClinikoCancellationRequest["cancellationReason"] }> & Interval & Selection
-  | Readonly<{ kind: "reschedule"; appointmentId: string; newStartsAt: string; newEndsAt: string }> & Interval & Selection;
+  | Readonly<{ kind: "reschedule"; appointmentId: string; newStartsAt: string; newEndsAt: string; newPractitionerId?: string }> & Interval & Selection;
 
 /** Provider-owned confirmed context, including patient-link binding. Never a send permit. */
 export type ClinikoReviewRequest = Readonly<{
@@ -58,7 +58,8 @@ function operation(value: unknown): value is ClinikoReviewOperation {
     case "book": return keys(row, common);
     case "cancel": return keys(row, [...common, "appointmentId", "cancellationReason"]) && id(row.appointmentId) &&
       typeof row.cancellationReason === "number" && [10, 20, 30, 40, 50, 60].includes(row.cancellationReason);
-    case "reschedule": return keys(row, [...common, "appointmentId", "newStartsAt", "newEndsAt"]) &&
+    case "reschedule": return keys(row, [...common, "appointmentId", "newStartsAt", "newEndsAt", ...(Object.hasOwn(row, "newPractitionerId") ? ["newPractitionerId"] : [])]) &&
+      (!Object.hasOwn(row, "newPractitionerId") || id(row.newPractitionerId) && row.newPractitionerId !== row.practitionerId) &&
       id(row.appointmentId) && interval(row, "newStartsAt", "newEndsAt");
     default: return false;
   }

@@ -78,6 +78,12 @@ function describe(request: ActionRequest, locale: string): string {
     case "reschedule": {
       const detail = request.offer.presentation;
       if (detail && !bookingConfirmation(request.offer, locale).ok) return "";
+      if (request.practitionerChange && detail) {
+        const original = appointmentTime(request.target.startsAt, request.target.timeZone, locale);
+        return Date.parse(request.offer.startsAt) === Date.parse(request.target.startsAt)
+          ? `Please confirm changing the practitioner for your ${detail.appointmentTypeName} appointment on ${original} to ${detail.practitionerName}. ${request.terms.approvedText}`
+          : `Please confirm moving your ${detail.appointmentTypeName} appointment on ${original} to ${appointmentTime(request.offer.startsAt, request.target.timeZone, locale)} with ${detail.practitionerName}, for ${detail.durationMinutes} minutes. ${request.terms.approvedText}`;
+      }
       return `Please confirm moving your ${detail ? `${detail.appointmentTypeName} appointment with ${detail.practitionerName}` : "appointment"} on ${appointmentTime(request.target.startsAt, request.target.timeZone, locale)} to ${appointmentTime(request.offer.startsAt, request.target.timeZone, locale)}${detail ? `, for ${detail.durationMinutes} minutes` : ""}. ${request.terms.approvedText}`;
     }
     case "intake": return "Please confirm that your approved intake details may be saved. This does not book an appointment.";
@@ -117,9 +123,10 @@ export function appointmentChangeEvidenceFailure(scope: LocationScope,
       typeof request.terms.version !== "string" || !request.terms.version.trim() || request.terms.version.length > 256 ||
       typeof request.terms.approvedText !== "string" || !request.terms.approvedText.trim() ||
       request.terms.approvedText.length > 500 || /[\u0000-\u001f\u007f]/.test(request.terms.approvedText) ||
-      (request.kind === "reschedule" && (!Number.isFinite(newStart) || newStart === start))) {
+      (request.kind === "reschedule" && (!Number.isFinite(newStart) || newStart === start && request.practitionerChange !== true))) {
     return { kind: "invalidTransition" };
   }
+  if (request.kind === "reschedule" && request.practitionerChange !== undefined && (request.practitionerChange !== true || !request.offer.presentation)) return { kind: "invalidTransition" };
   if (request.kind === "reschedule" && request.offer.presentation &&
       (!bookingConfirmation(request.offer, "en-AU").ok || request.offer.presentation.timeZone !== request.target.timeZone ||
        request.offer.presentation.durationMinutes*60_000 !== end-start)) return { kind: "invalidTransition" };

@@ -12,7 +12,7 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 | 4 | Complete synthetic speech, public transport and eventual carrier qualification. | Prior synthetic runtime evidence exists; noisy/safety and repeated speech gates remain open. Paid probes require restored credits; public tunnel requires a dedicated usable route. Twilio-number carrier evidence is deferred, not substituted with synthetic results. |
 | 5 | Expand services, duration choices, locations and initial/follow-up rules. | Current service/intake variants, return rules and independently provisioned multi-location compiled hosts are locally qualified in draft457. Actual clinic configuration/acceptance and authoritative CI remain open. |
 | 6 | Extend searches and support online-disabled services where required. | E2E-356 locally qualifies complete approved longer online searches and a compiled two-month late-range booking. E2E-357/358 add independently approved non-recurring native calendars, complete adaptive busy reads, Sunday0/7 and compiled returning/first-time location/member coverage with fresh chosen-day reads. Recurrence and broader real-calendar/serving qualification remain incomplete; preserve incomplete-source denial, date bounds and offer/commit agreement. |
-| 7 | Support another approved practitioner during rescheduling. | Current movement requires the same practitioner. Require destination approval, single in-place movement and truthful recovery for conflicts/unknown writes. |
+| 7 | Support another approved practitioner during rescheduling. | E2E-359 locally qualifies explicit approved practitioner pairs, independent destination policy, named played confirmation and one inspected in-place move at a changed or retained time. Destination is currently trusted host setup; caller directory selection and dialogue remain incomplete. |
 | 8 | Add patient detail corrections, required registration fields and resends. | Minimal intake exists; existing-patient correction and delivered resend are incomplete. Require independently authorized updates, contact/index consistency and separate registration/booking outcomes. |
 | 9 | Handle multiple patients/actions in one call. | Restricted proxy/identity foundations exist. Require authority for each person, exact appointment selection and independent outcomes; no implicit household disclosure. |
 | 10 | Add class attendance booking, cancellation and movement. | Individual endpoints are insufficient. Require existing session/attendee identities, capacity and duplicate checks, compensating move recovery and truthful concurrent-result handling. Membership credits/passes require their own evidence. |
@@ -260,3 +260,31 @@ additive sources and real provider/clinic acceptance. Patient-free sandbox
 recurrence evidence has been requested asynchronously; independent work can
 continue while it is pending. Gaps7–13 and real mail/acoustic/CI/carrier gates
 remain open; the full thirteen-gap objective is unchanged.
+
+
+## Gap7 approved practitioner-change foundation
+
+The concrete rescheduling authority now accepts an explicit approved directional
+pair for the exact service/duration and an independent destination booking
+policy. Original patient, appointment identity, location, type and duration are
+retained. A host-derived change fact distinguishes a same-time practitioner
+change from an unchanged request. The menu and confirmation name the new member;
+one native PATCH updates the original appointment and exact tuple/conflict
+inspection is required for success. The review protocol retains old/new member
+context after uncertainty; replay remains denied.
+
+A frozen trusted `reschedulingDestination` is wired through the clinical host,
+call flow and session. It is validated before verification and rechecked before
+proposal/send. E2E-359 has three compiled signed/TLS caller journeys and protected
+source/edge/approval cases. Typecheck, compiled build, diff and101 checks passed
+without failures/skips (work`Abby practitioner change final source core compiled
+and registry gate`, log`4590eee3-1791902828518.log`). Manifest1.166 retains359
+stable IDs. Exact command, API contract and diagnosed failures are recorded in
+`phase-2/APPROVED_PRACTITIONER_RESCHEDULING.md`.
+
+Gap7 remains incomplete for caller selection from an approved directory,
+retaining the existing practitioner preference and offering an explicit switch
+when availability does not suit. Gap6 recurrence/provider/historical additive
+work remains open with optional patient-free evidence pending. Gaps8–13, real
+clinic/mail, acoustic, cloud CI and carrier acceptance remain open. The full13
+objective is active.

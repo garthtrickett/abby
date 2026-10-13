@@ -211,7 +211,7 @@ export class ClinikoAppointmentChangeGuard {
       const request: Change = selected.kind === "cancel"
         ? { kind: "cancel", patient: patient.value, target: selected.target, terms: selected.terms }
         : { kind: "reschedule", patient: patient.value, target: selected.target,
-          offer: selected.offer, terms: selected.terms };
+          offer: selected.offer, terms: selected.terms, ...(selected.destinationPractitionerId ? { practitionerChange: true as const } : {}) };
       const provider = providerRequest(request, selected, this.#scope);
       const fresh = this.#time(query.now);
       if (!provider || appointmentChangeEvidenceFailure(this.#scope, request, query.now) ||

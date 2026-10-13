@@ -33,6 +33,8 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
 const services = process.env.ABBY_SYNTHETIC_SERVICE_MODE === "1", smtpMode = process.env.ABBY_SYNTHETIC_SMTP_MODE === "1";
 if (services && !["book", "intake"].includes(operation!) || process.env.ABBY_SYNTHETIC_SERVICE_MODE && !services || process.env.ABBY_SYNTHETIC_SMTP_MODE && !smtpMode) throw new Error("invalid synthetic integration mode");
 const multiLocation = process.env.ABBY_SYNTHETIC_LOCATION_MODE === "1";
+const practitionerMove = process.env.ABBY_SYNTHETIC_PRACTITIONER_MOVE;
+if (practitionerMove && (!["changedTime", "sameTime"].includes(practitionerMove) || operation !== "reschedule" || services || multiLocation)) throw new Error("invalid synthetic practitioner move mode");
 const longSearch = process.env.ABBY_SYNTHETIC_LONG_SEARCH_MODE === "1";
 const offlineCalendar = process.env.ABBY_SYNTHETIC_OFFLINE_CALENDAR === "1", missingBusy = process.env.ABBY_SYNTHETIC_MISSING_BUSY === "1";
 if (offlineCalendar && (!services || !["book", "intake"].includes(operation!)) || missingBusy && !offlineCalendar) throw new Error("invalid synthetic calendar mode");
@@ -41,7 +43,8 @@ if (longSearch && (!services || operation !== "book" || multiLocation)) throw ne
 if (multiLocation && (!services || !["book", "intake"].includes(operation!))) throw new Error("invalid synthetic location mode");
 const locationFixture = multiLocation ? operation === "intake" ? await intakeLocationServiceFixture() : await locationServiceFixture() : undefined;
 const f = locationFixture?.north ?? (services ? operation === "book" ? await serviceBookingFixture() : await intakeServiceFixture() : operation === "staff.request" ? await clinikoStaffCallFlowFixture() : operation === "book" ? await bookingCallFlowFixture() : operation === "cancel" ? await cancellationCallFlowFixture() :
-  operation === "reschedule" ? await reschedulingCallFlowFixture() : operation === "intake" ? await intakeCallFlowFixture() : await appointmentEnquiryFixture());
+  operation === "reschedule" ? await reschedulingCallFlowFixture(practitionerMove ? { destinationPractitionerId: "23", sameTime: practitionerMove === "sameTime",
+    practitionerMoves: [{ fromPractitionerId: "22", toPractitionerId: "23", appointmentTypeId: "33", durationMinutes: 30 }] } : {}) : operation === "intake" ? await intakeCallFlowFixture() : await appointmentEnquiryFixture());
 f.flow.dispose();
 if (longSearch && "setStarts" in f) f.setStarts(["2026-11-20T04:00:00.000Z"]);
 if (locationFixture && operation === "book") {
@@ -259,7 +262,7 @@ async function run(delivery?: PatientCodeDelivery) {
           if (operation === "book" || operation === "intake") return turn.text === "Times" ? ok({ kind: "bookingMenu", from: "2026-10-08", to: "2026-10-08" }) : ok({ kind: "bookingChoice", choice: 2 });
           if (operation === "reschedule") return turn.text === "Source" || turn.text === "Destination" ? ok({ kind: "reschedulingMenu", stage: turn.text === "Source" ? "targets" : "offers",
             from: turn.text === "Source" ? now() : "2026-10-08", to: turn.text === "Source" ? "2026-10-09T06:00:00.000Z" : "2026-10-08" }) :
-            ok({ kind: "reschedulingChoice", stage: turn.text === "Select source" ? "targets" : "offers", choice: turn.text === "Select source" ? 1 : 2 });
+            ok({ kind: "reschedulingChoice", stage: turn.text === "Select source" ? "targets" : "offers", choice: turn.text === "Select source" || practitionerMove === "sameTime" ? 1 : 2 });
           if (operation === "appointments.read") return ok({ kind: "appointmentEnquiry", from: now(), to: "2026-10-09T06:00:00.000Z" });
           const grant = await owner.cancellationProof();
           if (!grant) return err({ kind: "intentUnavailable" });

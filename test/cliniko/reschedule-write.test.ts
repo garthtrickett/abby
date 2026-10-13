@@ -35,6 +35,17 @@ function writer(fetchPort: typeof fetch): ClinikoRescheduleWriter {
   return created.value;
 }
 
+test("E2E-359 practitioner changes require trusted final authority and inspection callbacks before provider IO", async () => {
+  let calls = 0;
+  const adapter = writer(async () => { calls++; throw new Error("unexpected provider request"); });
+  assert.deepEqual(await adapter.rescheduleOnce({ ...request, newPractitionerId: "23" }), { ok: false, error: { kind: "forbidden" } });
+  for (const newPractitionerId of ["22", "0", "foreign", null, 23]) {
+    const result = await adapter.rescheduleOnce({ ...request, newPractitionerId } as never, undefined, { beforeSend: async () => true, beforeRead: async () => true });
+    assert.equal(result.ok, false);
+  }
+  assert.equal(calls, 0);
+});
+
 test("one in-place PATCH needs a fresh exact moved read and no conflict before a moved result", async () => {
   let moved = false;
   const methods: string[] = [];

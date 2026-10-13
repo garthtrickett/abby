@@ -6,10 +6,12 @@ import { approvalInstant, approvalRef, clinicApprovalKeys, decodeClinicApproval,
 import type { ClinicApproval } from "./owner-file-clinic-approval.ts";
 
 type Terms = Readonly<{ version: string; approvedText: string }>;
+export type ApprovedPractitionerMove = Readonly<{ fromPractitionerId: string; toPractitionerId: string; appointmentTypeId: string; durationMinutes: number }>;
 export type ReschedulingApproval = ClinicApproval & Readonly<{
   policyVersion: string; businessId: string; credentialFingerprint: string; recallTypeId: string; timeZone: string;
   writeContract: "bestEffort"; notificationOwner: "cliniko";
   lateNoticeHours: number; maxAdvanceDays: number; standardTerms: Terms; lateTerms: Terms;
+  practitionerMoves?: readonly ApprovedPractitionerMove[];
 }>;
 export type ReschedulingPolicyFailure = Readonly<{ kind: "reschedulingPolicyUnavailable" }>;
 export type ReschedulingPolicyBinding = Pick<ReschedulingApproval, "scope" | "policyVersion" | "businessId" | "credentialFingerprint" | "recallTypeId" | "timeZone">;
@@ -23,7 +25,8 @@ function terms(value: unknown): value is Terms {
 }
 function decode(value: unknown, scope: LocationScope): ReschedulingApproval | undefined {
   const common = decodeClinicApproval(value, scope, [...clinicApprovalKeys, "policyVersion", "businessId", "credentialFingerprint", "recallTypeId", "timeZone",
-    "writeContract", "notificationOwner", "lateNoticeHours", "maxAdvanceDays", "standardTerms", "lateTerms"]);
+    "writeContract", "notificationOwner", "lateNoticeHours", "maxAdvanceDays", "standardTerms", "lateTerms",
+    ...(value && typeof value === "object" && Object.hasOwn(value, "practitionerMoves") ? ["practitionerMoves"] : [])]);
   if (!common) return undefined;
   const row = value as Record<string, unknown>;
   if (!approvalRef(row.policyVersion) || !validClinikoId(row.businessId) || !validClinikoId(row.recallTypeId) ||
@@ -33,6 +36,18 @@ function decode(value: unknown, scope: LocationScope): ReschedulingApproval | un
       !Number.isSafeInteger(row.maxAdvanceDays) || Number(row.maxAdvanceDays) < 1 || Number(row.maxAdvanceDays) > 90 ||
       !terms(row.standardTerms) || !terms(row.lateTerms) || row.standardTerms.version === row.lateTerms.version) return undefined;
   try { new Intl.DateTimeFormat("en-AU", { timeZone: row.timeZone }); } catch { return undefined; }
+  if (row.practitionerMoves !== undefined) {
+    if (!Array.isArray(row.practitionerMoves) || row.practitionerMoves.length < 1 || row.practitionerMoves.length > 72) return undefined;
+    const seen = new Set<string>();
+    for (const move of row.practitionerMoves) {
+      if (!move || typeof move !== "object" || Array.isArray(move) || Object.keys(move).sort().join(",") !== "appointmentTypeId,durationMinutes,fromPractitionerId,toPractitionerId" ||
+          ![move.fromPractitionerId, move.toPractitionerId, move.appointmentTypeId].every(validClinikoId) || move.fromPractitionerId === move.toPractitionerId ||
+          !Number.isSafeInteger(move.durationMinutes) || move.durationMinutes < 1 || move.durationMinutes > 480) return undefined;
+      const key = `${move.fromPractitionerId}:${move.toPractitionerId}:${move.appointmentTypeId}`;
+      if (seen.has(key)) return undefined;
+      seen.add(key);
+    }
+  }
   return row as unknown as ReschedulingApproval;
 }
 

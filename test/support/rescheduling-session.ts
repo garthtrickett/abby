@@ -19,6 +19,7 @@ export async function reschedulingSessionFixture(options: Parameters<typeof resc
       permission: f.sessionConfig.permission, verificationBudget: options.verificationBudget ?? { reserve: async () => true },
       delivery: { send: async (email, code) => { f.mail.push({ email, code }); return true; } },
       directory: f.directory, callerApprovalPath: join(f.folder, "approval.json"), bookingApprovalPath: f.destinationPath, reschedulingApprovalPath: f.path,
+      ...(options.destinationPractitionerId ? { destination: { practitionerId: options.destinationPractitionerId, bookingApprovalPath: f.destinationPath } } : {}),
       cliniko: { apiKey: "synthetic-session-au5", contactEmail: "test@example.test", businessId: "11", practitionerId: "22", appointmentTypeId: "33",
         recallTypeId: "7", timeZone: "Australia/Sydney", countryCallingCode: "61", rateBudget: f.ownerPorts.rateBudget },
       signal: lifetime.signal, fetchPort: f.ownerPorts.fetchPort, clock: f.sessionConfig.clock,

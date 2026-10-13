@@ -22,6 +22,13 @@ A patient action is saved for staff through an approved, owned and recoverable w
 
 Other established terms are defined in [PRD section 5](PRD.md#5-canonical-terms).
 
+## Practitioner change
+
+A clinic-approved change of the practitioner assigned to an existing appointment.
+The patient, appointment identity, location, service and duration are retained.
+The caller confirms the destination practitioner under current authority for
+that appointment.
+
 ## Best-effort write
 
 A confirmed request is checked and attempted once, then inspected under the approved external provider contract. Competing edits, overlaps or duplicates may still occur; unknown outcomes require owned review rather than replay or a completion claim. It does not promise commit protection.

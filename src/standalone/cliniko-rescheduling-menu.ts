@@ -82,7 +82,7 @@ export class ClinikoReschedulingMenu implements ReschedulingMenuHost {
     const found = await this.#config.authority.listOffers(query.scope, grant.verificationRef, query.from, query.to, query.now, signal, this.#window);
     if (!found.ok || !await this.#fresh(query, grant.verificationRef, epoch, signal) || !query.correctingAppointmentRef && !recovery && this.#target !== target) return denied();
     this.#target = target;
-    const choices = found.value.choices.filter(item => item.startsAt !== current.value.target.startsAt);
+    const choices = found.value.choices.filter(item => item.startsAt !== current.value.target.startsAt || this.#config.authority.changesPractitioner(current.value));
     this.#menu = { stage: query.stage, turnId: query.turnId, verificationRef: grant.verificationRef, patientId: target.patientId, ...(found.value.window ? { window: found.value.window } : {}),
       choices: choices.map(item => ({ ref: item.offerRef, startsAt: item.startsAt, endsAt: item.endsAt, expiresAt: item.expiresAt })) };
     return ok({ stage: "offers", scope: query.scope, callId: query.callId, sessionId: query.sessionId, policyVersion: query.policyVersion,

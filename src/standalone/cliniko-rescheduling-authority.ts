@@ -6,6 +6,7 @@ import type { AppointmentChangeAuthority } from "./appointment-change-authority.
 import { sameScope } from "./appointment-change-authority.ts";
 import { ClinikoAppointmentSelection } from "./cliniko-appointment-selection.ts";
 import type { ClinikoAppointmentSelectionConfig } from "./cliniko-appointment-selection.ts";
+import type { SelectedAppointmentEvidence } from "./cliniko-appointment-selection.ts";
 import { ClinikoBookingOffers } from "./cliniko-booking-offers.ts";
 import type { BookingChoices, ClinikoBookingOffersConfig } from "./cliniko-booking-offers.ts";
 import { OwnerFileReschedulingPolicy } from "./owner-file-rescheduling-policy.ts";
@@ -14,7 +15,7 @@ export type ClinikoReschedulingAuthorityConfig = Omit<ClinikoBookingOffersConfig
   Readonly<{ feePolicy: OwnerFileReschedulingPolicy }>;
 const denied = <T>(): Result<T, HostReadFailure> => err({ kind: "unavailable", target: "offer" });
 
-/** Protected source and destination selection for a same-provider, same-duration in-place move.
+/** Protected source and destination selection for an approved same-duration in-place move.
  * Neither public policy nor observed availability issues patient permission or reserves a time. */
 export class ClinikoReschedulingAuthority implements AppointmentChangeAuthority, AppointmentHost {
   readonly #config: ClinikoReschedulingAuthorityConfig;
@@ -51,14 +52,23 @@ export class ClinikoReschedulingAuthority implements AppointmentChangeAuthority,
   }
   list(...args: Parameters<ClinikoAppointmentSelection["list"]>) { return this.#source.list(...args); }
   select(...args: Parameters<ClinikoAppointmentSelection["select"]>) { return this.#source.select(...args); }
+  /** Display fact for the private menu; final authority is rechecked at proposal and send. */
+  changesPractitioner(target: SelectedAppointmentEvidence): boolean {
+    return sameScope(target.scope, this.#config.scope) && target.practitionerId !== this.#config.practitionerId;
+  }
+  async #permitsTarget(target: SelectedAppointmentEvidence, signal: AbortSignal): Promise<boolean> {
+    const policy = await this.#config.policy.current(this.#config.scope), fee = await this.#config.feePolicy.current(this.#config.scope);
+    if (!policy.ok || !fee.ok || signal.aborted || target.businessId !== policy.value.businessId ||
+        target.appointmentTypeId !== policy.value.appointmentTypeId || Date.parse(target.target.endsAt) - Date.parse(target.target.startsAt) !== policy.value.durationMinutes * 60_000) return false;
+    return target.practitionerId === policy.value.practitionerId || fee.value.practitionerMoves?.some(move =>
+      move.fromPractitionerId === target.practitionerId && move.toPractitionerId === policy.value.practitionerId &&
+      move.appointmentTypeId === target.appointmentTypeId && move.durationMinutes === policy.value.durationMinutes) === true;
+  }
   async resolveTarget(query: Omit<Parameters<AppointmentChangeAuthority["resolve"]>[0], "kind" | "offerRef">) {
     const bound = { ...query, scope: { ...query.scope } };
     return await this.#bounded(async signal => {
       const target = await this.#source.resolveTarget({ ...bound, kind: "reschedule", signal });
-      const policy = await this.#config.policy.current(bound.scope);
-      return target.ok && policy.ok && !signal.aborted && target.value.practitionerId === policy.value.practitionerId &&
-        target.value.appointmentTypeId === policy.value.appointmentTypeId &&
-        Date.parse(target.value.target.endsAt)-Date.parse(target.value.target.startsAt) === policy.value.durationMinutes*60_000 ? target :
+      return target.ok && await this.#permitsTarget(target.value, signal) && !signal.aborted ? target :
         err({ kind: "unavailable" as const, target: "appointment" as const });
     }, bound.signal) ?? err({ kind: "unavailable" as const, target: "appointment" as const });
   }
@@ -79,21 +89,22 @@ export class ClinikoReschedulingAuthority implements AppointmentChangeAuthority,
   }
   async #resolve(query: Parameters<AppointmentChangeAuthority["resolve"]>[0] & Readonly<{ kind: "reschedule" }>): ReturnType<AppointmentChangeAuthority["resolve"]> {
     const source = await this.#source.resolveTarget(query);
-    if (!source.ok || query.signal.aborted) return denied();
+    if (!source.ok || query.signal.aborted || !await this.#permitsTarget(source.value, query.signal)) return denied();
     const destination = await this.#offers.resolve({ ...query, offerRef: query.offerRef });
     if (!destination.ok || query.signal.aborted) return denied();
     const target = source.value, offer = destination.value;
-    if (target.businessId !== offer.businessId || target.practitionerId !== offer.practitionerId ||
+    const changed = target.practitionerId !== offer.practitionerId;
+    if (target.businessId !== offer.businessId ||
         target.appointmentTypeId !== offer.appointmentTypeId || target.credentialFingerprint !== offer.credentialFingerprint ||
         target.target.timeZone !== offer.timeZone ||
         Date.parse(target.target.endsAt) - Date.parse(target.target.startsAt) !== Date.parse(offer.endsAt) - Date.parse(offer.offer.startsAt) ||
-        Date.parse(target.target.startsAt) === Date.parse(offer.offer.startsAt)) return denied();
+        !changed && Date.parse(target.target.startsAt) === Date.parse(offer.offer.startsAt) || changed && !offer.offer.presentation) return denied();
     // Destination IO may take time: re-read the protected source/fee before releasing combined evidence.
     const final = await this.#source.resolveTarget(query);
     const now = (this.#config.clock ?? (() => new Date().toISOString()))();
-    if (!final.ok || query.signal.aborted || !this.#offers.retains(offer, query.verificationRef) || JSON.stringify(final.value) !== JSON.stringify(target) ||
+    if (!final.ok || query.signal.aborted || !await this.#permitsTarget(final.value, query.signal) || !this.#offers.retains(offer, query.verificationRef) || JSON.stringify(final.value) !== JSON.stringify(target) ||
         Date.parse(offer.offer.expiresAt) <= Date.parse(now)) return denied();
-    return ok({ ...final.value, kind: "reschedule", offer: offer.offer });
+    return ok({ ...final.value, kind: "reschedule", offer: offer.offer, ...(changed ? { destinationPractitionerId: offer.practitionerId } : {}) });
   }
   dispose(): void { this.#lifetime.abort(); this.#source.dispose(); this.#offers.dispose(); }
 }

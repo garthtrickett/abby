@@ -21,7 +21,7 @@ export type AppointmentChangeAuthorityEvidence = Readonly<{
   target: AppointmentTarget;
   terms: AppointmentChangeTerms;
 }> & (Readonly<{ kind: "cancel"; cancellationReason: Reason }> |
-  Readonly<{ kind: "reschedule"; offer: BookableOffer }>);
+  Readonly<{ kind: "reschedule"; offer: BookableOffer; destinationPractitionerId?: string }>);
 
 export type AppointmentChangeAuthority = Readonly<{
   /** Re-read selected appointment, fee terms and permission at proposal and commit. */
@@ -57,13 +57,16 @@ export function providerRequest(request: AppointmentChangeRequest, evidence: App
       ? { ...target, cancellationReason: evidence.cancellationReason } : undefined;
   }
   if (request.kind === "reschedule" && evidence.kind === "reschedule") {
+    const changed = evidence.destinationPractitionerId !== undefined;
+    if (changed && (!validClinikoId(evidence.destinationPractitionerId) || evidence.destinationPractitionerId === evidence.practitionerId ||
+        request.practitionerChange !== true || !request.offer.presentation) || !changed && request.practitionerChange !== undefined) return undefined;
     const start = Date.parse(request.target.startsAt);
     const end = Date.parse(request.target.endsAt);
     const newStart = Date.parse(request.offer.startsAt);
     const newEnd = newStart + end - start;
     if (!Number.isFinite(newEnd) || newEnd <= newStart) return undefined;
     return { ...target, newStartsAt: request.offer.startsAt,
-      newEndsAt: new Date(newEnd).toISOString() };
+      newEndsAt: new Date(newEnd).toISOString(), ...(changed ? { newPractitionerId: evidence.destinationPractitionerId } : {}) };
   }
   return undefined;
 }
@@ -77,5 +80,5 @@ export function sameProviderRequest(left: ClinikoChangeProviderRequest,
     ("cancellationReason" in left && "cancellationReason" in right
       ? left.cancellationReason === right.cancellationReason
       : "newStartsAt" in left && "newStartsAt" in right &&
-        left.newStartsAt === right.newStartsAt && left.newEndsAt === right.newEndsAt);
+        left.newStartsAt === right.newStartsAt && left.newEndsAt === right.newEndsAt && left.newPractitionerId === right.newPractitionerId);
 }
