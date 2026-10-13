@@ -16,7 +16,7 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 import { voiceUntil } from "./cliniko-workflow-voice.ts";
 import type { LocationScope } from "../../src/core/model.ts";
 
-type Message = { kind: string; text?: string; method?: string; path?: string; body?: Record<string, unknown>;
+type Message = { kind: string; actionStatus?: string; text?: string; method?: string; path?: string; body?: Record<string, unknown>;
   stage?: "fixtureProcessKilled" | "runnerStartupUnavailable";
   locations?: readonly { scope: LocationScope; policyVersion: string; businessId: string }[];
   messages?: number; envelopeMatches?: boolean; codeMatches?: boolean; email?: string; code?: string; scope?: LocationScope; policyVersion?: string; operation?: string; allowed?: boolean; accepted?: boolean; verified?: boolean };

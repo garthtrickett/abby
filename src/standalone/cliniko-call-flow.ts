@@ -428,6 +428,12 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   }
   get privatePhoneCountry(): string { return this.#config.cliniko.countryCallingCode; }
   get patientCorrectionRef(): string | undefined { return this.#workflow === "patientUpdate" && !this.#verificationRequired ? this.#patientCorrectionRef : undefined; }
+  discardPatientCorrection(): boolean {
+    const owner = this.patientCorrection;
+    if (!owner || this.closed || this.#verificationRequired || !owner.discardCollection()) return false;
+    this.#patientCorrectionRef = undefined;
+    return true;
+  }
   async collectPatientCorrection(changes: PatientDetailChanges) {
     const owner = this.patientCorrection;
     this.#patientCorrectionRef = undefined;

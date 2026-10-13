@@ -175,6 +175,12 @@ export class ClinikoPatientCorrectionSession extends NoStoredKnowledge implement
     try { return this.#accepted = await this.#bounded(signal => this.#currentSubject(signal)) !== undefined; }
     finally { this.#busy = false; }
   }
+  /** A private edit withdraws prior readback, code and prepared host evidence before collecting new fields. */
+  discardCollection(): boolean {
+    if (this.#busy || this.#attempted || this.#lifetime.signal.aborted || !this.#accepted || !this.#terms) return false;
+    this.#mail?.close(); this.#mail = undefined; this.#pending = undefined; this.#action = undefined;
+    return true;
+  }
   /** Trusted private field input only. Recollection destroys the previous draft, code and action references. */
   async collect(changes: PatientDetailChanges): Promise<Result<Readonly<{ correctionRef: string; codeRequired: boolean }>, Failure>> {
     if (this.#busy || this.#attempted || !this.#accepted || !this.#terms || this.#collections >= 3) return err({ kind: "patientCorrectionUnavailable" });

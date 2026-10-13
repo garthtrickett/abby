@@ -237,10 +237,11 @@ export class TwilioConnectedCall {
       }
       return ok({ kind: "privateInput" });
     }
-    if (event.kind === "dtmf" && (privateAtArrival || this.privateInputMode())) {
+    const privateEdit = event.kind === "dtmf" && this.privateKeypadInput?.handlesDigit?.(event.digit) === true;
+    if (event.kind === "dtmf" && (privateAtArrival || this.privateInputMode() || privateEdit)) {
       if (!this.privateKeypadInput) { await this.failSession(); return err({ kind: "privateInputUnavailable" }); }
       // A queued private digit never becomes an availability choice after verification opens media.
-      if (!this.privateKeypadInput.blocked()) return ok({ kind: "privateInput" });
+      if (!this.privateKeypadInput.blocked() && !privateEdit) return ok({ kind: "privateInput" });
       const entered = await this.privateKeypadInput.accept(event.digit);
       if (entered === "failed") { await this.failSession(); return err({ kind: "privateInputUnavailable" }); }
       if (entered === "verified") { this.privateResuming = true; this.privateQuietMs = 0; this.privateQuietUntil = undefined; }

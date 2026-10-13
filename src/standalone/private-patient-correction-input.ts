@@ -23,8 +23,9 @@ export class PrivatePatientCorrectionInput implements PrivateKeypadInput {
   readonly #keypad: PrivateWorkflowKeypad;
   readonly #lifetime = new AbortController();
   readonly #onClose = () => this.stop();
-  readonly #media: MediaTurnController<void, TranscriptFailure>;
+  #media: MediaTurnController<void, TranscriptFailure>;
   readonly #privateSession: string;
+  #mediaGeneration = 0;
   #stage: Stage = "verification";
   #working = false;
   #consentRef: string | undefined;
@@ -39,10 +40,16 @@ export class PrivatePatientCorrectionInput implements PrivateKeypadInput {
   constructor(config: Config) {
     this.#config = Object.freeze({ ...config }); this.#keypad = new PrivateWorkflowKeypad(config);
     this.#privateSession = `${config.sessionId}:private-correction`;
-    const assembler = new TurnAssembler(config.callId, this.#privateSession, "private-correction");
+    this.#media = this.#createMedia();
+    config.signal.addEventListener("abort", this.#onClose, { once: true }); if (config.signal.aborted) this.stop();
+  }
+  #createMedia(): MediaTurnController<void, TranscriptFailure> {
+    const config = this.#config, sessionId = `${this.#privateSession}:${this.#mediaGeneration++}`;
+    this.#sequence = 0;
+    const assembler = new TurnAssembler(config.callId, sessionId, "private-correction");
     let transcription: TranscriptionPort | undefined;
-    const port = () => transcription ??= config.transcriptionFactory(this.#privateSession);
-    this.#media = new MediaTurnController(this.#privateSession, {
+    const port = () => transcription ??= config.transcriptionFactory(sessionId);
+    return new MediaTurnController(sessionId, {
       speechStarted: async () => this.#stage === "field" ? ok(assembler.beginSpeech()) : err({ kind: "invalidTranscript" }),
       acceptTranscript: event => assembler.accept(event),
       finishTurn: async now => {
@@ -66,7 +73,6 @@ export class PrivatePatientCorrectionInput implements PrivateKeypadInput {
       },
     }, { accept: (...args) => port().accept(...args), flush: (...args) => port().flush(...args),
       cancel: generation => transcription?.cancel?.(generation) ?? Promise.resolve(), close: () => transcription?.close?.() ?? Promise.resolve() }, config.mediaOptions);
-    config.signal.addEventListener("abort", this.#onClose, { once: true }); if (config.signal.aborted) this.stop();
   }
   #launch(run: () => Promise<void>): void {
     if (this.#working || this.#lifetime.signal.aborted) return;
@@ -86,6 +92,20 @@ export class PrivatePatientCorrectionInput implements PrivateKeypadInput {
     await this.#present(this.#fragment ? "Please continue your email address, starting with continue, or say actually followed by the full address to replace it." : field === "patient_phone_numbers"
       ? "This replaces the complete recorded phone list. Say each type, mobile, home, work, other or fax, followed by its number. Separate entries by saying semicolon. To remove all numbers, say clear all phone numbers."
       : `Please say the corrected ${label(field)}.${field === "country_code" ? " Use the two-letter country code." : field === "date_of_birth" ? " Use the day, month name and year." : field === "email" ? " You may say at and dot." : ""}`, "field");
+  }
+  #readyText(): string {
+    return "Your correction is ready for review. Press pound to return to speech, then say prepare the correction. You will be asked to confirm it separately. Press one to edit these fields, or three to start the fields again. You may also press one or three after returning to speech, before confirming.";
+  }
+  #edit(reset: boolean): boolean {
+    const owner = this.#config.owner();
+    if (!owner?.discardPatientCorrection()) { this.stop(); return false; }
+    this.#stage = "prompt"; this.#digits = ""; this.#codeOverflow = false; this.#attempts = 0; this.#fragment = undefined; this.#field = undefined;
+    if (reset) this.#draft = {};
+    this.#launch(async () => { await this.#media.stop(); if (this.#lifetime.signal.aborted) return; this.#media = this.#createMedia(); await this.#menu(); });
+    return true;
+  }
+  handlesDigit(digit: string): boolean {
+    return this.#stage === "ready" && !!this.#config.owner()?.patientCorrection && (digit === "1" || digit === "3");
   }
   claim(callId: string, sessionId: string) { return this.#keypad.claim(callId, sessionId); }
   start() { return !this.#lifetime.signal.aborted && this.#keypad.start(); }
@@ -126,26 +146,31 @@ export class PrivatePatientCorrectionInput implements PrivateKeypadInput {
       if (digit === "2") {
         this.#stage = "readback";
         this.#launch(async () => {
-          const collected = await owner.collectPatientCorrection(this.#draft); this.#draft = {};
+          const collected = await owner.collectPatientCorrection(this.#draft);
           if (!collected.ok || this.#lifetime.signal.aborted) { this.stop(); return; }
           await this.#media.stop(); this.#digits = ""; this.#codeOverflow = false; this.#attempts = 0;
-          await this.#present(collected.value.codeRequired ? "If you receive a code at the corrected email address, enter six digits then pound. Star clears the code. Do not say the code aloud."
-            : "Your correction is ready for review. Press pound to return to speech, then say prepare the correction. You will be asked to confirm it separately.", collected.value.codeRequired ? "prospectiveCode" : "readyGate");
+          await this.#present(collected.value.codeRequired ? "If you receive a code at the corrected email address, enter six digits then pound. To edit fields, press pound before entering any digits. Star clears the code. Do not say the code aloud."
+            : this.#readyText(), collected.value.codeRequired ? "prospectiveCode" : "readyGate");
         });
       }
     } else if (this.#stage === "prospectiveCode") {
       if (digit === "*") { this.#digits = ""; this.#codeOverflow = false; }
       else if (/^[0-9]$/.test(digit)) { if (this.#digits.length < 6) this.#digits += digit; else this.#codeOverflow = true; }
+      else if (digit === "#" && !this.#digits && !this.#codeOverflow) {
+        if (!this.#edit(false)) return "failed";
+      }
       else if (digit === "#") {
         const code = this.#digits.length === 6 && !this.#codeOverflow ? this.#digits : ""; this.#digits = ""; this.#codeOverflow = false;
         // Playback marks arrive on the same serialized transport as keypad input.
         // Return before awaiting private playback so its mark can be processed.
         this.#launch(async () => {
           const checked = await owner.patientCorrection!.answer(code);
-          if (checked.verified) await this.#present("Your correction is ready for review. Press pound to return to speech, then say prepare the correction. You will be asked to confirm it separately.", "readyGate");
+          if (checked.verified) await this.#present(this.#readyText(), "readyGate");
           else if (++this.#attempts >= 3) this.stop();
         });
       } else this.#codeOverflow = true;
+    } else if ((this.#stage === "readyGate" || this.#stage === "ready") && (digit === "1" || digit === "3")) {
+      if (!this.#edit(digit === "3")) return "failed";
     } else if (this.#stage === "readyGate" && digit === "#") this.#stage = "ready";
     // A ready transition follows private playback. Its final queued digit remains private.
     return this.#stage === "ready" ? "verified" : "pending";
@@ -153,7 +178,7 @@ export class PrivatePatientCorrectionInput implements PrivateKeypadInput {
   async acceptMedia(frame: MediaFrame): Promise<"pending" | "failed"> {
     if (this.#stage === "closed") return "failed";
     if (this.#stage !== "field") return "pending";
-    const result = await this.#media.acceptMedia({ ...frame, sessionId: this.#privateSession, sequence: this.#sequence++ });
+    const result = await this.#media.acceptMedia({ ...frame, sessionId: `${this.#privateSession}:${this.#mediaGeneration - 1}`, sequence: this.#sequence++ });
     if (!result.ok) { this.stop(); return "failed"; } return "pending";
   }
   stop(): void {

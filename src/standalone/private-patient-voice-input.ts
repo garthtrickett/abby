@@ -14,6 +14,7 @@ export class PrivatePatientVoiceInput implements PrivateKeypadInput {
   claim(callId: string, sessionId: string) { return this.#defaultInput.claim(callId, sessionId) && this.#correction.claim(callId, sessionId); }
   start() { return this.#defaultInput.start() && this.#correction.start(); }
   blocked() { return this.#active().blocked(); }
+  handlesDigit(digit: string) { return this.#active().handlesDigit?.(digit) === true; }
   accept(digit: string) { return this.#active().accept(digit); }
   acceptMedia(frame: MediaFrame) { return this.#active().acceptMedia?.(frame) ?? Promise.resolve("pending" as const); }
   stop(): void { this.#defaultInput.stop(); this.#correction.stop(); }

@@ -91,11 +91,16 @@ for (const path of approvalPaths) {
 }
 const publicInputs: string[] = [], privateInputs: string[] = [];
 let denied = false, lostWrite = false, mailLost = false, mutatePolicy = false;
+let readCorrectionStatus: (() => Promise<string | undefined>) | undefined;
 process.on("message", message => {
   if (!message || typeof message !== "object" || !("kind" in message)) return;
   if (message.kind === "input" && "text" in message && typeof message.text === "string") { publicInputs.push(message.text); process.send?.({ kind: "inputAccepted" }); }
   if (message.kind === "privateInput" && "text" in message && typeof message.text === "string") { privateInputs.push(message.text); process.send?.({ kind: "privateInputAccepted" }); }
   if (multiLocation && message.kind === "advanceClock" && "milliseconds" in message && typeof message.milliseconds === "number") { mediaElapsedMs = Math.max(mediaElapsedMs, message.milliseconds); process.send?.({ kind: "clockAdvanced" }); }
+  if (message.kind === "inspectCorrectionState" && readCorrectionStatus) {
+    void readCorrectionStatus().then(actionStatus => process.send?.({ kind: "correctionState", actionStatus }))
+      .catch(() => process.send?.({ kind: "correctionState", actionStatus: "unavailable" }));
+  }
   if (message.kind === "denyPermission") denied = true;
   if (message.kind === "loseWrite") lostWrite = true;
   if (message.kind === "loseMail") mailLost = true;
@@ -256,12 +261,15 @@ async function run(delivery?: PatientCodeDelivery) {
         intent(owner) {
           const submit = owner.submitCode.bind(owner);
           owner.submitCode = async code => { const result = await submit(code); process.send?.({ kind: "verificationResult", verified: result.verified }); return result; };
-          if (operation === "patientUpdate") return createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-intent", model: "synthetic-model", clinicDate: () => "2026-10-04",
+          if (operation === "patientUpdate") {
+            readCorrectionStatus = async () => (await owner.publicIntentContext())?.lastAction?.status;
+            return createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-intent", model: "synthetic-model", clinicDate: () => "2026-10-04",
             fetch: async (_value, init) => {
               const text = JSON.parse(JSON.parse(String(init?.body)).input[1].content).callerText;
               process.send?.({ kind: "modelTurn", text });
               return Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [{ type: "output_text", text: JSON.stringify({ kind: "outcome", operation: null, stage: null, from: null, to: null, choice: null }) }] }] });
             } });
+          }
           if (practitionerMove === "directory") return createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-intent", model: "synthetic-model", clinicDate: () => "2026-10-04",
             fetch: async (_value, init) => {
               const text = JSON.parse(JSON.parse(String(init?.body)).input[1].content).callerText;

@@ -674,6 +674,19 @@ export function transition(current: CallState, action: TransitionAction): Result
             : state.policy.capabilities.patientUpdate !== "execute" || state.policy.patientCorrectionsEnabled !== true)) return err({ kind: "leaseLost" });
       if (!/^[a-f0-9-]{36}$/.test(action.presentationId) || state.pendingPresentationId || state.presentations[action.presentationId] ||
           Object.values(state.presentations).some(item => item.status === "started" || item.status === "possiblySent")) return err({ kind: "invalidTransition" });
+      if (action.kind === "privateCorrectionPrompt") {
+        // Re-entering private fields withdraws the old correction confirmation.
+        // A dispatched/possibly-sent correction cannot be edited or retried.
+        const corrections = Object.values(state.actions).filter(item => item.kind === "patientUpdate");
+        if (corrections.some(item => ["dispatched", "committed", "uncertain", "needsReview"].includes(item.status) ||
+            state.effects[`${item.key}:write`]?.status === "possiblySent")) return err({ kind: "invalidTransition" });
+        for (const item of corrections) {
+          if (item.status !== "awaitingConfirmation" && item.status !== "ready") continue;
+          state.actions[item.key] = { ...item, status: "canceled" };
+          const effect = state.effects[`${item.key}:write`];
+          if (effect?.kind === "hostWrite" && effect.status === "pending") state.effects[effect.id] = { ...effect, status: "canceled" };
+        }
+      }
       state.presentations[action.presentationId] = { kind: "notice", id: action.presentationId, approvedText: "", status: "pending" };
       state.pendingPresentationId = action.presentationId;
       break;

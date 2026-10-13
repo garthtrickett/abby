@@ -187,6 +187,51 @@ test("E2E-362 recollection destroys old correction/code references and unplayed 
   } finally { await f.close(); }
 });
 
+test("E2E-367 entering private edits immediately destroys the prior code and ready write before recollection", async () => {
+  const f = await fixture();
+  try {
+    const first = resultValue(await f.collect()), code = f.mail[0]!.code;
+    assert.equal((await f.owner.answer(code)).verified, true);
+    const action = await f.propose(first.correctionRef); await f.confirm(action);
+    assert.equal(f.owner.discardCollection(), true);
+    assert.equal((await f.resolve(first.correctionRef)).ok, false);
+    assert.equal((await f.owner.answer(code)).verified, false);
+    const prompt = crypto.randomUUID();
+    resultValue(await f.f.runtime.privateCorrectionPrompt(f.f.callId, prompt, f.f.sessionId, verificationNow));
+    const state = await f.f.state(); assert.equal(state.actions[action.key]!.status, "canceled");
+    assert.equal(state.effects[`${action.key}:write`]!.status, "canceled");
+    await assert.rejects(f.worker.process(f.f.callId, `${action.key}:write`, verificationNow), /invalidTransition/);
+    assert.deepEqual(await f.owner.write(action.mutation, verificationNow), { kind: "rejected", actionKey: action.key, reason: "forbidden" });
+    assert.equal(f.traffic.some(t => t.method === "PATCH" || t.path === "/v1/recalls"), false);
+    assert.equal(f.synced, 0);
+    const second = resultValue(await f.owner.collect({ post_code: "3002" }));
+    assert.notEqual(second.correctionRef, first.correctionRef);
+    assert.equal((await f.resolve(second.correctionRef)).ok, true);
+  } finally { await f.close(); }
+});
+
+test("E2E-367 editing retains the collection budget and cannot revive evidence after a possible send", async () => {
+  const f = await fixture();
+  try {
+    for (const post_code of ["3001", "3002", "3003"]) {
+      resultValue(await f.owner.collect({ post_code })); assert.equal(f.owner.discardCollection(), true);
+    }
+    assert.equal((await f.owner.collect({ post_code: "3004" })).ok, false);
+    assert.equal(f.traffic.some(t => t.method === "PATCH"), false);
+  } finally { await f.close(); }
+  const sent = await fixture();
+  try {
+    const draft = resultValue(await sent.owner.collect({ post_code: "3001" }));
+    const action = await sent.propose(draft.correctionRef); await sent.confirm(action);
+    sent.mode("lostPatch"); await sent.worker.process(sent.f.callId, `${action.key}:write`, verificationNow);
+    assert.equal((await sent.f.state()).actions[action.key]!.status, "uncertain");
+    assert.equal((await sent.f.runtime.privateCorrectionPrompt(sent.f.callId, crypto.randomUUID(), sent.f.sessionId, verificationNow)).ok, false);
+    assert.equal(sent.owner.discardCollection(), false);
+    assert.equal((await sent.owner.collect({ post_code: "3002" })).ok, false);
+    assert.equal(sent.traffic.filter(t => t.method === "PATCH").length, 1);
+  } finally { await sent.close(); }
+});
+
 test("E2E-362 permission withdrawn after saved review prevents PATCH; withdrawal after PATCH suppresses success", async () => {
   for (const stage of ["before", "after"] as const) {
     const f = await fixture();
