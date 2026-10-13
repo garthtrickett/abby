@@ -18,7 +18,7 @@ import type { LocationScope } from "../../src/core/model.ts";
 
 type Message = { kind: string; text?: string; method?: string; path?: string; body?: Record<string, unknown>;
   email?: string; code?: string; scope?: LocationScope; policyVersion?: string; operation?: string; allowed?: boolean; accepted?: boolean; verified?: boolean };
-export type ClinicalRunnerOperation = "book" | "cancel" | "reschedule" | "intake" | "appointments.read";
+export type ClinicalRunnerOperation = "book" | "cancel" | "reschedule" | "intake" | "appointments.read" | "staff.request";
 
 /** Actual compiled runner in a separate process and database. All network
  * providers are fixtures; private caller material is kept in this test memory. */
