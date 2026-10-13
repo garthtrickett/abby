@@ -9,6 +9,9 @@ import type { ApprovedBookingService } from "./owner-file-service-catalogue.ts";
 
 type Pending = Readonly<{ turnId: string; revision: number; question: BookingServiceQuestion; catalogue: string; expiresAt: number }>;
 const changed = { kind: "clarify", reason: "serviceChoiceChanged" } as const;
+export function startsIntakeServiceDialogue(text: string): boolean {
+  return /^(?:(?:i am|i'm) a new patient[,.]? (?:and )?(?:i would like to |i'd like to |i want to )?book(?: an? appointment)?|(?:please )?register me(?: as a new patient)?)[.!?]*$/i.test(text.trim());
+}
 export function startsServiceDialogue(text: string): boolean {
   return /^(?:(?:please |i would like to |i want to |i'd like to )?book(?: me)? (?:an? )?appointment|(?:i would like|i want|i'd like) an? appointment)[.!?]*$/i.test(text.trim());
 }
@@ -23,7 +26,7 @@ export class BookingServiceDialogue {
   #choice: { -readonly [K in keyof BookingServiceChoice]?: BookingServiceChoice[K] } = {};
   get active() { return this.#pending !== undefined; }
   clear() { this.#pending = undefined; this.#choice = {}; }
-  resolve(turn: FinalCallerTurn, state: CallState, services: readonly ApprovedBookingService[], catalogue: string, now: string, startRequested = false): VoiceIntent | undefined {
+  resolve(turn: FinalCallerTurn, state: CallState, services: readonly ApprovedBookingService[], catalogue: string, now: string, startRequested = false, operation: "book" | "intake" = "book"): VoiceIntent | undefined {
     if (/^(?:please )?(?:cancel|reschedule|move|change) (?:my |the |an? )?appointment[.!?]*$/i.test(turn.text.trim())) { this.clear(); return undefined; }
     const start = startRequested || startsServiceDialogue(turn.text), previous = this.#pending;
     if (!start && !previous) return undefined;
@@ -98,6 +101,6 @@ export class BookingServiceDialogue {
       return { kind: "serviceQuestion", question };
     }
     const complete = { ...choice } as BookingServiceChoice; this.clear();
-    return { kind: "workflow", operation: "book", serviceChoice: complete };
+    return { kind: "workflow", operation, serviceChoice: complete };
   }
 }

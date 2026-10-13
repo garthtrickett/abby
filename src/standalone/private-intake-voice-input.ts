@@ -1,3 +1,4 @@
+import type { ClinikoIntakeSession } from "./cliniko-intake-session.ts";
 import type { ClinikoIntakeDraft } from "../cliniko/patient-intake.ts";
 import { err, ok } from "../core/model.ts";
 import { MediaTurnController } from "../voice/media-turn-controller.ts";
@@ -28,9 +29,12 @@ export class PrivateIntakeVoiceInput implements PrivateKeypadInput {
   readonly #config: PrivateIntakeVoiceConfig;
   readonly #keypad: PrivateWorkflowKeypad;
   readonly #lifetime = new AbortController();
-  readonly #media: MediaTurnController<void, TranscriptFailure>;
+  #media: MediaTurnController<void, TranscriptFailure>;
+  #mediaSessionId: string;
+  #collectionEpoch = 0;
   readonly #onClose = () => this.stop();
   #stage: Stage = "routing";
+  #intake: ClinikoIntakeSession | undefined;
   #draft: Partial<Record<Field, string>> = {};
   #field = 0;
   #fragment: string | undefined;
@@ -41,10 +45,16 @@ export class PrivateIntakeVoiceInput implements PrivateKeypadInput {
   constructor(config: PrivateIntakeVoiceConfig) {
     if (!/^\+[1-9][0-9]{7,14}$/.test(config.phone) || !(config.signal instanceof AbortSignal)) throw new TypeError("invalid private intake voice input");
     this.#config = Object.freeze({ ...config }); this.#keypad = new PrivateWorkflowKeypad(config);
-    const privateSession = `${config.sessionId}:private-intake`, assembler = new TurnAssembler(config.callId, privateSession, "private-intake");
+    this.#mediaSessionId = `${config.sessionId}:private-intake`;
+    this.#media = this.#createMedia();
+    config.signal.addEventListener("abort", this.#onClose, { once: true }); if (config.signal.aborted) this.stop();
+  }
+  #createMedia(): MediaTurnController<void, TranscriptFailure> {
+    const config = this.#config;
+    const privateSession = this.#mediaSessionId, assembler = new TurnAssembler(config.callId, privateSession, "private-intake");
     let transcription: TranscriptionPort | undefined;
     const privateTranscription = () => transcription ??= config.transcriptionFactory(privateSession);
-    this.#media = new MediaTurnController(privateSession, {
+    return new MediaTurnController(privateSession, {
       speechStarted: async () => this.#stage === "field" ? ok(assembler.beginSpeech()) : err({ kind: "invalidTranscript" }),
       acceptTranscript: event => assembler.accept(event),
       finishTurn: async now => {
@@ -72,7 +82,6 @@ export class PrivateIntakeVoiceInput implements PrivateKeypadInput {
       },
     }, { accept: (...args) => privateTranscription().accept(...args), flush: (...args) => privateTranscription().flush(...args),
       cancel: generation => transcription?.cancel?.(generation) ?? Promise.resolve(), close: () => transcription?.close?.() ?? Promise.resolve() }, config.mediaOptions);
-    config.signal.addEventListener("abort", this.#onClose, { once: true }); if (config.signal.aborted) this.stop();
   }
   #launch(run: () => Promise<void>): void {
     if (this.#working || this.#lifetime.signal.aborted) return;
@@ -90,6 +99,19 @@ export class PrivateIntakeVoiceInput implements PrivateKeypadInput {
     if (this.#stage === "closed") return true;
     const codeBlocked = this.#keypad.blocked();
     if (this.#config.owner()?.workflow !== "intake") return codeBlocked;
+    const intake = this.#config.owner()?.intake;
+    if (intake && intake !== this.#intake) {
+      // A pre-registration service correction replaces only an unsent owner.
+      // Repeat private consent/collection; no old draft or code crosses owners.
+      if (this.#working || !["routing", "start", "ready"].includes(this.#stage)) { this.stop(); return true; }
+      if (this.#intake) {
+        void this.#media.stop().catch(() => undefined);
+        this.#mediaSessionId = `${this.#config.sessionId}:private-intake:${++this.#collectionEpoch}`;
+        this.#sequence = 0; this.#media = this.#createMedia();
+      }
+      this.#intake = intake; this.#stage = "start"; this.#draft = {}; this.#field = 0;
+      this.#fragment = undefined; this.#recoveryRef = undefined; this.#attempts = 0;
+    }
     if (this.#stage === "routing") this.#stage = "start";
     return this.#stage !== "ready" || codeBlocked;
   }
@@ -123,13 +145,13 @@ export class PrivateIntakeVoiceInput implements PrivateKeypadInput {
   async acceptMedia(frame: MediaFrame): Promise<"pending" | "failed"> {
     if (this.#stage === "closed") return "failed";
     if (this.#stage !== "field") return "pending";
-    const result = await this.#media.acceptMedia({ ...frame, sessionId: `${this.#config.sessionId}:private-intake`, sequence: this.#sequence++ });
+    const result = await this.#media.acceptMedia({ ...frame, sessionId: this.#mediaSessionId, sequence: this.#sequence++ });
     if (!result.ok) { this.stop(); return "failed"; }
     return "pending";
   }
   stop(): void {
     if (this.#stage === "closed") return;
     this.#stage = "closed"; this.#lifetime.abort(); this.#config.signal.removeEventListener("abort", this.#onClose);
-    this.#draft = {}; this.#fragment = undefined; this.#recoveryRef = undefined; this.#keypad.stop(); void this.#media.stop().catch(() => undefined);
+    this.#draft = {}; this.#intake = undefined; this.#fragment = undefined; this.#recoveryRef = undefined; this.#keypad.stop(); void this.#media.stop().catch(() => undefined);
   }
 }

@@ -32,6 +32,8 @@ export type ClinikoIntakeSessionConfig = Readonly<{
   permission: ProspectiveIntakePermission; verificationBudget: PatientVerificationBudget; delivery: PatientCodeDelivery;
   /** Private transport presentation. true requires completed display/playback, not enqueue acceptance. */
   presentation: Readonly<{ play(text: string, signal: AbortSignal): Promise<boolean> }>;
+  /** Optional current service authority, checked on every protected registration use. */
+  workflowApproval?: (signal: AbortSignal) => Promise<boolean>;
   cliniko: Readonly<{ apiKey: string; contactEmail: string; rateBudget: ClinikoRequestBudget }>;
   signal: AbortSignal; fetchPort?: typeof fetch; clock?: () => string; timeoutMs?: number;
 }>;
@@ -83,7 +85,7 @@ export class ClinikoIntakeSession extends NoStoredKnowledge implements IntakeEvi
     try {
       if (!config || !(config.signal instanceof AbortSignal) || config.signal.aborted || !(config.policy instanceof OwnerFileIntakePolicy) ||
           !isClinikoRequestBudget(config.cliniko?.rateBudget) || typeof config.presentation?.play !== "function" ||
-          typeof config.permission?.allows !== "function" || typeof config.verificationBudget?.reserve !== "function" ||
+          (config.workflowApproval !== undefined && typeof config.workflowApproval !== "function") || typeof config.permission?.allows !== "function" || typeof config.verificationBudget?.reserve !== "function" ||
           typeof config.delivery?.send !== "function" || !/^[A-Za-z0-9:_-]{1,128}$/.test(config.sessionId) ||
           !/^[A-Za-z0-9:_-]{1,128}$/.test(config.policyVersion) ||
           (config.timeoutMs !== undefined && (!Number.isSafeInteger(config.timeoutMs) || config.timeoutMs < 1 || config.timeoutMs > 30_000))) return err({ kind: "intakeSessionUnavailable" });
@@ -136,6 +138,7 @@ export class ClinikoIntakeSession extends NoStoredKnowledge implements IntakeEvi
           state.value.presentations[action.presentationId]?.status !== "played" || effect?.kind !== "hostWrite" ||
           digestActionRequest(action.mutation.request) !== mutation.payloadDigest || digestActionRequest(effect.mutation.request) !== mutation.payloadDigest) return false;
     }
+    if (config.workflowApproval && await config.workflowApproval(signal) !== true) return false;
     return !signal.aborted && !this.#lifetime.signal.aborted && Date.parse(state.value.sessionLease!.expiresAt) > Date.parse(this.#now());
   }
   async #currentDraft(signal: AbortSignal): Promise<boolean> {

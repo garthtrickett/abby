@@ -505,3 +505,80 @@ assertions. Earlier failure logs remain recorded:
 `4590eee3-1791886279237.log`. Manifest version1.159 tracks352 scenarios;
 E2E-352 is synthetic evidence only. First-time intake variant selection and
 combined runner reconciliation remain open within gap5; gaps6–13 remain in scope.
+
+
+## New-patient service variants (E2E-353)
+
+Explicit new-patient booking requests and validated registration routes can
+start the same receipt-bound service questions with initial variants only.
+The operation stays registration while the caller answers service, duration
+and any/named/clinic-declared gender preference questions. No verifier, patient
+record, offer or writer starts from incomplete or interrupted selection. An
+explicit follow-up request cannot become a new-patient default.
+
+The returning and intake owners share `approved-booking-composition.ts` for
+current member approval, exact duration/type offers, complete eligible-group
+reads, private menus, native writers and parent catalogue guards. Registration
+still has separate recovery consent, private readback, prospective-email code,
+clinic permission and played confirmation. Its service authority is rechecked
+on every protected use, including immediately before patient creation. The
+created-patient booking proof independently checks current contact and book
+permission; it cannot borrow a returning-patient lookup or treat registration
+as booking confirmation.
+
+Before creation, an explicit supported duration correction replaces the
+unsent owner, clears its private draft reference, and repeats consent, private
+collection and code with a fresh private media collector. The old collector
+stays closed at code entry. Unsupported variants remove old authority and
+cannot save an earlier draft or use its menu. Known or uncertain patient and
+appointment sends retain their outcome boundary and cannot start another
+registration. A rejected/unavailable booking leaves the created patient intact.
+
+Sixteen signed synthetic journeys cover direct, guided and model-routed intake,
+service correction, declared gender, follow-up denial, interrupted choice,
+pre-creation duration correction/denial, withdrawal before patient/appointment
+send, provider duration drift, incomplete group read, denied independent book
+permission and lost patient/appointment responses. Native patient/type/member
+bodies, two played confirmations, private transcript separation and PostgreSQL
+canaries are inspected. Combined compiled-runner reconciliation and actual
+clinic/mail/speech/CI activation remain open; gaps6–13 remain in scope.
+
+
+### New-patient service qualification
+
+Current source passed `npm run typecheck`, `npm run build:voice-tests`,
+`git diff --check` and **82** checks, zero skips:67 in
+`Abby intake service final affected qualification October13`, plus15 in
+`Abby intake classifier and prospective-permission regression October13`.
+Logs:
+`/home/gust/paseo/paseo-home/work/logs/4590eee3-1791888598392.log` and
+`/home/gust/paseo/paseo-home/work/logs/4590eee3-1791888924884.log`.
+
+The broad executed command used isolated PostgreSQL and
+`node --test --test-concurrency=4` over the new voice journey; booking-session,
+booking-offers, service-catalogue, intake-booking-session/PostgreSQL/process,
+service-dialogue, service-booking-entry, clinical-workflow voice,
+private-intake-spelling, service-catalogue-booking, service-dialogue-booking,
+service-booking-entry voice, service-practitioner-preference voice,
+location-service-booking, previous-practitioner voice and scenario-manifest/
+no-number-gap-trace files. Two filename patterns in that invocation did not
+resolve and supply no evidence. The actual classifier and prospective-intake
+files were explicitly qualified afterwards:
+
+```sh
+bash scripts/with-postgres.sh node --test --test-concurrency=4 \
+  test/voice/openai-clinical-intent.test.ts \
+  test/cliniko/caller-mediated-intake.test.ts
+```
+
+Earlier checks exposed premature code submission in the new fixture, an
+incorrect expectation that an unspecified preference chooses the earliest
+member, and an unsupported ordinary answer. The corrected14-case journey
+passed. Extending it with pre-creation duration correction exposed the stopped
+private media collector. Recreating that collector with a new private session
+suffix fixed the defect while preserving its closure at code entry and all
+privacy/native assertions. The final16-case journey and existing spelling/
+registration/process-loss suites passed. No workers, deadlines, permissions or
+assertions were weakened. Earlier failure logs remain:
+`4590eee3-1791887686038.log` and `4590eee3-1791888184505.log`.
+Manifest version1.160 tracks353 scenarios; E2E-353 remains synthetic evidence.

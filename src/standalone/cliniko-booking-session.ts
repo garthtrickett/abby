@@ -1,9 +1,7 @@
+import { createApprovedBookingComposition } from "./approved-booking-composition.ts";
+import type { ApprovedBookingComposition } from "./approved-booking-composition.ts";
 import { OwnerFileBookingCatalogue } from "./owner-file-booking-catalogue.ts";
 import { ClinikoCatalogueBookingHost } from "./cliniko-catalogue-booking-host.ts";
-import { catalogueBookingAuthority } from "./catalogue-booking-member.ts";
-import { ClinikoBookingMenu } from "./cliniko-booking-menu.ts";
-import { ClinikoBookingWriter } from "../cliniko/booking-write.ts";
-import { ClinikoRecallWriter } from "../cliniko/recall-write.ts";
 import { clinikoCredentialFingerprint, isClinikoRequestBudget } from "../cliniko/read-budget.ts";
 import type { ClinikoRequestBudget } from "../cliniko/read-budget.ts";
 import { ClinikoVerificationContactReader } from "../cliniko/verification-contact.ts";
@@ -38,16 +36,12 @@ type Failure = Readonly<{ kind: "bookingSessionUnavailable" }>;
  * These ports belong to the call owner, never to a model/caller or an activation endpoint. */
 export class ClinikoBookingSession {
   readonly #verification: CallerVerificationSession;
-  readonly #authority: ClinikoBookingOffers;
-  readonly #host: ClinikoBookingHost | ClinikoCatalogueBookingHost;
-  readonly #extra: readonly Readonly<{ dispose(): void }>[];
+  readonly #composition: ApprovedBookingComposition;
   readonly #signal: AbortSignal;
-  readonly #menu: ClinikoBookingMenu;
   readonly #onClose = () => this.dispose();
   #closed = false;
-  private constructor(verification: CallerVerificationSession, authority: ClinikoBookingOffers,
-    host: ClinikoBookingHost | ClinikoCatalogueBookingHost, menu: ClinikoBookingMenu, signal: AbortSignal, extra: readonly Readonly<{ dispose(): void }>[]) {
-    this.#verification = verification; this.#authority = authority; this.#host = host; this.#signal = signal; this.#menu = menu; this.#extra = [...extra];
+  private constructor(verification: CallerVerificationSession, composition: ApprovedBookingComposition, signal: AbortSignal) {
+    this.#verification = verification; this.#composition = composition; this.#signal = signal;
     signal.addEventListener("abort", this.#onClose, { once: true });
     if (signal.aborted) this.dispose();
   }
@@ -55,12 +49,10 @@ export class ClinikoBookingSession {
   static async create(incoming: ClinikoBookingSessionConfig): Promise<Result<ClinikoBookingSession, Failure>> {
     const unavailable = (): Result<ClinikoBookingSession, Failure> => err({ kind: "bookingSessionUnavailable" });
     let timeout: ReturnType<typeof setTimeout> | undefined, removeAbort: () => void = () => undefined;
-    let verification: CallerVerificationSession | undefined, authority: ClinikoBookingOffers | undefined;
-    let host: ClinikoBookingHost | ClinikoCatalogueBookingHost | undefined, completed: ClinikoBookingSession | undefined;
-    let menu: ClinikoBookingMenu | undefined;
-    const extra: Readonly<{ dispose(): void }>[] = [];
+    let verification: CallerVerificationSession | undefined, composition: ApprovedBookingComposition | undefined;
+    let completed: ClinikoBookingSession | undefined;
     let settled = false;
-    const dispose = () => { host?.dispose(); menu?.dispose(); authority?.dispose(); for (const resource of extra) resource.dispose(); verification?.dispose(); };
+    const dispose = () => { composition?.dispose(); verification?.dispose(); };
     try {
       if (!incoming || !(incoming.signal instanceof AbortSignal) || incoming.signal.aborted ||
           !isClinikoRequestBudget(incoming.cliniko?.rateBudget) ||
@@ -123,47 +115,12 @@ export class ClinikoBookingSession {
           permission: config.permission, budget: config.verificationBudget, delivery: config.delivery, clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) });
         if (!session.ok || settled) return undefined;
         verification = session.value;
-        const source = ClinikoBookingOffers.create({ ...config.cliniko, scope, callId: config.receipt.callId,
-          sessionId: config.sessionId, policyVersion: config.policyVersion, proof: verification.proof,
-          policy: policy.value, clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) }, fetchPort);
-        const booking = ClinikoBookingWriter.create({ ...config.cliniko, scope }, fetchPort, config.clock);
-        const recalls = ClinikoRecallWriter.create({ ...config.cliniko, scope }, fetchPort);
-        if (!source.ok || !booking.ok || !recalls.ok || settled) return undefined;
-        authority = source.value;
-        menu = new ClinikoBookingMenu({ verification, offers: authority, scope, callId: config.receipt.callId, sessionId: config.sessionId, policyVersion: config.policyVersion });
-        host = new ClinikoBookingHost({ scope, callId: config.receipt.callId, sessionId: config.sessionId,
-          policyVersion: config.policyVersion, ledger: config.ledger, policy: config.policies, proof: verification.proof, authority: catalogue?.ok ? catalogueBookingAuthority(authority, catalogue.value, scope, config.cliniko.practitionerId) : authority,
-          menu,
-          timeZone: config.cliniko.timeZone, recallTypeId: config.cliniko.recallTypeId, writer: booking.value,
-          recallWriter: recalls.value, clock: config.clock });
-        if (config.catalogue && catalogue?.ok && profile?.ok) {
-          const members = [{ practitionerId: config.cliniko.practitionerId, name: profile.value.practitioners[0]!.name, host }];
-          for (const [index, member] of config.catalogue.practitioners.entries()) {
-            if (index === 0) continue;
-            const selection = { ...config.cliniko, practitionerId: member.practitionerId };
-            const terms = await OwnerFileBookingPolicy.capture({ path: member.bookingApprovalPath, scope,
-              policyVersion: config.policyVersion, ...selection, credentialFingerprint: clinikoCredentialFingerprint(selection.apiKey), directory: config.directory, clock: config.clock,
-              ...(config.catalogue.serviceBinding ? { serviceBinding: config.catalogue.serviceBinding } : {}) });
-            if (!terms.ok || settled) return undefined;
-            const offers = ClinikoBookingOffers.create({ ...selection, scope, callId: config.receipt.callId, sessionId: config.sessionId,
-              policyVersion: config.policyVersion, proof: verification.proof, policy: terms.value, clock: config.clock }, fetchPort);
-            const writer = ClinikoBookingWriter.create({ ...selection, scope }, fetchPort, config.clock);
-            if (!offers.ok || !writer.ok || settled) return undefined;
-            extra.push(offers.value);
-            const selectionMenu = new ClinikoBookingMenu({ verification, offers: offers.value, scope, callId: config.receipt.callId,
-              sessionId: config.sessionId, policyVersion: config.policyVersion }); extra.push(selectionMenu);
-            const selectionHost = new ClinikoBookingHost({ scope, callId: config.receipt.callId, sessionId: config.sessionId,
-              policyVersion: config.policyVersion, ledger: config.ledger, policy: config.policies, proof: verification.proof,
-              authority: catalogueBookingAuthority(offers.value, catalogue.value, scope, member.practitionerId), menu: selectionMenu,
-              timeZone: selection.timeZone, recallTypeId: selection.recallTypeId, writer: writer.value,
-              recallWriter: recalls.value, clock: config.clock }); extra.push(selectionHost);
-            members.push({ practitionerId: member.practitionerId, name: profile.value.practitioners[index]!.name, host: selectionHost });
-          }
-          host = new ClinikoCatalogueBookingHost({ scope, callId: config.receipt.callId, sessionId: config.sessionId, policyVersion: config.policyVersion,
-            ledger: config.ledger, catalogue: catalogue.value, members, ...(config.catalogue.initialSearchPreference ? { initialPreference: config.catalogue.initialSearchPreference } : {}) });
-        }
+        const composed = await createApprovedBookingComposition(config, policy.value, verification, catalogue?.ok ? catalogue.value : undefined,
+          () => settled || config.signal.aborted);
+        if (!composed.ok) return undefined;
+        composition = composed.value;
         if (settled || config.signal.aborted || !await active() || settled) return undefined;
-        completed = new ClinikoBookingSession(verification, authority, host, menu, config.signal, extra);
+        completed = new ClinikoBookingSession(verification, composition, config.signal);
         return completed;
       })().catch(() => undefined);
       const result = await Promise.race([build, stopped]);
@@ -180,10 +137,10 @@ export class ClinikoBookingSession {
   submitCode(code: string): ReturnType<CallerVerificationSession["submitCode"]> { return this.#verification.submitCode(code); }
   /** Private owner wiring for existing SAM/gateway commands; never send this grant to a model. */
   verified(): ReturnType<CallerVerificationSession["verified"]> { return this.#verification.verified(); }
-  get offers(): ClinikoBookingOffers { return this.#authority; }
-  get effects(): ClinikoBookingHost | ClinikoCatalogueBookingHost { return this.#host; }
+  get offers(): ClinikoBookingOffers { return this.#composition.offers; }
+  get effects(): ClinikoBookingHost | ClinikoCatalogueBookingHost { return this.#composition.host; }
   dispose(): void {
     this.#closed = true; this.#signal.removeEventListener("abort", this.#onClose);
-    this.#host.dispose(); this.#menu.dispose(); this.#authority.dispose(); for (const resource of this.#extra) resource.dispose(); this.#verification.dispose();
+    this.#composition.dispose(); this.#verification.dispose();
   }
 }

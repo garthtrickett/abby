@@ -61,3 +61,7 @@ The practitioner named by the latest eligible past appointment record in the cli
 ## Location service discovery
 
 A caller asks which services are listed at the locations sharing a clinic number before choosing one location. Public service information grants neither patient disclosure nor appointment availability, verification or booking authority.
+
+## Registration service choice
+
+An explicitly new patient chooses an approved initial service and duration before registration. This choice permits neither saving patient details nor booking: each requires its own permission and confirmation. A pre-registration correction discards the previous private draft; a completed or uncertain registration is never repeated to change the service.
