@@ -161,6 +161,10 @@ export interface WorkflowHost {
 }
 
 export type AppointmentEnquiryQuery = Omit<WorkflowQuery, "operation" | "replaceCanceledChange"> & Readonly<{ now: string }>;
+export interface PreviousPractitionerHost {
+  readPreviousPractitioner(query: AppointmentEnquiryQuery & Readonly<{ turnId: string }>): Promise<Result<
+    Readonly<{ kind: "codeRequired" }> | Readonly<{ kind: "history"; snapshot: import("./previous-practitioner.ts").PreviousPractitionerRead }>, Readonly<{ kind: "historyUnavailable" }>>>;
+}
 /** An operation-bound read owner resolves its private proof. Caller/model commands never supply it. */
 export interface AppointmentEnquiryHost {
   readAppointmentEnquiry(query: AppointmentEnquiryQuery & Readonly<{ from: string; to: string }>): Promise<Result<Readonly<{

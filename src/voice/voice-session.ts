@@ -14,6 +14,7 @@ import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 
 export type VoiceIntent =
+  | Readonly<{ kind: "previousPractitioner" }>
   | Readonly<{ kind: "serviceQuestion"; question: import("../core/booking-service-question.ts").BookingServiceQuestion }>
   | Readonly<{ kind: "presence" }>
   | Readonly<{ kind: "missedCall" }>
@@ -380,6 +381,8 @@ export class VoiceSession {
       result = await this.reception.respondPresence(this.scope, turn, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "missedCall") {
       result = await this.reception.respondMissedCall(this.scope, turn, existing.value.conversationRevision);
+    } else if (this.cachedIntent.kind === "previousPractitioner") {
+      result = await this.withPendingIntent(signal => this.reception.readPreviousPractitioner(this.scope, turn, existing.value.conversationRevision, signal));
     } else if (this.cachedIntent.kind === "bookingHorizon") {
       const controller = new AbortController(), pending = { cancel: () => controller.abort() };
       this.pendingIntent = pending;

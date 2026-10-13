@@ -254,6 +254,8 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
       if (before.staffRequestActive && /^(?:did that work|was that saved|did you send it|has it been sent)[.!?]*$/i.test(turn.text.trim()))
         return ok({ kind: "staffOutcome" });
     }
+    if (!before.callerIdentityDenied && !before.staffRequestActive && config.owner.previousPractitionerConfigured && /^(?:who did i see last time|who was my last practitioner|please book me with the practitioner i saw last time)[.!?]*$/i.test(turn.text.trim()))
+      return ok({ kind: "previousPractitioner" });
     const publicTopic = publicInformationLanguage(turn.text);
     if (publicTopic) return publicAnswer(publicTopic, signal);
     if (!before.callerIdentityDenied) {

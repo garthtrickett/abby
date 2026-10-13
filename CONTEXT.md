@@ -53,3 +53,7 @@ The caller's explicit answers about previous attendance and a new problem, evalu
 ## Practitioner preference
 
 The caller's choice of any eligible practitioner, a named practitioner, or a clinic-declared gender within the chosen service. It narrows eligibility without establishing clinical suitability or permission to use a different practitioner for an existing appointment.
+
+## Previous practitioner
+
+The practitioner named by the latest eligible past appointment record in the clinic's approved history period. This identifies a recorded booking relationship without establishing attendance, treatment suitability or permission to book with that practitioner.

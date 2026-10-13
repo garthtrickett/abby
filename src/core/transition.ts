@@ -1,3 +1,4 @@
+import { previousPractitionerText, previousPractitionerUnavailable } from "./previous-practitioner.ts";
 import { bookingServiceQuestionText } from "./booking-service-question.ts";
 import { staffMessageNoticeText, validStaffMessageNotice } from "./staff-message-notice.ts";
 import { conversationControl, conversationControlText, validConversationControlNotice } from "./conversation-control.ts";
@@ -337,6 +338,12 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
         conversationRevision: state.conversationRevision, status: "pending" };
       break;
     }
+    case "previousPractitioner":
+      state.callerMessages.push(previousPractitionerText(interpretation.snapshot, state, now) ?? previousPractitionerUnavailable);
+      break;
+    case "previousPractitionerUnavailable":
+      state.callerMessages.push(previousPractitionerUnavailable);
+      break;
     case "serviceQuestion": {
       const text = bookingServiceQuestionText(interpretation.question);
       if (!text || turn.quality !== "clear" || !state.policy.automationEnabled || state.policy.capabilities.book !== "execute") return err({ kind: "invalidTransition" });

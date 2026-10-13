@@ -131,8 +131,7 @@ request with no old-variant fallback, and corrected return answers followed by
 new selection/proof. No post-send service change or unknown write can start
 another appointment mutation.
 
-This is engineering progress, not complete product parity. Prior-practitioner
-lookup, multi-location service discovery and selection for first-time intake
+This is engineering progress, not complete product parity. Multi-location service discovery and selection for first-time intake
 remain open in gap 5/8. Expanded horizons and
 online-disabled services belong to gap 6; this patch still refuses them.
 Actual speech quality, real clinic approvals/recipients and carrier evidence
@@ -324,16 +323,15 @@ state, private keypad verification, exact native writers and PostgreSQL canaries
 The classifier's business-route accuracy and acoustic quality remain separate
 qualification requirements.
 
-### Remaining history work: verified API capability
+### History API capability
 
 Cliniko documents patient/business/time and cancellation filters on its
 [individual appointment list](https://docs.api.cliniko.com/openapi/individual-appointment/individualappointment),
 and [custom ordering](https://docs.api.cliniko.com/#ordering). This supports
 investigating a scoped prior-practitioner reader. It does not itself grant
-patient permission, establish attendance or provide booking authority. That
-feature remains unimplemented; it needs approved read-specific permission,
-current subject/source checks, honest bounded-history/ambiguity outcomes and a
-separate approved practitioner choice/booking proof. No live history was read.
+patient permission, establish attendance or provide booking authority. E2E-351 implements an independent history owner with approved read-specific
+permission, current subject/source checks, bounded-history/ambiguity outcomes
+and separate practitioner choice/booking proof. No live history was read.
 
 ### Generic-entry local qualification
 
@@ -354,3 +352,77 @@ receipts, fresh verification and PostgreSQL canaries. The slower final run
 finished under shared machine load without a restart or relaxed gates. These
 are local synthetic results; GitHub execution, real model/acoustic quality and
 clinic/carrier acceptance remain separate.
+
+## Previous-practitioner lookup (E2E-351)
+
+Optional `ClinikoCallFlowConfig.history` contains `callerApprovalPath`,
+`historyApprovalPath` and an independent `appointments.read` permission. The
+caller method approval must allow that operation. The new history approval
+extends the eight common clinic approval fields with `policyVersion`,
+`businessId`, `credentialFingerprint`, `timeZone`, `lookBackDays` (1–36525)
+and `purpose: "previousPractitioner"`. Both current source and approving
+membership are checked; default configuration supplies no history access.
+Existing upcoming-only enquiry approvals and date bounds are preserved.
+
+“Who did I see last time”, “Who was my last practitioner” and “Please book me
+with the practitioner I saw last time” start a fresh history read verifier.
+After private keypad verification, repeating the request reads the current
+record. The owner has no writer. It reports the practitioner named by a past
+appointment record in the approved period, a bounded empty result or ambiguity.
+It does not infer attendance, clinical suitability or return-rule answers.
+Unconfigured clinics retain their prior unsupported-history guidance.
+
+The read uses fixed-origin requests and native patient/business/time filters
+with descending start ordering. Every received record has matching patient and
+business links, valid times inside the approved past window, canonical
+practitioner link, unique ID, non-increasing order and valid cancellation/archive/
+deletion/no-show flags. Excluded records cannot select a practitioner. Complete
+latest-timestamp ties are read across pages before choosing one name; conflicting
+practitioners remain ambiguous. A large ordered history may stop once the
+latest eligible timestamp is complete. Five full tied pages or inconsistent/
+partial pages cannot establish a default. Response links are validated as data
+and never followed; budget, cancellation and bounded JSON limits remain.
+
+Every protected read revalidates the subject and current approval before/after
+provider use. Results, history facts and the subject binding stay in volatile
+call memory, outside the classifier and durable database. Booking afterwards
+uses the ordinary current service/practitioner questions, fresh independent book
+verification, native guard/review and a separately played confirmation. The
+lookup is restricted to the original verified patient until its source expiry;
+a changed candidate cannot trigger another patient's contact read or code.
+A read proof never becomes booking proof. Caller identity denial and call end
+clear the binding. Earlier known/unknown patient sends retain their receipts and
+cannot be replaced by a history lookup on the same call.
+
+Fifteen signed synthetic journeys inspect positive history-to-booking, empty/
+ambiguous/cancelled/no-show histories, foreign identities/businesses, ordering,
+future records, provider failures, revocation during/before reading, permission
+loss, changed subject and an existing booking proof requiring new read proof.
+Separate tests cover denied approval, a cross-page tie and an 800-record ordered
+history resolving without a full scan. Real clinic approvals, history coverage
+and operating acceptance remain separate.
+
+### Previous-practitioner local qualification
+
+Final source: `npm run typecheck`, `npm run build:voice-tests`,
+`node --test --test-concurrency=4` over previous-practitioner text/voice, native
+appointments, appointment-enquiries, standalone-verified-appointment-read,
+service-booking-entry text/voice, openai-clinical-intent, service-practitioner-
+preference text/voice, service-dialogue text/voice, service-catalogue, booking-
+session, booking-offers, call-flow, booking-horizon text, service-catalogue-booking,
+preference-service-boundaries, approved-booking-search, booking-horizon voice,
+booking-search-windows, appointment-change-intent and scenario-manifest/
+no-number-gap-trace contract files, followed by `git diff --check`. All84 checks
+passed, zero skips. Work label: `Abby previous practitioner final calendar-qualified
+regression October 13`. Log:
+`/home/gust/paseo/paseo-home/work/logs/4590eee3-1791884242194.log`.
+
+The initial integration typecheck identified the new read-only owner in the
+writer union; the writer explicitly excludes it. Focused signed qualification
+and the prior83-check regression passed. Review then reproduced JavaScript
+normalizing an impossible provider date (30 February), which could have named
+a practitioner from an invalid record. Explicit calendar validation fixed that
+without removing checks or broadening permission; the final84-check gate includes
+the reproduction and retains all worker/deadline/privacy/native-write assertions.
+These are synthetic local results, not CI execution or clinic/model/speech/carrier
+acceptance.

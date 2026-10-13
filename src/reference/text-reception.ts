@@ -23,7 +23,7 @@ import { modelTaskRef } from "../model/work.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").StaffReviewProcessHost & import("../core/host.ts").BookingHorizonHost & import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").StaffReviewProcessHost & import("../core/host.ts").BookingHorizonHost & import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").PreviousPractitionerHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 export const appointmentProposalEvidenceDeadlineMs = 15_000;
@@ -158,6 +158,23 @@ export class TextReception {
     const runtime = new CallRuntime(this.ledger, scope);
     return selected?.ok ? runtime.acceptTurn(turn, { kind: "workflowStarted", operation, next: selected.value.kind }, now, expectedConversationRevision)
       : runtime.acceptTurn(turn, operation === "appointments.read" ? { kind: "appointmentsFailure", reason: "notConfigured" } : { kind: "unavailableAction", actionKind: operation }, now, expectedConversationRevision);
+  }
+
+  async readPreviousPractitioner(scope: LocationScope, turn: FinalCallerTurn, expectedRevision: number, external: AbortSignal) {
+    const denied = await this.patientAccessDenied(scope, turn, expectedRevision); if (denied) return denied;
+    const state = await this.ledger.read(turn.callId, scope); if (!state.ok) return state;
+    const now = this.currentInstant();
+    if (!now || turn.quality !== "clear" || !turn.sessionId || state.value.conversationRevision !== expectedRevision || state.value.sessionLease?.sessionId !== turn.sessionId) return err({ kind: "staleTurn" as const });
+    const signal = AbortSignal.any([external, AbortSignal.timeout(20000)]);
+    let result;
+    try { result = await awaitUntilAbort(this.host.readPreviousPractitioner?.({ scope, callId: turn.callId, sessionId: turn.sessionId,
+      policyVersion: state.value.policy.policyVersion, turnId: turn.turnId, expectedConversationRevision: expectedRevision, now, signal }) ?? Promise.resolve(undefined), signal); }
+    catch { result = undefined; }
+    if (signal.aborted) return err({ kind: "staleTurn" as const });
+    const interpretation: TurnInterpretation = result?.ok ? result.value.kind === "codeRequired"
+      ? { kind: "workflowStarted", operation: "appointments.read", next: "codeRequired" }
+      : { kind: "previousPractitioner", snapshot: result.value.snapshot } : { kind: "previousPractitionerUnavailable" };
+    return new CallRuntime(this.ledger, scope).acceptTurn(turn, interpretation, now, expectedRevision);
   }
 
   appointmentEnquiryEnabled(): boolean { return !!this.host.startWorkflow && new AppointmentEnquiryTurns(this.ledger, this.host).enabled(); }
