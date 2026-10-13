@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.168
+# Scenario manifest, version 1.169
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -366,4 +366,4 @@ E2E-359 adds an explicitly approved source/destination practitioner pair, exact 
 E2E-360 covers current approved practitioner directories, source-practitioner preference, played name/ordinal choice, pagination, stale-time invalidation and changed/same-time signed moves. Two compiled journeys use the actual clinical resolver, PostgreSQL, TLS verification and one native PATCH; uncertainty cannot replay. General caller directory selection is implemented locally, while real-model/acoustic/provider/clinic/carrier acceptance and authoritative exact-head CI remain open.
 
 
-E2E-361 records the patient-correction provider edge only: exact original/current snapshots, allowlisted PATCH fields, independent current authority, played-confirmation attestation, prospective email proof, one possible send, cancellation/concurrency fencing and distinct contact-review outcome. Existing caller update workflow, clinic policy/settings, private collection, real proof/index synchronization, required registration fields and confirmation resend remain gap8 work. Voice/full-call evidence is planned; this row does not activate patient updates.
+E2E-361 records the patient-correction provider edge and independent owner-file policy: exact original/current snapshots, allowlisted PATCH fields, current clinic/account/administrator approval, private consent and adult self eligibility, operation-specific registered-email verification, played-confirmation attestation, prospective email proof, one possible send, cancellation/concurrency fencing and distinct contact-review outcome. Existing caller update workflow, settings, private collection, real proof/index synchronization, required registration fields and confirmation resend remain gap8 work. Voice/full-call evidence is planned; this row does not activate patient updates.

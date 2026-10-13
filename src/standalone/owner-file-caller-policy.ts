@@ -2,6 +2,7 @@ import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
 import type { AdminDirectory } from "./identity/magic-link.ts";
 import type { PatientOperation, VerificationPolicyGate } from "./transient-patient-proof.ts";
+import { patientOperations } from "./transient-patient-proof.ts";
 import { approvalRef, clinicApprovalKeys, decodeClinicApproval, OwnerFileClinicApproval } from "./owner-file-clinic-approval.ts";
 import type { ClinicApproval } from "./owner-file-clinic-approval.ts";
 
@@ -11,7 +12,7 @@ export type CallerVerificationApproval = ClinicApproval & Readonly<{
   sharedNumbers: "deny"; representatives: "deny"; patientPermission: "independentClinicHost";
   operations: readonly PatientOperation[];
 }>;
-const operations: readonly PatientOperation[] = ["appointments.read", "appointments.book", "appointments.cancel", "appointments.reschedule", "staff.request"];
+const operations: readonly PatientOperation[] = patientOperations;
 function approval(value: unknown, scope: LocationScope): CallerVerificationApproval | undefined {
   const common = decodeClinicApproval(value, scope, [...clinicApprovalKeys, "method", "maxAnswers", "lifetimeSeconds", "sharedNumbers", "representatives", "patientPermission", "operations"]);
   if (!common) return undefined;
