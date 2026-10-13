@@ -26,6 +26,29 @@ availability-only behaviour. Supplying a host does not change `/readyz`, signed
 test-caller restrictions, clinic readiness or production admission. The real
 sender, clinic staff acceptance, speech and carrier gates are still required.
 
+The host's scoped `cataloguePolicy` is also used for fresh catalogue-policy
+validation. Using the default availability store here would compare a clinical
+host's current version with a different policy source. Independent operation
+approval and permission still determine each patient action.
+
+A deploying host can supply `voiceProfiles`; its policy must capture the same
+qualified registry used to construct the physical adapters. The new synthetic
+runner does this through `captureVoicePolicy` and an actual
+`OpenAIVoiceProfileHost`, using patient-free HTTP and transcription ports.
+`syntheticClock` is available only to the isolated fixture with the guarded
+synthetic Cliniko key/account and database; no environment variable selects it.
+The normal runner retains its real clock and 700 ms end-of-turn silence.
+
+`test/voice/standalone-clinical-runner.test.ts` runs a separately compiled runner
+process and database for booking, cancellation, rescheduling, appointment
+information and private registration followed by an independently confirmed
+booking. It also checks current-policy withdrawal, independent permission,
+failed verification delivery, lost-write no-replay and clean shutdown. The
+fixture IPC channel disconnects after shutdown and all owned databases are
+removed. Caller inputs, provider mutations and speech are observed independently
+in test memory; private fields/codes are excluded from ordinary transcription,
+model input, runner output and durable database rows.
+
 `test/voice/standalone-clinical-host.test.ts` extends E2E-299 to the actual
 standalone server, shared PostgreSQL budget and active-call claims. Its provider,
 permission, verification email and speech are patient-free fixtures. This is

@@ -52,8 +52,12 @@ export type VoiceRunnerPorts = Readonly<{
   /** Patient-free synthetic evidence, admitted only by the isolated fixture guard. */
   speechQuality?: NonNullable<ClinikoVoiceServerConfig["speechQuality"]>;
   operationalCounters?: OperationalCounterStore;
+  /** A deploying host's qualified registry and matching adapter factory. */
+  voiceProfiles?: NonNullable<ClinikoVoiceServerConfig["voiceProfiles"]>;
   /** Synthetic provider selection for the isolated voice runner. */
   speechModels?: Readonly<{ primary: string; fallback?: string; primaryFirstChunkMs?: number }>;
+  /** Isolated synthetic runner clock; never configured through the environment. */
+  syntheticClock?: NonNullable<ClinikoVoiceServerConfig["now"]>;
   /** Deployment host owns clinic approvals, verification delivery and permission.
    * No environment flag or catalogue setting can supply this authority. */
   clinicalHost?: (context: Readonly<{ db: ReturnType<typeof connectPostgres>; scope: LocationScope;
@@ -79,7 +83,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       ports.transcriptionSocketFactory)) {
     throw new RangeError("synthetic transcription requires an isolated fixture");
   }
-  if ((ports.speechQuality || ports.speechModels || ports.speechSocketFactory) && (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || mode !== "1" ||
+  if ((ports.speechQuality || ports.speechModels || ports.speechSocketFactory || ports.syntheticClock) && (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || mode !== "1" ||
       !["synthetic-key-au5", "synthetic-rotated-key-au5"].includes(apiKey) ||
       !connectionString.includes("/abby_test_voice_") || accountSid !== `AC${"1".repeat(32)}`)) {
     throw new RangeError("synthetic speech configuration requires an isolated fixture");
@@ -112,18 +116,20 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       },
       ...(process.env.ABBY_CLINIKO_BUDGET_USER_REF
         ? { sharedUserRef: process.env.ABBY_CLINIKO_BUDGET_USER_REF } : {}) });
+    const clinicalHost = ports.clinicalHost?.({ db, scope: Object.freeze({ ...scope }), apiKey, contactEmail, rateBudget });
     const configured = createStandaloneClinikoSetup({ db, scope, apiKey, contactEmail, rateBudget,
+      ...(clinicalHost ? { runtimePolicy: clinicalHost.cataloguePolicy } : {}),
       route: { accountRef: accountSid, dialedNumber, routeVersion },
       ...(ports.clinikoFetch ? { fetch: ports.clinikoFetch } : {}) });
     if (!configured.ok) throw new RangeError(`invalid Cliniko catalogue configuration: ${configured.error.kind}`);
-    const clinicalHost = ports.clinicalHost?.({ db, scope: Object.freeze({ ...scope }), apiKey, contactEmail, rateBudget });
     const prepared = await createStandaloneClinikoVoiceServer({ db,
       activeCallClaims: new PostgresActiveCallClaims(connectionString, key),
       twilio: { accountSid,
         authToken: required("ABBY_TWILIO_AUTH_TOKEN"),
         publicWebhookUrl: required("ABBY_TWILIO_PUBLIC_WEBHOOK_URL"),
         publicStreamUrl: required("ABBY_TWILIO_PUBLIC_STREAM_URL"),
-        fallbackNumbers: { [dialedNumber]: fallbackNumber }, bindingKey: key },
+        fallbackNumbers: { [dialedNumber]: fallbackNumber }, bindingKey: key,
+        ...(ports.syntheticClock ? { now: () => new Date(ports.syntheticClock!()) } : {}) },
       routes: [{ dialedNumber, scope, routeVersion,
         ...(clinicalHost ? { clinicalHost } : {}),
         approval: configured.value.setup, rateBudget, credentialFingerprint: clinikoCredentialFingerprint(apiKey),
@@ -146,7 +152,9 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
           ...(ports.speechModels.primaryFirstChunkMs !== undefined ? { speechPrimaryFirstChunkMs: ports.speechModels.primaryFirstChunkMs } : {}) } : {}),
         ...(ports.transcriptionSocketFactory ? { transcriptionSocketFactory: ports.transcriptionSocketFactory } : {}) },
       ...(ports.transcriptionFactory ? { transcriptionFactory: ports.transcriptionFactory } : {}),
+      ...(ports.voiceProfiles ? { voiceProfiles: ports.voiceProfiles } : {}),
       ...(ports.speechQuality ? { speechQuality: ports.speechQuality } : {}),
+      ...(ports.syntheticClock ? { now: ports.syntheticClock } : {}),
       readiness: testCaller ? async current => current.tenantId === scope.tenantId &&
         current.clinicId === scope.clinicId && current.locationId === scope.locationId
         ? ok(true) : unprovenReadiness(current) : unprovenReadiness,
