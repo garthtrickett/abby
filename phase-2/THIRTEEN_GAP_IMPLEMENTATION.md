@@ -7,8 +7,8 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 | Order | Requirement | Current work and completion evidence |
 | --- | --- | --- |
 | 1 | Wire existing booking, enquiry, cancellation, rescheduling and intake into the running receptionist. | Local engineering proof now covers all five workflows through separately compiled runner subprocesses, signed serving paths, private verification, played confirmation, current-policy denial, independent permission, delivery loss and no replay. CI and real activation remain open under gaps 2–4. |
-| 2 | Connect caller verification and clinic-approved permissions. | Existing operation-bound interfaces; complete delivery integration and deploying-host permission wiring. Channel possession alone cannot grant proxy/minor authority. Require operation-specific positive/denied/lost-delivery journeys. |
-| 3 | Establish message delivery, staff handoff, monitoring and recovery ownership. | Existing recall/review/aggregate contracts; deployed receiver, real sender and human clinic process remain open. Build and test all independent adapters before external provisioning. |
+| 2 | Connect caller verification and clinic-approved permissions. | Separate draft PR 454 adds real TLS SMTP to the actual verifier/protected read with synthetic data; typecheck and 22 checks passed, including failed delivery and independent permission denial. Real sender/mailbox, accepted clinic policy and deploying-host permission source remain open. Channel possession alone cannot grant proxy/minor authority. |
+| 3 | Establish message delivery, staff handoff, monitoring and recovery ownership. | Four compiled-runner staff journeys now pass: named saved request, unknown write without replay, permission denial before mail and revocation before send. Existing recall/review/aggregate contracts remain. Deployed monitoring receiver, real sender and human clinic process remain open. |
 | 4 | Complete synthetic speech, public transport and eventual carrier qualification. | Prior synthetic runtime evidence exists; noisy/safety and repeated speech gates remain open. Paid probes require restored credits; public tunnel requires a dedicated usable route. Twilio-number carrier evidence is deferred, not substituted with synthetic results. |
 | 5 | Expand services, duration choices, locations and initial/follow-up rules. | Current one-type/one-business clinical cohort is insufficient. Require several independently approved services and correct routing of corrections and initial/follow-up/return rules. |
 | 6 | Extend searches and support online-disabled services where required. | Current bounded online cohort is insufficient. Require roster/extra availability minus all busy sources, incomplete-source denial, date bounds and offer/commit agreement. |
@@ -67,3 +67,54 @@ clinic staff process and speech qualification are not supplied by these tests.
 
 Final command: `npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh node --test --test-concurrency=4 test/voice/standalone-clinical-runner.test.ts test/voice/standalone-voice-service.test.ts test/voice/standalone-voice-profile.test.ts test/contract/scenario-manifest.test.ts`.
 Tracked job `Abby compiled clinical runner final type build and regression October 13` completed exit 0; log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791860823649.log`. This closes the local exported-runner journey evidence listed in the initial qualification. Gaps 2–13 and production activation remain open.
+
+## Verification delivery and compiled staff requests
+
+Draft [PR 454](https://github.com/garthtrickett/abby/pull/454), head
+`8a7965a496ce1e0493a345cc1082b56a1cbf2da5`, supplies a fixed verification
+email over implicit TLS SMTP. The actual verifier grants a protected read only
+after known transport acceptance and independently allowed operation. A lost
+DATA acknowledgement cannot grant proof or trigger resend. Typecheck and 22
+focused regression checks passed with no skips. Sender provisioning, actual
+mailbox receipt and clinic permission approval remain separate gates.
+
+Four additional compiled-runner staff cases passed with zero skips. They cross
+the exported runner, signed ingress, private keypad verifier, independent staff
+permission and actual Cliniko recall writer. A named request is saved once;
+unknown submission remains uncertain and is never replayed; denial before
+delivery and revocation after verification stop the send. Status questions do
+not promise human receipt or a callback. The compiled provider adapter now
+observes staff recall mutations as well as clinical mutations, so the complete
+runner regression must be rechecked before publishing this follow-up.
+
+Command: `bash scripts/with-postgres.sh node --test --test-concurrency=4 --test-name-pattern="compiled runner staff request" test/voice/standalone-clinical-runner.test.ts`.
+Tracked job `Abby compiled staff runner receipt wording proof October 13`
+completed exit 0; log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791863615485.log`.
+
+Initial staff fixture failures were diagnosed: the synthetic intent adapter
+discarded a named recipient, and the prohibition assertion matched the negated
+phrase “I can't confirm that staff have read it.” The fixture now uses the same
+staff-request parser as the real resolver. Named-recipient and explicit
+uncertainty assertions remain, including on the subsequent outcome query.
+No production gate, worker count, deadline or authority rule was relaxed.
+
+Manifest 1.150 registers these supplementary E2E-311 synthetic journeys and
+retains 347 scenarios with planned full-call evidence. Manifest 1.149 belongs to
+the independent unmerged SMTP PR and needs reconciliation on rebase. Both
+published PRs' GitHub jobs stopped before executing because account billing or
+the spending limit blocked Actions; neither is merged or treated as cloud
+qualified. The thirteen-gap goal remains active.
+
+The final compiled staff follow-up and neighbouring regression passed 18 checks,
+zero failures and skips, including all thirteen compiled clinical/staff journeys.
+Command: `npm run build:voice-tests && bash scripts/with-postgres.sh node --test --test-concurrency=4 test/voice/standalone-clinical-runner.test.ts test/voice/standalone-voice-service.test.ts test/voice/standalone-voice-profile.test.ts test/contract/scenario-manifest.test.ts`.
+Tracked job `Abby compiled staff runner scoped recall fault and full regression October 13`
+completed exit 0; log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791864127994.log`.
+The preceding whole-source typecheck passed; its regression stage failed 2 of 18
+checks. One failure proved that the new staff fault had incorrectly intercepted
+the clinical booking review recall before the intended appointment write. The
+adapter now scopes that interception to `staff.request`, retaining the prior
+clinical provider path and lost-appointment-write proof. The other failure was
+a rescheduling response timeout; the corrected full run passed it with the same
+worker counts and deadlines. The timeout's independent cause is not established.
+No failing result is presented as a pass, and no real human receipt is inferred.

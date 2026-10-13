@@ -7,6 +7,8 @@ import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 import { err, ok } from "../../src/core/model.ts";
 import { bookingCallFlowFixture, cancellationCallFlowFixture, reschedulingCallFlowFixture, intakeCallFlowFixture } from "./cliniko-call-flow.ts";
 import { appointmentEnquiryFixture } from "./cliniko-appointment-enquiry.ts";
+import { clinikoStaffCallFlowFixture } from "./cliniko-staff-call-flow.ts";
+import { staffRequestLanguage } from "../../src/standalone/staff-request-language.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 import { withApprovedSyntheticVoice } from "./approved-voice.ts";
 import { captureVoicePolicy } from "../../src/core/voice-policy.ts";
@@ -16,10 +18,10 @@ const operation = process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION;
 if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
     process.env.ABBY_CLINIKO_API_KEY !== "synthetic-key-au5" || !process.env.DATABASE_URL?.includes("/abby_test_voice_") ||
     process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}` ||
-    !["book", "cancel", "reschedule", "intake", "appointments.read"].includes(operation ?? "")) {
+    !["book", "cancel", "reschedule", "intake", "appointments.read", "staff.request"].includes(operation ?? "")) {
   throw new Error("synthetic clinical runner requires an isolated fixture");
 }
-const f = operation === "book" ? await bookingCallFlowFixture() : operation === "cancel" ? await cancellationCallFlowFixture() :
+const f = operation === "staff.request" ? await clinikoStaffCallFlowFixture() : operation === "book" ? await bookingCallFlowFixture() : operation === "cancel" ? await cancellationCallFlowFixture() :
   operation === "reschedule" ? await reschedulingCallFlowFixture() : operation === "intake" ? await intakeCallFlowFixture() : await appointmentEnquiryFixture();
 f.flow.dispose();
 const c = f.flowConfig, now = c.clock!, apiKey = process.env.ABBY_CLINIKO_API_KEY!, fingerprint = clinikoCredentialFingerprint(apiKey);
@@ -31,6 +33,7 @@ const approvalPaths = new Set([
   ...(await readdir(f.folder)).filter(file => file.endsWith(".json")).map(file => join(f.folder, file)),
   ...Object.values(c.approvals),
   ...(c.enquiry ? [c.enquiry.callerApprovalPath, c.enquiry.readApprovalPath] : []),
+  ...(c.staff ? [c.staff.callerApprovalPath, c.staff.staffApprovalPath] : []),
   ...(c.catalogue ? [c.catalogue.approvalPath, ...c.catalogue.practitioners.map(p => p.bookingApprovalPath)] : []),
 ]);
 for (const path of approvalPaths) {
@@ -67,6 +70,13 @@ let after: Record<string, unknown> | undefined, patient: Record<string, unknown>
 const provider: typeof fetch = async (value, init) => {
   const url = new URL(String(value)), method = init?.method ?? "GET";
   process.send?.({ kind: "providerRequest", method, path: url.pathname });
+  if (operation === "staff.request" && method === "POST" && url.pathname === "/v1/recalls") {
+    const body = JSON.parse(String(init?.body));
+    process.send?.({ kind: "providerMutation", method, path: url.pathname, body });
+    const response = await c.fetchPort!(value, init);
+    if (lostWrite) throw new Error("synthetic unknown staff request write");
+    return response;
+  }
   if (patient && method === "GET" && url.pathname === "/v1/patients/42") return Response.json(patient);
   if (method === "POST" && url.pathname === "/v1/patients") {
     const body = JSON.parse(String(init?.body)); patient = { ...body, id: "42", archived_at: null };
@@ -128,12 +138,20 @@ try {
           process.send?.({ kind: "permissionDecision", operation: args[2], allowed }); return allowed; } },
         delivery: { send: async (email, code) => { process.send?.({ kind: "verificationEmail", email, code, accepted: !mailLost }); return !mailLost; } },
         ...(c.enquiry ? { enquiry: { ...c.enquiry, permission: { allows: async (...args) => !denied && c.enquiry!.permission.allows(...args) } } } : {}),
+        ...(c.staff ? { staff: { ...c.staff, permission: { allows: async (...args) => {
+          const allowed = !denied && await c.staff!.permission.allows(...args);
+          process.send?.({ kind: "permissionDecision", operation: args[2], allowed }); return allowed;
+        } } } } : {}),
         ...(intake ? { intake, privateIntakeTranscription: transcription(true) } : {}),
         intent(owner) {
           const submit = owner.submitCode.bind(owner);
           owner.submitCode = async code => { const result = await submit(code); process.send?.({ kind: "verificationResult", verified: result.verified }); return result; };
           return async turn => {
           process.send?.({ kind: "modelTurn", text: turn.text });
+          if (operation === "staff.request") {
+            const request = staffRequestLanguage(turn.text);
+            return request ? ok(request) : err({ kind: "intentUnavailable" });
+          }
           if (turn.text === "Start") return ok({ kind: "workflow", operation: operation as "book" | "cancel" | "reschedule" | "intake" | "appointments.read" });
           if (turn.text === "Yes") return ok({ kind: "affirm" });
           if (turn.text === "Save") return owner.intakeDraftRef ? ok({ kind: "intake", draftRef: owner.intakeDraftRef }) : err({ kind: "intentUnavailable" });

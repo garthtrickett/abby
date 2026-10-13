@@ -9,6 +9,48 @@ const options = { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeou
 const clinicalWrites = (call: Parameters<Parameters<typeof withClinicalRunner>[1]>[0]) => call.mutations.filter(m => m.path?.startsWith("/v1/individual_appointments"));
 
 describe("actual compiled clinical runner", { concurrency: 2 }, () => {
+  for (const fault of ["saved", "lost", "denied", "revoked"] as const) {
+    test(`E2E-311 compiled runner staff request ${fault} owns independent verification and truthful queue outcome`, options, async () => {
+      await withClinicalRunner("staff.request", async call => {
+        if (fault === "denied") call.child.send({ kind: "denyPermission" });
+        await call.say("Could I speak to Morgan?"); await call.mark();
+        assert.equal(call.mutations.length, 0);
+        if (fault === "denied") {
+          await voiceUntil(() => call.messages.some(m => m.kind === "permissionDecision" && m.allowed === false), "independent staff permission denial");
+          assert.equal(call.messages.some(m => m.kind === "verificationEmail"), false);
+          await call.scan(verificationCanaries.slice(0, 2)); return;
+        }
+        await call.verify(); assert.equal(call.mutations.length, 0);
+        if (fault === "lost") call.child.send({ kind: "loseWrite" });
+        if (fault === "revoked") call.child.send({ kind: "denyPermission" });
+        await call.say("Please send that request.");
+        if (fault === "revoked") {
+          assert.match(call.spoken.at(-1)!, /can't send.*staff request/); assert.equal(call.mutations.length, 0);
+        } else {
+          const recallWrites = call.mutations.filter(m => m.path === "/v1/recalls");
+          assert.equal(recallWrites.length, 1); assert.equal(clinicalWrites(call).length, 0);
+          assert.equal(recallWrites[0]!.body?.recall_type_id, "8");
+          assert.match(String(recallWrites[0]!.body?.notes), /Morgan/);
+          assert.match(call.spoken.at(-1)!, fault === "lost" ? /can't confirm whether.*request.*saved or received.*won't send.*again/
+            : /staff request.*was saved.*can't confirm.*read.*promise/i);
+          await call.mark(); await call.say("Has somebody received my message?");
+          assert.equal(call.mutations.filter(m => m.path === "/v1/recalls").length, 1, "outcome read never resends the message");
+          assert.match(call.spoken.at(-1)!, fault === "lost" ? /can't confirm whether.*request.*saved or received.*won't send.*again/
+            : /staff request.*was saved.*can't confirm.*read.*promise/i);
+        }
+        assert.ok(call.messages.filter(m => m.kind === "permissionDecision").every(m => m.operation === "staff.request"));
+        assert.ok(!call.spoken.some(text => /(?:^|[.!?] )(?:the )?staff (?:have|has) (?:received|read)|(?:^|[.!?] )staff will call|guarantee/i.test(text)),
+          "a negated receipt statement is allowed; an affirmative human-receipt claim is not");
+        const code = call.messages.find(m => m.kind === "verificationEmail")!.code!;
+        for (const secret of [code, ...verificationCanaries.slice(0, 2)]) {
+          assert.equal(JSON.stringify(call.messages.filter(m => m.kind === "ordinaryFinal" || m.kind === "modelTurn")).includes(secret), false);
+          assert.equal(JSON.stringify(call.spoken).includes(secret), false);
+        }
+        await call.scan([code, ...verificationCanaries.slice(0, 2)]);
+      });
+    });
+  }
+
   for (const operation of ["book", "cancel", "reschedule", "appointments.read"] as const) {
     test(`E2E-299 E2E-314 compiled runner ${operation} owns signed admission, private verification and exact outcome`, options, async () => {
       await withClinicalRunner(operation, async call => {

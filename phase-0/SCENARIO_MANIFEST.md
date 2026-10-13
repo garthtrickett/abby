@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.148
+# Scenario manifest, version 1.150
 
 E2E-299, E2E-300 and E2E-314 now also run the separately compiled exported clinical runner: booking, cancellation, movement, enquiry and private first-time intake followed by separate booking. Exact provider requests, no-replay after loss, current-policy denial, independent permission, failed email transport and privacy are observed with patient-free ports. All full-call evidence remains planned.
 
@@ -319,3 +319,5 @@ E2E-345 covers twenty-two signed arrival, competing-fact and private-message jou
 E2E-346 covers twenty-one signed practitioner/service constraint journeys, including three independently approved canonical/any-practitioner sends with exact native location, type and approved spoken duration. Gender, aliases, prior practitioner history, style and ranking are not inferred. Different durations or types need clinic handling. Real carrier/mail/clinic activation remains planned.
 
 E2E-347 covers twenty-one signed class/home/mode/practitioner-boundary journeys, exact individually verified cancellation and same-practitioner movement, and private class/home-service messages. No class inventory, membership redemption, home-visit arrangement, mode switch or cross-practitioner source change is implemented or inferred. Unsupported requests need clinic handling. Real carrier/mail/clinic activation remains planned.
+
+E2E-311 additionally proves named staff requests through a separately compiled standalone runner, actual signed ingress and private verification. Four local cases cover one saved Cliniko recall, unknown write without replay or a human-receipt claim, independent permission denial before mail, and revocation before send. Status queries retain truthful uncertainty and do not resend. Real staff acceptance and deployment remain open.
