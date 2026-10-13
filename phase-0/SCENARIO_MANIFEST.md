@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.146
+# Scenario manifest, version 1.149
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -227,6 +227,8 @@ E2E-292 adds exact intake phone/type response and separate same-patient read-bac
 E2E-293 adds exact owner-only public intake eligibility and recorded privacy/intake terms checks, clinic-local age and admitted-phone rules, bounded capture/revalidation and current admin membership. Memory and actual PostgreSQL distinguish next-call raw-setting edits from approval revocation; database/backup scans exclude private drafts and effective standalone intake remains unavailable. This public policy does not choose D-18 or supply actual consent, email possession, patient permission, SAM confirmation or recovery authority.
 
 E2E-294 composes authenticated synthetic Twilio wire events, the actual admitted email verifier, private keypad collection and protected appointment reads. Private audio never reaches transcription/model or SAM turns; validated sequence/timestamps are consumed so subsequent ordinary speech remains ordered. Queued private arrivals stay private after verification; a fresh contiguous 500 ms quiet interval excludes late code audio before ordinary transcription resumes, and disconnect revokes held work synchronously. Actual PostgreSQL aggregate budget/database/backup proof remains distinct from real mail, clinical authority and carrier activation. The live runner leaves this trusted mode unconfigured.
+
+E2E-294 also records real loopback TLS/SMTP delivery through the actual caller verifier and protected read, with synthetic account/contact/certificate data. Independent permission denial stops before submission; authentication, certificate, malformed reply, abort and unknown acceptance faults cannot grant proof or trigger resend. This supplementary text evidence does not prove live mailbox receipt or carrier behavior; see [the SMTP delivery contract](../phase-2/VERIFICATION_SMTP_DELIVERY.md).
 
 E2E-295 implements the D-18 caller-mediated intake owner with separate played loss acknowledgment, private exact draft and prospective email code, independent permission, final SAM affirmation and one inspected patient create. Uncertainty instructs caller contact without a saved staff-task claim. Actual PostgreSQL aggregate budgets/backup scans and SIGKILL before/during/after creation prove the selected loss limitation; real delivery, clinical approval, downstream appointment authority and production voice activation remain separate.
 
