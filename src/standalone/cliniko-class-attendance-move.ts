@@ -12,6 +12,9 @@ import { ClinikoRecallWriter } from "../cliniko/recall-write.ts";
 import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
 import { encodeClinikoReview } from "../cliniko/review-request.ts";
 import type { ClinikoReviewRequest } from "../cliniko/review-request.ts";
+import type { ClassMovementPass } from "../cliniko/review-request.ts";
+import { ClinikoClassPassMovement } from "./cliniko-class-pass-movement.ts";
+import type { ClassPassMoveAuthority } from "./cliniko-class-pass-movement.ts";
 
 type Service = Readonly<{ practitionerId: string; appointmentTypeId: string; className: string }>;
 type Occurrence = Readonly<{ sessionId: string; startsAt: string; endsAt: string }>;
@@ -21,9 +24,10 @@ export type ClinikoClassMoveRequest = Readonly<{
   destination: Occurrence;
   cancellationReason: 10 | 20 | 30 | 40 | 50 | 60;
   compensation: "cancelReplacementIfOriginalUnsent";
+  pass?: ClassMovementPass;
 }>;
 export type ClinikoClassMovePhase = "review" | "bookReplacement" | "inspectReplacement" | "cancelOriginal" |
-  "inspectOriginal" | "compensateReplacement" | "inspectCompensation" | "final";
+  "inspectOriginal" | "compensateReplacement" | "inspectCompensation" | "inspectStaging" | "linkReplacement" | "inspectPass" | "final";
 /** Trusted host authority: exact dispatched SAM, played move/fee/recovery consent,
  * current source/destination policies, independent membership permission and
  * write stop. Channel proof and native observations cannot establish these. */
@@ -34,6 +38,7 @@ type Config = Readonly<{
   source: Service; destination: Service; proof: PatientProofHost;
   policyVersion: string; termsVersion: string; timeZone: string; recallTypeId: string;
   clock: () => string; signal: AbortSignal; fetchPort?: typeof fetch;
+  casePass?: Readonly<{ authority: ClassPassMoveAuthority; stagingContractVersion: string }>;
 }>;
 type Failure = Readonly<{ kind: "invalidConfig" | "invalidQuery" | "scopeMismatch" | "attemptConsumed" | "unavailable" }>;
 type MutationState = "notSent" | "uncertain" | "inspectedActive" | "inspectedCancelled";
@@ -42,6 +47,7 @@ export type ClinikoClassMoveOutcome = Readonly<{
   phase: ClinikoClassMovePhase;
   original: MutationState; replacement: MutationState;
   replacementAttendeeRef?: string; recallRef?: string; review?: "uncertain";
+  caseAssociation?: "notSent" | "unlinked" | "uncertain" | "inspectedLinked";
 }>;
 const id = (value: unknown): value is string => typeof value === "string" && /^[1-9][0-9]{0,18}$/.test(value);
 const uuid = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -51,7 +57,7 @@ const sameScope = (a: LocationScope, b: LocationScope) => a.tenantId === b.tenan
 const sameService = (a: Service, b: Service) => a.practitionerId === b.practitionerId && a.appointmentTypeId === b.appointmentTypeId;
 /** Staff can derive the exact three leg markers from the root in the owned review.
  * A distinct leg never reuses another leg's native single-attempt fence. */
-export function classMoveLegActionId(root: string, leg: "replacement" | "original" | "compensation"): string {
+export function classMoveLegActionId(root: string, leg: "replacement" | "original" | "compensation" | "association"): string {
   const hex = createHash("sha256").update(`abby-class-move:${root}:${leg}`).digest("hex").slice(0, 32).split("");
   hex[12] = "4"; hex[16] = ((parseInt(hex[16]!, 16) & 3) | 8).toString(16);
   const value = hex.join(""); return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
@@ -67,14 +73,17 @@ export class ClinikoClassAttendanceMove {
   readonly #destination: ClinikoClassAttendanceReader;
   readonly #writer: ClinikoClassAttendanceWriter;
   readonly #recalls: ClinikoRecallWriter;
+  readonly #passes?: ClinikoClassPassMovement;
   readonly #attempted = new Set<string>();
   private constructor(config: Config, source: ClinikoClassAttendanceReader, destination: ClinikoClassAttendanceReader,
     writer: ClinikoClassAttendanceWriter, recalls: ClinikoRecallWriter) {
     this.#config = config; this.#source = source; this.#destination = destination; this.#writer = writer; this.#recalls = recalls;
+    if (config.casePass) this.#passes = new ClinikoClassPassMovement({ ...config, fetchPort: config.fetchPort ?? fetch, ...config.casePass });
   }
   static create(input: Config): Result<ClinikoClassAttendanceMove, Failure> {
     try {
       if (!input || !(input.signal instanceof AbortSignal) || input.signal.aborted || typeof input.proof?.verifyPatient !== "function" || typeof input.clock !== "function" || typeof input.timeZone !== "string" || !input.timeZone || input.timeZone.length > 128) return err({ kind: "invalidConfig" });
+      if (Object.hasOwn(input, "casePass") && (!input.casePass || Object.keys(input.casePass).sort().join(",") !== "authority,stagingContractVersion")) return err({ kind: "invalidConfig" });
       const config = Object.freeze({ ...input, scope: Object.freeze({ ...input.scope }), cliniko: Object.freeze({ ...input.cliniko }),
         source: Object.freeze({ ...input.source }), destination: Object.freeze({ ...input.destination }) });
       const port = config.fetchPort ?? fetch;
@@ -96,7 +105,8 @@ export class ClinikoClassAttendanceMove {
       typeof request.verificationRef === "string" && !!request.verificationRef.trim() && request.verificationRef.length <= 256 &&
       Number.isFinite(at) && instant(request.expiresAt) && Date.parse(request.expiresAt) > at && Date.parse(request.expiresAt) <= at + 120000 &&
       occurrence(request.source) && id(request.source.attendeeId) && occurrence(request.destination) && request.source.sessionId !== request.destination.sessionId &&
-      [10, 20, 30, 40, 50, 60].includes(request.cancellationReason) && request.compensation === "cancelReplacementIfOriginalUnsent";
+      [10, 20, 30, 40, 50, 60].includes(request.cancellationReason) && request.compensation === "cancelReplacementIfOriginalUnsent" &&
+      !!request.pass === !!this.#passes && (!Object.hasOwn(request, "pass") || !!request.pass);
   }
   async #observe(request: ClinikoClassMoveRequest, signal: AbortSignal): Promise<Readonly<{ source: ClinikoClassSession; destination: ClinikoClassSession }> | undefined> {
     const c = this.#config, now = c.clock(), from = request.source.startsAt < request.destination.startsAt ? request.source.startsAt : request.destination.startsAt,
@@ -111,6 +121,13 @@ export class ClinikoClassAttendanceMove {
     const matches = (actual: ClinikoClassSession | undefined, expected: Occurrence) => actual?.startsAt === expected.startsAt && actual?.endsAt === expected.endsAt;
     return source && destination && matches(source, request.source) && matches(destination, request.destination) ? { source, destination } : undefined;
   }
+  async #observeDestination(request: ClinikoClassMoveRequest, signal: AbortSignal): Promise<ClinikoClassSession | undefined> {
+    const c = this.#config, selected = request.destination;
+    const read = await this.#destination.inspect(c.scope, request.verificationRef, selected.sessionId, selected.startsAt, selected.endsAt, c.clock(), signal);
+    if (!read.ok || read.value.patientRef !== request.patientId || read.value.timeZone !== c.timeZone || signal.aborted) return undefined;
+    const found = read.value.sessions[0];
+    return found?.sessionRef === selected.sessionId && found.startsAt === selected.startsAt && found.endsAt === selected.endsAt ? found : undefined;
+  }
   async executeOnce(input: ClinikoClassMoveRequest, external: AbortSignal, permit: ClinikoClassMovePermit): Promise<Result<ClinikoClassMoveOutcome, Failure>> {
     try { if (!this.#valid(input)) return err({ kind: input?.scope && !sameScope(input.scope, this.#config.scope) ? "scopeMismatch" : "invalidQuery" }); }
     catch { return err({ kind: "invalidQuery" }); }
@@ -120,10 +137,12 @@ export class ClinikoClassAttendanceMove {
     this.#attempted.add(input.actionId);
     const request = structuredClone(input), c = this.#config;
     Object.freeze(request.scope); Object.freeze(request.source); Object.freeze(request.destination); Object.freeze(request);
+    if (request.pass) { Object.freeze(request.pass.source); Object.freeze(request.pass.destination); Object.freeze(request.pass); }
     const signal = AbortSignal.any([c.signal, external, AbortSignal.timeout(30000)]);
     let phase: ClinikoClassMovePhase = "review", original: MutationState = "notSent", replacement: MutationState = "notSent", replacementAttendeeRef: string | undefined;
+    let caseAssociation: ClinikoClassMoveOutcome["caseAssociation"] = this.#passes ? "notSent" : undefined;
     const outcome = (kind?: ClinikoClassMoveOutcome["kind"]): ClinikoClassMoveOutcome => ({ kind: kind ?? (replacement === "notSent" && original === "notSent" ? "notSent" : "needsReview"), phase, original, replacement,
-      ...(replacementAttendeeRef ? { replacementAttendeeRef } : {}) });
+      ...(replacementAttendeeRef ? { replacementAttendeeRef } : {}), ...(caseAssociation ? { caseAssociation } : {}) });
     const permission = async (stage: ClinikoClassMovePhase, stop: AbortSignal) => {
       phase = stage;
       if (stop.aborted || Date.parse(c.clock()) >= Date.parse(request.expiresAt)) return false;
@@ -143,19 +162,28 @@ export class ClinikoClassAttendanceMove {
     const replacementActive = (value: ClinikoClassSession) => value.attendance.kind === "one" && `cliniko:attendee:${value.attendance.attendeeRef}` === replacementAttendeeRef;
     const initial = async (stop: AbortSignal) => {
       const observed = await this.#observe(request, stop);
-      return !!observed && sourceActive(observed.source) && observed.destination.attendance.kind === "none" && observed.destination.remainingPlaces > 0 && !observed.destination.overCapacity;
+      return !!observed && sourceActive(observed.source) && observed.destination.attendance.kind === "none" && observed.destination.remainingPlaces > 0 && !observed.destination.overCapacity &&
+        (!request.pass || await this.#passes!.unchanged(request.pass, request, "commit", stop));
     };
     const native = (kind: "book" | "cancel", leg: "replacement" | "original" | "compensation"): ClinikoAttendanceRequest => ({ scope: c.scope, patientId: request.patientId,
       sessionId: leg === "original" ? request.source.sessionId : request.destination.sessionId, actionId: classMoveLegActionId(request.actionId, leg),
       ...(kind === "book" ? { kind } : { kind, attendeeId: leg === "original" ? request.source.attendeeId : replacementAttendeeRef!.slice("cliniko:attendee:".length), cancellationReason: request.cancellationReason }) });
+    const unlinked = async (stage: ClinikoClassMovePhase, stop: AbortSignal) => {
+      if (!replacementAttendeeRef) return false;
+      const found = await this.#writer.inspectUnlinked(native("book", "replacement") as Extract<ClinikoAttendanceRequest, { kind: "book" }>,
+        replacementAttendeeRef, stop, last => allowed(stage, last));
+      return found.ok && found.value;
+    };
     const compensate = async (stop: AbortSignal): Promise<ClinikoClassMoveOutcome> => {
       if (original !== "notSent" || !replacementAttendeeRef || !await allowed("compensateReplacement", stop)) return outcome();
-      const cancel = native("cancel", "compensation");
+      const cancel = native("cancel", "compensation") as Extract<ClinikoAttendanceRequest, { kind: "cancel" }>;
       replacement = "uncertain";
       const sent = await this.#writer.executeOnce(cancel, stop, async last => {
         if (!await permission("compensateReplacement", last)) return false;
         const current = await this.#observe(request, last);
-        return !!current && sourceActive(current.source) && replacementActive(current.destination) && await permission("compensateReplacement", last);
+        return !!current && sourceActive(current.source) && replacementActive(current.destination) &&
+          (!request.pass || await this.#passes!.unchanged(request.pass, request, "compensation", last) &&
+            await unlinked("compensateReplacement", last)) && await permission("compensateReplacement", last);
       });
       if (!sent.ok) { replacement = "inspectedActive"; return outcome(); }
       if (sent.value.kind !== "accepted") return outcome();
@@ -163,6 +191,10 @@ export class ClinikoClassAttendanceMove {
       if (!exact.ok || !exact.value || !await allowed("inspectCompensation", stop)) return outcome();
       const after = await this.#observe(request, stop);
       if (!after || !sourceActive(after.source) || after.destination.attendance.kind !== "none" || !await permission("inspectCompensation", stop)) return outcome();
+      if (request.pass) {
+        const unlinked = await this.#writer.inspectUnlinked(cancel, replacementAttendeeRef, stop, last => allowed("inspectCompensation", last), classMoveLegActionId(request.actionId, "replacement"));
+        if (!unlinked.ok || !unlinked.value || !await this.#passes!.unchanged(request.pass, request, "compensation", stop)) return outcome();
+      }
       replacement = "inspectedCancelled";
       return outcome("restored");
     };
@@ -172,7 +204,7 @@ export class ClinikoClassAttendanceMove {
         practitionerId: c.source.practitionerId, appointmentTypeId: c.source.appointmentTypeId, newSessionId: request.destination.sessionId, newStartsAt: request.destination.startsAt,
         newEndsAt: request.destination.endsAt, ...(c.source.practitionerId !== c.destination.practitionerId ? { newPractitionerId: c.destination.practitionerId } : {}),
         ...(c.source.appointmentTypeId !== c.destination.appointmentTypeId ? { newAppointmentTypeId: c.destination.appointmentTypeId } : {}),
-        attendanceActionId: request.actionId, cancellationReason: request.cancellationReason, compensation: request.compensation } };
+        attendanceActionId: request.actionId, cancellationReason: request.cancellationReason, compensation: request.compensation, ...(request.pass ? { pass: request.pass } : {}) } };
     if (!encodeClinikoReview(request.actionId, review).ok) return err({ kind: "invalidQuery" });
     const reviewed = new ClinikoReviewedSend({ scope: c.scope, businessId: c.cliniko.businessId, credentialFingerprint: review.credentialFingerprint,
       policyVersion: c.policyVersion, timeZone: c.timeZone, recallTypeId: c.recallTypeId, writer: this.#recalls, clock: () => Date.parse(c.clock()) });
@@ -182,31 +214,76 @@ export class ClinikoClassAttendanceMove {
         authorize: async (_request, stop) => {
           if (prepared) return allowed("review", stop);
           if (!await permission("review", stop)) return false;
-          prepared = await initial(stop); return prepared && await permission("review", stop);
+          // A pass review journals the caller-confirmed proposal, not a claim
+          // of current native capacity. Its ownership/proof and independent
+          // financial authority are fresh here; the complete class and case
+          // state is rechecked after review and the final budget claim, before
+          // any attendance write. Legacy movement keeps its existing contract.
+          prepared = request.pass ? await allowed("review", stop) && await this.#passes!.authorized(request.pass, request, "commit", stop) : await initial(stop);
+          return prepared && await permission("review", stop);
         },
         send: async (_request, stop) => {
-          const book = native("book", "replacement");
+          const book = native("book", "replacement") as Extract<ClinikoAttendanceRequest, { kind: "book" }>;
           replacement = "uncertain";
+          if (request.pass) caseAssociation = "uncertain";
           const booked = await this.#writer.executeOnce(book, stop, async last => await permission("bookReplacement", last) && await initial(last) && await permission("bookReplacement", last));
-          if (!booked.ok) { replacement = "notSent"; return outcome(); }
+          if (!booked.ok) { replacement = "notSent"; if (request.pass) caseAssociation = "notSent"; return outcome(); }
           if (booked.value.kind !== "accepted") return outcome();
           replacementAttendeeRef = booked.value.attendeeRef;
           const exact = await this.#writer.inspect(book, replacementAttendeeRef, stop, last => allowed("inspectReplacement", last));
           if (!exact.ok || !exact.value) return outcome();
           replacement = "inspectedActive";
+          if (request.pass) {
+            if (!await unlinked("inspectStaging", stop)) { caseAssociation = "uncertain"; return outcome(); }
+            caseAssociation = "unlinked";
+          }
           const cancel = native("cancel", "original");
           original = "uncertain";
           const cancelled = await this.#writer.executeOnce(cancel, stop, async last => {
             if (!await permission("cancelOriginal", last)) return false;
             const current = await this.#observe(request, last);
-            return !!current && sourceActive(current.source) && replacementActive(current.destination) && !current.destination.overCapacity && await permission("cancelOriginal", last);
+            if (!current || !sourceActive(current.source) || !replacementActive(current.destination) || current.destination.overCapacity) return false;
+            if (request.pass) {
+              if (!await unlinked("inspectStaging", last) || !await this.#passes!.unchanged(request.pass, request, "commit", last)) return false;
+            }
+            return permission("cancelOriginal", last);
           });
           if (!cancelled.ok) { original = "notSent"; return compensate(stop); }
           if (cancelled.value.kind !== "accepted") return outcome();
           const inspected = await this.#writer.inspect(cancel, `cliniko:attendee:${request.source.attendeeId}`, stop, last => allowed("inspectOriginal", last));
           if (!inspected.ok || !inspected.value) return outcome();
           original = "inspectedCancelled";
+          if (request.pass) {
+            const link: ClinikoAttendanceRequest = { kind: "linkCase", scope: c.scope, patientId: request.patientId, sessionId: request.destination.sessionId,
+              attendeeId: replacementAttendeeRef.slice("cliniko:attendee:".length), patientCaseId: request.pass.destination.patientCaseId,
+              actionId: classMoveLegActionId(request.actionId, "association"), creationActionId: book.actionId };
+            caseAssociation = "uncertain";
+            const linked = await this.#writer.executeOnce(link, stop, async last => {
+              if (!await allowed("linkReplacement", last)) return false;
+              // The complete source case below independently proves exact
+              // original cancellation. Only destination class capacity needs
+              // another full class observation before associating its pass.
+              const current = await this.#observeDestination(request, last);
+              if (!current || !replacementActive(current) || current.overCapacity) return false;
+              return await unlinked("inspectStaging", last) && await this.#passes!.afterCancellation(request.pass!, request, last) && await permission("linkReplacement", last);
+            });
+            if (!linked.ok) { caseAssociation = "unlinked"; return outcome(); }
+            if (linked.value.kind !== "accepted") return outcome();
+            const exactLink = await this.#writer.inspect(link, replacementAttendeeRef, stop, last => allowed("inspectPass", last));
+            if (!exactLink.ok || !exactLink.value) return outcome();
+            caseAssociation = "inspectedLinked";
+          }
           if (!await permission("final", stop)) return outcome();
+          if (request.pass) {
+            const destination = await this.#observeDestination(request, stop);
+            // The complete final case inspection proves the exact original's
+            // cancelled state and old booking, as well as all other source
+            // associations. A second source-class roster read adds no evidence
+            // for that selected record. Destination capacity is still fresh.
+            return destination && replacementActive(destination) && !destination.overCapacity &&
+              await this.#passes!.inspectMovement(request.pass, request, replacementAttendeeRef.slice("cliniko:attendee:".length), stop) &&
+              await permission("final", stop) ? outcome("moved") : outcome();
+          }
           const final = await this.#observe(request, stop);
           return final && final.source.attendance.kind === "none" && replacementActive(final.destination) && !final.destination.overCapacity && await permission("final", stop) ? outcome("moved") : outcome();
         },

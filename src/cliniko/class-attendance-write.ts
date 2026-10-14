@@ -155,14 +155,18 @@ export class ClinikoClassAttendanceWriter {
    * numeric is-null filter, not an absent response property. Independent
    * authority must permit temporary unlinked attendance. This observation is
    * neither a case/capacity reservation nor authority to cancel the original. */
-  async inspectUnlinked(input: Extract<ClinikoAttendanceRequest, { kind: "book" }>, attendeeRef: string,
-    signal: AbortSignal, beforeRead: ClinikoAttendancePermit): Promise<Result<boolean, ClinikoAttendanceFailure>> {
-    if (!validRequest(input) || input.kind !== "book" || "patientCaseId" in input || !(signal instanceof AbortSignal)) return err({ kind: "invalidQuery" });
+  async inspectUnlinked(input: Extract<ClinikoAttendanceRequest, { kind: "book" | "cancel" }>, attendeeRef: string,
+    signal: AbortSignal, beforeRead: ClinikoAttendancePermit, creationActionId?: string): Promise<Result<boolean, ClinikoAttendanceFailure>> {
+    if (!validRequest(input) || input.kind !== "book" && input.kind !== "cancel" || "patientCaseId" in input || !(signal instanceof AbortSignal) ||
+      (input.kind === "cancel" ? !uuid(creationActionId) : creationActionId !== undefined)) return err({ kind: "invalidQuery" });
     if (!sameScope(input.scope, this.#config.scope)) return err({ kind: "scopeMismatch" });
     const request = structuredClone(input), selected = /^cliniko:attendee:([1-9][0-9]{0,18})$/.exec(attendeeRef)?.[1];
-    if (!selected) return err({ kind: "invalidQuery" });
+    if (!selected || request.kind === "cancel" && selected !== request.attendeeId) return err({ kind: "invalidQuery" });
     const query = new URLSearchParams({ page: "1", per_page: "100", sort: "id:asc" });
     for (const filter of [`id:=${selected}`, `patient_id:=${request.patientId}`, `booking_id:=${request.sessionId}`, "patient_case_id:!?"]) query.append("q[]", filter);
+    // Cancelled records can be excluded by default; the documented wildcard
+    // includes them while exact cancellation status/reason and marker are read.
+    if (request.kind === "cancel") query.append("q[]", "cancelled_at:*");
     const stop = AbortSignal.any([signal, AbortSignal.timeout(15_000)]);
     for (let observation = 0; observation < 2; observation++) {
       const limited = await untilAbort(claimClinikoBudget(this.#config.rateBudget), stop);
@@ -182,7 +186,8 @@ export class ClinikoClassAttendanceWriter {
         if (body.total_entries === 0) return ok(false);
         if (body.total_entries !== 1) return err({ kind: "malformed" });
         const row = object(body.attendees[0]);
-        if (!row || row.id !== selected || !this.#matches(row, request) || row.arrived !== null && row.arrived !== true) return ok(false);
+        if (!row || row.id !== selected || !this.#matches(row, request) || row.arrived !== null && row.arrived !== true ||
+          request.kind === "cancel" && row.notes !== notes(creationActionId!)) return ok(false);
         // A positive case link contradicts the server's is-null predicate.
         if (row.patient_case != null && (!object(row.patient_case) || !object(object(row.patient_case)?.links) || object(object(row.patient_case)?.links)?.self != null)) return ok(false);
         if (!await permitted(beforeRead, stop)) return err({ kind: "forbidden" });

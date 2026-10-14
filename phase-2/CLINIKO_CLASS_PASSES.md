@@ -4,7 +4,7 @@ Gap 10 includes membership/pass/credit handling. E405 supplies the native
 adapter, E406 connects approved pass booking to the ordinary caller host, and
 E407 adds native cancellation with verified session-use effects. E408 adds
 guarded association updates, exact unlinked staging reads and whole-case
-movement inspection. Caller movement,
+movement inspection. E409 composes a native pass movement/recovery coordinator. Caller movement,
 broader/mixed catalogue qualification and financial handling remain unfinished.
 Real clinic activation remains unqualified.
 
@@ -362,3 +362,130 @@ checks passed with no failures/skips. Both stages passed diff checks. Counts
 overlap; E408 adds no completed caller movement journey. Exact commands,
 chronology, corrected fixture failures and tracked logs are recorded in
 `THIRTEEN_GAP_IMPLEMENTATION.md`.
+
+
+## E2E-409 native pass movement and recovery
+
+`ClinikoClassAttendanceMove` has an explicit optional `casePass` configuration:
+an independent `ClassPassMoveAuthority` and an approved `stagingContractVersion`.
+A native request must contain the matching private `ClassMovementPass`; the
+legacy configuration cannot accept that request, and a native configuration
+cannot silently run without it. This is a native coordinator contract. The
+ordinary move host still rejects native-case membership pending its explicit
+owner terms, proposal binding and serving qualification.
+
+`ClinikoClassPassMovement` obtains the independently selected source and
+destination case/entitlement pair. Selection alone grants only private inspection.
+The separate `allows` check must approve the actual cancellation effect,
+temporary unlinked replacement, destination use and recovery version. Both ports
+receive exact scope, patient, original attendance/occurrence, destination
+occurrence, practitioner/type, policy/terms versions and phase. Channel proof,
+case naming or an available session cannot supply these permissions.
+
+Complete source inspection determines whether cancellation releases one session,
+leaves use unchanged or consumes one formerly excluded DNA session. Destination
+inspection checks its own clinic-date eligibility and resulting capacity. For
+the same case, the two snapshots must agree; final use is original use plus the
+cancellation effect plus one replacement session. A full case can therefore move
+when cancellation releases the original session. It cannot fund an additional
+session when cancellation retains or increases use. A separate eligible case
+can fund a move from an expired/closed source, provided the source effect is
+independently authorised and does not add an unfunded counted session.
+
+The coordinator performs these guarded steps:
+
+1. Journal the caller-confirmed proposal in one owned native review under live
+   proof, independent move/pass permission and exact private bindings. This
+   records proposed context and does not assert current native availability.
+2. After the review and final budget claim, inspect both classes and complete
+   cases before creating one replacement attendance without a case ID.
+3. Inspect that exact replacement, then prove it currently unlinked with two
+   exact native is-null queries. Auto-association remains uncertain and cannot
+   authorise original cancellation or automatic financial compensation.
+4. Before cancelling the original, freshly inspect both classes, unlinked
+   replacement and unchanged complete cases. Inspect the exact cancellation.
+5. Before linking the replacement, freshly inspect destination attendance and
+   capacity, unlinked staging, and the complete source cancellation/destination
+   case state. Change only the replacement's `patient_case_id` and inspect it.
+6. Confirm only after fresh destination capacity and exact complete-case
+   movement effects. Same-case inspection normalises exactly the original
+   cancellation plus replacement addition. Cross-case inspection separately
+   proves source cancellation and destination addition. The final case read
+   proves the selected original's old booking and cancellation, so no redundant
+   source-class roster read is needed for that record. Existing legacy movement
+   retains its own full paired-roster contract.
+
+Every provider request still claims the ordinary shared account budget. No
+limit, timeout, assertion or final case/capacity check was relaxed to fit the
+pipeline. The native cross-service tests initially exhausted the budget before
+linking. Journalling proposed context before the mandatory pre-write live reads,
+and using the complete source case proof for the exact cancelled original,
+remove repeated observations without dropping the relevant evidence. Small-case
+same/cross-service and same/cross-case native journeys now complete under the
+unchanged budget of 180 requests. This does not qualify larger histories through
+the entire caller protocol.
+
+Compensation may cancel only a known replacement when original cancellation was
+never sent. It requires fresh independent recovery permission, unchanged cases
+and unlinked staging, then proves the exact cancelled replacement is still
+unlinked using the documented `cancelled_at:*` inclusion filter. The original
+and cases must remain unchanged. Once original cancellation is invoked or
+uncertain, no automatic rollback or duplicate original is allowed. A denied or
+unknown final association leaves explicit staff-review state; no pass usage,
+attendance, payment or refund outcome is invented. Distinct deterministic UUIDs
+identify replacement, original cancellation, compensation and final association.
+
+### Bounded private movement review
+
+`Abby class pass movement review v1` uses a losslessly compressed fixed JSON tuple within the existing
+1,000-character recall summary bound. All scope/patient/business/credential,
+policy/terms/timezone/time, original and destination interval/type/practitioner,
+root action/recovery/cancellation reason, both exact case/entitlement/full-state
+fingerprints/counters, source effect and staging version are preserved. Nothing
+is truncated or replaced by a summary hash. The existing decoder returns the
+full named context for private staff recovery; a parsed record is never a send
+permit. Legacy review encoding remains unchanged.
+
+The outer tuple has ten slots: scope triple, patient, business, credential
+fingerprint, policy version, terms version, timezone, creation time, fourteen-slot
+movement tuple, and three-slot pass tuple. The movement tuple contains original
+practitioner/type/start/end/session/attendee, destination session/start/end,
+optional destination practitioner/type (null when absent), root action UUID,
+cancellation reason and compensation contract. The pass tuple holds source
+case/entitlement/fingerprint/maximum/used/effect, destination
+case/entitlement/fingerprint/maximum/used, and staging version. Tuple lengths,
+all named-field invariants, header relationship and total note length are
+validated on decode. Oversized context is rejected rather than truncated.
+
+The native tests cover twelve case/service/effect combinations, full passes,
+expired-source transfer, permission/source/entitlement/rule drift, restored
+originals, auto-linked staging, same-net case swaps, concurrent usage/capacity,
+unknown review and every write leg, recovery association drift, private result
+boundaries and malformed/oversized reviews. Ordinary owner-approved played
+consent, host offers/corrections, signed/compiled pass movement, larger/mixed
+histories and actual clinic/financial/cloud acceptance remain unfinished.
+
+
+The pass movement payload line is `z1:` plus canonical base64url of raw DEFLATE
+for that JSON tuple. Node's built-in zlib supplies the encoding; no dependency
+was added. Encoding and decoding bound the uncompressed payload to8,192 bytes, with inflation limited before strict UTF-8/JSON,
+tuple and named-context validation. The existing1,000-character summary limit
+still applies before decompression. Compression is an encoding, not a privacy
+control; the complete review remains private staff context. Legacy reviews
+retain their original JSON wire format.
+
+A diagnostic with full native identifier widths and ordinary UUID-based scope,
+policy and entitlement references found the first plain tuple exceeded the note
+limit. A committed positive regression now proves exact round-trip recovery for
+19-digit identifiers and UUID references. Corrupt, noncanonical, invalid UTF-8
+and excessive-inflation payloads deny, and genuinely oversized high-entropy
+context is rejected without truncation. Bounded convenience inflation is
+specified in the [Node zlib options](https://nodejs.org/download/release/v22.16.0/docs/api/zlib.html#class-options).
+
+
+E409 final local qualification:507 regression checks passed, followed by a fresh
+current-source type/build/migration gate and164 native/staff-review checks.
+Both stages had zero failures/cancellations/skips and passed diff checks; counts
+overlap. Exact commands, intermediate failures/diagnostics and tracked logs are
+recorded in `THIRTEEN_GAP_IMPLEMENTATION.md`. This qualifies the native
+coordinator, not the unfinished ordinary caller pass movement flow.
