@@ -91,6 +91,20 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     if (method === "GET" && inspectedId && nativeRows.has(inspectedId))
       return Response.json(url.pathname.endsWith("/conflicts") ? { conflicts: { exist: false } } : nativeRows.get(inspectedId));
     if (method === "GET" && url.pathname === "/v1/individual_appointments/91/conflicts") return Response.json({ conflicts: { exist: false } });
+    if (method === "POST" && url.pathname === "/v1/attendees" || method === "PATCH" && /^\/v1\/attendees\/[1-9][0-9]*\/cancel$/.test(url.pathname)) {
+      const state = resultValue(await ledger!.read(callId, scope));
+      const action = Object.values(state.actions).find(action => action.status === "dispatched"); assert.ok(action);
+      assert.equal(action.kind, method === "POST" ? "book" : "cancel");
+      assert.equal(state.presentations[action.presentationId]?.status, "played");
+      assert.ok(Object.values(state.effects).some(effect => effect.kind === "hostWrite" && effect.actionKey === action.key));
+      assert.equal(writtenActions.has(action.key), false); writtenActions.add(action.key);
+      writes.push(`${method} ${url.pathname}`); assert.ok(writes.length <= (options.maximumWrites ?? 1));
+      writeRequests.push({ method, path: url.pathname, body: JSON.parse(String(init?.body)) });
+      const response = await port(value, init);
+      if (options.beforeWriteResponse) await options.beforeWriteResponse();
+      if (options.lostWrite) throw new Error("synthetic lost class voice write response");
+      return response;
+    }
     if ((method === "POST" && url.pathname === "/v1/individual_appointments") ||
         (method === "PATCH" && url.pathname.startsWith("/v1/individual_appointments/"))) {
       const state = resultValue(await ledger!.read(callId, scope));

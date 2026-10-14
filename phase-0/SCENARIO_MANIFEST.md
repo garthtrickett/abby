@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.201
+# Scenario manifest, version 1.202
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -18,7 +18,7 @@ observation is retained in
 `eval/baselines/second-call-batch-automated-before-v1.json`. Production carrier,
 clinic approval and real speech activation remain separate gates.
 
-[SCENARIO_MANIFEST.json](SCENARIO_MANIFEST.json) tracks the 393 stable E2E IDs in [Technical Design Section 11](../TECHNICAL_DESIGN.md#11-verification-design). The design table owns each journey's wording; the registry adds its requirement mapping, fixture family, intended compositions, earliest implementation phase, and evidence status. Each scenario's fixture ID is `fixture-` plus its lowercase E2E ID. The capability and setting maps cover the current agent catalogue and its behavior settings. `test/contract/scenario-manifest.test.ts` checks the design and catalogue for drift, duplicate or missing IDs, and test-file references.
+[SCENARIO_MANIFEST.json](SCENARIO_MANIFEST.json) tracks the 394 stable E2E IDs in [Technical Design Section 11](../TECHNICAL_DESIGN.md#11-verification-design). The design table owns each journey's wording; the registry adds its requirement mapping, fixture family, intended compositions, earliest implementation phase, and evidence status. Each scenario's fixture ID is `fixture-` plus its lowercase E2E ID. The capability and setting maps cover the current agent catalogue and its behavior settings. `test/contract/scenario-manifest.test.ts` checks the design and catalogue for drift, duplicate or missing IDs, and test-file references.
 
 Every `fullCallEvidence` entry is **planned**. Existing text, browser, provider-contract, and synthetic voice tests are valuable evidence, but none proves the complete full-call scenario with the required production entry point and transport observations. `E2E-125` through `E2E-127` record passing **text-only** evidence from availability, startup refusal, and configuration portability journeys. `E2E-128` through `E2E-146` record passing **synthetic voice** evidence for speech generation, playback acknowledgment, Realtime transcription, Twilio media protocol handling, signed Twilio ingress, a local socket through Abby's actual call owner, transient presentation content, a disposable standalone voice ledger, process-local stream replay refusal, static post-stream fallback routing, transient availability intent selection, the composed standalone server, one bounded clarification before fallback, a clinic-approved keypad availability route, live-call lease renewal with terminal socket closure, greeting interruption through a returned clear fence, startup refusal of unsafe storage, a host-owned embedded voice call, a keyed embedded voice booking after exact playback and affirmation, and correlation of an early Realtime final with its later commit acknowledgment. `E2E-147` adds a passing text journey for a Cliniko slot returned on the wrong clinic-local date. `E2E-148` adds synthetic voice evidence for interchangeable host-owned availability ports in the embedded composition. `E2E-149` adds a signed local socket through a buyer-process embedded voice composition and a host-owned diary. `E2E-150` adds a bounded synthetic speech loop with missing safety-word detection; a separate opt-in run exercises the live synthesis and transcription adapters. `E2E-151` adds an opt-in pre-output speech fallback through a signed local standalone socket, with interruption and post-output safety checks at the playback port. `E2E-152` adds pinned telephone-band synthetic speech fixtures and the opt-in live transcription evaluation path. `E2E-153` adds a signed local keypad journey proving an online-booking-ineligible Cliniko business cannot yield times or a booking claim. `E2E-154` adds startup refusal for a Cliniko reader bound to the wrong route scope. `E2E-155` adds startup refusal for a missing or invalid clinic-approved keypad route. `E2E-156` through `E2E-160` add PostgreSQL-coordinated Cliniko request-budget journeys across two readers and failure cases. `E2E-161` adds pinned two-speaker noisy synthetic audio for the transcription evaluation path. `E2E-162` verifies that the committed-turn Realtime model candidate remains untrusted. `E2E-163` requires a shared PostgreSQL Cliniko budget at standalone voice startup and checks that signed local keypad reads charge it. `E2E-164` adds versioned per-location omission reconciliation and legacy archive compatibility. `E2E-165` blocks number publication when unlisted target configuration appears after import. `E2E-166` requires a fresh target clinic phone-index generation before synthetic number publication. `E2E-167` reconciles the imported write-stop audit event before publication. `E2E-168` rejects a changed durable import receipt before publication. `E2E-169` proves graceful local signed-stream shutdown and owner release. `E2E-170` proves cross-process active call exclusion and terminal loss of the PostgreSQL lock session. `E2E-171` proves default local process startup and refusal. `E2E-172` proves restricted test-call admission, keypad response, interruption, forged stream rejection, and shutdown through the isolated runner process. All remain planned for full-call evidence. `fixtureState` describes only the named fixture's current implementation level, not release approval.
 
@@ -477,3 +477,20 @@ unplayed consent and uncertain responses cannot grant a commit or replay.
 This supplies text/native evidence only. Normal signed/compiled class routing,
 class movement, membership/credit reconciliation and real activation remain
 open, and no synthetic voice or full-call evidence is promoted.
+
+
+E2E-394 adds admitted class ownership and the explicit class selector through
+ordinary clinical intent, signed HTTP/WebSocket serving and private keypad.
+The text owner and routing tests deny mismatched/revoked approvals, wrong
+operations, call/session, representative/service ambiguity, stop and close.
+Four synthetic signed journeys prove class book/cancel, exact attendee writes,
+played class/fee terms and separate affirmation, plus lost-response no replay.
+The positive booking corrects the first played choice before dispatch and
+writes only the second occurrence within the same200-request account budget.
+The exact attendee GET retains current proof, permission, policy and SAM checks;
+a separate final full native occurrence/capacity inspection is required before
+commitment. Default unconfigured classes retain the unsupported boundary.
+This is synthetic provider/model/media evidence, not real model, acoustic,
+carrier or clinic readiness. Each configured route currently selects one class
+service. Multiple class-service selection, compiled class runner subprocesses,
+movement and membership/pass/credit processing remain unfinished.

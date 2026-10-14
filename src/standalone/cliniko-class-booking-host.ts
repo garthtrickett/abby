@@ -83,6 +83,7 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
     turnId: string;
     choices: Choice[];
   } | undefined;
+  #previous: { turnId: string; choices: Choice[] } | undefined;
   #window: BookingSearchWindow | undefined;
   #prepared: Prepared | undefined;
   #busy = false;
@@ -174,6 +175,7 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
       return denied();
     const epoch = ++this.#epoch;
     this.#menu = undefined;
+    this.#previous = undefined;
     this.#choices.clear();
     this.#busy = true;
     if (query.window !== undefined)
@@ -242,21 +244,37 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
     const choice = menu.choices[query.choice - 1], grant = await this.#config.verification.ownedGrant("appointments.book", this.#signal(query.signal));
     if (!choice || !grant || grant.verificationRef !== choice.verificationRef || Date.parse(choice.offer.expiresAt) <= Date.parse(query.now) || !this.#matches(query))
       return denied();
+    this.#previous = menu;
     return ok({ verificationRef: choice.verificationRef, offerRef: choice.offer.offerRef });
   }
-  async #inspectChoice(choice: Choice, now: string, phase: "proposal" | "commit" | "inspection", signal: AbortSignal): Promise<VerifiedPatient | undefined> {
+  async correctBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; startsAt: string }>): Promise<Result<Readonly<{ verificationRef: string; offerRef: string }>, HostReadFailure>> {
+    const previous = this.#previous, choice = previous?.choices.find(item => item.offer.startsAt === query.startsAt);
+    if (!this.#matches(query) || this.#busy || this.#attempted || !previous || previous.turnId !== query.menuTurnId || !choice || Date.parse(choice.offer.expiresAt) <= Date.parse(query.now)) return denied();
+    const epoch = ++this.#epoch, signal = this.#signal(query.signal);
+    // This maps only an already issued private offer, exactly like ordinal
+    // selection. resolveBooking performs the fresh patient, permission and
+    // native occurrence checks before SAM can present corrected terms.
+    const grant = await this.#config.verification.ownedGrant("appointments.book", signal);
+    return grant && grant.verificationRef === choice.verificationRef && await this.#ready(query.now, signal) &&
+      !signal.aborted && epoch === this.#epoch && this.#previous === previous && this.#matches(query)
+      ? ok({ verificationRef: choice.verificationRef, offerRef: choice.offer.offerRef }) : denied();
+  }
+  async #inspectChoice(choice: Choice, now: string, phase: "proposal" | "commit" | "inspection", signal: AbortSignal, readNative = true): Promise<VerifiedPatient | undefined> {
     const c = this.#config, a = await c.classPolicy.current(c.scope), patient = await c.verification.proof.verifyOperation(c.scope, choice.verificationRef, "appointments.book", now, signal);
     if (!a.ok || !patient.ok || patient.value.patientRef !== choice.patientRef || !await this.#permission(patient.value, choice.session, a.value, phase, signal) ||
       this.#time(now) === undefined || Date.parse(choice.offer.expiresAt) <= this.#time(now)!)
       return undefined;
-    const day = clinicDateAt(a.value.timeZone, new Date(choice.session.startsAt)), lower = clinicDayStartUtc(a.value.timeZone, day);
-    const next = new Date(Date.parse(`${day}T00:00:00.000Z`) + 86400000).toISOString().slice(0, 10);
-    const read = await this.#reader.inspect(c.scope, choice.verificationRef, choice.session.sessionRef, new Date(Math.max(Date.parse(lower), this.#time(now)!)).toISOString(), clinicDayStartUtc(a.value.timeZone, next), now, signal);
-    const selected = read.ok ? read.value.sessions[0] : undefined;
-    if (!read.ok || !selected || read.value.patientRef !== choice.patientRef || read.value.timeZone !== a.value.timeZone || selected.startsAt !== choice.session.startsAt || selected.endsAt !== choice.session.endsAt ||
-      selected.capacity !== choice.session.capacity || selected.overCapacity || (phase === "inspection" ? selected.attendance.kind !== "one" : selected.attendance.kind !== "none" || selected.remainingPlaces < 1) ||
-      !isDeepStrictEqual(choice.offer.terms, { ...a.value.bookingTerms, expiresAt: choice.offer.expiresAt }))
-      return undefined;
+    if (!isDeepStrictEqual(choice.offer.terms, { ...a.value.bookingTerms, expiresAt: choice.offer.expiresAt })) return undefined;
+    let selected = choice.session;
+    if (readNative) {
+      const day = clinicDateAt(a.value.timeZone, new Date(choice.session.startsAt)), lower = clinicDayStartUtc(a.value.timeZone, day);
+      const next = new Date(Date.parse(`${day}T00:00:00.000Z`) + 86400000).toISOString().slice(0, 10);
+      const read = await this.#reader.inspect(c.scope, choice.verificationRef, choice.session.sessionRef, new Date(Math.max(Date.parse(lower), this.#time(now)!)).toISOString(), clinicDayStartUtc(a.value.timeZone, next), now, signal);
+      const observed = read.ok ? read.value.sessions[0] : undefined;
+      if (!read.ok || !observed || read.value.patientRef !== choice.patientRef || read.value.timeZone !== a.value.timeZone || observed.startsAt !== choice.session.startsAt || observed.endsAt !== choice.session.endsAt ||
+        observed.capacity !== choice.session.capacity || observed.overCapacity || (phase === "inspection" ? observed.attendance.kind !== "one" : observed.attendance.kind !== "none" || observed.remainingPlaces < 1)) return undefined;
+      selected = observed;
+    }
     const current = await c.classPolicy.current(c.scope), fresh = await c.verification.proof.verifyOperation(c.scope, choice.verificationRef, "appointments.book", now, signal);
     return current.ok && isDeepStrictEqual(current.value, a.value) && fresh.ok && fresh.value.patientRef === choice.patientRef &&
       await this.#permission(fresh.value, selected, a.value, phase, signal) && !signal.aborted ? fresh.value : undefined;
@@ -286,11 +304,11 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
       this.#busy = false;
     }
   }
-  async #authorize(prepared: Prepared, mutation: HostMutation, phase: "commit" | "inspection", signal: AbortSignal): Promise<boolean> {
+  async #authorize(prepared: Prepared, mutation: HostMutation, phase: "commit" | "inspection", signal: AbortSignal, readNative = true): Promise<boolean> {
     const now = this.#now();
     if (!await this.#ready(now, signal, mutation) || mutation.payloadDigest !== digestActionRequest(prepared.request))
       return false;
-    const patient = await this.#inspectChoice(prepared.choice, now, phase, signal);
+    const patient = await this.#inspectChoice(prepared.choice, now, phase, signal, readNative);
     return !!patient && patient.patientRef === prepared.request.patient.patientRef && patient.verificationRef === prepared.request.patient.verificationRef && !!await this.#ready(this.#now(), signal, mutation);
   }
   async write(mutation: HostMutation, now: string, external?: AbortSignal): Promise<HostWriteReceipt> {
@@ -315,7 +333,10 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
         const sent = await this.#writer.executeOnce(provider, stop, final => this.#authorize(prepared, mutation, "commit", final));
         if (!sent.ok || sent.value.kind !== "accepted")
           return sent;
-        const inspected = await this.#writer.inspect(provider, sent.value.attendeeRef, stop, final => this.#authorize(prepared, mutation, "inspection", final));
+        // The exact own-attendee GET is bracketed by fresh patient, class permission,
+        // policy and dispatched-SAM checks. Full native occurrence/capacity
+        // inspection below is independently required before a committed receipt.
+        const inspected = await this.#writer.inspect(provider, sent.value.attendeeRef, stop, final => this.#authorize(prepared, mutation, "inspection", final, false));
         if (!inspected.ok || !inspected.value || !await this.#authorize(prepared, mutation, "inspection", stop))
           return ok({ kind: "uncertain" as const });
         return sent;
@@ -330,5 +351,5 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
   async reconcile(mutation: HostMutation): Promise<ReconcileObservation> { return { kind: "stillUnknown", actionKey: mutation.actionKey }; }
   async openTask(item: StaffItem): Promise<StaffTaskReceipt> { return { kind: "rejected", taskKey: item.key }; }
   async reconcileTask(item: StaffItem): Promise<StaffTaskObservation> { return { kind: "stillUnknown", taskKey: item.key }; }
-  dispose(): void { this.#config.signal.removeEventListener("abort", this.#onClose); this.#lifetime.abort(); this.#review.close(); this.#choices.clear(); this.#menu = undefined; this.#prepared = undefined; ++this.#epoch; }
+  dispose(): void { this.#config.signal.removeEventListener("abort", this.#onClose); this.#lifetime.abort(); this.#review.close(); this.#choices.clear(); this.#menu = undefined; this.#previous = undefined; this.#prepared = undefined; ++this.#epoch; }
 }

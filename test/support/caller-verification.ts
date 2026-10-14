@@ -104,7 +104,7 @@ export async function callerVerificationFixture(options: { apiKey?: string; scop
       turnId: `appointment-read-${++turns}`, text: "Read my appointments", quality: "clear", at: now }, verificationRef,
       from: now, to: new Date(Date.parse(now) + 86_400_000).toISOString(), now });
     return { scope, path, accountPath, folder, approval, account, ledger, policies, runtime, callId, sessionId, receipt, inbound,
-      policy, config, sessionConfig, session, mail, provider, reader, agent, read,
+      policy, config, sessionConfig, session, mail, provider, reader, agent, read, fetchPort,
       replaceApproval: async (patch: Partial<CallerVerificationApproval>) => { approval = { ...approval, ...patch }; await replace(path, approval); },
       replaceAccount: async (patch: Partial<AdminAccount>) => { account = { ...account, ...patch }; await replace(accountPath, [account]); },
       setTime: (value: string) => { now = value; }, setPermitted: (value: boolean) => { permitted = value; },

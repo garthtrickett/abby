@@ -19,6 +19,7 @@ export async function classCancellationFixture(options: { operation?: "appointme
   let claims = 0;
   const budget = { claim: () => { claims++; return nativeBudget.claim(); }, observe429: nativeBudget.observe429.bind(nativeBudget) };
   const f = await callerVerificationFixture({ apiKey: "synthetic-class-au5", cancellationExecute: true, ...(options.operation === "appointments.book" ? { bookingExecute: true } : {}), operation: options.operation ?? "appointments.cancel", rateBudget: budget });
+  let callState = () => f.state();
   const native = classAttendanceFixture({ scope: f.scope, now: verificationNow, patientId: verificationCanaries[2]!, rateBudget: budget });
   native.attendees.splice(0, native.attendees.length, ...native.attendees.filter(row => !["105", "106"].includes(String(row.id))));
   let permitted = true, lostReview = false, lostWrite = false, sourceTime = verificationNow, onRecall = async () => { }, onWrite = async () => { };
@@ -56,9 +57,11 @@ export async function classCancellationFixture(options: { operation?: "appointme
     }
     if (/^\/v1\/attendees\/[1-9][0-9]*\/cancel$/.test(url.pathname) && method === "PATCH") {
       assert.equal(recalls.length, 1);
-      const action = Object.values((await f.state()).actions)[0]!;
+      const dispatched = Object.values((await callState()).actions).filter(action => action.status === "dispatched");
+      assert.equal(dispatched.length, 1);
+      const action = dispatched[0]!;
       assert.equal(action.status, "dispatched");
-      assert.equal((await f.state()).presentations[action.presentationId]!.status, "played");
+      assert.equal((await callState()).presentations[action.presentationId]!.status, "played");
       const body = JSON.parse(String(init?.body));
       assert.deepEqual(body, { cancellation_reason: 50, apply_to_repeats: false });
       writes.push(body);
@@ -74,6 +77,7 @@ export async function classCancellationFixture(options: { operation?: "appointme
       assert.equal(method, "GET");
       return Response.json(native.attendees.find(row => row.id === url.pathname.split("/").at(-1)));
     }
+    if (url.pathname.startsWith("/v1/patients/")) return f.fetchPort(value, init);
     return native.fetchPort(value, init);
   };
   const host = resultValue(await ClinikoClassCancellationHost.create({ scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion,
@@ -113,7 +117,13 @@ export async function classCancellationFixture(options: { operation?: "appointme
     const action = Object.values((await f.state()).actions).at(-1)!;
     return reception.affirm(f.scope, turn("yes", "Yes"), action.key, action.digest, sourceTime);
   };
-  return { ...f, native, host, reception, agent, recalls, writes, policy, path, cancellationPolicy, cancellationPath, turn, play, verify, propose, confirm,
+  const classSessionConfig = { receipt: f.receipt, inbound: f.inbound, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion,
+    ledger: f.ledger, policies: f.policies, lookup: f.sessionConfig.lookup, permission: f.sessionConfig.permission,
+    verificationBudget: f.sessionConfig.budget, delivery: f.sessionConfig.delivery, directory: f.config.directory,
+    callerApprovalPath: f.config.path, classApprovalPath: path, operation: "cancel" as const,
+    classPermission: { allows: async () => permitted }, cliniko: { ...native.config, timeZone: approval.timeZone, countryCallingCode: "61", recallTypeId: "7" },
+    signal: lifetime.signal, fetchPort, clock: () => sourceTime, cancellationApprovalPath: cancellationPath };
+  return { ...f, classSessionConfig, bindNativeCall: (read: typeof callState) => { callState = read; }, native, host, reception, agent, recalls, writes, policy, path, cancellationPolicy, cancellationPath, turn, play, verify, propose, confirm,
     drain: () => reception.drain(f.scope, f.callId, sourceTime), get claims() { return claims; }, get approval() { return approval; },
     permission: (value: boolean) => { permitted = value; }, loseReview: () => { lostReview = true; }, loseWrite: () => { lostWrite = true; },
     onRecall: (hook: () => Promise<void>) => { onRecall = hook; }, onWrite: (hook: () => Promise<void>) => { onWrite = hook; },

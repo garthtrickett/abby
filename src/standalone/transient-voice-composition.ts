@@ -211,8 +211,8 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
         workflow = owner;
       }
       const appointments = workflow ? {
-        list: (...args: Parameters<NonNullable<ClinikoCallFlow["appointments"]>["list"]>) => workflow?.appointments?.list(...args) ?? Promise.resolve(err({ kind: "unavailable" as const })),
-        select: (...args: Parameters<NonNullable<ClinikoCallFlow["appointments"]>["select"]>) => workflow?.appointments?.select(...args) ?? Promise.resolve(err({ kind: "unavailable" as const })),
+        list: (...args: Parameters<NonNullable<ClinikoCallFlow["appointments"]>["list"]>) => workflow?.appointments?.list(args[0], args[1], args[2], args[3], args[4]) ?? Promise.resolve(err({ kind: "unavailable" as const })),
+        select: (...args: Parameters<NonNullable<ClinikoCallFlow["appointments"]>["select"]>) => workflow?.appointments?.select(args[0], args[1], args[2], args[3], args[4]) ?? Promise.resolve(err({ kind: "unavailable" as const })),
       } : verifiedRead?.appointments;
       const selectedKnowledge = publicByLocation?.find(row => sameScope(row.scope, receipt.scope))?.source ?? publicKnowledge;
       const reception = new TextReception(ledger, policy, workflow ?? host, availability, appointments, undefined, selectedKnowledge ?? host, config.now);

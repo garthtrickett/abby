@@ -243,7 +243,7 @@ export class ClinikoClassCancellationHost extends NoStoredKnowledge implements A
       this.#busy = false;
     }
   }
-  async select(scope: LocationScope, ref: string, choice: 1 | 2 | 3, now: string): Promise<Result<{
+  async select(scope: LocationScope, ref: string, choice: 1 | 2 | 3, now: string, external?: AbortSignal): Promise<Result<{
     snapshot: AppointmentRead;
     from: string;
     to: string;
@@ -254,11 +254,12 @@ export class ClinikoClassCancellationHost extends NoStoredKnowledge implements A
     if (!menu || !sameScope(scope, this.#config.scope) || menu.snapshot.verificationRef !== ref || ![1, 2, 3].includes(choice) || this.#attempted || this.#busy || this.#time(now) === undefined)
       return readDenied();
     const selected = menu.snapshot.appointments[choice - 1], target = selected ? this.#targets.get(selected.appointmentRef) : undefined;
-    if (!target || !await this.#fresh(target, "proposal", this.#signal()) || epoch !== this.#epoch)
+    if (!target || !await this.#fresh(target, "proposal", this.#signal(external)) || epoch !== this.#epoch)
       return readDenied();
     this.#targets.set("selected", target);
     return ok({ snapshot: { ...menu.snapshot, observedAt: now, appointments: [selected!] }, from: menu.from, to: menu.to });
   }
+  clearSelection(): void { this.#targets.clear(); this.#menu = undefined; this.#prepared = undefined; ++this.#epoch; }
   async resolveBooking(): Promise<Result<Extract<ActionRequest, {
     kind: "book";
   }>, HostReadFailure>> { return denied(); }

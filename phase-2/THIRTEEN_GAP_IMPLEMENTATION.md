@@ -15,7 +15,7 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 | 7 | Support another approved practitioner during rescheduling. | E2E-359 locally qualifies explicit approved practitioner pairs, independent destination policy, named played confirmation and one inspected in-place move at a changed or retained time. E2E-360 adds the current approved directory, retained original preference, played name/ordinal choice, pagination, fresh-time invalidation and ordinary signed/compiled dialogue. Final type/build and 99 checks passed; current exact-head cloud, real model/acoustic and clinic acceptance remain open. |
 | 8 | Add patient detail corrections, required registration fields and resends. | E2E-361–368 locally qualify patient corrections, account revisions, linked recovery, private edit/reset and guarded setting-history portability. E2E-369 adds independently approved required address fields, complete private collection/readback, field-bound host authority, native response/inspection and separate registration/booking confirmation; final typecheck/build and80 checks passed without skips. E2E-370–379 qualify resend SMTP, native evidence, SAM consent, signed private selection/paging, interruption recovery and mapped staff receipt inspection. E2E-380 now locally qualifies explicit versioned in-person/telehealth/cancelled formats through116 final checks. Unsupported clinic-specific field adapters and production recovery-host/operator integration/acceptance remain open; current-head cloud and actual clinic/mail/model/acoustic acceptance are absent. |
 | 9 | Handle multiple patients/actions in one call. | E2E-381–387 qualify same-caller and independently verified two-person booking tasks, fresh private proofs, native writes and immutable receipts. E2E-388 additionally qualifies enquiry-only progression after played protected-read notices, two patients appointments in one signed call with zero mutation, and retired read-receipt integrity. E2E-389 qualifies actual signed related-person cancellation/rescheduling and mixed enquiry/change with fresh proof and preserved original records. Current type/build/isolated PostgreSQL final regression passed195 checks, zero skips. Other patient/operation/catalogue/staff combinations, unrelated representatives without a native self record and alternative guardian channels remain unfinished. |
-| 10 | Add class attendance booking, cancellation and movement. | E2E-390 now supplies a protected native class reader: existing sessions, complete active capacity, exact own attendee target and native drift/privacy checks. E2E-391 additionally supplies guarded native single-attendee registration/cancellation and exact inspection; E2E-392 adds locally qualified text class booking through actual verification, played SAM terms/consent, owned review, one inspected attendance write and capacity-race handling. E2E-393 now qualifies actual text cancellation with operation-bound proof, independent class/fee policy, played selection/consent and one owned review/inspected attendee PATCH. Class movement, membership credit handling and ordinary signed/compiled serving remain unfinished. Individual endpoints are insufficient. Require existing session/attendee identities, capacity and duplicate checks, compensating move recovery and truthful concurrent-result handling. Membership credits/passes require their own evidence. |
+| 10 | Add class attendance booking, cancellation and movement. | E2E-390 now supplies a protected native class reader: existing sessions, complete active capacity, exact own attendee target and native drift/privacy checks. E2E-391 additionally supplies guarded native single-attendee registration/cancellation and exact inspection; E2E-392 adds locally qualified text class booking through actual verification, played SAM terms/consent, owned review, one inspected attendance write and capacity-race handling. E2E-393 now qualifies actual text cancellation with operation-bound proof, independent class/fee policy, played selection/consent and one owned review/inspected attendee PATCH. E2E-394 additionally qualifies admitted class owners, ordinary class classifier routing and synthetic signed HTTP/WebSocket booking/cancellation with correction and exact native inspection. Class movement, membership credit handling, multiple class-service selection and compiled class runner subprocess evidence remain unfinished. Individual endpoints are insufficient. Require existing session/attendee identities, capacity and duplicate checks, compensating move recovery and truthful concurrent-result handling. Membership credits/passes require their own evidence. |
 | 11 | Add deposits, paid confirmation, receipts and expiry handling. | Financial boundaries exist, payment lifecycle absent. Require real provider adapter contracts, signed webhook/idempotency, delivered links, separate expiry authority and no refund/coverage/hold invention. |
 | 12 | Add outbound follow-up and practitioner sick-day management. | Recalls are not campaigns. Require scoped audience, opt-out, fresh appointment context, scheduler, per-action outcomes and recovery. |
 | 13 | Add approved communication/document writeback. | Optional clinical record features need explicit clinic-owned storage and field/content approval. Require no cross-patient/class-shared leakage and concurrency-aware result reporting. |
@@ -1674,3 +1674,79 @@ Exact command:
 ```sh
 npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh bash -c "npm run db:migrate && node --test --test-concurrency=4 test/cliniko/class-cancellation-host.test.ts test/cliniko/class-booking-host.test.ts test/cliniko/class-review-context.test.ts test/cliniko/class-attendance-read.test.ts test/cliniko/class-attendance-write.test.ts test/cliniko/standalone-booking.test.ts test/cliniko/booking-offers.test.ts test/cliniko/booking-session.test.ts test/cliniko/standalone-cancellation.test.ts test/cliniko/standalone-rescheduling.test.ts test/cliniko/review-discovery.test.ts test/cliniko/review-discovery-process.test.ts test/cliniko/reviewed-send.test.ts test/cliniko/reviewed-send-process.test.ts test/cliniko/review-rehearsal.test.ts test/cliniko/cancellation-review-context.test.ts test/cliniko/call-task-sequence.test.ts test/voice/cliniko-workflow-call.test.ts test/voice/standalone-clinical-runner.test.ts test/voice/caller-identity-denial.test.ts test/voice/call-task-sequence-runner.test.ts test/text/booking.test.ts test/text/uncertain.test.ts test/storage/standalone-call-state.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts" && git diff --check
 ```
+
+
+## Gap10 admitted class ownership and ordinary signed serving, E2E-394
+
+A concrete `ClinikoClassSession` owns fresh operation-bound verification and
+exactly one class booking or cancellation host under actual admission, active
+lease, current settings, approved member and write-stop checks. Construction
+captures the class service and separate caller/fee approvals and checks the
+current method before publishing. Wrong-operation approval now fails at
+preparation, rather than constructing an owner that can never obtain a grant.
+Late preparation and call disposal revoke the private verifier and host.
+
+An explicit class-attendance selector travels through ordinary workflow/query
+and voice/reception seams. `ClinikoCallFlow` composes the concrete class owner;
+its ordinary classifier sees only current approved class/instructor/location
+labels. A class is never routed to an individual endpoint by default. Missing,
+revoked and wrong-member/type approvals preserve the class boundary. Malformed
+class decisions, unsupported movement and representative/service ambiguity
+cannot select a default individual operation. The voice host freezes the class
+binding before admitting calls. Each configured route currently selects one
+class service; further catalogue and compiled subprocess coverage remain open.
+
+Four synthetic signed HTTP/WebSocket journeys use the actual clinical resolver,
+private keypad verifier, played class/time/fee confirmation, independent class
+permission, owned Cliniko review and inspected attendee create/cancel. Lost
+responses remain uncertain without replay. A spoken correction cancels the
+first proposal and writes only the second class occurrence after separate
+confirmation. Model/caller text and PostgreSQL exclude patient/code/recipient/
+native-identity canaries. No real mail, patient audio, number or provider write
+was used.
+
+Initial preparation exposed a TypeScript operation-widening error, corrected
+with the exact verifier-policy type. The source/owner test then found wrong
+operation approval accepted at construction; current method checks now reject
+it. Signed correction initially lacked the synthetic transport's actual clear
+fence, then the provider fixture incorrectly checked the first canceled action.
+It now observes the actual admitted call and exactly one dispatched action.
+The call fixture also preserved the live budget getter rather than copying a
+zero counter. The corrected witness proved inspection reached claim201 and
+properly remained uncertain. Private correction mapping now reuses an already
+issued offer like ordinal selection; fresh proposal/send inspection remains.
+Exact own-attendee GETs are bracketed by current patient/class permission,
+policy and dispatched SAM checks, followed by one mandatory complete native
+class/capacity inspection before commitment, matching the cancellation path.
+No budget, concurrency, deadline, permission or uncertainty gate was raised.
+
+Current class/native/admitted owner/routing/signed regression passed118 checks,
+zero failures/cancellations/skips in `4590eee3-1791993311574.log`. Earlier current
+source typecheck, fresh compiled voice build and74 owner/routing/native/model/
+signed checks passed in `4590eee3-1791992657928.log`. Final frozen-source broader
+regression and publication are pending. Registry1.202/394 records the actual
+text and synthetic signed evidence; full-call/carrier evidence stays planned.
+Movement, membership/pass/credit processing and the remaining full13 work are
+active. Billing prevents cloud execution but does not block local implementation.
+
+
+Final E2E-394 frozen-source qualification completed exit0 in
+`4590eee3-1791993463136.log`: whole-source typecheck, fresh compiled voice build,
+isolated PostgreSQL migrations and251 class/native/admitted owner/normal
+classifier/signed serving/ordinary clinical/compiled process/task/core/privacy/
+registry checks passed with zero failures/cancellations/skips. Diff check passed.
+The new corrected-class journey uses the live account-budget counter and the
+actual clear fence; every successful attendance is read back and followed by
+complete current native class/capacity inspection. Existing ordinary individual
+and default unsupported-class serving remain qualified by this regression.
+
+Exact command:
+
+```sh
+npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh bash -c "npm run db:migrate && node --test --test-concurrency=4 test/cliniko/class-session.test.ts test/cliniko/class-call-flow.test.ts test/voice/class-workflow-call.test.ts test/cliniko/class-cancellation-host.test.ts test/cliniko/class-booking-host.test.ts test/cliniko/class-review-context.test.ts test/cliniko/class-attendance-read.test.ts test/cliniko/class-attendance-write.test.ts test/cliniko/standalone-booking.test.ts test/cliniko/booking-offers.test.ts test/cliniko/booking-session.test.ts test/cliniko/standalone-cancellation.test.ts test/cliniko/standalone-rescheduling.test.ts test/cliniko/review-discovery.test.ts test/cliniko/review-discovery-process.test.ts test/cliniko/reviewed-send.test.ts test/cliniko/reviewed-send-process.test.ts test/cliniko/review-rehearsal.test.ts test/cliniko/cancellation-review-context.test.ts test/cliniko/call-task-sequence.test.ts test/voice/cliniko-workflow-call.test.ts test/voice/clinical-model-workflow-call.test.ts test/voice/openai-clinical-intent.test.ts test/voice/booking-request-boundaries.test.ts test/voice/played-menu-selection.test.ts test/voice/standalone-clinical-runner.test.ts test/voice/caller-identity-denial.test.ts test/voice/call-task-sequence-runner.test.ts test/text/booking.test.ts test/text/uncertain.test.ts test/storage/standalone-call-state.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts" && git diff --check
+```
+
+This is local synthetic qualification. The published branch still needs its
+exact-head authoritative CI checks; billing rejection is not a test pass.
+Compiled class subprocesses, multiple class services, movement, membership and
+financial workflows remain open; the full thirteen-gap objective is active.

@@ -17,6 +17,7 @@ export async function classBookingFixture() {
   let claims = 0;
   const budget = { claim: () => { claims++; return nativeBudget.claim(); }, observe429: nativeBudget.observe429.bind(nativeBudget) };
   const f = await callerVerificationFixture({ apiKey: "synthetic-class-au5", bookingExecute: true, operation: "appointments.book", rateBudget: budget });
+  let callState = () => f.state();
   const native = classAttendanceFixture({ scope: f.scope, now: verificationNow, patientId: verificationCanaries[2]!, rateBudget: budget });
   let permitted = true, lostReview = false, lostWrite = false, sourceTime = verificationNow, onRecall = async () => { }, onWrite = async () => { };
   const recalls: Record<string, unknown>[] = [], writes: Record<string, unknown>[] = [];
@@ -46,9 +47,11 @@ export async function classBookingFixture() {
     }
     if (url.pathname === "/v1/attendees" && method === "POST") {
       assert.equal(recalls.length, 1);
-      const action = Object.values((await f.state()).actions)[0]!;
+      const dispatched = Object.values((await callState()).actions).filter(action => action.status === "dispatched");
+      assert.equal(dispatched.length, 1);
+      const action = dispatched[0]!;
       assert.equal(action.status, "dispatched");
-      assert.equal((await f.state()).presentations[action.presentationId]!.status, "played");
+      assert.equal((await callState()).presentations[action.presentationId]!.status, "played");
       const body = JSON.parse(String(init?.body));
       writes.push(body);
       const row = { ...classAttendee("401", body.booking_id, body.patient_id), notes: body.notes };
@@ -62,6 +65,7 @@ export async function classBookingFixture() {
       assert.equal(method, "GET");
       return Response.json(native.attendees.find(row => row.id === "401"));
     }
+    if (url.pathname.startsWith("/v1/patients/")) return f.fetchPort(value, init);
     return native.fetchPort(value, init);
   };
   const host = resultValue(await ClinikoClassBookingHost.create({ scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion,
@@ -97,7 +101,13 @@ export async function classBookingFixture() {
   };
   const confirm = async (played = true) => { if (played)
     await play(); const action = Object.values((await f.state()).actions).at(-1)!; return reception.affirm(f.scope, turn("yes", "Yes"), action.key, action.digest, sourceTime); };
-  return { ...f, native, host, reception, agent, recalls, writes, policy, path, turn, play, verify, propose, confirm,
+  const classSessionConfig = { receipt: f.receipt, inbound: f.inbound, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion,
+    ledger: f.ledger, policies: f.policies, lookup: f.sessionConfig.lookup, permission: f.sessionConfig.permission,
+    verificationBudget: f.sessionConfig.budget, delivery: f.sessionConfig.delivery, directory: f.config.directory,
+    callerApprovalPath: f.config.path, classApprovalPath: path, operation: "book" as const,
+    classPermission: { allows: async () => permitted }, cliniko: { ...native.config, timeZone: approval.timeZone, countryCallingCode: "61", recallTypeId: "7" },
+    signal: lifetime.signal, fetchPort, clock: () => sourceTime };
+  return { ...f, classSessionConfig, bindNativeCall: (read: typeof callState) => { callState = read; }, native, host, reception, agent, recalls, writes, policy, path, turn, play, verify, propose, confirm,
     drain: () => reception.drain(f.scope, f.callId, sourceTime), get claims() { return claims; }, get approval() { return approval; },
     permission: (value: boolean) => { permitted = value; }, loseReview: () => { lostReview = true; }, loseWrite: () => { lostWrite = true; },
     onRecall: (hook: () => Promise<void>) => { onRecall = hook; }, onWrite: (hook: () => Promise<void>) => { onWrite = hook; },
