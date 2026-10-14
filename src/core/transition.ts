@@ -12,6 +12,9 @@ import { actionOutcomeText, confirmedActionText } from "./action-outcome.ts";
 import { patientCorrectionEvidenceFailure } from "./patient-correction.ts";
 import { confirmationResendEvidenceFailure } from "./confirmation-resend.ts";
 import { requestBoundaryText, validRequestBoundary } from "./request-boundary.ts";
+import { completedAppointmentEnquiry } from "./completed-appointment-enquiry.ts";
+import { noticePresentationId } from "./notice-presentation-id.ts";
+export { noticePresentationId } from "./notice-presentation-id.ts";
 import { bookingHorizonText, validBookingHorizon } from "./booking-horizon.ts";
 import { publicInformationUnavailable } from "./public-information.ts";
 import { conversationPresenceText } from "./conversation-presence.ts";
@@ -49,10 +52,6 @@ function transferUnavailableNotice(state: CallState, now: string): string {
   const approvedInfo = status === "closed" ? approvedAfterHoursText(state.policy) : undefined;
   const notice = status === "closed" ? CLOSED_TRANSFER_NOTICE : UNKNOWN_TRANSFER_NOTICE;
   return staffFallbackText(state, approvedInfo ? `${notice} ${approvedInfo}` : notice);
-}
-
-export function noticePresentationId(callId: string, turnId: string): string {
-  return createHash("sha256").update(JSON.stringify([callId, turnId, "notice"])).digest("hex");
 }
 
 function hostOutcomeNotice(state: CallState, effectId: string, approvedText: string): void {
@@ -275,8 +274,8 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       conversationControl(turn.text) !== (interpretation.notice === "pauseLimit" ? "pause" : interpretation.notice))) return err({ kind: "invalidTransition" });
   if (interpretation.kind === "workflowStarted" && interpretation.advanceTask !== undefined) {
     const current = Object.values(state.actions).filter(action => !state.previousTaskActionKeys?.includes(action.key));
-    if (interpretation.advanceTask !== true || turn.quality !== "clear" || state.pendingPresentationId || !current.length ||
-        !current.some(action => action.status !== "canceled") || current.some(action => !["committed", "rejected", "unsupported", "canceled"].includes(action.status)) ||
+    if (interpretation.advanceTask !== true || turn.quality !== "clear" || state.pendingPresentationId ||
+        (!current.some(action => action.status !== "canceled") && !completedAppointmentEnquiry(state)) || current.some(action => !["committed", "rejected", "unsupported", "canceled"].includes(action.status)) ||
         Object.values(state.effects).some(effect => (effect.kind === "hostWrite" || effect.kind === "staffTask") && !["completed", "canceled"].includes(effect.status))) return err({ kind: "invalidTransition" });
   }
   interpretation = restrictDeniedCaller(state, interpretation);

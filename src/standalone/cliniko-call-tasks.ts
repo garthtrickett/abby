@@ -3,6 +3,8 @@ import type { ActionState, CallState, HostMutation, LocationScope, ReconcileObse
 import type { CallerCandidateLookup } from "../voice/caller-candidates.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { err } from "../core/model.ts";
+import { completedAppointmentEnquiry } from "../core/completed-appointment-enquiry.ts";
+import { noticePresentationId } from "../core/notice-presentation-id.ts";
 import type { AdminDirectory } from "./identity/magic-link.ts";
 import { sameScope, validClinikoId } from "./appointment-change-authority.ts";
 import { approvalRef, clinicApprovalKeys, decodeClinicApproval, OwnerFileClinicApproval } from "./owner-file-clinic-approval.ts";
@@ -35,6 +37,7 @@ export class ClinikoCallTasks {
   readonly #config: Config;
   #source: Promise<OwnerFileClinicApproval<Approval> | undefined> | undefined;
   readonly #settled = new Map<string, ActionState>();
+  readonly #settledReads = new Map<string, Readonly<{ read: CallState["appointmentReads"][number]; presentation: CallState["presentations"][string] }>>();
   #patientId: string | undefined;
   #taskCount = 0;
   constructor(config: Config) { this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }) }); }
@@ -54,7 +57,9 @@ export class ClinikoCallTasks {
     return !c.signal.aborted && state.callId === c.callId && sameScope(state.policy.scope, c.scope) && state.policy.policyVersion === c.policyVersion &&
       state.policy.automationEnabled && !state.callerIdentityDenied && state.lifecycle === "active" &&
       state.sessionLease?.sessionId === c.sessionId && Number.isFinite(now) && Date.parse(state.sessionLease.expiresAt) > now &&
-      [...this.#settled].every(([key, action]) => isDeepStrictEqual(state.actions[key], action));
+      [...this.#settled].every(([key, action]) => isDeepStrictEqual(state.actions[key], action)) &&
+      [...this.#settledReads].every(([turnId, captured]) => isDeepStrictEqual(state.appointmentReads.find(read => read.turnId === turnId), captured.read) &&
+        isDeepStrictEqual(state.presentations[noticePresentationId(state.callId, turnId)], captured.presentation));
   }
   matches(scope: LocationScope, callId: string, sessionId: string, businessId: string, fingerprint: string, timeZone: string, policyVersion: string): boolean {
     const c = this.#config;
@@ -73,9 +78,9 @@ export class ClinikoCallTasks {
     if (!approval || !approval.operations.includes(operation as typeof operations[number]) || !this.#active(state) || (advancing ? this.#taskCount >= approval.maximumTasks : this.#taskCount > approval.maximumTasks)) return false;
     if (!advancing) return true;
     const actions = this.currentActions(state);
-    return !!this.#patientId && this.#taskCount > 0 && actions.length > 0 && !state.pendingPresentationId &&
+    return !!this.#patientId && this.#taskCount > 0 && !state.pendingPresentationId &&
       actions.every(action => ["committed", "rejected", "unsupported", "canceled"].includes(action.status)) &&
-      actions.some(action => action.status !== "canceled") &&
+      (actions.some(action => action.status !== "canceled") || !!completedAppointmentEnquiry(state)) &&
       Object.values(state.effects).every(effect => effect.kind !== "hostWrite" && effect.kind !== "staffTask" || ["completed", "canceled"].includes(effect.status)) &&
       Object.values(state.presentations).every(p => p.status !== "started" && p.status !== "possiblySent") &&
       Object.values(state.staffItems).every(item => item.status === "resolved" || item.status === "failed");
@@ -101,12 +106,17 @@ export class ClinikoCallTasks {
     } };
   }
   publish(state: CallState, advancing: boolean): void {
-    if (advancing) for (const action of this.currentActions(state)) this.#settled.set(action.key, structuredClone(action));
+    if (advancing) this.#retire(state);
     if (advancing || this.#taskCount === 0 || this.#settled.size === 0) this.#taskCount++;
   }
   publishRepresentative(state: CallState, advancing: boolean): void {
-    if (advancing) for (const action of this.currentActions(state)) this.#settled.set(action.key, structuredClone(action));
+    if (advancing) this.#retire(state);
     if (advancing || this.#taskCount === 0) this.#taskCount++;
+  }
+  #retire(state: CallState): void {
+    for (const action of this.currentActions(state)) this.#settled.set(action.key, structuredClone(action));
+    const read = completedAppointmentEnquiry(state);
+    if (read) this.#settledReads.set(read.turnId, { read: structuredClone(read), presentation: structuredClone(state.presentations[noticePresentationId(state.callId, read.turnId)]!) });
   }
   isRetired(key: string): boolean { return this.#settled.has(key); }
   receipt(mutation: HostMutation): ReconcileObservation | undefined {
