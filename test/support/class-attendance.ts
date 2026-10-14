@@ -43,7 +43,7 @@ export function classAttendanceFixture(options: { scope?: LocationScope; now?: s
   const fetchPort: typeof fetch = async (value, init) => {
     const url = new URL(String(value)), path = url.pathname; assert.equal(url.origin, "https://api.au5.cliniko.com");
     assert.equal(init?.method, "GET"); assert.equal(init?.redirect, "error"); assert.ok(init?.signal);
-    assert.equal(new Headers(init?.headers).get("User-Agent"), "Abby (dev@example.test)");
+    assert.equal(new Headers(init?.headers).get("User-Agent"), `Abby (${config.contactEmail})`);
     traffic.push({ path, filters: url.searchParams.getAll("q[]"), page: Number(url.searchParams.get("page") ?? 1) });
     const count = (counts.get(path) ?? 0) + 1; counts.set(path, count); onRead?.(path, count);
     if (responseStatus !== 200) return new Response(null, { status: responseStatus, headers: { "X-RateLimit-Reset": String(Date.parse(now) / 1000 + 60) } });

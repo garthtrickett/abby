@@ -9,12 +9,13 @@ import { classCancellationFixture } from "../support/class-cancellation.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
 import { verificationNow } from "../support/caller-verification.ts";
 
-for (const operation of ["book", "cancel"] as const) {
-  test(`E2E-394 admitted class ${operation} owns a fresh operation verifier, actual SAM and one inspected attendance write`, async () => {
+for (const operation of ["book", "cancel"] as const) for (const afterPreparation of [false, true]) {
+  test(`E2E-394${afterPreparation ? " E2E-395 after preparation expires" : ""} admitted class ${operation} owns a fresh operation verifier, actual SAM and one inspected attendance write`, async () => {
     const f = await (operation === "book" ? classBookingFixture() : classCancellationFixture());
     let session: ClinikoClassSession | undefined;
     try {
-      session = resultValue(await ClinikoClassSession.create(f.classSessionConfig));
+      session = resultValue(await ClinikoClassSession.create({ ...f.classSessionConfig, ...(afterPreparation ? { timeoutMs: 1000 } : {}) }));
+      if (afterPreparation) await new Promise(resolve => setTimeout(resolve, 1200));
       assert.equal(session.operation, operation);
       assert.equal(await session.verified(), undefined, "the fixture's verifier cannot grant the admitted class session");
       assert.equal(f.mail.length, 0);
@@ -89,3 +90,28 @@ for (const fault of ["patient", "class", "permission", "closed"] as const)
       assert.equal(f.writes.length, 0); assert.equal(f.recalls.length, 0);
     } finally { session?.dispose(); await f.close(); }
   });
+
+test("E2E-395 timed-out class preparation cannot publish a late owner or start patient verification", { timeout: 5000 }, async () => {
+  const f = await classCancellationFixture();
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let requested!: () => void;
+  const started = new Promise<void>(resolve => { requested = resolve; });
+  // AbortSignal.timeout intentionally does not keep a process alive. A real
+  // pending directory I/O would; retain that handle in this controlled fixture.
+  const pendingIo = setTimeout(() => release(), 3000);
+  const original = f.classSessionConfig.directory;
+  try {
+    const building = ClinikoClassSession.create({ ...f.classSessionConfig, timeoutMs: 100,
+      directory: { findByEmail: original.findByEmail.bind(original), findByRef: async ref => {
+        requested(); await gate; return original.findByRef(ref);
+      } } });
+    await started;
+    const result = await building; assert.equal(result.ok, false);
+    release();
+    // Let the late approval read settle: it must not issue a challenge or
+    // mutate even though its independent directory eventually answers.
+    await new Promise(resolve => setTimeout(resolve, 100));
+    assert.deepEqual([f.mail.length, f.writes.length, f.recalls.length], [0, 0, 0]);
+  } finally { clearTimeout(pendingIo); release(); await f.close(); }
+});

@@ -54,7 +54,8 @@ export class ClinikoClassSession {
           incoming.timeoutMs !== undefined && (!Number.isSafeInteger(incoming.timeoutMs) || incoming.timeoutMs < 1 || incoming.timeoutMs > 20_000)) return unavailable();
       const config = Object.freeze({ ...incoming, receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound),
         cliniko: Object.freeze({ ...incoming.cliniko }), clock: incoming.clock ?? (() => new Date().toISOString()) });
-      const signal = AbortSignal.any([config.signal, lifetime.signal, AbortSignal.timeout(config.timeoutMs ?? 15_000)]);
+      const callSignal = AbortSignal.any([config.signal, lifetime.signal]);
+      const signal = AbortSignal.any([callSignal, AbortSignal.timeout(config.timeoutMs ?? 15_000)]);
       const scope = config.receipt.scope;
       const operation: "appointments.book" | "appointments.cancel" = config.operation === "book" ? "appointments.book" : "appointments.cancel";
       const binding = { scope, policyVersion: config.policyVersion, businessId: config.cliniko.businessId,
@@ -66,7 +67,10 @@ export class ClinikoClassSession {
         const at = Date.parse(config.clock());
         const allowed = (p: CallPolicy) => sameScope(p.scope, scope) && p.policyVersion === config.policyVersion && p.automationEnabled && p.staffWorkEnabled === true &&
           p.capabilities[config.operation] === "execute" && (config.operation === "book" ? p.bookingEnabled === true : p.cancellationEnabled === true);
-        return !signal.aborted && state.ok && policy.ok && stop.ok && !stop.value.stopped && Number.isFinite(at) &&
+        // This predicate also belongs to the published verifier's current
+        // policy. Preparation has its own deadline; only the live call and
+        // session disposal may end ongoing verification after publication.
+        return !callSignal.aborted && state.ok && policy.ok && stop.ok && !stop.value.stopped && Number.isFinite(at) &&
           state.value.lifecycle === "active" && state.value.sessionLease?.sessionId === config.sessionId && Date.parse(state.value.sessionLease.expiresAt) > at &&
           allowed(state.value.policy) && allowed(policy.value);
       };
@@ -93,7 +97,7 @@ export class ClinikoClassSession {
         if (signal.aborted) { dispose(); return undefined; }
         const common = { scope, callId: config.receipt.callId, sessionId: config.sessionId, policyVersion: config.policyVersion,
           ledger: config.ledger, policies: config.policies, verification, classPolicy: classes.value, cliniko: config.cliniko,
-          clock: config.clock, signal: AbortSignal.any([config.signal, lifetime.signal]), ...(config.fetchPort ? { fetchPort: config.fetchPort } : {}) };
+          clock: config.clock, signal: callSignal, ...(config.fetchPort ? { fetchPort: config.fetchPort } : {}) };
         const created = config.operation === "book" ? await ClinikoClassBookingHost.create({ ...common, permission: config.classPermission }) :
           cancellation?.ok ? await ClinikoClassCancellationHost.create({ ...common, cancellationPolicy: cancellation.value, permission: config.classPermission }) : undefined;
         if (!created?.ok) return undefined;

@@ -7,6 +7,7 @@ type RuntimeEntrypoint = "scripts/serve-cliniko-voice.ts" |
   "test/support/start-synthetic-queue-monitor.ts" |
   "scripts/set-voice-test-automation.ts" | "test/support/start-synthetic-voice-runner.ts" |
   "test/support/start-synthetic-clinical-runner.ts" |
+  "test/support/start-synthetic-class-runner.ts" |
   "test/support/start-synthetic-resend-runner.ts" |
   "test/support/standalone-cancellation-worker.ts" | "test/support/standalone-rescheduling-worker.ts";
 

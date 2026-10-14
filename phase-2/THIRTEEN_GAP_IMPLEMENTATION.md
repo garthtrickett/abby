@@ -15,7 +15,7 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 | 7 | Support another approved practitioner during rescheduling. | E2E-359 locally qualifies explicit approved practitioner pairs, independent destination policy, named played confirmation and one inspected in-place move at a changed or retained time. E2E-360 adds the current approved directory, retained original preference, played name/ordinal choice, pagination, fresh-time invalidation and ordinary signed/compiled dialogue. Final type/build and 99 checks passed; current exact-head cloud, real model/acoustic and clinic acceptance remain open. |
 | 8 | Add patient detail corrections, required registration fields and resends. | E2E-361–368 locally qualify patient corrections, account revisions, linked recovery, private edit/reset and guarded setting-history portability. E2E-369 adds independently approved required address fields, complete private collection/readback, field-bound host authority, native response/inspection and separate registration/booking confirmation; final typecheck/build and80 checks passed without skips. E2E-370–379 qualify resend SMTP, native evidence, SAM consent, signed private selection/paging, interruption recovery and mapped staff receipt inspection. E2E-380 now locally qualifies explicit versioned in-person/telehealth/cancelled formats through116 final checks. Unsupported clinic-specific field adapters and production recovery-host/operator integration/acceptance remain open; current-head cloud and actual clinic/mail/model/acoustic acceptance are absent. |
 | 9 | Handle multiple patients/actions in one call. | E2E-381–387 qualify same-caller and independently verified two-person booking tasks, fresh private proofs, native writes and immutable receipts. E2E-388 additionally qualifies enquiry-only progression after played protected-read notices, two patients appointments in one signed call with zero mutation, and retired read-receipt integrity. E2E-389 qualifies actual signed related-person cancellation/rescheduling and mixed enquiry/change with fresh proof and preserved original records. Current type/build/isolated PostgreSQL final regression passed195 checks, zero skips. Other patient/operation/catalogue/staff combinations, unrelated representatives without a native self record and alternative guardian channels remain unfinished. |
-| 10 | Add class attendance booking, cancellation and movement. | E2E-390 now supplies a protected native class reader: existing sessions, complete active capacity, exact own attendee target and native drift/privacy checks. E2E-391 additionally supplies guarded native single-attendee registration/cancellation and exact inspection; E2E-392 adds locally qualified text class booking through actual verification, played SAM terms/consent, owned review, one inspected attendance write and capacity-race handling. E2E-393 now qualifies actual text cancellation with operation-bound proof, independent class/fee policy, played selection/consent and one owned review/inspected attendee PATCH. E2E-394 additionally qualifies admitted class owners, ordinary class classifier routing and synthetic signed HTTP/WebSocket booking/cancellation with correction and exact native inspection. Class movement, membership credit handling, multiple class-service selection and compiled class runner subprocess evidence remain unfinished. Individual endpoints are insufficient. Require existing session/attendee identities, capacity and duplicate checks, compensating move recovery and truthful concurrent-result handling. Membership credits/passes require their own evidence. |
+| 10 | Add class attendance booking, cancellation and movement. | E2E-390 now supplies a protected native class reader: existing sessions, complete active capacity, exact own attendee target and native drift/privacy checks. E2E-391 additionally supplies guarded native single-attendee registration/cancellation and exact inspection; E2E-392 adds locally qualified text class booking through actual verification, played SAM terms/consent, owned review, one inspected attendance write and capacity-race handling. E2E-393 now qualifies actual text cancellation with operation-bound proof, independent class/fee policy, played selection/consent and one owned review/inspected attendee PATCH. E2E-394 additionally qualifies admitted class owners, ordinary class classifier routing and synthetic signed HTTP/WebSocket booking/cancellation with correction and exact native inspection. E2E-395 additionally qualifies sixteen actual compiled class runner journeys through normal host provisioning, shared PostgreSQL budget/contact revision, admission/allowlist, private code, exact native receipt, current-authority denials and capacity races. Class movement, membership credit handling and multiple class-service selection remain unfinished. Individual endpoints are insufficient. Require existing session/attendee identities, capacity and duplicate checks, compensating move recovery and truthful concurrent-result handling. Membership credits/passes require their own evidence. |
 | 11 | Add deposits, paid confirmation, receipts and expiry handling. | Financial boundaries exist, payment lifecycle absent. Require real provider adapter contracts, signed webhook/idempotency, delivered links, separate expiry authority and no refund/coverage/hold invention. |
 | 12 | Add outbound follow-up and practitioner sick-day management. | Recalls are not campaigns. Require scoped audience, opt-out, fresh appointment context, scheduler, per-action outcomes and recovery. |
 | 13 | Add approved communication/document writeback. | Optional clinical record features need explicit clinic-owned storage and field/content approval. Require no cross-patient/class-shared leakage and concurrency-aware result reporting. |
@@ -1750,3 +1750,107 @@ This is local synthetic qualification. The published branch still needs its
 exact-head authoritative CI checks; billing rejection is not a test pass.
 Compiled class subprocesses, multiple class services, movement, membership and
 financial workflows remain open; the full thirteen-gap objective is active.
+
+
+## Gap10 actual compiled class runner, E2E-395
+
+A dedicated synthetic class runner calls the actual `serveClinikoVoice` entry
+point with a concrete `ClinikoVoiceClinicalHost`, the runner's physical shared
+PostgreSQL request budget and contact-revision owner. It keeps actual metadata
+selection, signed admission, allowlist, readiness and ordinary clinical intent.
+It privately verifies caller codes and requires played class/time/fee consent
+before native attendance writes. One occurrence cancellation excludes repeats.
+Native fixture metadata supplies real required catalogue fields and validates
+the User-Agent against the explicitly configured test contact address; default
+class fixture expectations remain unchanged. The compiled harness selects this
+separate entry point only when its explicit test option requests classes.
+
+Sixteen compiled journeys cover exact booking/cancellation, lost native response
+and no replay, independent caller/class permission denial after consent,
+withdrawn class approval, current policy changes, denied caller authority,
+failed mail, capacity loss before send and overcapacity after create. The latter
+leaves one acknowledged review and an unresolved attendance, with no second
+write on an outcome query. Booking/cancellation use no individual appointment
+endpoint. Non-allowlisted callers and general readiness remain disabled.
+Canary scans cover the actual child's public model/transcription, output and
+PostgreSQL. No real patient audio, mail, number or provider writes were used.
+
+Initial source/build preparation passed, but the first actual compiled booking
+remained uncertain in `4590eee3-1791994291975.log`: the runner rebinds the host's
+contact-revision owner and the fixture's SAM observer was attached to the old
+host. The test observer now follows actual rebindings and retains every played,
+unique dispatched-action assertion; no runtime gate was bypassed. The corrected
+first compiled journey passed in `4590eee3-1791994492349.log`. The complete first
+matrix and adjacent tests passed92 checks with zero failures/skips in
+`4590eee3-1791994610679.log`. Current source typecheck, fresh compiled voice build
+and the extended16-journey/native/owner/routing/signed regression passed94
+checks, zero failures/cancellations/skips in `4590eee3-1791994820937.log`.
+
+Registry1.203/395 records synthetic compiled evidence; full-call/carrier evidence
+stays planned. Final frozen-source broader regression and publication are pending.
+Multiple class services, movement, independent membership/pass/credits and
+remaining gaps6/8/9/11/12/13 plus actual acceptance and cloud qualification remain
+unfinished. The full thirteen-gap objective is active.
+
+
+The first combined E2E-395 final run failed one of267 checks in
+`4590eee3-1791995114481.log`: a compiled cancellation correctly remained
+uncertain after writing, while the other266 checks passed. Targeted cancellation
+with ordinary compiled/native load and new fixed-code diagnostics passed16
+checks in `4590eee3-1791995500404.log`. The diagnostic combined run failed a
+booking instead, again266/267, in `4590eee3-1791995678729.log`; the physical
+budget showed154/180 requests and a9.5-second write, excluding exhaustion and
+the30-second effect deadline. Cancellation completed at156/180 in that run.
+
+Source inspection identified a real lifecycle defect in `ClinikoClassSession`:
+the verifier's ongoing policy predicate captured the preparation's15-second
+signal. Thus a successfully prepared owner lost authority later in a long call.
+Two patient-free book/cancel regressions reproduced it deterministically after
+a configured preparation deadline: neither could issue a code. Red evidence:
+`4590eee3-1791996137275.log`. Ongoing policy now uses only the actual live call
+and disposal signal; construction still races its unchanged preparation
+deadline and rejects late owners. Closed/revoked/stop checks remain mandatory.
+The corrected paused-verification/native scope regression passed66 checks with
+zero failures/skips in `4590eee3-1791996174378.log`. A separate delayed-directory
+case asserts no owner/challenge/mutation after preparation times out.
+Positive compiled receipts now assert the exact confirmed wording and a
+committed host result, excluding an accidental match of "unconfirmed".
+No rate limit, worker count, deadline, permission or uncertainty rule was raised.
+Current-source final qualification must include this fix and the new regressions.
+
+
+The next corrected-source combined run in `4590eee3-1791996240857.log` passed269
+checks with zero assertion failures, but canceled the new delayed-directory test
+because its artificial pending Promise had no live I/O handle (preparation's
+AbortSignal timer is intentionally unreferenced). Both compiled exact receipts
+were committed after the former15-second boundary:155/180 booking requests and
+156/180 cancellation requests. The controlled directory fixture now retains a
+bounded real timer handle and a5-second test deadline, preserving the same
+100ms preparation timeout and all no-owner/no-code/no-mutation assertions.
+All21 current admitted-session checks then passed without failures/cancellations/
+skips in `4590eee3-1791996615024.log`. A final complete frozen-source run remains
+required before publication. The earlier canceled run is not called a pass.
+
+
+Final E2E-395 frozen-source qualification completed exit0 in
+`4590eee3-1791996713237.log`: whole-source typecheck, fresh separately compiled
+voice build, isolated PostgreSQL migrations and270 class/native/admitted owner/
+normal intent/signed/compiled runner/ordinary clinical/task/core/privacy/registry
+checks passed, zero failures/cancellations/skips, followed by clean diff check.
+The16 compiled class journeys retain current permissions, policy, approval,
+physical PostgreSQL budget and native inspection. The live-call verifier fix,
+two paused-after-preparation positive journeys and the delayed-directory negative
+case are included. A new actual cancellation completed after the previous
+15-second deadline with156/180 physical requests; the limit and all operational
+deadlines/concurrency remain unchanged. No real clinic/mail/model/acoustic/
+carrier acceptance or full class/membership parity is claimed.
+
+Exact command:
+
+```sh
+npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh bash -c "npm run db:migrate && ABBY_CLASS_DIAGNOSTICS=1 node --test --test-concurrency=4 test/voice/class-runner.test.ts test/cliniko/class-session.test.ts test/cliniko/class-call-flow.test.ts test/voice/class-workflow-call.test.ts test/cliniko/class-cancellation-host.test.ts test/cliniko/class-booking-host.test.ts test/cliniko/class-review-context.test.ts test/cliniko/class-attendance-read.test.ts test/cliniko/class-attendance-write.test.ts test/cliniko/standalone-booking.test.ts test/cliniko/booking-offers.test.ts test/cliniko/booking-session.test.ts test/cliniko/standalone-cancellation.test.ts test/cliniko/standalone-rescheduling.test.ts test/cliniko/review-discovery.test.ts test/cliniko/review-discovery-process.test.ts test/cliniko/reviewed-send.test.ts test/cliniko/reviewed-send-process.test.ts test/cliniko/review-rehearsal.test.ts test/cliniko/cancellation-review-context.test.ts test/cliniko/call-task-sequence.test.ts test/voice/cliniko-workflow-call.test.ts test/voice/clinical-model-workflow-call.test.ts test/voice/openai-clinical-intent.test.ts test/voice/booking-request-boundaries.test.ts test/voice/played-menu-selection.test.ts test/voice/standalone-clinical-runner.test.ts test/voice/caller-identity-denial.test.ts test/voice/call-task-sequence-runner.test.ts test/text/booking.test.ts test/text/uncertain.test.ts test/storage/standalone-call-state.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts" && git diff --check
+```
+
+The published commit still requires authoritative cloud execution. Multiple
+class-service selection, class movement, independently owned membership/pass/
+credits and the remaining thirteen-gap requirements remain active.
