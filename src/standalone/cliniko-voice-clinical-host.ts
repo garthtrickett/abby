@@ -1,3 +1,4 @@
+import { captureConfirmationResendPolicy } from "./capture-confirmation-resend-policy.ts";
 import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
 import type { ClinikoRequestBudget } from "../cliniko/read-budget.ts";
 import type { ClinikoSelectionApproval } from "../cliniko/catalogue-setup.ts";
@@ -11,10 +12,11 @@ import type { ClinikoCallFlowConfig } from "./cliniko-call-flow.ts";
 import type { ClinikoVoiceWorkflow } from "./transient-voice-composition.ts";
 
 type CallOwned = "receipt" | "inbound" | "sessionId" | "ledger" | "signal" | "clock";
-export type ClinikoVoiceClinicalHostConfig = Omit<ClinikoCallFlowConfig, CallOwned | "intake" | "correction"> & Readonly<{
+export type ClinikoVoiceClinicalHostConfig = Omit<ClinikoCallFlowConfig, CallOwned | "intake" | "correction" | "resend"> & Readonly<{
   scope: LocationScope;
   greeting: ApprovedGreeting;
   intake?: Omit<NonNullable<ClinikoCallFlowConfig["intake"]>, "presentation">;
+  resend?: Omit<NonNullable<ClinikoCallFlowConfig["resend"]>, "presentation">;
   correction?: Omit<NonNullable<ClinikoCallFlowConfig["correction"]>, "presentation">;
   intent: ClinikoVoiceWorkflow["intent"];
   privateIntakeTranscription?: ClinikoVoiceWorkflow["privateIntakeTranscription"];
@@ -39,6 +41,7 @@ export class ClinikoVoiceClinicalHost {
       ...(config.catalogue ? { catalogue: Object.freeze({ ...config.catalogue,
         practitioners: Object.freeze(config.catalogue.practitioners.map(member => Object.freeze({ ...member }))) }) } : {}),
       ...(config.intake ? { intake: Object.freeze({ ...config.intake }) } : {}),
+      ...(config.resend ? { resend: Object.freeze({ ...config.resend }) } : {}),
       ...(config.correction ? { correction: Object.freeze({ ...config.correction }) } : {}),
       ...(config.staff ? { staff: Object.freeze({ ...config.staff }) } : {}),
       ...(config.enquiry ? { enquiry: Object.freeze({ ...config.enquiry }) } : {}),
@@ -54,8 +57,18 @@ export class ClinikoVoiceClinicalHost {
       businessId: c.cliniko.businessId, credentialFingerprint: clinikoCredentialFingerprint(c.cliniko.apiKey), timeZone: c.cliniko.timeZone,
       directory: c.directory }) : undefined;
   }
+  get #policies(): PolicyStore {
+    const c = this.#config;
+    return new Proxy(c.policies, { get(target, key) {
+      if (key === "read") return async (...args: Parameters<PolicyStore["read"]>) => {
+        const loaded = await target.read(...args);
+        return loaded.ok ? { ok: true as const, value: await captureConfirmationResendPolicy(loaded.value, c.resend?.policy) } : loaded;
+      };
+      const value = Reflect.get(target, key) as unknown; return typeof value === "function" ? value.bind(target) : value;
+    } });
+  }
   get cataloguePolicy(): Pick<PolicyStore, "read"> {
-    return { read: scope => sameScope(scope, this.#config.scope) ? this.#config.policies.read(scope)
+    return { read: scope => sameScope(scope, this.#config.scope) ? this.#policies.read(scope)
       : Promise.resolve(err({ kind: "invalidValue" })) };
   }
   usesBudget(budget: ClinikoRequestBudget): boolean { return this.#config.cliniko.rateBudget === budget; }
@@ -63,7 +76,8 @@ export class ClinikoVoiceClinicalHost {
   /** Runner-owned shared revocation store; caller and model inputs cannot select it. */
   withContactRevision(owner: import("../cliniko/contact-revision.ts").ClinikoContactRevisionReader): ClinikoVoiceClinicalHost {
     if (!owner.matches(this.#config.scope.tenantId, clinikoCredentialFingerprint(this.#config.cliniko.apiKey)) ||
-        this.#config.correction && this.#config.correction.contactRevision !== owner) throw new RangeError("contact account mismatch");
+        this.#config.correction && this.#config.correction.contactRevision !== owner ||
+        this.#config.resend && this.#config.resend.contactRevision !== owner) throw new RangeError("contact account mismatch");
     return new ClinikoVoiceClinicalHost({ ...this.#config, cliniko: { ...this.#config.cliniko, contactRevision: owner } });
   }
 
@@ -79,18 +93,19 @@ export class ClinikoVoiceClinicalHost {
   workflow(approval: ClinikoSelectionApproval): ClinikoVoiceWorkflow {
     if (!this.matches(approval)) throw new RangeError("clinical voice host binding mismatch");
     const c = this.#config;
-    const { intake, correction, ...base } = c;
-    return { policies: c.policies, ...(c.publicKnowledge ? { publicKnowledge: c.publicKnowledge } : {}),
+    const { intake, correction, resend, ...base } = c;
+    return { policies: this.#policies, ...(c.publicKnowledge ? { publicKnowledge: c.publicKnowledge } : {}),
       ...(c.privateIntakeTranscription ? { privateIntakeTranscription: c.privateIntakeTranscription } : {}),
       ...(c.privateCorrectionTranscription ? { privateCorrectionTranscription: c.privateCorrectionTranscription } : {}),
       intent: c.intent,
       create(context) {
-        if (!sameScope(context.receipt.scope, c.scope)) {
+        if (!sameScope(context.receipt.scope, c.scope) || resend && !context.resendPresentation) {
           throw new RangeError("clinical voice admission mismatch");
         }
         const flow = ClinikoCallFlow.create({ ...base, ...context, policyVersion: c.policyVersion,
           ...(intake ? { intake: { ...intake, presentation: context.privatePresentation } } : {}),
-          ...(correction ? { correction: { ...correction, presentation: context.privatePresentation } } : {}) });
+          ...(correction ? { correction: { ...correction, presentation: context.privatePresentation } } : {}),
+          ...(resend ? { resend: { ...resend, presentation: context.resendPresentation! } } : {}) });
         if (!flow.ok) throw new Error("clinical voice workflow unavailable");
         return flow.value;
       } };

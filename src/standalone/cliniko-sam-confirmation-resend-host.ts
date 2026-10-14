@@ -1,3 +1,4 @@
+import { completePrivateResendPresentation } from "./private-resend-presentation.ts";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { digestActionRequest } from "../core/digest.ts";
@@ -56,9 +57,9 @@ export class ClinikoSamConfirmationResendHost extends NoStoredKnowledge implemen
     const started = await this.#runtime.startPresentation(c.receipt.callId, ref, c.sessionId, this.#now());
     if (!started.ok || signal.aborted) return false;
     let played = false;
-    try { played = await c.presentation.play(text, signal) === true && !signal.aborted; } catch { /* No playback proof. */ }
-    const resolved = await this.#runtime.resolvePresentation(c.receipt.callId, ref, played ? "played" : "failed", c.sessionId, this.#now());
-    return resolved.ok && played && await this.#ready(signal);
+    try { played = await c.presentation.play(text, signal, ref) === true && !signal.aborted; } catch { /* No playback proof. */ }
+    const resolved = await completePrivateResendPresentation(this.#runtime, c.receipt.callId, ref, c.sessionId, played, this.#now());
+    return resolved && await this.#ready(signal);
   }
   async prepare(appointmentId: string, external = this.#config.signal) {
     const signal = AbortSignal.any([this.#config.signal, external]);

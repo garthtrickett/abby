@@ -1,3 +1,4 @@
+import { confirmationResendLanguage } from "./confirmation-resend-language.ts";
 import { specialServiceLanguage } from "./special-service-language.ts";
 import { serviceConstraintLanguage } from "./service-constraint-language.ts";
 import { arrivalInformationLanguage } from "./arrival-information-language.ts";
@@ -29,7 +30,7 @@ import { staffRequestLanguage } from "./staff-request-language.ts";
 const endpoint = "https://api.openai.com/v1/responses";
 const unavailable = { kind: "intentUnavailable" } as const;
 const maxBytes = 16 * 1024;
-export const clinicalIntentPromptVersion = "clinical-intent-v27";
+export const clinicalIntentPromptVersion = "clinical-intent-v28";
 
 const schema = { type: "object", additionalProperties: false,
   properties: {
@@ -69,6 +70,7 @@ function publicPhase(context: Context): string {
   }
   if (context.workflow === "cancel") return "listOrCancelAppointment";
   if (context.workflow === "patientUpdate") return "preparePatientCorrection";
+  if (context.workflow === "confirmationResend") return "prepareConfirmationResend";
   if (context.workflow === "intake" && context.lastAction?.status !== "committed") return "saveRegistration";
   return context.lastMenu?.kind === "booking" ? "chooseBookingTime" : "listBookingTimes";
 }
@@ -81,7 +83,7 @@ function schemaFor(context: Context, hasPublicFacts: boolean) {
         ? ["choice", "menu", "outcome", "unsupported"] : context.workflow === "appointments.read"
           ? ["appointments", "workflow", "outcome", "unsupported"] : context.workflow === "cancel"
           ? ["appointments", "cancel", "outcome", "unsupported"] : context.workflow === "intake" && context.lastAction?.status !== "committed"
-          ? ["save", "outcome", "unsupported"] : context.workflow === "patientUpdate" ? ["save", "outcome", "unsupported"] : ["menu", "choice", "outcome", "unsupported"];
+          ? ["save", "outcome", "unsupported"] : context.workflow === "patientUpdate" ? ["save", "outcome", "unsupported"] : context.workflow === "confirmationResend" ? ["outcome", "unsupported"] : ["menu", "choice", "outcome", "unsupported"];
   const stages = phase === "listExistingAppointments" || phase === "chooseExistingAppointment" ? ["targets", null]
     : phase === "listNewTimes" || phase === "chooseNewTime" || phase === "choosePractitioner" ? ["practitioners", "offers", null] : [null];
   return { ...schema, properties: { ...schema.properties,
@@ -229,6 +231,15 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     // Active private message questions use the existing draft question fence;
     // explicit card-number disclosure must never become message content.
     if (financial && (!config.owner.collectingStaffMessage || /\bmy card number is\b/i.test(turn.text))) return ok({ kind: "clarify", reason: financial });
+    const resend = confirmationResendLanguage(turn.text);
+    if (!before.callerIdentityDenied && resend) {
+      if (resend === "unsupportedRecipient") return ok({ kind: "clarify", reason: "changeUnsupported" });
+      if (before.workflow === null || before.workflow === "appointments.read") return ok({ kind: "workflow", operation: "confirmationResend" });
+      if (before.workflow !== "confirmationResend" || before.verificationRequired) return ok({ kind: "clarify", reason: "menuUnavailable" });
+      if (before.lastAction && ["dispatched", "committed", "uncertain", "needsReview"].includes(before.lastAction.status)) return ok({ kind: "notificationOutcome" });
+      const requestRef = config.owner.confirmationResendRef;
+      return ok(requestRef ? { kind: "confirmationResend", requestRef } : { kind: "clarify", reason: "menuUnavailable" });
+    }
     // Contact values supplied alongside an explicit correction request never go to the public model.
     if (!before.callerIdentityDenied && /\b(?:change|correct|update)\b.{0,48}\b(?:my (?:email|address|name|phone|date of birth|postcode)|patient details|contact details)\b/i.test(turn.text) &&
         !/\b(?:not|don't|do not|someone else|daughter|son|husband|wife)\b/i.test(turn.text)) {

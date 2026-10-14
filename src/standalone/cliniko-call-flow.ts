@@ -89,6 +89,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   #verificationRequired = false;
   #intakeDraftRef: string | undefined;
   #patientCorrectionRef: string | undefined;
+  #confirmationResendRef: string | undefined;
   #publicMenu: Readonly<{ kind: "booking" | "rescheduling"; stage: "targets" | "practitioners" | "offers" | null }> | undefined;
   #reschedulingTargetSelected = false;
   readonly #serviceDialogue = new BookingServiceDialogue();
@@ -536,7 +537,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       const after = await awaitUntilAbort(this.#config.ledger.read(this.#config.receipt.callId, this.#config.receipt.scope), signal);
       if (!after?.ok || after.value.conversationRevision !== before.value.conversationRevision || this.#owner !== previousOwner ||
           signal.aborted || previousOwner && (replacingService ? hasSentPatientWork(after.value) : Object.values(after.value.actions).some(action => action.status !== "canceled"))) return unavailable();
-      previousOwner?.dispose(); this.#intakeDraftRef = undefined; this.#patientCorrectionRef = undefined; this.#publicMenu = undefined; this.#spokenMenu.clear(); this.#spokenPractitioners.clear(); this.#searchMenu.clear(); this.#reschedulingTargetSelected = false;
+      previousOwner?.dispose(); this.#intakeDraftRef = undefined; this.#patientCorrectionRef = undefined; this.#confirmationResendRef = undefined; this.#publicMenu = undefined; this.#spokenMenu.clear(); this.#spokenPractitioners.clear(); this.#searchMenu.clear(); this.#reschedulingTargetSelected = false;
       this.#owner = created; this.#workflow = operation; this.#bookingConfig = ["book", "intake"].includes(operation) ? selectedConfig : undefined;
       this.#serviceChoice = ["book", "intake"].includes(operation) && serviceChoice ? copyBookingServiceChoice(serviceChoice) : undefined; this.#serviceOperation = operation === "intake" ? "intake" : operation === "book" ? "book" : undefined;
       this.#verificationRequired = operation !== "intake"; created = undefined; published = true;
@@ -704,13 +705,22 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   }
   async resolveAppointmentChange(query: AppointmentChangeEvidenceQuery, signal?: AbortSignal) { return !this.#staffActive && (this.#owner instanceof ClinikoCancellationSession || this.#owner instanceof ClinikoReschedulingSession) ? this.#owner.effects.resolveAppointmentChange(query, signal) : readDenied(); }
   async resolveIntake(query: IntakeEvidenceQuery) { return (!this.#config.serviceCatalogue || !!this.#serviceChoice) && !this.#staffActive && this.#owner instanceof ClinikoIntakeBookingSession ? this.#owner.resolveIntake(query) : readDenied(); }
+  get confirmationResendRef() { return !this.closed && !this.#verificationRequired && this.#workflow === "confirmationResend" ? this.#confirmationResendRef : undefined; }
   async listResendAppointments(signal?: AbortSignal) {
     return !this.closed && !this.#staffActive && !this.#verificationRequired && this.#owner instanceof ClinikoConfirmationResendWorkflow
       ? this.#owner.listAppointments(signal) : unavailable<Readonly<{ count: number }>>();
   }
+  async resendMenuPlaybackCompleted(): Promise<boolean> {
+    return !this.closed && !this.#verificationRequired && this.#owner instanceof ClinikoConfirmationResendWorkflow &&
+      await this.#owner.menuPlaybackCompleted();
+  }
   async selectResendAppointment(choice: 1 | 2 | 3, signal?: AbortSignal) {
-    return !this.closed && !this.#staffActive && !this.#verificationRequired && this.#owner instanceof ClinikoConfirmationResendWorkflow
-      ? this.#owner.selectAppointment(choice, signal) : unavailable<Readonly<{ requestRef: string }>>();
+    this.#confirmationResendRef = undefined;
+    const owner = this.#owner;
+    const result = !this.closed && !this.#staffActive && !this.#verificationRequired && owner instanceof ClinikoConfirmationResendWorkflow
+      ? await owner.selectAppointment(choice, signal) : unavailable<Readonly<{ requestRef: string }>>();
+    if (result.ok && this.#owner === owner && !this.closed && !signal?.aborted) this.#confirmationResendRef = result.value.requestRef;
+    return result;
   }
   async resolveConfirmationResend(query: import("../core/host.ts").ConfirmationResendEvidenceQuery) {
     return !this.closed && !this.#staffActive && !this.#verificationRequired && this.#owner instanceof ClinikoConfirmationResendWorkflow

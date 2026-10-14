@@ -17,7 +17,7 @@ import { appointmentConfirmationText, SmtpAppointmentConfirmationDelivery } from
 export type ConfirmationResendSessionConfig = ConfirmationEvidenceConfig & Readonly<{
   journal: PostgresConfirmationResendJournal; email: SmtpAppointmentConfirmationDelivery;
   /** Private playback completion, never queue acceptance. */
-  presentation: Readonly<{ play(text: string, signal: AbortSignal): Promise<boolean> }>;
+  presentation: Readonly<{ play(text: string, signal: AbortSignal, presentationId?: string): Promise<boolean> }>;
   /** Trusted SAM owner must establish this exact ref's separately played and confirmed action.
    * It must not derive consent from verification, readback acceptance or a model boolean. */
   isConfirmed(requestRef: string, signal: AbortSignal): Promise<boolean>;

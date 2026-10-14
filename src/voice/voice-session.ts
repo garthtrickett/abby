@@ -37,6 +37,7 @@ export type VoiceIntent =
   | Readonly<{ kind: "reschedule"; verificationRef: string; targetRef: string; offerRef: string }>
   | Readonly<{ kind: "intake"; draftRef: string }>
   | Readonly<{ kind: "patientCorrection"; correctionRef: string }>
+  | Readonly<{ kind: "confirmationResend"; requestRef: string }>
   | Readonly<{ kind: "answer"; sourceRefs: readonly string[]; proposedText: string }>
   | Readonly<{ kind: "availability"; from: string; to: string }>
   | Readonly<{ kind: "appointments"; verificationRef: string; from: string; to: string }>
@@ -433,6 +434,9 @@ export class VoiceSession {
     } else if (this.cachedIntent.kind === "patientCorrection") {
       const intent = this.cachedIntent;
       result = await this.withPendingIntent(signal => this.reception.proposePatientCorrection(this.scope, turn, intent.correctionRef, now, existing.value.conversationRevision, signal));
+    } else if (this.cachedIntent.kind === "confirmationResend") {
+      const intent = this.cachedIntent;
+      result = await this.withPendingIntent(signal => this.reception.proposeConfirmationResend(this.scope, turn, intent.requestRef, now, existing.value.conversationRevision, signal));
     } else if (this.cachedIntent.kind === "answer") {
       const controller = new AbortController(), pending = { cancel: () => controller.abort() };
       this.pendingIntent = pending;
@@ -529,12 +533,44 @@ export class VoiceSession {
   async presentPrivateCorrection(text: string, signal: AbortSignal, now: string): Promise<boolean> {
     return this.presentPrivatePatientPrompt(text, signal, now, "patientUpdate");
   }
-  private async presentPrivatePatientPrompt(text: string, signal: AbortSignal, now: string, operation: "intake" | "patientUpdate"): Promise<boolean> {
+  async presentPrivateResend(text: string, signal: AbortSignal, now: string): Promise<boolean> {
+    return this.presentPrivatePatientPrompt(text, signal, now, "confirmationResend");
+  }
+  /** The native resend owner has already queued and started this blank notice.
+   * Render only that exact notice; the ordinary playback receipt records completion. */
+  async presentOwnedPrivateResend(text: string, signal: AbortSignal, now: string, presentationId?: string): Promise<boolean> {
+    if (!this.transientContent || !presentationId || signal.aborted || !this.canSend() || this.speechOpen || this.activePlayback ||
+        typeof text !== "string" || !text.trim() || text.length > 2_000) return false;
+    const state = await this.runtime.read(this.callId), id = presentationId;
+    if (!state.ok || signal.aborted || state.value.lifecycle !== "active" || state.value.callerIdentityDenied ||
+        state.value.policy.capabilities.confirmationResend !== "execute" || state.value.pendingPresentationId ||
+        state.value.presentations[id]?.kind !== "notice" || state.value.presentations[id]?.status !== "started" ||
+        state.value.presentations[id]?.approvedText !== "" || Object.values(state.value.presentations).some(p => p.id !== id && p.status === "started")) return false;
+    const playbackId = `${id}:playback`, generation = this.assembler.currentGeneration();
+    this.activePlayback = { id: playbackId, presentationId: id, generation };
+    this.transientContent.set(id, text);
+    let resolve!: (played: boolean) => void;
+    const receipt = new Promise<boolean>(done => { resolve = done; }); this.privatePlayback.set(id, resolve);
+    let played = false;
+    try {
+      const sent = await this.playback.enqueue(playbackId, text, () => !signal.aborted && this.canSend() &&
+        this.activePlayback?.id === playbackId && !this.speechOpen && generation === this.assembler.currentGeneration());
+      if (sent !== "queued" || signal.aborted) return false;
+      played = await awaitUntilAbort(receipt, AbortSignal.any([signal, AbortSignal.timeout(20_000)])) === true;
+      return played && !signal.aborted;
+    } catch { return false; }
+    finally {
+      this.privatePlayback.delete(id); this.transientContent.delete(id);
+      if (!played || signal.aborted) await this.clearPrivateIntakePrompt(id, now);
+    }
+  }
+  private async presentPrivatePatientPrompt(text: string, signal: AbortSignal, now: string, operation: "intake" | "patientUpdate" | "confirmationResend"): Promise<boolean> {
     if (!this.transientContent || signal.aborted || !this.canSend() || this.speechOpen || this.activePlayback ||
         typeof text !== "string" || !text.trim() || text.length > 2_000) return false;
     const id = randomUUID();
     const queued = operation === "intake" ? await this.runtime.privateIntakePrompt(this.callId, id, this.sessionId, now)
-      : await this.runtime.privateCorrectionPrompt(this.callId, id, this.sessionId, now);
+      : operation === "patientUpdate" ? await this.runtime.privateCorrectionPrompt(this.callId, id, this.sessionId, now)
+        : await this.runtime.privateResendPrompt(this.callId, id, this.sessionId, now);
     if (!queued.ok || signal.aborted) return false;
     this.transientContent.set(id, text);
     let resolve!: (played: boolean) => void;

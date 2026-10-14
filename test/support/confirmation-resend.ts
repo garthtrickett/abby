@@ -18,10 +18,10 @@ import { OwnerFileAdminDirectory } from "../../src/standalone/identity/owner-fil
 import { callerVerificationFixture, verificationCanaries } from "./caller-verification.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 
-export async function confirmationResendFixture(db: Kysely<Database>, smtp: SmtpPatientCodeConfig, operation: PatientOperation = "appointments.resend", sam = false) {
-  const apiKey = "synthetic-session-au5", fp = clinikoCredentialFingerprint(apiKey), scope = { tenantId: `resend-owner-${crypto.randomUUID()}`, clinicId: "clinic", locationId: "main" };
+export async function confirmationResendFixture(db: Kysely<Database>, smtp: SmtpPatientCodeConfig, operation: PatientOperation = "appointments.resend", sam = false, apiKey = "synthetic-session-au5") {
+  const fp = clinikoCredentialFingerprint(apiKey), scope = { tenantId: `resend-owner-${crypto.randomUUID()}`, clinicId: "clinic", locationId: "main" };
   const revision = new PostgresClinikoContactRevision(db, scope.tenantId, [fp]);
-  const f = await callerVerificationFixture({ scope, operation, contactRevision: revision,
+  const f = await callerVerificationFixture({ apiKey, scope, operation, contactRevision: revision,
     ...(sam ? { capturePolicy: async (base: CallPolicy, folder: string) => {
       const path = join(folder, "resend-approval.json"), record = {
         scope, revision: "resend-1", approverRef: "synthetic-admin", approvedAt: "2026-10-04T05:59:00.000Z",

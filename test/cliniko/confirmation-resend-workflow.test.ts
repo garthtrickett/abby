@@ -49,7 +49,7 @@ test("E2E-374 resend call workflow privately selects an exact appointment and re
       assert.equal((await flow.listResendAppointments()).ok, false); assert.equal(f.traffic.length, 0);
       await w.verify(); assert.equal(flow.verificationRequired, false);
       assert.deepEqual(resultValue(await flow.listResendAppointments()), { count: 2 });
-      assert.match(f.readbacks[0]!, /Option 1:.*Option 2:/);
+      assert.match(f.readbacks[0]!, /Press 1 for:.*Press 2 for:/);
       const request = resultValue(await flow.selectResendAppointment(2));
       assert.match(f.readbacks[1]!, /registered-session@example.test/);
       assert.match(f.readbacks[1]!, /9 October/);

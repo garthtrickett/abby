@@ -1,3 +1,4 @@
+import { PrivateResendVoiceInput } from "./private-resend-voice-input.ts";
 import type { VoiceProfileRegistry } from "../core/voice-profile-registry.ts";
 import type { SpeechAdapterFactory } from "../voice/call-speech-binding.ts";
 import { randomUUID } from "node:crypto";
@@ -49,7 +50,8 @@ export type ClinikoVoiceWorkflow = Readonly<{
   publicKnowledgeByLocation?: readonly Readonly<{ scope: LocationScope; source: OwnerFileClinicFAQs }>[];
   create(context: Readonly<{ receipt: AdmissionReceipt; inbound: AuthenticatedInboundCall; sessionId: string;
     ledger: MemoryLedger; policies: PolicyStore; signal: AbortSignal; clock: () => string;
-    privatePresentation: Readonly<{ play(text: string, signal: AbortSignal): Promise<boolean> }> }>): ClinikoCallFlow;
+    privatePresentation: Readonly<{ play(text: string, signal: AbortSignal): Promise<boolean> }>;
+    resendPresentation?: Readonly<{ play(text: string, signal: AbortSignal, presentationId?: string): Promise<boolean> }> }>): ClinikoCallFlow;
   intent(owner: ClinikoCallFlow): IntentResolver;
   /** A separate approved adapter for registration fields; it is never used during code entry. */
   privateIntakeTranscription?: (sessionId: string) => TranscriptionPort;
@@ -163,10 +165,13 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
     phone: config.stream.event.presentedCallerNumber ?? "", present: privatePresentation.play, signal: lifetime.signal,
     transcriptionFactory: config.clinicalWorkflow.privateIntakeTranscription, ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}) }) :
     config.clinicalWorkflow ? new PrivateWorkflowKeypad(privateBinding) : undefined;
-  const privateInput = config.clinicalWorkflow?.privateCorrectionTranscription && ordinaryPrivateInput
+  const patientInput = config.clinicalWorkflow?.privateCorrectionTranscription && ordinaryPrivateInput
     ? new PrivatePatientVoiceInput(() => workflow, ordinaryPrivateInput, new PrivatePatientCorrectionInput({ ...privateBinding,
       present: privatePresentation.play, signal: lifetime.signal, transcriptionFactory: config.clinicalWorkflow.privateCorrectionTranscription,
       ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}) })) : ordinaryPrivateInput;
+  const privateInput = patientInput ? new PrivateResendVoiceInput({ input: patientInput, owner: () => workflow, signal: lifetime.signal,
+    present: (text, signal) => voice?.presentPrivateResend(text, signal, now()) ?? Promise.resolve(false) }) : undefined;
+  const resendPresentation = { play: (text: string, signal: AbortSignal, id?: string) => voice?.presentOwnedPrivateResend(text, signal, now(), id) ?? Promise.resolve(false) };
   let call: TwilioConnectedCall | undefined = new TwilioConnectedCall({
     event: config.stream.event, streamStartedAt: config.stream.streamStartedAt,
     sessionId, ledger, intake, speech: config.voiceProfiles, send: config.send, now,
@@ -190,7 +195,7 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
       verifiedRead = candidate;
       workflow?.dispose(); workflow = undefined;
       if (config.clinicalWorkflow) {
-        const owner = config.clinicalWorkflow.create({ receipt, inbound: config.stream.event, sessionId, ledger, policies: policy, signal: lifetime.signal, clock: now, privatePresentation });
+        const owner = config.clinicalWorkflow.create({ receipt, inbound: config.stream.event, sessionId, ledger, policies: policy, signal: lifetime.signal, clock: now, privatePresentation, resendPresentation });
         const binding = owner instanceof ClinikoCallFlow ? owner.binding() : undefined;
         if (!binding || binding.callId !== receipt.callId || binding.sessionId !== sessionId) { owner?.dispose(); throw new TypeError("invalid clinical workflow ownership"); }
         workflow = owner;

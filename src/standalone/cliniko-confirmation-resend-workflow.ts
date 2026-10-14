@@ -1,3 +1,4 @@
+import { completePrivateResendPresentation } from "./private-resend-presentation.ts";
 import { randomUUID } from "node:crypto";
 import { ClinikoAppointmentReader } from "../cliniko/appointments.ts";
 import { ClinikoVerificationContactReader } from "../cliniko/verification-contact.ts";
@@ -31,6 +32,7 @@ export class ClinikoConfirmationResendWorkflow {
   readonly #lifetime = new AbortController();
   readonly #onClose = () => this.dispose();
   #menu: Menu | undefined;
+  #menuPresentationId: string | undefined;
   #busy = false;
   private constructor(config: Config, verification: CallerVerificationSession, reader: ClinikoAppointmentReader, effects: ClinikoSamConfirmationResendHost) {
     this.#config = config; this.#verification = verification; this.#reader = reader; this.effects = effects;
@@ -70,7 +72,11 @@ export class ClinikoConfirmationResendWorkflow {
           verifyPatient: (bound, ref, now) => verifier.value.proof.verifyOperation(bound, ref, "appointments.resend", now, config.signal),
         }, config.fetchPort, clock);
         if (!reader.ok) return undefined;
-        const host = await ClinikoSamConfirmationResendHost.create({ ...config, ...c, verification: verifier.value });
+        const host = await ClinikoSamConfirmationResendHost.create({ receipt: config.receipt, inbound: config.inbound,
+          sessionId: config.sessionId, policyVersion: config.policyVersion, ledger: config.ledger, policies: config.policies,
+          cliniko: config.cliniko, signal: config.signal, clock, ...(config.fetchPort ? { fetchPort: config.fetchPort } : {}),
+          policy: c.policy, permission: c.permission, contactRevision: c.contactRevision, presentation: c.presentation,
+          journal: c.journal, email: c.email, verification: verifier.value });
         if (!host.ok) return undefined;
         effects = host.value;
         if (signal.aborted) { effects.dispose(); verification.dispose(); return undefined; }
@@ -95,7 +101,7 @@ export class ClinikoConfirmationResendWorkflow {
   }
   async listAppointments(external = this.#config.signal): Promise<Result<Readonly<{ count: number }>, Failure>> {
     if (this.#busy) return unavailable();
-    this.#busy = true; this.#menu = undefined;
+    this.#busy = true; this.#menu = undefined; this.#menuPresentationId = undefined;
     const signal = AbortSignal.any([external, this.#config.signal, this.#lifetime.signal, AbortSignal.timeout(30_000)]);
     try {
       const prepared = await awaitUntilAbort((async () => {
@@ -108,23 +114,31 @@ export class ClinikoConfirmationResendWorkflow {
         if (new Set(options.map(a => a.startsAt)).size !== options.length) return undefined;
         const shown = options.slice(0, 3), presentationId = randomUUID(), c = this.#config;
         const format = new Intl.DateTimeFormat("en-GB", { timeZone: c.cliniko.timeZone, dateStyle: "full", timeStyle: "short" });
-        const text = shown.length ? `Choose the appointment whose details you want emailed. ${shown.map((a, i) => `Option ${i + 1}: ${format.format(new Date(a.startsAt))}.`).join(" ")}`
+        this.#menuPresentationId = presentationId;
+        const text = shown.length ? `Choose the appointment whose details you want emailed. ${shown.map((a, i) => `Press ${i + 1} for: ${format.format(new Date(a.startsAt))}.`).join(" ")}`
           : "I found no upcoming appointments at this clinic in the next 90 days. No email will be sent.";
         const queued = await this.#runtime.privateResendPrompt(c.receipt.callId, presentationId, c.sessionId, this.#now());
         if (!queued.ok || signal.aborted) return undefined;
         const started = await this.#runtime.startPresentation(c.receipt.callId, presentationId, c.sessionId, this.#now());
         if (!started.ok || signal.aborted) return undefined;
         let played = false;
-        try { played = await c.resend.presentation.play(text, signal) === true && !signal.aborted; } catch { /* No playback proof. */ }
-        const resolved = await this.#runtime.resolvePresentation(c.receipt.callId, presentationId, played ? "played" : "failed", c.sessionId, this.#now());
+        try { played = await c.resend.presentation.play(text, signal, presentationId) === true && !signal.aborted; } catch { /* No playback proof. */ }
+        const resolved = await completePrivateResendPresentation(this.#runtime, c.receipt.callId, presentationId, c.sessionId, played, this.#now());
         const fresh = await this.#ready(signal);
-        if (!played || !resolved.ok || !fresh || fresh.state.conversationRevision !== before.state.conversationRevision) return undefined;
+        if (!played || !resolved || !fresh || fresh.state.conversationRevision !== before.state.conversationRevision) return undefined;
         if (shown.length) this.#menu = { presentationId, conversationRevision: fresh.state.conversationRevision, from: now, to, snapshot: { ...read.value, appointments: shown } };
         return { count: shown.length };
       })(), signal);
       return prepared && !signal.aborted ? ok(prepared) : unavailable();
     } catch { return unavailable(); }
     finally { this.#busy = false; }
+  }
+  async menuPlaybackCompleted(): Promise<boolean> {
+    const id = this.#menuPresentationId;
+    if (!id || this.#lifetime.signal.aborted || this.#config.signal.aborted) return false;
+    const state = await this.#runtime.read(this.#config.receipt.callId);
+    return state.ok && state.value.lifecycle === "active" && state.value.sessionLease?.sessionId === this.#config.sessionId &&
+      state.value.presentations[id]?.status === "played";
   }
   async selectAppointment(choice: 1 | 2 | 3, external = this.#config.signal): Promise<Result<Readonly<{ requestRef: string }>, Failure>> {
     const menu = this.#menu;
