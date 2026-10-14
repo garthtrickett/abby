@@ -15,7 +15,7 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 | 7 | Support another approved practitioner during rescheduling. | E2E-359 locally qualifies explicit approved practitioner pairs, independent destination policy, named played confirmation and one inspected in-place move at a changed or retained time. E2E-360 adds the current approved directory, retained original preference, played name/ordinal choice, pagination, fresh-time invalidation and ordinary signed/compiled dialogue. Final type/build and 99 checks passed; current exact-head cloud, real model/acoustic and clinic acceptance remain open. |
 | 8 | Add patient detail corrections, required registration fields and resends. | E2E-361–368 locally qualify patient corrections, account revisions, linked recovery, private edit/reset and guarded setting-history portability. E2E-369 adds independently approved required address fields, complete private collection/readback, field-bound host authority, native response/inspection and separate registration/booking confirmation; final typecheck/build and80 checks passed without skips. E2E-370–379 qualify resend SMTP, native evidence, SAM consent, signed private selection/paging, interruption recovery and mapped staff receipt inspection. E2E-380 now locally qualifies explicit versioned in-person/telehealth/cancelled formats through116 final checks. Unsupported clinic-specific field adapters and production recovery-host/operator integration/acceptance remain open; current-head cloud and actual clinic/mail/model/acoustic acceptance are absent. |
 | 9 | Handle multiple patients/actions in one call. | E2E-381–387 qualify same-caller and independently verified two-person booking tasks, fresh private proofs, native writes and immutable receipts. E2E-388 additionally qualifies enquiry-only progression after played protected-read notices, two patients appointments in one signed call with zero mutation, and retired read-receipt integrity. E2E-389 qualifies actual signed related-person cancellation/rescheduling and mixed enquiry/change with fresh proof and preserved original records. Current type/build/isolated PostgreSQL final regression passed195 checks, zero skips. Other patient/operation/catalogue/staff combinations, unrelated representatives without a native self record and alternative guardian channels remain unfinished. |
-| 10 | Add class attendance booking, cancellation and movement. | E2E-390 now supplies a protected native class reader: existing sessions, complete active capacity, exact own attendee target and native drift/privacy checks. E2E-391 additionally supplies guarded native single-attendee registration/cancellation and exact inspection; E2E-392 adds locally qualified text class booking through actual verification, played SAM terms/consent, owned review, one inspected attendance write and capacity-race handling. E2E-393 now qualifies actual text cancellation with operation-bound proof, independent class/fee policy, played selection/consent and one owned review/inspected attendee PATCH. E2E-394 additionally qualifies admitted class owners, ordinary class classifier routing and synthetic signed HTTP/WebSocket booking/cancellation with correction and exact native inspection. E2E-395 additionally qualifies sixteen actual compiled class runner journeys through normal host provisioning, shared PostgreSQL budget/contact revision, admission/allowlist, private code, exact native receipt, current-authority denials and capacity races. E2E-396 adds complete multi-service class selection with played public choices, exact instructor/duration binding, current setting checks and actual native/compiled booking/cancellation. E2E-397 adds an explicit native class move/recovery coordinator and provider-owned movement review. E2E-398 adds protected text SAM movement and E2E-399 adds admitted ordinary class movement and signed voice. E2E-400 adds separately compiled native movement under the physical PostgreSQL budget. E2E-401 adds pre-send played-offer/new-date class movement correction and signed preparation evidence. E2E-402 additionally qualifies guarded account-budget waits, complete ordinal corrected same/cross-service signed commitments and a compiled ordinal corrected cross-service move across real quota waits with connected-call lease renewal. E2E-403 additionally qualifies complete signed and compiled date corrections for same and different-service/instructor/duration moves across real quota waits. Membership credit/pass handling and additional catalogue/operator acceptance remain unfinished. Individual endpoints are insufficient. Require existing session/attendee identities, capacity and duplicate checks, compensating move recovery and truthful concurrent-result handling. Membership credits/passes require their own evidence. |
+| 10 | Add class attendance booking, cancellation and movement. | E2E-390 now supplies a protected native class reader: existing sessions, complete active capacity, exact own attendee target and native drift/privacy checks. E2E-391 additionally supplies guarded native single-attendee registration/cancellation and exact inspection; E2E-392 adds locally qualified text class booking through actual verification, played SAM terms/consent, owned review, one inspected attendance write and capacity-race handling. E2E-393 now qualifies actual text cancellation with operation-bound proof, independent class/fee policy, played selection/consent and one owned review/inspected attendee PATCH. E2E-394 additionally qualifies admitted class owners, ordinary class classifier routing and synthetic signed HTTP/WebSocket booking/cancellation with correction and exact native inspection. E2E-395 additionally qualifies sixteen actual compiled class runner journeys through normal host provisioning, shared PostgreSQL budget/contact revision, admission/allowlist, private code, exact native receipt, current-authority denials and capacity races. E2E-396 adds complete multi-service class selection with played public choices, exact instructor/duration binding, current setting checks and actual native/compiled booking/cancellation. E2E-397 adds an explicit native class move/recovery coordinator and provider-owned movement review. E2E-398 adds protected text SAM movement and E2E-399 adds admitted ordinary class movement and signed voice. E2E-400 adds separately compiled native movement under the physical PostgreSQL budget. E2E-401 adds pre-send played-offer/new-date class movement correction and signed preparation evidence. E2E-402 additionally qualifies guarded account-budget waits, complete ordinal corrected same/cross-service signed commitments and a compiled ordinal corrected cross-service move across real quota waits with connected-call lease renewal. E2E-403 additionally qualifies complete signed and compiled date corrections for same and different-service/instructor/duration moves across real quota waits. E2E-405 adds private native case session tracking and exact case-linked attendee creation/inspection, without financial authority; ordinary caller pass selection, review linkage, consumption/release, membership money and additional catalogue/operator acceptance remain unfinished. Individual endpoints are insufficient. Require existing session/attendee identities, capacity and duplicate checks, compensating move recovery and truthful concurrent-result handling. Membership credits/passes require their own evidence. |
 | 11 | Add deposits, paid confirmation, receipts and expiry handling. | Financial boundaries exist, payment lifecycle absent. Require real provider adapter contracts, signed webhook/idempotency, delivered links, separate expiry authority and no refund/coverage/hold invention. |
 | 12 | Add outbound follow-up and practitioner sick-day management. | Recalls are not campaigns. Require scoped audience, opt-out, fresh appointment context, scheduler, per-action outcomes and recovery. |
 | 13 | Add approved communication/document writeback. | Optional clinical record features need explicit clinic-owned storage and field/content approval. Require no cross-patient/class-shared leakage and concurrency-aware result reporting. |
@@ -2529,3 +2529,56 @@ This qualification preserves the complete original objective. Recurring extra
 opening rules, real source/clinic acceptance, speech accuracy and the remaining
 class pass/credit, payment, campaign and approved writeback requirements remain
 open; cloud qualification is still required after publication.
+
+
+## E2E-405 native case session and attendance association boundary
+
+The previous conversational turn answered the owner's architecture question and
+made no implementation change; it is classified as no progress toward the
+thirteen-gap objective. This turn revalidated clean HEAD bbbe4cb, checked the
+tracked work board, and inspected current and archived provider contracts. The
+archived availability-block documentation adds no repeat cardinality/month-end/
+DST semantics, so recurring extra openings remain open. Independent class-pass
+work proceeds without guessing those rules.
+
+`phase-2/CLINIKO_CLASS_PASSES.md` records the current provider sources, accepted
+status interpretation and remaining full caller/lifecycle requirements. A new
+private native reader counts complete case-linked attendance across services,
+requires matching native associations, two snapshots, fresh patient proof and
+independent case/class permission, and respects clinic-date and cancelled/DNA
+settings. The writer can bind and inspect an exact approved case on one attendee.
+No shared group, whole case association list, monetary credit or refund is
+changed. Native acceptance alone remains insufficient for caller confirmation.
+
+An initial focused gate found a fixture type mismatch: the case-reader config
+type had correctly omitted class writer IDs, but a budget-denial test supplied
+it to a writer. The fixture now exposes the original attendance config
+separately. No production limit, assertion or failure boundary was relaxed.
+The subsequent focused runtime gate passed 100/100 without skips in 2 seconds:
+`node --test --test-concurrency=4 test/cliniko/patient-case-sessions.test.ts test/cliniko/class-attendance-write.test.ts test/cliniko/class-attendance-read.test.ts`,
+tracked as `Abby native case session focused runtime gate`, log
+`4590eee3-1792010849861.log`. Final whole-source/compiled and affected host
+regression qualification passed 221/221 without failures, cancellations or skips.
+Typecheck, a fresh compiled voice build, isolated migrations and diff check also
+passed. Tracked job `Abby E405 final type compiled and native class qualification`
+completed exit 0 in 2m22s, log `4590eee3-1792010939632.log`.
+
+Exact final commands (also recorded in `/tmp/abby-e405-final.sh`):
+
+```sh
+npm run typecheck
+npm run build:voice-tests
+bash scripts/with-postgres.sh bash -c '
+npm run db:migrate && node --test --test-concurrency=4 test/cliniko/patient-case-sessions.test.ts test/cliniko/class-attendance-write.test.ts test/cliniko/class-attendance-read.test.ts test/cliniko/class-booking-host.test.ts test/cliniko/class-cancellation-host.test.ts test/cliniko/class-attendance-move.test.ts test/cliniko/class-move-host.test.ts test/voice/class-runner.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts
+'
+git diff --check
+```
+
+Registry 1.213 tracks 405 scenarios;
+E2E-405 is native/text evidence only, with full-call evidence planned.
+
+The next requirements are clinic-owned pass selection and service eligibility,
+normal SAM consent and immutable reviewed case association, post-write counter
+inspection, cancellation/move consumption/recovery, and actual compiled caller
+journeys. Financial account credit/payment remains gap 11. The full thirteen
+gaps and actual clinic/mail/acoustic/carrier/cloud acceptance stay open.

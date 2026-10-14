@@ -12,7 +12,7 @@ export type ClinikoAttendanceConfig = Readonly<{
  * membership/payment and separately played consent. No model submits native IDs. */
 export type ClinikoAttendanceRequest = Readonly<{
   scope: LocationScope; patientId: string; sessionId: string; actionId: string;
-}> & (Readonly<{ kind: "book" }> | Readonly<{ kind: "cancel"; attendeeId: string; cancellationReason: 10 | 20 | 30 | 40 | 50 | 60 }>);
+}> & (Readonly<{ kind: "book"; patientCaseId?: string }> | Readonly<{ kind: "cancel"; attendeeId: string; cancellationReason: 10 | 20 | 30 | 40 | 50 | 60 }>);
 export type ClinikoAttendanceFailure = Readonly<{
   kind: "invalidConfig" | "scopeMismatch" | "invalidQuery" | "forbidden" | "unavailable" | "rateLimited" | "malformed" | "tooManyResults";
   resetAt?: string;
@@ -20,7 +20,8 @@ export type ClinikoAttendanceFailure = Readonly<{
 export type ClinikoAttendanceWrite = Readonly<{ kind: "accepted"; attendeeRef: string }> | Readonly<{ kind: "uncertain" }>;
 /** Trusted host check, after every final account-budget wait. It must recheck
  * exact patient/session selection, independent class authority, current
- * capacity/duplicates, fee/member policy, played consent and owned review. */
+ * capacity/duplicates, selected case/counters, fee/member policy, played
+ * consent and owned review. A case link alone is not a paid entitlement. */
 export type ClinikoAttendancePermit = (signal: AbortSignal) => Promise<boolean>;
 const object = (v: unknown): Record<string, unknown> | undefined => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : undefined;
 const id = (v: unknown): v is string => typeof v === "string" && /^[1-9][0-9]{0,18}$/.test(v);
@@ -36,7 +37,8 @@ const date = (v: unknown): v is string => {
 };
 const validRequest = (v: unknown): v is ClinikoAttendanceRequest => {
   const row = object(v); return !!row && scopeValid(row.scope) && id(row.patientId) && id(row.sessionId) && uuid(row.actionId) &&
-    (row.kind === "book" || row.kind === "cancel" && id(row.attendeeId) && [10, 20, 30, 40, 50, 60].includes(Number(row.cancellationReason)) && typeof row.cancellationReason === "number");
+    (row.kind === "book" && (!("patientCaseId" in row) || Object.hasOwn(row, "patientCaseId") && id(row.patientCaseId)) ||
+      row.kind === "cancel" && !("patientCaseId" in row) && id(row.attendeeId) && [10, 20, 30, 40, 50, 60].includes(Number(row.cancellationReason)) && typeof row.cancellationReason === "number");
 };
 const notes = (actionId: string) => `Abby attendance ${actionId}`;
 async function untilAbort<T>(work: Promise<T>, signal: AbortSignal): Promise<T | undefined> {
@@ -77,7 +79,8 @@ export class ClinikoClassAttendanceWriter {
     const link = (v: unknown) => object(object(v)?.links)?.self;
     return id(row.id) && link(row) === `${this.#base}/attendees/${row.id}` && link(row.patient) === `${this.#base}/patients/${request.patientId}` &&
       link(row.booking) === `${this.#base}/bookings/${request.sessionId}` && row.archived_at === null && row.deleted_at === null &&
-      (request.kind === "book" ? row.cancelled_at === null && row.notes === notes(request.actionId) :
+      (request.kind === "book" ? row.cancelled_at === null && row.notes === notes(request.actionId) &&
+        (request.patientCaseId === undefined || link(row.patient_case) === `${this.#base}/patient_cases/${request.patientCaseId}`) :
         row.id === request.attendeeId && date(row.cancelled_at) && row.cancellation_reason === request.cancellationReason);
   }
   async executeOnce(input: ClinikoAttendanceRequest, signal: AbortSignal, beforeSend: ClinikoAttendancePermit): Promise<Result<ClinikoAttendanceWrite, ClinikoAttendanceFailure>> {
@@ -102,7 +105,8 @@ export class ClinikoClassAttendanceWriter {
     try {
       response = await untilAbort(this.#fetch(`${this.#base}${request.kind === "book" ? "/attendees" : `/attendees/${request.attendeeId}/cancel`}`, {
         method: request.kind === "book" ? "POST" : "PATCH", redirect: "error", signal: stop, headers: this.#headers(),
-        body: JSON.stringify(request.kind === "book" ? { booking_id: request.sessionId, patient_id: request.patientId, notes: notes(request.actionId) } :
+        body: JSON.stringify(request.kind === "book" ? { booking_id: request.sessionId, patient_id: request.patientId, notes: notes(request.actionId),
+          ...(request.patientCaseId === undefined ? {} : { patient_case_id: request.patientCaseId }) } :
           { cancellation_reason: request.cancellationReason, apply_to_repeats: false }),
       }), stop);
     } catch { return ok({ kind: "uncertain" }); }
