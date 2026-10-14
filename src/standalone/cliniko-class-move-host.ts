@@ -87,7 +87,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     } catch { return denied(); }
   }
   static #bindings(c: ClinikoClassMoveHostConfig, source: ClassApproval, destination: ClassApproval, move: ClassMoveApproval) {
-    return [source, destination, move].every(row => sameScope(row.scope, c.scope) && row.policyVersion === c.policyVersion &&
+    return source.membership === "independentHost" && destination.membership === "independentHost" && [source, destination, move].every(row => sameScope(row.scope, c.scope) && row.policyVersion === c.policyVersion &&
       row.businessId === c.cliniko.businessId && row.credentialFingerprint === clinikoCredentialFingerprint(c.cliniko.apiKey) && row.recallTypeId === move.recallTypeId && row.timeZone === move.timeZone) &&
       source.practitionerId === c.cliniko.practitionerId && source.appointmentTypeId === c.cliniko.appointmentTypeId &&
       source.serviceRef === move.sourceServiceRef && destination.serviceRef === move.destinationServiceRef;

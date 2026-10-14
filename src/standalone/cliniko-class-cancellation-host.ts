@@ -120,7 +120,7 @@ export class ClinikoClassCancellationHost extends NoStoredKnowledge implements A
       const config = Object.freeze({ ...input, scope: Object.freeze({ ...input.scope }), cliniko: Object.freeze({ ...input.cliniko }) });
       const signal = AbortSignal.any([config.signal, AbortSignal.timeout(15000)]);
       const [classPolicy, cancel] = await Promise.all([awaitUntilAbort(config.classPolicy.current(config.scope), signal), awaitUntilAbort(config.cancellationPolicy.current(config.scope), signal)]);
-      if (!classPolicy?.ok || !cancel?.ok || signal.aborted || classPolicy.value.policyVersion !== config.policyVersion || cancel.value.policyVersion !== config.policyVersion ||
+      if (!classPolicy?.ok || !cancel?.ok || signal.aborted || classPolicy.value.membership !== "independentHost" || classPolicy.value.policyVersion !== config.policyVersion || cancel.value.policyVersion !== config.policyVersion ||
         classPolicy.value.credentialFingerprint !== clinikoCredentialFingerprint(config.cliniko.apiKey) || cancel.value.credentialFingerprint !== classPolicy.value.credentialFingerprint ||
         cancel.value.businessId !== classPolicy.value.businessId || cancel.value.recallTypeId !== classPolicy.value.recallTypeId || cancel.value.timeZone !== classPolicy.value.timeZone ||
         (["businessId", "practitionerId", "appointmentTypeId"] as const).some(key => config.cliniko[key] !== classPolicy.value[key]))

@@ -10,15 +10,16 @@ import { classBookingFixture } from "./class-booking.ts";
 import { classCancellationFixture } from "./class-cancellation.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 
-export async function classCallFlowFixture(operation: "book" | "cancel", multiple = false) {
-  const f = await (operation === "book" ? classBookingFixture() : classCancellationFixture());
+export async function classCallFlowFixture(operation: "book" | "cancel", multiple = false, passes = false) {
+  const f = await (operation === "book" ? classBookingFixture({ passes }) : classCancellationFixture());
   f.host.dispose(); f.session.dispose();
   const source = f.classSessionConfig;
   let flowConfig: ClinikoCallFlowConfig = { ...source,
     approvals: { bookCaller: source.callerApprovalPath, cancelCaller: source.callerApprovalPath, rescheduleCaller: source.callerApprovalPath,
       booking: f.path, cancellation: "cancellationApprovalPath" in source ? source.cancellationApprovalPath : f.path, rescheduling: f.path },
     classAttendance: { approvalPath: source.classApprovalPath, practitionerId: source.cliniko.practitionerId,
-      appointmentTypeId: source.cliniko.appointmentTypeId, bookPermission: source.classPermission, cancelPermission: source.classPermission } };
+      appointmentTypeId: source.cliniko.appointmentTypeId, bookPermission: source.classPermission, cancelPermission: source.classPermission,
+      ...("classPassAuthority" in source && source.classPassAuthority ? { passAuthority: source.classPassAuthority } : {}) } };
   let secondPath: string | undefined;
   if (multiple) {
     f.native.filterGroupServices();

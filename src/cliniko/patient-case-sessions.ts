@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { createHash } from "node:crypto";
 import type { PatientProofHost } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result, VerifiedPatient } from "../core/model.ts";
@@ -26,6 +27,7 @@ export type ClinikoCaseSessions = Readonly<{
   patientCaseId: string; patientId: string; verificationRef: string; observedAt: string;
   maximum: number; used: number; remaining: number; overdrawn: boolean;
   eligibleOnSessionDate: boolean; includeCancelled: boolean; includeDna: boolean;
+  usageFingerprint: string;
   /** No money, invoice, membership or reservation authority is inferred. */
   financialAuthority: "none"; reservable: false;
 }>;
@@ -143,6 +145,16 @@ export class ClinikoPatientCaseSessionsReader {
     return fail("tooManyResults");
   }
   async read(input: ClinikoCaseQuery, parentSignal: AbortSignal): Promise<Result<ClinikoCaseSessions, ClinikoCaseFailure>> {
+    return this.#read(input, parentSignal);
+  }
+  /** Confirm one exact new active attendance against the previously observed
+   * private case state. Other additions/removals/status/rule changes cannot be
+   * hidden by an unchanged net counter. This is observation, not a reservation. */
+  async inspectAddition(input: ClinikoCaseQuery, usageFingerprint: string, attendeeId: string, parentSignal: AbortSignal): Promise<Result<ClinikoCaseSessions, ClinikoCaseFailure>> {
+    if (!/^[a-f0-9]{64}$/.test(usageFingerprint) || !id(attendeeId)) return err({ kind: "invalidQuery" });
+    return this.#read(input, parentSignal, { usageFingerprint, attendeeId });
+  }
+  async #read(input: ClinikoCaseQuery, parentSignal: AbortSignal, addition?: Readonly<{ usageFingerprint: string; attendeeId: string }>): Promise<Result<ClinikoCaseSessions, ClinikoCaseFailure>> {
     if (!scopeValid(input?.scope) || !sameScope(input.scope, this.#config.scope)) return err({ kind: "scopeMismatch" });
     let now: string; try { now = this.#clock(); } catch { return err({ kind: "unavailable" }); }
     if (!id(input.patientCaseId) || !id(input.classSessionId) || typeof input.verificationRef !== "string" || !input.verificationRef.trim() || input.verificationRef.length > 256 ||
@@ -154,6 +166,12 @@ export class ClinikoPatientCaseSessionsReader {
         const patient = await this.#authority(query, signal), before = await this.#snapshot(query, patient.patientRef, signal);
         const after = await this.#snapshot(query, patient.patientRef, signal), current = await this.#authority(query, signal);
         if (patient.patientRef !== current.patientRef || !isDeepStrictEqual(before, after)) return err({ kind: "changed" });
+        const fingerprint = (snapshot: Snapshot) => createHash("sha256").update(JSON.stringify({ patientCaseId: query.patientCaseId, patientId: current.patientRef, snapshot })).digest("hex");
+        if (addition) {
+          const added = after.attendees.find(a => a.id === addition.attendeeId);
+          if (!added || added.bookingId !== query.classSessionId || added.archived !== null || added.deleted !== null || added.cancelled !== null || added.arrived === false ||
+            fingerprint({ ...after, attendees: after.attendees.filter(a => a.id !== addition.attendeeId) }) !== addition.usageFingerprint) return err({ kind: "changed" });
+        }
         const used = after.attendees.filter(a => a.archived === null && a.deleted === null &&
           (a.cancelled !== null ? after.includeCancelled : a.arrived === false ? after.includeDna : true)).length;
         const sessionDate = clinicDateAt(this.#config.timeZone, new Date(query.startsAt));
@@ -161,7 +179,7 @@ export class ClinikoPatientCaseSessionsReader {
         return ok({ patientCaseId: query.patientCaseId, patientId: current.patientRef, verificationRef: query.verificationRef, observedAt,
           maximum: after.maximum, used, remaining: Math.max(0, after.maximum - used), overdrawn: used > after.maximum,
           eligibleOnSessionDate: after.closedAt === null && after.archivedAt === null && (!after.issue || sessionDate >= after.issue) && (!after.expiry || sessionDate <= after.expiry),
-          includeCancelled: after.includeCancelled, includeDna: after.includeDna, financialAuthority: "none", reservable: false });
+          includeCancelled: after.includeCancelled, includeDna: after.includeDna, usageFingerprint: fingerprint(after), financialAuthority: "none", reservable: false });
       } catch (error) { return err(error instanceof CaseFailure ? error.detail : { kind: "unavailable" }); }
     })();
     return await awaitUntilAbort(work, signal) ?? err({ kind: "unavailable" });

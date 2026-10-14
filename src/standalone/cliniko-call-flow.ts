@@ -816,6 +816,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       const classes = config.classAttendance;
       building = classAttendance && classes ? operation === "book" ? ClinikoClassSession.create({ ...config, operation: "book", callerApprovalPath: paths.bookCaller,
         classApprovalPath: classes.approvalPath, classPermission: classes.bookPermission,
+        ...(classes.passAuthority ? { classPassAuthority: classes.passAuthority } : {}),
         cliniko: { ...config.cliniko, practitionerId: classes.practitionerId, appointmentTypeId: classes.appointmentTypeId } }) :
         operation === "cancel" ? ClinikoClassSession.create({ ...config, operation: "cancel", callerApprovalPath: paths.cancelCaller, cancellationApprovalPath: classes.cancellationApprovalPath ?? paths.cancellation,
           classApprovalPath: classes.approvalPath, classPermission: classes.cancelPermission,
@@ -976,7 +977,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   async resolveBooking(scope: LocationScope, verificationRef: string, offerRef: string, now: string, signal?: AbortSignal) { return this.#booking()?.resolveBooking(scope, verificationRef, offerRef, now, signal) ?? offerDenied(); }
   #rescheduling() { return this.#staffActive ? undefined : this.#owner instanceof ClinikoReschedulingSession ? this.#owner.effects : this.#owner instanceof ClinikoClassSession ? this.#owner.rescheduling : undefined; }
   async checkConfirmationCapacity(query: BookingMenuQuery & Readonly<{ actionKey: string; digest: string }>) {
-    const owner = !this.#staffActive && this.#owner instanceof ClinikoClassSession ? this.#owner.rescheduling : undefined;
+    const owner = !this.#staffActive && this.#owner instanceof ClinikoClassSession ? this.#owner.rescheduling ?? this.#owner.booking : undefined;
     return owner ? owner.checkConfirmationCapacity(query) : ok({ kind: "ready" as const });
   }
   reschedulingMenuAvailable(): boolean { return this.#rescheduling()?.reschedulingMenuAvailable() === true; }

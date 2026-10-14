@@ -76,7 +76,8 @@ function fixture() {
 test("E2E-405 private native case counter counts every associated service without claiming payment or a reservation", async () => {
   const f = fixture(), found = resultValue(await f.read());
   assert.deepEqual(found, { patientCaseId: "51", patientId: "42", verificationRef: "private-class-proof", observedAt: now,
-    maximum: 5, used: 2, remaining: 3, overdrawn: false, eligibleOnSessionDate: true, includeCancelled: false, includeDna: false, financialAuthority: "none", reservable: false });
+    maximum: 5, used: 2, remaining: 3, overdrawn: false, eligibleOnSessionDate: true, includeCancelled: false, includeDna: false, usageFingerprint: found.usageFingerprint, financialAuthority: "none", reservable: false });
+  assert.match(found.usageFingerprint, /^[a-f0-9]{64}$/);
   assert.equal(f.traffic.length, 4); assert.equal(f.proofCalls, 2);
   assert.equal(JSON.stringify(found).includes(canary), false); assert.equal(JSON.stringify(found).includes("private-other-name"), false);
   assert.equal(f.writes.length, 0);

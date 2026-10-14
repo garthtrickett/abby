@@ -22,7 +22,9 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
   throw new Error("synthetic class runner requires an isolated attendance fixture");
 }
 const multiple = process.env.ABBY_SYNTHETIC_MULTIPLE_CLASSES === "1";
-const f = operation === "reschedule" ? await classMoveCallFlowFixture(process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1", multiple) : await classCallFlowFixture(operation, multiple); f.flow.dispose();
+const passes = process.env.ABBY_SYNTHETIC_CLASS_PASSES === "1";
+if (process.env.ABBY_SYNTHETIC_CLASS_PASSES && (!passes || operation !== "book" || multiple)) throw new Error("invalid synthetic class pass mode");
+const f = operation === "reschedule" ? await classMoveCallFlowFixture(process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1", multiple) : await classCallFlowFixture(operation, multiple, passes); f.flow.dispose();
 if (operation === "reschedule" && (process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1" || process.env.ABBY_SYNTHETIC_CLASS_DATE_CORRECTION === "1"))
   f.native.groups.push({ ...structuredClone(f.native.groups[1]!), id: "95", ...classLink("group_appointments", "95"),
     starts_at: `2026-10-${process.env.ABBY_SYNTHETIC_CLASS_DATE_CORRECTION === "1" ? "10" : "09"}T12:00:00.000Z`,
@@ -50,6 +52,19 @@ process.on("message", message => {
   if (message.kind === "advanceClock" && "milliseconds" in message && Number.isSafeInteger(message.milliseconds) &&
       typeof message.milliseconds === "number" && message.milliseconds >= 0 && message.milliseconds <= 15000) {
     f.setTime(new Date(Date.parse(now()) + message.milliseconds).toISOString()); process.send?.({ kind: "clockAdvanced" });
+  }
+  if (passes && "pass" in f) {
+    if (message.kind === "denyPass") { f.pass.deny(); process.send?.({ kind: "passChanged" }); }
+    if (message.kind === "changePass") { f.pass.select({ patientCaseId: "811222333444555667", entitlementRef: f.pass.entitlementRef }); process.send?.({ kind: "passChanged" }); }
+    if (message.kind === "depletePass") { f.pass.record.max_sessions = 1; process.send?.({ kind: "passChanged" }); }
+    if (message.kind === "extraPassUseAfterWrite") {
+      f.onWrite(async () => {
+        if (!("pass" in f)) throw new Error("missing synthetic pass fixture");
+        f.pass.rows.push({ ...classAttendee("602", "82", f.pass.queries[0]!.patientId), arrived: null, patient_case: classLink("patient_cases", f.pass.caseId) });
+        (f.pass.record.attendee_ids as string[]).push("602");
+      });
+      process.send?.({ kind: "passRaceArmed" });
+    }
   }
   if (message.kind === "denyPermission") denied = true;
   if (message.kind === "denyClassPermission") classDenied = true;

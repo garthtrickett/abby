@@ -15,7 +15,9 @@ export type ClassApproval = ClinicApproval & Readonly<{
   attendance: "existingOccurrence";
   writeContract: "bestEffort";
   notificationOwner: "cliniko";
-  membership: "independentHost";
+  membership: "independentHost" | "nativeCaseSessions";
+  caseSessions?: Readonly<{ attendanceStatus: "arrivedFalseIsDna"; counting: "allLinkedNonArchivedAttendees";
+    dates: "inclusiveClinicDate"; consumption: "onePerAttendance"; financialAuthority: "independentHost" }>;
   serviceRef: string;
   className: string;
   practitionerName: string;
@@ -42,20 +44,26 @@ const name = (v: unknown): v is string => typeof v === "string" && v.trim() === 
 function decode(value: unknown, scope: LocationScope): ClassApproval | undefined {
   const common = decodeClinicApproval(value, scope, [...clinicApprovalKeys, "policyVersion", "businessId", "practitionerId", "appointmentTypeId", "credentialFingerprint",
     "recallTypeId", "timeZone", "attendance", "writeContract", "notificationOwner", "membership", "serviceRef", "className", "practitionerName", "locationName", "durationMinutes",
-    "bookingTerms", "minNoticeMinutes", "maxAdvanceDays", "offerTtlSeconds"]);
+    "bookingTerms", "minNoticeMinutes", "maxAdvanceDays", "offerTtlSeconds",
+    ...(value && typeof value === "object" && Object.hasOwn(value, "caseSessions") ? ["caseSessions"] : [])]);
   if (!common)
     return undefined;
   const row = value as Record<string, unknown>, terms = row.bookingTerms as Record<string, unknown> | undefined;
   const integer = (key: string, min: number, max: number) => Number.isSafeInteger(row[key]) && Number(row[key]) >= min && Number(row[key]) <= max;
   if (![row.policyVersion, row.serviceRef].every(approvalRef) || ![row.businessId, row.practitionerId, row.appointmentTypeId, row.recallTypeId].every(validClinikoId) ||
     typeof row.credentialFingerprint !== "string" || !/^[0-9a-f]{64}$/.test(row.credentialFingerprint) || row.attendance !== "existingOccurrence" ||
-    row.writeContract !== "bestEffort" || row.notificationOwner !== "cliniko" || row.membership !== "independentHost" ||
+    row.writeContract !== "bestEffort" || row.notificationOwner !== "cliniko" || typeof row.membership !== "string" || !["independentHost", "nativeCaseSessions"].includes(row.membership) ||
     ![row.className, row.practitionerName, row.locationName].every(name) || !integer("durationMinutes", 1, 480) || !integer("minNoticeMinutes", 1, 10080) ||
     !integer("maxAdvanceDays", 1, 90) || !integer("offerTtlSeconds", 15, 120) || Number(row.minNoticeMinutes) >= Number(row.maxAdvanceDays) * 1440 ||
     !terms || typeof terms !== "object" || Array.isArray(terms) || Object.keys(terms).sort().join(",") !== "approvedText,version" || !approvalRef(terms.version) ||
     typeof terms.approvedText !== "string" || terms.approvedText.trim() !== terms.approvedText || !terms.approvedText || terms.approvedText.length > 2000 ||
     /[\u0000-\u001f\u007f]/.test(terms.approvedText) || typeof row.timeZone !== "string" || row.timeZone.length > 128)
     return undefined;
+  const cases = row.caseSessions as Record<string, unknown> | undefined;
+  if (row.membership === "nativeCaseSessions" ? !cases || typeof cases !== "object" || Array.isArray(cases) ||
+    Object.keys(cases).sort().join(",") !== "attendanceStatus,consumption,counting,dates,financialAuthority" ||
+    cases.attendanceStatus !== "arrivedFalseIsDna" || cases.counting !== "allLinkedNonArchivedAttendees" || cases.dates !== "inclusiveClinicDate" ||
+    cases.consumption !== "onePerAttendance" || cases.financialAuthority !== "independentHost" : Object.hasOwn(row, "caseSessions")) return undefined;
   try {
     new Intl.DateTimeFormat("en", { timeZone: row.timeZone });
   }

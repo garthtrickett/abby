@@ -24,6 +24,18 @@ test("E2E-392 malformed or expanded class review cannot enter the owned recall p
     assert.equal(encodeClinikoReview(randomUUID(),{...request,operation:{...request.operation,...patch}} as ClinikoReviewRequest).ok,false);
 });
 
+test("E2E-406 pass review retains exact private case, entitlement and before-use evidence in a distinct non-replayable version", () => {
+  if (request.operation.kind !== "classBook") assert.fail("expected class booking fixture");
+  const operation = { ...request.operation, kind: "classBook" as const, sessionId: "91", attendanceActionId: randomUUID(),
+    pass: { patientCaseId: "811222333444555666", entitlementRef: "approved-pass-1", usageFingerprint: "a".repeat(64), maximum: 2, used: 1 } };
+  const encoded = resultValue(encodeClinikoReview(randomUUID(), { ...request, operation }));
+  assert.match(encoded, /class attendance review v2/);
+  assert.deepEqual(resultValue(decodeClinikoReview(encoded)).request.operation, operation);
+  assert.equal(decodeClinikoReview(encoded.replace("class attendance review v2", "class attendance review v1")).ok, false);
+  for (const patch of [{ patientCaseId: "0" }, { entitlementRef: "private arbitrary text" }, { usageFingerprint: "forged" }, { maximum: 301 }, { used: 2 }, { used: -1 }, { paid: true }])
+    assert.equal(encodeClinikoReview(randomUUID(), { ...request, operation: { ...operation, pass: { ...operation.pass, ...patch } } }).ok, false);
+});
+
 test("E2E-397 movement reviews retain both exact occurrences, root marker and explicit compensation boundary", () => {
   const operation = { kind: "classMove" as const, sessionId: "91", attendeeId: "101", newSessionId: "94", attendanceActionId: randomUUID(),
     practitionerId: "22", appointmentTypeId: "33", newPractitionerId: "23", newAppointmentTypeId: "34", startsAt: "2026-10-08T04:00:00.000Z", endsAt: "2026-10-08T05:00:00.000Z",

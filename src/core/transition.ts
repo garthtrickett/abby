@@ -403,14 +403,17 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
     }
     case "confirmationWait": {
       const action = state.actions[interpretation.actionKey];
+      const permitted = action?.kind === "book" ? state.policy.bookingEnabled && state.policy.capabilities.book === "execute" :
+        action?.kind === "reschedule" ? state.policy.reschedulingEnabled && state.policy.capabilities.reschedule === "execute" : false;
       if (turn.quality !== "clear" || !clearAffirmation(turn.text) || !action || action.status !== "awaitingConfirmation" ||
-          action.kind !== "reschedule" || !state.policy.automationEnabled || !state.policy.reschedulingEnabled ||
-          state.policy.capabilities.reschedule !== "execute" || !state.policy.staffWorkEnabled ||
+          !permitted || !state.policy.automationEnabled || !state.policy.staffWorkEnabled ||
           action.digest !== interpretation.digest || state.pendingPresentationId || state.presentations[action.presentationId]?.status !== "played" ||
           !Number.isSafeInteger(interpretation.seconds) || interpretation.seconds < 1 || interpretation.seconds > 60 ||
           evidenceFailure(state, action.mutation.request, now) ||
           Object.values(state.actions).some(other => other.key !== action.key && ["awaitingConfirmation", "ready"].includes(other.status))) return err({ kind: "confirmationMissing" });
-      state.callerMessages.push(`The booking system needs a moment. Please wait about ${interpretation.seconds} seconds, then say yes again if you still want this change. I haven't changed your appointment, and the replacement time is not reserved.`);
+      state.callerMessages.push(action.kind === "book"
+        ? `The booking system needs a moment. Please wait about ${interpretation.seconds} seconds, then say yes again if you still want this booking. I haven't booked an appointment, and this time is not reserved.`
+        : `The booking system needs a moment. Please wait about ${interpretation.seconds} seconds, then say yes again if you still want this change. I haven't changed your appointment, and the replacement time is not reserved.`);
       break;
     }
     case "affirm": {
