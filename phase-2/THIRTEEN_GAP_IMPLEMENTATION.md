@@ -15,7 +15,7 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 | 7 | Support another approved practitioner during rescheduling. | E2E-359 locally qualifies explicit approved practitioner pairs, independent destination policy, named played confirmation and one inspected in-place move at a changed or retained time. E2E-360 adds the current approved directory, retained original preference, played name/ordinal choice, pagination, fresh-time invalidation and ordinary signed/compiled dialogue. Final type/build and 99 checks passed; current exact-head cloud, real model/acoustic and clinic acceptance remain open. |
 | 8 | Add patient detail corrections, required registration fields and resends. | E2E-361–368 locally qualify patient corrections, account revisions, linked recovery, private edit/reset and guarded setting-history portability. E2E-369 adds independently approved required address fields, complete private collection/readback, field-bound host authority, native response/inspection and separate registration/booking confirmation; final typecheck/build and80 checks passed without skips. E2E-370–379 qualify resend SMTP, native evidence, SAM consent, signed private selection/paging, interruption recovery and mapped staff receipt inspection. E2E-380 now locally qualifies explicit versioned in-person/telehealth/cancelled formats through116 final checks. Unsupported clinic-specific field adapters and production recovery-host/operator integration/acceptance remain open; current-head cloud and actual clinic/mail/model/acoustic acceptance are absent. |
 | 9 | Handle multiple patients/actions in one call. | E2E-381–387 qualify same-caller and independently verified two-person booking tasks, fresh private proofs, native writes and immutable receipts. E2E-388 additionally qualifies enquiry-only progression after played protected-read notices, two patients appointments in one signed call with zero mutation, and retired read-receipt integrity. E2E-389 qualifies actual signed related-person cancellation/rescheduling and mixed enquiry/change with fresh proof and preserved original records. Current type/build/isolated PostgreSQL final regression passed195 checks, zero skips. Other patient/operation/catalogue/staff combinations, unrelated representatives without a native self record and alternative guardian channels remain unfinished. |
-| 10 | Add class attendance booking, cancellation and movement. | E2E-390 now supplies a protected native class reader: existing sessions, complete active capacity, exact own attendee target and native drift/privacy checks. E2E-391 additionally supplies guarded native single-attendee registration/cancellation and exact inspection; E2E-392 adds locally qualified text class booking through actual verification, played SAM terms/consent, owned review, one inspected attendance write and capacity-race handling. E2E-393 now qualifies actual text cancellation with operation-bound proof, independent class/fee policy, played selection/consent and one owned review/inspected attendee PATCH. E2E-394 additionally qualifies admitted class owners, ordinary class classifier routing and synthetic signed HTTP/WebSocket booking/cancellation with correction and exact native inspection. E2E-395 additionally qualifies sixteen actual compiled class runner journeys through normal host provisioning, shared PostgreSQL budget/contact revision, admission/allowlist, private code, exact native receipt, current-authority denials and capacity races. E2E-396 adds complete multi-service class selection with played public choices, exact instructor/duration binding, current setting checks and actual native/compiled booking/cancellation. E2E-397 adds an explicit native class move/recovery coordinator and provider-owned movement review. E2E-398 adds protected text SAM movement and E2E-399 adds admitted ordinary class movement and signed voice. Compiled movement, pre-send corrections, caller-facing account-budget pacing and membership credit handling remain unfinished. Individual endpoints are insufficient. Require existing session/attendee identities, capacity and duplicate checks, compensating move recovery and truthful concurrent-result handling. Membership credits/passes require their own evidence. |
+| 10 | Add class attendance booking, cancellation and movement. | E2E-390 now supplies a protected native class reader: existing sessions, complete active capacity, exact own attendee target and native drift/privacy checks. E2E-391 additionally supplies guarded native single-attendee registration/cancellation and exact inspection; E2E-392 adds locally qualified text class booking through actual verification, played SAM terms/consent, owned review, one inspected attendance write and capacity-race handling. E2E-393 now qualifies actual text cancellation with operation-bound proof, independent class/fee policy, played selection/consent and one owned review/inspected attendee PATCH. E2E-394 additionally qualifies admitted class owners, ordinary class classifier routing and synthetic signed HTTP/WebSocket booking/cancellation with correction and exact native inspection. E2E-395 additionally qualifies sixteen actual compiled class runner journeys through normal host provisioning, shared PostgreSQL budget/contact revision, admission/allowlist, private code, exact native receipt, current-authority denials and capacity races. E2E-396 adds complete multi-service class selection with played public choices, exact instructor/duration binding, current setting checks and actual native/compiled booking/cancellation. E2E-397 adds an explicit native class move/recovery coordinator and provider-owned movement review. E2E-398 adds protected text SAM movement and E2E-399 adds admitted ordinary class movement and signed voice. E2E-400 adds separately compiled native movement under the physical PostgreSQL budget. Cross-service compiled movement, pre-send corrections, caller-facing account-budget pacing and membership credit handling remain unfinished. Individual endpoints are insufficient. Require existing session/attendee identities, capacity and duplicate checks, compensating move recovery and truthful concurrent-result handling. Membership credits/passes require their own evidence. |
 | 11 | Add deposits, paid confirmation, receipts and expiry handling. | Financial boundaries exist, payment lifecycle absent. Require real provider adapter contracts, signed webhook/idempotency, delivered links, separate expiry authority and no refund/coverage/hold invention. |
 | 12 | Add outbound follow-up and practitioner sick-day management. | Recalls are not campaigns. Require scoped audience, opt-out, fresh appointment context, scheduler, per-action outcomes and recovery. |
 | 13 | Add approved communication/document writeback. | Optional clinical record features need explicit clinic-owned storage and field/content approval. Require no cross-patient/class-shared leakage and concurrency-aware result reporting. |
@@ -2110,3 +2110,61 @@ actual synthetic signed movement and planned full-call evidence. No dependencies
 migrations, request limits, deadlines or concurrency were changed. Compiled
 movement, corrections, conversational budget pacing, membership/pass/credits,
 remaining full13 requirements and authoritative cloud qualification remain open.
+
+
+## Gap10 separately compiled class movement and truthful quota recovery, E2E-400
+
+The existing synthetic class runner now provisions reschedule sessions through
+the actual exported runner and host/contact-revision rebinding. It uses the
+physical shared PostgreSQL request budget, signed admission/allowlist, private
+keypad proof and actual dispatched/played SAM assertions at each attendance
+mutation. Single and catalogue configurations reach one bounded owned review
+and exact replacement/original legs. Lost review, replacement and original
+responses remain unresolved without replay or rollback. Current patient/class
+permission, source/destination/pair approvals, approving membership, policy and
+capacity withdrawal after consent prevent mutations. Failed code delivery or
+independent caller denial cannot grant patient authority. Public model/media,
+child output and PostgreSQL exclude code/email/patient canaries. No production
+code, dependencies, migrations, request limits or deadlines are changed.
+
+The first complete compiled movement passed whole-source typecheck, fresh build
+and one actual runner journey in `4590eee3-1792004028007.log` (exit0). The expanded
+gate passed16 of17 checks in `4590eee3-1792004266636.log`. Its simulated capacity
+race was initially replayed after every native write and created duplicate
+fixture IDs during compensation. The race hook now runs only after replacement
+creation. The targeted correction still correctly stayed uncertain
+(`4590eee3-1792004389017.log`): a further diagnostic in
+`4590eee3-1792004482893.log` proved that the real shared budget had180 of180
+claims used during final recovery observation, with current inspection
+permission still allowed. The replacement cancellation was sent and the
+original had not been cancelled, but complete restoration was not verified.
+The assertion now explicitly requires an uncertain outcome, budget exhaustion
+and no replay for that case. A separately qualified known-unsent cancellation
+case still requires fully inspected recovery and a rejected move outcome.
+This is truthful best-effort handling, not completion of account-budget pacing.
+
+The complete current seventeen-case gate passed exit0 in55seconds in
+`4590eee3-1792004572389.log`, with zero failures/cancellations/skips. The final gate covers changed compiled runner provisioning and
+existing book/cancel/multiple-service paths; unchanged native adapters retain
+the407+7 combined source qualification from E2E-399. Corrections, conversational
+budget pacing, cross-service compiled movement and membership/pass/credit
+processing remain unfinished, along with the remaining thirteen-gap objective.
+Cloud qualification and real clinic/mail/acoustic/carrier acceptance are absent.
+
+Exact final command:
+
+```sh
+npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh bash -c "npm run db:migrate && node --test --test-concurrency=4 test/voice/class-move-runner.test.ts test/voice/class-runner.test.ts test/voice/class-service-runner.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts" && git diff --check
+```
+
+
+Final frozen-source qualification completed exit0 in3m06s in
+`4590eee3-1792004669474.log`: whole-source typecheck, fresh compiled voice build,
+isolated migrations and37 current compiled movement/existing class booking/
+cancellation/multiple-service/registry checks passed, zero failures,
+cancellations or skips, followed by clean diff check. Registry1.208/400 records
+actual compiled synthetic movement. Unchanged native/SAM/signed adapters retain
+the407+7 source evidence in E2E-399. Request limits, deadlines, concurrency,
+dependencies and production source are unchanged. The quota-exhausted final
+recovery observation remains explicitly uncertain; budget pacing and the
+remaining class/financial and full thirteen-gap requirements remain open.

@@ -10,17 +10,19 @@ import { createOpenAIClinicalIntentResolver } from "../../src/standalone/openai-
 import { OpenAIVoiceProfileHost } from "../../src/voice/openai-voice-profile.ts";
 import { withApprovedSyntheticVoice } from "./approved-voice.ts";
 import { classCallFlowFixture } from "./class-call-flow.ts";
+import { classMoveCallFlowFixture } from "./class-move-call-flow.ts";
+import type { ClassServiceConfig } from "../../src/standalone/class-service-catalogue.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 import { classAttendee } from "./class-attendance.ts";
 
 const operation = process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION;
 if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
     process.env.ABBY_CLINIKO_API_KEY !== "synthetic-key-au5" || !process.env.DATABASE_URL?.includes("/abby_test_voice_") ||
-    process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}` || operation !== "book" && operation !== "cancel") {
-  throw new Error("synthetic class runner requires an isolated book/cancel fixture");
+    process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}` || operation !== "book" && operation !== "cancel" && operation !== "reschedule") {
+  throw new Error("synthetic class runner requires an isolated attendance fixture");
 }
 const multiple = process.env.ABBY_SYNTHETIC_MULTIPLE_CLASSES === "1";
-const f = await classCallFlowFixture(operation, multiple); f.flow.dispose();
+const f = operation === "reschedule" ? await classMoveCallFlowFixture(false, multiple) : await classCallFlowFixture(operation, multiple); f.flow.dispose();
 const c = f.flowConfig, apiKey = process.env.ABBY_CLINIKO_API_KEY!, now = c.clock!;
 process.env.ABBY_TENANT_ID = f.scope.tenantId; process.env.ABBY_CLINIC_ID = f.scope.clinicId; process.env.ABBY_LOCATION_ID = f.scope.locationId;
 process.env.ABBY_TWILIO_TEST_CALLER_NUMBER = f.inbound.presentedCallerNumber;
@@ -46,9 +48,19 @@ process.on("message", message => {
   if (message.kind === "loseMail") mailLost = true;
   if (message.kind === "loseWrite") lostWrite = true;
   if (message.kind === "changePolicy") policyChanged = true;
-  if (message.kind === "revokeClass") void f.replacePolicy({ enabled: false }).then(() => process.send?.({ kind: "classRevoked" }));
+  if (message.kind === "revokeClass") void ("replaceSource" in f ? f.replaceSource({ enabled: false }) : f.replacePolicy({ enabled: false })).then(() => process.send?.({ kind: "classRevoked" }));
+  if (message.kind === "revokeMove" && "replaceMove" in f) void f.replaceMove({ enabled: false }).then(() => process.send?.({ kind: "moveRevoked" }));
+  if (message.kind === "revokeDestination" && "replaceDestination" in f) void f.replaceDestination({ enabled: false }).then(() => process.send?.({ kind: "destinationRevoked" }));
+  if (message.kind === "changeMember") void f.replaceAccount({ membershipVersion: "changed-member" }).then(() => process.send?.({ kind: "membershipChanged" }));
+  if (message.kind === "loseReview" && "lose" in f) f.lose("review");
+  if (message.kind === "loseOriginal" && "lose" in f) f.lose("original");
+  if (message.kind === "denyOriginalCancel" && "phasePermission" in f) f.phasePermission(phase => phase !== "cancelOriginal");
   if (message.kind === "fillClass") { occupyClass(); process.send?.({ kind: "classOccupied" }); }
-  if (message.kind === "overbookAfterWrite") { f.onWrite(async () => occupyClass()); process.send?.({ kind: "classRaceArmed" }); }
+  if (message.kind === "overbookAfterWrite") {
+    if ("phasePermission" in f) f.onWrite(async phase => { if (phase === "replacement") occupyClass(); });
+    else f.onWrite(async () => occupyClass());
+    process.send?.({ kind: "classRaceArmed" });
+  }
 });
 const provider: typeof fetch = async (value, init) => {
   const url = new URL(String(value)), method = init?.method ?? "GET";
@@ -88,6 +100,17 @@ const policies = new Proxy(approved, { get(target, key) {
   const value = Reflect.get(target, key); return typeof value === "function" ? value.bind(target) : value;
 } });
 const snapshot = resultValue(await policies.read(f.scope));
+const permissions = (service: ClassServiceConfig): ClassServiceConfig => ({ ...service,
+  bookPermission: { allows: async query => {
+    const allowed = !classDenied && await service.bookPermission.allows(query);
+    process.send?.({ kind: "classPermissionDecision", operation: "book", phase: query.phase, allowed }); return allowed;
+  } }, cancelPermission: { allows: async query => {
+    const allowed = !classDenied && await service.cancelPermission.allows(query);
+    process.send?.({ kind: "classPermissionDecision", operation: "cancel", phase: query.phase, allowed }); return allowed;
+  } }, ...(service.move ? { move: { ...service.move, permission: { allows: async query => {
+    const allowed = !classDenied && await service.move!.permission.allows(query);
+    process.send?.({ kind: "classPermissionDecision", operation: "reschedule", phase: query.phase, allowed }); return allowed;
+  } } } } : {}) });
 process.send?.({ kind: "fixtureReady", scope: f.scope, policyVersion: c.policyVersion });
 try {
   await serveClinikoVoice({ clinikoFetch: provider, openaiFetch: speech, syntheticClock: now, transcriptionFactory: transcription, voiceProfiles: profiles,
@@ -99,20 +122,7 @@ try {
           const allowed = !denied && await c.permission.allows(...args);
           process.send?.({ kind: "permissionDecision", operation: args[2], allowed }); return allowed;
         } },
-        ...(multiple ? { classServices: c.classServices!.map(service => ({ ...service,
-          bookPermission: { allows: async (query: Parameters<typeof service.bookPermission.allows>[0]) => {
-            const allowed = !classDenied && await service.bookPermission.allows(query);
-            process.send?.({ kind: "classPermissionDecision", operation: "book", phase: query.phase, allowed }); return allowed;
-          } }, cancelPermission: { allows: async (query: Parameters<typeof service.cancelPermission.allows>[0]) => {
-            const allowed = !classDenied && await service.cancelPermission.allows(query);
-            process.send?.({ kind: "classPermissionDecision", operation: "cancel", phase: query.phase, allowed }); return allowed;
-          } } })) } : { classAttendance: { ...c.classAttendance!, bookPermission: { allows: async query => {
-          const allowed = !classDenied && await c.classAttendance!.bookPermission.allows(query);
-          process.send?.({ kind: "classPermissionDecision", operation: "book", phase: query.phase, allowed }); return allowed;
-        } }, cancelPermission: { allows: async query => {
-          const allowed = !classDenied && await c.classAttendance!.cancelPermission.allows(query);
-          process.send?.({ kind: "classPermissionDecision", operation: "cancel", phase: query.phase, allowed }); return allowed;
-        } } } }),
+        ...(multiple ? { classServices: c.classServices!.map(permissions) } : { classAttendance: permissions(c.classAttendance!) }),
         delivery: { send: async (email, code) => { process.send?.({ kind: "verificationEmail", email, code, accepted: !mailLost }); return !mailLost; } },
         intent(owner) {
           const submit = owner.submitCode.bind(owner);
@@ -121,16 +131,20 @@ try {
           owner.write = async (...args) => {
             const started = performance.now(), result = await write(...args);
             process.send?.({ kind: "classWriteOutcome", actionStatus: result.kind, elapsedMs: Math.round(performance.now() - started) });
+            if (operation === "reschedule") process.send?.({ kind: "classMoveState",
+              originalActive: f.native.attendees.find(row => row.id === "101")?.cancelled_at === null,
+              replacementActive: f.native.attendees.find(row => row.id === "401")?.cancelled_at === null });
             return result;
           };
           return createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-model-key", model: "synthetic-model", clinicDate: () => "2026-10-04",
             fetch: async (_value, init) => {
               const input = JSON.parse(JSON.parse(String(init?.body)).input[1].content);
               process.send?.({ kind: "modelTurn", text: input.callerText });
-              const decision = { kind: "unsupported", operation: null as string | null, stage: null, from: null as string | null, to: null as string | null, choice: null as number | null };
+              const decision = { kind: "unsupported", operation: null as string | null, stage: null as string | null, from: null as string | null, to: null as string | null, choice: null as number | null };
               if (input.callerText === "Start") { decision.kind = "classWorkflow"; decision.operation = operation; }
-              else if (input.callerText === "Times") { decision.kind = "menu"; decision.from = decision.to = "2026-10-08"; }
-              else if (input.callerText === "Appointments") { decision.kind = "appointments"; decision.from = "2026-10-04"; decision.to = "2026-10-09"; }
+              else if (input.callerText === "Times") { decision.kind = "menu"; decision.from = decision.to = operation === "reschedule" ? "2026-10-09" : "2026-10-08"; decision.stage = operation === "reschedule" ? "offers" : null; }
+              else if (input.callerText === "Appointments") { decision.kind = operation === "reschedule" ? "menu" : "appointments"; decision.stage = operation === "reschedule" ? "targets" : null;
+                decision.from = operation === "reschedule" ? "2026-10-08" : "2026-10-04"; decision.to = operation === "reschedule" ? "2026-10-08" : "2026-10-09"; }
               else if (input.callerText === "What happened?") decision.kind = "outcome";
               else throw new Error("unexpected synthetic class model turn");
               return Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [{ type: "output_text", text: JSON.stringify(decision) }] }] });

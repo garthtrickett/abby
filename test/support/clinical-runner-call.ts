@@ -17,6 +17,7 @@ import { voiceUntil } from "./cliniko-workflow-voice.ts";
 import type { LocationScope } from "../../src/core/model.ts";
 
 type Message = { kind: string; actionStatus?: string; text?: string; method?: string; path?: string; body?: Record<string, unknown>;
+  originalActive?: boolean; replacementActive?: boolean;
   phase?: string; elapsedMs?: number;
   stage?: "fixtureProcessKilled" | "runnerStartupUnavailable";
   locations?: readonly { scope: LocationScope; policyVersion: string; businessId: string }[];
