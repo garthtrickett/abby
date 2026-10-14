@@ -263,6 +263,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "previousPractitioner"; snapshot: import("./previous-practitioner.ts").PreviousPractitionerRead }>
   | Readonly<{ kind: "previousPractitionerUnavailable" }>
   | Readonly<{ kind: "serviceQuestion"; question: import("./booking-service-question.ts").BookingServiceQuestion }>
+  | Readonly<{ kind: "classServiceQuestion"; question: import("./class-service-question.ts").ClassServiceQuestion }>
   | Readonly<{ kind: "conversationControl"; notice: import("./conversation-control.ts").ConversationControlNotice }>
   | Readonly<{ kind: "conversationPresence" }>
   | Readonly<{ kind: "missedCallReasonUnavailable" }>

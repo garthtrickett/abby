@@ -16,13 +16,14 @@ import type { TranscriptEvent, TranscriptFailure } from "./turn-assembler.ts";
 export type VoiceIntent =
   | Readonly<{ kind: "previousPractitioner" }>
   | Readonly<{ kind: "serviceQuestion"; question: import("../core/booking-service-question.ts").BookingServiceQuestion }>
+  | Readonly<{ kind: "classServiceQuestion"; question: import("../core/class-service-question.ts").ClassServiceQuestion }>
   | Readonly<{ kind: "presence" }>
   | Readonly<{ kind: "missedCall" }>
   | Readonly<{ kind: "bookingHorizon" }>
   | Readonly<{ kind: "requestBoundary"; reason: import("../core/request-boundary.ts").RequestBoundary }>
   | Readonly<{ kind: "callerIdentityDenied"; reason: import("../core/caller-identity.ts").CallerIdentityDenial }>
   | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason; approvedLocation?: string }>
-  | Readonly<{ kind: "workflow"; operation: import("../core/model.ts").WorkflowOperation; replaceCanceledChange?: true; serviceChoice?: import("../core/booking-service-choice.ts").BookingServiceChoice; forAnotherPerson?: true; classAttendance?: true }>
+  | Readonly<{ kind: "workflow"; operation: import("../core/model.ts").WorkflowOperation; replaceCanceledChange?: true; serviceChoice?: import("../core/booking-service-choice.ts").BookingServiceChoice; forAnotherPerson?: true; classAttendance?: true; classSelectionRef?: string }>
   | Readonly<{ kind: "outcome" }>
   | Readonly<{ kind: "notificationOutcome" }>
   | Readonly<{ kind: "staffOutcome" }>
@@ -394,13 +395,13 @@ export class VoiceSession {
       result = await this.reception.respondRequestBoundary(this.scope, turn, this.cachedIntent.reason, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "callerIdentityDenied") {
       result = await this.reception.denyCallerIdentity(this.scope, turn, this.cachedIntent.reason, existing.value.conversationRevision);
-    } else if (this.cachedIntent.kind === "clarify" || this.cachedIntent.kind === "serviceQuestion") {
+    } else if (this.cachedIntent.kind === "clarify" || this.cachedIntent.kind === "serviceQuestion" || this.cachedIntent.kind === "classServiceQuestion") {
       result = await this.runtime.acceptTurn(turn, this.cachedIntent, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "workflow") {
       const controller = new AbortController(), pending = { cancel: () => controller.abort() };
       this.pendingIntent = pending;
       try { result = await this.reception.startWorkflow(this.scope, turn, this.cachedIntent.operation, now, existing.value.conversationRevision,
-        controller.signal, this.cachedIntent.replaceCanceledChange, this.cachedIntent.serviceChoice, this.cachedIntent.forAnotherPerson, this.cachedIntent.classAttendance); }
+        controller.signal, this.cachedIntent.replaceCanceledChange, this.cachedIntent.serviceChoice, this.cachedIntent.forAnotherPerson, this.cachedIntent.classAttendance, this.cachedIntent.classSelectionRef); }
       finally { if (this.pendingIntent === pending) this.pendingIntent = undefined; }
     } else if (this.cachedIntent.kind === "outcome") {
       result = await this.runtime.acceptTurn(turn, { kind: "outcomeQuery" }, now, existing.value.conversationRevision);

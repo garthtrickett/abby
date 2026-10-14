@@ -1,5 +1,6 @@
 import { previousPractitionerText, previousPractitionerUnavailable } from "./previous-practitioner.ts";
 import { bookingServiceQuestionText } from "./booking-service-question.ts";
+import { classServiceQuestionText } from "./class-service-question.ts";
 import { staffMessageNoticeText, validStaffMessageNotice } from "./staff-message-notice.ts";
 import { conversationControl, conversationControlText, validConversationControlNotice } from "./conversation-control.ts";
 import { reschedulingMenuPresentation } from "./rescheduling-menu.ts";
@@ -368,6 +369,13 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
     case "previousPractitionerUnavailable":
       state.callerMessages.push(previousPractitionerUnavailable);
       break;
+    case "classServiceQuestion": {
+      const text = classServiceQuestionText(interpretation.question, now), operation = interpretation.question?.operation;
+      if (!text || turn.quality !== "clear" || !state.policy.automationEnabled || !state.policy.staffWorkEnabled ||
+          state.policy.capabilities[operation] !== "execute" || !(operation === "book" ? state.policy.bookingEnabled : state.policy.cancellationEnabled)) return err({ kind: "invalidTransition" });
+      state.callerMessages.push(text);
+      break;
+    }
     case "serviceQuestion": {
       const text = bookingServiceQuestionText(interpretation.question);
       if (!text || turn.quality !== "clear" || !state.policy.automationEnabled || state.policy.capabilities.book !== "execute") return err({ kind: "invalidTransition" });

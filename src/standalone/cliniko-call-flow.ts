@@ -1,3 +1,6 @@
+import { ClassServiceDialogue } from "./class-service-dialogue.ts";
+import { readClassServices, classServiceName } from "./class-service-catalogue.ts";
+import type { ClassServiceConfig, PublicClassService } from "./class-service-catalogue.ts";
 import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
 import { ClinikoCallTasks } from "./cliniko-call-tasks.ts";
 import { ClinikoRepresentativeCallOwner } from "./cliniko-representative-call-owner.ts";
@@ -25,8 +28,6 @@ import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { callIdFor } from "../voice/admission.ts";
 import { sameScope } from "./appointment-change-authority.ts";
 import { ClinikoClassSession } from "./cliniko-class-session.ts";
-import type { ClassAttendancePermission } from "./cliniko-class-booking-host.ts";
-import type { ClassCancellationPermission } from "./cliniko-class-cancellation-host.ts";
 import { OwnerFileClassPolicy } from "./owner-file-class-policy.ts";
 import { ClinikoBookingSession } from "./cliniko-booking-session.ts";
 import type { ClinikoBookingSessionConfig } from "./cliniko-booking-session.ts";
@@ -58,7 +59,8 @@ import type { PatientDetailChanges } from "../cliniko/patient-details.ts";
 export type ClinikoWorkflow = import("../core/model.ts").WorkflowOperation;
 export type ClinikoCallFlowConfig = Omit<ClinikoBookingSessionConfig, "callerApprovalPath" | "bookingApprovalPath" | "representative"> & Readonly<{
   approvals: Readonly<{ bookCaller: string; cancelCaller: string; rescheduleCaller: string; booking: string; cancellation: string; rescheduling: string }>;
-  classAttendance?: Readonly<{ approvalPath: string; practitionerId: string; appointmentTypeId: string; bookPermission: ClassAttendancePermission; cancelPermission: ClassCancellationPermission }>;
+  classAttendance?: ClassServiceConfig;
+  classServices?: readonly ClassServiceConfig[];
   intake?: Pick<ClinikoIntakeBookingSessionConfig, "policy" | "permission" | "presentation">;
   staff?: Readonly<{ callerApprovalPath: string; staffApprovalPath: string; recallTypeId: string; permission: PatientVerificationPermission }>;
   publicKnowledge?: OwnerFileClinicFAQs;
@@ -112,6 +114,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   #publicMenu: Readonly<{ kind: "booking" | "rescheduling"; stage: "targets" | "practitioners" | "offers" | null }> | undefined;
   #reschedulingTargetSelected = false;
   readonly #serviceDialogue = new BookingServiceDialogue();
+  readonly #classDialogue = new ClassServiceDialogue();
   readonly #searchMenu = new PlayedMenuSearch();
   readonly #spokenMenu = new PlayedMenuSelection();
   readonly #spokenPractitioners = new PlayedPractitionerSelection();
@@ -121,6 +124,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       ...(config.reschedulingDestination ? { reschedulingDestination: Object.freeze({ ...config.reschedulingDestination }) } : {}),
       ...(config.reschedulingPractitioners ? { reschedulingPractitioners: Object.freeze(config.reschedulingPractitioners.map(member => Object.freeze({ ...member }))) } : {}),
       ...(config.classAttendance ? { classAttendance: Object.freeze({ ...config.classAttendance }) } : {}),
+      ...(config.classServices ? { classServices: Object.freeze(config.classServices.map(service => Object.freeze({ ...service }))) } : {}),
       cliniko: Object.freeze({ ...config.cliniko }), approvals: Object.freeze({ ...config.approvals }), ...(config.intake ? { intake: Object.freeze({ ...config.intake }) } : {}),
       ...(config.catalogue ? { catalogue: Object.freeze({ ...config.catalogue, practitioners: Object.freeze(config.catalogue.practitioners.map(member => Object.freeze({ ...member }))) }) } : {}),
       ...(config.staff ? { staff: Object.freeze({ ...config.staff }) } : {}),
@@ -140,7 +144,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   }
   static create(config: ClinikoCallFlowConfig): Result<ClinikoCallFlow, Failure> {
     try {
-      if (!config || Object.hasOwn(config, "representative") || !(config.signal instanceof AbortSignal) || config.signal.aborted || config.receipt.callId !== callIdFor(config.inbound.key) ||
+      if (!config || config.classAttendance && config.classServices || config.classServices && (!Array.isArray(config.classServices) || config.classServices.length < 1 || config.classServices.length > 32) || Object.hasOwn(config, "representative") || !(config.signal instanceof AbortSignal) || config.signal.aborted || config.receipt.callId !== callIdFor(config.inbound.key) ||
           config.receipt.admission.key.accountRef !== config.inbound.key.accountRef || config.receipt.admission.key.providerCallRef !== config.inbound.key.providerCallRef ||
           config.receipt.admission.dialedNumber !== config.inbound.dialedNumber || !config.sessionId || !config.policyVersion ||
           (config.publicKnowledge !== undefined && !(config.publicKnowledge instanceof OwnerFileClinicFAQs)) ||
@@ -164,7 +168,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     this.#representativeCall?.dispose(); this.#representativeCall = undefined;
     this.#representative?.owner.dispose(); this.#representative = undefined;
     this.#owner?.dispose(); this.#staff?.dispose(); this.#owner = undefined; this.#staff = undefined;
-    this.#serviceDialogue.clear(); this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#serviceOperation = undefined; this.#staffActive = false; this.#verificationRequired = false; this.#intakeDraftRef = undefined;
+    this.#serviceDialogue.clear(); this.#classDialogue.clear(); this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#serviceOperation = undefined; this.#staffActive = false; this.#verificationRequired = false; this.#intakeDraftRef = undefined;
     return true;
   }
   async revokeCallerPatientAccess(query: Readonly<{ scope: LocationScope; callId: string; sessionId: string;
@@ -177,7 +181,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
         !Number.isFinite(now) || Date.parse(state.value.sessionLease.expiresAt) <= now || state.value.callerIdentityDenied !== query.reason) return false;
     this.#patientLifetime.abort(); this.#historySubject = undefined; this.#representative?.owner.dispose(); this.#representative = undefined;
     this.#owner?.dispose(); this.#staff?.dispose(); this.#owner = undefined; this.#staff = undefined;
-    this.#serviceDialogue.clear(); this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#serviceOperation = undefined; this.#staffActive = false; this.#verificationRequired = false; this.#intakeDraftRef = undefined;
+    this.#serviceDialogue.clear(); this.#classDialogue.clear(); this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#serviceOperation = undefined; this.#staffActive = false; this.#verificationRequired = false; this.#intakeDraftRef = undefined;
     this.#publicMenu = undefined; this.#reschedulingTargetSelected = false; this.#spokenMenu.clear(); this.#spokenPractitioners.clear(); this.#searchMenu.clear();
     return true;
   }
@@ -235,6 +239,48 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     return current?.ok && !this.closed ? { className: current.value.className, practitionerName: current.value.practitionerName,
       locationName: current.value.locationName, serviceRef: current.value.serviceRef } : undefined;
   }
+  async #classServices(external?: AbortSignal) {
+    const c = this.#config;
+    if (!c.classServices || this.closed || this.patientAccessDenied || this.#staffActive) return undefined;
+    const signal = AbortSignal.any([c.signal, this.#lifetime.signal, this.#patientLifetime.signal, AbortSignal.timeout(5_000), ...(external ? [external] : [])]);
+    const result = await readClassServices({ scope: c.receipt.scope, policyVersion: c.policyVersion, ...c.cliniko,
+      directory: c.directory, clock: c.clock ?? (() => new Date().toISOString()), services: c.classServices }, signal);
+    return result.ok && !signal.aborted ? result.value : undefined;
+  }
+  /** The public model may request a class operation, but only the actual caller
+   * turn and a played question may select its private service binding. */
+  async classServiceIntent(turn: FinalCallerTurn, external?: AbortSignal, requestedOperation?: "book" | "cancel"): Promise<VoiceIntent | undefined> {
+    if (!this.#config.classServices) return undefined;
+    const normalized = classServiceName(turn.text);
+    const match = /^(?:(?:please|can you|could you|i want to|i would like to) )?(book|cancel) (?:(?:me (?:into|onto) )?(?:my|the|a) )?(.+?)(?: attendance)?(?: tonight|today|tomorrow)?(?: please)?$/.exec(normalized);
+    const explicit = match && (/(?:^| )class$/.test(match[2]!) || /pilates|gym/.test(match[2]!));
+    if (!explicit && !requestedOperation && !this.#classDialogue.active) return undefined;
+    const denied = { kind: "clarify", reason: "serviceSelectionUnavailable" } as const;
+    if (this.closed || this.patientAccessDenied || this.#staffActive || this.#verificationRequired || this.#owner && !(this.#owner instanceof ClinikoClassSession)) { this.#classDialogue.clear(); return denied; }
+    const catalogue = await this.#classServices(external);
+    if (!catalogue) { this.#classDialogue.clear(); return denied; }
+    const operation = explicit ? match![1] as "book" | "cancel" : requestedOperation;
+    let name: string | undefined;
+    if (explicit) {
+      const subject = match![2]!.replace(/(?:^| )class$/, "").trim();
+      if (subject && subject !== "group") {
+        const matches = catalogue.items.filter(item => {
+          const label = classServiceName(item.public.className);
+          return label === subject || label.replace(/ class$/, "") === subject || ["pilates", "mat", "gym"].includes(subject) && label.split(" ").includes(subject);
+        });
+        if (!matches.length) { this.#classDialogue.clear(); return denied; }
+        if (matches.length === 1) name = matches[0]!.label;
+      }
+    }
+    const c = this.#config, signal = AbortSignal.any([c.signal, this.#lifetime.signal, this.#patientLifetime.signal, AbortSignal.timeout(5_000), ...(external ? [external] : [])]);
+    const checked = await awaitUntilAbort(Promise.all([c.ledger.read(c.receipt.callId, c.receipt.scope), c.policies.read(c.receipt.scope)]), signal);
+    const selectedOperation = operation ?? this.#classDialogue.operation ?? "book";
+    const allowed = (policy: CallState["policy"]) => policy.staffWorkEnabled === true &&
+      (selectedOperation === "book" ? policy.bookingEnabled === true : policy.cancellationEnabled === true);
+    if (!checked || !checked[0].ok || !checked[1].ok || !allowed(checked[0].value.policy) || !allowed(checked[1].value) ||
+        !await this.#active(selectedOperation, signal) || signal.aborted) { this.#classDialogue.clear(); return denied; }
+    return this.#classDialogue.resolve(turn, checked[0].value, catalogue, (c.clock ?? (() => new Date().toISOString()))(), operation ? { operation, ...(name ? { name } : {}) } : undefined);
+  }
   /** Finite public routing only. The admitted class session separately checks
    * current approvals, exact patient permission and private channel proof. */
   async classWorkflowIntent(text: string): Promise<VoiceIntent | undefined> {
@@ -273,7 +319,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     if (!source?.ok || !current?.ok || signal.aborted || current.value.conversationRevision !== state.value.conversationRevision ||
         current.value.sessionLease?.sessionId !== c.sessionId || current.value.lifecycle !== "active") { this.#serviceDialogue.clear(); return denied; }
     if (starting) {
-      this.#owner?.dispose(); this.#owner = undefined; this.#serviceDialogue.clear(); this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#serviceOperation = undefined; this.#reschedulingTargetSelected = false;
+      this.#owner?.dispose(); this.#owner = undefined; this.#serviceDialogue.clear(); this.#classDialogue.clear(); this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#serviceOperation = undefined; this.#reschedulingTargetSelected = false;
       this.#serviceOperation = operation;
       this.#publicMenu = undefined; this.#spokenMenu.clear(); this.#spokenPractitioners.clear(); this.#searchMenu.clear();
     }
@@ -289,7 +335,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     if (!current?.ok || this.#owner !== owner || this.closed || signal?.aborted || current.value.sessionLease?.sessionId !== c.sessionId ||
         current.value.lifecycle !== "active") return undefined;
     if ((this.#tasks ? this.#tasks.hasSentCurrentWork(current.value) : hasSentPatientWork(current.value))) return { kind: "clarify", reason: "changeAfterSend" };
-    owner.dispose(); this.#owner = undefined; this.#serviceDialogue.clear(); this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#serviceOperation = undefined;
+    owner.dispose(); this.#owner = undefined; this.#serviceDialogue.clear(); this.#classDialogue.clear(); this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#serviceOperation = undefined;
     this.#publicMenu = undefined; this.#spokenMenu.clear(); this.#spokenPractitioners.clear(); this.#searchMenu.clear(); this.#reschedulingTargetSelected = false;
     return { kind: "clarify", reason: "serviceChoiceChanged" };
   }
@@ -417,6 +463,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   async publicIntentContext(): Promise<Readonly<{ workflow: ClinikoWorkflow | null; verificationRequired: boolean; nextTaskAvailable?: true; callerIdentityDenied?: import("../core/caller-identity.ts").CallerIdentityDenial;
     lastAction: Readonly<{ kind: import("../core/model.ts").ActionKind; status: string; confirmationPlayed: boolean }> | null;
     now: string; timeZone: string; maxBookingSearchDays?: number;
+    classServices?: readonly PublicClassService[];
     classService?: Readonly<{ className: string; practitionerName: string; locationName: string; serviceRef: string }>;
     lastMenu: Readonly<{ kind: "booking" | "rescheduling"; stage: "targets" | "practitioners" | "offers" | null }> | null;
     reschedulingTargetSelected: boolean; staffRequestActive: boolean }> | undefined> {
@@ -430,12 +477,14 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     const last = (this.#tasks?.currentActions(found.value) ?? Object.values(found.value.actions)).at(-1);
     const nextTaskAvailable = this.#tasks && this.#workflow && await this.#tasks.allows(found.value, this.#workflow, true);
     const classService = await this.#publicClassService();
+    const classServices = await this.#classServices();
     const maxBookingSearchDays = !this.#verificationRequired && (this.#owner instanceof ClinikoBookingSession || this.#owner instanceof ClinikoIntakeBookingSession || this.#owner instanceof ClinikoClassSession)
       ? await this.#owner.maxBookingSearchDays() : undefined;
     if (this.closed) return undefined;
     return { workflow: this.#owner instanceof ClinikoPractitionerHistorySession || !(this.#owner instanceof ClinikoClassSession) && this.#config.serviceCatalogue && ["book", "intake"].includes(this.#workflow!) && !this.#serviceChoice ? null : this.#workflow ?? null, verificationRequired: this.#verificationRequired,
       ...(nextTaskAvailable ? { nextTaskAvailable: true as const } : {}),
       ...(classService ? { classService } : {}),
+      ...(classServices ? { classServices: classServices.items.map(item => item.public) } : {}),
       lastAction: last ? { kind: last.kind, status: last.status,
         confirmationPlayed: found.value.presentations[last.presentationId]?.status === "played" } : null,
       now: (this.#config.clock ?? (() => new Date().toISOString()))(), timeZone: this.#config.cliniko.timeZone,
@@ -526,9 +575,10 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     const config = this.#config;
     if (!sameScope(query.scope, config.receipt.scope) || query.callId !== config.receipt.callId || query.sessionId !== config.sessionId ||
         query.policyVersion !== config.policyVersion || query.signal.aborted) return unavailable<Readonly<{ kind: "codeRequired" | "intakeRequired" }>>();
+    if (query.classSelectionRef && !query.classAttendance) return unavailable();
     if (query.classAttendance && (query.forAnotherPerson || query.serviceChoice || !["book", "cancel"].includes(query.operation))) return unavailable();
     if (query.forAnotherPerson) return this.#prepareRepresentative(query);
-    const selected = await this.choose(query.operation, query.signal, query.replaceCanceledChange === true, query.expectedConversationRevision, query.serviceChoice, false, query.classAttendance === true);
+    const selected = await this.choose(query.operation, query.signal, query.replaceCanceledChange === true, query.expectedConversationRevision, query.serviceChoice, false, query.classAttendance === true, query.classSelectionRef, query.turnId);
     if (selected.ok && !selected.value.advanceTask && !query.signal.aborted && selected.value.kind === "codeRequired") this.beginVerification();
     return selected;
   }
@@ -627,9 +677,9 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       found.value.admission?.key.accountRef === config.inbound.key.accountRef && found.value.admission.key.providerCallRef === config.inbound.key.providerCallRef &&
       found.value.admission.dialedNumber === config.inbound.dialedNumber;
   }
-  async choose(operation: ClinikoWorkflow, external?: AbortSignal, replaceCanceledChange = false, expectedRevision?: number, incomingServiceChoice?: BookingServiceChoice, historyRequest = false, classAttendance = false): Promise<Result<Readonly<{ kind: "codeRequired" | "intakeRequired"; advanceTask?: true }>, Failure>> {
+  async choose(operation: ClinikoWorkflow, external?: AbortSignal, replaceCanceledChange = false, expectedRevision?: number, incomingServiceChoice?: BookingServiceChoice, historyRequest = false, classAttendance = false, classSelectionRef?: string, selectionTurnId?: string): Promise<Result<Readonly<{ kind: "codeRequired" | "intakeRequired"; advanceTask?: true }>, Failure>> {
     if (this.#pendingRepresentative || this.#representativeCall && !this.#representative) return unavailable();
-    return this.#choose(operation, external, replaceCanceledChange, expectedRevision, incomingServiceChoice, historyRequest, this.#representative, classAttendance);
+    return this.#choose(operation, external, replaceCanceledChange, expectedRevision, incomingServiceChoice, historyRequest, this.#representative, classAttendance, classSelectionRef, selectionTurnId);
   }
   async #prepareRepresentative(query: WorkflowQuery): Promise<Result<Readonly<{ kind: "representativeRequired"; advanceTask?: true }>, Failure>> {
     const c = this.#config;
@@ -677,8 +727,9 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     return this.#choose(operation, external, false, expectedRevision, serviceChoice, false, representative);
   }
   async #choose(operation: ClinikoWorkflow, external: AbortSignal | undefined, replaceCanceledChange: boolean, expectedRevision: number | undefined,
-    incomingServiceChoice: BookingServiceChoice | undefined, historyRequest: boolean, representative: RepresentativeWorkflowSelection | undefined, classAttendance = false): Promise<Result<Readonly<{ kind: "codeRequired" | "intakeRequired"; advanceTask?: true }>, Failure>> {
-    if (classAttendance && (!this.#config.classAttendance || representative || incomingServiceChoice || historyRequest || !["book", "cancel"].includes(operation))) return unavailable();
+    incomingServiceChoice: BookingServiceChoice | undefined, historyRequest: boolean, representative: RepresentativeWorkflowSelection | undefined, classAttendance = false, classSelectionRef?: string, selectionTurnId?: string): Promise<Result<Readonly<{ kind: "codeRequired" | "intakeRequired"; advanceTask?: true }>, Failure>> {
+    if (classSelectionRef && !classAttendance) return unavailable();
+    if (classAttendance && (!(this.#config.classAttendance || this.#config.classServices) || representative || incomingServiceChoice || historyRequest || !["book", "cancel"].includes(operation))) return unavailable();
     if (representative) {
       // A new representative task must be accepted before its child workflow.
       if (this.#tasks && (this.#owner || !this.#representativeCall)) return unavailable();
@@ -704,7 +755,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     try {
       const previousOwner = this.#owner;
       if (previousOwner && (previousOwner instanceof ClinikoClassSession) !== classAttendance) return unavailable();
-      const replacingService = !!previousOwner && !!serviceChoice && ["book", "intake"].includes(operation) && this.#workflow === operation;
+      const replacingService = !!previousOwner && (!!serviceChoice && ["book", "intake"].includes(operation) || !!classSelectionRef && classAttendance) && this.#workflow === operation;
       const before = await awaitUntilAbort(this.#config.ledger.read(this.#config.receipt.callId, this.#config.receipt.scope), signal);
       if (!before?.ok || expectedRevision !== undefined && before.value.conversationRevision !== expectedRevision) return unavailable();
       if (this.#tasks && representative && !await this.#tasks.allowsRepresentative(before.value, operation, false)) return unavailable();
@@ -712,7 +763,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       if (this.#tasks && !advancing && !await this.#tasks.allows(before.value, operation, false)) return unavailable();
       const currentActions = this.#tasks?.currentActions(before.value) ?? Object.values(before.value.actions);
       const replacingPerson = !!representative && (this.#representative?.owner !== representative.owner || this.#representative.selectionRef !== representative.selectionRef);
-      if (!advancing && !replacingPerson && previousOwner && this.#workflow === operation && !serviceChoice && (operation !== "appointments.read" || historyRequest === (previousOwner instanceof ClinikoPractitionerHistorySession))) {
+      if (!advancing && !replacingPerson && previousOwner && this.#workflow === operation && !serviceChoice && !classSelectionRef && (operation !== "appointments.read" || historyRequest === (previousOwner instanceof ClinikoPractitionerHistorySession))) {
         if (operation === "patientUpdate" || currentActions.some(action => action.status !== "canceled")) return unavailable();
         return await this.#active(operation, external) ? ok({ kind: operation === "intake" ? "intakeRequired" : "codeRequired" }) : unavailable();
       }
@@ -730,7 +781,15 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       if (serviceChoice) { this.#serviceChoice = undefined; this.#serviceOperation = undefined; } // A failed explicit change cannot reuse the old variant.
       const selection = serviceChoice ? await awaitUntilAbort(serviceBookingConfig(this.#config, serviceChoice), signal) : undefined;
       if (serviceChoice && !selection?.ok || signal.aborted) return unavailable();
-      const selectedConfig = selection?.ok ? selection.value : this.#config;
+      let selectedConfig = selection?.ok ? selection.value : this.#config;
+      if (classAttendance && this.#config.classServices) {
+        const catalogue = await this.#classServices(signal);
+        const chosen = catalogue && classSelectionRef ? this.#classDialogue.take(classSelectionRef, operation as "book" | "cancel", before.value, catalogue,
+          (this.#config.clock ?? (() => new Date().toISOString()))(), selectionTurnId) : undefined;
+        if (!chosen || signal.aborted) return unavailable();
+        selectedConfig = { ...this.#config, classAttendance: chosen.config };
+      } else if (classSelectionRef) return unavailable();
+      this.#classDialogue.clear();
       const pin = this.#historySubject;
       const lookup = pin ? { candidates: async (scope: Parameters<typeof selectedConfig.lookup.candidates>[0], phone: string) => {
         const now = Date.parse((this.#config.clock ?? (() => new Date().toISOString()))());
@@ -744,7 +803,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       building = classAttendance && classes ? operation === "book" ? ClinikoClassSession.create({ ...config, operation: "book", callerApprovalPath: paths.bookCaller,
         classApprovalPath: classes.approvalPath, classPermission: classes.bookPermission,
         cliniko: { ...config.cliniko, practitionerId: classes.practitionerId, appointmentTypeId: classes.appointmentTypeId } }) :
-        ClinikoClassSession.create({ ...config, operation: "cancel", callerApprovalPath: paths.cancelCaller, cancellationApprovalPath: paths.cancellation,
+        ClinikoClassSession.create({ ...config, operation: "cancel", callerApprovalPath: paths.cancelCaller, cancellationApprovalPath: classes.cancellationApprovalPath ?? paths.cancellation,
           classApprovalPath: classes.approvalPath, classPermission: classes.cancelPermission,
           cliniko: { ...config.cliniko, practitionerId: classes.practitionerId, appointmentTypeId: classes.appointmentTypeId } }) :
         operation === "appointments.read" ? historyRequest ? config.history ? ClinikoPractitionerHistorySession.create({ ...config, ...config.history }) : undefined : config.enquiry ? ClinikoAppointmentEnquirySession.create({ ...config, ...config.enquiry }) : undefined :
@@ -978,5 +1037,5 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   }
   async openTask(item: StaffItem, signal?: AbortSignal) { return this.#staff?.openTask(item, signal) ?? { kind: "rejected" as const, taskKey: item.key }; }
   async reconcileTask(item: StaffItem, signal?: AbortSignal) { return this.#staff?.reconcileTask(item, signal) ?? { kind: "stillUnknown" as const, taskKey: item.key }; }
-  dispose(): void { this.#pendingRepresentative?.owner.dispose(); this.#pendingRepresentative = undefined; this.#representativeCall?.dispose(); this.#representativeCall = undefined; this.#pendingTask?.representative?.owner.dispose(); this.#representative?.owner.dispose(); this.#representative = undefined; this.#pendingTask?.owner.dispose(); this.#pendingTask = undefined; this.#historySubject = undefined; this.#searchMenu.clear(); this.#spokenMenu.clear(); this.#spokenPractitioners.clear(); this.#workflowLifetime.abort(); this.#patientLifetime.abort(); this.#lifetime.abort(); this.#config.signal.removeEventListener("abort", this.#onClose); this.#owner?.dispose(); this.#staff?.dispose(); this.#staff = undefined; this.#owner = undefined; this.#serviceDialogue.clear(); this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#serviceOperation = undefined; this.#verificationRequired = false; this.#intakeDraftRef = undefined; this.#publicMenu = undefined; this.#reschedulingTargetSelected = false; }
+  dispose(): void { this.#pendingRepresentative?.owner.dispose(); this.#pendingRepresentative = undefined; this.#representativeCall?.dispose(); this.#representativeCall = undefined; this.#pendingTask?.representative?.owner.dispose(); this.#representative?.owner.dispose(); this.#representative = undefined; this.#pendingTask?.owner.dispose(); this.#pendingTask = undefined; this.#historySubject = undefined; this.#searchMenu.clear(); this.#spokenMenu.clear(); this.#spokenPractitioners.clear(); this.#workflowLifetime.abort(); this.#patientLifetime.abort(); this.#lifetime.abort(); this.#config.signal.removeEventListener("abort", this.#onClose); this.#owner?.dispose(); this.#staff?.dispose(); this.#staff = undefined; this.#owner = undefined; this.#serviceDialogue.clear(); this.#classDialogue.clear(); this.#workflow = undefined; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#serviceOperation = undefined; this.#verificationRequired = false; this.#intakeDraftRef = undefined; this.#publicMenu = undefined; this.#reschedulingTargetSelected = false; }
 }

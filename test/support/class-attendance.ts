@@ -28,6 +28,7 @@ export function classAttendanceFixture(options: { scope?: LocationScope; now?: s
   const business: Record<string, unknown> = { id: "11", time_zone_identifier: "Australia/Sydney", archived_at: null, appointment_type_ids: ["33"] };
   const type: Record<string, unknown> = { id: "33", archived_at: null, max_attendees: 10 };
   const traffic: { path: string; filters: string[]; page: number }[] = [];
+  let filterServices = false;
   let denied = false, subject = "42", proofCalls = 0, responseStatus = 200, missingRelationship = false;
   let onRead: ((path: string, count: number) => void) | undefined;
   let onResponse: ((path: string, body: Record<string, unknown>) => void) | undefined;
@@ -53,7 +54,12 @@ export function classAttendanceFixture(options: { scope?: LocationScope; now?: s
     let rows: Record<string, unknown>[] = [], name: string;
     if (path === "/v1/practitioners/22/businesses") { name = "businesses"; rows = missingRelationship ? [] : [{ id: "11", ...link(name, "11") }]; }
     else if (path === "/v1/practitioners/22/appointment_types") { name = "appointment_types"; rows = [{ id: "33", ...link(name, "33") }]; }
-    else if (path === "/v1/group_appointments") { name = "group_appointments"; rows = groups; }
+    else if (path === "/v1/group_appointments") {
+      name = "group_appointments";
+      const filters = url.searchParams.getAll("q[]"), member = filters.find(value => value.startsWith("practitioner_id:="))?.slice(17), kind = filters.find(value => value.startsWith("appointment_type_id:="))?.slice(21);
+      rows = !filterServices ? groups : groups.filter(row => (!member || (row.practitioner as { links: { self: string } }).links.self === `${base}/practitioners/${member}`) &&
+        (!kind || (row.appointment_type as { links: { self: string } }).links.self === `${base}/appointment_types/${kind}`));
+    }
     else if (/^\/v1\/group_appointments\/\d+$/.test(path)) return Response.json(groups.find(row => row.id === path.split("/").at(-1)));
     else if (path === "/v1/attendees") {
       name = "attendees"; const booking = url.searchParams.getAll("q[]").find(filter => filter.startsWith("booking_id:="))!.slice(12);
@@ -68,6 +74,7 @@ export function classAttendanceFixture(options: { scope?: LocationScope; now?: s
   const config = { scope: boundScope, apiKey: "synthetic-class-au5", contactEmail: "dev@example.test", businessId: "11", practitionerId: "22", appointmentTypeId: "33", className: "Approved mat Pilates", rateBudget: budget };
   const reader = resultValue(ClinikoClassAttendanceReader.create(config, proof, fetchPort, () => observedNow));
   return { reader, config, proof, fetchPort, groups, attendees, business, type, traffic, budget,
+    filterGroupServices: () => { filterServices = true; },
     list: (signal = new AbortController().signal) => reader.list(boundScope, "private-class-proof", observedNow, to, observedNow, signal),
     get proofCalls() { return proofCalls; }, revoke: () => { denied = true; }, changeSubject: () => { subject = "43"; },
     status: (status: number) => { responseStatus = status; }, noRelationship: () => { missingRelationship = true; },

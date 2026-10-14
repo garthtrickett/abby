@@ -19,7 +19,8 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}` || operation !== "book" && operation !== "cancel") {
   throw new Error("synthetic class runner requires an isolated book/cancel fixture");
 }
-const f = await classCallFlowFixture(operation); f.flow.dispose();
+const multiple = process.env.ABBY_SYNTHETIC_MULTIPLE_CLASSES === "1";
+const f = await classCallFlowFixture(operation, multiple); f.flow.dispose();
 const c = f.flowConfig, apiKey = process.env.ABBY_CLINIKO_API_KEY!, now = c.clock!;
 process.env.ABBY_TENANT_ID = f.scope.tenantId; process.env.ABBY_CLINIC_ID = f.scope.clinicId; process.env.ABBY_LOCATION_ID = f.scope.locationId;
 process.env.ABBY_TWILIO_TEST_CALLER_NUMBER = f.inbound.presentedCallerNumber;
@@ -98,13 +99,20 @@ try {
           const allowed = !denied && await c.permission.allows(...args);
           process.send?.({ kind: "permissionDecision", operation: args[2], allowed }); return allowed;
         } },
-        classAttendance: { ...c.classAttendance!, bookPermission: { allows: async query => {
+        ...(multiple ? { classServices: c.classServices!.map(service => ({ ...service,
+          bookPermission: { allows: async (query: Parameters<typeof service.bookPermission.allows>[0]) => {
+            const allowed = !classDenied && await service.bookPermission.allows(query);
+            process.send?.({ kind: "classPermissionDecision", operation: "book", phase: query.phase, allowed }); return allowed;
+          } }, cancelPermission: { allows: async (query: Parameters<typeof service.cancelPermission.allows>[0]) => {
+            const allowed = !classDenied && await service.cancelPermission.allows(query);
+            process.send?.({ kind: "classPermissionDecision", operation: "cancel", phase: query.phase, allowed }); return allowed;
+          } } })) } : { classAttendance: { ...c.classAttendance!, bookPermission: { allows: async query => {
           const allowed = !classDenied && await c.classAttendance!.bookPermission.allows(query);
           process.send?.({ kind: "classPermissionDecision", operation: "book", phase: query.phase, allowed }); return allowed;
         } }, cancelPermission: { allows: async query => {
           const allowed = !classDenied && await c.classAttendance!.cancelPermission.allows(query);
           process.send?.({ kind: "classPermissionDecision", operation: "cancel", phase: query.phase, allowed }); return allowed;
-        } } },
+        } } } }),
         delivery: { send: async (email, code) => { process.send?.({ kind: "verificationEmail", email, code, accepted: !mailLost }); return !mailLost; } },
         intent(owner) {
           const submit = owner.submitCode.bind(owner);

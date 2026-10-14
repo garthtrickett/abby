@@ -39,6 +39,7 @@ export class ClinikoVoiceClinicalHost {
       greeting: Object.freeze(structuredClone(config.greeting)), cliniko: Object.freeze({ ...config.cliniko }),
       approvals: Object.freeze({ ...config.approvals }),
       ...(config.classAttendance ? { classAttendance: Object.freeze({ ...config.classAttendance }) } : {}),
+      ...(config.classServices ? { classServices: Object.freeze(config.classServices.map(service => Object.freeze({ ...service }))) } : {}),
       ...(config.reschedulingDestination ? { reschedulingDestination: Object.freeze({ ...config.reschedulingDestination }) } : {}),
       ...(config.reschedulingPractitioners ? { reschedulingPractitioners: Object.freeze(config.reschedulingPractitioners.map(member => Object.freeze({ ...member }))) } : {}),
       ...(config.catalogue ? { catalogue: Object.freeze({ ...config.catalogue,
