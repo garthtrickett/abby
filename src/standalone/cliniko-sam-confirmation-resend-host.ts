@@ -61,6 +61,10 @@ export class ClinikoSamConfirmationResendHost extends NoStoredKnowledge implemen
     const resolved = await completePrivateResendPresentation(this.#runtime, c.receipt.callId, ref, c.sessionId, played, this.#now());
     return resolved && await this.#ready(signal);
   }
+  discardPreparation(): boolean {
+    if (this.#closed || this.#dispatch || !this.#session?.discardPreparation()) return false;
+    this.#request = undefined; return true;
+  }
   async prepare(appointmentId: string, external = this.#config.signal) {
     const signal = AbortSignal.any([this.#config.signal, external]);
     if (this.#dispatch || !this.#session || !await this.#ready(signal)) return err({ kind: "confirmationResendUnavailable" as const });

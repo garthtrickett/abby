@@ -14,6 +14,8 @@ export class PrivateResendVoiceInput implements PrivateKeypadInput {
   readonly #onClose = () => this.stop();
   #stage: Stage = "verification";
   #count = 0;
+  #hasNext = false;
+  #hasPrevious = false;
   #working = false;
   #task: Promise<void> | undefined;
   constructor(config: Config) {
@@ -44,17 +46,24 @@ export class PrivateResendVoiceInput implements PrivateKeypadInput {
       this.#launch(async signal => {
         const listed = await owner.listResendAppointments(signal);
         if (!listed.ok || !listed.value.count || signal.aborted) { this.stop(); return; }
-        this.#count = listed.value.count; this.#stage = "choice";
+        this.#count = listed.value.count; this.#hasNext = listed.value.hasNext; this.#hasPrevious = listed.value.hasPrevious; this.#stage = "choice";
       });
       return "pending";
     }
     if (digit === "*") { this.stop(); return "failed"; }
     // A playback receipt can precede the final native authority refresh. Keep a
     // post-play choice until that refresh completes; never retain an unplayed choice.
-    if (this.#working && this.#stage === "menu" && /^[1-3]$/.test(digit) && await owner.resendMenuPlaybackCompleted()) await this.#task;
+    if (this.#working && this.#stage === "menu" && /^[1-5]$/.test(digit) && await owner.resendMenuPlaybackCompleted()) await this.#task;
     if (this.#lifetime.signal.aborted || owner.closed) return "failed";
     if (this.#working) return "pending";
-    if (this.#stage === "choice" && /^[1-3]$/.test(digit) && Number(digit) <= this.#count) {
+    if (this.#stage === "choice" && (digit === "4" && this.#hasNext || digit === "5" && this.#hasPrevious)) {
+      this.#stage = "menu";
+      this.#launch(async signal => {
+        const page = await owner.pageResendAppointments(digit === "4" ? "next" : "previous", signal);
+        if (!page.ok || !page.value.count || signal.aborted) { this.stop(); return; }
+        this.#count = page.value.count; this.#hasNext = page.value.hasNext; this.#hasPrevious = page.value.hasPrevious; this.#stage = "choice";
+      });
+    } else if (this.#stage === "choice" && /^[1-3]$/.test(digit) && Number(digit) <= this.#count) {
       this.#stage = "readback";
       this.#launch(async signal => {
         const selected = await owner.selectResendAppointment(Number(digit) as 1 | 2 | 3, signal);

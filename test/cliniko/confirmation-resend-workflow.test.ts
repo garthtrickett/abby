@@ -48,7 +48,7 @@ test("E2E-374 resend call workflow privately selects an exact appointment and re
       assert.equal(flow.workflow, "confirmationResend"); assert.equal(flow.verificationRequired, true);
       assert.equal((await flow.listResendAppointments()).ok, false); assert.equal(f.traffic.length, 0);
       await w.verify(); assert.equal(flow.verificationRequired, false);
-      assert.deepEqual(resultValue(await flow.listResendAppointments()), { count: 2 });
+      assert.deepEqual(resultValue(await flow.listResendAppointments()), { count: 2, hasNext: false, hasPrevious: false });
       assert.match(f.readbacks[0]!, /Press 1 for:.*Press 2 for:/);
       const request = resultValue(await flow.selectResendAppointment(2));
       assert.match(f.readbacks[1]!, /registered-session@example.test/);
@@ -109,6 +109,69 @@ test("E2E-374 resend caller policy and email-recipient approval are independentl
       assert.equal(flow.workflow, undefined);
       assert.equal((await flow.listResendAppointments()).ok, false);
       assert.equal(f.mail.length, 0); assert.equal(f.recalls.length, 0); assert.equal(smtp.messages.length, 0);
+    } finally { flow?.dispose(); await f.close(); }
+  });
+});
+
+const sevenAppointments = () => Array.from({ length: 7 }, (_, i) => ({ id: String(81 + i),
+  starts_at: `2026-10-${String(8 + i).padStart(2, "0")}T04:00:00.000Z`, ends_at: `2026-10-${String(8 + i).padStart(2, "0")}T04:30:00.000Z` }));
+
+test("E2E-376 private resend pages traverse a stable native list in both directions and select its seventh appointment", async () => {
+  await withSmtpVerificationServer(async smtp => {
+    const f = await confirmationResendFixture(db, smtp.config, "appointments.resend", true); let flow: ClinikoCallFlow | undefined;
+    try {
+      const w = await workflow(f); flow = w.flow; await w.verify(); f.setChoices(sevenAppointments());
+      assert.deepEqual(resultValue(await flow.listResendAppointments()), { count: 3, hasNext: true, hasPrevious: false });
+      assert.equal((await flow.pageResendAppointments("previous")).ok, false);
+      assert.deepEqual(resultValue(await flow.pageResendAppointments("next")), { count: 3, hasNext: true, hasPrevious: true });
+      assert.match(f.readbacks.at(-1)!, /11 October/);
+      // Provider response order is irrelevant; the private list is chronological.
+      f.setChoices(sevenAppointments().reverse());
+      assert.deepEqual(resultValue(await flow.pageResendAppointments("previous")), { count: 3, hasNext: true, hasPrevious: false });
+      resultValue(await flow.pageResendAppointments("next"));
+      assert.deepEqual(resultValue(await flow.pageResendAppointments("next")), { count: 1, hasNext: false, hasPrevious: true });
+      assert.equal((await flow.pageResendAppointments("next")).ok, false);
+      assert.equal((await flow.selectResendAppointment(2)).ok, false);
+      const ref = resultValue(await flow.selectResendAppointment(1));
+      assert.match(f.readbacks.at(-1)!, /14 October/);
+      assert.equal(ref.requestRef, flow.confirmationResendRef);
+      for (const secret of [...verificationCanaries, "20 Fixture Road", "Séamus Example"]) assert.equal(JSON.stringify(await f.state()).includes(secret), false);
+      assert.equal(f.recalls.length, 0); assert.equal(smtp.messages.length, 0);
+    } finally { flow?.dispose(); await f.close(); }
+  });
+});
+
+test("E2E-376 resend paging withdraws old choices after native insertion, removal, retiming or failed playback", async () => {
+  for (const fault of ["insert", "remove", "time", "play"] as const) {
+    await withSmtpVerificationServer(async smtp => {
+      const f = await confirmationResendFixture(db, smtp.config, "appointments.resend", true); let flow: ClinikoCallFlow | undefined;
+      try {
+        const w = await workflow(f); flow = w.flow; await w.verify(); const rows = sevenAppointments(); f.setChoices(rows);
+        resultValue(await flow.listResendAppointments());
+        if (fault === "insert") f.setChoices([...rows, { id: "99", starts_at: "2026-10-07T04:00:00.000Z", ends_at: "2026-10-07T04:30:00.000Z" }]);
+        if (fault === "remove") f.setChoices(rows.slice(1));
+        if (fault === "time") f.setChoices(rows.map((row, i) => i === 4 ? { ...row, starts_at: "2026-10-12T05:00:00.000Z", ends_at: "2026-10-12T05:30:00.000Z" } : row));
+        if (fault === "play") f.setPlay(false);
+        assert.equal((await flow.pageResendAppointments("next")).ok, false);
+        assert.equal((await flow.selectResendAppointment(1)).ok, false);
+        assert.equal(flow.confirmationResendRef, undefined);
+        assert.equal(f.recalls.length, 0); assert.equal(smtp.messages.length, 0);
+      } finally { flow?.dispose(); await f.close(); }
+    });
+  }
+});
+
+test("E2E-376 re-entering private menus withdraws a previously prepared resend reference", async () => {
+  await withSmtpVerificationServer(async smtp => {
+    const f = await confirmationResendFixture(db, smtp.config, "appointments.resend", true); let flow: ClinikoCallFlow | undefined;
+    try {
+      const w = await workflow(f); flow = w.flow; await w.verify(); resultValue(await flow.listResendAppointments());
+      const old = resultValue(await flow.selectResendAppointment(1)); resultValue(await flow.listResendAppointments());
+      assert.equal(flow.confirmationResendRef, undefined);
+      assert.equal((await flow.resolveConfirmationResend({ scope: f.scope, callId: f.callId, sessionId: f.sessionId,
+        policyVersion: f.sessionConfig.policyVersion, requestRef: old.requestRef, now: f.sessionConfig.clock() })).ok, false);
+      const fresh = resultValue(await flow.selectResendAppointment(1)); assert.notEqual(fresh.requestRef, old.requestRef);
+      assert.equal(f.recalls.length, 0); assert.equal(smtp.messages.length, 0);
     } finally { flow?.dispose(); await f.close(); }
   });
 });

@@ -27,6 +27,14 @@ try {
     const receive = (message: unknown) => {
       if (!message || typeof message !== "object" || !("kind" in message)) return;
       if (message.kind === "input" && "text" in message && typeof message.text === "string") { inputs.push(message.text); process.send?.({ kind: "inputAccepted" }); }
+      if (message.kind === "pagedAppointments") {
+        f.setChoices(Array.from({ length: 7 }, (_, i) => ({ id: String(81 + i), starts_at: `2026-10-${String(8 + i).padStart(2, "0")}T04:00:00.000Z`, ends_at: `2026-10-${String(8 + i).padStart(2, "0")}T04:30:00.000Z` })));
+        process.send?.({ kind: "appointmentsPaged" });
+      }
+      if (message.kind === "changeAppointments") {
+        f.setChoices([{ id: "81", starts_at: "2026-10-08T05:00:00.000Z", ends_at: "2026-10-08T05:30:00.000Z" }]);
+        process.send?.({ kind: "appointmentsChanged" });
+      }
       if (message.kind === "denyPermission") denied = true;
       if (message.kind === "loseMail") loseMail = true;
       if (message.kind === "changePolicy") void f.replace({ enabled: false }).then(() => process.send?.({ kind: "policyChanged" }));
@@ -94,6 +102,8 @@ try {
             const list = owner.listResendAppointments.bind(owner), select = owner.selectResendAppointment.bind(owner);
             owner.listResendAppointments = async signal => { const result = await list(signal); process.send?.({ kind: "privateMenuResult", accepted: result.ok }); return result; };
             owner.selectResendAppointment = async (choice, signal) => { const result = await select(choice, signal); process.send?.({ kind: "privateChoiceResult", accepted: result.ok }); return result; };
+            const page = owner.pageResendAppointments.bind(owner);
+            owner.pageResendAppointments = async (direction, signal) => { const result = await page(direction, signal); process.send?.({ kind: "privatePageResult", accepted: result.ok }); return result; };
             const submit = owner.submitCode.bind(owner);
             owner.submitCode = async code => { const result = await submit(code); process.send?.({ kind: "verificationResult", verified: result.verified }); return result; };
             return createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-intent", model: "synthetic-model", clinicDate: () => "2026-10-04",

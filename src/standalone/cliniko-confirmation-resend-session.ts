@@ -64,6 +64,10 @@ export class ClinikoConfirmationResendSession {
     try { return await awaitUntilAbort(Promise.resolve().then(() => signal.aborted ? undefined : run(signal)), signal); }
     catch { return undefined; }
   }
+  discardPreparation(): boolean {
+    if (this.#busy || this.#attempted || this.#lifetime.signal.aborted) return false;
+    this.#pending = undefined; return true;
+  }
   /** Trusted exact selection only. Private details are played, while only an opaque ref is returned. */
   async prepare(appointmentId: string, external?: AbortSignal): Promise<Result<Readonly<{ requestRef: string }>, Failure>> {
     if (this.#busy || this.#attempted || this.#lifetime.signal.aborted || external?.aborted) return err({ kind: "confirmationResendUnavailable" });

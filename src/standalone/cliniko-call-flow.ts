@@ -1,5 +1,5 @@
 import { ClinikoConfirmationResendWorkflow } from "./cliniko-confirmation-resend-workflow.ts";
-import type { ConfirmationResendWorkflowConfig } from "./cliniko-confirmation-resend-workflow.ts";
+import type { ConfirmationResendWorkflowConfig, ConfirmationResendMenuProgress } from "./cliniko-confirmation-resend-workflow.ts";
 import { ClinikoPractitionerHistorySession } from "./cliniko-practitioner-history-session.ts";
 import type { VerifiedPatient } from "../core/model.ts";
 import { copyBookingServiceChoice } from "../core/booking-service-choice.ts";
@@ -707,8 +707,14 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   async resolveIntake(query: IntakeEvidenceQuery) { return (!this.#config.serviceCatalogue || !!this.#serviceChoice) && !this.#staffActive && this.#owner instanceof ClinikoIntakeBookingSession ? this.#owner.resolveIntake(query) : readDenied(); }
   get confirmationResendRef() { return !this.closed && !this.#verificationRequired && this.#workflow === "confirmationResend" ? this.#confirmationResendRef : undefined; }
   async listResendAppointments(signal?: AbortSignal) {
+    this.#confirmationResendRef = undefined;
     return !this.closed && !this.#staffActive && !this.#verificationRequired && this.#owner instanceof ClinikoConfirmationResendWorkflow
-      ? this.#owner.listAppointments(signal) : unavailable<Readonly<{ count: number }>>();
+      ? this.#owner.listAppointments(signal) : unavailable<ConfirmationResendMenuProgress>();
+  }
+  async pageResendAppointments(direction: "next" | "previous", signal?: AbortSignal) {
+    this.#confirmationResendRef = undefined;
+    return !this.closed && !this.#staffActive && !this.#verificationRequired && this.#owner instanceof ClinikoConfirmationResendWorkflow
+      ? this.#owner.pageAppointments(direction, signal) : unavailable<ConfirmationResendMenuProgress>();
   }
   async resendMenuPlaybackCompleted(): Promise<boolean> {
     return !this.closed && !this.#verificationRequired && this.#owner instanceof ClinikoConfirmationResendWorkflow &&
