@@ -24,6 +24,18 @@ test("E2E-392 malformed or expanded class review cannot enter the owned recall p
     assert.equal(encodeClinikoReview(randomUUID(),{...request,operation:{...request.operation,...patch}} as ClinikoReviewRequest).ok,false);
 });
 
+test("E2E-397 movement reviews retain both exact occurrences, root marker and explicit compensation boundary", () => {
+  const operation = { kind: "classMove" as const, sessionId: "91", attendeeId: "101", newSessionId: "94", attendanceActionId: randomUUID(),
+    practitionerId: "22", appointmentTypeId: "33", newPractitionerId: "23", newAppointmentTypeId: "34", startsAt: "2026-10-08T04:00:00.000Z", endsAt: "2026-10-08T05:00:00.000Z",
+    newStartsAt: "2026-10-09T04:00:00.000Z", newEndsAt: "2026-10-09T04:30:00.000Z", cancellationReason: 50 as const, compensation: "cancelReplacementIfOriginalUnsent" as const };
+  const marker = randomUUID(), move = { ...request, operation }, encoded = resultValue(encodeClinikoReview(marker, move));
+  assert.match(encoded, /Abby class movement review v1/); assert.deepEqual(resultValue(decodeClinikoReview(encoded)), { marker, request: move });
+  assert.equal(decodeClinikoReview(encoded.replace("class movement review v1", "class attendance review v1")).ok, false);
+  for (const patch of [{ newSessionId: "91" }, { attendeeId: "0" }, { attendanceActionId: "forged" }, { newPractitionerId: "22" },
+    { newAppointmentTypeId: "33" }, { newEndsAt: operation.newStartsAt }, { compensation: "alwaysRollback" }, { apply_to_repeats: true }, { transcript: "private transcript" }])
+    assert.equal(encodeClinikoReview(marker, { ...move, operation: { ...operation, ...patch } } as ClinikoReviewRequest).ok, false);
+});
+
 test("E2E-392 optional approved booking terms bind the same expiry and retain legacy wording",()=>{
   const offer={scope:request.scope,offerRef:"offer",serviceRef:"class",startsAt:"2026-10-08T04:00:00.000Z",expiresAt:"2026-10-04T06:02:00.000Z"};
   assert.equal(resultValue(bookingConfirmation(offer,"en-AU")),`Please confirm the class appointment at ${offer.startsAt}.`);

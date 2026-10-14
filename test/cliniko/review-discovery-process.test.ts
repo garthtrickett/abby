@@ -13,17 +13,19 @@ import type { ClinikoReviewRequest } from "../../src/cliniko/review-request.ts";
 
 const base = "https://api.au5.cliniko.com/v1";
 
-test("E2E-267 killed senders lose all context; replacement owners discover only provider-owned work without replay",
+for (const classMove of [false, true]) test(`${classMove ? "E2E-397 class movement" : "E2E-267 appointment"} killed senders lose all context; replacement owners discover only provider-owned work without replay`,
   { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 60_000 }, async () => {
   const adminUrl = process.env.DATABASE_URL; assert.ok(adminUrl);
   const admin = connectPostgres(adminUrl);
   const databaseName = `abby_review_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl); target.pathname = `/${databaseName}`;
   const scope = { tenantId: `review-${randomUUID()}`, clinicId: "clinic" };
-  const request: ClinikoReviewRequest & { operation: Extract<ClinikoReviewRequest["operation"], { kind: "book" }> } = { scope: { ...scope, locationId: "review-location" }, patientId: "918273645546372",
+  const request: ClinikoReviewRequest & { operation: Extract<ClinikoReviewRequest["operation"], { kind: "book" | "classMove" }> } = { scope: { ...scope, locationId: "review-location" }, patientId: "918273645546372",
     businessId: "11", credentialFingerprint: "a".repeat(64), policyVersion: "private-review-policy-canary",
     termsVersion: "private-review-terms-canary", timeZone: "Asia/Jakarta", createdAt: "2026-10-04T04:00:00Z",
-    operation: { kind: "book", practitionerId: "22", appointmentTypeId: "33",
+    operation: classMove ? { kind: "classMove", practitionerId: "22", appointmentTypeId: "33", sessionId: "91", attendeeId: "101", newSessionId: "94",
+      startsAt: "2026-10-08T04:00:00Z", endsAt: "2026-10-08T04:30:00Z", newStartsAt: "2026-10-09T04:00:00Z", newEndsAt: "2026-10-09T04:30:00Z",
+      attendanceActionId: randomUUID(), cancellationReason: 50, compensation: "cancelReplacementIfOriginalUnsent" } : { kind: "book", practitionerId: "22", appointmentTypeId: "33",
       startsAt: "2026-10-08T04:00:00Z", endsAt: "2026-10-08T04:30:00Z" } };
   let rows: Array<Record<string, unknown>> = [];
   let shouldCommit = false, posts = 0;
@@ -84,12 +86,12 @@ test("E2E-267 killed senders lose all context; replacement owners discover only 
       const recovery = launch("discover", { scope, proxy, recallTypeId: "7" });
       const recovered = await recovery.exited; assert.equal(recovered.code, 0, recovered.stderr);
       assert.deepEqual(JSON.parse(recovered.stdout), { pending: commit ? 1 : 0, invalid: 0, ambiguous: 0,
-        book: commit ? 1 : 0, cancel: 0, reschedule: 0 });
+        book: commit && !classMove ? 1 : 0, cancel: 0, reschedule: 0, ...(commit && classMove ? { classMove: 1 } : {}) });
       assert.equal(posts, commit ? 1 : 2, "fresh recovery did not replay the uncertain POST");
     }
     assert.equal(serverFailure, undefined);
     const canaries = [request.patientId, request.policyVersion, request.termsVersion, request.operation.startsAt,
-      ...markers].map((value, index) => ({ label: `review_${index}`, value }));
+      ...(request.operation.kind === "classMove" ? [request.operation.attendanceActionId, request.operation.newStartsAt] : []), ...markers].map((value, index) => ({ label: `review_${index}`, value }));
     assert.deepEqual(await scanPatientDataCanaries(db, canaries), { ok: true, value: [] });
     assert.deepEqual(await scanDisposableBackupCanaries(target.toString(), canaries), []);
     for (const { value } of canaries) assert.ok(output.every(part => !part.includes(value)));

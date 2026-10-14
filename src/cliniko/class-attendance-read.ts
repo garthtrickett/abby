@@ -136,16 +136,20 @@ export class ClinikoClassAttendanceReader {
     if (!businesses.some(row => row.id === c.businessId) || !types.some(row => row.id === c.appointmentTypeId)) return fail("malformed");
     return { timeZone: business.time_zone_identifier, typeCapacity: Number(type.max_attendees) };
   }
-  async #snapshot(from: string, to: string, signal: AbortSignal, selected?: string): Promise<Snapshot> {
+  async #snapshot(from: string, to: string, signal: AbortSignal, selected?: readonly string[]): Promise<Snapshot> {
     const c = this.#config, metadata = await this.#metadata(signal);
-    const groups = selected ? [object(await this.#get(`/group_appointments/${selected}`, signal)) ?? fail("malformed")] :
+    const groups = selected ? await Promise.all(selected.map(async ref => {
+      const row = object(await this.#get(`/group_appointments/${ref}`, signal));
+      if (!row || row.id !== ref) return fail("malformed");
+      return row;
+    })) :
       await this.#collection("group_appointments", [`business_id:=${c.businessId}`, `practitioner_id:=${c.practitionerId}`,
         `appointment_type_id:=${c.appointmentTypeId}`, `starts_at:>=${from}`, `starts_at:<${to}`], signal);
     if (groups.length > 30) return fail("tooManyResults");
     const sessions: { session: NativeSession; attendees: NativeAttendee[] }[] = [];
     for (const group of groups) {
       const start = instant(group.starts_at), end = instant(group.ends_at);
-      if (!id(group.id) || selected && group.id !== selected || this.#link(group, "group_appointments") !== group.id ||
+      if (!id(group.id) || selected && !selected.includes(String(group.id)) || this.#link(group, "group_appointments") !== group.id ||
         this.#link(group.business, "businesses") !== c.businessId || this.#link(group.practitioner, "practitioners") !== c.practitionerId ||
         this.#link(group.appointment_type, "appointment_types") !== c.appointmentTypeId || start === undefined || end === undefined ||
         start < Date.parse(from) || start >= Date.parse(to) || end <= start || end - start > 86_400_000 ||
@@ -179,9 +183,15 @@ export class ClinikoClassAttendanceReader {
   /** Re-read one existing occurrence; a remembered menu choice is never fresh capacity evidence. */
   async inspect(scope: LocationScope, verificationRef: string, sessionRef: string, from: string, to: string, now: string, signal: AbortSignal): Promise<Result<ClinikoClassRead, ClinikoClassReadFailure>> {
     if (!id(sessionRef)) return err({ kind: "invalidQuery" });
-    return this.#read(scope, verificationRef, from, to, now, signal, sessionRef);
+    return this.#read(scope, verificationRef, from, to, now, signal, [sessionRef]);
   }
-  async #read(scope: LocationScope, ref: string, from: string, to: string, now: string, parentSignal: AbortSignal, selected?: string): Promise<Result<ClinikoClassRead, ClinikoClassReadFailure>> {
+  /** One coherent double snapshot for the two exact existing occurrences in a
+   * move. Metadata and proof are shared within this read, never across calls. */
+  async inspectPair(scope: LocationScope, verificationRef: string, sessionRefs: readonly [string, string], from: string, to: string, now: string, signal: AbortSignal): Promise<Result<ClinikoClassRead, ClinikoClassReadFailure>> {
+    if (!Array.isArray(sessionRefs) || sessionRefs.length !== 2 || !sessionRefs.every(id) || sessionRefs[0] === sessionRefs[1]) return err({ kind: "invalidQuery" });
+    return this.#read(scope, verificationRef, from, to, now, signal, [...sessionRefs]);
+  }
+  async #read(scope: LocationScope, ref: string, from: string, to: string, now: string, parentSignal: AbortSignal, selected?: readonly string[]): Promise<Result<ClinikoClassRead, ClinikoClassReadFailure>> {
     if (!scopeValid(scope) || !sameScope(scope, this.#config.scope)) return err({ kind: "scopeMismatch" });
     const start = instant(from), end = instant(to), supplied = instant(now);
     let observed: number | undefined; try { observed = instant(this.#clock()); } catch { return err({ kind: "unavailable" }); }

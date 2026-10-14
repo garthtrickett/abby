@@ -29,6 +29,29 @@ test("E2E-390 selected occurrence inspection rereads capacity without modifying 
   assert.equal(f.groups[0]!.max_attendees, 3);
 });
 
+test("E2E-397 paired occurrence inspection shares current metadata and proof while retaining exact own attendance and complete capacity", async () => {
+  const f = fixture();
+  const result = resultValue(await f.reader.inspectPair(scope, "private-class-proof", ["91", "94"], now, to, now, new AbortController().signal));
+  assert.equal(f.proofCalls, 2);
+  assert.deepEqual(result.sessions.map(row => ({ ref: row.sessionRef, remaining: row.remainingPlaces, attendance: row.attendance })), [
+    { ref: "91", remaining: 1, attendance: { kind: "one", attendeeRef: "101" } }, { ref: "94", remaining: 3, attendance: { kind: "none" } },
+  ]);
+  assert.equal(f.traffic.filter(row => row.path === "/v1/businesses/11").length, 3, "metadata is fresh before both snapshots and after them");
+  for (const secret of ["private-attendee-note", "private-other-name", "102", "103"]) assert.equal(JSON.stringify(result).includes(secret), false);
+});
+
+for (const fault of ["capacity", "subject", "wrongEndpointRecord", "duplicateSelection"] as const)
+  test(`E2E-397 paired ${fault} cannot publish either occurrence as a partial result`, async () => {
+    const f = fixture();
+    if (fault === "capacity") f.onRead((path, count) => { if (path === "/v1/group_appointments/94" && count === 2) f.attendees.push(attendee("401", "94", "44")); });
+    if (fault === "subject") f.onRead((path, count) => { if (path === "/v1/group_appointments/94" && count === 2) f.changeSubject(); });
+    const port: typeof fetch = (value, init) => new URL(String(value)).pathname === "/v1/group_appointments/94" && fault === "wrongEndpointRecord"
+      ? Promise.resolve(Response.json(f.groups[0])) : f.fetchPort(value, init);
+    const reader = resultValue(ClinikoClassAttendanceReader.create(f.config, f.proof, port, () => now));
+    const result = await reader.inspectPair(scope, "private-class-proof", fault === "duplicateSelection" ? ["91", "91"] : ["91", "94"], now, to, now, new AbortController().signal);
+    assert.equal(result.ok, false);
+  });
+
 for (const fault of ["business", "practitioner", "type", "link", "capacity", "missingFlag", "booking", "patient", "range", "singleType", "relationship"] as const)
   test(`E2E-390 class ${fault} mismatch cannot publish a partial attendance result`, async () => {
     const f = fixture();
