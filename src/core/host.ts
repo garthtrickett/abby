@@ -240,6 +240,10 @@ export interface StaffRequestHost {
 }
 
 export interface HostEffects {
+  /** Advisory capacity before caller affirmation. This does not reserve a slot,
+   * grant consent, or replace any authorization at the eventual write. */
+  checkConfirmationCapacity?(query: BookingMenuQuery & Readonly<{ actionKey: string; digest: string }>):
+    Promise<Result<Readonly<{ kind: "ready" }> | Readonly<{ kind: "wait"; seconds: number }>, HostReadFailure>>;
   /** Trusted adapter budget for its complete effect protocol, including review
    * and readback. Dispatcher validates 1..120000 ms; absent means 15000 ms.
    * This is not caller/model input and cannot extend proof or call lifetimes. */

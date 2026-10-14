@@ -666,8 +666,25 @@ export class TextReception {
     return this.runtime(scope).completeTextPresentation(callId, presentationId, now);
   }
 
-  affirm(scope: LocationScope, turn: FinalCallerTurn, actionKey: string, digest: string, now: string, expectedConversationRevision?: number): Promise<Result<CallState, TransitionFailure>> {
-    return this.runtime(scope).acceptTurn(turn, { kind: "affirm", actionKey, digest, affirmative: true }, now, expectedConversationRevision);
+  async affirm(scope: LocationScope, turn: FinalCallerTurn, actionKey: string, digest: string, now: string, expectedConversationRevision?: number, external?: AbortSignal): Promise<Result<CallState, TransitionFailure>> {
+    const runtime = this.runtime(scope);
+    if (!this.host.checkConfirmationCapacity) return runtime.acceptTurn(turn, { kind: "affirm", actionKey, digest, affirmative: true }, now, expectedConversationRevision);
+    const state = await runtime.read(turn.callId); if (!state.ok) return state;
+    if (expectedConversationRevision !== undefined && expectedConversationRevision !== state.value.conversationRevision) return err({ kind: "staleTurn" });
+    const action = state.value.actions[actionKey];
+    if (!turn.sessionId || action?.status !== "awaitingConfirmation" || action.digest !== digest || state.value.presentations[action.presentationId]?.status !== "played" || state.value.pendingPresentationId) return err({ kind: "confirmationMissing" });
+    const revision = state.value.conversationRevision;
+    const signal = AbortSignal.any([AbortSignal.timeout(5000), ...(external ? [external] : [])]);
+    let interpretation: TurnInterpretation = { kind: "readFailure", target: "appointment", failure: "unavailable" };
+    try {
+      const capacity = await awaitUntilAbort(this.host.checkConfirmationCapacity({ scope, callId: turn.callId, sessionId: turn.sessionId,
+        turnId: turn.turnId, policyVersion: state.value.policy.policyVersion, now, signal, actionKey, digest }), signal);
+      if (external?.aborted) return err({ kind: "staleTurn" });
+      if (capacity?.ok && capacity.value.kind === "ready") interpretation = { kind: "affirm", actionKey, digest, affirmative: true };
+      else if (capacity?.ok && capacity.value.kind === "wait") interpretation = { kind: "confirmationWait", actionKey, digest, seconds: capacity.value.seconds };
+      else if (capacity && !capacity.ok && capacity.error.kind === "expired") interpretation = { kind: "clarify", reason: "menuUnavailable" };
+    } catch { if (external?.aborted) return err({ kind: "staleTurn" }); }
+    return runtime.acceptTurn(turn, interpretation, now, revision);
   }
 
   async drain(scope: LocationScope, callId: string, now: string): Promise<Result<CallState, TextReceptionFailure>> {

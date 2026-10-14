@@ -4,7 +4,7 @@ import { noticePresentationId } from "../core/notice-presentation-id.ts";
 import { matchesBookingSearchWindow, validBookingSearchWindow } from "../core/booking-search-window.ts";
 import { err, ok } from "../core/model.ts";
 import type { ActionRequest, CallState, HostMutation, HostWriteReceipt, LocationScope, ReconcileObservation, Result, StaffItem, StaffTaskObservation, StaffTaskReceipt } from "../core/model.ts";
-import type { AppointmentChangeEvidenceHost, AppointmentChangeEvidenceQuery, BookingEvidenceHost, HostEffects, HostReadFailure, PolicyStore, ReschedulingMenuHost, ReschedulingMenuQuery, ReschedulingMenuReadQuery } from "../core/host.ts";
+import type { AppointmentChangeEvidenceHost, AppointmentChangeEvidenceQuery, BookingEvidenceHost, BookingMenuQuery, HostEffects, HostReadFailure, PolicyStore, ReschedulingMenuHost, ReschedulingMenuQuery, ReschedulingMenuReadQuery } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import type { ReschedulingMenuRead } from "../core/rescheduling-menu.ts";
 import { ClinikoClassAttendanceReader } from "../cliniko/class-attendance-read.ts";
@@ -125,7 +125,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
       ...(offer ? { destinationClassSessionId: offer.session.sessionRef } : {}), phase, termsVersion: context.version, signal }), signal) === true && !signal.aborted; }
     catch { return false; }
   }
-  #matches(query: ReschedulingMenuQuery) {
+  #matches(query: BookingMenuQuery) {
     const c = this.#config, now = Date.parse(query.now), actual = Date.parse(this.#now());
     return sameScope(query.scope, c.scope) && query.callId === c.callId && query.sessionId === c.sessionId && query.policyVersion === c.policyVersion && !query.signal.aborted &&
       Number.isFinite(now) && Number.isFinite(actual) && Math.abs(now - actual) <= 30000;
@@ -296,6 +296,28 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     finally { this.#busy = false; }
   }
   async resolveBooking(): Promise<Result<Extract<ActionRequest, { kind: "book" }>, HostReadFailure>> { return denied(); }
+  async checkConfirmationCapacity(query: BookingMenuQuery & Readonly<{ actionKey: string; digest: string }>): Promise<Result<Readonly<{ kind: "ready" }> | Readonly<{ kind: "wait"; seconds: number }>, HostReadFailure>> {
+    const p = this.#prepared;
+    if (!p || this.#busy || this.#attempted || !this.#matches(query) || digestActionRequest(p.request) !== query.digest) return denied();
+    const signal = this.#signal(query.signal), state = await this.#ready(signal), context = await this.#context(signal, p.target.verificationRef);
+    const pending = (value: CallState | undefined) => value?.actions[query.actionKey]?.status === "awaitingConfirmation" &&
+      value.actions[query.actionKey]!.digest === query.digest && value.presentations[value.actions[query.actionKey]!.presentationId]?.status === "played";
+    const request = context ? this.#request(context, p.target, p.offer) : undefined;
+    if (!pending(state) || !context || context.version !== p.version || !request || digestActionRequest(request) !== query.digest ||
+        !await this.#permit(context, p.target, p.offer, "review", signal)) return denied();
+    const same = context.source.practitionerId === context.destination.practitionerId && context.source.appointmentTypeId === context.destination.appointmentTypeId;
+    const capacity = await checkClinikoHeadroom(this.#config.cliniko.rateBudget, same ? 120 : 180);
+    const after = await this.#context(signal, p.target.verificationRef), current = await this.#ready(signal);
+    const refreshed = after ? this.#request(after, p.target, p.offer) : undefined;
+    if (!after || after.version !== p.version || !pending(current) || current!.conversationRevision !== state!.conversationRevision ||
+        !refreshed || digestActionRequest(refreshed) !== query.digest || this.#prepared !== p || signal.aborted ||
+        !await this.#permit(after, p.target, p.offer, "review", signal)) return denied();
+    if (capacity === null) return ok({ kind: "ready" });
+    if (capacity.kind !== "rateLimited" || !Number.isSafeInteger(capacity.retryAfterMs) || capacity.retryAfterMs! < 1 || capacity.retryAfterMs! > 60000) return denied();
+    const seconds = Math.ceil(capacity.retryAfterMs! / 1000);
+    if (Date.parse(request.terms.expiresAt) <= Date.parse(this.#now()) + (seconds + 3) * 1000) return err({ kind: "expired", target: "offer" });
+    return ok({ kind: "wait", seconds });
+  }
   async write(mutation: HostMutation, now: string, external?: AbortSignal): Promise<HostWriteReceipt> {
     const p = this.#prepared, c = this.#config, reject = (): HostWriteReceipt => ({ kind: "rejected", actionKey: mutation.actionKey, reason: "forbidden" });
     if (!p || this.#attempted || this.#busy || mutation.kind !== "reschedule" || mutation.request.kind !== "reschedule" || mutation.notification || !sameScope(mutation.scope, c.scope) ||

@@ -35,13 +35,13 @@ for (const different of [false, true])
     } finally { await f.close(); }
   });
 
-test("E2E-398 known insufficient cross-service budget refuses before review or attendance mutation", async () => {
+test("E2E-398 known insufficient cross-service budget waits before review or attendance mutation", async () => {
   const f = await classMoveFixture(true);
   try {
     await f.verify(); const action = await f.prepare(); await f.play();
     resultValue(await f.reception.affirm(f.scope, f.turn("yes", "Yes"), action.key, action.digest, verificationNow));
     resultValue(await f.reception.drain(f.scope, f.callId, verificationNow));
-    assert.equal((await f.state()).actions[action.key]!.status, "rejected");
+    assert.equal((await f.state()).actions[action.key]!.status, "awaitingConfirmation");
     assert.equal(f.writes.length, 0); assert.equal(f.recalls.length, 0);
     assert.equal(f.native.attendees.find(row => row.id === "101")!.cancelled_at, null);
   } finally { await f.close(); }
@@ -54,7 +54,7 @@ test("E2E-398 destination notice crossed during an otherwise valid caller pause 
     resultValue(await f.reception.affirm(f.scope, f.turn("yes", "Yes"), action.key, action.digest, "2026-10-04T06:01:01.000Z"));
     resultValue(await f.reception.drain(f.scope, f.callId, "2026-10-04T06:01:01.000Z"));
     assert.equal(f.writes.length, 0); assert.equal(f.recalls.length, 0);
-    assert.equal((await f.state()).actions[action.key]!.status, "rejected");
+    assert.equal((await f.state()).actions[action.key]!.status, "canceled");
   } finally { await f.close(); }
 });
 

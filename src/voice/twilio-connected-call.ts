@@ -65,6 +65,7 @@ export class TwilioConnectedCall {
   private retriedSilence = false;
   private blockedSilenceChecks = 0;
   private listeningControl: "pause" | "goodbye" | undefined;
+  private confirmationWaitMs: number | undefined;
 
   constructor(config: TwilioConnectedCallConfig) {
     const silenceWaitMs = config.silenceWaitMs ?? 15_000;
@@ -121,7 +122,7 @@ export class TwilioConnectedCall {
     this.cancelSilenceTimer();
     if (this.closed) return;
     const delay = kind === "playback" ? this.playbackDeadlineMs : this.listeningControl === "goodbye" ? 5_000 :
-      this.listeningControl === "pause" ? 30_000 : this.silenceWaitMs;
+      this.listeningControl === "pause" ? 30_000 : this.confirmationWaitMs ?? this.silenceWaitMs;
     const generation = this.silenceGeneration;
     this.silenceHandle = this.silenceTimer.schedule(() => {
       if (generation !== this.silenceGeneration) return;
@@ -144,8 +145,13 @@ export class TwilioConnectedCall {
     this.scheduleSilenceTimer("playback");
   }
 
-  private trackDelivery(delivery: Readonly<{ kind: string; playbackId?: string; conversationControl?: "pause" | "goodbye" }>, kind: "normal" | "retry" | "final" = "normal"): void {
+  private trackDelivery(delivery: Readonly<{ kind: string; playbackId?: string; conversationControl?: "pause" | "goodbye"; confirmationWaitSeconds?: number }>, kind: "normal" | "retry" | "final" = "normal"): void {
     this.listeningControl = delivery.kind === "queued" ? delivery.conversationControl : undefined;
+    // This is an explicit caller-facing wait, starting only after its playback mark.
+    // It does not extend confirmation evidence or execute the pending action.
+    this.confirmationWaitMs = delivery.kind === "queued" && Number.isSafeInteger(delivery.confirmationWaitSeconds) &&
+      delivery.confirmationWaitSeconds! >= 1 && delivery.confirmationWaitSeconds! <= 60 ?
+      delivery.confirmationWaitSeconds! * 1000 + 3000 : undefined;
     if (delivery.kind === "queued" && delivery.playbackId) this.watchPlayback(delivery.playbackId, kind);
     else if (delivery.kind === "none" || delivery.kind === "played") this.scheduleSilenceTimer("listening");
   }
@@ -159,6 +165,7 @@ export class TwilioConnectedCall {
     if (this.pendingPlayback) return;
     if (this.listeningControl === "goodbye") { await this.closeSession("normal"); return; }
     this.listeningControl = undefined;
+    this.confirmationWaitMs = undefined;
     const stage = this.retriedSilence ? "final" : "retry";
     const result = await this.call.silenceTimeout(stage, this.now());
     if (!result.ok) {
@@ -199,6 +206,7 @@ export class TwilioConnectedCall {
     this.cancelSilenceTimer();
     this.pendingPlayback = undefined;
     this.listeningControl = undefined;
+    this.confirmationWaitMs = undefined;
     this.stopCall();
     void this.lease.stop();
     this.stream.close();
@@ -282,6 +290,7 @@ export class TwilioConnectedCall {
         this.cancelSilenceTimer();
         this.pendingPlayback = undefined;
         this.listeningControl = undefined;
+        this.confirmationWaitMs = undefined;
         this.retriedSilence = false;
         this.blockedSilenceChecks = 0;
       } else if (progressed.value.kind === "turnCompleted") {
@@ -306,6 +315,7 @@ export class TwilioConnectedCall {
       this.cancelSilenceTimer();
       this.pendingPlayback = undefined;
       this.listeningControl = undefined;
+      this.confirmationWaitMs = undefined;
       this.retriedSilence = false;
       this.blockedSilenceChecks = 0;
       if (progressed.value.kind === "turnCompleted") this.trackDelivery(progressed.value.delivery);

@@ -93,9 +93,10 @@ export class PostgresClinikoRequestBudget implements ClinikoRequestBudget {
     try {
       return await this.locked<ClinikoBudgetDenial | null>(async (_trx, now, row) => {
         const cooldown = millis(row.cooldown_until_ms);
-        if (now < cooldown) return { kind: "rateLimited", resetAt: new Date(cooldown).toISOString() };
+        if (now < cooldown) return { kind: "rateLimited", resetAt: new Date(cooldown).toISOString(), retryAfterMs: cooldown - now };
         const recent = sentTimes(row.sent_at_ms).filter(at => at > now - minuteMs);
-        return recent.length + requests <= this.maxPerMinute ? null : { kind: "rateLimited", resetAt: new Date(recent[recent.length + requests - this.maxPerMinute - 1]! + minuteMs).toISOString() };
+        const reset = recent[recent.length + requests - this.maxPerMinute - 1]! + minuteMs;
+        return recent.length + requests <= this.maxPerMinute ? null : { kind: "rateLimited", resetAt: new Date(reset).toISOString(), retryAfterMs: reset - now };
       });
     } catch { return { kind: "unavailable" }; }
   }

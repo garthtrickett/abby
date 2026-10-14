@@ -5,7 +5,7 @@ export function clinikoCredentialFingerprint(apiKey: string): string {
   return createHash("sha256").update("abby-cliniko-credential-v1\0").update(apiKey).digest("hex");
 }
 
-export type ClinikoRateLimit = Readonly<{ kind: "rateLimited"; resetAt?: string }>;
+export type ClinikoRateLimit = Readonly<{ kind: "rateLimited"; resetAt?: string; retryAfterMs?: number }>;
 export type ClinikoBudgetDenial = ClinikoRateLimit | Readonly<{ kind: "unavailable" }>;
 export type ClinikoBudgetOperationalEvent = "claimRateLimited" | "claimUnavailable" | "provider429";
 
@@ -27,9 +27,11 @@ function normalizedLimit(value: unknown): ClinikoRateLimit | null {
   if (typeof value !== "object" || value === null) return null;
   const result = value as Partial<ClinikoRateLimit>;
   if (result.kind !== "rateLimited") return null;
-  if (result.resetAt === undefined) return { kind: "rateLimited" };
+  if (result.retryAfterMs !== undefined && (!Number.isSafeInteger(result.retryAfterMs) || result.retryAfterMs < 1 || result.retryAfterMs > 8_640_000_000)) return null;
+  const delay = result.retryAfterMs === undefined ? {} : { retryAfterMs: result.retryAfterMs };
+  if (result.resetAt === undefined) return { kind: "rateLimited", ...delay };
   return typeof result.resetAt === "string" && Number.isFinite(Date.parse(result.resetAt))
-    ? { kind: "rateLimited", resetAt: result.resetAt } : null;
+    ? { kind: "rateLimited", resetAt: result.resetAt, ...delay } : null;
 }
 
 function normalizedDenial(value: unknown): ClinikoBudgetDenial | null {
@@ -85,15 +87,18 @@ export class ClinikoReadBudget implements ClinikoRequestBudget {
     this.clock = clock;
   }
 
-  /** Reserve before sending. Synchronous reservation keeps concurrent callers under one process budget. */
+  /** Observe current capacity without reserving requests. */
   checkHeadroom(requests: number): ClinikoBudgetDenial | null {
     if (!Number.isSafeInteger(requests) || requests < 1 || requests > this.maxPerMinute) return { kind: "unavailable" };
     let now: number; try { now = this.clock(); } catch { return { kind: "unavailable" }; }
     if (!Number.isSafeInteger(now) || now < 0) return { kind: "unavailable" };
-    if (now < this.cooldownUntil) return { kind: "rateLimited", resetAt: new Date(this.cooldownUntil).toISOString() };
+    if (now < this.cooldownUntil) return { kind: "rateLimited", resetAt: new Date(this.cooldownUntil).toISOString(), retryAfterMs: this.cooldownUntil - now };
     const recent = this.sentAt.filter(at => at > now - 60000);
-    return recent.length + requests <= this.maxPerMinute ? null : { kind: "rateLimited", resetAt: new Date(recent[recent.length + requests - this.maxPerMinute - 1]! + 60000).toISOString() };
+    if (recent.length + requests <= this.maxPerMinute) return null;
+    const reset = recent[recent.length + requests - this.maxPerMinute - 1]! + 60000;
+    return { kind: "rateLimited", resetAt: new Date(reset).toISOString(), retryAfterMs: reset - now };
   }
+  /** Reserve before sending. Synchronous reservation keeps concurrent callers under one process budget. */
   claim(): ClinikoRateLimit | null {
     let now: number;
     try { now = this.clock(); }

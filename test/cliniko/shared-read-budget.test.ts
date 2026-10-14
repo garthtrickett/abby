@@ -12,6 +12,17 @@ const scope = { tenantId: "budget-tenant", clinicId: "budget-clinic", locationId
 const apiKey = "synthetic-key-au5";
 const contactEmail = "dev@example.test";
 
+test("E2E-402 headroom reports a relative wait on its own clock and rejects malformed host delays", async () => {
+  let now = 1234000; const budget = new ClinikoReadBudget(2, () => now);
+  assert.equal(budget.claim(), null); now += 15000;
+  assert.deepEqual(await checkClinikoHeadroom(budget, 2), { kind: "rateLimited", resetAt: new Date(1294000).toISOString(), retryAfterMs: 45000 });
+  assert.equal(budget.claim(), null, "headroom has not reserved the remaining claim");
+  for (const retryAfterMs of [0, -1, 1.5, NaN, Infinity, 8_640_000_001]) {
+    assert.equal((await checkClinikoHeadroom({ claim: () => null, observe429: () => ({ kind: "rateLimited" }),
+      checkHeadroom: () => ({ kind: "rateLimited", retryAfterMs }) }, 1))?.kind, "unavailable");
+  }
+});
+
 test("E2E-398 headroom checks do not consume or reserve quota, respect cooldown and reject unavailable hosts", async () => {
   let now = 180000;
   const budget = new ClinikoReadBudget(3, () => now);

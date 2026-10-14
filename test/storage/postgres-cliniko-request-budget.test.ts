@@ -147,13 +147,17 @@ test("E2E-160 conflicting limits for one Cliniko user fail closed", async () => 
   assert.deepEqual(await misconfigured.claim(), { kind: "unavailable" });
 });
 
-test("E2E-398 PostgreSQL headroom uses current shared claims and cooldown without reserving capacity", async () => {
+test("E2E-398 E2E-402 PostgreSQL headroom uses current shared claims, relative waits and cooldown without reserving capacity", async () => {
   const apiKey = `synthetic-headroom-${crypto.randomUUID()}-au5`;
   const first = new PostgresClinikoRequestBudget(firstDb, { apiKey, maxPerMinute: 4 });
   const second = new PostgresClinikoRequestBudget(secondDb, { apiKey, maxPerMinute: 4 });
   assert.equal(await checkClinikoHeadroom(first, 4), null); assert.equal(await checkClinikoHeadroom(second, 4), null);
   assert.equal(await first.claim(), null);
-  assert.equal((await checkClinikoHeadroom(second, 4))?.kind, "rateLimited");
+  const wait = await checkClinikoHeadroom(second, 4);
+  assert.equal(wait?.kind, "rateLimited");
+  if (wait?.kind !== "rateLimited") throw new Error("missing account wait");
+  assert.ok(Number.isSafeInteger(wait.retryAfterMs) && wait.retryAfterMs! > 0 && wait.retryAfterMs! <= 60000,
+    "database supplies its own relative wait; no clinic clock conversion is needed");
   assert.equal(await checkClinikoHeadroom(second, 3), null);
   assert.equal(await second.claim(), null); assert.equal(await first.claim(), null); assert.equal(await second.claim(), null);
   assert.equal((await first.claim())?.kind, "rateLimited");

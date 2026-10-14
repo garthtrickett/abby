@@ -71,7 +71,7 @@ export type TransferPort = Readonly<{ request(transferId: string, destinationRef
 export type TransientPresentationConfig = Readonly<{ greeting: ApprovedGreeting; staffWorkUnavailable?: true }>;
 export type VoiceSessionFailure = TransitionFailure | TextReceptionFailure | TranscriptFailure |
   Readonly<{ kind: "sessionUnknown" | "deliveryBlocked" | "playbackUnknown" | "transportUnavailable" | "intentUnavailable" | "automatedCallUnavailable" }>;
-export type DispatchResult = Readonly<{ kind: "none" | "queued" | "played" | "failed" | "unproven" | "interrupted" | "transferConnected" | "transferFailed" | "transferUnproven" | "transferCanceled"; playbackId?: string; conversationControl?: "pause" | "goodbye" }>;
+export type DispatchResult = Readonly<{ kind: "none" | "queued" | "played" | "failed" | "unproven" | "interrupted" | "transferConnected" | "transferFailed" | "transferUnproven" | "transferCanceled"; playbackId?: string; conversationControl?: "pause" | "goodbye"; confirmationWaitSeconds?: number }>;
 
 type ActivePlayback = { id: string; presentationId: string; generation: number };
 
@@ -485,7 +485,7 @@ export class VoiceSession {
       if (turn.quality !== "clear" || !clearAffirmation(turn.text)) return err({ kind: "confirmationMissing" });
       const candidates = Object.values(existing.value.actions).filter(action => action.status === "awaitingConfirmation" && existing.value.presentations[action.presentationId]?.status === "played");
       if (candidates.length !== 1) return err({ kind: "confirmationMissing" });
-      result = await this.reception.affirm(this.scope, turn, candidates[0]!.key, candidates[0]!.digest, now, existing.value.conversationRevision);
+      result = await this.withPendingIntent(signal => this.reception.affirm(this.scope, turn, candidates[0]!.key, candidates[0]!.digest, now, existing.value.conversationRevision, signal));
     }
     if (result.ok && generation === this.assembler.currentGeneration()) {
       this.rememberPending(result.value);
@@ -649,7 +649,10 @@ export class VoiceSession {
     if (send === "queued") {
       if (!this.privatePlayback.has(presentationId)) this.unattended.rememberOutput(approvedText);
       const control = this.controlPresentation?.id === presentationId ? this.controlPresentation.mode : undefined;
-      return ok({ kind: "queued", playbackId, ...(control ? { conversationControl: control } : {}) });
+      return ok({ kind: "queued", playbackId, ...(control ? { conversationControl: control } : {}),
+        ...(presentation.kind === "notice" && Number.isSafeInteger(presentation.confirmationWaitSeconds) &&
+          presentation.confirmationWaitSeconds! >= 1 && presentation.confirmationWaitSeconds! <= 60 ?
+          { confirmationWaitSeconds: presentation.confirmationWaitSeconds } : {}) });
     }
     this.activePlayback = undefined;
     this.transientContent?.delete(presentationId);

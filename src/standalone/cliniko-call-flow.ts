@@ -975,6 +975,10 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   }
   async resolveBooking(scope: LocationScope, verificationRef: string, offerRef: string, now: string, signal?: AbortSignal) { return this.#booking()?.resolveBooking(scope, verificationRef, offerRef, now, signal) ?? offerDenied(); }
   #rescheduling() { return this.#staffActive ? undefined : this.#owner instanceof ClinikoReschedulingSession ? this.#owner.effects : this.#owner instanceof ClinikoClassSession ? this.#owner.rescheduling : undefined; }
+  async checkConfirmationCapacity(query: BookingMenuQuery & Readonly<{ actionKey: string; digest: string }>) {
+    const owner = !this.#staffActive && this.#owner instanceof ClinikoClassSession ? this.#owner.rescheduling : undefined;
+    return owner ? owner.checkConfirmationCapacity(query) : ok({ kind: "ready" as const });
+  }
   reschedulingMenuAvailable(): boolean { return this.#rescheduling()?.reschedulingMenuAvailable() === true; }
   async readReschedulingMenu(query: ReschedulingMenuReadQuery) {
     this.#switchPromptTurnId = undefined;

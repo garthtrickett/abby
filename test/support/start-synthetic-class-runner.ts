@@ -13,7 +13,7 @@ import { classCallFlowFixture } from "./class-call-flow.ts";
 import { classMoveCallFlowFixture } from "./class-move-call-flow.ts";
 import type { ClassServiceConfig } from "../../src/standalone/class-service-catalogue.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
-import { classAttendee } from "./class-attendance.ts";
+import { classAttendee, classLink } from "./class-attendance.ts";
 
 const operation = process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION;
 if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
@@ -22,7 +22,10 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
   throw new Error("synthetic class runner requires an isolated attendance fixture");
 }
 const multiple = process.env.ABBY_SYNTHETIC_MULTIPLE_CLASSES === "1";
-const f = operation === "reschedule" ? await classMoveCallFlowFixture(false, multiple) : await classCallFlowFixture(operation, multiple); f.flow.dispose();
+const f = operation === "reschedule" ? await classMoveCallFlowFixture(process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1", multiple) : await classCallFlowFixture(operation, multiple); f.flow.dispose();
+if (operation === "reschedule" && process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1")
+  f.native.groups.push({ ...structuredClone(f.native.groups[1]!), id: "95", ...classLink("group_appointments", "95"),
+    starts_at: "2026-10-09T12:00:00.000Z", ends_at: "2026-10-09T12:30:00.000Z" });
 const c = f.flowConfig, apiKey = process.env.ABBY_CLINIKO_API_KEY!, now = c.clock!;
 process.env.ABBY_TENANT_ID = f.scope.tenantId; process.env.ABBY_CLINIC_ID = f.scope.clinicId; process.env.ABBY_LOCATION_ID = f.scope.locationId;
 process.env.ABBY_TWILIO_TEST_CALLER_NUMBER = f.inbound.presentedCallerNumber;
@@ -43,6 +46,10 @@ const occupyClass = () => { for (let index = 0; index < 3; index++) f.native.att
 process.on("message", message => {
   if (!message || typeof message !== "object" || !("kind" in message)) return;
   if (message.kind === "input" && "text" in message && typeof message.text === "string") { inputs.push(message.text); process.send?.({ kind: "inputAccepted" }); }
+  if (message.kind === "advanceClock" && "milliseconds" in message && Number.isSafeInteger(message.milliseconds) &&
+      typeof message.milliseconds === "number" && message.milliseconds >= 0 && message.milliseconds <= 15000) {
+    f.setTime(new Date(Date.parse(now()) + message.milliseconds).toISOString()); process.send?.({ kind: "clockAdvanced" });
+  }
   if (message.kind === "denyPermission") denied = true;
   if (message.kind === "denyClassPermission") classDenied = true;
   if (message.kind === "loseMail") mailLost = true;

@@ -43,7 +43,7 @@ test("E2E-399 actual signed class movement uses ordinary routing, private keypad
         assert.match(call.spoken.at(-1)!, /book the replacement before cancelling the original/);
         await call.mark(); if (fault === "permission") f.permit(false);
         await call.turn("Yes");
-        assert.equal((await call.state()).actions[action.key]!.status, fault === "none" ? "committed" : fault === "lostOriginal" ? "uncertain" : "rejected");
+        assert.equal((await call.state()).actions[action.key]!.status, fault === "none" ? "committed" : fault === "lostOriginal" ? "uncertain" : "canceled");
         assert.equal(f.writes.length, fault === "permission" ? 0 : 2); assert.equal(f.recalls.length, fault === "permission" ? 0 : 1);
         if (fault !== "permission") {
           assert.deepEqual(call.writes, ["POST /v1/attendees", "PATCH /v1/attendees/101/cancel"]);

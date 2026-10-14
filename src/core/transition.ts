@@ -285,7 +285,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
         Object.values(state.effects).some(effect => (effect.kind === "hostWrite" || effect.kind === "staffTask") && !["completed", "canceled"].includes(effect.status))) return err({ kind: "invalidTransition" });
   }
   interpretation = restrictDeniedCaller(state, interpretation);
-  if (interpretation.kind !== "affirm") supersedeUnsent(state);
+  if (interpretation.kind !== "affirm" && interpretation.kind !== "confirmationWait") supersedeUnsent(state);
   cancelModelWork(state);
   state.conversationRevision += 1;
   const messageCount = state.callerMessages.length;
@@ -399,6 +399,18 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
     case "requestAction": {
       const result = handleRequest(state, turn, interpretation.request, now);
       if (!result.ok) return result;
+      break;
+    }
+    case "confirmationWait": {
+      const action = state.actions[interpretation.actionKey];
+      if (turn.quality !== "clear" || !clearAffirmation(turn.text) || !action || action.status !== "awaitingConfirmation" ||
+          action.kind !== "reschedule" || !state.policy.automationEnabled || !state.policy.reschedulingEnabled ||
+          state.policy.capabilities.reschedule !== "execute" || !state.policy.staffWorkEnabled ||
+          action.digest !== interpretation.digest || state.pendingPresentationId || state.presentations[action.presentationId]?.status !== "played" ||
+          !Number.isSafeInteger(interpretation.seconds) || interpretation.seconds < 1 || interpretation.seconds > 60 ||
+          evidenceFailure(state, action.mutation.request, now) ||
+          Object.values(state.actions).some(other => other.key !== action.key && ["awaitingConfirmation", "ready"].includes(other.status))) return err({ kind: "confirmationMissing" });
+      state.callerMessages.push(`The booking system needs a moment. Please wait about ${interpretation.seconds} seconds, then say yes again if you still want this change. I haven't changed your appointment, and the replacement time is not reserved.`);
       break;
     }
     case "affirm": {
@@ -550,7 +562,8 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   const newMessages = state.callerMessages.slice(messageCount);
   if (newMessages.length > 0 && !state.pendingPresentationId) {
     const id = noticePresentationId(state.callId, turn.turnId);
-    state.presentations[id] = { kind: "notice", id, approvedText: newMessages.join(" "), status: "pending" };
+    state.presentations[id] = { kind: "notice", id, approvedText: newMessages.join(" "), status: "pending",
+      ...(interpretation.kind === "confirmationWait" ? { confirmationWaitSeconds: interpretation.seconds } : {}) };
     state.pendingPresentationId = id;
   }
   state.processedTurnIds.push(turn.turnId);

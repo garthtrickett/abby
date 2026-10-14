@@ -284,6 +284,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason; approvedLocation?: string }>
   | Readonly<{ kind: "requestAction"; request: ActionRequest }>
   | Readonly<{ kind: "affirm"; actionKey: string; digest: string; affirmative: boolean }>
+  | Readonly<{ kind: "confirmationWait"; actionKey: string; digest: string; seconds: number }>
   | Readonly<{ kind: "handoff"; reason: StaffReason; requestedPerson?: string; staffWorkUnavailable?: true }>
   | Readonly<{ kind: "transfer"; reason: StaffReason }>
   | Readonly<{ kind: "readFailure"; target: "patient" | "offer" | "appointment"; failure: "unavailable" | "notFound" }>
@@ -340,6 +341,8 @@ export type Presentation =
     kind: "notice";
     id: string;
     approvedText: string;
+    /** Only a core-validated confirmation wait can extend this notice's listening interval. */
+    confirmationWaitSeconds?: number;
     status: "pending" | "started" | "played" | "interrupted" | "failed" | "unproven" | "superseded";
   }>
   | Readonly<{
