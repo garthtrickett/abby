@@ -9,7 +9,7 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 | 1 | Wire existing booking, enquiry, cancellation, rescheduling and intake into the running receptionist. | Local engineering proof now covers all five workflows through separately compiled runner subprocesses, signed serving paths, private verification, played confirmation, current-policy denial, independent permission, delivery loss and no replay. CI and real activation remain open under gaps 2–4. |
 | 2 | Connect caller verification and clinic-approved permissions. | Separate draft PR 454 adds real TLS SMTP to the actual verifier/protected read with synthetic data; typecheck and 22 checks passed, including failed delivery and independent permission denial. Real sender/mailbox, accepted clinic policy and deploying-host permission source remain open. Channel possession alone cannot grant proxy/minor authority. |
 | 3 | Establish message delivery, staff handoff, monitoring and recovery ownership. | Four compiled-runner staff journeys now pass: named saved request, unknown write without replay, permission denial before mail and revocation before send. Existing recall/review/aggregate contracts remain. Deployed monitoring receiver, real sender and human clinic process remain open. |
-| 4 | Complete synthetic speech, public transport and eventual carrier qualification. | Prior synthetic runtime evidence exists; noisy/safety and repeated speech gates remain open. The October13 noisy baseline still matches current source inputs and records12 critical misses in18 runs with40.15% word error rate; it is not a release pass. Speech-provider credits were restored in the earlier investigation; public tunnel still requires a dedicated usable route. Twilio-number carrier evidence is deferred, not substituted with synthetic results. |
+| 4 | Complete synthetic speech, public transport and eventual carrier qualification. | Prior synthetic runtime evidence exists; noisy/safety and repeated speech gates remain open. The October14 repeated baseline remains source-matched and fails with11 critical misses in18 runs and41.67% WER. Near-field reduction worsens WER to50.76%; the committed-turn model improves to30.30% but still has10 critical misses. No candidate passes or is promoted. Speech-provider credits were restored in the earlier investigation; public tunnel still requires a dedicated usable route. Twilio-number carrier evidence is deferred, not substituted with synthetic results. |
 | 5 | Expand services, duration choices, locations and initial/follow-up rules. | Current service/intake variants, return rules and independently provisioned multi-location compiled hosts are locally qualified in draft457. Actual clinic configuration/acceptance and authoritative CI remain open. |
 | 6 | Extend searches and support online-disabled services where required. | E2E-356 locally qualifies complete approved longer online searches and a compiled two-month late-range booking. E2E-357/358 add independently approved non-recurring native calendars, complete adaptive busy reads, Sunday0/7 and compiled returning/first-time location/member coverage with fresh chosen-day reads. Recurrence and broader real-calendar/serving qualification remain incomplete; preserve incomplete-source denial, date bounds and offer/commit agreement. |
 | 7 | Support another approved practitioner during rescheduling. | E2E-359 locally qualifies explicit approved practitioner pairs, independent destination policy, named played confirmation and one inspected in-place move at a changed or retained time. E2E-360 adds the current approved directory, retained original preference, played name/ordinal choice, pagination, fresh-time invalidation and ordinary signed/compiled dialogue. Final type/build and 99 checks passed; current exact-head cloud, real model/acoustic and clinic acceptance remain open. |
@@ -2403,3 +2403,23 @@ critical misses across18 noisy runs (40.15% word error rate). Provider credits
 were already restored. This is a known quality failure to investigate, not a
 new pass or a credit blocker. Real patient audio, real email and Twilio-number
 activation remain excluded.
+
+
+## Return to gap4: current repeated noisy-speech evidence, 14 October2026
+
+The current baseline and two controlled comparisons now have18 results each
+(three repeats per pinned noisy case, concurrency2). Current live-transcription
+defaults fail with11 critical misses/41.67% WER; near_field reduction has11 misses/
+50.76% WER; the committed-turn model has10 misses/30.30% WER. Latency and provider
+availability pass their checks; accuracy does not. Every run exits1 for the
+unchanged quality gate, not a credential or transport outage. All54 result
+identities and current audio/source hashes and assessments were independently
+verified. No adapter, model default, threshold, corpus or readiness changed.
+
+See [aggregate metrics and hashes](../eval/baselines/synthetic-speech-comparison-20261014-v1.json)
+and [commands, logs and interpretation](../eval/LIVE_BASELINE_2026-09-29.md#current-synthetic-comparison--2026-10-14).
+Most remaining model-comparison misses cluster in one synthetic voice. Earlier
+October5–8 filter/context/PCMU work already exists; review it and inspect waveform
+and conversion evidence before further candidate screens. No fixture defect or
+production improvement is claimed. Full speech qualification, remaining class
+membership/pass/credits and the full13 objective remain open.

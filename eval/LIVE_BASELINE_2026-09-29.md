@@ -1,5 +1,58 @@
 # Live synthetic evaluation baseline — 2026-09-29
 
+## Current synthetic comparison — 2026-10-14
+
+The unchanged six-clip noisy corpus was replayed through the production Realtime
+adapter for three repeats per case, two concurrent sessions per configuration.
+All54 results, repeat identities, pinned clip/source hashes and machine
+assessments were independently recomputed before recording the
+[aggregate evidence](baselines/synthetic-speech-comparison-20261014-v1.json).
+Only the selected existing evaluation credential entered the synthetic runner;
+raw reports remain owner-only under the canonical ignored `eval/results/` path.
+
+| Configuration | Runs | Critical misses | WER | Final p95 after commit | Provider failures | Gate |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Current `gpt-live-transcribe` defaults | 18 | 11 | 41.67% | 1,170ms | 0 | fail |
+| Same model with only `near_field` reduction added | 18 | 11 | 50.76% | 1,048ms | 0 | fail |
+| `gpt-transcribe`, other controls unchanged | 18 | 10 | 30.30% | 1,117ms | 0 | fail |
+
+All three fail the unchanged zero-critical and maximum10% WER criteria. No empty,
+truncated, delayed or provider-failed cases occurred; every case has all three
+repeats. Near-field reduction is rejected. The committed-turn model improves WER
+but still fails, with most remaining recognition errors in the `slt` voice. No
+configuration is promoted and all finals remain `needsClarification`. No clean,
+safety or synthesis gate is claimed for these candidates; no threshold, pinned
+corpus, production adapter, dependency or readiness setting changed.
+
+[Official OpenAI documentation](https://developers.openai.com/api/docs/guides/realtime-transcription#transcribe-a-committed-turn)
+describes `gpt-transcribe` for committed-turn finals and documents transcription
+context and delay controls. This explains the bounded comparison; it does not
+establish Abby quality or a production choice. The earlier October5–8 filter,
+context, PCMU and supplementary-voice investigations below remain relevant and
+must be reviewed before repeating those candidates. Synthetic-source waveform
+and conversion evidence should be inspected before further parameter screens.
+The generator already emits16kHz PCM and normalizes telephone frames; no
+sample-rate defect is established by this comparison.
+
+Exact executed commands (each report is immutable and must use a new output path
+for a later run):
+
+```sh
+node /tmp/abby-synthetic-transcription-eval.mjs --out /home/gust/code/abby/eval/results/20261014-original-noise-recheck18.json --corpus transcription-noise-v1 --repeats 3 --concurrency 2
+node /tmp/abby-synthetic-transcription-eval.mjs --out /home/gust/code/abby/eval/results/20261014-near-field-noise-recheck18.json --corpus transcription-noise-v1 --repeats 3 --concurrency 2 --noise-reduction near_field
+node /tmp/abby-synthetic-transcription-eval.mjs --out /home/gust/code/abby/eval/results/20261014-committed-model-noise18.json --corpus transcription-noise-v1 --repeats 3 --concurrency 2 --model gpt-transcribe
+node /tmp/abby-verify-noise-recheck-20261014.mjs
+```
+
+Tracked logs are `4590eee3-1792007998300.log` (45s),
+`4590eee3-1792007998413.log` (46s) and `4590eee3-1792008079677.log` (43s).
+Every evaluation exits1 for its failed quality gate; the independent artifact
+verification exits0. The aggregate includes report SHA-256, exact source inputs,
+thresholds and metrics without transcripts. Production remains on hold; human,
+clinic and carrier acceptance remain pending. This is progress in diagnosis,
+not completion of speech quality or the full thirteen-gap objective.
+
+
 All runs used patient-free synthetic fixtures, an account-provided OpenAI API key, and owner-only reports under ignored `eval/results/`. No key value or real patient content is in this file. The reports retain repeat-level proposals or transcripts for local review; this summary records only counts and configuration evidence.
 
 ## Replacement voice fixtures and original-noise control — 2026-10-08
