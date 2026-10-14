@@ -28,6 +28,7 @@ export const verificationNow = "2026-10-04T06:00:00.000Z";
 export const verificationCanaries = ["registered-session@example.test", "private-session-chart", "482746192837465"];
 
 export async function callerVerificationFixture(options: { apiKey?: string; scope?: LocationScope; folder?: string; approved?: boolean; enabled?: boolean;
+  rateBudget?: import("../../src/cliniko/read-budget.ts").ClinikoRequestBudget;
   contactRevision?: import("../../src/cliniko/contact-revision.ts").ClinikoContactRevisionReader;
   capturePolicy?: (policy: CallPolicy, folder: string) => Promise<CallPolicy>;
   operation?: PatientOperation; budget?: PatientVerificationBudget; delivery?: PatientCodeDelivery; timeoutMs?: number; cancellationExecute?: boolean; bookingExecute?: boolean; reschedulingExecute?: boolean; patientUpdateExecute?: boolean; staffWorkEnabled?: boolean } = {}) {
@@ -89,7 +90,7 @@ export async function callerVerificationFixture(options: { apiKey?: string; scop
     const apiKey = options.apiKey ?? "synthetic-session-au5", contactEmail = "test@example.test";
     const sessionConfig = { receipt, inbound, sessionId, policyVersion: captured.policyVersion, operation: options.operation ?? "appointments.read",
       ledger, policyStore: policies, policy, lookup: { candidates: async () => ok(candidates) },
-      contact: new ClinikoVerificationContactReader({ scope, apiKey, contactEmail, countryCallingCode: "61",
+      contact: new ClinikoVerificationContactReader({ scope, apiKey, contactEmail, countryCallingCode: "61", ...(options.rateBudget ? { rateBudget: options.rateBudget } : {}),
         ...(options.contactRevision ? { contactRevision: options.contactRevision } : {}) }, fetchPort),
       permission: { allows: async () => permitted }, budget: options.budget ?? { reserve: async () => true },
       delivery: options.delivery ?? { send: async (address: string, code: string) => { mail.push({ email: address, code }); return true; } },

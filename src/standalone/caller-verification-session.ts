@@ -87,7 +87,7 @@ export class CallerVerificationSession {
     }
     // Read call ownership last, after any asynchronous policy/stop reads.
     const state = await ledger.read(receipt.callId, receipt.scope);
-    if (!state.ok || state.value.callId !== receipt.callId || state.value.lifecycle !== "active" ||
+    if (!state.ok || state.value.callId !== receipt.callId || state.value.lifecycle !== "active" || state.value.callerIdentityDenied !== undefined ||
         !sameScope(state.value.policy.scope, receipt.scope) || state.value.policy.automationEnabled !== true ||
         state.value.policy.policyVersion !== policyVersion || !state.value.sessionLease ||
         state.value.sessionLease.sessionId !== sessionId ||
@@ -109,6 +109,12 @@ export class CallerVerificationSession {
     if (this.#closed || !(contact instanceof ClinikoVerificationContactReader)) return false;
     const selection = contact.selection(), scope = this.#config.receipt.scope;
     return selection.credentialFingerprint === credentialFingerprint && selection.scope.tenantId === scope.tenantId && selection.scope.clinicId === scope.clinicId;
+  }
+
+  /** Representative roots must possess their own native registered channel.
+   * A delegated subject verifier cannot become a new delegating caller. */
+  usesSelfRegisteredContact(): boolean {
+    return !this.#closed && this.#config.contact.constructor === ClinikoVerificationContactReader;
   }
 
   usesContactRevision(owner: import("../cliniko/contact-revision.ts").ClinikoContactRevisionReader): boolean {

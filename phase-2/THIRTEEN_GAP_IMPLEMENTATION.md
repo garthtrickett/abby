@@ -14,7 +14,7 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 | 6 | Extend searches and support online-disabled services where required. | E2E-356 locally qualifies complete approved longer online searches and a compiled two-month late-range booking. E2E-357/358 add independently approved non-recurring native calendars, complete adaptive busy reads, Sunday0/7 and compiled returning/first-time location/member coverage with fresh chosen-day reads. Recurrence and broader real-calendar/serving qualification remain incomplete; preserve incomplete-source denial, date bounds and offer/commit agreement. |
 | 7 | Support another approved practitioner during rescheduling. | E2E-359 locally qualifies explicit approved practitioner pairs, independent destination policy, named played confirmation and one inspected in-place move at a changed or retained time. E2E-360 adds the current approved directory, retained original preference, played name/ordinal choice, pagination, fresh-time invalidation and ordinary signed/compiled dialogue. Final type/build and 99 checks passed; current exact-head cloud, real model/acoustic and clinic acceptance remain open. |
 | 8 | Add patient detail corrections, required registration fields and resends. | E2E-361–368 locally qualify patient corrections, account revisions, linked recovery, private edit/reset and guarded setting-history portability. E2E-369 adds independently approved required address fields, complete private collection/readback, field-bound host authority, native response/inspection and separate registration/booking confirmation; final typecheck/build and80 checks passed without skips. E2E-370–379 qualify resend SMTP, native evidence, SAM consent, signed private selection/paging, interruption recovery and mapped staff receipt inspection. E2E-380 now locally qualifies explicit versioned in-person/telehealth/cancelled formats through116 final checks. Unsupported clinic-specific field adapters and production recovery-host/operator integration/acceptance remain open; current-head cloud and actual clinic/mail/model/acoustic acceptance are absent. |
-| 9 | Handle multiple patients/actions in one call. | E2E-381 locally qualifies an explicit same-caller task sequence: fresh verification/consent, two native/signed bookings, preserved receipts, current-task outcomes, uncertain/count/source/member/patient denial and two-phase startup/activation recovery. Final type/build and84 checks passed. Per-person private selection, independently approved proxy/minor authority, cross-operation/catalogue sequences and staff outcomes remain unfinished; no household disclosure is inferred. |
+| 9 | Handle multiple patients/actions in one call. | E2E-381 locally qualifies an explicit same-caller task sequence: fresh verification/consent, two native/signed bookings, preserved receipts, current-task outcomes, uncertain/count/source/member/patient denial and two-phase startup/activation recovery. Final type/build and84 checks passed. E2E-382 now adds private native related-person selection, independent adult/guardian authority and selected registered-channel verification/protected reads; final type/build and61 serving/native checks passed without skips. Ordinary private voice/workflow routing, representative mutations, callers without their own native patient record, alternative guardian channels, cross-operation/catalogue sequences and staff outcomes remain unfinished; no household disclosure is inferred. |
 | 10 | Add class attendance booking, cancellation and movement. | Individual endpoints are insufficient. Require existing session/attendee identities, capacity and duplicate checks, compensating move recovery and truthful concurrent-result handling. Membership credits/passes require their own evidence. |
 | 11 | Add deposits, paid confirmation, receipts and expiry handling. | Financial boundaries exist, payment lifecycle absent. Require real provider adapter contracts, signed webhook/idempotency, delivered links, separate expiry authority and no refund/coverage/hold invention. |
 | 12 | Add outbound follow-up and practitioner sick-day management. | Recalls are not campaigns. Require scoped audience, opt-out, fresh appointment context, scheduler, per-action outcomes and recovery. |
@@ -819,3 +819,64 @@ npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh 
 ```
 
 This checkpoint adds no dependency, migration or generated schema change. Task-history metadata contains action keys only; standalone call, subject pin and owner state remain transient and are not recoverable after process loss. Another-person/proxy/minor authority, cross-operation/catalogue sequence qualification and per-task staff outcomes remain open. Real clinic/source/permission/operator/model/acoustic/cloud acceptance is absent; full-call evidence stays planned. The complete13 goal remains active.
+
+## Gap9 related-person identity and independent authority checkpoint
+
+`ClinikoRepresentativeSelection` composes the actual admitted self verifier,
+complete bounded native relationships, private exact first/last name and birth
+date, and a separately supplied clinic permission source. The native relationship
+is an identity candidate, never permission. An explicit owner file binds account,
+business, zone, policy, adult-age threshold, permitted adult/guardian process and
+operations. Stable independent authority is checked before a subject read and
+again after fresh native evidence. Source/member, actor proof, relationship,
+subject identity/registered email and permission drift stop access. The selected
+subject obtains a separate actual caller-verification session and fresh OTP at
+its native registered email; that proof reaches the existing protected appointment
+reader. Stale person references and delegation through a representative proof
+are refused. No native write or public patient fields are introduced.
+
+This implements an authority foundation within gap9. It does not activate
+ordinary representative speech or workflow routing, authorize new-patient proxy
+intake, infer guardian consent from a family label, or provision a real permission
+host. Representatives without an independently verified native self record and
+children needing a different approved delivery channel still need implementation.
+Per-person writes, multiple-person sequencing, cross-operation/catalogue tasks,
+staff outcomes and the remaining thirteen-gap requirements remain open.
+
+Initial source check passed. The first fixture run failed at a missing object
+brace; the second stopped on strict optional fetch/clock typing. Corrected
+whole-source typechecking and28 native/legacy checks passed with zero skips in
+`4590eee3-1791960693530.log`. A new actual shared200-per-minute Cliniko budget
+witness then failed at the protected read: unnecessary native re-reads in method
+policy and candidate lookup consumed the budget. Those two non-disclosing gates
+now recheck current process/actor/authority; registered contact and protected
+operation permission still independently recheck exact fresh native relationship
+and subject evidence. The corrected10-case selection suite passed, including
+actual shared-budget actor+subject proof and protected read, in
+`4590eee3-1791960898112.log`. No budget, deadline, assertion or concurrency was
+increased. Final type/build/serving regression is pending; manifest1.190/382 IDs
+keeps native evidence separate from planned voice/full-call qualification.
+
+The first final source/build/serving regression passed60 checks with zero skips
+in `4590eee3-1791961018424.log`. A separate actual SAM identity-disagreement
+witness then exposed a verifier boundary: the recorded denial did not itself
+revoke a verifier outside call-flow disposal. `CallerVerificationSession` now
+checks the recorded denial on every active-call check. New representative cases
+prove both pre-selection denial and revocation of an already issued delegated
+proof, without further related-person reads. The focused22-case representative,
+caller-verifier and native identity-denial regression passed without skips in
+`4590eee3-1791961423952.log`. Final requalification of the corrected source is
+running as `Abby representative final identity fenced source and serving
+qualification`, log `4590eee3-1791961473956.log`.
+
+Final corrected-source qualification completed exit0: whole-source typecheck,
+fresh compiled voice build, isolated PostgreSQL migrations and61 native/core/
+signed-serving checks passed, zero failures/skips, followed by `git diff --check`.
+Log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791961473956.log`.
+Exact command: `npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh bash -c "npm run db:migrate && node --test --test-concurrency=4 test/cliniko/representative-selection.test.ts test/cliniko/email-patient-authority.test.ts test/cliniko/caller-verification-session.test.ts test/cliniko/call-task-sequence.test.ts test/cliniko/cliniko-call-flow.test.ts test/cliniko/request-boundary.test.ts test/voice/call-task-sequence-runner.test.ts test/voice/standalone-clinical-runner.test.ts test/voice/caller-identity-denial.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts" && git diff --check`.
+Source was frozen during qualification. Eleven E2E-382 native tests qualify
+identity/authority/channel/read boundaries; their registry evidence remains text/
+native only, with synthetic voice and full-call planned. No dependency, database
+migration or production activation is introduced. Current-head authoritative
+cloud qualification and all real clinic/mail/operator/acoustic/carrier gates
+remain separate; the complete13 goal stays active.

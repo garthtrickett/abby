@@ -9,16 +9,17 @@ import type { ClinicApproval } from "./owner-file-clinic-approval.ts";
 export type CallerPolicyFailure = Readonly<{ kind: "callerPolicyUnavailable" }>;
 export type CallerVerificationApproval = ClinicApproval & Readonly<{
   method: "emailOtp"; maxAnswers: 3; lifetimeSeconds: 300;
-  sharedNumbers: "deny"; representatives: "deny"; patientPermission: "independentClinicHost";
+  sharedNumbers: "deny"; representatives: "deny" | "independentClinicHost"; representativeRecipient?: "selectedPatientRegisteredEmail"; patientPermission: "independentClinicHost";
   operations: readonly PatientOperation[];
 }>;
 const operations: readonly PatientOperation[] = patientOperations;
 function approval(value: unknown, scope: LocationScope): CallerVerificationApproval | undefined {
-  const common = decodeClinicApproval(value, scope, [...clinicApprovalKeys, "method", "maxAnswers", "lifetimeSeconds", "sharedNumbers", "representatives", "patientPermission", "operations"]);
+  const extended = value && typeof value === "object" && (value as Record<string, unknown>).representatives === "independentClinicHost";
+  const common = decodeClinicApproval(value, scope, [...clinicApprovalKeys, "method", "maxAnswers", "lifetimeSeconds", "sharedNumbers", "representatives", "patientPermission", "operations", ...(extended ? ["representativeRecipient"] : [])]);
   if (!common) return undefined;
   const row = value as Record<string, unknown>;
   if (row.method !== "emailOtp" || row.maxAnswers !== 3 || row.lifetimeSeconds !== 300 || row.sharedNumbers !== "deny" ||
-      row.representatives !== "deny" || row.patientPermission !== "independentClinicHost" ||
+      (extended ? row.representativeRecipient !== "selectedPatientRegisteredEmail" : row.representatives !== "deny") || row.patientPermission !== "independentClinicHost" ||
       !Array.isArray(row.operations) || !row.operations.length || row.operations.length > operations.length ||
       row.operations.some(value => !operations.includes(value)) || new Set(row.operations).size !== row.operations.length) return undefined;
   return row as unknown as CallerVerificationApproval;
@@ -46,6 +47,11 @@ export class OwnerFileCallerPolicy implements VerificationPolicyGate {
     } catch { return err({ kind: "callerPolicyUnavailable" }); }
   }
 
+  async allowsRepresentative(scope: LocationScope): Promise<boolean> {
+    const found = await this.#source.current(scope);
+    return found.ok && found.value?.representatives === "independentClinicHost" &&
+      found.value.representativeRecipient === "selectedPatientRegisteredEmail" && found.value.operations.includes(this.#config.operation);
+  }
   async current(scope: LocationScope): ReturnType<VerificationPolicyGate["current"]> {
     const found = await this.#source.current(scope), config = this.#config;
     return found.ok ? ok({ scope: config.scope, enabled: !!found.value?.operations.includes(config.operation), version: config.policyVersion }) : found;
