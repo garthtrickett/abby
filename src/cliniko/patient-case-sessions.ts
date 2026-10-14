@@ -32,8 +32,12 @@ export type ClinikoCaseSessions = Readonly<{
   financialAuthority: "none"; reservable: false;
 }>;
 export type ClinikoCaseAttendance = ClinikoCaseSessions & Readonly<{ attendance: Readonly<{ attendeeId: string; countsSession: boolean }> }>;
+export type ClinikoCaseMovement = Readonly<{
+  usageFingerprint: string; originalAttendeeId: string; originalClassSessionId: string; replacementAttendeeId: string;
+}>;
 type CaseObservation = ClinikoCaseSessions & Readonly<{ attendance?: ClinikoCaseAttendance["attendance"] }>;
 type AttendanceCheck = Readonly<{ kind: "addition" | "cancellation"; usageFingerprint: string; attendeeId: string }> |
+  (ClinikoCaseMovement & Readonly<{ kind: "movement"; attendeeId: string }>) |
   Readonly<{ kind: "attendance"; attendeeId: string }>;
 export type ClinikoCaseConfig = Readonly<{
   scope: LocationScope; apiKey: string; contactEmail: string; timeZone: string; rateBudget: ClinikoRequestBudget;
@@ -171,6 +175,17 @@ export class ClinikoPatientCaseSessionsReader {
     if (!/^[a-f0-9]{64}$/.test(usageFingerprint) || !id(attendeeId)) return err({ kind: "invalidQuery" });
     return this.#read(input, parentSignal, { kind: "cancellation", usageFingerprint, attendeeId });
   }
+  /** Same-case replacement: the original must be cancelled on its exact old
+   * class, the replacement active on the requested new class. Normalize just
+   * those two changes, then require the entire prior case state. A net balance
+   * alone cannot prove a movement or exclude concurrent use. This performs no
+   * write and grants no entitlement, staging or compensation authority. */
+  async inspectMovement(input: ClinikoCaseQuery, movement: ClinikoCaseMovement, parentSignal: AbortSignal): Promise<Result<ClinikoCaseSessions, ClinikoCaseFailure>> {
+    if (!movement || !/^[a-f0-9]{64}$/.test(movement.usageFingerprint) || !id(movement.originalAttendeeId) || !id(movement.originalClassSessionId) ||
+      !id(movement.replacementAttendeeId) || movement.originalAttendeeId === movement.replacementAttendeeId ||
+      movement.originalClassSessionId === input?.classSessionId) return err({ kind: "invalidQuery" });
+    return this.#read(input, parentSignal, { ...movement, kind: "movement", attendeeId: movement.replacementAttendeeId });
+  }
   async #read(input: ClinikoCaseQuery, parentSignal: AbortSignal, check?: AttendanceCheck): Promise<Result<CaseObservation, ClinikoCaseFailure>> {
     if (!scopeValid(input?.scope) || !sameScope(input.scope, this.#config.scope)) return err({ kind: "scopeMismatch" });
     let now: string; try { now = this.#clock(); } catch { return err({ kind: "unavailable" }); }
@@ -194,6 +209,13 @@ export class ClinikoPatientCaseSessionsReader {
         if (check?.kind === "attendance" && selected!.cancelled !== null) return err({ kind: "changed" });
         if (check?.kind === "cancellation" && (selected!.cancelled === null || fingerprint({ ...after,
           attendees: after.attendees.map(a => a.id === check.attendeeId ? { ...a, cancelled: null } : a) }) !== check.usageFingerprint)) return err({ kind: "changed" });
+        if (check?.kind === "movement") {
+          const original = after.attendees.find(a => a.id === check.originalAttendeeId);
+          if (selected!.cancelled !== null || selected!.arrived === false || !original || original.bookingId !== check.originalClassSessionId ||
+            original.cancelled === null || original.archived !== null || original.deleted !== null || fingerprint({ ...after,
+              attendees: after.attendees.filter(a => a.id !== check.replacementAttendeeId).map(a => a.id === check.originalAttendeeId ? { ...a, cancelled: null } : a)
+            }) !== check.usageFingerprint) return err({ kind: "changed" });
+        }
         const used = after.attendees.filter(a => a.archived === null && a.deleted === null &&
           (a.cancelled !== null ? after.includeCancelled : a.arrived === false ? after.includeDna : true)).length;
         const sessionDate = clinicDateAt(this.#config.timeZone, new Date(query.startsAt));

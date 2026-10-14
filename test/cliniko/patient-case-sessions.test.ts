@@ -218,3 +218,62 @@ test("E2E-405 invalid native case IDs cannot be attached implicitly or supplied 
   const cancel = { ...f.request, kind: "cancel", attendeeId: "101", cancellationReason: 50 } as ClinikoAttendanceRequest;
   assert.equal((await f.writer.executeOnce(cancel, signal, async () => true)).ok, false); assert.equal(f.writes.length, 0);
 });
+
+async function movementFixture(includeCancelled = false, arrived: boolean | null = null, includeDna = false) {
+  const f = fixture(), signal = new AbortController().signal;
+  // The source belongs to another class/service; no catalogue or future-only
+  // filter may drop it when qualifying the whole case's final movement.
+  f.rows[0]!.arrived = arrived; f.record.include_cancelled_attendees = includeCancelled; f.record.include_dna_attendees = includeDna;
+  const before = resultValue(await f.read());
+  const original = f.rows[0]!; original.cancelled_at = now;
+  const replacement: Record<string, unknown> = { ...attendee("701", "94", "42"), patient_case: link("patient_cases", "51"), arrived: null };
+  f.rows.push(replacement); (f.record.attendee_ids as string[]).push("701");
+  const movement = { usageFingerprint: before.usageFingerprint, originalAttendeeId: "601", originalClassSessionId: "401", replacementAttendeeId: "701" };
+  return { ...f, signal, before, original, replacement, movement, inspect: () => f.reader.inspectMovement(f.query, movement, signal) };
+}
+for (const cancelled of [false, true]) for (const arrived of [null, false, true]) for (const dna of [false, true])
+  test(`E2E-408 whole-case movement inspects exact original and replacement with cancelled=${cancelled} arrived=${arrived} DNA=${dna}`, async () => {
+    const f = await movementFixture(cancelled, arrived, dna), result = resultValue(await f.inspect());
+    const contribution = arrived === false ? Number(dna) : 1;
+    assert.equal(result.used, f.before.used + 1 + Number(cancelled) - contribution);
+    assert.equal(result.maximum, f.before.maximum); assert.notEqual(result.usageFingerprint, f.before.usageFingerprint);
+    assert.equal(result.financialAuthority, "none"); assert.equal(result.reservable, false); assert.equal(f.writes.length, 0);
+    assert.equal(JSON.stringify(result).includes(canary), false);
+  });
+test("E2E-408 an observed same-case move can release the original full-pass session without pretending to reserve capacity", async () => {
+  const f = await movementFixture(); f.record.max_sessions = f.before.used;
+  // Bind a source snapshot at the full limit before applying the two changes.
+  f.original.cancelled_at = null; f.rows.pop(); (f.record.attendee_ids as string[]).pop();
+  const before = resultValue(await f.read()); assert.equal(before.remaining, 0);
+  f.movement.usageFingerprint = before.usageFingerprint; f.original.cancelled_at = now;
+  f.rows.push(f.replacement); (f.record.attendee_ids as string[]).push("701");
+  const result = resultValue(await f.inspect()); assert.equal(result.used, before.used); assert.equal(result.remaining, 0); assert.equal(result.overdrawn, false);
+});
+for (const fault of ["originalActive", "wrongSource", "originalArchived", "replacementCancelled", "replacementDna", "wrongDestination", "rule", "maximum", "expiry", "swap", "extraUse", "permission", "proof"] as const)
+  test(`E2E-408 ${fault} cannot satisfy an exact whole-case movement`, async () => {
+    const f = await movementFixture();
+    if (fault === "originalActive") f.original.cancelled_at = null;
+    if (fault === "wrongSource") f.original.booking = link("bookings", "402");
+    if (fault === "originalArchived") f.original.archived_at = now;
+    if (fault === "replacementCancelled") f.replacement.cancelled_at = now;
+    if (fault === "replacementDna") f.replacement.arrived = false;
+    if (fault === "wrongDestination") f.replacement.booking = link("bookings", "93");
+    if (fault === "rule") f.record.include_cancelled_attendees = true;
+    if (fault === "maximum") f.record.max_sessions = 6;
+    if (fault === "expiry") f.record.expiry_date = "2026-10-10";
+    if (fault === "swap") { f.rows[1]!.id = "702"; f.rows[1]!.links = { self: "https://api.au5.cliniko.com/v1/attendees/702" }; (f.record.attendee_ids as string[])[1] = "702"; }
+    if (fault === "extraUse") { f.rows.push({ ...attendee("703", "406", "42"), patient_case: link("patient_cases", "51"), arrived: null }); (f.record.attendee_ids as string[]).push("703"); }
+    if (fault === "permission") f.deny(); if (fault === "proof") f.revoke();
+    const result = await f.inspect(); assert.equal(result.ok, false); assert.equal(f.writes.length, 0);
+    assert.equal(result.error.kind, fault === "permission" ? "forbidden" : fault === "proof" ? "invalidProof" : "changed");
+  });
+test("E2E-408 invalid movement identities cannot start protected reads and source mutation is not caller authority", async () => {
+  const f = fixture(), signal = new AbortController().signal;
+  const movement = { usageFingerprint: "a".repeat(64), originalAttendeeId: "601", originalClassSessionId: "401", replacementAttendeeId: "701" };
+  for (const patch of [{ usageFingerprint: "guessed" }, { originalAttendeeId: "701" }, { originalClassSessionId: "94" },
+    { replacementAttendeeId: "-1" }, { originalClassSessionId: "401?secret" }]) {
+    const result = await f.reader.inspectMovement(f.query, { ...movement, ...patch }, signal);
+    assert.equal(result.ok, false); assert.equal(result.error.kind, "invalidQuery");
+  }
+  assert.equal(f.traffic.length, 0); assert.equal(f.writes.length, 0);
+});

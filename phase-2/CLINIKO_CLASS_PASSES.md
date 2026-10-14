@@ -2,7 +2,9 @@
 
 Gap 10 includes membership/pass/credit handling. E405 supplies the native
 adapter, E406 connects approved pass booking to the ordinary caller host, and
-E407 adds native cancellation with verified session-use effects. Movement,
+E407 adds native cancellation with verified session-use effects. E408 adds
+guarded association updates, exact unlinked staging reads and whole-case
+movement inspection. Caller movement,
 broader/mixed catalogue qualification and financial handling remain unfinished.
 Real clinic activation remains unqualified.
 
@@ -104,6 +106,72 @@ case before reporting success and preserve uncertainty without another send.
 
 The full thirteen-gap goal stays open. Real delivery, acoustic/carrier
 qualification and authoritative cloud checks remain separate requirements.
+
+## E2E-408 native pass movement prerequisites
+
+The current [attendee update contract](https://docs.api.cliniko.com/openapi/attendee/updateattendee-patch)
+accepts `patient_case_id`, `notes` and `arrived`. It does not document changing
+`booking_id` or `patient_id`. Abby therefore does not implement an in-place class
+move by inventing either field. A class move requires separate existing-session
+attendance operations and explicit recovery authority.
+
+`ClinikoClassAttendanceWriter` now accepts a private `linkCase` request for one
+exact Abby-created replacement. It sends only `patient_case_id` to
+`PATCH /attendees/:id`, expects HTTP 200 and validates the exact native self,
+patient, booking and requested case links, active status and creation-action
+marker. Arrival must be null or true. Neither notes, arrival, class, patient nor
+the entire case's attendee list is written. The independent host must approve
+the previous association and the change, with current pass, class, capacity,
+consent/review and recovery checks. This primitive alone grants none of them.
+It cannot clear an association using an undocumented null case ID.
+
+An association action has its own UUID, distinct from the attendance creation
+action. It shares the writer's normal account budget and no-replay reservation.
+Authority is checked after the final budget wait. Once invoked, a lost, aborted,
+incorrect or non-200 result remains uncertain; it cannot automatically retry,
+cancel the replacement or recreate the original. An accepted update still needs
+exact guarded readback and complete case inspection before any caller result.
+
+`ClinikoPatientCaseSessionsReader.inspectMovement` observes the complete case
+twice under current proof/independent permission. It requires the original
+attendance cancelled on the exact old class, and a distinct active non-DNA
+replacement on the exact destination class. Removing only the replacement and
+normalizing only the original's cancellation must reproduce the prior case's
+full usage fingerprint. Metadata, rules, every other association and status
+must remain unchanged. The resulting usage may be unchanged or consume extra
+sessions according to cancellation and DNA rules; the host must separately
+approve and verify that effect. Cross-case movement can use the existing exact
+source cancellation and destination addition inspections, with separate
+authority for both cases.
+
+Creating without `patient_case_id` does not prove that the provider leaves the
+replacement unlinked. Its response schema also does not establish a concrete
+nil-link shape. The additional provider [filtering contract](https://docs.api.cliniko.com/#filtering-results)
+documents `!?` for numeric null fields, and attendee queries document
+`patient_case_id`, `id`, `patient_id` and `booking_id`. `inspectUnlinked` therefore
+reads the exact replacement twice with all four predicates, including
+`patient_case_id:!?`. Both complete responses must contain only that exact
+active, non-DNA attendance and creation marker. A positive case link contradicts
+the filter and denies; absence alone never supplies evidence. An auto-linked
+attendance returns no matching row and cannot authorize original cancellation.
+Current independent permission and account budget surround the observations.
+No attendee is mutated by this read and it reserves neither pass nor capacity.
+
+This qualifies necessary native operations, not an ordinary caller move.
+Cliniko's package guidance says the maximum limits associated appointments;
+temporary overdraw is not an approved staging strategy. Full passes need an
+explicit host-approved temporary unlinked stage, exact fresh case/attendance
+checks, recovery consent and final linking/inspection. The native is-null read
+now supplies provider evidence for staging without assuming a response shape;
+the caller coordinator and its failure handling still need implementation. Do
+not substitute whole-case association replacement or cancel the original first
+under the existing replacement-first consent.
+
+Remaining work includes the explicit host staging/recovery contract, movement authority,
+played effect/recovery terms, versioned review and complete signed/compiled
+caller journeys under the physical shared quota. Native pass movement stays
+disabled in the caller host while those requirements remain unmet. No payment,
+invoice, account credit or refund is inferred from an association update.
 
 
 ## Local qualification
@@ -285,3 +353,12 @@ quota window, actual 180-request limit, normal leases, later affirmative and
 public/model/PostgreSQL privacy checks remained in force. Exact commands are
 in `THIRTEEN_GAP_IMPLEMENTATION.md`. Larger/mixed case histories, native pass
 movement, financial operations and actual acceptance remain unfinished.
+
+
+E408 local qualification: the existing native/host/signed/compiled regression
+stage passed440 checks with no failures/skips. After adding filtered staging,
+a fresh whole-source typecheck/build and136 current-source native/registry
+checks passed with no failures/skips. Both stages passed diff checks. Counts
+overlap; E408 adds no completed caller movement journey. Exact commands,
+chronology, corrected fixture failures and tracked logs are recorded in
+`THIRTEEN_GAP_IMPLEMENTATION.md`.
