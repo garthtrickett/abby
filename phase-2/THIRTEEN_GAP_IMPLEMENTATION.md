@@ -11,7 +11,7 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 | 3 | Establish message delivery, staff handoff, monitoring and recovery ownership. | Four compiled-runner staff journeys now pass: named saved request, unknown write without replay, permission denial before mail and revocation before send. Existing recall/review/aggregate contracts remain. Deployed monitoring receiver, real sender and human clinic process remain open. |
 | 4 | Complete synthetic speech, public transport and eventual carrier qualification. | Prior synthetic runtime evidence exists; noisy/safety and repeated speech gates remain open. The October14 repeated baseline remains source-matched and fails with11 critical misses in18 runs and41.67% WER. Near-field reduction worsens WER to50.76%; the committed-turn model improves to30.30% but still has10 critical misses. No candidate passes or is promoted. Speech-provider credits were restored in the earlier investigation; public tunnel still requires a dedicated usable route. Twilio-number carrier evidence is deferred, not substituted with synthetic results. |
 | 5 | Expand services, duration choices, locations and initial/follow-up rules. | Current service/intake variants, return rules and independently provisioned multi-location compiled hosts are locally qualified in draft457. Actual clinic configuration/acceptance and authoritative CI remain open. |
-| 6 | Extend searches and support online-disabled services where required. | E2E-356 locally qualifies complete approved longer online searches and a compiled two-month late-range booking. E2E-357/358 add independently approved non-recurring native calendars, complete adaptive busy reads, Sunday0/7 and compiled returning/first-time location/member coverage with fresh chosen-day reads. Recurrence and broader real-calendar/serving qualification remain incomplete; preserve incomplete-source denial, date bounds and offer/commit agreement. |
+| 6 | Extend searches and support online-disabled services where required. | E2E-356 locally qualifies complete approved longer online searches and a compiled two-month late-range booking. E2E-357/358 add independently approved non-recurring native calendars, complete adaptive busy reads, Sunday0/7 and compiled returning/first-time location/member coverage with fresh chosen-day reads. E2E-404 additionally supports explicitly approved dated native recurring busy occurrences with actual compiled booking and late-conflict denial. Recurring extra opening rules and broader real-calendar/serving qualification remain incomplete; preserve incomplete-source denial, date bounds and offer/commit agreement. |
 | 7 | Support another approved practitioner during rescheduling. | E2E-359 locally qualifies explicit approved practitioner pairs, independent destination policy, named played confirmation and one inspected in-place move at a changed or retained time. E2E-360 adds the current approved directory, retained original preference, played name/ordinal choice, pagination, fresh-time invalidation and ordinary signed/compiled dialogue. Final type/build and 99 checks passed; current exact-head cloud, real model/acoustic and clinic acceptance remain open. |
 | 8 | Add patient detail corrections, required registration fields and resends. | E2E-361–368 locally qualify patient corrections, account revisions, linked recovery, private edit/reset and guarded setting-history portability. E2E-369 adds independently approved required address fields, complete private collection/readback, field-bound host authority, native response/inspection and separate registration/booking confirmation; final typecheck/build and80 checks passed without skips. E2E-370–379 qualify resend SMTP, native evidence, SAM consent, signed private selection/paging, interruption recovery and mapped staff receipt inspection. E2E-380 now locally qualifies explicit versioned in-person/telehealth/cancelled formats through116 final checks. Unsupported clinic-specific field adapters and production recovery-host/operator integration/acceptance remain open; current-head cloud and actual clinic/mail/model/acoustic acceptance are absent. |
 | 9 | Handle multiple patients/actions in one call. | E2E-381–387 qualify same-caller and independently verified two-person booking tasks, fresh private proofs, native writes and immutable receipts. E2E-388 additionally qualifies enquiry-only progression after played protected-read notices, two patients appointments in one signed call with zero mutation, and retired read-receipt integrity. E2E-389 qualifies actual signed related-person cancellation/rescheduling and mixed enquiry/change with fresh proof and preserved original records. Current type/build/isolated PostgreSQL final regression passed195 checks, zero skips. Other patient/operation/catalogue/staff combinations, unrelated representatives without a native self record and alternative guardian channels remain unfinished. |
@@ -2443,3 +2443,89 @@ and [exact commands](../eval/LIVE_BASELINE_2026-09-29.md#repeated-native-pcmu-di
 are recorded. Work log `4590eee3-1792008794475.log` exits1 for failed quality;
 offline and independent artifact verification exit0. Speech remains on hold.
 This closes the diagnostic capture defect, not the full speech or13-gap goal.
+
+
+## Gap6 approved dated native recurring busy occurrences, E2E-404
+
+The roster reader previously rejected every non-null repeat_rule, including
+actual dated busy records. A new optional owner availability-plan value,
+`busyRecurrence: nativeOccurrences`, accepts documented metadata on native
+individual/group appointments and unavailable blocks. The reader validates the
+rule shape but uses only each returned native record's actual start/end instants.
+No recurrence dates, count interpretation or DST offsets are generated. Source
+business/practitioner identity, active flags, full pagination/adaptive splits,
+two stable calendar snapshots and current metadata retain their existing checks.
+All-business busy scope and the pre-send source/permission/approval checks remain.
+Only the owner file can select this plan; legacy plans and unknown/implicit plan
+values deny it. Any recurring extra opening rule remains unsupported.
+
+Native scenarios cover all three busy resource types, independent legacy denial,
+malformed metadata, a past root/current child, unstable reads, withdrawal before
+send, late busy changes and complete1201-row range splitting. Actual separately
+compiled calls use the normal host/contact-revision, SMTP verification, played
+menus/confirmation and PostgreSQL request budget. An approved recurring13:00
+conflict removes that hour; the caller selects14:00, which is the only new native
+appointment. A legacy owner plan offers no partial booking, and a recurring
+14:00 conflict introduced after preparation prevents the send. Public/model and
+PostgreSQL scans retain private calendar/patient/code canaries.
+
+Initial focused qualification found three incorrect fixture expectations: noon
+was outside the daily hours; extra hours start at13:00 (02:00UTC). Correcting that
+expected time leaves the native conflict/subtraction assertions intact. Then59
+native/calendar checks passed in `4590eee3-1792009518290.log`; whole-source
+typecheck, a fresh compiled build and10 compiled current/new calendar journeys
+passed in `4590eee3-1792009518444.log`. A later explicit-plan prototype check and
+a1201-row recurring-busy scenario are included in final qualification.
+
+See [the approval contract and remaining recurrence limits](LONGER_CLINIKO_AVAILABILITY.md#dated-native-recurring-busy-records-e2e-404).
+Registry1.212 tracks404 stable scenarios with full-call evidence still planned.
+This is progress in gap6, not full recurrence/clinic acceptance or closure of the
+13-gap objective. No dependency, migration, request limit, execution deadline or
+production admission changed. Speech remains on hold under its failed gate.
+
+
+E2E-404 final source qualification: the provider's downloadable OpenAPI schema
+(SHA-256 `4c354b3cb3fb9cf7ca91b5dd408b78f62896c62b89d265ba3190e5d2bd03740c`)
+confirmed that rule types are Daily/Monthly/Weekly, counts are positive or null,
+and intervals are1–100. The new validator/tests were tightened to those bounds;
+autogenerated zero-valued page examples do not override schema constraints.
+A preceding90-check gate passed before that audit and is not the final-source
+claim. The strict final gate in `4590eee3-1792010024558.log` passes whole-source
+typecheck, a fresh compiled voice build, isolated migrations and95 affected
+native/calendar/approval/online-search/compiled/privacy/registry checks with zero
+failures, cancellations or skips, followed by clean diff check. Native large-range,
+Daily/Monthly/null-count and boundary-denial cases are included.
+
+Exact executed script (`bash /tmp/abby-e404-final.sh`):
+
+```sh
+#!/usr/bin/env bash
+set -euo pipefail
+cd /home/gust/code/abby-integrated-runner
+npm run typecheck
+npm run build:voice-tests
+bash scripts/with-postgres.sh bash -c '
+set -euo pipefail
+npm run db:migrate
+node --test --test-concurrency=4 \
+  test/cliniko/roster-native-repeats.test.ts \
+  test/cliniko/roster-booking.test.ts \
+  test/cliniko/roster-large-calendar.test.ts \
+  test/cliniko/roster-calendar.test.ts \
+  test/cliniko/booking-clinic-policy.test.ts \
+  test/cliniko/long-booking-search.test.ts \
+  test/cliniko/approved-availability-search.test.ts \
+  test/voice/compiled-roster-native-repeats.test.ts \
+  test/voice/compiled-roster-booking.test.ts \
+  test/voice/compiled-roster-coverage.test.ts \
+  test/voice/compiled-long-booking-search.test.ts \
+  test/contract/scenario-manifest.test.ts \
+  test/contract/no-number-gap-trace.test.ts
+'
+git diff --check
+```
+
+This qualification preserves the complete original objective. Recurring extra
+opening rules, real source/clinic acceptance, speech accuracy and the remaining
+class pass/credit, payment, campaign and approved writeback requirements remain
+open; cloud qualification is still required after publication.

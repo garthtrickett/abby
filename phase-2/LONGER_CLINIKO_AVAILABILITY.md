@@ -207,3 +207,51 @@ Tracked job: `Abby adaptive offline parent count corrected full gate`, exit0.
 Manifest1.165 retains358 stable IDs. This is local engineering evidence; cloud
 CI, recurrence interpretation, additive historical-volume and real clinic/mail,
 acoustic and carrier acceptance remain open. The full13 objective is active.
+
+
+## Dated native recurring busy records, E2E-404
+
+An independently approved roster policy can now include:
+
+```json
+"availabilityPlan": {
+  "mode": "roster",
+  "maxSearchDays": 90,
+  "slotIntervalMinutes": 15,
+  "weekdayOrigin": "sunday",
+  "busyScope": "practitionerAllBusinesses",
+  "busyRecurrence": "nativeOccurrences"
+}
+```
+
+This mode uses the dated busy occurrences returned by native individual/group
+appointment and unavailable-block collections. Each has its own native identity
+and actual start/end instants. Only those intervals are subtracted; repeat_rule
+is validated metadata rather than a source of generated dates. The supported
+shape has Daily/Weekly/Monthly type, a positive safe repeat count (or null),
+and an integer interval from1 to100. Counts do not supply booking authority.
+
+The provider documents dated resources, repeat metadata and related occurrences:
+[individual appointments](https://docs.api.cliniko.com/openapi/individual-appointment/individualappointment),
+[group appointments](https://docs.api.cliniko.com/openapi/group-appointment/listgroupappointments-get),
+and [unavailable blocks](https://docs.api.cliniko.com/openapi/unavailable-block/listunavailableblocks-get).
+The provider's [downloadable OpenAPI schema](https://docs.api.cliniko.com/_bundle/openapi.json?download),
+retrieved14October2026, SHA-256
+`4c354b3cb3fb9cf7ca91b5dd408b78f62896c62b89d265ba3190e5d2bd03740c`,
+establishes those rule bounds. Null type/interval and incomplete rule objects
+remain outside this supported subset; the reader never fills in their meaning.
+This opt-in must be accepted against the deploying clinic's native occurrence
+collections and full requested horizon before activation. Local synthetic
+contract evidence does not replace that clinic acceptance.
+
+Legacy plans retain their former source restrictions. Wrong/implicit values do
+not grant the new scope. Every native page and all busy families/businesses must
+remain complete and stable; large collections retain adaptive range splitting.
+The selected day is read again under current approval before writing. Private
+notes and patient associations do not leave the reader. Approval withdrawal,
+malformed rules, calendar drift and new native conflicts deny the send.
+
+Availability blocks that define extra opening hours still require repeat_rule
+null. Their expansion/count/month-end/DST semantics remain unqualified. No
+missing native occurrence is synthesized or inferred from an existing rule, and
+full recurrence support and real-calendar acceptance remain open.

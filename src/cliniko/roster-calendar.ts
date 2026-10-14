@@ -3,11 +3,17 @@ import { clinicDayStartUtc } from "../standalone/clinic-clock.ts";
 export type CalendarInterval = Readonly<{ start: number; end: number }>;
 export type DailyRoster = Readonly<{ dayOfWeek: number; intervals: readonly Readonly<{ startMinute: number; endMinute: number }>[] }>;
 export type RosterSearchPlan = Readonly<{ mode: "roster"; maxSearchDays: number; slotIntervalMinutes: number;
-  weekdayOrigin: "sunday" | "monday"; busyScope: "practitionerAllBusinesses" }>;
+  weekdayOrigin: "sunday" | "monday"; busyScope: "practitionerAllBusinesses";
+  /** Approved use of dated native busy occurrences; never expand a repeat rule into openings. */
+  busyRecurrence?: "nativeOccurrences" }>;
 
 export function validRosterSearchPlan(value: unknown): value is RosterSearchPlan {
-  if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).sort().join(",") !== "busyScope,maxSearchDays,mode,slotIntervalMinutes,weekdayOrigin") return false;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const p = value as RosterSearchPlan;
+  const keys = Object.keys(value).sort().join(",");
+  if (!Object.hasOwn(value, "busyRecurrence") && p.busyRecurrence !== undefined) return false;
+  if (keys !== "busyScope,maxSearchDays,mode,slotIntervalMinutes,weekdayOrigin" &&
+      (keys !== "busyRecurrence,busyScope,maxSearchDays,mode,slotIntervalMinutes,weekdayOrigin" || p.busyRecurrence !== "nativeOccurrences")) return false;
   return p.mode === "roster" && Number.isSafeInteger(p.maxSearchDays) && p.maxSearchDays >= 1 && p.maxSearchDays <= 90 &&
     Number.isSafeInteger(p.slotIntervalMinutes) && p.slotIntervalMinutes >= 1 && p.slotIntervalMinutes <= 60 &&
     ["sunday", "monday"].includes(p.weekdayOrigin) && p.busyScope === "practitionerAllBusinesses";

@@ -82,12 +82,29 @@ export class ClinikoRosterAvailabilityReader {
     }
     throw new Error("calendar source exceeds bound");
   }
-  #interval(row: Row): CalendarInterval {
+  #datedInterval(row: Row): CalendarInterval {
     const start = calendarInstant(row.starts_at), end = calendarInstant(row.ends_at);
-    if (start === undefined || end === undefined || start >= end || row.repeat_rule !== null) throw new Error("unsupported calendar interval");
+    if (start === undefined || end === undefined || start >= end) throw new Error("unsupported calendar interval");
     return { start, end };
   }
-  async #busy(name: string, lower: string, upper: string, signal: AbortSignal, depth = 0): Promise<BusyRecord[]> {
+  #openingInterval(row: Row): CalendarInterval {
+    if (row.repeat_rule !== null) throw new Error("unsupported opening recurrence");
+    return this.#datedInterval(row);
+  }
+  #busyInterval(row: Row, plan: RosterSearchPlan): CalendarInterval {
+    if (row.repeat_rule !== null) {
+      const rule = object(row.repeat_rule);
+      if (plan.busyRecurrence !== "nativeOccurrences" || !rule ||
+          Object.keys(rule).sort().join(",") !== "number_of_repeats,repeat_type,repeating_interval" ||
+          typeof rule.repeat_type !== "string" || !["Daily", "Weekly", "Monthly"].includes(rule.repeat_type) ||
+          (rule.number_of_repeats !== null && (!Number.isSafeInteger(rule.number_of_repeats) || Number(rule.number_of_repeats) < 1)) ||
+          !Number.isSafeInteger(rule.repeating_interval) || Number(rule.repeating_interval) < 1 || Number(rule.repeating_interval) > 100) throw new Error("unsupported busy recurrence");
+    }
+    // Each returned appointment/block has its own native identity and actual
+    // start/end instants. Only these occurrences are used, never inferred dates.
+    return this.#datedInterval(row);
+  }
+  async #busy(name: string, lower: string, upper: string, plan: RosterSearchPlan, signal: AbortSignal, depth = 0): Promise<BusyRecord[]> {
     try {
       return await this.#collection(name, [`practitioner_id:=${this.#config.practitionerId}`, `starts_at:<${upper}`, `ends_at:>${lower}`], row => {
       if (!this.#link(row.business, "businesses")) throw new Error("missing busy business");
@@ -95,7 +112,7 @@ export class ClinikoRosterAvailabilityReader {
         if (row[flag] !== null && calendarInstant(row[flag]) === undefined) throw new Error("unknown busy activity");
       }
       if ([row.archived_at, row.deleted_at, ...(name === "individual_appointments" ? [row.cancelled_at] : [])].some(flag => flag !== null)) return { id: String(row.id) };
-      const interval = this.#interval(row);
+      const interval = this.#busyInterval(row, plan);
       if (interval.start >= Date.parse(upper) || interval.end <= Date.parse(lower)) throw new Error("foreign busy range");
       return { id: String(row.id), interval };
       }, signal);
@@ -105,8 +122,8 @@ export class ClinikoRosterAvailabilityReader {
       const middle = new Date(first + Math.floor((last - first) / 2)).toISOString();
       // Both half-open overlap queries include an interval crossing the split.
       // The same native record must agree before it can be deduplicated.
-      const left = await this.#busy(name, lower, middle, signal, depth + 1);
-      const right = await this.#busy(name, middle, upper, signal, depth + 1);
+      const left = await this.#busy(name, lower, middle, plan, signal, depth + 1);
+      const right = await this.#busy(name, middle, upper, plan, signal, depth + 1);
       const merged = new Map(left.map(row => [row.id, row]));
       for (const row of right) {
         const previous = merged.get(row.id);
@@ -117,9 +134,9 @@ export class ClinikoRosterAvailabilityReader {
       return [...merged.values()].sort((a, b) => a.id.localeCompare(b.id));
     }
   }
-  async #snapshot(lower: string, upper: string, zone: string, signal: AbortSignal): Promise<Snapshot> {
+  async #snapshot(lower: string, upper: string, zone: string, plan: RosterSearchPlan, signal: AbortSignal): Promise<Snapshot> {
     const c = this.#config, practitioner = `practitioner_id:=${c.practitionerId}`, business = `business_id:=${c.businessId}`;
-    const busy = async (name: string) => (await this.#busy(name, lower, upper, signal)).flatMap(row => row.interval ? [row.interval] : []);
+    const busy = async (name: string) => (await this.#busy(name, lower, upper, plan, signal)).flatMap(row => row.interval ? [row.interval] : []);
     const [daily, extra, individual, group, unavailable] = await Promise.all([
       this.#collection("daily_availabilities", [practitioner, business], row => {
         if (this.#link(row.business, "businesses") !== c.businessId || !Number.isInteger(row.day_of_week) ||
@@ -133,7 +150,7 @@ export class ClinikoRosterAvailabilityReader {
       }, signal),
       this.#collection("availability_blocks", [practitioner, business], row => {
         if (this.#link(row.business, "businesses") !== c.businessId) throw new Error("foreign extra availability");
-        return this.#interval(row);
+        return this.#openingInterval(row);
       }, signal), busy("individual_appointments"), busy("group_appointments"), busy("unavailable_blocks"),
     ]);
     return { daily, extra, busy: [...individual, ...group, ...unavailable] };
@@ -153,7 +170,7 @@ export class ClinikoRosterAvailabilityReader {
         if (!metadata.value.offering) return failure();
         const zone = metadata.value.timeZone, lower = clinicDayStartUtc(zone, from), upper = clinicDayStartUtc(zone, new Date(last + 86_400_000).toISOString().slice(0, 10));
         const busyUpper = new Date(Date.parse(upper) + durationMinutes * 60_000).toISOString();
-        const before = await this.#snapshot(lower, busyUpper, zone, signal), after = await this.#snapshot(lower, busyUpper, zone, signal);
+        const before = await this.#snapshot(lower, busyUpper, zone, plan, signal), after = await this.#snapshot(lower, busyUpper, zone, plan, signal);
         const again = await this.#metadata.describeRosterBooking(scope, durationMinutes, signal);
         if (!again.ok || JSON.stringify(again.value) !== JSON.stringify(metadata.value) || JSON.stringify(before) !== JSON.stringify(after) || signal.aborted) return failure();
         const startsAt = rosterStarts({ from, to, timeZone: zone, durationMinutes, plan, ...after, signal });

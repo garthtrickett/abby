@@ -44,7 +44,9 @@ const practitionerMove = process.env.ABBY_SYNTHETIC_PRACTITIONER_MOVE;
 if (practitionerMove && (!["changedTime", "sameTime", "directory"].includes(practitionerMove) || operation !== "reschedule" || services || multiLocation)) throw new Error("invalid synthetic practitioner move mode");
 const longSearch = process.env.ABBY_SYNTHETIC_LONG_SEARCH_MODE === "1";
 const offlineCalendar = process.env.ABBY_SYNTHETIC_OFFLINE_CALENDAR === "1", missingBusy = process.env.ABBY_SYNTHETIC_MISSING_BUSY === "1";
+const recurringBusy = process.env.ABBY_SYNTHETIC_RECURRING_BUSY;
 if (offlineCalendar && (!services || !["book", "intake"].includes(operation!)) || missingBusy && !offlineCalendar) throw new Error("invalid synthetic calendar mode");
+if (recurringBusy && (!offlineCalendar || !["approved", "legacy"].includes(recurringBusy))) throw new Error("invalid synthetic busy occurrence mode");
 const calendars = new Map<string, ReturnType<typeof syntheticRosterProvider>>();
 if (longSearch && (!services || operation !== "book" || multiLocation)) throw new Error("invalid synthetic long search mode");
 if (multiLocation && (!services || !["book", "intake"].includes(operation!))) throw new Error("invalid synthetic location mode");
@@ -92,7 +94,8 @@ for (const path of approvalPaths) {
     await writeFile(path, JSON.stringify({ ...value, credentialFingerprint: fingerprint,
       ...("policyVersion" in value ? { policyVersion: c.policyVersion } : {}),
       ...(longSearch && "bookingPolicyVersion" in value ? { maxAdvanceDays: 90, availabilityPlan: { mode: "online", maxSearchDays: 90 } } : {}),
-      ...(offlineCalendar && "bookingPolicyVersion" in value ? { availabilityPlan: { ...rosterPlan, maxSearchDays: longSearch ? 90 : 30 } } : {}),
+      ...(offlineCalendar && "bookingPolicyVersion" in value ? { availabilityPlan: { ...rosterPlan, maxSearchDays: longSearch ? 90 : 30,
+        ...(recurringBusy === "approved" ? { busyRecurrence: "nativeOccurrences" } : {}) } } : {}),
       ...(longSearch && "services" in value && Array.isArray(value.services)
         ? { services: value.services.map(service => ({ ...service, searchDays: 90 })) } : {}) }), { mode: 0o600 });
   }
@@ -120,7 +123,10 @@ process.on("message", message => {
   if (offlineCalendar && message.kind === "occupyCalendar") {
     for (const [selection, calendar] of calendars) {
       const [businessId, practitionerId] = selection.split(":");
-      calendar.rows.unavailable_blocks!.push(rosterInterval("unavailable_blocks", "106", "2026-10-08T02:00:00.000Z", "2026-10-08T03:00:00.000Z", businessId!, practitionerId!));
+      const busy = rosterInterval("unavailable_blocks", "106", recurringBusy ? "2026-10-08T03:00:00.000Z" : "2026-10-08T02:00:00.000Z",
+        recurringBusy ? "2026-10-08T04:00:00.000Z" : "2026-10-08T03:00:00.000Z", businessId!, practitionerId!);
+      if (recurringBusy) busy.repeat_rule = { repeat_type: "Weekly", number_of_repeats: 6, repeating_interval: 1 };
+      calendar.rows.unavailable_blocks!.push(busy);
     }
     process.send?.({ kind: "calendarOccupied" });
   }
@@ -148,6 +154,13 @@ if (offlineCalendar) {
     let calendar = calendars.get(key);
     if (!calendar) {
       calendar = syntheticRosterProvider({ businessId, practitionerId }); calendars.set(key, calendar);
+      if (recurringBusy) {
+        const rule = { repeat_type: "Weekly", number_of_repeats: 6, repeating_interval: 1 };
+        for (const name of ["individual_appointments", "group_appointments", "unavailable_blocks"])
+          for (const row of calendar.rows[name]!) row.repeat_rule = rule;
+        const busy = rosterInterval("unavailable_blocks", "110", "2026-10-08T02:00:00.000Z", "2026-10-08T03:00:00.000Z", businessId === "11" ? "12" : "11", practitionerId);
+        busy.repeat_rule = rule; calendar.rows.unavailable_blocks!.push(busy);
+      }
       if (missingBusy) calendar.fail("group_appointments");
       if (practitionerId === "24") calendar.rows.availability_blocks = [rosterInterval("availability_blocks", "102", "2026-10-08T01:00:00.000Z", "2026-10-08T03:00:00.000Z", businessId, practitionerId)];
       if (longSearch) {
