@@ -15,7 +15,7 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 | 7 | Support another approved practitioner during rescheduling. | E2E-359 locally qualifies explicit approved practitioner pairs, independent destination policy, named played confirmation and one inspected in-place move at a changed or retained time. E2E-360 adds the current approved directory, retained original preference, played name/ordinal choice, pagination, fresh-time invalidation and ordinary signed/compiled dialogue. Final type/build and 99 checks passed; current exact-head cloud, real model/acoustic and clinic acceptance remain open. |
 | 8 | Add patient detail corrections, required registration fields and resends. | E2E-361–368 locally qualify patient corrections, account revisions, linked recovery, private edit/reset and guarded setting-history portability. E2E-369 adds independently approved required address fields, complete private collection/readback, field-bound host authority, native response/inspection and separate registration/booking confirmation; final typecheck/build and80 checks passed without skips. E2E-370–379 qualify resend SMTP, native evidence, SAM consent, signed private selection/paging, interruption recovery and mapped staff receipt inspection. E2E-380 now locally qualifies explicit versioned in-person/telehealth/cancelled formats through116 final checks. Unsupported clinic-specific field adapters and production recovery-host/operator integration/acceptance remain open; current-head cloud and actual clinic/mail/model/acoustic acceptance are absent. |
 | 9 | Handle multiple patients/actions in one call. | E2E-381–387 qualify same-caller and independently verified two-person booking tasks, fresh private proofs, native writes and immutable receipts. E2E-388 additionally qualifies enquiry-only progression after played protected-read notices, two patients appointments in one signed call with zero mutation, and retired read-receipt integrity. E2E-389 qualifies actual signed related-person cancellation/rescheduling and mixed enquiry/change with fresh proof and preserved original records. Current type/build/isolated PostgreSQL final regression passed195 checks, zero skips. Other patient/operation/catalogue/staff combinations, unrelated representatives without a native self record and alternative guardian channels remain unfinished. |
-| 10 | Add class attendance booking, cancellation and movement. | E2E-390 now supplies a protected native class reader: existing sessions, complete active capacity, exact own attendee target and native drift/privacy checks. This read-only provider stage does not yet provide serving or class mutations. Individual endpoints are insufficient. Require existing session/attendee identities, capacity and duplicate checks, compensating move recovery and truthful concurrent-result handling. Membership credits/passes require their own evidence. |
+| 10 | Add class attendance booking, cancellation and movement. | E2E-390 now supplies a protected native class reader: existing sessions, complete active capacity, exact own attendee target and native drift/privacy checks. E2E-391 additionally supplies guarded native single-attendee registration/cancellation and exact inspection; caller-facing class actions, movement and membership credit handling remain unfinished. Individual endpoints are insufficient. Require existing session/attendee identities, capacity and duplicate checks, compensating move recovery and truthful concurrent-result handling. Membership credits/passes require their own evidence. |
 | 11 | Add deposits, paid confirmation, receipts and expiry handling. | Financial boundaries exist, payment lifecycle absent. Require real provider adapter contracts, signed webhook/idempotency, delivered links, separate expiry authority and no refund/coverage/hold invention. |
 | 12 | Add outbound follow-up and practitioner sick-day management. | Recalls are not campaigns. Require scoped audience, opt-out, fresh appointment context, scheduler, per-action outcomes and recovery. |
 | 13 | Add approved communication/document writeback. | Optional clinical record features need explicit clinic-owned storage and field/content approval. Require no cross-patient/class-shared leakage and concurrency-aware result reporting. |
@@ -1470,4 +1470,63 @@ Exact command:
 
 ```sh
 npm run typecheck && node --test --test-concurrency=4 test/cliniko/class-attendance-read.test.ts test/cliniko/appointments.test.ts test/cliniko/shared-read-budget.test.ts test/cliniko/recalls.test.ts test/cliniko/roster-booking.test.ts test/cliniko/roster-large-calendar.test.ts test/cliniko/roster-calendar.test.ts test/cliniko/catalogue.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts && git diff --check
+```
+
+
+## Gap10 native single-attendee registration/cancellation, E2E-391 (unpublished)
+
+`src/cliniko/class-attendance-write.ts` implements the documented native attendee
+create and cancellation operations plus guarded exact-record inspection. The
+trusted host must construct exact native patient/session targets and supply
+current authority after the final shared account-budget wait. The test
+authority reads actual native class capacity and unique own attendance through
+E2E-390's module and independently checks permission. Missing authority, wrong
+scope, full/duplicate attendance, another patient's cancellation target and
+revocation deny a send or result. A same-action concurrent call reserves its
+one-attempt key before asynchronous work. Lost response, an abort after provider
+invocation or incorrect acknowledgement is uncertain; that action cannot replay
+in this live writer. No ownership claim survives process loss on this basis.
+
+Registration creates only `/attendees` with exact booking/patient IDs and an
+opaque private attendee-note marker. Cancellation patches only its own attendee
+and sets `apply_to_repeats: false`; it does not edit the shared class, another
+patient, another occurrence, a membership credit or a refund. Exact guarded
+readback checks patient/session/marker/status and rechecks independent authority
+after the provider read. The official
+[cancellation contract](https://docs.api.cliniko.com/openapi/attendee/cancelattendee-patch)
+returns204 and provides an explicit repeat flag; acknowledgement is therefore
+kept separate from inspected native evidence and caller confirmation.
+
+The native race witness deliberately adds another attendee after creation,
+so exact own-record inspection succeeds while the class is over capacity. This
+is evidence that the caller-facing host still needs fresh post-write capacity
+and review handling; no atomic capacity guarantee is invented. SAM consent,
+approved class terms, membership/payment policy, owned Cliniko review/recovery,
+class movement and actual signed/compiled serving integration remain required.
+The writer is disconnected from production call routing and activates nothing.
+
+The original reader fixture was extracted unchanged into
+`test/support/class-attendance.ts`; reader assertions and registry paths remain.
+Initial whole-source checking and reader regression passed in
+`4590eee3-1791986517481.log`. Native read/write/current capacity and exact receipt
+checks passed47 cases without failures/skips in
+`4590eee3-1791986633320.log`. Current receipt-permission and pending-budget-abort
+witnesses plus the reader passed49 cases, zero failures/cancellations/skips, in
+`4590eee3-1791986791802.log`. Final whole-source and adjacent native/read/write
+regression plus publication are pending. Registry1.199/391 records provider
+evidence only; synthetic voice/full-call evidence remains planned. The full13
+objective and every earlier open requirement remain active.
+
+
+Final E2E-391 qualification completed exit0 in
+`4590eee3-1791986903478.log`: whole-source typecheck, diff check and166 native
+class/read/write/roster/catalogue/registry regression checks passed, zero
+failures/cancellations/skips. Source remained frozen during this gate. This
+qualifies the native attendance provider primitives, not class caller journeys
+or complete gap10.
+
+Exact command:
+
+```sh
+npm run typecheck && node --test --test-concurrency=4 test/cliniko/class-attendance-read.test.ts test/cliniko/class-attendance-write.test.ts test/cliniko/appointments.test.ts test/cliniko/shared-read-budget.test.ts test/cliniko/recalls.test.ts test/cliniko/booking-write.test.ts test/cliniko/cancellation-write.test.ts test/cliniko/reschedule-write.test.ts test/cliniko/roster-booking.test.ts test/cliniko/roster-large-calendar.test.ts test/cliniko/roster-calendar.test.ts test/cliniko/catalogue.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts && git diff --check
 ```
