@@ -108,7 +108,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       if (options.appointmentTypeMetadata) assert.ok(metadata && Number.isSafeInteger(metadata.durationMinutes) && metadata.durationMinutes > 0 && metadata.durationMinutes <= 480);
       after = { ...before, id: appointmentId, notes: body.notes ?? before.notes, starts_at: starts, ends_at: new Date(Date.parse(starts) + (metadata?.durationMinutes ?? 30) * 60_000).toISOString(), archived_at: null, deleted_at: null,
         cancelled_at: url.pathname.endsWith("/cancel") ? now() : null,
-        patient: { links: { self: `${base}/patients/${body.patient_id ?? verificationCanaries[2]}` } },
+        patient: body.patient_id === undefined && before.patient ? before.patient : { links: { self: `${base}/patients/${body.patient_id ?? verificationCanaries[2]}` } },
         business: { links: { self: `${base}/businesses/${body.business_id ?? config.cliniko.businessId}` } }, practitioner: { links: { self: `${base}/practitioners/${body.practitioner_id ?? "22"}` } },
         appointment_type: { links: { self: `${base}/appointment_types/${typeId}` } } };
       assert.ok(after); nativeRows.set(appointmentId, after);

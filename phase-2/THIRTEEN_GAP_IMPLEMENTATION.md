@@ -14,7 +14,7 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 | 6 | Extend searches and support online-disabled services where required. | E2E-356 locally qualifies complete approved longer online searches and a compiled two-month late-range booking. E2E-357/358 add independently approved non-recurring native calendars, complete adaptive busy reads, Sunday0/7 and compiled returning/first-time location/member coverage with fresh chosen-day reads. Recurrence and broader real-calendar/serving qualification remain incomplete; preserve incomplete-source denial, date bounds and offer/commit agreement. |
 | 7 | Support another approved practitioner during rescheduling. | E2E-359 locally qualifies explicit approved practitioner pairs, independent destination policy, named played confirmation and one inspected in-place move at a changed or retained time. E2E-360 adds the current approved directory, retained original preference, played name/ordinal choice, pagination, fresh-time invalidation and ordinary signed/compiled dialogue. Final type/build and 99 checks passed; current exact-head cloud, real model/acoustic and clinic acceptance remain open. |
 | 8 | Add patient detail corrections, required registration fields and resends. | E2E-361–368 locally qualify patient corrections, account revisions, linked recovery, private edit/reset and guarded setting-history portability. E2E-369 adds independently approved required address fields, complete private collection/readback, field-bound host authority, native response/inspection and separate registration/booking confirmation; final typecheck/build and80 checks passed without skips. E2E-370–379 qualify resend SMTP, native evidence, SAM consent, signed private selection/paging, interruption recovery and mapped staff receipt inspection. E2E-380 now locally qualifies explicit versioned in-person/telehealth/cancelled formats through116 final checks. Unsupported clinic-specific field adapters and production recovery-host/operator integration/acceptance remain open; current-head cloud and actual clinic/mail/model/acoustic acceptance are absent. |
-| 9 | Handle multiple patients/actions in one call. | E2E-381–387 qualify same-caller and independently verified two-person booking tasks, fresh private proofs, native writes and immutable receipts. E2E-388 additionally qualifies enquiry-only progression after played protected-read notices, two patients appointments in one signed call with zero mutation, and retired read-receipt integrity. Current type/build/isolated PostgreSQL final regression passed173 checks, zero skips. Other patient/operation/catalogue/staff combinations, unrelated representatives without a native self record and alternative guardian channels remain unfinished. |
+| 9 | Handle multiple patients/actions in one call. | E2E-381–387 qualify same-caller and independently verified two-person booking tasks, fresh private proofs, native writes and immutable receipts. E2E-388 additionally qualifies enquiry-only progression after played protected-read notices, two patients appointments in one signed call with zero mutation, and retired read-receipt integrity. E2E-389 qualifies actual signed related-person cancellation/rescheduling and mixed enquiry/change with fresh proof and preserved original records. Current type/build/isolated PostgreSQL final regression passed195 checks, zero skips. Other patient/operation/catalogue/staff combinations, unrelated representatives without a native self record and alternative guardian channels remain unfinished. |
 | 10 | Add class attendance booking, cancellation and movement. | Individual endpoints are insufficient. Require existing session/attendee identities, capacity and duplicate checks, compensating move recovery and truthful concurrent-result handling. Membership credits/passes require their own evidence. |
 | 11 | Add deposits, paid confirmation, receipts and expiry handling. | Financial boundaries exist, payment lifecycle absent. Require real provider adapter contracts, signed webhook/idempotency, delivered links, separate expiry authority and no refund/coverage/hold invention. |
 | 12 | Add outbound follow-up and practitioner sick-day management. | Recalls are not campaigns. Require scoped audience, opt-out, fresh appointment context, scheduler, per-action outcomes and recovery. |
@@ -1347,3 +1347,65 @@ This qualifies the demonstrated read-only task sequence. It does not qualify all
 patient/action combinations, real clinic/mailbox/speech/carrier acceptance or
 current authoritative CI. The full13 objective and its remaining requirements
 are retained above; PR457 stays draft until its required gates are established.
+
+
+## Gap9 related-person cancellation, rescheduling and mixed read/change serving, E2E-389 (unpublished)
+
+The existing native change owners now have actual CallFlow and signed private
+serving qualification for related patients. Caller and selected patient each
+verify through separate channels; the current representative and clinical
+permissions remain independent. Actual target lists, move offers and clinical
+consent must play before a native change. The caller's own appointment is
+preserved. An enquiry for one person followed by another person's cancellation
+obtains fresh operation-bound proof and preserves the first read. A cancellation
+proof cannot authorize a move. Lost change responses remain uncertain and cannot
+replay; current caller permission withdrawn after proposal denies mutation.
+
+Changes are fixture/qualification work for existing production capabilities,
+not invented new production behavior. Dedicated synthetic native records and
+independent change approvals share the existing200-request account budget.
+Fixture capability flags are explicit and default off. The signed fixture had
+been replacing a PATCH target's patient with the calling patient when PATCH body
+contained no patient ID. It now preserves the actual native pre-change patient
+for readback. Existing self-call semantics and default single-write bound remain.
+No dependency, schema migration, real sender, patient recordings or Twilio number
+were added or activated.
+
+Source preparation passed in `4590eee3-1791984124115.log`; actual native related
+cancel/move and existing native/sequence qualification passed9 checks, zero
+failures/skips, in `4590eee3-1791984298069.log`. Current source and mixed enquiry/
+cancel/native task cases passed11 checks, zero failures/skips, in
+`4590eee3-1791984500521.log`. The first signed source gate stopped on a new
+test-only ActionState inference error (`4590eee3-1791984666781.log`); explicit
+typing corrected it before repeat. Fresh source/build, isolated PostgreSQL and
+actual signed cancel/move/mixed serving plus prior workflows passed27 checks,
+zero failures/cancellations/skips, in `4590eee3-1791984762723.log`. The signed
+cases scan isolated storage and public model/transcript/SAM for private name,
+birth-date, recipient and code leakage; all scans are empty. Uncertainty/replay
+and fresh caller-permission regression passed14 checks, zero failures/skips, in
+`4590eee3-1791985026101.log`.
+
+Manifest1.197/389 records native and synthetic serving evidence; production
+full-call evidence remains planned. Final source/build/isolated PostgreSQL and
+broader native/voice/core/storage/registry regression runs as `Abby E389 related
+changes final source native serving storage regression`, log
+`4590eee3-1791985123105.log`. Publication awaits that terminal result.
+
+Files: opt-in fixture change capabilities, independent representative operation
+approvals, native related change fixtures, preserved PATCH target identity,
+native/mixed and actual signed change tests and registry/design/implementation
+ledger. The full13 objective remains active. Other patient/operation/catalogue/
+staff combinations, unrelated representatives without a native self record,
+alternative guardian channels, remaining gap6/8 and gaps10–13 remain unfinished;
+actual clinic/mailbox/model/acoustic/carrier acceptance and current authoritative
+CI remain unproven.
+
+
+Final E2E-389 qualification completed exit0 in
+`4590eee3-1791985123105.log`: whole-source typecheck, fresh compiled voice build,
+isolated PostgreSQL migrations and195 native/private/signed/compiled/core/storage
+and contract checks passed, zero failures/cancellations/skips, plus clean diff
+check. Source remained frozen during the qualification. The full thirteen-gap
+objective remains active; these tests qualify the specified existing related
+change workflows, not all class/payment/campaign/document capabilities or
+production readiness.

@@ -13,10 +13,16 @@ export function representativeInputOptions(f: Awaited<ReturnType<typeof represen
   return { callerApprovalPath, callerPermission, representativeApprovalPath, representativeCallerApprovalPath, permission };
 }
 
-export async function representativeCallOwnerFixture(options: { multiplePatients?: true; operation?: "book" | "appointments.read" } = {}) {
-  const f = await bookingOffersFixture({ budget: new ClinikoReadBudget(200, () => Date.parse(verificationNow)) });
+export async function representativeCallOwnerFixture(options: { multiplePatients?: true; operation?: "book" | "appointments.read" | "cancel" | "reschedule";
+  allowedOperations?: readonly ("book" | "appointments.read" | "cancel" | "reschedule")[]; appointmentChanges?: true } = {}) {
+  const f = await bookingOffersFixture({ ...(options.appointmentChanges ? { appointmentChanges: true } : {}), budget: new ClinikoReadBudget(200, () => Date.parse(verificationNow)) });
   const operation = options.operation ?? "book";
-  const r = await representativeFixture(f.ownerPorts.rateBudget, { fixture: f, operation: operation === "book" ? "appointments.book" : "appointments.read" });
+  const patientOperations = { book: "appointments.book", cancel: "appointments.cancel", reschedule: "appointments.reschedule", "appointments.read": "appointments.read" } as const;
+  const r = await representativeFixture(f.ownerPorts.rateBudget, { fixture: f, operation: patientOperations[operation] });
+  if (options.allowedOperations) {
+    const operations = options.allowedOperations.map(op => patientOperations[op]);
+    await r.replaceApproval({ operations }); await r.replaceCaller({ operations });
+  }
   const callerPath = join(f.folder, "representative-actor-caller.json");
   const approval = JSON.parse(await readFile(f.config.path, "utf8"));
   await writeFile(callerPath, JSON.stringify({ ...approval, operations: ["appointments.read"] }), { mode: 0o600 });
@@ -56,7 +62,7 @@ export async function representativeCallOwnerFixture(options: { multiplePatients
     approvals: { bookCaller: r.config.representativeCallerApprovalPath, cancelCaller: r.config.representativeCallerApprovalPath,
       rescheduleCaller: r.config.representativeCallerApprovalPath, booking: f.path, cancellation: f.path, rescheduling: f.path } };
   let enquiry: import("../../src/standalone/cliniko-call-flow.ts").ClinikoCallFlowConfig["enquiry"];
-  if (operation === "appointments.read") {
+  if (operation === "appointments.read" || options.allowedOperations?.includes("appointments.read")) {
     const path = join(f.folder, "representative-read.json");
     const common = Object.fromEntries(["scope", "revision", "approverRef", "approvedAt", "effectiveFrom", "effectiveUntil", "approved", "enabled"].map(key => [key, approval[key]]));
     await writeFile(path, JSON.stringify({ ...common, policyVersion: context.policyVersion, businessId: context.cliniko.businessId,
