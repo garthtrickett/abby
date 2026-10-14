@@ -68,14 +68,18 @@ export function bookingMenuPresentation(read: BookingMenuRead, binding: Readonly
 
 /** Confirm the same provider/service/duration in the approved clinic calendar. Legacy hosts retain their wording. */
 export function bookingConfirmation(offer: BookableOffer, locale: string): Result<string, Readonly<{ kind: "invalidEvidence" }>> {
-  const presentation = offer.presentation;
-  if (!presentation) return ok(`Please confirm the ${offer.serviceRef} appointment at ${offer.startsAt}.`);
+  const presentation = offer.presentation, terms = offer.terms;
+  if (terms && (typeof terms.version !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(terms.version) ||
+      typeof terms.approvedText !== "string" || !terms.approvedText.trim() || terms.approvedText.length > 2000 ||
+      /[\u0000-\u001f\u007f]/.test(terms.approvedText) || instant(terms.expiresAt) === undefined || terms.expiresAt !== offer.expiresAt)) return err({ kind: "invalidEvidence" });
+  const suffix = terms ? ` ${terms.approvedText}` : "";
+  if (!presentation) return ok(`Please confirm the ${offer.serviceRef} appointment at ${offer.startsAt}.${suffix}`);
   try {
     if (!supportedVoiceLocale(locale) || !name(presentation.practitionerName) || !name(presentation.appointmentTypeName) || presentation.locationName !== undefined && !name(presentation.locationName) ||
         !Number.isSafeInteger(presentation.durationMinutes) || presentation.durationMinutes < 1 || presentation.durationMinutes > 480 ||
         instant(offer.startsAt) === undefined || typeof presentation.timeZone !== "string" || presentation.timeZone.length > 128) return err({ kind: "invalidEvidence" });
     const at = new Intl.DateTimeFormat(locale, { timeZone: presentation.timeZone, weekday: "long", day: "numeric", month: "long",
       hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "long" }).format(new Date(offer.startsAt));
-    return ok(`Please confirm the ${presentation.appointmentTypeName} appointment with ${presentation.practitionerName}${presentation.locationName ? ` at ${presentation.locationName}` : ""} on ${at}, for ${presentation.durationMinutes} minutes.`);
+    return ok(`Please confirm the ${presentation.appointmentTypeName} appointment with ${presentation.practitionerName}${presentation.locationName ? ` at ${presentation.locationName}` : ""} on ${at}, for ${presentation.durationMinutes} minutes.${suffix}`);
   } catch { return err({ kind: "invalidEvidence" }); }
 }

@@ -82,7 +82,7 @@ test("E2E-390 complete attendee pagination excludes cancelled records and report
 for (const status of [401, 429, 503]) test(`E2E-390 native class HTTP${status} yields a typed failure`, async () => {
   const f = fixture(); f.status(status); const result = await f.list(); assert.equal(result.ok, false);
   assert.equal(result.error.kind, status === 401 ? "forbidden" : status === 429 ? "rateLimited" : "unavailable");
-  if (status === 429) assert.equal(f.budget.claim()?.kind, "rateLimited");
+  if (status === 429) assert.equal((await f.budget.claim())?.kind, "rateLimited");
 });
 
 test("E2E-390 account budget and cancellation prevent additional native reads", async () => {

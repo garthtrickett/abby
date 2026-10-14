@@ -15,7 +15,7 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 | 7 | Support another approved practitioner during rescheduling. | E2E-359 locally qualifies explicit approved practitioner pairs, independent destination policy, named played confirmation and one inspected in-place move at a changed or retained time. E2E-360 adds the current approved directory, retained original preference, played name/ordinal choice, pagination, fresh-time invalidation and ordinary signed/compiled dialogue. Final type/build and 99 checks passed; current exact-head cloud, real model/acoustic and clinic acceptance remain open. |
 | 8 | Add patient detail corrections, required registration fields and resends. | E2E-361–368 locally qualify patient corrections, account revisions, linked recovery, private edit/reset and guarded setting-history portability. E2E-369 adds independently approved required address fields, complete private collection/readback, field-bound host authority, native response/inspection and separate registration/booking confirmation; final typecheck/build and80 checks passed without skips. E2E-370–379 qualify resend SMTP, native evidence, SAM consent, signed private selection/paging, interruption recovery and mapped staff receipt inspection. E2E-380 now locally qualifies explicit versioned in-person/telehealth/cancelled formats through116 final checks. Unsupported clinic-specific field adapters and production recovery-host/operator integration/acceptance remain open; current-head cloud and actual clinic/mail/model/acoustic acceptance are absent. |
 | 9 | Handle multiple patients/actions in one call. | E2E-381–387 qualify same-caller and independently verified two-person booking tasks, fresh private proofs, native writes and immutable receipts. E2E-388 additionally qualifies enquiry-only progression after played protected-read notices, two patients appointments in one signed call with zero mutation, and retired read-receipt integrity. E2E-389 qualifies actual signed related-person cancellation/rescheduling and mixed enquiry/change with fresh proof and preserved original records. Current type/build/isolated PostgreSQL final regression passed195 checks, zero skips. Other patient/operation/catalogue/staff combinations, unrelated representatives without a native self record and alternative guardian channels remain unfinished. |
-| 10 | Add class attendance booking, cancellation and movement. | E2E-390 now supplies a protected native class reader: existing sessions, complete active capacity, exact own attendee target and native drift/privacy checks. E2E-391 additionally supplies guarded native single-attendee registration/cancellation and exact inspection; caller-facing class actions, movement and membership credit handling remain unfinished. Individual endpoints are insufficient. Require existing session/attendee identities, capacity and duplicate checks, compensating move recovery and truthful concurrent-result handling. Membership credits/passes require their own evidence. |
+| 10 | Add class attendance booking, cancellation and movement. | E2E-390 now supplies a protected native class reader: existing sessions, complete active capacity, exact own attendee target and native drift/privacy checks. E2E-391 additionally supplies guarded native single-attendee registration/cancellation and exact inspection; E2E-392 adds locally qualified text class booking through actual verification, played SAM terms/consent, owned review, one inspected attendance write and capacity-race handling. Class cancellation/movement, membership credit handling and ordinary signed/compiled serving remain unfinished. Individual endpoints are insufficient. Require existing session/attendee identities, capacity and duplicate checks, compensating move recovery and truthful concurrent-result handling. Membership credits/passes require their own evidence. |
 | 11 | Add deposits, paid confirmation, receipts and expiry handling. | Financial boundaries exist, payment lifecycle absent. Require real provider adapter contracts, signed webhook/idempotency, delivered links, separate expiry authority and no refund/coverage/hold invention. |
 | 12 | Add outbound follow-up and practitioner sick-day management. | Recalls are not campaigns. Require scoped audience, opt-out, fresh appointment context, scheduler, per-action outcomes and recovery. |
 | 13 | Add approved communication/document writeback. | Optional clinical record features need explicit clinic-owned storage and field/content approval. Require no cross-patient/class-shared leakage and concurrency-aware result reporting. |
@@ -1529,4 +1529,83 @@ Exact command:
 
 ```sh
 npm run typecheck && node --test --test-concurrency=4 test/cliniko/class-attendance-read.test.ts test/cliniko/class-attendance-write.test.ts test/cliniko/appointments.test.ts test/cliniko/shared-read-budget.test.ts test/cliniko/recalls.test.ts test/cliniko/booking-write.test.ts test/cliniko/cancellation-write.test.ts test/cliniko/reschedule-write.test.ts test/cliniko/roster-booking.test.ts test/cliniko/roster-large-calendar.test.ts test/cliniko/roster-calendar.test.ts test/cliniko/catalogue.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts && git diff --check
+```
+
+
+## Gap10 approved class booking through actual SAM and owned review, E2E-392 (unpublished)
+
+A new `OwnerFileClassPolicy` requires exact selected business/member/type,
+existing native occurrences, explicit best-effort and notification ownership,
+versioned public labels/terms, bounded dates/expiry and approving clinic admin
+membership. Ordinary appointment approval cannot enable class attendance.
+`ClinikoClassBookingHost` owns private class menu/selection/preparation and
+composes the existing actual book action/SAM rather than creating a shared
+class. Actual caller proof and independent class/membership entitlement remain
+separate. Only a played class proposal followed by an affirmative, current
+settings/stop/live-call authority and an acknowledged Cliniko-owned review can
+reach one attendee POST. Exact attendee marker/patient/session inspection and
+fresh whole-class capacity are required before a committed receipt.
+
+The class review protocol has its own versioned header and records the exact
+class session and native attendance action marker. Its cancellation shape
+distinguishes an attendee from a shared class; this protocol does not implement
+a caller cancellation path. Provider-owned review discovery recognises the new
+shapes without treating parsed notes as permission. Its synthetic process
+helper reports positive class counts as non-patient aggregates while retaining
+legacy aggregate shapes. Core booking offers optionally carry approved terms
+with exactly their own expiry; terms enter the played confirmation and action
+digest. Existing offers retain their wording. Protected native class reads now
+propagate the caller abort to verification. No dependency/migration, patient
+recording, real sender or Twilio number was added.
+
+Current caller/class permission, approving membership, terms, native type or
+capacity changes, write-stop, disposal, unplayed consent and guessed offers
+deny send or disclosure. A lost review/write response remains uncertain, retains
+Cliniko review work and cannot replay or later upgrade. A native create followed
+by overcapacity or a duplicate own attendance also cannot become committed.
+Class shared records and other patients are not edited. Caller presentations
+exclude actual synthetic recipient, code, native patient and class-note canaries.
+The positive path uses the actual unchanged shared200-request account budget.
+
+Initial source checking stopped at the review-process helper's old operation
+count union (`4590eee3-1791987670431.log`); explicit class aggregate cases fixed
+it. The first native text fixtures used the wrong `begin()` return type,
+invented menu command names, omitted the real text clock/greeting playback and
+sent blank caller turns. They were corrected to the existing interfaces, actual
+played admission greeting and complete turns without changing production
+playback, limits or assertions. The complete native class journey passed in
+`4590eee3-1791988188778.log`.
+
+A subsequent source gate stopped on test-only asynchronous budget type and
+un-narrowed presentation union (`4590eee3-1791988351345.log`); awaiting the actual
+budget and requiring actual speech fixed these. Whole-source checking and82
+class/native/current-approval/uncertainty/race plus ordinary booking/review
+regressions passed without failures/skips in `4590eee3-1791988480591.log`.
+A later foreign-policy witness expected a failed turn when the text shell
+correctly accepts an unsuccessful request and presents a denial; its correction
+now separately requires private host denial, explicit caller fallback, zero
+class reads and zero actions/reviews/writes. The original red75-case evidence is
+`4590eee3-1791988595754.log`; all75 current cases passed without failures/
+cancellations/skips in `4590eee3-1791988790656.log`.
+
+Registry1.200/392 records text/native evidence only. Final source/build, broader
+PostgreSQL/process/voice/core/provider/registry qualification and publication
+are pending. The full13 objective remains active. Ordinary signed/compiled class
+routing, class cancellation/movement, membership/pass/credit adapters and clinic
+acceptance remain unfinished; prior gap6/8/9 requirements and gaps11–13 remain.
+
+
+Final E2E-392 qualification completed exit0 in
+`4590eee3-1791989108987.log`: whole-source typecheck, fresh compiled voice build,
+isolated PostgreSQL migrations and185 native class/SAM/owned review/process/
+ordinary clinical voice/task/core/storage/registry checks passed with zero
+failures/cancellations/skips, plus clean diff check. Source remained frozen
+throughout. This qualifies the demonstrated text class-booking composition
+and preserves existing serving regressions; it does not establish ordinary
+class signed/compiled serving or close the full class/membership gap.
+
+Exact command:
+
+```sh
+npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh bash -c "npm run db:migrate && node --test --test-concurrency=4 test/cliniko/class-booking-host.test.ts test/cliniko/class-review-context.test.ts test/cliniko/class-attendance-read.test.ts test/cliniko/class-attendance-write.test.ts test/cliniko/standalone-booking.test.ts test/cliniko/booking-offers.test.ts test/cliniko/booking-session.test.ts test/cliniko/standalone-cancellation.test.ts test/cliniko/standalone-rescheduling.test.ts test/cliniko/review-discovery.test.ts test/cliniko/review-discovery-process.test.ts test/cliniko/reviewed-send.test.ts test/cliniko/reviewed-send-process.test.ts test/cliniko/review-rehearsal.test.ts test/cliniko/cancellation-review-context.test.ts test/cliniko/call-task-sequence.test.ts test/voice/cliniko-workflow-call.test.ts test/voice/standalone-clinical-runner.test.ts test/voice/caller-identity-denial.test.ts test/voice/call-task-sequence-runner.test.ts test/text/booking.test.ts test/text/uncertain.test.ts test/storage/standalone-call-state.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts" && git diff --check
 ```

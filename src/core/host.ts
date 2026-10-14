@@ -218,7 +218,7 @@ export interface ConfirmationResendEvidenceHost {
 
 /** The host issues this proof after its own caller verification; a provider ID is never proof. */
 export interface PatientProofHost {
-  verifyPatient(scope: LocationScope, verificationRef: string, now: string): Promise<Result<VerifiedPatient, HostReadFailure>>;
+  verifyPatient(scope: LocationScope, verificationRef: string, now: string, signal?: AbortSignal): Promise<Result<VerifiedPatient, HostReadFailure>>;
 }
 
 export type StaffRequestQuery = Readonly<{

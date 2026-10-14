@@ -166,7 +166,7 @@ export class ClinikoClassAttendanceReader {
     if (signal.aborted) return fail("unavailable");
     const observedAt = this.#clock(), now = instant(observedAt);
     if (now === undefined) return fail("unavailable");
-    const result = await this.#proof.verifyPatient(scope, ref, observedAt);
+    const result = await this.#proof.verifyPatient(scope, ref, observedAt, signal);
     if (!result.ok) return fail(result.error.kind === "unavailable" ? "unavailable" : "invalidProof");
     const p = result.value;
     if (!scopeValid(p.scope) || !sameScope(scope, p.scope) || p.verificationRef !== ref || !id(p.patientRef) ||

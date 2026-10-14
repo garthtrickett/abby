@@ -169,6 +169,8 @@ export type VerifiedPatient = Readonly<{
   expiresAt: string;
 }>;
 export type BookableOffer = Readonly<{
+  /** Optional host-approved booking terms share the exact offer expiry and action digest. */
+  terms?: AppointmentChangeTerms;
   scope: LocationScope;
   offerRef: string;
   serviceRef: string;

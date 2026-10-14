@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { ClinikoClassAttendanceReader } from "../../src/cliniko/class-attendance-read.ts";
+import type { LocationScope } from "../../src/core/model.ts";
+import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 import type { PatientProofHost } from "../../src/core/host.ts";
 import { ok, err } from "../../src/core/model.ts";
 import { ClinikoReadBudget } from "../../src/cliniko/read-budget.ts";
@@ -18,7 +20,8 @@ function attendee(id: string, booking: string, patient = "44", cancelled_at: str
   return { id, ...link("attendees", id), booking: link("bookings", booking), patient: link("patients", patient),
     archived_at: null, deleted_at: null, cancelled_at, notes: "private-attendee-note", patient_name: "private-other-name" };
 }
-export function classAttendanceFixture() {
+export function classAttendanceFixture(options: { scope?: LocationScope; now?: string; patientId?: string; rateBudget?: ClinikoRequestBudget } = {}) {
+  const boundScope = options.scope ?? scope, observedNow = options.now ?? now;
   const groups: Record<string, unknown>[] = [group("91"), group("92", 1), group("93"), group("94")];
   const attendees: Record<string, unknown>[] = [attendee("101", "91", "42"), attendee("102", "91"), attendee("103", "91", "45", now),
     attendee("104", "92"), attendee("105", "93", "42"), attendee("106", "93", "42")];
@@ -29,9 +32,13 @@ export function classAttendanceFixture() {
   let onRead: ((path: string, count: number) => void) | undefined;
   let onResponse: ((path: string, body: Record<string, unknown>) => void) | undefined;
   const counts = new Map<string, number>();
+  if (options.patientId) for (const row of attendees) {
+    if ((row.patient as { links: { self: string } }).links.self === `${base}/patients/42`) row.patient = link("patients", options.patientId);
+  }
+  subject = options.patientId ?? subject;
   const proof: PatientProofHost = { verifyPatient: async (s, ref) => {
-    proofCalls++; assert.deepEqual(s, scope); assert.equal(ref, "private-class-proof");
-    return denied ? err({ kind: "expired", target: "patient" }) : ok({ scope, patientRef: subject, verificationRef: ref, expiresAt: "2026-10-08T10:00:00.000Z" });
+    proofCalls++; assert.deepEqual(s, boundScope); assert.equal(ref, "private-class-proof");
+    return denied ? err({ kind: "expired", target: "patient" }) : ok({ scope: boundScope, patientRef: subject, verificationRef: ref, expiresAt: "2026-10-08T10:00:00.000Z" });
   } };
   const fetchPort: typeof fetch = async (value, init) => {
     const url = new URL(String(value)), path = url.pathname; assert.equal(url.origin, "https://api.au5.cliniko.com");
@@ -57,11 +64,11 @@ export function classAttendanceFixture() {
     const body = { [name]: rows.slice((page - 1) * 100, page * 100), total_entries: rows.length };
     onResponse?.(path, body); return Response.json(body);
   };
-  const budget = new ClinikoReadBudget(200, () => Date.parse(now));
-  const config = { scope, apiKey: "synthetic-class-au5", contactEmail: "dev@example.test", businessId: "11", practitionerId: "22", appointmentTypeId: "33", className: "Approved mat Pilates", rateBudget: budget };
-  const reader = resultValue(ClinikoClassAttendanceReader.create(config, proof, fetchPort, () => now));
+  const budget = options.rateBudget ?? new ClinikoReadBudget(200, () => Date.parse(observedNow));
+  const config = { scope: boundScope, apiKey: "synthetic-class-au5", contactEmail: "dev@example.test", businessId: "11", practitionerId: "22", appointmentTypeId: "33", className: "Approved mat Pilates", rateBudget: budget };
+  const reader = resultValue(ClinikoClassAttendanceReader.create(config, proof, fetchPort, () => observedNow));
   return { reader, config, proof, fetchPort, groups, attendees, business, type, traffic, budget,
-    list: (signal = new AbortController().signal) => reader.list(scope, "private-class-proof", now, to, now, signal),
+    list: (signal = new AbortController().signal) => reader.list(boundScope, "private-class-proof", observedNow, to, observedNow, signal),
     get proofCalls() { return proofCalls; }, revoke: () => { denied = true; }, changeSubject: () => { subject = "43"; },
     status: (status: number) => { responseStatus = status; }, noRelationship: () => { missingRelationship = true; },
     onRead: (callback: typeof onRead) => { onRead = callback; },

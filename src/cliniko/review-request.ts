@@ -7,6 +7,8 @@ import { formatRecallNote, validRecallDate, validRecallMarker, validRecallSummar
 type Interval = Readonly<{ startsAt: string; endsAt: string }>;
 type Selection = Readonly<{ practitionerId: string; appointmentTypeId: string }>;
 export type ClinikoReviewOperation =
+  | Readonly<{ kind: "classBook"; sessionId: string; attendanceActionId: string }> & Interval & Selection
+  | Readonly<{ kind: "classCancel"; sessionId: string; attendeeId: string; cancellationReason: ClinikoCancellationRequest["cancellationReason"] }> & Interval & Selection
   | Readonly<{ kind: "book" }> & Interval & Selection
   | Readonly<{ kind: "cancel"; appointmentId: string; cancellationReason: ClinikoCancellationRequest["cancellationReason"] }> & Interval & Selection
   | Readonly<{ kind: "reschedule"; appointmentId: string; newStartsAt: string; newEndsAt: string; newPractitionerId?: string }> & Interval & Selection
@@ -31,8 +33,9 @@ const header = "Abby appointment review v2";
 const correctionHeader = "Abby patient correction review v1";
 const resendHeader = "Abby confirmation resend review v1";
 const resendContentHeader = "Abby confirmation resend review v2";
-const reviewHeader = (operation: ClinikoReviewOperation) => operation.kind === "patientUpdate" ? correctionHeader : operation.kind === "confirmationResend" ?
+const reviewHeader = (operation: ClinikoReviewOperation) => operation.kind === "classBook" || operation.kind === "classCancel" ? classHeader : operation.kind === "patientUpdate" ? correctionHeader : operation.kind === "confirmationResend" ?
   operation.contentKind ? resendContentHeader : resendHeader : header;
+const classHeader = "Abby class attendance review v1";
 const instruction = "Staff review required. Do not replay automatically.";
 const idPattern = /^[1-9][0-9]{0,18}$/;
 
@@ -64,6 +67,10 @@ function operation(value: unknown): value is ClinikoReviewOperation {
   if (!row || !id(row.practitionerId) || !id(row.appointmentTypeId) || !interval(row, "startsAt", "endsAt")) return false;
   const common = ["kind", "practitionerId", "appointmentTypeId", "startsAt", "endsAt"];
   switch (row.kind) {
+    case "classBook": return keys(row, [...common, "sessionId", "attendanceActionId"]) && id(row.sessionId) &&
+      typeof row.attendanceActionId === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(row.attendanceActionId);
+    case "classCancel": return keys(row, [...common, "sessionId", "attendeeId", "cancellationReason"]) && id(row.sessionId) && id(row.attendeeId) &&
+      typeof row.cancellationReason === "number" && [10, 20, 30, 40, 50, 60].includes(row.cancellationReason);
     case "confirmationResend": return keys(row, [...common, "appointmentId", "resendRef", ...(Object.hasOwn(row, "contentKind") ? ["contentKind"] : [])]) && (!Object.hasOwn(row, "contentKind") || typeof row.contentKind === "string" && ["activeInPerson", "activeTelehealth", "cancelled"].includes(row.contentKind)) && id(row.appointmentId) &&
       typeof row.resendRef === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(row.resendRef);
     case "book": return keys(row, common);
@@ -98,7 +105,7 @@ export function encodeClinikoReview(marker: string, request: ClinikoReviewReques
 export function decodeClinikoReview(notes: unknown): Result<ClinikoDecodedReview, ClinikoReviewRequestFailure> {
   if (typeof notes !== "string") return err({ kind: "invalidReviewRequest" });
   const parts = notes.split("\n");
-  if (parts.length !== 4 || !parts[0]?.startsWith("Abby request ") || ![header, correctionHeader, resendHeader, resendContentHeader].includes(parts[1]!) ||
+  if (parts.length !== 4 || !parts[0]?.startsWith("Abby request ") || ![header, correctionHeader, resendHeader, resendContentHeader, classHeader].includes(parts[1]!) ||
       parts[3] !== instruction || !validRecallSummary(parts.slice(1).join("\n"))) {
     return err({ kind: "invalidReviewRequest" });
   }
