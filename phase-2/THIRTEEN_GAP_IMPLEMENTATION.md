@@ -2423,3 +2423,23 @@ October5–8 filter/context/PCMU work already exists; review it and inspect wave
 and conversion evidence before further candidate screens. No fixture defect or
 production improvement is claimed. Full speech qualification, remaining class
 membership/pass/credits and the full13 objective remain open.
+
+
+## Gap4 repeated PCMU experiment with repaired outbound capture
+
+The earlier incomplete wire instrumentation is repaired in a new owner-only
+runner. Twenty-five offline cases pass, including idempotent close/terminate
+capture and rejection of a mismatched format acknowledgment before audio.
+All36 measured sessions now have exact expected outbound audio hashes and actual
+provider format/model/context acknowledgments. The paired three-repeat comparison
+holds model/context/fixture/pacing/concurrency constant. Current PCM has5 critical
+misses/28.03% WER; PCMU has4/35.61%. Both fail unchanged accuracy thresholds with
+zero provider failures or missing repeats. No candidate is promoted and no
+production adapter changes. Locally captured bytes do not prove a remote
+receive-byte hash, and this diagnostic shim does not qualify a production binding.
+
+[Metrics, hashes and limitations](../eval/baselines/native-pcmu-repeated-20261014-v1.json)
+and [exact commands](../eval/LIVE_BASELINE_2026-09-29.md#repeated-native-pcmu-diagnostic--2026-10-14)
+are recorded. Work log `4590eee3-1792008794475.log` exits1 for failed quality;
+offline and independent artifact verification exit0. Speech remains on hold.
+This closes the diagnostic capture defect, not the full speech or13-gap goal.

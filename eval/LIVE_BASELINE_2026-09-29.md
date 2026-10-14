@@ -1,5 +1,54 @@
 # Live synthetic evaluation baseline — 2026-09-29
 
+## Repeated native PCMU diagnostic — 2026-10-14
+
+The earlier PCMU screen failed to capture its outbound bytes because the
+adapter normally tears down with terminate(), while that screen recorded only
+close(). A new owner-only diagnostic captures close, terminate and close events
+exactly once. Twenty-five offline checks cover both formats, both teardown
+paths, all six original clips and wrong-format acknowledgment rejection before
+any audio is sent. Independently calculated whole-signal24kHz interpolation and
+8kHz PCMU hashes match the adapter/frame projection, including the exact decoded
+16kHz fixture signal for PCMU.
+
+The corrected live comparison holds model, generic clinic context, pinned input,
+three repeats, concurrency2 and20ms pacing fixed. Only the wire format differs.
+All36 actual outbound captures match their expected per-case hashes; each arm
+has18 actual provider format/context acknowledgments and exactly18 terminal
+captures. [Aggregate evidence and hashes](baselines/native-pcmu-repeated-20261014-v1.json)
+retain those facts without transcripts.
+
+| Wire format | Runs | Critical misses | WER | Final p95 | Gate |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Current24kHz PCM, fixed generic clinic context | 18 | 5 | 28.03% | 872ms | fail |
+| Native8kHz PCMU projection, same context | 18 | 4 | 35.61% | 932ms | fail |
+
+Both fail the unchanged zero-critical/maximum10% WER criteria. Neither arm has
+provider failures, empty/truncated/delayed finals or missing repeats. PCMU is
+rejected as a quality candidate. The result does not establish a conversion
+fault. This remains a diagnostic projection: the wrapper retains the real
+provider acknowledgment, then privately maps its format for the unchanged
+production adapter. Locally captured queued bytes are not a provider-generated
+receive-byte hash or a production PCMU binding. No production source, physical
+voice profile, threshold, corpus, dependency or admission changed.
+
+Exact commands:
+
+```sh
+node /home/gust/code/abby/eval/results/screen-native-pcmu-20261014.mjs --preflight
+node --import /tmp/abby-evaluation-key.mjs /home/gust/code/abby/eval/results/screen-native-pcmu-20261014.mjs
+node /tmp/abby-verify-native-pcmu-20261014.mjs
+```
+
+Tracked job `Abby repeated native PCMU wire qualified comparison` completes
+exit1 for failed quality in1m26s, log `4590eee3-1792008794475.log`. Offline and
+independent evidence checks exit0. Reports and runner are retained owner-only;
+all source/corpus/report/runner hashes are recorded. The official
+[Realtime client-event reference](https://developers.openai.com/api/reference/resources/realtime/client-events)
+documents transcription-session PCM and PCMU formats. Real acoustic, clinic,
+human and carrier gates remain open; speech admission stays on hold.
+
+
 ## Current synthetic comparison — 2026-10-14
 
 The unchanged six-clip noisy corpus was replayed through the production Realtime

@@ -1,0 +1,182 @@
+{
+  "schema": "abby.native-pcmu-repeated-comparison.aggregate.v1",
+  "date": "2026-10-14",
+  "patientFree": true,
+  "baseHead": "701131b60dd1433c291515fcbd1d4fca78e3bf37",
+  "corpusSha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+  "sourceFiles": [
+    {
+      "path": "src/voice/openai-realtime-transcription.ts",
+      "sha256": "2104a7321c544d8fddd5939b7613c00968979dc888d22aa61730bb6c721c1df0"
+    },
+    {
+      "path": "src/voice/transcription-evaluation.ts",
+      "sha256": "3ea30413b80cd28ecf337aaf9ad156dc6d5fd946ee74f81678654f9f2a41943d"
+    },
+    {
+      "path": "src/voice/transcription-evaluation-gate.ts",
+      "sha256": "44f7973d65f8de8261db8030bfbb14ce827a0c14b9b35756c2640133c956357c"
+    }
+  ],
+  "report": {
+    "path": "eval/results/20261014-native-pcmu-repeated.json",
+    "sha256": "123bd09d3b5f8bf5cc5d8deb0e05eb18741c0aa89013995a74fe9f70f55c0bdf",
+    "ownerOnly": true
+  },
+  "runner": {
+    "path": "eval/results/screen-native-pcmu-20261014.mjs",
+    "sha256": "752a3db25236786ac08352a489984e81dc47d36fb2f66df43adebf9809caef7c",
+    "ownerOnly": true
+  },
+  "configuration": {
+    "model": "gpt-live-transcribe",
+    "context": {
+      "prompt": "English physiotherapy clinic calls about appointments, booking, and urgent symptoms.",
+      "languages": [
+        "en"
+      ]
+    },
+    "repeats": 3,
+    "concurrency": 2,
+    "paceMs": 20
+  },
+  "offlineChecks": 25,
+  "expectedWireHashes": [
+    {
+      "id": "NS-001",
+      "pcm16Sha256": "4c0f89cf66ad975b340162747bca58162569a8d496f01cdb71c4dbb20cf0c5e9",
+      "pcm24Sha256": "ecdf3ed00f0b99190f596ce99b269070a5aff6698387fdaedbf9b507cb10fbf7",
+      "pcmuSha256": "2faa5333209a08b26bc689cb9e3db7824d42bfdef2f32378a22119fac1b1620d",
+      "pcm24Bytes": 125760,
+      "pcmuBytes": 20960
+    },
+    {
+      "id": "NS-002",
+      "pcm16Sha256": "ede31b5da32bb6222b982dfafdc17134d01d2a5e35bb6b7ec7c05455af7f610e",
+      "pcm24Sha256": "409eca02beced538409f9b80363ecd7e490a33ae789a286305e37d7a37d58cc3",
+      "pcmuSha256": "24666baa032220717a2e9470f5135cd1cc49f90b794e1dc25b654eee5737fd8b",
+      "pcm24Bytes": 135360,
+      "pcmuBytes": 22560
+    },
+    {
+      "id": "NS-003",
+      "pcm16Sha256": "185a21430c72e911d092ea578f0748ad6ca35d7289b764f0c97fac3f2d2f0495",
+      "pcm24Sha256": "0ee9318dda5826bbc07c7adc75aecad44af55f85c294b792b01b8a0f5bff5d6a",
+      "pcmuSha256": "0e8d14e7411aef5d5ae64482ddd2436ce848f07c5ccbb55d28d9330d0355b104",
+      "pcm24Bytes": 165120,
+      "pcmuBytes": 27520
+    },
+    {
+      "id": "NS-004",
+      "pcm16Sha256": "476b330c032d23f0acb2ea1d88d0d00b447d2ade928d405afe5de1a0e13cce08",
+      "pcm24Sha256": "aba4be733c835248149d2f27aae41d0ae024c1fce64e4c7df9217e490f84939d",
+      "pcmuSha256": "e1157bd2fbe5f67a881659e58e09f1f5c4f2c244802281acef9617a43fb4b9fe",
+      "pcm24Bytes": 139200,
+      "pcmuBytes": 23200
+    },
+    {
+      "id": "NS-005",
+      "pcm16Sha256": "9aae18f17d26c003055c5726ba9e28d9226e3ab2b5a394dc933dc632a3c4d6df",
+      "pcm24Sha256": "b6c3b158d7221615b3035780376d9257d05b7fba66a860ac76ec2bff2b25a515",
+      "pcmuSha256": "7ba64aa4aa331d448fd2a35f4f7e5a123932f619cfeb1c2f39dd30d2c9f79a7e",
+      "pcm24Bytes": 141120,
+      "pcmuBytes": 23520
+    },
+    {
+      "id": "NS-006",
+      "pcm16Sha256": "5f8dee408c6a256936a02b6db29bdea788c41161fb277d4970ab8217c20ebb10",
+      "pcm24Sha256": "e92dad72e74581cd0898d2c53288547c5dce6b7305d5bd1645a6142bd8d32205",
+      "pcmuSha256": "446b17a86672864e8400ebcae3c488c20d7bf0ac98efcd0d814856922e115695",
+      "pcm24Bytes": 150720,
+      "pcmuBytes": 25120
+    }
+  ],
+  "arms": [
+    {
+      "format": "pcm24",
+      "outboundWiresVerified": 18,
+      "providerFormatAcknowledged": true,
+      "teardownCapture": "terminate, exactly once per session",
+      "assessment": {
+        "status": "fail",
+        "failures": [
+          "critical",
+          "wordErrorRate"
+        ],
+        "metrics": {
+          "cases": 6,
+          "runs": 18,
+          "critical": 5,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0.2803030303030303,
+          "finalP95Ms": 872,
+          "missingRepeats": []
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      }
+    },
+    {
+      "format": "pcmu8",
+      "outboundWiresVerified": 18,
+      "providerFormatAcknowledged": true,
+      "teardownCapture": "terminate, exactly once per session",
+      "assessment": {
+        "status": "fail",
+        "failures": [
+          "critical",
+          "wordErrorRate"
+        ],
+        "metrics": {
+          "cases": 6,
+          "runs": 18,
+          "critical": 4,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0.3560606060606061,
+          "finalP95Ms": 932,
+          "missingRepeats": []
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      }
+    }
+  ],
+  "job": {
+    "label": "Abby repeated native PCMU wire qualified comparison",
+    "log": "4590eee3-1792008794475.log",
+    "exitCode": 1
+  },
+  "limitations": [
+    "Diagnostic projection rewrites session format and privately maps the provider acknowledgment back to the unchanged adapter; this is not a production PCMU binding.",
+    "Captured hashes prove the locally queued outbound audio and acknowledged input format, not a provider-generated receive-byte hash.",
+    "All 36 measured sessions fail the unchanged accuracy gate; neither configuration is promoted.",
+    "No representative acoustic, clinic, human or carrier acceptance; full13 and production speech readiness remain open."
+  ],
+  "releaseGate": "unverified",
+  "productionAdmission": "hold",
+  "validation": "all36 result identities, assessments, source/corpus/report hashes and per-case wire records verified"
+}
