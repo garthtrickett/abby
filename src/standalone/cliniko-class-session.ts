@@ -9,6 +9,7 @@ import type { ClinikoBookingSessionConfig } from "./cliniko-booking-session.ts";
 import { ClinikoClassBookingHost } from "./cliniko-class-booking-host.ts";
 import type { ClassAttendancePermission } from "./cliniko-class-booking-host.ts";
 import type { ClassPassAuthority } from "./cliniko-class-pass-booking.ts";
+import type { ClassPassCancellationAuthority } from "./cliniko-class-pass-cancellation.ts";
 import { ClinikoClassCancellationHost } from "./cliniko-class-cancellation-host.ts";
 import type { ClassCancellationPermission } from "./cliniko-class-cancellation-host.ts";
 import { OwnerFileCallerPolicy } from "./owner-file-caller-policy.ts";
@@ -21,7 +22,7 @@ import type { ClassMovePermission } from "./cliniko-class-move-host.ts";
 type Common = Omit<ClinikoBookingSessionConfig, "bookingApprovalPath" | "catalogue" | "representative"> & Readonly<{ classApprovalPath: string }>;
 export type ClinikoClassSessionConfig = Common & (
   Readonly<{ operation: "book"; classPermission: ClassAttendancePermission; classPassAuthority?: ClassPassAuthority }> |
-  Readonly<{ operation: "cancel"; classPermission: ClassCancellationPermission; cancellationApprovalPath: string }> |
+  Readonly<{ operation: "cancel"; classPermission: ClassCancellationPermission; cancellationApprovalPath: string; classPassCancellationAuthority?: ClassPassCancellationAuthority }> |
   Readonly<{ operation: "reschedule"; classPermission: ClassMovePermission; moveApprovalPath: string;
     destination: Readonly<{ classApprovalPath: string; practitionerId: string; appointmentTypeId: string }> }>
 );
@@ -100,7 +101,9 @@ export class ClinikoClassSession {
           ? await OwnerFileClassMovePolicy.capture({ ...binding, path: config.moveApprovalPath,
             sourceServiceRef: sourceApproval.value.serviceRef, destinationServiceRef: destinationApproval.value.serviceRef }) : undefined;
         if (!caller.ok || !classes.ok || config.operation === "cancel" && !cancellation?.ok || signal.aborted) return undefined;
-        if (config.operation !== "book" && sourceApproval?.ok && sourceApproval.value.membership !== "independentHost") return undefined;
+        if (config.operation === "cancel" && sourceApproval?.ok && sourceApproval.value.membership === "nativeCaseSessions" &&
+          (!sourceApproval.value.caseSessions?.cancellation || typeof config.classPassCancellationAuthority?.select !== "function")) return undefined;
+        if (config.operation === "reschedule" && sourceApproval?.ok && sourceApproval.value.membership !== "independentHost") return undefined;
         if (config.operation === "reschedule" && (!destination?.ok || !movement?.ok || destinationApproval?.ok && destinationApproval.value.membership !== "independentHost")) return undefined;
         const method: Parameters<typeof CallerVerificationSession.create>[0]["policy"] = { operation, current: async (bound: typeof scope) => {
           const [identity, service, fees, replacement, move] = await Promise.all([caller.value.current(bound), classes.value.current(bound), cancellation?.ok ? cancellation.value.current(bound) : undefined,
@@ -123,7 +126,8 @@ export class ClinikoClassSession {
           clock: config.clock, signal: callSignal, ...(config.fetchPort ? { fetchPort: config.fetchPort } : {}) };
         const created = config.operation === "book" ? await ClinikoClassBookingHost.create({ ...common, permission: config.classPermission,
           ...(config.classPassAuthority ? { classPassAuthority: config.classPassAuthority } : {}) }) :
-          config.operation === "cancel" && cancellation?.ok ? await ClinikoClassCancellationHost.create({ ...common, cancellationPolicy: cancellation.value, permission: config.classPermission }) :
+          config.operation === "cancel" && cancellation?.ok ? await ClinikoClassCancellationHost.create({ ...common, cancellationPolicy: cancellation.value, permission: config.classPermission,
+            ...(config.classPassCancellationAuthority ? { classPassCancellationAuthority: config.classPassCancellationAuthority } : {}) }) :
           config.operation === "reschedule" && destination?.ok && movement?.ok ? await ClinikoClassMoveHost.create({ ...common,
             sourcePolicy: classes.value, destinationPolicy: destination.value, movePolicy: movement.value, permission: config.classPermission }) : undefined;
         if (!created?.ok) return undefined;

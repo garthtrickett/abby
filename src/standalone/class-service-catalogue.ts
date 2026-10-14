@@ -7,6 +7,7 @@ import { OwnerFileClassPolicy } from "./owner-file-class-policy.ts";
 import type { ClassApproval } from "./owner-file-class-policy.ts";
 import type { ClassAttendancePermission } from "./cliniko-class-booking-host.ts";
 import type { ClassPassAuthority } from "./cliniko-class-pass-booking.ts";
+import type { ClassPassCancellationAuthority } from "./cliniko-class-pass-cancellation.ts";
 import type { ClassCancellationPermission } from "./cliniko-class-cancellation-host.ts";
 import { OwnerFileClassMovePolicy } from "./owner-file-class-move-policy.ts";
 import type { ClassMovePermission } from "./cliniko-class-move-host.ts";
@@ -16,6 +17,7 @@ export type ClassServiceConfig = Readonly<{
   approvalPath: string; practitionerId: string; appointmentTypeId: string;
   bookPermission: ClassAttendancePermission; cancelPermission: ClassCancellationPermission;
   passAuthority?: ClassPassAuthority;
+  passCancellationAuthority?: ClassPassCancellationAuthority;
   cancellationApprovalPath?: string;
   move?: Readonly<{ approvalPath: string; permission: ClassMovePermission;
     destination: Readonly<{ approvalPath: string; practitionerId: string; appointmentTypeId: string }> }>;
@@ -46,7 +48,8 @@ export async function readClassServices(c: Config, signal: AbortSignal): Promise
         const approval = policy.ok ? await policy.value.current(c.scope) : undefined;
         if (!policy.ok || !approval?.ok || signal.aborted) return undefined;
         const a = approval.value;
-        if (a.membership === "nativeCaseSessions" ? typeof service.passAuthority?.select !== "function" : service.passAuthority !== undefined) return undefined;
+        if (a.membership === "nativeCaseSessions" ? typeof service.passAuthority?.select !== "function" && !(a.caseSessions?.cancellation && typeof service.passCancellationAuthority?.select === "function") : service.passAuthority !== undefined) return undefined;
+        if (service.passCancellationAuthority !== undefined && (a.membership !== "nativeCaseSessions" || !a.caseSessions?.cancellation || typeof service.passCancellationAuthority.select !== "function")) return undefined;
         const destinationPolicy = service.move ? await OwnerFileClassPolicy.capture({ ...policy.value.binding(), ...service.move.destination,
           path: service.move.destination.approvalPath, directory: c.directory, clock: c.clock }) : undefined;
         const destination = destinationPolicy?.ok ? await destinationPolicy.value.current(c.scope) : undefined;

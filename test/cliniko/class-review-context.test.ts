@@ -36,6 +36,19 @@ test("E2E-406 pass review retains exact private case, entitlement and before-use
     assert.equal(encodeClinikoReview(randomUUID(), { ...request, operation: { ...operation, pass: { ...operation.pass, ...patch } } }).ok, false);
 });
 
+test("E2E-407 cancellation pass reviews retain exact before-use and approved counter effect without payment or replay authority", () => {
+  const operation = { kind: "classCancel" as const, sessionId: "91", attendeeId: "101", cancellationReason: 50 as const, practitionerId: "22", appointmentTypeId: "33",
+    startsAt: "2026-10-08T04:00:00.000Z", endsAt: "2026-10-08T05:00:00.000Z",
+    pass: { patientCaseId: "811222333444555666", entitlementRef: "approved-cancel-1", usageFingerprint: "a".repeat(64), maximum: 1, used: 2, effect: "releaseOne" as const } };
+  for (const effect of ["releaseOne", "unchanged", "consumeOne"] as const) {
+    const selected = { ...operation, pass: { ...operation.pass, effect } }, encoded = resultValue(encodeClinikoReview(randomUUID(), { ...request, operation: selected }));
+    assert.match(encoded, /class cancellation pass review v1/); assert.deepEqual(resultValue(decodeClinikoReview(encoded)).request.operation, selected);
+    assert.equal(decodeClinikoReview(encoded.replace("class cancellation pass review v1", "class attendance review v1")).ok, false);
+  }
+  for (const patch of [{ effect: "refund" }, { used: -1 }, { used: 0, effect: "releaseOne" }, { used: 1000, effect: "consumeOne" }, { paid: true }, { usageFingerprint: "forged" }])
+    assert.equal(encodeClinikoReview(randomUUID(), { ...request, operation: { ...operation, pass: { ...operation.pass, ...patch } } } as ClinikoReviewRequest).ok, false);
+});
+
 test("E2E-397 movement reviews retain both exact occurrences, root marker and explicit compensation boundary", () => {
   const operation = { kind: "classMove" as const, sessionId: "91", attendeeId: "101", newSessionId: "94", attendanceActionId: randomUUID(),
     practitionerId: "22", appointmentTypeId: "33", newPractitionerId: "23", newAppointmentTypeId: "34", startsAt: "2026-10-08T04:00:00.000Z", endsAt: "2026-10-08T05:00:00.000Z",

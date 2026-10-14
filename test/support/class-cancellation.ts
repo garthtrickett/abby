@@ -14,23 +14,46 @@ import { ClinikoRecallReader } from "../../src/cliniko/recalls.ts";
 import { classAttendanceFixture, classAttendee, classLink, classBase as base } from "./class-attendance.ts";
 import { callerVerificationFixture, verificationNow, verificationCanaries } from "./caller-verification.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
-export async function classCancellationFixture(options: { operation?: "appointments.cancel" | "appointments.book" } = {}) {
-  const nativeBudget = new ClinikoReadBudget(200, () => Date.parse(verificationNow));
+import type { ClassPassCancellationAuthority, ClassPassCancellationAuthorityQuery, ClassPassCancellationEffect } from "../../src/standalone/cliniko-class-pass-cancellation.ts";
+import type { ClassPassSelection } from "../../src/standalone/cliniko-class-pass-booking.ts";
+export async function classCancellationFixture(options: { operation?: "appointments.cancel" | "appointments.book"; passes?: ClassPassCancellationEffect } = {}) {
+  let sourceTime = verificationNow;
+  const nativeBudget = new ClinikoReadBudget(200, () => Date.parse(sourceTime));
   let claims = 0;
-  const budget = { claim: () => { claims++; return nativeBudget.claim(); }, observe429: nativeBudget.observe429.bind(nativeBudget) };
+  const budget = { claim: () => { claims++; return nativeBudget.claim(); }, observe429: nativeBudget.observe429.bind(nativeBudget), checkHeadroom: nativeBudget.checkHeadroom.bind(nativeBudget) };
   const f = await callerVerificationFixture({ apiKey: "synthetic-class-au5", cancellationExecute: true, ...(options.operation === "appointments.book" ? { bookingExecute: true } : {}), operation: options.operation ?? "appointments.cancel", rateBudget: budget });
   let callState = () => f.state();
   const native = classAttendanceFixture({ scope: f.scope, now: verificationNow, patientId: verificationCanaries[2]!, rateBudget: budget });
   native.attendees.splice(0, native.attendees.length, ...native.attendees.filter(row => !["105", "106"].includes(String(row.id))));
-  let permitted = true, lostReview = false, lostWrite = false, sourceTime = verificationNow, onRecall = async () => { }, onWrite = async () => { };
+  let permitted = true, lostReview = false, lostWrite = false, onRecall = async () => { }, onWrite = async () => { };
   const recalls: Record<string, unknown>[] = [], writes: Record<string, unknown>[] = [];
   const lifetime = new AbortController(), path = join(f.folder, "class.json");
+  const caseId = "811222333444555666", entitlementRef = "synthetic-private-cancel-entitlement";
+  const own = native.attendees.find(row => row.id === "101")!;
+  Object.assign(own, { arrived: options.passes === "consumeOne" ? false : null, ...(options.passes ? { patient_case: classLink("patient_cases", caseId) } : {}) });
+  const caseRows: Record<string, unknown>[] = [own, { ...classAttendee("601", "81", verificationCanaries[2]!), arrived: true, patient_case: classLink("patient_cases", caseId) }];
+  const caseRecord: Record<string, unknown> = { id: caseId, ...classLink("patient_cases", caseId), patient: classLink("patients", verificationCanaries[2]!), attendee_ids: ["101", "601"],
+    max_sessions: 2, include_cancelled_attendees: options.passes !== "releaseOne", include_dna_attendees: false, issue_date: "2026-10-01", expiry_date: "2026-10-31",
+    closed_at: null, archived_at: null, name: "private-cancel-case-name", notes: "private-cancel-case-notes", referral: "private-cancel-case-referral" };
+  let passAllowed = true, effectAllowed = true, selection: ClassPassSelection = { patientCaseId: caseId, entitlementRef }, onCaseRead = (_path: string) => {};
+  const passQueries: ClassPassCancellationAuthorityQuery[] = [];
+  const passAuthority: ClassPassCancellationAuthority = { select: async query => {
+    passQueries.push(query);
+    return passAllowed && (!query.effect || effectAllowed && query.effect === options.passes) && query.operation === "cancel" && query.attendeeId === "101" &&
+      query.patientId === verificationCanaries[2] && query.classSessionId === "91" && query.serviceRef === "mat-pilates" && query.businessId === "11" &&
+      query.practitionerId === "22" && query.appointmentTypeId === "33" && query.passTermsVersion === "pass-cancel-1" && !query.signal.aborted ? structuredClone(selection) : undefined;
+  } };
   let approval: ClassApproval = { scope: f.scope, revision: "class-1", approverRef: f.account.actor.actorRef, approvedAt: "2026-10-04T05:59:00.000Z",
     effectiveFrom: "2026-10-04T06:00:00.000Z", effectiveUntil: "2026-10-05T06:00:00.000Z", approved: true, enabled: true,
     policyVersion: f.sessionConfig.policyVersion, businessId: "11", practitionerId: "22", appointmentTypeId: "33", credentialFingerprint: clinikoCredentialFingerprint(native.config.apiKey), recallTypeId: "7",
     timeZone: "Australia/Sydney", attendance: "existingOccurrence", writeContract: "bestEffort", notificationOwner: "cliniko", membership: "independentHost",
     serviceRef: "mat-pilates", className: "Mat Pilates", practitionerName: "Demo Instructor", locationName: "Demo Clinic", durationMinutes: 60,
     bookingTerms: { version: "class-terms-1", approvedText: "This class costs 12 pounds. Your pass or payment must be checked by the clinic." }, minNoticeMinutes: 60, maxAdvanceDays: 30, offerTtlSeconds: 120 };
+  if (options.passes) approval = { ...approval, membership: "nativeCaseSessions", caseSessions: { attendanceStatus: "arrivedFalseIsDna", counting: "allLinkedNonArchivedAttendees",
+    dates: "inclusiveClinicDate", consumption: "onePerAttendance", financialAuthority: "independentHost", cancellation: { version: "pass-cancel-1",
+      releaseOne: "One session will stop counting as used. This does not extend your pass or provide a money refund.",
+      unchanged: "Your pass usage will stay unchanged. No money refund is included.",
+      consumeOne: "This cancellation will count as one used pass session. No money refund is included." } } };
   await writeFile(path, JSON.stringify(approval), { mode: 0o600 });
   const policy = resultValue(await OwnerFileClassPolicy.capture({ path, scope: f.scope, policyVersion: f.sessionConfig.policyVersion, businessId: "11", practitionerId: "22", appointmentTypeId: "33",
     credentialFingerprint: approval.credentialFingerprint, recallTypeId: "7", timeZone: approval.timeZone, directory: new OwnerFileAdminDirectory(f.accountPath, f.scope), clock: () => sourceTime }));
@@ -43,6 +66,12 @@ export async function classCancellationFixture(options: { operation?: "appointme
   const cancellationPolicy = resultValue(await OwnerFileCancellationPolicy.capture({ path: cancellationPath, ...policy.binding(), directory: new OwnerFileAdminDirectory(f.accountPath, f.scope), clock: () => sourceTime }));
   const fetchPort: typeof fetch = async (value, init) => {
     const url = new URL(String(value)), method = init?.method ?? "GET";
+    if (url.pathname.startsWith(`/v1/patient_cases/${caseId}`)) {
+      assert.equal(method, "GET"); onCaseRead(url.pathname);
+      if (url.pathname === `/v1/patient_cases/${caseId}`) return Response.json(caseRecord);
+      assert.equal(url.pathname, `/v1/patient_cases/${caseId}/attendees`); assert.equal(url.searchParams.has("q[]"), false);
+      const page = Number(url.searchParams.get("page")); return Response.json({ attendees: caseRows.slice((page - 1) * 100, page * 100), total_entries: caseRows.length });
+    }
     if (url.pathname === "/v1/recalls") {
       if (method === "GET")
         return Response.json({ recalls, total_entries: recalls.length });
@@ -81,7 +110,8 @@ export async function classCancellationFixture(options: { operation?: "appointme
     return native.fetchPort(value, init);
   };
   const host = resultValue(await ClinikoClassCancellationHost.create({ scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion,
-    ledger: f.ledger, policies: f.policies, verification: f.session, classPolicy: policy, cancellationPolicy, permission: { allows: async () => permitted }, cliniko: native.config, clock: () => sourceTime, signal: lifetime.signal, fetchPort }));
+    ledger: f.ledger, policies: f.policies, verification: f.session, classPolicy: policy, cancellationPolicy, permission: { allows: async () => permitted },
+    ...(options.passes ? { classPassCancellationAuthority: passAuthority } : {}), cliniko: native.config, clock: () => sourceTime, signal: lifetime.signal, fetchPort }));
   const reception = new TextReception(f.ledger, f.policies, host, undefined, host, undefined, undefined, () => sourceTime), agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope: f.scope }, f.policies, reception, undefined, undefined, undefined, f.ledger);
   let turns = 0;
   const turn = (name: string, text = "Cancel my class") => ({ callId: f.callId, sessionId: f.sessionId, turnId: `class-${name}-${++turns}`, text, quality: "clear" as const, at: sourceTime });
@@ -121,9 +151,15 @@ export async function classCancellationFixture(options: { operation?: "appointme
     ledger: f.ledger, policies: f.policies, lookup: f.sessionConfig.lookup, permission: f.sessionConfig.permission,
     verificationBudget: f.sessionConfig.budget, delivery: f.sessionConfig.delivery, directory: f.config.directory,
     callerApprovalPath: f.config.path, classApprovalPath: path, operation: "cancel" as const,
-    classPermission: { allows: async () => permitted }, cliniko: { ...native.config, timeZone: approval.timeZone, countryCallingCode: "61", recallTypeId: "7" },
+    classPermission: { allows: async () => permitted }, ...(options.passes ? { classPassCancellationAuthority: passAuthority } : {}), cliniko: { ...native.config, timeZone: approval.timeZone, countryCallingCode: "61", recallTypeId: "7" },
     signal: lifetime.signal, fetchPort, clock: () => sourceTime, cancellationApprovalPath: cancellationPath };
   return { ...f, classSessionConfig, bindNativeCall: (read: typeof callState) => { callState = read; }, native, host, reception, agent, recalls, writes, policy, path, cancellationPolicy, cancellationPath, turn, play, verify, propose, confirm,
+    pass: { caseId, entitlementRef, record: caseRecord, rows: caseRows, queries: passQueries, authority: passAuthority, deny: () => { passAllowed = false; },
+      denyEffect: () => { effectAllowed = false; }, select: (value: ClassPassSelection) => { selection = value; }, onRead: (hook: typeof onCaseRead) => { onCaseRead = hook; } },
+    pause: async (seconds: number) => {
+      while (seconds > 0) { const step = Math.min(15, seconds); sourceTime = new Date(Date.parse(sourceTime) + step * 1000).toISOString(); f.setTime(sourceTime);
+        resultValue(await f.runtime.renewSession(f.callId, f.sessionId, (await f.state()).sessionLease!.version, sourceTime)); seconds -= step; }
+    },
     drain: () => reception.drain(f.scope, f.callId, sourceTime), get claims() { return claims; }, get approval() { return approval; },
     permission: (value: boolean) => { permitted = value; }, loseReview: () => { lostReview = true; }, loseWrite: () => { lostWrite = true; },
     onRecall: (hook: () => Promise<void>) => { onRecall = hook; }, onWrite: (hook: () => Promise<void>) => { onWrite = hook; },

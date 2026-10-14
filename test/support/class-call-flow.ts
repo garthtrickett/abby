@@ -9,9 +9,10 @@ import { err } from "../../src/core/model.ts";
 import { classBookingFixture } from "./class-booking.ts";
 import { classCancellationFixture } from "./class-cancellation.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
+import type { ClassPassCancellationEffect } from "../../src/standalone/cliniko-class-pass-cancellation.ts";
 
-export async function classCallFlowFixture(operation: "book" | "cancel", multiple = false, passes = false) {
-  const f = await (operation === "book" ? classBookingFixture({ passes }) : classCancellationFixture());
+export async function classCallFlowFixture(operation: "book" | "cancel", multiple = false, passes = false, passCancellation?: ClassPassCancellationEffect) {
+  const f = await (operation === "book" ? classBookingFixture({ passes }) : classCancellationFixture(passCancellation ? { passes: passCancellation } : {}));
   f.host.dispose(); f.session.dispose();
   const source = f.classSessionConfig;
   let flowConfig: ClinikoCallFlowConfig = { ...source,
@@ -19,7 +20,8 @@ export async function classCallFlowFixture(operation: "book" | "cancel", multipl
       booking: f.path, cancellation: "cancellationApprovalPath" in source ? source.cancellationApprovalPath : f.path, rescheduling: f.path },
     classAttendance: { approvalPath: source.classApprovalPath, practitionerId: source.cliniko.practitionerId,
       appointmentTypeId: source.cliniko.appointmentTypeId, bookPermission: source.classPermission, cancelPermission: source.classPermission,
-      ...("classPassAuthority" in source && source.classPassAuthority ? { passAuthority: source.classPassAuthority } : {}) } };
+      ...("classPassAuthority" in source && source.classPassAuthority ? { passAuthority: source.classPassAuthority } : {}),
+      ...("classPassCancellationAuthority" in source && source.classPassCancellationAuthority ? { passCancellationAuthority: source.classPassCancellationAuthority } : {}) } };
   let secondPath: string | undefined;
   if (multiple) {
     f.native.filterGroupServices();

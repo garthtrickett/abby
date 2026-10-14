@@ -1,9 +1,10 @@
 # Cliniko class passes and session tracking
 
-Gap 10 includes membership/pass/credit handling. A complete caller workflow is
-still unfinished. E405 supplies the native adapter; E406 connects explicit approved pass booking
-to the ordinary caller host. Cancellation/movement and financial handling are
-not complete, and real clinic activation remains unqualified.
+Gap 10 includes membership/pass/credit handling. E405 supplies the native
+adapter, E406 connects approved pass booking to the ordinary caller host, and
+E407 adds native cancellation with verified session-use effects. Movement,
+broader/mixed catalogue qualification and financial handling remain unfinished.
+Real clinic activation remains unqualified.
 
 ## Provider contract
 
@@ -86,16 +87,20 @@ case before reporting success and preserve uncertainty without another send.
 2. E406 locally qualifies the binding from private selection through normal
    played consent, owned review, native send and final exact case/attendance
    inspection. Broader catalogue/correction/acceptance qualification remains.
-3. Cancellation and movement with each clinic's consumption/release rules,
-   including full cases, counted cancellations, expiry, cross-service moves,
-   lost responses and compensating recovery. Do not claim a restored credit
-   simply because attendance was cancelled.
-4. E406 supplies six complete signed compiled booking journeys and privacy
-   checks. Extend these to the remaining cancellation/movement and catalogue
-   combinations; actual clinic/provider/operator acceptance is still absent.
+3. E407 supplies explicit native cancellation effect/inspection contracts and
+   caller journeys, including full/expired/closed cases and lost outcomes.
+   Movement, cross-service consumption/recovery and broader clinic-rule
+   combinations remain. Attendance cancellation alone grants no money refund.
+4. E406 supplies six compiled booking journeys and E407 adds eight compiled
+   cancellation journeys. Extend these to movement and broader catalogue/
+   correction cases; actual clinic/provider/operator acceptance is absent.
 5. Monetary account credit, deposit/payment/receipt/refund lifecycle under gap
    11. Neither this adapter nor the existing independent permission port
    implements those financial operations.
+6. Qualify larger case histories and mixed case-linked/cash attendance through
+   the complete caller protocol under the physical account budget. The native
+   reader's 1,000-association bound has separate adapter evidence; current caller
+   proofs use small package histories.
 
 The full thirteen-gap goal stays open. Real delivery, acoustic/carrier
 qualification and authoritative cloud checks remain separate requirements.
@@ -211,3 +216,72 @@ tracked job `Abby E406 final pass caller and capacity qualification`, exit0,
 The remaining lifecycle list above is still authoritative for unfinished work:
 ordinary approved booking has additional local proof, while cancellation/move,
 real entitlement provisioning, money and actual clinic acceptance stay open.
+
+
+## E2E-407 ordinary caller pass cancellation
+
+A native case-session owner document may additionally approve a `cancellation`
+object with exactly `version`, `releaseOne`, `unchanged` and `consumeOne`. Each
+effect has separately approved text of at most 200 characters. A booking-only
+pass approval still cannot activate cancellation. The class service supplies
+a separate `passCancellationAuthority`, carried into the actual cancellation
+session/host as `classPassCancellationAuthority`; ordinary operation permission
+and fee approval remain independent. Movement is still gated.
+
+The independent selection query binds the exact patient, class occurrence,
+attendee, service/location/practitioner/type, fee terms, pass terms version and
+phase. An initial effect-free proposal permits private case inspection only.
+The native reader then verifies that exact existing active attendance belongs
+to the selected case, and identifies its real contribution under the DNA rule.
+The independent authority must approve the resulting effect for the same
+case/entitlement before consent or mutation. A changed case is never silently
+substituted.
+
+Cancellation contribution is governed by `include_cancelled_attendees`. The
+change in used sessions is that contribution minus the attendance's prior
+contribution. Thus cancelling may release one session, preserve usage, or
+consume one previously excluded DNA attendance. Approved fee/pass terms and
+the exact effect are bound to SAM consent and a distinct cancellation-pass
+review protocol. This does not establish a money refund or extend an expired
+pass. Full, expired, closed and already overdrawn cases can still lose their
+attendance under the explicit policy; their other metadata remains unchanged.
+
+After the one native cancellation, exact attendee inspection and complete
+case inspection are both required. The case reader normalizes only that
+attendee's cancelled state back to its previously active value and compares
+the complete prior usage fingerprint. All other associations, attendance
+statuses, case dates/activity, maximum and count settings must still match.
+The actual final counter must equal the approved delta. Another change cannot
+hide behind an equal net count. Lost review or mutation acknowledgement and
+post-send drift remain uncertain and cannot replay or manufacture a credit.
+
+The cancellation host uses the same advisory account-capacity protocol as pass
+booking. The core cancellation wait checks cancellation policy/capability and
+current evidence, says that attendance has not been cancelled, and requires a
+new affirmative. Normal leases and the physical request limit stay unchanged;
+all provider reads/writes continue to claim quota. Concurrent late consumers
+can still cause an uncertain outcome.
+
+Local native/host evidence and eight separately compiled caller cases cover
+these effects, real quota waits, independent authority, native drift, lost
+responses, other use, same-net swaps and public/model/PostgreSQL privacy.
+Final results are recorded in the thirteen-gap implementation log.
+
+Native pass movement and broader/mixed catalogue and correction cases remain
+unfinished, together with real independent entitlement/financial provisioning
+and actual clinic/provider/operator acceptance. This is additional cancellation
+engineering; financial account credit/refunds, the full gap10 and full thirteen
+gaps are not declared complete.
+
+
+### E407 qualification result
+
+Whole-source typecheck, fresh compiled build, isolated migrations, diff checks
+and 391 affected checks passed, with zero failures, cancellations or skips.
+The final tracked run completed exit0 in 5m31s, log
+`4590eee3-1792013663745.log`. It includes eight compiled pass cancellation
+journeys, six pass bookings and sixteen existing class journeys. The real
+quota window, actual 180-request limit, normal leases, later affirmative and
+public/model/PostgreSQL privacy checks remained in force. Exact commands are
+in `THIRTEEN_GAP_IMPLEMENTATION.md`. Larger/mixed case histories, native pass
+movement, financial operations and actual acceptance remain unfinished.

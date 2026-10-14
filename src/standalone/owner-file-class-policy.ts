@@ -17,7 +17,8 @@ export type ClassApproval = ClinicApproval & Readonly<{
   notificationOwner: "cliniko";
   membership: "independentHost" | "nativeCaseSessions";
   caseSessions?: Readonly<{ attendanceStatus: "arrivedFalseIsDna"; counting: "allLinkedNonArchivedAttendees";
-    dates: "inclusiveClinicDate"; consumption: "onePerAttendance"; financialAuthority: "independentHost" }>;
+    dates: "inclusiveClinicDate"; consumption: "onePerAttendance"; financialAuthority: "independentHost";
+    cancellation?: Readonly<{ version: string; releaseOne: string; unchanged: string; consumeOne: string }> }>;
   serviceRef: string;
   className: string;
   practitionerName: string;
@@ -61,9 +62,14 @@ function decode(value: unknown, scope: LocationScope): ClassApproval | undefined
     return undefined;
   const cases = row.caseSessions as Record<string, unknown> | undefined;
   if (row.membership === "nativeCaseSessions" ? !cases || typeof cases !== "object" || Array.isArray(cases) ||
-    Object.keys(cases).sort().join(",") !== "attendanceStatus,consumption,counting,dates,financialAuthority" ||
+    Object.keys(cases).sort().join(",") !== ["attendanceStatus", "consumption", "counting", "dates", "financialAuthority", ...(Object.hasOwn(cases, "cancellation") ? ["cancellation"] : [])].sort().join(",") ||
     cases.attendanceStatus !== "arrivedFalseIsDna" || cases.counting !== "allLinkedNonArchivedAttendees" || cases.dates !== "inclusiveClinicDate" ||
     cases.consumption !== "onePerAttendance" || cases.financialAuthority !== "independentHost" : Object.hasOwn(row, "caseSessions")) return undefined;
+  if (cases && Object.hasOwn(cases, "cancellation")) {
+    const cancel = cases.cancellation as Record<string, unknown> | undefined;
+    if (!cancel || typeof cancel !== "object" || Array.isArray(cancel) || Object.keys(cancel).sort().join(",") !== "consumeOne,releaseOne,unchanged,version" ||
+      !approvalRef(cancel.version) || ![cancel.releaseOne, cancel.unchanged, cancel.consumeOne].every(text => typeof text === "string" && text.trim() === text && text.length > 0 && text.length <= 200 && !/[\u0000-\u001f\u007f]/.test(text))) return undefined;
+  }
   try {
     new Intl.DateTimeFormat("en", { timeZone: row.timeZone });
   }
