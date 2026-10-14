@@ -9,7 +9,7 @@ import { once } from "node:events";
 import type { SmtpPatientCodeConfig } from "../../src/standalone/smtp-patient-code-delivery.ts";
 
 export type SmtpFault = "authRejected" | "recipientRejected" | "dropAfterData" | "stallGreeting" | "stallData" |
-  "noPlain" | "mixedReply" | "overlongReply" | "wrongIdentity";
+  "noPlain" | "mixedReply" | "overlongReply" | "wrongIdentity" | "dataRejected" | "unexpectedDataReply";
 
 /** Real loopback TLS/SMTP. Certificate, credentials, mailbox and messages are synthetic. */
 export async function withSmtpVerificationServer(run: (server: Readonly<{
@@ -39,6 +39,8 @@ export async function withSmtpVerificationServer(run: (server: Readonly<{
             if (line !== ".") { text.push(line); continue; }
             messages.push(text.join("\r\n")); text = []; collecting = false; received();
             if (fault === "dropAfterData") socket.destroy();
+            else if (fault === "dataRejected") socket.write("550 message rejected\r\n");
+            else if (fault === "unexpectedDataReply") socket.write("354 unexpected\r\n");
             else if (fault !== "stallData") socket.write("250 accepted\r\n");
             continue;
           }
