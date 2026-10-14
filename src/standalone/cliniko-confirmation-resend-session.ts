@@ -65,8 +65,8 @@ export class ClinikoConfirmationResendSession {
     catch { return undefined; }
   }
   /** Trusted exact selection only. Private details are played, while only an opaque ref is returned. */
-  async prepare(appointmentId: string): Promise<Result<Readonly<{ requestRef: string }>, Failure>> {
-    if (this.#busy || this.#attempted || this.#lifetime.signal.aborted) return err({ kind: "confirmationResendUnavailable" });
+  async prepare(appointmentId: string, external?: AbortSignal): Promise<Result<Readonly<{ requestRef: string }>, Failure>> {
+    if (this.#busy || this.#attempted || this.#lifetime.signal.aborted || external?.aborted) return err({ kind: "confirmationResendUnavailable" });
     this.#busy = true; this.#pending = undefined;
     try {
       const prepared = await this.#bounded(async signal => {
@@ -76,7 +76,7 @@ export class ClinikoConfirmationResendSession {
         if (text.length > 2000 || await this.#config.presentation.play(text, signal) !== true || signal.aborted) return undefined;
         const fresh = await this.#reader.read(appointmentId, signal);
         return fresh && isDeepStrictEqual(evidence, fresh) ? { ref: randomUUID(), evidence: structuredClone(evidence) } : undefined;
-      });
+      }, external);
       if (!prepared || this.#lifetime.signal.aborted) return err({ kind: "confirmationResendUnavailable" });
       this.#pending = prepared; return ok({ requestRef: prepared.ref });
     } finally { this.#busy = false; }

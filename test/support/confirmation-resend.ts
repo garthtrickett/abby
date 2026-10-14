@@ -48,6 +48,7 @@ export async function confirmationResendFixture(db: Kysely<Database>, smtp: Smtp
   const replace = async (patch: Partial<ConfirmationResendApproval> = {}) => {
     await writeFile(`${path}.new`, JSON.stringify({ ...approval, ...patch }), { mode: 0o600 }); await rename(`${path}.new`, path);
   };
+  let choices = [{ id: "81", starts_at: "2026-10-08T04:00:00.000Z", ends_at: "2026-10-08T04:30:00.000Z" }];
   const fetchPort: typeof fetch = async (value, init) => {
     const url = new URL(String(value)), method = init?.method ?? "GET"; traffic.push(`${method} ${url.pathname}`);
     if (url.pathname.startsWith("/v1/patients/")) return originalFetch(value, init);
@@ -58,10 +59,13 @@ export async function confirmationResendFixture(db: Kysely<Database>, smtp: Smtp
         patient: { links: { self: `https://api.au5.cliniko.com/v1/patients/${verificationCanaries[2]}` } }, recall_type: { links: { self: "https://api.au5.cliniko.com/v1/recall_types/7" } } }, { status: 201 });
     }
     assert.equal(method, "GET");
-    if (url.pathname === "/v1/individual_appointments/81") return Response.json({ id: "81", starts_at: "2026-10-08T04:00:00.000Z", ends_at: "2026-10-08T04:30:00.000Z",
+    if (url.pathname === "/v1/individual_appointments") return Response.json({ total_entries: choices.length, individual_appointments: choices.map(row => ({ ...row,
+      patient: { links: { self: `https://api.au5.cliniko.com/v1/patients/${verificationCanaries[2]}` } }, business: { links: { self: "https://api.au5.cliniko.com/v1/businesses/11" } }, notes: verificationCanaries[1] })) });
+    const selected = choices.find(row => url.pathname === `/v1/individual_appointments/${row.id}`);
+    if (selected) return Response.json({
       cancelled_at: null, archived_at: null, deleted_at: null, notes: verificationCanaries[1],
       patient: { links: { self: `https://api.au5.cliniko.com/v1/patients/${verificationCanaries[2]}` } }, business: { links: { self: "https://api.au5.cliniko.com/v1/businesses/11" } },
-      practitioner: { links: { self: "https://api.au5.cliniko.com/v1/practitioners/22" } }, appointment_type: { links: { self: "https://api.au5.cliniko.com/v1/appointment_types/33" } }, ...appointmentPatch });
+      practitioner: { links: { self: "https://api.au5.cliniko.com/v1/practitioners/22" } }, appointment_type: { links: { self: "https://api.au5.cliniko.com/v1/appointment_types/33" } }, ...selected, ...appointmentPatch });
     if (url.pathname === "/v1/businesses/11") return Response.json({ id: "11", archived_at: null, time_zone_identifier: "Australia/Sydney",
       business_name: "Synthetic Clinic", display_name: "Synthetic Branch", address_1: "20 Fixture Road", city: "Sydney", post_code: "2000", ...businessPatch });
     if (url.pathname === "/v1/practitioners/22") return Response.json({ id: "22", display_name: "Séamus Example", first_name: "Séamus", last_name: "Example", private_notes: verificationCanaries[1] });
@@ -104,6 +108,7 @@ export async function confirmationResendFixture(db: Kysely<Database>, smtp: Smtp
         while (!f.mail.length && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
         assert.equal(f.mail.length, 1); assert.equal((await f.session.submitCode(f.mail[0]!.code)).verified, true); },
       confirm: (ref: string) => { confirmed = ref; }, setPlay: (value: boolean) => { play = value; },
+      setChoices: (value: typeof choices) => { choices = structuredClone(value); },
       setAppointment: (patch: Record<string, unknown>) => { appointmentPatch = patch; }, setBusiness: (patch: Record<string, unknown>) => { businessPatch = patch; },
       setReviewUnknown: () => { reviewUnknown = true; }, afterReadback: (run: () => Promise<void>) => { afterReadback = run; },
       afterReview: (run: () => Promise<void>) => { afterReview = run; }, replace,

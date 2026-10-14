@@ -1,3 +1,5 @@
+import { ClinikoConfirmationResendWorkflow } from "./cliniko-confirmation-resend-workflow.ts";
+import type { ConfirmationResendWorkflowConfig } from "./cliniko-confirmation-resend-workflow.ts";
 import { ClinikoPractitionerHistorySession } from "./cliniko-practitioner-history-session.ts";
 import type { VerifiedPatient } from "../core/model.ts";
 import { copyBookingServiceChoice } from "../core/booking-service-choice.ts";
@@ -54,10 +56,11 @@ export type ClinikoCallFlowConfig = Omit<ClinikoBookingSessionConfig, "callerApp
   enquiry?: Readonly<{ callerApprovalPath: string; readApprovalPath: string; permission: PatientVerificationPermission }>;
   serviceCatalogue?: ServiceCatalogueConfig;
   correction?: PatientCorrectionWorkflowConfig;
+  resend?: ConfirmationResendWorkflowConfig;
   reschedulingDestination?: Readonly<{ practitionerId: string; bookingApprovalPath: string }>;
   reschedulingPractitioners?: readonly Readonly<{ practitionerId: string; bookingApprovalPath: string }>[];
 }>;
-type Owner = ClinikoBookingSession | ClinikoCancellationSession | ClinikoReschedulingSession | ClinikoIntakeBookingSession | ClinikoAppointmentEnquirySession | ClinikoPractitionerHistorySession | ClinikoPatientCorrectionWorkflow;
+type Owner = ClinikoBookingSession | ClinikoCancellationSession | ClinikoReschedulingSession | ClinikoIntakeBookingSession | ClinikoAppointmentEnquirySession | ClinikoPractitionerHistorySession | ClinikoPatientCorrectionWorkflow | ClinikoConfirmationResendWorkflow;
 type Failure = Readonly<{ kind: "workflowUnavailable" }>;
 const unavailable = <T>(): Result<T, Failure> => err({ kind: "workflowUnavailable" });
 const readDenied = () => err({ kind: "unavailable" as const, target: "appointment" as const });
@@ -103,6 +106,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       ...(config.history ? { history: Object.freeze({ ...config.history }) } : {}),
       ...(config.enquiry ? { enquiry: Object.freeze({ ...config.enquiry }) } : {}),
       ...(config.correction ? { correction: Object.freeze({ ...config.correction }) } : {}),
+      ...(config.resend ? { resend: Object.freeze({ ...config.resend }) } : {}),
       ...(config.serviceCatalogue ? { serviceCatalogue: Object.freeze({ ...config.serviceCatalogue,
         services: Object.freeze(config.serviceCatalogue.services.map(service => Object.freeze({ ...service,
           practitioners: Object.freeze(service.practitioners.map(member => Object.freeze({ ...member }))) }))) }) } : {}) });
@@ -475,7 +479,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     this.#serviceDialogue.clear();
     const serviceChoice = incomingServiceChoice ? copyBookingServiceChoice(incomingServiceChoice) : undefined;
     if (incomingServiceChoice && !serviceChoice) return unavailable();
-    if (!["book", "cancel", "reschedule", "intake", "patientUpdate", "appointments.read"].includes(operation) || operation === "patientUpdate" && !this.#config.correction || this.#staffActive || this.#selecting || this.#patientLifetime.signal.aborted || this.#lifetime.signal.aborted || external?.aborted) return unavailable();
+    if (!["book", "cancel", "reschedule", "intake", "patientUpdate", "confirmationResend", "appointments.read"].includes(operation) || operation === "patientUpdate" && !this.#config.correction || operation === "confirmationResend" && !this.#config.resend || this.#staffActive || this.#selecting || this.#patientLifetime.signal.aborted || this.#lifetime.signal.aborted || external?.aborted) return unavailable();
     if (serviceChoice && !["book", "intake"].includes(operation) || operation === "intake" && serviceChoice?.visitKind !== undefined && serviceChoice.visitKind !== "initial" ||
         ["book", "intake"].includes(operation) && this.#config.serviceCatalogue && !serviceChoice ||
         serviceChoice && this.#owner && this.#verificationRequired) return unavailable();
@@ -521,6 +525,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
         operation === "book" ? ClinikoBookingSession.create({ ...config, callerApprovalPath: paths.bookCaller, bookingApprovalPath: paths.booking }) :
         operation === "cancel" ? ClinikoCancellationSession.create({ ...config, callerApprovalPath: paths.cancelCaller, cancellationApprovalPath: paths.cancellation }) :
         operation === "reschedule" ? ClinikoReschedulingSession.create({ ...config, ...(config.reschedulingDestination ? { destination: config.reschedulingDestination } : {}), ...(config.reschedulingPractitioners !== undefined ? { practitioners: config.reschedulingPractitioners } : {}), callerApprovalPath: paths.rescheduleCaller, bookingApprovalPath: paths.booking, reschedulingApprovalPath: paths.rescheduling }) :
+        operation === "confirmationResend" ? config.resend ? ClinikoConfirmationResendWorkflow.create({ ...config, resend: config.resend }) : undefined :
         operation === "patientUpdate" ? config.correction ? ClinikoPatientCorrectionWorkflow.create({ ...config, correction: config.correction,
           callerApprovalPath: config.correction.callerApprovalPath, bookingApprovalPath: paths.booking }) : undefined :
         config.intake ? ClinikoIntakeBookingSession.create({ ...config, ...config.intake, bookingPermission: config.permission, bookingApprovalPath: paths.booking }) : undefined;
@@ -699,6 +704,18 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   }
   async resolveAppointmentChange(query: AppointmentChangeEvidenceQuery, signal?: AbortSignal) { return !this.#staffActive && (this.#owner instanceof ClinikoCancellationSession || this.#owner instanceof ClinikoReschedulingSession) ? this.#owner.effects.resolveAppointmentChange(query, signal) : readDenied(); }
   async resolveIntake(query: IntakeEvidenceQuery) { return (!this.#config.serviceCatalogue || !!this.#serviceChoice) && !this.#staffActive && this.#owner instanceof ClinikoIntakeBookingSession ? this.#owner.resolveIntake(query) : readDenied(); }
+  async listResendAppointments(signal?: AbortSignal) {
+    return !this.closed && !this.#staffActive && !this.#verificationRequired && this.#owner instanceof ClinikoConfirmationResendWorkflow
+      ? this.#owner.listAppointments(signal) : unavailable<Readonly<{ count: number }>>();
+  }
+  async selectResendAppointment(choice: 1 | 2 | 3, signal?: AbortSignal) {
+    return !this.closed && !this.#staffActive && !this.#verificationRequired && this.#owner instanceof ClinikoConfirmationResendWorkflow
+      ? this.#owner.selectAppointment(choice, signal) : unavailable<Readonly<{ requestRef: string }>>();
+  }
+  async resolveConfirmationResend(query: import("../core/host.ts").ConfirmationResendEvidenceQuery) {
+    return !this.closed && !this.#staffActive && !this.#verificationRequired && this.#owner instanceof ClinikoConfirmationResendWorkflow
+      ? this.#owner.effects.resolveConfirmationResend(query) : readDenied();
+  }
   async resolvePatientCorrection(query: import("../core/host.ts").PatientCorrectionEvidenceQuery) {
     return this.patientCorrection?.resolvePatientCorrection(query) ?? readDenied();
   }
@@ -708,7 +725,10 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
         ["book", "intake"].includes(mutation.kind) && this.#config.serviceCatalogue && !this.#serviceChoice) return { kind: "rejected", actionKey: mutation.actionKey, reason: "forbidden" };
     return (owner instanceof ClinikoIntakeBookingSession ? owner : owner.effects).write(mutation, now, signal);
   }
-  async reconcile(mutation: HostMutation) { return { kind: "stillUnknown" as const, actionKey: mutation.actionKey }; }
+  async reconcile(mutation: HostMutation) {
+    return this.#owner instanceof ClinikoConfirmationResendWorkflow ? this.#owner.effects.reconcile(mutation)
+      : { kind: "stillUnknown" as const, actionKey: mutation.actionKey };
+  }
   async readStaffReviewProcess(query: import("../core/host.ts").StaffReviewProcessQuery) {
     if (this.closed || this.#patientLifetime.signal.aborted || query.signal.aborted || !this.#staffActive || !this.#staff) return err({ kind: "staffReviewUnavailable" as const });
     return this.#staff.readReviewProcess(query);

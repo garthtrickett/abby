@@ -60,13 +60,14 @@ export class ClinikoSamConfirmationResendHost extends NoStoredKnowledge implemen
     const resolved = await this.#runtime.resolvePresentation(c.receipt.callId, ref, played ? "played" : "failed", c.sessionId, this.#now());
     return resolved.ok && played && await this.#ready(signal);
   }
-  async prepare(appointmentId: string) {
-    if (this.#dispatch || !this.#session || !await this.#ready(this.#config.signal)) return err({ kind: "confirmationResendUnavailable" as const });
+  async prepare(appointmentId: string, external = this.#config.signal) {
+    const signal = AbortSignal.any([this.#config.signal, external]);
+    if (this.#dispatch || !this.#session || !await this.#ready(signal)) return err({ kind: "confirmationResendUnavailable" as const });
     this.#request = undefined;
-    const prepared = await this.#session.prepare(appointmentId);
+    const prepared = await this.#session.prepare(appointmentId, signal);
     if (!prepared.ok) return prepared;
-    const proof = await this.#config.verification.verifiedSubject("appointments.resend", this.#config.signal), now = Date.parse(this.#now());
-    if (!proof || !Number.isFinite(now) || !await this.#ready(this.#config.signal)) return err({ kind: "confirmationResendUnavailable" as const });
+    const proof = await this.#config.verification.verifiedSubject("appointments.resend", signal), now = Date.parse(this.#now());
+    if (!proof || !Number.isFinite(now) || !await this.#ready(signal)) return err({ kind: "confirmationResendUnavailable" as const });
     this.#request = { kind: "confirmationResend", scope: structuredClone(this.#config.receipt.scope), requestRef: prepared.value.requestRef,
       resendVersion: this.#config.policy.bindingFingerprint(), expiresAt: new Date(Math.min(Date.parse(proof.expiresAt), now + 120_000)).toISOString() };
     return ok({ requestRef: prepared.value.requestRef });
