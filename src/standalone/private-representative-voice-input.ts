@@ -59,6 +59,12 @@ export class PrivateRepresentativeVoiceInput implements PrivateKeypadInput {
     const owner = this.#config.owner();
     if (!owner && !this.#owner) return this.#config.input.blocked();
     const binding = owner?.binding();
+    if (owner instanceof ClinikoRepresentativeCallOwner && this.#owner && owner !== this.#owner && this.#owner.closed &&
+        this.#stage === "ready" && !this.#working && !owner.closed && binding?.callId === this.#config.callId && binding.sessionId === this.#config.sessionId) {
+      const retired = this.#media; this.#media = undefined;
+      void retired?.stop().catch(() => this.stop());
+      this.#owner = undefined; this.#stage = "routing"; this.#draft = {}; this.#field = 0; this.#digits = ""; this.#overflow = false; this.#attempts = 0;
+    }
     if (!(owner instanceof ClinikoRepresentativeCallOwner) || owner.closed || this.#owner && this.#owner !== owner ||
         binding?.callId !== this.#config.callId || binding.sessionId !== this.#config.sessionId) { this.stop(); return true; }
     if (!this.#owner) {

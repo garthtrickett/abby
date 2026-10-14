@@ -229,7 +229,7 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     if (representative && !before.callerIdentityDenied) {
       const staff = staffRequestLanguage(turn.text);
       if (staff) return ok(staff);
-      return config.owner.representativeStartupAvailable
+      return await config.owner.representativeStartupAvailable(representative, signal)
         ? ok({ kind: "workflow", operation: representative, forAnotherPerson: true })
         : ok({ kind: "requestBoundary", reason: "proxyPatient" });
     }

@@ -13,7 +13,7 @@ export function representativeInputOptions(f: Awaited<ReturnType<typeof represen
   return { callerApprovalPath, callerPermission, representativeApprovalPath, representativeCallerApprovalPath, permission };
 }
 
-export async function representativeCallOwnerFixture() {
+export async function representativeCallOwnerFixture(options: { multiplePatients?: true } = {}) {
   const f = await bookingOffersFixture({ budget: new ClinikoReadBudget(200, () => Date.parse(verificationNow)) });
   const r = await representativeFixture(f.ownerPorts.rateBudget, { fixture: f, operation: "appointments.book" });
   const callerPath = join(f.folder, "representative-actor-caller.json");
@@ -25,9 +25,9 @@ export async function representativeCallOwnerFixture() {
     const path = new URL(String(value)).pathname;
     if (path.startsWith("/v1/relationships") || path === "/v1/patients/43" || path === "/v1/patients/44") return r.config.fetchPort!(value, init);
     if (path === "/v1/recalls" && init?.method === "POST") {
-      const body = JSON.parse(String(init.body)); assert.equal(body.patient_id, "43");
+      const body = JSON.parse(String(init.body)); assert.ok(body.patient_id === "43" || options.multiplePatients && body.patient_id === "44");
       const row = { id: "71", archived_at: null, recalled: false, recall_at: body.recall_at, notes: body.notes,
-        patient: { links: { self: "https://api.au5.cliniko.com/v1/patients/43" } },
+        patient: { links: { self: `https://api.au5.cliniko.com/v1/patients/${body.patient_id}` } },
         recall_type: { links: { self: "https://api.au5.cliniko.com/v1/recall_types/7" } } };
       f.recalls.push(row); return Response.json(row, { status: 201 });
     }
@@ -40,7 +40,7 @@ export async function representativeCallOwnerFixture() {
     ledger: f.ledger, policies: f.policies, lookup: f.sessionConfig.lookup, verificationBudget: { reserve: async () => true },
     delivery: { send: async (email: string, code: string) => { mail.push({ email, code }); return true; } },
     directory: f.directory, cliniko: r.config.cliniko, signal: r.lifetime.signal, fetchPort, clock: f.sessionConfig.clock };
-  const flowConfig = { ...context, permission: { allows: async (_scope: unknown, id: string) => id === "43" && subjectPermission },
+  const flowConfig = { ...context, permission: { allows: async (_scope: unknown, id: string) => (id === "43" || options.multiplePatients && id === "44") === true && subjectPermission },
     approvals: { bookCaller: r.config.representativeCallerApprovalPath, cancelCaller: r.config.representativeCallerApprovalPath,
       rescheduleCaller: r.config.representativeCallerApprovalPath, booking: f.path, cancellation: f.path, rescheduling: f.path } };
   const flow = resultValue(ClinikoCallFlow.create(flowConfig));

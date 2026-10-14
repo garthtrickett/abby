@@ -12,7 +12,7 @@ const operations = ["book", "cancel", "reschedule", "patientUpdate", "confirmati
 type Approval = ClinicApproval & Readonly<{
   policyVersion: string; businessId: string; credentialFingerprint: string; timeZone: string;
   maximumTasks: number; operations: readonly typeof operations[number][];
-  patientSelection: "sameVerifiedCaller"; verification: "freshEachTask"; unresolvedActions: "denyNextTask";
+  patientSelection: "sameVerifiedCaller" | "independentlyVerifiedPatients"; verification: "freshEachTask"; unresolvedActions: "denyNextTask";
 }>;
 type Config = Readonly<{ path: string; scope: LocationScope; policyVersion: string; businessId: string;
   credentialFingerprint: string; timeZone: string; callId: string; sessionId: string; directory: AdminDirectory; signal: AbortSignal; clock: () => string }>;
@@ -23,7 +23,7 @@ function decode(value: unknown, scope: LocationScope): Approval | undefined {
   if (!approvalRef(row.policyVersion) || !validClinikoId(row.businessId) || !/^[a-f0-9]{64}$/.test(row.credentialFingerprint) ||
       typeof row.timeZone !== "string" || row.timeZone.length > 128 || !Number.isSafeInteger(row.maximumTasks) || row.maximumTasks < 2 || row.maximumTasks > 10 ||
       !Array.isArray(row.operations) || !row.operations.length || row.operations.length > operations.length || new Set(row.operations).size !== row.operations.length ||
-      row.operations.some(kind => !operations.includes(kind)) || row.patientSelection !== "sameVerifiedCaller" ||
+      row.operations.some(kind => !operations.includes(kind)) || !["sameVerifiedCaller", "independentlyVerifiedPatients"].includes(row.patientSelection) ||
       row.verification !== "freshEachTask" || row.unresolvedActions !== "denyNextTask") return undefined;
   try { new Intl.DateTimeFormat("en", { timeZone: row.timeZone }); } catch { return undefined; }
   return row;
@@ -80,6 +80,14 @@ export class ClinikoCallTasks {
       Object.values(state.presentations).every(p => p.status !== "started" && p.status !== "possiblySent") &&
       Object.values(state.staffItems).every(item => item.status === "resolved" || item.status === "failed");
   }
+  /** This approves sequencing only. Each selected patient still needs a fresh
+   * representative authority and operation-bound channel proof. lookup() pins
+   * the root caller across tasks, never the independently selected patient. */
+  async allowsRepresentative(state: CallState, operation: WorkflowOperation, advancing: boolean): Promise<boolean> {
+    const approval = await this.#approval();
+    return approval?.patientSelection === "independentlyVerifiedPatients" &&
+      ["book", "cancel", "reschedule", "appointments.read"].includes(operation) && await this.allows(state, operation, advancing);
+  }
   lookup(original: CallerCandidateLookup): CallerCandidateLookup {
     return { candidates: async (scope, phone) => {
       const approval = await this.#approval();
@@ -95,6 +103,10 @@ export class ClinikoCallTasks {
   publish(state: CallState, advancing: boolean): void {
     if (advancing) for (const action of this.currentActions(state)) this.#settled.set(action.key, structuredClone(action));
     if (advancing || this.#taskCount === 0 || this.#settled.size === 0) this.#taskCount++;
+  }
+  publishRepresentative(state: CallState, advancing: boolean): void {
+    if (advancing) for (const action of this.currentActions(state)) this.#settled.set(action.key, structuredClone(action));
+    if (advancing || this.#taskCount === 0) this.#taskCount++;
   }
   isRetired(key: string): boolean { return this.#settled.has(key); }
   receipt(mutation: HostMutation): ReconcileObservation | undefined {

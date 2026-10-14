@@ -14,7 +14,7 @@ Activated by the owner: bridge all thirteen gaps in the agreed order, including 
 | 6 | Extend searches and support online-disabled services where required. | E2E-356 locally qualifies complete approved longer online searches and a compiled two-month late-range booking. E2E-357/358 add independently approved non-recurring native calendars, complete adaptive busy reads, Sunday0/7 and compiled returning/first-time location/member coverage with fresh chosen-day reads. Recurrence and broader real-calendar/serving qualification remain incomplete; preserve incomplete-source denial, date bounds and offer/commit agreement. |
 | 7 | Support another approved practitioner during rescheduling. | E2E-359 locally qualifies explicit approved practitioner pairs, independent destination policy, named played confirmation and one inspected in-place move at a changed or retained time. E2E-360 adds the current approved directory, retained original preference, played name/ordinal choice, pagination, fresh-time invalidation and ordinary signed/compiled dialogue. Final type/build and 99 checks passed; current exact-head cloud, real model/acoustic and clinic acceptance remain open. |
 | 8 | Add patient detail corrections, required registration fields and resends. | E2E-361–368 locally qualify patient corrections, account revisions, linked recovery, private edit/reset and guarded setting-history portability. E2E-369 adds independently approved required address fields, complete private collection/readback, field-bound host authority, native response/inspection and separate registration/booking confirmation; final typecheck/build and80 checks passed without skips. E2E-370–379 qualify resend SMTP, native evidence, SAM consent, signed private selection/paging, interruption recovery and mapped staff receipt inspection. E2E-380 now locally qualifies explicit versioned in-person/telehealth/cancelled formats through116 final checks. Unsupported clinic-specific field adapters and production recovery-host/operator integration/acceptance remain open; current-head cloud and actual clinic/mail/model/acoustic acceptance are absent. |
-| 9 | Handle multiple patients/actions in one call. | E2E-381 qualifies same-caller task sequencing; E2E-382–384 qualify native related-person authority, protected reads and booking/change owners. E2E-385 adds call-owned actor verification and private identity components. E2E-386 now qualifies ordinary explicit representative booking through actual signed private playback, two distinct code stages, identity readback, one inspected native booking and privacy scans. Corrected broader regression passed142 checks; final human-priority type/build/serving gate passed22 checks, zero skips. Explicit multi-person task approval/stable caller pin, multiple-person journeys, unrelated representatives without a native self record, alternative guardian channels, other representative serving operations/catalogue and staff sequences remain unfinished. |
+| 9 | Handle multiple patients/actions in one call. | E2E-381 qualifies same-caller tasks; E2E-382–386 qualify independent related-person/native authority and ordinary signed private booking. E2E-387 adds an explicit independentlyVerifiedPatients approval, one pinned caller with fresh actor/patient codes for each task, two different-patient native bookings in one signed private call, immutable prior receipts and no replay. Current type/build/isolated PostgreSQL final regression passed166 checks, zero skips, under unchanged shared200-request API budget and four workers. Other patient/operation/catalogue/staff combinations, unrelated representatives without a native self record and alternative guardian channels remain unfinished. |
 | 10 | Add class attendance booking, cancellation and movement. | Individual endpoints are insufficient. Require existing session/attendee identities, capacity and duplicate checks, compensating move recovery and truthful concurrent-result handling. Membership credits/passes require their own evidence. |
 | 11 | Add deposits, paid confirmation, receipts and expiry handling. | Financial boundaries exist, payment lifecycle absent. Require real provider adapter contracts, signed webhook/idempotency, delivered links, separate expiry authority and no refund/coverage/hold invention. |
 | 12 | Add outbound follow-up and practitioner sick-day management. | Recalls are not campaigns. Require scoped audience, opt-out, fresh appointment context, scheduler, per-action outcomes and recovery. |
@@ -1182,3 +1182,99 @@ regressions. These are separate evidence scopes, not an invented combined count
 or production acceptance. The full13 objective and all remaining requirements
 above remain active. PR457 remains draft pending authoritative current-head
 cloud qualification and actual activation gates.
+
+
+## Gap9 explicitly approved multiple-patient tasks, E2E-387 (unpublished)
+
+The existing sameVerifiedCaller approval does not approve another patient.
+An independentlyVerifiedPatients mode now separately permits sequencing for
+book/cancel/reschedule/appointment-read operations. The task lookup pins the
+caller, while representative authority, clinical permission and fresh patient
+channel proof remain independent for each task. The demonstrated journey books
+two different patients, one adult and one guardian-authorized minor, with four
+separate codes, private name/birth-date fields/readbacks and separately played
+SAM confirmations. Other operation/catalogue/task combinations remain open.
+
+Preparation sends no code and does not dispose the current actor. Accepted
+next-task receipts publish the next root and retire exact prior actions, then
+close the previous actor/subject owners. Aborted preparation preserves the prior
+owner/receipt and allows a fresh request. Uncertain actions, source/member or
+caller-candidate drift, revoked caller permission and the task limit deny
+continuation. Legacy same-caller approval still denies representative startup.
+Routing checks the current approval before selecting this path; metadata flags
+cannot manufacture patient authority. The private input resets only after a
+completed owner is closed and the accepted new owner has the same call/session.
+
+Initial source checking passed in `4590eee3-1791979891881.log`. The first native
+sequence run passed14/15 cases (`4590eee3-1791980048231.log`): its second booking
+was rejected. A count-only witness showed201 claims and one denial
+(`4590eee3-1791980223803.log`); phase accounting showed26 calls for first proof,
+135 at first commit and161 at second proof (`4590eee3-1791980373323.log`). No
+API budget was enlarged or clock advanced to obtain a pass.
+
+A private, one-use concrete booking-guard receipt now brackets the actual
+availability read with native authority checks. Inside that bounded read the
+offers reader validates current proof ownership rather than repeating the same
+native checks. Foreign/forged/reused receipts deny. Private menu-reference
+routing grants neither patient access nor permission; the proposal guard still
+validates fresh native authority before SAM speech, and write/inspection do so
+independently. Native inspection checks immediately before each provider read,
+then after the final read, with the second read's fresh check also following the
+first. The controller still sends once, inspects the actual result and reports
+uncertainty truthfully.
+
+The first bracket correction passed24/25 cases and reduced first commit135 to
+111 but remained over quota (`4590eee3-1791980530023.log`). A later run passed47/49
+(`4590eee3-1791980814579.log`): the second possible write was uncertain at201
+claims, and a new contact-drift test was changing an inactive fixture setter.
+The fixture now changes the actual native contact response; its unchanged
+rejection assertion passes. Further private-reference routing avoided duplicate
+validation before the proposal guard. Current typecheck and57 native booking,
+revocation and task checks passed, zero failures/skips, in
+`4590eee3-1791981142215.log`, including complete two-patient native bookings
+under the unchanged shared200-request budget and four-worker setting.
+
+The first signed-source gate stopped on an optional native-row map value in the
+fixture (`4590eee3-1791981325033.log`); an explicit row assertion corrected the
+type. Fresh source/build and signed private/native qualification then passed14
+checks with2 existing database-dependent compiled task checks skipped in that
+invocation (`4590eee3-1791981493182.log`). The new actual signed two-patient test
+itself passed, including both private collections, four codes, separate native
+subjects/writes, preserved first receipt and an empty isolated database canary
+scan. These14 checks are not a claim that the skipped cases ran.
+
+Manifest1.195/387 records native and synthetic serving evidence; production
+full-call evidence remains planned. The final source/build and isolated
+PostgreSQL native/voice/storage regression runs as `Abby E387 multi patient final
+source native voice storage regression`, log `4590eee3-1791981761585.log`. It
+includes those previously skipped compiled cases with actual database setup;
+publication awaits its terminal result.
+
+Files affected: task approval/sequence, CallFlow startup/retirement and public
+routing, private representative collector, booking guard/offers/menu/native
+inspection composition; shared fixtures, native task/bracket and signed two-person
+tests, registry/design/implementation ledger. No dependency or migration added.
+The full13 objective remains active: other patient/operation/catalogue/staff
+sequences, unrelated representatives without a native self record, alternative
+guardian channels, remaining gap6/8 work and gaps10–13, plus actual clinic,
+mailbox, speech, carrier and authoritative cloud acceptance remain unproven.
+
+
+Final frozen-source E2E-387 qualification finished exit0 in
+`4590eee3-1791981761585.log`: whole-source typecheck, fresh compiled voice build,
+isolated PostgreSQL migrations and166 native/private/signed/compiled/core/storage
+and registry checks passed, zero failures/cancellations/skips, plus clean diff
+check. The two previously skipped compiled task cases now ran with real isolated
+database setup. Runtime source stayed unchanged throughout this final gate.
+
+Exact command:
+
+```sh
+npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh bash -c "npm run db:migrate && node --test --test-concurrency=4 test/cliniko/representative-task-sequence.test.ts test/cliniko/booking-native-proof-bracket.test.ts test/voice/representative-task-sequence-call.test.ts test/cliniko/representative-workflow-start.test.ts test/cliniko/representative-call-owner.test.ts test/cliniko/representative-call-flow.test.ts test/cliniko/representative-workflow.test.ts test/cliniko/representative-appointment-change.test.ts test/cliniko/representative-selection.test.ts test/cliniko/native-validation-context.test.ts test/cliniko/call-task-sequence.test.ts test/cliniko/cliniko-call-flow.test.ts test/cliniko/booking-offers.test.ts test/cliniko/booking-session.test.ts test/cliniko/standalone-booking.test.ts test/cliniko/booking-best-effort-edge.test.ts test/cliniko/standalone-cancellation.test.ts test/cliniko/standalone-rescheduling.test.ts test/cliniko/rescheduling-session.test.ts test/cliniko/rescheduling-authority.test.ts test/voice/representative-workflow-call.test.ts test/voice/private-representative-input.test.ts test/voice/private-representative-presentation.test.ts test/voice/representative-request-language.test.ts test/voice/call-task-sequence-runner.test.ts test/voice/standalone-clinical-runner.test.ts test/voice/caller-identity-denial.test.ts test/voice/openai-clinical-intent.test.ts test/voice/urgent-conversation-routing.test.ts test/voice/standalone-clinical-host.test.ts test/text/booking.test.ts test/text/uncertain.test.ts test/text/request-boundary.test.ts test/cliniko/request-boundary.test.ts test/storage/standalone-call-state.test.ts test/storage/postgres-portable-text-calls.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts" && git diff --check
+```
+
+This qualifies the demonstrated two-person booking sequence, not every
+patient/action/catalogue combination or an actual clinic/carrier deployment.
+The remaining full13 scope is retained above. No real patient traffic, email
+sender or Twilio number was activated; current authoritative CI remains required
+before this draft can be ready or merged.

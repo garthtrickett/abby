@@ -88,7 +88,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   #representative: RepresentativeWorkflowSelection | undefined;
   #representativeCall: ClinikoRepresentativeCallOwner | undefined;
   #pendingRepresentative: Readonly<{ owner: ClinikoRepresentativeCallOwner; operation: "book" | "cancel" | "reschedule" | "appointments.read";
-    revision: number }> | undefined;
+    revision: number; before: CallState; advancing: boolean }> | undefined;
   #pendingTask: Readonly<{ owner: Owner; previous: Owner; operation: ClinikoWorkflow; before: CallState;
     selectedConfig: ClinikoCallFlowConfig; serviceChoice: BookingServiceChoice | undefined; representative: RepresentativeWorkflowSelection | undefined }> | undefined;
   #historySubject: VerifiedPatient | undefined;
@@ -499,19 +499,28 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   }
   /** Routing readiness only; approval, identity and permission are checked by
    * preparation and private verification, never granted by this flag. */
-  get representativeStartupAvailable(): boolean {
-    return !!this.#config.representativeInput && !this.closed && !this.patientAccessDenied && !this.#tasks && !this.#owner &&
-      !this.#staffActive && !this.#selecting && !this.#pendingRepresentative && !this.#representativeCall;
+  async representativeStartupAvailable(operation: "book" | "cancel" | "reschedule" | "appointments.read", external?: AbortSignal): Promise<boolean> {
+    if (!this.#config.representativeInput || this.closed || this.patientAccessDenied || this.#staffActive || this.#selecting || this.#pendingRepresentative || this.#pendingTask) return false;
+    if (!this.#tasks) return !this.#owner && !this.#representativeCall;
+    const signal = AbortSignal.any([this.#lifetime.signal, this.#patientLifetime.signal, this.#workflowLifetime.signal, AbortSignal.timeout(5000), ...(external ? [external] : [])]);
+    const state = await awaitUntilAbort(this.#config.ledger.read(this.#config.receipt.callId, this.#config.receipt.scope), signal);
+    return !!state?.ok && !signal.aborted && (await awaitUntilAbort(this.#tasks.allowsRepresentative(state.value, operation, !!this.#owner), signal)) === true;
   }
   async completeWorkflowStart(query: WorkflowQuery & Readonly<{ turnId: string; advanceTask?: true }>): Promise<boolean> {
     if (query.forAnotherPerson) {
       const pending = this.#pendingRepresentative, c = this.#config;
-      if (!pending || pending.operation !== query.operation || query.advanceTask || query.signal.aborted || this.closed ||
+      if (!pending || pending.operation !== query.operation || (query.advanceTask === true) !== pending.advancing || query.signal.aborted || this.closed ||
           !sameScope(query.scope, c.receipt.scope) || query.callId !== c.receipt.callId || query.sessionId !== c.sessionId || query.policyVersion !== c.policyVersion) return false;
       const state = await c.ledger.read(c.receipt.callId, c.receipt.scope);
       if (!state.ok || state.value.conversationRevision !== pending.revision + 1 || !state.value.processedTurnIds.includes(query.turnId) ||
           state.value.lastWorkflowStart?.turnId !== query.turnId || state.value.lastWorkflowStart.operation !== pending.operation ||
           state.value.lastWorkflowStart.next !== "representativeRequired" || !await this.#active(pending.operation, query.signal)) return false;
+      if (pending.advancing && JSON.stringify(state.value.previousTaskActionKeys) !== JSON.stringify(Object.keys(pending.before.actions)) ||
+          this.#tasks && !await this.#tasks.allowsRepresentative(pending.before, pending.operation, pending.advancing)) return false;
+      this.#tasks?.publishRepresentative(pending.before, pending.advancing);
+      this.#owner?.dispose(); this.#owner = undefined; this.#representative?.owner.dispose(); this.#representative = undefined;
+      this.#representativeCall?.dispose(); this.#spokenMenu.clear(); this.#spokenPractitioners.clear(); this.#searchMenu.clear(); this.#publicMenu = undefined;
+      this.#reschedulingTargetSelected = false; this.#bookingConfig = undefined; this.#serviceChoice = undefined; this.#serviceOperation = undefined;
       this.#representativeCall = pending.owner; this.#pendingRepresentative = undefined; this.#workflow = pending.operation; this.#verificationRequired = true;
       return true;
     }
@@ -529,7 +538,18 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   }
   async abandonWorkflowStart(query: WorkflowQuery & Readonly<{ turnId: string }>): Promise<void> {
     if (query.forAnotherPerson && query.callId === this.#config.receipt.callId && query.sessionId === this.#config.sessionId && sameScope(query.scope, this.#config.receipt.scope)) {
-      this.#pendingRepresentative?.owner.dispose(); this.#pendingRepresentative = undefined; return;
+      const pending = this.#pendingRepresentative; this.#pendingRepresentative = undefined; pending?.owner.dispose();
+      if (pending) {
+        const state = await this.#config.ledger.read(query.callId, query.scope);
+        if (state.ok && state.value.lastWorkflowStart?.turnId === query.turnId && state.value.lastWorkflowStart.next === "representativeRequired" &&
+            state.value.conversationRevision === pending.revision + 1) {
+          this.#tasks?.publishRepresentative(pending.before, pending.advancing);
+          this.#owner?.dispose(); this.#owner = undefined; this.#representative?.owner.dispose(); this.#representative = undefined;
+          this.#representativeCall?.dispose(); this.#representativeCall = undefined; this.#workflow = undefined; this.#verificationRequired = false;
+          this.#publicMenu = undefined; this.#spokenMenu.clear(); this.#spokenPractitioners.clear(); this.#searchMenu.clear();
+        }
+      }
+      return;
     }
     const pending = this.#pendingTask, c = this.#config;
     if (!pending || query.callId !== c.receipt.callId || query.sessionId !== c.sessionId || !sameScope(query.scope, c.receipt.scope)) return;
@@ -576,9 +596,9 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     if (this.#pendingRepresentative || this.#representativeCall && !this.#representative) return unavailable();
     return this.#choose(operation, external, replaceCanceledChange, expectedRevision, incomingServiceChoice, historyRequest, this.#representative);
   }
-  async #prepareRepresentative(query: WorkflowQuery): Promise<Result<Readonly<{ kind: "representativeRequired" }>, Failure>> {
+  async #prepareRepresentative(query: WorkflowQuery): Promise<Result<Readonly<{ kind: "representativeRequired"; advanceTask?: true }>, Failure>> {
     const c = this.#config;
-    if (!c.representativeInput || this.#tasks || this.#owner || this.#staffActive || this.#selecting || this.#pendingRepresentative || this.#representativeCall ||
+    if (!c.representativeInput || !this.#tasks && (this.#owner || this.#representativeCall) || this.#staffActive || this.#selecting || this.#pendingTask || this.#pendingRepresentative ||
         !["book", "cancel", "reschedule", "appointments.read"].includes(query.operation) || query.replaceCanceledChange ||
         query.operation === "book" && c.serviceCatalogue && !query.serviceChoice || this.closed || this.patientAccessDenied) return unavailable();
     this.#selecting = true;
@@ -589,18 +609,24 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     let created: ClinikoRepresentativeCallOwner | undefined;
     try {
       const state = await awaitUntilAbort(c.ledger.read(c.receipt.callId, c.receipt.scope), signal);
-      if (!state?.ok || signal.aborted || state.value.conversationRevision !== query.expectedConversationRevision ||
-          Object.values(state.value.actions).some(action => action.status !== "canceled") || !await this.#active(query.operation, signal)) return unavailable();
+      if (!state?.ok || signal.aborted || state.value.conversationRevision !== query.expectedConversationRevision) return unavailable();
+      const previousOwner = this.#owner, previousRoot = this.#representativeCall;
+      const advancing = !!previousOwner && !!this.#tasks;
+      if (this.#tasks && !await this.#tasks.allowsRepresentative(state.value, query.operation, advancing) ||
+          !advancing && (this.#tasks?.currentActions(state.value) ?? Object.values(state.value.actions)).some(action => action.status !== "canceled") ||
+          !await this.#active(query.operation, signal)) return unavailable();
       const operation = query.operation as "book" | "cancel" | "reschedule" | "appointments.read";
       building = ClinikoRepresentativeCallOwner.create({ ...c.representativeInput, context: { ...c,
+        lookup: this.#tasks ? this.#tasks.lookup(c.lookup) : c.lookup,
         signal: AbortSignal.any([c.signal, this.#workflowLifetime.signal, this.#patientLifetime.signal, this.#lifetime.signal, buildLifetime.signal]) }, flow: this, operation,
         ...(query.serviceChoice ? { serviceChoice: query.serviceChoice } : {}) });
       const made = await awaitUntilAbort(building, signal);
       if (!made?.ok) return unavailable(); created = made.value;
       const after = await awaitUntilAbort(c.ledger.read(c.receipt.callId, c.receipt.scope), signal);
-      if (signal.aborted || !after?.ok || after.value.conversationRevision !== state.value.conversationRevision || !await this.#active(operation, signal)) return unavailable();
-      this.#pendingRepresentative = { owner: created, operation, revision: state.value.conversationRevision }; created = undefined; published = true;
-      return ok({ kind: "representativeRequired" });
+      if (signal.aborted || !after?.ok || after.value.conversationRevision !== state.value.conversationRevision || this.#owner !== previousOwner || this.#representativeCall !== previousRoot ||
+          this.#tasks && !await this.#tasks.allowsRepresentative(after.value, operation, advancing) || !await this.#active(operation, signal)) return unavailable();
+      this.#pendingRepresentative = { owner: created, operation, revision: state.value.conversationRevision, before: structuredClone(state.value), advancing }; created = undefined; published = true;
+      return ok({ kind: "representativeRequired", ...(advancing ? { advanceTask: true as const } : {}) });
     } catch { return unavailable(); }
     finally {
       if (!published) { buildLifetime.abort(); void building?.then(late => { if (late.ok) late.value.dispose(); }, () => undefined); }
@@ -618,9 +644,8 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   async #choose(operation: ClinikoWorkflow, external: AbortSignal | undefined, replaceCanceledChange: boolean, expectedRevision: number | undefined,
     incomingServiceChoice: BookingServiceChoice | undefined, historyRequest: boolean, representative: RepresentativeWorkflowSelection | undefined): Promise<Result<Readonly<{ kind: "codeRequired" | "intakeRequired"; advanceTask?: true }>, Failure>> {
     if (representative) {
-      // The current task protocol approves sameVerifiedCaller only. A related
-      // patient needs an explicitly approved multi-patient task protocol.
-      if (this.#tasks) return unavailable();
+      // A new representative task must be accepted before its child workflow.
+      if (this.#tasks && (this.#owner || !this.#representativeCall)) return unavailable();
       const c = this.#config, patientOperation = operation === "book" ? "appointments.book" : operation === "cancel" ? "appointments.cancel" : operation === "reschedule" ? "appointments.reschedule" : operation === "appointments.read" && !historyRequest ? "appointments.read" : undefined;
       if (!patientOperation || !representative.owner.matchesWorkflow({ scope: c.receipt.scope, callId: c.receipt.callId, sessionId: c.sessionId,
         policyVersion: c.policyVersion, credentialFingerprint: clinikoCredentialFingerprint(c.cliniko.apiKey), businessId: c.cliniko.businessId,
@@ -645,6 +670,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       const replacingService = !!previousOwner && !!serviceChoice && ["book", "intake"].includes(operation) && this.#workflow === operation;
       const before = await awaitUntilAbort(this.#config.ledger.read(this.#config.receipt.callId, this.#config.receipt.scope), signal);
       if (!before?.ok || expectedRevision !== undefined && before.value.conversationRevision !== expectedRevision) return unavailable();
+      if (this.#tasks && representative && !await this.#tasks.allowsRepresentative(before.value, operation, false)) return unavailable();
       const advancing = !!previousOwner && !!this.#tasks && await this.#tasks.allows(before.value, operation, true);
       if (this.#tasks && !advancing && !await this.#tasks.allows(before.value, operation, false)) return unavailable();
       const currentActions = this.#tasks?.currentActions(before.value) ?? Object.values(before.value.actions);
@@ -675,7 +701,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
         const result = await selectedConfig.lookup.candidates(scope, phone);
         return result.ok && result.value.kind === "one" && result.value.candidateIds[0] === pin.patientRef && this.#historySubject === pin && !this.closed ? result : err({ kind: "denied" });
       } } : selectedConfig.lookup;
-      const config = { ...selectedConfig, ...(representative ? { representative } : {}), lookup: this.#tasks ? this.#tasks.lookup(lookup) : lookup,
+      const config = { ...selectedConfig, ...(representative ? { representative } : {}), lookup: this.#tasks && !representative ? this.#tasks.lookup(lookup) : lookup,
         ...(selectedConfig.resend && this.#tasks ? { resend: { ...selectedConfig.resend, taskSequence: this.#tasks } } : {}), signal: AbortSignal.any([this.#workflowLifetime.signal, this.#patientLifetime.signal, this.#lifetime.signal, this.#config.signal, buildLifetime.signal]) }, paths = config.approvals;
       building = operation === "appointments.read" ? historyRequest ? config.history ? ClinikoPractitionerHistorySession.create({ ...config, ...config.history }) : undefined : config.enquiry ? ClinikoAppointmentEnquirySession.create({ ...config, ...config.enquiry }) : undefined :
         operation === "book" ? ClinikoBookingSession.create({ ...config, callerApprovalPath: paths.bookCaller, bookingApprovalPath: paths.booking }) :
@@ -693,7 +719,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       if (!after?.ok || after.value.conversationRevision !== before.value.conversationRevision || this.#owner !== previousOwner ||
           signal.aborted || advancing && !await this.#tasks!.allows(after.value, operation, true) || previousOwner && !advancing && (replacingService ? (this.#tasks ? this.#tasks.hasSentCurrentWork(after.value) : hasSentPatientWork(after.value)) : (this.#tasks?.currentActions(after.value) ?? Object.values(after.value.actions)).some(action => action.status !== "canceled"))) return unavailable();
       if (advancing) this.#pendingTask = { owner: created, previous: previousOwner!, operation, before: structuredClone(before.value), selectedConfig, serviceChoice, representative };
-      else { if (this.#tasks && !previousOwner) this.#tasks.publish(after.value, false); this.#installOwner(created, previousOwner, operation, selectedConfig, serviceChoice, representative); }
+      else { if (this.#tasks && !previousOwner && !representative) this.#tasks.publish(after.value, false); this.#installOwner(created, previousOwner, operation, selectedConfig, serviceChoice, representative); }
       created = undefined; published = true;
       return ok({ kind: operation === "intake" ? "intakeRequired" : "codeRequired", ...(advancing ? { advanceTask: true as const } : {}) });
     } catch { return unavailable(); }

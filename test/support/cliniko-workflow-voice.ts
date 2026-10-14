@@ -35,6 +35,7 @@ export async function voiceUntil(check: () => boolean, label: string, timeoutMs 
  * Cliniko HTTP, clear-final transcription and speech synthesis are explicitly synthetic. */
 export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: ClinikoCallFlowConfig,
   intent: (flow: ClinikoCallFlow) => IntentResolver, options: { lostWrite?: boolean;
+    maximumWrites?: 2;
     routingHost?: (accountSid: string) => ClinicNumberRoutingHost;
     locationServiceSources?: readonly Parameters<typeof OwnerFileServiceCatalogue.capture>[0][];
     appointmentTypeMetadata?: Readonly<Record<string, Readonly<{ durationMinutes: number }>>>;
@@ -61,6 +62,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   // Synthetic fixture memory only: inspect the actual provider mutation body,
   // separately from public speech and the SAM proposal being exercised.
   const writeRequests: { method: string; path: string; body: Record<string, unknown> }[] = [];
+  const writtenActions = new Set<string>(), nativeRows = new Map<string, Record<string, unknown>>();
   const failures: string[] = [];
   const acknowledged = new Set<string>();
   // Fixed stage names and timings only; diagnostics never retain caller text,
@@ -85,7 +87,9 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   const base = "https://api.au5.cliniko.com/v1", port = config.fetchPort!;
   const provider: typeof fetch = observe("providerRequest", async (value: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
     const url = new URL(String(value)), method = init?.method ?? "GET";
-    if (after && method === "GET" && url.pathname === `/v1/individual_appointments/${after.id}`) return Response.json(after);
+    const inspectedId = /^\/v1\/individual_appointments\/([0-9]+)(?:\/conflicts)?$/.exec(url.pathname)?.[1];
+    if (method === "GET" && inspectedId && nativeRows.has(inspectedId))
+      return Response.json(url.pathname.endsWith("/conflicts") ? { conflicts: { exist: false } } : nativeRows.get(inspectedId));
     if (method === "GET" && url.pathname === "/v1/individual_appointments/91/conflicts") return Response.json({ conflicts: { exist: false } });
     if ((method === "POST" && url.pathname === "/v1/individual_appointments") ||
         (method === "PATCH" && url.pathname.startsWith("/v1/individual_appointments/"))) {
@@ -93,10 +97,11 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       const action = Object.values(state.actions).find(action => action.status === "dispatched")!; assert.ok(action);
       assert.equal(state.presentations[action.presentationId]?.status, "played");
       assert.ok(Object.values(state.effects).some(effect => effect.kind === "hostWrite" && effect.actionKey === action.key));
-      writes.push(`${method} ${url.pathname}`); assert.equal(writes.length, 1);
+      assert.equal(writtenActions.has(action.key), false, "a confirmed action permits only one native write"); writtenActions.add(action.key);
+      writes.push(`${method} ${url.pathname}`); assert.ok(writes.length <= (options.maximumWrites ?? 1));
       const body = JSON.parse(String(init?.body));
       writeRequests.push({ method, path: url.pathname, body: structuredClone(body) });
-      const appointmentId = method === "PATCH" ? url.pathname.split("/")[3]! : "91";
+      const appointmentId = method === "PATCH" ? url.pathname.split("/")[3]! : String(90 + writeRequests.length);
       const before = method === "PATCH" ? await (await port(`${base}/individual_appointments/${appointmentId}`, { method: "GET", redirect: "error", ...(init?.signal ? { signal: init.signal } : {}) })).json() : {};
       const starts = body.starts_at ?? before.starts_at;
       const typeId = body.appointment_type_id ?? "33", metadata = options.appointmentTypeMetadata?.[typeId];
@@ -106,6 +111,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         patient: { links: { self: `${base}/patients/${body.patient_id ?? verificationCanaries[2]}` } },
         business: { links: { self: `${base}/businesses/${body.business_id ?? config.cliniko.businessId}` } }, practitioner: { links: { self: `${base}/practitioners/${body.practitioner_id ?? "22"}` } },
         appointment_type: { links: { self: `${base}/appointment_types/${typeId}` } } };
+      assert.ok(after); nativeRows.set(appointmentId, after);
       if (options.beforeWriteResponse) await options.beforeWriteResponse();
       if (options.lostWrite) throw new Error("synthetic lost voice write response");
       if (url.pathname.endsWith("/cancel")) return new Response(null, { status: 204 });
