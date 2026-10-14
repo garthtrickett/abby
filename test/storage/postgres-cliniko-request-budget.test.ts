@@ -5,6 +5,7 @@ import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
 import type { ClinikoBudgetDenial, ClinikoBudgetOperationalEvent } from "../../src/cliniko/read-budget.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
+import { checkClinikoHeadroom } from "../../src/cliniko/read-budget.ts";
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
@@ -144,4 +145,18 @@ test("E2E-160 conflicting limits for one Cliniko user fail closed", async () => 
   const misconfigured = new PostgresClinikoRequestBudget(secondDb, { apiKey: "synthetic-other-key-au5",
     sharedUserRef: "synthetic-user-e2e-160", maxPerMinute: 2 });
   assert.deepEqual(await misconfigured.claim(), { kind: "unavailable" });
+});
+
+test("E2E-398 PostgreSQL headroom uses current shared claims and cooldown without reserving capacity", async () => {
+  const apiKey = `synthetic-headroom-${crypto.randomUUID()}-au5`;
+  const first = new PostgresClinikoRequestBudget(firstDb, { apiKey, maxPerMinute: 4 });
+  const second = new PostgresClinikoRequestBudget(secondDb, { apiKey, maxPerMinute: 4 });
+  assert.equal(await checkClinikoHeadroom(first, 4), null); assert.equal(await checkClinikoHeadroom(second, 4), null);
+  assert.equal(await first.claim(), null);
+  assert.equal((await checkClinikoHeadroom(second, 4))?.kind, "rateLimited");
+  assert.equal(await checkClinikoHeadroom(second, 3), null);
+  assert.equal(await second.claim(), null); assert.equal(await first.claim(), null); assert.equal(await second.claim(), null);
+  assert.equal((await first.claim())?.kind, "rateLimited");
+  await first.observe429(null); assert.equal((await checkClinikoHeadroom(second, 1))?.kind, "rateLimited");
+  assert.equal((await checkClinikoHeadroom(second, 0))?.kind, "unavailable");
 });

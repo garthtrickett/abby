@@ -180,6 +180,14 @@ export class ClinikoClassAttendanceReader {
   async list(scope: LocationScope, verificationRef: string, from: string, to: string, now: string, signal: AbortSignal): Promise<Result<ClinikoClassRead, ClinikoClassReadFailure>> {
     return this.#read(scope, verificationRef, from, to, now, signal);
   }
+  /** Non-reserving menu candidates, not commit/proposal authority. One native
+   * observation is bracketed by fresh patient proof and matching metadata.
+   * A selected candidate still requires strict inspect/inspectPair before SAM
+   * preparation and every move write uses its own strict current observations. */
+  async candidates(scope: LocationScope, verificationRef: string, from: string, to: string, now: string, signal: AbortSignal): Promise<Result<ClinikoClassRead & Readonly<{ purpose: "menuCandidates" }>, ClinikoClassReadFailure>> {
+    const read = await this.#read(scope, verificationRef, from, to, now, signal, undefined, true);
+    return read.ok ? ok({ ...read.value, purpose: "menuCandidates" }) : read;
+  }
   /** Re-read one existing occurrence; a remembered menu choice is never fresh capacity evidence. */
   async inspect(scope: LocationScope, verificationRef: string, sessionRef: string, from: string, to: string, now: string, signal: AbortSignal): Promise<Result<ClinikoClassRead, ClinikoClassReadFailure>> {
     if (!id(sessionRef)) return err({ kind: "invalidQuery" });
@@ -191,7 +199,7 @@ export class ClinikoClassAttendanceReader {
     if (!Array.isArray(sessionRefs) || sessionRefs.length !== 2 || !sessionRefs.every(id) || sessionRefs[0] === sessionRefs[1]) return err({ kind: "invalidQuery" });
     return this.#read(scope, verificationRef, from, to, now, signal, [...sessionRefs]);
   }
-  async #read(scope: LocationScope, ref: string, from: string, to: string, now: string, parentSignal: AbortSignal, selected?: readonly string[]): Promise<Result<ClinikoClassRead, ClinikoClassReadFailure>> {
+  async #read(scope: LocationScope, ref: string, from: string, to: string, now: string, parentSignal: AbortSignal, selected?: readonly string[], candidates = false): Promise<Result<ClinikoClassRead, ClinikoClassReadFailure>> {
     if (!scopeValid(scope) || !sameScope(scope, this.#config.scope)) return err({ kind: "scopeMismatch" });
     const start = instant(from), end = instant(to), supplied = instant(now);
     let observed: number | undefined; try { observed = instant(this.#clock()); } catch { return err({ kind: "unavailable" }); }
@@ -202,7 +210,7 @@ export class ClinikoClassAttendanceReader {
     const work = (async (): Promise<Result<ClinikoClassRead, ClinikoClassReadFailure>> => {
       try {
         const patient = await this.#verified(scope, ref, signal), before = await this.#snapshot(from, to, signal, selected);
-        const after = await this.#snapshot(from, to, signal, selected), metadata = await this.#metadata(signal);
+        const after = candidates ? before : await this.#snapshot(from, to, signal, selected), metadata = await this.#metadata(signal);
         const current = await this.#verified(scope, ref, signal);
         if (patient.patientRef !== current.patientRef || !isDeepStrictEqual(before, after) ||
           !isDeepStrictEqual(metadata, { timeZone: after.timeZone, typeCapacity: after.typeCapacity })) return err({ kind: "changed" });

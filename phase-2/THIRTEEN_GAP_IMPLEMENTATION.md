@@ -1994,3 +1994,58 @@ Exact final validation command:
 ```sh
 npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh bash -c "npm run db:migrate && node --test --test-concurrency=4 test/cliniko/class-attendance-move.test.ts test/cliniko/class-service-selection.test.ts test/voice/class-service-runner.test.ts test/voice/class-runner.test.ts test/cliniko/class-session.test.ts test/cliniko/class-call-flow.test.ts test/voice/class-workflow-call.test.ts test/cliniko/class-cancellation-host.test.ts test/cliniko/class-booking-host.test.ts test/cliniko/class-review-context.test.ts test/cliniko/class-attendance-read.test.ts test/cliniko/class-attendance-write.test.ts test/cliniko/standalone-booking.test.ts test/cliniko/booking-offers.test.ts test/cliniko/booking-session.test.ts test/cliniko/standalone-cancellation.test.ts test/cliniko/standalone-rescheduling.test.ts test/cliniko/review-discovery.test.ts test/cliniko/review-discovery-process.test.ts test/cliniko/reviewed-send.test.ts test/cliniko/reviewed-send-process.test.ts test/cliniko/review-rehearsal.test.ts test/cliniko/cancellation-review-context.test.ts test/cliniko/call-task-sequence.test.ts test/voice/cliniko-workflow-call.test.ts test/voice/clinical-model-workflow-call.test.ts test/voice/openai-clinical-intent.test.ts test/voice/booking-request-boundaries.test.ts test/voice/played-menu-selection.test.ts test/voice/standalone-clinical-runner.test.ts test/voice/caller-identity-denial.test.ts test/voice/call-task-sequence-runner.test.ts test/text/booking.test.ts test/text/uncertain.test.ts test/storage/standalone-call-state.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts" && git diff --check
 ```
+
+
+## Gap10 protected class move host and played SAM consent, E2E-398
+
+`ClinikoClassMoveHost` now privately selects the original owned attendance and
+replacement occurrence with actual played target/offer menus, operation-bound
+caller verification, independent per-phase movement authority and three current
+owner approvals. Fee and non-atomic recovery terms are bound to the proposal and
+played confirmation. Explicit service replacement names original and destination
+classes and is rejected by the individual in-place provider adapter. Cancellation
+and booking settings do not imply rescheduling permission. No admitted ordinary
+call/voice movement or membership/pass/credit authority is claimed yet.
+
+Native proof refresh must be sequential across service readers: the physical
+email authority has an exclusive refresh and concurrent refreshes invalidated
+each other. Candidate menus now use an explicitly non-reserving single snapshot;
+strict proposal, pre-send and post-send observations retain full double snapshots
+and capacity checks. Phase permission is checked after native observations.
+Unknown owned-review replies propagate uncertainty through SAM instead of being
+misreported as rejection. No unknown leg is replayed or rolled back.
+
+Same-service movement completes within one 180-request account window. Different
+service/instructor/duration movement is qualified after a 61-second caller pause
+with actual lease renewal and a fresh account window. A shared-budget headroom
+check (memory and PostgreSQL) rejects known inadequate quota before review or
+attendance changes. It does not consume/reserve quota or avoid ordinary claims,
+so concurrent account use can still produce an unresolved move. Pacing/retry in
+admitted conversational serving remains unfinished.
+
+A new red test reproduced minimum-notice crossing while the caller paused:
+`Abby E398 reproduce destination notice crossing before commit` failed because
+attendance changes were sent after the destination crossed its 60-minute rule.
+The host now rechecks destination notice, horizon and duration whenever it
+reconstructs the request, including before the first review and every native
+phase. The corrected host and individual-projection gate completed exit0 in
+`4590eee3-1792002310125.log`. Earlier 105 focused checks, typecheck and seven
+isolated PostgreSQL budget checks passed in `4590eee3-1792001981196.log`; they
+precede this timing correction and are not the final combined gate.
+
+Final frozen-source qualification command:
+
+```sh
+npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh bash -c "npm run db:migrate && node --test --test-concurrency=4 test/cliniko/class-move-host.test.ts test/cliniko/shared-read-budget.test.ts test/cliniko/class-attendance-move.test.ts test/cliniko/class-service-selection.test.ts test/voice/class-service-runner.test.ts test/voice/class-runner.test.ts test/cliniko/class-session.test.ts test/cliniko/class-call-flow.test.ts test/voice/class-workflow-call.test.ts test/cliniko/class-cancellation-host.test.ts test/cliniko/class-booking-host.test.ts test/cliniko/class-review-context.test.ts test/cliniko/class-attendance-read.test.ts test/cliniko/class-attendance-write.test.ts test/cliniko/standalone-booking.test.ts test/cliniko/booking-offers.test.ts test/cliniko/booking-session.test.ts test/cliniko/standalone-cancellation.test.ts test/cliniko/standalone-rescheduling.test.ts test/cliniko/review-discovery.test.ts test/cliniko/review-discovery-process.test.ts test/cliniko/reviewed-send.test.ts test/cliniko/reviewed-send-process.test.ts test/cliniko/review-rehearsal.test.ts test/cliniko/cancellation-review-context.test.ts test/cliniko/call-task-sequence.test.ts test/voice/cliniko-workflow-call.test.ts test/voice/clinical-model-workflow-call.test.ts test/voice/openai-clinical-intent.test.ts test/voice/booking-request-boundaries.test.ts test/voice/played-menu-selection.test.ts test/voice/standalone-clinical-runner.test.ts test/voice/caller-identity-denial.test.ts test/voice/call-task-sequence-runner.test.ts test/text/booking.test.ts test/text/uncertain.test.ts test/storage/standalone-call-state.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts" && bash scripts/with-postgres.sh bash -c "npm run db:migrate && node --test test/storage/postgres-cliniko-request-budget.test.ts" && git diff --check
+```
+
+
+Final frozen-source gate completed exit0 in4m50s in
+`4590eee3-1792002376918.log`: whole-source typecheck, fresh compiled voice build,
+isolated PostgreSQL migrations,368 combined source/SAM/native/review/recovery/
+ordinary signed and compiled class/voice/privacy/registry checks and seven
+separate real PostgreSQL shared-budget checks passed with zero failures,
+cancellations or skips, followed by clean diff check. Registry1.206/398 records
+text evidence only. No dependencies, migrations, limits, deadlines or concurrency
+were changed. Admitted ordinary movement, caller-facing budget pacing, financial
+entitlements, cloud qualification and the full13 requirements remain open.

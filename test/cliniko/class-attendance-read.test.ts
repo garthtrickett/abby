@@ -40,6 +40,15 @@ test("E2E-397 paired occurrence inspection shares current metadata and proof whi
   for (const secret of ["private-attendee-note", "private-other-name", "102", "103"]) assert.equal(JSON.stringify(result).includes(secret), false);
 });
 
+test("E2E-398 menu candidates remain non-reserving and bracket native observations with fresh patient proof and metadata", async () => {
+  const f = fixture();
+  const menu = resultValue(await f.reader.candidates(scope, "private-class-proof", now, to, now, new AbortController().signal));
+  assert.equal(menu.purpose, "menuCandidates"); assert.equal(menu.reservable, false); assert.equal(f.proofCalls, 2);
+  assert.equal(f.traffic.filter(row => row.path === "/v1/group_appointments").length, 1);
+  assert.equal(f.traffic.filter(row => row.path === "/v1/businesses/11").length, 2);
+  for (const secret of ["private-attendee-note", "private-class-shared-note", "private-other-name"]) assert.equal(JSON.stringify(menu).includes(secret), false);
+});
+
 for (const fault of ["capacity", "subject", "wrongEndpointRecord", "duplicateSelection"] as const)
   test(`E2E-397 paired ${fault} cannot publish either occurrence as a partial result`, async () => {
     const f = fixture();

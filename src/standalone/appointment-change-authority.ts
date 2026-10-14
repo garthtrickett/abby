@@ -57,6 +57,7 @@ export function providerRequest(request: AppointmentChangeRequest, evidence: App
       ? { ...target, cancellationReason: evidence.cancellationReason } : undefined;
   }
   if (request.kind === "reschedule" && evidence.kind === "reschedule") {
+    if (request.serviceChange !== undefined) return undefined; // In-place individual moves cannot change service or duration.
     const changed = evidence.destinationPractitionerId !== undefined;
     if (changed && (!validClinikoId(evidence.destinationPractitionerId) || evidence.destinationPractitionerId === evidence.practitionerId ||
         request.practitionerChange !== true || !request.offer.presentation) || !changed && request.practitionerChange !== undefined) return undefined;

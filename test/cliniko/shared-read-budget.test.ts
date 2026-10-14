@@ -4,12 +4,25 @@ import { ClinikoAppointmentReader } from "../../src/cliniko/appointments.ts";
 import { ClinikoAvailabilityReader } from "../../src/cliniko/availability.ts";
 import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
 import { ClinikoReadBudget } from "../../src/cliniko/read-budget.ts";
+import { checkClinikoHeadroom } from "../../src/cliniko/read-budget.ts";
 import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
 
 const scope = { tenantId: "budget-tenant", clinicId: "budget-clinic", locationId: "budget-location" };
 const apiKey = "synthetic-key-au5";
 const contactEmail = "dev@example.test";
+
+test("E2E-398 headroom checks do not consume or reserve quota, respect cooldown and reject unavailable hosts", async () => {
+  let now = 180000;
+  const budget = new ClinikoReadBudget(3, () => now);
+  assert.equal(await checkClinikoHeadroom(budget, 3), null); assert.equal(await checkClinikoHeadroom(budget, 3), null);
+  assert.equal(budget.claim(), null); assert.equal((await checkClinikoHeadroom(budget, 3))?.kind, "rateLimited");
+  assert.equal(await checkClinikoHeadroom(budget, 2), null); assert.equal(budget.claim(), null); assert.equal(budget.claim(), null);
+  assert.equal(budget.claim()?.kind, "rateLimited"); now += 60001; assert.equal(await checkClinikoHeadroom(budget, 3), null);
+  budget.observe429(null); assert.equal((await checkClinikoHeadroom(budget, 1))?.kind, "rateLimited");
+  for (const count of [0, -1, 201, 1.5]) assert.equal((await checkClinikoHeadroom(budget, count))?.kind, "unavailable");
+  assert.equal((await checkClinikoHeadroom({ claim: () => null, observe429: () => ({ kind: "rateLimited" }) }, 1))?.kind, "unavailable");
+});
 
 test("one provider 429 stops patient, availability, and appointment reads until its reset", async () => {
   let now = Date.parse("2026-09-29T00:00:00.000Z");

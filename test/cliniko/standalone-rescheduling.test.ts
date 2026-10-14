@@ -4,10 +4,23 @@ import { decodeClinikoReview } from "../../src/cliniko/review-request.ts";
 import { standaloneReschedulingFixture } from "../support/standalone-rescheduling.ts";
 import { verificationCanaries, verificationNow } from "../support/caller-verification.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
+import { providerRequest } from "../../src/standalone/appointment-change-authority.ts";
 
 async function prepare(f:Awaited<ReturnType<typeof standaloneReschedulingFixture>>) {
   const ref=await f.verify(); resultValue(await f.propose(ref)); resultValue(await f.confirm()); return ref;
 }
+
+test("E2E-398 explicit class service replacement cannot project onto an individual in-place move", async () => {
+  const f = await standaloneReschedulingFixture();
+  try {
+    const ref = await f.verify(); resultValue(await f.propose(ref));
+    const request = Object.values((await f.state()).actions)[0]!.mutation.request;
+    assert.equal(request.kind, "reschedule"); if (request.kind !== "reschedule") throw new Error("missing move");
+    assert.ok(providerRequest(request, f.evidence, f.scope));
+    assert.equal(providerRequest({ ...request, serviceChange: { fromServiceName: "Mat Pilates" } }, f.evidence, f.scope), undefined);
+    assert.equal(f.patches, 0); assert.equal(f.recalls.length, 0);
+  } finally { await f.close(); }
+});
 
 test("E2E-285 actual email proof, gateway, played old/new/fee confirmation and acknowledged provider review precede one inspected in-place move",async () => {
   const f=await standaloneReschedulingFixture();

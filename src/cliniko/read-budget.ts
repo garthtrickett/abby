@@ -11,6 +11,8 @@ export type ClinikoBudgetOperationalEvent = "claimRateLimited" | "claimUnavailab
 
 /** The host owns one budget per Cliniko API user; adapters reserve before every request. */
 export type ClinikoRequestBudget = Readonly<{
+  /** Current admission check for a composed operation; not a reservation. Every request still claims normally. */
+  checkHeadroom?(requests: number): ClinikoBudgetDenial | null | Promise<ClinikoBudgetDenial | null>;
   claim(): ClinikoBudgetDenial | null | Promise<ClinikoBudgetDenial | null>;
   observe429(resetHeader: string | null): ClinikoRateLimit | Promise<ClinikoRateLimit>;
 }>;
@@ -48,6 +50,16 @@ export async function claimClinikoBudget(budget: ClinikoRequestBudget): Promise<
   return { kind: "unavailable" };
 }
 
+/** Refuse a known-insufficient multi-step operation before any native mutation.
+ * Concurrent consumers may still change capacity; this never replaces claims. */
+export async function checkClinikoHeadroom(budget: ClinikoRequestBudget, requests: number): Promise<ClinikoBudgetDenial | null> {
+  if (!Number.isSafeInteger(requests) || requests < 1 || requests > 200 || typeof budget.checkHeadroom !== "function") return { kind: "unavailable" };
+  try {
+    const value: unknown = await budget.checkHeadroom(requests);
+    return value === null ? null : normalizedDenial(value) ?? { kind: "unavailable" };
+  } catch { return { kind: "unavailable" }; }
+}
+
 export async function observeCliniko429(budget: ClinikoRequestBudget,
                                   resetHeader: string | null): Promise<ClinikoRateLimit> {
   try {
@@ -74,6 +86,14 @@ export class ClinikoReadBudget implements ClinikoRequestBudget {
   }
 
   /** Reserve before sending. Synchronous reservation keeps concurrent callers under one process budget. */
+  checkHeadroom(requests: number): ClinikoBudgetDenial | null {
+    if (!Number.isSafeInteger(requests) || requests < 1 || requests > this.maxPerMinute) return { kind: "unavailable" };
+    let now: number; try { now = this.clock(); } catch { return { kind: "unavailable" }; }
+    if (!Number.isSafeInteger(now) || now < 0) return { kind: "unavailable" };
+    if (now < this.cooldownUntil) return { kind: "rateLimited", resetAt: new Date(this.cooldownUntil).toISOString() };
+    const recent = this.sentAt.filter(at => at > now - 60000);
+    return recent.length + requests <= this.maxPerMinute ? null : { kind: "rateLimited", resetAt: new Date(recent[recent.length + requests - this.maxPerMinute - 1]! + 60000).toISOString() };
+  }
   claim(): ClinikoRateLimit | null {
     let now: number;
     try { now = this.clock(); }

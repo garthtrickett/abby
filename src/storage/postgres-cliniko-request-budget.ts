@@ -86,6 +86,20 @@ export class PostgresClinikoRequestBudget implements ClinikoRequestBudget {
     });
   }
 
+  /** Check current shared account headroom without consuming it. Subsequent
+   * requests still use the same locked claim and provider-cooldown path. */
+  async checkHeadroom(requests: number): Promise<ClinikoBudgetDenial | null> {
+    if (!Number.isSafeInteger(requests) || requests < 1 || requests > this.maxPerMinute) return { kind: "unavailable" };
+    try {
+      return await this.locked<ClinikoBudgetDenial | null>(async (_trx, now, row) => {
+        const cooldown = millis(row.cooldown_until_ms);
+        if (now < cooldown) return { kind: "rateLimited", resetAt: new Date(cooldown).toISOString() };
+        const recent = sentTimes(row.sent_at_ms).filter(at => at > now - minuteMs);
+        return recent.length + requests <= this.maxPerMinute ? null : { kind: "rateLimited", resetAt: new Date(recent[recent.length + requests - this.maxPerMinute - 1]! + minuteMs).toISOString() };
+      });
+    } catch { return { kind: "unavailable" }; }
+  }
+
   async claim(): Promise<ClinikoBudgetDenial | null> {
     try {
       const result = await this.locked<ClinikoBudgetDenial | null>(async (trx, now, row) => {
