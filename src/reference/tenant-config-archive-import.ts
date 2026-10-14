@@ -102,6 +102,7 @@ function prepare(data: TenantConfigArchiveData, mapper: ReferenceImportMapper):
       sourceScope: location.sourceScope, targetScope: location.targetScope,
       timeZone: location.timeZone, mappingProvenance: location.mappingProvenance,
       policies: location.policies, automation: clinic.automation, clinicIntake: clinic.clinicIntake ?? [], clinicPatientCorrections: clinic.clinicPatientCorrections ?? [], clinicNotifications: clinic.clinicNotifications ?? [], clinicVoice: clinic.clinicVoice ?? [], writeStops: clinic.writeStops,
+      ...(location.confirmationResends === undefined ? {} : { confirmationResends: location.confirmationResends }),
       knowledge: location.knowledge };
     const mapped = mapConfig(scoped, location.targetScope, mapper);
     if (!mapped.ok) return mapped;
@@ -134,7 +135,7 @@ function report(data: TenantConfigArchiveData, auditRef: string, prepared: Prepa
     ...(data.sourceFenceVersion === undefined ? {} : { sourceFenceVersion: data.sourceFenceVersion }),
     recordCounts: { locations: data.sectionManifests.locations.recordCount,
       settings: data.sectionManifests.settings.recordCount, knowledge: data.sectionManifests.knowledge.recordCount,
-      calls: data.sectionManifests.calls.recordCount, staffWork: 0 },
+      calls: data.sectionManifests.calls.recordCount, staffWork: data.sectionManifests.staffWork.recordCount },
     sectionDigests: { locations: data.sectionManifests.locations.sha256,
       settings: data.sectionManifests.settings.sha256, knowledge: data.sectionManifests.knowledge.sha256,
       calls: data.sectionManifests.calls.sha256, staffWork: data.sectionManifests.staffWork.sha256 },

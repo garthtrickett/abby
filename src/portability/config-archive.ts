@@ -1,3 +1,5 @@
+import { validConfirmationResendArchiveHistory } from "./confirmation-resend-history.ts";
+import type { ConfirmationResendArchiveRow } from "./confirmation-resend-history.ts";
 import { validPatientCorrectionArchiveHistory } from "./patient-correction-history.ts";
 import type { ClinicPatientCorrectionArchiveRow } from "./patient-correction-history.ts";
 import { validVoiceArchiveHistory } from "./voice-history.ts";
@@ -49,6 +51,7 @@ export type ConfigArchiveData = Readonly<{
   clinicVoice?: readonly ClinicVoiceArchiveRow[];
   writeStops: readonly Readonly<{ version: number; isHead: boolean; stopped: boolean; actorRef: string;
     reasonDigest: string; changedAt: string }>[];
+  confirmationResends?: readonly ConfirmationResendArchiveRow[];
   knowledge: readonly PortablePublishedKnowledge[];
 }>;
 
@@ -69,6 +72,7 @@ export type TenantConfigArchiveData = Readonly<{
     mappingProvenance: string;
     /** Present in archive v2; absent for legacy v1 imports. */
     omittedTextCalls?: number;
+    confirmationResends?: readonly ConfirmationResendArchiveRow[];
     policies: ConfigArchiveData["policies"];
     knowledge: readonly PortablePublishedKnowledge[];
   }>[];
@@ -323,6 +327,7 @@ type MutableLocation = {
   mappingProvenance: string;
   omittedTextCalls?: number;
   policies: ConfigArchiveData["policies"][number][];
+  confirmationResends?: ConfirmationResendArchiveRow[];
   knowledge: PortablePublishedKnowledge[];
 };
 
@@ -352,8 +357,7 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
   const { verified, sections, manifestBytes } = materialized.value;
   try {
     if (verified.manifest.sourceSystem !== "abby-postgres" ||
-        (verified.manifest.archiveVersion === 1 && verified.manifest.sections.calls.recordCount !== 0) ||
-        verified.manifest.sections.staffWork.recordCount !== 0) throw new InvalidConfigArchive();
+        (verified.manifest.archiveVersion === 1 && verified.manifest.sections.calls.recordCount !== 0)) throw new InvalidConfigArchive();
     const metadata = object(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(manifestBytes)), "locations");
     ref(metadata.exportRequestRef, "locations");
     const omissions = object(metadata.omittedCalls, "calls");
@@ -402,6 +406,28 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
         { sourceClinicId: sourceScope.clinicId, automation: [], clinicIntake: [], clinicPatientCorrections: [], clinicNotifications: [], clinicVoice: [], writeStops: [] });
     }
     if (locations.size !== declaredMappings.size) throw new InvalidConfigArchive("locations");
+
+    const resendRefs = new Set<string>();
+    for (const row of lines(sections.staffWork, "staffWork")) {
+      if (Object.keys(row).sort().join(",") !==
+          "completedAt,createdAt,kind,messageRef,ownerBinding,recordId,recordVersion,requestRef,sourceClinicId,sourceLocationId,sourceTenantId,status" ||
+          row.kind !== "confirmationResendSubmission" || row.recordVersion !== 1) throw new InvalidConfigArchive("staffWork");
+      const key = JSON.stringify([ref(row.sourceClinicId, "staffWork"), ref(row.sourceLocationId, "staffWork")]);
+      const location = locations.get(key);
+      const submissions: unknown = [{ requestRef: row.requestRef, ownerBinding: row.ownerBinding, status: row.status,
+        messageRef: row.messageRef, createdAt: row.createdAt, completedAt: row.completedAt }];
+      if (!location || !validConfirmationResendArchiveHistory(submissions) || submissions === undefined) {
+        throw new InvalidConfigArchive("staffWork");
+      }
+      const submission = submissions[0]!;
+      if (resendRefs.has(submission.requestRef) || row.recordId !== expectedId("confirmationResend", submission.requestRef, 1)) {
+        throw new InvalidConfigArchive("staffWork");
+      }
+      resendRefs.add(submission.requestRef);
+      location.confirmationResends ??= [];
+      location.confirmationResends.push(submission);
+    }
+    for (const location of locations.values()) location.confirmationResends?.sort((a, b) => a.requestRef.localeCompare(b.requestRef));
 
     if (verified.manifest.archiveVersion === 2) {
       const counts = new Map<string, number>();
@@ -672,5 +698,6 @@ export async function decodeConfigArchive(input: ArchiveEnvelope, expectedTarget
     sourceScope: location.sourceScope, targetScope: location.targetScope, timeZone: location.timeZone,
     mappingProvenance: location.mappingProvenance, policies: location.policies, automation: clinic.automation, clinicIntake: clinic.clinicIntake ?? [], clinicPatientCorrections: clinic.clinicPatientCorrections ?? [],
     clinicNotifications: clinic.clinicNotifications ?? [], clinicVoice: clinic.clinicVoice ?? [],
+    ...(location.confirmationResends === undefined ? {} : { confirmationResends: location.confirmationResends }),
     writeStops: clinic.writeStops, knowledge: location.knowledge });
 }

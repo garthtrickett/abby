@@ -39,7 +39,7 @@ export type ReferenceConfigPreflight = Readonly<{
   targetScope: LocationScope;
   sourceSchemaVersion: string;
   sourceFenceVersion?: number;
-  recordCounts: Readonly<{ locations: 1; settings: number; knowledge: number; calls: number; staffWork: 0 }>;
+  recordCounts: Readonly<{ locations: 1; settings: number; knowledge: number; calls: number; staffWork: number }>;
   omittedCalls: ConfigArchiveData["omittedCalls"];
   omittedTextCalls?: number;
   mappings: readonly ReferenceImportMapping[];
@@ -298,7 +298,7 @@ function preflightReport(data: ConfigArchiveData, auditRef: string, mappings: re
     sourceScope: data.sourceScope, targetScope: data.targetScope, sourceSchemaVersion: data.sourceSchemaVersion,
     ...(data.sourceFenceVersion === undefined ? {} : { sourceFenceVersion: data.sourceFenceVersion }),
     recordCounts: { locations: 1, settings: data.policies.length + data.automation.length + (data.clinicIntake?.length ?? 0) + (data.clinicPatientCorrections?.length ?? 0) + data.writeStops.length,
-      knowledge: data.knowledge.length, calls: data.sectionManifests.calls.recordCount, staffWork: 0 },
+      knowledge: data.knowledge.length, calls: data.sectionManifests.calls.recordCount, staffWork: data.sectionManifests.staffWork.recordCount },
     omittedCalls: data.omittedCalls,
     ...(data.omittedTextCalls === undefined ? {} : { omittedTextCalls: data.omittedTextCalls }),
     mappings, status,

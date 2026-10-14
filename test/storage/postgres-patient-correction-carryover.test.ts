@@ -168,7 +168,8 @@ test("E2E-368 upgraded correction settings cannot change or lose their guards du
     await migrateTo(isolated, "045_cliniko_contact_change_registry");
     const policy = new PostgresPolicyStore(isolated, referenceDefaultPolicy);
     value(await policy.changePatientCorrectionsEnabled(scope, "0", true, "source-owner"));
-    await migrate(isolated);
+    // Pin the migration under examination so later downgrade guards cannot mask its rejection.
+    await migrateTo(isolated, "046_correction_setting_portability_guard");
     const fence = new PostgresPortabilityFence(isolated);
     const authorized = { authorizeAndRecord: async () => ok({ requestRef: randomUUID() }) };
     const frozen = value(await fence.freeze({ tenantId: scope.tenantId, actorRef: "source-owner", reason: "cutoverFreeze" }, authorized));

@@ -1,3 +1,4 @@
+import { readConfirmationResendCarryover } from "./postgres-confirmation-resend-carryover.ts";
 import { readPatientCorrectionCarryover } from "./postgres-patient-correction-carryover.ts";
 import { readVoiceCarryover } from "./postgres-voice-carryover.ts";
 import { validClinicIntakeArchiveHistory } from "../portability/clinic-intake-history.ts";
@@ -297,6 +298,7 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
       if ([...callScan.value.locationKeys].some(key => !byLocation.has(key))) throw new ExportAbort("scopeIncomplete");
       const observedLocations = await sql<{ clinic_id: string; location_id: string }>`select clinic_id, location_id from clinic_settings
         where tenant_id = ${sourceTenantId} union select clinic_id, location_id from clinic_knowledge_events
+        where tenant_id = ${sourceTenantId} union select clinic_id, location_id from confirmation_resend_journal
         where tenant_id = ${sourceTenantId}`.execute(trx);
       const observedClinics = await sql<{ clinic_id: string }>`select clinic_id from clinic_automation where tenant_id = ${sourceTenantId}
         union select clinic_id from clinic_intake_settings where tenant_id = ${sourceTenantId}
@@ -320,6 +322,9 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
       let clinicNotifications: Awaited<ReturnType<typeof readNotificationCarryover>>;
       try { clinicNotifications = await readNotificationCarryover(trx, sourceTenantId); }
       catch { throw new ExportAbort("storageCorrupt"); }
+      let confirmationResends: Awaited<ReturnType<typeof readConfirmationResendCarryover>>;
+      try { confirmationResends = await readConfirmationResendCarryover(trx, sourceTenantId); }
+      catch { throw new ExportAbort("storageCorrupt"); }
       const stops = await sql<StopRow>`select clinic_id, version, stopped, actor_ref, reason, changed_at
         from clinic_write_stop_events where tenant_id = ${sourceTenantId} order by clinic_id, version`.execute(trx);
       let clinicVoice: Awaited<ReturnType<typeof readVoiceCarryover>>;
@@ -340,7 +345,7 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
           effective_from, effective_until, actor_ref, changed_at from clinic_knowledge_events
           where tenant_id = ${sourceTenantId} and status in ('approved', 'revoked')
           order by clinic_id, location_id, source_ref, version`.execute(trx)).rows;
-      return { schemaVersion, settings: settings.rows, automation: automation.rows, clinicIntake: clinicIntake.rows, clinicPatientCorrections, clinicNotifications, clinicVoice, stops: stops.rows,
+      return { schemaVersion, settings: settings.rows, automation: automation.rows, clinicIntake: clinicIntake.rows, clinicPatientCorrections, clinicNotifications, clinicVoice, confirmationResends, stops: stops.rows,
         knowledge, omittedTextCalls: callScan.value.count,
         omittedTextCallsByLocation: callScan.value.countsByLocation,
         sourceFenceVersion: request.expectedFenceVersion };
@@ -433,7 +438,10 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
         kind: "omittedTextCallCount", sourceClinicId: mapping.sourceScope.clinicId,
         sourceLocationId: mapping.sourceScope.locationId, notRetained: count }];
     });
-    const records: Record<ArchiveSection, readonly RecordData[]> = { locations, settings, knowledge, calls, staffWork: [] };
+    const staffWork: RecordData[] = snapshot.confirmationResends.map(row => ({
+      ...common(recordId("confirmationResend", row.submission.requestRef, 1)), kind: "confirmationResendSubmission",
+      sourceClinicId: row.clinicId, sourceLocationId: row.locationId, ...row.submission }));
+    const records: Record<ArchiveSection, readonly RecordData[]> = { locations, settings, knowledge, calls, staffWork };
     const bytes = Object.fromEntries(ARCHIVE_SECTIONS.map(name => [name, sectionBytes(records[name])])) as Record<ArchiveSection, Buffer>;
     const manifest = { archiveVersion: 2, archiveId: request.archiveId, createdAt: request.createdAt,
       sourceSystem: "abby-postgres", sourceSchemaVersion: snapshot.schemaVersion, sourceTenantId,

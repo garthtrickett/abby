@@ -29,7 +29,14 @@ for (const scenario of ["last", "drift"] as const) {
       assert.match(call.spoken.at(-1)!, /14 October/); assert.doesNotMatch(call.spoken.at(-1)!, /Press 4/); await call.mark();
       await call.keypad("4"); await call.keypad("2"); // Boundary and absent second ordinal preserve the last page.
       for (let i = 0; i < 12; i++) call.media(true);
-      await call.digit("1"); await call.mark();
+      try { await call.digit("1"); }
+      catch (error) {
+        // Fixed phase results only; no speech, native IDs, recipient or caller verification data.
+        const stages = Object.fromEntries(["privateMenuResult", "privatePageResult", "privateChoiceResult"].map(kind =>
+          [kind, call.messages.filter(message => message.kind === kind).map(message => message.accepted)]));
+        throw new Error(`private resend selection failed: ${JSON.stringify(stages)}`, { cause: error });
+      }
+      await call.mark();
       await voiceUntil(() => call.spoken.at(-1)?.includes("Press pound to return") === true, "private selected recipient complete"); await call.mark();
       assert.equal(call.messages.filter(m => m.kind === "ordinaryFrame").length, ordinary);
       assert.equal(call.mutations.length, 0);
