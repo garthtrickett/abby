@@ -45,14 +45,16 @@ try {
     const result = await reader.value.discoverPendingReviews(input.scope, input.recallTypeId!);
     if (!result.ok) throw new Error("synthetic review discovery failed");
     const counts = { pending: result.value.pending.length, invalid: 0, ambiguous: 0, book: 0, cancel: 0, reschedule: 0 };
-    let patientUpdates = 0;
+    let patientUpdates = 0, confirmationResends = 0;
     for (const item of result.value.pending) {
       if (item.kind === "invalidEnvelope") counts.invalid += 1;
       else if (item.kind === "ambiguousMarker") counts.ambiguous += 1;
       else if (item.envelope.request.operation.kind === "patientUpdate") patientUpdates++;
+      else if (item.envelope.request.operation.kind === "confirmationResend") confirmationResends++;
       else counts[item.envelope.request.operation.kind] += 1;
     }
     // The test process reports aggregates only; no patient/request/marker escapes via stdout.
-    process.stdout.write(JSON.stringify({ ...counts, ...(patientUpdates ? { patientUpdate: patientUpdates } : {}) })+"\n");
+    process.stdout.write(JSON.stringify({ ...counts, ...(patientUpdates ? { patientUpdate: patientUpdates } : {}),
+      ...(confirmationResends ? { confirmationResend: confirmationResends } : {}) })+"\n");
   }
 } finally { await db.destroy(); }

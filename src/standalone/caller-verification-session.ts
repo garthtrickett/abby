@@ -3,7 +3,7 @@ import { ClinikoVerificationContactReader } from "../cliniko/verification-contac
 import type { PolicyStore } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
-import type { AdmissionReceipt, Result } from "../core/model.ts";
+import type { AdmissionReceipt, Result, VerifiedPatient } from "../core/model.ts";
 import { callIdFor } from "../voice/admission.ts";
 import type { AuthenticatedInboundCall } from "../voice/admission.ts";
 import type { CallerCandidateLookup } from "../voice/caller-candidates.ts";
@@ -151,6 +151,17 @@ export class CallerVerificationSession {
       const checked = await this.#proof.verifyOperation(this.#config.receipt.scope, grant.verificationRef, this.#config.operation, this.#now(), signal);
       if (!checked.ok || signal?.aborted || this.#closed || this.#grant !== grant) { this.dispose(); return undefined; }
       return { ...grant };
+    } catch { this.dispose(); return undefined; }
+  }
+
+  /** Trusted native owner only. Never return this patient-bearing value through a model/caller command. */
+  async verifiedSubject(operation: PatientOperation, signal?: AbortSignal): Promise<VerifiedPatient | undefined> {
+    const grant = this.#grant;
+    if (operation !== this.#config.operation || signal?.aborted || this.#closed || !grant) return undefined;
+    try {
+      const checked = await this.#proof.verifyOperation(this.#config.receipt.scope, grant.verificationRef, operation, this.#now(), signal);
+      if (!checked.ok || signal?.aborted || this.#closed || this.#grant !== grant) { this.dispose(); return undefined; }
+      return structuredClone(checked.value);
     } catch { this.dispose(); return undefined; }
   }
 

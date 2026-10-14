@@ -17,7 +17,8 @@ export class DurableConfirmationSubmission {
         typeof delivery?.send !== "function") throw new TypeError("invalid confirmation submission ports");
     this.#journal = journal; this.#delivery = delivery;
   }
-  async submit(requestRef: string, incoming: AppointmentConfirmationMail, signal: AbortSignal): Promise<DurableConfirmationOutcome> {
+  async submit(requestRef: string, incoming: AppointmentConfirmationMail, signal: AbortSignal,
+    authorizeBeforeSend?: () => Promise<boolean>): Promise<DurableConfirmationOutcome> {
     if (!confirmationResendRef(requestRef) || !(signal instanceof AbortSignal) || signal.aborted) return { kind: "denied" };
     let message: AppointmentConfirmationMail;
     try { message = structuredClone(incoming); } catch { return { kind: "denied" }; }
@@ -31,11 +32,15 @@ export class DurableConfirmationSubmission {
       return prior.kind === "accepted" ? prior : { kind: prior.kind === "possiblySent" ? "unknown" : prior.kind };
     }
     let result: SmtpMailSubmission = { kind: "definitiveUnsent" };
-    if (!signal.aborted) {
+    let authorized = !signal.aborted;
+    if (authorized && authorizeBeforeSend) {
+      try { authorized = await authorizeBeforeSend() === true && !signal.aborted; } catch { authorized = false; }
+    }
+    if (authorized) {
       result = { kind: "unknown" };
       try {
-        const observed = await this.#delivery.send(message, signal);
-        if (validResendSubmission(observed)) result = observed;
+        const observed = await this.#delivery.send(message, signal, requestRef);
+        if (validResendSubmission(observed) && (observed.kind !== "accepted" || observed.messageRef === requestRef)) result = observed;
       } catch { /* A transport exception does not prove rejection after the send barrier. */ }
     }
     try { return (await this.#journal.finish(requestRef, result)).ok ? result : { kind: "unknown" }; }

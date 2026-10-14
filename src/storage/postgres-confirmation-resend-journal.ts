@@ -28,6 +28,11 @@ export class PostgresConfirmationResendJournal implements ConfirmationResendJour
     this.#db = db; this.#scope = Object.freeze({ ...scope }); this.#binding = ownerBinding;
   }
   #matches(row: Row): boolean { return row.clinic_id === this.#scope.clinicId && row.location_id === this.#scope.locationId && row.owner_binding === this.#binding; }
+  /** Trusted composition check only; no request or patient evidence is returned. */
+  matches(scope: LocationScope, binding: string): boolean {
+    return scope.tenantId === this.#scope.tenantId && scope.clinicId === this.#scope.clinicId &&
+      scope.locationId === this.#scope.locationId && binding === this.#binding;
+  }
   async claim(requestRef: string): ReturnType<ConfirmationResendJournal["claim"]> {
     if (!confirmationResendRef(requestRef)) return err({ kind: "invalidInput" });
     try {

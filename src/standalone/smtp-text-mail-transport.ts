@@ -79,10 +79,11 @@ export class SmtpTextMailTransport {
     this.#config = Object.freeze({ ...config, port, timeoutMs, helloName,
       ...(config.ca instanceof Uint8Array ? { ca: new Uint8Array(config.ca) } : {}) });
   }
-  async submit(email: string, subject: string, text: string, signal: AbortSignal): Promise<SmtpMailSubmission> {
+  async submit(email: string, subject: string, text: string, signal: AbortSignal, submissionRef?: string): Promise<SmtpMailSubmission> {
     if (!(signal instanceof AbortSignal) || signal.aborted || typeof email !== "string" || normalizeEmailAddress(email) !== email ||
         typeof subject !== "string" || !/^[\x20-\x7e]{1,120}$/.test(subject) ||
-        typeof text !== "string" || !text.length || Buffer.byteLength(text) > 16_384 || /\u0000/.test(text)) {
+        typeof text !== "string" || !text.length || Buffer.byteLength(text) > 16_384 || /\u0000/.test(text) ||
+        submissionRef !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(submissionRef)) {
       return { kind: "definitiveUnsent" };
     }
     let bodyMayHaveBeenSent = false;
@@ -115,7 +116,7 @@ export class SmtpTextMailTransport {
       if (challenge.lines.length !== 1 || !["", "="].includes(challenge.lines[0]!)) return { kind: "definitiveUnsent" };
       await command(Buffer.from(`\0${c.username}\0${c.password}`, "utf8").toString("base64"), 235);
       await command(`MAIL FROM:<${c.from}>`, 250); await command(`RCPT TO:<${email}>`, 250); await command("DATA", 354);
-      const messageRef = randomUUID();
+      const messageRef = submissionRef ?? randomUUID();
       const normalized = text.replace(/\r\n|\r|\n/g, "\r\n");
       const plain = /^[\x09\x0a\x0d\x20-\x7e]*$/.test(normalized) && normalized.split("\r\n").every(line => Buffer.byteLength(line) <= 998);
       const body = plain ? normalized : Buffer.from(normalized, "utf8").toString("base64").match(/.{1,76}/g)!.join("\r\n");

@@ -13,8 +13,10 @@ export type AppointmentConfirmationMail = Readonly<{
 export interface AppointmentConfirmationDelivery {
   /** Transport acceptance only. Permission, played consent, durable send fencing
    * and unresolved-send review belong to the resend owner, not this adapter. */
-  send(message: AppointmentConfirmationMail, signal: AbortSignal): Promise<SmtpMailSubmission>;
+  send(message: AppointmentConfirmationMail, signal: AbortSignal, submissionRef?: string): Promise<SmtpMailSubmission>;
 }
+/** Private host readback only. This must not be returned by a model tool or stored in SAM. */
+export function appointmentConfirmationText(message: AppointmentConfirmationMail): string | undefined { return render(message)?.text; }
 const labels = ["clinicName", "locationName", "locationAddress", "practitionerName", "appointmentTypeName"] as const;
 const fields = ["email", "startsAt", "endsAt", "timeZone", ...labels].sort().join(",");
 function instant(value: unknown): value is string {
@@ -44,9 +46,11 @@ function render(value: unknown): Readonly<{ email: string; text: string }> | und
  * It never retries a failed or uncertain SMTP submission. */
 export class SmtpAppointmentConfirmationDelivery implements AppointmentConfirmationDelivery {
   readonly #transport: SmtpTextMailTransport;
-  constructor(config: SmtpMailConfig) { this.#transport = new SmtpTextMailTransport(config); }
-  async send(message: AppointmentConfirmationMail, signal: AbortSignal): Promise<SmtpMailSubmission> {
+  readonly #sender: string;
+  constructor(config: SmtpMailConfig) { this.#transport = new SmtpTextMailTransport(config); this.#sender = config.from; }
+  selection() { return { sender: this.#sender, template: "appointmentDetails.v1" as const }; }
+  async send(message: AppointmentConfirmationMail, signal: AbortSignal, submissionRef?: string): Promise<SmtpMailSubmission> {
     const prepared = render(message);
-    return prepared ? this.#transport.submit(prepared.email, "Your appointment details", prepared.text, signal) : { kind: "definitiveUnsent" };
+    return prepared ? this.#transport.submit(prepared.email, "Your appointment details", prepared.text, signal, submissionRef) : { kind: "definitiveUnsent" };
   }
 }
