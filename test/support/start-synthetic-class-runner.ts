@@ -23,9 +23,10 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
 }
 const multiple = process.env.ABBY_SYNTHETIC_MULTIPLE_CLASSES === "1";
 const f = operation === "reschedule" ? await classMoveCallFlowFixture(process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1", multiple) : await classCallFlowFixture(operation, multiple); f.flow.dispose();
-if (operation === "reschedule" && process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1")
+if (operation === "reschedule" && (process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1" || process.env.ABBY_SYNTHETIC_CLASS_DATE_CORRECTION === "1"))
   f.native.groups.push({ ...structuredClone(f.native.groups[1]!), id: "95", ...classLink("group_appointments", "95"),
-    starts_at: "2026-10-09T12:00:00.000Z", ends_at: "2026-10-09T12:30:00.000Z" });
+    starts_at: `2026-10-${process.env.ABBY_SYNTHETIC_CLASS_DATE_CORRECTION === "1" ? "10" : "09"}T12:00:00.000Z`,
+    ends_at: `2026-10-${process.env.ABBY_SYNTHETIC_CLASS_DATE_CORRECTION === "1" ? "10" : "09"}T${process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1" ? "12:30" : "13:00"}:00.000Z` });
 const c = f.flowConfig, apiKey = process.env.ABBY_CLINIKO_API_KEY!, now = c.clock!;
 process.env.ABBY_TENANT_ID = f.scope.tenantId; process.env.ABBY_CLINIC_ID = f.scope.clinicId; process.env.ABBY_LOCATION_ID = f.scope.locationId;
 process.env.ABBY_TWILIO_TEST_CALLER_NUMBER = f.inbound.presentedCallerNumber;

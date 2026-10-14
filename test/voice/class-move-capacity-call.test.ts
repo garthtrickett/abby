@@ -9,8 +9,8 @@ import { withDisposablePostgres } from "../support/disposable-postgres.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
 import { verificationCanaries } from "../support/caller-verification.ts";
 
-for (const different of [false, true])
-  test(`E2E-402 signed corrected ${different ? "cross-service" : "same-service"} move waits through real silence, renews its lease, and commits only after renewed affirmation`, { timeout: 120_000 }, async () => {
+for (const correction of ["ordinal", "date"] as const) for (const different of [false, true])
+  test(`${correction === "date" ? "E2E-403" : "E2E-402"} signed ${correction} corrected ${different ? "cross-service" : "same-service"} move waits through real silence, renews its lease, and commits only after renewed affirmation`, { timeout: 120_000 }, async () => {
     await withDisposablePostgres(async db => {
       const f = await classMoveCallFlowFixture(different); f.flow.dispose();
       let call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined, ticker: ReturnType<typeof setInterval> | undefined, quiet: ReturnType<typeof setInterval> | undefined;
@@ -18,7 +18,8 @@ for (const different of [false, true])
       const capacityResults: string[] = [];
       try {
         f.native.groups.push({ ...structuredClone(f.native.groups[1]!), id: "95", ...classLink("group_appointments", "95"),
-          starts_at: "2026-10-09T12:00:00.000Z", ends_at: different ? "2026-10-09T12:30:00.000Z" : "2026-10-09T13:00:00.000Z" });
+          starts_at: correction === "date" ? "2026-10-10T12:00:00.000Z" : "2026-10-09T12:00:00.000Z",
+          ends_at: `2026-10-${correction === "date" ? "10" : "09"}T${different ? "12:30" : "13:00"}:00.000Z` });
         const model: typeof fetch = async (_url, init) => {
           const body = JSON.parse(String(init?.body)), context = JSON.parse(body.input[1].content); publicModel.push(context);
           const decision = { kind: "menu", operation: null, stage: "targets", from: "2026-10-08", to: "2026-10-08", choice: null };
@@ -37,9 +38,15 @@ for (const different of [false, true])
         await call.turn("Show my class bookings on October 8."); await call.mark(); await call.turn("The first time please."); await call.mark();
         await call.turn("Show replacement classes on October 9."); await call.mark(); await call.turn("The first time please.");
         const original = Object.values((await call.state()).actions).at(-1)!;
-        await call.turn("No, the second time please.", { interrupt: true });
+        await call.turn(correction === "date" ? "Actually, Saturday" : "No, the second time please.", { interrupt: true });
+        if (correction === "date") {
+          assert.match(call.spoken.at(-1)!, /Saturday 10 October/); await call.mark(); await call.turn("The first time please.");
+        }
         const corrected = Object.values((await call.state()).actions).at(-1)!;
         assert.notEqual(corrected.key, original.key); assert.equal((await call.state()).actions[original.key]!.status, "canceled");
+        assert.equal(corrected.mutation.request.kind, "reschedule");
+        if (corrected.mutation.request.kind !== "reschedule") throw new Error("missing class move");
+        assert.equal(corrected.mutation.request.offer.startsAt, correction === "date" ? "2026-10-10T12:00:00.000Z" : "2026-10-09T12:00:00.000Z");
         assert.match(call.spoken.at(-1)!, /book the replacement before cancelling the original/); await call.mark();
         while (await f.config.cliniko.rateBudget.claim() === null) { /* actual shared claims at unchanged limit */ }
         await call.turn("Yes"); assert.match(call.spoken.at(-1)!, /wait about 60 seconds.*say yes again/); await call.mark();

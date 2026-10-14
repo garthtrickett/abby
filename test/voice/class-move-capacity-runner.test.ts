@@ -5,7 +5,8 @@ import { verificationCanaries } from "../support/caller-verification.ts";
 import { decodeClinikoReview } from "../../src/cliniko/review-request.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
 
-test("E2E-402 compiled corrected cross-service class move waits for real PostgreSQL capacity before renewing consent and writing exactly the selected replacement", {
+for (const mode of [{ date: false, different: true }, { date: true, different: false }, { date: true, different: true }])
+test(`${mode.date ? "E2E-403" : "E2E-402"} compiled ${mode.date ? "date" : "ordinal"} corrected ${mode.different ? "cross-service" : "same-service"} class move waits for real PostgreSQL capacity before renewing consent and writing exactly the selected replacement`, {
   skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120000,
 }, async () => {
   await withClinicalRunner("reschedule", async call => {
@@ -14,8 +15,9 @@ test("E2E-402 compiled corrected cross-service class move waits for real Postgre
       await call.say("Start"); await call.mark(); await call.verify();
       await call.say("Appointments"); await call.mark(); await call.say("The first time please."); await call.mark();
       await call.say("Times"); await call.mark(); await call.say("The first time please."); await call.mark();
-      await call.say("No, the second time please.");
-      assert.match(call.spoken.at(-1)!, /moving your Mat Pilates.*Reformer Pilates.*Second Instructor.*30 minutes/);
+      await call.say(mode.date ? "Actually, Saturday" : "No, the second time please.");
+      if (mode.date) { assert.match(call.spoken.at(-1)!, /Saturday 10 October/); await call.mark(); await call.say("The first time please."); }
+      if (mode.different) assert.match(call.spoken.at(-1)!, /moving your Mat Pilates.*Reformer Pilates.*Second Instructor.*30 minutes/);
       assert.match(call.spoken.at(-1)!, /book the replacement before cancelling the original/); await call.mark();
       await call.say("Yes"); assert.match(call.spoken.at(-1)!, /wait about \d+ seconds.*say yes again/);
       const seconds = Number(/wait about (\d+) seconds/.exec(call.spoken.at(-1)!)![1]);
@@ -47,5 +49,5 @@ test("E2E-402 compiled corrected cross-service class move waits for real Postgre
       const code = call.messages.find(row => row.kind === "verificationEmail")!.code!;
       await call.scan([...verificationCanaries, code]);
     } finally { if (ticker) clearInterval(ticker); if (quiet) clearInterval(quiet); }
-  }, { classes: true, differentClass: true });
+  }, { classes: true, differentClass: mode.different, classDateCorrection: mode.date });
 });
