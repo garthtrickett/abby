@@ -1,3 +1,4 @@
+import { createWorkflowCallerVerification } from "./workflow-caller-verification.ts";
 import { clinikoCredentialFingerprint, isClinikoRequestBudget } from "../cliniko/read-budget.ts";
 import { ClinikoVerificationContactReader } from "../cliniko/verification-contact.ts";
 import type { AppointmentHost } from "../core/host.ts";
@@ -33,7 +34,7 @@ export class ClinikoAppointmentEnquirySession {
     let completed: ClinikoAppointmentEnquirySession | undefined;
     try {
       if (!(incoming.signal instanceof AbortSignal) || incoming.signal.aborted || !isClinikoRequestBudget(incoming.cliniko.rateBudget)) return unavailable();
-      const config = Object.freeze({ ...incoming, receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound),
+      const config = Object.freeze({ ...incoming, ...(incoming.representative ? { representative: Object.freeze({ ...incoming.representative }) } : {}), receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound),
         cliniko: Object.freeze({ ...incoming.cliniko }), clock: incoming.clock ?? (() => new Date().toISOString()) });
       const signal = AbortSignal.any([config.signal, AbortSignal.timeout(15_000)]), scope = config.receipt.scope;
       const building = (async () => {
@@ -48,8 +49,8 @@ export class ClinikoAppointmentEnquirySession {
           const current = await terms.value.current(bound);
           return ok({ ...method.value, enabled: method.value.enabled && current.ok });
         } };
-        const session = CallerVerificationSession.create({ ...config, operation: "appointments.read", policyStore: config.policies,
-          policy, budget: config.verificationBudget, contact: new ClinikoVerificationContactReader({ ...config.cliniko, scope }, config.fetchPort), clock: config.clock });
+        const session = await createWorkflowCallerVerification({ ...config, operation: "appointments.read", policyStore: config.policies,
+          policy, budget: config.verificationBudget, contact: new ClinikoVerificationContactReader({ ...config.cliniko, scope }, config.fetchPort), clock: config.clock }, { credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey), businessId: config.cliniko.businessId, timeZone: config.cliniko.timeZone }, signal, caller.value, config.representative);
         if (!session.ok) return undefined;
         verification = session.value;
         if (signal.aborted) { verification.dispose(); return undefined; }

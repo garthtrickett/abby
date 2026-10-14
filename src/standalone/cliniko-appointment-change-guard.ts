@@ -1,3 +1,5 @@
+import { ClinikoCancellationAuthority } from "./cliniko-cancellation-authority.ts";
+import { ClinikoReschedulingAuthority } from "./cliniko-rescheduling-authority.ts";
 import { ClinikoCancellationWriter } from "../cliniko/cancellation-write.ts";
 import { ClinikoRescheduleWriter } from "../cliniko/reschedule-write.ts";
 import { digestActionRequest } from "../core/digest.ts";
@@ -169,6 +171,12 @@ export class ClinikoAppointmentChangeGuard {
     } catch { return false; }
   }
 
+  #nativeProofValidation(): boolean {
+    const source = this.#authority;
+    return source instanceof ClinikoCancellationAuthority && source.constructor === ClinikoCancellationAuthority && source.usesProof(this.#proof) ||
+      source instanceof ClinikoReschedulingAuthority && source.constructor === ClinikoReschedulingAuthority && source.usesProof(this.#proof);
+  }
+
   async resolve(incoming: AppointmentChangeEvidenceQuery, phase: "proposal" | "commit",
                  signal: AbortSignal): Promise<Result<PreparedClinikoChange, HostReadFailure>> {
     const query = incoming && { ...incoming, scope: { ...incoming.scope } };
@@ -184,9 +192,12 @@ export class ClinikoAppointmentChangeGuard {
       return err({ kind: "unavailable", target: "appointment" });
     }
     try {
-      const patient = await untilAbort(this.#proof.verifyOperation(this.#scope,
-        query.verificationRef, query.kind === "cancel" ? "appointments.cancel" : "appointments.reschedule",
-        query.now, signal), signal);
+      const operation = query.kind === "cancel" ? "appointments.cancel" : "appointments.reschedule";
+      // These concrete native sources validate this exact proof before and
+      // after their provider reads. Other host authorities retain full checks.
+      const native = this.#nativeProofValidation();
+      const patient = await untilAbort(native ? this.#proof.currentReference(this.#scope, query.verificationRef, operation, query.now)
+        : this.#proof.verifyOperation(this.#scope, query.verificationRef, operation, query.now, signal), signal);
       if (!patient?.ok || this.#closed || signal.aborted || !validClinikoId(patient.value.patientRef)) {
         return err({ kind: "notFound", target: "patient" });
       }
@@ -230,9 +241,9 @@ export class ClinikoAppointmentChangeGuard {
           return err({ kind: "unavailable", target: "appointment" });
         }
       }
-      const finalPatient = await untilAbort(this.#proof.verifyOperation(this.#scope,
-        query.verificationRef, query.kind === "cancel" ? "appointments.cancel" : "appointments.reschedule",
-        query.now, signal), signal);
+      const finalPatient = await untilAbort(native && phase === "commit"
+        ? this.#proof.currentReference(this.#scope, query.verificationRef, operation, query.now)
+        : this.#proof.verifyOperation(this.#scope, query.verificationRef, operation, query.now, signal), signal);
       if (!finalPatient?.ok || this.#closed || signal.aborted ||
           digestActionRequest({ ...request, patient: finalPatient.value }) !== digestActionRequest(request)) {
         return err({ kind: "notFound", target: "patient" });

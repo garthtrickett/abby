@@ -8,7 +8,7 @@ import { OwnerFileCallerPolicy } from "./owner-file-caller-policy.ts";
 import { OwnerFileAppointmentHistoryPolicy } from "./owner-file-appointment-history-policy.ts";
 import type { ClinikoCancellationSessionConfig } from "./cliniko-cancellation-session.ts";
 
-type Config = Omit<ClinikoCancellationSessionConfig, "cancellationApprovalPath"> & Readonly<{ historyApprovalPath: string }>;
+type Config = Omit<ClinikoCancellationSessionConfig, "cancellationApprovalPath" | "representative"> & Readonly<{ historyApprovalPath: string }>;
 const denied = () => err({ kind: "historyUnavailable" as const });
 /** A separate history approval and read verifier. No booking writer or grant
  * reuse is available in this owner. Clinical history remains volatile. */

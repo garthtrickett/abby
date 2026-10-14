@@ -40,6 +40,11 @@ export class ClinikoReschedulingMenu implements ReschedulingMenuHost {
     const grant = await this.#config.verification.verified(signal);
     return !!grant && grant.verificationRef === verificationRef && this.#matches(query) && !signal.aborted && epoch === this.#epoch;
   }
+  async #routingGrant(signal: AbortSignal) {
+    const c = this.#config;
+    return c.authority.constructor === ClinikoReschedulingAuthority && c.authority.usesProof(c.verification.proof)
+      ? c.verification.ownedGrant("appointments.reschedule", signal) : c.verification.verified(signal);
+  }
   #bound(query: ReschedulingMenuQuery, verificationRef: string, patientId: string, targetRef: string, signal: AbortSignal) {
     return { ...query, verificationRef, patientId, targetRef, phase: "proposal" as const, signal };
   }
@@ -55,7 +60,7 @@ export class ClinikoReschedulingMenu implements ReschedulingMenuHost {
     const offset = query.nextPractitioners ? prior!.offset + 3 : 0;
     this.#menu = undefined; this.#previous = undefined; this.#practitioners = undefined;
     const epoch = ++this.#epoch, signal = AbortSignal.any([query.signal, this.#lifetime.signal]);
-    const grant = await this.#config.verification.verified(signal);
+    const grant = await this.#routingGrant(signal);
     if (!grant || grant.verificationRef !== target.verificationRef || !await this.#fresh(query, grant.verificationRef, epoch, signal)) return denied();
     const result = await this.#config.authority.practitioners(this.#bound(query, grant.verificationRef, target.patientId, target.targetRef, signal), offset);
     if (!result.ok || !await this.#fresh(query, grant.verificationRef, epoch, signal) || this.#target !== target) return denied();
@@ -86,7 +91,7 @@ export class ClinikoReschedulingMenu implements ReschedulingMenuHost {
     this.#previous = undefined;
     if (query.stage === "targets") { this.#target = undefined; this.#window = undefined; }
     const signal = AbortSignal.any([query.signal, this.#lifetime.signal]);
-    const grant = await this.#config.verification.verified(signal);
+    const grant = await this.#routingGrant(signal);
     if (!grant || !this.#matches(query) || signal.aborted || epoch !== this.#epoch) return denied();
     if (query.stage === "targets") {
       const found = await this.#config.authority.list(query.scope, grant.verificationRef, query.from, query.to, query.now, signal);
@@ -135,7 +140,7 @@ export class ClinikoReschedulingMenu implements ReschedulingMenuHost {
     if (!this.#matches(query) || !menu || menu.stage !== query.stage || menu.turnId !== query.menuTurnId || ![1,2,3].includes(query.choice)) return denied();
     this.#menu = undefined; const epoch = ++this.#epoch, target = this.#target;
     const chosen = menu.choices[query.choice-1], signal = AbortSignal.any([query.signal, this.#lifetime.signal]);
-    const grant = await this.#config.verification.verified(signal);
+    const grant = await this.#routingGrant(signal);
     if (!chosen || !grant || grant.verificationRef !== menu.verificationRef || !this.#matches(query) || signal.aborted ||
         epoch !== this.#epoch || Date.parse(chosen.expiresAt) <= Date.parse(query.now)) return denied();
     if (query.stage === "targets") {

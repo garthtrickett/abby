@@ -18,7 +18,7 @@ import { OwnerFileCallerPolicy } from "./owner-file-caller-policy.ts";
 
 export type ConfirmationResendWorkflowConfig = Pick<ConfirmationResendSessionConfig,
   "policy" | "permission" | "contactRevision" | "journal" | "email" | "presentation"> & Readonly<{ callerApprovalPath: string; taskSequence?: ClinikoCallTasks }>;
-type Config = Omit<ClinikoBookingSessionConfig, "callerApprovalPath" | "bookingApprovalPath"> & Readonly<{ resend: ConfirmationResendWorkflowConfig }>;
+type Config = Omit<ClinikoBookingSessionConfig, "callerApprovalPath" | "bookingApprovalPath" | "representative"> & Readonly<{ resend: ConfirmationResendWorkflowConfig }>;
 type Failure = Readonly<{ kind: "confirmationResendWorkflowUnavailable" }>;
 const unavailable = <T>(): Result<T, Failure> => err({ kind: "confirmationResendWorkflowUnavailable" });
 export type ConfirmationResendMenuProgress = Readonly<{ count: number; hasNext: boolean; hasPrevious: boolean }>;

@@ -71,6 +71,7 @@ export class ClinikoReschedulingAuthority implements AppointmentChangeAuthority,
     catch { return undefined; }
     finally { clearTimeout(timer); signal.removeEventListener("abort", stop); controller.abort(); }
   }
+  usesProof(proof: ClinikoReschedulingAuthorityConfig["proof"]): boolean { return !this.#lifetime.signal.aborted && this.#config.proof === proof && this.#source.usesProof(proof); }
   list(...args: Parameters<ClinikoAppointmentSelection["list"]>) { return this.#source.list(...args); }
   select(...args: Parameters<ClinikoAppointmentSelection["select"]>) { return this.#source.select(...args); }
   get timeZone(): string { return this.#config.feePolicy.binding().timeZone; }
@@ -173,7 +174,7 @@ export class ClinikoReschedulingAuthority implements AppointmentChangeAuthority,
   async #resolve(query: Parameters<AppointmentChangeAuthority["resolve"]>[0] & Readonly<{ kind: "reschedule" }>): ReturnType<AppointmentChangeAuthority["resolve"]> {
     const source = await this.#source.resolveTarget(query);
     if (!source.ok || query.signal.aborted || !await this.#permitsTarget(source.value, query.signal)) return denied();
-    const destination = await this.#offers.resolve({ ...query, offerRef: query.offerRef });
+    const destination = await this.#offers.resolve({ ...query, offerRef: query.offerRef }, { source: this.#source, evidence: source.value });
     if (!destination.ok || query.signal.aborted) return denied();
     const target = source.value, offer = destination.value;
     const changed = target.practitionerId !== offer.practitionerId;

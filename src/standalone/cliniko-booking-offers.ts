@@ -1,3 +1,5 @@
+import { ClinikoAppointmentSelection } from "./cliniko-appointment-selection.ts";
+import type { SelectedAppointmentEvidence } from "./cliniko-appointment-selection.ts";
 import { copyBookingSearchWindow, matchesBookingSearchWindow, validBookingSearchWindow } from "../core/booking-search-window.ts";
 import type { BookingSearchWindow } from "../core/booking-search-window.ts";
 import { randomBytes } from "node:crypto";
@@ -87,11 +89,12 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
     catch { return undefined; }
     finally { clearTimeout(timer); signal.removeEventListener("abort", stop); local.abort(); }
   }
-  async #current(verificationRef: string, now: string, signal: AbortSignal) {
+  async #current(verificationRef: string, now: string, signal: AbortSignal, withinTargetRead = false) {
     const config = this.#config;
     const policy = await config.policy.current(config.scope);
     if (!policy.ok || signal.aborted || this.#time(now) === undefined) return undefined;
-    const proof = await config.proof.verifyOperation(config.scope, verificationRef, config.operation ?? "appointments.book", this.#now(), signal);
+    const proof = withinTargetRead ? await config.proof.currentReference(config.scope, verificationRef, "appointments.reschedule", this.#now())
+      : await config.proof.verifyOperation(config.scope, verificationRef, config.operation ?? "appointments.book", this.#now(), signal);
     if (!proof.ok || signal.aborted) return undefined;
     const finalPolicy = await config.policy.current(config.scope), at = this.#time(now);
     if (!finalPolicy.ok || JSON.stringify(finalPolicy.value) !== JSON.stringify(policy.value) || at === undefined ||
@@ -146,13 +149,16 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
     }, external);
     return result ? ok(result) : denied();
   }
-  async resolve(incoming: ClinikoBookingQuery): Promise<Result<ClinikoBookingEvidence, HostReadFailure>> {
+  async resolve(incoming: ClinikoBookingQuery, targetRead?: Readonly<{ source: ClinikoAppointmentSelection; evidence: SelectedAppointmentEvidence }>): Promise<Result<ClinikoBookingEvidence, HostReadFailure>> {
     const query = { ...incoming, scope: { ...incoming.scope } }, config = this.#config, selected = this.#offers.get(query.offerRef);
     if (!selected || !sameScope(query.scope, config.scope) || query.callId !== config.callId || query.sessionId !== config.sessionId ||
         query.policyVersion !== config.policyVersion || query.patientId !== selected.evidence.patientId || query.verificationRef !== selected.verificationRef ||
         !["proposal", "commit"].includes(query.phase) || !(query.signal instanceof AbortSignal) || this.#time(query.now) === undefined) return denied();
+    const withinTargetRead = !!targetRead && config.operation === "appointments.reschedule" && targetRead.source instanceof ClinikoAppointmentSelection &&
+      targetRead.source.constructor === ClinikoAppointmentSelection && targetRead.source.consumeResolvedEvidence(targetRead.evidence, query, config.proof);
+    if (targetRead && !withinTargetRead) return denied();
     const result = await this.#bounded(async signal => {
-      const before = await this.#current(query.verificationRef, query.now, signal), evidence = selected.evidence;
+      const before = await this.#current(query.verificationRef, query.now, signal, withinTargetRead), evidence = selected.evidence;
       if (!before || before.patient.patientRef !== evidence.patientId || Date.parse(evidence.offer.expiresAt) <= before.at ||
           !OwnerFileBookingPolicy.allows(before.policy, evidence.offer.startsAt, new Date(before.at).toISOString())) return undefined;
       const date = clinicDateAt(evidence.timeZone, new Date(evidence.offer.startsAt));
@@ -160,7 +166,7 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
       if (!read.ok || read.value.kind !== "times" || read.value.timeZone !== evidence.timeZone ||
           read.value.offering?.practitionerName !== selected.practitionerName || read.value.offering?.appointmentTypeName !== selected.appointmentTypeName ||
           !read.value.startsAt.includes(evidence.offer.startsAt) || signal.aborted) return undefined;
-      const fresh = await this.#current(query.verificationRef, query.now, signal), at = this.#time(query.now);
+      const fresh = await this.#current(query.verificationRef, query.now, signal, withinTargetRead), at = this.#time(query.now);
       if (!fresh || at === undefined || fresh.patient.patientRef !== evidence.patientId || this.#offers.get(query.offerRef) !== selected ||
           Date.parse(evidence.offer.expiresAt) <= at || signal.aborted || JSON.stringify(fresh.policy) !== JSON.stringify(before.policy) ||
           !OwnerFileBookingPolicy.allows(fresh.policy, evidence.offer.startsAt, new Date(at).toISOString())) return undefined;

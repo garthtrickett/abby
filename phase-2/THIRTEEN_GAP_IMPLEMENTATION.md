@@ -880,3 +880,53 @@ native only, with synthetic voice and full-call planned. No dependency, database
 migration or production activation is introduced. Current-head authoritative
 cloud qualification and all real clinic/mail/operator/acoustic/carrier gates
 remain separate; the complete13 goal stays active.
+
+## Gap9 representative native workflow composition, E2E-383
+
+The actual booking, cancellation, rescheduling and enquiry constructors now
+accept a concrete private person selection bound to the exact operation, call,
+session, inbound caller, account, business and zone. Representative method
+approval, current workflow policy and independent clinical operation permission
+are added to the selector’s own authority checks. Neither parent proof nor
+family linkage alone can supply subject authority. Fresh selected-channel codes
+feed the existing source, SAM consent, review, one-send and inspected outcome
+protocols. A timed-out constructor disposes a delegated verifier that finishes
+later. Ordinary person voice routing and multiple-person task composition remain
+unfinished; unsupported workflows do not inherit representative configuration.
+
+A real shared-budget witness exposed duplicate native identity checks: the move
+exhausted200 requests before PATCH, with no overlapping actor checks and no
+signal abort. Native outer/inner guard validation and destination/menu routing
+were repeating the same proof checks. Metadata-only checks now apply only at
+non-disclosing routing or inside exact concrete native source validation. Native
+sources still validate identity before and after protected provider reads. The
+public destination read is bracketed by fresh protected target checks, using
+exact one-use evidence owned by that source; copied, foreign or consumed
+evidence is rejected. Contact and permission use native evidence once within
+the same bounded verification transaction, with current independent operation
+permission still checked separately. No quota, deadline, consent, mutation or
+inspection assertion was raised or removed.
+
+The current focused whole-source typecheck and63 native/legacy checks passed
+with zero failures/skips in `4590eee3-1791968768873.log`, including guardian
+booking, full related-person cancellation/move, unchanged actor appointment,
+late construction and evidence ownership. A preceding37-case shared-budget
+run passed in `4590eee3-1791968516077.log`. Earlier failures remain evidence,
+including the exact allowed200/denied1 move witness in
+`4590eee3-1791967143697.log` and the phase profile in
+`4590eee3-1791967316822.log`. Final fresh compiled/serving regression and
+publication are pending. Manifest1.191 retains383 IDs and marks native/text
+evidence separately from planned representative voice/full-call journeys.
+The complete13 objective remains active, including the remaining gap6/8 work,
+private person speech/actions/task routing within gap9 and gaps10–13.
+
+Final frozen-source qualification completed exit0: whole-source typecheck,
+fresh compiled voice build, isolated PostgreSQL migrations and102 checks passed,
+zero failures/cancellations/skips, followed by `git diff --check`.
+Log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791969058497.log`.
+Exact command: `npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh bash -c "npm run db:migrate && node --test --test-concurrency=4 test/cliniko/representative-workflow.test.ts test/cliniko/representative-appointment-change.test.ts test/cliniko/native-validation-context.test.ts test/cliniko/representative-selection.test.ts test/cliniko/rescheduling-authority.test.ts test/cliniko/rescheduling-session.test.ts test/cliniko/booking-offers.test.ts test/cliniko/standalone-cancellation.test.ts test/cliniko/standalone-rescheduling.test.ts test/cliniko/caller-verification-session.test.ts test/cliniko/call-task-sequence.test.ts test/cliniko/cliniko-call-flow.test.ts test/voice/call-task-sequence-runner.test.ts test/voice/standalone-clinical-runner.test.ts test/voice/caller-identity-denial.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts" && git diff --check`.
+Representative cases cover native workflow composition; the signed serving
+regressions cover the existing routes. They do not prove representative voice
+routing or atomic protection against external Cliniko writers. No dependency
+or migration was added. Current-head cloud qualification remains a separate
+publication gate, and the complete13 objective remains active.

@@ -13,7 +13,7 @@ import type { PatientCorrectionSessionConfig } from "./cliniko-patient-correctio
 
 export type PatientCorrectionWorkflowConfig = Pick<PatientCorrectionSessionConfig, "policy" | "permission" | "contactRevision" | "presentation"> &
   Readonly<{ callerApprovalPath: string }>;
-type Config = ClinikoBookingSessionConfig & Readonly<{ correction: PatientCorrectionWorkflowConfig }>;
+type Config = Omit<ClinikoBookingSessionConfig, "representative"> & Readonly<{ correction: PatientCorrectionWorkflowConfig }>;
 type Failure = Readonly<{ kind: "patientCorrectionWorkflowUnavailable" }>;
 
 /** Admission-owned composition: independent caller policy, registered-channel proof,

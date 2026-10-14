@@ -160,6 +160,24 @@ export class CallerVerificationSession {
     } catch { this.dispose(); return undefined; }
   }
 
+  /** Private ownership check for non-disclosing policy/candidate gates only.
+   * It does not revalidate native contact or patient permission. Protected
+   * contact and operation boundaries must still call verifiedSubject. */
+  async ownsCurrentProof(operation: PatientOperation, verificationRef: string, signal: AbortSignal): Promise<boolean> {
+    const grant = this.#grant;
+    if (this.#closed || signal.aborted || operation !== this.#config.operation || !grant || grant.verificationRef !== verificationRef ||
+        !this.#proof.ownsLiveReference(verificationRef, operation, this.#now())) return false;
+    const policy = await this.#config.policy.current(this.#config.receipt.scope);
+    return policy.ok && policy.value.enabled && sameScope(policy.value.scope, this.#config.receipt.scope) && policy.value.version === this.#config.policyVersion &&
+      await this.#active() && !signal.aborted && this.#grant === grant && this.#proof.ownsLiveReference(verificationRef, operation, this.#now());
+  }
+
+  /** Private routing metadata only. Native readers still validate the grant. */
+  async ownedGrant(operation: PatientOperation, signal: AbortSignal): Promise<Grant | undefined> {
+    const grant = this.#grant;
+    return grant && await this.ownsCurrentProof(operation, grant.verificationRef, signal) ? { ...grant } : undefined;
+  }
+
   /** Trusted native owner only. Never return this patient-bearing value through a model/caller command. */
   async verifiedSubject(operation: PatientOperation, signal?: AbortSignal): Promise<VerifiedPatient | undefined> {
     const grant = this.#grant;

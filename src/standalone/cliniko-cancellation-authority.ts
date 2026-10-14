@@ -19,6 +19,7 @@ export class ClinikoCancellationAuthority implements AppointmentChangeAuthority,
       return source.ok ? ok(new ClinikoCancellationAuthority(source.value)) : source;
     } catch { return err({ kind: "invalidConfig" }); }
   }
+  usesProof(proof: ClinikoAppointmentSelectionConfig["proof"]): boolean { return this.#source.usesProof(proof); }
   list(...args: Parameters<ClinikoAppointmentSelection["list"]>) { return this.#source.list(...args); }
   select(...args: Parameters<ClinikoAppointmentSelection["select"]>) { return this.#source.select(...args); }
   clearSelection(): void { this.#source.clearSelection(); }

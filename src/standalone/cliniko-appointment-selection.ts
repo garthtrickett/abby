@@ -41,6 +41,7 @@ export class ClinikoAppointmentSelection implements AppointmentHost {
   readonly #budget: ClinikoRequestBudget;
   readonly #fetch: typeof fetch;
   readonly #lifetime = new AbortController();
+  readonly #resolvedEvidence = new WeakSet<SelectedAppointmentEvidence>();
   readonly #targets = new Map<string, Selection>();
   #choices: Readonly<{ snapshot: AppointmentRead; from: string; to: string }> | undefined;
   #listing = 0;
@@ -150,6 +151,21 @@ export class ClinikoAppointmentSelection implements AppointmentHost {
     const parsed = await boundedClinikoJson(response); return parsed.ok && !signal.aborted ? row(parsed.value) : undefined;
   }
 
+  usesProof(proof: TransientPatientProofHost): boolean { return !this.#lifetime.signal.aborted && this.#config.proof === proof; }
+
+  /** One-use evidence for public destination IO bracketed by this native source.
+   * A caller cannot manufacture it from JSON or a copied evidence object. */
+  consumeResolvedEvidence(evidence: SelectedAppointmentEvidence, query: { scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
+    patientId: string; verificationRef: string; now: string }, proof: TransientPatientProofHost): boolean {
+    const owned = this.#resolvedEvidence.has(evidence); this.#resolvedEvidence.delete(evidence);
+    const selected = this.#targets.get(evidence.targetRef), c = this.#config;
+    return owned && this.usesProof(proof) && c.policy instanceof OwnerFileReschedulingPolicy && sameScope(query.scope, c.scope) &&
+      query.callId === c.callId && query.sessionId === c.sessionId && query.policyVersion === c.policyVersion &&
+      this.#currentTime(query.now) && Date.parse(evidence.terms.expiresAt) > Date.parse(this.#now()) &&
+      !!selected && selected.patientId === query.patientId && selected.verificationRef === query.verificationRef &&
+      evidence.patientId === query.patientId && evidence.target.appointmentRef === selected.appointmentId;
+  }
+
   async resolveTarget(incoming: Omit<Parameters<AppointmentChangeAuthority["resolve"]>[0], "kind" | "offerRef"> & Readonly<{ kind: "cancel" | "reschedule" }>): Promise<Result<SelectedAppointmentEvidence, HostReadFailure>> {
     const query = { ...incoming, scope: { ...incoming.scope } };
     const config = this.#config, selected = this.#targets.get(query.targetRef);
@@ -191,6 +207,7 @@ export class ClinikoAppointmentSelection implements AppointmentHost {
         target: { scope: config.scope, appointmentRef: selected.appointmentId, patientRef: selected.patientId,
           startsAt: selected.startsAt, endsAt: selected.endsAt, timeZone: selected.timeZone } };
     }, query.signal);
+    if (result) this.#resolvedEvidence.add(result);
     return result ? ok(result) : denied();
   }
   dispose(): void { this.#listing++; this.#lifetime.abort(); this.#targets.clear(); this.#choices = undefined; }

@@ -1,17 +1,24 @@
 import assert from "node:assert/strict";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 import { ClinikoRepresentativeSelection } from "../../src/standalone/cliniko-representative-selection.ts";
 import type { RepresentativeAuthorization } from "../../src/standalone/cliniko-representative-selection.ts";
+import type { PatientOperation } from "../../src/standalone/transient-patient-proof.ts";
+import type { CallerVerificationApproval, OwnerFileCallerPolicy } from "../../src/standalone/owner-file-caller-policy.ts";
 import { OwnerFileRepresentativePolicy } from "../../src/standalone/owner-file-representative-policy.ts";
 import { callerVerificationFixture, verificationCanaries } from "./caller-verification.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 
 /** Native-shaped synthetic related patients. Actor authentication is the actual
  * self caller verifier; permission and registered subjects are independent. */
-export async function representativeFixture(rateBudget?: import("../../src/cliniko/read-budget.ts").ClinikoRequestBudget) {
-  const f = await callerVerificationFixture(rateBudget ? { rateBudget } : {});
+export async function representativeFixture(rateBudget?: import("../../src/cliniko/read-budget.ts").ClinikoRequestBudget,
+  provided?: Readonly<{ fixture: Pick<Awaited<ReturnType<typeof callerVerificationFixture>>,
+    "scope" | "folder" | "sessionConfig" | "session" | "ledger" | "policies" | "inbound" | "receipt" | "callId" | "sessionId" | "mail" | "close" |
+    "state" | "runtime" | "setTime" | "setPermitted" | "setEmail" | "provider" | "replaceAccount"> & Readonly<{ config: Parameters<typeof OwnerFileCallerPolicy.capture>[0] }>; operation: PatientOperation }>) {
+  const f = provided?.fixture ?? await callerVerificationFixture(rateBudget ? { rateBudget } : {});
+  const rootApproval = JSON.parse(await readFile(f.config.path, "utf8")) as CallerVerificationApproval;
+  const operation = provided?.operation ?? "appointments.read";
   const path = join(f.folder, "representative.json"), callerPath = join(f.folder, "representative-caller.json");
   const lifetime = new AbortController(), base = "https://api.au5.cliniko.com/v1";
   const identity = { firstName: "Synthetic", lastName: "Subject Canaries", dateOfBirth: "1982-03-05" };
@@ -28,12 +35,12 @@ export async function representativeFixture(rateBudget?: import("../../src/clini
     ["43", { authorityRef: "approved-adult", version: "1", expiresAt: "2026-10-04T06:02:00.000Z", subjectKind: "adult", authorityKind: "adultRepresentative" }],
     ["44", { authorityRef: "approved-guardian", version: "1", expiresAt: "2026-10-04T06:02:00.000Z", subjectKind: "minor", authorityKind: "guardian" }],
   ]);
-  const common = Object.fromEntries(["scope", "revision", "approverRef", "approvedAt", "effectiveFrom", "effectiveUntil", "approved", "enabled"].map(key => [key, f.approval[key as keyof typeof f.approval]]));
+  const common = Object.fromEntries(["scope", "revision", "approverRef", "approvedAt", "effectiveFrom", "effectiveUntil", "approved", "enabled"].map(key => [key, rootApproval[key as keyof typeof rootApproval]]));
   let approval = { ...common, policyVersion: f.sessionConfig.policyVersion, businessId: "11", credentialFingerprint: clinikoCredentialFingerprint("synthetic-session-au5"),
     timeZone: "Australia/Sydney", subjects: "nativeRelatedPatients", identity: "exactNameAndBirthDate", caller: "freshRegisteredChannelProof",
     authority: "independentClinicHost", recipient: "selectedPatientRegisteredEmail", adultAgeYears: 18, leapDayBirthday: "march1",
-    allowedAuthorities: ["adultRepresentative", "guardian"], operations: ["appointments.read"] };
-  let callerApproval = { ...f.approval, representatives: "independentClinicHost", representativeRecipient: "selectedPatientRegisteredEmail" };
+    allowedAuthorities: ["adultRepresentative", "guardian"], operations: [operation] };
+  let callerApproval = { ...rootApproval, operations: [operation], representatives: "independentClinicHost", representativeRecipient: "selectedPatientRegisteredEmail" };
   const write = (file: string, value: unknown) => writeFile(file, JSON.stringify(value), { mode: 0o600 });
   await write(path, approval); await write(callerPath, callerApproval);
   const policyConfig = { path, scope: f.scope, policyVersion: f.sessionConfig.policyVersion, businessId: "11", credentialFingerprint: approval.credentialFingerprint,
@@ -83,7 +90,7 @@ export async function representativeFixture(rateBudget?: import("../../src/clini
   const config: ConstructorParameters<typeof ClinikoRepresentativeSelection>[0] = {
     receipt: f.receipt, inbound: f.inbound, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion,
     ledger: f.ledger, policies: f.policies, lookup: f.sessionConfig.lookup, delivery: { send: async (email, code) => { mail.push({ email, code }); return true; } },
-    verificationBudget: { reserve: async () => true }, directory: f.config.directory, actor: f.session, actorOperation: "appointments.read", policy,
+    verificationBudget: { reserve: async () => true }, directory: f.config.directory, actor: f.session, actorOperation: f.sessionConfig.operation, policy,
     representativeCallerApprovalPath: callerPath, permission, signal: lifetime.signal, clock: f.sessionConfig.clock, fetchPort,
     cliniko: { apiKey: "synthetic-session-au5", contactEmail: "test@example.test", businessId: "11", practitionerId: "22", appointmentTypeId: "33", recallTypeId: "7",
       countryCallingCode: "61", timeZone: "Australia/Sydney", rateBudget: { claim: () => !budgetAllowed ? { kind: "unavailable" } : rateBudget ? rateBudget.claim() : null, observe429: header => rateBudget ? rateBudget.observe429(header) : { kind: "rateLimited" } } },
@@ -93,7 +100,7 @@ export async function representativeFixture(rateBudget?: import("../../src/clini
     const deadline = Date.now() + 5000;
     while (!f.mail.length && Date.now() < deadline) await new Promise<void>(resolve => setTimeout(resolve, 5));
     assert.ok(f.mail[0]); assert.equal((await f.session.submitCode(f.mail[0].code)).verified, true); };
-  const select = () => owner.select(identity, "appointments.read", lifetime.signal);
+  const select = () => owner.select(identity, operation, lifetime.signal);
   const verifySubject = async () => {
     const chosen = resultValue(await select()), verifier = resultValue(await owner.verifier(chosen.selectionRef, lifetime.signal));
     verifier.begin(); const deadline = Date.now() + 5000;

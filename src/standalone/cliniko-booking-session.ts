@@ -1,3 +1,5 @@
+import { createWorkflowCallerVerification } from "./workflow-caller-verification.ts";
+import type { RepresentativeWorkflowSelection } from "./workflow-caller-verification.ts";
 import { createApprovedBookingComposition } from "./approved-booking-composition.ts";
 import type { ApprovedBookingComposition } from "./approved-booking-composition.ts";
 import { OwnerFileBookingCatalogue } from "./owner-file-booking-catalogue.ts";
@@ -29,6 +31,7 @@ export type ClinikoBookingSessionConfig = Readonly<{
     timeZone: string; countryCallingCode: string; rateBudget: ClinikoRequestBudget;
     contactRevision?: import("../cliniko/contact-revision.ts").ClinikoContactRevisionReader }>;
   catalogue?: Readonly<{ approvalPath: string; practitioners: readonly Readonly<{ practitionerId: string; bookingApprovalPath: string }>[]; serviceBinding?: BookingServiceBinding; initialSearchPreference?: import("../core/booking-search-preference.ts").BookingSearchPreference }>;
+  representative?: RepresentativeWorkflowSelection;
   signal: AbortSignal; fetchPort?: typeof fetch; clock?: () => string; timeoutMs?: number;
 }>;
 type Failure = Readonly<{ kind: "bookingSessionUnavailable" }>;
@@ -59,7 +62,7 @@ export class ClinikoBookingSession {
           !isClinikoRequestBudget(incoming.cliniko?.rateBudget) ||
           (incoming.timeoutMs !== undefined && (!Number.isSafeInteger(incoming.timeoutMs) || incoming.timeoutMs < 1 || incoming.timeoutMs > 20_000))) return unavailable();
       // Freeze caller/provider bindings before the first async approval read.
-      const config = Object.freeze({ ...incoming, receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound),
+      const config = Object.freeze({ ...incoming, ...(incoming.representative ? { representative: Object.freeze({ ...incoming.representative }) } : {}), receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound),
         cliniko: Object.freeze({ ...incoming.cliniko }),
         ...(incoming.catalogue ? { catalogue: Object.freeze({ ...incoming.catalogue, ...(incoming.catalogue.initialSearchPreference ? { initialSearchPreference: Object.freeze({ ...incoming.catalogue.initialSearchPreference }) } : {}), practitioners: Object.freeze(incoming.catalogue.practitioners.map(member => Object.freeze({ ...member }))) }) } : {}), clock: incoming.clock ?? (() => new Date().toISOString()) });
       const scope = config.receipt.scope, fetchPort = config.fetchPort ?? fetch;
@@ -110,12 +113,13 @@ export class ClinikoBookingSession {
             current.value.capabilities.book === "execute" && current.value.staffWorkEnabled === true && admitted.ok &&
             admitted.value.policy.capabilities.book === "execute" && admitted.value.policy.staffWorkEnabled === true });
         } };
-        const session = CallerVerificationSession.create({ receipt: config.receipt, inbound: config.inbound, sessionId: config.sessionId,
+        const session = await createWorkflowCallerVerification({ receipt: config.receipt, inbound: config.inbound, sessionId: config.sessionId,
           policyVersion: config.policyVersion, operation: "appointments.book", ledger: config.ledger, policyStore: config.policies,
           policy: verificationPolicy, lookup: config.lookup, contact: new ClinikoVerificationContactReader({ ...config.cliniko, scope }, fetchPort),
-          permission: config.permission, budget: config.verificationBudget, delivery: config.delivery, clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) });
-        if (!session.ok || settled) return undefined;
+          permission: config.permission, budget: config.verificationBudget, delivery: config.delivery, clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) }, { credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey), businessId: config.cliniko.businessId, timeZone: config.cliniko.timeZone }, config.signal, caller.value, config.representative);
+        if (!session.ok) return undefined;
         verification = session.value;
+        if (settled || config.signal.aborted) { verification.dispose(); return undefined; }
         const composed = await createApprovedBookingComposition(config, policy.value, verification, catalogue?.ok ? catalogue.value : undefined,
           () => settled || config.signal.aborted);
         if (!composed.ok) return undefined;
