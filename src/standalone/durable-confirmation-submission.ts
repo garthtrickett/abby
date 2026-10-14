@@ -29,7 +29,8 @@ export class DurableConfirmationSubmission {
         claimed.value.send && claimed.value.status.kind !== "possiblySent") return { kind: "denied" };
     if (!claimed.value.send) {
       const prior = claimed.value.status;
-      return prior.kind === "accepted" ? prior : { kind: prior.kind === "possiblySent" ? "unknown" : prior.kind };
+      return prior.kind === "accepted" ? prior.messageRef === requestRef ? prior : { kind: "unknown" }
+        : { kind: prior.kind === "possiblySent" ? "unknown" : prior.kind };
     }
     let result: SmtpMailSubmission = { kind: "definitiveUnsent" };
     let authorized = !signal.aborted;

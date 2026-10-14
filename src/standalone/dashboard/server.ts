@@ -1,3 +1,4 @@
+import { ClinikoConfirmationResendRecovery } from "../cliniko-confirmation-resend-recovery.ts";
 import { readFile } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
 import { createServer } from "node:http";
@@ -82,6 +83,7 @@ export type HostDashboardIdentity = Readonly<{
   /** Optional owner report reader; the response is reduced to fixed aggregate fields. */
   readSpeechGate?: () => Promise<unknown>;
   /** Optional privileged account recovery; identity and investigation/quiescence authority are host-owned. */
+  confirmationResendRecoveryFor?: (actor: HostActor, request: IncomingMessage) => ClinikoConfirmationResendRecovery | Promise<ClinikoConfirmationResendRecovery>;
   correctionRecoveryFor?: (actor: HostActor, request: IncomingMessage) => ClinikoPatientCorrectionRecovery | Promise<ClinikoPatientCorrectionRecovery>;
   /** Optional host-specific wording constraint applied before the generic policy command. */
   greetingTextValidator?: (text: string) => boolean;
@@ -113,7 +115,8 @@ export async function createHostAuthenticatedDashboardRequestHandler(identity: H
         !/^\/[A-Za-z0-9/_-]+$/.test(identity.signOutPath) || identity.signOutPath.startsWith("//"))) ||
       (identity.greetingTextValidator !== undefined && typeof identity.greetingTextValidator !== "function") ||
       (identity.readSpeechGate !== undefined && typeof identity.readSpeechGate !== "function") ||
-      (identity.correctionRecoveryFor !== undefined && typeof identity.correctionRecoveryFor !== "function")) {
+      (identity.correctionRecoveryFor !== undefined && typeof identity.correctionRecoveryFor !== "function") ||
+      (identity.confirmationResendRecoveryFor !== undefined && typeof identity.confirmationResendRecoveryFor !== "function")) {
     throw new RangeError("invalid dashboard identity configuration");
   }
   const [bundle, stylesheet] = await Promise.all([
@@ -143,6 +146,13 @@ export async function createHostAuthenticatedDashboardRequestHandler(identity: H
           const currentActor = await identity.resolveActor(request);
           if (!currentActor || !isDeepStrictEqual(currentActor, actor)) return undefined;
           return recovery.resolve(input, undefined, currentActor);
+        } : undefined,
+        identity.confirmationResendRecoveryFor ? async input => {
+          const recovery = await identity.confirmationResendRecoveryFor!(actor, request);
+          if (!(recovery instanceof ClinikoConfirmationResendRecovery)) return undefined;
+          const currentActor = await identity.resolveActor(request);
+          if (!currentActor || !isDeepStrictEqual(currentActor, actor)) return undefined;
+          return recovery.inspect(input, undefined, currentActor);
         } : undefined);
     } catch { return json(response, 403, { ok: false, error: { kind: "forbidden" } }); }
   })(); };
@@ -153,7 +163,8 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
                       surface: "full" | "availabilitySetup" = "full",
                       readSpeechGate?: () => Promise<unknown>, speechGateAdmin = false,
                       greetingTextValidator?: (text: string) => boolean, signOutPath?: string,
-                      correctionRecovery?: (input: Parameters<ClinikoPatientCorrectionRecovery["resolve"]>[0]) => Promise<Awaited<ReturnType<ClinikoPatientCorrectionRecovery["resolve"]>> | undefined>): Promise<void> {
+                      correctionRecovery?: (input: Parameters<ClinikoPatientCorrectionRecovery["resolve"]>[0]) => Promise<Awaited<ReturnType<ClinikoPatientCorrectionRecovery["resolve"]>> | undefined>,
+                      resendRecovery?: (input: Parameters<ClinikoConfirmationResendRecovery["inspect"]>[0]) => Promise<Awaited<ReturnType<ClinikoConfirmationResendRecovery["inspect"]>> | undefined>): Promise<void> {
   try {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (surface === "availabilitySetup" && !(
@@ -167,6 +178,16 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     if (request.method === "POST" && url.pathname.startsWith("/api/") &&
         !acceptsCommandOrigin(request, authenticatedOrigin)) {
       return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+    }
+    if (request.method === "POST" && url.pathname === "/api/confirmation-resends/receipt") {
+      if (!authenticatedOrigin || !resendRecovery) return json(response, 404, { ok: false, error: { kind: "notFound" } });
+      if (!speechGateAdmin) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+      const input = record(await body(request));
+      if (url.searchParams.size || !input || Object.keys(input).sort().join(",") !== "recallRef,requestRef" ||
+          typeof input.requestRef !== "string" || typeof input.recallRef !== "string") return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      const result = await resendRecovery({ requestRef: input.requestRef, recallRef: input.recallRef });
+      return result?.ok ? json(response, 200, { ok: true, value: result.value })
+        : json(response, 403, { ok: false, error: { kind: "confirmationResendRecoveryUnavailable" } });
     }
     if (request.method === "POST" && url.pathname === "/api/patient-corrections/resolve-reviewed") {
       if (!authenticatedOrigin || !correctionRecovery) return json(response, 404, { ok: false, error: { kind: "notFound" } });
