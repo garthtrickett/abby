@@ -113,6 +113,7 @@ test("E2E-378 resealed private, inconsistent, duplicate and foreign submission r
   const edits = [
     (rows: Record<string, unknown>[]) => rows.map(row => ({ ...row, email: "synthetic-patient@example.invalid" })),
     (rows: Record<string, unknown>[]) => rows.map(row => ({ ...row, ownerBinding: "wrong" })),
+    (rows: Record<string, unknown>[]) => rows.map(row => ({ ...row, originScope: { tenantId: "origin", clinicId: "origin", locationId: "origin", email: "synthetic-patient@example.invalid" } })),
     (rows: Record<string, unknown>[]) => rows.map(row => ({ ...row, createdAt: "2026-02-31T01:00:00.000Z" })),
     (rows: Record<string, unknown>[]) => rows.map(row => ({ ...row, sourceLocationId: "unmapped" })),
     (rows: Record<string, unknown>[]) => rows.map(row => ({ ...row, sourceTenantId: "foreign" })),

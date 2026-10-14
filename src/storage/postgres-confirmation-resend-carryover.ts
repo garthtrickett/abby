@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from "node:util";
 import { sql } from "kysely";
 import type { Kysely, Transaction } from "kysely";
 import type { LocationScope } from "../core/model.ts";
-import { validConfirmationResendArchiveHistory } from "../portability/confirmation-resend-history.ts";
+import { validConfirmationResendArchiveHistory, confirmationResendBarrier } from "../portability/confirmation-resend-history.ts";
 import type { ConfirmationResendArchiveRow } from "../portability/confirmation-resend-history.ts";
 import type { TenantConfigArchiveData } from "../portability/config-archive.ts";
 import type Database from "./generated/Database.ts";
@@ -43,7 +43,7 @@ export async function reconcileConfirmationResendCarryover(db: Db, data: TenantC
   for (const location of data.locations) {
     if (!validConfirmationResendArchiveHistory(location.confirmationResends)) return false;
     for (const submission of location.confirmationResends ?? []) expected.push({
-      clinicId: location.targetScope.clinicId, locationId: location.targetScope.locationId, submission });
+      clinicId: location.targetScope.clinicId, locationId: location.targetScope.locationId, submission: confirmationResendBarrier(submission) });
   }
   expected.sort((a, b) => a.submission.requestRef.localeCompare(b.submission.requestRef));
   return isDeepStrictEqual(await readConfirmationResendCarryover(db, data.targetTenantId), expected);

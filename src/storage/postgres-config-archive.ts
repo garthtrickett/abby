@@ -1,3 +1,5 @@
+import { carryConfirmationResendOrigins } from "./postgres-confirmation-resend-import-history.ts";
+import { confirmationResendArchiveRecord } from "../portability/confirmation-resend-history.ts";
 import { readConfirmationResendCarryover } from "./postgres-confirmation-resend-carryover.ts";
 import { readPatientCorrectionCarryover } from "./postgres-patient-correction-carryover.ts";
 import { readVoiceCarryover } from "./postgres-voice-carryover.ts";
@@ -323,7 +325,8 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
       try { clinicNotifications = await readNotificationCarryover(trx, sourceTenantId); }
       catch { throw new ExportAbort("storageCorrupt"); }
       let confirmationResends: Awaited<ReturnType<typeof readConfirmationResendCarryover>>;
-      try { confirmationResends = await readConfirmationResendCarryover(trx, sourceTenantId); }
+      try { confirmationResends = await carryConfirmationResendOrigins(trx, sourceTenantId,
+        await readConfirmationResendCarryover(trx, sourceTenantId)); }
       catch { throw new ExportAbort("storageCorrupt"); }
       const stops = await sql<StopRow>`select clinic_id, version, stopped, actor_ref, reason, changed_at
         from clinic_write_stop_events where tenant_id = ${sourceTenantId} order by clinic_id, version`.execute(trx);
@@ -438,9 +441,8 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
         kind: "omittedTextCallCount", sourceClinicId: mapping.sourceScope.clinicId,
         sourceLocationId: mapping.sourceScope.locationId, notRetained: count }];
     });
-    const staffWork: RecordData[] = snapshot.confirmationResends.map(row => ({
-      ...common(recordId("confirmationResend", row.submission.requestRef, 1)), kind: "confirmationResendSubmission",
-      sourceClinicId: row.clinicId, sourceLocationId: row.locationId, ...row.submission }));
+    const staffWork: RecordData[] = snapshot.confirmationResends.map(row => confirmationResendArchiveRecord(
+      { tenantId: sourceTenantId, clinicId: row.clinicId, locationId: row.locationId }, row.submission));
     const records: Record<ArchiveSection, readonly RecordData[]> = { locations, settings, knowledge, calls, staffWork };
     const bytes = Object.fromEntries(ARCHIVE_SECTIONS.map(name => [name, sectionBytes(records[name])])) as Record<ArchiveSection, Buffer>;
     const manifest = { archiveVersion: 2, archiveId: request.archiveId, createdAt: request.createdAt,

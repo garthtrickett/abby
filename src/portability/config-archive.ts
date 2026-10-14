@@ -409,13 +409,14 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
 
     const resendRefs = new Set<string>();
     for (const row of lines(sections.staffWork, "staffWork")) {
-      if (Object.keys(row).sort().join(",") !==
-          "completedAt,createdAt,kind,messageRef,ownerBinding,recordId,recordVersion,requestRef,sourceClinicId,sourceLocationId,sourceTenantId,status" ||
+      if (!["completedAt,createdAt,kind,messageRef,ownerBinding,recordId,recordVersion,requestRef,sourceClinicId,sourceLocationId,sourceTenantId,status",
+          "completedAt,createdAt,kind,messageRef,originScope,ownerBinding,recordId,recordVersion,requestRef,sourceClinicId,sourceLocationId,sourceTenantId,status"].includes(Object.keys(row).sort().join(",")) ||
           row.kind !== "confirmationResendSubmission" || row.recordVersion !== 1) throw new InvalidConfigArchive("staffWork");
       const key = JSON.stringify([ref(row.sourceClinicId, "staffWork"), ref(row.sourceLocationId, "staffWork")]);
       const location = locations.get(key);
       const submissions: unknown = [{ requestRef: row.requestRef, ownerBinding: row.ownerBinding, status: row.status,
-        messageRef: row.messageRef, createdAt: row.createdAt, completedAt: row.completedAt }];
+        messageRef: row.messageRef, createdAt: row.createdAt, completedAt: row.completedAt,
+        ...(Object.hasOwn(row, "originScope") ? { originScope: row.originScope } : {}) }];
       if (!location || !validConfirmationResendArchiveHistory(submissions) || submissions === undefined) {
         throw new InvalidConfigArchive("staffWork");
       }
