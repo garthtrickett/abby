@@ -1,3 +1,4 @@
+import { ClinikoCallTasks } from "./cliniko-call-tasks.ts";
 import { isDeepStrictEqual } from "node:util";
 import { completePrivateResendPresentation } from "./private-resend-presentation.ts";
 import { randomUUID } from "node:crypto";
@@ -16,7 +17,7 @@ import { ClinikoSamConfirmationResendHost } from "./cliniko-sam-confirmation-res
 import { OwnerFileCallerPolicy } from "./owner-file-caller-policy.ts";
 
 export type ConfirmationResendWorkflowConfig = Pick<ConfirmationResendSessionConfig,
-  "policy" | "permission" | "contactRevision" | "journal" | "email" | "presentation"> & Readonly<{ callerApprovalPath: string }>;
+  "policy" | "permission" | "contactRevision" | "journal" | "email" | "presentation"> & Readonly<{ callerApprovalPath: string; taskSequence?: ClinikoCallTasks }>;
 type Config = Omit<ClinikoBookingSessionConfig, "callerApprovalPath" | "bookingApprovalPath"> & Readonly<{ resend: ConfirmationResendWorkflowConfig }>;
 type Failure = Readonly<{ kind: "confirmationResendWorkflowUnavailable" }>;
 const unavailable = <T>(): Result<T, Failure> => err({ kind: "confirmationResendWorkflowUnavailable" });
@@ -52,6 +53,8 @@ export class ClinikoConfirmationResendWorkflow {
         cliniko: Object.freeze({ ...incoming.cliniko }), resend: Object.freeze({ ...incoming.resend }) });
       const building = (async () => {
         const c = config.resend, scope = config.receipt.scope, clock = config.clock ?? (() => new Date().toISOString());
+        if (c.taskSequence && (!(c.taskSequence instanceof ClinikoCallTasks) || !c.taskSequence.matches(scope, config.receipt.callId, config.sessionId,
+            config.cliniko.businessId, clinikoCredentialFingerprint(config.cliniko.apiKey), config.cliniko.timeZone, config.policyVersion))) return undefined;
         if (config.cliniko.contactRevision !== c.contactRevision || !c.contactRevision.matches(scope.tenantId, clinikoCredentialFingerprint(config.cliniko.apiKey))) return undefined;
         const caller = await OwnerFileCallerPolicy.capture({ path: c.callerApprovalPath, scope, policyVersion: config.policyVersion,
           operation: "appointments.resend", directory: config.directory, clock });
@@ -98,7 +101,7 @@ export class ClinikoConfirmationResendWorkflow {
     if (signal.aborted || this.#lifetime.signal.aborted || this.#config.signal.aborted) return undefined;
     const subject = await this.#verification.verifiedSubject("appointments.resend", signal);
     const state = await this.#runtime.read(this.#config.receipt.callId);
-    return subject && state.ok && !hasSentPatientWork(state.value) && !state.value.callerIdentityDenied &&
+    return subject && state.ok && !(this.#config.resend.taskSequence ? this.#config.resend.taskSequence.hasSentCurrentWork(state.value) : hasSentPatientWork(state.value)) && !state.value.callerIdentityDenied &&
       state.value.lifecycle === "active" && state.value.sessionLease?.sessionId === this.#config.sessionId &&
       Date.parse(state.value.sessionLease.expiresAt) > Date.parse(this.#now()) && !signal.aborted ? { subject, state: state.value } : undefined;
   }

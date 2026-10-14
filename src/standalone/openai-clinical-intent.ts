@@ -77,7 +77,7 @@ function publicPhase(context: Context): string {
 
 function schemaFor(context: Context, hasPublicFacts: boolean) {
   const phase = publicPhase(context);
-  const kinds = context.callerIdentityDenied ? ["unsupported"] : context.workflow === null ? ["workflow", "outcome", "unsupported"] : context.verificationRequired
+  const kinds = context.callerIdentityDenied ? ["unsupported"] : context.nextTaskAvailable ? ["workflow", "outcome", "unsupported"] : context.workflow === null ? ["workflow", "outcome", "unsupported"] : context.verificationRequired
     ? ["outcome", "unsupported"] : phase === "listExistingAppointments" || phase === "listNewTimes"
       ? ["menu", "outcome", "unsupported"] : phase === "chooseExistingAppointment" || phase === "chooseNewTime" || phase === "choosePractitioner"
         ? ["choice", "menu", "outcome", "unsupported"] : context.workflow === "appointments.read"
@@ -88,7 +88,7 @@ function schemaFor(context: Context, hasPublicFacts: boolean) {
     : phase === "listNewTimes" || phase === "chooseNewTime" || phase === "choosePractitioner" ? ["practitioners", "offers", null] : [null];
   return { ...schema, properties: { ...schema.properties,
     kind: { type: "string", enum: [...kinds, "staffRequest", "staffOutcome", "faq", "urgent", "notificationOutcome", "identityDisagreement", "sharedPhone", "minorIntake", "proxyPatient", "jointPractitioners", "groupClass", "bookingHorizon", "presence", "missedCall", ...publicInformationTopics, ...staffRequestSubjects] },
-    operation: { type: ["string", "null"], enum: context.workflow === null || context.workflow === "appointments.read"
+    operation: { type: ["string", "null"], enum: context.workflow === null || context.workflow === "appointments.read" || context.nextTaskAvailable === true
       ? ["book", "cancel", "reschedule", "intake", "patientUpdate", "appointments.read", null] : [null] },
     stage: { type: ["string", "null"], enum: stages },
     choice: { type: ["integer", "null"], enum: kinds.includes("choice") || hasPublicFacts ? [1, 2, 3, null] : [null] },
@@ -154,7 +154,7 @@ async function mapDecision(decision: Decision, context: Context, today: number, 
     return { from: clinicDateAt(context.timeZone, new Date(context.now)) === decision.from && Date.parse(context.now) > Date.parse(start)
       ? context.now : start, to: end };
   };
-  if (decision.kind === "workflow" && (context.workflow === null || context.workflow === "appointments.read") && !context.verificationRequired &&
+  if (decision.kind === "workflow" && (context.workflow === null || context.workflow === "appointments.read" || context.nextTaskAvailable === true) && !context.verificationRequired &&
       decision.operation !== null && decision.stage === null && decision.from === null && decision.to === null && decision.choice === null)
     return ok({ kind: "workflow", operation: decision.operation });
   if (context.workflow === null || context.verificationRequired || context.lastAction?.status === "uncertain") {
@@ -231,10 +231,13 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     // Active private message questions use the existing draft question fence;
     // explicit card-number disclosure must never become message content.
     if (financial && (!config.owner.collectingStaffMessage || /\bmy card number is\b/i.test(turn.text))) return ok({ kind: "clarify", reason: financial });
+    if (before.nextTaskAvailable && /^(?:please |i would like to |i want to )?(?:book another appointment|cancel another appointment|reschedule another appointment)[.!]?$/i.test(turn.text.trim())) {
+      return ok({ kind: "workflow", operation: /book/i.test(turn.text) ? "book" : /reschedule/i.test(turn.text) ? "reschedule" : "cancel" });
+    }
     const resend = confirmationResendLanguage(turn.text);
     if (!before.callerIdentityDenied && resend) {
       if (resend === "unsupportedRecipient") return ok({ kind: "clarify", reason: "changeUnsupported" });
-      if (before.workflow === null || before.workflow === "appointments.read") return ok({ kind: "workflow", operation: "confirmationResend" });
+      if (before.workflow === null || before.workflow === "appointments.read" || before.nextTaskAvailable && before.workflow !== "confirmationResend") return ok({ kind: "workflow", operation: "confirmationResend" });
       if (before.workflow !== "confirmationResend" || before.verificationRequired) return ok({ kind: "clarify", reason: "menuUnavailable" });
       if (before.lastAction && ["dispatched", "committed", "uncertain", "needsReview"].includes(before.lastAction.status)) return ok({ kind: "notificationOutcome" });
       const requestRef = config.owner.confirmationResendRef;

@@ -25,7 +25,7 @@ export type ClinicalRunnerOperation = "book" | "cancel" | "reschedule" | "intake
 /** Actual compiled runner in a separate process and database. All network
  * providers are fixtures; private caller material is kept in this test memory. */
 export async function withClinicalRunner(operation: ClinicalRunnerOperation,
-  run: (call: Awaited<ReturnType<typeof start>>) => Promise<void>, options: { resendContent?: "telehealth" | "cancelled"; intakeFields?: boolean; services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean; practitionerMove?: "changedTime" | "sameTime" | "directory" } = {}): Promise<void> {
+  run: (call: Awaited<ReturnType<typeof start>>) => Promise<void>, options: { taskSequence?: boolean; resendContent?: "telehealth" | "cancelled"; intakeFields?: boolean; services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean; practitionerMove?: "changedTime" | "sameTime" | "directory" } = {}): Promise<void> {
   const adminUrl = process.env.DATABASE_URL; assert.ok(adminUrl);
   const admin = connectPostgres(adminUrl), name = `abby_test_voice_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl); target.pathname = `/${name}`;
@@ -45,7 +45,7 @@ export async function withClinicalRunner(operation: ClinicalRunnerOperation,
     if (failures.length) throw new AggregateError(originalFailure === undefined ? failures : [originalFailure, ...failures], "clinical runner test or cleanup failed");
   }
 }
-async function start(operation: ClinicalRunnerOperation, connectionString: string, db: ReturnType<typeof connectPostgres>, options: { resendContent?: "telehealth" | "cancelled"; intakeFields?: boolean; services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean; practitionerMove?: "changedTime" | "sameTime" | "directory" }) {
+async function start(operation: ClinicalRunnerOperation, connectionString: string, db: ReturnType<typeof connectPostgres>, options: { taskSequence?: boolean; resendContent?: "telehealth" | "cancelled"; intakeFields?: boolean; services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean; practitionerMove?: "changedTime" | "sameTime" | "directory" }) {
   const accountSid = `AC${"1".repeat(32)}`, authToken = "synthetic-clinical-runner-token", number = "+6125550199", caller = "+61400111222";
   const webhookUrl = "https://clinical-runner.example.test/twilio/inbound", streamUrl = "wss://clinical-runner.example.test/twilio/media/";
   const messages: Message[] = [], output: string[] = [];
@@ -53,6 +53,7 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
     cwd: new URL("../../", import.meta.url), stdio: ["ignore", "pipe", "pipe", "ipc"],
     env: { ...process.env, DATABASE_URL: connectionString, ABBY_ISOLATED_POSTGRES_PROBE: "1", ABBY_VOICE_TEST_MODE: "1", ABBY_VOICE_PORT: "0",
       ABBY_SYNTHETIC_CLINICAL_OPERATION: operation,
+      ABBY_SYNTHETIC_TASK_SEQUENCE: options.taskSequence ? "1" : undefined,
       ABBY_SYNTHETIC_RESEND_CONTENT: options.resendContent,
       ABBY_SYNTHETIC_LOCATION_MODE: options.locations ? "1" : undefined,
       ABBY_SYNTHETIC_INTAKE_FIELDS: options.intakeFields ? "1" : undefined,
@@ -131,9 +132,9 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
       get mutations() { return messages.filter(m => m.kind === "providerMutation"); },
       async digit(digit: string) { const before = count("speech"); send({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
         await voiceUntil(() => count("speech") > before, "private runner prompt"); },
-      async verify(expected = true) { await voiceUntil(() => count("verificationEmail") > 0, "runner verification mail"); const mail = messages.filter(m => m.kind === "verificationEmail").at(-1)!;
+      async verify(expected = true) { const resultsBefore = count("verificationResult"); await voiceUntil(() => count("verificationEmail") > 0, "runner verification mail"); const mail = messages.filter(m => m.kind === "verificationEmail").at(-1)!;
         assert.ok(mail.code); for (const digit of `${mail.code}#`) send({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
-        await voiceUntil(() => count("verificationResult") > 0, "completed private runner verification");
+        await voiceUntil(() => count("verificationResult") > resultsBefore, "completed private runner verification");
         assert.equal(messages.filter(m => m.kind === "verificationResult").at(-1)!.verified, expected);
         // Actual media pacing keeps post-code speech from arriving inside the
         // private queue. No private input or code is sent to a model adapter.

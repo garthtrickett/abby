@@ -150,16 +150,23 @@ export class TextReception {
     if (state.value.processedTurnIds.includes(turn.turnId)) return state;
     const signal = AbortSignal.any([AbortSignal.timeout(20_000), ...(external ? [external] : [])]);
     if (signal.aborted) return err({ kind: "staleTurn" as const });
-    let selected;
-    try { selected = await awaitUntilAbort(this.host.startWorkflow({ scope, callId: turn.callId, sessionId: turn.sessionId,
-      policyVersion: state.value.policy.policyVersion, operation, signal, expectedConversationRevision: state.value.conversationRevision,
-      ...(serviceChoice ? { serviceChoice } : {}),
-      ...(replaceCanceledChange ? { replaceCanceledChange: true as const } : {}) }), signal); }
-    catch { selected = undefined; }
-    if (external?.aborted) return err({ kind: "staleTurn" as const });
-    const runtime = new CallRuntime(this.ledger, scope);
-    return selected?.ok ? runtime.acceptTurn(turn, { kind: "workflowStarted", operation, next: selected.value.kind }, now, expectedConversationRevision)
-      : runtime.acceptTurn(turn, operation === "appointments.read" ? { kind: "appointmentsFailure", reason: "notConfigured" } : { kind: "unavailableAction", actionKind: operation }, now, expectedConversationRevision);
+    const query = { scope, callId: turn.callId, sessionId: turn.sessionId, policyVersion: state.value.policy.policyVersion,
+      operation, signal, expectedConversationRevision: state.value.conversationRevision, turnId: turn.turnId,
+      ...(serviceChoice ? { serviceChoice } : {}), ...(replaceCanceledChange ? { replaceCanceledChange: true as const } : {}) };
+    let selected, completed = false;
+    try {
+      try { selected = await awaitUntilAbort(this.host.startWorkflow(query), signal); } catch { selected = undefined; }
+      if (external?.aborted) return err({ kind: "staleTurn" as const });
+      const runtime = new CallRuntime(this.ledger, scope);
+      const result = selected?.ok ? await runtime.acceptTurn(turn, { kind: "workflowStarted", operation, next: selected.value.kind,
+        ...(selected.value.advanceTask ? { advanceTask: true as const } : {}) }, now, expectedConversationRevision)
+        : await runtime.acceptTurn(turn, operation === "appointments.read" ? { kind: "appointmentsFailure", reason: "notConfigured" }
+          : { kind: "unavailableAction", actionKind: operation }, now, expectedConversationRevision);
+      if (!result.ok || !selected?.ok) return result;
+      if (this.host.completeWorkflowStart && !await this.host.completeWorkflowStart({ ...query, ...(selected.value.advanceTask ? { advanceTask: true as const } : {}) })) return err({ kind: "staleTurn" as const });
+      completed = true; return result;
+    } catch { return err({ kind: "staleTurn" as const }); }
+    finally { if (!completed) await this.host.abandonWorkflowStart?.(query); }
   }
 
   async readPreviousPractitioner(scope: LocationScope, turn: FinalCallerTurn, expectedRevision: number, external: AbortSignal) {

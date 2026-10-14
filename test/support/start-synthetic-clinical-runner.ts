@@ -1,3 +1,4 @@
+import { syntheticTaskSequence, syntheticMultiTaskBookingProvider } from "./call-task-sequence.ts";
 import { withSmtpVerificationServer } from "./smtp-verification-server.ts";
 import { SmtpPatientCodeDelivery } from "../../src/standalone/smtp-patient-code-delivery.ts";
 import type { PatientCodeDelivery } from "../../src/standalone/email-patient-authority.ts";
@@ -32,6 +33,8 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     !["book", "cancel", "reschedule", "intake", "patientUpdate", "appointments.read", "staff.request"].includes(operation ?? "")) {
   throw new Error("synthetic clinical runner requires an isolated fixture");
 }
+const taskSequence = process.env.ABBY_SYNTHETIC_TASK_SEQUENCE === "1";
+if (process.env.ABBY_SYNTHETIC_TASK_SEQUENCE && (!taskSequence || operation !== "book" || process.env.ABBY_SYNTHETIC_SERVICE_MODE || process.env.ABBY_SYNTHETIC_LOCATION_MODE)) throw new Error("invalid synthetic task sequence mode");
 const intakeFields = process.env.ABBY_SYNTHETIC_INTAKE_FIELDS === "1";
 if (intakeFields && operation !== "intake") throw new Error("invalid synthetic intake field mode");
 const services = process.env.ABBY_SYNTHETIC_SERVICE_MODE === "1", smtpMode = process.env.ABBY_SYNTHETIC_SMTP_MODE === "1";
@@ -95,6 +98,8 @@ for (const path of approvalPaths) {
   }
 }
 }
+const taskSource = taskSequence ? await syntheticTaskSequence({ ...c, cliniko: { ...c.cliniko, apiKey } }, f.folder) : undefined;
+const taskNative = taskSequence ? syntheticMultiTaskBookingProvider() : undefined;
 const publicInputs: string[] = [], privateInputs: string[] = [];
 let denied = false, lostWrite = false, mailLost = false, mutatePolicy = false, intakeFieldMismatch = false;
 let readCorrectionStatus: (() => Promise<string | undefined>) | undefined;
@@ -157,9 +162,15 @@ if (offlineCalendar) {
     calendarPort = calendar.wrap(calendarPort);
   }
 }
+const taskPort = taskNative?.wrap(calendarPort);
 return async (value, init) => {
   const url = new URL(String(value)), method = init?.method ?? "GET";
   process.send?.({ kind: "providerRequest", method, path: url.pathname, scope: c.receipt.scope });
+  if (taskPort) {
+    if (method !== "GET") process.send?.({ kind: "providerMutation", method, path: url.pathname, body: JSON.parse(String(init?.body)) });
+    if (lostWrite && method === "POST" && url.pathname === "/v1/individual_appointments") taskNative!.loseResponse();
+    return taskPort(value, init);
+  }
   if (operation === "patientUpdate" && (method === "PATCH" && url.pathname.startsWith("/v1/patients/") || method === "POST" && url.pathname === "/v1/recalls")) {
     const body = JSON.parse(String(init?.body)); process.send?.({ kind: "providerMutation", method, path: url.pathname, body });
     const response = await c.fetchPort!(value, init);
@@ -248,7 +259,7 @@ async function run(delivery?: PatientCodeDelivery) {
   function createHost(context: Parameters<NonNullable<VoiceRunnerPorts["clinicalHost"]>>[0], row: typeof locationRows[number]) {
       const c = row.config, clinicPolicy = row.policies, provider = row.provider, intake = row.intake, correction = row.correction;
       const greeting = row.snapshot.greeting!;
-      return new ClinikoVoiceClinicalHost({ ...c, scope: context.scope, policies: clinicPolicy, greeting,
+      return new ClinikoVoiceClinicalHost({ ...c, ...(taskSource ? { taskSequence: taskSource.config.taskSequence } : {}), scope: context.scope, policies: clinicPolicy, greeting,
         cliniko: { ...c.cliniko, apiKey: context.apiKey, contactEmail: context.contactEmail, rateBudget: context.rateBudget, contactRevision: context.contactRevision }, fetchPort: provider,
         permission: { allows: async (...args) => { const allowed = !denied && await c.permission.allows(...args);
           process.send?.({ kind: "permissionDecision", operation: args[2], allowed, scope: context.scope }); return allowed; } },
@@ -268,6 +279,18 @@ async function run(delivery?: PatientCodeDelivery) {
         intent(owner) {
           const submit = owner.submitCode.bind(owner);
           owner.submitCode = async code => { const result = await submit(code); process.send?.({ kind: "verificationResult", verified: result.verified }); return result; };
+          if (taskSequence) return createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-intent", model: "synthetic-model", clinicDate: () => "2026-10-04",
+            fetch: async (_value, init) => {
+              const text = JSON.parse(JSON.parse(String(init?.body)).input[1].content).callerText; process.send?.({ kind: "modelTurn", text });
+              const decisions = {
+                "Book an appointment.": { kind: "workflow", operation: "book", stage: null, from: null, to: null, choice: null },
+                "Book another appointment.": { kind: "workflow", operation: "book", stage: null, from: null, to: null, choice: null },
+                "Show times on October 8.": { kind: "menu", operation: null, stage: null, from: "2026-10-08", to: "2026-10-08", choice: null },
+                "What happened?": { kind: "outcome", operation: null, stage: null, from: null, to: null, choice: null },
+              };
+              const decision = decisions[text as keyof typeof decisions]; if (!decision) throw new Error("unexpected synthetic task sequence turn");
+              return Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [{ type: "output_text", text: JSON.stringify(decision) }] }] });
+            } });
           if (operation === "patientUpdate") {
             readCorrectionStatus = async () => (await owner.publicIntentContext())?.lastAction?.status;
             return createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-intent", model: "synthetic-model", clinicDate: () => "2026-10-04",

@@ -273,6 +273,12 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   if (interpretation.kind === "callerIdentityDenied" && (!validCallerIdentityDenial(interpretation.reason) || turn.quality !== "clear")) return err({ kind: "invalidTransition" });
   if (interpretation.kind === "conversationControl" && (turn.quality !== "clear" || !validConversationControlNotice(interpretation.notice) ||
       conversationControl(turn.text) !== (interpretation.notice === "pauseLimit" ? "pause" : interpretation.notice))) return err({ kind: "invalidTransition" });
+  if (interpretation.kind === "workflowStarted" && interpretation.advanceTask !== undefined) {
+    const current = Object.values(state.actions).filter(action => !state.previousTaskActionKeys?.includes(action.key));
+    if (interpretation.advanceTask !== true || turn.quality !== "clear" || state.pendingPresentationId || !current.length ||
+        !current.some(action => action.status !== "canceled") || current.some(action => !["committed", "rejected", "unsupported", "canceled"].includes(action.status)) ||
+        Object.values(state.effects).some(effect => (effect.kind === "hostWrite" || effect.kind === "staffTask") && !["completed", "canceled"].includes(effect.status))) return err({ kind: "invalidTransition" });
+  }
   interpretation = restrictDeniedCaller(state, interpretation);
   if (interpretation.kind !== "affirm") supersedeUnsent(state);
   cancelModelWork(state);
@@ -331,13 +337,15 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       if (!["book", "cancel", "reschedule", "intake", "patientUpdate", "confirmationResend", "appointments.read"].includes(interpretation.operation) ||
           (interpretation.operation === "intake" ? interpretation.next !== "intakeRequired" : interpretation.next !== "codeRequired") ||
           (interpretation.operation !== "appointments.read" && state.policy.capabilities[interpretation.operation] !== "execute") || !state.policy.automationEnabled) return err({ kind: "invalidTransition" });
+      if (interpretation.advanceTask) state.previousTaskActionKeys = Object.keys(state.actions);
       state.callerMessages.push(interpretation.next === "codeRequired"
         ? "Before we continue, verify your email. If you receive a six-digit code, enter it on the keypad, then press pound. Star clears your entry. Please do not say the code aloud."
         : "Before registration, we will explain privacy and what happens if the call fails, then review your details. Registration does not book an appointment. Press one to start private registration, or star to stop.");
       break;
     }
     case "outcomeQuery": {
-      state.callerMessages.push(actionOutcomeText(Object.values(state.actions).at(-1)));
+      const current = Object.values(state.actions).filter(action => !state.previousTaskActionKeys?.includes(action.key)).at(-1);
+      state.callerMessages.push(!current && state.previousTaskActionKeys?.length ? "I haven't completed an action for this new task." : actionOutcomeText(current));
       break;
     }
     case "notificationOutcomeQuery":

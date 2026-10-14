@@ -160,7 +160,9 @@ export type WorkflowQuery = Readonly<{ scope: LocationScope; callId: string; ses
   serviceChoice?: import("./booking-service-choice.ts").BookingServiceChoice }>;
 /** Trusted workflow routing issues neither patient proof nor a clinical action. */
 export interface WorkflowHost {
-  startWorkflow(query: WorkflowQuery): Promise<Result<Readonly<{ kind: "codeRequired" | "intakeRequired" }>, Readonly<{ kind: "workflowUnavailable" }>>>;
+  completeWorkflowStart?(query: WorkflowQuery & Readonly<{ turnId: string; advanceTask?: true }>): Promise<boolean>;
+  abandonWorkflowStart?(query: WorkflowQuery & Readonly<{ turnId: string }>): Promise<void>;
+  startWorkflow(query: WorkflowQuery): Promise<Result<Readonly<{ kind: "codeRequired" | "intakeRequired"; advanceTask?: true }>, Readonly<{ kind: "workflowUnavailable" }>>>;
 }
 
 export type AppointmentEnquiryQuery = Omit<WorkflowQuery, "operation" | "replaceCanceledChange"> & Readonly<{ now: string }>;

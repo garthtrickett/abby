@@ -268,7 +268,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "bookingHorizonFailure" }>
   | Readonly<{ kind: "requestBoundary"; reason: import("./request-boundary.ts").RequestBoundary }>
   | Readonly<{ kind: "callerIdentityDenied"; reason: import("./caller-identity.ts").CallerIdentityDenial }>
-  | Readonly<{ kind: "workflowStarted"; operation: WorkflowOperation; next: "codeRequired" | "intakeRequired" }>
+  | Readonly<{ kind: "workflowStarted"; operation: WorkflowOperation; next: "codeRequired" | "intakeRequired"; advanceTask?: true }>
   | Readonly<{ kind: "outcomeQuery" }>
   | Readonly<{ kind: "notificationOutcomeQuery" }>
   | Readonly<{ kind: "staffOutcomeQuery"; reviewProcess?: import("./staff-review-process.ts").StaffReviewProcess }>
@@ -465,6 +465,8 @@ export type CallState = {
   conversationRevision: number;
   processedTurnIds: string[];
   actions: Record<string, ActionState>;
+  /** Settled prior-task action keys remain in actions; current-task outcome queries exclude them. */
+  previousTaskActionKeys?: readonly string[];
   presentations: Record<string, Presentation>;
   pendingPresentationId?: string;
   effects: Record<string, Effect>;
