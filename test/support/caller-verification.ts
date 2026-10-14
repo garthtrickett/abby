@@ -6,7 +6,7 @@ import { ClinikoAppointmentReader } from "../../src/cliniko/appointments.ts";
 import { ClinikoVerificationContactReader } from "../../src/cliniko/verification-contact.ts";
 import { MemoryLedger } from "../../src/core/ledger.ts";
 import { ok } from "../../src/core/model.ts";
-import type { AdmissionReceipt, LocationScope } from "../../src/core/model.ts";
+import type { AdmissionReceipt, CallPolicy, LocationScope } from "../../src/core/model.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
@@ -29,6 +29,7 @@ export const verificationCanaries = ["registered-session@example.test", "private
 
 export async function callerVerificationFixture(options: { scope?: LocationScope; folder?: string; approved?: boolean; enabled?: boolean;
   contactRevision?: import("../../src/cliniko/contact-revision.ts").ClinikoContactRevisionReader;
+  capturePolicy?: (policy: CallPolicy, folder: string) => Promise<CallPolicy>;
   operation?: PatientOperation; budget?: PatientVerificationBudget; delivery?: PatientCodeDelivery; timeoutMs?: number; cancellationExecute?: boolean; bookingExecute?: boolean; reschedulingExecute?: boolean; patientUpdateExecute?: boolean; staffWorkEnabled?: boolean } = {}) {
   const scope = options.scope ?? { tenantId: `verification-${crypto.randomUUID()}`, clinicId: "clinic", locationId: "main" };
   const folder = options.folder ?? await mkdtemp(join(tmpdir(), "abby-caller-policy-"));
@@ -65,7 +66,8 @@ export async function callerVerificationFixture(options: { scope?: LocationScope
     if (options.cancellationExecute) resultValue(await policies.changeCancellationEnabled(scope, await currentVersion(), true, "synthetic-admin"));
     if (options.reschedulingExecute) resultValue(await policies.changeReschedulingEnabled(scope, await currentVersion(), true, "synthetic-admin"));
     if (options.patientUpdateExecute) resultValue(await policies.changePatientCorrectionsEnabled(scope, "0", true, "synthetic-admin"));
-    const captured = approvedSyntheticPolicy(resultValue(await policies.read(scope)));
+    const base = approvedSyntheticPolicy(resultValue(await policies.read(scope)));
+    const captured = options.capturePolicy ? await options.capturePolicy(base, folder) : base;
     const inbound = { key: { accountRef: "synthetic-account", providerCallRef: `provider-${crypto.randomUUID()}` },
       dialedNumber: "+6125550199", presentedCallerNumber: phone, receivedAt: now };
     const callId = callIdFor(inbound.key), sessionId = `session-${crypto.randomUUID()}`, runtime = new CallRuntime(ledger, scope);

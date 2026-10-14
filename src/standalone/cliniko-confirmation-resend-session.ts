@@ -87,6 +87,15 @@ export class ClinikoConfirmationResendSession {
     return !!fresh && isDeepStrictEqual(fresh, pending.evidence) && !signal.aborted && !this.#lifetime.signal.aborted &&
       this.#pending === pending && await this.#config.isConfirmed(pending.ref, signal) === true;
   }
+  /** Proposal resolution only: proves the private readback still matches current evidence; grants no consent. */
+  async current(requestRef: string, external: AbortSignal): Promise<boolean> {
+    const pending = this.#pending;
+    if (this.#busy || this.#attempted || !pending || pending.ref !== requestRef || external.aborted || this.#lifetime.signal.aborted) return false;
+    return await this.#bounded(async signal => {
+      const fresh = await this.#reader.read(pending.evidence.appointmentId, signal);
+      return !!fresh && isDeepStrictEqual(fresh, pending.evidence) && this.#pending === pending && !signal.aborted;
+    }, external) === true;
+  }
   async dispatch(requestRef: string, external: AbortSignal): Promise<DurableConfirmationOutcome> {
     const pending = this.#pending;
     if (this.#busy || this.#attempted || !pending || pending.ref !== requestRef || external.aborted || this.#lifetime.signal.aborted) return { kind: "denied" };

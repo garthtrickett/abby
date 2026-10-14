@@ -8,6 +8,7 @@ const noResend = "I can't send or resend an email from this call. Please contact
 /** Read captured receipts only. This cannot queue, inspect, retry or change ownership. */
 export function notificationOutcomeText(state: CallState): string {
   const action = Object.values(state.actions).at(-1), prefix = actionOutcomeText(action);
+  if (action?.kind === "confirmationResend") return prefix;
   const effects = Object.values(state.effects).filter(effect => effect.kind === "notification" && effect.actionKey === action?.key);
   const effect = effects.length === 1 ? effects[0] : undefined;
   if (!action || action.status !== "committed" || !effect || effect.kind !== "notification" ||

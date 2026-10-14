@@ -1,3 +1,4 @@
+import { confirmationResendEvidenceFailure } from "../core/confirmation-resend.ts";
 import { validStaffMessageNotice } from "../core/staff-message-notice.ts";
 import { StaffOutcomeTurns } from "./staff-outcome-turns.ts";
 import { ReschedulingMenuTurns } from "./rescheduling-menu-turns.ts";
@@ -24,7 +25,7 @@ import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { patientCorrectionEvidenceFailure } from "../core/patient-correction.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").StaffReviewProcessHost & import("../core/host.ts").BookingHorizonHost & import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").PreviousPractitionerHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost & import("../core/host.ts").PatientCorrectionEvidenceHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").StaffReviewProcessHost & import("../core/host.ts").BookingHorizonHost & import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").PreviousPractitionerHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost & import("../core/host.ts").PatientCorrectionEvidenceHost & import("../core/host.ts").ConfirmationResendEvidenceHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 export const appointmentProposalEvidenceDeadlineMs = 15_000;
@@ -513,6 +514,29 @@ export class TextReception {
         policyVersion: state.value.policy.policyVersion, correctionRef, now }), signal);
       if (external?.aborted) return err({ kind: "staleTurn" });
       if (evidence?.ok && evidence.value.correctionRef === correctionRef && !patientCorrectionEvidenceFailure(scope, evidence.value, now)) {
+        interpretation = { kind: "requestAction", request: evidence.value };
+      }
+    } catch { if (external?.aborted) return err({ kind: "staleTurn" }); }
+    return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);
+  }
+
+  confirmationResendEnabled(): boolean { return typeof this.host.resolveConfirmationResend === "function"; }
+  async proposeConfirmationResend(scope: LocationScope, turn: FinalCallerTurn, requestRef: string, now: string,
+    expectedConversationRevision?: number, external?: AbortSignal): Promise<Result<CallState, TextReceptionFailure>> {
+    const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision); if (denied) return denied;
+    const runtime = this.runtime(scope), state = await runtime.read(turn.callId); if (!state.ok) return state;
+    if (state.value.policy.capabilities.confirmationResend !== "execute" || !this.host.resolveConfirmationResend) {
+      return runtime.acceptTurn(turn, { kind: "unavailableAction", actionKind: "confirmationResend" }, now, expectedConversationRevision);
+    }
+    if (turn.quality !== "clear" || typeof turn.sessionId !== "string" || state.value.sessionLease?.sessionId !== turn.sessionId ||
+        typeof requestRef !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(requestRef)) return err({ kind: "invalidTransition" });
+    const signal = external ? AbortSignal.any([external, AbortSignal.timeout(appointmentProposalEvidenceDeadlineMs)]) : AbortSignal.timeout(appointmentProposalEvidenceDeadlineMs);
+    let interpretation: TurnInterpretation = { kind: "readFailure", target: "patient", failure: "unavailable" };
+    try {
+      const evidence = await awaitUntilAbort(this.host.resolveConfirmationResend({ scope, callId: turn.callId, sessionId: turn.sessionId,
+        policyVersion: state.value.policy.policyVersion, requestRef, now }), signal);
+      if (external?.aborted) return err({ kind: "staleTurn" });
+      if (evidence?.ok && evidence.value.requestRef === requestRef && !confirmationResendEvidenceFailure(state.value.policy, evidence.value, now)) {
         interpretation = { kind: "requestAction", request: evidence.value };
       }
     } catch { if (external?.aborted) return err({ kind: "staleTurn" }); }

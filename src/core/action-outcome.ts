@@ -7,6 +7,7 @@ export function confirmedActionText(kind: ActionRequest["kind"]): string {
     case "reschedule": return "Your appointment move is confirmed.";
     case "intake": return "Your details were saved. No appointment is confirmed yet.";
     case "patientUpdate": return "Your patient details match the confirmed correction. Your appointments remain unchanged.";
+    case "confirmationResend": return "The mail service accepted your appointment-details email. I can't confirm that it reached your inbox.";
   }
 }
 

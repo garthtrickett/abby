@@ -10,6 +10,7 @@ import { digestActionRequest } from "./digest.ts";
 import { clearAffirmation } from "./caller-affirmation.ts";
 import { actionOutcomeText, confirmedActionText } from "./action-outcome.ts";
 import { patientCorrectionEvidenceFailure } from "./patient-correction.ts";
+import { confirmationResendEvidenceFailure } from "./confirmation-resend.ts";
 import { requestBoundaryText, validRequestBoundary } from "./request-boundary.ts";
 import { bookingHorizonText, validBookingHorizon } from "./booking-horizon.ts";
 import { publicInformationUnavailable } from "./public-information.ts";
@@ -89,11 +90,12 @@ function describe(request: ActionRequest, locale: string): string {
     }
     case "intake": return "Please confirm that your approved intake details may be saved. This does not book an appointment.";
     case "patientUpdate": return "Please confirm saving the patient-detail correction that was read back privately. Your appointments will remain unchanged.";
+    case "confirmationResend": return "Please confirm sending the appointment-details email to the verified recipient read back privately.";
   }
 }
 
 function requestScope(request: ActionRequest): LocationScope {
-  return request.kind === "intake" ? request.scope : request.patient.scope;
+  return request.kind === "intake" || request.kind === "confirmationResend" ? request.scope : request.patient.scope;
 }
 
 /** Shared check for a host-issued appointment change before speech and again before dispatch. */
@@ -139,6 +141,7 @@ export function appointmentChangeEvidenceFailure(scope: LocationScope,
 
 function evidenceFailure(state: CallState, request: ActionRequest, now: string): TransitionFailure | undefined {
   if (request.kind === "patientUpdate") return patientCorrectionEvidenceFailure(state.policy.scope, request, now);
+  if (request.kind === "confirmationResend") return confirmationResendEvidenceFailure(state.policy, request, now);
   if (request.kind === "cancel" || request.kind === "reschedule") {
     return appointmentChangeEvidenceFailure(state.policy.scope, request, now);
   }
@@ -234,7 +237,7 @@ function handleRequest(state: CallState, turn: FinalCallerTurn, request: ActionR
   const failure = evidenceFailure(state, request, now);
   if (failure) return err(failure);
   const mode = state.policy.capabilities[request.kind] ?? "unavailable";
-  if (mode === "unavailable") {
+  if (mode === "unavailable" || request.kind === "confirmationResend" && mode !== "execute") {
     state.callerMessages.push("I can't complete that request here.");
     return ok(undefined);
   }
@@ -325,7 +328,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
         "Before saving a staff request, verify your registered email. If you receive a six-digit code, enter it on the keypad, then press pound. Star clears your entry. Please do not say the code aloud. " + (interpretation.messageDraft === true ? "After verification, tell me your message. You can add or correct details before asking me to send it." : "After verification, ask me to send the request."));
       break;
     case "workflowStarted": {
-      if (!["book", "cancel", "reschedule", "intake", "patientUpdate", "appointments.read"].includes(interpretation.operation) ||
+      if (!["book", "cancel", "reschedule", "intake", "patientUpdate", "confirmationResend", "appointments.read"].includes(interpretation.operation) ||
           (interpretation.operation === "intake" ? interpretation.next !== "intakeRequired" : interpretation.next !== "codeRequired") ||
           (interpretation.operation !== "appointments.read" && state.policy.capabilities[interpretation.operation] !== "execute") || !state.policy.automationEnabled) return err({ kind: "invalidTransition" });
       state.callerMessages.push(interpretation.next === "codeRequired"
@@ -569,7 +572,7 @@ function recordHostResult(state: CallState, effectId: string, receipt: import(".
 export function transition(current: CallState, action: TransitionAction): Result<CallState, TransitionFailure> {
   if ("now" in action && action.now !== undefined && !Number.isFinite(Date.parse(action.now))) return err({ kind: "invalidTransition" });
   if (current.callerIdentityDenied && ["markHostPossiblySent", "markStaffPossiblySent", "markStaffChangePossiblySent",
-    "markNotificationPossiblySent", "markOperatorAlertPossiblySent", "transferPossiblySent", "privateIntakePrompt", "privateCorrectionPrompt"].includes(action.kind))
+    "markNotificationPossiblySent", "markOperatorAlertPossiblySent", "transferPossiblySent", "privateIntakePrompt", "privateCorrectionPrompt", "privateResendPrompt"].includes(action.kind))
     return err({ kind: "invalidTransition" });
   const state = structuredClone(current);
   const now = "now" in action && action.now !== undefined ? action.now : new Date(0).toISOString();
@@ -665,19 +668,21 @@ export function transition(current: CallState, action: TransitionAction): Result
       break;
     }
     case "privateIntakePrompt":
-    case "privateCorrectionPrompt": {
+    case "privateCorrectionPrompt":
+    case "privateResendPrompt": {
       const lease = state.sessionLease;
       if (state.lifecycle !== "active" || !state.admission || !lease || lease.sessionId !== action.sessionId ||
           Date.parse(action.now) >= Date.parse(lease.expiresAt) || !state.policy.automationEnabled ||
           (action.kind === "privateIntakePrompt"
             ? state.policy.capabilities.intake !== "execute" || state.policy.firstTimeIntakeEnabled !== true
-            : state.policy.capabilities.patientUpdate !== "execute" || state.policy.patientCorrectionsEnabled !== true)) return err({ kind: "leaseLost" });
+            : action.kind === "privateCorrectionPrompt" ? state.policy.capabilities.patientUpdate !== "execute" || state.policy.patientCorrectionsEnabled !== true
+              : state.policy.capabilities.confirmationResend !== "execute" || !/^[a-f0-9]{64}$/.test(state.policy.confirmationResendVersion ?? ""))) return err({ kind: "leaseLost" });
       if (!/^[a-f0-9-]{36}$/.test(action.presentationId) || state.pendingPresentationId || state.presentations[action.presentationId] ||
           Object.values(state.presentations).some(item => item.status === "started" || item.status === "possiblySent")) return err({ kind: "invalidTransition" });
-      if (action.kind === "privateCorrectionPrompt") {
+      if (action.kind === "privateCorrectionPrompt" || action.kind === "privateResendPrompt") {
         // Re-entering private fields withdraws the old correction confirmation.
         // A dispatched/possibly-sent correction cannot be edited or retried.
-        const corrections = Object.values(state.actions).filter(item => item.kind === "patientUpdate");
+        const corrections = Object.values(state.actions).filter(item => item.kind === (action.kind === "privateCorrectionPrompt" ? "patientUpdate" : "confirmationResend"));
         if (corrections.some(item => ["dispatched", "committed", "uncertain", "needsReview"].includes(item.status) ||
             state.effects[`${item.key}:write`]?.status === "possiblySent")) return err({ kind: "invalidTransition" });
         for (const item of corrections) {

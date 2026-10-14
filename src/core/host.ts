@@ -209,6 +209,10 @@ export interface PatientCorrectionEvidenceHost {
   /** Resolve privately collected/read-back details, consent and current patient authority. */
   resolvePatientCorrection(query: PatientCorrectionEvidenceQuery): Promise<Result<Extract<ActionRequest, { kind: "patientUpdate" }>, HostReadFailure>>;
 }
+export type ConfirmationResendEvidenceQuery = Omit<IntakeEvidenceQuery, "draftRef"> & Readonly<{ requestRef: string }>;
+export interface ConfirmationResendEvidenceHost {
+  resolveConfirmationResend(query: ConfirmationResendEvidenceQuery): Promise<Result<Extract<ActionRequest, { kind: "confirmationResend" }>, HostReadFailure>>;
+}
 
 /** The host issues this proof after its own caller verification; a provider ID is never proof. */
 export interface PatientProofHost {

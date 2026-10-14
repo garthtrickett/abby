@@ -3,6 +3,7 @@ import { writeFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import type { Kysely } from "kysely";
 import type Database from "../../src/storage/generated/Database.ts";
+import type { CallPolicy } from "../../src/core/model.ts";
 import { PostgresClinikoContactRevision } from "../../src/storage/postgres-cliniko-contact-revision.ts";
 import { PostgresConfirmationResendJournal } from "../../src/storage/postgres-confirmation-resend-journal.ts";
 import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
@@ -12,13 +13,28 @@ import { ClinikoConfirmationResendSession } from "../../src/standalone/cliniko-c
 import { SmtpAppointmentConfirmationDelivery } from "../../src/standalone/smtp-appointment-confirmation-delivery.ts";
 import type { SmtpPatientCodeConfig } from "../../src/standalone/smtp-patient-code-delivery.ts";
 import type { PatientOperation } from "../../src/standalone/transient-patient-proof.ts";
+import { captureConfirmationResendPolicy } from "../../src/standalone/capture-confirmation-resend-policy.ts";
+import { OwnerFileAdminDirectory } from "../../src/standalone/identity/owner-file-admin-directory.ts";
 import { callerVerificationFixture, verificationCanaries } from "./caller-verification.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 
-export async function confirmationResendFixture(db: Kysely<Database>, smtp: SmtpPatientCodeConfig, operation: PatientOperation = "appointments.resend") {
+export async function confirmationResendFixture(db: Kysely<Database>, smtp: SmtpPatientCodeConfig, operation: PatientOperation = "appointments.resend", sam = false) {
   const apiKey = "synthetic-session-au5", fp = clinikoCredentialFingerprint(apiKey), scope = { tenantId: `resend-owner-${crypto.randomUUID()}`, clinicId: "clinic", locationId: "main" };
   const revision = new PostgresClinikoContactRevision(db, scope.tenantId, [fp]);
-  const f = await callerVerificationFixture({ scope, operation, contactRevision: revision });
+  const f = await callerVerificationFixture({ scope, operation, contactRevision: revision,
+    ...(sam ? { capturePolicy: async (base: CallPolicy, folder: string) => {
+      const path = join(folder, "resend-approval.json"), record = {
+        scope, revision: "resend-1", approverRef: "synthetic-admin", approvedAt: "2026-10-04T05:59:00.000Z",
+        effectiveFrom: "2026-10-04T06:00:00.000Z", effectiveUntil: "2026-10-05T06:00:00.000Z", approved: true, enabled: true,
+        policyVersion: base.policyVersion, businessId: "11", credentialFingerprint: fp, timeZone: "Australia/Sydney", owner: "abby" as const,
+        sender: smtp.from, template: "appointmentDetails.v1" as const, recipient: "verifiedRegisteredEmail" as const,
+        patientPermission: "independentClinicHost" as const, consent: "separatePlayedConfirmation" as const, submission: "durableSingleAttempt" as const,
+        recallTypeId: "7", reviewProcess: "clinikoRecallsFullType" as const, reviewOwnerRef: "primary", reviewBackupRef: "backup", reviewCadenceMinutes: 15 };
+      await writeFile(path, JSON.stringify(record), { mode: 0o600 });
+      const approval = resultValue(await OwnerFileConfirmationResendPolicy.capture({ ...record, path,
+        directory: new OwnerFileAdminDirectory(join(folder, "accounts.json"), scope), clock: () => "2026-10-04T06:00:00.000Z" }));
+      return captureConfirmationResendPolicy(base, approval);
+    } } : {}) });
   const lifetime = new AbortController(), path = join(f.folder, "resend-approval.json");
   const traffic: string[] = [], recalls: Record<string, unknown>[] = [], readbacks: string[] = [];
   let confirmed: string | undefined, play = true, appointmentPatch: Record<string, unknown> = {}, businessPatch: Record<string, unknown> = {},
@@ -64,6 +80,10 @@ export async function confirmationResendFixture(db: Kysely<Database>, smtp: Smtp
   try {
     await replace();
     const policy = resultValue(await OwnerFileConfirmationResendPolicy.capture({ ...approval, path, directory: f.config.directory, clock: f.sessionConfig.clock }));
+    if (sam) {
+      const original = f.policies.read.bind(f.policies);
+      f.policies.read = async bound => { const found = await original(bound); return found.ok ? { ok: true, value: await captureConfirmationResendPolicy(found.value, policy) } : found; };
+    }
     const journal = new PostgresConfirmationResendJournal(db, scope, policy.bindingFingerprint());
     const config = { receipt: f.receipt, inbound: f.inbound, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion,
       ledger: f.ledger, policies: f.policies, policy, verification: f.session, permission: f.sessionConfig.permission, contactRevision: revision,
@@ -74,7 +94,13 @@ export async function confirmationResendFixture(db: Kysely<Database>, smtp: Smtp
       isConfirmed: async (ref: string) => confirmed === ref };
     const session = resultValue(await ClinikoConfirmationResendSession.create(config));
     return { ...f, lifetime, traffic, recalls, readbacks, journal, revision, config, session,
-      verify: async () => { f.session.begin(); const deadline = Date.now() + 5000;
+      verify: async () => {
+        if (sam) {
+          const state = await f.state(), greeting = state.pendingPresentationId;
+          assert.ok(greeting); resultValue(await f.runtime.startPresentation(f.callId, greeting, f.sessionId, f.sessionConfig.clock()));
+          resultValue(await f.runtime.resolvePresentation(f.callId, greeting, "played", f.sessionId, f.sessionConfig.clock()));
+        }
+        f.session.begin(); const deadline = Date.now() + 5000;
         while (!f.mail.length && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
         assert.equal(f.mail.length, 1); assert.equal((await f.session.submitCode(f.mail[0]!.code)).verified, true); },
       confirm: (ref: string) => { confirmed = ref; }, setPlay: (value: boolean) => { play = value; },

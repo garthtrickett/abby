@@ -86,6 +86,7 @@ export type GatewayCommand =
   | Readonly<{ kind: "appointments.change.propose.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; selection: AppointmentChangeSelection; now: string }>
   | Readonly<{ kind: "patients.intake.propose.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; draftRef: string; now: string }>
   | Readonly<{ kind: "patients.correction.propose.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; correctionRef: string; now: string }>
+  | Readonly<{ kind: "notifications.resend.propose.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; requestRef: string; now: string }>
   | Readonly<{ kind: "calls.urgent.respond.v1"; turn: FinalCallerTurn; now: string }>
   | Readonly<{ kind: "calls.presence.respond.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; now: string }>
   | Readonly<{ kind: "calls.missedCall.respond.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; now: string }>
@@ -155,6 +156,7 @@ export type GatewayReply =
   | Readonly<{ kind: "appointmentChangeProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "intakeProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "patientCorrectionProposal"; progress: CallCommandProgress }>
+  | Readonly<{ kind: "confirmationResendProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "staffRequestProgress"; progress: CallCommandProgress }>
   | Readonly<{ kind: "urgentResponseProgress"; progress: CallCommandProgress }>
   | Readonly<{ kind: "conversationPresenceProgress"; progress: CallCommandProgress }>
@@ -233,6 +235,7 @@ export class CommandGateway {
       "patients.intake.propose.v1", "knowledge.answer.v2", "calls.urgent.respond.v1", "calls.notifications.outcome.v1", "calls.presence.respond.v1", "calls.missedCall.respond.v1"];
     if (this.reception.bookingHorizonEnabled()) permitted.push("booking.horizon.read.v1");
     if (this.reception.patientCorrectionEnabled()) permitted.push("patients.correction.propose.v1");
+    if (this.reception.confirmationResendEnabled()) permitted.push("notifications.resend.propose.v1");
     if (this.reception.requestBoundaryEnabled()) permitted.push("calls.requestBoundary.respond.v1");
     if (this.reception.callerIdentityEnabled()) permitted.push("calls.callerIdentity.deny.v1");
     if (this.reception.reschedulingMenuEnabled()) permitted.push("rescheduling.menu.read.v1", "rescheduling.menu.select.v1");
@@ -496,6 +499,11 @@ export class CommandGateway {
         if (!Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
         const result = await this.reception.proposePatientCorrection(this.actor.scope, command.turn, command.correctionRef, command.now);
         return result.ok ? ok({ kind: "patientCorrectionProposal", progress: commandProgress(result.value, command.turn.turnId) }) : result;
+      }
+      case "notifications.resend.propose.v1": {
+        if (!Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
+        const result = await this.reception.proposeConfirmationResend(this.actor.scope, command.turn, command.requestRef, command.now);
+        return result.ok ? ok({ kind: "confirmationResendProposal", progress: commandProgress(result.value, command.turn.turnId) }) : result;
       }
       case "calls.urgent.respond.v1": {
         if (!Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
