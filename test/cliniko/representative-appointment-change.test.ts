@@ -3,6 +3,7 @@ import { ClinikoVerificationContactReader } from "../../src/cliniko/verification
 import { ClinikoAppointmentChangeGuard } from "../../src/standalone/cliniko-appointment-change-guard.ts";
 import { ClinikoCancellationWriter } from "../../src/cliniko/cancellation-write.ts";
 import assert from "node:assert/strict";
+import { verificationPhaseDiagnostics } from "../support/verification-phase-diagnostics.ts";
 import test from "node:test";
 import { CallerVerificationSession } from "../../src/standalone/caller-verification-session.ts";
 import { ClinikoCancellationSession } from "../../src/standalone/cliniko-cancellation-session.ts";
@@ -35,6 +36,7 @@ for (const operation of ["appointments.cancel", "appointments.reschedule"] as co
     const actor = { ...f, session: root, mail: rootMail, config: { path: f.config.callerApprovalPath, scope: f.scope, policyVersion: f.sessionConfig.policyVersion,
       operation, directory: f.config.directory, clock: f.sessionConfig.clock } };
     const r = await representativeFixture(f.config.cliniko.rateBudget, { fixture: actor, operation });
+    const verificationDiagnostics = verificationPhaseDiagnostics(context, root, verificationCanaries[2]!, r.owner);
     let owner: ClinikoCancellationSession | ClinikoReschedulingSession | undefined;
     const base = "https://api.au5.cliniko.com/v1";
     const appointment = (id: string, patient: string) => ({ id, starts_at: "2026-10-08T04:00:00.000Z", ends_at: "2026-10-08T04:30:00.000Z", cancelled_at: null as string | null,
@@ -115,7 +117,7 @@ for (const operation of ["appointments.cancel", "appointments.reschedule"] as co
             from: stage === "targets" ? verificationNow : "2026-10-08", to: stage === "targets" ? "2026-10-09T06:00:00.000Z" : "2026-10-08", now: verificationNow }));
           assert.match((await f.state()).callerMessages.at(-1)!, /Option one/i, `menu ${stage}: ${(await f.state()).callerMessages.at(-1)}`);
           await play(); phase = `select-${stage}`; resultValue(await agent.submit({ kind: "rescheduling.menu.select.v1", turn: turn(`select-${stage}`), stage, choice: 1, now: verificationNow }));
-          assert.ok(!(await f.state()).callerMessages.at(-1)?.includes("can't"), `selection ${stage}: ${(await f.state()).callerMessages.at(-1)}; actor: ${JSON.stringify({ ...actorStats, claimStats, providerReads: f.provider.length })}; providers: ${providerErrors.join(",")}`);
+          assert.ok(!(await f.state()).callerMessages.at(-1)?.includes("can't"), `selection ${stage}: ${(await f.state()).callerMessages.at(-1)}; actor: ${JSON.stringify({ ...actorStats, claimStats, providerReads: f.provider.length })}; providers: ${providerErrors.join(",")}; verification phases: ${verificationDiagnostics()}`);
           if (stage === "targets") await play();
         }
       }
