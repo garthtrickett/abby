@@ -28,7 +28,10 @@ if (process.env.ABBY_SYNTHETIC_CLASS_PASSES && (!passes || operation !== "book" 
 const cancellationMode = process.env.ABBY_SYNTHETIC_CLASS_PASS_CANCELLATION;
 if (cancellationMode && (!["releaseOne", "unchanged", "consumeOne"].includes(cancellationMode) || operation !== "cancel" || multiple || passes)) throw new Error("invalid synthetic pass cancellation mode");
 const passCancellation = cancellationMode as ClassPassCancellationEffect | undefined;
-const f = operation === "reschedule" ? await classMoveCallFlowFixture(process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1", multiple) : await classCallFlowFixture(operation, multiple, passes, passCancellation); f.flow.dispose();
+const moveMode = process.env.ABBY_SYNTHETIC_CLASS_PASS_MOVE;
+if (moveMode && (!["full", "transfer"].includes(moveMode) || operation !== "reschedule" || passes || passCancellation)) throw new Error("invalid synthetic pass movement mode");
+const f = operation === "reschedule" ? await classMoveCallFlowFixture(process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1", multiple,
+  moveMode === "full" ? { full: true } : moveMode === "transfer" ? { differentCase: true } : undefined) : await classCallFlowFixture(operation, multiple, passes, passCancellation); f.flow.dispose();
 if (operation === "reschedule" && (process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1" || process.env.ABBY_SYNTHETIC_CLASS_DATE_CORRECTION === "1"))
   f.native.groups.push({ ...structuredClone(f.native.groups[1]!), id: "95", ...classLink("group_appointments", "95"),
     starts_at: `2026-10-${process.env.ABBY_SYNTHETIC_CLASS_DATE_CORRECTION === "1" ? "10" : "09"}T12:00:00.000Z`,
@@ -56,6 +59,17 @@ process.on("message", message => {
   if (message.kind === "advanceClock" && "milliseconds" in message && Number.isSafeInteger(message.milliseconds) &&
       typeof message.milliseconds === "number" && message.milliseconds >= 0 && message.milliseconds <= 15000) {
     f.setTime(new Date(Date.parse(now()) + message.milliseconds).toISOString()); process.send?.({ kind: "clockAdvanced" });
+  }
+  if (moveMode && "movePass" in f && f.movePass) {
+    if (message.kind === "denyMovePass") { f.movePass.deny(); process.send?.({ kind: "movePassChanged" }); }
+    if (message.kind === "changeMovePass") { const selected = f.movePass.selection(); f.movePass.select({ ...selected, destination: { ...selected.destination, entitlementRef: "changed-move-entitlement" } }); process.send?.({ kind: "movePassChanged" }); }
+    if (message.kind === "moveCaseRule") { f.movePass.records[f.movePass.sourceCaseId]!.include_cancelled_attendees = true; process.send?.({ kind: "movePassChanged" }); }
+    if (message.kind === "movePassRace") {
+      f.onWrite(async phase => { if (phase === "association" && "movePass" in f && f.movePass)
+        f.native.attendees.push({ ...classAttendee("605", "705", f.movePass.queries[0]!.patientId), arrived: null, patient_case: classLink("patient_cases", f.movePass.destinationCaseId) });
+      }); process.send?.({ kind: "movePassRaceArmed" });
+    }
+    if (message.kind === "loseAssociation" && "lose" in f) { f.lose("association"); process.send?.({ kind: "movePassChanged" }); }
   }
   if (passes && "pass" in f) {
     if (message.kind === "denyPass") { f.pass.deny(); process.send?.({ kind: "passChanged" }); }
@@ -173,6 +187,12 @@ try {
             if (operation === "reschedule") process.send?.({ kind: "classMoveState",
               originalActive: f.native.attendees.find(row => row.id === "101")?.cancelled_at === null,
               replacementActive: f.native.attendees.find(row => row.id === "401")?.cancelled_at === null });
+            if (moveMode && "movePass" in f && f.movePass) {
+              const pass = f.movePass, used = (id: string) => pass.caseRows(id).filter(row => row.archived_at === null && row.deleted_at === null &&
+                (row.cancelled_at !== null ? pass.records[id]!.include_cancelled_attendees : row.arrived === false ? pass.records[id]!.include_dna_attendees : true)).length;
+              process.send?.({ kind: "classPassMoveState", sourceUsed: used(pass.sourceCaseId), destinationUsed: used(pass.destinationCaseId),
+                caseLinked: pass.caseRows(pass.destinationCaseId).some(row => row.id === "401") });
+            }
             return result;
           };
           return createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-model-key", model: "synthetic-model", clinicDate: () => "2026-10-04",

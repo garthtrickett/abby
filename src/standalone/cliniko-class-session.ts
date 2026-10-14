@@ -10,6 +10,7 @@ import { ClinikoClassBookingHost } from "./cliniko-class-booking-host.ts";
 import type { ClassAttendancePermission } from "./cliniko-class-booking-host.ts";
 import type { ClassPassAuthority } from "./cliniko-class-pass-booking.ts";
 import type { ClassPassCancellationAuthority } from "./cliniko-class-pass-cancellation.ts";
+import type { ClassPassMoveAuthority } from "./cliniko-class-pass-movement.ts";
 import { ClinikoClassCancellationHost } from "./cliniko-class-cancellation-host.ts";
 import type { ClassCancellationPermission } from "./cliniko-class-cancellation-host.ts";
 import { OwnerFileCallerPolicy } from "./owner-file-caller-policy.ts";
@@ -23,7 +24,7 @@ type Common = Omit<ClinikoBookingSessionConfig, "bookingApprovalPath" | "catalog
 export type ClinikoClassSessionConfig = Common & (
   Readonly<{ operation: "book"; classPermission: ClassAttendancePermission; classPassAuthority?: ClassPassAuthority }> |
   Readonly<{ operation: "cancel"; classPermission: ClassCancellationPermission; cancellationApprovalPath: string; classPassCancellationAuthority?: ClassPassCancellationAuthority }> |
-  Readonly<{ operation: "reschedule"; classPermission: ClassMovePermission; moveApprovalPath: string;
+  Readonly<{ operation: "reschedule"; classPermission: ClassMovePermission; moveApprovalPath: string; classPassMoveAuthority?: ClassPassMoveAuthority;
     destination: Readonly<{ classApprovalPath: string; practitionerId: string; appointmentTypeId: string }> }>
 );
 type Failure = Readonly<{ kind: "classSessionUnavailable" }>;
@@ -103,8 +104,12 @@ export class ClinikoClassSession {
         if (!caller.ok || !classes.ok || config.operation === "cancel" && !cancellation?.ok || signal.aborted) return undefined;
         if (config.operation === "cancel" && sourceApproval?.ok && sourceApproval.value.membership === "nativeCaseSessions" &&
           (!sourceApproval.value.caseSessions?.cancellation || typeof config.classPassCancellationAuthority?.select !== "function")) return undefined;
-        if (config.operation === "reschedule" && sourceApproval?.ok && sourceApproval.value.membership !== "independentHost") return undefined;
-        if (config.operation === "reschedule" && (!destination?.ok || !movement?.ok || destinationApproval?.ok && destinationApproval.value.membership !== "independentHost")) return undefined;
+        if (config.operation === "reschedule") {
+          const move = movement?.ok ? await movement.value.current(scope) : undefined;
+          if (!sourceApproval?.ok || !destination?.ok || !destinationApproval?.ok || !move?.ok ||
+            sourceApproval.value.membership !== destinationApproval.value.membership || sourceApproval.value.membership !== move.value.membership ||
+            (move.value.membership === "nativeCaseSessions" ? !move.value.passMovement || typeof config.classPassMoveAuthority?.select !== "function" || typeof config.classPassMoveAuthority?.allows !== "function" : config.classPassMoveAuthority !== undefined)) return undefined;
+        }
         const method: Parameters<typeof CallerVerificationSession.create>[0]["policy"] = { operation, current: async (bound: typeof scope) => {
           const [identity, service, fees, replacement, move] = await Promise.all([caller.value.current(bound), classes.value.current(bound), cancellation?.ok ? cancellation.value.current(bound) : undefined,
             destination?.ok ? destination.value.current(bound) : undefined, movement?.ok ? movement.value.current(bound) : undefined]);
@@ -129,7 +134,8 @@ export class ClinikoClassSession {
           config.operation === "cancel" && cancellation?.ok ? await ClinikoClassCancellationHost.create({ ...common, cancellationPolicy: cancellation.value, permission: config.classPermission,
             ...(config.classPassCancellationAuthority ? { classPassCancellationAuthority: config.classPassCancellationAuthority } : {}) }) :
           config.operation === "reschedule" && destination?.ok && movement?.ok ? await ClinikoClassMoveHost.create({ ...common,
-            sourcePolicy: classes.value, destinationPolicy: destination.value, movePolicy: movement.value, permission: config.classPermission }) : undefined;
+            sourcePolicy: classes.value, destinationPolicy: destination.value, movePolicy: movement.value, permission: config.classPermission,
+            ...(config.classPassMoveAuthority ? { classPassMoveAuthority: config.classPassMoveAuthority } : {}) }) : undefined;
         if (!created?.ok) return undefined;
         host = created.value;
         const finalMethod = await method.current(scope);

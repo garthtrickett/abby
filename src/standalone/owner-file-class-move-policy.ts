@@ -4,12 +4,19 @@ import type { AdminDirectory } from "./identity/magic-link.ts";
 import { approvalRef, approvalInstant, clinicApprovalKeys, decodeClinicApproval, OwnerFileClinicApproval } from "./owner-file-clinic-approval.ts";
 import type { ClinicApproval } from "./owner-file-clinic-approval.ts";
 import { sameScope, validClinikoId } from "./appointment-change-authority.ts";
+import type { ClassMovementPass } from "../cliniko/review-request.ts";
 
 type Terms = Readonly<{ version: string; approvedText: string }>;
+export type ClassPassMoveTerms = Readonly<{
+  version: string; staging: "unlinkedReplacement"; association: "afterOriginalCancellation"; financialAuthority: "independentHost";
+  sameCaseUnchanged: string; sameCaseConsumeOne: string; sameCaseConsumeTwo: string;
+  differentCaseReleaseOne: string; differentCaseUnchanged: string; differentCaseConsumeOne: string;
+}>;
 export type ClassMoveApproval = ClinicApproval & Readonly<{
   policyVersion: string; businessId: string; credentialFingerprint: string; recallTypeId: string; timeZone: string;
   sourceServiceRef: string; destinationServiceRef: string;
-  writeContract: "bestEffort"; notificationOwner: "cliniko"; membership: "independentHost";
+  writeContract: "bestEffort"; notificationOwner: "cliniko"; membership: "independentHost" | "nativeCaseSessions";
+  passMovement?: ClassPassMoveTerms;
   compensation: "cancelReplacementIfOriginalUnsent";
   cancellationReason: 10 | 20 | 30 | 40 | 50 | 60;
   lateNoticeHours: number; maxAdvanceDays: number; offerTtlSeconds: number;
@@ -24,16 +31,26 @@ const terms = (value: unknown, max: number): value is Terms => {
   return Object.keys(row).sort().join(",") === "approvedText,version" && approvalRef(row.version) && typeof row.approvedText === "string" &&
     !!row.approvedText && row.approvedText.trim() === row.approvedText && row.approvedText.length <= max && !/[\u0000-\u001f\u007f]/.test(row.approvedText);
 };
+const passEffects = ["sameCaseUnchanged", "sameCaseConsumeOne", "sameCaseConsumeTwo", "differentCaseReleaseOne", "differentCaseUnchanged", "differentCaseConsumeOne"] as const;
+function passMovement(value: unknown): value is ClassPassMoveTerms {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  return Object.keys(row).sort().join(",") === [...passEffects, "version", "staging", "association", "financialAuthority"].sort().join(",") &&
+    approvalRef(row.version) && row.staging === "unlinkedReplacement" && row.association === "afterOriginalCancellation" && row.financialAuthority === "independentHost" &&
+    passEffects.every(key => typeof row[key] === "string" && !!row[key] && row[key].trim() === row[key] && row[key].length <= 160 && !/[\u0000-\u001f\u007f]/.test(row[key]));
+}
 function decode(value: unknown, scope: LocationScope): ClassMoveApproval | undefined {
+  const hasPass = value !== null && typeof value === "object" && Object.hasOwn(value, "passMovement");
   const common = decodeClinicApproval(value, scope, [...clinicApprovalKeys, "policyVersion", "businessId", "credentialFingerprint", "recallTypeId", "timeZone",
     "sourceServiceRef", "destinationServiceRef", "writeContract", "notificationOwner", "membership", "compensation", "cancellationReason",
-    "lateNoticeHours", "maxAdvanceDays", "offerTtlSeconds", "standardTerms", "lateTerms", "recoveryTerms"]);
+    "lateNoticeHours", "maxAdvanceDays", "offerTtlSeconds", "standardTerms", "lateTerms", "recoveryTerms", ...(hasPass ? ["passMovement"] : [])]);
   if (!common) return undefined;
   const row = value as Record<string, unknown>;
   const integer = (key: string, min: number, max: number) => Number.isSafeInteger(row[key]) && Number(row[key]) >= min && Number(row[key]) <= max;
   if (![row.policyVersion, row.sourceServiceRef, row.destinationServiceRef].every(approvalRef) || ![row.businessId, row.recallTypeId].every(validClinikoId) ||
       typeof row.credentialFingerprint !== "string" || !/^[a-f0-9]{64}$/.test(row.credentialFingerprint) || typeof row.timeZone !== "string" || row.timeZone.length > 128 ||
-      row.writeContract !== "bestEffort" || row.notificationOwner !== "cliniko" || row.membership !== "independentHost" || row.compensation !== "cancelReplacementIfOriginalUnsent" ||
+      row.writeContract !== "bestEffort" || row.notificationOwner !== "cliniko" ||
+      (row.membership === "nativeCaseSessions" ? !passMovement(row.passMovement) : row.membership !== "independentHost" || Object.hasOwn(row, "passMovement")) || row.compensation !== "cancelReplacementIfOriginalUnsent" ||
       ![10, 20, 30, 40, 50, 60].includes(Number(row.cancellationReason)) || typeof row.cancellationReason !== "number" || !integer("lateNoticeHours", 1, 168) ||
       !integer("maxAdvanceDays", 1, 90) || !integer("offerTtlSeconds", 15, 120) || !terms(row.standardTerms, 150) || !terms(row.lateTerms, 150) || !terms(row.recoveryTerms, 180) ||
       new Set([row.standardTerms.version, row.lateTerms.version, row.recoveryTerms.version]).size !== 3) return undefined;
@@ -64,5 +81,14 @@ export class OwnerFileClassMovePolicy {
     if (start === undefined || at === undefined || start <= at || start - at > approval.maxAdvanceDays * 86400000 ||
         at < Date.parse(approval.effectiveFrom) || at >= Date.parse(approval.effectiveUntil)) return undefined;
     return start - at < approval.lateNoticeHours * 3600000 ? approval.lateTerms : approval.standardTerms;
+  }
+  static passTermsFor(approval: ClassMoveApproval, binding: ClassMovementPass): Terms | undefined {
+    const pass = approval.passMovement;
+    if (!pass || pass.version !== binding.stagingContractVersion) return undefined;
+    const same = binding.source.patientCaseId === binding.destination.patientCaseId;
+    const effect = binding.source.effect;
+    const key = same ? effect === "releaseOne" ? "sameCaseUnchanged" : effect === "unchanged" ? "sameCaseConsumeOne" : "sameCaseConsumeTwo" :
+      effect === "releaseOne" ? "differentCaseReleaseOne" : effect === "unchanged" ? "differentCaseUnchanged" : "differentCaseConsumeOne";
+    return { version: `${pass.version}:${key}`, approvedText: pass[key] };
   }
 }

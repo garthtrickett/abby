@@ -489,3 +489,53 @@ Both stages had zero failures/cancellations/skips and passed diff checks; counts
 overlap. Exact commands, intermediate failures/diagnostics and tracked logs are
 recorded in `THIRTEEN_GAP_IMPLEMENTATION.md`. This qualifies the native
 coordinator, not the unfinished ordinary caller pass movement flow.
+
+## Ordinary caller pass movement (E410, local qualification)
+
+The class movement host now binds independent source/destination pass selection
+to each private destination offer. The public proposal includes the clinic's
+approved fee, actual pass effect and recovery wording before confirmation.
+All six same/different-case effect variants require explicit versioned owner
+text. Source, destination and movement approvals must agree on native session
+tracking. The service catalogue and admitted class owner require a separate
+selection and actual-effect authority; possession of a caller code or a case
+balance cannot supply it.
+
+The played proposal's terms digest binds its complete private pass evidence.
+Proposal inspection uses the owner/fee terms version; commit authorization uses
+the actual combined SAM terms version. Both phases must approve the same exact
+pass selection, service pair and staging contract. Changed rules, counters,
+entitlements or approvals invalidate the proposal. No pass identifiers or
+financial fingerprints are added to public messages or stored core actions.
+
+The native coordinator groups related GET observations between writes. Each
+group verifies the actual operation-bound patient proof and native contact
+before and after all reads, discards everything on revocation or subject change,
+and closes its temporary proof before returning. Internal complete snapshot,
+source, rule and permission checks remain. No clinical write or protected result
+publication is allowed inside the callback. Fresh financial permission is
+required after group closure, and every clinical send remains outside the group
+under the native writer's existing budget claim and final permission gate.
+The scoped proof cannot be reused by later reads or writes.
+
+This avoids repeated native contact fetches within a single private observation
+while retaining actual proof checks around every observation and between every
+write. The physical 180-request account limit, 15-second native deadlines,
+normal call leases and existing offer expiry remain unchanged. When the account
+needs a fresh quota window, the caller hears a wait notice and must say yes
+again after playback and the ordinary elapsed wait. The host does not reserve
+quota or pass credits.
+
+Initial caller/native checks passed89 tests, including permission and native
+contact changes inside an observation. The next source type/build and14
+admission checks passed. Final native/owner/legacy/review regression passed279
+checks, then fresh type/build/migrations and40 compiled/contract checks passed;
+all stages had zero final failures, cancellations or skips, and counts overlap.
+The compiled journeys include full and cross-case/service/instructor/duration
+moves, live authority/selection/rule denials, lost association and concurrent-use
+uncertainty with no replay. Public/model/storage scans include every plain
+canary and every bounded fragment of the complete compressed native review.
+The first compiled diagnostic failures and their test-only corrections are
+recorded in `THIRTEEN_GAP_IMPLEMENTATION.md`. Larger/mixed histories, broader
+catalogue/correction combinations, deploying-host financial provisioning,
+actual clinic acceptance and authoritative cloud qualification remain open.

@@ -52,6 +52,9 @@ export class ClinikoClassPassMovement {
     this.#config = Object.freeze({ ...input, scope: Object.freeze({ ...input.scope }), cliniko: Object.freeze({ ...input.cliniko }),
       source: Object.freeze({ ...input.source }), destination: Object.freeze({ ...input.destination }) });
   }
+  /** Only for a private read-only group whose outer owner verifies the real
+   * operation proof before and after all observations. Never cross a write. */
+  usingProof(proof: PatientProofHost) { return new ClinikoClassPassMovement({ ...this.#config, proof }); }
   #query(request: ClinikoClassMoveRequest, phase: Phase, signal: AbortSignal): ClassPassMoveAuthorityQuery {
     const c = this.#config;
     return { scope: { ...c.scope }, policyVersion: c.policyVersion, termsVersion: c.termsVersion, stagingContractVersion: c.stagingContractVersion,
@@ -105,7 +108,7 @@ export class ClinikoClassPassMovement {
       b.value.remaining < 1 || b.value.overdrawn || change > 0 && a.value.used + change > a.value.maximum) return undefined;
     return await this.authorized(binding, request, phase, signal) ? binding : undefined;
   }
-  async unchanged(binding: ClassMovementPass, request: ClinikoClassMoveRequest, phase: "commit" | "compensation", signal: AbortSignal): Promise<boolean> {
+  async unchanged(binding: ClassMovementPass, request: ClinikoClassMoveRequest, phase: "proposal" | "commit" | "compensation", signal: AbortSignal): Promise<boolean> {
     const current = await this.select(request, phase, signal); return !!current && isDeepStrictEqual(binding, current) && !signal.aborted;
   }
   async afterCancellation(binding: ClassMovementPass, request: ClinikoClassMoveRequest, signal: AbortSignal): Promise<boolean> {

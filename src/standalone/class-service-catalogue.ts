@@ -8,6 +8,7 @@ import type { ClassApproval } from "./owner-file-class-policy.ts";
 import type { ClassAttendancePermission } from "./cliniko-class-booking-host.ts";
 import type { ClassPassAuthority } from "./cliniko-class-pass-booking.ts";
 import type { ClassPassCancellationAuthority } from "./cliniko-class-pass-cancellation.ts";
+import type { ClassPassMoveAuthority } from "./cliniko-class-pass-movement.ts";
 import type { ClassCancellationPermission } from "./cliniko-class-cancellation-host.ts";
 import { OwnerFileClassMovePolicy } from "./owner-file-class-move-policy.ts";
 import type { ClassMovePermission } from "./cliniko-class-move-host.ts";
@@ -19,7 +20,7 @@ export type ClassServiceConfig = Readonly<{
   passAuthority?: ClassPassAuthority;
   passCancellationAuthority?: ClassPassCancellationAuthority;
   cancellationApprovalPath?: string;
-  move?: Readonly<{ approvalPath: string; permission: ClassMovePermission;
+  move?: Readonly<{ approvalPath: string; permission: ClassMovePermission; passAuthority?: ClassPassMoveAuthority;
     destination: Readonly<{ approvalPath: string; practitionerId: string; appointmentTypeId: string }> }>;
 }>;
 export type PublicClassService = Readonly<{
@@ -48,7 +49,9 @@ export async function readClassServices(c: Config, signal: AbortSignal): Promise
         const approval = policy.ok ? await policy.value.current(c.scope) : undefined;
         if (!policy.ok || !approval?.ok || signal.aborted) return undefined;
         const a = approval.value;
-        if (a.membership === "nativeCaseSessions" ? typeof service.passAuthority?.select !== "function" && !(a.caseSessions?.cancellation && typeof service.passCancellationAuthority?.select === "function") : service.passAuthority !== undefined) return undefined;
+        const passBooking = typeof service.passAuthority?.select === "function", passCancellation = !!a.caseSessions?.cancellation && typeof service.passCancellationAuthority?.select === "function";
+        const passMove = typeof service.move?.passAuthority?.select === "function" && typeof service.move?.passAuthority?.allows === "function";
+        if (a.membership === "nativeCaseSessions" ? !passBooking && !passCancellation && !passMove : service.passAuthority !== undefined || service.move?.passAuthority !== undefined) return undefined;
         if (service.passCancellationAuthority !== undefined && (a.membership !== "nativeCaseSessions" || !a.caseSessions?.cancellation || typeof service.passCancellationAuthority.select !== "function")) return undefined;
         const destinationPolicy = service.move ? await OwnerFileClassPolicy.capture({ ...policy.value.binding(), ...service.move.destination,
           path: service.move.destination.approvalPath, directory: c.directory, clock: c.clock }) : undefined;
@@ -56,7 +59,10 @@ export async function readClassServices(c: Config, signal: AbortSignal): Promise
         const movePolicy = service.move && destination?.ok ? await OwnerFileClassMovePolicy.capture({ ...policy.value.binding(), path: service.move.approvalPath,
           sourceServiceRef: a.serviceRef, destinationServiceRef: destination.value.serviceRef, directory: c.directory, clock: c.clock }) : undefined;
         const move = movePolicy?.ok ? await movePolicy.value.current(c.scope) : undefined;
-        const movement = typeof service.move?.permission?.allows === "function" && move?.ok && destination?.ok ? [move.value, destination.value] : null;
+        const movement = typeof service.move?.permission?.allows === "function" && move?.ok && destination?.ok &&
+          a.membership === move.value.membership && a.membership === destination.value.membership &&
+          (a.membership === "nativeCaseSessions" ? !!move.value.passMovement && passMove : !move.value.passMovement) ? [move.value, destination.value] : null;
+        if (a.membership === "nativeCaseSessions" && !passBooking && !passCancellation && !movement) return undefined;
         return { policy: policy.value, destinationPolicy, movePolicy, movement, item: { config: service, approval: a,
           public: { className: a.className, practitionerName: a.practitionerName, locationName: a.locationName, serviceRef: a.serviceRef, durationMinutes: a.durationMinutes,
             ...(movement ? { moveAvailable: true as const } : {}) },

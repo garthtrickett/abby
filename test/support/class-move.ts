@@ -12,8 +12,11 @@ import type { ClassMoveApproval } from "../../src/standalone/owner-file-class-mo
 import { classAttendanceFixture, classAttendee, classLink } from "./class-attendance.ts";
 import { callerVerificationFixture, verificationNow, verificationCanaries } from "./caller-verification.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
+import type { ClassPassMoveAuthority, ClassPassMoveAuthorityQuery } from "../../src/standalone/cliniko-class-pass-movement.ts";
 
-export async function classMoveFixture(different = false, near = false) {
+export type PassMoveOptions = Readonly<{ differentCase?: boolean; effect?: "releaseOne" | "unchanged" | "consumeOne"; full?: boolean }>;
+
+export async function classMoveFixture(different = false, near = false, passes?: PassMoveOptions) {
   let claims = 0, now = verificationNow;
   const budget = new ClinikoReadBudget(180, () => Date.parse(now));
   const windows = new Map<number, number>();
@@ -25,6 +28,19 @@ export async function classMoveFixture(different = false, near = false) {
     ...(different ? { practitioner: classLink("practitioners", "23"), appointment_type: classLink("appointment_types", "34") } : {}) });
   if (near) Object.assign(native.groups[1]!, { starts_at: new Date(Date.parse(now) + 61 * 60000).toISOString(), ends_at: new Date(Date.parse(now) + 121 * 60000).toISOString() });
   if (different) native.business.appointment_type_ids = ["33", "34"];
+  const sourceCaseId = "811222333444555666", destinationCaseId = passes?.differentCase ? "811222333444555667" : sourceCaseId;
+  const caseOf = (row: Record<string, unknown>) => (row.patient_case as { links?: { self?: string } } | undefined)?.links?.self?.split("/").at(-1);
+  const caseRows = (id: string) => native.attendees.filter(row => caseOf(row) === id);
+  const records: Record<string, Record<string, unknown>> = {};
+  const effect = passes?.effect ?? "releaseOne";
+  if (passes) {
+    Object.assign(native.attendees.find(row => row.id === "101")!, { arrived: effect === "consumeOne" ? false : null, patient_case: classLink("patient_cases", sourceCaseId) });
+    native.attendees.push({ ...classAttendee("601", "701", verificationCanaries[2]!), arrived: true, patient_case: classLink("patient_cases", sourceCaseId) });
+    if (passes.differentCase) native.attendees.push({ ...classAttendee("602", "702", verificationCanaries[2]!), arrived: true, patient_case: classLink("patient_cases", destinationCaseId) });
+    for (const id of new Set([sourceCaseId, destinationCaseId])) records[id] = { id, ...classLink("patient_cases", id), patient: classLink("patients", verificationCanaries[2]!),
+      max_sessions: passes.full ? id === sourceCaseId ? effect === "consumeOne" ? 1 : 2 : 2 : 5, include_cancelled_attendees: id === sourceCaseId && effect !== "releaseOne", include_dna_attendees: false,
+      issue_date: "2026-10-01", expiry_date: "2026-10-30", closed_at: null, archived_at: null, name: "synthetic-private-move-pass-name", notes: "synthetic-private-move-pass-note" };
+  }
   const lifetime = new AbortController(), sourcePath = join(f.folder, "class-source.json"), destinationPath = join(f.folder, "class-destination.json"), movePath = join(f.folder, "class-move.json");
   let source: ClassApproval = { scope: f.scope, revision: "source-1", approverRef: f.account.actor.actorRef, approvedAt: "2026-10-04T05:59:00.000Z", effectiveFrom: now,
     effectiveUntil: "2026-10-05T06:00:00.000Z", approved: true, enabled: true, policyVersion: f.sessionConfig.policyVersion, businessId: "11", practitionerId: "22", appointmentTypeId: "33",
@@ -32,22 +48,36 @@ export async function classMoveFixture(different = false, near = false) {
     notificationOwner: "cliniko", membership: "independentHost", serviceRef: "mat-pilates", className: "Mat Pilates", practitionerName: "Demo Instructor", locationName: "Demo Clinic", durationMinutes: 60,
     bookingTerms: { version: "class-book-1", approvedText: "This class costs 12 pounds." }, minNoticeMinutes: 60, maxAdvanceDays: 30, offerTtlSeconds: 120 };
   let destination: ClassApproval = { ...source, ...(different ? { revision: "destination-1", practitionerId: "23", appointmentTypeId: "34", serviceRef: "reformer-pilates", className: "Reformer Pilates", practitionerName: "Second Instructor", durationMinutes: 30 } : {}) };
+  if (passes) {
+    const caseSessions = { attendanceStatus: "arrivedFalseIsDna", counting: "allLinkedNonArchivedAttendees", dates: "inclusiveClinicDate", consumption: "onePerAttendance", financialAuthority: "independentHost" } as const;
+    source = { ...source, membership: "nativeCaseSessions", caseSessions }; destination = { ...destination, membership: "nativeCaseSessions", caseSessions };
+  }
   let move: ClassMoveApproval = { scope: f.scope, revision: "move-1", approverRef: f.account.actor.actorRef, approvedAt: source.approvedAt, effectiveFrom: now, effectiveUntil: source.effectiveUntil,
     approved: true, enabled: true, policyVersion: source.policyVersion, businessId: "11", credentialFingerprint: source.credentialFingerprint, recallTypeId: "7", timeZone: source.timeZone,
     sourceServiceRef: source.serviceRef, destinationServiceRef: destination.serviceRef, writeContract: "bestEffort", notificationOwner: "cliniko", membership: "independentHost", compensation: "cancelReplacementIfOriginalUnsent",
     cancellationReason: 50, lateNoticeHours: 24, maxAdvanceDays: 30, offerTtlSeconds: 120, standardTerms: { version: "standard-1", approvedText: "No move fee applies." },
     lateTerms: { version: "late-1", approvedText: "A late move fee applies." }, recoveryTerms: { version: "recovery-1", approvedText: "We book the replacement before cancelling the original. If original cancellation was never sent, we may cancel only the replacement and retain the original." } };
+  if (passes) move = { ...move, membership: "nativeCaseSessions", recoveryTerms: { version: "pass-recovery-1", approvedText: "If the move cannot finish, staff may need to confirm the replacement. If we have not sent the original cancellation, we may cancel only the replacement." },
+    passMovement: { version: "pass-move-v1", staging: "unlinkedReplacement", association: "afterOriginalCancellation", financialAuthority: "independentHost",
+      sameCaseUnchanged: "This move keeps your pass session use unchanged.", sameCaseConsumeOne: "This move uses one additional pass session.", sameCaseConsumeTwo: "This move uses two additional pass sessions.",
+      differentCaseReleaseOne: "Your original pass releases one session and your destination pass uses one session.", differentCaseUnchanged: "Your original pass use is unchanged and your destination pass uses one session.",
+      differentCaseConsumeOne: "Your original pass uses one additional session and your destination pass uses one session." } };
   for (const [path, value] of [[sourcePath, source], [destinationPath, destination], [movePath, move]] as const) await writeFile(path, JSON.stringify(value), { mode: 0o600 });
   const binding = { scope: f.scope, policyVersion: source.policyVersion, businessId: "11", credentialFingerprint: source.credentialFingerprint, recallTypeId: "7", timeZone: source.timeZone,
     directory: f.config.directory, clock: () => now };
   const sourcePolicy = resultValue(await OwnerFileClassPolicy.capture({ ...binding, path: sourcePath, practitionerId: source.practitionerId, appointmentTypeId: source.appointmentTypeId }));
   const destinationPolicy = resultValue(await OwnerFileClassPolicy.capture({ ...binding, path: destinationPath, practitionerId: destination.practitionerId, appointmentTypeId: destination.appointmentTypeId }));
   const movePolicy = resultValue(await OwnerFileClassMovePolicy.capture({ ...binding, path: movePath, sourceServiceRef: source.serviceRef, destinationServiceRef: destination.serviceRef }));
-  let lost: "review" | "replacement" | "original" | "compensation" | undefined, permitted = true;
+  let lost: "review" | "replacement" | "original" | "compensation" | "association" | undefined, permitted = true;
   let phasePermission: (phase: Parameters<ClassMovePermission["allows"]>[0]["phase"]) => boolean = () => true;
   let onWrite: ((phase: string) => void | Promise<void>) | undefined;
   const recalls: Record<string, unknown>[] = [], writes: { path: string; body: Record<string, unknown> }[] = [];
   let callState = f.state;
+  let passAllowed = true, selection = { source: { patientCaseId: sourceCaseId, entitlementRef: "private-move-source-entitlement" }, destination: { patientCaseId: destinationCaseId, entitlementRef: "private-move-destination-entitlement" } };
+  const passQueries: ClassPassMoveAuthorityQuery[] = [];
+  let onCaseRead = (_path: string) => {};
+  const passAuthority: ClassPassMoveAuthority = { select: async query => { passQueries.push(query); return passAllowed ? structuredClone(selection) : undefined; },
+    allows: async query => passAllowed && query.patientId === verificationCanaries[2] && query.stagingContractVersion === move.passMovement?.version && query.binding.source.effect === effect };
   const fetchPort: typeof fetch = async (value, init) => {
     const url = new URL(String(value)), method = init?.method ?? "GET";
     if (url.pathname.startsWith("/v1/patients/")) return f.fetchPort(value, init);
@@ -62,18 +92,30 @@ export async function classMoveFixture(different = false, near = false) {
       const dispatched = Object.values((await callState()).actions).filter(action => action.status === "dispatched");
       assert.equal(dispatched.length, 1); assert.equal((await callState()).presentations[dispatched[0]!.presentationId]!.status, "played");
       const body = JSON.parse(String(init?.body)); writes.push({ path: url.pathname, body });
-      const phase = method === "POST" ? "replacement" : url.pathname.includes("/101/") ? "original" : "compensation";
+      const phase = method === "POST" ? "replacement" : passes && url.pathname === "/v1/attendees/401" ? "association" : url.pathname.includes("/101/") ? "original" : "compensation";
       let row: Record<string, unknown>;
-      if (method === "POST") { assert.equal(url.pathname, "/v1/attendees"); row = { ...classAttendee("401", body.booking_id, body.patient_id), notes: body.notes }; native.attendees.push(row); }
+      if (method === "POST") { assert.equal(url.pathname, "/v1/attendees"); row = { ...classAttendee("401", body.booking_id, body.patient_id), notes: body.notes, ...(passes ? { arrived: null } : {}) }; native.attendees.push(row); }
+      else if (phase === "association") { assert.deepEqual(body, { patient_case_id: destinationCaseId }); row = native.attendees.find(row => row.id === "401")!; row.patient_case = classLink("patient_cases", body.patient_case_id); }
       else {
         assert.deepEqual(body, { cancellation_reason: 50, apply_to_repeats: false });
         assert.match(url.pathname, /^\/v1\/attendees\/(?:101|401)\/cancel$/);
         row = native.attendees.find(row => row.id === (phase === "original" ? "101" : "401"))!; row.cancelled_at = now; row.cancellation_reason = body.cancellation_reason;
       }
       await onWrite?.(phase); if (lost === phase) throw new Error("synthetic lost class move leg");
-      return method === "POST" ? Response.json(row, { status: 201 }) : new Response(null, { status: 204 });
+      return method === "POST" ? Response.json(row, { status: 201 }) : phase === "association" ? Response.json(row) : new Response(null, { status: 204 });
     }
     if (/^\/v1\/attendees\/[1-9][0-9]*$/.test(url.pathname)) return Response.json(native.attendees.find(row => row.id === url.pathname.split("/").at(-1)));
+    if (passes && url.pathname.startsWith("/v1/patient_cases/")) {
+      onCaseRead(url.pathname);
+      const id = url.pathname.split("/")[3]!, rows = caseRows(id).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+      assert.ok(records[id]); return url.pathname.endsWith("/attendees") ? Response.json({ attendees: rows.slice((Number(url.searchParams.get("page")) - 1) * 100, Number(url.searchParams.get("page")) * 100), total_entries: rows.length }) :
+        Response.json({ ...records[id], attendee_ids: rows.map(row => row.id) });
+    }
+    if (passes && url.pathname === "/v1/attendees" && url.searchParams.getAll("q[]").includes("patient_case_id:!?")) {
+      const filters = url.searchParams.getAll("q[]"), id = filters.find(v => v.startsWith("id:="))?.slice(4);
+      const rows = native.attendees.filter(row => row.id === id && !caseOf(row) && (row.cancelled_at === null || filters.includes("cancelled_at:*")));
+      return Response.json({ attendees: rows, total_entries: rows.length });
+    }
     if (different) {
       if (url.pathname === "/v1/practitioners/23") return Response.json({ id: "23", active: true });
       if (url.pathname === "/v1/appointment_types/34") return Response.json({ id: "34", archived_at: null, max_attendees: 10 });
@@ -93,7 +135,8 @@ export async function classMoveFixture(different = false, near = false) {
   };
   const permission: ClassMovePermission = { allows: async query => permitted && phasePermission(query.phase) };
   const config = { scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: source.policyVersion, ledger: f.ledger, policies: f.policies, verification: f.session,
-    sourcePolicy, destinationPolicy, movePolicy, permission, cliniko: native.config, clock: () => now, signal: lifetime.signal, fetchPort };
+    sourcePolicy, destinationPolicy, movePolicy, permission, cliniko: native.config, clock: () => now, signal: lifetime.signal, fetchPort,
+    ...(passes ? { classPassMoveAuthority: passAuthority } : {}) };
   const host = resultValue(await ClinikoClassMoveHost.create(config));
   const reception = new TextReception(f.ledger, f.policies, host, undefined, undefined, undefined, undefined, () => now);
   let count = 0;
@@ -120,8 +163,11 @@ export async function classMoveFixture(different = false, near = false) {
     verificationBudget: f.sessionConfig.budget, delivery: f.sessionConfig.delivery, directory: f.config.directory,
     callerApprovalPath: f.path, classApprovalPath: sourcePath, operation: "reschedule" as const,
     classPermission: permission, moveApprovalPath: movePath, destination: { classApprovalPath: destinationPath, practitionerId: destination.practitionerId, appointmentTypeId: destination.appointmentTypeId },
+    ...(passes ? { classPassMoveAuthority: passAuthority } : {}),
     cliniko: { ...native.config, timeZone: source.timeZone, countryCallingCode: "61", recallTypeId: "7" }, signal: lifetime.signal, fetchPort, clock: () => now };
   return { ...f, classSessionConfig, bindNativeCall: (read: typeof callState) => { callState = read; }, native, host, reception, config, sourcePath, destinationPath, movePath, recalls, writes, steps, turn, play, verify, prepare,
+    movePass: passes ? { sourceCaseId, destinationCaseId, records, queries: passQueries, caseRows, deny: () => { passAllowed = false; },
+      select: (next: typeof selection) => { selection = structuredClone(next); }, selection: () => structuredClone(selection), onRead: (hook: typeof onCaseRead) => { onCaseRead = hook; } } : undefined,
     get claims() { return claims; }, get windowClaims() { return [...windows.values()]; }, pause, setTime: (value: string) => { now = value; f.setTime(value); }, permit: (value: boolean) => { permitted = value; },
     phasePermission: (allow: typeof phasePermission) => { phasePermission = allow; }, lose: (phase: NonNullable<typeof lost>) => { lost = phase; }, onWrite: (hook: typeof onWrite) => { onWrite = hook; },
     replaceSource: async (patch: Partial<ClassApproval>) => { source = { ...source, ...patch }; await writeFile(sourcePath, JSON.stringify(source)); },

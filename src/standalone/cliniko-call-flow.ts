@@ -824,6 +824,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
           cliniko: { ...config.cliniko, practitionerId: classes.practitionerId, appointmentTypeId: classes.appointmentTypeId } }) :
         operation === "reschedule" && classes.move ? ClinikoClassSession.create({ ...config, operation: "reschedule", callerApprovalPath: paths.rescheduleCaller,
           classApprovalPath: classes.approvalPath, classPermission: classes.move.permission, moveApprovalPath: classes.move.approvalPath,
+          ...(classes.move.passAuthority ? { classPassMoveAuthority: classes.move.passAuthority } : {}),
           destination: { classApprovalPath: classes.move.destination.approvalPath, practitionerId: classes.move.destination.practitionerId, appointmentTypeId: classes.move.destination.appointmentTypeId },
           cliniko: { ...config.cliniko, practitionerId: classes.practitionerId, appointmentTypeId: classes.appointmentTypeId } }) : undefined :
         operation === "appointments.read" ? historyRequest ? config.history ? ClinikoPractitionerHistorySession.create({ ...config, ...config.history }) : undefined : config.enquiry ? ClinikoAppointmentEnquirySession.create({ ...config, ...config.enquiry }) : undefined :
