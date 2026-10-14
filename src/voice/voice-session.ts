@@ -22,7 +22,7 @@ export type VoiceIntent =
   | Readonly<{ kind: "requestBoundary"; reason: import("../core/request-boundary.ts").RequestBoundary }>
   | Readonly<{ kind: "callerIdentityDenied"; reason: import("../core/caller-identity.ts").CallerIdentityDenial }>
   | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason; approvedLocation?: string }>
-  | Readonly<{ kind: "workflow"; operation: import("../core/model.ts").WorkflowOperation; replaceCanceledChange?: true; serviceChoice?: import("../core/booking-service-choice.ts").BookingServiceChoice }>
+  | Readonly<{ kind: "workflow"; operation: import("../core/model.ts").WorkflowOperation; replaceCanceledChange?: true; serviceChoice?: import("../core/booking-service-choice.ts").BookingServiceChoice; forAnotherPerson?: true }>
   | Readonly<{ kind: "outcome" }>
   | Readonly<{ kind: "notificationOutcome" }>
   | Readonly<{ kind: "staffOutcome" }>
@@ -400,7 +400,7 @@ export class VoiceSession {
       const controller = new AbortController(), pending = { cancel: () => controller.abort() };
       this.pendingIntent = pending;
       try { result = await this.reception.startWorkflow(this.scope, turn, this.cachedIntent.operation, now, existing.value.conversationRevision,
-        controller.signal, this.cachedIntent.replaceCanceledChange, this.cachedIntent.serviceChoice); }
+        controller.signal, this.cachedIntent.replaceCanceledChange, this.cachedIntent.serviceChoice, this.cachedIntent.forAnotherPerson); }
       finally { if (this.pendingIntent === pending) this.pendingIntent = undefined; }
     } else if (this.cachedIntent.kind === "outcome") {
       result = await this.runtime.acceptTurn(turn, { kind: "outcomeQuery" }, now, existing.value.conversationRevision);
@@ -536,6 +536,9 @@ export class VoiceSession {
   async presentPrivateResend(text: string, signal: AbortSignal, now: string): Promise<boolean> {
     return this.presentPrivatePatientPrompt(text, signal, now, "confirmationResend");
   }
+  async presentPrivateRepresentative(text: string, signal: AbortSignal, now: string, operation: "book" | "cancel" | "reschedule" | "appointments.read"): Promise<boolean> {
+    return this.presentPrivatePatientPrompt(text, signal, now, operation);
+  }
   /** The native resend owner has already queued and started this blank notice.
    * Render only that exact notice; the ordinary playback receipt records completion. */
   async presentOwnedPrivateResend(text: string, signal: AbortSignal, now: string, presentationId?: string): Promise<boolean> {
@@ -564,13 +567,14 @@ export class VoiceSession {
       if (!played || signal.aborted) await this.clearPrivateIntakePrompt(id, now);
     }
   }
-  private async presentPrivatePatientPrompt(text: string, signal: AbortSignal, now: string, operation: "intake" | "patientUpdate" | "confirmationResend"): Promise<boolean> {
+  private async presentPrivatePatientPrompt(text: string, signal: AbortSignal, now: string, operation: "intake" | "patientUpdate" | "confirmationResend" | "book" | "cancel" | "reschedule" | "appointments.read"): Promise<boolean> {
     if (!this.transientContent || signal.aborted || !this.canSend() || this.speechOpen || this.activePlayback ||
         typeof text !== "string" || !text.trim() || text.length > 2_000) return false;
     const id = randomUUID();
     const queued = operation === "intake" ? await this.runtime.privateIntakePrompt(this.callId, id, this.sessionId, now)
       : operation === "patientUpdate" ? await this.runtime.privateCorrectionPrompt(this.callId, id, this.sessionId, now)
-        : await this.runtime.privateResendPrompt(this.callId, id, this.sessionId, now);
+        : operation === "confirmationResend" ? await this.runtime.privateResendPrompt(this.callId, id, this.sessionId, now)
+          : await this.runtime.privateRepresentativePrompt(this.callId, id, this.sessionId, operation, now);
     if (!queued.ok || signal.aborted) return false;
     this.transientContent.set(id, text);
     let resolve!: (played: boolean) => void;

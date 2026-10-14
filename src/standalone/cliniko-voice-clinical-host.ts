@@ -21,6 +21,7 @@ export type ClinikoVoiceClinicalHostConfig = Omit<ClinikoCallFlowConfig, CallOwn
   intent: ClinikoVoiceWorkflow["intent"];
   privateIntakeTranscription?: ClinikoVoiceWorkflow["privateIntakeTranscription"];
   privateCorrectionTranscription?: ClinikoVoiceWorkflow["privateCorrectionTranscription"];
+  privateRepresentativeTranscription?: ClinikoVoiceWorkflow["privateRepresentativeTranscription"];
 }>;
 
 /** Clinic-owned clinical composition. A catalogue approval remains read-only:
@@ -30,7 +31,8 @@ export class ClinikoVoiceClinicalHost {
   readonly #config: ClinikoVoiceClinicalHostConfig;
   constructor(config: ClinikoVoiceClinicalHostConfig) {
     if (!validGreetingShape(config.greeting, config.scope) || typeof config.intent !== "function" ||
-        config.correction && typeof config.privateCorrectionTranscription !== "function") {
+        config.correction && typeof config.privateCorrectionTranscription !== "function" ||
+        config.representativeInput && typeof config.privateRepresentativeTranscription !== "function") {
       throw new RangeError("invalid clinical voice host");
     }
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }),
@@ -42,6 +44,7 @@ export class ClinikoVoiceClinicalHost {
         practitioners: Object.freeze(config.catalogue.practitioners.map(member => Object.freeze({ ...member }))) }) } : {}),
       ...(config.intake ? { intake: Object.freeze({ ...config.intake }) } : {}),
       ...(config.resend ? { resend: Object.freeze({ ...config.resend }) } : {}),
+      ...(config.representativeInput ? { representativeInput: Object.freeze({ ...config.representativeInput }) } : {}),
       ...(config.correction ? { correction: Object.freeze({ ...config.correction }) } : {}),
       ...(config.staff ? { staff: Object.freeze({ ...config.staff }) } : {}),
       ...(config.enquiry ? { enquiry: Object.freeze({ ...config.enquiry }) } : {}),
@@ -97,6 +100,7 @@ export class ClinikoVoiceClinicalHost {
     return { policies: this.#policies, ...(c.publicKnowledge ? { publicKnowledge: c.publicKnowledge } : {}),
       ...(c.privateIntakeTranscription ? { privateIntakeTranscription: c.privateIntakeTranscription } : {}),
       ...(c.privateCorrectionTranscription ? { privateCorrectionTranscription: c.privateCorrectionTranscription } : {}),
+      ...(c.privateRepresentativeTranscription ? { privateRepresentativeTranscription: c.privateRepresentativeTranscription } : {}),
       intent: c.intent,
       create(context) {
         if (!sameScope(context.receipt.scope, c.scope) || resend && !context.resendPresentation) {

@@ -38,6 +38,7 @@ import { OwnerFileClinicFAQs } from "./owner-file-clinic-faqs.ts";
 import { PrivateIntakeVoiceInput } from "./private-intake-voice-input.ts";
 import { PrivatePatientCorrectionInput } from "./private-patient-correction-input.ts";
 import { PrivatePatientVoiceInput } from "./private-patient-voice-input.ts";
+import { PrivateRepresentativeVoiceInput } from "./private-representative-voice-input.ts";
 import { ClinikoLocationServiceDirectory } from "./cliniko-location-service-directory.ts";
 import type { OwnerFileServiceCatalogue } from "./owner-file-service-catalogue.ts";
 
@@ -56,6 +57,7 @@ export type ClinikoVoiceWorkflow = Readonly<{
   /** A separate approved adapter for registration fields; it is never used during code entry. */
   privateIntakeTranscription?: (sessionId: string) => TranscriptionPort;
   privateCorrectionTranscription?: (sessionId: string) => TranscriptionPort;
+  privateRepresentativeTranscription?: (sessionId: string) => TranscriptionPort;
 }>;
 
 export type TransientVoiceConfig = Readonly<{
@@ -169,7 +171,15 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
     ? new PrivatePatientVoiceInput(() => workflow, ordinaryPrivateInput, new PrivatePatientCorrectionInput({ ...privateBinding,
       present: privatePresentation.play, signal: lifetime.signal, transcriptionFactory: config.clinicalWorkflow.privateCorrectionTranscription,
       ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}) })) : ordinaryPrivateInput;
-  const privateInput = patientInput ? new PrivateResendVoiceInput({ input: patientInput, owner: () => workflow, signal: lifetime.signal,
+  const representativeInput = config.clinicalWorkflow?.privateRepresentativeTranscription && patientInput
+    ? new PrivateRepresentativeVoiceInput({ ...privateBinding, input: patientInput, owner: () => workflow?.representativeInputOwner,
+      waitForStartKey: true, signal: lifetime.signal,
+      present: (text, signal) => {
+        const owner = workflow?.representativeInputOwner;
+        return owner && voice ? voice.presentPrivateRepresentative(text, signal, now(), owner.operation) : Promise.resolve(false);
+      }, transcriptionFactory: config.clinicalWorkflow.privateRepresentativeTranscription,
+      ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}) }) : patientInput;
+  const privateInput = representativeInput ? new PrivateResendVoiceInput({ input: representativeInput, owner: () => workflow, signal: lifetime.signal,
     present: (text, signal) => voice?.presentPrivateResend(text, signal, now()) ?? Promise.resolve(false) }) : undefined;
   const resendPresentation = { play: (text: string, signal: AbortSignal, id?: string) => voice?.presentOwnedPrivateResend(text, signal, now(), id) ?? Promise.resolve(false) };
   let call: TwilioConnectedCall | undefined = new TwilioConnectedCall({

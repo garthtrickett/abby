@@ -268,7 +268,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "bookingHorizonFailure" }>
   | Readonly<{ kind: "requestBoundary"; reason: import("./request-boundary.ts").RequestBoundary }>
   | Readonly<{ kind: "callerIdentityDenied"; reason: import("./caller-identity.ts").CallerIdentityDenial }>
-  | Readonly<{ kind: "workflowStarted"; operation: WorkflowOperation; next: "codeRequired" | "intakeRequired"; advanceTask?: true }>
+  | Readonly<{ kind: "workflowStarted"; operation: WorkflowOperation; next: "codeRequired" | "intakeRequired" | "representativeRequired"; advanceTask?: true }>
   | Readonly<{ kind: "outcomeQuery" }>
   | Readonly<{ kind: "notificationOutcomeQuery" }>
   | Readonly<{ kind: "staffOutcomeQuery"; reviewProcess?: import("./staff-review-process.ts").StaffReviewProcess }>
@@ -455,6 +455,8 @@ export type CallState = {
   callerIdentityDenied?: import("./caller-identity.ts").CallerIdentityDenial;
   /** Negative-command receipt only; no patient identity or permission. */
   lastRequestBoundary?: Readonly<{ turnId: string; reason: import("./request-boundary.ts").RequestBoundary }>;
+  /** Accepted workflow receipt only; contains no patient identity or permission. */
+  lastWorkflowStart?: Readonly<{ turnId: string; operation: WorkflowOperation; next: "codeRequired" | "intakeRequired" | "representativeRequired" }>;
   callId: string;
   policy: CallPolicy;
   lifecycle: "starting" | "active" | "ended";
@@ -508,6 +510,7 @@ export type TransitionAction =
   | Readonly<{ kind: "privateIntakePrompt"; sessionId: string; presentationId: string; now: string }>
   | Readonly<{ kind: "privateCorrectionPrompt"; sessionId: string; presentationId: string; now: string }>
   | Readonly<{ kind: "privateResendPrompt"; sessionId: string; presentationId: string; now: string }>
+  | Readonly<{ kind: "privateRepresentativePrompt"; operation: "book" | "cancel" | "reschedule" | "appointments.read"; sessionId: string; presentationId: string; now: string }>
   | Readonly<{ kind: "callerTurn"; turn: FinalCallerTurn; interpretation: TurnInterpretation; now: string; expectedConversationRevision?: number }>
   | Readonly<{ kind: "modelResolved"; effectId: string; result: Result<import("../model/proposal.ts").ModelProposal, import("../model/proposal.ts").ModelFailure>; now: string }>
   | Readonly<{ kind: "modelKnowledgeResolved"; effectId: string; result: Result<readonly ApprovedKnowledge[], Readonly<{ kind: "invalidQuery" | "unavailable" }>>;

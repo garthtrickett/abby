@@ -9,11 +9,11 @@ import { privateIntakeField } from "./private-intake-field.ts";
 import type { RepresentativeIdentity } from "./cliniko-representative-selection.ts";
 
 const fields = ["firstName", "lastName", "dateOfBirth"] as const;
-type Stage = "routing" | "prompt" | "actorCode" | "field" | "readback" | "subjectCode" | "ready" | "closed";
+type Stage = "routing" | "start" | "prompt" | "actorCode" | "field" | "readback" | "subjectCode" | "ready" | "closed";
 type Config = Readonly<{ callId: string; sessionId: string; input: PrivateKeypadInput;
   owner: () => ClinikoRepresentativeCallOwner | undefined;
   present(text: string, signal: AbortSignal): Promise<boolean>;
-  transcriptionFactory(sessionId: string): TranscriptionPort; signal: AbortSignal; mediaOptions?: MediaTurnOptions }>;
+  transcriptionFactory(sessionId: string): TranscriptionPort; signal: AbortSignal; mediaOptions?: MediaTurnOptions; waitForStartKey?: true }>;
 
 /** Private actor code, patient fields/readback and subject code. No field final
  * becomes an ordinary caller turn, and no transcription opens during OTP. */
@@ -62,14 +62,18 @@ export class PrivateRepresentativeVoiceInput implements PrivateKeypadInput {
     if (!(owner instanceof ClinikoRepresentativeCallOwner) || owner.closed || this.#owner && this.#owner !== owner ||
         binding?.callId !== this.#config.callId || binding.sessionId !== this.#config.sessionId) { this.stop(); return true; }
     if (!this.#owner) {
-      this.#owner = owner; this.#stage = "prompt";
-      this.#launch(async () => {
-        if (!await this.#config.present("First verify yourself as the caller. If you receive a registered email code, enter its six digits and press pound. Star clears the code. Do not say the code aloud.", this.#lifetime.signal) ||
-            this.#lifetime.signal.aborted || !owner.beginCallerVerification()) { this.stop(); return; }
-        this.#stage = "actorCode";
-      });
+      this.#owner = owner;
+      if (this.#config.waitForStartKey) this.#stage = "start"; else this.#beginActor();
     }
     return this.#stage !== "ready" || this.#config.input.blocked();
+  }
+  #beginActor(): void {
+    this.#stage = "prompt";
+    this.#launch(async () => {
+      if (!await this.#config.present("First verify yourself as the caller. If you receive a registered email code, enter its six digits and press pound. Star clears the code. Do not say the code aloud.", this.#lifetime.signal) ||
+          this.#lifetime.signal.aborted || !this.#owner!.beginCallerVerification()) { this.stop(); return; }
+      this.#stage = "actorCode";
+    });
   }
   async #promptField(): Promise<void> {
     this.#stage = "prompt"; await this.#media?.stop();
@@ -105,6 +109,14 @@ export class PrivateRepresentativeVoiceInput implements PrivateKeypadInput {
     this.blocked(); if (this.#stage === "closed") return "failed";
     if (!this.#owner) return this.#config.input.accept(digit);
     if (this.#working) return "pending";
+    if (this.#stage === "start") {
+      if (digit === "*") { this.stop(); return "failed"; }
+      if (digit !== "1") return "pending";
+      this.#working = true; let ready = false;
+      try { ready = await this.#owner.privateStartupReady(); } finally { this.#working = false; }
+      if (this.#owner !== this.#config.owner() || this.#lifetime.signal.aborted) { this.stop(); return "failed"; }
+      if (ready) this.#beginActor(); return "pending";
+    }
     if (this.#stage === "actorCode") {
       if (digit === "*") { this.#digits = ""; this.#overflow = false; return "pending"; }
       if (/^[0-9]$/.test(digit)) { if (this.#digits.length < 6) this.#digits += digit; else this.#overflow = true; return "pending"; }

@@ -335,10 +335,14 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       break;
     case "workflowStarted": {
       if (!["book", "cancel", "reschedule", "intake", "patientUpdate", "confirmationResend", "appointments.read"].includes(interpretation.operation) ||
-          (interpretation.operation === "intake" ? interpretation.next !== "intakeRequired" : interpretation.next !== "codeRequired") ||
+          (interpretation.operation === "intake" ? interpretation.next !== "intakeRequired" : interpretation.next !== "codeRequired" &&
+            (interpretation.next !== "representativeRequired" || !["book", "cancel", "reschedule", "appointments.read"].includes(interpretation.operation))) ||
           (interpretation.operation !== "appointments.read" && state.policy.capabilities[interpretation.operation] !== "execute") || !state.policy.automationEnabled) return err({ kind: "invalidTransition" });
       if (interpretation.advanceTask) state.previousTaskActionKeys = Object.keys(state.actions);
-      state.callerMessages.push(interpretation.next === "codeRequired"
+      state.lastWorkflowStart = { turnId: turn.turnId, operation: interpretation.operation, next: interpretation.next };
+      state.callerMessages.push(interpretation.next === "representativeRequired"
+        ? "We need to verify you as the caller, then privately collect and verify the patient's details. Press one to begin, or star to stop."
+        : interpretation.next === "codeRequired"
         ? "Before we continue, verify your email. If you receive a six-digit code, enter it on the keypad, then press pound. Star clears your entry. Please do not say the code aloud."
         : "Before registration, we will explain privacy and what happens if the call fails, then review your details. Registration does not book an appointment. Press one to start private registration, or star to stop.");
       break;
@@ -580,7 +584,7 @@ function recordHostResult(state: CallState, effectId: string, receipt: import(".
 export function transition(current: CallState, action: TransitionAction): Result<CallState, TransitionFailure> {
   if ("now" in action && action.now !== undefined && !Number.isFinite(Date.parse(action.now))) return err({ kind: "invalidTransition" });
   if (current.callerIdentityDenied && ["markHostPossiblySent", "markStaffPossiblySent", "markStaffChangePossiblySent",
-    "markNotificationPossiblySent", "markOperatorAlertPossiblySent", "transferPossiblySent", "privateIntakePrompt", "privateCorrectionPrompt", "privateResendPrompt"].includes(action.kind))
+    "markNotificationPossiblySent", "markOperatorAlertPossiblySent", "transferPossiblySent", "privateIntakePrompt", "privateCorrectionPrompt", "privateResendPrompt", "privateRepresentativePrompt"].includes(action.kind))
     return err({ kind: "invalidTransition" });
   const state = structuredClone(current);
   const now = "now" in action && action.now !== undefined ? action.now : new Date(0).toISOString();
@@ -673,6 +677,19 @@ export function transition(current: CallState, action: TransitionAction): Result
       }
       state.conversationRevision += 1;
       cancelModelWork(state);
+      break;
+    }
+    case "privateRepresentativePrompt": {
+      const lease = state.sessionLease;
+      if (state.lifecycle !== "active" || !state.admission || !lease || lease.sessionId !== action.sessionId ||
+          Date.parse(action.now) >= Date.parse(lease.expiresAt) || !state.policy.automationEnabled ||
+          !["book", "cancel", "reschedule", "appointments.read"].includes(action.operation) ||
+          action.operation !== "appointments.read" && state.policy.capabilities[action.operation] !== "execute") return err({ kind: "leaseLost" });
+      if (!/^[a-f0-9-]{36}$/.test(action.presentationId) || state.pendingPresentationId || state.presentations[action.presentationId] ||
+          Object.values(state.presentations).some(item => item.status === "started" || item.status === "possiblySent") ||
+          Object.values(state.actions).some(item => !state.previousTaskActionKeys?.includes(item.key) && item.status !== "canceled")) return err({ kind: "invalidTransition" });
+      state.presentations[action.presentationId] = { kind: "notice", id: action.presentationId, approvedText: "", status: "pending" };
+      state.pendingPresentationId = action.presentationId;
       break;
     }
     case "privateIntakePrompt":

@@ -157,6 +157,10 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
           const text = privateInputs.shift(); assert.ok(text); privateTranscripts.push(text);
           return ok([{ kind: "segmentFinal" as const, sessionId, generation, utteranceId: `private-${privateTranscripts.length}`, text, quality: "clear" as const }]);
         } }) } : {}),
+        ...(config.representativeInput ? { privateRepresentativeTranscription: (sessionId: string) => ({ async accept() { return ok([]); }, async flush(generation: number) {
+          const text = privateInputs.shift(); assert.ok(text); privateTranscripts.push(text);
+          return ok([{ kind: "segmentFinal" as const, sessionId, generation, utteranceId: `representative-${privateTranscripts.length}`, text, quality: "clear" as const }]);
+        } }) } : {}),
       },
       ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
         transcriptionFactory: sessionId => ({ async accept() { transcriptionFrames++; return ok([]); }, async flush(generation) {
@@ -222,6 +226,12 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         const marks = sent.filter(item => item.event === "mark").length;
         sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
         await voiceUntil(() => sent.filter(item => item.event === "mark").length > marks || failures.length > 0, "private registration prompt");
+        assert.deepEqual(failures, []);
+      },
+      async privateKey(digit: string) {
+        const keySequence = sequence;
+        sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+        await voiceUntil(() => processedSequence >= keySequence || closed, "processed private keypad event");
         assert.deepEqual(failures, []);
       },
       async turn(text: string, options: { expectedFailure?: "confirmationMissing" | "staleGeneration" | "automatedCallUnavailable"; interrupt?: boolean } = {}) {

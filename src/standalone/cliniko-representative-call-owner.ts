@@ -16,6 +16,7 @@ type Operation = "book" | "cancel" | "reschedule" | "appointments.read";
 type Context = Pick<ClinikoBookingSessionConfig, "receipt" | "inbound" | "sessionId" | "policyVersion" | "ledger" | "policies" |
   "lookup" | "verificationBudget" | "delivery" | "directory" | "cliniko" | "signal" | "fetchPort" | "clock">;
 type Config = Readonly<{ context: Context; flow: ClinikoCallFlow; operation: Operation;
+  serviceChoice?: import("../core/booking-service-choice.ts").BookingServiceChoice;
   callerApprovalPath: string; callerPermission: PatientVerificationPermission;
   representativeApprovalPath: string; representativeCallerApprovalPath: string; permission: ClinicRepresentativePermission }>;
 type Failure = Readonly<{ kind: "representativeUnavailable" }>;
@@ -50,7 +51,7 @@ export class ClinikoRepresentativeCallOwner {
       const context = Object.freeze({ ...incoming.context, receipt: structuredClone(incoming.context.receipt), inbound: structuredClone(incoming.context.inbound),
         cliniko: Object.freeze({ ...incoming.context.cliniko }), clock: incoming.context.clock ?? (() => new Date().toISOString()),
         signal: AbortSignal.any([incoming.context.signal, lifetime.signal]) });
-      const config = Object.freeze({ ...incoming, context });
+      const config = Object.freeze({ ...incoming, context, ...(incoming.serviceChoice ? { serviceChoice: structuredClone(incoming.serviceChoice) } : {}) });
       const signal = AbortSignal.any([context.signal, AbortSignal.timeout(15_000)]), scope = context.receipt.scope;
       const building = (async () => {
         const [caller, process] = await Promise.all([
@@ -84,7 +85,13 @@ export class ClinikoRepresentativeCallOwner {
     finally { if (!completed) { lifetime.abort(); selection?.dispose(); actor?.dispose(); } }
   }
   get closed(): boolean { return this.#lifetime.signal.aborted; }
+  get operation(): Operation { return this.#config.operation; }
   binding() { return { callId: this.#config.context.receipt.callId, sessionId: this.#config.context.sessionId }; }
+  async privateStartupReady(): Promise<boolean> {
+    const c = this.#config.context, state = await c.ledger.read(c.receipt.callId, c.receipt.scope);
+    return !this.closed && this.#config.flow.matchesPrivateVerificationContext(c) && state.ok && !state.value.callerIdentityDenied &&
+      !state.value.pendingPresentationId && Object.values(state.value.presentations).every(item => item.status !== "started" && item.status !== "possiblySent");
+  }
   beginCallerVerification(): boolean {
     if (this.closed || !this.#config.flow.matchesPrivateVerificationContext(this.#config.context)) return false;
     this.#actor.begin(); return true;
@@ -104,7 +111,7 @@ export class ClinikoRepresentativeCallOwner {
     try {
       const selected = await this.#selection.select(structuredClone(identity), patientOperation[this.#config.operation], signal);
       if (!selected.ok || signal.aborted || !this.#config.flow.matchesPrivateVerificationContext(this.#config.context)) return denied();
-      const routed = await this.#config.flow.chooseRepresentative(this.#config.operation, { owner: this.#selection, selectionRef: selected.value.selectionRef }, signal, expectedRevision);
+      const routed = await this.#config.flow.chooseRepresentative(this.#config.operation, { owner: this.#selection, selectionRef: selected.value.selectionRef }, signal, expectedRevision, this.#config.serviceChoice);
       this.#routed = routed.ok && !signal.aborted && !this.closed;
       return this.#routed ? ok({ codeRequired: true as const }) : denied();
     } catch { return denied(); }

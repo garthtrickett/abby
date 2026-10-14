@@ -1,4 +1,5 @@
 import { confirmationResendLanguage } from "./confirmation-resend-language.ts";
+import { representativeRequestLanguage } from "./representative-request-language.ts";
 import { specialServiceLanguage } from "./special-service-language.ts";
 import { serviceConstraintLanguage } from "./service-constraint-language.ts";
 import { arrivalInformationLanguage } from "./arrival-information-language.ts";
@@ -224,6 +225,14 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     const identity = callerIdentityLanguage(turn.text);
     if (identity) return ok({ kind: "callerIdentityDenied", reason: identity });
     if (explicitUrgentRequest(turn.text)) return ok({ kind: "handoff", reason: "potentiallyUrgent", staffWorkUnavailable: true, checkedAt: before.now });
+    const representative = representativeRequestLanguage(turn.text);
+    if (representative && !before.callerIdentityDenied) {
+      const staff = staffRequestLanguage(turn.text);
+      if (staff) return ok(staff);
+      return config.owner.representativeStartupAvailable
+        ? ok({ kind: "workflow", operation: representative, forAnotherPerson: true })
+        : ok({ kind: "requestBoundary", reason: "proxyPatient" });
+    }
     if (isPresenceQuestion(turn.text)) return ok({ kind: "presence" });
     if (isMissedCallQuestion(turn.text)) return ok({ kind: "missedCall" });
     if (/\bmy card number is\b/i.test(turn.text)) return ok({ kind: "clarify", reason: "paymentEvidenceUnavailable" });

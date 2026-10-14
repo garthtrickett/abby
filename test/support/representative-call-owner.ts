@@ -8,6 +8,11 @@ import { representativeFixture } from "./representative-selection.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 import { verificationNow, verificationCanaries } from "./caller-verification.ts";
 
+export function representativeInputOptions(f: Awaited<ReturnType<typeof representativeCallOwnerFixture>>) {
+  const { callerApprovalPath, callerPermission, representativeApprovalPath, representativeCallerApprovalPath, permission } = f.config;
+  return { callerApprovalPath, callerPermission, representativeApprovalPath, representativeCallerApprovalPath, permission };
+}
+
 export async function representativeCallOwnerFixture() {
   const f = await bookingOffersFixture({ budget: new ClinikoReadBudget(200, () => Date.parse(verificationNow)) });
   const r = await representativeFixture(f.ownerPorts.rateBudget, { fixture: f, operation: "appointments.book" });
@@ -35,9 +40,10 @@ export async function representativeCallOwnerFixture() {
     ledger: f.ledger, policies: f.policies, lookup: f.sessionConfig.lookup, verificationBudget: { reserve: async () => true },
     delivery: { send: async (email: string, code: string) => { mail.push({ email, code }); return true; } },
     directory: f.directory, cliniko: r.config.cliniko, signal: r.lifetime.signal, fetchPort, clock: f.sessionConfig.clock };
-  const flow = resultValue(ClinikoCallFlow.create({ ...context, permission: { allows: async (_scope, id) => id === "43" && subjectPermission },
+  const flowConfig = { ...context, permission: { allows: async (_scope: unknown, id: string) => id === "43" && subjectPermission },
     approvals: { bookCaller: r.config.representativeCallerApprovalPath, cancelCaller: r.config.representativeCallerApprovalPath,
-      rescheduleCaller: r.config.representativeCallerApprovalPath, booking: f.path, cancellation: f.path, rescheduling: f.path } }));
+      rescheduleCaller: r.config.representativeCallerApprovalPath, booking: f.path, cancellation: f.path, rescheduling: f.path } };
+  const flow = resultValue(ClinikoCallFlow.create(flowConfig));
   const config = { context, flow, operation: "book" as const, callerApprovalPath: callerPath,
     callerPermission: { allows: async (_scope: unknown, id: string, operation: string) => actorPermission && id === verificationCanaries[2] && operation === "appointments.read" },
     representativeApprovalPath: r.policyConfig.path, representativeCallerApprovalPath: r.config.representativeCallerApprovalPath, permission: r.config.permission };
@@ -51,7 +57,7 @@ export async function representativeCallOwnerFixture() {
     resultValue(await f.runtime.startPresentation(f.callId, pending, f.sessionId, verificationNow));
     resultValue(await f.runtime.resolvePresentation(f.callId, pending, "played", f.sessionId, verificationNow));
   }
-  return { f, r, config, flow, mail, callerPath, waitForMail, play, get writes() { return writes; },
+  return { f, r, config, flow, flowConfig, mail, callerPath, waitForMail, play, get writes() { return writes; },
     revokeActor: () => { actorPermission = false; }, revokeSubject: () => { subjectPermission = false; },
     close: async () => { flow.dispose(); await r.close(); } };
 }
