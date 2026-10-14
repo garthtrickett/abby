@@ -99,26 +99,27 @@ describe("compiled class movement denial and partial recovery", { concurrency: 2
       }, { classes: true });
     });
 
-  for (const reason of ["denyOriginalCancel", "overbookAfterWrite"] as const)
-    test(`E2E-400 compiled ${reason} cancels only the replacement and ${reason === "overbookAfterWrite" ? "keeps exhausted-budget verification unresolved" : "proves the original remains active"}`, options, async () => {
+  for (const reason of ["denyOriginalCancel", "overbookAfterWrite", "overbookExhaustedRecovery"] as const)
+    test(`E2E-400 compiled ${reason} cancels only the replacement and ${reason === "overbookExhaustedRecovery" ? "keeps exhausted-budget verification unresolved" : "proves the original remains active"}`, options, async () => {
       await withClinicalRunner("reschedule", async call => {
         await prepare(call); await call.mark(); call.child.send({ kind: reason });
-        if (reason === "overbookAfterWrite") await voiceUntil(() => call.messages.some(row => row.kind === "classRaceArmed"), "compiled class race armed");
+        if (reason !== "denyOriginalCancel") await voiceUntil(() => call.messages.some(row => row.kind === "classRaceArmed"), "compiled class race armed");
         await call.say("Yes");
         assert.deepEqual(attendances(call).map(row => [row.method, row.path]), [["POST", "/v1/attendees"], ["PATCH", "/v1/attendees/401/cancel"]]);
         assert.equal(attendances(call)[1]!.body?.apply_to_repeats, false);
         const budgets = await call.db.selectFrom("cliniko_request_budgets").select(["sent_at_ms", "max_per_minute"]).execute();
-        const expected = reason === "overbookAfterWrite" ? "uncertain" : "rejected";
+        const expected = reason === "overbookExhaustedRecovery" ? "uncertain" : "rejected";
         assert.equal(call.messages.filter(row => row.kind === "classWriteOutcome").at(-1)!.actionStatus, expected, JSON.stringify({
           budget: budgets.map(row => ({ used: Array.isArray(row.sent_at_ms) ? row.sent_at_ms.length : -1, limit: row.max_per_minute })),
           phases: call.messages.filter(row => row.kind === "classPermissionDecision").slice(-6).map(row => ({ phase: row.phase, allowed: row.allowed })),
           lastReads: call.messages.filter(row => row.kind === "providerRequest").slice(-8).map(row => row.path?.startsWith("/v1/patients/") ? "patient" : row.path?.startsWith("/v1/attendees/") ? "ownAttendance" : row.path === "/v1/attendees" ? "capacity" : row.path?.startsWith("/v1/group_appointments") ? "class" : "metadata"),
         }));
-        if (reason === "overbookAfterWrite") {
+        if (reason === "overbookExhaustedRecovery") {
+          assert.ok(call.messages.some(row => row.kind === "classRecoveryBudgetConsumed"));
           assert.equal(budgets.length, 1); assert.equal(budgets[0]!.max_per_minute, 180);
           assert.ok(Array.isArray(budgets[0]!.sent_at_ms)); assert.equal(budgets[0]!.sent_at_ms.length, 180);
           assert.match(call.spoken.at(-1)!, /can't confirm|couldn't confirm|not confirmed|unconfirmed/i);
-        }
+        } else assert.ok(budgets.every(row => row.max_per_minute === 180 && Array.isArray(row.sent_at_ms) && row.sent_at_ms.length <= 180));
         const state = call.messages.filter(row => row.kind === "classMoveState").at(-1)!;
         assert.equal(state.originalActive, true); assert.equal(state.replacementActive, false);
         assert.notEqual(call.spoken.at(-1), "Your appointment move is confirmed.");

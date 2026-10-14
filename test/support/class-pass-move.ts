@@ -8,8 +8,9 @@ import { ClinikoClassPassMovement } from "../../src/standalone/cliniko-class-pas
 import type { ClassPassMoveAuthority } from "../../src/standalone/cliniko-class-pass-movement.ts";
 import { classAttendanceFixture, classAttendee as attendee, classLink as link, classNow as initialNow, classScope } from "./class-attendance.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
+import { addCaseHistory, visibleCaseRows, visibleArchivedCase } from "./class-pass-history.ts";
 
-export async function classPassMoveFixture(options: { differentService?: boolean; differentCase?: boolean; effect?: "releaseOne" | "unchanged" | "consumeOne"; full?: boolean } = {}) {
+export async function classPassMoveFixture(options: { differentService?: boolean; differentCase?: boolean; effect?: "releaseOne" | "unchanged" | "consumeOne"; full?: boolean; history?: number } = {}) {
   let now = initialNow, claims = 0;
   const budget = new ClinikoReadBudget(180, () => Date.parse(now));
   const rateBudget = { claim: () => { claims++; return budget.claim(); }, observe429: budget.observe429.bind(budget), checkHeadroom: budget.checkHeadroom.bind(budget) };
@@ -19,6 +20,8 @@ export async function classPassMoveFixture(options: { differentService?: boolean
   Object.assign(original, { patient_case: link("patient_cases", sourceCaseId), arrived: effect === "consumeOne" ? false : null });
   f.attendees.push({ ...attendee("601", "701", "42"), patient_case: link("patient_cases", sourceCaseId), arrived: true });
   if (options.differentCase) f.attendees.push({ ...attendee("602", "702", "42"), patient_case: link("patient_cases", destinationCaseId), arrived: true });
+  if (options.history) for (const [side, id] of [...new Set([sourceCaseId, destinationCaseId])].entries())
+    addCaseHistory(f.attendees, id, "42", options.history, now, 900000 + side * 10000);
   const records: Record<string, Record<string, unknown>> = {};
   for (const caseId of new Set([sourceCaseId, destinationCaseId])) records[caseId] = { id: caseId, ...link("patient_cases", caseId), patient: link("patients", "42"),
     max_sessions: options.full ? caseId === sourceCaseId ? effect === "consumeOne" ? 1 : 2 : 1 : 5,
@@ -70,9 +73,10 @@ export async function classPassMoveFixture(options: { differentService?: boolean
     }
     onRead(u.pathname);
     if (u.pathname.startsWith("/v1/patient_cases/")) {
-      const caseId = u.pathname.split("/")[3]!, rows = caseRows(caseId).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+      const caseId = u.pathname.split("/")[3]!, all = caseRows(caseId).sort((a, b) => String(a.id).localeCompare(String(b.id))), rows = visibleCaseRows(u, all);
       assert.ok(records[caseId]);
-      return u.pathname.endsWith("/attendees") ? Response.json({ attendees: rows, total_entries: rows.length }) : Response.json({ ...records[caseId], attendee_ids: rows.map(row => row.id) });
+      const page = Number(u.searchParams.get("page"));
+      return u.pathname.endsWith("/attendees") ? Response.json({ attendees: rows.slice((page - 1) * 100, page * 100), total_entries: rows.length }) : visibleArchivedCase(u, records[caseId]!) ? Response.json({ ...records[caseId], attendee_ids: all.map(row => row.id) }) : new Response(null, { status: 404 });
     }
     if (u.pathname === "/v1/attendees" && u.searchParams.getAll("q[]").includes("patient_case_id:!?")) {
       const filters = u.searchParams.getAll("q[]");

@@ -36,7 +36,10 @@ test("E2E-397 paired occurrence inspection shares current metadata and proof whi
   assert.deepEqual(result.sessions.map(row => ({ ref: row.sessionRef, remaining: row.remainingPlaces, attendance: row.attendance })), [
     { ref: "91", remaining: 1, attendance: { kind: "one", attendeeRef: "101" } }, { ref: "94", remaining: 3, attendance: { kind: "none" } },
   ]);
-  assert.equal(f.traffic.filter(row => row.path === "/v1/businesses/11").length, 3, "metadata is fresh before both snapshots and after them");
+  const metadata = f.traffic.map((row, index) => row.path === "/v1/businesses/11" ? index : -1).filter(index => index >= 0);
+  const rosters = f.traffic.map((row, index) => row.path === "/v1/attendees" ? index : -1).filter(index => index >= 0);
+  assert.equal(metadata.length, 2, "fresh metadata brackets both complete snapshots");
+  assert.ok(metadata[0]! < rosters[0]! && metadata[1]! > rosters.at(-1)!);
   for (const secret of ["private-attendee-note", "private-other-name", "102", "103"]) assert.equal(JSON.stringify(result).includes(secret), false);
 });
 
@@ -85,7 +88,9 @@ for (const fault of ["capacity", "typeCapacity", "attendee", "subject", "permiss
   test(`E2E-390 class ${fault} changing between observations denies publication`, async () => {
     const f = fixture();
     f.onRead((path, count) => {
-      if (path === "/v1/businesses/11" && count === 2) {
+      // Place every fault between the actual snapshots, independently of the
+      // metadata fetch ordering. The second roster snapshot must see drift.
+      if (path === "/v1/group_appointments" && count === 2) {
         if (fault === "capacity") f.groups[0]!.max_attendees = 2;
         if (fault === "typeCapacity") f.type.max_attendees = 5;
         if (fault === "attendee") f.attendees.push(attendee("108", "94", "49"));

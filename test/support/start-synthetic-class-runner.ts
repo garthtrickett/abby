@@ -15,6 +15,8 @@ import type { ClassPassCancellationEffect } from "../../src/standalone/cliniko-c
 import type { ClassServiceConfig } from "../../src/standalone/class-service-catalogue.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 import { classAttendee, classLink } from "./class-attendance.ts";
+import { claimClinikoBudget } from "../../src/cliniko/read-budget.ts";
+import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 
 const operation = process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION;
 if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
@@ -30,8 +32,11 @@ if (cancellationMode && (!["releaseOne", "unchanged", "consumeOne"].includes(can
 const passCancellation = cancellationMode as ClassPassCancellationEffect | undefined;
 const moveMode = process.env.ABBY_SYNTHETIC_CLASS_PASS_MOVE;
 if (moveMode && (!["full", "transfer"].includes(moveMode) || operation !== "reschedule" || passes || passCancellation)) throw new Error("invalid synthetic pass movement mode");
+const historyText = process.env.ABBY_SYNTHETIC_CLASS_PASS_HISTORY;
+if (historyText !== undefined && (!moveMode || !["201", "501"].includes(historyText))) throw new Error("invalid synthetic pass history");
+const history = historyText === undefined ? undefined : Number(historyText);
 const f = operation === "reschedule" ? await classMoveCallFlowFixture(process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1", multiple,
-  moveMode === "full" ? { full: true } : moveMode === "transfer" ? { differentCase: true } : undefined) : await classCallFlowFixture(operation, multiple, passes, passCancellation); f.flow.dispose();
+  moveMode === "full" ? { full: true, ...(history === undefined ? {} : { history }) } : moveMode === "transfer" ? { differentCase: true, ...(history === undefined ? {} : { history }) } : undefined) : await classCallFlowFixture(operation, multiple, passes, passCancellation); f.flow.dispose();
 if (operation === "reschedule" && (process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1" || process.env.ABBY_SYNTHETIC_CLASS_DATE_CORRECTION === "1"))
   f.native.groups.push({ ...structuredClone(f.native.groups[1]!), id: "95", ...classLink("group_appointments", "95"),
     starts_at: `2026-10-${process.env.ABBY_SYNTHETIC_CLASS_DATE_CORRECTION === "1" ? "10" : "09"}T12:00:00.000Z`,
@@ -51,6 +56,7 @@ f.native.business.business_name = "Demo Clinic"; f.native.business.show_in_onlin
 f.native.type.name = "Mat Pilates"; f.native.type.show_in_online_bookings = true;
 
 let denied = false, classDenied = false, mailLost = false, lostWrite = false, policyChanged = false;
+let sharedBudget: ClinikoRequestBudget | undefined;
 const inputs: string[] = [];
 const occupyClass = () => { for (let index = 0; index < 3; index++) f.native.attendees.push(classAttendee(String(851 + index), "94", String(951 + index))); };
 process.on("message", message => {
@@ -67,6 +73,11 @@ process.on("message", message => {
     if (message.kind === "movePassRace") {
       f.onWrite(async phase => { if (phase === "association" && "movePass" in f && f.movePass)
         f.native.attendees.push({ ...classAttendee("605", "705", f.movePass.queries[0]!.patientId), arrived: null, patient_case: classLink("patient_cases", f.movePass.destinationCaseId) });
+      }); process.send?.({ kind: "movePassRaceArmed" });
+    }
+    if (message.kind === "movePassLastPage") {
+      f.onWrite(async phase => { if (phase === "association" && "movePass" in f && f.movePass)
+        f.movePass.caseRows(f.movePass.destinationCaseId).at(-2)!.booking = classLink("bookings", "799999");
       }); process.send?.({ kind: "movePassRaceArmed" });
     }
     if (message.kind === "loseAssociation" && "lose" in f) { f.lose("association"); process.send?.({ kind: "movePassChanged" }); }
@@ -109,8 +120,17 @@ process.on("message", message => {
   if (message.kind === "loseOriginal" && "lose" in f) f.lose("original");
   if (message.kind === "denyOriginalCancel" && "phasePermission" in f) f.phasePermission(phase => phase !== "cancelOriginal");
   if (message.kind === "fillClass") { occupyClass(); process.send?.({ kind: "classOccupied" }); }
-  if (message.kind === "overbookAfterWrite") {
-    if ("phasePermission" in f) f.onWrite(async phase => { if (phase === "replacement") occupyClass(); });
+  if (message.kind === "overbookAfterWrite" || message.kind === "overbookExhaustedRecovery") {
+    if ("phasePermission" in f) f.onWrite(async phase => {
+      if (phase === "replacement") occupyClass();
+      if (phase === "compensation" && message.kind === "overbookExhaustedRecovery") {
+        assert.ok(sharedBudget);
+        // Real claims model other in-flight account consumers after the known
+        // compensation send. No limit, clock, lease or stored row is altered.
+        for (let index = 0; index < 180; index++) if (await claimClinikoBudget(sharedBudget) !== null) break;
+        process.send?.({ kind: "classRecoveryBudgetConsumed" });
+      }
+    });
     else f.onWrite(async () => occupyClass());
     process.send?.({ kind: "classRaceArmed" });
   }
@@ -169,6 +189,7 @@ try {
   await serveClinikoVoice({ clinikoFetch: provider, openaiFetch: speech, syntheticClock: now, transcriptionFactory: transcription, voiceProfiles: profiles,
     speechQuality: (_scope, configurationHash) => ok({ configurationHash, qualityVersion: "synthetic-class-runner.v1" }),
     clinicalHost(context) {
+      sharedBudget = context.rateBudget;
       const host = new ClinikoVoiceClinicalHost({ ...c, scope: context.scope, policies, greeting: snapshot.greeting!, fetchPort: provider,
         cliniko: { ...c.cliniko, apiKey: context.apiKey, contactEmail: context.contactEmail, rateBudget: context.rateBudget, contactRevision: context.contactRevision },
         permission: { allows: async (...args) => {

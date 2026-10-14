@@ -1,3 +1,4 @@
+import { visibleCaseRows, visibleArchivedCase } from "../support/class-pass-history.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
@@ -45,13 +46,18 @@ function fixture() {
     const count = (counts.get(path) ?? 0) + 1; counts.set(path, count); onRead(path, count);
     if (status !== 200) return new Response(null, { status, headers: { "X-RateLimit-Reset": String(Date.parse(now) / 1000 + 60) } });
     let body: Record<string, unknown>;
-    if (path === "/v1/patient_cases/51") body = structuredClone(record);
+    if (path === "/v1/patient_cases/51") {
+      assert.deepEqual(u.searchParams.getAll("q[]"), ["archived_at:*"]);
+      if (!visibleArchivedCase(u, record)) return new Response(null, { status: 404 });
+      body = structuredClone(record);
+    }
     else {
       assert.equal(path, "/v1/patient_cases/51/attendees");
       const page = Number(u.searchParams.get("page"));
       assert.equal(u.searchParams.get("per_page"), "100"); assert.equal(u.searchParams.get("sort"), "id:asc");
-      assert.equal(u.searchParams.has("q[]"), false, "all case uses count, including other services and past appointments");
-      body = { attendees: structuredClone(rows.slice((page - 1) * 100, page * 100)), total_entries: rows.length };
+      assert.deepEqual(u.searchParams.getAll("q[]"), ["archived_at:*", "cancelled_at:*", "deleted_at:*"], "all states are included without a date, patient or service restriction");
+      const visible = visibleCaseRows(u, rows);
+      body = { attendees: structuredClone(visible.slice((page - 1) * 100, page * 100)), total_entries: visible.length };
     }
     onBody(path, body); return Response.json(body);
   };
@@ -76,11 +82,36 @@ function fixture() {
 test("E2E-405 private native case counter counts every associated service without claiming payment or a reservation", async () => {
   const f = fixture(), found = resultValue(await f.read());
   assert.deepEqual(found, { patientCaseId: "51", patientId: "42", verificationRef: "private-class-proof", observedAt: now,
-    maximum: 5, used: 2, remaining: 3, overdrawn: false, eligibleOnSessionDate: true, includeCancelled: false, includeDna: false, usageFingerprint: found.usageFingerprint, financialAuthority: "none", reservable: false });
+    maximum: 5, used: 2, remaining: 3, overdrawn: false, associationCount: 4, eligibleOnSessionDate: true, includeCancelled: false, includeDna: false, usageFingerprint: found.usageFingerprint, financialAuthority: "none", reservable: false });
   assert.match(found.usageFingerprint, /^[a-f0-9]{64}$/);
   assert.equal(f.traffic.length, 4); assert.equal(f.proofCalls, 2);
   assert.equal(JSON.stringify(found).includes(canary), false); assert.equal(JSON.stringify(found).includes("private-other-name"), false);
   assert.equal(f.writes.length, 0);
+});
+test("E2E-411 explicit state inclusion reads a complete case when native defaults hide inactive records", async () => {
+  const f = fixture(), required = ["archived_at:*", "cancelled_at:*", "deleted_at:*"];
+  const native: typeof fetch = async (value, init) => {
+    const url = new URL(String(value)), response = await f.fetchPort(value, init);
+    if (url.pathname !== "/v1/patient_cases/51/attendees") return response;
+    const body = await response.json() as { attendees: Record<string, unknown>[]; total_entries: number };
+    if (!required.every(filter => url.searchParams.getAll("q[]").includes(filter))) {
+      body.attendees = body.attendees.filter(row => row.archived_at === null && row.cancelled_at === null && row.deleted_at === null);
+      body.total_entries = body.attendees.length;
+    }
+    return Response.json(body);
+  };
+  const reader = resultValue(ClinikoPatientCaseSessionsReader.create(f.config, f.proof, f.permission, native, () => now));
+  const found = resultValue(await reader.read(f.query, new AbortController().signal));
+  assert.equal(found.associationCount, 4); assert.equal(found.used, 2);
+  assert.ok(f.traffic.filter(row => row.path.endsWith("/attendees")).every(row => required.every(filter => row.filters.includes(filter))));
+});
+for (const reason of [50, 40, null, undefined, "50"] as const) test(`E2E-411 complete case cancellation requires the exact approved native reason, observed=${reason}`, async () => {
+  const f = fixture(); f.rows[0]!.booking = link("bookings", f.query.classSessionId);
+  const before = resultValue(await f.read());
+  f.rows[0]!.cancelled_at = now; f.rows[0]!.cancellation_reason = reason;
+  const inspected = await f.reader.inspectCancellation(f.query, before.usageFingerprint, "601", new AbortController().signal, 50);
+  assert.equal(inspected.ok, reason === 50);
+  if (inspected.ok) { assert.equal(inspected.value.used, before.used - 1); assert.equal(inspected.value.associationCount, 4); }
 });
 for (const cancelled of [false, true]) for (const dna of [false, true])
   test(`E2E-405 native case cancellation=${cancelled} and DNA=${dna} rules govern session use`, async () => {

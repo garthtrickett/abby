@@ -50,12 +50,29 @@ function fixture(kind: "book" | "cancel" = "book") {
     const proof = await f.proof.verifyPatient(scope, "private-class-proof", now);
     return proof.ok && proof.value.patientRef === request.patientId && !signal.aborted;
   };
-  return { ...f, writer, request, permit, readPermit, writes, reads,
+  return { ...f, writer, request, permit, readPermit, writes, reads, fetchPort,
     get checks() { return checks; }, deny: () => { allowed = false; }, loseResponse: () => { lost = true; }, wrongReceipt: () => { incorrect = true; },
     afterSend: (callback: () => void) => { afterSend = callback; },
     afterRead: (callback: () => void) => { afterRead = callback; },
     unchangedSharedRecords: () => { assert.deepEqual(f.groups, beforeGroups); assert.deepEqual(f.attendees.filter(row => (row.patient as { links: { self: string } }).links.self !== `${base}/patients/42`), beforeOther); } };
 }
+
+test("E2E-411 exact cancellation inspection explicitly includes a native record hidden by default", async () => {
+  const f = fixture("cancel"), signal = new AbortController().signal;
+  const sent = resultValue(await f.writer.executeOnce(f.request, signal, f.permit)); assert.equal(sent.kind, "accepted");
+  const native: typeof fetch = async (value, init) => {
+    const url = new URL(String(value));
+    if (url.pathname === "/v1/attendees/101") {
+      if (!url.searchParams.getAll("q[]").includes("cancelled_at:*")) return new Response(null, { status: 404 });
+      assert.deepEqual(url.searchParams.getAll("q[]"), ["archived_at:*", "cancelled_at:*", "deleted_at:*"]);
+    }
+    return f.fetchPort(value, init);
+  };
+  const writer = resultValue(ClinikoClassAttendanceWriter.create(f.config, native));
+  assert.equal(resultValue(await writer.inspect(f.request, sent.attendeeRef, signal, f.readPermit)), true);
+  f.attendees.find(row => row.id === "101")!.archived_at = now;
+  assert.equal(resultValue(await writer.inspect(f.request, sent.attendeeRef, signal, f.readPermit)), false);
+});
 
 for (const kind of ["book", "cancel"] as const) {
   test(`E2E-391 native class ${kind} changes one attendee after current private proof/capacity and inspects exact receipt`, async () => {

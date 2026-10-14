@@ -140,7 +140,9 @@ export class ClinikoClassAttendanceWriter {
     if (limited) return err(limited);
     if (!await permitted(beforeRead, stop)) return err({ kind: "forbidden" });
     try {
-      const response = await untilAbort(this.#fetch(`${this.#base}/attendees/${selected}`, { method: "GET", redirect: "error", signal: stop, headers: this.#headers() }), stop);
+      const query = new URLSearchParams();
+      for (const state of ["archived_at", "cancelled_at", "deleted_at"]) query.append("q[]", `${state}:*`);
+      const response = await untilAbort(this.#fetch(`${this.#base}/attendees/${selected}?${query}`, { method: "GET", redirect: "error", signal: stop, headers: this.#headers() }), stop);
       if (!response || stop.aborted) return err({ kind: "unavailable" });
       if (response.status === 429) return err(await observeCliniko429(this.#config.rateBudget, response.headers.get("X-RateLimit-Reset")));
       if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });

@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { ClinikoPatientCaseSessionsReader } from "../cliniko/patient-case-sessions.ts";
+import { CLINIKO_CASE_ASSOCIATION_LIMIT } from "../cliniko/patient-case-sessions.ts";
 import type { ClinikoCaseSessions } from "../cliniko/patient-case-sessions.ts";
 import type { ClassMovementPass } from "../cliniko/review-request.ts";
 import type { ClinikoAttendanceConfig } from "../cliniko/class-attendance-write.ts";
@@ -99,7 +100,7 @@ export class ClinikoClassPassMovement {
     if (!source.ok || !destination.ok) return undefined;
     const a = await source.value.inspectAttendance(this.#nativeQuery(request, selected, "source"), request.source.attendeeId, signal);
     const b = await destination.value.read(this.#nativeQuery(request, selected, "destination"), signal);
-    if (!a.ok || !b.ok || !b.value.eligibleOnSessionDate) return undefined;
+    if (!a.ok || !b.ok || !b.value.eligibleOnSessionDate || b.value.associationCount >= CLINIKO_CASE_ASSOCIATION_LIMIT) return undefined;
     const change = Number(a.value.includeCancelled) - Number(a.value.attendance.countsSession);
     const bind = (side: "source" | "destination", value: ClinikoCaseSessions) => ({ ...selected[side], usageFingerprint: value.usageFingerprint, maximum: value.maximum, used: value.used });
     const binding: ClassMovementPass = { source: { ...bind("source", a.value), effect: change < 0 ? "releaseOne" : change > 0 ? "consumeOne" : "unchanged" },
@@ -114,7 +115,7 @@ export class ClinikoClassPassMovement {
   async afterCancellation(binding: ClassMovementPass, request: ClinikoClassMoveRequest, signal: AbortSignal): Promise<boolean> {
     const selected = this.#selected(binding), source = this.#reader(request, selected, "source", "commit", binding), destination = this.#reader(request, selected, "destination", "commit", binding);
     if (!source.ok || !destination.ok) return false;
-    const a = await source.value.inspectCancellation(this.#nativeQuery(request, selected, "source"), binding.source.usageFingerprint, request.source.attendeeId, signal);
+    const a = await source.value.inspectCancellation(this.#nativeQuery(request, selected, "source"), binding.source.usageFingerprint, request.source.attendeeId, signal, request.cancellationReason);
     const b = await destination.value.read(this.#nativeQuery(request, selected, "destination"), signal);
     return a.ok && b.ok && a.value.maximum === binding.source.maximum && a.value.used === binding.source.used + delta(binding) &&
       b.value.eligibleOnSessionDate && !b.value.overdrawn && b.value.remaining >= 1 && b.value.maximum === binding.destination.maximum &&
@@ -124,12 +125,13 @@ export class ClinikoClassPassMovement {
     const selected = this.#selected(binding), source = this.#reader(request, selected, "source", "inspection", binding), destination = this.#reader(request, selected, "destination", "inspection", binding);
     if (!source.ok || !destination.ok) return false;
     const b = sameCase(binding) ? await destination.value.inspectMovement(this.#nativeQuery(request, selected, "destination"), {
-      usageFingerprint: binding.source.usageFingerprint, originalAttendeeId: request.source.attendeeId, originalClassSessionId: request.source.sessionId, replacementAttendeeId }, signal) :
+      usageFingerprint: binding.source.usageFingerprint, originalAttendeeId: request.source.attendeeId, originalClassSessionId: request.source.sessionId, replacementAttendeeId,
+      originalCancellationReason: request.cancellationReason }, signal) :
       await destination.value.inspectAddition(this.#nativeQuery(request, selected, "destination"), binding.destination.usageFingerprint, replacementAttendeeId, signal);
     if (!b.ok || !b.value.eligibleOnSessionDate || b.value.overdrawn || b.value.maximum !== binding.destination.maximum ||
       b.value.used !== binding.destination.used + 1 + (sameCase(binding) ? delta(binding) : 0)) return false;
     if (sameCase(binding)) return this.authorized(binding, request, "inspection", signal);
-    const a = await source.value.inspectCancellation(this.#nativeQuery(request, selected, "source"), binding.source.usageFingerprint, request.source.attendeeId, signal);
+    const a = await source.value.inspectCancellation(this.#nativeQuery(request, selected, "source"), binding.source.usageFingerprint, request.source.attendeeId, signal, request.cancellationReason);
     return a.ok && a.value.maximum === binding.source.maximum && a.value.used === binding.source.used + delta(binding) &&
       await this.authorized(binding, request, "inspection", signal);
   }

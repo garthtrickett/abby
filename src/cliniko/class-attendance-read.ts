@@ -136,8 +136,8 @@ export class ClinikoClassAttendanceReader {
     if (!businesses.some(row => row.id === c.businessId) || !types.some(row => row.id === c.appointmentTypeId)) return fail("malformed");
     return { timeZone: business.time_zone_identifier, typeCapacity: Number(type.max_attendees) };
   }
-  async #snapshot(from: string, to: string, signal: AbortSignal, selected?: readonly string[]): Promise<Snapshot> {
-    const c = this.#config, metadata = await this.#metadata(signal);
+  async #snapshot(from: string, to: string, signal: AbortSignal, selected?: readonly string[], metadataAfter = false): Promise<Snapshot> {
+    const c = this.#config, metadata = metadataAfter ? undefined : await this.#metadata(signal);
     const groups = selected ? await Promise.all(selected.map(async ref => {
       const row = object(await this.#get(`/group_appointments/${ref}`, signal));
       if (!row || row.id !== ref) return fail("malformed");
@@ -164,7 +164,7 @@ export class ClinikoClassAttendanceReader {
           return { id: String(row.id), patientId, active: this.#active(row, true) };
         }) });
     }
-    return { ...metadata, sessions: sessions.sort((a, b) => a.session.startsAt.localeCompare(b.session.startsAt) || a.session.id.localeCompare(b.session.id)) };
+    return { ...(metadata ?? await this.#metadata(signal)), sessions: sessions.sort((a, b) => a.session.startsAt.localeCompare(b.session.startsAt) || a.session.id.localeCompare(b.session.id)) };
   }
   async #verified(scope: LocationScope, ref: string, signal: AbortSignal): Promise<VerifiedPatient> {
     if (signal.aborted) return fail("unavailable");
@@ -210,7 +210,11 @@ export class ClinikoClassAttendanceReader {
     const work = (async (): Promise<Result<ClinikoClassRead, ClinikoClassReadFailure>> => {
       try {
         const patient = await this.#verified(scope, ref, signal), before = await this.#snapshot(from, to, signal, selected);
-        const after = candidates ? before : await this.#snapshot(from, to, signal, selected), metadata = await this.#metadata(signal);
+        // Native metadata brackets the two complete class/roster snapshots:
+        // before the first, after the second. No middle duplicate is needed.
+        // Menu candidates retain their separate closing metadata check.
+        const after = candidates ? before : await this.#snapshot(from, to, signal, selected, true);
+        const metadata = candidates ? await this.#metadata(signal) : { timeZone: after.timeZone, typeCapacity: after.typeCapacity };
         const current = await this.#verified(scope, ref, signal);
         if (patient.patientRef !== current.patientRef || !isDeepStrictEqual(before, after) ||
           !isDeepStrictEqual(metadata, { timeZone: after.timeZone, typeCapacity: after.typeCapacity })) return err({ kind: "changed" });

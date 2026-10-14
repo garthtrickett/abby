@@ -1,3 +1,4 @@
+import { visibleCaseRows, visibleArchivedCase } from "./class-pass-history.ts";
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -68,9 +69,9 @@ export async function classCancellationFixture(options: { operation?: "appointme
     const url = new URL(String(value)), method = init?.method ?? "GET";
     if (url.pathname.startsWith(`/v1/patient_cases/${caseId}`)) {
       assert.equal(method, "GET"); onCaseRead(url.pathname);
-      if (url.pathname === `/v1/patient_cases/${caseId}`) return Response.json(caseRecord);
-      assert.equal(url.pathname, `/v1/patient_cases/${caseId}/attendees`); assert.equal(url.searchParams.has("q[]"), false);
-      const page = Number(url.searchParams.get("page")); return Response.json({ attendees: caseRows.slice((page - 1) * 100, page * 100), total_entries: caseRows.length });
+      if (url.pathname === `/v1/patient_cases/${caseId}`) return visibleArchivedCase(url, caseRecord) ? Response.json(caseRecord) : new Response(null, { status: 404 });
+      assert.equal(url.pathname, `/v1/patient_cases/${caseId}/attendees`); assert.deepEqual(url.searchParams.getAll("q[]"), ["archived_at:*", "cancelled_at:*", "deleted_at:*"]);
+      const page = Number(url.searchParams.get("page")), visible = visibleCaseRows(url, caseRows); return Response.json({ attendees: visible.slice((page - 1) * 100, page * 100), total_entries: visible.length });
     }
     if (url.pathname === "/v1/recalls") {
       if (method === "GET")

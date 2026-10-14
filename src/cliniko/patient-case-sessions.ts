@@ -25,7 +25,7 @@ export type ClinikoCasePermission = Readonly<{
 }>;
 export type ClinikoCaseSessions = Readonly<{
   patientCaseId: string; patientId: string; verificationRef: string; observedAt: string;
-  maximum: number; used: number; remaining: number; overdrawn: boolean;
+  maximum: number; used: number; remaining: number; overdrawn: boolean; associationCount: number;
   eligibleOnSessionDate: boolean; includeCancelled: boolean; includeDna: boolean;
   usageFingerprint: string;
   /** No money, invoice, membership or reservation authority is inferred. */
@@ -34,9 +34,10 @@ export type ClinikoCaseSessions = Readonly<{
 export type ClinikoCaseAttendance = ClinikoCaseSessions & Readonly<{ attendance: Readonly<{ attendeeId: string; countsSession: boolean }> }>;
 export type ClinikoCaseMovement = Readonly<{
   usageFingerprint: string; originalAttendeeId: string; originalClassSessionId: string; replacementAttendeeId: string;
+  originalCancellationReason?: number;
 }>;
 type CaseObservation = ClinikoCaseSessions & Readonly<{ attendance?: ClinikoCaseAttendance["attendance"] }>;
-type AttendanceCheck = Readonly<{ kind: "addition" | "cancellation"; usageFingerprint: string; attendeeId: string }> |
+type AttendanceCheck = Readonly<{ kind: "addition" | "cancellation"; usageFingerprint: string; attendeeId: string; cancellationReason?: number }> |
   (ClinikoCaseMovement & Readonly<{ kind: "movement"; attendeeId: string }>) |
   Readonly<{ kind: "attendance"; attendeeId: string }>;
 export type ClinikoCaseConfig = Readonly<{
@@ -45,6 +46,7 @@ export type ClinikoCaseConfig = Readonly<{
   attendanceStatus: "arrivedFalseIsDna";
 }>;
 type Row = Record<string, unknown>;
+export const CLINIKO_CASE_ASSOCIATION_LIMIT = 1000;
 const object = (v: unknown): Row | undefined => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Row : undefined;
 const id = (v: unknown): v is string => typeof v === "string" && /^[1-9][0-9]{0,18}$/.test(v);
 const scopeValid = (v: unknown): v is LocationScope => {
@@ -61,7 +63,7 @@ const fail = (kind: ClinikoCaseFailure["kind"]): never => { throw new CaseFailur
 type Snapshot = Readonly<{
   maximum: number; includeCancelled: boolean; includeDna: boolean; issue: string | null; expiry: string | null;
   closedAt: string | null; archivedAt: string | null;
-  attendees: readonly Readonly<{ id: string; bookingId: string; arrived: boolean | null; cancelled: string | null; archived: string | null; deleted: string | null }>[];
+  attendees: readonly Readonly<{ id: string; bookingId: string; arrived: boolean | null; cancelled: string | null; archived: string | null; deleted: string | null; cancellationReason: number | null }>[];
 }>;
 
 /** Private, complete native case counter. Counts all associated appointments,
@@ -117,7 +119,8 @@ export class ClinikoPatientCaseSessionsReader {
     return p;
   }
   async #snapshot(query: ClinikoCaseQuery, patientId: string, signal: AbortSignal): Promise<Snapshot> {
-    const row = object(await this.#get(`/patient_cases/${query.patientCaseId}`, signal));
+    const metadataQuery = new URLSearchParams(); metadataQuery.append("q[]", "archived_at:*");
+    const row = object(await this.#get(`/patient_cases/${query.patientCaseId}?${metadataQuery}`, signal));
     if (!row || row.id !== query.patientCaseId || this.#link(row, "patient_cases") !== query.patientCaseId || this.#link(row.patient, "patients") !== patientId ||
       !Number.isSafeInteger(row.max_sessions) || Number(row.max_sessions) < 1 || Number(row.max_sessions) > 300 ||
       typeof row.include_cancelled_attendees !== "boolean" || typeof row.include_dna_attendees !== "boolean" ||
@@ -125,15 +128,17 @@ export class ClinikoPatientCaseSessionsReader {
       row.issue_date !== null && row.expiry_date !== null && String(row.issue_date) > String(row.expiry_date) ||
       !Array.isArray(row.attendee_ids) || !row.attendee_ids.every(id) || new Set(row.attendee_ids).size !== row.attendee_ids.length) return fail("malformed");
     const expected = row.attendee_ids as string[];
-    if (expected.length > 1000) return fail("tooManyResults");
+    if (expected.length > CLINIKO_CASE_ASSOCIATION_LIMIT) return fail("tooManyResults");
     const attendees: Snapshot["attendees"][number][] = [], seen = new Set<string>(); let total: number | undefined;
     for (let page = 1; page <= 10; page++) {
       const queryString = new URLSearchParams({ page: String(page), per_page: "100", sort: "id:asc" });
-      // No service, business, patient or future-date filter: every case use counts.
+      // Explicitly include inactive records rather than relying on endpoint
+      // defaults. These wildcards do not narrow the case to a date/service.
+      for (const state of ["archived_at", "cancelled_at", "deleted_at"]) queryString.append("q[]", `${state}:*`);
       const body = object(await this.#get(`/patient_cases/${query.patientCaseId}/attendees?${queryString}`, signal)), entries = body?.attendees;
       if (!body || !Array.isArray(entries) || !Number.isSafeInteger(body.total_entries) || Number(body.total_entries) < 0 ||
         total !== undefined && total !== body.total_entries) return fail("malformed");
-      total = Number(body.total_entries); if (total > 1000) return fail("tooManyResults");
+      total = Number(body.total_entries); if (total > CLINIKO_CASE_ASSOCIATION_LIMIT) return fail("tooManyResults");
       if (entries.length !== Math.min(100, total - attendees.length)) return fail("malformed");
       for (const entry of entries) {
         const a = object(entry), bookingId = a && this.#link(a.booking, "bookings");
@@ -141,7 +146,8 @@ export class ClinikoPatientCaseSessionsReader {
           this.#link(a.patient, "patients") !== patientId || this.#link(a.patient_case, "patient_cases") !== query.patientCaseId ||
           a.arrived !== null && typeof a.arrived !== "boolean" || ![a.cancelled_at, a.archived_at, a.deleted_at].every(v => v === null || instant(v))) return fail("malformed");
         seen.add(a.id);
-        attendees.push({ id: a.id, bookingId, arrived: a.arrived as boolean | null, cancelled: a.cancelled_at as string | null, archived: a.archived_at as string | null, deleted: a.deleted_at as string | null });
+        attendees.push({ id: a.id, bookingId, arrived: a.arrived as boolean | null, cancelled: a.cancelled_at as string | null, archived: a.archived_at as string | null, deleted: a.deleted_at as string | null,
+          cancellationReason: typeof a.cancellation_reason === "number" ? a.cancellation_reason : null });
       }
       if (attendees.length === total) {
         if (object(body.links)?.next != null || seen.size !== expected.length) return fail("malformed");
@@ -171,9 +177,9 @@ export class ClinikoPatientCaseSessionsReader {
   }
   /** Only the selected attendee's cancelled state may change. Metadata and all
    * other uses must match the exact prior private state, even at equal counts. */
-  async inspectCancellation(input: ClinikoCaseQuery, usageFingerprint: string, attendeeId: string, parentSignal: AbortSignal): Promise<Result<ClinikoCaseSessions, ClinikoCaseFailure>> {
-    if (!/^[a-f0-9]{64}$/.test(usageFingerprint) || !id(attendeeId)) return err({ kind: "invalidQuery" });
-    return this.#read(input, parentSignal, { kind: "cancellation", usageFingerprint, attendeeId });
+  async inspectCancellation(input: ClinikoCaseQuery, usageFingerprint: string, attendeeId: string, parentSignal: AbortSignal, cancellationReason?: number): Promise<Result<ClinikoCaseSessions, ClinikoCaseFailure>> {
+    if (!/^[a-f0-9]{64}$/.test(usageFingerprint) || !id(attendeeId) || cancellationReason !== undefined && ![10, 20, 30, 40, 50, 60].includes(cancellationReason)) return err({ kind: "invalidQuery" });
+    return this.#read(input, parentSignal, { kind: "cancellation", usageFingerprint, attendeeId, ...(cancellationReason === undefined ? {} : { cancellationReason }) });
   }
   /** Same-case replacement: the original must be cancelled on its exact old
    * class, the replacement active on the requested new class. Normalize just
@@ -183,7 +189,7 @@ export class ClinikoPatientCaseSessionsReader {
   async inspectMovement(input: ClinikoCaseQuery, movement: ClinikoCaseMovement, parentSignal: AbortSignal): Promise<Result<ClinikoCaseSessions, ClinikoCaseFailure>> {
     if (!movement || !/^[a-f0-9]{64}$/.test(movement.usageFingerprint) || !id(movement.originalAttendeeId) || !id(movement.originalClassSessionId) ||
       !id(movement.replacementAttendeeId) || movement.originalAttendeeId === movement.replacementAttendeeId ||
-      movement.originalClassSessionId === input?.classSessionId) return err({ kind: "invalidQuery" });
+      movement.originalClassSessionId === input?.classSessionId || movement.originalCancellationReason !== undefined && ![10, 20, 30, 40, 50, 60].includes(movement.originalCancellationReason)) return err({ kind: "invalidQuery" });
     return this.#read(input, parentSignal, { ...movement, kind: "movement", attendeeId: movement.replacementAttendeeId });
   }
   async #read(input: ClinikoCaseQuery, parentSignal: AbortSignal, check?: AttendanceCheck): Promise<Result<CaseObservation, ClinikoCaseFailure>> {
@@ -198,7 +204,11 @@ export class ClinikoPatientCaseSessionsReader {
         const patient = await this.#authority(query, signal), before = await this.#snapshot(query, patient.patientRef, signal);
         const after = await this.#snapshot(query, patient.patientRef, signal), current = await this.#authority(query, signal);
         if (patient.patientRef !== current.patientRef || !isDeepStrictEqual(before, after)) return err({ kind: "changed" });
-        const fingerprint = (snapshot: Snapshot) => createHash("sha256").update(JSON.stringify({ patientCaseId: query.patientCaseId, patientId: current.patientRef, snapshot })).digest("hex");
+        // Preserve the existing counter fingerprint wire contract. Reasons do
+        // not change session use, but exact cancellation inspection below
+        // independently requires the approved reason in both stable snapshots.
+        const fingerprint = (snapshot: Snapshot) => createHash("sha256").update(JSON.stringify({ patientCaseId: query.patientCaseId, patientId: current.patientRef,
+          snapshot: { ...snapshot, attendees: snapshot.attendees.map(({ cancellationReason: _reason, ...a }) => a) } })).digest("hex");
         const selected = check ? after.attendees.find(a => a.id === check.attendeeId) : undefined;
         if (check && (!selected || selected.bookingId !== query.classSessionId || selected.archived !== null || selected.deleted !== null)) return err({ kind: "changed" });
         if (check?.kind === "addition") {
@@ -207,12 +217,13 @@ export class ClinikoPatientCaseSessionsReader {
             fingerprint({ ...after, attendees: after.attendees.filter(a => a.id !== check.attendeeId) }) !== check.usageFingerprint) return err({ kind: "changed" });
         }
         if (check?.kind === "attendance" && selected!.cancelled !== null) return err({ kind: "changed" });
-        if (check?.kind === "cancellation" && (selected!.cancelled === null || fingerprint({ ...after,
+        if (check?.kind === "cancellation" && (selected!.cancelled === null || check.cancellationReason !== undefined && selected!.cancellationReason !== check.cancellationReason || fingerprint({ ...after,
           attendees: after.attendees.map(a => a.id === check.attendeeId ? { ...a, cancelled: null } : a) }) !== check.usageFingerprint)) return err({ kind: "changed" });
         if (check?.kind === "movement") {
           const original = after.attendees.find(a => a.id === check.originalAttendeeId);
           if (selected!.cancelled !== null || selected!.arrived === false || !original || original.bookingId !== check.originalClassSessionId ||
-            original.cancelled === null || original.archived !== null || original.deleted !== null || fingerprint({ ...after,
+            original.cancelled === null || original.archived !== null || original.deleted !== null ||
+            check.originalCancellationReason !== undefined && original.cancellationReason !== check.originalCancellationReason || fingerprint({ ...after,
               attendees: after.attendees.filter(a => a.id !== check.replacementAttendeeId).map(a => a.id === check.originalAttendeeId ? { ...a, cancelled: null } : a)
             }) !== check.usageFingerprint) return err({ kind: "changed" });
         }
@@ -221,7 +232,7 @@ export class ClinikoPatientCaseSessionsReader {
         const sessionDate = clinicDateAt(this.#config.timeZone, new Date(query.startsAt));
         const observedAt = this.#clock(); if (!instant(observedAt) || signal.aborted) return fail("unavailable");
         return ok({ patientCaseId: query.patientCaseId, patientId: current.patientRef, verificationRef: query.verificationRef, observedAt,
-          maximum: after.maximum, used, remaining: Math.max(0, after.maximum - used), overdrawn: used > after.maximum,
+          maximum: after.maximum, used, remaining: Math.max(0, after.maximum - used), overdrawn: used > after.maximum, associationCount: after.attendees.length,
           eligibleOnSessionDate: after.closedAt === null && after.archivedAt === null && (!after.issue || sessionDate >= after.issue) && (!after.expiry || sessionDate <= after.expiry),
           includeCancelled: after.includeCancelled, includeDna: after.includeDna, usageFingerprint: fingerprint(after), financialAuthority: "none", reservable: false,
           ...(check?.kind === "attendance" ? { attendance: { attendeeId: check.attendeeId, countsSession: selected!.arrived !== false || after.includeDna } } : {}) });

@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { ClinikoPatientCaseSessionsReader } from "../cliniko/patient-case-sessions.ts";
+import { CLINIKO_CASE_ASSOCIATION_LIMIT } from "../cliniko/patient-case-sessions.ts";
 import type { ClinikoCaseSessions } from "../cliniko/patient-case-sessions.ts";
 import type { ClinikoAttendanceConfig } from "../cliniko/class-attendance-write.ts";
 import type { ClinikoClassSession } from "../cliniko/class-attendance-read.ts";
@@ -83,14 +84,14 @@ export class ClinikoClassPassBooking {
     if (!selection) return undefined;
     const reader = this.#reader(selection, patient, session, approval, "proposal"); if (!reader.ok) return undefined;
     const read = await reader.value.read(this.#caseQuery(selection, patient, session, now), signal);
-    if (!read.ok || !read.value.eligibleOnSessionDate || read.value.overdrawn || read.value.remaining < 1 || signal.aborted) return undefined;
+    if (!read.ok || !read.value.eligibleOnSessionDate || read.value.overdrawn || read.value.remaining < 1 || read.value.associationCount >= CLINIKO_CASE_ASSOCIATION_LIMIT || signal.aborted) return undefined;
     return { selection, usageFingerprint: read.value.usageFingerprint, maximum: read.value.maximum, used: read.value.used };
   }
   async unchanged(binding: ClassPassBookingBinding, patient: VerifiedPatient, session: ClinikoClassSession, approval: ClassApproval,
     phase: "proposal" | "commit", now: string, signal: AbortSignal): Promise<boolean> {
     const reader = this.#reader(binding.selection, patient, session, approval, phase); if (!reader.ok) return false;
     const read = await reader.value.read(this.#caseQuery(binding.selection, patient, session, now), signal);
-    return read.ok && read.value.eligibleOnSessionDate && !read.value.overdrawn && read.value.remaining > 0 &&
+    return read.ok && read.value.eligibleOnSessionDate && !read.value.overdrawn && read.value.remaining > 0 && read.value.associationCount < CLINIKO_CASE_ASSOCIATION_LIMIT &&
       read.value.usageFingerprint === binding.usageFingerprint && !signal.aborted;
   }
   async inspectAddition(binding: ClassPassBookingBinding, patient: VerifiedPatient, session: ClinikoClassSession,

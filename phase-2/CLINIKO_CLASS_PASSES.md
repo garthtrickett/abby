@@ -539,3 +539,77 @@ The first compiled diagnostic failures and their test-only corrections are
 recorded in `THIRTEEN_GAP_IMPLEMENTATION.md`. Larger/mixed histories, broader
 catalogue/correction combinations, deploying-host financial provisioning,
 actual clinic acceptance and authoritative cloud qualification remain open.
+
+
+## Complete mixed histories and ordered native observations (E411)
+
+Local caller/native qualification now includes501 existing linked associations
+on a same-service/same-case move and201 associations on each side of the other
+case/service/instructor/duration combinations. Cancelled, DNA, archived and
+deleted uses on unrelated bookings remain in the full private fingerprint even
+when excluded from the counter. A same-count booking-link change on the last
+page prevents confirmation. These are specific qualified workloads, not an
+unbounded history-size claim.
+
+Native class metadata is fresh before the first complete roster snapshot and
+after the second. The second snapshot now reads its metadata at the end, so no
+middle duplicate is needed. Both complete roster observations, exact native
+relationships, final metadata validation and real proof at both outer boundaries
+remain. Drift tests place mutations between the actual snapshots and also
+assert the bracketing order; final-scan metadata revocation still denies.
+
+After replacement creation, two exact native is-null observations prove the
+active patient's record, class, creation marker and unlinked staging in the same
+private group as the current class/case observations before original cancellation.
+Original cancellation is proved by both complete stable case snapshots, with
+the exact approved native reason, source booking and original identity. The
+separate original-attendee GET is therefore unnecessary. Final linked-attendee
+GET/creation-marker inspection remains in the closing group, followed by complete
+case and current capacity checks. A group can record a known unlinked replacement
+only after real proof and financial authorization close; this preserves guarded
+compensation when cancellation permission or capacity is denied.
+
+After the private proposal journal, owned review/financial permission is current;
+the first subsequent protected provider operation still begins with actual
+native contact verification and closes it after all observations, before any
+clinical send. No proof is cached across any provider write. Limits and deadlines
+remain unchanged.
+
+The private reader now reports associationCount separately from used sessions.
+An addition is denied when it would exceed the existing1000-association complete
+inspection bound. Remaining paid sessions cannot authorize an uninspectable
+addition. No raw cancellation reason, notes or referral content leaves the edge;
+the expected reason is checked internally and excluded from the existing counter
+fingerprint encoding, preserving that wire contract.
+
+The initial larger-history probe found post-send quota exhaustion on some
+workloads. Consolidation and the metadata ordering reduce actual requests and
+qualify the sizes above; larger cross-case histories can still exhaust the
+physical budget. Complete cost admission and staged multi-window movement remain
+unfinished, alongside catalogue/correction combinations, financial provisioning
+and real clinic/cloud/voice acceptance. Current type/build/native qualification and the final rebuilt state-including
+signed serving gate passed:280 native checks,134 focused checks and60 compiled/
+contract checks, with overlapping counts and zero final failures/cancellations/
+skips. Exact logs and diagnosed intermediate failures are recorded in
+`THIRTEEN_GAP_IMPLEMENTATION.md`.
+
+
+### Explicit native state inclusion
+
+Cliniko documents the DateTime wildcard for including inactive records on
+endpoints that otherwise exclude them: [filtering results](https://docs.api.cliniko.com/#filtering-results).
+The [Attendee API](https://docs.api.cliniko.com/openapi/attendee/listattendees-get)
+supports archived_at, cancelled_at and deleted_at filters, and the
+[Patient Case API](https://docs.api.cliniko.com/openapi/patient-case/listpatientcases-get)
+supports archived_at on exact case reads. Complete case collections now request
+all three state wildcards; case metadata requests archived cases explicitly.
+These inclusion predicates do not restrict the case by service, patient or date.
+Every returned record is still checked against the exact private association set.
+
+Exact own-attendee inspections also include inactive states explicitly. An
+archived or deleted record cannot satisfy an active/cancelled receipt merely
+because the API returned it: all existing patient/booking/state/reason/marker
+checks remain. Native fixture providers independently hide each inactive state
+unless requested. A new red test exposed the old implicit-default assumption;
+the corrected reader passes the full history and exact cancelled-record checks.
+This is documentation-based adapter qualification; no live patient API was used.
