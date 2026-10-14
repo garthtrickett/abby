@@ -167,6 +167,19 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     return true;
   }
   binding() { return { callId: this.#config.receipt.callId, sessionId: this.#config.sessionId }; }
+  /** Trusted private-input composition only; matching context grants no
+   * patient permission and returns no caller or patient fields. */
+  matchesPrivateVerificationContext(context: Pick<ClinikoCallFlowConfig, "receipt" | "inbound" | "sessionId" | "policyVersion" | "cliniko">): boolean {
+    const c = this.#config;
+    return !this.closed && !this.patientAccessDenied && sameScope(context.receipt.scope, c.receipt.scope) &&
+      context.receipt.callId === c.receipt.callId && context.sessionId === c.sessionId && context.policyVersion === c.policyVersion &&
+      context.inbound.key.accountRef === c.inbound.key.accountRef && context.inbound.key.providerCallRef === c.inbound.key.providerCallRef &&
+      context.inbound.dialedNumber === c.inbound.dialedNumber && context.inbound.presentedCallerNumber === c.inbound.presentedCallerNumber &&
+      context.cliniko.businessId === c.cliniko.businessId && context.cliniko.timeZone === c.cliniko.timeZone &&
+      context.cliniko.countryCallingCode === c.cliniko.countryCallingCode &&
+      context.cliniko.rateBudget === c.cliniko.rateBudget &&
+      clinikoCredentialFingerprint(context.cliniko.apiKey) === clinikoCredentialFingerprint(c.cliniko.apiKey);
+  }
   async readBookingHorizon(query: import("../core/host.ts").BookingHorizonQuery) {
     return this.#readHorizon(query);
   }

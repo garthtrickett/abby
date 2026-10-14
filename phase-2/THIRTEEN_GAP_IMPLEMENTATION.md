@@ -1013,3 +1013,50 @@ and corrected. Four E2E-384 native cases qualify the private route; existing
 signed serving regressions qualify their existing routes, not private identity
 speech. The full13 goal remains active, and no real sender, clinic, acoustic
 or carrier activation is inferred. No dependency or database migration added.
+
+## Gap9 call-owned actor and private patient identity component, E2E-385 (unpublished)
+
+The new call-owned representative verifier captures independent native self
+verification and clinic-approved related-person policy. Its actor remains alive
+through exact name/birth-date selection, fresh patient channel proof and native
+workflow execution. Full scope/call/session/account/business/zone/inbound and
+shared-budget identity must match the actual CallFlow. Actor permission and
+clinical subject permission stay independent; closure disposes both proofs.
+The private input component keeps actor code media and patient code media out
+of transcription, collects only first/last name and birth date in separate
+private sessions, and permits field reset after played private readback before
+lookup/delivery. A failed caller instruction receipt closes without mail.
+
+The first source check passed and11/12 runtime checks passed in
+`4590eee3-1791975106850.log`. Native booking was uncertain because the fixture
+returned a review receipt for the actor rather than the selected patient. Its
+native receipt now identifies the actual requested subject; the unchanged
+committed/one-write assertions passed in the corrected32-case run
+`4590eee3-1791975362300.log`. A later source check found a readonly working draft
+and a missing moved test import (`4590eee3-1791975880218.log`), both corrected.
+The next source check passed but17/19 cases passed (`4590eee3-1791975991492.log`):
+private field collection stopped after actor code. A length/boolean-only code
+witness (`4590eee3-1791976203364.log`) proved actor verification succeeded; the
+fixture requested20ms silence below the controller's100ms minimum. With legal
+endpoint timing and enough synthetic silent frames, all19 native/component
+cases passed without skips in `4590eee3-1791976239355.log`. No controller,
+verification or API budget/deadline/permission/assertion was relaxed.
+
+Manifest1.193/385 records native/component evidence only. Actual private
+representative presentation, request routing and serving composition remain
+unfinished, as do explicit multiple-person task approval/caller pin, sequences,
+other workflows and remaining full13 requirements. Full source/build/serving
+regression is pending before publication. No dependency or migration added;
+all audio/identities are patient-free fixtures and no real mail/carrier activated.
+
+Final frozen-source E2E-385 qualification completed exit0: whole-source
+checking, fresh compiled voice artifacts, isolated PostgreSQL migration and112
+native/component/signed-serving checks passed, zero failures/cancellations/skips,
+followed by `git diff --check`.
+Log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791976378799.log`.
+Exact command: `npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh bash -c "npm run db:migrate && node --test --test-concurrency=4 test/voice/private-representative-input.test.ts test/cliniko/representative-call-owner.test.ts test/cliniko/representative-call-flow.test.ts test/cliniko/representative-workflow.test.ts test/cliniko/representative-appointment-change.test.ts test/cliniko/native-validation-context.test.ts test/cliniko/representative-selection.test.ts test/cliniko/rescheduling-authority.test.ts test/cliniko/rescheduling-session.test.ts test/cliniko/booking-offers.test.ts test/cliniko/standalone-cancellation.test.ts test/cliniko/standalone-rescheduling.test.ts test/cliniko/caller-verification-session.test.ts test/cliniko/call-task-sequence.test.ts test/cliniko/cliniko-call-flow.test.ts test/voice/call-task-sequence-runner.test.ts test/voice/standalone-clinical-runner.test.ts test/voice/caller-identity-denial.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts" && git diff --check`.
+The new media cases use component callbacks and deterministic synthetic PCM;
+they do not qualify ordinary representative request routing or the actual
+private playback event. Existing signed tests cover their existing routes.
+The full13 goal remains active, with private presentation/serving composition,
+multiple-person process/caller pin and sequences still required within gap9.
