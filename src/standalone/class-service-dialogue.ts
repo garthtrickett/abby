@@ -6,8 +6,8 @@ import type { VoiceIntent } from "../voice/voice-session.ts";
 import { classServiceName } from "./class-service-catalogue.ts";
 import type { ClassServices, ClassServiceItem } from "./class-service-catalogue.ts";
 
-type Pending = Readonly<{ turnId: string; revision: number; version: string; operation: "book" | "cancel"; page: number; expiresAt: number }>;
-type Selection = Readonly<{ turnId: string; item: ClassServiceItem; version: string; operation: "book" | "cancel"; callId: string; sessionId: string; revision: number; expiresAt: number }>;
+type Pending = Readonly<{ turnId: string; revision: number; version: string; operation: "book" | "cancel" | "reschedule"; page: number; expiresAt: number }>;
+type Selection = Readonly<{ turnId: string; item: ClassServiceItem; version: string; operation: "book" | "cancel" | "reschedule"; callId: string; sessionId: string; revision: number; expiresAt: number }>;
 const denied = { kind: "clarify", reason: "serviceSelectionUnavailable" } as const;
 
 /** Volatile public service selection. Private handles bind an exact current
@@ -22,21 +22,21 @@ export class ClassServiceDialogue {
     return turn.quality === "clear" && state.lifecycle === "active" && !state.callerIdentityDenied && turn.callId === state.callId &&
       turn.sessionId === state.sessionLease?.sessionId && Number.isFinite(Date.parse(now)) && Date.parse(state.sessionLease!.expiresAt) > Date.parse(now) && !state.processedTurnIds.includes(turn.turnId);
   }
-  #question(turn: FinalCallerTurn, state: CallState, catalogue: ClassServices, operation: "book" | "cancel", page: number, now: string): VoiceIntent {
+  #question(turn: FinalCallerTurn, state: CallState, catalogue: ClassServices, operation: "book" | "cancel" | "reschedule", page: number, now: string): VoiceIntent {
     const expiresAt = Math.min(Date.parse(now) + 120_000, Date.parse(catalogue.expiresAt));
     this.#pending = { turnId: turn.turnId, revision: state.conversationRevision, version: catalogue.version, operation, page, expiresAt };
     const question: ClassServiceQuestion = { operation, labels: catalogue.items.slice(page * 3, page * 3 + 3).map(item => item.label), page: page + 1,
       pages: Math.ceil(catalogue.items.length / 3), expiresAt: new Date(expiresAt).toISOString() };
     return { kind: "classServiceQuestion", question };
   }
-  #choose(turn: FinalCallerTurn, state: CallState, catalogue: ClassServices, operation: "book" | "cancel", item: ClassServiceItem, now: string): VoiceIntent {
+  #choose(turn: FinalCallerTurn, state: CallState, catalogue: ClassServices, operation: "book" | "cancel" | "reschedule", item: ClassServiceItem, now: string): VoiceIntent {
     const ref = `class-service:${randomUUID()}`;
     this.#pending = undefined; this.#selected.clear();
     this.#selected.set(ref, { turnId: turn.turnId, item, version: catalogue.version, operation, callId: turn.callId, sessionId: turn.sessionId!, revision: state.conversationRevision,
       expiresAt: Math.min(Date.parse(now) + 120_000, Date.parse(catalogue.expiresAt)) });
     return { kind: "workflow", operation, classAttendance: true, classSelectionRef: ref };
   }
-  resolve(turn: FinalCallerTurn, state: CallState, catalogue: ClassServices, now: string, requested?: Readonly<{ operation: "book" | "cancel"; name?: string }>): VoiceIntent | undefined {
+  resolve(turn: FinalCallerTurn, state: CallState, catalogue: ClassServices, now: string, requested?: Readonly<{ operation: "book" | "cancel" | "reschedule"; name?: string }>): VoiceIntent | undefined {
     if (!requested && !this.#pending) return undefined;
     if (!this.#valid(turn, state, now)) { this.clear(); return denied; }
     if (requested) {
@@ -67,7 +67,7 @@ export class ClassServiceDialogue {
     if (!selected) return this.#question(turn, state, catalogue, pending.operation, pending.page, now);
     return this.#choose(turn, state, catalogue, pending.operation, selected, now);
   }
-  take(ref: string, operation: "book" | "cancel", state: CallState, catalogue: ClassServices, now: string, turnId?: string): ClassServiceItem | undefined {
+  take(ref: string, operation: "book" | "cancel" | "reschedule", state: CallState, catalogue: ClassServices, now: string, turnId?: string): ClassServiceItem | undefined {
     const selection = this.#selected.get(ref); this.#selected.delete(ref);
     return selection && selection.turnId === turnId && selection.operation === operation && selection.callId === state.callId && selection.sessionId === state.sessionLease?.sessionId &&
       selection.revision === state.conversationRevision && selection.version === catalogue.version && selection.expiresAt > Date.parse(now) &&

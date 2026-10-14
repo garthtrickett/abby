@@ -47,6 +47,7 @@ export async function classMoveFixture(different = false, near = false) {
   let phasePermission: (phase: Parameters<ClassMovePermission["allows"]>[0]["phase"]) => boolean = () => true;
   let onWrite: ((phase: string) => void | Promise<void>) | undefined;
   const recalls: Record<string, unknown>[] = [], writes: { path: string; body: Record<string, unknown> }[] = [];
+  let callState = f.state;
   const fetchPort: typeof fetch = async (value, init) => {
     const url = new URL(String(value)), method = init?.method ?? "GET";
     if (url.pathname.startsWith("/v1/patients/")) return f.fetchPort(value, init);
@@ -58,8 +59,8 @@ export async function classMoveFixture(different = false, near = false) {
     }
     if (method === "POST" || method === "PATCH") {
       assert.equal(recalls.length, 1);
-      const dispatched = Object.values((await f.state()).actions).filter(action => action.status === "dispatched");
-      assert.equal(dispatched.length, 1); assert.equal((await f.state()).presentations[dispatched[0]!.presentationId]!.status, "played");
+      const dispatched = Object.values((await callState()).actions).filter(action => action.status === "dispatched");
+      assert.equal(dispatched.length, 1); assert.equal((await callState()).presentations[dispatched[0]!.presentationId]!.status, "played");
       const body = JSON.parse(String(init?.body)); writes.push({ path: url.pathname, body });
       const phase = method === "POST" ? "replacement" : url.pathname.includes("/101/") ? "original" : "compensation";
       let row: Record<string, unknown>;
@@ -102,11 +103,11 @@ export async function classMoveFixture(different = false, near = false) {
     assert.equal(f.mail.length, 1); assert.equal((await f.session.submitCode(f.mail[0]!.code)).verified, true); };
   const steps: { stage: string; claims: number; text: string }[] = [];
   const record = async (stage: string) => { const state = await f.state(); const shown = state.pendingPresentationId ? state.presentations[state.pendingPresentationId] : undefined; steps.push({ stage, claims, text: shown && "approvedText" in shown ? shown.approvedText : state.callerMessages.at(-1) ?? "" }); };
-  const prepare = async () => {
-    resultValue(await reception.readReschedulingMenu(f.scope, turn("targets"), "targets", "2026-10-08", "2026-10-08", now)); await record("targets"); await play();
-    resultValue(await reception.selectReschedulingMenu(f.scope, turn("target-one", "one"), "targets", 1, now)); await record("targetSelected"); await play();
-    resultValue(await reception.readReschedulingMenu(f.scope, turn("offers"), "offers", near ? "2026-10-04" : "2026-10-09", near ? "2026-10-04" : "2026-10-09", now)); await record("offers"); await play();
-    resultValue(await reception.selectReschedulingMenu(f.scope, turn("offer-one", "one"), "offers", 1, now)); await record("offerSelected");
+  const prepare = async (activeReception = reception) => {
+    resultValue(await activeReception.readReschedulingMenu(f.scope, turn("targets"), "targets", "2026-10-08", "2026-10-08", now)); await record("targets"); await play();
+    resultValue(await activeReception.selectReschedulingMenu(f.scope, turn("target-one", "one"), "targets", 1, now)); await record("targetSelected"); await play();
+    resultValue(await activeReception.readReschedulingMenu(f.scope, turn("offers"), "offers", near ? "2026-10-04" : "2026-10-09", near ? "2026-10-04" : "2026-10-09", now)); await record("offers"); await play();
+    resultValue(await activeReception.selectReschedulingMenu(f.scope, turn("offer-one", "one"), "offers", 1, now)); await record("offerSelected");
     const action = Object.values((await f.state()).actions).at(-1); assert.equal(action?.status, "awaitingConfirmation", JSON.stringify({ claims, steps, last: (await f.state()).callerMessages.at(-1) })); return action!;
   };
   const pause = async (seconds: number) => {
@@ -114,7 +115,13 @@ export async function classMoveFixture(different = false, near = false) {
     while (remaining > 0) { const step = Math.min(15, remaining); now = new Date(Date.parse(now) + step * 1000).toISOString(); f.setTime(now);
       resultValue(await f.runtime.renewSession(f.callId, f.sessionId, (await f.state()).sessionLease!.version, now)); remaining -= step; }
   };
-  return { ...f, native, host, reception, config, sourcePath, destinationPath, movePath, recalls, writes, steps, turn, play, verify, prepare,
+  const classSessionConfig = { receipt: f.receipt, inbound: f.inbound, sessionId: f.sessionId, policyVersion: source.policyVersion,
+    ledger: f.ledger, policies: f.policies, lookup: f.sessionConfig.lookup, permission: f.sessionConfig.permission,
+    verificationBudget: f.sessionConfig.budget, delivery: f.sessionConfig.delivery, directory: f.config.directory,
+    callerApprovalPath: f.path, classApprovalPath: sourcePath, operation: "reschedule" as const,
+    classPermission: permission, moveApprovalPath: movePath, destination: { classApprovalPath: destinationPath, practitionerId: destination.practitionerId, appointmentTypeId: destination.appointmentTypeId },
+    cliniko: { ...native.config, timeZone: source.timeZone, countryCallingCode: "61", recallTypeId: "7" }, signal: lifetime.signal, fetchPort, clock: () => now };
+  return { ...f, classSessionConfig, bindNativeCall: (read: typeof callState) => { callState = read; }, native, host, reception, config, sourcePath, destinationPath, movePath, recalls, writes, steps, turn, play, verify, prepare,
     get claims() { return claims; }, get windowClaims() { return [...windows.values()]; }, pause, setTime: (value: string) => { now = value; f.setTime(value); }, permit: (value: boolean) => { permitted = value; },
     phasePermission: (allow: typeof phasePermission) => { phasePermission = allow; }, lose: (phase: NonNullable<typeof lost>) => { lost = phase; }, onWrite: (hook: typeof onWrite) => { onWrite = hook; },
     replaceSource: async (patch: Partial<ClassApproval>) => { source = { ...source, ...patch }; await writeFile(sourcePath, JSON.stringify(source)); },

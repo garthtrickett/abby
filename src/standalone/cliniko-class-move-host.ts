@@ -18,6 +18,7 @@ import { ClinikoClassAttendanceMove } from "./cliniko-class-attendance-move.ts";
 import type { ClinikoClassMovePhase } from "./cliniko-class-attendance-move.ts";
 import { clinicDayStartUtc } from "./clinic-clock.ts";
 import { OwnerFileClassMovePolicy } from "./owner-file-class-move-policy.ts";
+import { approvalInstant } from "./owner-file-clinic-approval.ts";
 import type { ClassMoveApproval } from "./owner-file-class-move-policy.ts";
 import { OwnerFileClassPolicy } from "./owner-file-class-policy.ts";
 import type { ClassApproval } from "./owner-file-class-policy.ts";
@@ -131,6 +132,14 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
   #expires(context: Context) { return new Date(Math.min(Date.parse(this.#now()) + Math.min(context.source.offerTtlSeconds, context.destination.offerTtlSeconds, context.move.offerTtlSeconds) * 1000,
     ...[context.source.effectiveUntil, context.destination.effectiveUntil, context.move.effectiveUntil, context.grant.expiresAt].map(Date.parse))).toISOString(); }
   #range(query: ReschedulingMenuReadQuery, context: Context) {
+    if (query.stage === "targets") {
+      const first = approvalInstant(query.from), last = approvalInstant(query.to), now = Date.parse(this.#now());
+      if (first !== undefined && last !== undefined) {
+        const from = Math.max(first, now);
+        return Number.isFinite(now) && last > from && last - first <= 7 * 86400000 && last - now <= context.move.maxAdvanceDays * 86400000
+          ? { from: new Date(from).toISOString(), to: query.to } : undefined;
+      }
+    }
     const day = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
     if (!day(query.from) || !day(query.to) || query.from > query.to || Date.parse(query.to) - Date.parse(query.from) > 6 * 86400000) return undefined;
     const from = new Date(Math.max(Date.parse(this.#now()), Date.parse(clinicDayStartUtc(context.move.timeZone, query.from)))).toISOString();

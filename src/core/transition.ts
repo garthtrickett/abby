@@ -377,7 +377,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
     case "classServiceQuestion": {
       const text = classServiceQuestionText(interpretation.question, now), operation = interpretation.question?.operation;
       if (!text || turn.quality !== "clear" || !state.policy.automationEnabled || !state.policy.staffWorkEnabled ||
-          state.policy.capabilities[operation] !== "execute" || !(operation === "book" ? state.policy.bookingEnabled : state.policy.cancellationEnabled)) return err({ kind: "invalidTransition" });
+          state.policy.capabilities[operation] !== "execute" || !(operation === "book" ? state.policy.bookingEnabled : operation === "cancel" ? state.policy.cancellationEnabled : state.policy.reschedulingEnabled)) return err({ kind: "invalidTransition" });
       state.callerMessages.push(text);
       break;
     }
