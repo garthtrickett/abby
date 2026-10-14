@@ -4,11 +4,12 @@ import { normalizeEmailAddress } from "../shared/email-address.ts";
 import { validClinikoId } from "./appointment-change-authority.ts";
 import { approvalRef, clinicApprovalKeys, decodeClinicApproval, OwnerFileClinicApproval } from "./owner-file-clinic-approval.ts";
 import type { ClinicApproval } from "./owner-file-clinic-approval.ts";
+import type { ConfirmationContentKind, ConfirmationTemplate } from "./smtp-appointment-confirmation-delivery.ts";
 import type { AdminDirectory } from "./identity/magic-link.ts";
 
 export type ConfirmationResendApproval = ClinicApproval & Readonly<{
   policyVersion: string; businessId: string; credentialFingerprint: string; timeZone: string;
-  owner: "abby"; sender: string; template: "appointmentDetails.v1";
+  owner: "abby"; sender: string; template: ConfirmationTemplate; contentKinds?: readonly ConfirmationContentKind[];
   recipient: "verifiedRegisteredEmail"; patientPermission: "independentClinicHost";
   consent: "separatePlayedConfirmation"; submission: "durableSingleAttempt";
   recallTypeId: string; reviewProcess: "clinikoRecallsFullType";
@@ -17,18 +18,22 @@ export type ConfirmationResendApproval = ClinicApproval & Readonly<{
 type Binding = Pick<ConfirmationResendApproval, "scope" | "policyVersion" | "businessId" | "credentialFingerprint" | "timeZone" | "sender" | "recallTypeId">;
 type Config = Binding & Readonly<{ path: string; directory: AdminDirectory; clock?: () => string }>;
 function decode(value: unknown, scope: LocationScope): ConfirmationResendApproval | undefined {
+  const incoming = value && typeof value === "object" ? value as Record<string, unknown> : undefined;
+  const extended = incoming?.template === "appointmentDetails.v2";
   if (!decodeClinicApproval(value, scope, [...clinicApprovalKeys, "policyVersion", "businessId", "credentialFingerprint", "timeZone",
     "owner", "sender", "template", "recipient", "patientPermission", "consent", "submission", "recallTypeId", "reviewProcess",
-    "reviewOwnerRef", "reviewBackupRef", "reviewCadenceMinutes"])) return undefined;
+    "reviewOwnerRef", "reviewBackupRef", "reviewCadenceMinutes", ...(extended ? ["contentKinds"] : [])])) return undefined;
   const row = value as ConfirmationResendApproval;
   if (!approvalRef(row.policyVersion) || !validClinikoId(row.businessId) || !/^[a-f0-9]{64}$/.test(row.credentialFingerprint) ||
       typeof row.sender !== "string" || normalizeEmailAddress(row.sender) !== row.sender ||
-      row.owner !== "abby" || row.template !== "appointmentDetails.v1" || row.recipient !== "verifiedRegisteredEmail" ||
+      row.owner !== "abby" || !["appointmentDetails.v1", "appointmentDetails.v2"].includes(row.template) || row.recipient !== "verifiedRegisteredEmail" ||
       row.patientPermission !== "independentClinicHost" || row.consent !== "separatePlayedConfirmation" || row.submission !== "durableSingleAttempt" ||
       !validClinikoId(row.recallTypeId) || row.reviewProcess !== "clinikoRecallsFullType" || !approvalRef(row.reviewOwnerRef) ||
       !approvalRef(row.reviewBackupRef) || row.reviewOwnerRef === row.reviewBackupRef || !Number.isSafeInteger(row.reviewCadenceMinutes) ||
       row.reviewCadenceMinutes < 1 || row.reviewCadenceMinutes > 1440 ||
       typeof row.timeZone !== "string" || row.timeZone.length > 128) return undefined;
+  if (extended && (!Array.isArray(row.contentKinds) || row.contentKinds.length < 1 || row.contentKinds.length > 3 ||
+      new Set(row.contentKinds).size !== row.contentKinds.length || row.contentKinds.some(kind => !["activeInPerson", "activeTelehealth", "cancelled"].includes(kind)))) return undefined;
   try { new Intl.DateTimeFormat("en-GB", { timeZone: row.timeZone }); } catch { return undefined; }
   return row;
 }

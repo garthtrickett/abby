@@ -4,6 +4,6 @@ export function confirmationResendLanguage(text: string): "request" | "unsupport
   if (/\b(?:don't|do not|never|not|stop)\b/.test(value)) return undefined;
   if (/\b(?:send|resend)\b/.test(value) && /\b(?:email|confirmation|appointment details)\b/.test(value) &&
       /@|\b(?:another|different|someone else|wife|husband|daughter|son|new address)\b/.test(value)) return "unsupportedRecipient";
-  return /^(?:(?:can|could|would|will) you |(?:please |i want you to |i would like you to ))?(?:resend|send)(?: me)? (?:my|the) (?:appointment (?:confirmation(?: email)?|details(?: email)?|email)|confirmation email)(?: again)?(?: please)?$/.test(value)
+  return /^(?:(?:can|could|would|will) you |(?:please |i want you to |i would like you to ))?(?:resend|send)(?: me)? (?:my|the) (?:(?:(?:cancelled|canceled|telehealth|virtual|in-person) )?appointment (?:confirmation(?: email)?|details(?: email)?|email)|confirmation email)(?: again)?(?: please)?$/.test(value)
     ? "request" : undefined;
 }

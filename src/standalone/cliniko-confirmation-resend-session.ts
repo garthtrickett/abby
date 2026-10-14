@@ -112,7 +112,7 @@ export class ClinikoConfirmationResendSession {
           credentialFingerprint: clinikoCredentialFingerprint(c.cliniko.apiKey), policyVersion: c.policyVersion,
           termsVersion: c.policy.bindingFingerprint(), timeZone: c.cliniko.timeZone, createdAt: (c.clock ?? (() => new Date().toISOString()))(),
           operation: { kind: "confirmationResend", resendRef: pending.ref, appointmentId: evidence.appointmentId, practitionerId: evidence.practitionerId,
-            appointmentTypeId: evidence.appointmentTypeId, startsAt: evidence.mail.startsAt, endsAt: evidence.mail.endsAt } };
+            appointmentTypeId: evidence.appointmentTypeId, ...(evidence.mail.contentKind ? { contentKind: evidence.mail.contentKind } : {}), startsAt: evidence.mail.startsAt, endsAt: evidence.mail.endsAt } };
         const sent = await this.#review.run(request, { authorize: (_request, bound) => this.#authorize(pending, bound),
           send: (_request, bound) => this.#submitter.submit(pending.ref, evidence.mail, bound, () => this.#authorize(pending, bound)) }, signal);
         return sent.ok ? sent.value.outcome : { kind: sent.error.kind === "mutationUncertain" ? "unknown" as const : "denied" as const };

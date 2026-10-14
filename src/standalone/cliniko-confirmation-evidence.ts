@@ -13,7 +13,7 @@ import { sameScope, validClinikoId } from "./appointment-change-authority.ts";
 import { CallerVerificationSession } from "./caller-verification-session.ts";
 import type { PatientVerificationPermission } from "./email-patient-authority.ts";
 import { OwnerFileConfirmationResendPolicy } from "./owner-file-confirmation-resend-policy.ts";
-import { appointmentConfirmationText } from "./smtp-appointment-confirmation-delivery.ts";
+import { appointmentConfirmationText, validPatientJoinUrl } from "./smtp-appointment-confirmation-delivery.ts";
 import type { AppointmentConfirmationMail } from "./smtp-appointment-confirmation-delivery.ts";
 
 export type ConfirmationEvidenceConfig = Readonly<{
@@ -98,6 +98,27 @@ export class ClinikoConfirmationEvidenceReader {
     const id = self.slice(`${this.#base}/${family}/`.length);
     return validClinikoId(id) ? id : undefined;
   }
+  async #patientJoin(appointmentId: string, patientId: string, origin: string, signal: AbortSignal): Promise<string | undefined> {
+    const seen = new Set<string>(); let total: number | undefined, selected: string | undefined;
+    for (let page = 1; page <= 5; page++) {
+      const query = new URLSearchParams({ page: String(page), per_page: "100" });
+      query.append("q[]", `booking_id:=${appointmentId}`); query.append("q[]", `patient_id:=${patientId}`);
+      const body = await this.#get(`/attendees?${query}`, signal);
+      if (!body || !Number.isSafeInteger(body.total_entries) || Number(body.total_entries) < 0 || Number(body.total_entries) > 500 ||
+          (total !== undefined && total !== body.total_entries) || !Array.isArray(body.attendees) || body.attendees.length > 100) return undefined;
+      total = Number(body.total_entries);
+      for (const value of body.attendees) {
+        const row = record(value);
+        if (!row || !validClinikoId(row.id) || seen.has(row.id) || this.#linkedId(row.booking, "bookings") !== appointmentId ||
+            this.#linkedId(row.patient, "patients") !== patientId || row.archived_at !== null || row.deleted_at !== null || row.cancelled_at !== null ||
+            !validPatientJoinUrl(row.telehealth_url) || new URL(row.telehealth_url).origin !== origin || selected !== undefined) return undefined;
+        seen.add(row.id); selected = row.telehealth_url;
+      }
+      if (seen.size > total || body.attendees.length === 0 && seen.size < total) return undefined;
+      if (seen.size === total) return seen.size === 1 ? selected : undefined;
+    }
+    return undefined;
+  }
   /** appointmentId comes from trusted verified selection, never from a model tool argument. */
   async read(appointmentId: string, external: AbortSignal): Promise<ConfirmationEvidence | undefined> {
     if (!validClinikoId(appointmentId) || !(external instanceof AbortSignal) || external.aborted) return undefined;
@@ -110,31 +131,49 @@ export class ClinikoConfirmationEvidenceReader {
     if (!before) return undefined;
     const row = await this.#get(`/individual_appointments/${appointmentId}`, signal);
     const startsAt = instant(row?.starts_at), endsAt = instant(row?.ends_at);
+    const cancelledAt = row?.cancelled_at === null ? undefined : instant(row?.cancelled_at);
+    const approval = await c.policy.current(c.receipt.scope);
+    if (!approval.ok || row?.cancelled_at !== null && !cancelledAt) return undefined;
     const practitionerId = this.#linkedId(row?.practitioner, "practitioners"), appointmentTypeId = this.#linkedId(row?.appointment_type, "appointment_types");
-    if (!row || row.id !== appointmentId || row.cancelled_at !== null || row.archived_at !== null || row.deleted_at !== null ||
+    if (!row || row.id !== appointmentId || row.archived_at !== null || row.deleted_at !== null ||
         this.#linkedId(row.patient, "patients") !== before.patientRef || this.#linkedId(row.business, "businesses") !== c.cliniko.businessId ||
-        !startsAt || !endsAt || Date.parse(startsAt) <= Date.parse(this.#now()) || Date.parse(endsAt) <= Date.parse(startsAt) || !practitionerId || !appointmentTypeId) return undefined;
+        !startsAt || !endsAt || (cancelledAt ? Date.parse(cancelledAt) > Date.parse(this.#now()) || Math.abs(Date.parse(startsAt) - Date.parse(this.#now())) > 90 * 86_400_000 : Date.parse(startsAt) <= Date.parse(this.#now())) || Date.parse(endsAt) <= Date.parse(startsAt) || !practitionerId || !appointmentTypeId) return undefined;
     const business = await this.#get(`/businesses/${c.cliniko.businessId}`, signal);
     const practitioner = await this.#get(`/practitioners/${practitionerId}`, signal);
     const type = await this.#get(`/appointment_types/${appointmentTypeId}`, signal);
     if (!business || business.id !== c.cliniko.businessId || business.archived_at !== null || business.time_zone_identifier !== c.cliniko.timeZone ||
         !practitioner || practitioner.id !== practitionerId || !type || type.id !== appointmentTypeId || type.archived_at !== null || !label(type.name) ||
-        !label(business.business_name) || !label(business.address_1)) return undefined;
+        !label(business.business_name) || ![true, false, null].includes(type.telehealth_enabled as boolean | null)) return undefined;
     const locationName = business.display_name ?? business.label ?? business.business_name;
     const practitionerName = practitioner.display_name ?? (label(practitioner.first_name) && label(practitioner.last_name) ? `${practitioner.first_name} ${practitioner.last_name}` : undefined);
     const addressParts = [business.address_1, business.address_2, business.city, business.state, business.post_code, business.country].filter(v => v !== null && v !== undefined && v !== "");
-    if (!label(locationName) || !label(practitionerName) || addressParts.some(v => !label(v))) return undefined;
+    const contentKind = cancelledAt ? "cancelled" : type.telehealth_enabled === true ? "activeTelehealth" : "activeInPerson";
+    if (approval.value.template === "appointmentDetails.v1" ? contentKind !== "activeInPerson" : !approval.value.contentKinds?.includes(contentKind)) return undefined;
+    if (contentKind === "activeInPerson" && (!label(business.address_1) || addressParts.some(v => !label(v)))) return undefined;
+    if (!label(locationName) || !label(practitionerName)) return undefined;
+    const staffUrl = row.telehealth_url;
+    const virtualOrigin = typeof staffUrl === "string" && /^https:\/\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.cliniko\.com\/appointments\/[1-9][0-9]*\/connect$/.test(staffUrl) &&
+      new URL(staffUrl).pathname === `/appointments/${appointmentId}/connect` ? new URL(staffUrl).origin : undefined;
+    if (contentKind === "activeTelehealth" && !virtualOrigin) return undefined;
+    const patientJoinUrl = contentKind === "activeTelehealth" ? await this.#patientJoin(appointmentId, before.patientRef, virtualOrigin!, signal) : undefined;
+    if (contentKind === "activeTelehealth" && !patientJoinUrl) return undefined;
     const recipient = await this.#contact.read(c.receipt.scope, before.patientRef, c.inbound.presentedCallerNumber!, signal);
     if (!recipient.ok || !await this.#subject(signal)) return undefined;
     const freshTarget = await this.#get(`/individual_appointments/${appointmentId}`, signal);
-    if (!freshTarget || freshTarget.id !== appointmentId || freshTarget.cancelled_at !== null || freshTarget.archived_at !== null || freshTarget.deleted_at !== null ||
+    if (!freshTarget || freshTarget.id !== appointmentId || (cancelledAt ? instant(freshTarget.cancelled_at) !== cancelledAt : freshTarget.cancelled_at !== null) || freshTarget.archived_at !== null || freshTarget.deleted_at !== null ||
         instant(freshTarget.starts_at) !== startsAt || instant(freshTarget.ends_at) !== endsAt ||
         this.#linkedId(freshTarget.patient, "patients") !== before.patientRef || this.#linkedId(freshTarget.business, "businesses") !== c.cliniko.businessId ||
         this.#linkedId(freshTarget.practitioner, "practitioners") !== practitionerId || this.#linkedId(freshTarget.appointment_type, "appointment_types") !== appointmentTypeId) return undefined;
+    const freshType = await this.#get(`/appointment_types/${appointmentTypeId}`, signal);
+    if (!freshType || freshType.id !== appointmentTypeId || freshType.archived_at !== null || freshType.name !== type.name ||
+        freshType.telehealth_enabled !== type.telehealth_enabled || contentKind === "activeTelehealth" && freshTarget.telehealth_url !== staffUrl || contentKind === "activeTelehealth" && await this.#patientJoin(appointmentId, before.patientRef, virtualOrigin!, signal) !== patientJoinUrl) return undefined;
     const after = await this.#subject(signal);
     if (!after || after.patientRef !== before.patientRef || after.verificationRef !== before.verificationRef) return undefined;
-    const mail = { email: recipient.value, startsAt, endsAt, timeZone: c.cliniko.timeZone, clinicName: business.business_name,
-      locationName, locationAddress: addressParts.join(", "), practitionerName, appointmentTypeName: type.name };
+    const base = { email: recipient.value, startsAt, endsAt, timeZone: c.cliniko.timeZone, clinicName: business.business_name,
+      locationName, practitionerName, appointmentTypeName: type.name };
+    const mail: AppointmentConfirmationMail = contentKind === "cancelled" ? { ...base, contentKind, cancelledAt: cancelledAt! } :
+      contentKind === "activeTelehealth" ? { ...base, contentKind, patientJoinUrl: patientJoinUrl! } : approval.value.template === "appointmentDetails.v1" ?
+      { ...base, locationAddress: addressParts.join(", ") } : { ...base, contentKind, locationAddress: addressParts.join(", ") };
     return appointmentConfirmationText(mail) ? { patientId: before.patientRef, appointmentId, practitionerId, appointmentTypeId,
       verificationRef: before.verificationRef, mail } : undefined;
   }

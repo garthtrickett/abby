@@ -118,3 +118,24 @@ describe("E2E-370 private appointment confirmation SMTP adapter", { concurrency:
     });
   });
 });
+
+test("E2E-380 versioned templates reject mixed attendance, staff links, unknown fields and implicit legacy upgrades", async () => {
+  await withSmtpVerificationServer(async smtp => {
+    const legacy = new SmtpAppointmentConfirmationDelivery(smtp.config), extended = new SmtpAppointmentConfirmationDelivery(smtp.config, "appointmentDetails.v2");
+    const { locationAddress: _address, ...base } = appointment; void _address;
+    const virtual = { ...base, contentKind: "activeTelehealth" as const, patientJoinUrl: "https://synthetic-clinic.cliniko.com/c/private-patient-join" };
+    const cancelled = { ...base, contentKind: "cancelled" as const, cancelledAt: "2026-10-01T12:30:00Z" };
+    assert.deepEqual(await legacy.send(virtual, new AbortController().signal), { kind: "definitiveUnsent" });
+    assert.deepEqual(await extended.send(appointment, new AbortController().signal), { kind: "definitiveUnsent" });
+    for (const value of [{ ...virtual, locationAddress: "Physical location" }, { ...cancelled, patientJoinUrl: virtual.patientJoinUrl },
+      { ...virtual, patientJoinUrl: "https://synthetic-clinic.cliniko.com/appointments/81/connect" },
+      { ...virtual, patientJoinUrl: "https://attacker.example/c/private" }, { ...cancelled, cancelledAt: "2026-02-30T12:30:00Z" }, { ...cancelled, refund: "automatic" }]) {
+      assert.deepEqual(await extended.send(value as AppointmentConfirmationMail, new AbortController().signal), { kind: "definitiveUnsent" });
+    }
+    assert.equal(smtp.commands.length, 0);
+    assert.equal((await extended.send(virtual, new AbortController().signal)).kind, "accepted");
+    assert.equal((await extended.send(cancelled, new AbortController().signal)).kind, "accepted");
+    assert.match(body(smtp.messages[0]!), /Attendance: Telehealth/);
+    assert.match(body(smtp.messages[1]!), /Status: Cancelled/);
+  });
+});

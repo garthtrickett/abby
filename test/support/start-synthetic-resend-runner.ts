@@ -20,10 +20,18 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
 const db = connectPostgres(url);
 try {
   await withSmtpVerificationServer(async smtp => {
-    const f = await confirmationResendFixture(db, smtp.config, "appointments.resend", true, apiKey);
+    const content = process.env.ABBY_SYNTHETIC_RESEND_CONTENT;
+    if (content !== undefined && !["telehealth", "cancelled"].includes(content)) throw new Error("unknown synthetic resend content");
+    const f = await confirmationResendFixture(db, smtp.config, "appointments.resend", true, apiKey, undefined,
+      content ? { template: "appointmentDetails.v2", contentKinds: ["activeInPerson", "activeTelehealth", "cancelled"] } : undefined);
     const inputs: string[] = []; let denied = false, loseMail = false;
     f.setChoices([{ id: "81", starts_at: "2026-10-08T04:00:00.000Z", ends_at: "2026-10-08T04:30:00.000Z" },
       { id: "82", starts_at: "2026-10-09T04:00:00.000Z", ends_at: "2026-10-09T04:30:00.000Z" }]);
+    if (content === "telehealth") {
+      f.setType({ telehealth_enabled: true });
+      f.setAppointment({ telehealth_url: "https://synthetic-clinic.cliniko.com/appointments/81/connect" });
+    }
+    if (content === "cancelled") f.setChoices([{ id: "81", starts_at: "2026-10-03T04:00:00.000Z", ends_at: "2026-10-03T04:30:00.000Z", cancelled_at: "2026-10-02T06:00:00.000Z" }]);
     const receive = (message: unknown) => {
       if (!message || typeof message !== "object" || !("kind" in message)) return;
       if (message.kind === "input" && "text" in message && typeof message.text === "string") { inputs.push(message.text); process.send?.({ kind: "inputAccepted" }); }
@@ -79,6 +87,15 @@ try {
       return result;
     };
     process.env.ABBY_TENANT_ID = f.scope.tenantId; process.env.ABBY_CLINIC_ID = f.scope.clinicId; process.env.ABBY_LOCATION_ID = f.scope.locationId;
+    const submitMail = f.config.email.send.bind(f.config.email);
+    f.config.email.send = async (...args) => {
+      const result = await submitMail(...args), message = smtp.messages.at(-1) ?? "";
+      const body = Buffer.from(message.slice(message.indexOf("\r\n\r\n") + 4).replace(/\r\n/g, ""), "base64").toString("utf8");
+      process.send?.({ kind: "resendContentResult", accepted: result.kind === "accepted", allowed: content === "telehealth" ?
+        body.includes("Patient join link: https://synthetic-clinic.cliniko.com/c/private-patient-join") && !body.includes("/connect") && !body.includes("Address:") :
+        body.includes("Status: Cancelled") && !body.includes("join link:") && !body.includes("Address:") && !body.includes("refund") });
+      return result;
+    };
     process.send?.({ kind: "fixtureReady", scope: f.scope, policyVersion: f.sessionConfig.policyVersion });
     const greeting = resultValue(await policies.read(f.scope)).greeting!;
     try {

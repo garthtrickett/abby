@@ -21,7 +21,8 @@ type Config = Omit<ClinikoBookingSessionConfig, "callerApprovalPath" | "bookingA
 type Failure = Readonly<{ kind: "confirmationResendWorkflowUnavailable" }>;
 const unavailable = <T>(): Result<T, Failure> => err({ kind: "confirmationResendWorkflowUnavailable" });
 export type ConfirmationResendMenuProgress = Readonly<{ count: number; hasNext: boolean; hasPrevious: boolean }>;
-type Menu = Readonly<{ presentationId: string; conversationRevision: number; from: string; to: string; snapshot: AppointmentRead; offset: number }>;
+type ResendAppointmentRead = Omit<AppointmentRead, "appointments"> & Readonly<{ appointments: readonly (AppointmentRead["appointments"][number] & { cancelledAt?: string })[] }>;
+type Menu = Readonly<{ presentationId: string; conversationRevision: number; from: string; to: string; snapshot: ResendAppointmentRead; offset: number }>;
 
 /** An admitted resend owns a separate verifier and private appointment menu.
  * Public progress contains counts and random request references only. */
@@ -101,13 +102,13 @@ export class ClinikoConfirmationResendWorkflow {
       state.value.lifecycle === "active" && state.value.sessionLease?.sessionId === this.#config.sessionId &&
       Date.parse(state.value.sessionLease.expiresAt) > Date.parse(this.#now()) && !signal.aborted ? { subject, state: state.value } : undefined;
   }
-  async #showMenu(snapshot: AppointmentRead, from: string, to: string, offset: number, revision: number, signal: AbortSignal): Promise<ConfirmationResendMenuProgress | undefined> {
+  async #showMenu(snapshot: ResendAppointmentRead, from: string, to: string, offset: number, revision: number, signal: AbortSignal): Promise<ConfirmationResendMenuProgress | undefined> {
     const c = this.#config, shown = snapshot.appointments.slice(offset, offset + 3), presentationId = randomUUID();
     const hasNext = offset + shown.length < snapshot.appointments.length, hasPrevious = offset > 0;
     this.#menuPresentationId = presentationId;
     const format = new Intl.DateTimeFormat("en-GB", { timeZone: c.cliniko.timeZone, dateStyle: "full", timeStyle: "short" });
-    const text = shown.length ? `Choose the appointment whose details you want emailed. ${shown.map((a, i) => `Press ${i + 1} for: ${format.format(new Date(a.startsAt))}.`).join(" ")}${hasNext ? " Press 4 for the next appointments." : ""}${hasPrevious ? " Press 5 for the previous appointments." : ""}`
-      : "I found no upcoming appointments at this clinic in the next 90 days. No appointment-details email will be sent.";
+    const text = shown.length ? `Choose the appointment whose details you want emailed. ${shown.map((a, i) => `Press ${i + 1} for: ${format.format(new Date(a.startsAt))}${a.cancelledAt ? ", cancelled" : ""}.`).join(" ")}${hasNext ? " Press 4 for the next appointments." : ""}${hasPrevious ? " Press 5 for the previous appointments." : ""}`
+      : "I found no appointments eligible for these emails within the approved search window. No appointment-details email will be sent.";
     const queued = await this.#runtime.privateResendPrompt(c.receipt.callId, presentationId, c.sessionId, this.#now());
     if (!queued.ok || signal.aborted) return undefined;
     const started = await this.#runtime.startPresentation(c.receipt.callId, presentationId, c.sessionId, this.#now());
@@ -120,6 +121,31 @@ export class ClinikoConfirmationResendWorkflow {
     if (shown.length) this.#menu = { presentationId, conversationRevision: revision, from, to, offset, snapshot: structuredClone(snapshot) };
     return { count: shown.length, hasNext, hasPrevious };
   }
+  async #readMenu(anchor: string, to: string, verificationRef: string, now: string, signal: AbortSignal): Promise<ResendAppointmentRead | undefined> {
+    const c = this.#config, approval = await c.resend.policy.current(c.receipt.scope);
+    if (!approval.ok || signal.aborted) return undefined;
+    const active = await this.#reader.list(c.receipt.scope, verificationRef, now, to, now);
+    if (!active.ok || active.value.timeZone !== c.cliniko.timeZone) return undefined;
+    const options: ResendAppointmentRead["appointments"][number][] = approval.value.template === "appointmentDetails.v2" &&
+      !approval.value.contentKinds?.some(kind => kind === "activeInPerson" || kind === "activeTelehealth") ? [] : [...active.value.appointments];
+    if (approval.value.template === "appointmentDetails.v2" && approval.value.contentKinds?.includes("cancelled")) {
+      // The lookback follows the current clock; a renewed call must not make an old anchor exceed the native history bound.
+      const past = new Date(Date.parse(now) - 90 * 86_400_000).toISOString();
+      for (const [from, end] of [[past, anchor], [anchor, to]]) {
+        if (signal.aborted) return undefined;
+        const cancelled = await this.#reader.listCancelled(c.receipt.scope, verificationRef, from!, end!, now);
+        if (!cancelled.ok || cancelled.value.timeZone !== active.value.timeZone || cancelled.value.sourceRef !== active.value.sourceRef) return undefined;
+        for (const row of cancelled.value.appointments) {
+          const duplicate = options.find(a => a.appointmentRef === row.appointmentRef);
+          if (duplicate && !isDeepStrictEqual(duplicate, row)) return undefined;
+          if (!duplicate) options.push(row);
+        }
+      }
+    }
+    options.sort((a, b) => a.startsAt.localeCompare(b.startsAt) || a.appointmentRef.localeCompare(b.appointmentRef));
+    if (new Set(options.map(a => `${a.startsAt}:${a.cancelledAt ? "cancelled" : "active"}`)).size !== options.length || signal.aborted) return undefined;
+    return { ...active.value, appointments: options };
+  }
   async listAppointments(external = this.#config.signal): Promise<Result<ConfirmationResendMenuProgress, Failure>> {
     if (this.#busy) return unavailable();
     this.#busy = true; this.#menu = undefined; this.#menuPresentationId = undefined;
@@ -128,12 +154,10 @@ export class ClinikoConfirmationResendWorkflow {
       const prepared = await awaitUntilAbort((async () => {
         const before = await this.#ready(signal); if (!before || !this.effects.discardPreparation()) return undefined;
         const now = this.#now(), to = new Date(Date.parse(now) + 90 * 86_400_000).toISOString();
-        const read = await this.#reader.list(this.#config.receipt.scope, before.subject.verificationRef, now, to, now);
+        const read = await this.#readMenu(now, to, before.subject.verificationRef, now, signal);
         const after = await this.#ready(signal);
-        if (!read.ok || !after || after.state.conversationRevision !== before.state.conversationRevision || read.value.timeZone !== this.#config.cliniko.timeZone) return undefined;
-        const options = [...read.value.appointments].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-        if (new Set(options.map(a => a.startsAt)).size !== options.length) return undefined;
-        return this.#showMenu({ ...read.value, appointments: options }, now, to, 0, before.state.conversationRevision, signal);
+        if (!read || !after || after.state.conversationRevision !== before.state.conversationRevision) return undefined;
+        return this.#showMenu(read, now, to, 0, before.state.conversationRevision, signal);
       })(), signal);
       return prepared && !signal.aborted ? ok(prepared) : unavailable();
     } catch { return unavailable(); }
@@ -150,11 +174,11 @@ export class ClinikoConfirmationResendWorkflow {
         const before = await this.#ready(signal);
         if (!before || before.state.conversationRevision !== menu.conversationRevision || before.state.pendingPresentationId ||
             before.state.presentations[menu.presentationId]?.status !== "played" || before.subject.verificationRef !== menu.snapshot.verificationRef || !this.effects.discardPreparation()) return undefined;
-        const now = this.#now(), read = await this.#reader.list(this.#config.receipt.scope, before.subject.verificationRef, now, menu.to, now);
-        const after = await this.#ready(signal), options = read.ok ? [...read.value.appointments].sort((a, b) => a.startsAt.localeCompare(b.startsAt)) : [];
-        if (!read.ok || !after || after.state.conversationRevision !== menu.conversationRevision || read.value.sourceRef !== menu.snapshot.sourceRef ||
-            read.value.timeZone !== menu.snapshot.timeZone || !isDeepStrictEqual(options, menu.snapshot.appointments)) return undefined;
-        return this.#showMenu({ ...read.value, appointments: options }, now, menu.to, offset, menu.conversationRevision, signal);
+        const now = this.#now(), read = await this.#readMenu(menu.from, menu.to, before.subject.verificationRef, now, signal);
+        const after = await this.#ready(signal);
+        if (!read || !after || after.state.conversationRevision !== menu.conversationRevision || read.sourceRef !== menu.snapshot.sourceRef ||
+            read.timeZone !== menu.snapshot.timeZone || !isDeepStrictEqual(read.appointments, menu.snapshot.appointments)) return undefined;
+        return this.#showMenu(read, menu.from, menu.to, offset, menu.conversationRevision, signal);
       })(), signal);
       return paged && !signal.aborted ? ok(paged) : unavailable();
     } catch { return unavailable(); }
@@ -178,12 +202,12 @@ export class ClinikoConfirmationResendWorkflow {
         if (!before || before.state.conversationRevision !== menu.conversationRevision || before.state.presentations[menu.presentationId]?.status !== "played" || before.state.pendingPresentationId ||
             before.subject.verificationRef !== menu.snapshot.verificationRef) return undefined;
         const now = this.#now(), target = menu.snapshot.appointments[menu.offset + choice - 1]!;
-        const fresh = await this.#reader.list(this.#config.receipt.scope, before.subject.verificationRef, now, menu.to, now);
+        const fresh = await this.#readMenu(menu.from, menu.to, before.subject.verificationRef, now, signal);
         const after = await this.#ready(signal);
-        const match = fresh.ok ? fresh.value.appointments.filter(a => a.appointmentRef === target.appointmentRef) : [];
-        if (!fresh.ok || !after || after.state.conversationRevision !== before.state.conversationRevision ||
-            fresh.value.sourceRef !== menu.snapshot.sourceRef || fresh.value.timeZone !== menu.snapshot.timeZone || match.length !== 1 ||
-            match[0]!.startsAt !== target.startsAt || match[0]!.endsAt !== target.endsAt) return undefined;
+        const match = fresh ? fresh.appointments.filter(a => a.appointmentRef === target.appointmentRef) : [];
+        if (!fresh || !after || after.state.conversationRevision !== before.state.conversationRevision ||
+            fresh.sourceRef !== menu.snapshot.sourceRef || fresh.timeZone !== menu.snapshot.timeZone || match.length !== 1 ||
+            !isDeepStrictEqual(match[0], target)) return undefined;
         return this.effects.prepare(target.appointmentRef, signal);
       })(), signal);
       return result?.ok && !signal.aborted ? result : unavailable();

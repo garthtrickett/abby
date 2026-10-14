@@ -83,3 +83,19 @@ test("E2E-371 independent resend permission denial stops code delivery; proof is
     assert.equal(f.mail.length, 0); assert.equal(await f.session.verified(), undefined);
   } finally { await f.close(); }
 });
+
+test("E2E-380 extended content needs a versioned explicit owner approval; legacy records cannot opt in by extra fields", async () => {
+  const f = await fixture();
+  try {
+    for (const patch of [{ template: "appointmentDetails.v2" }, { template: "appointmentDetails.v2", contentKinds: [] },
+      { template: "appointmentDetails.v2", contentKinds: ["cancelled", "cancelled"] }, { template: "appointmentDetails.v2", contentKinds: ["arbitrary"] },
+      { template: "appointmentDetails.v1", contentKinds: ["activeTelehealth"] }]) {
+      await f.replace(patch); assert.equal((await OwnerFileConfirmationResendPolicy.capture(f.config)).ok, false);
+    }
+    await f.replace({ template: "appointmentDetails.v2", contentKinds: ["activeTelehealth", "cancelled"] });
+    const policy = resultValue(await OwnerFileConfirmationResendPolicy.capture(f.config));
+    assert.deepEqual(resultValue(await policy.current(f.scope)).contentKinds, ["activeTelehealth", "cancelled"]);
+    await f.replace({ template: "appointmentDetails.v2", contentKinds: ["activeInPerson", "activeTelehealth", "cancelled"] });
+    assert.equal((await policy.current(f.scope)).ok, false, "content expansion revokes the captured authority");
+  } finally { await f.close(); }
+});

@@ -115,3 +115,24 @@ test("cancelled rows are omitted; permission and transport faults stay typed", a
     failure(await readerFor(host, faulty.port).list(scope, "host-proof", from, to, now), expected);
   }
 });
+
+test("E2E-380 cancelled history has explicit bounded inclusive queries; ordinary reads cannot disclose that history", async () => {
+  const past = "2026-09-20T10:00:00.000Z";
+  const native = appointment("33", { starts_at: past, ends_at: "2026-09-20T10:30:00.000Z", cancelled_at: "2026-09-19T10:00:00.000Z" });
+  const provider = fakeProvider([[native]]), reader = readerFor(host, provider.port);
+  const found = value(await reader.listCancelled(scope, "host-proof", past, now, now));
+  assert.deepEqual(found.appointments, [{ appointmentRef: "33", startsAt: past, endsAt: "2026-09-20T10:30:00.000Z", cancelledAt: "2026-09-19T10:00:00.000Z" }]);
+  assert.deepEqual(provider.requests[1]!.searchParams.getAll("q[]"), ["cancelled_at:*", "patient_id:=22", "business_id:=11", `starts_at:>=${past}`, `starts_at:<=${now}`]);
+  const before = provider.requests.length;
+  failure(await reader.list(scope, "host-proof", past, now, now), "invalidRange");
+  failure(await reader.listCancelled(scope, "host-proof", "2026-01-01T10:00:00.000Z", "2026-01-02T10:00:00.000Z", now), "invalidRange");
+  failure(await reader.listCancelled(scope, "unknown-proof", past, now, now), "invalidProof");
+  assert.equal(provider.requests.length, before);
+  for (const patch of [{ cancelled_at: null }, { cancelled_at: "2026-10-01T10:00:00Z" }, { archived_at: "2026-09-19T10:00:00Z" }, { deleted_at: "2026-09-19T10:00:00Z" },
+    { patient: { links: { self: "https://api.au5.cliniko.com/v1/patients/99" } } }, { business: { links: { self: "https://api.au5.cliniko.com/v1/businesses/99" } } }]) {
+    const faulty = fakeProvider([[{ ...native, ...patch }]]);
+    failure(await readerFor(host, faulty.port).listCancelled(scope, "host-proof", past, now, now), "malformed");
+  }
+  const partial = fakeProvider([[native], []], { total: 2 });
+  failure(await readerFor(host, partial.port).listCancelled(scope, "host-proof", past, now, now), "unavailable");
+});
