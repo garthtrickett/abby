@@ -461,11 +461,12 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       callId: turn.callId, sessionId: this.#config.sessionId, policyVersion: this.#config.policyVersion,
       turnId: turn.turnId, now, signal, menuTurnId: correction.menuTurnId, startsAt: correction.startsAt };
     let intent: VoiceIntent | undefined;
+    const rescheduling = this.#rescheduling();
     if (correction.menuKind === "booking") {
       const selection = await awaitUntilAbort(this.#booking()?.correctBookingMenu(query) ?? Promise.resolve(readDenied()), signal);
       if (selection?.ok) intent = { kind: "book", ...selection.value };
-    } else if (this.#owner instanceof ClinikoReschedulingSession) {
-      const selection = await awaitUntilAbort(this.#owner.effects.correctReschedulingMenu({ ...query, stage: "offers" }), signal);
+    } else if (rescheduling) {
+      const selection = await awaitUntilAbort(rescheduling.correctReschedulingMenu({ ...query, stage: "offers" }), signal);
       if (selection?.ok) intent = { kind: "reschedule", ...selection.value };
     }
     if (!intent || signal.aborted || this.closed) return { kind: "clarify", reason: "menuUnavailable" };
