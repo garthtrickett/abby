@@ -47,6 +47,7 @@ import { up as up044, down as down044 } from "./migrations/044_cliniko_contact_r
 import { up as up045, down as down045 } from "./migrations/045_cliniko_contact_change_registry.ts";
 
 import { up as up046, down as down046 } from "./migrations/046_correction_setting_portability_guard.ts";
+import { up as up047, down as down047 } from "./migrations/047_confirmation_resend_journal.ts";
 
 function createMigrator<DB>(db: Kysely<DB>): Migrator {
   return new Migrator({
@@ -98,6 +99,7 @@ function createMigrator<DB>(db: Kysely<DB>): Migrator {
       "044_cliniko_contact_revision": { up: up044, down: down044 },
       "045_cliniko_contact_change_registry": { up: up045, down: down045 },
       "046_correction_setting_portability_guard": { up: up046, down: down046 },
+      "047_confirmation_resend_journal": { up: up047, down: down047 },
     }) },
   });
 }

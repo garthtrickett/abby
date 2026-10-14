@@ -11,6 +11,7 @@ import type { default as PendingLocationCallsTable } from './PendingLocationCall
 import type { default as ClinicWriteStopTable } from './ClinicWriteStop.js';
 import type { default as NumberRouteEventsTable } from './NumberRouteEvents.js';
 import type { default as ClinicNotificationSettingsTable } from './ClinicNotificationSettings.js';
+import type { default as ConfirmationResendJournalTable } from './ConfirmationResendJournal.js';
 import type { default as ClinicKnowledgeHeadsTable } from './ClinicKnowledgeHeads.js';
 import type { default as PatientPhoneScanLinksTable } from './PatientPhoneScanLinks.js';
 import type { default as TenantPortabilityFencesTable } from './TenantPortabilityFences.js';
@@ -62,6 +63,8 @@ export default interface PublicSchema {
   number_route_events: NumberRouteEventsTable;
 
   clinic_notification_settings: ClinicNotificationSettingsTable;
+
+  confirmation_resend_journal: ConfirmationResendJournalTable;
 
   clinic_knowledge_heads: ClinicKnowledgeHeadsTable;
 
