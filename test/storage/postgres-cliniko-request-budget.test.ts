@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash, randomUUID } from "node:crypto";
 import test, { after } from "node:test";
 import { ClinikoAvailabilityReader } from "../../src/cliniko/availability.ts";
 import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
@@ -16,6 +17,11 @@ after(async () => { await Promise.all([firstDb.destroy(), secondDb.destroy()]); 
 test("E2E-156 separate standalone Cliniko readers share one PostgreSQL request budget", async () => {
   const scope = { tenantId: "budget-standalone", clinicId: "clinic", locationId: "main" };
   const apiKey = "synthetic-shared-budget-key-au5";
+  // Other credentials can already own rows in the shared PostgreSQL cohort.
+  const unrelated = new PostgresClinikoRequestBudget(secondDb, {
+    apiKey: `synthetic-unrelated-${randomUUID()}-au5`, maxPerMinute: 1,
+  });
+  assert.equal(await unrelated.claim(), null);
   const events: ClinikoBudgetOperationalEvent[] = [];
   const first = new PostgresClinikoRequestBudget(firstDb, { apiKey, maxPerMinute: 1,
     onEvent: event => { events.push(event); } });
@@ -56,10 +62,13 @@ test("E2E-156 separate standalone Cliniko readers share one PostgreSQL request b
   const deniedClaims = claims.filter(result => result?.kind === "rateLimited");
   assert.ok(deniedClaims.length >= denied);
   assert.deepEqual(events, Array(deniedClaims.length).fill("claimRateLimited"));
-  const rows = await firstDb.selectFrom("cliniko_request_budgets").selectAll().execute();
+  const stored = await firstDb.selectFrom("cliniko_request_budgets").selectAll().execute();
+  assert.equal(JSON.stringify(stored).includes(apiKey), false);
+  const budgetRef = createHash("sha256").update(`abby-cliniko-budget-v1\0${apiKey}`).digest("hex");
+  const rows = stored.filter(row => row.budget_ref === budgetRef);
+  assert.ok(stored.some(row => row.budget_ref !== budgetRef), "unrelated credential rows remain present");
   assert.equal(rows.length, 1);
   assert.match(rows[0]!.budget_ref, /^[0-9a-f]{64}$/);
-  assert.equal(JSON.stringify(rows).includes(apiKey), false);
   assert.deepEqual(Object.keys(rows[0]!).sort(), ["budget_ref", "cooldown_until_ms", "max_per_minute", "sent_at_ms"]);
 });
 

@@ -3741,3 +3741,44 @@ three authenticated recovery HTTP cases plus both registry/trace checks pass
 without failures, cancellations or skips in `4590eee3-1792039145428.log`.
 The next complete clean-commit local release remains required before merge.
 The full thirteen-gap goal and separate clinical activation gates stay open.
+
+## PostgreSQL release fixture preconditions
+
+The clean 8b9d492 release passed its complete text command, including 2190 main
+cohort passes, zero failures and 221 existing profile skips. Its PostgreSQL
+cohort exposed two outdated fixture assumptions. The verification-budget test
+rolled back only the newest migration, leaving its budget table present; it now
+targets schema 041 and asserts that the table is absent before testing denial.
+The shared-provider-budget test counted unrelated credentials' rows; it now
+checks its own credential hash, explicitly retains another credential's row,
+and preserves the database-wide assertion that the raw key is absent.
+
+The original PostgreSQL cohort completed with 2917 passes, four failures, zero
+cancellations and one existing profile skip. The other failures were greeting
+startup timeouts in two compound-search modes and an invalid transition in the
+routed intake mode. The fixture now reports only transport counters on greeting
+failure and uses its already-captured pre-disposal snapshot for public state
+diagnostics. No patient fields, native identifiers or verification material are
+added to diagnostics. The cause of the two speech failures remains unestablished.
+
+The original failed release remains recorded in
+`eval/results/local-release-8b9d492`; later release stages did not run. Both
+corrected database tests, all compound-search modes and all sixteen intake modes
+pass together under PostgreSQL with the original concurrency and deadlines:
+12 tests, zero failures, cancellations or skips. Complete typechecking, both
+registry/trace tests and `git diff --check` also pass in tracked job
+`Abby PostgreSQL fixture corrections and signed startup intake reproduction`,
+log `4590eee3-1792042477710.log`, exit 0.
+
+Exact commands: `bash scripts/with-postgres.sh bash -c 'npm run db:migrate &&
+ABBY_LEDGER=postgres node --test --test-concurrency=4
+test/cliniko/email-verification-budget-postgres.test.ts
+test/storage/postgres-cliniko-request-budget.test.ts
+test/voice/compound-booking-constraints.test.ts
+test/voice/intake-service-catalogue.test.ts'`, `npm run typecheck`,
+`node --test test/contract/scenario-manifest.test.ts
+test/contract/no-number-gap-trace.test.ts`, and `git diff --check`.
+These corrections change only tests and diagnostics; no production behavior,
+deadlines, worker counts, assertions or skips are relaxed. Complete clean-commit
+release qualification remains required before merge. The full thirteen-gap
+objective and separate clinical activation requirements remain open.

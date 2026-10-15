@@ -84,6 +84,12 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   let processedChunk = 0, processedSequence = 0, hostWritesStarted = 0, hostWritesSettled = 0;
   let staffPreparationsStarted = 0, staffPreparationsSettled = 0, staffWritesStarted = 0, staffWritesSettled = 0;
   const callId = callIdFor({ accountRef: accountSid, providerCallRef: callSid });
+  const diagnosticState = async () => {
+    try {
+      const read = await (disposedState ?? ledger?.read(callId, scope));
+      return read?.ok ? read.value : undefined;
+    } catch { return undefined; }
+  };
   const base = "https://api.au5.cliniko.com/v1", port = config.fetchPort!;
   const provider: typeof fetch = observe("providerRequest", async (value: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
     const url = new URL(String(value)), method = init?.method ?? "GET";
@@ -216,7 +222,14 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     socket.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
     socket.send(JSON.stringify({ event: "start", sequenceNumber: String(sequence++), streamSid,
       start: { accountSid, callSid, streamSid, tracks: ["inbound"], mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 }, customParameters: { abbyBinding: binding } } }));
-    await voiceUntil(() => sent.some(item => item.event === "mark"), "greeting mark");
+    try { await voiceUntil(() => sent.some(item => item.event === "mark"), "greeting mark"); }
+    catch (error) {
+      const transport = { closed, closeCode, receiveFailures: failures.length,
+        mediaEvents: sent.filter(item => item.event === "media").length,
+        markEvents: sent.filter(item => item.event === "mark").length,
+        clearEvents: sent.filter(item => item.event === "clear").length };
+      throw new Error(`greeting mark timed out: ${JSON.stringify(transport)}`, { cause: error });
+    }
     const sendEvent = (event: Record<string, unknown>) => socket!.send(JSON.stringify({ ...event, streamSid: event.streamSid ?? streamSid, sequenceNumber: String(sequence++) }));
     const media = (voiced: boolean) => {
       chunk++; mediaElapsedMs = (chunk - 1) * 20;
@@ -316,7 +329,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
             await voiceUntil(() => staffWritesSettled > beforeStaffWrites || failures.length > 0, "staff write settlement", flow!.effectDeadlineMs);
           await voiceUntil(() => hasReply() || failures.length > 0, "caller turn speech");
         } catch (error) {
-          const state = ledger ? resultValue(await ledger.read(callId, scope)) : undefined;
+          const state = await diagnosticState();
           throw new Error(`caller turn delivery stalled: ${JSON.stringify({ closed, workflowClosed: flow?.closed,
             workflow: flow?.workflow, lifecycle: state?.lifecycle, queuedInputs: inputs.length, processedChunk, chunk,
             modelTurns: modelTurns.length, transcriptionFrames, writes: writes.length, hostWritesStarted, hostWritesSettled, staffPreparationsStarted, staffPreparationsSettled, staffWritesStarted, staffWritesSettled, failures, stageFailure: error instanceof Error ? error.message : "unknown",
@@ -326,8 +339,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
               elapsedMs: Math.round((stage.settled ?? performance.now()) - stage.started) })),
             effects: Object.values(state?.effects ?? {}).map(effect => ({ kind: effect.kind, status: effect.status })) })}`, { cause: error });
         }
-        const failureRead = failures.length && !options.expectedFailure && ledger ? await ledger.read(callId, scope) : undefined;
-        const failureState = failureRead && failureRead.ok ? failureRead.value : undefined;
+        const failureState = failures.length && !options.expectedFailure ? await diagnosticState() : undefined;
         assert.deepEqual(failures, options.expectedFailure ? [options.expectedFailure] : [], `wire failure after ${modelTurns.length} model turns and ${transcriptionFrames} transcribed frames ${failureState ? JSON.stringify({
           workflow: flow?.workflow, lifecycle: failureState.lifecycle, now: now(),
           processedChunk, finalChunk, pendingPresentation: failureState.pendingPresentationId !== undefined,
