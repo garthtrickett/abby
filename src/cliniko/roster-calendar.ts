@@ -4,16 +4,18 @@ export type CalendarInterval = Readonly<{ start: number; end: number }>;
 export type DailyRoster = Readonly<{ dayOfWeek: number; intervals: readonly Readonly<{ startMinute: number; endMinute: number }>[] }>;
 export type RosterSearchPlan = Readonly<{ mode: "roster"; maxSearchDays: number; slotIntervalMinutes: number;
   weekdayOrigin: "sunday" | "monday"; busyScope: "practitionerAllBusinesses";
-  /** Approved use of dated native busy occurrences; never expand a repeat rule into openings. */
-  busyRecurrence?: "nativeOccurrences" }>;
+  /** Each approval uses only returned native instants, never inferred repeat dates. */
+  busyRecurrence?: "nativeOccurrences";
+  openingRecurrence?: "nativeOccurrences" }>;
 
 export function validRosterSearchPlan(value: unknown): value is RosterSearchPlan {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const p = value as RosterSearchPlan;
-  const keys = Object.keys(value).sort().join(",");
-  if (!Object.hasOwn(value, "busyRecurrence") && p.busyRecurrence !== undefined) return false;
-  if (keys !== "busyScope,maxSearchDays,mode,slotIntervalMinutes,weekdayOrigin" &&
-      (keys !== "busyRecurrence,busyScope,maxSearchDays,mode,slotIntervalMinutes,weekdayOrigin" || p.busyRecurrence !== "nativeOccurrences")) return false;
+  const keys = Object.keys(value).filter(key => !["busyRecurrence", "openingRecurrence"].includes(key)).sort().join(",");
+  if (keys !== "busyScope,maxSearchDays,mode,slotIntervalMinutes,weekdayOrigin") return false;
+  for (const key of ["busyRecurrence", "openingRecurrence"] as const) {
+    if (Object.hasOwn(value, key) ? p[key] !== "nativeOccurrences" : p[key] !== undefined) return false;
+  }
   return p.mode === "roster" && Number.isSafeInteger(p.maxSearchDays) && p.maxSearchDays >= 1 && p.maxSearchDays <= 90 &&
     Number.isSafeInteger(p.slotIntervalMinutes) && p.slotIntervalMinutes >= 1 && p.slotIntervalMinutes <= 60 &&
     ["sunday", "monday"].includes(p.weekdayOrigin) && p.busyScope === "practitionerAllBusinesses";

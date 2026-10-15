@@ -45,8 +45,10 @@ if (practitionerMove && (!["changedTime", "sameTime", "directory"].includes(prac
 const longSearch = process.env.ABBY_SYNTHETIC_LONG_SEARCH_MODE === "1";
 const offlineCalendar = process.env.ABBY_SYNTHETIC_OFFLINE_CALENDAR === "1", missingBusy = process.env.ABBY_SYNTHETIC_MISSING_BUSY === "1";
 const recurringBusy = process.env.ABBY_SYNTHETIC_RECURRING_BUSY;
+const recurringOpening = process.env.ABBY_SYNTHETIC_RECURRING_OPENING;
 if (offlineCalendar && (!services || !["book", "intake"].includes(operation!)) || missingBusy && !offlineCalendar) throw new Error("invalid synthetic calendar mode");
 if (recurringBusy && (!offlineCalendar || !["approved", "legacy"].includes(recurringBusy))) throw new Error("invalid synthetic busy occurrence mode");
+if (recurringOpening && (!offlineCalendar || !["approved", "legacy"].includes(recurringOpening))) throw new Error("invalid synthetic opening occurrence mode");
 const calendars = new Map<string, ReturnType<typeof syntheticRosterProvider>>();
 if (longSearch && (!services || operation !== "book" || multiLocation)) throw new Error("invalid synthetic long search mode");
 if (multiLocation && (!services || !["book", "intake"].includes(operation!))) throw new Error("invalid synthetic location mode");
@@ -95,7 +97,8 @@ for (const path of approvalPaths) {
       ...("policyVersion" in value ? { policyVersion: c.policyVersion } : {}),
       ...(longSearch && "bookingPolicyVersion" in value ? { maxAdvanceDays: 90, availabilityPlan: { mode: "online", maxSearchDays: 90 } } : {}),
       ...(offlineCalendar && "bookingPolicyVersion" in value ? { availabilityPlan: { ...rosterPlan, maxSearchDays: longSearch ? 90 : 30,
-        ...(recurringBusy === "approved" ? { busyRecurrence: "nativeOccurrences" } : {}) } } : {}),
+        ...(recurringBusy === "approved" ? { busyRecurrence: "nativeOccurrences" } : {}),
+        ...(recurringOpening === "approved" ? { openingRecurrence: "nativeOccurrences" } : {}) } } : {}),
       ...(longSearch && "services" in value && Array.isArray(value.services)
         ? { services: value.services.map(service => ({ ...service, searchDays: 90 })) } : {}) }), { mode: 0o600 });
   }
@@ -160,6 +163,10 @@ if (offlineCalendar) {
           for (const row of calendar.rows[name]!) row.repeat_rule = rule;
         const busy = rosterInterval("unavailable_blocks", "110", "2026-10-08T02:00:00.000Z", "2026-10-08T03:00:00.000Z", businessId === "11" ? "12" : "11", practitionerId);
         busy.repeat_rule = rule; calendar.rows.unavailable_blocks!.push(busy);
+      }
+      if (recurringOpening) {
+        calendar.rows.daily_availabilities = [];
+        for (const row of calendar.rows.availability_blocks!) row.repeat_rule = { repeat_type: "Weekly", number_of_repeats: 6, repeating_interval: 2 };
       }
       if (missingBusy) calendar.fail("group_appointments");
       if (practitionerId === "24") calendar.rows.availability_blocks = [rosterInterval("availability_blocks", "102", "2026-10-08T01:00:00.000Z", "2026-10-08T03:00:00.000Z", businessId, practitionerId)];

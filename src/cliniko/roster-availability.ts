@@ -87,21 +87,18 @@ export class ClinikoRosterAvailabilityReader {
     if (start === undefined || end === undefined || start >= end) throw new Error("unsupported calendar interval");
     return { start, end };
   }
-  #openingInterval(row: Row): CalendarInterval {
-    if (row.repeat_rule !== null) throw new Error("unsupported opening recurrence");
-    return this.#datedInterval(row);
-  }
-  #busyInterval(row: Row, plan: RosterSearchPlan): CalendarInterval {
+  #nativeInterval(row: Row, recurrenceApproved: boolean): CalendarInterval {
     if (row.repeat_rule !== null) {
       const rule = object(row.repeat_rule);
-      if (plan.busyRecurrence !== "nativeOccurrences" || !rule ||
+      if (!recurrenceApproved || !rule ||
           Object.keys(rule).sort().join(",") !== "number_of_repeats,repeat_type,repeating_interval" ||
           typeof rule.repeat_type !== "string" || !["Daily", "Weekly", "Monthly"].includes(rule.repeat_type) ||
           (rule.number_of_repeats !== null && (!Number.isSafeInteger(rule.number_of_repeats) || Number(rule.number_of_repeats) < 1)) ||
-          !Number.isSafeInteger(rule.repeating_interval) || Number(rule.repeating_interval) < 1 || Number(rule.repeating_interval) > 100) throw new Error("unsupported busy recurrence");
+          !Number.isSafeInteger(rule.repeating_interval) || Number(rule.repeating_interval) < 1 || Number(rule.repeating_interval) > 100) throw new Error("unsupported calendar recurrence");
     }
     // Each returned appointment/block has its own native identity and actual
-    // start/end instants. Only these occurrences are used, never inferred dates.
+    // start/end instants. Busy and opening authority are separately approved;
+    // neither permits inferring another date from this row's repeat metadata.
     return this.#datedInterval(row);
   }
   async #busy(name: string, lower: string, upper: string, plan: RosterSearchPlan, signal: AbortSignal, depth = 0): Promise<BusyRecord[]> {
@@ -112,7 +109,7 @@ export class ClinikoRosterAvailabilityReader {
         if (row[flag] !== null && calendarInstant(row[flag]) === undefined) throw new Error("unknown busy activity");
       }
       if ([row.archived_at, row.deleted_at, ...(name === "individual_appointments" ? [row.cancelled_at] : [])].some(flag => flag !== null)) return { id: String(row.id) };
-      const interval = this.#busyInterval(row, plan);
+      const interval = this.#nativeInterval(row, plan.busyRecurrence === "nativeOccurrences");
       if (interval.start >= Date.parse(upper) || interval.end <= Date.parse(lower)) throw new Error("foreign busy range");
       return { id: String(row.id), interval };
       }, signal);
@@ -150,7 +147,7 @@ export class ClinikoRosterAvailabilityReader {
       }, signal),
       this.#collection("availability_blocks", [practitioner, business], row => {
         if (this.#link(row.business, "businesses") !== c.businessId) throw new Error("foreign extra availability");
-        return this.#openingInterval(row);
+        return this.#nativeInterval(row, plan.openingRecurrence === "nativeOccurrences");
       }, signal), busy("individual_appointments"), busy("group_appointments"), busy("unavailable_blocks"),
     ]);
     return { daily, extra, busy: [...individual, ...group, ...unavailable] };
