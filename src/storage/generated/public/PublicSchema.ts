@@ -27,6 +27,7 @@ import type { default as ClinikoRequestBudgetsTable } from './ClinikoRequestBudg
 import type { default as PatientPhoneScanTable } from './PatientPhoneScan.js';
 import type { default as ClinikoCatalogueApprovalsTable } from './ClinikoCatalogueApprovals.js';
 import type { default as StaffItemsTable } from './StaffItems.js';
+import type { default as ClinikoRequestReservationsTable } from './ClinikoRequestReservations.js';
 import type { default as ClinicKnowledgeEventsTable } from './ClinicKnowledgeEvents.js';
 import type { default as CallsTable } from './Calls.js';
 import type { default as ClinicPatientCorrectionSettingsTable } from './ClinicPatientCorrectionSettings.js';
@@ -95,6 +96,8 @@ export default interface PublicSchema {
   cliniko_catalogue_approvals: ClinikoCatalogueApprovalsTable;
 
   staff_items: StaffItemsTable;
+
+  cliniko_request_reservations: ClinikoRequestReservationsTable;
 
   clinic_knowledge_events: ClinicKnowledgeEventsTable;
 

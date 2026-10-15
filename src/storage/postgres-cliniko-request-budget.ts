@@ -1,11 +1,15 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
 import type { ClinikoBudgetDenial, ClinikoBudgetOperationalEvent, ClinikoRateLimit,
-  ClinikoRequestBudget } from "../cliniko/read-budget.ts";
+  ClinikoRequestBudget, ClinikoReservedRun } from "../cliniko/read-budget.ts";
+import { budgetReservationContext, runBudgetReservation } from "../cliniko/budget-reservation-context.ts";
+import { budgetCapacity, claimDenial, reservationLifetimeMs, validateBudgetState } from "../cliniko/request-budget-state.ts";
+import type { BudgetState } from "../cliniko/request-budget-state.ts";
 import type Database from "./generated/Database.ts";
 import type { ClinikoRequestBudgetsBudgetRef } from "./generated/public/ClinikoRequestBudgets.ts";
+import type { ClinikoRequestReservationsLeaseRef } from "./generated/public/ClinikoRequestReservations.ts";
 
 const minuteMs = 60_000;
 
@@ -69,8 +73,7 @@ export class PostgresClinikoRequestBudget implements ClinikoRequestBudget {
 
   matchesCredentialFingerprint(fingerprint: string): boolean { return this.credentialFingerprint === fingerprint; }
 
-  private async locked<T>(run: (trx: Kysely<Database>, now: number,
-    row: Readonly<{ sent_at_ms: unknown; cooldown_until_ms: string; max_per_minute: number }>) => Promise<T>): Promise<T> {
+  private async locked<T>(run: (trx: Kysely<Database>, state: BudgetState) => Promise<T>): Promise<T> {
     return this.db.transaction().execute(async trx => {
       await trx.insertInto("cliniko_request_budgets")
         .values({ budget_ref: this.budgetRef, max_per_minute: this.maxPerMinute })
@@ -82,7 +85,15 @@ export class PostgresClinikoRequestBudget implements ClinikoRequestBudget {
       const clock = await sql<{ now_ms: string }>`select floor(extract(epoch from clock_timestamp()) * 1000)::bigint as now_ms`
         .execute(trx);
       if (!clock.rows[0]) throw new Error("Cliniko budget clock unavailable");
-      return run(trx, millis(clock.rows[0].now_ms), row);
+      const now = millis(clock.rows[0].now_ms);
+      await trx.deleteFrom("cliniko_request_reservations").where("budget_ref", "=", this.budgetRef)
+        .where("expires_at_ms", "<=", String(now)).execute();
+      const held = await trx.selectFrom("cliniko_request_reservations").select(["lease_ref", "remaining", "expires_at_ms"])
+        .where("budget_ref", "=", this.budgetRef).execute();
+      const state: BudgetState = { now, limit: this.maxPerMinute, cooldown: millis(row.cooldown_until_ms),
+        recent: sentTimes(row.sent_at_ms).filter(at => at > now - minuteMs),
+        holds: held.map(h => ({ id: h.lease_ref, remaining: h.remaining, expiresAt: millis(h.expires_at_ms) })) };
+      validateBudgetState(state); return run(trx, state);
     });
   }
 
@@ -91,31 +102,30 @@ export class PostgresClinikoRequestBudget implements ClinikoRequestBudget {
   async checkHeadroom(requests: number): Promise<ClinikoBudgetDenial | null> {
     if (!Number.isSafeInteger(requests) || requests < 1 || requests > this.maxPerMinute) return { kind: "unavailable" };
     try {
-      return await this.locked<ClinikoBudgetDenial | null>(async (_trx, now, row) => {
-        const cooldown = millis(row.cooldown_until_ms);
-        if (now < cooldown) return { kind: "rateLimited", resetAt: new Date(cooldown).toISOString(), retryAfterMs: cooldown - now };
-        const recent = sentTimes(row.sent_at_ms).filter(at => at > now - minuteMs);
-        const reset = recent[recent.length + requests - this.maxPerMinute - 1]! + minuteMs;
-        return recent.length + requests <= this.maxPerMinute ? null : { kind: "rateLimited", resetAt: new Date(reset).toISOString(), retryAfterMs: reset - now };
+      return await this.locked<ClinikoBudgetDenial | null>(async (_trx, state) => {
+        const context = budgetReservationContext(this.budgetRef);
+        return context && !context.valid ? { kind: "unavailable" } : budgetCapacity(state, requests, context?.id);
       });
     } catch { return { kind: "unavailable" }; }
   }
 
   async claim(): Promise<ClinikoBudgetDenial | null> {
     try {
-      const result = await this.locked<ClinikoBudgetDenial | null>(async (trx, now, row) => {
-        const cooldownUntil = millis(row.cooldown_until_ms);
-        if (now < cooldownUntil) return { kind: "rateLimited", resetAt: new Date(cooldownUntil).toISOString() };
-        const recent = sentTimes(row.sent_at_ms).filter(at => at > now - minuteMs);
-        if (recent.length >= this.maxPerMinute) {
-          return { kind: "rateLimited", resetAt: new Date(recent[0]! + minuteMs).toISOString() };
+      const result = await this.locked<ClinikoBudgetDenial | null>(async (trx, state) => {
+        const context = budgetReservationContext(this.budgetRef);
+        if (context && !context.valid) return { kind: "unavailable" };
+        const denied = budgetCapacity(state, 1, context?.id); if (denied) return claimDenial(denied);
+        if (context) {
+          const hold = state.holds.find(h => h.id === context.id)!;
+          await trx.updateTable("cliniko_request_reservations").set({ remaining: hold.remaining - 1 })
+            .where("budget_ref", "=", this.budgetRef).where("lease_ref", "=", context.id as ClinikoRequestReservationsLeaseRef).executeTakeFirstOrThrow();
         }
-        recent.push(now);
         await trx.updateTable("cliniko_request_budgets")
-          .set({ sent_at_ms: JSON.stringify(recent) })
+          .set({ sent_at_ms: JSON.stringify([...state.recent, state.now]) })
           .where("budget_ref", "=", this.budgetRef).execute();
         return null;
       });
+      if (budgetReservationContext(this.budgetRef)?.valid === false) { this.report("claimUnavailable"); return { kind: "unavailable" }; }
       if (result?.kind === "rateLimited") this.report("claimRateLimited");
       return result;
     } catch {
@@ -124,15 +134,35 @@ export class PostgresClinikoRequestBudget implements ClinikoRequestBudget {
     }
   }
 
+  async withReservation<T>(requests: number, signal: AbortSignal, task: () => Promise<T>): Promise<ClinikoReservedRun<T>> {
+    if (!Number.isSafeInteger(requests) || requests < 1 || requests > this.maxPerMinute || !(signal instanceof AbortSignal) ||
+        signal.aborted || typeof task !== "function" || budgetReservationContext(this.budgetRef)) return { kind: "denied", denial: { kind: "unavailable" } };
+    try {
+      const held = await this.locked<{ id: string } | { denial: ClinikoBudgetDenial }>(async (trx, state) => {
+        if (signal.aborted) return { denial: { kind: "unavailable" } };
+        const denial = budgetCapacity(state, requests); if (denial) return { denial };
+        const id = randomUUID();
+        await trx.insertInto("cliniko_request_reservations").values({ lease_ref: id as ClinikoRequestReservationsLeaseRef,
+          budget_ref: this.budgetRef, remaining: requests, expires_at_ms: String(state.now + reservationLifetimeMs) }).execute();
+        return { id };
+      });
+      if ("denial" in held) return { kind: "denied", denial: held.denial };
+      return await runBudgetReservation(this.budgetRef, held.id, signal, task, async () => {
+        await this.locked(async trx => { await trx.deleteFrom("cliniko_request_reservations").where("budget_ref", "=", this.budgetRef)
+          .where("lease_ref", "=", held.id as ClinikoRequestReservationsLeaseRef).execute(); });
+      });
+    } catch { return { kind: "denied", denial: { kind: "unavailable" } }; }
+  }
+
   async observe429(resetHeader: string | null): Promise<ClinikoRateLimit> {
     this.report("provider429");
     try {
-      return await this.locked(async (trx, now, row) => {
+      return await this.locked(async (trx, state) => {
         const seconds = resetHeader && /^[0-9]+$/.test(resetHeader) ? Number(resetHeader) : NaN;
         const providerReset = Number.isSafeInteger(seconds) && seconds >= 0 && seconds <= 8_640_000_000
           ? seconds * 1_000 : NaN;
-        const until = Math.max(millis(row.cooldown_until_ms),
-          Number.isSafeInteger(providerReset) && providerReset > now ? providerReset : now + minuteMs);
+        const until = Math.max(state.cooldown,
+          Number.isSafeInteger(providerReset) && providerReset > state.now ? providerReset : state.now + minuteMs);
         await trx.updateTable("cliniko_request_budgets")
           .set({ cooldown_until_ms: String(until) })
           .where("budget_ref", "=", this.budgetRef).execute();

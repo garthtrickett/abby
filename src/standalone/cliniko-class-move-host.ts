@@ -11,7 +11,7 @@ import type { ReschedulingMenuRead } from "../core/rescheduling-menu.ts";
 import { ClinikoClassAttendanceReader } from "../cliniko/class-attendance-read.ts";
 import type { ClinikoClassSession as Occurrence } from "../cliniko/class-attendance-read.ts";
 import type { ClinikoAttendanceConfig } from "../cliniko/class-attendance-write.ts";
-import { checkClinikoHeadroom, clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
+import { checkClinikoHeadroom, clinikoCredentialFingerprint, withClinikoReservation } from "../cliniko/read-budget.ts";
 import { observedClassMoveRequests } from "../cliniko/class-move-workload.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { sameScope } from "./appointment-change-authority.ts";
@@ -84,6 +84,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
   static async create(input: ClinikoClassMoveHostConfig): Promise<Result<ClinikoClassMoveHost, HostReadFailure>> {
     try {
       if (!(input.signal instanceof AbortSignal) || input.signal.aborted || !(input.verification instanceof CallerVerificationSession) ||
+          typeof input.cliniko?.rateBudget?.withReservation !== "function" ||
           !(input.sourcePolicy instanceof OwnerFileClassPolicy) || !(input.destinationPolicy instanceof OwnerFileClassPolicy) || !(input.movePolicy instanceof OwnerFileClassMovePolicy) ||
           !input.verification.proof.matchesCall(input.scope, input.callId, input.sessionId, input.policyVersion) ||
           !input.verification.matchesClinikoAccount(clinikoCredentialFingerprint(input.cliniko.apiKey)) || typeof input.permission?.allows !== "function") return denied();
@@ -384,13 +385,17 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
       ...(p.offer.pass && context.move.passMovement && c.classPassMoveAuthority ? { casePass: { authority: c.classPassMoveAuthority, stagingContractVersion: context.move.passMovement.version } } : {}),
       ...(c.fetchPort ? { fetchPort: c.fetchPort } : {}) });
     if (!mover.ok) return reject();
-    const result = await mover.value.executeOnce({ ...this.#nativeRequest(context, p.target, p.offer), expiresAt: p.request.terms.expiresAt }, signal, async query => {
+    const reserved = await withClinikoReservation(c.cliniko.rateBudget, p.offer.pass ? 180 : sameService ? 120 : 180, signal,
+      () => mover.value.executeOnce({ ...this.#nativeRequest(context, p.target, p.offer), expiresAt: p.request.terms.expiresAt }, signal, async query => {
         const current = await this.#context(query.signal, p.target.verificationRef, mutation);
         const fresh = current ? this.#request(current, p.target, p.offer) : undefined;
         if (!current || current.version !== p.version || !fresh || digestActionRequest(fresh) !== mutation.payloadDigest || !await this.#permit(current, p.target, p.offer, query.phase, query.signal)) return false;
         const after = await this.#context(query.signal, p.target.verificationRef, mutation);
         return !!after && after.version === p.version && !!await this.#ready(query.signal, mutation) && await this.#permit(after, p.target, p.offer, query.phase, query.signal);
-      });
+      }));
+    if (reserved.kind === "denied") return reject();
+    if (reserved.kind === "interrupted") return { kind: "uncertain", actionKey: mutation.actionKey, reconcileAfter: now, deadline: new Date(Date.parse(now) + 300000).toISOString() };
+    const result = reserved.value;
     if (!result.ok || result.value.kind === "notSent" && result.value.review !== "uncertain" || result.value.kind === "restored") return reject();
     if (result.value.kind === "moved" && !signal.aborted && await this.#ready(signal, mutation)) return { kind: "committed", actionKey: mutation.actionKey, hostRef: result.value.replacementAttendeeRef! };
     return { kind: "uncertain", actionKey: mutation.actionKey, reconcileAfter: now, deadline: new Date(Date.parse(now) + 300000).toISOString() };

@@ -19,6 +19,7 @@ import type { LocationScope } from "../../src/core/model.ts";
 type Message = { kind: string; actionStatus?: string; text?: string; method?: string; path?: string; body?: Record<string, unknown>;
   originalActive?: boolean; replacementActive?: boolean; sourceUsed?: number; destinationUsed?: number; caseLinked?: boolean;
   phase?: string; elapsedMs?: number;
+  claims?: number; denialKind?: string;
   stage?: "fixtureProcessKilled" | "runnerStartupUnavailable";
   locations?: readonly { scope: LocationScope; policyVersion: string; businessId: string }[];
   messages?: number; envelopeMatches?: boolean; codeMatches?: boolean; email?: string; code?: string; scope?: LocationScope; policyVersion?: string; operation?: string; allowed?: boolean; accepted?: boolean; verified?: boolean };

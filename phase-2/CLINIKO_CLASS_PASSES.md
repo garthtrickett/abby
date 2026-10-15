@@ -717,3 +717,29 @@ cloud/speech/mail/carrier acceptance remain required. The full thirteen-gap
 objective remains active.
 
 Final current-source type/build,281 native checks and15 rebuilt compiled serving journeys pass in `4590eee3-1792027858397.log`; zero failures/cancellations/skips. Final2 registry/trace checks and diff pass in `4590eee3-1792028011822.log`. The counts overlap previous reader/pass cases and the earlier focused66 checks; actual clinic, acoustic/carrier and cloud acceptance remain separate.
+
+
+### Shared account allocations (E2E-416)
+
+The actual composed movement host now allocates its120/180-request admission
+before the reviewed native operation. The local and PostgreSQL budget adapters
+account for outstanding allocations in ordinary claims/headroom; an owner spends
+only its balance. Expired, aborted, released or exhausted contexts never fall back
+to unallocated requests. Migration048 adds an account-row guard for older clients
+that do not read the allocation table, preserving legitimate unallocated traffic.
+Real process death frees unused capacity only after database expiry. No patient,
+call, action or raw credential is persisted in allocation state.
+
+A separate-process compiled call holds at replacement dispatch, denies another
+consumer's claim/headroom/allocation, then completes and inspects all three
+native legs. The recovery fault now deliberately consumes the owner's allocation:
+it leaves unused physical capacity, refuses fallback, cancels only the replacement
+and keeps unverified recovery uncertain. Normal compensation, history, correction
+and consent cases retain their original deadlines/concurrency. See
+[the budget contract](CLINIKO_READ_BUDGET.md#shared-operation-allocations-e2e-416).
+
+This supplies shared capacity ownership, not a bound on arbitrary callbacks or
+future native growth. Workloads spanning quota windows still require durable
+phase ownership, fresh authority/consent and exact no-replay reconciliation.
+Financial provisioning and broader class/patient/operation combinations remain
+unfinished. The thirteen-gap objective and all external gates remain active.

@@ -13,7 +13,7 @@ import { addCaseHistory, addClassRosterHistory, visibleCaseRows, visibleArchived
 export async function classPassMoveFixture(options: { differentService?: boolean; differentCase?: boolean; effect?: "releaseOne" | "unchanged" | "consumeOne"; full?: boolean; history?: number; rosterHistory?: number } = {}) {
   let now = initialNow, claims = 0;
   const budget = new ClinikoReadBudget(180, () => Date.parse(now));
-  const rateBudget = { claim: () => { claims++; return budget.claim(); }, observe429: budget.observe429.bind(budget), checkHeadroom: budget.checkHeadroom.bind(budget) };
+  const rateBudget = { claim: () => { claims++; return budget.claim(); }, observe429: budget.observe429.bind(budget), checkHeadroom: budget.checkHeadroom.bind(budget), withReservation: budget.withReservation.bind(budget) };
   const scope = { ...classScope, tenantId: `pass-move-${randomUUID()}` }, f = classAttendanceFixture({ scope, rateBudget });
   const sourceCaseId = "811222333444555666", destinationCaseId = options.differentCase ? "811222333444555667" : sourceCaseId;
   const effect = options.effect ?? "releaseOne", original = f.attendees.find(row => row.id === "101")!;

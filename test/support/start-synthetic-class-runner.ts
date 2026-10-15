@@ -60,10 +60,13 @@ f.native.type.name = "Mat Pilates"; f.native.type.show_in_online_bookings = true
 
 let denied = false, classDenied = false, mailLost = false, lostWrite = false, policyChanged = false;
 let sharedBudget: ClinikoRequestBudget | undefined;
+let holdReplacement = false, releaseReplacement: (() => void) | undefined;
 const inputs: string[] = [];
 const occupyClass = () => { for (let index = 0; index < 3; index++) f.native.attendees.push(classAttendee(String(851 + index), "94", String(951 + index))); };
 process.on("message", message => {
   if (!message || typeof message !== "object" || !("kind" in message)) return;
+  if (message.kind === "holdClassReplacement") { holdReplacement = true; process.send?.({ kind: "classReplacementHoldArmed" }); }
+  if (message.kind === "releaseClassReplacement") { releaseReplacement?.(); releaseReplacement = undefined; }
   if (message.kind === "input" && "text" in message && typeof message.text === "string") { inputs.push(message.text); process.send?.({ kind: "inputAccepted" }); }
   if (message.kind === "advanceClock" && "milliseconds" in message && Number.isSafeInteger(message.milliseconds) &&
       typeof message.milliseconds === "number" && message.milliseconds >= 0 && message.milliseconds <= 15000) {
@@ -128,10 +131,16 @@ process.on("message", message => {
       if (phase === "replacement") occupyClass();
       if (phase === "compensation" && message.kind === "overbookExhaustedRecovery") {
         assert.ok(sharedBudget);
-        // Real claims model other in-flight account consumers after the known
-        // compensation send. No limit, clock, lease or stored row is altered.
-        for (let index = 0; index < 180; index++) if (await claimClinikoBudget(sharedBudget) !== null) break;
-        process.send?.({ kind: "classRecoveryBudgetConsumed" });
+        // These claims execute in the owning callback. Under a reservation they
+        // model unaccounted owner I/O; independent consumers are tested from a
+        // separate process. No limit, clock, lease or stored row is altered.
+        let claims = 0, denialKind: string | undefined;
+        for (let index = 0; index <= 180; index++) {
+          const denial = await claimClinikoBudget(sharedBudget);
+          if (denial) { denialKind = denial.kind; break; }
+          claims++;
+        }
+        process.send?.({ kind: "classRecoveryBudgetConsumed", claims, denialKind });
       }
     });
     else f.onWrite(async () => occupyClass());
@@ -141,6 +150,19 @@ process.on("message", message => {
 const provider: typeof fetch = async (value, init) => {
   const url = new URL(String(value)), method = init?.method ?? "GET";
   process.send?.({ kind: "providerRequest", method, path: url.pathname, elapsedMs: Math.round(performance.now()) });
+  if (holdReplacement && method === "POST" && url.pathname === "/v1/attendees") {
+    holdReplacement = false;
+    let aborted = () => {};
+    try {
+      await new Promise<void>(resolve => {
+        releaseReplacement = resolve; aborted = resolve;
+        init?.signal?.addEventListener("abort", aborted, { once: true });
+        if (init?.signal?.aborted) resolve();
+        process.send?.({ kind: "classReplacementHeld" });
+      });
+    } finally { init?.signal?.removeEventListener("abort", aborted); releaseReplacement = undefined; }
+    if (init?.signal?.aborted) throw new Error("synthetic replacement stopped before provider send");
+  }
   if (method === "GET" && url.pathname === "/v1/practitioners/22") return Response.json({ id: "22", active: true, show_in_online_bookings: true, display_name: "Demo Instructor" });
   if (method === "GET" && url.pathname === "/v1/businesses/11/practitioners") return Response.json({ practitioners: [{ id: "22" }], total_entries: 1 });
   if (method !== "GET") process.send?.({ kind: "providerMutation", method, path: url.pathname, body: JSON.parse(String(init?.body)) });

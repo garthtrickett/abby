@@ -104,7 +104,17 @@ describe("compiled class movement denial and partial recovery", { concurrency: 2
       await withClinicalRunner("reschedule", async call => {
         await prepare(call); await call.mark(); call.child.send({ kind: reason });
         if (reason !== "denyOriginalCancel") await voiceUntil(() => call.messages.some(row => row.kind === "classRaceArmed"), "compiled class race armed");
-        await call.say("Yes");
+        try { await call.say("Yes"); }
+        catch (error) {
+          const rows = await call.db.selectFrom("cliniko_request_budgets").select(["sent_at_ms", "max_per_minute"]).execute();
+          const holds = await call.db.selectFrom("cliniko_request_reservations").select(["remaining"]).execute();
+          assert.fail(JSON.stringify({ failure: error instanceof Error ? error.message : "unknown", reason,
+            sent: rows.map(row => ({ used: Array.isArray(row.sent_at_ms) ? row.sent_at_ms.length : -1, limit: row.max_per_minute })),
+            holds, mutations: attendances(call).map(row => [row.method, row.path]),
+            phases: call.messages.filter(row => row.kind === "classPermissionDecision").slice(-8).map(row => [row.phase, row.allowed]),
+            lastReads: call.messages.filter(row => row.kind === "providerRequest").slice(-12).map(row => row.path?.startsWith("/v1/patients/") ? "patient" : row.path?.startsWith("/v1/attendees/") ? "ownAttendance" : row.path === "/v1/attendees" ? "capacity" : row.path?.startsWith("/v1/group_appointments") ? "class" : "metadata"),
+          }));
+        }
         assert.deepEqual(attendances(call).map(row => [row.method, row.path]), [["POST", "/v1/attendees"], ["PATCH", "/v1/attendees/401/cancel"]]);
         assert.equal(attendances(call)[1]!.body?.apply_to_repeats, false);
         const budgets = await call.db.selectFrom("cliniko_request_budgets").select(["sent_at_ms", "max_per_minute"]).execute();
@@ -115,9 +125,14 @@ describe("compiled class movement denial and partial recovery", { concurrency: 2
           lastReads: call.messages.filter(row => row.kind === "providerRequest").slice(-8).map(row => row.path?.startsWith("/v1/patients/") ? "patient" : row.path?.startsWith("/v1/attendees/") ? "ownAttendance" : row.path === "/v1/attendees" ? "capacity" : row.path?.startsWith("/v1/group_appointments") ? "class" : "metadata"),
         }));
         if (reason === "overbookExhaustedRecovery") {
-          assert.ok(call.messages.some(row => row.kind === "classRecoveryBudgetConsumed"));
+          const consumed = call.messages.find(row => row.kind === "classRecoveryBudgetConsumed");
+          assert.ok(consumed && consumed.claims! > 0 && consumed.claims! <= 120);
+          // The owner exhausted its allocation. Unallocated physical capacity
+          // remains, but it cannot silently fall back to spend that capacity.
+          assert.equal(consumed.denialKind, "unavailable");
           assert.equal(budgets.length, 1); assert.equal(budgets[0]!.max_per_minute, 180);
-          assert.ok(Array.isArray(budgets[0]!.sent_at_ms)); assert.equal(budgets[0]!.sent_at_ms.length, 180);
+          assert.ok(Array.isArray(budgets[0]!.sent_at_ms));
+          assert.ok(budgets[0]!.sent_at_ms.length >= 120 && budgets[0]!.sent_at_ms.length < 180);
           assert.match(call.spoken.at(-1)!, /can't confirm|couldn't confirm|not confirmed|unconfirmed/i);
         } else assert.ok(budgets.every(row => row.max_per_minute === 180 && Array.isArray(row.sent_at_ms) && row.sent_at_ms.length <= 180));
         const state = call.messages.filter(row => row.kind === "classMoveState").at(-1)!;
