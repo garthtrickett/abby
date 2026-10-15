@@ -326,7 +326,16 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
               elapsedMs: Math.round((stage.settled ?? performance.now()) - stage.started) })),
             effects: Object.values(state?.effects ?? {}).map(effect => ({ kind: effect.kind, status: effect.status })) })}`, { cause: error });
         }
-        assert.deepEqual(failures, options.expectedFailure ? [options.expectedFailure] : [], `wire failure after ${modelTurns.length} model turns and ${transcriptionFrames} transcribed frames`);
+        const failureRead = failures.length && !options.expectedFailure && ledger ? await ledger.read(callId, scope) : undefined;
+        const failureState = failureRead && failureRead.ok ? failureRead.value : undefined;
+        assert.deepEqual(failures, options.expectedFailure ? [options.expectedFailure] : [], `wire failure after ${modelTurns.length} model turns and ${transcriptionFrames} transcribed frames ${failureState ? JSON.stringify({
+          workflow: flow?.workflow, lifecycle: failureState.lifecycle, now: now(),
+          processedChunk, finalChunk, pendingPresentation: failureState.pendingPresentationId !== undefined,
+          actions: Object.values(failureState.actions).map(action => ({ kind: action.kind, status: action.status })),
+          presentations: Object.values(failureState.presentations).map(p => ({ kind: p.kind, status: p.status })),
+          effects: Object.values(failureState.effects).map(e => ({ kind: e.kind, status: e.status })),
+          stages: stages.map(stage => ({ name: stage.name, pending: stage.settled === undefined, elapsedMs: Math.round((stage.settled ?? performance.now()) - stage.started) })),
+        }) : ""}`);
         await voiceUntil(() => processedChunk >= finalChunk, "completed caller media turn"); },
       async verify(code: string) { for (const digit of `${code}#`) sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
         await voiceUntil(() => !flow!.verificationRequired, "private code verification");

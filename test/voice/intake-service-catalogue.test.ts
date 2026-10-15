@@ -15,7 +15,7 @@ test("E2E-353 new-patient service variants require played selection, private reg
       for (;;) {
         const mode = cases[next++]; if (!mode) return;
         const f = await intakeServiceFixture(); f.flow.dispose();
-        let call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined;
+        let call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined, step = "setup";
         try {
           call = await clinikoWorkflowVoiceFixture(db, f.flowConfig, owner => createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic", model: "synthetic-model", clinicDate: () => "2026-10-04",
             fetch: async (_value, init) => {
@@ -25,7 +25,7 @@ test("E2E-353 new-patient service variants require played selection, private reg
                 text: JSON.stringify(text === "I need to register before arranging my first visit." ? { kind: "workflow", operation: "intake", stage: null, from: null, to: null, choice: null } : text === "Save my details." ? { kind: "save", operation: null, stage: null, from: null, to: null, choice: null }
                   : { kind: "menu", operation: null, stage: null, from: "2026-10-08", to: "2026-10-08", choice: null }) }] }] });
             } }), { lostWrite: mode === "bookingLoss", appointmentTypeMetadata: { "34": { durationMinutes: 60 }, "35": { durationMinutes: 45 }, "36": { durationMinutes: 45 } } });
-          const play = async (text: string) => { await call!.turn(text); await call!.mark(); };
+          const play = async (text: string) => { step = text; await call!.turn(text); await call!.mark(); };
           if (["guided", "gender", "groupFailure", "routed", "unplayed"].includes(mode)) {
             const starter = mode === "routed" ? "I need to register before arranging my first visit." : "I'm a new patient. I'd like to book an appointment.";
             if (mode === "unplayed") {
@@ -80,7 +80,7 @@ test("E2E-353 new-patient service variants require played selection, private reg
           const ordinary = JSON.stringify([call.transcripts, call.modelTurns, state.callerMessages]);
           for (const value of [intakeDraft.firstName, intakeDraft.email, intakeDraft.dateOfBirth, f.mail[0]!.code]) assert.equal(ordinary.includes(value), false);
           await play("I'm a new patient. Book a 45-minute initial Massage appointment."); assert.equal(f.provider.patientPosts, 1); assert.equal(call.writeRequests.length, 1);
-        } catch (error) { failures.push(new Error(`${mode}: ${error instanceof Error ? error.message : String(error)}`, { cause: error })); }
+        } catch (error) { failures.push(new Error(`${mode} at ${step}: ${error instanceof Error ? error.message : String(error)}`, { cause: error })); }
         finally { await call?.close(); await f.close(); }
       }
     }));

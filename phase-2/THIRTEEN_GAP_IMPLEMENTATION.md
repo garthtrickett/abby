@@ -3701,3 +3701,23 @@ validation (`4590eee3-1792037043489.exit` is 0). Registry/trace checks pass befo
 publication. A later failure in the original immutable complete run affected
 the signed new-patient routed service case (E2E-353); its unchanged file is being
 reproduced independently. No full clean-source release pass or merge is claimed.
+
+
+The original clean f24ecaa run is terminal failed: 2390 tests, 2145 passed,
+24 failed and 221 skipped in the normal text profile; later release stages did
+not run. The record is `eval/results/local-release-f24ecaa/summary.json`.
+Twenty-one failures belong to the missing-database fixture family; three affect
+signed enquiry, within-deadline evidence and intake routing. The initial intake
+reproduction failed a different mode (`groupFailure`) in
+`4590eee3-1792037606519.log`. The next reproduction passed all 16 modes in
+`4590eee3-1792037802620.log` after overlapping compilation/full-suite jobs ended.
+
+Diagnostics now retain only public lifecycle/action/presentation/effect states,
+fixed stage names and durations on failure, plus the static fixture step. They
+exclude caller/provider text, native identifiers and verification material.
+The first combined run exposed diagnostic masking after an expired call was disposed (4590eee3-1792037873338.log): the optional ledger read threw callUnknown instead of preserving effectFailure. The diagnostic read is now best effort and the original assertion remains unchanged. Complete typechecking, all three signed files together at concurrency 4 (six
+tests), both registry/trace checks and diff validation pass with zero failures,
+cancellations or skips in `4590eee3-1792038008914.log`. No runtime behavior,
+deadline, concurrency or verifier was changed. Resource contention is suspected
+but not established as the cause; a new complete clean-commit run remains the
+merge gate and will be the sole owned qualification workload.
