@@ -669,3 +669,51 @@ patient/account traffic was used. Matching-account native/pass qualification pas
 serving passed62 checks, zero failures/cancellations/skips, with typecheck and
 PostgreSQL migrations, log `4590eee3-1792023288134.log`. This new mismatch scenario
 remains native-host evidence; real clinic/cloud/voice acceptance remains absent.
+
+### Observed class pagination in pass movement cost (E2E-415)
+
+The E412 lower bound counts complete case history but assumes one page for each
+class attendance and practitioner-relationship collection. A new synthetic
+witness adds201 cancelled attendance records to each selected class while
+preserving active places and pass use. The estimate is161 requests; execution
+attempts181 and becomes uncertain after replacement creation, original
+cancellation and pass association. The pre-change aggregate is
+`eval/baselines/class-observed-workload-before-v1.json` at `b5dc63b`, tracked in
+`4590eee3-1792027354483.log`. This is a native fixture result, not an incident
+observed at a real clinic.
+
+The private class reader now retains the observed attendance record count and
+metadata relationship-page request count. The
+[official attendee API](https://docs.api.cliniko.com/openapi/attendee/attendee)
+defines paginated collections, `total_entries`, booking filters and activity
+fields. Forecasting uses the rows actually returned by complete native reads;
+activity determines capacity independently of read cost. These counts stay in
+transient native observations and are omitted from public menus, ordinary
+model input and reviews.
+
+`class-move-workload.ts` computes the coordinator's two complete class-pair
+observations and two destination observations from that shape. It accounts for
+a replacement crossing a100-row attendance boundary and rejects a destination
+already at the500-record inspection bound. It replaces only the64/84-request
+single-page class component in the existing case estimate. Ordinary offers,
+fresh proposal inspection and the pre-replacement observation apply the result;
+metadata and roster growth cannot remain hidden behind a small active count.
+Current proof, independent pass/patient authority, complete case fingerprints,
+played consent, strict observations and native write inspection are unchanged.
+
+Native successful-path tests compare forecast with actual claims, including
+99/100/101 attendance boundaries,201 attendance records and201 metadata
+relationships, for same and different services/cases. Oversized metadata or
+attendance, inspection overflow and post-menu growth deny before clinical
+mutation. The first focused reader/history/workload regression passes66 checks
+with zero failures/cancellations/skips in `4590eee3-1792027779676.log`.
+
+This is an estimate for the observed native shape, not a reservation or an upper
+bound for arbitrary proof/permission callbacks, concurrent native growth or
+compensation. The registered native contact's known request floor remains
+separate. Shared account reservation, staged movement across quota windows,
+complete recovery ownership, financial provisioning and real clinic/source/
+cloud/speech/mail/carrier acceptance remain required. The full thirteen-gap
+objective remains active.
+
+Final current-source type/build,281 native checks and15 rebuilt compiled serving journeys pass in `4590eee3-1792027858397.log`; zero failures/cancellations/skips. Final2 registry/trace checks and diff pass in `4590eee3-1792028011822.log`. The counts overlap previous reader/pass cases and the earlier focused66 checks; actual clinic, acoustic/carrier and cloud acceptance remain separate.

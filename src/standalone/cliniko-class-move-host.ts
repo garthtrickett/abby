@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { digestActionRequest } from "../core/digest.ts";
 import { noticePresentationId } from "../core/notice-presentation-id.ts";
 import { matchesBookingSearchWindow, validBookingSearchWindow } from "../core/booking-search-window.ts";
@@ -11,6 +12,7 @@ import { ClinikoClassAttendanceReader } from "../cliniko/class-attendance-read.t
 import type { ClinikoClassSession as Occurrence } from "../cliniko/class-attendance-read.ts";
 import type { ClinikoAttendanceConfig } from "../cliniko/class-attendance-write.ts";
 import { checkClinikoHeadroom, clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
+import { observedClassMoveRequests } from "../cliniko/class-move-workload.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { sameScope } from "./appointment-change-authority.ts";
 import { CallerVerificationSession } from "./caller-verification-session.ts";
@@ -219,7 +221,8 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
           if (!await this.#permit(context, target!, item, "offers", signal)) return denied();
           if (context.move.membership === "nativeCaseSessions") {
             const observed = await this.#passEvidence(context, target!)?.selectWithWorkload(this.#nativeRequest(context, target!, item), "proposal", signal);
-            if (!observed || observed.minimumNativeRequests + 9 * this.#proofRequestFloor() > 180) continue;
+            const requests = observed && observedClassMoveRequests(observed.minimumNativeRequests, target!.session, item.session, this.#source === this.#destination);
+            if (!observed || requests === undefined || requests + 9 * this.#proofRequestFloor() > 180) continue;
             const pass = observed.binding;
             Object.freeze(pass.source); Object.freeze(pass.destination); Object.freeze(pass);
             item = { ...item, pass };
@@ -290,10 +293,13 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
         await this.#destination.inspect(this.#config.scope, target.verificationRef, offer.session.sessionRef, from, to, this.#now(), signal)];
     if (reads.some(read => !read.ok || read.value.patientRef !== target.patientId || read.value.timeZone !== context.move.timeZone)) return false;
     const sessions = reads.flatMap(read => read.ok ? read.value.sessions : []), source = sessions.find(row => row.sessionRef === target.session.sessionRef), destination = sessions.find(row => row.sessionRef === offer.session.sessionRef);
-    return !!source && source.startsAt === target.session.startsAt && source.endsAt === target.session.endsAt && source.attendance.kind === "one" && source.attendance.attendeeRef === target.attendeeId &&
+    if (!(!!source && source.startsAt === target.session.startsAt && source.endsAt === target.session.endsAt && source.attendance.kind === "one" && source.attendance.attendeeRef === target.attendeeId &&
       !!destination && destination.startsAt === offer.session.startsAt && destination.endsAt === offer.session.endsAt && destination.attendance.kind === "none" && destination.remainingPlaces > 0 && !destination.overCapacity &&
-      ((context.move.membership === "nativeCaseSessions") === !!offer.pass) && (!offer.pass ||
-        await this.#passEvidence(context, target)?.unchanged(offer.pass, this.#nativeRequest(context, target, offer), "proposal", signal) === true);
+      ((context.move.membership === "nativeCaseSessions") === !!offer.pass))) return false;
+    if (!offer.pass) return true;
+    const current = await this.#passEvidence(context, target)?.selectWithWorkload(this.#nativeRequest(context, target, offer), "proposal", signal);
+    const requests = current && observedClassMoveRequests(current.minimumNativeRequests, source, destination, this.#source === this.#destination);
+    return !!current && isDeepStrictEqual(current.binding, offer.pass) && requests !== undefined && requests + 9 * this.#proofRequestFloor() <= 180;
   }
   #request(context: Context, target: Target, offer: Offer): Move | undefined {
     const now = this.#now(), at = Date.parse(now), start = Date.parse(offer.session.startsAt), end = Date.parse(offer.session.endsAt);

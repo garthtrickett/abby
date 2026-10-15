@@ -35,8 +35,11 @@ if (moveMode && (!["full", "transfer"].includes(moveMode) || operation !== "resc
 const historyText = process.env.ABBY_SYNTHETIC_CLASS_PASS_HISTORY;
 if (historyText !== undefined && (!moveMode || !["201", "301", "501", "999"].includes(historyText))) throw new Error("invalid synthetic pass history");
 const history = historyText === undefined ? undefined : Number(historyText);
+const rosterText = process.env.ABBY_SYNTHETIC_CLASS_ROSTER_HISTORY;
+if (rosterText !== undefined && (!moveMode || !["99", "100", "101", "201", "500"].includes(rosterText))) throw new Error("invalid synthetic class attendance history");
+const roster = rosterText === undefined ? {} : { rosterHistory: Number(rosterText) };
 const f = operation === "reschedule" ? await classMoveCallFlowFixture(process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1", multiple,
-  moveMode === "full" ? { full: true, ...(history === undefined ? {} : { history }) } : moveMode === "transfer" ? { differentCase: true, ...(history === undefined ? {} : { history }) } : undefined) : await classCallFlowFixture(operation, multiple, passes, passCancellation); f.flow.dispose();
+  moveMode === "full" ? { full: true, ...(history === undefined ? {} : { history }), ...roster } : moveMode === "transfer" ? { differentCase: true, ...(history === undefined ? {} : { history }), ...roster } : undefined) : await classCallFlowFixture(operation, multiple, passes, passCancellation); f.flow.dispose();
 if (operation === "reschedule" && (process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1" || process.env.ABBY_SYNTHETIC_CLASS_DATE_CORRECTION === "1"))
   f.native.groups.push({ ...structuredClone(f.native.groups[1]!), id: "95", ...classLink("group_appointments", "95"),
     starts_at: `2026-10-${process.env.ABBY_SYNTHETIC_CLASS_DATE_CORRECTION === "1" ? "10" : "09"}T12:00:00.000Z`,

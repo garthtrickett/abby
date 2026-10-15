@@ -8,9 +8,9 @@ import { ClinikoClassPassMovement } from "../../src/standalone/cliniko-class-pas
 import type { ClassPassMoveAuthority } from "../../src/standalone/cliniko-class-pass-movement.ts";
 import { classAttendanceFixture, classAttendee as attendee, classLink as link, classNow as initialNow, classScope } from "./class-attendance.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
-import { addCaseHistory, visibleCaseRows, visibleArchivedCase } from "./class-pass-history.ts";
+import { addCaseHistory, addClassRosterHistory, visibleCaseRows, visibleArchivedCase } from "./class-pass-history.ts";
 
-export async function classPassMoveFixture(options: { differentService?: boolean; differentCase?: boolean; effect?: "releaseOne" | "unchanged" | "consumeOne"; full?: boolean; history?: number } = {}) {
+export async function classPassMoveFixture(options: { differentService?: boolean; differentCase?: boolean; effect?: "releaseOne" | "unchanged" | "consumeOne"; full?: boolean; history?: number; rosterHistory?: number } = {}) {
   let now = initialNow, claims = 0;
   const budget = new ClinikoReadBudget(180, () => Date.parse(now));
   const rateBudget = { claim: () => { claims++; return budget.claim(); }, observe429: budget.observe429.bind(budget), checkHeadroom: budget.checkHeadroom.bind(budget) };
@@ -36,6 +36,7 @@ export async function classPassMoveFixture(options: { differentService?: boolean
   Object.assign(destination, { starts_at: "2026-10-09T10:00:00.000Z", ends_at: options.differentService ? "2026-10-09T10:30:00.000Z" : "2026-10-09T11:00:00.000Z",
     ...(options.differentService ? { practitioner: link("practitioners", "23"), appointment_type: link("appointment_types", "34") } : {}) });
   if (options.differentService) f.business.appointment_type_ids = ["33", "34"];
+  if (options.rosterHistory) for (const [side, group] of ["91", "94"].entries()) addClassRosterHistory(f.attendees, group, options.rosterHistory, now, 700000 + side * 1000);
   let independent = true, sourceEntitlement = "source-entitlement", destinationEntitlement = "destination-entitlement";
   const authorityQueries: unknown[] = [];
   const authority: ClassPassMoveAuthority = {

@@ -27,3 +27,12 @@ export function addCaseHistory(rows: Record<string, unknown>[], caseId: string, 
     rows.push(row);
   }
 }
+
+/** Cancelled other-patient attendance adds native pagination without changing
+ * active places or attaching any record to the selected patient's pass. */
+export function addClassRosterHistory(rows: Record<string, unknown>[], bookingId: string, total: number, at: string, seed = 700000) {
+  assert.ok(Number.isSafeInteger(total) && total >= 1 && total <= 500);
+  const current = rows.filter(row => (row.booking as { links?: { self?: string } } | undefined)?.links?.self?.endsWith(`/bookings/${bookingId}`)).length;
+  assert.ok(current <= total);
+  for (let index = current; index < total; index++) rows.push({ ...classAttendee(String(seed + index), bookingId, "65", at), arrived: null });
+}

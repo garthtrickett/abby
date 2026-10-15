@@ -15,6 +15,9 @@ export type ClinikoClassSession = Readonly<{
   sessionRef: string; startsAt: string; endsAt: string; capacity: number; activeAttendanceCount: number;
   remainingPlaces: number; overCapacity: boolean;
   attendance: Readonly<{ kind: "none" | "ambiguous" }> | Readonly<{ kind: "one"; attendeeRef: string }>;
+  /** Private native read shape, including inactive records. Not capacity,
+   * patient permission, financial authority or a quota reservation. */
+  nativeWorkload?: Readonly<{ metadataRequests: number; attendanceRecords: number }>;
 }>;
 export type ClinikoClassRead = Readonly<{
   scope: LocationScope; sourceRef: string; observedAt: string; timeZone: string; className: string;
@@ -28,7 +31,7 @@ export type ClinikoClassReadConfig = Readonly<{
 type Row = Record<string, unknown>;
 type NativeSession = Readonly<{ id: string; startsAt: string; endsAt: string; capacity: number; active: boolean }>;
 type NativeAttendee = Readonly<{ id: string; patientId: string; active: boolean }>;
-type Snapshot = Readonly<{ timeZone: string; typeCapacity: number; sessions: readonly Readonly<{ session: NativeSession; attendees: readonly NativeAttendee[] }>[] }>;
+type Snapshot = Readonly<{ timeZone: string; typeCapacity: number; metadataRequests: number; sessions: readonly Readonly<{ session: NativeSession; attendees: readonly NativeAttendee[] }>[] }>;
 const object = (v: unknown): Row | undefined => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Row : undefined;
 const id = (v: unknown): v is string => typeof v === "string" && /^[1-9][0-9]{0,18}$/.test(v);
 const scopeValid = (v: unknown): v is LocationScope => {
@@ -118,7 +121,7 @@ export class ClinikoClassAttendanceReader {
     }
     return fail("tooManyResults");
   }
-  async #metadata(signal: AbortSignal): Promise<{ timeZone: string; typeCapacity: number }> {
+  async #metadata(signal: AbortSignal): Promise<{ timeZone: string; typeCapacity: number; metadataRequests: number }> {
     const c = this.#config;
     const business = object(await this.#get(`/businesses/${c.businessId}`, signal));
     if (!business || business.id !== c.businessId || business.archived_at !== null ||
@@ -134,7 +137,8 @@ export class ClinikoClassAttendanceReader {
     const businesses = await this.#collection(`practitioners/${c.practitionerId}/businesses`, [], signal);
     const types = await this.#collection(`practitioners/${c.practitionerId}/appointment_types`, [], signal);
     if (!businesses.some(row => row.id === c.businessId) || !types.some(row => row.id === c.appointmentTypeId)) return fail("malformed");
-    return { timeZone: business.time_zone_identifier, typeCapacity: Number(type.max_attendees) };
+    return { timeZone: business.time_zone_identifier, typeCapacity: Number(type.max_attendees),
+      metadataRequests: 3 + Math.max(1, Math.ceil(businesses.length / 100)) + Math.max(1, Math.ceil(types.length / 100)) };
   }
   async #snapshot(from: string, to: string, signal: AbortSignal, selected?: readonly string[], metadataAfter = false): Promise<Snapshot> {
     const c = this.#config, metadata = metadataAfter ? undefined : await this.#metadata(signal);
@@ -214,16 +218,17 @@ export class ClinikoClassAttendanceReader {
         // before the first, after the second. No middle duplicate is needed.
         // Menu candidates retain their separate closing metadata check.
         const after = candidates ? before : await this.#snapshot(from, to, signal, selected, true);
-        const metadata = candidates ? await this.#metadata(signal) : { timeZone: after.timeZone, typeCapacity: after.typeCapacity };
+        const metadata = candidates ? await this.#metadata(signal) : { timeZone: after.timeZone, typeCapacity: after.typeCapacity, metadataRequests: after.metadataRequests };
         const current = await this.#verified(scope, ref, signal);
         if (patient.patientRef !== current.patientRef || !isDeepStrictEqual(before, after) ||
-          !isDeepStrictEqual(metadata, { timeZone: after.timeZone, typeCapacity: after.typeCapacity })) return err({ kind: "changed" });
+          !isDeepStrictEqual(metadata, { timeZone: after.timeZone, typeCapacity: after.typeCapacity, metadataRequests: after.metadataRequests })) return err({ kind: "changed" });
         return ok({ scope: { ...scope }, sourceRef: `cliniko:classes:${this.#config.businessId}:${this.#config.practitionerId}:${this.#config.appointmentTypeId}`,
           observedAt: this.#clock(), timeZone: after.timeZone, className: this.#config.className, patientRef: current.patientRef,
           verificationRef: ref, proofExpiresAt: current.expiresAt, reservable: false, sessions: after.sessions.map(({ session, attendees }) => {
             const active = attendees.filter(row => row.active), own = active.filter(row => row.patientId === current.patientRef);
             return { sessionRef: session.id, startsAt: session.startsAt, endsAt: session.endsAt, capacity: session.capacity,
               activeAttendanceCount: active.length, remainingPlaces: Math.max(0, session.capacity - active.length), overCapacity: active.length > session.capacity,
+              nativeWorkload: { metadataRequests: after.metadataRequests, attendanceRecords: attendees.length },
               attendance: own.length === 1 ? { kind: "one", attendeeRef: own[0]!.id } : { kind: own.length > 1 ? "ambiguous" : "none" } };
           }) });
       } catch (error) { return err(error instanceof ReadFailure ? error.failure : { kind: "unavailable" }); }

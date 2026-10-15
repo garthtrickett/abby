@@ -27,7 +27,7 @@ export type ClinicalRunnerOperation = "book" | "cancel" | "reschedule" | "intake
 /** Actual compiled runner in a separate process and database. All network
  * providers are fixtures; private caller material is kept in this test memory. */
 export async function withClinicalRunner(operation: ClinicalRunnerOperation,
-  run: (call: Awaited<ReturnType<typeof start>>) => Promise<void>, options: { classPassHistory?: 201 | 301 | 501 | 999; classPassMovement?: "full" | "transfer"; classPasses?: boolean; classPassCancellation?: "releaseOne" | "unchanged" | "consumeOne"; recurringBusy?: "approved" | "legacy"; recurringOpening?: "approved" | "legacy"; classDateCorrection?: boolean; differentClass?: boolean; multipleClasses?: boolean; classes?: boolean; taskSequence?: boolean; resendContent?: "telehealth" | "cancelled"; intakeFields?: boolean; services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean; practitionerMove?: "changedTime" | "sameTime" | "directory" } = {}): Promise<void> {
+  run: (call: Awaited<ReturnType<typeof start>>) => Promise<void>, options: { classPassHistory?: 201 | 301 | 501 | 999; classRosterHistory?: 99 | 100 | 101 | 201 | 500; classPassMovement?: "full" | "transfer"; classPasses?: boolean; classPassCancellation?: "releaseOne" | "unchanged" | "consumeOne"; recurringBusy?: "approved" | "legacy"; recurringOpening?: "approved" | "legacy"; classDateCorrection?: boolean; differentClass?: boolean; multipleClasses?: boolean; classes?: boolean; taskSequence?: boolean; resendContent?: "telehealth" | "cancelled"; intakeFields?: boolean; services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean; practitionerMove?: "changedTime" | "sameTime" | "directory" } = {}): Promise<void> {
   const adminUrl = process.env.DATABASE_URL; assert.ok(adminUrl);
   const admin = connectPostgres(adminUrl), name = `abby_test_voice_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl); target.pathname = `/${name}`;
@@ -47,7 +47,7 @@ export async function withClinicalRunner(operation: ClinicalRunnerOperation,
     if (failures.length) throw new AggregateError(originalFailure === undefined ? failures : [originalFailure, ...failures], "clinical runner test or cleanup failed");
   }
 }
-async function start(operation: ClinicalRunnerOperation, connectionString: string, db: ReturnType<typeof connectPostgres>, options: { classPassHistory?: 201 | 301 | 501 | 999; classPassMovement?: "full" | "transfer"; classPasses?: boolean; classPassCancellation?: "releaseOne" | "unchanged" | "consumeOne"; recurringBusy?: "approved" | "legacy"; recurringOpening?: "approved" | "legacy"; classDateCorrection?: boolean; differentClass?: boolean; multipleClasses?: boolean; classes?: boolean; taskSequence?: boolean; resendContent?: "telehealth" | "cancelled"; intakeFields?: boolean; services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean; practitionerMove?: "changedTime" | "sameTime" | "directory" }) {
+async function start(operation: ClinicalRunnerOperation, connectionString: string, db: ReturnType<typeof connectPostgres>, options: { classPassHistory?: 201 | 301 | 501 | 999; classRosterHistory?: 99 | 100 | 101 | 201 | 500; classPassMovement?: "full" | "transfer"; classPasses?: boolean; classPassCancellation?: "releaseOne" | "unchanged" | "consumeOne"; recurringBusy?: "approved" | "legacy"; recurringOpening?: "approved" | "legacy"; classDateCorrection?: boolean; differentClass?: boolean; multipleClasses?: boolean; classes?: boolean; taskSequence?: boolean; resendContent?: "telehealth" | "cancelled"; intakeFields?: boolean; services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean; practitionerMove?: "changedTime" | "sameTime" | "directory" }) {
   const accountSid = `AC${"1".repeat(32)}`, authToken = "synthetic-clinical-runner-token", number = "+6125550199", caller = "+61400111222";
   const webhookUrl = "https://clinical-runner.example.test/twilio/inbound", streamUrl = "wss://clinical-runner.example.test/twilio/media/";
   const messages: Message[] = [], output: string[] = [];
@@ -59,6 +59,7 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
       ABBY_SYNTHETIC_CLASS_PASSES: options.classPasses ? "1" : undefined,
       ABBY_SYNTHETIC_CLASS_PASS_MOVE: options.classPassMovement,
       ABBY_SYNTHETIC_CLASS_PASS_HISTORY: options.classPassHistory === undefined ? undefined : String(options.classPassHistory),
+      ABBY_SYNTHETIC_CLASS_ROSTER_HISTORY: options.classRosterHistory === undefined ? undefined : String(options.classRosterHistory),
       ABBY_SYNTHETIC_CLASS_PASS_CANCELLATION: options.classPassCancellation,
       ABBY_SYNTHETIC_DIFFERENT_CLASS: options.differentClass ? "1" : undefined,
       ABBY_SYNTHETIC_CLASS_DATE_CORRECTION: options.classDateCorrection ? "1" : undefined,

@@ -17,6 +17,7 @@ import type { ClassMovementPass } from "../cliniko/review-request.ts";
 import { ClinikoClassPassMovement } from "./cliniko-class-pass-movement.ts";
 import type { ClassPassMoveAuthority } from "./cliniko-class-pass-movement.ts";
 import { withVerifiedClinikoRead } from "../cliniko/verified-read.ts";
+import { observedClassMoveRequests } from "../cliniko/class-move-workload.ts";
 
 type Service = Readonly<{ practitionerId: string; appointmentTypeId: string; className: string }>;
 type Occurrence = Readonly<{ sessionId: string; startsAt: string; endsAt: string }>;
@@ -189,8 +190,9 @@ export class ClinikoClassAttendanceMove {
         if (!observed || !sourceActive(observed.source) || observed.destination.attendance.kind !== "none" || observed.destination.remainingPlaces < 1 || observed.destination.overCapacity) return false;
         if (!request.pass) return true;
         const current = await passes!.selectWithWorkload(request, "commit", last);
+        const requests = current && observedClassMoveRequests(current.minimumNativeRequests, observed.source, observed.destination, sameService(c.source, c.destination));
         return !!current && isDeepStrictEqual(current.binding, request.pass) &&
-          current.minimumNativeRequests + 9 * (c.proofNativeRequestFloor ?? 0) <= 180;
+          requests !== undefined && requests + 9 * (c.proofNativeRequestFloor ?? 0) <= 180;
       };
       return request.pass ? grouped("commit", stop, (proof, last, passes) => read(proof, last, passes)) : read(undefined, stop);
     };

@@ -13,9 +13,9 @@ import { classAttendanceFixture, classAttendee, classLink } from "./class-attend
 import { callerVerificationFixture, verificationNow, verificationCanaries } from "./caller-verification.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 import type { ClassPassMoveAuthority, ClassPassMoveAuthorityQuery } from "../../src/standalone/cliniko-class-pass-movement.ts";
-import { addCaseHistory, visibleCaseRows, visibleArchivedCase } from "./class-pass-history.ts";
+import { addCaseHistory, addClassRosterHistory, visibleCaseRows, visibleArchivedCase } from "./class-pass-history.ts";
 
-export type PassMoveOptions = Readonly<{ differentCase?: boolean; effect?: "releaseOne" | "unchanged" | "consumeOne"; full?: boolean; history?: number }>;
+export type PassMoveOptions = Readonly<{ differentCase?: boolean; effect?: "releaseOne" | "unchanged" | "consumeOne"; full?: boolean; history?: number; rosterHistory?: number }>;
 
 export async function classMoveFixture(different = false, near = false, passes?: PassMoveOptions) {
   let claims = 0, now = verificationNow;
@@ -29,6 +29,7 @@ export async function classMoveFixture(different = false, near = false, passes?:
     ...(different ? { practitioner: classLink("practitioners", "23"), appointment_type: classLink("appointment_types", "34") } : {}) });
   if (near) Object.assign(native.groups[1]!, { starts_at: new Date(Date.parse(now) + 61 * 60000).toISOString(), ends_at: new Date(Date.parse(now) + 121 * 60000).toISOString() });
   if (different) native.business.appointment_type_ids = ["33", "34"];
+  if (passes?.rosterHistory) for (const [side, group] of ["91", "94"].entries()) addClassRosterHistory(native.attendees, group, passes.rosterHistory, now, 700000 + side * 1000);
   const sourceCaseId = "811222333444555666", destinationCaseId = passes?.differentCase ? "811222333444555667" : sourceCaseId;
   const caseOf = (row: Record<string, unknown>) => (row.patient_case as { links?: { self?: string } } | undefined)?.links?.self?.split("/").at(-1);
   const caseRows = (id: string) => native.attendees.filter(row => caseOf(row) === id);
