@@ -32,11 +32,12 @@ export type ClinikoCaseSessions = Readonly<{
   financialAuthority: "none"; reservable: false;
 }>;
 export type ClinikoCaseAttendance = ClinikoCaseSessions & Readonly<{ attendance: Readonly<{ attendeeId: string; countsSession: boolean }> }>;
+export type ClinikoCaseTransfer = Readonly<{ source: ClinikoCaseAttendance; destination: ClinikoCaseSessions }>;
 export type ClinikoCaseMovement = Readonly<{
   usageFingerprint: string; originalAttendeeId: string; originalClassSessionId: string; replacementAttendeeId: string;
   originalCancellationReason?: number;
 }>;
-type CaseObservation = ClinikoCaseSessions & Readonly<{ attendance?: ClinikoCaseAttendance["attendance"] }>;
+type CaseObservation = ClinikoCaseSessions & Readonly<{ attendance?: ClinikoCaseAttendance["attendance"]; companion?: ClinikoCaseSessions }>;
 type AttendanceCheck = Readonly<{ kind: "addition" | "cancellation"; usageFingerprint: string; attendeeId: string; cancellationReason?: number }> |
   (ClinikoCaseMovement & Readonly<{ kind: "movement"; attendeeId: string }>) |
   Readonly<{ kind: "attendance"; attendeeId: string }>;
@@ -175,6 +176,28 @@ export class ClinikoPatientCaseSessionsReader {
     const found = await this.#read(input, parentSignal, { kind: "attendance", attendeeId });
     return found.ok ? found.value.attendance ? ok({ ...found.value, attendance: found.value.attendance }) : err({ kind: "changed" }) : found;
   }
+  /** One complete state for two explicitly authorised targets on the same
+   * case. Date eligibility is evaluated separately. Neither target permission
+   * nor either proof boundary can be inferred from the other target. */
+  async inspectTransfer(source: ClinikoCaseQuery, destination: ClinikoCaseQuery, attendeeId: string, signal: AbortSignal): Promise<Result<ClinikoCaseTransfer, ClinikoCaseFailure>> {
+    if (!id(attendeeId) || !this.#paired(source, destination)) return err({ kind: "invalidQuery" });
+    const read = await this.#read(source, signal, { kind: "attendance", attendeeId }, destination);
+    if (!read.ok) return read;
+    const { companion, ...observed } = read.value;
+    return companion && observed.attendance ? ok({ source: { ...observed, attendance: observed.attendance }, destination: companion }) : err({ kind: "changed" });
+  }
+  async inspectTransferCancellation(source: ClinikoCaseQuery, destination: ClinikoCaseQuery, usageFingerprint: string, attendeeId: string,
+    cancellationReason: number, signal: AbortSignal): Promise<Result<Readonly<{ source: ClinikoCaseSessions; destination: ClinikoCaseSessions }>, ClinikoCaseFailure>> {
+    if (!this.#paired(source, destination) || !/^[a-f0-9]{64}$/.test(usageFingerprint) || !id(attendeeId) || ![10, 20, 30, 40, 50, 60].includes(cancellationReason)) return err({ kind: "invalidQuery" });
+    const read = await this.#read(source, signal, { kind: "cancellation", usageFingerprint, attendeeId, cancellationReason }, destination);
+    if (!read.ok) return read;
+    const { companion, ...observed } = read.value;
+    return companion ? ok({ source: observed, destination: companion }) : err({ kind: "changed" });
+  }
+  #paired(source: ClinikoCaseQuery, destination: ClinikoCaseQuery) {
+    return !!source && !!destination && scopeValid(source.scope) && scopeValid(destination.scope) && sameScope(source.scope, destination.scope) &&
+      source.patientCaseId === destination.patientCaseId && source.verificationRef === destination.verificationRef && source.classSessionId !== destination.classSessionId;
+  }
   /** Only the selected attendee's cancelled state may change. Metadata and all
    * other uses must match the exact prior private state, even at equal counts. */
   async inspectCancellation(input: ClinikoCaseQuery, usageFingerprint: string, attendeeId: string, parentSignal: AbortSignal, cancellationReason?: number): Promise<Result<ClinikoCaseSessions, ClinikoCaseFailure>> {
@@ -192,17 +215,21 @@ export class ClinikoPatientCaseSessionsReader {
       movement.originalClassSessionId === input?.classSessionId || movement.originalCancellationReason !== undefined && ![10, 20, 30, 40, 50, 60].includes(movement.originalCancellationReason)) return err({ kind: "invalidQuery" });
     return this.#read(input, parentSignal, { ...movement, kind: "movement", attendeeId: movement.replacementAttendeeId });
   }
-  async #read(input: ClinikoCaseQuery, parentSignal: AbortSignal, check?: AttendanceCheck): Promise<Result<CaseObservation, ClinikoCaseFailure>> {
+  async #read(input: ClinikoCaseQuery, parentSignal: AbortSignal, check?: AttendanceCheck, pairedInput?: ClinikoCaseQuery): Promise<Result<CaseObservation, ClinikoCaseFailure>> {
     if (!scopeValid(input?.scope) || !sameScope(input.scope, this.#config.scope)) return err({ kind: "scopeMismatch" });
     let now: string; try { now = this.#clock(); } catch { return err({ kind: "unavailable" }); }
-    if (!id(input.patientCaseId) || !id(input.classSessionId) || typeof input.verificationRef !== "string" || !input.verificationRef.trim() || input.verificationRef.length > 256 ||
-      !instant(input.startsAt) || !instant(input.now) || !instant(now) || Math.abs(Date.parse(input.now) - Date.parse(now)) > 30000 || Date.parse(input.startsAt) < Date.parse(now) ||
-      Date.parse(input.startsAt) - Date.parse(now) > 90 * 86400000 || !(parentSignal instanceof AbortSignal)) return err({ kind: "invalidQuery" });
-    const query = structuredClone(input), signal = AbortSignal.any([parentSignal, AbortSignal.timeout(15000)]);
+    const valid = (q: ClinikoCaseQuery) => scopeValid(q?.scope) && sameScope(q.scope, this.#config.scope) && id(q.patientCaseId) && id(q.classSessionId) &&
+      typeof q.verificationRef === "string" && !!q.verificationRef.trim() && q.verificationRef.length <= 256 && instant(q.startsAt) && instant(q.now) && instant(now) &&
+      Math.abs(Date.parse(q.now) - Date.parse(now)) <= 30000 && Date.parse(q.startsAt) >= Date.parse(now) && Date.parse(q.startsAt) - Date.parse(now) <= 90 * 86400000;
+    if (!valid(input) || pairedInput && (!this.#paired(input, pairedInput) || !valid(pairedInput)) || !(parentSignal instanceof AbortSignal)) return err({ kind: "invalidQuery" });
+    const query = structuredClone(input), companion = pairedInput ? structuredClone(pairedInput) : undefined, signal = AbortSignal.any([parentSignal, AbortSignal.timeout(15000)]);
     const work = (async (): Promise<Result<CaseObservation, ClinikoCaseFailure>> => {
       try {
-        const patient = await this.#authority(query, signal), before = await this.#snapshot(query, patient.patientRef, signal);
+        const patient = await this.#authority(query, signal);
+        if (companion && (await this.#authority(companion, signal)).patientRef !== patient.patientRef) return err({ kind: "changed" });
+        const before = await this.#snapshot(query, patient.patientRef, signal);
         const after = await this.#snapshot(query, patient.patientRef, signal), current = await this.#authority(query, signal);
+        if (companion && (await this.#authority(companion, signal)).patientRef !== current.patientRef) return err({ kind: "changed" });
         if (patient.patientRef !== current.patientRef || !isDeepStrictEqual(before, after)) return err({ kind: "changed" });
         // Preserve the existing counter fingerprint wire contract. Reasons do
         // not change session use, but exact cancellation inspection below
@@ -229,12 +256,16 @@ export class ClinikoPatientCaseSessionsReader {
         }
         const used = after.attendees.filter(a => a.archived === null && a.deleted === null &&
           (a.cancelled !== null ? after.includeCancelled : a.arrived === false ? after.includeDna : true)).length;
-        const sessionDate = clinicDateAt(this.#config.timeZone, new Date(query.startsAt));
         const observedAt = this.#clock(); if (!instant(observedAt) || signal.aborted) return fail("unavailable");
-        return ok({ patientCaseId: query.patientCaseId, patientId: current.patientRef, verificationRef: query.verificationRef, observedAt,
+        const usageFingerprint = fingerprint(after);
+        const summarize = (startsAt: string): ClinikoCaseSessions => {
+          const sessionDate = clinicDateAt(this.#config.timeZone, new Date(startsAt));
+          return { patientCaseId: query.patientCaseId, patientId: current.patientRef, verificationRef: query.verificationRef, observedAt,
           maximum: after.maximum, used, remaining: Math.max(0, after.maximum - used), overdrawn: used > after.maximum, associationCount: after.attendees.length,
           eligibleOnSessionDate: after.closedAt === null && after.archivedAt === null && (!after.issue || sessionDate >= after.issue) && (!after.expiry || sessionDate <= after.expiry),
-          includeCancelled: after.includeCancelled, includeDna: after.includeDna, usageFingerprint: fingerprint(after), financialAuthority: "none", reservable: false,
+          includeCancelled: after.includeCancelled, includeDna: after.includeDna, usageFingerprint, financialAuthority: "none", reservable: false };
+        };
+        return ok({ ...summarize(query.startsAt), ...(companion ? { companion: summarize(companion.startsAt) } : {}),
           ...(check?.kind === "attendance" ? { attendance: { attendeeId: check.attendeeId, countsSession: selected!.arrived !== false || after.includeDna } } : {}) });
       } catch (error) { return err(error instanceof CaseFailure ? error.detail : { kind: "unavailable" }); }
     })();

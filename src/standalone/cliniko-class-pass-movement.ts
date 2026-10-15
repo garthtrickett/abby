@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import { ClinikoPatientCaseSessionsReader } from "../cliniko/patient-case-sessions.ts";
 import { CLINIKO_CASE_ASSOCIATION_LIMIT } from "../cliniko/patient-case-sessions.ts";
-import type { ClinikoCaseSessions } from "../cliniko/patient-case-sessions.ts";
+import type { ClinikoCaseSessions, ClinikoCaseAttendance } from "../cliniko/patient-case-sessions.ts";
 import type { ClassMovementPass } from "../cliniko/review-request.ts";
 import type { ClinikoAttendanceConfig } from "../cliniko/class-attendance-write.ts";
 import type { PatientProofHost } from "../core/host.ts";
@@ -14,6 +14,13 @@ import { approvalRef } from "./owner-file-clinic-approval.ts";
 type Phase = "proposal" | "commit" | "inspection" | "compensation";
 type Service = Readonly<{ practitionerId: string; appointmentTypeId: string }>;
 type Selection = Readonly<{ source: ClassPassSelection; destination: ClassPassSelection }>;
+export type ClassPassMoveObservation = Readonly<{
+  binding: ClassMovementPass;
+  /** Lower bound for the current native success path, excluding real proof
+   * requests. Extra metadata/roster pages and other consumers can add cost.
+   * This is neither a quota reservation nor a promise of recovery capacity. */
+  minimumNativeRequests: number;
+}>;
 export type ClassPassMoveAuthorityQuery = Readonly<{
   scope: LocationScope; policyVersion: string; termsVersion: string; stagingContractVersion: string;
   patientId: string; source: ClinikoClassMoveRequest["source"] & Service; destination: ClinikoClassMoveRequest["destination"] & Service;
@@ -77,11 +84,12 @@ export class ClinikoClassPassMovement {
     try { return await awaitUntilAbort(Promise.resolve().then(() => this.#config.authority.allows({ ...this.#query(request, phase, signal), binding: structuredClone(binding) })), signal) === true && !signal.aborted; }
     catch { return false; }
   }
-  #reader(request: ClinikoClassMoveRequest, selected: Selection, side: "source" | "destination", phase: Phase, binding?: ClassMovementPass) {
-    const c = this.#config, expected = request[side];
+  #reader(request: ClinikoClassMoveRequest, selected: Selection, side: "source" | "destination" | "both", phase: Phase, binding?: ClassMovementPass) {
+    const c = this.#config, targets = side === "both" ? [request.source, request.destination] : [request[side]], selectedCase = selected[side === "both" ? "source" : side].patientCaseId;
     return ClinikoPatientCaseSessionsReader.create({ ...c.cliniko, scope: c.scope, timeZone: c.timeZone, attendanceStatus: "arrivedFalseIsDna" }, c.proof,
       { allows: async query => {
-        if (query.patientId !== request.patientId || query.patientCaseId !== selected[side].patientCaseId || query.classSessionId !== expected.sessionId || query.startsAt !== expected.startsAt) return false;
+        if (query.patientId !== request.patientId || query.patientCaseId !== selectedCase || side === "both" && selected.source.patientCaseId !== selected.destination.patientCaseId ||
+          !targets.some(expected => query.classSessionId === expected.sessionId && query.startsAt === expected.startsAt)) return false;
         if (binding) return this.authorized(binding, request, phase, query.signal);
         const current = await this.#selection(request, phase, query.signal); return !!current && isDeepStrictEqual(current, selected);
       } }, c.fetchPort, c.clock);
@@ -94,32 +102,64 @@ export class ClinikoClassPassMovement {
     return { source: { patientCaseId: binding.source.patientCaseId, entitlementRef: binding.source.entitlementRef },
       destination: { patientCaseId: binding.destination.patientCaseId, entitlementRef: binding.destination.entitlementRef } };
   }
-  async select(request: ClinikoClassMoveRequest, phase: "proposal" | "commit" | "compensation", signal: AbortSignal): Promise<ClassMovementPass | undefined> {
-    const selected = await this.#selection(request, phase, signal); if (!selected) return undefined;
+  async #observedSelection(request: ClinikoClassMoveRequest, selected: Selection, phase: "proposal" | "commit" | "compensation", signal: AbortSignal): Promise<Readonly<{ source: ClinikoCaseAttendance; destination: ClinikoCaseSessions }> | undefined> {
+    if (selected.source.patientCaseId === selected.destination.patientCaseId) {
+      const reader = this.#reader(request, selected, "both", phase); if (!reader.ok) return undefined;
+      const read = await reader.value.inspectTransfer(this.#nativeQuery(request, selected, "source"), this.#nativeQuery(request, selected, "destination"), request.source.attendeeId, signal);
+      return read.ok ? read.value : undefined;
+    }
     const source = this.#reader(request, selected, "source", phase), destination = this.#reader(request, selected, "destination", phase);
     if (!source.ok || !destination.ok) return undefined;
     const a = await source.value.inspectAttendance(this.#nativeQuery(request, selected, "source"), request.source.attendeeId, signal);
     const b = await destination.value.read(this.#nativeQuery(request, selected, "destination"), signal);
-    if (!a.ok || !b.ok || !b.value.eligibleOnSessionDate || b.value.associationCount >= CLINIKO_CASE_ASSOCIATION_LIMIT) return undefined;
-    const change = Number(a.value.includeCancelled) - Number(a.value.attendance.countsSession);
+    return a.ok && b.ok ? { source: a.value, destination: b.value } : undefined;
+  }
+  async select(request: ClinikoClassMoveRequest, phase: "proposal" | "commit" | "compensation", signal: AbortSignal): Promise<ClassMovementPass | undefined> {
+    return (await this.selectWithWorkload(request, phase, signal))?.binding;
+  }
+  async selectWithWorkload(request: ClinikoClassMoveRequest, phase: "proposal" | "commit" | "compensation", signal: AbortSignal): Promise<ClassPassMoveObservation | undefined> {
+    const selected = await this.#selection(request, phase, signal); if (!selected) return undefined;
+    const observed = await this.#observedSelection(request, selected, phase, signal); if (!observed) return undefined;
+    const a = observed.source, b = observed.destination;
+    if (!b.eligibleOnSessionDate || b.associationCount >= CLINIKO_CASE_ASSOCIATION_LIMIT) return undefined;
+    const change = Number(a.includeCancelled) - Number(a.attendance.countsSession);
     const bind = (side: "source" | "destination", value: ClinikoCaseSessions) => ({ ...selected[side], usageFingerprint: value.usageFingerprint, maximum: value.maximum, used: value.used });
-    const binding: ClassMovementPass = { source: { ...bind("source", a.value), effect: change < 0 ? "releaseOne" : change > 0 ? "consumeOne" : "unchanged" },
-      destination: bind("destination", b.value), stagingContractVersion: this.#config.stagingContractVersion };
-    if (sameCase(binding) ? a.value.usageFingerprint !== b.value.usageFingerprint || b.value.used + change + 1 > b.value.maximum :
-      b.value.remaining < 1 || b.value.overdrawn || change > 0 && a.value.used + change > a.value.maximum) return undefined;
-    return await this.authorized(binding, request, phase, signal) ? binding : undefined;
+    const binding: ClassMovementPass = { source: { ...bind("source", a), effect: change < 0 ? "releaseOne" : change > 0 ? "consumeOne" : "unchanged" },
+      destination: bind("destination", b), stagingContractVersion: this.#config.stagingContractVersion };
+    if (sameCase(binding) ? a.usageFingerprint !== b.usageFingerprint || b.used + change + 1 > b.maximum :
+      b.remaining < 1 || b.overdrawn || change > 0 && a.used + change > a.maximum) return undefined;
+    if (!await this.authorized(binding, request, phase, signal)) return undefined;
+    // Each complete case read observes metadata plus every 100-row page twice.
+    // Three pre-association observations use the old destination count; the
+    // fourth observes its added replacement, including a possible new page.
+    const cost = (count: number) => 2 * (1 + Math.max(1, Math.ceil(count / 100)));
+    const cases = sameCase(binding) ? 3 * cost(a.associationCount) + cost(b.associationCount + 1) :
+      4 * cost(a.associationCount) + 3 * cost(b.associationCount) + cost(b.associationCount + 1);
+    const pairedClasses = this.#config.source.practitionerId === this.#config.destination.practitionerId &&
+      this.#config.source.appointmentTypeId === this.#config.destination.appointmentTypeId;
+    // Two whole source/destination observations, two destination observations,
+    // one journal, three clinical writes, four is-null reads and one exact GET.
+    return { binding, minimumNativeRequests: (pairedClasses ? 64 : 84) + cases + 9 };
   }
   async unchanged(binding: ClassMovementPass, request: ClinikoClassMoveRequest, phase: "proposal" | "commit" | "compensation", signal: AbortSignal): Promise<boolean> {
     const current = await this.select(request, phase, signal); return !!current && isDeepStrictEqual(binding, current) && !signal.aborted;
   }
   async afterCancellation(binding: ClassMovementPass, request: ClinikoClassMoveRequest, signal: AbortSignal): Promise<boolean> {
-    const selected = this.#selected(binding), source = this.#reader(request, selected, "source", "commit", binding), destination = this.#reader(request, selected, "destination", "commit", binding);
+    const selected = this.#selected(binding);
+    const matches = (a: ClinikoCaseSessions, b: ClinikoCaseSessions) => a.maximum === binding.source.maximum && a.used === binding.source.used + delta(binding) &&
+      b.eligibleOnSessionDate && !b.overdrawn && b.remaining >= 1 && b.maximum === binding.destination.maximum &&
+      b.usageFingerprint === (sameCase(binding) ? a.usageFingerprint : binding.destination.usageFingerprint) && !signal.aborted;
+    if (sameCase(binding)) {
+      const reader = this.#reader(request, selected, "both", "commit", binding); if (!reader.ok) return false;
+      const read = await reader.value.inspectTransferCancellation(this.#nativeQuery(request, selected, "source"), this.#nativeQuery(request, selected, "destination"),
+        binding.source.usageFingerprint, request.source.attendeeId, request.cancellationReason, signal);
+      return read.ok && matches(read.value.source, read.value.destination);
+    }
+    const source = this.#reader(request, selected, "source", "commit", binding), destination = this.#reader(request, selected, "destination", "commit", binding);
     if (!source.ok || !destination.ok) return false;
     const a = await source.value.inspectCancellation(this.#nativeQuery(request, selected, "source"), binding.source.usageFingerprint, request.source.attendeeId, signal, request.cancellationReason);
     const b = await destination.value.read(this.#nativeQuery(request, selected, "destination"), signal);
-    return a.ok && b.ok && a.value.maximum === binding.source.maximum && a.value.used === binding.source.used + delta(binding) &&
-      b.value.eligibleOnSessionDate && !b.value.overdrawn && b.value.remaining >= 1 && b.value.maximum === binding.destination.maximum &&
-      b.value.usageFingerprint === (sameCase(binding) ? a.value.usageFingerprint : binding.destination.usageFingerprint) && !signal.aborted;
+    return a.ok && b.ok && matches(a.value, b.value);
   }
   async inspectMovement(binding: ClassMovementPass, request: ClinikoClassMoveRequest, replacementAttendeeId: string, signal: AbortSignal): Promise<boolean> {
     const selected = this.#selected(binding), source = this.#reader(request, selected, "source", "inspection", binding), destination = this.#reader(request, selected, "destination", "inspection", binding);

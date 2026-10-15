@@ -7,6 +7,7 @@ import { addCaseHistory } from "../support/class-pass-history.ts";
 import { classLink } from "../support/class-attendance.ts";
 import { verificationCanaries } from "../support/caller-verification.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
+import { ClinikoClassAttendanceMove } from "../../src/standalone/cliniko-class-attendance-move.ts";
 
 type Fixture = Awaited<ReturnType<typeof classMoveFixture>>;
 async function move(f: Fixture) {
@@ -25,12 +26,13 @@ async function move(f: Fixture) {
   return { action, state };
 }
 const combinations = [
+  { differentService: false, differentCase: false, history: 999 },
   { differentService: false, differentCase: false, history: 501 },
   { differentService: true, differentCase: false, history: 201 },
   { differentService: false, differentCase: true, history: 201 },
   { differentService: true, differentCase: true, history: 201 },
 ];
-for (const c of combinations) test(`E2E-411 ordinary move with ${c.history} mixed associations, service=${c.differentService} case=${c.differentCase}, verifies every page under the physical budget`, async () => {
+for (const c of combinations) test(`E2E-${c.history === 999 ? 412 : 411} ordinary move with ${c.history} mixed associations, service=${c.differentService} case=${c.differentCase}, verifies every page under the physical budget`, async () => {
   const f = await classMoveFixture(c.differentService, false, { differentCase: c.differentCase, history: c.history });
   try {
     const { action, state } = await move(f);
@@ -43,6 +45,50 @@ for (const c of combinations) test(`E2E-411 ordinary move with ${c.history} mixe
     for (const secret of [f.movePass!.sourceCaseId, f.movePass!.destinationCaseId, "synthetic-private-move-pass-note", ...verificationCanaries])
       assert.equal(JSON.stringify([state.callerMessages, state.presentations]).includes(secret), false);
   } finally { await f.close(); }
+});
+for (const c of [
+  { differentService: false, differentCase: false, history: 99 },
+  { differentService: true, differentCase: false, history: 100 },
+  { differentService: true, differentCase: true, history: 201 },
+  { differentService: false, differentCase: false, history: 999 },
+]) test(`E2E-412 workload lower bound matches actual native success requests at ${JSON.stringify(c)}`, async () => {
+  const f = await classPassMoveFixture(c);
+  try {
+    const observation = await f.passes.selectWithWorkload(f.request, "proposal", f.lifetime.signal); assert.ok(observation);
+    assert.deepEqual(observation.binding, f.binding);
+    f.setTime("2026-10-07T10:01:01.000Z"); // Fresh normal window; original request still unexpired.
+    const before = f.claims, result = resultValue(await f.run());
+    assert.equal(result.kind, "moved"); assert.equal(f.claims - before, observation.minimumNativeRequests);
+    assert.equal(f.writes.length, 3);
+  } finally { f.lifetime.abort(); }
+});
+for (const c of [
+  { differentService: true, differentCase: true, history: 301 },
+  { differentService: true, differentCase: false, history: 999 },
+]) test(`E2E-412 known oversized workload publishes no ordinary move offer at ${JSON.stringify(c)}`, async () => {
+  const f = await classMoveFixture(c.differentService, false, c);
+  try {
+    await f.verify();
+    resultValue(await f.reception.readReschedulingMenu(f.scope, f.turn("targets"), "targets", "2026-10-08", "2026-10-08", f.config.clock())); await f.play();
+    resultValue(await f.reception.selectReschedulingMenu(f.scope, f.turn("target-one", "one"), "targets", 1, f.config.clock())); await f.play();
+    resultValue(await f.reception.readReschedulingMenu(f.scope, f.turn("offers"), "offers", "2026-10-09", "2026-10-09", f.config.clock()));
+    assert.equal(Object.keys((await f.state()).actions).length, 0);
+    assert.equal(f.writes.length, 0); assert.equal(f.recalls.length, 0); assert.equal(f.native.attendees.find(row => row.id === "101")!.cancelled_at, null);
+    assert.ok(f.movePass!.casePages.some(page => page.page === Math.ceil(c.history / 100)));
+    const state = await f.state(); assert.match(state.callerMessages.at(-1)!, /couldn't find an eligible new appointment time/);
+  } finally { await f.close(); }
+});
+test("E2E-412 coordinator rechecks known workload before replacement even if an earlier binding exists", async () => {
+  const f = await classPassMoveFixture({ differentService: true, differentCase: true, history: 301 });
+  try {
+    const observation = await f.passes.selectWithWorkload(f.request, "proposal", f.lifetime.signal); assert.ok(observation);
+    assert.equal(observation.minimumNativeRequests, 173); // Actual native contact proof adds nine requests.
+    f.setTime("2026-10-07T10:01:01.000Z");
+    const mover = resultValue(ClinikoClassAttendanceMove.create({ ...f.config, proofNativeRequestFloor: 1 }));
+    const result = resultValue(await mover.executeOnce(f.request, f.lifetime.signal, f.permit));
+    assert.equal(result.kind, "notSent"); assert.equal(f.writes.length, 0); assert.equal(f.recalls.length, 1);
+    assert.equal(f.original.cancelled_at, null); assert.equal((await mover.executeOnce(f.request, f.lifetime.signal, f.permit)).ok, false);
+  } finally { f.lifetime.abort(); }
 });
 test("E2E-411 a same-count booking-link change on the last history page prevents final confirmation and cannot replay", async () => {
   const f = await classMoveFixture(false, false, { history: 301 });

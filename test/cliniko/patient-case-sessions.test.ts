@@ -79,6 +79,67 @@ function fixture() {
     setClock: (value: string) => { proofTime = value; } };
 }
 
+function pairedFixture() {
+  const f = fixture(), destination = { ...f.query, classSessionId: "95", startsAt: "2026-10-09T14:00:00.000Z" };
+  f.rows[0]!.booking = link("bookings", f.query.classSessionId);
+  const checks: { session: string; requests: number }[] = [];
+  let permit = (_query: ClinikoCaseQuery) => true;
+  const reader = resultValue(ClinikoPatientCaseSessionsReader.create(f.config, f.proof, { allows: async q => {
+    checks.push({ session: q.classSessionId, requests: f.traffic.length });
+    return q.patientId === "42" && q.patientCaseId === "51" && [f.query, destination].some(target =>
+      target.classSessionId === q.classSessionId && target.startsAt === q.startsAt) && permit(q);
+  } }, f.fetchPort, () => now));
+  return { ...f, reader, destination, checks, setPermit: (value: typeof permit) => { permit = value; },
+    get proofCalls() { return f.proofCalls; },
+    transfer: () => reader.inspectTransfer(f.query, destination, "601", new AbortController().signal) };
+}
+test("E2E-412 one complete case observation checks both target permissions at both boundaries and dates separately", async () => {
+  const f = pairedFixture(), found = resultValue(await f.transfer());
+  assert.equal(found.source.eligibleOnSessionDate, true); assert.equal(found.destination.eligibleOnSessionDate, false);
+  assert.equal(found.source.usageFingerprint, found.destination.usageFingerprint);
+  assert.equal(found.source.associationCount, 4); assert.equal(found.destination.used, found.source.used);
+  assert.deepEqual(found.source.attendance, { attendeeId: "601", countsSession: true });
+  assert.deepEqual(f.checks, [{ session: "94", requests: 0 }, { session: "95", requests: 0 }, { session: "94", requests: 4 }, { session: "95", requests: 4 }]);
+  assert.equal(f.proofCalls, 4); assert.equal(f.traffic.length, 4); assert.equal(f.writes.length, 0);
+  assert.equal(JSON.stringify(found).includes(canary), false); assert.equal("companion" in found.source, false);
+});
+for (const boundary of ["before", "after"] as const) for (const session of ["94", "95"]) test(`E2E-412 ${session} permission denied ${boundary} prevents paired evidence`, async () => {
+  const f = pairedFixture(); f.setPermit(q => q.classSessionId !== session || boundary === "after" && f.traffic.length === 0);
+  assert.equal((await f.transfer()).ok, false);
+  assert.equal(f.traffic.length, boundary === "before" ? 0 : 4); assert.equal(f.writes.length, 0);
+});
+for (const fault of ["scope", "case", "proof", "sameClass", "date", "oldQuery"] as const) test(`E2E-412 paired ${fault} mismatch denies before provider access`, async () => {
+  const f = pairedFixture(), destination = { ...f.destination };
+  if (fault === "scope") destination.scope = { ...destination.scope, clinicId: "other" };
+  if (fault === "case") destination.patientCaseId = "52";
+  if (fault === "proof") destination.verificationRef = "other-proof";
+  if (fault === "sameClass") destination.classSessionId = f.query.classSessionId;
+  if (fault === "date") destination.startsAt = "not-a-date";
+  if (fault === "oldQuery") destination.now = "2020-01-01T00:00:00.000Z";
+  assert.equal((await f.reader.inspectTransfer(f.query, destination, "601", new AbortController().signal)).ok, false);
+  assert.equal(f.traffic.length, 0); assert.equal(f.proofCalls, 0);
+});
+test("E2E-412 paired observations reject whole-case drift and a source attendee on another booking", async () => {
+  for (const fault of ["drift", "booking"] as const) {
+    const f = pairedFixture();
+    if (fault === "booking") f.rows[0]!.booking = link("bookings", "999");
+    else f.onRead((path, count) => { if (path.endsWith("/attendees") && count === 2) f.rows[1]!.booking = link("bookings", "999"); });
+    assert.equal((await f.transfer()).ok, false); assert.equal(f.writes.length, 0);
+  }
+});
+for (const reason of [40, 50]) test(`E2E-412 paired cancellation checks exact reason ${reason} and both date authorities`, async () => {
+  const f = pairedFixture(), before = resultValue(await f.transfer()); f.checks.length = 0;
+  f.rows[0]!.cancelled_at = now; f.rows[0]!.cancellation_reason = reason;
+  const observed = await f.reader.inspectTransferCancellation(f.query, f.destination, before.source.usageFingerprint, "601", 50, new AbortController().signal);
+  assert.equal(observed.ok, reason === 50);
+  if (observed.ok) {
+    assert.equal(observed.value.source.used, before.source.used - 1);
+    assert.equal(observed.value.source.usageFingerprint, observed.value.destination.usageFingerprint);
+    assert.equal(observed.value.destination.eligibleOnSessionDate, false);
+  }
+  assert.deepEqual(f.checks.map(q => q.session), ["94", "95", "94", "95"]); assert.equal(f.writes.length, 0);
+});
+
 test("E2E-405 private native case counter counts every associated service without claiming payment or a reservation", async () => {
   const f = fixture(), found = resultValue(await f.read());
   assert.deepEqual(found, { patientCaseId: "51", patientId: "42", verificationRef: "private-class-proof", observedAt: now,

@@ -33,7 +33,7 @@ const passCancellation = cancellationMode as ClassPassCancellationEffect | undef
 const moveMode = process.env.ABBY_SYNTHETIC_CLASS_PASS_MOVE;
 if (moveMode && (!["full", "transfer"].includes(moveMode) || operation !== "reschedule" || passes || passCancellation)) throw new Error("invalid synthetic pass movement mode");
 const historyText = process.env.ABBY_SYNTHETIC_CLASS_PASS_HISTORY;
-if (historyText !== undefined && (!moveMode || !["201", "501"].includes(historyText))) throw new Error("invalid synthetic pass history");
+if (historyText !== undefined && (!moveMode || !["201", "301", "501", "999"].includes(historyText))) throw new Error("invalid synthetic pass history");
 const history = historyText === undefined ? undefined : Number(historyText);
 const f = operation === "reschedule" ? await classMoveCallFlowFixture(process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1", multiple,
   moveMode === "full" ? { full: true, ...(history === undefined ? {} : { history }) } : moveMode === "transfer" ? { differentCase: true, ...(history === undefined ? {} : { history }) } : undefined) : await classCallFlowFixture(operation, multiple, passes, passCancellation); f.flow.dispose();

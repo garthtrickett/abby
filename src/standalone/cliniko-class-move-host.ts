@@ -101,6 +101,9 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
   }
   #signal(external?: AbortSignal, ms = 15000) { return AbortSignal.any([this.#config.signal, this.#lifetime.signal, AbortSignal.timeout(ms), ...(external ? [external] : [])]); }
   #now() { return this.#config.clock(); }
+  #proofRequestFloor(): 0 | 1 {
+    return this.#config.verification.matchesClinikoAccount(clinikoCredentialFingerprint(this.#config.cliniko.apiKey)) ? 1 : 0;
+  }
   #nativeRequest(context: Context, target: Target, offer: Offer): ClinikoClassMoveRequest {
     return { scope: this.#config.scope, patientId: target.patientId, verificationRef: target.verificationRef, actionId: randomUUID(),
       expiresAt: new Date(Math.min(Date.parse(target.expiresAt), Date.parse(offer.expiresAt))).toISOString(),
@@ -214,8 +217,9 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
           let item: Offer = { ref: `class-move-offer:${randomUUID()}`, session, expiresAt, version: context.version };
           if (!await this.#permit(context, target!, item, "offers", signal)) return denied();
           if (context.move.membership === "nativeCaseSessions") {
-            const pass = await this.#passEvidence(context, target!)?.select(this.#nativeRequest(context, target!, item), "proposal", signal);
-            if (!pass) continue;
+            const observed = await this.#passEvidence(context, target!)?.selectWithWorkload(this.#nativeRequest(context, target!, item), "proposal", signal);
+            if (!observed || observed.minimumNativeRequests + 9 * this.#proofRequestFloor() > 180) continue;
+            const pass = observed.binding;
             Object.freeze(pass.source); Object.freeze(pass.destination); Object.freeze(pass);
             item = { ...item, pass };
           }
@@ -369,6 +373,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
       destination: { practitionerId: context.destination.practitionerId, appointmentTypeId: context.destination.appointmentTypeId, className: context.destination.className },
       proof: { verifyPatient: (scope, ref, at, stop) => c.verification.proof.verifyOperation(scope, ref, "appointments.reschedule", at, stop) },
       policyVersion: c.policyVersion, termsVersion: p.request.terms.version, timeZone: context.move.timeZone, recallTypeId: context.move.recallTypeId, clock: c.clock, signal,
+      proofNativeRequestFloor: this.#proofRequestFloor(),
       ...(p.offer.pass && context.move.passMovement && c.classPassMoveAuthority ? { casePass: { authority: c.classPassMoveAuthority, stagingContractVersion: context.move.passMovement.version } } : {}),
       ...(c.fetchPort ? { fetchPort: c.fetchPort } : {}) });
     if (!mover.ok) return reject();

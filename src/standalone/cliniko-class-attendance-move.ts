@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
 import type { PatientProofHost } from "../core/host.ts";
@@ -40,6 +41,9 @@ type Config = Readonly<{
   policyVersion: string; termsVersion: string; timeZone: string; recallTypeId: string;
   clock: () => string; signal: AbortSignal; fetchPort?: typeof fetch;
   casePass?: Readonly<{ authority: ClassPassMoveAuthority; stagingContractVersion: string }>;
+  /** Independent host knowledge of native requests made by each proof check.
+   * Omitted means unknown (zero lower bound), never an upper-cost guarantee. */
+  proofNativeRequestFloor?: 0 | 1;
 }>;
 type Failure = Readonly<{ kind: "invalidConfig" | "invalidQuery" | "scopeMismatch" | "attemptConsumed" | "unavailable" }>;
 type MutationState = "notSent" | "uncertain" | "inspectedActive" | "inspectedCancelled";
@@ -84,6 +88,7 @@ export class ClinikoClassAttendanceMove {
   static create(input: Config): Result<ClinikoClassAttendanceMove, Failure> {
     try {
       if (!input || !(input.signal instanceof AbortSignal) || input.signal.aborted || typeof input.proof?.verifyPatient !== "function" || typeof input.clock !== "function" || typeof input.timeZone !== "string" || !input.timeZone || input.timeZone.length > 128) return err({ kind: "invalidConfig" });
+      if (input.proofNativeRequestFloor !== undefined && input.proofNativeRequestFloor !== 0 && input.proofNativeRequestFloor !== 1) return err({ kind: "invalidConfig" });
       if (Object.hasOwn(input, "casePass") && (!input.casePass || Object.keys(input.casePass).sort().join(",") !== "authority,stagingContractVersion")) return err({ kind: "invalidConfig" });
       const config = Object.freeze({ ...input, scope: Object.freeze({ ...input.scope }), cliniko: Object.freeze({ ...input.cliniko }),
         source: Object.freeze({ ...input.source }), destination: Object.freeze({ ...input.destination }) });
@@ -181,8 +186,11 @@ export class ClinikoClassAttendanceMove {
     const initial = async (stop: AbortSignal) => {
       const read = async (proof: PatientProofHost | undefined, last: AbortSignal, passes?: ClinikoClassPassMovement) => {
         const observed = await this.#observe(request, last, proof);
-        return !!observed && sourceActive(observed.source) && observed.destination.attendance.kind === "none" && observed.destination.remainingPlaces > 0 && !observed.destination.overCapacity &&
-          (!request.pass || await passes!.unchanged(request.pass, request, "commit", last));
+        if (!observed || !sourceActive(observed.source) || observed.destination.attendance.kind !== "none" || observed.destination.remainingPlaces < 1 || observed.destination.overCapacity) return false;
+        if (!request.pass) return true;
+        const current = await passes!.selectWithWorkload(request, "commit", last);
+        return !!current && isDeepStrictEqual(current.binding, request.pass) &&
+          current.minimumNativeRequests + 9 * (c.proofNativeRequestFloor ?? 0) <= 180;
       };
       return request.pass ? grouped("commit", stop, (proof, last, passes) => read(proof, last, passes)) : read(undefined, stop);
     };

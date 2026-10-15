@@ -613,3 +613,38 @@ checks remain. Native fixture providers independently hide each inactive state
 unless requested. A new red test exposed the old implicit-default assumption;
 the corrected reader passes the full history and exact cancelled-record checks.
 This is documentation-based adapter qualification; no live patient API was used.
+
+
+### Paired case observations and workload lower bounds (E412)
+
+A move on one case now observes that complete case twice for both source and
+destination targets. Each target retains its own before/after permission and
+proof checks, and its own inclusive clinic-date eligibility. No native record,
+proof or permission is reused across a provider write. Different cases retain
+separate complete observations. Exact original-cancellation reason and final
+replacement-association inspection remain mandatory.
+
+The movement reader privately reports a success-path native request lower bound
+from actual association counts, including the destination addition crossing a
+100-record page boundary. It includes all required class observations, the
+private journal, three clinical writes, staging reads and exact final receipt.
+The host adds nine native contact reads only when its verifier is bound to the
+same Cliniko credential. Unknown custom proof cost contributes zero to the
+lower bound; it is never treated as free or as an upper bound.
+
+An ordinary proposal whose known minimum exceeds180 requests is withheld before
+any journal or clinical write. The native coordinator repeats that workload check
+in its current protected observation before the replacement send. Every actual
+request still claims the shared physical budget. Extra roster/metadata pages,
+custom permission/proof I/O, competing consumers and recovery can require more
+requests. This does not provide full cost admission, reservation or multi-window
+staging, and those requirements remain open.
+
+Native/SAM qualification passes170 checks with zero failures/cancellations/skips,
+including999 associations on one case/service, preserved201 cross-case/service
+movements, permission boundaries, whole-case drift, exact cancellation reasons,
+measured page-boundary costs and oversized-workload denial. The actual rebuilt
+compiled serving and affected class/pass/legacy regression also passed62 checks
+with zero failures/cancellations/skips, including the999-record success and
+known oversized denial. Log `4590eee3-1792022668501.log` includes both stages.
+No carrier, acoustic or clinic acceptance is inferred.
