@@ -819,3 +819,28 @@ above runs both with zero skips. This keeps the ordinary text cohort independent
 of a database and does not remove either case from the PostgreSQL proof job.
 
 After the opt-in cohort wiring, the complete current-source typecheck passes in `4590eee3-1792034644945.log`; final2 registry/trace and diff checks pass in `4590eee3-1792034609622.log`. No staged caller, human recovery or cloud acceptance is inferred.
+## Private verification succession for staged moves (E2E-418)
+
+`CallerVerificationSession.renewOnce` supplies the private identity handoff
+needed between native stages. It accepts only the current owner's successfully
+issued reference and a live operation signal. It retires the old email
+attestation and proof before asynchronous ownership checks, then creates a new
+single-challenge owner under the same admitted call, operation and pinned
+patient. A changed caller candidate cannot select another patient's channel.
+The successor still requires `begin` and private code entry; handoff alone sends
+no email and grants no read, consent or write authority. Shared verification
+budgets apply to every new issue and answer. Old proof expiry is never extended.
+
+The native composition test performs a cross-case/service move with 999 linked
+records and 201 roster records. Its actual SAM lease is renewed while the
+original email attestation expires. The actual verifier issues a fresh private
+proof, verification reads consume the same Cliniko quota, and each later stage
+requires a separately supplied confirmation. Revocation after the new code
+prevents original cancellation and retains the unresolved native review. The
+isolated PostgreSQL journey checks both budget increments and database/backup
+privacy for the original and renewed codes and references.
+
+This is the verifier/native handoff contract. Caller/SAM stage presentation,
+fresh consent and private renewal routing, admitted host provisioning and human
+resolution remain to be integrated. No real email, clinic, acoustic or carrier
+acceptance follows from these synthetic checks.

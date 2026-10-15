@@ -27,7 +27,7 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 export const verificationNow = "2026-10-04T06:00:00.000Z";
 export const verificationCanaries = ["registered-session@example.test", "private-session-chart", "482746192837465"];
 
-export async function callerVerificationFixture(options: { apiKey?: string; scope?: LocationScope; folder?: string; approved?: boolean; enabled?: boolean;
+export async function callerVerificationFixture(options: { apiKey?: string; scope?: LocationScope; folder?: string; approved?: boolean; enabled?: boolean; patientId?: string; now?: string;
   rateBudget?: import("../../src/cliniko/read-budget.ts").ClinikoRequestBudget;
   contactRevision?: import("../../src/cliniko/contact-revision.ts").ClinikoContactRevisionReader;
   capturePolicy?: (policy: CallPolicy, folder: string) => Promise<CallPolicy>;
@@ -47,10 +47,11 @@ export async function callerVerificationFixture(options: { apiKey?: string; scop
   const policies = new FixturePolicy(options.bookingExecute ? "execute" : "requestOnly", () => now, async () => ok(true),
     { ...(options.cancellationExecute ? { cancellation: "execute" as const } : {}), ...(options.reschedulingExecute ? { rescheduling: "execute" as const } : {}),
       ...(options.patientUpdateExecute ? { patientUpdate: "execute" as const } : {}) });
-  let now = verificationNow, permitted = true, email = verificationCanaries[0]!, phone = "+61400111222";
-  let candidates: CallerCandidates = { kind: "one", candidateIds: [verificationCanaries[2]!] };
+  let now = options.now ?? verificationNow, permitted = true, email = verificationCanaries[0]!, phone = "+61400111222";
+  let patientId = options.patientId ?? verificationCanaries[2]!;
+  let candidates: CallerCandidates = { kind: "one", candidateIds: [patientId] };
   let approval: CallerVerificationApproval = { scope, revision: "demo-revision-1", approverRef: "synthetic-admin",
-    approvedAt: "2026-10-04T05:59:00.000Z", effectiveFrom: "2026-10-04T06:00:00.000Z", effectiveUntil: "2026-10-05T06:00:00.000Z",
+    approvedAt: new Date(Date.parse(now) - 60000).toISOString(), effectiveFrom: now, effectiveUntil: new Date(Date.parse(now) + 86400000).toISOString(),
     approved: options.approved ?? true, enabled: options.enabled ?? true, method: "emailOtp", maxAnswers: 3, lifetimeSeconds: 300,
     sharedNumbers: "deny", representatives: "deny", patientPermission: "independentClinicHost", operations: [options.operation ?? "appointments.read"] };
   let account: AdminAccount = { email: "clinic-admin@example.test", actor: { actorRef: "synthetic-admin", role: "clinicAdmin", scope }, membershipVersion: "member-1" };
@@ -73,7 +74,7 @@ export async function callerVerificationFixture(options: { apiKey?: string; scop
       dialedNumber: "+6125550199", presentedCallerNumber: phone, receivedAt: now };
     const callId = callIdFor(inbound.key), sessionId = `session-${crypto.randomUUID()}`, runtime = new CallRuntime(ledger, scope);
     resultValue(await runtime.admit(callId, captured, { key: inbound.key, dialedNumber: inbound.dialedNumber,
-      acceptedAt: now, deadline: "2026-10-04T06:00:30.000Z" }));
+      acceptedAt: now, deadline: new Date(Date.parse(now) + 30000).toISOString() }));
     resultValue(await runtime.activate(callId, sessionId, now));
     const receipt: AdmissionReceipt = resultValue(await ledger.findAdmission(callId))!;
     const directory = new OwnerFileAdminDirectory(accountPath, scope);
@@ -81,7 +82,7 @@ export async function callerVerificationFixture(options: { apiKey?: string; scop
     const policy = resultValue(await OwnerFileCallerPolicy.capture(config));
     const fetchPort: typeof fetch = async value => {
       const url = new URL(String(value)); provider.push(url.pathname);
-      if (url.pathname.startsWith("/v1/patients/")) return Response.json({ id: verificationCanaries[2], email,
+      if (url.pathname.startsWith("/v1/patients/")) return Response.json({ id: patientId, email,
         archived_at: null, patient_phone_numbers: [{ number: phone, phone_type: "Mobile" }], notes: verificationCanaries[1] });
       if (url.pathname === "/v1/businesses/11") return Response.json({ id: "11", archived_at: null, time_zone_identifier: "Australia/Sydney" });
       assert.equal(url.pathname, "/v1/individual_appointments");
@@ -109,6 +110,7 @@ export async function callerVerificationFixture(options: { apiKey?: string; scop
       replaceAccount: async (patch: Partial<AdminAccount>) => { account = { ...account, ...patch }; await replace(accountPath, [account]); },
       setTime: (value: string) => { now = value; }, setPermitted: (value: boolean) => { permitted = value; },
       setEmail: (value: string) => { email = value; }, setPhone: (value: string) => { phone = value; },
+      setNativePatientId: (value: string) => { patientId = value; },
       setCandidates: (value: CallerCandidates) => { candidates = value; },
       state: async () => resultValue(await ledger.read(callId, scope)),
       close: async () => { session?.dispose(); await rm(folder, { recursive: true, force: true }); },

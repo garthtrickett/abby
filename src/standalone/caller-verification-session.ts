@@ -5,6 +5,7 @@ import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
 import type { AdmissionReceipt, Result, VerifiedPatient } from "../core/model.ts";
 import { callIdFor } from "../voice/admission.ts";
+import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { AuthenticatedInboundCall } from "../voice/admission.ts";
 import type { CallerCandidateLookup } from "../voice/caller-candidates.ts";
 import { sameScope } from "./appointment-change-authority.ts";
@@ -33,6 +34,7 @@ export class CallerVerificationSession {
   #busy = false;
   #closed = false;
   #grant: Grant | undefined;
+  #subject: string | undefined;
 
   private constructor(incoming: Config) {
     const config = Object.freeze({ ...incoming, receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound) });
@@ -143,7 +145,9 @@ export class CallerVerificationSession {
       const issued = await this.#proof.issue(answered.value, this.#config.operation);
       if (!issued.ok || this.#closed) return { verified: false };
       this.#grant = issued.value;
-      if (!await this.verified()) return { verified: false };
+      const subject = await this.verifiedSubject(this.#config.operation);
+      if (!subject) return { verified: false };
+      this.#subject = subject.patientRef;
       return { verified: true };
     } catch { this.dispose(); return { verified: false }; }
     finally { this.#busy = false; }
@@ -178,6 +182,40 @@ export class CallerVerificationSession {
     return grant && await this.ownsCurrentProof(operation, grant.verificationRef, signal) ? { ...grant } : undefined;
   }
 
+  /** Private live-workflow handoff, never a caller/model resend command. Retire
+   * this owner before looking up a fresh challenge. The successor must verify
+   * the original patient again under the same admitted call and operation.
+   * Expiry is not extended, and a failed handoff cannot restore the old proof. */
+  async renewOnce(verificationRef: string, external: AbortSignal): Promise<Result<CallerVerificationSession, Readonly<{ kind: "verificationUnavailable" }>>> {
+    const unavailable = () => err({ kind: "verificationUnavailable" as const });
+    const grant = this.#grant, patientId = this.#subject, config = this.#config;
+    if (this.#closed || this.#busy || !grant || !patientId || verificationRef !== grant.verificationRef ||
+        !(external instanceof AbortSignal) || external.aborted) return unavailable();
+    this.#busy = true;
+    // No old reader, captured proof object or concurrent answer keeps access
+    // while current admission/policy and the successor are being checked.
+    this.#grant = undefined; this.#subject = undefined;
+    this.#email.close(); this.#proof.dispose();
+    const signal = AbortSignal.any([external, AbortSignal.timeout(config.timeoutMs ?? 5000)]);
+    let successor: CallerVerificationSession | undefined;
+    try {
+      const active = await awaitUntilAbort(this.#active(), signal);
+      if (active !== true || signal.aborted || this.#closed) return unavailable();
+      const lookup: CallerCandidateLookup = { candidates: async (scope, number) => {
+        const found = await config.lookup.candidates(scope, number);
+        return found.ok && found.value.kind === "one" && found.value.candidateIds.length === 1 && found.value.candidateIds[0] === patientId
+          ? found : ok({ kind: "none", candidateIds: [] });
+      } };
+      const created = CallerVerificationSession.create({ ...config, lookup });
+      if (!created.ok) return unavailable();
+      successor = created.value;
+      const current = await awaitUntilAbort(successor.#active(), signal);
+      if (current !== true || signal.aborted || this.#closed) { successor.dispose(); return unavailable(); }
+      return ok(successor);
+    } catch { successor?.dispose(); return unavailable(); }
+    finally { this.dispose(); this.#busy = false; }
+  }
+
   /** Trusted native owner only. Never return this patient-bearing value through a model/caller command. */
   async verifiedSubject(operation: PatientOperation, signal?: AbortSignal): Promise<VerifiedPatient | undefined> {
     const grant = this.#grant;
@@ -192,5 +230,5 @@ export class CallerVerificationSession {
   /** Supplied to a trusted protected reader/writer; not an agent command or proof-issuance endpoint. */
   get proof(): TransientPatientProofHost { return this.#proof; }
 
-  dispose(): void { this.#closed = true; this.#email.close(); this.#proof.dispose(); this.#grant = undefined; }
+  dispose(): void { this.#closed = true; this.#email.close(); this.#proof.dispose(); this.#grant = undefined; this.#subject = undefined; }
 }
