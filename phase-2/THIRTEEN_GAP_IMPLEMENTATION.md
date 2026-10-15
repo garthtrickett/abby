@@ -3721,3 +3721,23 @@ cancellations or skips in `4590eee3-1792038008914.log`. No runtime behavior,
 deadline, concurrency or verifier was changed. Resource contention is suspected
 but not established as the cause; a new complete clean-commit run remains the
 merge gate and will be the sole owned qualification workload.
+
+
+## Clean test-command dashboard prerequisite
+
+The sole clean 366c004 run finished the main text cohort: 2411 tests, 2187 passed,
+three failed, zero cancelled and 221 existing profile skips. The three failures
+all occurred before authenticated staff HTTP inspection because
+`dist/dashboard/app.js` did not exist. All earlier signed-call failures passed
+in this full run. Its incremental record remains failed evidence at
+`eval/results/local-release-366c004/summary.json`; later stages did not run.
+
+The standard text and PostgreSQL commands now build the actual dashboard before
+their Node cohorts. Previously only the browser command built that prerequisite,
+while the development checkout's old bundle masked the dependency. Tests,
+assertions, concurrency and deadlines are unchanged, and no dependency or product
+code is added. With the old bundle moved aside, a fresh dashboard build and all
+three authenticated recovery HTTP cases plus both registry/trace checks pass
+without failures, cancellations or skips in `4590eee3-1792039145428.log`.
+The next complete clean-commit local release remains required before merge.
+The full thirteen-gap goal and separate clinical activation gates stay open.
