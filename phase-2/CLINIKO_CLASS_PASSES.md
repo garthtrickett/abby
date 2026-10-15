@@ -648,3 +648,24 @@ compiled serving and affected class/pass/legacy regression also passed62 checks
 with zero failures/cancellations/skips, including the999-record success and
 known oversized denial. Log `4590eee3-1792022668501.log` includes both stages.
 No carrier, acoustic or clinic acceptance is inferred.
+
+
+### Native verification account binding (E413)
+
+All three class host factories now require the real CallerVerificationSession's
+registered contact reader to match the target native Cliniko credential and its
+tenant/clinic, in addition to the existing exact call/session/policy scope.
+Current target owner approval cannot substitute for that binding. The immutable
+native configuration then retains that account throughout the host lifetime;
+ordinary grant, current permission, policy, consent and write-stop checks remain.
+
+A synthetic reproduction on5f07e26 constructed a movement host and read a class
+through another credential using a same-call proof. The target policies were
+independently current and native IDs overlapped. The stored baseline contains
+only that source commit, booleans and a choice count. Three boundary tests for
+booking/cancellation/movement reproduced acceptance before the fix and now
+require denial with zero native I/O, recalls or clinical mutation. No real
+patient/account traffic was used. Matching-account native/pass qualification passed178 checks and rebuilt compiled
+serving passed62 checks, zero failures/cancellations/skips, with typecheck and
+PostgreSQL migrations, log `4590eee3-1792023288134.log`. This new mismatch scenario
+remains native-host evidence; real clinic/cloud/voice acceptance remains absent.

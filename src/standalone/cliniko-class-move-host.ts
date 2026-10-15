@@ -83,7 +83,8 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     try {
       if (!(input.signal instanceof AbortSignal) || input.signal.aborted || !(input.verification instanceof CallerVerificationSession) ||
           !(input.sourcePolicy instanceof OwnerFileClassPolicy) || !(input.destinationPolicy instanceof OwnerFileClassPolicy) || !(input.movePolicy instanceof OwnerFileClassMovePolicy) ||
-          !input.verification.proof.matchesCall(input.scope, input.callId, input.sessionId, input.policyVersion) || typeof input.permission?.allows !== "function") return denied();
+          !input.verification.proof.matchesCall(input.scope, input.callId, input.sessionId, input.policyVersion) ||
+          !input.verification.matchesClinikoAccount(clinikoCredentialFingerprint(input.cliniko.apiKey)) || typeof input.permission?.allows !== "function") return denied();
       const config = Object.freeze({ ...input, scope: Object.freeze({ ...input.scope }), cliniko: Object.freeze({ ...input.cliniko }) });
       const signal = AbortSignal.any([config.signal, AbortSignal.timeout(15000)]);
       const [source, destination, move] = await Promise.all([config.sourcePolicy.current(config.scope), config.destinationPolicy.current(config.scope), config.movePolicy.current(config.scope)]);

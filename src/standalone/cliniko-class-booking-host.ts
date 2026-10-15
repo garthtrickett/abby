@@ -117,6 +117,7 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
     try {
       if (!(input.signal instanceof AbortSignal) || input.signal.aborted || !(input.verification instanceof CallerVerificationSession) ||
         !(input.classPolicy instanceof OwnerFileClassPolicy) || !input.verification.proof.matchesCall(input.scope, input.callId, input.sessionId, input.policyVersion) ||
+        !input.verification.matchesClinikoAccount(clinikoCredentialFingerprint(input.cliniko.apiKey)) ||
         ![input.callId, input.sessionId, input.policyVersion].every(approvalRef) || typeof input.permission?.allows !== "function" ||
         typeof input.ledger?.read !== "function" || typeof input.ledger?.readWriteStop !== "function" || typeof input.policies?.read !== "function" || typeof input.clock !== "function")
         return denied();

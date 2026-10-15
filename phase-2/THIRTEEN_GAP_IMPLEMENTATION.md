@@ -3240,3 +3240,79 @@ gate` completed exit0 in52s, log `4590eee3-1792023021380.log`:
 `git diff --check` passed, zero failures/skips. Counts overlap prior contracts.
 Publication updates draft457; exact published-head cloud checks require fresh
 inspection. No old head or local result is substituted for cloud qualification.
+
+
+## E413 class verification credential boundary
+
+E412 published at5f07e26cb52895753ac3ce016b648d0759f915c9 in draft457.
+Its exact-head PR/push jobs were inspected in `4590eee3-1792023099365.log`:
+all eight jobs stopped with zero steps because GitHub account payments/spending
+limits prevented startup. Publication/audit recording passed in
+`4590eee3-1792023124190.log`. This is not cloud qualification or a reason to
+stop independent engineering. The full thirteen-gap scope remains active.
+
+While continuing workload ownership, source inspection showed that class
+factories checked the exact call proof and target native approvals but did not
+require that the verifier's registered contact belonged to the same Cliniko
+credential. A synthetic reproduction with the same call, independently current
+other-credential target approvals and overlapping native IDs constructed the
+move host and read one protected class. Tracked diagnostic
+`Abby E413 reproduce class verifier account boundary` passed as a reproduction,
+log `4590eee3-1792023173516.log`. The patient-free baseline is
+`eval/baselines/class-verification-account-before-v1.json`; it records only
+source commit, booleans and one count, not any raw credential, contact or patient.
+
+Three independent regression cases first failed0/3 on the intended acceptance
+assertion, not malformed policy setup, in `4590eee3-1792023245737.log`.
+All three now pass in `4590eee3-1792023263219.log` after requiring
+`CallerVerificationSession.matchesClinikoAccount` in booking, cancellation and
+movement factories. The existing check binds the actual native registered
+contact to credential fingerprint and tenant/clinic; exact call/session/policy
+scope is still independently required. No provider read, recall or clinical
+mutation may occur on mismatch. This repairs part of gaps2 and10, not general
+representative or financial authority.
+
+Current full source typecheck, affected native class/pass hosts and actual
+compiled serving regression are running in tracked
+`Abby E413 account binding type native and compiled qualification`, log
+`4590eee3-1792023288134.log`. Registry1.221/413 records E413 textImplemented;
+full-call remains planned. Matching-account compiled acceptance is not inferred
+from the new negative unit cases. Larger staged quota/recovery, complete cost
+admission, catalogue/corrections, financial provisioning, payments, campaigns and
+document writeback remain unfinished, along with actual clinic/speech/mail/cloud
+and deferred carrier acceptance.
+
+
+### E413 matching-account regression result
+
+Tracked `Abby E413 account binding type native and compiled qualification`
+completed exit0 in6m39s, log `4590eee3-1792023288134.log`. Whole-source typecheck,
+178 affected native tests, rebuilt voice runner, isolated PostgreSQL migrations,
+62 compiled/contract tests and diff check passed with zero failures/cancellations/
+skips. The native command covers `class-verification-account`, `class-booking-host`,
+`class-cancellation-host`, `class-move-host`, all three `class-pass-*-host` files
+and `class-pass-history` at concurrency4. The subsequent compiled command is the
+same eight-file build/migration/serving/contract gate recorded under E412 above.
+
+Matching-account normal class/pass calls,999/501/201 histories, played terms,
+quota waits, exact native results, changed permission/policy, lost receipts,
+concurrent case changes and guarded recovery remain covered. E413 itself stays
+textImplemented at1.221/413: existing matching-account compiled calls do not
+substitute for a new cross-account carrier scenario. Full-call evidence stays
+planned. Exact current evidence/type/registry/diff checks precede publication.
+
+Next reassessment follows the original order: gaps2/3 still lack actual sender,
+recipient/clinic operating acceptance; the earliest remaining engineering failure
+is gap4's synthetic speech quality. No model/acoustic candidate currently passes.
+Continue that investigation with patient-free synthetic audio as requested, while
+retaining the unfinished class cost/reservation/staging work under gap10 and the
+remaining catalogue/correction/financial/payment/campaign/document requirements.
+No production or carrier readiness is inferred from this regression.
+
+
+Final E413 current-source gate completed exit0 in42s:
+`Abby E413 final current source and evidence gate`, log
+`4590eee3-1792023762693.log`. `npm run typecheck`, both manifest/trace checks and
+`git diff --check` passed, zero failures/skips. Counts overlap the compiled
+contract stage. Publish through the existing draft457 and inspect its exact new
+head; no merge or cloud qualification is established by these local checks.

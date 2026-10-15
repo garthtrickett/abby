@@ -124,6 +124,7 @@ export class ClinikoClassCancellationHost extends NoStoredKnowledge implements A
       if (!(input.signal instanceof AbortSignal) || input.signal.aborted || !(input.verification instanceof CallerVerificationSession) ||
         !(input.classPolicy instanceof OwnerFileClassPolicy) || !(input.cancellationPolicy instanceof OwnerFileCancellationPolicy) ||
         !input.verification.proof.matchesCall(input.scope, input.callId, input.sessionId, input.policyVersion) || ![input.callId, input.sessionId, input.policyVersion].every(approvalRef) ||
+        !input.verification.matchesClinikoAccount(clinikoCredentialFingerprint(input.cliniko.apiKey)) ||
         typeof input.permission?.allows !== "function" || typeof input.clock !== "function" || typeof input.ledger?.read !== "function" || typeof input.ledger?.readWriteStop !== "function" || typeof input.policies?.read !== "function")
         return denied();
       const config = Object.freeze({ ...input, scope: Object.freeze({ ...input.scope }), cliniko: Object.freeze({ ...input.cliniko }) });
