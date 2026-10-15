@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
-import { connectPostgres } from "../../src/storage/connect.ts";
+import { createDisposablePostgres } from "../support/disposable-postgres.ts";
 import { ClinikoCallFlow } from "../../src/standalone/cliniko-call-flow.ts";
 import { decodeClinikoReview } from "../../src/cliniko/review-request.ts";
 import { EffectWorker } from "../../src/core/effect-worker.ts";
@@ -9,7 +9,9 @@ import { resultValue } from "../support/agent-appointment-proposals.ts";
 import { verificationCanaries } from "../support/caller-verification.ts";
 import { withSmtpVerificationServer } from "../support/smtp-verification-server.ts";
 
-const db = connectPostgres(process.env.DATABASE_URL!); after(async () => { await db.destroy(); });
+const database = await createDisposablePostgres();
+const { db } = database;
+after(async () => { await database.close(); });
 import { resendWorkflow as workflow } from "../support/confirmation-resend-workflow.ts";
 
 test("E2E-374 resend call workflow privately selects an exact appointment and requires separate SAM consent", async () => {

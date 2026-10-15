@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
-import { connectPostgres } from "../../src/storage/connect.ts";
+import { createDisposablePostgres } from "../support/disposable-postgres.ts";
 import { ClinikoSamConfirmationResendHost } from "../../src/standalone/cliniko-sam-confirmation-resend-host.ts";
 import { TextReception } from "../../src/reference/text-reception.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
@@ -10,8 +10,9 @@ import { withSmtpVerificationServer } from "../support/smtp-verification-server.
 import { resultValue } from "../support/agent-appointment-proposals.ts";
 import { verificationCanaries } from "../support/caller-verification.ts";
 
-if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
-const db = connectPostgres(process.env.DATABASE_URL); after(async () => { await db.destroy(); });
+const database = await createDisposablePostgres();
+const { db } = database;
+after(async () => { await database.close(); });
 
 test("E2E-373 gateway proposal and real played/affirmed SAM effect drive the native review and one SMTP send", async () => {
   await withSmtpVerificationServer(async smtp => {

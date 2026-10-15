@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { once } from "node:events";
 import { resolve } from "node:path";
-import { connectPostgres } from "../../src/storage/connect.ts";
+import { createDisposablePostgres } from "../support/disposable-postgres.ts";
 import { PostgresConfirmationResendJournal } from "../../src/storage/postgres-confirmation-resend-journal.ts";
 import { ClinikoRecallReader } from "../../src/cliniko/recalls.ts";
 import { encodeClinikoReview } from "../../src/cliniko/review-request.ts";
@@ -20,7 +20,9 @@ import { resultValue } from "../support/agent-appointment-proposals.ts";
 import { verificationCanaries } from "../support/caller-verification.ts";
 import { withSmtpVerificationServer } from "../support/smtp-verification-server.ts";
 
-const db = connectPostgres(process.env.DATABASE_URL!); after(async () => { await db.destroy(); });
+const database = await createDisposablePostgres();
+const { db } = database;
+after(async () => { await database.close(); });
 async function fixture(smtp: Parameters<typeof confirmationResendFixture>[1], historical = false) {
   const f = await confirmationResendFixture(db, smtp, "appointments.resend", true), requestRef = crypto.randomUUID();
   const binding = historical ? "b".repeat(64) : f.config.policy.bindingFingerprint();

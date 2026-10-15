@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { sql } from "kysely";
-import { connectPostgres } from "../../src/storage/connect.ts";
+import { createDisposablePostgres } from "../support/disposable-postgres.ts";
 import { PostgresClinikoContactRevision } from "../../src/storage/postgres-cliniko-contact-revision.ts";
 import { ClinikoPatientCorrectionRecovery } from "../../src/standalone/cliniko-patient-correction-recovery.ts";
 import { ClinikoRecallReader } from "../../src/cliniko/recalls.ts";
@@ -17,10 +17,9 @@ import { DisabledStandaloneHost } from "../../src/standalone/disabled-host.ts";
 import { once } from "node:events";
 import { resolve } from "node:path";
 
-const url = process.env.DATABASE_URL;
-if (!url) throw new Error("DATABASE_URL is required");
-const db = connectPostgres(url);
-after(async () => { await db.destroy(); });
+const database = await createDisposablePostgres();
+const { db } = database;
+after(async () => { await database.close(); });
 async function fixture() {
   const f = await callerVerificationFixture();
   const apiKey = "synthetic-recovery-au5", fp = clinikoCredentialFingerprint(apiKey), alias = clinikoCredentialFingerprint("synthetic-second-au5");

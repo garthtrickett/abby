@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { sql } from "kysely";
-import { connectPostgres } from "../../src/storage/connect.ts";
+import { createDisposablePostgres } from "../support/disposable-postgres.ts";
 import { ClinikoConfirmationEvidenceReader } from "../../src/standalone/cliniko-confirmation-evidence.ts";
 import { ClinikoConfirmationResendSession } from "../../src/standalone/cliniko-confirmation-resend-session.ts";
 import { SmtpAppointmentConfirmationDelivery } from "../../src/standalone/smtp-appointment-confirmation-delivery.ts";
@@ -13,7 +13,9 @@ import { verificationCanaries } from "../support/caller-verification.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
 import { withSmtpVerificationServer } from "../support/smtp-verification-server.ts";
 
-const db = connectPostgres(process.env.DATABASE_URL!); after(async () => { await db.destroy(); });
+const database = await createDisposablePostgres();
+const { db } = database;
+after(async () => { await database.close(); });
 const content = { template: "appointmentDetails.v2" as const, contentKinds: ["activeInPerson", "activeTelehealth", "cancelled"] as const };
 const link = "https://synthetic-clinic.cliniko.com/c/private-patient-join";
 const cancelledAt = "2026-10-02T06:00:00.000Z";

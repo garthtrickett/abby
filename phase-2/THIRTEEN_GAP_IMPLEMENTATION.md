@@ -3657,3 +3657,47 @@ skips, in `4590eee3-1792036040613.log`. The earlier 26-case compiled regression
 predates this narrow disposal fence; it is supplementary evidence. The two
 registry/trace checks pass again before publication. Staged caller/SAM and
 operator integration remain open.
+## Local release parity and isolated database fixtures
+
+The owner clarified that GitHub Actions billing must not hold up locally
+verified merges. Earlier repository release evidence already records this
+authorization. A clean detached checkout of f24ecaa, fresh locked dependencies
+and Node 22.23.0 passed typechecking and started the complete local workflow
+equivalents plus the existing release isolation guards. No repository rule,
+workflow, deadline or assertion is weakened to accommodate billing.
+
+The complete text cohort exposed seven newly added confirmation-resend and
+patient-correction recovery files that assumed an externally provided database.
+Some attempted a default connection and failed before email verification; others
+threw at import. The text workflow provides no DATABASE_URL. These files now
+own fresh migrated PostgreSQL through a private socket, using the existing
+disposable fixture implementation. They also ignore ambient credentials, so
+neither the text nor PostgreSQL cohort can accidentally use an unrelated
+database. Every existing test still runs. The callback fixture remains available
+to existing browser/storage tests; concurrent close waits for complete cleanup.
+
+With actual databases, the first focused run reached 36 of 38 passing cases but
+two synthetic RSA certificate generations exceeded the existing 10-second
+fixture setup deadline (`4590eee3-1792036727329.log`). Synthetic SMTP now uses
+P-256 certificates, retaining real TLS, CA/identity checks, transport faults and
+all original time limits. The new resource cleanup test initially queried the
+wrong migration table (`4590eee3-1792036872825.log`); it now checks the actual
+Kysely migration history. Actual cleanup and recovery proof passes six cases in
+`4590eee3-1792036907278.log`. No product cryptography is changed.
+
+The corrected database/TLS group passes 59 tests with zero failures,
+cancellations or skips in `4590eee3-1792037043489.log`. The separate private-code
+SMTP group passes 12 in `4590eee3-1792037080372.log`. The original complete run
+also found signed enquiry verification and within-deadline evidence timing
+failures. Their exact two files pass five focused cases, preserving the four
+workers and all original deadlines, in `4590eee3-1792037247098.log`. The cause of
+those two complete-run timing failures remains uncertain; a focused pass does
+not replace complete clean-commit qualification. Requalification and merge
+remain pending. The full thirteen-gap goal remains active.
+
+
+The 59-case corrected fixture group also passes complete typechecking and diff
+validation (`4590eee3-1792037043489.exit` is 0). Registry/trace checks pass before
+publication. A later failure in the original immutable complete run affected
+the signed new-patient routed service case (E2E-353); its unchanged file is being
+reproduced independently. No full clean-source release pass or merge is claimed.

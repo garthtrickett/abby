@@ -17,7 +17,7 @@ import type { TenantConfigArchiveData } from "../../src/portability/config-archi
 import { decodeTenantConfigArchive } from "../../src/portability/config-archive.ts";
 import { ClinikoConfirmationResendRecovery } from "../../src/standalone/cliniko-confirmation-resend-recovery.ts";
 import { OwnerFileAdminDirectory } from "../../src/standalone/identity/owner-file-admin-directory.ts";
-import { connectPostgres } from "../../src/storage/connect.ts";
+import { createDisposablePostgres } from "../support/disposable-postgres.ts";
 import { buildPostgresTenantConfigArchive } from "../../src/storage/postgres-config-archive.ts";
 import { PostgresConfirmationResendJournal } from "../../src/storage/postgres-confirmation-resend-journal.ts";
 import { PostgresConfirmationResendImportHistory } from "../../src/storage/postgres-confirmation-resend-import-history.ts";
@@ -30,8 +30,9 @@ import { resultValue } from "../support/agent-appointment-proposals.ts";
 import { verificationCanaries } from "../support/caller-verification.ts";
 import { withSmtpVerificationServer } from "../support/smtp-verification-server.ts";
 
-assert.ok(process.env.DATABASE_URL);
-const db = connectPostgres(process.env.DATABASE_URL); after(async () => { await db.destroy(); });
+const database = await createDisposablePostgres();
+const { db } = database;
+after(async () => { await database.close(); });
 const exporter = { authorizeAndRecord: async () => ok({ requestRef: "synthetic-reviewed-export" }) };
 const importerAuthority = { authorizeAndRecord: async () => ok({ auditRef: "synthetic-reviewed-import" }) };
 const binding = "b".repeat(64);

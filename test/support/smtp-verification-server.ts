@@ -23,7 +23,9 @@ export async function withSmtpVerificationServer(run: (server: Readonly<{
   let server: ReturnType<typeof createServer> | undefined;
   try {
     const key = join(folder, "key.pem"), certificate = join(folder, "cert.pem");
-    await promisify(execFile)("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+    // Keep real certificate/identity validation without prime-search timing
+    // competing with the test workers. P-256 is supported by the TLS adapters.
+    await promisify(execFile)("openssl", ["req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-days", "1",
       "-subj", "/CN=127.0.0.1", "-addext", identity === "correct" ? "subjectAltName=IP:127.0.0.1" : "subjectAltName=DNS:wrong.example.test",
       "-keyout", key, "-out", certificate], { timeout: 10_000 });
     await chmod(key, 0o600); const [keyBytes, certBytes] = await Promise.all([readFile(key), readFile(certificate)]);

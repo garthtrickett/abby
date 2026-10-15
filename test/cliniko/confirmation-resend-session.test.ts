@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { sql } from "kysely";
-import { connectPostgres } from "../../src/storage/connect.ts";
+import { createDisposablePostgres } from "../support/disposable-postgres.ts";
 import { ClinikoConfirmationResendSession } from "../../src/standalone/cliniko-confirmation-resend-session.ts";
 import { decodeClinikoReview, encodeClinikoReview } from "../../src/cliniko/review-request.ts";
 import { withSmtpVerificationServer } from "../support/smtp-verification-server.ts";
@@ -9,9 +9,9 @@ import { confirmationResendFixture } from "../support/confirmation-resend.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
 import { verificationCanaries } from "../support/caller-verification.ts";
 
-if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
-const db = connectPostgres(process.env.DATABASE_URL);
-after(async () => { await db.destroy(); });
+const database = await createDisposablePostgres();
+const { db } = database;
+after(async () => { await database.close(); });
 const signal = () => new AbortController().signal;
 function messageBody(message: string): string {
   const text = message.slice(message.indexOf("\r\n\r\n") + 4);
