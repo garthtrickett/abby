@@ -1,0 +1,243 @@
+{
+  "schemaVersion": 1,
+  "version": "transcription-booking-v1",
+  "audioFormat": "mono-pcm16le-16000",
+  "cases": [
+    {
+      "id": "BK-001",
+      "category": "date-time-coral-quiet",
+      "file": "booking-date-time-coral-quiet-pcmu.pcm",
+      "sha256": "38fe0029ee14f0909016fe8ad896f93ae2b670a5fb12679aec97c58b89f7225c",
+      "expectedText": "Please book an appointment on Thursday the fifteenth of October at two thirty in the afternoon.",
+      "criticalTerms": [
+        "book",
+        "Thursday",
+        "fifteenth",
+        "October",
+        "two",
+        "thirty",
+        "afternoon"
+      ]
+    },
+    {
+      "id": "BK-002",
+      "category": "date-time-coral-noise",
+      "file": "booking-date-time-coral-noise10db-pcmu.pcm",
+      "sha256": "c9efa263f93b211a231a65c9b879d7cfd289ee2da739a869027fe1bc18e18166",
+      "expectedText": "Please book an appointment on Thursday the fifteenth of October at two thirty in the afternoon.",
+      "criticalTerms": [
+        "book",
+        "Thursday",
+        "fifteenth",
+        "October",
+        "two",
+        "thirty",
+        "afternoon"
+      ]
+    },
+    {
+      "id": "BK-003",
+      "category": "correction-coral-quiet",
+      "file": "booking-correction-coral-quiet-pcmu.pcm",
+      "sha256": "8a8f71ef9ac13eccff6d2395289ffb8b80b34df1ebbf67ddaad8abf4f7e376f3",
+      "expectedText": "No, I meant Tuesday at two thirty, not Thursday at three.",
+      "criticalTerms": [
+        "No",
+        "Tuesday",
+        "two",
+        "thirty",
+        "not",
+        "Thursday",
+        "three"
+      ]
+    },
+    {
+      "id": "BK-004",
+      "category": "correction-coral-noise",
+      "file": "booking-correction-coral-noise10db-pcmu.pcm",
+      "sha256": "11bfd139c298010d38c67040a693478bbeea4f3b7db7c706e287580d0fd9c8d9",
+      "expectedText": "No, I meant Tuesday at two thirty, not Thursday at three.",
+      "criticalTerms": [
+        "No",
+        "Tuesday",
+        "two",
+        "thirty",
+        "not",
+        "Thursday",
+        "three"
+      ]
+    },
+    {
+      "id": "BK-005",
+      "category": "withdrawal-coral-quiet",
+      "file": "booking-withdrawal-coral-quiet-pcmu.pcm",
+      "sha256": "f2d1a8a5c6a9cbddc4df3c3a74ca04315dda44e0391716d8fd79a20726a908f4",
+      "expectedText": "Keep my original appointment. Do not cancel it.",
+      "criticalTerms": [
+        "Keep",
+        "original",
+        "not",
+        "cancel"
+      ]
+    },
+    {
+      "id": "BK-006",
+      "category": "withdrawal-coral-noise",
+      "file": "booking-withdrawal-coral-noise10db-pcmu.pcm",
+      "sha256": "2f8f93bd111969f0bf5c53446722d4692dc5bca9d2eb93544061d4744e7d49d7",
+      "expectedText": "Keep my original appointment. Do not cancel it.",
+      "criticalTerms": [
+        "Keep",
+        "original",
+        "not",
+        "cancel"
+      ]
+    },
+    {
+      "id": "BK-007",
+      "category": "duration-coral-quiet",
+      "file": "booking-duration-coral-quiet-pcmu.pcm",
+      "sha256": "1501aceb63233f83cdeb97737267bd4ffd6c57e65a398014fcff82c81327fc0f",
+      "expectedText": "Please make that a full hour, not forty five minutes.",
+      "criticalTerms": [
+        "full",
+        "hour",
+        "not",
+        "forty",
+        "five"
+      ]
+    },
+    {
+      "id": "BK-008",
+      "category": "duration-coral-noise",
+      "file": "booking-duration-coral-noise10db-pcmu.pcm",
+      "sha256": "e900f7ea16f16b5e44fff73c867affb1f82aa7a3351e8ff509b5039d74303d14",
+      "expectedText": "Please make that a full hour, not forty five minutes.",
+      "criticalTerms": [
+        "full",
+        "hour",
+        "not",
+        "forty",
+        "five"
+      ]
+    },
+    {
+      "id": "BK-009",
+      "category": "date-time-cedar-quiet",
+      "file": "booking-date-time-cedar-quiet-pcmu.pcm",
+      "sha256": "5e54a2f0b34c701d9c428616eada27a222cdb11ea0274d5b26c5c996544bf612",
+      "expectedText": "Please book an appointment on Thursday the fifteenth of October at two thirty in the afternoon.",
+      "criticalTerms": [
+        "book",
+        "Thursday",
+        "fifteenth",
+        "October",
+        "two",
+        "thirty",
+        "afternoon"
+      ]
+    },
+    {
+      "id": "BK-010",
+      "category": "date-time-cedar-noise",
+      "file": "booking-date-time-cedar-noise10db-pcmu.pcm",
+      "sha256": "387af2e3a7453811db293b7021422f02f891ce0e7d9a759d9fbd72f8775889e7",
+      "expectedText": "Please book an appointment on Thursday the fifteenth of October at two thirty in the afternoon.",
+      "criticalTerms": [
+        "book",
+        "Thursday",
+        "fifteenth",
+        "October",
+        "two",
+        "thirty",
+        "afternoon"
+      ]
+    },
+    {
+      "id": "BK-011",
+      "category": "correction-cedar-quiet",
+      "file": "booking-correction-cedar-quiet-pcmu.pcm",
+      "sha256": "8969536a90bf0207ffb053fbcbb0577aade9038640efeb52a324f1e2186f91bd",
+      "expectedText": "No, I meant Tuesday at two thirty, not Thursday at three.",
+      "criticalTerms": [
+        "No",
+        "Tuesday",
+        "two",
+        "thirty",
+        "not",
+        "Thursday",
+        "three"
+      ]
+    },
+    {
+      "id": "BK-012",
+      "category": "correction-cedar-noise",
+      "file": "booking-correction-cedar-noise10db-pcmu.pcm",
+      "sha256": "341784a14b261907944d4cc764f18e10b9b9de8b1b4265420ff02f3fed689c8b",
+      "expectedText": "No, I meant Tuesday at two thirty, not Thursday at three.",
+      "criticalTerms": [
+        "No",
+        "Tuesday",
+        "two",
+        "thirty",
+        "not",
+        "Thursday",
+        "three"
+      ]
+    },
+    {
+      "id": "BK-013",
+      "category": "withdrawal-cedar-quiet",
+      "file": "booking-withdrawal-cedar-quiet-pcmu.pcm",
+      "sha256": "cfbdeebfa32fe28008cf4d89ccb5796267a4c0b5608c74306134407ec68172df",
+      "expectedText": "Keep my original appointment. Do not cancel it.",
+      "criticalTerms": [
+        "Keep",
+        "original",
+        "not",
+        "cancel"
+      ]
+    },
+    {
+      "id": "BK-014",
+      "category": "withdrawal-cedar-noise",
+      "file": "booking-withdrawal-cedar-noise10db-pcmu.pcm",
+      "sha256": "a6dea4f7e4e29f959f55de09b9d50cfc24b9a3ccd93d851a8fc134c5c9a345ca",
+      "expectedText": "Keep my original appointment. Do not cancel it.",
+      "criticalTerms": [
+        "Keep",
+        "original",
+        "not",
+        "cancel"
+      ]
+    },
+    {
+      "id": "BK-015",
+      "category": "duration-cedar-quiet",
+      "file": "booking-duration-cedar-quiet-pcmu.pcm",
+      "sha256": "039a0a5b4184b2400ba8be425d95635a7ca6cb698a0d2b9324f8f92207ba485d",
+      "expectedText": "Please make that a full hour, not forty five minutes.",
+      "criticalTerms": [
+        "full",
+        "hour",
+        "not",
+        "forty",
+        "five"
+      ]
+    },
+    {
+      "id": "BK-016",
+      "category": "duration-cedar-noise",
+      "file": "booking-duration-cedar-noise10db-pcmu.pcm",
+      "sha256": "f3d9f6a03925ddd3af3024266460d503ca017a45ae8a025202f7128dc148c7ef",
+      "expectedText": "Please make that a full hour, not forty five minutes.",
+      "criticalTerms": [
+        "full",
+        "hour",
+        "not",
+        "forty",
+        "five"
+      ]
+    }
+  ]
+}
