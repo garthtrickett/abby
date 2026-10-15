@@ -3782,3 +3782,50 @@ These corrections change only tests and diagnostics; no production behavior,
 deadlines, worker counts, assertions or skips are relaxed. Complete clean-commit
 release qualification remains required before merge. The full thirteen-gap
 objective and separate clinical activation requirements remain open.
+
+## Local release scheduling and write diagnostics
+
+The complete clean 4095db5 release passed typechecking and its text command:
+2190 main-cohort passes plus six ordered-runner passes, zero failures, and 221
+existing profile skips. Its PostgreSQL cohort finished with 2900 passes,
+14 failures, seven cancelled tests and one existing profile skip. Browser and
+later isolation gates did not run. This failed evidence remains retained in
+`eval/results/local-release-4095db5`; it is not release qualification.
+
+Failures included native and compiled write/response timeouts, signed-call
+startup and delivery failures, and one parallel-call audio consistency
+assertion. The shared two-CPU machine was heavily loaded during the run. The
+cause of each failure is not established. The earlier migration and
+credential-budget fixture corrections passed in this complete run.
+
+`ABBY_TEST_FILE_CONCURRENCY` now selects the aggregate test-file worker count in
+`test:text` and `test:postgres`, retaining the existing default of four. Local
+qualification can select one file at a time on this shared machine. Test
+patterns, per-case deadlines, assertions, existing skips and explicit
+concurrent-client scenarios remain unchanged. A one-file run does not prove the
+four-file aggregate load profile. No workflow or repository rule is changed.
+
+Related-person change diagnostics now record fixed timings, receipt kind and
+write/claim/patch counters without patient data or native identifiers. Signed
+workflow failure snapshots also include the terminal reason. The focused
+PostgreSQL related-person suite passes all seven tests; its positive move makes
+one patch and returns committed in about two seconds. The separately compiled
+observed class-workload suite passes all three cases, including both large
+history cases with unchanged internal concurrency of two and 120-second
+deadlines. Fresh voice compilation, complete typechecking, both registry/trace
+tests and `git diff --check` pass in tracked job
+`Abby focused write diagnostics and unchanged compiled workload proof`, log
+`4590eee3-1792047834418.log`, exit 0.
+
+Commands: `bash scripts/with-postgres.sh bash -c 'npm run db:migrate &&
+ABBY_LEDGER=postgres node --test --test-concurrency=4
+test/cliniko/representative-change-call-flow.test.ts'`,
+`npm run build:voice-tests`, `bash scripts/with-postgres.sh env
+ABBY_LEDGER=postgres node --test --test-concurrency=4
+test/voice/class-observed-workload-runner.test.ts`, `npm run typecheck`,
+`node --test test/contract/scenario-manifest.test.ts
+test/contract/no-number-gap-trace.test.ts`, and `git diff --check`.
+The script expansion was also checked for default four and explicit one.
+Complete qualification of the new clean commit remains required before normal
+merge. The complete thirteen-gap objective and staged caller integration remain
+open; the separate consent draft is not activated by this correction.

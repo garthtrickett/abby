@@ -3,6 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 import { ClinikoCallFlow } from "../../src/standalone/cliniko-call-flow.ts";
+import type { HostWriteReceipt } from "../../src/core/model.ts";
 import { representativeCallOwnerFixture, representativeInputOptions } from "./representative-call-owner.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 import { verificationCanaries, verificationNow } from "./caller-verification.ts";
@@ -62,6 +63,20 @@ export async function representativeChangeCallFixture(operation: "cancel" | "res
   const flowConfig = { ...f.flowConfig, fetchPort, representativeInput: representativeInputOptions(f),
     approvals: { ...f.flowConfig.approvals, cancellation: cancelPath, rescheduling: movePath } };
   const flow = resultValue(ClinikoCallFlow.create(flowConfig));
+  const nativeWrite = flow.write.bind(flow);
+  let writesStarted = 0, writesSettled = 0, writeStartedAt: number | undefined, writeSettledAt: number | undefined;
+  let writeSignal: AbortSignal | undefined, writeReceipt: HostWriteReceipt["kind"] | "pending" | "threw" = "pending";
+  flow.write = async (...args: Parameters<ClinikoCallFlow["write"]>) => {
+    writesStarted++; writeStartedAt = performance.now(); writeSettledAt = undefined; writeSignal = args[2]; writeReceipt = "pending";
+    try { const receipt = await nativeWrite(...args); writeReceipt = receipt.kind; return receipt; }
+    catch (error) { writeReceipt = "threw"; throw error; }
+    finally { writesSettled++; writeSettledAt = performance.now(); }
+  };
   return { ...f, flow, flowConfig, rows, patches, loseResponse: () => { lostWrite = true; },
+    // Fixed counters and timings only. No names, provider rows, proof values,
+    // native identifiers, approval contents or callback messages are exposed.
+    writeDiagnostics: () => ({ writesStarted, writesSettled, writeReceipt,
+      writeElapsedMs: writeStartedAt === undefined ? 0 : Math.round((writeSettledAt ?? performance.now()) - writeStartedAt),
+      signalAborted: writeSignal?.aborted === true, nativeClaims: f.f.claims, appointmentPatches: patches.length, reviews: f.f.recalls.length }),
     close: async () => { flow.dispose(); await f.close(); } };
 }

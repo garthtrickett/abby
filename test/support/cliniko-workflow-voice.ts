@@ -331,7 +331,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         } catch (error) {
           const state = await diagnosticState();
           throw new Error(`caller turn delivery stalled: ${JSON.stringify({ closed, workflowClosed: flow?.closed,
-            workflow: flow?.workflow, lifecycle: state?.lifecycle, queuedInputs: inputs.length, processedChunk, chunk,
+            workflow: flow?.workflow, lifecycle: state?.lifecycle, terminalReason: state?.terminal?.reason, queuedInputs: inputs.length, processedChunk, chunk,
             modelTurns: modelTurns.length, transcriptionFrames, writes: writes.length, hostWritesStarted, hostWritesSettled, staffPreparationsStarted, staffPreparationsSettled, staffWritesStarted, staffWritesSettled, failures, stageFailure: error instanceof Error ? error.message : "unknown",
             actions: Object.values(state?.actions ?? {}).map(action => action.status),
             presentations: Object.values(state?.presentations ?? {}).map(presentation => presentation.status),
@@ -341,7 +341,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         }
         const failureState = failures.length && !options.expectedFailure ? await diagnosticState() : undefined;
         assert.deepEqual(failures, options.expectedFailure ? [options.expectedFailure] : [], `wire failure after ${modelTurns.length} model turns and ${transcriptionFrames} transcribed frames ${failureState ? JSON.stringify({
-          workflow: flow?.workflow, lifecycle: failureState.lifecycle, now: now(),
+          workflow: flow?.workflow, lifecycle: failureState.lifecycle, terminalReason: failureState.terminal?.reason, now: now(),
           processedChunk, finalChunk, pendingPresentation: failureState.pendingPresentationId !== undefined,
           actions: Object.values(failureState.actions).map(action => ({ kind: action.kind, status: action.status })),
           presentations: Object.values(failureState.presentations).map(p => ({ kind: p.kind, status: p.status })),

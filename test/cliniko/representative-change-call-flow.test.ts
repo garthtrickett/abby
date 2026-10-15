@@ -88,13 +88,19 @@ test("E2E-389 an enquiry followed by another patients cancellation gets fresh op
 });
 
 for (const operation of ["cancel", "reschedule"] as const) {
-  test(`E2E-389 related-person CallFlow ${operation} separately verifies and confirms one native target without changing caller appointment`, async () => {
-    const f = await fixture(operation), originalCaller = structuredClone(f.rows.get("93"));
+  test(`E2E-389 related-person CallFlow ${operation} separately verifies and confirms one native target without changing caller appointment`, async t => {
+    const startedAt = performance.now(), f = await fixture(operation), preparedAt = performance.now(), originalCaller = structuredClone(f.rows.get("93"));
     try {
-      await f.verify(); const action = await f.propose(); assert.equal(f.patches.length, 0);
+      await f.verify(); const verifiedAt = performance.now(), action = await f.propose(), proposedAt = performance.now(); assert.equal(f.patches.length, 0);
       await f.play(); resultValue(await f.reception.affirm(f.f.scope, f.f.turn("related-yes", "Yes"), action.key, action.digest, verificationNow));
+      const confirmedAt = performance.now();
       resultValue(await f.reception.drain(f.f.scope, f.f.callId, verificationNow));
-      assert.equal((await f.f.state()).actions[action.key]!.status, "committed"); assert.equal(f.patches.length, 1);
+      const drainedAt = performance.now();
+      const diagnostics = { operation,
+        fixtureMs: Math.round(preparedAt - startedAt), verificationMs: Math.round(verifiedAt - preparedAt), proposalMs: Math.round(proposedAt - verifiedAt),
+        confirmationMs: Math.round(confirmedAt - proposedAt), drainMs: Math.round(drainedAt - confirmedAt), ...f.writeDiagnostics() };
+      assert.equal((await f.f.state()).actions[action.key]!.status, "committed", JSON.stringify(diagnostics)); assert.equal(f.patches.length, 1);
+      t.diagnostic(`native change timing: ${JSON.stringify(diagnostics)}`);
       assert.equal(f.patches[0]!.id, "91"); assert.equal(f.patches[0]!.kind, operation); assert.deepEqual(f.rows.get("93"), originalCaller);
       assert.equal(f.f.recalls.length, 1); assert.equal(f.mail.length, 2);
     } finally { await f.close(); }

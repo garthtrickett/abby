@@ -7,7 +7,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test:text": "npm run build:voice-tests && npm run build:dashboard && node --test --test-concurrency=4 test/text/*.test.ts test/composition/*.test.ts test/admission/*.test.ts test/voice/*.test.ts test/cliniko/*.test.ts test/portability/*.test.ts test/contract/*.test.ts && node --test test/runner/ordered-node-e2e.test.ts",
+    "test:text": "npm run build:voice-tests && npm run build:dashboard && node --test --test-concurrency=\"${ABBY_TEST_FILE_CONCURRENCY:-4}\" test/text/*.test.ts test/composition/*.test.ts test/admission/*.test.ts test/voice/*.test.ts test/cliniko/*.test.ts test/portability/*.test.ts test/contract/*.test.ts && node --test test/runner/ordered-node-e2e.test.ts",
     "test:settings-isolation": "node scripts/probe-setting-e2e-isolation.mjs",
     "test:node-order": "node --test test/runner/ordered-node-e2e.test.ts",
     "test:settings-isolation:postgres": "bash scripts/with-postgres.sh node scripts/probe-setting-e2e-isolation-postgres.mjs",
@@ -40,7 +40,7 @@
     "build:availability-console": "esbuild src/standalone/availability-console/main.ts --bundle --format=esm --platform=browser --outfile=dist/availability-console/app.js",
     "demo:availability-console": "npm run build:availability-console && node scripts/demo-cliniko-availability-console.ts",
     "test:browser": "npm run build:dashboard && npm run build:cliniko-admin && npm run build:availability-console && npm run build:sign-in && playwright test && node --test test/runner/ordered-browser-e2e.test.ts",
-    "test:postgres": "npm run build:voice-tests && npm run build:dashboard && npm run build:cliniko-admin && npm run build:availability-console && node --test --test-concurrency=4 test/text/*.test.ts test/storage/*.test.ts test/composition/*.test.ts test/admission/*.test.ts test/voice/*.test.ts test/cliniko/*.test.ts test/portability/*.test.ts test/contract/*.test.ts && node --test test/runner/ordered-node-e2e.test.ts",
+    "test:postgres": "npm run build:voice-tests && npm run build:dashboard && npm run build:cliniko-admin && npm run build:availability-console && node --test --test-concurrency=\"${ABBY_TEST_FILE_CONCURRENCY:-4}\" test/text/*.test.ts test/storage/*.test.ts test/composition/*.test.ts test/admission/*.test.ts test/voice/*.test.ts test/cliniko/*.test.ts test/portability/*.test.ts test/contract/*.test.ts && node --test test/runner/ordered-node-e2e.test.ts",
     "eval:model": "node scripts/evaluate-model.ts",
     "eval:availability-intent": "node scripts/evaluate-availability-intent.ts",
     "eval:clinical-intent": "node scripts/evaluate-clinical-intent.ts",
