@@ -9,6 +9,8 @@ import { ClinikoClassAttendanceReader } from "../cliniko/class-attendance-read.t
 import type { ClinikoClassSession } from "../cliniko/class-attendance-read.ts";
 import { ClinikoClassAttendanceWriter } from "../cliniko/class-attendance-write.ts";
 import type { ClinikoAttendanceConfig, ClinikoAttendanceRequest } from "../cliniko/class-attendance-write.ts";
+import { ClinikoRecallReader } from "../cliniko/recalls.ts";
+import type { ClinikoReviewRecord } from "../cliniko/recalls.ts";
 import { ClinikoRecallWriter } from "../cliniko/recall-write.ts";
 import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
 import { encodeClinikoReview } from "../cliniko/review-request.ts";
@@ -17,6 +19,8 @@ import type { ClassMovementPass } from "../cliniko/review-request.ts";
 import { ClinikoClassPassMovement } from "./cliniko-class-pass-movement.ts";
 import type { ClassPassMoveAuthority } from "./cliniko-class-pass-movement.ts";
 import { withVerifiedClinikoRead } from "../cliniko/verified-read.ts";
+import { ClassMoveStageControl } from "./cliniko-class-move-stages.ts";
+import type { ClinikoStagedClassMove } from "./cliniko-class-move-stages.ts";
 import { observedClassMoveRequests } from "../cliniko/class-move-workload.ts";
 
 type Service = Readonly<{ practitionerId: string; appointmentTypeId: string; className: string }>;
@@ -45,8 +49,11 @@ type Config = Readonly<{
   /** Independent host knowledge of native requests made by each proof check.
    * Omitted means unknown (zero lower bound), never an upper-cost guarantee. */
   proofNativeRequestFloor?: 0 | 1;
+  /** Separately approved staged quota contract; legacy call routes do not enable it. */
+  quotaStaging?: Readonly<{ version: string }>;
 }>;
-type Failure = Readonly<{ kind: "invalidConfig" | "invalidQuery" | "scopeMismatch" | "attemptConsumed" | "unavailable" }>;
+export type ClinikoClassMoveFailure = Readonly<{ kind: "invalidConfig" | "invalidQuery" | "scopeMismatch" | "attemptConsumed" | "unavailable" }>;
+type Failure = ClinikoClassMoveFailure;
 type MutationState = "notSent" | "uncertain" | "inspectedActive" | "inspectedCancelled";
 export type ClinikoClassMoveOutcome = Readonly<{
   kind: "moved" | "restored" | "notSent" | "needsReview";
@@ -90,9 +97,10 @@ export class ClinikoClassAttendanceMove {
     try {
       if (!input || !(input.signal instanceof AbortSignal) || input.signal.aborted || typeof input.proof?.verifyPatient !== "function" || typeof input.clock !== "function" || typeof input.timeZone !== "string" || !input.timeZone || input.timeZone.length > 128) return err({ kind: "invalidConfig" });
       if (input.proofNativeRequestFloor !== undefined && input.proofNativeRequestFloor !== 0 && input.proofNativeRequestFloor !== 1) return err({ kind: "invalidConfig" });
+      if ("quotaStaging" in input && (!Object.hasOwn(input, "quotaStaging") || !input.quotaStaging || Object.keys(input.quotaStaging).join(",") !== "version" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(input.quotaStaging.version))) return err({ kind: "invalidConfig" });
       if (Object.hasOwn(input, "casePass") && (!input.casePass || Object.keys(input.casePass).sort().join(",") !== "authority,stagingContractVersion")) return err({ kind: "invalidConfig" });
       const config = Object.freeze({ ...input, scope: Object.freeze({ ...input.scope }), cliniko: Object.freeze({ ...input.cliniko }),
-        source: Object.freeze({ ...input.source }), destination: Object.freeze({ ...input.destination }) });
+        source: Object.freeze({ ...input.source }), destination: Object.freeze({ ...input.destination }), ...(input.quotaStaging ? { quotaStaging: Object.freeze({ ...input.quotaStaging }) } : {}) });
       const port = config.fetchPort ?? fetch;
       const source = ClinikoClassAttendanceReader.create({ ...config.cliniko, ...config.source, scope: config.scope }, config.proof, port, config.clock);
       const destination = ClinikoClassAttendanceReader.create({ ...config.cliniko, ...config.destination, scope: config.scope }, config.proof, port, config.clock);
@@ -113,7 +121,7 @@ export class ClinikoClassAttendanceMove {
       Number.isFinite(at) && instant(request.expiresAt) && Date.parse(request.expiresAt) > at && Date.parse(request.expiresAt) <= at + 120000 &&
       occurrence(request.source) && id(request.source.attendeeId) && occurrence(request.destination) && request.source.sessionId !== request.destination.sessionId &&
       [10, 20, 30, 40, 50, 60].includes(request.cancellationReason) && request.compensation === "cancelReplacementIfOriginalUnsent" &&
-      !!request.pass === !!this.#passes && (!Object.hasOwn(request, "pass") || !!request.pass);
+      !!request.pass === !!this.#passes && (Object.hasOwn(request, "pass") ? !!request.pass : !this.#passes);
   }
   #readers(proof?: PatientProofHost) {
     if (!proof) return { source: this.#source, destination: this.#destination };
@@ -144,24 +152,39 @@ export class ClinikoClassAttendanceMove {
     return found?.sessionRef === selected.sessionId && found.startsAt === selected.startsAt && found.endsAt === selected.endsAt ? found : undefined;
   }
   async executeOnce(input: ClinikoClassMoveRequest, external: AbortSignal, permit: ClinikoClassMovePermit): Promise<Result<ClinikoClassMoveOutcome, Failure>> {
+    return this.#execute(input, external, permit);
+  }
+  prepareStagesOnce(input: ClinikoClassMoveRequest): Result<ClinikoStagedClassMove, Failure> {
+    try {
+      const c = this.#config;
+      if (!c.quotaStaging || !input.pass || typeof c.cliniko.rateBudget.withReservation !== "function" || !this.#valid(input) || c.signal.aborted) return err({ kind: "invalidQuery" });
+      if (this.#attempted.has(input.actionId)) return err({ kind: "attemptConsumed" });
+      const stages = new ClassMoveStageControl({ version: c.quotaStaging.version, initialExpiresAt: input.expiresAt, initialVerificationRef: input.verificationRef,
+        clock: c.clock, signal: c.signal, budget: c.cliniko.rateBudget });
+      void this.#execute(input, c.signal, query => stages.authorize(query), stages).then(result => stages.finish(result), () => stages.finish(err({ kind: "unavailable" })));
+      return ok(stages.handle());
+    } catch { return err({ kind: "invalidQuery" }); }
+  }
+  async #execute(input: ClinikoClassMoveRequest, external: AbortSignal, permit: ClinikoClassMovePermit, staging?: ClassMoveStageControl): Promise<Result<ClinikoClassMoveOutcome, Failure>> {
     try { if (!this.#valid(input)) return err({ kind: input?.scope && !sameScope(input.scope, this.#config.scope) ? "scopeMismatch" : "invalidQuery" }); }
     catch { return err({ kind: "invalidQuery" }); }
     if (!(external instanceof AbortSignal) || external.aborted || this.#config.signal.aborted || typeof permit !== "function") return err({ kind: "unavailable" });
     if (this.#attempted.has(input.actionId)) return err({ kind: "attemptConsumed" });
     if (this.#attempted.size >= 10000) return err({ kind: "unavailable" });
     this.#attempted.add(input.actionId);
-    const request = structuredClone(input), c = this.#config;
+    let request = structuredClone(input); const c = this.#config;
     Object.freeze(request.scope); Object.freeze(request.source); Object.freeze(request.destination); Object.freeze(request);
     if (request.pass) { Object.freeze(request.pass.source); Object.freeze(request.pass.destination); Object.freeze(request.pass); }
-    const signal = AbortSignal.any([c.signal, external, AbortSignal.timeout(30000)]);
+    const signal = AbortSignal.any([c.signal, external, ...(staging ? [] : [AbortSignal.timeout(30000)])]);
     let phase: ClinikoClassMovePhase = "review", original: MutationState = "notSent", replacement: MutationState = "notSent", replacementAttendeeRef: string | undefined;
+    let recallRef: string | undefined;
     let caseAssociation: ClinikoClassMoveOutcome["caseAssociation"] = this.#passes ? "notSent" : undefined;
     const outcome = (kind?: ClinikoClassMoveOutcome["kind"]): ClinikoClassMoveOutcome => ({ kind: kind ?? (replacement === "notSent" && original === "notSent" ? "notSent" : "needsReview"), phase, original, replacement,
-      ...(replacementAttendeeRef ? { replacementAttendeeRef } : {}), ...(caseAssociation ? { caseAssociation } : {}) });
+      ...(replacementAttendeeRef ? { replacementAttendeeRef } : {}), ...(recallRef ? { recallRef } : {}), ...(caseAssociation ? { caseAssociation } : {}) });
     const permission = async (stage: ClinikoClassMovePhase, stop: AbortSignal) => {
       phase = stage;
-      if (stop.aborted || Date.parse(c.clock()) >= Date.parse(request.expiresAt)) return false;
-      try { return await awaitUntilAbort(permit({ request, phase: stage, ...(replacementAttendeeRef ? { replacementAttendeeRef } : {}), signal: stop }), stop) === true && !stop.aborted; }
+      if (stop.aborted || Date.parse(c.clock()) >= Date.parse(staging?.expiresAt ?? request.expiresAt)) return false;
+      try { return await awaitUntilAbort(permit({ request: staging ? { ...request, expiresAt: staging.expiresAt } : request, phase: stage, ...(replacementAttendeeRef ? { replacementAttendeeRef } : {}), signal: stop }), stop) === true && !stop.aborted; }
       catch { return false; }
     };
     // Exact attendee inspections need their own live proof. Compound class
@@ -192,7 +215,7 @@ export class ClinikoClassAttendanceMove {
         const current = await passes!.selectWithWorkload(request, "commit", last);
         const requests = current && observedClassMoveRequests(current.minimumNativeRequests, observed.source, observed.destination, sameService(c.source, c.destination));
         return !!current && isDeepStrictEqual(current.binding, request.pass) &&
-          requests !== undefined && requests + 9 * (c.proofNativeRequestFloor ?? 0) <= 180;
+          requests !== undefined && (staging !== undefined || requests + 9 * (c.proofNativeRequestFloor ?? 0) <= 180);
       };
       return request.pass ? grouped("commit", stop, (proof, last, passes) => read(proof, last, passes)) : read(undefined, stop);
     };
@@ -205,8 +228,8 @@ export class ClinikoClassAttendanceMove {
         replacementAttendeeRef, stop, last => allowed(stage, last, proof));
       return found.ok && found.value;
     };
-    const compensate = async (stop: AbortSignal): Promise<ClinikoClassMoveOutcome> => {
-      if (original !== "notSent" || !replacementAttendeeRef || !await (request.pass ? permission("compensateReplacement", stop) : allowed("compensateReplacement", stop))) return outcome();
+    const cancelCompensation = async (stop: AbortSignal): Promise<boolean> => {
+      if (original !== "notSent" || !replacementAttendeeRef || !await (request.pass ? permission("compensateReplacement", stop) : allowed("compensateReplacement", stop))) return false;
       const cancel = native("cancel", "compensation") as Extract<ClinikoAttendanceRequest, { kind: "cancel" }>;
       replacement = "uncertain";
       const sent = await this.#writer.executeOnce(cancel, stop, async last => {
@@ -219,8 +242,13 @@ export class ClinikoClassAttendanceMove {
         const current = await this.#observe(request, last);
         return !!current && sourceActive(current.source) && replacementActive(current.destination) && await permission("compensateReplacement", last);
       });
-      if (!sent.ok) { replacement = "inspectedActive"; return outcome(); }
-      if (sent.value.kind !== "accepted") return outcome();
+      if (!sent.ok) { replacement = "inspectedActive"; return false; }
+      if (sent.value.kind !== "accepted") return false;
+      return true;
+    };
+    const inspectCompensation = async (stop: AbortSignal): Promise<ClinikoClassMoveOutcome> => {
+      if (!replacementAttendeeRef) return outcome();
+      const cancel = native("cancel", "compensation") as Extract<ClinikoAttendanceRequest, { kind: "cancel" }>;
       if (request.pass) {
         const inspected = await grouped("compensation", stop, async (proof, last, passes) => {
           const exact = await this.#writer.inspect(cancel, replacementAttendeeRef!, last, next => allowed("inspectCompensation", next, proof));
@@ -240,19 +268,129 @@ export class ClinikoClassAttendanceMove {
       replacement = "inspectedCancelled";
       return outcome("restored");
     };
+    const compensate = async (stop: AbortSignal) => await cancelCompensation(stop) ? inspectCompensation(stop) : outcome();
+    const bookReplacement = async (stop: AbortSignal, inspectStaging = false): Promise<boolean> => {
+      const book = native("book", "replacement") as Extract<ClinikoAttendanceRequest, { kind: "book" }>;
+      replacement = "uncertain";
+      if (request.pass) caseAssociation = "uncertain";
+      const booked = await this.#writer.executeOnce(book, stop, async last => await permission("bookReplacement", last) && await initial(last) && await permission("bookReplacement", last));
+      if (!booked.ok) { replacement = "notSent"; if (request.pass) caseAssociation = "notSent"; return false; }
+      if (booked.value.kind !== "accepted") return false;
+      replacementAttendeeRef = booked.value.attendeeRef;
+      if (!request.pass) {
+        const exact = await this.#writer.inspect(book, replacementAttendeeRef, stop, last => allowed("inspectReplacement", last));
+        if (!exact.ok || !exact.value) return false;
+        replacement = "inspectedActive";
+      }
+      if (request.pass && inspectStaging) {
+        const inspected = await grouped("inspection", stop, async (proof, last) =>
+          await unlinked("inspectStaging", last, proof) && await permission("inspectReplacement", last));
+        if (!inspected) return false;
+        replacement = "inspectedActive"; caseAssociation = "unlinked";
+      }
+      return true;
+    };
+    const cancelOriginal = async (stop: AbortSignal, inspectStaging = false): Promise<"continue" | "compensate" | "stop"> => {
+      const cancel = native("cancel", "original");
+      original = "uncertain";
+      const cancelled = await this.#writer.executeOnce(cancel, stop, async last => {
+        if (request.pass) {
+          const checked = await observation("commit", last, async (proof, inner, passes) => {
+            // The two exact native is-null observations also prove the
+            // active record, patient, booking and creation marker. Keep
+            // staging and current class/case reads in one private group,
+            // after this write's budget claim and before any cancellation.
+            if (!await permission("inspectReplacement", inner) || !await unlinked("inspectStaging", inner, proof)) return undefined;
+            const current = await this.#observe(request, inner, proof);
+            return { canCancel: !!current && sourceActive(current.source) && replacementActive(current.destination) && !current.destination.overCapacity &&
+              await passes.unchanged(request.pass!, request, "commit", inner) };
+          });
+          if (!checked) return false;
+          replacement = "inspectedActive"; caseAssociation = "unlinked";
+          return checked.canCancel && await permission("cancelOriginal", last);
+        }
+        if (!await permission("cancelOriginal", last)) return false;
+        const current = await this.#observe(request, last);
+        if (!current || !sourceActive(current.source) || !replacementActive(current.destination) || current.destination.overCapacity) return false;
+        return permission("cancelOriginal", last);
+      });
+      if (!cancelled.ok) { original = "notSent"; return replacement === "inspectedActive" ? "compensate" : "stop"; }
+      if (cancelled.value.kind !== "accepted") return "stop";
+      if (!request.pass) {
+        const inspected = await this.#writer.inspect(cancel, `cliniko:attendee:${request.source.attendeeId}`, stop, last => allowed("inspectOriginal", last));
+        if (!inspected.ok || !inspected.value) return "stop";
+        original = "inspectedCancelled";
+      }
+      if (request.pass && inspectStaging) {
+        const inspected = await this.#writer.inspect(cancel, `cliniko:attendee:${request.source.attendeeId}`, stop, last => allowed("inspectOriginal", last));
+        if (!inspected.ok || !inspected.value) return "stop";
+        original = "inspectedCancelled";
+      }
+      return "continue";
+    };
+    const associateAndInspect = async (stop: AbortSignal): Promise<ClinikoClassMoveOutcome> => {
+      if (!replacementAttendeeRef) return outcome();
+      const book = native("book", "replacement") as Extract<ClinikoAttendanceRequest, { kind: "book" }>;
+      if (request.pass) {
+        const link: ClinikoAttendanceRequest = { kind: "linkCase", scope: c.scope, patientId: request.patientId, sessionId: request.destination.sessionId,
+          attendeeId: replacementAttendeeRef.slice("cliniko:attendee:".length), patientCaseId: request.pass.destination.patientCaseId,
+          actionId: classMoveLegActionId(request.actionId, "association"), creationActionId: book.actionId };
+        caseAssociation = "uncertain";
+        const linked = await this.#writer.executeOnce(link, stop, async last => {
+          if (!await permission("linkReplacement", last)) return false;
+          // The complete source case below independently proves exact
+          // original cancellation. Only destination class capacity needs
+          // another full class observation before associating its pass.
+          const checked = await grouped("commit", last, async (proof, inner, passes) => {
+            if (!await permission("inspectOriginal", inner)) return false;
+            const current = await this.#observeDestination(request, inner, proof);
+            return !!current && replacementActive(current) && !current.overCapacity && await unlinked("inspectStaging", inner, proof) &&
+              await passes.afterCancellation(request.pass!, request, inner) && await permission("linkReplacement", inner);
+          });
+          if (checked) original = "inspectedCancelled";
+          return checked;
+        });
+        if (!linked.ok) { caseAssociation = "unlinked"; return outcome(); }
+        if (linked.value.kind !== "accepted") return outcome();
+      }
+      if (!await permission("final", stop)) return outcome();
+      if (request.pass) {
+        // The complete final case inspection proves the exact original's
+        // cancelled state and old booking, as well as all other source
+        // associations. A second source-class roster read adds no evidence
+        // for that selected record. Destination capacity is still fresh.
+        const checked = await grouped("inspection", stop, async (proof, last, passes) => {
+          const link: ClinikoAttendanceRequest = { kind: "linkCase", scope: c.scope, patientId: request.patientId, sessionId: request.destination.sessionId,
+            attendeeId: replacementAttendeeRef!.slice("cliniko:attendee:".length), patientCaseId: request.pass!.destination.patientCaseId,
+            actionId: classMoveLegActionId(request.actionId, "association"), creationActionId: book.actionId };
+          const exact = await this.#writer.inspect(link, replacementAttendeeRef!, last, next => allowed("inspectPass", next, proof));
+          if (!exact.ok || !exact.value) return false;
+          const destination = await this.#observeDestination(request, last, proof);
+          return !!destination && replacementActive(destination) && !destination.overCapacity &&
+            await passes.inspectMovement(request.pass!, request, replacementAttendeeRef!.slice("cliniko:attendee:".length), last) && await permission("final", last);
+        });
+        if (checked) caseAssociation = "inspectedLinked";
+        return checked ? outcome("moved") : outcome();
+      }
+      const final = await this.#observe(request, stop);
+      return final && final.source.attendance.kind === "none" && replacementActive(final.destination) && !final.destination.overCapacity && await permission("final", stop) ? outcome("moved") : outcome();
+    };
     const review: ClinikoReviewRequest = { scope: c.scope, patientId: request.patientId, businessId: c.cliniko.businessId,
       credentialFingerprint: clinikoCredentialFingerprint(c.cliniko.apiKey), policyVersion: c.policyVersion, termsVersion: c.termsVersion, timeZone: c.timeZone, createdAt: c.clock(),
       operation: { kind: "classMove", sessionId: request.source.sessionId, attendeeId: request.source.attendeeId, startsAt: request.source.startsAt, endsAt: request.source.endsAt,
         practitionerId: c.source.practitionerId, appointmentTypeId: c.source.appointmentTypeId, newSessionId: request.destination.sessionId, newStartsAt: request.destination.startsAt,
         newEndsAt: request.destination.endsAt, ...(c.source.practitionerId !== c.destination.practitionerId ? { newPractitionerId: c.destination.practitionerId } : {}),
         ...(c.source.appointmentTypeId !== c.destination.appointmentTypeId ? { newAppointmentTypeId: c.destination.appointmentTypeId } : {}),
-        attendanceActionId: request.actionId, cancellationReason: request.cancellationReason, compensation: request.compensation, ...(request.pass ? { pass: request.pass } : {}) } };
+        attendanceActionId: request.actionId, cancellationReason: request.cancellationReason, compensation: request.compensation, ...(request.pass ? { pass: request.pass } : {}), ...(staging ? { quotaStaging: c.quotaStaging!.version } : {}) } };
     if (!encodeClinikoReview(request.actionId, review).ok) return err({ kind: "invalidQuery" });
     const reviewed = new ClinikoReviewedSend({ scope: c.scope, businessId: c.cliniko.businessId, credentialFingerprint: review.credentialFingerprint,
       policyVersion: c.policyVersion, timeZone: c.timeZone, recallTypeId: c.recallTypeId, writer: this.#recalls, clock: () => Date.parse(c.clock()) });
     try {
       let prepared = false;
-      const result = await reviewed.run(review, {
+      let activeReview = review;
+      const start = (stop: AbortSignal) => {
+        activeReview = staging ? { ...review, createdAt: c.clock() } : review;
+        return reviewed.run(activeReview, {
         authorize: async (_request, stop) => {
           // No clinical/provider read occurs in the send callback before its
           // own actual-proof group. After the private journal, recheck owned
@@ -269,93 +407,54 @@ export class ClinikoClassAttendanceMove {
           return prepared && await permission("review", stop);
         },
         send: async (_request, stop) => {
-          const book = native("book", "replacement") as Extract<ClinikoAttendanceRequest, { kind: "book" }>;
-          replacement = "uncertain";
-          if (request.pass) caseAssociation = "uncertain";
-          const booked = await this.#writer.executeOnce(book, stop, async last => await permission("bookReplacement", last) && await initial(last) && await permission("bookReplacement", last));
-          if (!booked.ok) { replacement = "notSent"; if (request.pass) caseAssociation = "notSent"; return outcome(); }
-          if (booked.value.kind !== "accepted") return outcome();
-          replacementAttendeeRef = booked.value.attendeeRef;
-          if (!request.pass) {
-            const exact = await this.#writer.inspect(book, replacementAttendeeRef, stop, last => allowed("inspectReplacement", last));
-            if (!exact.ok || !exact.value) return outcome();
-            replacement = "inspectedActive";
-          }
-          const cancel = native("cancel", "original");
-          original = "uncertain";
-          const cancelled = await this.#writer.executeOnce(cancel, stop, async last => {
-            if (request.pass) {
-              const checked = await observation("commit", last, async (proof, inner, passes) => {
-                // The two exact native is-null observations also prove the
-                // active record, patient, booking and creation marker. Keep
-                // staging and current class/case reads in one private group,
-                // after this write's budget claim and before any cancellation.
-                if (!await permission("inspectReplacement", inner) || !await unlinked("inspectStaging", inner, proof)) return undefined;
-                const current = await this.#observe(request, inner, proof);
-                return { canCancel: !!current && sourceActive(current.source) && replacementActive(current.destination) && !current.destination.overCapacity &&
-                  await passes.unchanged(request.pass!, request, "commit", inner) };
-              });
-              if (!checked) return false;
-              replacement = "inspectedActive"; caseAssociation = "unlinked";
-              return checked.canCancel && await permission("cancelOriginal", last);
-            }
-            if (!await permission("cancelOriginal", last)) return false;
-            const current = await this.#observe(request, last);
-            if (!current || !sourceActive(current.source) || !replacementActive(current.destination) || current.destination.overCapacity) return false;
-            return permission("cancelOriginal", last);
-          });
-          if (!cancelled.ok) { original = "notSent"; return replacement === "inspectedActive" ? compensate(stop) : outcome(); }
-          if (cancelled.value.kind !== "accepted") return outcome();
-          if (!request.pass) {
-            const inspected = await this.#writer.inspect(cancel, `cliniko:attendee:${request.source.attendeeId}`, stop, last => allowed("inspectOriginal", last));
-            if (!inspected.ok || !inspected.value) return outcome();
-            original = "inspectedCancelled";
-          }
-          if (request.pass) {
-            const link: ClinikoAttendanceRequest = { kind: "linkCase", scope: c.scope, patientId: request.patientId, sessionId: request.destination.sessionId,
-              attendeeId: replacementAttendeeRef.slice("cliniko:attendee:".length), patientCaseId: request.pass.destination.patientCaseId,
-              actionId: classMoveLegActionId(request.actionId, "association"), creationActionId: book.actionId };
-            caseAssociation = "uncertain";
-            const linked = await this.#writer.executeOnce(link, stop, async last => {
-              if (!await permission("linkReplacement", last)) return false;
-              // The complete source case below independently proves exact
-              // original cancellation. Only destination class capacity needs
-              // another full class observation before associating its pass.
-              const checked = await grouped("commit", last, async (proof, inner, passes) => {
-                if (!await permission("inspectOriginal", inner)) return false;
-                const current = await this.#observeDestination(request, inner, proof);
-                return !!current && replacementActive(current) && !current.overCapacity && await unlinked("inspectStaging", inner, proof) &&
-                  await passes.afterCancellation(request.pass!, request, inner) && await permission("linkReplacement", inner);
-              });
-              if (checked) original = "inspectedCancelled";
-              return checked;
-            });
-            if (!linked.ok) { caseAssociation = "unlinked"; return outcome(); }
-            if (linked.value.kind !== "accepted") return outcome();
-          }
-          if (!await permission("final", stop)) return outcome();
-          if (request.pass) {
-            // The complete final case inspection proves the exact original's
-            // cancelled state and old booking, as well as all other source
-            // associations. A second source-class roster read adds no evidence
-            // for that selected record. Destination capacity is still fresh.
-            const checked = await grouped("inspection", stop, async (proof, last, passes) => {
-              const link: ClinikoAttendanceRequest = { kind: "linkCase", scope: c.scope, patientId: request.patientId, sessionId: request.destination.sessionId,
-                attendeeId: replacementAttendeeRef!.slice("cliniko:attendee:".length), patientCaseId: request.pass!.destination.patientCaseId,
-                actionId: classMoveLegActionId(request.actionId, "association"), creationActionId: book.actionId };
-              const exact = await this.#writer.inspect(link, replacementAttendeeRef!, last, next => allowed("inspectPass", next, proof));
-              if (!exact.ok || !exact.value) return false;
-              const destination = await this.#observeDestination(request, last, proof);
-              return !!destination && replacementActive(destination) && !destination.overCapacity &&
-                await passes.inspectMovement(request.pass!, request, replacementAttendeeRef!.slice("cliniko:attendee:".length), last) && await permission("final", last);
-            });
-            if (checked) caseAssociation = "inspectedLinked";
-            return checked ? outcome("moved") : outcome();
-          }
-          const final = await this.#observe(request, stop);
-          return final && final.source.attendance.kind === "none" && replacementActive(final.destination) && !final.destination.overCapacity && await permission("final", stop) ? outcome("moved") : outcome();
+          if (!await bookReplacement(stop, !!staging)) return outcome();
+          if (staging) return outcome();
+          const cancellation = await cancelOriginal(stop);
+          if (cancellation === "compensate") return compensate(stop);
+          return cancellation === "continue" ? associateAndInspect(stop) : outcome();
         },
-      }, signal);
+      }, stop);
+      };
+      if (staging) {
+        const made = ClinikoRecallReader.create({ ...c.cliniko, scope: c.scope }, c.fetchPort, c.clock);
+        if (!made.ok) return err({ kind: "invalidConfig" });
+        let boundReview: ClinikoReviewRecord | undefined;
+        const currentReview = async (stop: AbortSignal, bind = false) => {
+          if (!recallRef || !await allowed("review", stop)) return false;
+          const read = await made.value.readReview(c.scope, recallRef, c.recallTypeId, stop);
+          if (!read.ok || read.value.recalled || !isDeepStrictEqual(read.value.envelope.request, activeReview) ||
+              !bind && (!boundReview || !isDeepStrictEqual(read.value, boundReview))) return false;
+          if (bind) boundReview = structuredClone(read.value);
+          return allowed("review", stop);
+        };
+        const refreshProof = () => { request = Object.freeze({ ...request, verificationRef: staging.verificationRef, expiresAt: staging.expiresAt }); };
+        const segment = <T>(name: Parameters<typeof staging.segment>[0], task: (stop: AbortSignal) => Promise<T>) => staging.segment(name, async stop => {
+          refreshProof();
+          if (!await currentReview(stop)) return undefined;
+          const value = await task(stop);
+          return await currentReview(stop) ? value : undefined;
+        }, outcome);
+        const first = await staging.segment("replacement", async stop => {
+          refreshProof();
+          const result = await start(stop);
+          if (!result.ok) return result;
+          recallRef = result.value.recallRef;
+          return await currentReview(stop, true) ? result : err({ kind: "mutationUncertain" as const });
+        }, outcome);
+        if (!first) return ok(outcome());
+        if (!first.ok) return ok({ ...outcome(), ...(first.error.kind === "reviewUncertain" ? { review: "uncertain" as const } : {}) });
+        recallRef = first.value.recallRef;
+        if (outcome().replacement !== "inspectedActive") return ok(outcome());
+        const cancelled = await segment("original", stop => cancelOriginal(stop, true));
+        if (cancelled === "compensate") {
+          const compensated = await segment("compensation", cancelCompensation);
+          if (!compensated) return ok(outcome());
+          return ok(await segment("compensationInspection", inspectCompensation) ?? outcome());
+        }
+        if (cancelled !== "continue") return ok(outcome());
+        return ok(await segment("association", associateAndInspect) ?? outcome());
+      }
+      const result = await start(signal);
       return ok(result.ok ? { ...result.value.outcome, recallRef: result.value.recallRef } : { ...outcome(), ...(result.error.kind === "reviewUncertain" ? { review: "uncertain" as const } : {}) });
     } catch { return ok(outcome()); }
     finally { reviewed.close(); }

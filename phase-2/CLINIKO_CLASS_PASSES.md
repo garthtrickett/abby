@@ -743,3 +743,79 @@ future native growth. Workloads spanning quota windows still require durable
 phase ownership, fresh authority/consent and exact no-replay reconciliation.
 Financial provisioning and broader class/patient/operation combinations remain
 unfinished. The thirteen-gap objective and all external gates remain active.
+
+
+## Native staged class movement (E2E-417)
+
+`ClinikoClassAttendanceMove.prepareStagesOnce` creates one volatile native
+case-pass execution under a separately supplied `quotaStaging` contract. Its returned
+`advanceOnce` interface accepts fresh trusted-host confirmation, private proof
+reference and current permission for each phase. Existing call routes do not
+supply that contract. Both modes share the same native leg functions.
+
+The staged path performs replacement creation/inspection, original cancellation/
+inspection and pass association/final inspection in separate allocations of180
+requests, each with30-second write authority. It releases unused capacity between
+phases and does no provider work while waiting for quota. The first confirmation
+cannot extend the offered deadline. Later phases require a new consent nonce
+and bounded expiry. A valid new private proof may replace an old one only under
+fresh same-subject, operation-bound verification and current permission; neither
+renewed consent nor a quota reset extends the old grant. Real caller proof/source
+expiry checks are retained. No proof reference enters the native review.
+
+The new bounded compressed review header records the full original intent and
+quota contract in Cliniko. Legacy envelopes retain their encoding. The engine
+binds the acknowledged native review, then checks its exact envelope, marker,
+updated time and unrecalled/unarchived state before and after subsequent phases.
+Staff changes withdraw that owner; losing ownership after association prevents a
+completed observation. The review is context for independent recovery, never a
+send permit. A serialized checkpoint cannot recreate the volatile executor.
+
+Unknown replies end automation without replay or compensation. A definitively
+unsent original cancellation may instead progress to separately authorized
+replacement compensation and then a separate inspection phase. Fresh private
+proof, independent membership/financial permission, whole-case fingerprints,
+class capacity and exact creation/cancellation/association markers still apply.
+No shared class, repeated attendee series, payment or pass ledger is edited.
+
+Native tests cover same/cross-case/service moves exceeding one quota window,
+maximum supported metadata/attendance/case pages, nonce replay, deadline/proof/
+entitlement withdrawal, renewed proof for the same patient, wrong renewed patient,
+old-grant expiry, every unknown write leg, concurrent advances, abort after a
+possible write, compensation and current review ownership. The largest native
+fixture has499 relationship rows,499 attendance rows before replacement and999
+case associations, plus one native request for each actual proof verification.
+Its three stages consume132,134 and178 requests, total444, without raising the
+180-request budget. This is the known native profile, not a bound on arbitrary
+external permission/proof callback I/O.
+
+The actual process test uses HTTP provider fixtures and PostgreSQL. It completes
+three native phases across two real rolling-minute waits, issuing independent
+synthetic five-minute proofs once per later phase without extending them during
+quota waits. Another test kills the sender after replacement inspection; a fresh
+worker discovers the structured native review using only clinic/account/type
+configuration and sends no mutation. Database scans include root action/private
+proof/entitlement/case canaries and compressed review fragments. No patient-linked
+Abby workflow persistence, migration or new dependency is introduced.
+
+**Integration remains open:** this is a native case-pass provider interface, not
+the staged caller route. No-pass and other membership models still need their
+own staged qualification. Caller/SAM phase transitions, played phase terms, actual
+private-verifier renewal handoff and an approved operator resolution surface
+still need end-to-end implementation and qualification. Native review discovery
+does not establish human acknowledgment, safe automatic restart resumption or
+clinical acceptance. Broader class/patient/correction combinations, financial
+provisioning, payments, outbound and document writeback remain required by the
+original thirteen-gap objective, along with all external activation gates.
+
+Final rebuilt caller boundary regression passes4 cases with zero failures,
+cancellations or skips in `4590eee3-1792034404509.log`, after the private-proof
+handoff addition. These overlap the earlier30 caller cases; they do not qualify
+a staged caller route. Final current typecheck,2 manifest/trace checks and diff
+check pass in `4590eee3-1792034288934.log`. The process tests follow the existing
+isolated-PostgreSQL opt-in convention: the no-database text cohort intentionally
+skips those2 cases (`4590eee3-1792034390453.log`), while actual PostgreSQL evidence
+above runs both with zero skips. This keeps the ordinary text cohort independent
+of a database and does not remove either case from the PostgreSQL proof job.
+
+After the opt-in cohort wiring, the complete current-source typecheck passes in `4590eee3-1792034644945.log`; final2 registry/trace and diff checks pass in `4590eee3-1792034609622.log`. No staged caller, human recovery or cloud acceptance is inferred.

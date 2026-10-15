@@ -49,10 +49,17 @@ export async function classPassMoveFixture(options: { differentService?: boolean
     const u = new URL(String(value)), method = init?.method ?? "GET"; assert.equal(init?.redirect, "error"); assert.ok(init?.signal);
     if (u.pathname === "/v1/recalls" && method === "POST") {
       const body = JSON.parse(String(init?.body)), review = resultValue(decodeClinikoReview(body.notes));
-      assert.equal(review.request.operation.kind, "classMove"); assert.match(String(body.notes), /Abby class pass movement review v1/);
-      const row = { id: "71", archived_at: null, recalled: false, recall_at: body.recall_at, notes: body.notes, patient: link("patients", "42"), recall_type: link("recall_types", "7") };
+      assert.equal(review.request.operation.kind, "classMove");
+      assert.equal(String(body.notes).split("\n")[1], review.request.operation.kind === "classMove" && review.request.operation.quotaStaging
+        ? "Abby staged class pass movement review v1" : "Abby class pass movement review v1");
+      const row = { id: "71", ...link("recalls", "71"), updated_at: now, archived_at: null, recalled: false, recall_at: body.recall_at, notes: body.notes, patient: link("patients", "42"), recall_type: link("recall_types", "7") };
       recalls.push(row); if (lost === "review") throw new Error("synthetic lost review"); return Response.json(row, { status: 201 });
     }
+    if (u.pathname === "/v1/recalls" && method === "GET") {
+      assert.equal(u.searchParams.get("sort"), "id:asc");
+      return Response.json({ recalls, total_entries: recalls.length });
+    }
+    if (u.pathname === "/v1/recalls/71" && method === "GET") return recalls.length ? Response.json(recalls[0]) : new Response(null, { status: 404 });
     if (method === "POST" || method === "PATCH") {
       assert.equal(recalls.length, 1); const body = JSON.parse(String(init?.body));
       const leg = method === "POST" ? "replacement" : u.pathname === "/v1/attendees/401" ? "association" : u.pathname.includes("/101/") ? "original" : "compensation";

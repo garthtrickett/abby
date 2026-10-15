@@ -55,3 +55,13 @@ reconciliation. Local and actual compiled qualification passes in the evidence b
 and real clinic/cloud/voice acceptance remain open.
 
 Qualification: final current-source type/build,74 native,18 PostgreSQL and4 rebuilt compiled checks pass in `4590eee3-1792030818771.log`; broader37 compiled checks pass before the final callback-lifetime fix in `4590eee3-1792030267657.log`. These counts overlap. See [the implementation evidence](THIRTEEN_GAP_IMPLEMENTATION.md#gap10-shared-account-allocation-e2e-416) for failed witnesses and limits.
+
+
+### Native staged consumers
+
+E2E-417 adds a separately approved native class-move consumer. It allocates one
+bounded phase at a time, releases before quota waits, requires fresh phase
+consent/current private proof and preserves the first offer expiry. Its Cliniko
+review remains the patient-specific recovery record. This does not enable the
+staged caller route or automatically resume an interrupted executor. See
+[the staged native contract](CLINIKO_CLASS_PASSES.md#native-staged-class-movement-e2e-417).

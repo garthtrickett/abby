@@ -13,7 +13,7 @@ export type ClassMovementPass = Readonly<{ source: ClassCancellationPass; destin
 export type ClinikoReviewOperation =
   | Readonly<{ kind: "classMove"; sessionId: string; attendeeId: string; newSessionId: string; newStartsAt: string; newEndsAt: string;
       newPractitionerId?: string; newAppointmentTypeId?: string; attendanceActionId: string;
-      cancellationReason: ClinikoCancellationRequest["cancellationReason"]; compensation: "cancelReplacementIfOriginalUnsent"; pass?: ClassMovementPass }> & Interval & Selection
+      cancellationReason: ClinikoCancellationRequest["cancellationReason"]; compensation: "cancelReplacementIfOriginalUnsent"; pass?: ClassMovementPass; quotaStaging?: string }> & Interval & Selection
   | Readonly<{ kind: "classBook"; sessionId: string; attendanceActionId: string; pass?: ClassPass }> & Interval & Selection
   | Readonly<{ kind: "classCancel"; sessionId: string; attendeeId: string; cancellationReason: ClinikoCancellationRequest["cancellationReason"]; pass?: ClassCancellationPass }> & Interval & Selection
   | Readonly<{ kind: "book" }> & Interval & Selection
@@ -40,10 +40,11 @@ const header = "Abby appointment review v2";
 const correctionHeader = "Abby patient correction review v1";
 const resendHeader = "Abby confirmation resend review v1";
 const resendContentHeader = "Abby confirmation resend review v2";
-const reviewHeader = (operation: ClinikoReviewOperation) => operation.kind === "classMove" ? operation.pass ? classPassMoveHeader : classMoveHeader : operation.kind === "classCancel" && operation.pass ? classPassCancellationHeader : operation.kind === "classBook" && operation.pass ? classPassHeader : operation.kind === "classBook" || operation.kind === "classCancel" ? classHeader : operation.kind === "patientUpdate" ? correctionHeader : operation.kind === "confirmationResend" ?
+const reviewHeader = (operation: ClinikoReviewOperation) => operation.kind === "classMove" ? operation.pass ? operation.quotaStaging ? stagedClassPassMoveHeader : classPassMoveHeader : classMoveHeader : operation.kind === "classCancel" && operation.pass ? classPassCancellationHeader : operation.kind === "classBook" && operation.pass ? classPassHeader : operation.kind === "classBook" || operation.kind === "classCancel" ? classHeader : operation.kind === "patientUpdate" ? correctionHeader : operation.kind === "confirmationResend" ?
   operation.contentKind ? resendContentHeader : resendHeader : header;
 const classMoveHeader = "Abby class movement review v1";
 const classPassMoveHeader = "Abby class pass movement review v1";
+const stagedClassPassMoveHeader = "Abby staged class pass movement review v1";
 const classHeader = "Abby class attendance review v1";
 const classPassHeader = "Abby class attendance review v2";
 const classPassCancellationHeader = "Abby class cancellation pass review v1";
@@ -109,28 +110,30 @@ function packPassMove(request: ClinikoReviewRequest): unknown {
     request.policyVersion, request.termsVersion, request.timeZone, request.createdAt,
     [o.practitionerId, o.appointmentTypeId, o.startsAt, o.endsAt, o.sessionId, o.attendeeId, o.newSessionId, o.newStartsAt, o.newEndsAt,
       o.newPractitionerId ?? null, o.newAppointmentTypeId ?? null, o.attendanceActionId, o.cancellationReason, o.compensation],
-    [[...tuple(p.source), p.source.effect], tuple(p.destination), p.stagingContractVersion]];
+    [[...tuple(p.source), p.source.effect], tuple(p.destination), p.stagingContractVersion], ...(o.quotaStaging ? [o.quotaStaging] : [])];
 }
 function unpackPassMove(value: unknown): unknown {
   const array = (v: unknown, length: number): v is unknown[] => Array.isArray(v) && v.length === length;
-  if (!array(value, 10) || !array(value[0], 3) || !array(value[8], 14) || !array(value[9], 3) || !array(value[9][0], 6) || !array(value[9][1], 5)) return undefined;
+  if ((!array(value, 10) && !array(value, 11)) || !array(value[0], 3) || !array(value[8], 14) || !array(value[9], 3) || !array(value[9][0], 6) || !array(value[9][1], 5)) return undefined;
   const s = value[0], o = value[8], p = value[9], a = p[0] as unknown[], b = p[1] as unknown[];
   const pass = (c: unknown[]) => ({ patientCaseId: c[0], entitlementRef: c[1], usageFingerprint: c[2], maximum: c[3], used: c[4] });
   return { scope: { tenantId: s[0], clinicId: s[1], locationId: s[2] }, patientId: value[1], businessId: value[2], credentialFingerprint: value[3],
     policyVersion: value[4], termsVersion: value[5], timeZone: value[6], createdAt: value[7],
     operation: { kind: "classMove", practitionerId: o[0], appointmentTypeId: o[1], startsAt: o[2], endsAt: o[3], sessionId: o[4], attendeeId: o[5], newSessionId: o[6],
       newStartsAt: o[7], newEndsAt: o[8], ...(o[9] === null ? {} : { newPractitionerId: o[9] }), ...(o[10] === null ? {} : { newAppointmentTypeId: o[10] }),
-      attendanceActionId: o[11], cancellationReason: o[12], compensation: o[13], pass: { source: { ...pass(a), effect: a[5] }, destination: pass(b), stagingContractVersion: p[2] } } };
+      attendanceActionId: o[11], cancellationReason: o[12], compensation: o[13], ...(value.length === 11 ? { quotaStaging: value[10] } : {}), pass: { source: { ...pass(a), effect: a[5] }, destination: pass(b), stagingContractVersion: p[2] } } };
 }
 function operation(value: unknown): value is ClinikoReviewOperation {
   const row = record(value);
+  if (row && (("quotaStaging" in row && !Object.hasOwn(row, "quotaStaging")) || ("pass" in row && !Object.hasOwn(row, "pass")))) return false;
   if (row?.kind === "patientUpdate") return keys(row, ["kind", "correctionRef"]) && typeof row.correctionRef === "string" && /^[A-Za-z0-9][A-Za-z0-9:_-]{0,127}$/.test(row.correctionRef);
   if (!row || !id(row.practitionerId) || !id(row.appointmentTypeId) || !interval(row, "startsAt", "endsAt")) return false;
   const common = ["kind", "practitionerId", "appointmentTypeId", "startsAt", "endsAt"];
   switch (row.kind) {
     case "classMove": return keys(row, [...common, "sessionId", "attendeeId", "newSessionId", "newStartsAt", "newEndsAt", "attendanceActionId", "cancellationReason", "compensation",
       ...(Object.hasOwn(row, "newPractitionerId") ? ["newPractitionerId"] : []), ...(Object.hasOwn(row, "newAppointmentTypeId") ? ["newAppointmentTypeId"] : []),
-      ...(Object.hasOwn(row, "pass") ? ["pass"] : [])]) && (!Object.hasOwn(row, "pass") || classMovementPass(row.pass)) &&
+      ...(Object.hasOwn(row, "pass") ? ["pass"] : []), ...(Object.hasOwn(row, "quotaStaging") ? ["quotaStaging"] : [])]) && (!Object.hasOwn(row, "pass") || classMovementPass(row.pass)) &&
+      (!Object.hasOwn(row, "quotaStaging") || !!row.pass && typeof row.quotaStaging === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(row.quotaStaging)) &&
       id(row.sessionId) && id(row.attendeeId) && id(row.newSessionId) && row.sessionId !== row.newSessionId && interval(row, "newStartsAt", "newEndsAt") &&
       (!Object.hasOwn(row, "newPractitionerId") || id(row.newPractitionerId) && row.newPractitionerId !== row.practitionerId) &&
       (!Object.hasOwn(row, "newAppointmentTypeId") || id(row.newAppointmentTypeId) && row.newAppointmentTypeId !== row.appointmentTypeId) &&
@@ -182,7 +185,7 @@ export function encodeClinikoReview(marker: string, request: ClinikoReviewReques
 export function decodeClinikoReview(notes: unknown): Result<ClinikoDecodedReview, ClinikoReviewRequestFailure> {
   if (typeof notes !== "string") return err({ kind: "invalidReviewRequest" });
   const parts = notes.split("\n");
-  if (parts.length !== 4 || !parts[0]?.startsWith("Abby request ") || ![header, correctionHeader, resendHeader, resendContentHeader, classHeader, classPassHeader, classPassCancellationHeader, classMoveHeader, classPassMoveHeader].includes(parts[1]!) ||
+  if (parts.length !== 4 || !parts[0]?.startsWith("Abby request ") || ![header, correctionHeader, resendHeader, resendContentHeader, classHeader, classPassHeader, classPassCancellationHeader, classMoveHeader, classPassMoveHeader, stagedClassPassMoveHeader].includes(parts[1]!) ||
       parts[3] !== instruction || !validRecallSummary(parts.slice(1).join("\n"))) {
     return err({ kind: "invalidReviewRequest" });
   }
@@ -190,7 +193,7 @@ export function decodeClinikoReview(notes: unknown): Result<ClinikoDecodedReview
   if (!validRecallMarker(marker)) return err({ kind: "invalidReviewRequest" });
   let request: unknown;
   try {
-    if (parts[1] === classPassMoveHeader) {
+    if (parts[1] === classPassMoveHeader || parts[1] === stagedClassPassMoveHeader) {
       if (!/^z1:[A-Za-z0-9_-]+$/.test(parts[2]!)) return err({ kind: "invalidReviewRequest" });
       const encoded = parts[2]!.slice(3), bytes = Buffer.from(encoded, "base64url");
       if (bytes.toString("base64url") !== encoded) return err({ kind: "invalidReviewRequest" });
