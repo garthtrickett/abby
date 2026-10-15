@@ -146,7 +146,7 @@ export class CallerVerificationSession {
       if (!issued.ok || this.#closed) return { verified: false };
       this.#grant = issued.value;
       const subject = await this.verifiedSubject(this.#config.operation);
-      if (!subject) return { verified: false };
+      if (!subject || this.#closed || this.#grant !== issued.value) return { verified: false };
       this.#subject = subject.patientRef;
       return { verified: true };
     } catch { this.dispose(); return { verified: false }; }

@@ -3641,3 +3641,19 @@ regression and actual PostgreSQL verifier renewal privacy`, exit 0, log
 routes; the new staged route remains unfinished. Final complete current source
 `npm run typecheck`, the two registry/trace checks and `git diff --check` pass in
 `4590eee3-1792035807281.log`.
+
+
+Final review found a disposal race after `verifiedSubject` returned but before
+code entry published success. The caller session now checks that it is still
+open and still owns the exact issued grant before pinning the subject. A new
+microtask-disposal regression denies late success. This correction changes
+neither proof lifetimes nor challenge/permission rules.
+
+The final correction gate passes 74 native checks (including the new race),
+complete typechecking and diff validation in `4590eee3-1792036017141.log`.
+After rebuilding, the actual PostgreSQL renewal/privacy case and the compiled
+successful full-pass caller case both pass, with zero failures/cancellations/
+skips, in `4590eee3-1792036040613.log`. The earlier 26-case compiled regression
+predates this narrow disposal fence; it is supplementary evidence. The two
+registry/trace checks pass again before publication. Staged caller/SAM and
+operator integration remain open.

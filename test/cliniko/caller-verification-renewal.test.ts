@@ -156,3 +156,21 @@ for (const kind of ["abort", "close"] as const) test(`E2E-418 ${kind} during a h
     assert.equal((await owner.renewOnce(before.verificationRef, signal())).ok, false);
   } finally { release(); owner.dispose(); await f.close(); }
 });
+
+test("E2E-418 disposal after subject verification cannot publish a late successful code or a renewable subject", async () => {
+  const f = await callerVerificationFixture();
+  try {
+    const verify = f.session.verifiedSubject.bind(f.session);
+    f.session.verifiedSubject = async (...args) => {
+      const subject = await verify(...args);
+      queueMicrotask(() => f.session.dispose());
+      return subject;
+    };
+    f.session.begin(); const deadline = Date.now() + 5000;
+    while (!f.mail.length && Date.now() < deadline) await new Promise<void>(r => setTimeout(r, 5));
+    assert.equal(f.mail.length, 1);
+    assert.deepEqual(await f.session.submitCode(f.mail[0]!.code), { verified: false });
+    assert.equal(await f.session.verified(), undefined);
+    assert.equal((await f.session.renewOnce("retired", signal())).ok, false);
+  } finally { await f.close(); }
+});
