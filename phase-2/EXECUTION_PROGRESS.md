@@ -1524,3 +1524,108 @@ no diagnostics, which is not a separately passing runtime typecheck. The98
 passing memory run precedes this erased test-only annotation. No unchanged
 heavy retry or serving build is bundled; the actual terminal and absent wrapper
 were reported and the next corrected check requires fresh coordination.
+
+
+
+## Booking menu deadline refusal correction
+
+The failed full PostgreSQL suite reported an E2E-353 menu read at the original
+15-second deadline followed by `invalidTransition`. Unchanged isolated first-
+failure and four-file PostgreSQL reproductions later passed. Their timing
+cause remains unproven. A separate deterministic held-read gateway test did
+reproduce a source defect: the deadline aborted the native read and then the
+final readiness check reused that already-aborted signal, preventing the
+intended `bookingMenuFailure` notice from being recorded.
+
+The unmodified-source reproduction failed, natural exit 1, log
+`be9df097-1792149262049.log`. The correction leaves the deadline and canceled
+native read intact. After initial authority was established, only the generic
+retry/fresh-options notice may cross the atomic current call/session/lease and
+conversation-revision boundary at a mandatory trusted clock. It carries no
+native selection, patient information or send authority. External abort takes
+precedence; invalid or backwards time is refused. Positive evidence still
+requires the original fresh readiness checks. No timeout can resume or replay
+the read, and no staff/provider write is created.
+
+Eight initial deadline/clock boundaries passed, log
+`be9df097-1792149511578.log`. Extending those same boundaries to held menu
+reads, private option selection and booking-evidence resolution passed all
+24 cases with zero failures/cancellations/skips, natural exit 0, log
+`be9df097-1792149758791.log`. Command:
+
+```sh
+env ABBY_LEDGER=memory node --test test/text/booking-menu-deadline.test.ts
+```
+
+These contracts include real successful menu playback before selection,
+rejected late positive options/evidence, no extra protected read and no host
+mutation. Manifest 1.230 adds this text witness to existing E2E-353/E2E-358
+without adding a scenario or promoting planned full-call evidence. Full
+typecheck subsequently passed as recorded below. PostgreSQL/compiled
+qualification, broader regressions, review and exact-head cloud gates remain
+pending. The earlier whole-suite PostgreSQL
+result remains failed; this correction does not establish its timing cause.
+No heavy validation is queued during the requeued Gust e252 slot.
+
+
+The timeout witness manifest and no-number trace contracts passed two cases,
+zero failures/cancellations/skips, natural exit 0, log
+`be9df097-1792149878847.log`, command `node --test --test-concurrency=1
+test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts`.
+The candidate is now based on qualified reader fixture commit `cd9b4ca`;
+its menu source and new witness were preserved through that rebase.
+
+
+The first full typecheck of frozen booking-menu `2cf1d511a4f089b952369528a0f2ec45dc57d20d`
+finished naturally with exit 2 at 12:01:33 UTC, log
+`be9df097-1792152027020.log`. Its only diagnostic was the new test's
+`unavailableAction` newer-turn fixture missing the required `actionKind`.
+The runtime source and all 1,143 frozen typecheck inputs stayed unchanged
+through that run. Adding the concrete `book` action kind fixes the fixture's
+typed shape; all 24 original deadline boundary cases then passed again,
+zero failures/cancellations/skips, log `be9df097-1792152120474.log`, using the
+same focused command above. No assertion, deadline or concurrency changed.
+The initial authorized heavy job ended and released the slot to Gust at the
+conservative 12:01:36 UTC cutoff; no automatic retry or follow-on heavy job
+was launched.
+
+After another explicit single-job swap and the operator's instruction to
+start following the memory-floor audit, full `npm run typecheck` of corrected
+commit `5a6f1bdd38c8d68ed0f4f931ecb500dd6b912b8b` passed, natural exit 0,
+13:37:43.625256–13:38:48.886175 UTC (65.26 seconds), log
+`be9df097-1792157863343.log`. All 1,143 frozen inputs remained unchanged.
+The whole escaped scope peaked at 1,421,070,336 bytes (about 1.32 GiB), with
+zero high/max/OOM/OOM-kill events. This run had no explicit heap or scope
+memory cap; actual `memory.max`, `memory.high` and `memory.swap.max` were
+`max`. The earlier 4,500,000 KiB prelaunch floor was an uncalibrated agent
+choice copied from a focused PostgreSQL diagnostic, not a measured TypeScript
+requirement or reserved capacity. The operator explicitly authorized this
+single start after that audit; it establishes no automatic future launch rule.
+
+The paired wait was consumed and all tracked processes were verified absent
+at the new conservative 13:38:58.613751 UTC release cutoff. Gust's requeued
+e252 diagnostic retains the next heavy slot under its own fresh admission
+checks. No follow-on Abby heavy or native-owner preparation used this slot.
+PostgreSQL/compiled qualification of this menu delta, broader regressions,
+review and exact-head cloud gates remain open; the previous failed whole-suite
+result and its unresolved timing cause remain recorded above.
+
+### Separate combined booking-menu and staged quota candidate
+
+While the frozen3960 maximum-history pass case runs independently, a dedicated
+`codex/abby-combined-booking-staged` worktree reconciles staged3960 with the
+separate booking-menu draft466 head4d04e960, common basecd9b4ca3. The dry
+merge has no runtime-source conflicts. Four registry/evidence conflicts are
+resolved by preserving both histories and both deadline witness registrations,
+419 stable IDs and planned full-call evidence; synchronized version1.240.
+No source, artifact or deadline in the running3960 case is changed.
+
+The combined source passes26 light memory contracts (24 booking menu deadline
+plus product facts/registry2), work1792170510486/log
+`be9df097-1792170510486.log`,1.32s/zero skips. This is not combined full
+TypeScript, serving, PostgreSQL, first-time timing reproduction or whole-suite
+qualification. Source3960's full typecheck and serving build pass separately:
+work1792169769020 (63.17s/1,598,189,568B/OOM0) and1792169944901
+(29.53s/794,103,808B/OOM0,1170 inputs/448 artifacts). These do not qualify
+the combined graph. Its new ordinary and pass serving evidence remains pending;
+the3960 pass work1792170371866 was live at this checkpoint.

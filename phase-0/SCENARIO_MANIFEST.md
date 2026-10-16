@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.239
+# Scenario manifest, version 1.240
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -928,3 +928,28 @@ planned. This is not completed gap10 or clinic activation.
 E2E-419 adds two isolated PostgreSQL cold staff process cases: current moved state after an uncertain pass association reply, and exact ordinary restoration. A fresh worker receives citations and synthetic host configuration, never caller proof/code/action root/patient identity. Real request-budget rows, database and disposable backup scans pass; the ended caller action and provider writes remain unchanged. These are focused synthetic staff observations, not rebuilt signed serving or real operator acceptance. Full-call evidence remains planned.
 
 E2E-419 now covers a bounded native-phase quota wait before protected preparation. The memory witness exhausts the actual account budget, checks fixed listening metadata and unchanged owner/proof/write state, then resumes with fresh played consent; malformed seconds are refused. New compiled signed fixtures remain semantically unqualified after the first silent-wait test failed. No full-call promotion follows.
+
+
+
+## Booking menu timeout refusal, October 16
+
+E2E-353/E2E-358 add deterministic gateway/SAM contracts at the unchanged
+15-second native menu deadline. Held initial reads, private option selection
+and booking-evidence resolution produce only the generic fresh-options notice
+when the same call/session/revision and current lease remain valid. External
+abort in either ordering, conversation change, ended call, expired lease and
+invalid/backwards trusted time cannot publish that notice. Late options or
+private evidence cannot create an action, trigger another protected read or
+perform a provider/staff write. These text contracts do not qualify the compiled
+journey or establish the cause of the earlier slow native reads. Full-call
+evidence remains planned; the registry retains 418 stable scenario IDs.
+
+
+## Combined booking-menu and staged source reconciliation
+
+Version1.240 preserves419 stable IDs and both branch evidence histories. The
+booking timeout section's418 count describes its original draft466 source. The
+combined source has26 focused booking-deadline/facts/registry memory passes;
+full TypeScript/build/PostgreSQL and combined acceptance remain pending.
+Staged3960 is separately frozen for its serving journey; inherited passes are
+not evidence for this combined graph. No full-call evidence is promoted.
