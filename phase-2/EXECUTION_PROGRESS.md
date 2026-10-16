@@ -11,9 +11,9 @@
 | 3 Exact receipt foundation | Implemented and locally qualified in `codex/abby-provider-ack-receipt`, stacked on the published plans and integrated candidate. The full interval is captured, sent and validated. Existing post-write host success gates remain. Independent review and exact-head CI remain outstanding. |
 | 4 Individual booking | Published in draft [PR #460](https://github.com/garthtrickett/abby/pull/460), `codex/abby-provider-ack-individual`, based on receipt correction `92a16e5`. Final online/roster availability follows preparation; exact acknowledgement survives host/review/worker cancellation. Focused, isolated database/process/compiled-location and complete local `npm test` checks passed. Independent review and cloud qualification remain open; cloud jobs have not started because of billing. |
 | 5 Native class creation | Implemented candidate in `codex/abby-provider-ack-class`, based on stage 4 `40a51f2`. Exact attendee acknowledgement and final double capacity ordering apply to ordinary/approved-pass creation. Focused, process-loss/privacy and unchanged movement/cancellation regressions passed; corrected compiled cases, final typecheck and manifest checks passed. Full local `npm test` is running. Published in draft [PR #461](https://github.com/garthtrickett/abby/pull/461); independent review and cloud qualification remain open. |
-| 6 Earlier-gap qualification | Pending the booking runtime steps. Preserve all gaps 1–9 and their remaining engineering/acceptance requirements. |
+| 6 Earlier-gap qualification | Combined text suite running; full PostgreSQL migration/schema/composition qualification is queued to run only after it passes. Dispatch review identified missing synchronous captured session-lease expiry checks after final availability/capacity; reproduce and correct in an isolated follow-up. Preserve all gaps 1–9 and their remaining engineering/acceptance requirements. |
 | 7 Class/pass completion | Pending; staged caller/SAM/operator integration, complete cost admission and broader combinations remain required. |
-| 8 Payments | Pending gap 11 specification and implementation, including audit R18/R19 and any necessary approved receipt attachment dependency. |
+| 8 Payments | Pending gap 11 specification and implementation, including audit R18/R19 and any necessary approved receipt attachment dependency. The owner selected Stripe Checkout on October16; clinic account/policy acceptance and live activation remain distinct. |
 | 9 Outbound | Pending gap 12, audit R20/R21 and contact-policy decisions. |
 | 10 Writeback | Pending gap 13, exact permissions/content/storage decisions and audit R08/R22. |
 | 11 Combined qualification | Pending. Clinic, mail, native provider, deployment, speech/public-route and eventual carrier acceptance remain distinct gates. Existing real-mail/Twilio deferrals remain. |
@@ -149,6 +149,28 @@ notice; it now follows that notice, renews the ordinary lease and obtains a fres
 affirmation within the original offer/proof expiry. No budget limit or timeout
 was weakened. Full composed qualification, independent review, cloud execution
 and all actual clinic/provider/operator acceptance remain separate open gates.
+
+## Gap 11 provider selection
+
+On October16 the owner selected Stripe Checkout after the provider recommendation.
+The proposed integration uses a separate hosted Checkout Session for each approved
+deposit/payment request, bound to the exact clinic account, action, amount,
+currency and authorized recipient. Use verified payment evidence for paid
+status; a completed browser redirect or delivered link is not payment proof.
+Cliniko appointment status, payment, delivery, receipt and expiry remain separate.
+Expiring a checkout does not prove an appointment cancellation, and late payment
+does not restore a cancelled appointment.
+
+Current primary references checked: [hosted Checkout](https://docs.stripe.com/payments/checkout),
+[Checkout Session status](https://docs.stripe.com/api/checkout/sessions),
+[session expiry](https://docs.stripe.com/api/checkout/sessions/expire),
+[webhooks](https://docs.stripe.com/webhooks) and
+[receipts](https://docs.stripe.com/receipts).
+This records the owner's provider selection. It does not establish clinic account/terms
+acceptance, a payment implementation, approved financial storage, connected-account
+setup or live money movement. Refine the exact payment/provider-owned recovery contract under
+stage 8 before implementing it; retain the standalone privacy rule and all
+R18/R19 adversarial cases. Current booking/class qualification continues first.
 
 ## Review, acceptance and remaining limits
 
