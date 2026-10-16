@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.239
+# Scenario manifest, version 1.240
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -928,3 +928,16 @@ planned. This is not completed gap10 or clinic activation.
 E2E-419 adds two isolated PostgreSQL cold staff process cases: current moved state after an uncertain pass association reply, and exact ordinary restoration. A fresh worker receives citations and synthetic host configuration, never caller proof/code/action root/patient identity. Real request-budget rows, database and disposable backup scans pass; the ended caller action and provider writes remain unchanged. These are focused synthetic staff observations, not rebuilt signed serving or real operator acceptance. Full-call evidence remains planned.
 
 E2E-419 now covers a bounded native-phase quota wait before protected preparation. The memory witness exhausts the actual account budget, checks fixed listening metadata and unchanged owner/proof/write state, then resumes with fresh played consent; malformed seconds are refused. New compiled signed fixtures remain semantically unqualified after the first silent-wait test failed. No full-call promotion follows.
+
+
+## Bounded staged caller serving, E2E-419
+
+Source3960 passes full TypeScript, the serving build and separate actual compiled
+signed ordinary/999-history201-roster cross-case pass PostgreSQL journeys, with
+zero skips. Initial selection and later phases use explicit played bounded waits,
+current private verification and distinct affirmative effects. Exact writes and
+read-only joint completion, physical180 quota/no reservations, clock alignment
+and database/unfiltered backup/output privacy assertions pass. Version1.240
+registers this synthetic voice evidence while retaining419 IDs and planned
+full-call status. Combined booking-menu, broader mixed/concurrent/correction,
+whole-suite and independent/cloud/clinic/provider acceptance remain open.
