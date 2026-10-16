@@ -1299,3 +1299,43 @@ unchanged. The corrected signed fixture now follows the existing initial
 confirmation wait and new explicit phase preparation waits; it does not sleep
 unannounced or alter the transport's silence deadline. New rebuilt graph and
 signed ordinary/pass runtime qualification remain pending.
+
+
+### Corrected build, ordinary continuation failure and clock investigation
+
+Frozen `3ada20a` passes `npm run build:voice-tests`, tracked
+work1792164945727/log `be9df097-1792164945727.log`, natural exit0
+at15:36:21.448263UTC,35.44s, peak830,599,168B/OOMhighmax0,
+1,170 source inputs unchanged and448 compiled JavaScript files pinned.
+No PostgreSQL or full typecheck was bundled.
+
+The one corrected ordinary case then ran under the same source/artifact pins,
+work1792165071076/log `be9df097-1792165071076.log`. It reached one
+replacement write and the partial-movement notice, then failed on the first
+"Continue my class move" response timeout. Natural terminal15:39:25.617850UTC,
+exit1/94.32s, scope peak192,856,064B excluding Docker PostgreSQL,
+OOM/high/max0. No pass case or unchanged retry ran; Gust799 then a989 took
+heavy priority. Current signed ordinary/pass qualification remains absent.
+
+Static diagnosis: MediaTurnController stamps the completed turn from wire
+capturedAt, while this fixture sends840ms speech bursts without advancing its
+synthetic host clock. After the real initial wait its media timeline can remain
+ahead of that clock. ClassMovementTurns intentionally refuses startedAt earlier
+than turn.at; memory gateway cases already preserve this guard. This is a
+specific clock-mismatch hypothesis, not a measured verdict from that failed run.
+The fixture now aligns its synthetic clock forward to the next media-turn end,
+with a15-second per-step guard, and emits a fixed aheadByMs observation for the
+actual continuation. Production clock/lease/deadline checks are unchanged.
+On response failure a new synthetic-only diagnostic projects fixed lifecycle,
+lease interval, action/effect/presentation statuses and phase enums before and
+after the turn. It excludes identifiers, text, proofs, codes, recipients and
+native citations. This is test instrumentation, not a product endpoint.
+Syntax inspection passes; rebuild/semantic measurement and full TypeScript
+remain pending. No source-only inference is promoted to a passing journey.
+
+Remaining cost-admission edge: the new preparation check includes phase plus
+preparation overhead, but menu admission currently validates native phases
+alone. Near-limit callback cohorts can still be offered and then refused by
+the stricter combined preparation bound. This is safe refusal, not complete
+serving admission. Centralize/test the host's combined admission before closing
+that requirement; retain the native-only coordinator's separate ceilings.

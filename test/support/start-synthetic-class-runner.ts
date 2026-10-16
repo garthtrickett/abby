@@ -17,6 +17,7 @@ import { withApprovedSyntheticVoice } from "./approved-voice.ts";
 import { classCallFlowFixture } from "./class-call-flow.ts";
 import { classMoveCallFlowFixture } from "./class-move-call-flow.ts";
 import type { ClassPassCancellationEffect } from "../../src/standalone/cliniko-class-pass-cancellation.ts";
+import type { CallState } from "../../src/core/model.ts";
 import type { ClassServiceConfig } from "../../src/standalone/class-service-catalogue.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 import { classAttendee, classLink } from "./class-attendance.ts";
@@ -52,6 +53,7 @@ if (operation === "reschedule" && (process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS ==
     starts_at: `2026-10-${process.env.ABBY_SYNTHETIC_CLASS_DATE_CORRECTION === "1" ? "10" : "09"}T12:00:00.000Z`,
     ends_at: `2026-10-${process.env.ABBY_SYNTHETIC_CLASS_DATE_CORRECTION === "1" ? "10" : "09"}T${process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1" ? "12:30" : "13:00"}:00.000Z` });
 const c = f.flowConfig, apiKey = process.env.ABBY_CLINIKO_API_KEY!, now = c.clock!;
+const mediaClockOrigin = Date.parse(now());
 process.env.ABBY_TENANT_ID = f.scope.tenantId; process.env.ABBY_CLINIC_ID = f.scope.clinicId; process.env.ABBY_LOCATION_ID = f.scope.locationId;
 process.env.ABBY_TWILIO_TEST_CALLER_NUMBER = f.inbound.presentedCallerNumber;
 // Only public synthetic approvals are rebound. The runtime supplies its actual
@@ -69,12 +71,33 @@ let denied = false, classDenied = false, mailLost = false, lostWrite = false, po
 let sharedBudget: ClinikoRequestBudget | undefined;
 let holdReplacement = false, releaseReplacement: (() => void) | undefined;
 const inputs: string[] = [];
+let readNativeState: (() => Promise<CallState>) | undefined;
 const occupyClass = () => { for (let index = 0; index < 3; index++) f.native.attendees.push(classAttendee(String(851 + index), "94", String(951 + index))); };
 process.on("message", message => {
   if (!message || typeof message !== "object" || !("kind" in message)) return;
+  if (staging && message.kind === "classDiagnostic") void (async () => {
+    const state = await readNativeState?.();
+    if (!state) { process.send?.({ kind: "classDiagnostic", diagnostic: { available: false } }); return; }
+    const pending = state.pendingPresentationId ? state.presentations[state.pendingPresentationId] : undefined;
+    // Fixed state enums/counts only: no identifiers, text, proof, code, targets,
+    // recipients or native citations leave this diagnostic boundary.
+    process.send?.({ kind: "classDiagnostic", diagnostic: { available: true, lifecycle: state.lifecycle,
+      leaseRemainingMs: state.sessionLease ? Date.parse(state.sessionLease.expiresAt) - Date.parse(now()) : null,
+      pending: pending ? { kind: pending.kind, status: pending.status } : null,
+      actions: Object.values(state.actions).slice(0, 8).map(action => ({ kind: action.kind, status: action.status,
+        stage: action.classMovement?.outcome === "pending" ? action.classMovement.continuation.stage : null, outcome: action.classMovement?.outcome ?? null,
+        phaseConsent: !!action.classMovementConsent })),
+      effects: Object.values(state.effects).slice(-8).map(effect => ({ kind: effect.kind, status: effect.status })) } });
+  })().catch(() => process.send?.({ kind: "classDiagnostic", diagnostic: { available: false } }));
   if (message.kind === "holdClassReplacement") { holdReplacement = true; process.send?.({ kind: "classReplacementHoldArmed" }); }
   if (message.kind === "releaseClassReplacement") { releaseReplacement?.(); releaseReplacement = undefined; }
   if (message.kind === "input" && "text" in message && typeof message.text === "string") { inputs.push(message.text); process.send?.({ kind: "inputAccepted" }); }
+  if (staging && message.kind === "alignMediaClock" && "elapsedMs" in message && typeof message.elapsedMs === "number" &&
+      Number.isSafeInteger(message.elapsedMs) && message.elapsedMs >= 0 && message.elapsedMs <= 900000) {
+    const at = Date.parse(now()), aligned = Math.max(at, mediaClockOrigin + message.elapsedMs), allowed = aligned - at <= 15000;
+    if (allowed) f.setTime(new Date(aligned).toISOString());
+    process.send?.({ kind: "mediaClockAligned", allowed });
+  }
   if (message.kind === "advanceClock" && "milliseconds" in message && Number.isSafeInteger(message.milliseconds) &&
       typeof message.milliseconds === "number" && message.milliseconds >= 0 && message.milliseconds <= 15000) {
     f.setTime(new Date(Date.parse(now()) + message.milliseconds).toISOString()); process.send?.({ kind: "clockAdvanced" });
@@ -267,7 +290,7 @@ try {
             }
             return result;
           };
-          return createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-model-key", model: "synthetic-model", clinicDate: () => "2026-10-04",
+          const resolve = createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-model-key", model: "synthetic-model", clinicDate: () => "2026-10-04",
             fetch: async (_value, init) => {
               const input = JSON.parse(JSON.parse(String(init?.body)).input[1].content);
               process.send?.({ kind: "modelTurn", text: input.callerText });
@@ -280,6 +303,11 @@ try {
               else throw new Error("unexpected synthetic class model turn");
               return Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [{ type: "output_text", text: JSON.stringify(decision) }] }] });
             } });
+          return (...args: Parameters<typeof resolve>) => {
+            if (staging && args[0].text === "Continue my class move") process.send?.({ kind: "classTurnTiming",
+              aheadByMs: Date.parse(args[0].at) - Date.parse(now()) });
+            return resolve(...args);
+          };
         },
       });
       const observe = (host: ClinikoVoiceClinicalHost): ClinikoVoiceClinicalHost => {
@@ -289,7 +317,8 @@ try {
           return { ...owned, create(admission) {
             // Observe the actual transient call's SAM. The fixture still asserts
             // one dispatched, played action at every native attendance mutation.
-            f.bindNativeCall(async () => resultValue(await admission.ledger.read(admission.receipt.callId, admission.receipt.scope)));
+            readNativeState = async () => resultValue(await admission.ledger.read(admission.receipt.callId, admission.receipt.scope));
+            f.bindNativeCall(readNativeState);
             return owned.create(admission);
           } };
         };

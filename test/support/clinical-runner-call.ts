@@ -16,7 +16,7 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 import { voiceUntil } from "./cliniko-workflow-voice.ts";
 import type { LocationScope } from "../../src/core/model.ts";
 
-type Message = { kind: string; actionStatus?: string; text?: string; method?: string; path?: string; body?: Record<string, unknown>;
+type Message = { kind: string; diagnostic?: unknown; aheadByMs?: number; actionStatus?: string; text?: string; method?: string; path?: string; body?: Record<string, unknown>;
   originalActive?: boolean; replacementActive?: boolean; sourceUsed?: number; destinationUsed?: number; caseLinked?: boolean;
   phase?: string; elapsedMs?: number;
   claims?: number; denialKind?: string;
@@ -122,6 +122,17 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
     send({ event: "start", start: { accountSid, callSid, streamSid, tracks: ["inbound"], customParameters: { abbyBinding: binding }, mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 } } });
     const count = (kind: string) => messages.filter(m => m.kind === kind).length;
     const say = async (text: string, privateField = false, expectFailure = false) => {
+      if (options.classQuotaStaging) {
+        const aligned = count("mediaClockAligned"); child.send({ kind: "alignMediaClock", elapsedMs: (chunk + 42) * 20 });
+        await voiceUntil(() => count("mediaClockAligned") > aligned, "synthetic class media clock");
+        assert.equal(messages.filter(row => row.kind === "mediaClockAligned").at(-1)!.allowed, true);
+      }
+      let beforeState: unknown;
+      if (options.classQuotaStaging && text === "Continue my class move") {
+        const probes = count("classDiagnostic"); child.send({ kind: "classDiagnostic" });
+        await voiceUntil(() => count("classDiagnostic") > probes || child.exitCode !== null, "class continuation state", 1000);
+        beforeState = messages.filter(row => row.kind === "classDiagnostic").at(-1)?.diagnostic;
+      }
       const accepted = privateField ? "privateInputAccepted" : "inputAccepted", beforeAccepted = count(accepted), beforeSpeech = count("speech");
       child.send({ kind: privateField ? "privateInput" : "input", text }); await voiceUntil(() => count(accepted) > beforeAccepted, "caller input reaches runner");
       if (options.locations) {
@@ -131,7 +142,18 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
       // The real runner retains its 700 ms end-of-turn silence threshold.
       // Two voiced frames plus 800 ms of silence complete the actual turn.
       for (let i = 0; i < 42; i++) media(i < 2);
-      await voiceUntil(() => count("speech") > beforeSpeech || child.exitCode !== null || (expectFailure && socket!.readyState === WebSocket.CLOSED), "clinical runner response", 20_000);
+      try {
+        await voiceUntil(() => count("speech") > beforeSpeech || child.exitCode !== null || (expectFailure && socket!.readyState === WebSocket.CLOSED), "clinical runner response", 20_000);
+      } catch (error) {
+        if (!options.classQuotaStaging) throw error;
+        const probes = count("classDiagnostic"); child.send({ kind: "classDiagnostic" });
+        try { await voiceUntil(() => count("classDiagnostic") > probes || child.exitCode !== null, "bounded class state diagnostic", 1000); } catch { /* absence is part of the diagnostic */ }
+        const counts = Object.fromEntries([...new Set(messages.map(row => row.kind))].map(kind => [kind, count(kind)]));
+        const trace = messages.slice(-16).map(row => ({ kind: row.kind, phase: row.phase,
+          actionStatus: row.actionStatus, verified: row.verified, allowed: row.allowed }));
+        throw new Error("Staged signed response unavailable: " + JSON.stringify({ socket: socket!.readyState, childExit: child.exitCode,
+          counts, trace, beforeState, state: messages.filter(row => row.kind === "classDiagnostic").at(-1)?.diagnostic ?? null }), { cause: error });
+      }
       assert.equal(child.exitCode, null);
     };
     const media = (voiced: boolean) => send({ event: "media", media: { track: "inbound", chunk: String(++chunk), timestamp: String((chunk - 1) * 20), payload: Buffer.alloc(160, voiced ? 0x9f : 0xff).toString("base64") } });

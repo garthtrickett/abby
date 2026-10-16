@@ -65,6 +65,9 @@ for (const pass of [false, true]) test(`E2E-419 compiled signed ${pass ? "maximu
       await call.mark();
     }
     assert.equal(call.spoken.at(-1), "Your appointment move is confirmed.");
+    const timings = call.messages.filter(row => row.kind === "classTurnTiming");
+    assert.ok(timings.length > 0 && timings.every(row => typeof row.aheadByMs === "number" && row.aheadByMs <= 0),
+      "the actual synthetic speech turn cannot outrun the captured host clock");
     assert.deepEqual(writes(call).map(row => [row.method, row.path]), pass ?
       [["POST", "/v1/attendees"], ["PATCH", "/v1/attendees/101/cancel"], ["PATCH", "/v1/attendees/401"]] :
       [["POST", "/v1/attendees"], ["PATCH", "/v1/attendees/101/cancel"]]);
