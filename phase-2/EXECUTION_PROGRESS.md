@@ -1738,3 +1738,7 @@ open. The existing full run continues naturally and is not retried in parallel.
 Adding the already-played-before-clear case and reviewed facts/registry yields
 eight passing cases/zero skips, work1792173314782. No signed acceptance is
 inferred from these pure wire and metadata checks.
+
+A failure-only diagnostic now includes the numeric WebSocket close code and
+playback counts/booleans. It excludes close reason text, mark names, patient
+fields and utterances. It does not change readiness, authority or timing.

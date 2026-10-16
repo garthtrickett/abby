@@ -89,6 +89,7 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
   child.on("message", value => { if (value && typeof value === "object" && "kind" in value) messages.push(value as Message); });
   child.stdout!.on("data", data => output.push(data.toString())); child.stderr!.on("data", data => output.push(data.toString()));
   let socket: WebSocket | undefined, closed = false, sequence = 1, chunk = 0;
+  let transportCloseCode: number | undefined;
   const close = async () => {
     if (closed) return; closed = true;
     if (socket && socket.readyState !== WebSocket.CLOSED) { socket.terminate(); await once(socket, "close"); }
@@ -119,6 +120,7 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
     socket = new WebSocket(`ws://127.0.0.1:${port}/twilio/media/`, { headers: { "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, streamUrl, {}) } });
     const send = (event: object) => socket!.send(JSON.stringify({ ...event, streamSid, sequenceNumber: String(sequence++) }));
     const playback = new SyntheticPlaybackReceipts(name => send({ event: "mark", mark: { name } }));
+    socket.on("close", code => { transportCloseCode = code; });
     socket.on("message", data => { if (!closed) playback.receive(JSON.parse(data.toString())); });
     await once(socket, "open"); socket.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
     send({ event: "start", start: { accountSid, callSid, streamSid, tracks: ["inbound"], customParameters: { abbyBinding: binding }, mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 } } });
@@ -154,8 +156,8 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
         const counts = Object.fromEntries([...new Set(messages.map(row => row.kind))].map(kind => [kind, count(kind)]));
         const trace = messages.slice(-16).map(row => ({ kind: row.kind, phase: row.phase,
           actionStatus: row.actionStatus, verified: row.verified, allowed: row.allowed }));
-        throw new Error("Staged signed response unavailable: " + JSON.stringify({ socket: socket!.readyState, childExit: child.exitCode,
-          counts, trace, beforeState, state: messages.filter(row => row.kind === "classDiagnostic").at(-1)?.diagnostic ?? null }), { cause: error });
+        throw new Error("Staged signed response unavailable: " + JSON.stringify({ socket: socket!.readyState, closeCode: transportCloseCode, childExit: child.exitCode,
+          playback: { marks: playback.count, outstanding: playback.hasPendingAfter() }, counts, trace, beforeState, state: messages.filter(row => row.kind === "classDiagnostic").at(-1)?.diagnostic ?? null }), { cause: error });
       }
       assert.equal(child.exitCode, null);
     };
