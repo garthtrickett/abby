@@ -1629,3 +1629,76 @@ work1792169769020 (63.17s/1,598,189,568B/OOM0) and1792169944901
 (29.53s/794,103,808B/OOM0,1170 inputs/448 artifacts). These do not qualify
 the combined graph. Its new ordinary and pass serving evidence remains pending;
 the3960 pass work1792170371866 was live at this checkpoint.
+
+### Staged caller quota serving qualification on frozen3960
+
+The complete frozen source `3960b6fc406c31e313ba01a1848df6bf00175e5c`
+passes full `npm run typecheck`, work1792169769020/log
+`be9df097-1792169769020.log`,16:56:09.254358–16:57:12.421903UTC,
+63.17s,1,598,189,568B peak/OOMhighmax0. Separate `npm run build:voice-tests`
+passes work1792169944901/log `be9df097-1792169944901.log`,
+16:59:05.093421–16:59:34.618565UTC,29.53s/794,103,808B/OOMhighmax0.
+The1170 source inputs are unchanged and448 JavaScript artifacts are pinned.
+These are two separately coordinated jobs, with no PostgreSQL bundled.
+
+The corrected compiled signed maximum-history cross-case pass then passes1
+case/zero skips: work1792170371866/log `be9df097-1792170371866.log`,
+17:06:12.472375–17:10:47.600975UTC,275.13s total. Exact command is
+`bash scripts/with-postgres.sh env ABBY_LEDGER=postgres node --test
+--test-concurrency=1 --test-name-pattern="compiled signed maximum-history"
+test/voice/class-move-staged-runner.test.ts`. The independent ordinary case
+passes1/zero skips with the filter `compiled signed ordinary`, work1792170811840/
+log `be9df097-1792170811840.log`,17:13:32.144224–17:15:53.948817UTC,
+141.80s. Its header accidentally lists ordinary among excluded follow-ons; the
+actual command runs exactly the one ordinary case and no pass/build/typecheck.
+No active deadline or source changed during either job.
+
+All assertions completed: distinct played phase readbacks/affirmations, exact
+three pass writes plus read-only final inspection (two writes for ordinary),
+private current same-patient renewal, partial truth before final completion,
+bounded quota notices (pass at most5/360s, ordinary at most2/180s), actual
+180-request account/no residual reservations, continuation clock not ahead of
+host, exactly the permitted phone-ID map, and private codes/clinical/case/review
+fragments absent from every other column, the unfiltered disposable backup,
+public model/speech and raw runner output. Scope peaks219,201,536B pass and
+200,990,720B ordinary exclude the Docker PostgreSQL server; all OOM/high/max0.
+Both retain1170 source/448 artifact identity. Wrappers were absent and actual
+natural releases sent promptly. Existing Docker membership was selected with
+`sg` after migration; system permissions and original restored databases were
+not changed. No automatic follow-on job ran.
+
+Manifest1.240 now registers the two completed signed cases as synthetic voice
+evidence for E2E-419, preserving419 stable IDs and planned full-call evidence.
+The final publication metadata changes docs/fingerprints plus only the
+uncompiled registry-test version literal; runtime and serving fixture sources
+remain the3960 graph. Product facts reflect current scoped passes. This does
+not close gap10: combined booking-menu/full-suite, broader mixed/concurrent/
+correction cohorts, independent/cloud/clinic/operator/provider/acoustic
+acceptance and any financial dependency remain open. All13 gaps stay active;
+Stripe is selected for gap11.
+
+### Combined source reconciles completed staged serving evidence
+
+The local combined candidate now includes the staged publication evidence as
+well as draft466 booking-menu deadlines, preserving both histories. Registry
+1.241 retains419 IDs and planned full-call status. The3960 runtime/fixture
+graph passed both signed journeys independently; combined qualification still
+requires its own full TypeScript/build and regression. No inherited pass is
+promoted to a combined graph pass, and no main merge or deployment occurred.
+
+### Staged quota draft469 publication and cloud startup
+
+Draft [#469](https://github.com/garthtrickett/abby/pull/469), branch
+`codex/abby-class-stage-window-admission`, published exact head
+`00bfdabd24163c4ca8be35c65820829042cda235` above draft468. Final
+reviewed facts/registry pass2, work1792171428739. An earlier attempted gate
+used an unavailable tsx loader and failed before either test; the repository
+uses native Node TypeScript, and the corrected command added no dependency.
+The combined reconciliation then passes26 cases, work1792171477673.
+
+Exact-head Text contract push38939406818 and pull_request38939414008
+both completed failure before job steps. Check117102979970 annotation states
+that recent account payments failed or the spending limit needs increasing.
+This is a cloud-startup blocker, not a source regression or passing CI. No
+billing/configuration change or unchanged retry push was made. Draft469 remains
+unmerged; current combined engineering continues locally.

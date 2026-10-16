@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.240
+# Scenario manifest, version 1.241
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -947,9 +947,21 @@ evidence remains planned; the registry retains 418 stable scenario IDs.
 
 ## Combined booking-menu and staged source reconciliation
 
-Version1.240 preserves419 stable IDs and both branch evidence histories. The
+Version1.241 preserves419 stable IDs and both branch evidence histories. The
 booking timeout section's418 count describes its original draft466 source. The
 combined source has26 focused booking-deadline/facts/registry memory passes;
 full TypeScript/build/PostgreSQL and combined acceptance remain pending.
 Staged3960 is separately frozen for its serving journey; inherited passes are
 not evidence for this combined graph. No full-call evidence is promoted.
+
+## Bounded staged caller serving, E2E-419
+
+Source3960 passes full TypeScript, the serving build and separate actual compiled
+signed ordinary/999-history201-roster cross-case pass PostgreSQL journeys, with
+zero skips. Initial selection and later phases use explicit played bounded waits,
+current private verification and distinct affirmative effects. Exact writes and
+read-only joint completion, physical180 quota/no reservations, clock alignment
+and database/unfiltered backup/output privacy assertions pass. Version1.240
+registers this synthetic voice evidence while retaining419 IDs and planned
+full-call status. Combined booking-menu, broader mixed/concurrent/correction,
+whole-suite and independent/cloud/clinic/provider acceptance remain open.
