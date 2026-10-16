@@ -4179,3 +4179,12 @@ scope spreads; explicit native config corrects them, with a separate corrected
 full check still pending. Exact commands, logs and boundaries are in the
 execution ledger. Rebuilt signed serving, broad cohorts, independent/real
 operator/cloud acceptance and remaining13-gap execution stay open.
+
+
+Cold staff reader final source checkpoint: frozen671c474 passes the full
+`npm run typecheck` in81.42s, with1,168 unchanged inputs and1.463GiB scope
+peak/OOM0. Combined memory regression and two isolated PostgreSQL process/
+backup privacy cases above remain the bounded evidence, with the later test-only
+kind-narrowing delta explicit in the execution ledger. This is a draft source
+checkpoint; rebuilt signed serving, broad cohorts, independent/real operator/
+cloud acceptance and the full13-gap order remain active.

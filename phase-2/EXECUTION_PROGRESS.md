@@ -1164,8 +1164,8 @@ real clinic/operator and authoritative cloud acceptance remain open. PR467's
 billing startup failures remain unresolved externally. Gap10/all13 stay active.
 
 
-The corrected runtime at `2dcdcf4` passed full runtime-source checking, but the
-full command still failed two TS2339 diagnostics in the new process test's
+The full check at `2dcdcf4` emitted no runtime-source diagnostics, but the
+command still failed two TS2339 diagnostics in the new process test's
 canary setup: its generic ActionRequest had not been narrowed to reschedule.
 Tracked work1792163371729, log `be9df097-1792163371729.log`, naturally
 finished15:10:48.092618UTC exit2 after76.16s;1,168 inputs unchanged,
@@ -1174,3 +1174,25 @@ caller request is a reschedule now narrows its patient fields. No runtime or
 provider logic changes; the preceding PostgreSQL results cover the same worker
 and recovery graph before this test assertion. Another full check is pending;
 no automatic heavy retry followed the failure.
+
+
+### Cold staff recovery final source typecheck
+
+Frozen `671c4748b2cd68e56366676199d020c68658f7b6` passes
+`npm run typecheck`, tracked work1792163735709, log
+`be9df097-1792163735709.log`. Actual start15:15:36.081693UTC,
+natural terminal15:16:57.497249UTC,81.42s, exit0. All1,168 TypeScript/
+package/config inputs unchanged; whole scope peak1,570,353,152B (1.463GiB),
+OOM/high/max0. Wrapper1319478 absence verified; heavy slot released without
+another launch. The only source delta since the passing two-case PostgreSQL
+run is a test-only action-kind assertion/narrowing and registry test version;
+worker and runtime graph are unchanged. No new-source PostgreSQL rerun is
+claimed. Final facts and registry qualification are recorded separately.
+
+This completes the narrow cold staff reader/optional authenticated route source
+checkpoint for draft review. Rebuilt signed serving, complete mixed/concurrent/
+high-cost cohorts, independent review, real clinic/operator and authoritative
+cloud acceptance remain open. Gap10 and the full13-gap order remain active;
+Stripe11 follows the remaining class prerequisites rather than replacing them.
+
+Final facts/registry contract command `node --test --test-concurrency=1 test/contract/product-facts.test.ts test/contract/scenario-manifest.test.ts` passed2 cases, log `be9df097-1792163867002.log`. These are documentation/registry guards, not another runtime or whole-suite result.
