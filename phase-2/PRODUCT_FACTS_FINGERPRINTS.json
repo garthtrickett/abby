@@ -1,7 +1,7 @@
 {
   "verifiedDate": "2026-10-16",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "01fe76b6c326bdcd99ba20a1c41355f5b478ddbf750461a561462a879b61bded",
+  "factsSha256": "a65985150b8197764098f98f48fede443e16c33702a24613aab1c77aaab4710f",
   "sources": {
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
     "src/cliniko/booking-write.ts": "01a64fe2f73e22281ec48ec0b238a7033d694ce9ecd0b7c434aeda538aff0a04",

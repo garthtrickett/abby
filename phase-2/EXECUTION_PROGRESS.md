@@ -210,6 +210,40 @@ Independent review, exact-head cloud qualification, broader earlier-gap
 engineering and all external acceptance remain open. No full integration,
 landing, clinic activation or Aeva deletion is claimed.
 
+## Product-fact drift qualification
+
+Stage 6 audit R11 review found that the small operator reference had manually
+verified fingerprints but no normal-gate check. The isolated
+`codex/abby-product-facts-guard` follow-up, based on dispatch correction `94fd49`,
+adds `test/contract/product-facts.test.ts`. The existing Node test globs include
+it without a script, dependency, scenario-ID or runtime change. It verifies the
+fact-content hash, matching review date, unique fact IDs, exact coverage of
+directly cited repository files and each source hash. Source removal or a missing
+fingerprint cannot silently pass. It checks drift and does not certify behavior,
+deployment, clinic acceptance or published support advice.
+
+`node --test test/contract/product-facts.test.ts` passed with one check and zero
+failures/skips. Tracked `Abby product facts guard drift qualification` completed
+exit0 in log `be9df097-1792143530413.log`: the current reference passed,
+deliberately stale source hash, omitted source hash and changed fact content
+each failed for the expected reason, and the restored reference passed. All
+temporary edits were restored. `git diff --check` passed. These checks use only
+Node builtins and repository files; no dependency install, compiler, browser or
+database ran in this follow-up.
+
+The corrected booking suite finished naturally, exit0, against fixed runtime
+`94fd49` in its original worktree. The new guard was not included in that suite.
+This follow-up is rebased onto documentation-only `f01b9d2`, which records its
+terminal and the next heavy window yielded to Gust. The next heavy Abby job
+remains held for that single diagnostic and its actual terminal release.
+Full PostgreSQL/cloud qualification and independent review remain outstanding.
+
+The drift check was initially published as `97dda69a43e3fc070bd25cd2c710dff5e1c88c00`
+in draft [PR #463](https://github.com/garthtrickett/abby/pull/463). Its exact-head
+push38882031995 and PR38882064861 had no executed steps; PR check116910912400
+independently reported account billing/spending limits. Rebased-head cloud
+qualification remains required; no green result is inferred from the local check.
+
 ## Gap 11 provider selection
 
 On October16 the owner selected Stripe Checkout after the provider recommendation.

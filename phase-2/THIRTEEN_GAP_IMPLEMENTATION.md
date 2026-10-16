@@ -3944,3 +3944,21 @@ The terminal notifier sent actual release to the named Gust coordinator at
 corrected frozen Gust7fa76986 diagnostic after its own fresh guards. No heavy
 Abby rerun is queued or timed automatically; light staged-class source work
 continues while actual Gust start/terminal release is pending.
+
+## October16 earlier-gap operator-reference drift check
+
+Audit R11's repository product facts now have a Node contract guard in
+`test/contract/product-facts.test.ts`, included by the existing normal test globs.
+It requires matching fact content/review date, unique fact IDs, every directly
+cited repository source and matching source hashes. This closes the missing
+automated drift check for the small reference; it adds no support chat,
+publication system, behavioral attestation or clinic readiness claim.
+
+The direct check passed. Deliberately stale/omitted source fingerprints and
+changed unreviewed fact content each produced the expected failure; restoring
+the original files restored the pass. Exact evidence and the continuing
+booking-suite/shared-compute boundary are in
+[execution progress](EXECUTION_PROGRESS.md#product-fact-drift-qualification).
+No production code, dependency, schema, setting or scenario status changes.
+The complete thirteen-gap scope and remaining acceptance requirements stay open.
+
