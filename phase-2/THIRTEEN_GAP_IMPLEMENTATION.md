@@ -4004,10 +4004,9 @@ These in-process contracts do not establish complete native request-cost
 admission or an actual serving route.
 
 The prerequisite is qualified reader fixture commit `cd9b4ca`. Rebase checking
-preserved all 1,149 previously typechecked source inputs exactly. That full
-typecheck passed before the latest expiry refinements; the revised source
-requires a fresh full typecheck under the coordinated Gust hold. No follow-on
-heavy job is queued. Manifest 1.230 has 419 stable IDs and keeps every full-call
+preserved all 1,149 previously typechecked source inputs exactly. That earlier pass preceded the expiry refinements. A second explicitly
+coordinated full `npm run typecheck` now passes final refined foundation
+`809e993d`, with all 1,149 inputs unchanged. No follow-on heavy job is queued. Manifest 1.230 has 419 stable IDs and keeps every full-call
 evidence item planned.
 
 Native caller/renewal routing, operator resolution, complete cost admission,
@@ -4070,6 +4069,7 @@ boundaries: startup admission expiry cannot shorten an already active renewed
 session lease, and live proof/lease cannot extend separately approved movement
 terms. The admitted-session witness crosses a full quota window with actual
 session renewals and grants no mutation. All 35 focused core/SAM/registry
-contracts pass. The earlier full typecheck predates these refinements; a fresh
-full typecheck is pending under the coordinated Gust hold. Exact red/green
+contracts pass. The final refined foundation now passes its own full typecheck after an
+explicit compute swap; the one Gust e252 window is requeued after its actual
+terminal/release. Exact red/green
 logs and remaining native serving limits are in the execution ledger.

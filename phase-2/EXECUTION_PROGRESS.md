@@ -12,7 +12,7 @@
 | 4 Individual booking | Published in draft [PR #460](https://github.com/garthtrickett/abby/pull/460), `codex/abby-provider-ack-individual`, based on receipt correction `92a16e5`. Final online/roster availability follows preparation; exact acknowledgement survives host/review/worker cancellation. Focused, isolated database/process/compiled-location and complete local `npm test` checks passed. Independent review and cloud qualification remain open; cloud jobs have not started because of billing. |
 | 5 Native class creation | Implemented candidate in `codex/abby-provider-ack-class`, based on stage 4 `40a51f2`. Exact attendee acknowledgement and final double capacity ordering apply to ordinary/approved-pass creation. Focused, process-loss/privacy and unchanged movement/cancellation regressions passed; corrected compiled cases, final typecheck and manifest checks passed. The full class text pool ended with 2,214 passes, one E2E-353 deadline failure and 225 gated skips; isolated E2E-353 rerun passed. Combined correction qualification remains open. Published in draft [PR #461](https://github.com/garthtrickett/abby/pull/461); independent review and cloud qualification remain open. |
 | 6 Earlier-gap qualification | Dispatch-lease omission reproduced for online/roster/class creation and corrected in `codex/abby-booking-dispatch-lease`. Twelve final-read/transport expiry/renewal cases and 124 shared-host regressions pass; typecheck and ordering checks pass. Corrected full `npm test` passed:2,227 main-pool passes,225 gated skips,zero failures/cancellations; separate ordered runner6 passes,zero skips. Full PostgreSQL qualification finished naturally, exit1:2,958 passes,4 failures,1 existing gated skip,zero cancellations; migrations, generation/parity and builds passed, ordered runner not reached. Gust7fa released naturally, exit0; unchanged first-file and concurrent four-file PostgreSQL reproductions passed4 and9 tests respectively, with overlap, while the failed full-suite timing cause remains unproven. The reader/foundation typecheck is tracked separately. The separate correction/resend reader-kind fix passes focused gateway checks; its typecheck now passes; independent and database/cloud qualification remain open. The original full class run failed E2E-353; its unchanged isolated rerun passed. Preserve all gaps 1–9 and their remaining engineering/acceptance requirements. |
-| 7 Class/pass completion | Unpublished E2E-419 observation/receipt/consent/SAM foundation now has 33 memory contract passes plus 2 registry checks; focused staged ordinary native cases also pass. The actual native caller/renewal route, operator integration, complete cost admission and mixed combinations remain unfinished. The prior complete foundation typecheck passed; subsequent startup/active-lease and terms-expiry refinements pass those 35 focused checks and await a new full typecheck. Synthetic native/review regressions pass 76 cases. Database/process and cloud qualification remain required. |
+| 7 Class/pass completion | Unpublished E2E-419 observation/receipt/consent/SAM foundation now has 33 memory contract passes plus 2 registry checks; focused staged ordinary native cases also pass. The actual native caller/renewal route, operator integration, complete cost admission and mixed combinations remain unfinished. The final refined foundation `809e993d` passes its complete typecheck and those 35 focused checks. Synthetic native/review regressions pass 76 cases. Database/process and cloud qualification remain required. |
 | 8 Payments | Pending gap 11 specification and implementation, including audit R18/R19 and any necessary approved receipt attachment dependency. The owner selected Stripe Checkout on October16; clinic account/policy acceptance and live activation remain distinct. |
 | 9 Outbound | Pending gap 12, audit R20/R21 and contact-policy decisions. |
 | 10 Writeback | Pending gap 13, exact permissions/content/storage decisions and audit R08/R22. |
@@ -609,3 +609,35 @@ operator-fact review, `node --test test/contract/product-facts.test.ts` passed
 one case, log `be9df097-1792150015166.log`. Both naturally exited 0 with no
 failures/cancellations/skips. These are overlapping drift/registry checks,
 not extra whole-process acceptance.
+
+
+## Final refined foundation typecheck
+
+The second explicit Gust swap authorized exactly one full typecheck of frozen
+foundation `809e993dde67af7fab4dad27a719cabbea9808cc`; the separate booking-menu
+candidate was excluded. Fresh board/agents/source/PID checks and MemAvailable
+4,573,732 KiB/PSI full_avg10 0 admitted work `1792150300641` at
+11:31:40.937670 UTC, wrapper `1236718`, user-systemd scope
+`run-rd393d330ae8c4f128975be43de77d356.scope`.
+
+`npm run typecheck` passed and finished naturally at 11:32:39.278399 UTC,
+exit 0, after 58 seconds, log `be9df097-1792150300641.log`. All 1,149 frozen
+source inputs stayed unchanged and the tracked tree was clean. At 11:32:58 UTC
+the authoritative exit file, absent wrapper/Python PIDs and successful
+`work wait` were checked and the terminal/release sent directly to the Gust
+coordinator. That conservative new cutoff replaces 11:19:05 for its one
+requeued e252 attempt. No follow-on Abby heavy job is queued.
+
+This full typecheck qualifies the two expiry refinements as well as the
+original observation/receipt/consent foundation. It does not supply the
+unfinished native serving route, whole database/process acceptance or cloud
+qualification. Later documentation commits preserve the exact qualified
+source inputs. All thirteen gaps remain active.
+
+The prerequisite facts guard `b65c1a2` and reader correction `cd9b4ca` were
+published through their existing draft PRs. Exact-head push/PR runs
+38894023352/38894028876 and 38894026366/38894030572 respectively failed before
+all four jobs started (zero steps). Typecheck checks 116950100968 and
+116950106907 explicitly report the account billing/spending startup failure.
+No source failure or cloud qualification follows, and no billing/workflow
+configuration was changed. Both PRs remain draft.
