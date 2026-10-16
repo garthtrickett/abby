@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.228
+# Scenario manifest, version 1.229
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -835,3 +835,5 @@ IDs or promoting full-call, clinic or cloud evidence. Current creation assertion
 also use exact acknowledgement wording; E2E-266's earlier embedded host retains
 its separately inspected contract. See [execution progress](../phase-2/EXECUTION_PROGRESS.md)
 for exact commands, results and outstanding qualification.
+
+E2E-362/E2E-373 also qualify completed and uncertain correction/resend outcomes through the scoped call-review and reporting gateway. Fixed redacted fields preserve the actual outcome; private proof, host and request references remain absent, foreign scope is denied, and unknown action kinds remain corrupt. This is local SAM/reader evidence, with no new provider write or external acceptance claim.

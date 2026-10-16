@@ -3962,3 +3962,24 @@ booking-suite/shared-compute boundary are in
 No production code, dependency, schema, setting or scenario status changes.
 The complete thirteen-gap scope and remaining acceptance requirements stay open.
 
+
+## October16 earlier-gap correction/resend result readers
+
+A source audit found the shared call-review reader still accepted only the
+original four action kinds. Valid correction/resend actions therefore became
+`storageCorrupt` in call review and outcome reporting, despite their actual
+SAM receipts. The isolated reader candidate adds both existing operations and
+makes the own-property allowlist exhaustive against `ActionState["kind"]`.
+No new clinical action, authority, storage, notification or dependency is added.
+
+Four actual SAM/gateway regressions failed before correction. Corrected focused
+reader/report/correction/resend checks pass16 cases; the final invalid-kind and
+manifest/trace/product-fact checks pass7 overlapping cases. Foreign scope,
+private-reference redaction, corrupt/prototype kinds and no extra host write
+remain covered. Manifest1.229 retains418 scenarios and records the witness under
+E2E-362/E2E-373; full-call evidence stays planned. Exact commands/logs and the
+pending typecheck/PostgreSQL/independent/cloud gates are in
+[execution progress](EXECUTION_PROGRESS.md#correction-and-resend-result-reader-kinds).
+The simultaneous PostgreSQL qualification tests fixed earlier booking source
+and does not qualify this delta. No integration completion or activation follows;
+all thirteen gaps and remaining staged caller/operator work stay active.

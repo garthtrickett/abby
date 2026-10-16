@@ -11,7 +11,7 @@
 | 3 Exact receipt foundation | Implemented and locally qualified in `codex/abby-provider-ack-receipt`, stacked on the published plans and integrated candidate. The full interval is captured, sent and validated. Existing post-write host success gates remain. Independent review and exact-head CI remain outstanding. |
 | 4 Individual booking | Published in draft [PR #460](https://github.com/garthtrickett/abby/pull/460), `codex/abby-provider-ack-individual`, based on receipt correction `92a16e5`. Final online/roster availability follows preparation; exact acknowledgement survives host/review/worker cancellation. Focused, isolated database/process/compiled-location and complete local `npm test` checks passed. Independent review and cloud qualification remain open; cloud jobs have not started because of billing. |
 | 5 Native class creation | Implemented candidate in `codex/abby-provider-ack-class`, based on stage 4 `40a51f2`. Exact attendee acknowledgement and final double capacity ordering apply to ordinary/approved-pass creation. Focused, process-loss/privacy and unchanged movement/cancellation regressions passed; corrected compiled cases, final typecheck and manifest checks passed. The full class text pool ended with 2,214 passes, one E2E-353 deadline failure and 225 gated skips; isolated E2E-353 rerun passed. Combined correction qualification remains open. Published in draft [PR #461](https://github.com/garthtrickett/abby/pull/461); independent review and cloud qualification remain open. |
-| 6 Earlier-gap qualification | Dispatch-lease omission reproduced for online/roster/class creation and corrected in `codex/abby-booking-dispatch-lease`. Twelve final-read/transport expiry/renewal cases and 124 shared-host regressions pass; typecheck and ordering checks pass. Corrected full `npm test` passed:2,227 main-pool passes,225 gated skips,zero failures/cancellations; separate ordered runner6 passes,zero skips. Full PostgreSQL qualification finished naturally, exit1:2,958 passes,4 failures,1 existing gated skip,zero cancellations; migrations, generation/parity and builds passed, ordered runner not reached. First-failure reproduction remains next after the single corrected Gust7fa diagnostic actually releases its yielded window. The original full class run failed E2E-353; its unchanged isolated rerun passed. Preserve all gaps 1–9 and their remaining engineering/acceptance requirements. |
+| 6 Earlier-gap qualification | Dispatch-lease omission reproduced for online/roster/class creation and corrected in `codex/abby-booking-dispatch-lease`. Twelve final-read/transport expiry/renewal cases and 124 shared-host regressions pass; typecheck and ordering checks pass. Corrected full `npm test` passed:2,227 main-pool passes,225 gated skips,zero failures/cancellations; separate ordered runner6 passes,zero skips. Full PostgreSQL qualification finished naturally, exit1:2,958 passes,4 failures,1 existing gated skip,zero cancellations; migrations, generation/parity and builds passed, ordered runner not reached. First-failure reproduction remains next after the single corrected Gust7fa diagnostic actually releases its yielded window. The separate correction/resend reader-kind fix passes focused gateway checks; its typecheck and independent qualification remain open. The original full class run failed E2E-353; its unchanged isolated rerun passed. Preserve all gaps 1–9 and their remaining engineering/acceptance requirements. |
 | 7 Class/pass completion | Pending; staged caller/SAM/operator integration, complete cost admission and broader combinations remain required. |
 | 8 Payments | Pending gap 11 specification and implementation, including audit R18/R19 and any necessary approved receipt attachment dependency. The owner selected Stripe Checkout on October16; clinic account/policy acceptance and live activation remain distinct. |
 | 9 Outbound | Pending gap 12, audit R20/R21 and contact-policy decisions. |
@@ -243,6 +243,37 @@ in draft [PR #463](https://github.com/garthtrickett/abby/pull/463). Its exact-he
 push38882031995 and PR38882064861 had no executed steps; PR check116910912400
 independently reported account billing/spending limits. Rebased-head cloud
 qualification remains required; no green result is inferred from the local check.
+
+## Correction and resend result-reader kinds
+
+Stage6 review of the shared result readers found a stale four-kind allowlist in
+`src/reference/call-review.ts`. Actual SAM `patientUpdate` and
+`confirmationResend` actions could reach committed/uncertain state, but scoped
+`calls.read.v1` and its dependent `calls.outcomes.v1` reporting returned
+`storageCorrupt`. The isolated `codex/abby-call-review-action-kinds` candidate,
+based on product-facts guard `afaff89`, replaces that list with an own-property
+map checked against every `ActionState["kind"]` by TypeScript. Existing DTOs and
+capability schemas already include both operations. This fixes result reading;
+it adds no write, permission, notification, durable state, dependency or setting.
+
+Actual SAM plus scoped gateway reproduction failed all4 new cases before the
+fix, with `storageCorrupt`, in `be9df097-1792145565092.log`. After correction:
+
+- `env ABBY_LEDGER=memory node --test --test-concurrency=1 test/text/call-review-action-kinds.test.ts test/text/call-review.test.ts test/text/call-outcome-report.test.ts test/text/patient-correction.test.ts test/text/confirmation-resend.test.ts`:16 passed,zero failures/cancellations/skips, `be9df097-1792145600243.log`.
+- Final extra invalid-kind controls and registry checks: `env ABBY_LEDGER=memory node --test --test-concurrency=1 test/text/call-review-action-kinds.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts test/contract/product-facts.test.ts`:7 passed,zero failures/cancellations/skips, `be9df097-1792145662377.log`. These runs overlap; do not sum them as independent cases.
+- `git diff --check`:passed. Existing same-lock installed dependencies are read through a worktree symlink; no dependency install, compiler, database or browser ran for this focused follow-up.
+
+The gateway cases cover committed/uncertain truth, redaction of private request,
+proof/patient/host references, foreign-scope refusal, corrupted/unknown/prototype
+kind refusal and absence of another host write. Manifest1.229 keeps418 IDs and
+adds the witness to E2E-362/E2E-373 without promoting full-call evidence.
+Full typecheck, isolated PostgreSQL qualification of this delta, independent
+review and exact-head cloud checks remain open. The earlier complete booking
+suite and failed PostgreSQL job do not qualify these later source changes.
+The database job finished naturally and its notifier acknowledged terminal
+release at10:38:50UTC; the next heavy window remains held for the corrected
+Gust7fa diagnostic and its actual release. Staged-class source
+preparation remains separate and unpublished. All thirteen gaps remain active.
 
 ## Gap 11 provider selection
 

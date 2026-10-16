@@ -17,7 +17,9 @@ export type CallSummary = Readonly<{
   appointmentReads: readonly Readonly<{ status: "shown" | "empty" | "failed"; sourceRef?: string; shownCount: number; reason?: string }>[];
 }>;
 
-const actionKinds = ["book", "cancel", "reschedule", "intake"] as const;
+const actionKinds = {
+  book: true, cancel: true, reschedule: true, intake: true, patientUpdate: true, confirmationResend: true,
+} satisfies Record<ActionState["kind"], true>;
 const actionStatuses = ["awaitingConfirmation", "ready", "dispatched", "committed", "rejected", "unsupported", "uncertain", "needsReview", "canceled"] as const;
 const staffStatuses = ["requested", "open", "acknowledged", "resolved", "needsReview", "failed"] as const;
 
@@ -31,7 +33,7 @@ export function summarizeCall(call: CallState): Result<CallSummary, TransitionFa
   const staffItems = Object.values(call.staffItems);
   const notifications = reviewNotifications(call);
   if (!notifications.ok) return notifications;
-  if (actions.some(item => !item || !allowed(actionKinds, item.kind) || !allowed(actionStatuses, item.status)) ||
+  if (actions.some(item => !item || typeof item.kind !== "string" || !Object.hasOwn(actionKinds, item.kind) || !allowed(actionStatuses, item.status)) ||
       (call.terminal !== undefined && (!call.terminal || call.lifecycle !== "ended" || !CALL_TERMINAL_REASONS.includes(call.terminal.reason) ||
         typeof call.terminal.at !== "string" || !Number.isFinite(Date.parse(call.terminal.at)))) ||
       staffItems.some(item => !item || !allowed(STAFF_REASONS, item.reason) || !allowed(staffStatuses, item.status)) ||
