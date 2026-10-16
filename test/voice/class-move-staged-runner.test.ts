@@ -11,24 +11,30 @@ import { verificationCanaries } from "../support/caller-verification.ts";
 type Call = Parameters<Parameters<typeof withClinicalRunner>[1]>[0];
 const writes = (call: Call) => call.mutations.filter(row => row.path?.startsWith("/v1/attendees"));
 async function nextRealWindow(call: Call) {
-  const before = writes(call).length;
+  const before = writes(call).length, clocks = call.messages.filter(row => row.kind === "clockAdvanced").length;
+  let sent = 0;
   // Real elapsed time releases the actual PostgreSQL budget. Synthetic clock
   // ticks and silent media preserve the existing lease and age the real proof;
   // no stored budget timestamp, limit, deadline or reservation is edited.
-  const ticks = setInterval(() => call.child.send({ kind: "advanceClock", milliseconds: 1000 }), 1000);
+  const tick = () => { sent++; call.child.send({ kind: "advanceClock", milliseconds: 1000 }); };
+  const ticks = setInterval(tick, 1000);
   const quiet = setInterval(() => call.media(false), 20);
   try { await new Promise<void>(resolve => setTimeout(resolve, 61000)); }
   finally { clearInterval(ticks); clearInterval(quiet); }
+  // Timer scheduling must not make the proof-age assertion probabilistic.
+  while (sent < 61) { tick(); call.media(false); await voiceUntil(() => call.messages.filter(row => row.kind === "clockAdvanced").length >= clocks + sent, "bounded phase clock tick"); }
+  await voiceUntil(() => call.messages.filter(row => row.kind === "clockAdvanced").length >= clocks + sent, "quota-window proof age");
   assert.equal(writes(call).length, before, "waiting cannot dispatch a stage");
 }
 for (const pass of [false, true]) test(`E2E-419 compiled signed ${pass ? "maximum-history cross-case pass" : "ordinary"} move requires every played phase`, {
-  skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: pass ? 260000 : 120000,
+  skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: pass ? 300000 : 180000,
 }, async () => {
   await withClinicalRunner("reschedule", async call => {
     await call.say("Start"); await call.mark(); await call.verify();
     await call.say("Appointments"); await call.mark(); await call.say("The first time please."); await call.mark();
     await call.say("Times"); await call.mark(); await call.say("The first time please.");
     assert.match(call.spoken.at(-1)!, /Move only your/); assert.equal(writes(call).length, 0); await call.mark();
+    await nextRealWindow(call);
     await call.say("Yes");
     assert.equal(writes(call).length, 1); assert.match(call.spoken.at(-1)!, /overall class move is not confirmed/);
     await call.mark();

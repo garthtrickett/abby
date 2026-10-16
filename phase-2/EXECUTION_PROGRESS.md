@@ -1196,3 +1196,46 @@ cloud acceptance remain open. Gap10 and the full13-gap order remain active;
 Stripe11 follows the remaining class prerequisites rather than replacing them.
 
 Final facts/registry contract command `node --test --test-concurrency=1 test/contract/product-facts.test.ts test/contract/scenario-manifest.test.ts` passed2 cases, log `be9df097-1792163867002.log`. These are documentation/registry guards, not another runtime or whole-suite result.
+
+
+### Published cold staff recovery draft and cloud startup blocker
+
+Draft [PR468](https://github.com/garthtrickett/abby/pull/468) publishes
+`82eeace94222b19c19930472b7ee9cbfe663fb41` above native-caller PR467.
+Publish work1792163895144 finished naturally exit0. Exact-head Actions push
+run38922830667 and PR run38922838611 each failed four jobs with zero steps.
+PR check117046834594 explicitly reports account failed payments/spending limit;
+no cloud runtime/typecheck/browser/PostgreSQL verdict exists. Draft body records
+the exact blocker via work1792163983419; no ready/merge/retry loop follows.
+
+A separate unpublished follow-on worktree prepares two compiled signed voice
+cases for ordinary and maximum-history cross-case pass staging. It uses actual
+phone-index lookup/contact revision and PostgreSQL budget, binds only audited
+synthetic in-memory callbacks' costs to that physical account, ages proof across
+real elapsed quota windows, and requires distinct played phase readbacks plus
+private renewal. Allowed phone-to-ID storage is checked exactly; clinical/code/
+grant/review data remain forbidden everywhere and in backup/public output.
+These new fixtures have syntax-only inspection so far: no compiled, runtime,
+whole-suite or acceptance pass is claimed. Build and execution require separate
+fresh heavy coordination. All13 gaps remain active.
+
+
+Frozen serving fixture source `b84d7aff` passes `npm run build:voice-tests`,
+work1792164064183, log `be9df097-1792164064183.log`. Actual
+start15:21:04.437376UTC and natural terminal15:21:40.753542UTC,
+exit0/36.32s,1,169 inputs unchanged, scope peak833,572,864B (0.776GiB),
+OOM/high/max0. All448 emitted JavaScript files are pinned for later execution.
+This build checks its serving/fixture dependency graph, not the unimported new
+TypeScript test or full repository. A copied runner banner says standalone
+native typecheck; the actual command is explicitly `build:voice-tests` and no
+standalone full typecheck/test/PostgreSQL command was bundled.
+
+Before the first semantic run, the new journey was refined to wait one actual
+quota window before initial affirmation as well as between phases, because
+preparation consumes real shared requests. The original120-second offer still
+bounds initial dispatch. Heartbeats age the synthetic proof exactly61 seconds
+per real elapsed window without changing limits/stored timestamps. New case
+deadlines are180 seconds for ordinary/two real windows,300 seconds for pass/
+four real windows plus private renewal and privacy scans; no existing test's
+deadline changes. Only the uncompiled test changes after the build; emitted
+serving/fixture graph stays unchanged. Semantic execution remains pending.
