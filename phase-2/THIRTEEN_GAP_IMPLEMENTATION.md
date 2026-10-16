@@ -3865,9 +3865,11 @@ files passed22 cases with zero skips. Remaining cancellation, multiple-service,
 process and owning-diary cases passed in the initial compiled run. Manifest
 1.227 retains418 IDs; full-call evidence and real acceptance are not promoted.
 
-Full combined local `npm test` is running in tracked user-systemd scope
-`Abby class combined complete local suite`; no completed whole-candidate result
-is claimed yet. Exact-head GitHub push38877593063 and PR38877638829 failed
+The original class combined `npm test` finished exit1:2,214 passed,one
+E2E-353 service-menu deadline failure,225 gated skips; its ordered runner did not
+execute. An unchanged isolated E2E-353 rerun passed. The composed dispatch-lease
+correction and successful whole-source rerun are recorded below. Exact-head
+GitHub push38877593063 and PR38877638829 failed
 before any steps; both independently inspected checks reported account billing/
 spending limits. The PR remains draft; no merge, activation, live provider write,
 real mail, Aeva deletion or billing/workflow bypass occurred.
@@ -3877,3 +3879,43 @@ staged class caller/SAM/operator integration, complete cost admission, broader
 cohorts/catalogues, payments, outbound and writeback remain in scope. Actual
 clinic/source/staff, mail, speech/public-route/carrier and cloud gates remain
 explicit; independent engineering can continue while those gates are unavailable.
+
+
+## October16 composed booking lease and complete local qualification
+
+Stage6 actual SAM reproduction found online/roster/class creation could send
+if the session lease expired during the final native read while proof/offer
+remained live. Runtime `94fd49e2ac5d250cf8fafb5d85d35a4d5b683370`, draft
+[PR #462](https://github.com/garthtrickett/abby/pull/462), captures the last
+validated lease deadline and requires it after final availability/capacity and
+at transport. An observed renewal supplies its newer deadline; an unobserved
+renewal cannot extend that captured window. There is no extra asynchronous
+policy/ledger/provider read after availability and no post-acknowledgement veto.
+
+The initial six-case reproduction had3 failing expiry cases and3 passing
+renewal controls. Corrected twelve final-read/transport expiry/renewal cases,
+24 ordering/acknowledgement checks and124 shared host regressions passed with
+zero skips; the narrower runs have overlapping coverage and are not a summed
+independent test count. Manifest1.228 preserves418 IDs and their acceptance limits.
+
+Complete corrected `npm test` finished naturally exit0 after21m10s in tracked
+user-systemd scope `Abby corrected booking complete local suite`, log
+`be9df097-1792142756182.log`. Typecheck and compiled builds passed. Main pool:
+2,227 passed,225 gated skips,zero failures/cancellations. Separate ordered
+runner:6 passed,zero failures/cancellations/skips. E2E-353 passed in this full
+run. Source remained fixed at94fd49; default concurrency/deadlines were retained.
+The skips are not database/browser acceptance. The earlier class failure stays
+recorded; this passing correction run does not prove its environmental cause.
+
+PostgreSQL migration up/down/up, generated-schema parity and complete database
+qualification remain unstarted. The current suite was never interrupted; only
+its queued PostgreSQL prerequisite waiter was stopped before tests. After the
+suite's actual natural terminal, the next heavy window was yielded to the
+single coordinated Gust643f diagnostic. No automatic Abby restart is queued;
+await the diagnostic's actual terminal release before the next heavy job.
+
+Exact-head cloud push38880747568 and PR38880804698 had no executed steps;
+inspected check116906810004 reported account billing/spending limits. Independent
+review, cloud qualification, remaining earlier-gap/class engineering and all
+clinic/provider/operational acceptance remain open. No integration completion,
+merge, deployment, live provider write, real mail or Aeva deletion is claimed.
