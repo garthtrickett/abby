@@ -1044,7 +1044,8 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     const result = await (this.#rescheduling()?.selectReschedulingMenu(query) ?? readDenied());
     if (result.ok && !query.signal.aborted && !this.closed && !this.#patientLifetime.signal.aborted) {
       if (result.value.kind === "selectionWait") {
-        this.#spokenMenu.selectionWait(query.menuTurnId, query.turnId); this.#searchMenu.clear();
+        this.#spokenMenu.selectionWait(query.menuTurnId, query.turnId);
+        // Retain the original played search for later pre-send date corrections.
         return result;
       }
       this.#publicMenu = undefined;

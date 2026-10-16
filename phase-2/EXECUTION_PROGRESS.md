@@ -2126,3 +2126,46 @@ All451 serving artifacts remain byte-identical. New-source full TypeScript and
 the strengthened single case still need execution; no complete privacy or
 independent/external acceptance is inferred. The three correction/mixed cases,
 maximum-history extraction and concurrent breadth remain open.
+
+### Same-case pass date correction exposes lost search binding
+
+ONE frozena139 same-case pass date case1792181401666 naturally failed at
+20:11:17.322754UTC, exit1, before any review or native write. The expected
+Saturday menu was replaced by the fixed fresh-options refusal at shared
+journey56. Test body68.467s, zero skips/cancellations;1180 source inputs and451
+artifacts unchanged. Scope peak201,830,400B excludes Docker PostgreSQL, all
+OOM/high/max0. Exitfile1/wrapper315052 absence verified and slot released; no
+unchanged rerun or guard weakening followed. Earlier full/staff/ordinal passes
+remain scoped passes, not qualification of this new case.
+
+Direct host memory controls1792181709148 show the date read can succeed with
+capacity, while exhaustion and expiry safely refuse. Those generic refusal
+controls did not reproduce the admitted route's cause. Actual call-flow review
+found selectionWait rebinding the private ordinal menu while clearing
+PlayedMenuSearch. A later explicit date correction therefore lost its played
+search/cancelled-proposal correlation and omitted correcting=true. The gateway
+correctly refused an offers read that lacked that correlation; it never gained
+movement authority.
+
+A focused admitted full-pass test reproduces the missing flag after a real
+selection-wait route. Initial red1792181983219 also exposed that Saturday's
+explicit date search includes window:null. The refined exact-window red
+1792182006886 retains that field and still fails solely on missing correcting.
+Removing only the search-clear operation from selectionWait makes the focused
+case pass1792182023379. The original actually played search remains private;
+its dates/window are not refreshed or extended by waiting. Existing private
+ordinal rebinding, expiry, context, role, proof, target identity, policy, quota
+and separate played-affirmation guards are unchanged.
+
+A subsequent focused17-case run1792182106809 passes, zero skips: the new
+admitted date routing plus expired-target and permission-loss controls,
+existing ordinary/cross-service date/ordinal correction guards and staged
+call-flow succession/selection contracts. Cancelled requests remain exactly
+unchanged; failed/expired/revoked paths send no review or move. Command:
+`node --test --test-concurrency=1 test/cliniko/class-move-staged-date-search.test.ts test/cliniko/class-move-correction.test.ts test/cliniko/class-move-staged-call-flow.test.ts`.
+
+This is a small runtime binding fix, so a fresh TypeScript/serving build and
+the actual previously failing signed PostgreSQL case are still required. No
+compiled success, full current-graph regression, cloud review or clinic
+acceptance is claimed. The native-account limit stays180 and existing scenario
+deadlines are unchanged. All thirteen gaps remain active.
