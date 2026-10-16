@@ -1821,3 +1821,46 @@ remain unqualified. Healthy-schema full regression on frozen52e920 is reserved
 separately after a ready Gust diagnostic; this branch does not use that slot.
 The root cause of the earlier full-context socket failure is not closed by an
 isolated pass, despite the independently proven clear-fence fixture defect.
+
+### Prepared actual signed uncertainty to independent cold staff observation
+
+This isolated test-only source keeps its own GET-only loopback fake provider
+alive after actual compiled caller-flow disposal; no native records are
+recreated from an expected outcome. A dedicated isolated ordinary staging
+flag guards the extra fixture port/context. No public runtime route or clinic
+configuration is added. The provider uses the actual same mutable native records
+and exact created review from the signed call, with its fixed synthetic key.
+Every cold reader request is independently budgeted and restricted to GET.
+
+The prepared new case applies the original cancellation then loses its response,
+retains caller uncertainty, plays its notice and disconnects the caller. A real
+flow.dispose observer establishes owner disposal, without using that event as
+staff investigation/quiescence permission. Fresh staff processes get only
+host-approved file/account bindings and the selected review citation. Their
+permission is supplied independently by the trusted test parent, not emitted
+by the caller. The first denial must make no protected attendance/case reads.
+Native moved progress before provider acknowledgement remains needsReview;
+a separate synthetic provider staff acknowledgement permits reviewedMoved on
+a later fresh observation. Neither observation changes caller speech, outcomes
+or provider mutation count. Investigation/current-directory/native checks
+remain those of ClinikoClassMoveRecovery, not new reader semantics.
+
+The caller's actual database is shared only for its permitted phone-ID index
+and account request budget. A real60.5s cold window elapses with no media or
+lease renewal; the fixture clock ages in existing bounded increments. The
+new240s case budget derives from two caller quota windows, one cold window and
+60s serving/scans; existing case deadlines are untouched. It prepares scans
+of codes/email/root/review/grant fragments across SQL, unfiltered backup and
+worker/runner/public output, while asserting the allowed index separately.
+The old cold worker retains its original context mode and account; a validated
+private signed-fixture mode selects only the new fixed test account/database
+prefix and independent parent permission. Its original process cases must
+still be rerun for preservation.
+
+The shared staged journey's exact initial preparation and next-stage routing
+are lifted for reuse; original two-case preservation plus correction cohorts
+remain unqualified on this new graph. Native Node syntax checks pass only.
+There is no TypeScript, signed/cold execution, privacy or new acceptance claim.
+The frozenb2022c2 full regression is running in another checkout untouched;
+this preparation is not part of its compute slot or result. It still needs the
+qualified media/deadline source reconciled before heavy validation/publication.

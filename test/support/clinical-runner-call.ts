@@ -1,3 +1,4 @@
+import type { ClassMoveColdContext } from "./class-move-cold-context.ts";
 import { SyntheticPlaybackReceipts } from "./synthetic-playback-receipts.ts";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -17,7 +18,7 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 import { voiceUntil } from "./cliniko-workflow-voice.ts";
 import type { LocationScope } from "../../src/core/model.ts";
 
-type Message = { kind: string; diagnostic?: unknown; aheadByMs?: number; actionStatus?: string; text?: string; method?: string; path?: string; body?: Record<string, unknown>;
+type Message = { kind: string; coldContext?: ClassMoveColdContext; diagnostic?: unknown; aheadByMs?: number; actionStatus?: string; text?: string; method?: string; path?: string; body?: Record<string, unknown>;
   originalActive?: boolean; replacementActive?: boolean; sourceUsed?: number; destinationUsed?: number; caseLinked?: boolean;
   phase?: string; elapsedMs?: number;
   claims?: number; denialKind?: string;
@@ -29,7 +30,7 @@ export type ClinicalRunnerOperation = "book" | "cancel" | "reschedule" | "intake
 /** Actual compiled runner in a separate process and database. All network
  * providers are fixtures; private caller material is kept in this test memory. */
 export async function withClinicalRunner(operation: ClinicalRunnerOperation,
-  run: (call: Awaited<ReturnType<typeof start>>) => Promise<void>, options: { classQuotaStaging?: boolean; classPassHistory?: 201 | 301 | 501 | 999; classRosterHistory?: 99 | 100 | 101 | 201 | 500; classPassMovement?: "full" | "transfer"; classPasses?: boolean; classPassCancellation?: "releaseOne" | "unchanged" | "consumeOne"; recurringBusy?: "approved" | "legacy"; recurringOpening?: "approved" | "legacy"; classDateCorrection?: boolean; differentClass?: boolean; multipleClasses?: boolean; classes?: boolean; taskSequence?: boolean; resendContent?: "telehealth" | "cancelled"; intakeFields?: boolean; services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean; practitionerMove?: "changedTime" | "sameTime" | "directory" } = {}): Promise<void> {
+  run: (call: Awaited<ReturnType<typeof start>>) => Promise<void>, options: { classColdRecovery?: boolean; classQuotaStaging?: boolean; classPassHistory?: 201 | 301 | 501 | 999; classRosterHistory?: 99 | 100 | 101 | 201 | 500; classPassMovement?: "full" | "transfer"; classPasses?: boolean; classPassCancellation?: "releaseOne" | "unchanged" | "consumeOne"; recurringBusy?: "approved" | "legacy"; recurringOpening?: "approved" | "legacy"; classDateCorrection?: boolean; differentClass?: boolean; multipleClasses?: boolean; classes?: boolean; taskSequence?: boolean; resendContent?: "telehealth" | "cancelled"; intakeFields?: boolean; services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean; practitionerMove?: "changedTime" | "sameTime" | "directory" } = {}): Promise<void> {
   const adminUrl = process.env.DATABASE_URL; assert.ok(adminUrl);
   const admin = connectPostgres(adminUrl), name = `abby_test_voice_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl); target.pathname = `/${name}`;
@@ -49,7 +50,8 @@ export async function withClinicalRunner(operation: ClinicalRunnerOperation,
     if (failures.length) throw new AggregateError(originalFailure === undefined ? failures : [originalFailure, ...failures], "clinical runner test or cleanup failed");
   }
 }
-async function start(operation: ClinicalRunnerOperation, connectionString: string, db: ReturnType<typeof connectPostgres>, options: { classQuotaStaging?: boolean; classPassHistory?: 201 | 301 | 501 | 999; classRosterHistory?: 99 | 100 | 101 | 201 | 500; classPassMovement?: "full" | "transfer"; classPasses?: boolean; classPassCancellation?: "releaseOne" | "unchanged" | "consumeOne"; recurringBusy?: "approved" | "legacy"; recurringOpening?: "approved" | "legacy"; classDateCorrection?: boolean; differentClass?: boolean; multipleClasses?: boolean; classes?: boolean; taskSequence?: boolean; resendContent?: "telehealth" | "cancelled"; intakeFields?: boolean; services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean; practitionerMove?: "changedTime" | "sameTime" | "directory" }) {
+async function start(operation: ClinicalRunnerOperation, connectionString: string, db: ReturnType<typeof connectPostgres>, options: { classColdRecovery?: boolean; classQuotaStaging?: boolean; classPassHistory?: 201 | 301 | 501 | 999; classRosterHistory?: 99 | 100 | 101 | 201 | 500; classPassMovement?: "full" | "transfer"; classPasses?: boolean; classPassCancellation?: "releaseOne" | "unchanged" | "consumeOne"; recurringBusy?: "approved" | "legacy"; recurringOpening?: "approved" | "legacy"; classDateCorrection?: boolean; differentClass?: boolean; multipleClasses?: boolean; classes?: boolean; taskSequence?: boolean; resendContent?: "telehealth" | "cancelled"; intakeFields?: boolean; services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean; practitionerMove?: "changedTime" | "sameTime" | "directory" }) {
+  if (options.classColdRecovery && (!options.classQuotaStaging || !options.classes || options.classPassMovement)) throw new Error("ordinary staged cold recovery fixture required");
   if (options.classQuotaStaging && (!options.classes || operation !== "reschedule")) throw new Error("staged class runner requires class rescheduling");
   const accountSid = `AC${"1".repeat(32)}`, authToken = "synthetic-clinical-runner-token", number = "+6125550199", caller = "+61400111222";
   const webhookUrl = "https://clinical-runner.example.test/twilio/inbound", streamUrl = "wss://clinical-runner.example.test/twilio/media/";
@@ -59,6 +61,7 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
     env: { ...process.env, DATABASE_URL: connectionString, ABBY_ISOLATED_POSTGRES_PROBE: "1", ABBY_VOICE_TEST_MODE: "1", ABBY_VOICE_PORT: "0",
       ABBY_SYNTHETIC_CLINICAL_OPERATION: operation,
       ABBY_SYNTHETIC_CLASS_QUOTA_STAGING: options.classQuotaStaging ? "1" : undefined,
+      ABBY_SYNTHETIC_CLASS_COLD_RECOVERY: options.classColdRecovery ? "1" : undefined,
       ABBY_SYNTHETIC_MULTIPLE_CLASSES: options.multipleClasses ? "1" : undefined,
       ABBY_SYNTHETIC_CLASS_PASSES: options.classPasses ? "1" : undefined,
       ABBY_SYNTHETIC_CLASS_PASS_MOVE: options.classPassMovement,
@@ -168,6 +171,26 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
     };
     await mark();
     return { child, messages, output, scope, locations, db, connectionString, mark, say, media, close, signedWebhook,
+      async endCallerForColdReview() {
+        assert.equal(options.classColdRecovery, true);
+        if (socket!.readyState !== WebSocket.CLOSED) { const ended = once(socket!, "close"); socket!.close(1000); await ended; }
+        await voiceUntil(() => count("coldCallerDisposed") > 0, "actual compiled caller owner disposal");
+      },
+      async coldReviewContext() {
+        assert.equal(options.classColdRecovery, true); const before = count("coldProviderContext");
+        child.send({ kind: "coldProviderContext" });
+        await voiceUntil(() => count("coldProviderContext") > before || count("coldProviderUnavailable") > 0, "independent cold provider bindings");
+        const context = messages.filter(row => row.kind === "coldProviderContext").at(-1)?.coldContext; assert.ok(context); return context;
+      },
+      async coldProviderAudit() {
+        assert.equal(options.classColdRecovery, true); const before = count("coldProviderAudit"); child.send({ kind: "coldProviderAudit" });
+        await voiceUntil(() => count("coldProviderAudit") > before, "cold provider GET audit");
+        return messages.filter(row => row.kind === "coldProviderAudit").at(-1)!.diagnostic as { reads: number; protectedReads: number; nonGet: number };
+      },
+      async acknowledgeColdReview() {
+        assert.equal(options.classColdRecovery, true); const before = count("coldReviewAcknowledged"); child.send({ kind: "acknowledgeColdReview" });
+        await voiceUntil(() => count("coldReviewAcknowledged") > before, "independent synthetic provider review acknowledgement");
+      },
       async keypad(entry: string) { for (const digit of entry) send({ event: "dtmf", dtmf: { track: "inbound_track", digit } }); },
       async quietAfterPrivateInput() { for (let i = 0; i < 40; i++) { media(false); await new Promise<void>(resolve => setTimeout(resolve, 20)); } },
       get spoken() { return messages.filter(m => m.kind === "speech").map(m => m.text!); },

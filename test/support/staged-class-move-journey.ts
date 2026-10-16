@@ -45,51 +45,60 @@ function assertMoveReadback(call: Call, scenario: StagedMoveScenario) {
     ? /original pass releases one session.*destination pass uses one session/ : /pass session use unchanged/);
 }
 
+export async function prepareSignedStagedReplacement(call: Call, scenario: StagedMoveScenario) {
+  await call.say("Start"); await call.mark(); await call.verify();
+  await call.say("Appointments"); await call.mark(); await call.say("The first time please."); await call.mark();
+  await call.say("Times"); await call.mark(); await selectOption(call, "The first time please.");
+  assertMoveReadback(call, scenario); assert.equal(writes(call).length, 0); await call.mark();
+  if (scenario.correction) {
+    await call.say(scenario.correction === "date" ? "Actually, Saturday" : "No, the second time please.");
+    if (scenario.correction === "date") {
+      assert.match(call.spoken.at(-1)!, /Saturday 10 October/); await call.mark();
+      await selectOption(call, "The first time please.");
+    } else {
+      const wait = /wait about (\d+) seconds, then choose your option again/.exec(call.spoken.at(-1)!);
+      if (wait) { await call.mark(); await waitForQuota(call, Number(wait[1])); await selectOption(call, "The second time please."); }
+    }
+    assertMoveReadback(call, scenario);
+    if (scenario.different) assert.match(call.spoken.at(-1)!, /Reformer Pilates.*Second Instructor.*30 minutes/);
+    assert.equal(call.mutations.length, 0, "correcting a played readback cannot send or create a review");
+    assert.equal(call.messages.some(row => row.kind === "classWriteOutcome"), false);
+    await call.mark();
+  }
+  await affirmClassPassMove(call);
+  assert.equal(writes(call).length, 1); assert.match(call.spoken.at(-1)!, /overall class move is not confirmed/);
+  await call.mark();
+}
+
+export async function prepareSignedStagedPhase(call: Call, stage: string) {
+  const count = writes(call).length, mailCount = call.messages.filter(row => row.kind === "verificationEmail").length;
+  await call.say("Continue my class move"); assert.equal(writes(call).length, count);
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const wait = /wait about (\d+) seconds, then ask to continue/.exec(call.spoken.at(-1)!);
+    if (wait) {
+      await call.mark(); await waitForQuota(call, Number(wait[1]));
+      await call.say("Continue my class move"); assert.equal(writes(call).length, count); continue;
+    }
+    if (/registered email again/.test(call.spoken.at(-1)!)) {
+      await call.mark();
+      await voiceUntil(() => call.messages.filter(row => row.kind === "verificationEmail").length > mailCount, "fresh private phase verification");
+      await call.verify(); await call.say("Continue my class move"); assert.equal(writes(call).length, count); continue;
+    }
+    break;
+  }
+  const words = stage === "original" ? /separate confirmation to cancel the original/ : stage === "association" ? /separate confirmation to associate the replacement/ : /separate confirmation to inspect whether/;
+  assert.match(call.spoken.at(-1)!, words);
+}
+
 /** Drive real signed serving, current proof/played consent and physical quota;
  * observe exact effects plus database/backup/output privacy. */
 export async function stagedMoveJourney(scenario: StagedMoveScenario) {
   const pass = scenario.pass !== undefined;
   await withClinicalRunner("reschedule", async call => {
-    await call.say("Start"); await call.mark(); await call.verify();
-    await call.say("Appointments"); await call.mark(); await call.say("The first time please."); await call.mark();
-    await call.say("Times"); await call.mark(); await selectOption(call, "The first time please.");
-    assertMoveReadback(call, scenario); assert.equal(writes(call).length, 0); await call.mark();
-    if (scenario.correction) {
-      await call.say(scenario.correction === "date" ? "Actually, Saturday" : "No, the second time please.");
-      if (scenario.correction === "date") {
-        assert.match(call.spoken.at(-1)!, /Saturday 10 October/); await call.mark();
-        await selectOption(call, "The first time please.");
-      } else {
-        const wait = /wait about (\d+) seconds, then choose your option again/.exec(call.spoken.at(-1)!);
-        if (wait) { await call.mark(); await waitForQuota(call, Number(wait[1])); await selectOption(call, "The second time please."); }
-      }
-      assertMoveReadback(call, scenario);
-      if (scenario.different) assert.match(call.spoken.at(-1)!, /Reformer Pilates.*Second Instructor.*30 minutes/);
-      assert.equal(call.mutations.length, 0, "correcting a played readback cannot send or create a review");
-      assert.equal(call.messages.some(row => row.kind === "classWriteOutcome"), false);
-      await call.mark();
-    }
-    await affirmClassPassMove(call);
-    assert.equal(writes(call).length, 1); assert.match(call.spoken.at(-1)!, /overall class move is not confirmed/);
-    await call.mark();
+    await prepareSignedStagedReplacement(call, scenario);
     for (const [index, stage] of (pass ? ["original", "association", "associationInspection"] : ["original"]).entries()) {
-      const count = writes(call).length, mailCount = call.messages.filter(row => row.kind === "verificationEmail").length;
-      await call.say("Continue my class move"); assert.equal(writes(call).length, count);
-      for (let attempt = 0; attempt < 4; attempt++) {
-        const wait = /wait about (\d+) seconds, then ask to continue/.exec(call.spoken.at(-1)!);
-        if (wait) {
-          await call.mark(); await waitForQuota(call, Number(wait[1]));
-          await call.say("Continue my class move"); assert.equal(writes(call).length, count); continue;
-        }
-        if (/registered email again/.test(call.spoken.at(-1)!)) {
-          await call.mark();
-          await voiceUntil(() => call.messages.filter(row => row.kind === "verificationEmail").length > mailCount, "fresh private phase verification");
-          await call.verify(); await call.say("Continue my class move"); assert.equal(writes(call).length, count); continue;
-        }
-        break;
-      }
-      const words = stage === "original" ? /separate confirmation to cancel the original/ : stage === "association" ? /separate confirmation to associate the replacement/ : /separate confirmation to inspect whether/;
-      assert.match(call.spoken.at(-1)!, words);
+      const count = writes(call).length;
+      await prepareSignedStagedPhase(call, stage);
       await call.mark(); await call.say("Yes");
       assert.equal(writes(call).length, count + (stage === "associationInspection" ? 0 : 1));
       assert.equal(call.messages.filter(row => row.kind === "classWriteOutcome").at(-1)!.actionStatus,

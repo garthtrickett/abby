@@ -1,3 +1,5 @@
+import { classProviderProxy } from "./class-provider-proxy.ts";
+import type { ClassMoveColdContext } from "./class-move-cold-context.ts";
 import assert from "node:assert/strict";
 import { ClinikoPhoneLookup } from "../../src/standalone/cliniko-phone-lookup.ts";
 import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
@@ -40,6 +42,9 @@ if (cancellationMode && (!["releaseOne", "unchanged", "consumeOne"].includes(can
 const passCancellation = cancellationMode as ClassPassCancellationEffect | undefined;
 const moveMode = process.env.ABBY_SYNTHETIC_CLASS_PASS_MOVE;
 if (moveMode && (!["full", "transfer"].includes(moveMode) || operation !== "reschedule" || passes || passCancellation)) throw new Error("invalid synthetic pass movement mode");
+const coldRecovery = process.env.ABBY_SYNTHETIC_CLASS_COLD_RECOVERY === "1";
+if (process.env.ABBY_SYNTHETIC_CLASS_COLD_RECOVERY && (!coldRecovery || !staging || operation !== "reschedule" || moveMode))
+  throw new Error("isolated ordinary staged cold recovery required");
 const historyText = process.env.ABBY_SYNTHETIC_CLASS_PASS_HISTORY;
 if (historyText !== undefined && (!moveMode || !["201", "301", "501", "999"].includes(historyText))) throw new Error("invalid synthetic pass history");
 const history = historyText === undefined ? undefined : Number(historyText);
@@ -72,9 +77,26 @@ let sharedBudget: ClinikoRequestBudget | undefined;
 let holdReplacement = false, releaseReplacement: (() => void) | undefined;
 const inputs: string[] = [];
 let readNativeState: (() => Promise<CallState>) | undefined;
+let providerProxy: Awaited<ReturnType<typeof classProviderProxy>> | undefined, callerDisposed = false;
 const occupyClass = () => { for (let index = 0; index < 3; index++) f.native.attendees.push(classAttendee(String(851 + index), "94", String(951 + index))); };
 process.on("message", message => {
   if (!message || typeof message !== "object" || !("kind" in message)) return;
+  if (coldRecovery && "movePath" in f && message.kind === "coldProviderContext") void (async () => {
+    if (!providerProxy || f.recalls.length !== 1) throw new Error("synthetic review unavailable");
+    const source = JSON.parse(await readFile(f.sourcePath, "utf8")), destination = JSON.parse(await readFile(f.destinationPath, "utf8"));
+    const context: ClassMoveColdContext = { scope: f.scope, proxy: providerProxy.origin, sourcePath: f.sourcePath,
+      destinationPath: f.destinationPath, movePath: f.movePath, accountPath: f.accountPath, actorRef: f.account.actor.actorRef,
+      policyVersion: source.policyVersion, businessId: source.businessId, recallTypeId: source.recallTypeId, timeZone: source.timeZone,
+      source: { practitionerId: source.practitionerId, appointmentTypeId: source.appointmentTypeId },
+      destination: { practitionerId: destination.practitionerId, appointmentTypeId: destination.appointmentTypeId }, now: now(),
+      request: { recallRef: "cliniko:recall:" + f.recalls[0]!.id } };
+    process.send?.({ kind: "coldProviderContext", coldContext: context });
+  })().catch(() => process.send?.({ kind: "coldProviderUnavailable" }));
+  if (coldRecovery && message.kind === "coldProviderAudit" && providerProxy)
+    process.send?.({ kind: "coldProviderAudit", diagnostic: providerProxy.audit() });
+  if (coldRecovery && "movePath" in f && message.kind === "acknowledgeColdReview" && callerDisposed && f.recalls.length === 1) {
+    f.recalls[0]!.recalled = true; process.send?.({ kind: "coldReviewAcknowledged" });
+  }
   if (staging && message.kind === "classDiagnostic") void (async () => {
     const state = await readNativeState?.();
     if (!state) { process.send?.({ kind: "classDiagnostic", diagnostic: { available: false } }); return; }
@@ -255,6 +277,7 @@ if (staging) {
       [{ normalizedPhone: f.inbound.presentedCallerNumber!, patientId: "482746192837465" }], "61", clinikoCredentialFingerprint(apiKey)));
   } finally { await setup.destroy(); }
 }
+if (coldRecovery) providerProxy = await classProviderProxy(c.fetchPort!, apiKey);
 process.send?.({ kind: "fixtureReady", scope: f.scope, policyVersion: c.policyVersion });
 try {
   await serveClinikoVoice({ clinikoFetch: provider, openaiFetch: speech, syntheticClock: now, transcriptionFactory: transcription, voiceProfiles: profiles,
@@ -319,7 +342,12 @@ try {
             // one dispatched, played action at every native attendance mutation.
             readNativeState = async () => resultValue(await admission.ledger.read(admission.receipt.callId, admission.receipt.scope));
             f.bindNativeCall(readNativeState);
-            return owned.create(admission);
+            const flow = owned.create(admission);
+            if (coldRecovery) {
+              const dispose = flow.dispose.bind(flow);
+              flow.dispose = () => { dispose(); if (!callerDisposed) { callerDisposed = true; process.send?.({ kind: "coldCallerDisposed" }); } };
+            }
+            return flow;
           } };
         };
         // The real runner creates a newly bound host for the contact-revision
@@ -333,4 +361,4 @@ try {
 } catch {
   process.send?.({ kind: "fixtureFailure", stage: "runnerStartupUnavailable" });
   process.stderr.write("synthetic class runner unavailable\n"); process.exitCode = 1;
-} finally { await f.close(); if (process.connected) process.disconnect(); }
+} finally { await providerProxy?.close(); await f.close(); if (process.connected) process.disconnect(); }
