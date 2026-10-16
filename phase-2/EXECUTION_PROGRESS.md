@@ -2533,3 +2533,20 @@ withdrawn refresh/stop deny. Full TypeScript/fresh serving build and compiled
 resend qualification are next. This deterministic race does not by itself
 establish that every full-suite timeout shares its cause; the other failures
 remain for first-cause diagnosis. Current full regression remains failed.
+
+Private resend source4325251 now has full TypeScript and a fresh serving build
+(`work1792193207839`,23:26:48.110349–23:28:55.584490UTC,exit0),1184 source
+inputs unchanged,451 runtime artifacts with exactly the intended private resend
+input module changed. Peak1,428,180,992B,2GiB/CPU200%/Swap0,1536MiB Node heap;
+no memory limit/OOM events. The separately admitted original six-case compiled
+signed resend suite (`work1792193557188`,23:32:37.711305–23:33:35.510851UTC)
+passed6/6,0skips, preserving its concurrency2,120s case deadlines, all existing
+played/private consent and SQL/backup privacy assertions. Nodepeak215,506,944B
+under1GiB/CPU200%; aggregate Dockerpeak158,490,624B under512MiB/CPU100%,
+Swap0 and no memory limit/OOM events. Source1184/runtime451 unchanged. Only
+this job's labelled disposable database was cleaned up; restored databases were
+not involved. No build, other suite or followup was bundled into that PG run.
+This qualifies the narrow resend change locally; the complete combined graph
+still retains the failed c54 evidence and separate unresolved intake/backup
+failures. No clinic, delivery, deployment or authoritative cloud acceptance is
+inferred.
