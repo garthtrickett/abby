@@ -12,7 +12,9 @@ import { ClinikoClassAttendanceReader } from "../cliniko/class-attendance-read.t
 import type { ClinikoClassSession as Occurrence } from "../cliniko/class-attendance-read.ts";
 import type { ClinikoAttendanceConfig } from "../cliniko/class-attendance-write.ts";
 import { checkClinikoHeadroom, clinikoCredentialFingerprint, withClinikoReservation } from "../cliniko/read-budget.ts";
-import { observedClassMoveRequests } from "../cliniko/class-move-workload.ts";
+import { observedClassMoveRequests, classMoveStageRequestCeilings } from "../cliniko/class-move-workload.ts";
+import type { ClassMoveStageRequestCosts } from "../cliniko/class-move-workload.ts";
+import { clinikoRequestCeiling } from "../cliniko/request-cost.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { sameScope } from "./appointment-change-authority.ts";
 import { CallerVerificationSession } from "./caller-verification-session.ts";
@@ -58,7 +60,7 @@ type Offer = Readonly<{ ref: string; session: Occurrence; expiresAt: string; ver
 type Menu = Readonly<{ turnId: string; stage: "targets" | "offers"; version: string; targets?: readonly Target[]; offers?: readonly Offer[] }>;
 type Prepared = Readonly<{ request: Move; target: Target; offer: Offer; revision: number; version: string }>;
 type Staged = { mutation: HostMutation; prepared: Prepared; verifier: ClassMovementVerifier; native: ClinikoStagedClassMove;
-  version: string; ordinal: number; progress: ClassMovementProgress; continuation: PendingClassMovementStage | undefined };
+  version: string; ordinal: number; progress: ClassMovementProgress; continuation: PendingClassMovementStage | undefined; costs: ClassMoveStageRequestCosts };
 const denied = <T>(): Result<T, HostReadFailure> => err({ kind: "unavailable", target: "appointment" });
 const signature = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 
@@ -118,6 +120,20 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
   #now() { return this.#config.clock(); }
   #proofRequestFloor(): 0 | 1 {
     return this.#config.verification.matchesClinikoAccount(clinikoCredentialFingerprint(this.#config.cliniko.apiKey)) ? 1 : 0;
+  }
+  #stageRequestCosts(): ClassMoveStageRequestCosts | undefined {
+    const c = this.#config, binding = { scope: c.scope, credentialFingerprint: clinikoCredentialFingerprint(c.cliniko.apiKey), budget: c.cliniko.rateBudget };
+    const proof = this.#movementVerifier ? this.#movementVerifier.nativeRequestCostCeilings(binding) : c.verification.nativeRequestCostCeilings(binding);
+    const permission = clinikoRequestCeiling(c.permission.allows, binding);
+    const select = c.classPassMoveAuthority ? clinikoRequestCeiling(c.classPassMoveAuthority.select, binding) : 0;
+    const allow = c.classPassMoveAuthority ? clinikoRequestCeiling(c.classPassMoveAuthority.allows, binding) : 0;
+    if (!proof || permission === undefined || select === undefined || allow === undefined) return undefined;
+    return Object.freeze({ proof: proof.proof, permit: 2 * (proof.ownership + permission), passSelect: select, passAllow: allow });
+  }
+  #requests(context: Context, p: Prepared): number | undefined {
+    if (!context.move.quotaStaging) return p.offer.pass ? 180 :
+      context.source.practitionerId === context.destination.practitionerId && context.source.appointmentTypeId === context.destination.appointmentTypeId ? 120 : 180;
+    return classMoveStageRequestCeilings(this.#stageRequestCosts(), !!p.offer.pass)?.replacement;
   }
   #nativeRequest(context: Context, target: Target, offer: Offer): ClinikoClassMoveRequest {
     return { scope: this.#config.scope, patientId: target.patientId, verificationRef: target.verificationRef, actionId: randomUUID(),
@@ -328,6 +344,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
       approvedText, expiresAt } : undefined;
   }
   #request(context: Context, target: Target, offer: Offer): Move | undefined {
+    if (context.move.quotaStaging && !classMoveStageRequestCeilings(this.#stageRequestCosts(), !!offer.pass)) return undefined;
     const now = this.#now(), at = Date.parse(now), start = Date.parse(offer.session.startsAt), end = Date.parse(offer.session.endsAt);
     if (!Number.isFinite(at) || !Number.isFinite(start) || !Number.isFinite(end) ||
         start - at < context.destination.minNoticeMinutes * 60000 ||
@@ -386,10 +403,14 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     try {
       const before = await this.#ready(signal);
       if (!before || !this.#pendingOwner(before, owner) || before.pendingPresentationId) return denied();
+      if (!isDeepStrictEqual(this.#stageRequestCosts(), owner.costs)) {
+        owner.continuation = undefined; owner.verifier.dispose(); return ok({ kind: "needsReview" });
+      }
       // Expired proof must reach private succession before any protected read
       // can clear the source grant. Code entry still cannot dispatch a stage.
       const proof = await owner.verifier.prepare(signal);
-      if (!proof.ok || signal.aborted || this.#staged !== owner) return denied();
+      if (signal.aborted || this.#staged !== owner) return denied();
+      if (!proof.ok) { owner.continuation = undefined; return ok({ kind: "needsReview" }); }
       if (proof.value.kind === "verificationRequired") return ok(proof.value);
       const context = await this.#context(signal, proof.value.patient.verificationRef), current = await this.#ready(signal);
       if (!context || context.version !== owner.prepared.version || context.move.quotaStaging?.version !== owner.version || !current ||
@@ -432,10 +453,14 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
   }
   async #advance(owner: Staged, signal: AbortSignal, consent?: ClassMovementConsent): Promise<HostWriteReceipt> {
     const p = owner.prepared, mutation = owner.mutation;
+    if (!isDeepStrictEqual(this.#stageRequestCosts(), owner.costs)) {
+      owner.continuation = undefined; owner.verifier.dispose();
+      return { kind: "classMovement", actionKey: mutation.actionKey, progress: owner.progress, outcome: "needsReview" };
+    }
     const result = await owner.native.advanceOnce({ contractVersion: owner.version, confirmationRef: randomUUID(),
       verificationRef: consent?.evidence.patient.verificationRef ?? p.request.patient.verificationRef,
       expiresAt: consent?.evidence.expiresAt ?? p.request.terms.expiresAt }, signal, async query => {
-      if (this.#staged !== owner || query.stagingContractVersion !== owner.version ||
+      if (this.#staged !== owner || !isDeepStrictEqual(this.#stageRequestCosts(), owner.costs) || query.stagingContractVersion !== owner.version ||
           query.stage !== (consent?.evidence.continuation.stage ?? "replacement") ||
           consent && !isDeepStrictEqual(consent.evidence.continuation, owner.continuation)) return false;
       const current = await this.#context(query.signal, query.request.verificationRef, mutation, consent);
@@ -475,8 +500,8 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     if (!pending(state) || !context || context.version !== p.version || !request || digestActionRequest(request) !== query.digest ||
         !await this.#permit(context, p.target, p.offer, "review", signal) || p.offer.pass &&
         await this.#passEvidence(context, p.target, request.terms.version)?.authorized(p.offer.pass, this.#nativeRequest(context, p.target, p.offer), "commit", signal) !== true) return denied();
-    const same = context.source.practitionerId === context.destination.practitionerId && context.source.appointmentTypeId === context.destination.appointmentTypeId;
-    const capacity = await checkClinikoHeadroom(this.#config.cliniko.rateBudget, p.offer.pass ? 180 : same ? 120 : 180);
+    const requests = this.#requests(context, p); if (requests === undefined) return denied();
+    const capacity = await checkClinikoHeadroom(this.#config.cliniko.rateBudget, requests);
     const after = await this.#context(signal, p.target.verificationRef), current = await this.#ready(signal);
     const refreshed = after ? this.#request(after, p.target, p.offer) : undefined;
     if (!after || after.version !== p.version || !pending(current) || current!.conversationRevision !== state!.conversationRevision ||
@@ -498,10 +523,12 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     const request = context ? this.#request(context, p.target, p.offer) : undefined;
     if (!context || context.version !== p.version || !request || digestActionRequest(request) !== mutation.payloadDigest) return reject();
     const sameService = context.source.practitionerId === context.destination.practitionerId && context.source.appointmentTypeId === context.destination.appointmentTypeId;
-    if (await checkClinikoHeadroom(c.cliniko.rateBudget, p.offer.pass ? 180 : sameService ? 120 : 180) !== null || signal.aborted) return reject();
+    const requests = this.#requests(context, p); if (requests === undefined || await checkClinikoHeadroom(c.cliniko.rateBudget, requests) !== null || signal.aborted) return reject();
     const lifetime = AbortSignal.any([c.signal, this.#lifetime.signal]);
     const verifier = context.move.quotaStaging ? this.#movementVerifier : undefined;
     if (context.move.quotaStaging && !verifier) return reject();
+    const stageRequestCosts = context.move.quotaStaging ? this.#stageRequestCosts() : undefined;
+    if (context.move.quotaStaging && !stageRequestCosts) return reject();
     const mover = ClinikoClassAttendanceMove.create({ scope: c.scope, cliniko: c.cliniko,
       source: { practitionerId: context.source.practitionerId, appointmentTypeId: context.source.appointmentTypeId, className: context.source.className },
       destination: { practitionerId: context.destination.practitionerId, appointmentTypeId: context.destination.appointmentTypeId, className: context.destination.className },
@@ -510,6 +537,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
       signal: context.move.quotaStaging ? lifetime : signal,
       proofNativeRequestFloor: this.#proofRequestFloor(),
       ...(context.move.quotaStaging ? { quotaStaging: context.move.quotaStaging } : {}),
+      ...(stageRequestCosts ? { stageRequestCosts } : {}),
       ...(p.offer.pass && context.move.passMovement && c.classPassMoveAuthority ? { casePass: { authority: c.classPassMoveAuthority, stagingContractVersion: context.move.passMovement.version } } : {}),
       ...(c.fetchPort ? { fetchPort: c.fetchPort } : {}) });
     if (!mover.ok) { verifier?.dispose(); return reject(); }
@@ -517,7 +545,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
       const native = mover.value.prepareStagesOnce({ ...this.#nativeRequest(context, p.target, p.offer), expiresAt: p.request.terms.expiresAt });
       if (!native.ok) { verifier.dispose(); return reject(); }
       const owner: Staged = { mutation: structuredClone(mutation), prepared: p, verifier, native: native.value,
-        version: context.move.quotaStaging.version, ordinal: 0, continuation: undefined,
+        version: context.move.quotaStaging.version, ordinal: 0, continuation: undefined, costs: stageRequestCosts!,
         progress: { original: "notSent", replacement: "notSent", caseAssociation: p.offer.pass ? "notSent" : "notApplicable" } };
       this.#staged = owner;
       return this.#advance(owner, signal);

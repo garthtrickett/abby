@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { inheritClinikoRequestCost } from "../cliniko/request-cost.ts";
 import type { ActionState, CallState, HostMutation, LocationScope, ReconcileObservation, WorkflowOperation } from "../core/model.ts";
 import type { CallerCandidateLookup } from "../voice/caller-candidates.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
@@ -94,16 +95,16 @@ export class ClinikoCallTasks {
       ["book", "cancel", "reschedule", "appointments.read"].includes(operation) && await this.allows(state, operation, advancing);
   }
   lookup(original: CallerCandidateLookup): CallerCandidateLookup {
-    return { candidates: async (scope, phone) => {
+    return { candidates: inheritClinikoRequestCost(async (scope: Parameters<CallerCandidateLookup["candidates"]>[0], phone: string, signal?: AbortSignal) => {
       const approval = await this.#approval();
       if (this.#config.signal.aborted || !approval || (scope.tenantId !== this.#config.scope.tenantId || scope.clinicId !== this.#config.scope.clinicId)) return err({ kind: "denied" });
-      const result = await original.candidates(scope, phone);
+      const result = await original.candidates(scope, phone, signal);
       if (!result.ok || result.value.kind !== "one" || !validClinikoId(result.value.candidateIds[0]) ||
           this.#patientId !== undefined && this.#patientId !== result.value.candidateIds[0] || this.#config.signal.aborted || !await this.#approval()) return err({ kind: "denied" });
       if (this.#config.signal.aborted || this.#patientId !== undefined && this.#patientId !== result.value.candidateIds[0]) return err({ kind: "denied" });
       this.#patientId ??= result.value.candidateIds[0];
       return result;
-    } };
+    }, original.candidates) };
   }
   publish(state: CallState, advancing: boolean): void {
     if (advancing) this.#retire(state);

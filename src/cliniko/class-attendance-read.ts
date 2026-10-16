@@ -6,6 +6,10 @@ import { boundedClinikoJson } from "./bounded-json.ts";
 import { claimClinikoBudget, isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
 import type { ClinikoRequestBudget } from "./read-budget.ts";
 
+export const CLINIKO_CLASS_PAGE_SIZE = 100;
+export const CLINIKO_CLASS_COLLECTION_PAGE_LIMIT = 5;
+export const CLINIKO_CLASS_METADATA_REQUEST_LIMIT = 3 + 2 * CLINIKO_CLASS_COLLECTION_PAGE_LIMIT;
+
 export type ClinikoClassReadFailure = Readonly<{
   kind: "invalidConfig" | "scopeMismatch" | "invalidQuery" | "invalidProof" | "forbidden" |
     "rateLimited" | "unavailable" | "malformed" | "tooManyResults" | "changed";
@@ -101,13 +105,13 @@ export class ClinikoClassAttendanceReader {
   async #collection(resource: string, filters: readonly string[], signal: AbortSignal): Promise<Row[]> {
     const name = resource.split("/").at(-1)!;
     const rows: Row[] = [], seen = new Set<string>(); let total: number | undefined;
-    for (let page = 1; page <= 5; page++) {
-      const query = new URLSearchParams({ page: String(page), per_page: "100", sort: "id:asc" });
+    for (let page = 1; page <= CLINIKO_CLASS_COLLECTION_PAGE_LIMIT; page++) {
+      const query = new URLSearchParams({ page: String(page), per_page: String(CLINIKO_CLASS_PAGE_SIZE), sort: "id:asc" });
       for (const filter of filters) query.append("q[]", filter);
       const body = object(await this.#get(`/${resource}?${query}`, signal)), entries = body?.[name];
       if (!body || !Array.isArray(entries) || !Number.isSafeInteger(body.total_entries) || Number(body.total_entries) < 0 ||
         total !== undefined && total !== body.total_entries) return fail("malformed");
-      total = Number(body.total_entries); if (total > 500) return fail("tooManyResults");
+      total = Number(body.total_entries); if (total > CLINIKO_CLASS_PAGE_SIZE * CLINIKO_CLASS_COLLECTION_PAGE_LIMIT) return fail("tooManyResults");
       if (entries.length !== Math.min(100, total - rows.length)) return fail("malformed");
       for (const entry of entries) {
         const row = object(entry);

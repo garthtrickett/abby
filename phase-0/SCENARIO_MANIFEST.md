@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.232
+# Scenario manifest, version 1.233
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -868,3 +868,27 @@ retired and replaced through the original same-subject private-code route.
 This retains 419 IDs and planned full-call evidence. Complete cost admission,
 operator resolution, mixed/concurrent/process/database/privacy acceptance and
 full typecheck remain open; source-only routing does not activate clinic work.
+
+
+## Four-phase native cost checkpoint, E2E-417–E2E-419
+
+Current unpublished source separates accepted pass association from a newly
+confirmed read-only final inspection. Only that inspection can establish joint
+completion; an ambiguous association ends for review. Maximum-shape synthetic
+native journeys passed all24 stage cases. Measured phase claims were
+132/134/93/91 with one native request per proof and139/142/99/97 with two,
+within the complete derived ceilings and unchanged180-request cap. The earlier
+three-phase PostgreSQL/reset evidence above is historical; it does not qualify
+the new four-phase process fixture, which remains unrun.
+
+The current native host, admitted caller, voice and cost scope passed29 cases.
+Actual verifier renewal passed two additional cases, including a third real code
+when the last quota wait leaves insufficient proof margin for final inspection.
+The concrete phone lookup captures its full existing index candidate count
+(up to ten), verifies every candidate and refuses growth before native reads.
+Thirteen lookup/composed-proof/SQL-revision cost cases passed using an in-memory
+query driver; this is not a real PostgreSQL run. Unknown or changed callback
+costs and any phase above180 remain explicit refusals. High-cost serving
+cohorts, full typecheck, rebuilt signed serving, operator resolution, mixed/
+concurrent/process/database/backup and cloud acceptance remain unfinished.
+Version1.233 keeps419 stable IDs and all full-call evidence planned.

@@ -58,18 +58,19 @@ function worker(e: Awaited<ReturnType<typeof start>>, mode: "complete" | "park" 
 }
 async function privacy(e: Awaited<ReturnType<typeof start>>) {
   const notes = String(e.f.recalls[0]?.notes ?? ""), payload = notes.split("\n").find(s => s.startsWith("z1:")); assert.ok(payload);
-  const canaries = [e.f.request.actionId, "private-class-proof", "synthetic-private-stage-proof-1", "synthetic-private-stage-proof-2", "source-entitlement", "destination-entitlement", "811222333444555666",
+  const canaries = [e.f.request.actionId, "private-class-proof", "synthetic-private-stage-proof-1", "synthetic-private-stage-proof-2", "synthetic-private-stage-proof-3", "source-entitlement", "destination-entitlement", "811222333444555666",
     ...Array.from({ length: Math.ceil(payload.length / 200) }, (_, i) => payload.slice(Math.min(i * 200, payload.length - 4), (i + 1) * 200))];
   const scan = await scanPatientDataCanaries(e.db, canaries.map((value, i) => ({ label: `stage_canary_${i}`, value }))); assert.equal(scan.ok, true); if (scan.ok) assert.deepEqual(scan.value, []);
 }
 
-test("E2E-417 real PostgreSQL quota windows admit three separate native phases without raising the account limit", { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 210000 }, async () => {
+test("E2E-417 real PostgreSQL quota windows admit four separate native phases without raising the account limit", { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 210000 }, async () => {
   await withProvider(async e => {
     const owner = worker(e, "complete");
     try {
       await owner.done(); const completed = owner.messages.find(m => m.kind === "completed"); assert.ok(completed);
-      assert.equal(completed.phases, 3); assert.equal(completed.waits, 2);
-      const stages = owner.messages.filter(m => m.kind === "stage"); assert.equal(stages.length, 3);
+      assert.equal(completed.phases, 4); assert.equal(completed.waits, 3);
+      const stages = owner.messages.filter(m => m.kind === "stage"); assert.equal(stages.length, 4);
+      assert.deepEqual(stages.map(m => m.next), ["original", "association", "associationInspection", undefined]);
       for (const stage of stages) { assert.equal(stage.held, 0); assert.ok(Array.isArray(stage.used) && stage.used.every(n => typeof n === "number" && n > 0 && n <= 180)); }
       assert.deepEqual(e.f.writes.map(w => w.leg), ["replacement", "original", "association"]); assert.equal(e.f.recalls.length, 1);
       assert.ok(owner.messages.filter(m => m.kind === "quotaWait").every(m => Number(m.milliseconds) >= 1 && Number(m.milliseconds) <= 60000));

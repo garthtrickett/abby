@@ -9,6 +9,9 @@ import { PostgresPatientPhoneIndex } from "../storage/postgres-patient-phone-ind
 import type { PhoneScanFailure, PhoneScanCursor } from "../storage/postgres-patient-phone-scan.ts";
 import { PostgresPatientPhoneScan } from "../storage/postgres-patient-phone-scan.ts";
 import type { CallerCandidates } from "../voice/caller-candidates.ts";
+import type { CallerCandidateLookup } from "../voice/caller-candidates.ts";
+import { declareClinikoRequestCost } from "../cliniko/request-cost.ts";
+import type { ClinikoCostBinding } from "../cliniko/request-cost.ts";
 
 export type PhoneLookupResult = CallerCandidates;
 
@@ -135,8 +138,35 @@ export class ClinikoPhoneLookup {
     return stale.ok ? finished : stale;
   }
 
-  async candidates(scope: ClinikoClinicScope, presentedCallerNumber: string):
+  /** Quote an enforced ceiling for this admitted number without filtering any
+   * candidate or granting identity. Growth beyond the captured count refuses
+   * before native reads; a later workflow must obtain its own current quote. */
+  async forVerificationBudget(binding: ClinikoCostBinding, presentedCallerNumber: string, signal: AbortSignal): Promise<CallerCandidateLookup | undefined> {
+    const scope = Object.freeze({ tenantId: binding.scope.tenantId, clinicId: binding.scope.clinicId });
+    const captured = Object.freeze({ ...binding, scope });
+    const current = () => Object.getPrototypeOf(this) === ClinikoPhoneLookup.prototype && this.candidates === nativeCandidates &&
+      Object.getPrototypeOf(this.index) === PostgresPatientPhoneIndex.prototype && this.index.find === indexedCandidates &&
+      ClinikoPatientCandidateReader.prototype.nativePhoneRequestCostCeiling.call(this.reader, captured) === 1;
+    if (signal.aborted || !current()) return undefined;
+    const phone = normalizePatientPhone(presentedCallerNumber, this.countryCallingCode);
+    const indexed = phone ? await this.index.find(scope, phone, this.maxIndexAgeMs, this.countryCallingCode, this.credentialFingerprint()) : undefined;
+    if (signal.aborted || !current() || indexed && (!indexed.ok || indexed.value.kind === "stale" || indexed.value.kind === "tooMany")) return undefined;
+    const maximum = indexed?.ok ? indexed.value.patientIds.length : 0;
+    if (maximum > 10) return undefined;
+    return Object.freeze({ candidates: declareClinikoRequestCost(async (bound: ClinikoClinicScope, number: string, stop?: AbortSignal) => {
+      if (signal.aborted || stop?.aborted || !current() || bound.tenantId !== scope.tenantId || bound.clinicId !== scope.clinicId || number !== presentedCallerNumber)
+        return err({ kind: "unavailable" as const });
+      return this.#candidates(bound, number, maximum, AbortSignal.any([signal, ...(stop ? [stop] : [])]), current);
+    }, captured, maximum) });
+  }
+
+  async candidates(scope: ClinikoClinicScope, presentedCallerNumber: string, signal?: AbortSignal):
     Promise<Result<PhoneLookupResult, ClinikoPatientFailure | PhoneIndexFailure>> {
+    return this.#candidates(scope, presentedCallerNumber, 10, signal);
+  }
+  async #candidates(scope: ClinikoClinicScope, presentedCallerNumber: string, maximum: number, signal?: AbortSignal, current: () => boolean = () => true):
+    Promise<Result<PhoneLookupResult, ClinikoPatientFailure | PhoneIndexFailure>> {
+    if (signal?.aborted || !current()) return err({ kind: "unavailable" });
     const phone = normalizePatientPhone(presentedCallerNumber, this.countryCallingCode);
     if (!phone) return ok({ kind: "noNumber", candidateIds: [] });
     const indexed = await this.index.find(scope, phone, this.maxIndexAgeMs, this.countryCallingCode,
@@ -144,11 +174,13 @@ export class ClinikoPhoneLookup {
     if (!indexed.ok) return indexed;
     if (indexed.value.kind === "stale") return ok({ kind: "indexStale", candidateIds: [] });
     if (indexed.value.kind === "tooMany") return ok({ kind: "tooMany", candidateIds: [] });
+    if (indexed.value.patientIds.length > maximum) return err({ kind: "unavailable" });
     const candidateIds: string[] = [];
     for (const patientId of indexed.value.patientIds) {
-      const current = await this.reader.hasCurrentPhone(scope, patientId, phone, this.countryCallingCode);
-      if (!current.ok) return err(current.error);
-      if (current.value) candidateIds.push(patientId);
+      if (signal?.aborted || !current()) return err({ kind: "unavailable" });
+      const found = await this.reader.hasCurrentPhone(scope, patientId, phone, this.countryCallingCode, signal);
+      if (!found.ok) return err(found.error);
+      if (found.value) candidateIds.push(patientId);
     }
     if (indexed.value.patientIds.length) {
       // Provider reads may outlive a clinic disconnect, failed scan, or replacement generation.
@@ -162,7 +194,10 @@ export class ClinikoPhoneLookup {
         return ok({ kind: "indexStale", candidateIds: [] });
       }
     }
+    if (signal?.aborted || !current()) return err({ kind: "unavailable" });
     const kind = candidateIds.length === 0 ? "none" : candidateIds.length === 1 ? "one" : "multiple";
     return ok({ kind, candidateIds });
   }
 }
+const nativeCandidates = ClinikoPhoneLookup.prototype.candidates;
+const indexedCandidates = PostgresPatientPhoneIndex.prototype.find;

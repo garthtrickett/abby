@@ -341,7 +341,10 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       if (turn.quality !== "clear" || !target || target.status !== "pendingContinuation" || target.classMovement?.outcome !== "pending" ||
           state.pendingPresentationId || !state.policy.automationEnabled || !state.policy.reschedulingEnabled ||
           !state.policy.staffWorkEnabled || state.policy.capabilities.reschedule !== "execute") return err({ kind: "invalidTransition" });
-      if (interpretation.preparation.kind === "verificationRequired") {
+      if (interpretation.preparation.kind === "needsReview") {
+        retireClassMovementAction(state, target);
+        state.callerMessages.push("I cannot verify permission to continue this class move. The clinic needs to review it before any further change.");
+      } else if (interpretation.preparation.kind === "verificationRequired") {
         state.callerMessages.push("Before the next class stage, verify your registered email again. If you receive a six-digit code, enter it on the keypad, then press pound. Star clears your entry. Please do not say the code aloud. Verification alone makes no attendance change.");
       } else {
         if (interpretation.preparation.expectedConversationRevision !== state.conversationRevision - 1) return err({ kind: "staleTurn" });

@@ -5,6 +5,8 @@ import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import type Database from "./generated/Database.ts";
 import type { ClinikoContactRevisionOwner } from "../cliniko/contact-revision.ts";
+import { declareClinikoRequestCost } from "../cliniko/request-cost.ts";
+import type { ClinikoCostBinding } from "../cliniko/request-cost.ts";
 
 export type ContactRevision = Readonly<{ version: number; blocked: boolean }>;
 export type ContactChangeStatus = Readonly<{ binding: "reviewBound" | "legacyUnlinked"; status: "pending" | "completed";
@@ -41,11 +43,19 @@ export class PostgresClinikoContactRevision implements ClinikoContactRevisionOwn
   readonly #db: Kysely<Database>;
   readonly #tenantId: string;
   readonly #fingerprints: readonly string[];
-  constructor(db: Kysely<Database>, tenantId: string, credentialFingerprints: readonly string[]) {
+  constructor(db: Kysely<Database>, tenantId: string, credentialFingerprints: readonly string[], nativeCostBinding?: ClinikoCostBinding) {
     if (!Array.isArray(credentialFingerprints) || credentialFingerprints.length < 1 || credentialFingerprints.length > 100 ||
         credentialFingerprints.some(fp => !validContactAccount(tenantId, fp)) ||
         new Set(credentialFingerprints).size !== credentialFingerprints.length) throw new TypeError("invalid contact account binding");
     this.#db = db; this.#tenantId = tenantId; this.#fingerprints = Object.freeze([...credentialFingerprints].sort());
+    if (nativeCostBinding) {
+      if (nativeCostBinding.scope.tenantId !== tenantId || !this.#fingerprints.includes(nativeCostBinding.credentialFingerprint))
+        throw new TypeError("contact revision cost account mismatch");
+      // This concrete adapter performs local SQL only. Bind that known cost;
+      // arbitrary contact-revision ports still need their own declaration.
+      this.read = declareClinikoRequestCost((fingerprint: string) => this.matches === matchesRevision
+        ? readRevision.call(this, fingerprint) : Promise.resolve(err({ kind: "invalidInput" as const })), nativeCostBinding, 0);
+    }
   }
   matches(tenantId: string, fingerprint: string): boolean {
     return tenantId === this.#tenantId && this.#fingerprints.includes(fingerprint);
@@ -128,3 +138,5 @@ export class PostgresClinikoContactRevision implements ClinikoContactRevisionOwn
       on conflict (tenant_id, credential_fingerprint) do update set version = cliniko_contact_revisions.version + 1`.execute(db);
   }
 }
+const readRevision = PostgresClinikoContactRevision.prototype.read;
+const matchesRevision = PostgresClinikoContactRevision.prototype.matches;

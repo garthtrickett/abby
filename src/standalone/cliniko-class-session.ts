@@ -5,6 +5,7 @@ import type { CallPolicy, Result } from "../core/model.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { sameScope } from "./appointment-change-authority.ts";
 import { CallerVerificationSession } from "./caller-verification-session.ts";
+import { declareClinikoRequestCost } from "../cliniko/request-cost.ts";
 import type { ClinikoBookingSessionConfig } from "./cliniko-booking-session.ts";
 import { ClinikoClassBookingHost } from "./cliniko-class-booking-host.ts";
 import type { ClassAttendancePermission } from "./cliniko-class-booking-host.ts";
@@ -110,12 +111,12 @@ export class ClinikoClassSession {
             sourceApproval.value.membership !== destinationApproval.value.membership || sourceApproval.value.membership !== move.value.membership ||
             (move.value.membership === "nativeCaseSessions" ? !move.value.passMovement || typeof config.classPassMoveAuthority?.select !== "function" || typeof config.classPassMoveAuthority?.allows !== "function" : config.classPassMoveAuthority !== undefined)) return undefined;
         }
-        const method: Parameters<typeof CallerVerificationSession.create>[0]["policy"] = { operation, current: async (bound: typeof scope) => {
+        const method: Parameters<typeof CallerVerificationSession.create>[0]["policy"] = { operation, current: declareClinikoRequestCost(async (bound: typeof scope) => {
           const [identity, service, fees, replacement, move] = await Promise.all([caller.value.current(bound), classes.value.current(bound), cancellation?.ok ? cancellation.value.current(bound) : undefined,
             destination?.ok ? destination.value.current(bound) : undefined, movement?.ok ? movement.value.current(bound) : undefined]);
           return identity.ok ? ok({ ...identity.value, enabled: identity.value.enabled && service.ok && (!cancellation || fees?.ok === true) &&
             (!destination || replacement?.ok === true) && (!movement || move?.ok === true) && await active() }) : identity;
-        } };
+        }, { scope, credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey), budget: config.cliniko.rateBudget }, 0) };
         const currentMethod = await method.current(scope);
         if (!currentMethod.ok || !currentMethod.value.enabled || signal.aborted) return undefined;
         const verified = CallerVerificationSession.create({ receipt: config.receipt, inbound: config.inbound, sessionId: config.sessionId,

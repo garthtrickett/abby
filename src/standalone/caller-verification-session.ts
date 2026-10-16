@@ -12,6 +12,8 @@ import { sameScope } from "./appointment-change-authority.ts";
 import { EmailPatientAuthority } from "./email-patient-authority.ts";
 import type { PatientCodeDelivery, PatientVerificationBudget, PatientVerificationPermission } from "./email-patient-authority.ts";
 import { TransientPatientProofHost } from "./transient-patient-proof.ts";
+import { clinikoRequestCeiling, inheritClinikoRequestCost } from "../cliniko/request-cost.ts";
+import type { ClinikoCostBinding } from "../cliniko/request-cost.ts";
 import type { PatientOperation, VerificationPolicyGate } from "./transient-patient-proof.ts";
 
 type Config = Readonly<{
@@ -112,6 +114,18 @@ export class CallerVerificationSession {
     const selection = contact.selection(), scope = this.#config.receipt.scope;
     return selection.credentialFingerprint === credentialFingerprint && selection.scope.tenantId === scope.tenantId && selection.scope.clinicId === scope.clinicId;
   }
+  /** Cost of the actual composed proof recheck and non-disclosing ownership
+   * check. Native contact, lookup, patient permission and all four underlying
+   * policy reads are included. This supplies no caller or send authority. */
+  nativeRequestCostCeilings(binding: ClinikoCostBinding): Readonly<{ proof: number; ownership: number }> | undefined {
+    const c = this.#config, contact = c.contact;
+    if (this.#closed || !(contact instanceof ClinikoVerificationContactReader)) return undefined;
+    const channel = ClinikoVerificationContactReader.prototype.nativeRequestCostCeiling.call(contact, binding);
+    const policy = clinikoRequestCeiling(c.policy.current, binding), lookup = clinikoRequestCeiling(c.lookup.candidates, binding),
+      permission = clinikoRequestCeiling(c.permission.allows, binding);
+    if (channel === undefined || policy === undefined || lookup === undefined || permission === undefined) return undefined;
+    return Object.freeze({ proof: channel + 4 * policy + lookup + permission, ownership: policy });
+  }
 
   /** Representative roots must possess their own native registered channel.
    * A delegated subject verifier cannot become a new delegating caller. */
@@ -201,11 +215,11 @@ export class CallerVerificationSession {
     try {
       const active = await awaitUntilAbort(this.#active(), signal);
       if (active !== true || signal.aborted || this.#closed) return unavailable();
-      const lookup: CallerCandidateLookup = { candidates: async (scope, number) => {
-        const found = await config.lookup.candidates(scope, number);
+      const lookup: CallerCandidateLookup = { candidates: inheritClinikoRequestCost(async (scope: Parameters<CallerCandidateLookup["candidates"]>[0], number: string, stop?: AbortSignal) => {
+        const found = await config.lookup.candidates(scope, number, stop);
         return found.ok && found.value.kind === "one" && found.value.candidateIds.length === 1 && found.value.candidateIds[0] === patientId
           ? found : ok({ kind: "none", candidateIds: [] });
-      } };
+      }, config.lookup.candidates) };
       const created = CallerVerificationSession.create({ ...config, lookup });
       if (!created.ok) return unavailable();
       successor = created.value;

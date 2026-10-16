@@ -236,6 +236,10 @@ test("SAM advances actual distinct stage effects only after each fresh played co
       ? { kind: "classMovement", actionKey: app.action.key, outcome: "pending",
         progress: { ...progress, original: "inspectedCancelled" },
         continuation: { ...app.continuation, ref: `class-move-stage:${randomUUID()}`, ordinal: 2, stage: "association" } }
+      : consent.evidence.continuation.stage === "association"
+      ? { kind: "classMovement", actionKey: app.action.key, outcome: "pending",
+        progress: { ...progress, original: "inspectedCancelled", caseAssociation: "uncertain" },
+        continuation: { ...app.continuation, ref: `class-move-stage:${randomUUID()}`, ordinal: 3, stage: "associationInspection" } }
       : { kind: "classMovement", actionKey: app.action.key, outcome: "moved", hostRef: "inspected-joint-class-move",
         progress: { ...progress, original: "inspectedCancelled", caseAssociation: "inspectedLinked" } };
   } });
@@ -252,17 +256,30 @@ test("SAM advances actual distinct stage effects only after each fresh played co
   assert.deepEqual(await association.affirm(), { ok: false, error: { kind: "confirmationMissing" } });
   await association.play(); success(await association.affirm());
   await app.worker.process(app.callId, association.effectId, now);
+  assert.equal((await app.state()).actions[app.action.key]!.status, "pendingContinuation");
+  assert.equal(stageCalls.length, 2);
+  const inspection = await nextConsent(app);
+  assert.notEqual(inspection.consent.digest, association.consent.digest);
+  assert.match(inspection.consent.evidence.continuation.stage, /^associationInspection$/);
+  const inspectionState = await app.state(), inspectionAction = inspectionState.actions[app.action.key]!;
+  const inspectionSpeech = inspectionState.presentations[inspectionAction.presentationId];
+  assert.ok(inspectionSpeech?.kind === "speech");
+  assert.match(inspectionSpeech.approvedText, /inspection makes no further attendance change/);
+  assert.deepEqual(await inspection.affirm(), { ok: false, error: { kind: "confirmationMissing" } });
+  await inspection.play(); success(await inspection.affirm());
+  await app.worker.process(app.callId, inspection.effectId, now);
   const state = await app.state(), action = state.actions[app.action.key]!;
-  assert.equal(stageCalls.length, 2); assert.equal(app.host.writes.length, 1, "initial host write is never used for a continuation");
+  assert.equal(stageCalls.length, 3); assert.equal(app.host.writes.length, 1, "initial host write is never used for a continuation");
   assert.equal(action.status, "committed"); assert.equal(action.classMovement?.outcome, "moved");
   assert.deepEqual(action.mutation, app.action.mutation); assert.equal(action.digest, app.action.digest);
-  assert.deepEqual(stageCalls.map(c => c.evidence.patient.verificationRef), [app.patient.verificationRef, app.patient.verificationRef],
+  assert.deepEqual(stageCalls.map(c => c.evidence.patient.verificationRef), [app.patient.verificationRef, app.patient.verificationRef, app.patient.verificationRef],
     "a still-current proof needs no new challenge solely because the native stage changed");
   assert.equal(action.classMovementConsent, undefined);
   assert.equal(state.effects[original.effectId]?.status, "completed");
   assert.equal(state.effects[association.effectId]?.status, "completed");
+  assert.equal(state.effects[inspection.effectId]?.status, "completed");
   await assert.rejects(app.worker.process(app.callId, original.effectId, now), /invalidTransition/);
-  assert.equal(stageCalls.length, 2);
+  assert.equal(stageCalls.length, 3);
 });
 
 test("a host without a staged continuation method cannot replay its initial write", async () => {

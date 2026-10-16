@@ -6,7 +6,7 @@ import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko
 import { ClinikoClassAttendanceMove } from "../../src/standalone/cliniko-class-attendance-move.ts";
 import type { ClinikoClassMoveRequest } from "../../src/standalone/cliniko-class-attendance-move.ts";
 import { ClinikoRecallReader } from "../../src/cliniko/recalls.ts";
-import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
+import { claimClinikoBudget, clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 import { err, ok } from "../../src/core/model.ts";
 import type { LocationScope } from "../../src/core/model.ts";
 
@@ -51,7 +51,7 @@ try {
       proof: { verifyPatient: async (scope, ref) => ref === proofRef && Date.parse(clock()) < proofExpiry
         ? ok({ scope, patientRef: "42", verificationRef: ref, expiresAt: new Date(proofExpiry).toISOString() }) : err({ kind: "notFound", target: "patient" }) },
       policyVersion: "policy-1", termsVersion: "pass-move-terms-1", timeZone: "Australia/Sydney", recallTypeId: "7", clock, signal: lifetime.signal,
-      fetchPort, quotaStaging: { version }, casePass: { stagingContractVersion: "unlinked-recovery-v1", authority: {
+      fetchPort, quotaStaging: { version }, stageRequestCosts: { proof: 0, permit: 0, passSelect: 0, passAllow: 0 }, casePass: { stagingContractVersion: "unlinked-recovery-v1", authority: {
         select: async () => ({ source: { patientCaseId: request.pass!.source.patientCaseId, entitlementRef: request.pass!.source.entitlementRef },
           destination: { patientCaseId: request.pass!.destination.patientCaseId, entitlementRef: request.pass!.destination.entitlementRef } }),
         allows: async () => true,
@@ -83,6 +83,9 @@ try {
         if (result.observation.kind !== "moved") throw new Error("move not inspected complete");
         process.send({ kind: "completed", phases: phase, waits }); break;
       }
+      // Explicit competing account traffic forces each inter-stage quota
+      // wait even when two smaller complete allocations could otherwise fit.
+      for (let i = 0; i < 180; i++) if (await claimClinikoBudget(budget)) break;
     }
   }
 } finally { lifetime.abort(); await db.destroy(); process.disconnect?.(); }

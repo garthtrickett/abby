@@ -7,6 +7,8 @@ import type { ClinikoRequestBudget } from "./read-budget.ts";
 import { boundedClinikoJson } from "./bounded-json.ts";
 import type { ClinikoPatientConfig } from "./patients.ts";
 import type { ClinikoContactRevisionReader } from "./contact-revision.ts";
+import { clinikoRequestCeiling } from "./request-cost.ts";
+import type { ClinikoCostBinding } from "./request-cost.ts";
 
 export type VerificationContactFailure = Readonly<{ kind: "denied" | "unavailable" }>;
 export interface VerificationContact {
@@ -50,6 +52,17 @@ export class ClinikoVerificationContactReader implements VerificationContact {
   usesContactRevision(owner: ClinikoContactRevisionReader): boolean {
     const selection = this.selection();
     return this.#config.contactRevision === owner && owner.matches(selection.scope.tenantId, selection.credentialFingerprint);
+  }
+  /** One patient GET plus both optional account-revision reads. Unknown
+   * injected revision work is not a zero-cost declaration. */
+  nativeRequestCostCeiling(binding: ClinikoCostBinding): number | undefined {
+    const selection = this.selection();
+    if (Object.getPrototypeOf(this) !== ClinikoVerificationContactReader.prototype ||
+        this.read !== ClinikoVerificationContactReader.prototype.read || this.revision !== ClinikoVerificationContactReader.prototype.revision ||
+        this.#budget !== binding.budget || selection.credentialFingerprint !== binding.credentialFingerprint ||
+        selection.scope.tenantId !== binding.scope.tenantId || selection.scope.clinicId !== binding.scope.clinicId) return undefined;
+    const revision = this.#config.contactRevision ? clinikoRequestCeiling(this.#config.contactRevision.read, binding) : 0;
+    return revision === undefined ? undefined : 1 + 2 * revision;
   }
   async revision(scope: LocationScope, signal: AbortSignal): Promise<Result<number | undefined, VerificationContactFailure>> {
     if (signal.aborted || scope.tenantId !== this.#config.scope.tenantId || scope.clinicId !== this.#config.scope.clinicId) return err({ kind: "denied" });

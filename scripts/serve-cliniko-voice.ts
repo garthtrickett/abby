@@ -128,7 +128,8 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
     if (ports.clinicalHost && ports.clinicalLocations) throw new RangeError("conflicting clinical runner hosts");
     const { PostgresClinikoContactRevision } = await import("../src/storage/postgres-cliniko-contact-revision.ts");
     const credentialFingerprint = clinikoCredentialFingerprint(apiKey);
-    const contactRevision = new PostgresClinikoContactRevision(db, scope.tenantId, ports.clinikoCredentialAliases ?? [credentialFingerprint]);
+    const contactRevision = new PostgresClinikoContactRevision(db, scope.tenantId, ports.clinikoCredentialAliases ?? [credentialFingerprint],
+      { scope, credentialFingerprint, budget: rateBudget });
     if (!contactRevision.matches(scope.tenantId, credentialFingerprint)) throw new RangeError("configured credential missing from account aliases");
     const context = { db, scope: Object.freeze({ ...scope }), apiKey, contactEmail, rateBudget, contactRevision };
     const clinicalHost = ports.clinicalHost?.(context);

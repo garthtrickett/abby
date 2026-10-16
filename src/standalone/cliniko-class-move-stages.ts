@@ -1,6 +1,7 @@
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import type { ClassMovementStage } from "../core/class-movement-progress.ts";
+import type { ClassMoveStageRequestCeilings } from "../cliniko/class-move-workload.ts";
 import { withClinikoReservation } from "../cliniko/read-budget.ts";
 import type { ClinikoBudgetDenial, ClinikoRequestBudget } from "../cliniko/read-budget.ts";
 import type { ClinikoClassMoveFailure, ClinikoClassMoveOutcome, ClinikoClassMovePermit } from "./cliniko-class-attendance-move.ts";
@@ -18,7 +19,8 @@ export type ClassMoveStageResult = Readonly<{ kind: "waiting"; stage: ClassMoveS
 export type ClinikoStagedClassMove = Readonly<{
   advanceOnce(confirmation: ClassMoveStageConfirmation, signal: AbortSignal, permit: ClassMoveStagePermit): Promise<Result<ClassMoveStageResult, ClinikoClassMoveFailure>>;
 }>;
-type Config = Readonly<{ version: string; initialExpiresAt: string; initialVerificationRef: string; clock: () => string; signal: AbortSignal; budget: ClinikoRequestBudget }>;
+type Config = Readonly<{ version: string; initialExpiresAt: string; initialVerificationRef: string; clock: () => string; signal: AbortSignal; budget: ClinikoRequestBudget;
+  requestCeilings: ClassMoveStageRequestCeilings }>;
 function gate() { let resolve!: () => void; const promise = new Promise<void>(r => { resolve = r; }); return { promise, resolve }; }
 type Pending = { stage: ClassMoveStage; run(signal: AbortSignal): Promise<unknown>; resolve(value: unknown): void; observation(): ClinikoClassMoveOutcome };
 const instant = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v) && Number.isFinite(Date.parse(v)) && new Date(v).toISOString() === v;
@@ -81,8 +83,10 @@ export class ClassMoveStageControl {
       if (!this.#pending && !this.#finished) await this.#changed.promise;
       const pending = this.#pending;
       if (!pending || this.#closed || external.aborted || c.signal.aborted) return denied("unavailable");
+      const requests = c.requestCeilings[pending.stage];
+      if (!Number.isSafeInteger(requests) || requests === undefined || requests < 1 || requests > 180) return denied("unavailable");
       const signal = AbortSignal.any([external, c.signal, AbortSignal.timeout(30000)]);
-      const reserved = await withClinikoReservation(c.budget, 180, signal, async () => {
+      const reserved = await withClinikoReservation(c.budget, requests, signal, async () => {
         invoked = pending; this.#active = { confirmation, stage: pending.stage, permit };
         try { return await pending.run(signal); } finally { this.#active = undefined; }
       });

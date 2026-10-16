@@ -23,12 +23,14 @@ import { callIdFor } from "../../src/voice/admission.ts";
 import type { CallerCandidates } from "../../src/voice/caller-candidates.ts";
 import { approvedSyntheticPolicy } from "./approved-voice.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
+import { declareClinikoRequestCost } from "../../src/cliniko/request-cost.ts";
+import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 
 export const verificationNow = "2026-10-04T06:00:00.000Z";
 export const verificationCanaries = ["registered-session@example.test", "private-session-chart", "482746192837465"];
 
 export async function callerVerificationFixture(options: { apiKey?: string; scope?: LocationScope; folder?: string; approved?: boolean; enabled?: boolean; patientId?: string; now?: string;
-  rateBudget?: import("../../src/cliniko/read-budget.ts").ClinikoRequestBudget; activate?: boolean;
+  rateBudget?: import("../../src/cliniko/read-budget.ts").ClinikoRequestBudget; activate?: boolean; nativeRequestCosts?: boolean;
   contactRevision?: import("../../src/cliniko/contact-revision.ts").ClinikoContactRevisionReader;
   capturePolicy?: (policy: CallPolicy, folder: string) => Promise<CallPolicy>;
   operation?: PatientOperation; budget?: PatientVerificationBudget; delivery?: PatientCodeDelivery; timeoutMs?: number; cancellationExecute?: boolean; bookingExecute?: boolean; reschedulingExecute?: boolean; patientUpdateExecute?: boolean; staffWorkEnabled?: boolean } = {}) {
@@ -89,11 +91,20 @@ export async function callerVerificationFixture(options: { apiKey?: string; scop
       return Response.json({ total_entries: 0, individual_appointments: [] });
     };
     const apiKey = options.apiKey ?? "synthetic-session-au5", contactEmail = "test@example.test";
+    const costBinding = options.rateBudget ? { scope, credentialFingerprint: clinikoCredentialFingerprint(apiKey), budget: options.rateBudget } : undefined;
+    if (options.nativeRequestCosts && !costBinding) throw new Error("known physical budget required for synthetic callback cost declarations");
+    const lookup = { candidates: async () => ok(candidates) }, permission = { allows: async () => permitted };
+    const verificationPolicy = options.nativeRequestCosts && costBinding ? { operation: config.operation,
+      current: declareClinikoRequestCost((bound: LocationScope) => policy.current(bound), costBinding, 0) } : policy;
+    if (options.nativeRequestCosts && costBinding) {
+      lookup.candidates = declareClinikoRequestCost(lookup.candidates, costBinding, 0);
+      permission.allows = declareClinikoRequestCost(permission.allows, costBinding, 0);
+    }
     const sessionConfig = { receipt, inbound, sessionId, policyVersion: captured.policyVersion, operation: options.operation ?? "appointments.read",
-      ledger, policyStore: policies, policy, lookup: { candidates: async () => ok(candidates) },
+      ledger, policyStore: policies, policy: verificationPolicy, lookup,
       contact: new ClinikoVerificationContactReader({ scope, apiKey, contactEmail, countryCallingCode: "61", ...(options.rateBudget ? { rateBudget: options.rateBudget } : {}),
         ...(options.contactRevision ? { contactRevision: options.contactRevision } : {}) }, fetchPort),
-      permission: { allows: async () => permitted }, budget: options.budget ?? { reserve: async () => true },
+      permission, budget: options.budget ?? { reserve: async () => true },
       delivery: options.delivery ?? { send: async (address: string, code: string) => { mail.push({ email: address, code }); return true; } },
       clock: () => now, ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }) };
     session = resultValue(CallerVerificationSession.create(sessionConfig));

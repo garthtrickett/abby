@@ -150,10 +150,10 @@ export class TransientPatientProofHost implements PatientProofHost {
     finally { if (timer) clearTimeout(timer); }
   }
 
-  async #candidates(): Promise<readonly string[] | undefined> {
+  async #candidates(signal?: AbortSignal): Promise<readonly string[] | undefined> {
     if (typeof this.#presentedNumber !== "string" || !this.#presentedNumber || this.#presentedNumber.length > 64) return undefined;
     try {
-      const found = await this.#lookup.candidates(this.#scope, this.#presentedNumber);
+      const found = await this.#lookup.candidates(this.#scope, this.#presentedNumber, signal);
       if (!found.ok || !validCallerCandidates(found.value) ||
           (found.value.kind !== "one" && found.value.kind !== "multiple") ||
           found.value.candidateIds.some(id => !/^[1-9][0-9]*$/.test(id))) return undefined;
@@ -194,7 +194,7 @@ export class TransientPatientProofHost implements PatientProofHost {
     try {
       if (!await this.#enabled()) return err({ kind: "disabled" });
       if (this.#closed || this.#epoch !== epoch) return err({ kind: "disconnected" });
-      const first = await this.#candidates();
+      const first = await this.#candidates(signal);
       if (!first || this.#closed || this.#epoch !== epoch) return err({ kind: this.#closed ? "disconnected" : "denied" });
       let attested: Awaited<ReturnType<PatientAuthority["attest"]>>;
       try { attested = await this.#authority.attest(Object.freeze({ scope: this.#scope,
@@ -211,7 +211,7 @@ export class TransientPatientProofHost implements PatientProofHost {
           allowed.some(value => !operations.includes(value)) || new Set(allowed).size !== allowed.length ||
           !allowed.includes(operation)) return err({ kind: "denied" });
       const permitted = Object.freeze([...allowed]);
-      const latest = await this.#candidates();
+      const latest = await this.#candidates(signal);
       if (!latest || latest.length !== first.length || latest.some((id, index) => id !== first[index]) ||
           !await this.#enabled() || this.#closed || this.#epoch !== epoch) {
         return err({ kind: this.#closed ? "disconnected" : "denied" });

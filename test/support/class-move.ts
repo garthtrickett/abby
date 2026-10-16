@@ -12,6 +12,7 @@ import type { ClassMoveApproval } from "../../src/standalone/owner-file-class-mo
 import { classAttendanceFixture, classAttendee, classLink } from "./class-attendance.ts";
 import { callerVerificationFixture, verificationNow, verificationCanaries } from "./caller-verification.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
+import { declareClinikoRequestCost } from "../../src/cliniko/request-cost.ts";
 import type { ClassPassMoveAuthority, ClassPassMoveAuthorityQuery } from "../../src/standalone/cliniko-class-pass-movement.ts";
 import { addCaseHistory, addClassRosterHistory, visibleCaseRows, visibleArchivedCase } from "./class-pass-history.ts";
 
@@ -22,7 +23,7 @@ export async function classMoveFixture(different = false, near = false, passes?:
   const budget = new ClinikoReadBudget(180, () => Date.parse(now));
   const windows = new Map<number, number>();
   const rateBudget = { claim: () => { claims++; const result = budget.claim(); if (result === null) { const window = Math.floor((Date.parse(now) - Date.parse(verificationNow)) / 60000); windows.set(window, (windows.get(window) ?? 0) + 1); } return result; }, observe429: budget.observe429.bind(budget), checkHeadroom: budget.checkHeadroom.bind(budget), withReservation: budget.withReservation.bind(budget) };
-  const f = await callerVerificationFixture({ apiKey: "synthetic-class-au5", operation: "appointments.reschedule", reschedulingExecute: true, rateBudget, activate });
+  const f = await callerVerificationFixture({ apiKey: "synthetic-class-au5", operation: "appointments.reschedule", reschedulingExecute: true, rateBudget, activate, nativeRequestCosts: staging });
   const native = classAttendanceFixture({ scope: f.scope, now, patientId: verificationCanaries[2]!, rateBudget });
   native.groups.splice(1, 2);
   Object.assign(native.groups[1]!, { starts_at: "2026-10-09T10:00:00.000Z", ends_at: different ? "2026-10-09T10:30:00.000Z" : "2026-10-09T11:00:00.000Z",
@@ -82,7 +83,7 @@ export async function classMoveFixture(different = false, near = false, passes?:
   const passQueries: ClassPassMoveAuthorityQuery[] = [];
   const casePages: { caseId: string; page: number; total: number }[] = [];
   let onCaseRead = (_path: string) => {};
-  const passAuthority: ClassPassMoveAuthority = { select: async query => { passQueries.push(query); return passAllowed ? structuredClone(selection) : undefined; },
+  let passAuthority: ClassPassMoveAuthority = { select: async query => { passQueries.push(query); return passAllowed ? structuredClone(selection) : undefined; },
     allows: async query => passAllowed && query.patientId === verificationCanaries[2] && query.stagingContractVersion === move.passMovement?.version && query.binding.source.effect === effect };
   const fetchPort: typeof fetch = async (value, init) => {
     const url = new URL(String(value)), method = init?.method ?? "GET";
@@ -141,7 +142,12 @@ export async function classMoveFixture(different = false, near = false, passes?:
       (row.appointment_type as { links: { self: string } }).links.self.endsWith(`/appointment_types/${expected("appointment_type_id")}`));
     return Response.json({ group_appointments: groups, total_entries: groups.length });
   };
-  const permission: ClassMovePermission = { allows: async query => permitted && phasePermission(query.phase) };
+  let permission: ClassMovePermission = { allows: async query => permitted && phasePermission(query.phase) };
+  if (staging) {
+    const binding = { scope: f.scope, credentialFingerprint: clinikoCredentialFingerprint(native.config.apiKey), budget: rateBudget };
+    permission = { allows: declareClinikoRequestCost(permission.allows, binding, 0) };
+    passAuthority = { select: declareClinikoRequestCost(passAuthority.select, binding, 0), allows: declareClinikoRequestCost(passAuthority.allows, binding, 0) };
+  }
   const config = { scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: source.policyVersion, ledger: f.ledger, policies: f.policies, verification: f.session,
     sourcePolicy, destinationPolicy, movePolicy, permission, cliniko: native.config, clock: () => now, signal: lifetime.signal, fetchPort,
     ...(passes ? { classPassMoveAuthority: passAuthority } : {}) };

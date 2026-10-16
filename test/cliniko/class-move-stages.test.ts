@@ -5,6 +5,7 @@ import { ClinikoClassAttendanceMove } from "../../src/standalone/cliniko-class-a
 import type { ClassMoveStageConfirmation, ClassMoveStagePermit, ClassMoveStageResult } from "../../src/standalone/cliniko-class-move-stages.ts";
 import { classMovementCanContinue, classMovementProgressText, readClassMovementProgress } from "../../src/core/class-movement-progress.ts";
 import { claimClinikoBudget } from "../../src/cliniko/read-budget.ts";
+import { classMoveStageRequestCeilings } from "../../src/cliniko/class-move-workload.ts";
 import { err } from "../../src/core/model.ts";
 import { classLink } from "../support/class-attendance.ts";
 import { decodeClinikoReview, encodeClinikoReview } from "../../src/cliniko/review-request.ts";
@@ -20,7 +21,7 @@ function assertPublicStageProgress(result: ClassMoveStageResult) {
   assert.equal(classMovementCanContinue(progress, result.next), true);
   assert.match(classMovementProgressText(progress), /overall class move is not confirmed/);
 }
-async function fixture(different = false, largest = false) {
+async function fixture(different = false, largest = false, proofRequests = largest ? 1 : 0) {
   const f = await classPassMoveFixture({ history: 999, rosterHistory: largest ? 499 : 201, differentCase: different, differentService: different });
   const port: typeof fetch = async (input, init) => {
     const u = new URL(String(input)), relation = largest && /^\/v1\/practitioners\/(22|23)\/(businesses|appointment_types)$/.exec(u.pathname);
@@ -30,10 +31,12 @@ async function fixture(different = false, largest = false) {
     const page = Number(u.searchParams.get("page")); return Response.json({ [name]: rows.slice((page - 1) * 100, page * 100), total_entries: rows.length });
   };
   const proof = largest ? { verifyPatient: async (...args: Parameters<typeof f.proof.verifyPatient>) => {
-    if (await claimClinikoBudget(f.config.cliniko.rateBudget)) return err({ kind: "notFound" as const, target: "patient" as const });
+    for (let i = 0; i < proofRequests; i++)
+      if (await claimClinikoBudget(f.config.cliniko.rateBudget)) return err({ kind: "notFound" as const, target: "patient" as const });
     return f.proof.verifyPatient(...args);
   } } : f.proof;
-  const mover = resultValue(ClinikoClassAttendanceMove.create({ ...f.config, fetchPort: port, proof, proofNativeRequestFloor: largest ? 1 : 0, quotaStaging: { version } }));
+  const mover = resultValue(ClinikoClassAttendanceMove.create({ ...f.config, fetchPort: port, proof, proofNativeRequestFloor: largest ? 1 : 0,
+    stageRequestCosts: { proof: proofRequests, permit: 0, passSelect: 0, passAllow: 0 }, quotaStaging: { version } }));
   const stages = resultValue(mover.prepareStagesOnce(f.request));
   let started = false;
   const confirmation = (): ClassMoveStageConfirmation => ({ contractVersion: version, verificationRef: f.request.verificationRef, confirmationRef: randomUUID(),
@@ -51,19 +54,26 @@ async function fixture(different = false, largest = false) {
   return { ...f, mover, stages, confirmation, advance, reset, get claims() { return f.claims; } };
 }
 
-for (const row of [{ different: false, largest: false }, { different: true, largest: false }, { different: true, largest: true }]) test(`E2E-417 native staged movement completes larger-than-window workload ${JSON.stringify(row)}`, async t => {
-  const different = row.different, f = await fixture(different, row.largest);
+for (const row of [{ different: false, largest: false, proofRequests: 0 }, { different: true, largest: false, proofRequests: 0 },
+  { different: true, largest: true, proofRequests: 1 }, { different: true, largest: true, proofRequests: 2 }]) test(`E2E-417 native staged movement completes larger-than-window workload ${JSON.stringify(row)}`, async t => {
+  const different = row.different, f = await fixture(different, row.largest, row.proofRequests);
   try {
+    // Competing same-account work must actually exhaust the smaller complete
+    // allocation; one prior claim no longer implies a180-request reservation.
+    for (let i = 0; i < 180; i++) if (await claimClinikoBudget(f.config.cliniko.rateBudget)) break;
     const waiting = await f.advance(); assert.equal(waiting.kind, "waiting"); assert.equal(f.writes.length, 0); assert.equal(f.recalls.length, 0);
     f.reset(); const counts: number[] = [];
-    for (const [index, next] of ["original", "association", undefined].entries()) {
+    for (const [index, next] of ["original", "association", "associationInspection", undefined].entries()) {
       const before = f.claims, result = await f.advance(); counts.push(f.claims - before);
       assertPublicStageProgress(result);
-      assert.ok(counts.at(-1)! <= 180, JSON.stringify(counts));
+      const ceilings = classMoveStageRequestCeilings({ proof: row.proofRequests, permit: 0, passSelect: 0, passAllow: 0 }, true)!;
+      const stage = (["replacement", "original", "association", "associationInspection"] as const)[index]!;
+      assert.ok(counts.at(-1)! <= ceilings[stage]!, JSON.stringify({ counts, stage, ceiling: ceilings[stage] }));
       if (next) { assert.equal(result.kind, "staged"); if (result.kind === "staged") assert.equal(result.next, next); }
       else { assert.equal(result.kind, "finished"); if (result.kind === "finished") assert.equal(result.observation.kind, "moved"); }
-      assert.equal(f.writes.length, index + 1);
+      assert.equal(f.writes.length, Math.min(index + 1, 3), "final inspection cannot send another mutation");
       if (next) {
+        for (let i = 0; i < 180; i++) if (await claimClinikoBudget(f.config.cliniko.rateBudget)) break;
         const count: number = f.writes.length; assert.equal((await f.advance()).kind, "waiting"); assert.equal(f.writes.length, count); f.reset();
       }
     }
@@ -253,6 +263,7 @@ for (const mode of ["renewed", "expired", "wrongPatient"] as const)
       let result = await advance();
       if (mode === "renewed") {
         assert.equal(result.kind, "staged"); f.setTime("2026-10-07T10:04:03.000Z"); result = await advance();
+        assert.equal(result.kind, "staged"); f.setTime("2026-10-07T10:04:04.000Z"); result = await advance();
         assert.equal(result.kind, "finished"); if (result.kind === "finished") assert.equal(result.observation.kind, "moved");
         assert.deepEqual(f.writes.map(w => w.leg), ["replacement", "original", "association"]);
       } else {

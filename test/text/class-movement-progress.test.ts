@@ -7,7 +7,7 @@ import type { ClassMovementProgress, ClassMovementStage } from "../../src/core/c
 const empty: ClassMovementProgress = { original: "notSent", replacement: "notSent", caseAssociation: "notSent" };
 const replacement: ClassMovementProgress = { original: "notSent", replacement: "inspectedActive", caseAssociation: "unlinked" };
 const originalCancelled: ClassMovementProgress = { ...replacement, original: "inspectedCancelled" };
-const stages: readonly ClassMovementStage[] = ["replacement", "original", "association", "compensation", "compensationInspection"];
+const stages: readonly ClassMovementStage[] = ["replacement", "original", "association", "associationInspection", "compensation", "compensationInspection"];
 
 test("a no-pass move has no association stage or invented membership uncertainty", () => {
   const ordinary: ClassMovementProgress = { ...replacement, caseAssociation: "notApplicable" };
@@ -23,6 +23,8 @@ test("class movement progress distinguishes replacement creation, original cance
   assert.deepEqual(stages.filter(stage => classMovementCanContinue(replacement, stage)), ["original", "compensation"],
     "the live host must independently choose its actual next stage; public observations do not choose a mutation");
   assert.deepEqual(stages.filter(stage => classMovementCanContinue(originalCancelled, stage)), ["association"]);
+  assert.deepEqual(stages.filter(stage => classMovementCanContinue({ ...originalCancelled, caseAssociation: "uncertain" }, stage)), ["associationInspection"],
+    "only the private accepted-link owner can offer read-only inspection; these public facts cannot replay association");
   assert.deepEqual(stages.filter(stage => classMovementCanContinue({ ...originalCancelled, caseAssociation: "inspectedLinked" }, stage)), [],
     "finished observations are not authority to repeat the membership mutation");
   for (const progress of [empty, replacement, originalCancelled, { ...originalCancelled, caseAssociation: "inspectedLinked" }]) {

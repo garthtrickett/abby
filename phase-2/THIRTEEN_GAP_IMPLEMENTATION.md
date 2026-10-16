@@ -4115,3 +4115,22 @@ rebuilt signed serving, full typecheck and required review/cloud gates remain
 open. Existing provider floors/physical caps do not prove arbitrary callback
 upper costs. The runtime remains unpublished; no deployment or clinic
 activation has occurred. The booking-menu correction remains a separate branch.
+
+
+## Four-phase native cost checkpoint
+
+The unpublished native route now requires separately confirmed read-only final
+inspection after accepted pass association. Complete bounded-reader and trusted
+callback ceilings are captured for the exact account/budget; unknown, changed
+or above180 costs refuse staging. The real phone lookup quotes the full current
+candidate count and refuses growth without truncating ambiguity. Concrete
+SQL-only revision reads declare zero native requests. Focused native stage,
+caller/voice, real renewal, composed-cost and legacy regression scopes passed;
+the execution ledger records commands, overlapping counts and failed fixture
+preconditions. Manifest1.233 preserves419 stable IDs and planned full-call
+evidence. Four-phase PostgreSQL/process fixtures are changed but unrun.
+
+This is still gap10 implementation, not closure. High-cost cohorts, full native
+typecheck, independent operator resolution, mixed/concurrent/serving/database/
+backup and exact-head cloud acceptance remain open. The rest of the13-gap
+execution order, including owner-selected Stripe for gap11, remains active.

@@ -22,7 +22,7 @@ for (const pass of [false, true]) test(`E2E-419 admitted ${pass ? "pass" : "ordi
     resultValue(await reception.affirm(f.scope, f.turn("initial-yes", "Yes"), initial.key, initial.digest, at()));
     resultValue(await reception.drain(f.scope, f.callId, at()));
     assert.equal((await f.state()).actions[initial.key]!.status, "pendingContinuation");
-    for (const stage of pass ? ["original", "association"] : ["original"]) {
+    for (const stage of pass ? ["original", "association", "associationInspection"] : ["original"]) {
       await f.play(); await f.pause(61);
       let turn = f.turn(`continue-${stage}`, "Continue my class move");
       assert.deepEqual(resultValue(await resolver(turn)), { kind: "continueClassMovement" });
@@ -48,7 +48,7 @@ for (const pass of [false, true]) test(`E2E-419 admitted ${pass ? "pass" : "ordi
       await f.play();
       resultValue(await reception.affirm(f.scope, f.turn(`yes-${stage}`, "Yes"), action.key, action.classMovementConsent!.digest, at()));
       resultValue(await reception.drain(f.scope, f.callId, at()));
-      assert.equal(f.writes.length, before + 1);
+      assert.equal(f.writes.length, before + (stage === "associationInspection" ? 0 : 1));
     }
     assert.equal((await f.state()).actions[initial.key]!.status, "committed");
     assert.ok(f.windowClaims.every(count => count <= 180));

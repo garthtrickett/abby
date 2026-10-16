@@ -3,7 +3,7 @@
  * permission to perform another operation or evidence of a completed move. */
 export type ClassMovementMutationState = "notSent" | "uncertain" | "inspectedActive" | "inspectedCancelled";
 export type ClassMovementAssociationState = "notApplicable" | "notSent" | "unlinked" | "uncertain" | "inspectedLinked";
-export type ClassMovementStage = "replacement" | "original" | "association" | "compensation" | "compensationInspection";
+export type ClassMovementStage = "replacement" | "original" | "association" | "associationInspection" | "compensation" | "compensationInspection";
 export type ClassMovementProgress = Readonly<{
   original: ClassMovementMutationState;
   replacement: ClassMovementMutationState;
@@ -51,6 +51,8 @@ export function classMovementCanContinue(progress: unknown, stage: ClassMovement
       return observed.original === "notSent" && observed.replacement === "inspectedActive" && (observed.caseAssociation === "unlinked" || observed.caseAssociation === "notApplicable");
     case "association":
       return observed.original === "inspectedCancelled" && observed.replacement === "inspectedActive" && observed.caseAssociation === "unlinked";
+    case "associationInspection":
+      return observed.original === "inspectedCancelled" && observed.replacement === "inspectedActive" && observed.caseAssociation === "uncertain";
     case "compensationInspection":
       return observed.original === "notSent" && observed.replacement === "uncertain" && (observed.caseAssociation === "unlinked" || observed.caseAssociation === "notApplicable");
     default: return false;

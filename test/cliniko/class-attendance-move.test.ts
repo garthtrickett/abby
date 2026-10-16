@@ -80,6 +80,7 @@ function fixture(differentService = false) {
     return f.fetchPort(value, init);
   };
   const config = { scope, cliniko: f.config, source: { practitionerId: "22", appointmentTypeId: "33", className: "Mat Pilates" },
+    stageRequestCosts: { proof: 0, permit: 0, passSelect: 0, passAllow: 0 },
     destination: differentService ? { practitionerId: "23", appointmentTypeId: "34", className: "Reformer Pilates" } : { practitionerId: "22", appointmentTypeId: "33", className: "Mat Pilates" }, proof: f.proof,
     policyVersion: "policy-1", termsVersion: "move-and-recovery-terms-1", timeZone: "Australia/Sydney", recallTypeId: "7",
     clock: () => clock, signal: lifetime.signal, fetchPort };

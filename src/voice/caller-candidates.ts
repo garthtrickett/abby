@@ -7,7 +7,7 @@ export type CallerCandidates = Readonly<{
 }>;
 
 export type CallerCandidateLookup = Readonly<{
-  candidates(scope: Pick<LocationScope, "tenantId" | "clinicId">, presentedCallerNumber: string):
+  candidates(scope: Pick<LocationScope, "tenantId" | "clinicId">, presentedCallerNumber: string, signal?: AbortSignal):
     Promise<Result<CallerCandidates, Readonly<{ kind: string }>>>;
 }>;
 

@@ -18,7 +18,7 @@ for (const pass of [false, true]) test(`E2E-419 actual staged ${pass ? "pass" : 
     assert.equal(current.classMovement?.outcome, "pending");
     assert.equal(f.writes.length, 1); assert.equal(f.native.attendees.find(row => row.id === "101")!.cancelled_at, null);
     const initialQuote = structuredClone(action.mutation.request);
-    for (const stage of pass ? ["original", "association"] : ["original"]) {
+    for (const stage of pass ? ["original", "association", "associationInspection"] : ["original"]) {
       await f.play(); await f.pause(61);
       let prepared = resultValue(await f.host.prepareClassMovementContinuation(action.key, signal));
       if (prepared.kind === "verificationRequired") {
@@ -42,7 +42,7 @@ for (const pass of [false, true]) test(`E2E-419 actual staged ${pass ? "pass" : 
       assert.equal(f.writes.length, before, "affirmation only admits the exact phase effect");
       resultValue(await f.reception.drain(f.scope, f.callId, at()));
       current = (await f.state()).actions[action.key]!;
-      assert.equal(f.writes.length, before + 1, JSON.stringify({ stage, current, claims: f.claims }));
+      assert.equal(f.writes.length, before + (stage === "associationInspection" ? 0 : 1), JSON.stringify({ stage, current, claims: f.claims }));
     }
     assert.equal(current.status, "committed", JSON.stringify(current));
     assert.equal(current.classMovement?.outcome, "moved");
@@ -93,5 +93,22 @@ test(`E2E-419 staged ${pass ? "pass" : "ordinary"} host refuses ${boundary} befo
     assert.equal(f.native.attendees.find(row => row.id === "101")!.cancelled_at, null);
     assert.equal(f.native.attendees.find(row => row.id === "401")!.cancelled_at, null);
     assert.ok(f.windowClaims.every(count => count <= 180));
+  } finally { await f.close(); }
+});
+
+for (const fault of ["permission", "contact"] as const)
+test(`E2E-419 withdrawn patient ${fault} cannot disclose a fresh phase readback`, async () => {
+  const f = await classMoveFixture(false, false, undefined, true), at = () => f.config.clock();
+  try {
+    await f.verify(); const initial = await f.prepare(); await f.play(); await f.pause(61);
+    resultValue(await f.reception.affirm(f.scope, f.turn("initial-yes", "Yes"), initial.key, initial.digest, at()));
+    resultValue(await f.reception.drain(f.scope, f.callId, at())); await f.play(); await f.pause(61);
+    if (fault === "permission") f.setPermitted(false); else f.setEmail("changed-channel@example.test");
+    const state = resultValue(await f.reception.continueClassMovement(f.scope, f.turn("continue", "Continue my class move")));
+    assert.equal(state.actions[initial.key]!.status, "needsReview");
+    assert.equal(state.actions[initial.key]!.classMovementConsent, undefined);
+    const notice = state.pendingPresentationId ? state.presentations[state.pendingPresentationId] : undefined;
+    assert.doesNotMatch(notice?.approvedText ?? "", /The original class is on|Demo Instructor|Mat Pilates/);
+    assert.equal(f.writes.length, 1); assert.equal(f.native.attendees.find(row => row.id === "101")!.cancelled_at, null);
   } finally { await f.close(); }
 });

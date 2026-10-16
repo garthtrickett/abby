@@ -4,6 +4,7 @@ import type { LocationScope, Result, VerifiedPatient } from "../core/model.ts";
 import { CallerVerificationSession, verificationPrompt } from "./caller-verification-session.ts";
 import { sameScope } from "./appointment-change-authority.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
+import type { ClinikoCostBinding } from "../cliniko/request-cost.ts";
 
 type Failure = Readonly<{ kind: "verificationUnavailable" }>;
 type Preparation = Readonly<{ kind: "ready"; patient: VerifiedPatient }> |
@@ -68,14 +69,13 @@ export class ClassMovementVerifier {
         if (signal.aborted || this.#closed) { this.dispose(); return unavailable(); }
         return ok({ kind: "verificationRequired", prompt: verificationPrompt });
       }
-      // Preparing a separate confirmation exposes no new protected facts and
-      // must not spend the next phase's native allocation before it is held.
-      // Every eventual native boundary still uses the actual proof port.
-      const grant = await this.ownedGrant(signal);
-      if (signal.aborted || this.#closed || !grant) {
+      // A phase readback discloses the original protected targets again.
+      // Ownership metadata cannot replace current contact/patient permission.
+      const patient = await this.#session.verifiedSubject("appointments.reschedule", signal);
+      if (signal.aborted || this.#closed || !patient || !this.#matches(patient) || patient.verificationRef !== this.#current.verificationRef) {
         this.dispose(); return unavailable();
       }
-      return ok({ kind: "ready", patient: structuredClone(this.#current) });
+      return ok({ kind: "ready", patient: structuredClone(patient) });
     } catch { this.dispose(); return unavailable(); }
     finally { this.#busy = false; }
   }
@@ -118,6 +118,9 @@ export class ClassMovementVerifier {
     const grant = await session.ownedGrant("appointments.reschedule", signal);
     return !signal.aborted && !this.#closed && !this.#pending && session === this.#session &&
       grant?.verificationRef === this.#current.verificationRef && grant.expiresAt === this.#current.expiresAt ? grant : undefined;
+  }
+  nativeRequestCostCeilings(binding: ClinikoCostBinding) {
+    return this.#closed ? undefined : this.#session.nativeRequestCostCeilings(binding);
   }
 
   dispose(): void {

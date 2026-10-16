@@ -16,13 +16,14 @@ export type ClassMovementConsentEvidence = Readonly<{
 export type ClassMovementConsent = Readonly<{
   evidence: ClassMovementConsentEvidence; digest: string;
 }>;
-export type ClassMovementPreparation = Readonly<{ kind: "verificationRequired" }> |
+export type ClassMovementPreparation = Readonly<{ kind: "verificationRequired" }> | Readonly<{ kind: "needsReview" }> |
   Readonly<{ kind: "ready"; evidence: ClassMovementConsentEvidence; expectedConversationRevision: number }>;
 
 const phaseDescription: Readonly<Record<PendingClassMovementStage["stage"], string>> = {
   replacement: "create the replacement class attendance",
   original: "cancel the original class attendance",
   association: "associate the replacement attendance with its approved membership case",
+  associationInspection: "inspect whether the class move and membership association are complete; this inspection makes no further attendance change",
   compensation: "cancel the replacement attendance to restore the original arrangement",
   compensationInspection: "inspect whether the original arrangement has been restored; this inspection makes no further attendance change",
 };

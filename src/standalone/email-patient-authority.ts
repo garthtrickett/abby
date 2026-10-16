@@ -89,7 +89,7 @@ export class EmailPatientAuthority implements PatientAuthority {
     const policy = await config.policy.current(config.scope);
     if (!policy.ok || policy.value.enabled !== true || policy.value.version !== config.policyVersion ||
         !sameScope(policy.value.scope, config.scope) || signal.aborted) return undefined;
-    const candidates = await config.lookup.candidates(config.scope, config.presentedNumber);
+    const candidates = await config.lookup.candidates(config.scope, config.presentedNumber, signal);
     if (!candidates.ok || !validCallerCandidates(candidates.value) || candidates.value.kind !== "one" || candidates.value.candidateIds.length !== 1 ||
         signal.aborted) return undefined;
     const selected = candidates.value.candidateIds[0]!;

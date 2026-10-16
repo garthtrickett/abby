@@ -102,6 +102,7 @@ export async function classPassMoveFixture(options: { differentService?: boolean
     return f.fetchPort(value, init);
   };
   const lifetime = new AbortController(), config = { scope, cliniko: f.config, source: { practitionerId: "22", appointmentTypeId: "33", className: "Mat Pilates" },
+    stageRequestCosts: { proof: 0, permit: 0, passSelect: 0, passAllow: 0 },
     destination: options.differentService ? { practitionerId: "23", appointmentTypeId: "34", className: "Reformer Pilates" } : { practitionerId: "22", appointmentTypeId: "33", className: "Mat Pilates" },
     proof: f.proof, policyVersion: "policy-1", termsVersion: "pass-move-terms-1", timeZone: "Australia/Sydney", recallTypeId: "7", clock: () => now, signal: lifetime.signal, fetchPort,
     casePass: { authority, stagingContractVersion: "unlinked-recovery-v1" } };

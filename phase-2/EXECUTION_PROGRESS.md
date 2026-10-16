@@ -747,12 +747,21 @@ original offer deadline. A changed quote or captured source is refused.
 The private verifier now renews when the remaining proof cannot cover the
 native boundary's required two-minute margin, as well as after expiry. It
 retires the old owner and requires the original same-subject private-code
-succession. Preparing a live readback uses non-disclosing ownership metadata;
-actual protected provider boundaries still use the original real proof port,
-inside their native allocation. This avoids spending a native contact request
-before reserving a full phase. Unknown callback costs are still unknown: this
-change does not convert the existing request floor or a physical cap into a
-complete phase admission ceiling.
+succession. Preparing a live protected readback checks the current verifier's
+actual subject proof, including contact and patient permission. Non-disclosing
+ownership metadata is confined to private routing guards. The earlier
+metadata-only preparation was insufficient: two host tests reproduced a fresh
+protected readback after contact or patient permission was withdrawn, log
+`be9df097-1792154842009.log`. Restoring the actual proof check retires the
+continuation and produces only a fixed review notice on refusal. The combined
+proof/readback and verifier contracts then passed 31 cases, log
+`be9df097-1792154864099.log`; the subsequent cost-drift, host, call-flow and voice
+contracts passed 28 cases, log `be9df097-1792155014467.log`. These scopes overlap
+and do not replace full qualification. Protected native boundaries also check
+the current actual proof independently. Readback proof requests consume the
+shared account budget before a later phase allocation; complete admission must
+account for that real remaining capacity. Unknown callback costs remain
+unknown; a request floor or physical cap is not a complete phase ceiling.
 
 A shared `ClassMovementTurns` gateway and core reducer accept the caller's
 continuation request once, check the current call/session/lease/policy/write
@@ -820,3 +829,113 @@ native I/O is not bounded by the old request floor. Do not activate this route
 or land it as completed gap10 while those dependencies remain unfinished.
 Gust e252 retains the next heavy slot after the 12:01:36 UTC release. No new
 Abby typecheck, compiler, PostgreSQL job or automatic heavy retry was launched.
+
+### Unpublished request-cost refinement: admission still incomplete
+
+The current source derives phase ceilings from bounded native reader caps and
+explicit callback ceilings bound to the exact scope, account credential and
+physical budget. Unknown callbacks, foreign bindings, malformed declarations,
+changed captured costs and any required phase above 180 are refused. A request
+floor never supplies an upper bound. Declarations describe trusted callback
+contracts; actual requests still require the shared physical budget claim.
+
+The cost, staged contention, admitted flow, verification and ordinary native
+contracts passed 79 cases, zero failures/cancellations/skips, log
+`be9df097-1792154645897.log`. Two earlier runs failed assertions that assumed a
+fixed 180-request reservation. The corrected tests explicitly fill the shared
+account budget before testing contention, preserving the no-extra-read/write
+assertions, fresh confirmation and original deadlines. The largest synthetic
+pass journey measured phase claims of 132, 134 and 178 against independently
+calculated ceilings, including full bounded metadata, rosters and case history.
+
+Ordinary paired observations now use one actual proof boundary around the
+compound read, with proof checks before and after it. Existing ordinary/pass
+native and host contracts passed 98 cases, zero failures/cancellations/skips,
+log `be9df097-1792154702634.log`. This run predates the additional readback
+withdrawal cases recorded above; its scope overlaps other results.
+
+This is not complete admission for the actual serving cohort. The earlier
+combined pass association/final-inspection stage exceeded 180 when the actual
+proof ceiling was two requests, causing conservative refusal. The unpublished
+refinement now separates association from a freshly confirmed read-only
+inspection. Only an accepted association queues that inspection; an ambiguous
+response still ends for review. Core completion requires the separate
+inspection stage and its joint observations. The pure progress, receipt,
+consent and SAM contracts passed 38 cases, zero failures/cancellations/skips,
+log `be9df097-1792157117056.log`. The additional explicit read-only prompt and
+association-skip assertions subsequently passed with the receipt/SAM scope:
+23 cases, zero failures/cancellations/skips, log
+`be9df097-1792157215723.log`. These scopes overlap. Native owner, actual cost and
+serving/process checks of this split remain pending. Existing live owners
+cannot be reconstructed or hot-loaded across source changes; the older
+foundation draft alone does not implement this protocol. The real phone lookup
+has an existing bound: `PostgresPatientPhoneIndex.find` returns at most ten
+candidate IDs, and `ClinikoPhoneLookup.candidates` rechecks each through one
+patient GET before rechecking the index generation. An oversized index yields
+`tooMany` without native candidate reads. Its account/budget-bound cost
+declaration and propagation through caller/task wrappers remain unfinished;
+synthetic zero-cost declarations cannot qualify it. The complete actual proof
+can therefore cost eleven requests even when other callbacks use no native
+requests. Splitting association alone does not admit every phase at that
+ceiling; further native admission work is required without truncating candidate
+ambiguity or weakening proof freshness.
+Readback proof requests and competing account work must leave enough physical
+capacity for each later phase. Unknown policy/permission/contact-revision
+costs remain explicit refusals. No full typecheck, process/database rebuild,
+serving activation or completed gap10 claim follows from these focused checks.
+Source fingerprints and scenario evidence need review after this refinement
+is complete; the earlier fingerprint checkpoint does not cover this delta.
+
+
+### Four-phase cost refinement and concrete lookup checkpoint (unpublished)
+
+Accepted pass association now queues a separately confirmed read-only joint
+inspection. No further attendance mutation occurs in that fourth phase; an
+ambiguous association stops for review without queuing it. Completion requires
+the inspection's original/replacement/case observations. Native upper costs
+include bounded metadata/roster/case readers plus every declared callback for
+the exact scope/account/physical budget. Unknown costs, changed declarations
+and any required phase above180 still refuse staging.
+
+The actual phone lookup now captures its complete existing index candidate
+count, up to ten, without filtering ambiguous candidates. Every invocation
+rechecks the current full index; growth refuses before native requests, and
+generation drift and aborts remain failures. Task/history/renewal forwarders
+preserve known ceilings and cancellation. The concrete SQL-only contact
+revision adapter supplies a zero-native-request declaration; arbitrary revision
+ports remain unknown. The actual composed proof costs N+1 native reads when
+other declared callbacks are local. High-cost cohorts can still exceed a
+phase's180 ceiling and are not yet admitted.
+
+Exact focused commands and results (all with ABBY_LEDGER=memory):
+
+- `node --test --test-concurrency=1 test/cliniko/phone-lookup-request-cost.test.ts test/cliniko/verification-request-cost.test.ts`:13 passed, log `be9df097-1792158907173.log`. The real query/transaction adapter runs over DummyDriver; this is not PostgreSQL evidence.
+- `node --test --test-concurrency=1 test/cliniko/class-move-stages.test.ts test/cliniko/class-move-verification-renewal.test.ts`:24 stage cases passed, two renewal fixture failures, log `be9df097-1792159076140.log`. Maximum-shape measured phase claims132/134/93/91 (proof1) and139/142/99/97 (proof2) remained below independently calculated ceilings.
+- `node --test --test-concurrency=1 test/cliniko/class-move-verification-renewal.test.ts`:first correction produced1 pass/1 failure, log `be9df097-1792159151139.log`; final corrected fixture2 passed, log `be9df097-1792159242159.log`. The first failure assumed a fixed180 reservation; the fixture now fills actual remaining account capacity before asserting quota waiting. The next failure correctly required fresh proof after the last wait left117 seconds; a third real code now supplies a distinct current proof before final inspection. No expiry/deadline/concurrency/assertion was weakened.
+- `node --test --test-concurrency=1 test/cliniko/class-move-staged-host.test.ts test/cliniko/class-move-staged-call-flow.test.ts test/voice/class-move-staged-session.test.ts test/cliniko/class-move-request-cost.test.ts`:29 passed, log `be9df097-1792159173737.log`. This exercises actual native host, admitted caller, playback/affirmation and fourth-phase zero writes.
+- `node --test --test-concurrency=1 test/cliniko/class-attendance-move.test.ts test/cliniko/class-move-host.test.ts test/cliniko/class-pass-movement.test.ts test/cliniko/class-pass-move-host.test.ts test/cliniko/call-task-sequence.test.ts test/cliniko/request-cost.test.ts`:135 passed, log `be9df097-1792159655213.log`. Existing ordinary/pass behavior and callback forwarding remain covered after the split.
+
+All passing scopes have zero failures/cancellations/skips and overlap earlier
+checkpoints; their counts are not added into a whole-suite total. The four-phase
+PostgreSQL worker is updated to add explicit competing account claims between
+phases and expect three real rolling resets; it has NOT run. Its existing
+210-second deadline,180-request cap and three-mutation expectation are unchanged.
+Earlier three-phase process/backup evidence cannot qualify the new protocol.
+
+Manifest1.233 retains419 IDs and planned full-call evidence, registers the
+focused concrete cost witnesses and distinguishes historical PostgreSQL results.
+Product facts were reviewed against this changed source; direct source hashes
+are refreshed as a content-drift aid, not a behavioral attestation. Full native
+typecheck, high-cost cohort admission, rebuilt signed serving, independent
+operator recovery, mixed/concurrent/process/PostgreSQL/backup/output privacy and
+whole-suite/cloud qualification remain open. Booking-menu PR466 remains a
+separate branch and is not silently included here. All13 gaps and the selected
+Stripe provider remain in scope. No production/clinic activation occurred.
+
+The earlier4,500,000KiB host-free-memory floor had no measured derivation and
+was a conservative runner choice. The separate menu source5a6 typecheck passed
+in65.26s with measured scope peak1,421,070,336 bytes (1.323GiB) and no OOM;
+its scope and heap were not explicitly capped. This is a useful observation,
+not a guarantee for this larger native tree. No new heavy job is automatically
+authorized by Gust's latest release; the next frozen standalone native typecheck
+requires a fresh board/source/live-process check and peer coordination.

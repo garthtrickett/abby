@@ -22,7 +22,8 @@ export type ClassMovementSummary = Readonly<{ outcome: ClassMovementState["outco
 const following: Readonly<Record<ClassMovementStage, readonly ClassMovementStage[]>> = {
   replacement: ["replacement", "original"],
   original: ["original", "association", "compensation"],
-  association: ["association"],
+  association: ["association", "associationInspection"],
+  associationInspection: ["associationInspection"],
   compensation: ["compensation", "compensationInspection"],
   compensationInspection: ["compensationInspection"],
 };
@@ -90,7 +91,7 @@ export function readClassMovementReceipt(value: unknown, previous?: ClassMovemen
     return continuation ? { movement: Object.freeze({ progress, outcome: "pending", continuation }) } : review();
   }
   const completedStage = previous?.outcome === "pending" && (
-    previous.continuation.stage === "association" && previous.progress.caseAssociation === "unlinked" && progress.caseAssociation === "inspectedLinked" ||
+    previous.continuation.stage === "associationInspection" && previous.progress.caseAssociation === "uncertain" && progress.caseAssociation === "inspectedLinked" ||
     previous.continuation.stage === "original" && previous.progress.caseAssociation === "notApplicable" && progress.caseAssociation === "notApplicable"
   );
   if (read.outcome === "moved" && completedStage &&

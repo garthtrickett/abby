@@ -64,8 +64,13 @@ test("movement receipts require distinct sequential stage references and final j
   const second = read(receipt(cancelled, "association", 2), first.movement);
   assert.equal(second.movement.outcome, "pending");
   const final = { kind: "classMovement", actionKey: "owned-action", outcome: "moved", progress: { ...cancelled, caseAssociation: "inspectedLinked" }, hostRef: "native-move-receipt" };
-  assert.equal(read(final, second.movement).movement.outcome, "moved");
-  assert.equal(read(final, second.movement).hostRef, "native-move-receipt");
+  assert.equal(read(final, second.movement).movement.outcome, "needsReview", "an accepted association does not replace separate final inspection");
+  const inspection = read(receipt({ ...cancelled, caseAssociation: "uncertain" }, "associationInspection", 3), second.movement);
+  assert.equal(inspection.movement.outcome, "pending");
+  assert.equal(read(receipt({ ...cancelled, caseAssociation: "uncertain" }, "associationInspection", 2), first.movement).movement.outcome,
+    "needsReview", "public uncertainty cannot skip the owned association stage");
+  assert.equal(read(final, inspection.movement).movement.outcome, "moved");
+  assert.equal(read(final, inspection.movement).hostRef, "native-move-receipt");
   assert.equal(read(final, first.movement).movement.outcome, "needsReview", "an original cancellation acknowledgement cannot skip the membership stage");
   assert.equal(read(final).movement.outcome, "needsReview", "final-looking observations do not replace the owned stage sequence");
   assert.equal(read({ ...final, progress: cancelled }, second.movement).movement.outcome, "needsReview");

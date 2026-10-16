@@ -2,6 +2,8 @@ import { ClassServiceDialogue } from "./class-service-dialogue.ts";
 import { readClassServices, classServiceName } from "./class-service-catalogue.ts";
 import type { ClassServiceConfig, PublicClassService } from "./class-service-catalogue.ts";
 import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
+import { inheritClinikoRequestCost } from "../cliniko/request-cost.ts";
+import { ClinikoPhoneLookup } from "./cliniko-phone-lookup.ts";
 import { ClinikoCallTasks } from "./cliniko-call-tasks.ts";
 import { ClinikoRepresentativeCallOwner } from "./cliniko-representative-call-owner.ts";
 import { ClinikoRepresentativeSelection } from "./cliniko-representative-selection.ts";
@@ -827,13 +829,21 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
         selectedConfig = { ...this.#config, classAttendance: chosen.config };
       } else if (classSelectionRef) return unavailable();
       this.#classDialogue.clear();
+      if (classAttendance && operation === "reschedule" && selectedConfig.lookup instanceof ClinikoPhoneLookup) {
+        const bound = await awaitUntilAbort(selectedConfig.lookup.forVerificationBudget({ scope: selectedConfig.receipt.scope,
+          credentialFingerprint: clinikoCredentialFingerprint(selectedConfig.cliniko.apiKey), budget: selectedConfig.cliniko.rateBudget },
+        selectedConfig.inbound.presentedCallerNumber ?? "", AbortSignal.any([this.#workflowLifetime.signal, this.#patientLifetime.signal,
+          this.#lifetime.signal, this.#config.signal, buildLifetime.signal])), signal);
+        if (!bound || signal.aborted) return unavailable();
+        selectedConfig = { ...selectedConfig, lookup: bound };
+      }
       const pin = this.#historySubject;
-      const lookup = pin ? { candidates: async (scope: Parameters<typeof selectedConfig.lookup.candidates>[0], phone: string) => {
+      const lookup = pin ? { candidates: inheritClinikoRequestCost(async (scope: Parameters<typeof selectedConfig.lookup.candidates>[0], phone: string, stop?: AbortSignal) => {
         const now = Date.parse((this.#config.clock ?? (() => new Date().toISOString()))());
         if (!sameScope(pin.scope, this.#config.receipt.scope) || !Number.isFinite(now) || Date.parse(pin.expiresAt) <= now || this.closed || this.#historySubject !== pin) return err({ kind: "denied" });
-        const result = await selectedConfig.lookup.candidates(scope, phone);
+        const result = await selectedConfig.lookup.candidates(scope, phone, stop);
         return result.ok && result.value.kind === "one" && result.value.candidateIds[0] === pin.patientRef && this.#historySubject === pin && !this.closed ? result : err({ kind: "denied" });
-      } } : selectedConfig.lookup;
+      }, selectedConfig.lookup.candidates) } : selectedConfig.lookup;
       const config = { ...selectedConfig, ...(representative ? { representative } : {}), lookup: this.#tasks && !representative ? this.#tasks.lookup(lookup) : lookup,
         ...(selectedConfig.resend && this.#tasks ? { resend: { ...selectedConfig.resend, taskSequence: this.#tasks } } : {}), signal: AbortSignal.any([this.#workflowLifetime.signal, this.#patientLifetime.signal, this.#lifetime.signal, this.#config.signal, buildLifetime.signal]) }, paths = config.approvals;
       const classes = config.classAttendance;
