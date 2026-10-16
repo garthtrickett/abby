@@ -3983,3 +3983,93 @@ pending typecheck/PostgreSQL/independent/cloud gates are in
 The simultaneous PostgreSQL qualification tests fixed earlier booking source
 and does not qualify this delta. No integration completion or activation follows;
 all thirteen gaps and remaining staged caller/operator work stay active.
+
+## October16 staged movement source contracts, E2E-419
+
+Unpublished staged-class preparation adds fixed partial observations, typed
+SAM receipts, separately played phase consent, current same-patient proof,
+redacted result readers and truthful terminal/uncertain/recovery behavior.
+After reproducing and correcting startup/active-lease and terms-expiry
+boundaries, 33 memory contracts plus two registry checks pass with no failures,
+cancellations or skips. Existing source creation claims and the new movement
+fact were reviewed; the product-fact drift contract passes. Exact red/green
+commands and logs are in
+[execution progress](EXECUTION_PROGRESS.md#staged-movement-source-foundation-e2e-419).
+
+All 76 synthetic native movement/staging/review regressions also pass. They
+cover ordinary/pass cases, different services, loss, compensation, concurrent
+advances, quota windows and exact legacy/staged review encoding. The staged
+ordinary format preserves complete context within the existing note bound.
+These in-process contracts do not establish complete native request-cost
+admission or an actual serving route.
+
+The prerequisite is qualified reader fixture commit `cd9b4ca`. Rebase checking
+preserved all 1,149 previously typechecked source inputs exactly. That full
+typecheck passed before the latest expiry refinements; the revised source
+requires a fresh full typecheck under the coordinated Gust hold. No follow-on
+heavy job is queued. Manifest 1.230 has 419 stable IDs and keeps every full-call
+evidence item planned.
+
+Native caller/renewal routing, operator resolution, complete cost admission,
+mixed catalogue/correction/no-pass/pass combinations and process/database/
+backup/serving acceptance remain open. Stage 7 is unfinished. The parent
+PostgreSQL suite failed on unchanged `94fd49`; later unchanged focused runs
+passed four and nine overlapping cases without establishing the timing cause
+or qualifying this later draft. All thirteen gaps remain active.
+
+### Remaining serving boundary for E2E-419
+
+Source review identifies these concrete integration requirements; they are
+planned work, not implemented native caller support:
+
+1. Keep one private movement owner for the admitted call. The current move
+   host supplies a 30-second send signal to native execution. A parked staged
+   owner instead needs the call lifetime; each active segment keeps its own
+   bounded effect/30-second deadline. Closing the call retires the owner. No
+   serialized continuation reference can reconstruct it after process loss.
+2. Carry current verification explicitly through that owner. Use the actual
+   `CallerVerificationSession.renewOnce` before asking an expired owner for
+   `verifiedSubject`, then obtain a fresh private challenge/code under the
+   original pinned subject, operation, call and Cliniko account. Never redirect
+   a retired proof object to its successor. Renewal grants no send or consent.
+3. Update native permission/SAM correlation for each distinct phase effect.
+   `ClinikoClassMoveHost.#ready` currently checks the initial `:write` effect.
+   A phase must check its actual consent-derived effect, current played
+   presentation, immutable movement targets/terms, current proof and live
+   permission; it cannot fall through the initial action's guard.
+4. Route pending receipts, quota waits, private renewal and the fresh exact
+   readback through the actual serving owner. A request to continue or a newly
+   entered code may prepare a prompt; only a subsequent exact affirmative
+   turn after that prompt is played can dispatch its phase. The model cannot
+   select a phase or authorize replay. Do not add an autonomous quota timer.
+   If initial terms expire across quota windows, never extend their stored
+   expiry or borrow proof renewal as terms authority. A later route needs
+   separately issued same-contract terms evidence from fresh owner policy,
+   preserving the original version/text and targets; absent that evidence the
+   current foundation stops for review.
+5. Establish complete phase request-cost bounds, including any proof and
+   independent permission requests against the same native account. The
+   existing proof request floor is a lower bound and cannot establish that
+   upper bound. Preserve physical allocation, complete pages, growth checks,
+   fresh observations and safe partial truth for both ordinary and pass moves.
+6. Add independently authorized operator resolution over the provider-owned
+   review and fresh joint native state. Enforce the staging version, exact
+   original/replacement/case, policy and terms. Parsed notes, a released claim
+   or the lost caller's reference cannot authorize a recovery mutation.
+7. Exercise the complete caller/renewal/operator route across actual quota
+   windows, mixed services/catalogues/corrections, no-pass/pass combinations,
+   concurrent actors and process loss with database/backup/output privacy.
+   Qualify the foundation and shared booking regressions on their actual
+   combined source; the failed parent PostgreSQL run does not supply this
+   evidence. Typecheck, facts drift, registry and required review/cloud gates
+   remain separate from the external activation requirements.
+
+
+The subsequent refinement reproduced and corrected two foundation expiry
+boundaries: startup admission expiry cannot shorten an already active renewed
+session lease, and live proof/lease cannot extend separately approved movement
+terms. The admitted-session witness crosses a full quota window with actual
+session renewals and grants no mutation. All 35 focused core/SAM/registry
+contracts pass. The earlier full typecheck predates these refinements; a fresh
+full typecheck is pending under the coordinated Gust hold. Exact red/green
+logs and remaining native serving limits are in the execution ledger.

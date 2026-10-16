@@ -98,6 +98,7 @@ function auditPayload(action: TransitionAction): Record<string, string> {
     case "transferPossiblySent": return { presentationId: action.presentationId };
     case "presentationResolved": return { presentationId: action.presentationId, status: action.status };
     case "reconciliationDeadline": return { actionKey: action.actionKey };
+    case "classMovementConsentPrepared": return { actionKey: action.actionKey };
     case "staffChangeRequested": return { taskKey: action.taskKey, actorRef: action.actorRef, operation: action.change.kind };
     case "staffAlertRequested": return { taskKey: action.taskKey, reason: action.reason };
     default: return { effectId: action.effectId };

@@ -123,6 +123,11 @@ export class EffectWorker {
     }
     if (effect.kind === "hostWrite") {
       if (effect.status !== "pending") throw new Error("invalidTransition");
+      if (effect.classMovementConsent && !this.host.continueClassMovement) {
+        const blocked = await this.runtime.blockHostWrite(callId, effectId, now, "unsupported");
+        if (!blocked.ok) throw new Error(blocked.error.kind);
+        return;
+      }
       const marked = await this.runtime.markHostPossiblySent(callId, effectId, now);
       if (!marked.ok) throw new Error(marked.error.kind);
       if (marked.value.effects[effectId]?.status === "canceled") return;
@@ -130,10 +135,12 @@ export class EffectWorker {
       let acknowledged: Extract<HostWriteReceipt, { kind: "committed" }> | undefined;
       let receiving = true;
       try {
-        receipt = await this.hostCall(signal => this.host.write(effect.mutation, now, signal, value => {
-          if (receiving && !acknowledged && effect.mutation.kind === "book" && value.kind === "committed" && value.actionKey === effect.actionKey)
-            acknowledged = structuredClone(value);
-        }));
+        receipt = await this.hostCall(signal => effect.classMovementConsent
+          ? this.host.continueClassMovement!(effect.mutation, effect.classMovementConsent, now, signal)
+          : this.host.write(effect.mutation, now, signal, value => {
+            if (receiving && !acknowledged && effect.mutation.kind === "book" && value.kind === "committed" && value.actionKey === effect.actionKey)
+              acknowledged = structuredClone(value);
+          }));
       } catch {
         receipt = acknowledged ?? {
           kind: "uncertain",

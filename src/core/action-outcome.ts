@@ -1,4 +1,5 @@
 import type { ActionRequest, ActionState } from "./model.ts";
+import { classMovementOutcomeText } from "./class-movement-continuation.ts";
 
 export function confirmedActionText(kind: ActionRequest["kind"]): string {
   switch (kind) {
@@ -14,6 +15,7 @@ export function confirmedActionText(kind: ActionRequest["kind"]): string {
 /** Status comes from the committed SAM record, never caller or model wording. */
 export function actionOutcomeText(action: ActionState | undefined): string {
   if (!action) return "I haven't completed an action in this call.";
+  if (action.classMovement) return classMovementOutcomeText(action.classMovement);
   if (action.status === "committed") return confirmedActionText(action.kind);
   if (action.status === "uncertain" || action.status === "needsReview" || action.status === "dispatched")
     return action.kind === "intake" && action.mutation.request.kind === "intake" && action.mutation.request.recoveryContract === "callerMediated"

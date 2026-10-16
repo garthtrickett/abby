@@ -1,4 +1,6 @@
 import type { ActionState, CallState, Presentation, StaffItem } from "../core/model.ts";
+import { classMovementSummary } from "../core/class-movement-continuation.ts";
+import type { ClassMovementSummary } from "../core/class-movement-continuation.ts";
 
 /** Agent-visible receipt for a turn command. It carries keys and outcomes, never host evidence or spoken content. */
 export type CallCommandProgress = Readonly<{
@@ -6,7 +8,7 @@ export type CallCommandProgress = Readonly<{
   traceKey: string;
   callVersion: number;
   lifecycle: CallState["lifecycle"];
-  actions: readonly Readonly<{ actionKey: string; kind: ActionState["kind"]; status: ActionState["status"]; presentationId: string }>[];
+  actions: readonly Readonly<{ actionKey: string; kind: ActionState["kind"]; status: ActionState["status"]; presentationId: string; classMovement?: ClassMovementSummary }>[];
   staffItems: readonly Readonly<{ taskKey: string; reason: StaffItem["reason"]; status: StaffItem["status"] }>[];
   pendingPresentation?: Readonly<{ presentationId: string; kind: Presentation["kind"]; status: Presentation["status"] }>;
   knowledgeSources: readonly Readonly<{ sourceRef: string; version: string; ownerRef: string }>[];
@@ -20,8 +22,11 @@ export function commandProgress(state: CallState, traceKey: string): CallCommand
   const appointments = state.appointmentReads.filter(item => item.turnId === traceKey).at(-1);
   return {
     callId: state.callId, traceKey, callVersion: state.version, lifecycle: state.lifecycle,
-    actions: (state.callerIdentityDenied ? [] : Object.values(state.actions)).map(action => ({ actionKey: action.key, kind: action.kind,
-      status: action.status, presentationId: action.presentationId })),
+    actions: (state.callerIdentityDenied ? [] : Object.values(state.actions)).map(action => {
+      const movement = classMovementSummary(action.classMovement);
+      return { actionKey: action.key, kind: action.kind, status: action.status, presentationId: action.presentationId,
+        ...(movement ? { classMovement: movement } : {}) };
+    }),
     staffItems: (state.callerIdentityDenied ? [] : Object.values(state.staffItems)).map(item => ({ taskKey: item.key, reason: item.reason, status: item.status })),
     ...(pending ? { pendingPresentation: { presentationId: pending.id, kind: pending.kind, status: pending.status } } : {}),
     knowledgeSources: state.knowledgeAnswers.filter(item => item.turnId === traceKey)

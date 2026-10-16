@@ -358,7 +358,7 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
       if (selection) return ok(selection);
       const change = appointmentChangeLanguage(turn.text);
       const correction = callerCorrection(turn.text, date);
-      if ((change || correction) && before.lastAction && ["committed", "uncertain", "needsReview", "dispatched"].includes(before.lastAction.status))
+      if ((change || correction) && before.lastAction && ["committed", "uncertain", "needsReview", "dispatched", "pendingContinuation"].includes(before.lastAction.status))
         return ok({ kind: "clarify", reason: "changeAfterSend" });
       if (change?.kind === "clarify") {
         if (change.reason === "targetDisagreement") config.owner.appointments?.clearSelection();

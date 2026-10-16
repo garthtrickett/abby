@@ -11,8 +11,8 @@
 | 3 Exact receipt foundation | Implemented and locally qualified in `codex/abby-provider-ack-receipt`, stacked on the published plans and integrated candidate. The full interval is captured, sent and validated. Existing post-write host success gates remain. Independent review and exact-head CI remain outstanding. |
 | 4 Individual booking | Published in draft [PR #460](https://github.com/garthtrickett/abby/pull/460), `codex/abby-provider-ack-individual`, based on receipt correction `92a16e5`. Final online/roster availability follows preparation; exact acknowledgement survives host/review/worker cancellation. Focused, isolated database/process/compiled-location and complete local `npm test` checks passed. Independent review and cloud qualification remain open; cloud jobs have not started because of billing. |
 | 5 Native class creation | Implemented candidate in `codex/abby-provider-ack-class`, based on stage 4 `40a51f2`. Exact attendee acknowledgement and final double capacity ordering apply to ordinary/approved-pass creation. Focused, process-loss/privacy and unchanged movement/cancellation regressions passed; corrected compiled cases, final typecheck and manifest checks passed. The full class text pool ended with 2,214 passes, one E2E-353 deadline failure and 225 gated skips; isolated E2E-353 rerun passed. Combined correction qualification remains open. Published in draft [PR #461](https://github.com/garthtrickett/abby/pull/461); independent review and cloud qualification remain open. |
-| 6 Earlier-gap qualification | Dispatch-lease omission reproduced for online/roster/class creation and corrected in `codex/abby-booking-dispatch-lease`. Twelve final-read/transport expiry/renewal cases and 124 shared-host regressions pass; typecheck and ordering checks pass. Corrected full `npm test` passed:2,227 main-pool passes,225 gated skips,zero failures/cancellations; separate ordered runner6 passes,zero skips. Full PostgreSQL qualification finished naturally, exit1:2,958 passes,4 failures,1 existing gated skip,zero cancellations; migrations, generation/parity and builds passed, ordered runner not reached. First-failure reproduction remains next after the single corrected Gust7fa diagnostic actually releases its yielded window. The separate correction/resend reader-kind fix passes focused gateway checks; its typecheck and independent qualification remain open. The original full class run failed E2E-353; its unchanged isolated rerun passed. Preserve all gaps 1–9 and their remaining engineering/acceptance requirements. |
-| 7 Class/pass completion | Pending; staged caller/SAM/operator integration, complete cost admission and broader combinations remain required. |
+| 6 Earlier-gap qualification | Dispatch-lease omission reproduced for online/roster/class creation and corrected in `codex/abby-booking-dispatch-lease`. Twelve final-read/transport expiry/renewal cases and 124 shared-host regressions pass; typecheck and ordering checks pass. Corrected full `npm test` passed:2,227 main-pool passes,225 gated skips,zero failures/cancellations; separate ordered runner6 passes,zero skips. Full PostgreSQL qualification finished naturally, exit1:2,958 passes,4 failures,1 existing gated skip,zero cancellations; migrations, generation/parity and builds passed, ordered runner not reached. Gust7fa released naturally, exit0; unchanged first-file and concurrent four-file PostgreSQL reproductions passed4 and9 tests respectively, with overlap, while the failed full-suite timing cause remains unproven. The reader/foundation typecheck is tracked separately. The separate correction/resend reader-kind fix passes focused gateway checks; its typecheck now passes; independent and database/cloud qualification remain open. The original full class run failed E2E-353; its unchanged isolated rerun passed. Preserve all gaps 1–9 and their remaining engineering/acceptance requirements. |
+| 7 Class/pass completion | Unpublished E2E-419 observation/receipt/consent/SAM foundation now has 33 memory contract passes plus 2 registry checks; focused staged ordinary native cases also pass. The actual native caller/renewal route, operator integration, complete cost admission and mixed combinations remain unfinished. The prior complete foundation typecheck passed; subsequent startup/active-lease and terms-expiry refinements pass those 35 focused checks and await a new full typecheck. Synthetic native/review regressions pass 76 cases. Database/process and cloud qualification remain required. |
 | 8 Payments | Pending gap 11 specification and implementation, including audit R18/R19 and any necessary approved receipt attachment dependency. The owner selected Stripe Checkout on October16; clinic account/policy acceptance and live activation remain distinct. |
 | 9 Outbound | Pending gap 12, audit R20/R21 and contact-policy decisions. |
 | 10 Writeback | Pending gap 13, exact permissions/content/storage decisions and audit R08/R22. |
@@ -372,3 +372,240 @@ establish the original timing cause or qualify this reader delta. The failed
 whole PostgreSQL suite remains failed; reader PostgreSQL qualification,
 independent review and required cloud checks remain outstanding. No landing
 or clinic activation is claimed.
+
+## Staged movement source foundation, E2E-419
+
+`codex/abby-staged-class-caller` contains unpublished source preparation above
+the correction/resend reader fix. Its local prerequisite is `cd9b4ca`, which
+also completes the reader fixture ports after the PostgreSQL-outcome
+documentation rebase. The first rebase preserved all 33 then-changed foundation
+files byte-for-byte. The prerequisite runtime source is identical to published
+draft `846cc76`; its test fixture now satisfies the complete gateway host
+interface. These rebases are not new cloud qualification. No admitted native staged caller
+route or clinic activation is claimed.
+
+The core now separates partial observations, pending live-owner continuation,
+complete movement, inspected restoration and review. Public progress carries
+fixed attendance/association facts; native identifiers, proof references and
+resume capabilities stay out of the projection. A pending move counts as
+unresolved. A terminal label contradicting those facts is refused.
+
+Each next phase has a distinct digest/effect and separately played readback
+of its exact immutable targets and terms. Current same-patient proof may be
+reused without extending its expiry. Changed proof, conversation revision,
+policy, lease, call or continuation cannot reuse the old confirmation.
+Ending, identity denial, interrupted playback and unknown sends retain
+inspected effects while retiring further stage authority. A host without a
+live continuation owner cannot fall back to the initial write. The actual
+effect-recovery entry point preserves uncertainty after a possibly-sent phase;
+a later generic leg exact-commit cannot establish the joint move.
+
+Native source preparation also lets explicitly staged ordinary movement use
+the existing physical 180-request allocation and separate 30-second stages,
+without an invented membership leg. Its separately versioned review compresses
+the complete no-pass request within the existing 1,000-character summary bound.
+The existing pass tuple format and legacy ordinary JSON remain intact.
+Malformed/corrupt/oversized payloads and header downgrade are refused.
+
+| Actual focused command | Result and scope |
+| --- | --- |
+| `env ABBY_LEDGER=memory node --test --test-concurrency=1 test/text/class-movement-progress.test.ts test/text/class-movement-receipt.test.ts test/text/class-movement-consent.test.ts test/text/class-movement-sam.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts` | 33 passed,zero failures/cancellations/skips, log `be9df097-1792147098375.log`; 31 pure/memory SAM contracts plus 2 registry checks. No compiler, browser, database or live provider ran. |
+| `env ABBY_LEDGER=memory node --test --test-concurrency=1 --test-name-pattern='^(staged no-pass\|explicit identity denial)' test/cliniko/class-attendance-move.test.ts test/text/class-movement-sam.test.ts` | 6 passed,zero failures/cancellations/skips, log `be9df097-1792146372618.log`; 5 ordinary native synthetic cases plus 1 overlapping identity-denial SAM case. Do not sum overlapping runs. |
+| `env ABBY_LEDGER=memory node --test --test-concurrency=1 test/text/effect-deadline.test.ts test/text/call-review-action-kinds.test.ts test/text/call-review.test.ts test/text/call-outcome-report.test.ts` | 14 passed, zero failures/cancellations/skips, log `be9df097-1792147584023.log`; shared booking acknowledgement/deadline and correction/resend result-reader regressions. |
+| Terminal contradiction reproduction and refined reader integration | The new contradiction test first failed in `be9df097-1792146835769.log`; corrected full contracts above and 2 focused projection/SAM checks in `be9df097-1792146911864.log` passed. |
+
+Early ordinary staged tests failed because the synthetic recall omitted its
+required self link, then because cross-service review JSON exceeded the bound.
+The fixture now supplies exact native ownership metadata; the separate staged
+format preserves all context without increasing the bound. An initial denial
+test wrongly expected a rejected turn; the existing monotonic identity-denial
+contract instead accepts later input only as another denial. The corrected
+assertion checks no stage effect/write and retained native truth. These
+failures remain in logs `be9df097-1792146004643.log`,
+`be9df097-1792146233933.log` and `be9df097-1792146347703.log`.
+
+Manifest 1.230 adds E2E-419 as text-only evidence, 419 stable IDs and planned
+full-call evidence. The complete foundation typecheck and cited product-fact
+review/drift contract now pass, with exact qualification recorded below.
+Broader synthetic and database/process qualification remains separate.
+The native admitted caller and private renewal route, new-host operator
+resolution, complete permission/proof/native request-cost bounds, quota-window
+serving, mixed catalogue/correction/no-pass/pass combinations and actual
+process/database/backup acceptance still need implementation and qualification.
+All thirteen gaps remain active. The failed parent PostgreSQL suite and
+Gust7fa compute handoff remain separate from this source preparation.
+
+Read-only cleanup verification after the database terminal found no active
+`abby.phase0.probe=true` containers created by this run. The remaining labelled
+containers predate this run by days; no container or other agent's process was
+stopped. The separate light regression job finished naturally before the next
+compute status check. No heavy Abby diagnostic was started.
+
+## Post-handoff unchanged PostgreSQL diagnostics
+
+The single corrected Gust7fa compiler finished naturally, exit0, with actual
+terminal/release confirmed around10:53UTC. Fresh board/agents/source/PID and
+resource guards then admitted each Abby job separately. The failed-suite
+runtime94fd49 and compiled fixtures built09:52:39 stayed unchanged; no source
+fix, deadline/assertion relaxation or concurrency change preceded these runs.
+
+| Diagnostic | Actual result |
+| --- | --- |
+| `bash scripts/with-postgres.sh env ABBY_LEDGER=postgres node --test --test-concurrency=4 test/voice/compiled-roster-coverage.test.ts` |4 passes,zero failures/cancellations/skips; natural exit0 after45s, log `be9df097-1792148090945.log`. Fresh start10:54:51UTC had5,010,508KiB available and PSI0. |
+| Same command with all four previously failing files: `compiled-roster-coverage`, `confirmation-resend-content-runner`, `intake-service-catalogue`, `integrated-clinical-runner` |9 passes,zero failures/cancellations/skips; natural exit0 after1m, log `be9df097-1792148234292.log`. Fresh start10:57:14UTC had5,025,092KiB available and PSI0. Original concurrency4 retained; no second heavy job overlapped. |
+
+These runs overlap and do not prove the original timing failures were caused
+by the environment. Complete PostgreSQL qualification remains failed, and
+there is no unchanged full-suite rerun queued. The later reader/staged source
+is different and needs its own qualification. Its sequential typecheck was
+admitted after these terminals with fresh guards at10:59:46UTC,
+MemAvailable5,013,000KiB/PSI0, wrapper1228735, log
+`be9df097-1792148386294.log`; an observation timeout is not its terminal.
+
+The first sequential typecheck finished naturally, exit2, after1m14s, log
+`be9df097-1792148386294.log`. Its first reader check reported TS2345 at
+`test/text/call-review-action-kinds.test.ts:31`: the SAM fixture's `FakeHost`
+lacked `TextReception`'s required booking resolver. The staged check did not
+run. This was a real typecheck failure despite the earlier runtime test passes.
+The second sequential run, wrapper 1229496, also finished naturally with
+exit 2 after 57 seconds, log `be9df097-1792148558873.log`. Adding only the
+booking resolver exposed the other required `TextHost` port, `readKnowledge`.
+The foundation check again did not run. Both were actual fixture type errors;
+runtime-only passes did not establish the gateway interface.
+
+The final fixture explicitly satisfies the complete `TextHost` type. It retains
+the actual SAM host and adds booking/knowledge readers that throw if invoked,
+preserving the no-extra-write assertion without a cast or production change.
+The third sequential job, wrapper 1230028, finished naturally with exit 2 after
+2m03s, log `be9df097-1792148713720.log`. The reader's full `npm run typecheck`
+and all four actual gateway memory tests passed. Source inputs remained
+unchanged during the run. The subsequent foundation typecheck reported three
+sites: union narrowing in `uncertainClassMovement`, a potentially missing
+linked action during played consent, and a test assigning a readonly field.
+
+Those three sites now use explicit pending/review narrowing, an explicit linked
+action guard and immutable test fixture replacement. The same 31 movement/SAM
+contracts plus two registry checks passed after correction, natural exit 0,
+log `be9df097-1792149126383.log`. The corrected foundation full typecheck has
+not yet run. No type assertion, deadline or runtime assertion was weakened.
+
+Actual terminal/release was checked and sent to the Gust coordinator at
+11:08:28 UTC. Abby has yielded the next heavy slot to ONE frozen Gust e252461b
+diagnostic, conditional on that lane's four fresh post-release samples and
+immediate source/tool/limits/live/agents checks. No Abby typecheck, build or
+database job will start until its actual terminal/release and fresh Abby
+guards. Light source work continues; elapsed estimates grant no launch.
+
+
+## Foundation product-fact review
+
+Reviewed the changed host, worker, runtime and transition against the existing
+booking facts. The booking-only active-dispatch acknowledgement callback,
+matching action checks, original dispatch-lease/transport ordering and ended
+call behavior are preserved. Staged movement uses its own effect branch and
+cannot promote a generic leg acknowledgement or reconciliation to joint move
+completion. The unchanged booking claims remain scoped to creation.
+
+The operator reference now states the tested partial-truth, played-consent,
+redaction and fresh-host limits of the foundation, and explicitly leaves the
+native serving/renewal and operator routes unfinished. Its reviewed content
+and directly cited sources have refreshed fingerprints. The 33 focused
+movement/registry checks passed after the three type corrections; the prior
+14 shared booking deadline/reader/report checks passed before those narrow
+corrections. The content/fingerprint contract passed, natural exit 0, log
+`be9df097-1792149219238.log`, command `node --test
+test/contract/product-facts.test.ts`. Source review and that drift guard do not
+establish broader qualification.
+
+
+At 11:15 UTC the Gust lane still had no compiler and remained below its own
+unchanged admission floor. Abby reported that one corrected foundation
+`npm run typecheck` is ready and requested an explicit release/requeue of the
+unused Gust-next hold. The request itself grants no launch; until explicit
+agreement, the existing hold continues. No Abby heavy process is live or
+queued. The separate deterministic booking-menu refusal diagnosis uses only
+light memory tests in its own worktree.
+
+
+## Corrected foundation typecheck terminal
+
+The Gust coordinator explicitly released the unused hold at 11:16 UTC for
+exactly one Abby foundation typecheck. Fresh board/agents/source/PID and
+resource guards admitted the job at 11:17:23.870854 UTC, with MemAvailable
+4,514,328 KiB and PSI full_avg10 0. Work `1792149443641`, wrapper `1233207`,
+ran `npm run typecheck` in user-systemd scope
+`run-r3df4832229b04bf7b2a746e33d96573f.scope`.
+
+The job finished naturally at 11:18:29.663639 UTC, exit 0, after 1m06s.
+All 1,149 source inputs were unchanged before/after. The qualified source
+patch SHA-256 above prerequisite `7b64542` was
+`f5e57457bf64a55c19168a2dd4ff93da22856698ebe4b94d2773a46daf396990`.
+The actual terminal and absent wrapper/Python PIDs were independently checked
+at 11:19:05 UTC and sent directly to the coordinator. Gust's one e252 attempt
+is requeued with that conservative post-release sampling cutoff. No follow-on
+Abby heavy job is queued; source/docs and small synthetic contracts continue.
+
+The foundation was then rebased onto qualified reader fixture commit `cd9b4ca`.
+All 37 non-conflicting changed file hashes and all 1,149 qualified typecheck
+source inputs matched exactly. The execution-ledger append conflict retained
+both evidence sections; no source conflict or assertion change occurred.
+Backups and the pre-rebase stash remain retained. A ref/documentation change
+is not a new cloud or database qualification.
+
+
+The broader light synthetic native/review command also passed all 76 tests,
+zero failures/cancellations/skips, natural exit 0 after 10 seconds, log
+`be9df097-1792149676757.log`:
+
+```sh
+env ABBY_LEDGER=memory node --test --test-concurrency=1 test/cliniko/class-attendance-move.test.ts test/cliniko/class-move-stages.test.ts test/cliniko/reviewed-send.test.ts
+```
+
+These in-process synthetic fetch contracts cover legacy ordinary movement,
+ordinary/pass staging, exact review encoding, quota windows, compensation,
+concurrent advances and reviewed-send behavior. No compiler, database, browser,
+process build or real provider ran. This evidence does not supply the unfinished
+native serving/renewal/operator route or whole-process qualification.
+
+
+## Refinement: startup admission, active lease and terms expiry
+
+The next source review found two distinct expiry defects in the unpublished
+foundation. The previous full typecheck pass remains evidence for its frozen
+source, not this later revision.
+
+First, the admission deadline bounds startup activation. Existing core
+`sessionActivated`/`admissionExpired` transitions enforce it while the call is
+starting; an active call instead follows its renewable session lease. The
+foundation incorrectly also limited later phase consent by that old startup
+deadline. A real admitted/activated/renewed-session regression failed before
+correction, log `be9df097-1792149846165.log`. The refined test renews the same
+session at 20, 40 and 60 seconds and checks consent at 65 seconds, after a
+full quota window. The original startup deadline stays unchanged; ending or
+lease expiry still denies consent, and no proof expiry or mutation is extended.
+Malformed admission metadata remains refused.
+
+Second, current patient proof must not extend independently approved terms.
+The new terms-expiry regression failed before correction, log
+`be9df097-1792149946152.log`. Phase consent is now also bounded by valid,
+unexpired movement terms; proof/lease renewal cannot revive expired terms.
+The original immutable terms and targets are retained. The actual native
+caller and operator paths remain unfinished; no terms-refresh authority is
+invented here.
+
+Corrected core/SAM/registry contracts passed 35 cases, zero failures,
+cancellations or skips, natural exit 0, log
+`be9df097-1792149970882.log`, using the six-file focused command above.
+This comprises 33 memory contracts plus two registry checks and overlaps the
+earlier 33-case runs. The directly cited consent source/witness and the new
+operator fact were reviewed and their fingerprints refreshed. The revised
+foundation needs its own full typecheck in the next explicitly coordinated
+Abby heavy slot; no compiler or database job is queued under the Gust hold.
+
+
+The source-preserving rebase facts/manifest/trace checks passed three cases,
+log `be9df097-1792149759056.log`. After the expiry refinements and explicit
+operator-fact review, `node --test test/contract/product-facts.test.ts` passed
+one case, log `be9df097-1792150015166.log`. Both naturally exited 0 with no
+failures/cancellations/skips. These are overlapping drift/registry checks,
+not extra whole-process acceptance.

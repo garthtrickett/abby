@@ -1,17 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
+import { deflateRawSync } from "node:zlib";
 import { ClinikoClassAttendanceMove, classMoveLegActionId } from "../../src/standalone/cliniko-class-attendance-move.ts";
 import type { ClinikoClassMovePhase, ClinikoClassMoveRequest } from "../../src/standalone/cliniko-class-attendance-move.ts";
 import { ClinikoReadBudget } from "../../src/cliniko/read-budget.ts";
-import { decodeClinikoReview } from "../../src/cliniko/review-request.ts";
+import { decodeClinikoReview, encodeClinikoReview } from "../../src/cliniko/review-request.ts";
 import { classAttendanceFixture, classNow as now, classScope, classLink as link, classAttendee as attendee, classBase as base } from "../support/class-attendance.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
 
 function fixture(differentService = false) {
-  const scope = { ...classScope, tenantId: `class-move-${randomUUID()}` }, budget = new ClinikoReadBudget(180, () => Date.parse(now));
-  let claims = 0;
-  const rateBudget = { claim: () => { claims++; return budget.claim(); }, observe429: budget.observe429.bind(budget) };
+  const scope = { ...classScope, tenantId: `class-move-${randomUUID()}` };
+  let clock = now, claims = 0;
+  const budget = new ClinikoReadBudget(180, () => Date.parse(clock));
+  const rateBudget = { claim: () => { claims++; return budget.claim(); }, observe429: budget.observe429.bind(budget),
+    checkHeadroom: budget.checkHeadroom.bind(budget), withReservation: budget.withReservation.bind(budget) };
   const f = classAttendanceFixture({ scope, rateBudget });
   f.groups.find(row => row.id === "94")!.starts_at = "2026-10-09T10:00:00.000Z";
   f.groups.find(row => row.id === "94")!.ends_at = "2026-10-09T11:00:00.000Z";
@@ -21,7 +24,7 @@ function fixture(differentService = false) {
   }
   const shared = structuredClone(f.groups), others = structuredClone(f.attendees.filter(row => (row.patient as { links: { self: string } }).links.self !== `${base}/patients/42`));
   const recalls: Record<string, unknown>[] = [], writes: { path: string; body: Record<string, unknown> }[] = [], phases: ClinikoClassMovePhase[] = [];
-  let lost: "review" | "replacement" | "original" | "compensation" | undefined, clock = now;
+  let lost: "review" | "replacement" | "original" | "compensation" | undefined;
   let rejectedReview = false, permit: (phase: ClinikoClassMovePhase) => boolean = () => true;
   let afterWrite: ((leg: string) => void) | undefined, beforeExact: ((path: string) => void) | undefined;
   const lifetime = new AbortController();
@@ -35,12 +38,13 @@ function fixture(differentService = false) {
       assert.equal(String(body.notes).includes("private-class-proof"), false);
       assert.equal(String(body.notes).includes("private-attendee-note"), false);
       if (rejectedReview) return new Response(null, { status: 403 });
-      const row = { id: "71", archived_at: null, recalled: false, recall_at: body.recall_at, notes: body.notes,
+      const row = { id: "71", ...link("recalls", "71"), updated_at: clock, archived_at: null, recalled: false, recall_at: body.recall_at, notes: body.notes,
         patient: link("patients", body.patient_id), recall_type: link("recall_types", "7") };
       recalls.push(row);
       if (lost === "review") throw new Error("synthetic lost movement review");
       return Response.json(row, { status: 201 });
     }
+    if (url.pathname === "/v1/recalls/71" && method === "GET") return Response.json(recalls[0]);
     if (method === "POST" || method === "PATCH") {
       assert.equal(recalls.length, 1, "one owned movement review must precede native attendance changes");
       assert.equal(init?.redirect, "error"); assert.ok(init?.signal);
@@ -96,6 +100,128 @@ function fixture(differentService = false) {
     afterWrite: (hook: typeof afterWrite) => { afterWrite = hook; }, beforeExact: (hook: typeof beforeExact) => { beforeExact = hook; },
     setTime: (value: string) => { clock = value; } };
 }
+
+for (const differentService of [false, true])
+  test(`staged no-pass movement ${differentService ? "across services" : "within a service"} inspects both attendances in two bounded stages`, async () => {
+    const f = fixture(differentService), version = "ordinary-stages-v1";
+    try {
+      const mover = resultValue(ClinikoClassAttendanceMove.create({ ...f.config, quotaStaging: { version } }));
+      const stages = resultValue(mover.prepareStagesOnce(f.request));
+      let current = now, started = false;
+      const advance = async () => {
+        const confirmation = { contractVersion: version, confirmationRef: randomUUID(), verificationRef: f.request.verificationRef,
+          expiresAt: started ? new Date(Date.parse(current) + 110000).toISOString() : f.request.expiresAt };
+        const result = resultValue(await stages.advanceOnce(confirmation, f.lifetime.signal, async q => {
+          assert.equal(q.request.expiresAt, confirmation.expiresAt);
+          assert.equal(q.request.patientId, f.request.patientId);
+          assert.equal(q.confirmationRef, confirmation.confirmationRef);
+          return true;
+        }));
+        if (result.kind !== "waiting") started = true;
+        return result;
+      };
+      let before = f.claims;
+      const replacement = await advance();
+      assert.equal(replacement.kind, "staged");
+      if (replacement.kind !== "staged") throw new Error("missing original stage");
+      assert.equal(replacement.next, "original");
+      assert.equal(replacement.observation.caseAssociation, undefined);
+      assert.equal(f.writes.length, 1); assert.ok(f.claims - before <= 180);
+      assert.equal((await advance()).kind, "waiting"); assert.equal(f.writes.length, 1);
+      current = new Date(Date.parse(now) + 61000).toISOString(); f.setTime(current);
+      before = f.claims;
+      const original = await advance();
+      assert.equal(original.kind, "finished");
+      if (original.kind !== "finished") throw new Error("unexpected membership stage");
+      assert.equal(original.observation.kind, "moved");
+      assert.equal(original.observation.original, "inspectedCancelled");
+      assert.equal(original.observation.replacement, "inspectedActive");
+      assert.equal(original.observation.caseAssociation, undefined);
+      assert.equal(f.writes.length, 2); assert.ok(f.claims - before <= 180);
+      assert.deepEqual(f.writes.map(row => row.path), ["/v1/attendees", "/v1/attendees/101/cancel"]);
+      f.unchanged();
+      const notes = String(f.recalls[0]!.notes), review = resultValue(decodeClinikoReview(notes));
+      assert.match(notes, /Abby staged class movement review v1/);
+      assert.ok(review.request.operation.kind === "classMove");
+      assert.equal(review.request.operation.quotaStaging, version);
+      assert.equal(review.request.operation.pass, undefined);
+      assert.equal(resultValue(encodeClinikoReview(review.marker, review.request)), notes);
+      assert.equal(decodeClinikoReview(notes.replace("Abby staged class movement review v1", "Abby class movement review v1")).ok, false);
+      const lines = notes.split("\n");
+      assert.ok(lines.slice(1).join("\n").length <= 1000);
+      const invalidPayloads = ["z1:bad!payload", "z1:AAAA", `${lines[2]}=`,
+        `z1:${deflateRawSync(Buffer.alloc(8193, "x")).toString("base64url")}`,
+        `z1:${deflateRawSync(Buffer.from([0xff, 0xff])).toString("base64url")}`];
+      const missingContract = structuredClone(review.request);
+      Reflect.deleteProperty(missingContract.operation, "quotaStaging");
+      invalidPayloads.push(`z1:${deflateRawSync(Buffer.from(JSON.stringify(missingContract))).toString("base64url")}`);
+      for (const payload of invalidPayloads) {
+        const malformed = [...lines]; malformed[2] = payload;
+        assert.equal(decodeClinikoReview(malformed.join("\n")).ok, false);
+      }
+      assert.equal((await stages.advanceOnce({ contractVersion: version, confirmationRef: randomUUID(), verificationRef: f.request.verificationRef,
+        expiresAt: new Date(Date.parse(current) + 110000).toISOString() }, f.lifetime.signal, async () => true)).ok, false);
+    } finally { f.lifetime.abort(); }
+  });
+
+for (const lost of ["replacement", "original"] as const)
+  test(`staged no-pass lost ${lost} ends in review without replay or compensation`, async () => {
+    const f = fixture(), version = "ordinary-stages-v1";
+    try {
+      f.lose(lost);
+      const mover = resultValue(ClinikoClassAttendanceMove.create({ ...f.config, quotaStaging: { version } }));
+      const stages = resultValue(mover.prepareStagesOnce(f.request));
+      let current = now;
+      const advance = () => stages.advanceOnce({ contractVersion: version, confirmationRef: randomUUID(), verificationRef: f.request.verificationRef,
+        expiresAt: new Date(Date.parse(current) + 110000).toISOString() }, f.lifetime.signal, async () => true);
+      let result = resultValue(await advance());
+      if (lost === "original") {
+        assert.equal(result.kind, "staged");
+        current = new Date(Date.parse(now) + 61000).toISOString(); f.setTime(current);
+        result = resultValue(await advance());
+      }
+      assert.equal(result.kind, "finished");
+      if (result.kind !== "finished") throw new Error("unknown write cannot continue");
+      assert.equal(result.observation.kind, "needsReview");
+      assert.equal(result.observation[lost], "uncertain");
+      assert.equal(f.writes.length, lost === "original" ? 2 : 1);
+      assert.equal((await advance()).ok, false);
+      assert.equal(f.writes.length, lost === "original" ? 2 : 1);
+    } finally { f.lifetime.abort(); }
+  });
+
+test("staged no-pass compensation needs its own permission and later inspected restoration", async () => {
+  const f = fixture(), version = "ordinary-stages-v1";
+  try {
+    const mover = resultValue(ClinikoClassAttendanceMove.create({ ...f.config, quotaStaging: { version } }));
+    const stages = resultValue(mover.prepareStagesOnce(f.request));
+    let current = now;
+    const advance = () => stages.advanceOnce({ contractVersion: version, confirmationRef: randomUUID(), verificationRef: f.request.verificationRef,
+      expiresAt: new Date(Date.parse(current) + 110000).toISOString() }, f.lifetime.signal, async q => q.phase !== "cancelOriginal");
+    for (const [index, expected] of ["original", "compensation", "compensationInspection", undefined].entries()) {
+      if (index) { current = new Date(Date.parse(now) + index * 61000).toISOString(); f.setTime(current); }
+      const before = f.claims, result = resultValue(await advance());
+      assert.ok(f.claims - before <= 180);
+      if (expected) {
+        assert.equal(result.kind, "staged");
+        if (result.kind !== "staged") throw new Error("missing separate compensation stage");
+        assert.equal(result.next, expected);
+        assert.notEqual(result.observation.kind, "restored");
+      } else {
+        assert.equal(result.kind, "finished");
+        if (result.kind !== "finished") throw new Error("restoration was not inspected");
+        assert.equal(result.observation.kind, "restored");
+        assert.equal(result.observation.original, "notSent");
+        assert.equal(result.observation.replacement, "inspectedCancelled");
+        assert.equal(result.observation.caseAssociation, undefined);
+      }
+    }
+    assert.deepEqual(f.writes.map(row => row.path), ["/v1/attendees", "/v1/attendees/401/cancel"]);
+    assert.equal(f.attendees.find(row => row.id === "101")!.cancelled_at, null);
+    assert.notEqual(f.attendees.find(row => row.id === "401")!.cancelled_at, null);
+    f.unchanged();
+  } finally { f.lifetime.abort(); }
+});
 
 test("E2E-397 native class movement verifies the replacement before original cancellation and inspects both final occurrences", async () => {
   const f = fixture();

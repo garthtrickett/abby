@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { ClinikoClassAttendanceMove } from "../../src/standalone/cliniko-class-attendance-move.ts";
-import type { ClassMoveStageConfirmation, ClassMoveStagePermit } from "../../src/standalone/cliniko-class-move-stages.ts";
+import type { ClassMoveStageConfirmation, ClassMoveStagePermit, ClassMoveStageResult } from "../../src/standalone/cliniko-class-move-stages.ts";
+import { classMovementCanContinue, classMovementProgressText, readClassMovementProgress } from "../../src/core/class-movement-progress.ts";
 import { claimClinikoBudget } from "../../src/cliniko/read-budget.ts";
 import { err } from "../../src/core/model.ts";
 import { classLink } from "../support/class-attendance.ts";
@@ -11,6 +12,14 @@ import { classPassMoveFixture } from "../support/class-pass-move.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
 
 const version = "three-window-v1";
+function assertPublicStageProgress(result: ClassMoveStageResult) {
+  if (result.kind !== "staged") return;
+  assert.equal(readClassMovementProgress(result.observation), undefined, "native observations are not public SAM records");
+  const { original, replacement, caseAssociation } = result.observation;
+  const progress = readClassMovementProgress({ original, replacement, caseAssociation }); assert.ok(progress);
+  assert.equal(classMovementCanContinue(progress, result.next), true);
+  assert.match(classMovementProgressText(progress), /overall class move is not confirmed/);
+}
 async function fixture(different = false, largest = false) {
   const f = await classPassMoveFixture({ history: 999, rosterHistory: largest ? 499 : 201, differentCase: different, differentService: different });
   const port: typeof fetch = async (input, init) => {
@@ -49,6 +58,7 @@ for (const row of [{ different: false, largest: false }, { different: true, larg
     f.reset(); const counts: number[] = [];
     for (const [index, next] of ["original", "association", undefined].entries()) {
       const before = f.claims, result = await f.advance(); counts.push(f.claims - before);
+      assertPublicStageProgress(result);
       assert.ok(counts.at(-1)! <= 180, JSON.stringify(counts));
       if (next) { assert.equal(result.kind, "staged"); if (result.kind === "staged") assert.equal(result.next, next); }
       else { assert.equal(result.kind, "finished"); if (result.kind === "finished") assert.equal(result.observation.kind, "moved"); }
@@ -115,6 +125,7 @@ test("E2E-417 large staged compensation cancels only the replacement and separat
     f.reset(); assert.equal((await f.advance()).kind, "staged"); f.deny(["cancelOriginal"]);
     for (const next of ["compensation", "compensationInspection"]) {
       f.reset(); const result = await f.advance(); assert.equal(result.kind, "staged"); if (result.kind === "staged") assert.equal(result.next, next);
+      assertPublicStageProgress(result);
     }
     assert.deepEqual(f.writes.map(w => w.leg), ["replacement", "compensation"]);
     f.reset(); const result = await f.advance(); assert.equal(result.kind, "finished"); if (result.kind === "finished") assert.equal(result.observation.kind, "restored");

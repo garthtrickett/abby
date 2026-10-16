@@ -104,7 +104,11 @@ const greetingAuditPage = optional({ entries: array(optional({ version: key, ena
 ["version", "enabled", "previousEnabled", "actorRef", "changedAt"])), nextAfterVersion: uint }, ["entries"]);
 const actionKind = choice("book", "cancel", "reschedule", "intake", "patientUpdate", "confirmationResend");
 const actionStatus = choice("awaitingConfirmation", "ready", "dispatched", "committed", "rejected",
-  "unsupported", "uncertain", "needsReview", "canceled");
+  "unsupported", "uncertain", "needsReview", "canceled", "pendingContinuation");
+const classMovementMutation = choice("notSent", "uncertain", "inspectedActive", "inspectedCancelled");
+const classMovement = object({ outcome: choice("pending", "moved", "restored", "needsReview"),
+  progress: object({ original: classMovementMutation, replacement: classMovementMutation,
+    caseAssociation: choice("notApplicable", "notSent", "unlinked", "uncertain", "inspectedLinked") }) });
 const staffReason = choice(...STAFF_REASONS);
 const writeStop = optional({ stopped: bool, version: key, actorRef: key, reason: nonEmpty,
   changedAt: str, inFlight: array(object({ effectId: key, callId: key, actionKey: key,
@@ -122,7 +126,8 @@ const availability = optional({ status: choice("shown", "empty", "failed"), sour
 const appointments = optional({ status: choice("shown", "empty", "failed"), sourceRef: str,
   shownCount: uint, reason: str }, ["status", "shownCount"]);
 const progress = optional({ callId: key, traceKey: key, callVersion: uint, lifecycle,
-  actions: array(object({ actionKey: key, kind: actionKind, status: actionStatus, presentationId: key })),
+  actions: array(optional({ actionKey: key, kind: actionKind, status: actionStatus, presentationId: key, classMovement },
+    ["actionKey", "kind", "status", "presentationId"])),
   staffItems: array(object({ taskKey: key, reason: staffReason, status: staffStatus })),
   pendingPresentation: object({ presentationId: key, kind: choice("speech", "notice", "transfer"),
     status: choice("pending", "started", "played", "interrupted", "failed", "unproven", "superseded",
@@ -136,7 +141,7 @@ const callSummary = optional({ callId: key, lifecycle, version: uint, terminal,
     owner: choice("host", "abby"), status: choice("pending", "possiblySent", "completed", "uncertain", "needsReview", "canceled"),
     outcome: choice("sent", "definitiveUnsent", "unknown"), blockedReason: choice("suppressionUnproven", "hostUnavailable", "emergencyStop") },
   ["kind", "owner", "status"])),
-  actions: array(object({ kind: actionKind, status: actionStatus })),
+  actions: array(optional({ kind: actionKind, status: actionStatus, classMovement }, ["kind", "status"])),
   staffItems: array(object({ reason: staffReason, status: staffStatus })), knowledgeAnswers: array(source),
   availabilityReads: array(availability), appointmentReads: array(appointments) },
 ["callId", "lifecycle", "version", "actions", "staffItems", "knowledgeAnswers", "availabilityReads", "appointmentReads"]);

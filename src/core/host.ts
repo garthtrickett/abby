@@ -253,6 +253,10 @@ export interface HostEffects {
    * authority, replay or persistence and never applies to another operation. */
   write(mutation: HostMutation, now: string, signal?: AbortSignal,
     onBookingAcknowledged?: (receipt: Extract<HostWriteReceipt, { kind: "committed" }>) => void): Promise<HostWriteReceipt>;
+  /** Continue only the existing live stage owner. An adapter without this
+   * method cannot dispatch a staged effect through the initial write path. */
+  continueClassMovement?(mutation: HostMutation, consent: import("./class-movement-consent.ts").ClassMovementConsent,
+    now: string, signal?: AbortSignal): Promise<HostWriteReceipt>;
   reconcile(mutation: HostMutation, signal?: AbortSignal): Promise<ReconcileObservation>;
   openTask(item: StaffItem, signal?: AbortSignal): Promise<StaffTaskReceipt>;
   reconcileTask(item: StaffItem, signal?: AbortSignal): Promise<StaffTaskObservation>;

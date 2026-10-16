@@ -10,6 +10,8 @@ import { createHash } from "node:crypto";
 import { digestActionRequest } from "./digest.ts";
 import { clearAffirmation } from "./caller-affirmation.ts";
 import { actionOutcomeText, confirmedActionText } from "./action-outcome.ts";
+import { classMovementOutcomeText, readClassMovementReceipt, stopClassMovement, uncertainClassMovement } from "./class-movement-continuation.ts";
+import { classMovementConsentText, readClassMovementConsent } from "./class-movement-consent.ts";
 import { patientCorrectionEvidenceFailure } from "./patient-correction.ts";
 import { confirmationResendEvidenceFailure } from "./confirmation-resend.ts";
 import { requestBoundaryText, validRequestBoundary } from "./request-boundary.ts";
@@ -199,6 +201,19 @@ function applyStaffChange(state: CallState, item: import("./model.ts").StaffItem
   return true;
 }
 
+function retireClassMovementAction(state: CallState, action: ActionState): void {
+  if (!action.classMovement) return;
+  const possibleSend = Object.values(state.effects).some(effect => effect.kind === "hostWrite" && effect.actionKey === action.key && effect.status === "possiblySent");
+  const movement = possibleSend ? uncertainClassMovement(action.classMovement) : stopClassMovement(action.classMovement);
+  const { classMovementConsent: _retiredConsent, ...remaining } = action;
+  state.actions[action.key] = { ...remaining, classMovement: movement,
+    status: movement.outcome === "moved" ? "committed" : movement.outcome === "restored" ? "rejected" : "needsReview" };
+  for (const [id, effect] of Object.entries(state.effects)) {
+    if (effect.kind === "hostWrite" && effect.actionKey === action.key && effect.status === "pending")
+      state.effects[id] = { ...effect, status: "canceled" };
+  }
+}
+
 function supersedeUnsent(state: CallState): void {
   if (state.pendingPresentationId) {
     const pending = state.presentations[state.pendingPresentationId];
@@ -213,6 +228,7 @@ function supersedeUnsent(state: CallState): void {
     if (presentation && presentation.status !== "played") {
       state.presentations[presentation.id] = { ...presentation, status: "superseded" };
     }
+    if (action.classMovement) { retireClassMovementAction(state, action); continue; }
     const effect = state.effects[`${key}:write`];
     if (effect?.kind === "hostWrite" && effect.status === "possiblySent") continue;
     state.actions[key] = { ...action, status: "canceled" };
@@ -226,6 +242,10 @@ function endMedia(state: CallState, now: string, reason: CallTerminalReason): vo
   state.lifecycle = "ended";
   state.terminal = { reason, at: now };
   cancelModelWork(state);
+  for (const action of Object.values(state.actions)) {
+    if (action.classMovement?.outcome === "pending")
+      retireClassMovementAction(state, action);
+  }
   let unresolvedTransfer = false;
   for (const [id, presentation] of Object.entries(state.presentations)) {
     if (presentation.status === "pending") state.presentations[id] = { ...presentation, status: "superseded" };
@@ -285,7 +305,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
         Object.values(state.effects).some(effect => (effect.kind === "hostWrite" || effect.kind === "staffTask") && !["completed", "canceled"].includes(effect.status))) return err({ kind: "invalidTransition" });
   }
   interpretation = restrictDeniedCaller(state, interpretation);
-  if (interpretation.kind !== "affirm" && interpretation.kind !== "confirmationWait") supersedeUnsent(state);
+  if (interpretation.kind !== "affirm" && interpretation.kind !== "confirmationWait" && interpretation.kind !== "classMovementAffirm") supersedeUnsent(state);
   cancelModelWork(state);
   state.conversationRevision += 1;
   const messageCount = state.callerMessages.length;
@@ -314,6 +334,9 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       break;
     case "callerIdentityDenied":
       state.callerIdentityDenied ??= interpretation.reason;
+      for (const action of Object.values(state.actions)) {
+        if (action.classMovement?.outcome === "pending") retireClassMovementAction(state, action);
+      }
       state.callerMessages.push(callerIdentityDenialText);
       break;
     case "staffOutcomeQuery":
@@ -406,7 +429,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       const permitted = action?.kind === "book" ? state.policy.bookingEnabled && state.policy.capabilities.book === "execute" :
         action?.kind === "reschedule" ? state.policy.reschedulingEnabled && state.policy.capabilities.reschedule === "execute" :
           action?.kind === "cancel" ? state.policy.cancellationEnabled && state.policy.capabilities.cancel === "execute" : false;
-      if (turn.quality !== "clear" || !clearAffirmation(turn.text) || !action || action.status !== "awaitingConfirmation" ||
+      if (turn.quality !== "clear" || !clearAffirmation(turn.text) || !action || action.status !== "awaitingConfirmation" || action.classMovement ||
           !permitted || !state.policy.automationEnabled || !state.policy.staffWorkEnabled ||
           action.digest !== interpretation.digest || state.pendingPresentationId || state.presentations[action.presentationId]?.status !== "played" ||
           !Number.isSafeInteger(interpretation.seconds) || interpretation.seconds < 1 || interpretation.seconds > 60 ||
@@ -418,9 +441,24 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
         : `The booking system needs a moment. Please wait about ${interpretation.seconds} seconds, then say yes again if you still want this change. I haven't changed your appointment, and the replacement time is not reserved.`);
       break;
     }
+    case "classMovementAffirm": {
+      const action = state.actions[interpretation.actionKey], consent = action?.classMovementConsent;
+      if (turn.quality !== "clear" || !clearAffirmation(turn.text) || !action || action.status !== "awaitingConfirmation" || !consent ||
+          interpretation.digest !== consent.digest || state.pendingPresentationId ||
+          state.presentations[consent.presentationId]?.status !== "played" || !consent.playedAt ||
+          Date.parse(turn.at) < Date.parse(consent.playedAt) || Date.parse(turn.at) > Date.parse(now)) return err({ kind: "confirmationMissing" });
+      const current = readClassMovementConsent(state, action, consent.evidence, now);
+      if (!current || current.digest !== consent.digest) return err({ kind: "confirmationMissing" });
+      const id = `${action.key}:classStage:${consent.digest}`;
+      if (state.effects[id]) return err({ kind: "invalidTransition" });
+      state.actions[action.key] = { ...action, status: "ready" };
+      state.effects[id] = { kind: "hostWrite", id, actionKey: action.key, mutation: action.mutation,
+        classMovementConsent: current, status: "pending" };
+      break;
+    }
     case "affirm": {
       const action = state.actions[interpretation.actionKey];
-      if (!interpretation.affirmative || turn.quality !== "clear" || !action || action.status !== "awaitingConfirmation") {
+      if (!interpretation.affirmative || turn.quality !== "clear" || !action || action.status !== "awaitingConfirmation" || action.classMovement) {
         return err({ kind: "confirmationMissing" });
       }
       if (interpretation.digest !== action.digest) return err({ kind: "digestChanged" });
@@ -583,6 +621,35 @@ function recordHostResult(state: CallState, effectId: string, receipt: import(".
   if (receipt.actionKey !== effect.actionKey) return err({ kind: "keyMismatch" });
   const action = state.actions[effect.actionKey];
   if (!action) return err({ kind: "invalidTransition" });
+  if (action.classMovement?.outcome === "moved" || action.classMovement?.outcome === "restored") {
+    state.effects[effectId] = { ...effect, status: "completed" };
+    return ok(undefined);
+  }
+
+  if (receipt.kind === "classMovement") {
+    if (action.kind !== "reschedule" || effect.mutation.kind !== "reschedule" || effect.mutation.notification) return err({ kind: "invalidTransition" });
+    const record = readClassMovementReceipt(receipt, action.classMovement, state.lifecycle === "active" && !state.callerIdentityDenied);
+    if (!record) return err({ kind: "invalidTransition" });
+    const status = record.movement.outcome === "moved" ? "committed" : record.movement.outcome === "restored" ? "rejected"
+      : record.movement.outcome === "pending" ? "pendingContinuation" : "needsReview";
+    const { classMovementConsent: _consumedConsent, ...remaining } = action;
+    state.actions[action.key] = { ...remaining, status, classMovement: record.movement, ...(record.hostRef ? { hostRef: record.hostRef } : {}) };
+    state.effects[effectId] = { ...effect, status: "completed" };
+    hostOutcomeNotice(state, effectId, classMovementOutcomeText(record.movement));
+    return ok(undefined);
+  }
+
+  // A normal acknowledgement describes one effect, not the joint attendance
+  // and membership result. It cannot promote a partial move to completion or
+  // erase the earlier native changes after a later rejection.
+  if (action.classMovement && receipt.kind !== "uncertain") {
+    const movement = receipt.kind === "committed" ? uncertainClassMovement(action.classMovement) : stopClassMovement(action.classMovement);
+    const { classMovementConsent: _consumedConsent, ...remaining } = action;
+    state.actions[action.key] = { ...remaining, status: "needsReview", classMovement: movement };
+    state.effects[effectId] = { ...effect, status: "completed" };
+    hostOutcomeNotice(state, effectId, classMovementOutcomeText(movement));
+    return ok(undefined);
+  }
 
   if (receipt.kind === "committed") {
     if (!receipt.hostRef) return err({ kind: "invalidTransition" });
@@ -592,7 +659,9 @@ function recordHostResult(state: CallState, effectId: string, receipt: import(".
     hostOutcomeNotice(state, effectId, confirmedActionText(action.kind));
   } else if (receipt.kind === "uncertain") {
     if (!Number.isFinite(Date.parse(receipt.reconcileAfter)) || !Number.isFinite(Date.parse(receipt.deadline)) || Date.parse(receipt.deadline) <= Date.parse(now)) return err({ kind: "invalidTransition" });
-    state.actions[action.key] = { ...action, status: "uncertain", reconciliationDeadline: receipt.deadline };
+    const { classMovementConsent: _consumedConsent, ...remaining } = action;
+    state.actions[action.key] = { ...remaining, status: "uncertain", reconciliationDeadline: receipt.deadline,
+      ...(action.classMovement ? { classMovement: uncertainClassMovement(action.classMovement) } : {}) };
     state.effects[effectId] = { ...effect, status: "uncertain" };
     const reconcileId = `${effectId}:reconcile`;
     state.effects[reconcileId] = { kind: "hostReconcile", id: reconcileId, actionKey: action.key, originalEffectId: effectId, status: "pending" };
@@ -702,7 +771,8 @@ export function transition(current: CallState, action: TransitionAction): Result
       for (const [key, candidate] of Object.entries(state.actions)) {
         const presentation = state.presentations[candidate.presentationId];
         if (candidate.status === "awaitingConfirmation" && presentation && (presentation.status === "started" || presentation.status === "superseded")) {
-          state.actions[key] = { ...candidate, status: "canceled" };
+          if (candidate.classMovement) retireClassMovementAction(state, candidate);
+          else state.actions[key] = { ...candidate, status: "canceled" };
         }
       }
       state.conversationRevision += 1;
@@ -849,7 +919,37 @@ export function transition(current: CallState, action: TransitionAction): Result
       } else {
         if (action.status !== "played" && action.status !== "interrupted" && action.status !== "failed" && action.status !== "unproven") return err({ kind: "invalidTransition" });
         state.presentations[presentation.id] = { ...presentation, status: action.status };
+        if (presentation.kind === "speech") {
+          const linked = state.actions[presentation.actionKey], consent = linked?.classMovementConsent;
+          if (linked && consent?.presentationId === presentation.id) {
+            if (action.status === "played" && action.now)
+              state.actions[linked.key] = { ...linked, classMovementConsent: { ...consent, playedAt: action.now } };
+            else retireClassMovementAction(state, linked);
+          }
+        }
       }
+      break;
+    }
+    case "classMovementConsentPrepared": {
+      if (!Number.isSafeInteger(action.expectedConversationRevision) || state.conversationRevision !== action.expectedConversationRevision)
+        return err({ kind: "staleTurn" });
+      const target = state.actions[action.actionKey];
+      if (!target || target.status !== "pendingContinuation" || state.pendingPresentationId ||
+          Object.values(state.presentations).some(item => item.status === "started" || item.status === "possiblySent") ||
+          Object.values(state.actions).some(item => item.key !== target.key && ["awaitingConfirmation", "ready", "dispatched"].includes(item.status))) return err({ kind: "invalidTransition" });
+      const consent = readClassMovementConsent(state, target, action.evidence, now);
+      if (!consent) return err({ kind: "confirmationMissing" });
+      const id = `${target.key}:classStage:${consent.digest}:confirmation`;
+      if (state.presentations[id]) return err({ kind: "invalidTransition" });
+      state.actions[target.key] = { ...target, status: "awaitingConfirmation", presentationId: id,
+        classMovementConsent: { ...consent, presentationId: id } };
+      const request = target.mutation.request;
+      if (request.kind !== "reschedule") return err({ kind: "invalidTransition" });
+      const locale = state.policy.voiceProfile?.locale ?? "en-AU", details = request.offer.presentation;
+      const context = `The original class is on ${appointmentTime(request.target.startsAt, request.target.timeZone, locale)}. The replacement${details ? ` ${details.appointmentTypeName} with ${details.practitionerName}, for ${details.durationMinutes} minutes,` : " class"} is on ${appointmentTime(request.offer.startsAt, request.target.timeZone, locale)}. ${request.terms.approvedText}`;
+      const approvedText = `${classMovementOutcomeText(target.classMovement!)} ${context} ${classMovementConsentText(consent)}`;
+      state.presentations[id] = { kind: "speech", id, actionKey: target.key, digest: consent.digest, approvedText, status: "pending" };
+      state.pendingPresentationId = id;
       break;
     }
     case "markHostPossiblySent": {
@@ -857,10 +957,18 @@ export function transition(current: CallState, action: TransitionAction): Result
       if (!effect || effect.kind !== "hostWrite") return err({ kind: "effectUnknown" });
       const pendingAction = state.actions[effect.actionKey];
       if (effect.status !== "pending" || pendingAction?.status !== "ready" || pendingAction.digest !== effect.mutation.payloadDigest) return err({ kind: "invalidTransition" });
-      const evidence = evidenceFailure(state, effect.mutation.request, now);
-      if (evidence) return err(evidence);
+      if (effect.classMovementConsent) {
+        const current = readClassMovementConsent(state, pendingAction, effect.classMovementConsent.evidence, now);
+        const consent = pendingAction.classMovementConsent;
+        if (!current || current.digest !== effect.classMovementConsent.digest || consent?.digest !== current.digest ||
+            state.presentations[consent.presentationId]?.status !== "played" || !consent.playedAt) return err({ kind: "confirmationMissing" });
+      } else {
+        if (pendingAction.classMovement) return err({ kind: "confirmationMissing" });
+        const evidence = evidenceFailure(state, effect.mutation.request, now);
+        if (evidence) return err(evidence);
+      }
       state.effects[effect.id] = { ...effect, status: "possiblySent", possiblySentAt: now };
-      state.actions[pendingAction.key] = { ...pendingAction, status: "dispatched" };
+      state.actions[pendingAction.key] = { ...state.actions[pendingAction.key]!, status: "dispatched" };
       break;
     }
     case "hostWriteBlocked": {
@@ -869,9 +977,14 @@ export function transition(current: CallState, action: TransitionAction): Result
       const pendingAction = state.actions[effect.actionKey];
       if (effect.status !== "pending" || pendingAction?.status !== "ready" || pendingAction.digest !== effect.mutation.payloadDigest) return err({ kind: "invalidTransition" });
       state.effects[effect.id] = { ...effect, status: "canceled" };
-      state.actions[pendingAction.key] = { ...pendingAction, status: "unsupported" };
-      addStaffTask(state, "emergencyStopped", action.now, pendingAction.key, effect.mutation.request);
-      const approvedText = staffFallbackText(state, "I can't complete that action now. I'll request staff follow-up, but I can't confirm they've received it yet.");
+      const movement = pendingAction.classMovement ? stopClassMovement(pendingAction.classMovement) : undefined;
+      const { classMovementConsent: _blockedConsent, ...remaining } = pendingAction;
+      state.actions[pendingAction.key] = { ...remaining, status: movement ? "needsReview" : "unsupported",
+        ...(movement ? { classMovement: movement } : {}) };
+      if (action.reason !== undefined && action.reason !== "unsupported") return err({ kind: "invalidTransition" });
+      addStaffTask(state, action.reason ?? "emergencyStopped", action.now, pendingAction.key, effect.mutation.request);
+      const stoppedText = movement ? classMovementOutcomeText(movement) : "I can't complete that action now.";
+      const approvedText = staffFallbackText(state, `${stoppedText} I'll request staff follow-up, but I can't confirm they've received it yet.`);
       state.callerMessages.push(approvedText);
       if (state.lifecycle === "active" && !state.pendingPresentationId) {
         const id = `${effect.id}:stoppedNotice`;
@@ -906,6 +1019,15 @@ export function transition(current: CallState, action: TransitionAction): Result
       if (action.observation.actionKey !== effect.actionKey) return err({ kind: "keyMismatch" });
       const linked = state.actions[effect.actionKey];
       if (!linked || linked.status !== "uncertain") return err({ kind: "invalidTransition" });
+      if (linked.classMovement) {
+        if (action.observation.kind === "stillUnknown" && linked.reconciliationDeadline && Date.parse(action.now) < Date.parse(linked.reconciliationDeadline)) return ok(current);
+        const movement = stopClassMovement(linked.classMovement);
+        state.actions[linked.key] = { ...linked, status: "needsReview", classMovement: movement };
+        state.effects[effect.id] = { ...effect, status: "completed" };
+        addStaffTask(state, "uncertainAction", action.now, linked.key);
+        hostOutcomeNotice(state, effect.id, classMovementOutcomeText(movement));
+        break;
+      }
       if (action.observation.kind === "exactCommit") {
         if (!action.observation.hostRef) return err({ kind: "invalidTransition" });
         state.actions[linked.key] = { ...linked, status: "committed", hostRef: action.observation.hostRef };

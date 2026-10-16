@@ -155,6 +155,16 @@ export class CallRuntime {
     return this.update(callId, { kind: "markHostPossiblySent", effectId, now });
   }
 
+  prepareClassMovementConsent(callId: string, actionKey: string,
+    evidence: import("./class-movement-consent.ts").ClassMovementConsentEvidence, now: string,
+    expectedConversationRevision: number): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "classMovementConsentPrepared", actionKey, evidence, now, expectedConversationRevision });
+  }
+
+  blockHostWrite(callId: string, effectId: string, now: string, reason?: "unsupported"): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "hostWriteBlocked", effectId, ...(reason ? { reason } : {}), now });
+  }
+
   notificationAction(callId: string, action: import("./notification-effects.ts").NotificationTransitionAction):
     Promise<Result<CallState, TransitionFailure>> {
     return this.update(callId, action);

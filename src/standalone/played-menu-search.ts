@@ -38,7 +38,7 @@ export class PlayedMenuSearch {
     if (!request && !refresh && !navigation && !relative) return undefined;
     if (request?.kind === "ambiguous" && !relative) return { kind: "clarify", reason: "menuAmbiguous" };
     const action = Object.values(state.actions).at(-1);
-    if (action && action.kind !== "intake" && ["committed", "uncertain", "needsReview", "dispatched"].includes(action.status)) return { kind: "clarify", reason: "changeAfterSend" };
+    if (action && action.kind !== "intake" && (!!action.classMovement || ["committed", "uncertain", "needsReview", "dispatched"].includes(action.status))) return { kind: "clarify", reason: "changeAfterSend" };
     const menu = this.#menu;
     const played = menu?.kind === kind && state.presentations[noticePresentationId(state.callId, menu.turnId)]?.status === "played";
     if (relative && !(request?.kind === "window" && request.date)) {

@@ -40,9 +40,20 @@ const header = "Abby appointment review v2";
 const correctionHeader = "Abby patient correction review v1";
 const resendHeader = "Abby confirmation resend review v1";
 const resendContentHeader = "Abby confirmation resend review v2";
-const reviewHeader = (operation: ClinikoReviewOperation) => operation.kind === "classMove" ? operation.pass ? operation.quotaStaging ? stagedClassPassMoveHeader : classPassMoveHeader : classMoveHeader : operation.kind === "classCancel" && operation.pass ? classPassCancellationHeader : operation.kind === "classBook" && operation.pass ? classPassHeader : operation.kind === "classBook" || operation.kind === "classCancel" ? classHeader : operation.kind === "patientUpdate" ? correctionHeader : operation.kind === "confirmationResend" ?
-  operation.contentKind ? resendContentHeader : resendHeader : header;
+function reviewHeader(operation: ClinikoReviewOperation): string {
+  switch (operation.kind) {
+    case "classMove":
+      if (operation.quotaStaging) return operation.pass ? stagedClassPassMoveHeader : stagedClassMoveHeader;
+      return operation.pass ? classPassMoveHeader : classMoveHeader;
+    case "classCancel": return operation.pass ? classPassCancellationHeader : classHeader;
+    case "classBook": return operation.pass ? classPassHeader : classHeader;
+    case "patientUpdate": return correctionHeader;
+    case "confirmationResend": return operation.contentKind ? resendContentHeader : resendHeader;
+    default: return header;
+  }
+}
 const classMoveHeader = "Abby class movement review v1";
+const stagedClassMoveHeader = "Abby staged class movement review v1";
 const classPassMoveHeader = "Abby class pass movement review v1";
 const stagedClassPassMoveHeader = "Abby staged class pass movement review v1";
 const classHeader = "Abby class attendance review v1";
@@ -99,9 +110,9 @@ function classMovementPass(value: unknown): value is ClassMovementPass {
     source.maximum === destination.maximum && source.used === destination.used && source.used + delta + 1 <= source.maximum;
   return Number(destination.used) < Number(destination.maximum) && (delta <= 0 || source.used + delta <= source.maximum);
 }
-/** A versioned losslessly compressed tuple keeps the complete two-case context
- * within the existing 1,000-character recall summary bound. Nothing is
- * truncated, hashed away or inferred. Legacy review JSON remains unchanged. */
+/** Pass movement uses a losslessly compressed tuple. Staged ordinary movement
+ * compresses its complete request under its own header. Both preserve the
+ * 1,000-character summary bound; legacy review JSON remains unchanged. */
 function packPassMove(request: ClinikoReviewRequest): unknown {
   const o = request.operation;
   if (o.kind !== "classMove" || !o.pass) return request;
@@ -133,7 +144,7 @@ function operation(value: unknown): value is ClinikoReviewOperation {
     case "classMove": return keys(row, [...common, "sessionId", "attendeeId", "newSessionId", "newStartsAt", "newEndsAt", "attendanceActionId", "cancellationReason", "compensation",
       ...(Object.hasOwn(row, "newPractitionerId") ? ["newPractitionerId"] : []), ...(Object.hasOwn(row, "newAppointmentTypeId") ? ["newAppointmentTypeId"] : []),
       ...(Object.hasOwn(row, "pass") ? ["pass"] : []), ...(Object.hasOwn(row, "quotaStaging") ? ["quotaStaging"] : [])]) && (!Object.hasOwn(row, "pass") || classMovementPass(row.pass)) &&
-      (!Object.hasOwn(row, "quotaStaging") || !!row.pass && typeof row.quotaStaging === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(row.quotaStaging)) &&
+      (!Object.hasOwn(row, "quotaStaging") || typeof row.quotaStaging === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(row.quotaStaging)) &&
       id(row.sessionId) && id(row.attendeeId) && id(row.newSessionId) && row.sessionId !== row.newSessionId && interval(row, "newStartsAt", "newEndsAt") &&
       (!Object.hasOwn(row, "newPractitionerId") || id(row.newPractitionerId) && row.newPractitionerId !== row.practitionerId) &&
       (!Object.hasOwn(row, "newAppointmentTypeId") || id(row.newAppointmentTypeId) && row.newAppointmentTypeId !== row.appointmentTypeId) &&
@@ -174,8 +185,9 @@ export function encodeClinikoReview(marker: string, request: ClinikoReviewReques
   try {
     const json = JSON.stringify(packPassMove(request));
     const bytes = Buffer.from(json);
-    if (request.operation.kind === "classMove" && request.operation.pass && bytes.length > 8192) return err({ kind: "invalidReviewRequest" });
-    const payload = request.operation.kind === "classMove" && request.operation.pass ? `z1:${deflateRawSync(bytes).toString("base64url")}` : json;
+    const compressed = request.operation.kind === "classMove" && !!(request.operation.pass || request.operation.quotaStaging);
+    if (compressed && bytes.length > 8192) return err({ kind: "invalidReviewRequest" });
+    const payload = compressed ? `z1:${deflateRawSync(bytes).toString("base64url")}` : json;
     const summary = `${reviewHeader(request.operation)}\n${payload}\n${instruction}`;
     return validRecallSummary(summary) ? ok(formatRecallNote(marker, summary)) : err({ kind: "invalidReviewRequest" });
   } catch { return err({ kind: "invalidReviewRequest" }); }
@@ -185,7 +197,7 @@ export function encodeClinikoReview(marker: string, request: ClinikoReviewReques
 export function decodeClinikoReview(notes: unknown): Result<ClinikoDecodedReview, ClinikoReviewRequestFailure> {
   if (typeof notes !== "string") return err({ kind: "invalidReviewRequest" });
   const parts = notes.split("\n");
-  if (parts.length !== 4 || !parts[0]?.startsWith("Abby request ") || ![header, correctionHeader, resendHeader, resendContentHeader, classHeader, classPassHeader, classPassCancellationHeader, classMoveHeader, classPassMoveHeader, stagedClassPassMoveHeader].includes(parts[1]!) ||
+  if (parts.length !== 4 || !parts[0]?.startsWith("Abby request ") || ![header, correctionHeader, resendHeader, resendContentHeader, classHeader, classPassHeader, classPassCancellationHeader, classMoveHeader, stagedClassMoveHeader, classPassMoveHeader, stagedClassPassMoveHeader].includes(parts[1]!) ||
       parts[3] !== instruction || !validRecallSummary(parts.slice(1).join("\n"))) {
     return err({ kind: "invalidReviewRequest" });
   }
@@ -193,12 +205,12 @@ export function decodeClinikoReview(notes: unknown): Result<ClinikoDecodedReview
   if (!validRecallMarker(marker)) return err({ kind: "invalidReviewRequest" });
   let request: unknown;
   try {
-    if (parts[1] === classPassMoveHeader || parts[1] === stagedClassPassMoveHeader) {
+    if (parts[1] === classPassMoveHeader || parts[1] === stagedClassPassMoveHeader || parts[1] === stagedClassMoveHeader) {
       if (!/^z1:[A-Za-z0-9_-]+$/.test(parts[2]!)) return err({ kind: "invalidReviewRequest" });
       const encoded = parts[2]!.slice(3), bytes = Buffer.from(encoded, "base64url");
       if (bytes.toString("base64url") !== encoded) return err({ kind: "invalidReviewRequest" });
       const json = new TextDecoder("utf-8", { fatal: true }).decode(inflateRawSync(bytes, { maxOutputLength: 8192 }));
-      request = unpackPassMove(JSON.parse(json));
+      request = parts[1] === stagedClassMoveHeader ? JSON.parse(json) : unpackPassMove(JSON.parse(json));
     } else request = JSON.parse(parts[2]!);
   } catch { return err({ kind: "invalidReviewRequest" }); }
   return validRequest(request) && parts[1] === reviewHeader(request.operation)

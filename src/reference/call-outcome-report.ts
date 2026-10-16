@@ -67,7 +67,7 @@ export class CallOutcomeReport {
       rows.push({ callId: summary.value.callId, lifecycle: summary.value.lifecycle,
         ...(summary.value.terminal ? { terminalReason: summary.value.terminal.reason } : {}),
         committedActions: actions.filter(item => item.status === "committed").length,
-        unresolvedActions: actions.filter(item => item.status === "uncertain" || item.status === "needsReview").length,
+        unresolvedActions: actions.filter(item => item.status === "uncertain" || item.status === "needsReview" || item.classMovement?.outcome === "pending").length,
         staffRequests: items.length,
         hostConfirmedTasks: items.filter(item => item.status === "open" || item.status === "acknowledged" || item.status === "resolved").length,
         staffNeedsReview: items.filter(item => item.status === "needsReview" || item.status === "failed").length,

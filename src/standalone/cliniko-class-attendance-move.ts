@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
+import type { ClassMovementMutationState, ClassMovementAssociationState } from "../core/class-movement-progress.ts";
 import type { PatientProofHost } from "../core/host.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { ClinikoReviewedSend } from "./cliniko-reviewed-send.ts";
@@ -54,13 +55,13 @@ type Config = Readonly<{
 }>;
 export type ClinikoClassMoveFailure = Readonly<{ kind: "invalidConfig" | "invalidQuery" | "scopeMismatch" | "attemptConsumed" | "unavailable" }>;
 type Failure = ClinikoClassMoveFailure;
-type MutationState = "notSent" | "uncertain" | "inspectedActive" | "inspectedCancelled";
+type MutationState = ClassMovementMutationState;
 export type ClinikoClassMoveOutcome = Readonly<{
   kind: "moved" | "restored" | "notSent" | "needsReview";
   phase: ClinikoClassMovePhase;
   original: MutationState; replacement: MutationState;
   replacementAttendeeRef?: string; recallRef?: string; review?: "uncertain";
-  caseAssociation?: "notSent" | "unlinked" | "uncertain" | "inspectedLinked";
+  caseAssociation?: ClassMovementAssociationState;
 }>;
 const id = (value: unknown): value is string => typeof value === "string" && /^[1-9][0-9]{0,18}$/.test(value);
 const uuid = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -157,7 +158,7 @@ export class ClinikoClassAttendanceMove {
   prepareStagesOnce(input: ClinikoClassMoveRequest): Result<ClinikoStagedClassMove, Failure> {
     try {
       const c = this.#config;
-      if (!c.quotaStaging || !input.pass || typeof c.cliniko.rateBudget.withReservation !== "function" || !this.#valid(input) || c.signal.aborted) return err({ kind: "invalidQuery" });
+      if (!c.quotaStaging || typeof c.cliniko.rateBudget.withReservation !== "function" || !this.#valid(input) || c.signal.aborted) return err({ kind: "invalidQuery" });
       if (this.#attempted.has(input.actionId)) return err({ kind: "attemptConsumed" });
       const stages = new ClassMoveStageControl({ version: c.quotaStaging.version, initialExpiresAt: input.expiresAt, initialVerificationRef: input.verificationRef,
         clock: c.clock, signal: c.signal, budget: c.cliniko.rateBudget });
@@ -445,13 +446,18 @@ export class ClinikoClassAttendanceMove {
         if (!first.ok) return ok({ ...outcome(), ...(first.error.kind === "reviewUncertain" ? { review: "uncertain" as const } : {}) });
         recallRef = first.value.recallRef;
         if (outcome().replacement !== "inspectedActive") return ok(outcome());
-        const cancelled = await segment("original", stop => cancelOriginal(stop, true));
-        if (cancelled === "compensate") {
+        const cancelled = await segment("original", async stop => {
+          const cancellation = await cancelOriginal(stop, true);
+          return { cancellation, ...(!request.pass && cancellation === "continue" ? { finished: await associateAndInspect(stop) } : {}) };
+        });
+        if (!cancelled) return ok(outcome());
+        if (cancelled.finished) return ok(cancelled.finished);
+        if (cancelled.cancellation === "compensate") {
           const compensated = await segment("compensation", cancelCompensation);
           if (!compensated) return ok(outcome());
           return ok(await segment("compensationInspection", inspectCompensation) ?? outcome());
         }
-        if (cancelled !== "continue") return ok(outcome());
+        if (cancelled.cancellation !== "continue") return ok(outcome());
         return ok(await segment("association", associateAndInspect) ?? outcome());
       }
       const result = await start(signal);

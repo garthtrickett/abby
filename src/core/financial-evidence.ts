@@ -1,4 +1,5 @@
 import { confirmedActionText } from "./action-outcome.ts";
+import { classMovementOutcomeText } from "./class-movement-continuation.ts";
 import type { ActionState } from "./model.ts";
 export const financialEvidenceReasons = ["paymentEvidenceUnavailable", "coverageEvidenceUnavailable", "refundEvidenceUnavailable", "reservationEvidenceUnavailable"] as const;
 export type FinancialEvidenceReason = typeof financialEvidenceReasons[number];
@@ -12,8 +13,9 @@ const notices: Record<FinancialEvidenceReason, string> = {
  reservationEvidenceUnavailable: "I can't hold an appointment until payment, confirm a paid booking or extend a payment deadline here. Please contact the clinic to arrange a payment-dependent reservation. I haven't reserved another time or sent a payment link for this request.",
 };
 /** An appointment receipt is independent of payment, insurance and refunds. */
-export function financialEvidenceText(reason: FinancialEvidenceReason, latest?: Pick<ActionState, "kind" | "status">): string {
- const prefix = latest?.status === "committed" ? confirmedActionText(latest.kind) : latest && ["uncertain", "needsReview", "dispatched"].includes(latest.status)
+export function financialEvidenceText(reason: FinancialEvidenceReason, latest?: Pick<ActionState, "kind" | "status" | "classMovement">): string {
+ const prefix = latest?.classMovement ? classMovementOutcomeText(latest.classMovement)
+  : latest?.status === "committed" ? confirmedActionText(latest.kind) : latest && ["uncertain", "needsReview", "dispatched"].includes(latest.status)
   ? "I can't confirm that action yet. It is pending review. Please contact the clinic before trying again. I won't send that action again from this call." : undefined;
  return `${prefix ? `${prefix} ` : ""}${notices[reason]}`;
 }

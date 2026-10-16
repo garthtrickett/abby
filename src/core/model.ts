@@ -284,6 +284,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason; approvedLocation?: string }>
   | Readonly<{ kind: "requestAction"; request: ActionRequest }>
   | Readonly<{ kind: "affirm"; actionKey: string; digest: string; affirmative: boolean }>
+  | Readonly<{ kind: "classMovementAffirm"; actionKey: string; digest: string }>
   | Readonly<{ kind: "confirmationWait"; actionKey: string; digest: string; seconds: number }>
   | Readonly<{ kind: "handoff"; reason: StaffReason; requestedPerson?: string; staffWorkUnavailable?: true }>
   | Readonly<{ kind: "transfer"; reason: StaffReason }>
@@ -307,7 +308,7 @@ export const STAFF_REASONS = ["callerRequested", "verificationFailed", "unsuppor
 export type StaffReason = typeof STAFF_REASONS[number];
 export type ActionStatus =
   | "awaitingConfirmation" | "ready" | "dispatched" | "committed"
-  | "rejected" | "unsupported" | "uncertain" | "needsReview" | "canceled";
+  | "rejected" | "unsupported" | "uncertain" | "needsReview" | "canceled" | "pendingContinuation";
 export type HostMutation = Readonly<{
   kind: ActionKind;
   scope: LocationScope;
@@ -327,6 +328,10 @@ export type ActionState = Readonly<{
   presentationId: string;
   hostRef?: string;
   reconciliationDeadline?: string;
+  /** Fixed progress and an opaque live-stage reference; neither reconstructs
+   * a private sender or grants permission for another operation. */
+  classMovement?: import("./class-movement-continuation.ts").ClassMovementState;
+  classMovementConsent?: import("./class-movement-consent.ts").ClassMovementConsent & Readonly<{ presentationId: string; playedAt?: string }>;
 }>;
 export type Presentation =
   | Readonly<{
@@ -354,6 +359,7 @@ export type Presentation =
     providerConnectionRef?: string;
   }>;
 export type HostWriteReceipt =
+  | import("./class-movement-continuation.ts").ClassMovementReceipt
   | Readonly<{ kind: "committed"; actionKey: string; hostRef: string;
     notification?: import("./notification-effects.ts").NotificationDirective }>
   | Readonly<{ kind: "rejected"; actionKey: string; reason: "conflict" | "invalid" | "forbidden" | "expiredOffer" }>
@@ -439,7 +445,9 @@ export type Effect =
   | Readonly<{ kind: "model"; schemaVersion: 1; id: string; taskRef: string; turnId: string; conversationRevision: number; status: "pending" | "completed" | "canceled" }>
   | Readonly<{ kind: "modelKnowledge"; schemaVersion: 1; id: string; taskRef: string; turnId: string; conversationRevision: number;
       sourceRefsDigest: string; status: "pending" | "completed" | "canceled" }>
-  | Readonly<{ kind: "hostWrite"; id: string; actionKey: string; mutation: HostMutation; status: "pending" | "possiblySent" | "completed" | "uncertain" | "canceled"; possiblySentAt?: string }>
+  | Readonly<{ kind: "hostWrite"; id: string; actionKey: string; mutation: HostMutation;
+      classMovementConsent?: import("./class-movement-consent.ts").ClassMovementConsent;
+      status: "pending" | "possiblySent" | "completed" | "uncertain" | "canceled"; possiblySentAt?: string }>
   | Readonly<{ kind: "hostReconcile"; id: string; actionKey: string; originalEffectId: string; status: "pending" | "completed" }>
   | Readonly<{ kind: "staffTask"; id: string; taskKey: string; status: "pending" | "possiblySent" | "completed" | "uncertain"; possiblySentAt?: string }>
   | Readonly<{ kind: "staffReconcile"; id: string; taskKey: string; originalEffectId: string; originalItem: StaffItem; status: "pending" | "completed" }>
@@ -525,7 +533,9 @@ export type TransitionAction =
   | Readonly<{ kind: "transferPossiblySent"; presentationId: string; sessionId: string; now: string }>
   | Readonly<{ kind: "presentationResolved"; presentationId: string; status: "played" | "interrupted" | "failed" | "unproven" | "connected" | "canceled"; providerConnectionRef?: string; sessionId?: string; now?: string }>
   | Readonly<{ kind: "markHostPossiblySent"; effectId: string; now: string }>
-  | Readonly<{ kind: "hostWriteBlocked"; effectId: string; now: string }>
+  | Readonly<{ kind: "classMovementConsentPrepared"; actionKey: string; evidence: import("./class-movement-consent.ts").ClassMovementConsentEvidence;
+      expectedConversationRevision: number; now: string }>
+  | Readonly<{ kind: "hostWriteBlocked"; effectId: string; reason?: "unsupported"; now: string }>
   | Readonly<{ kind: "recoverHostPossiblySent"; effectId: string; now: string }>
   | Readonly<{ kind: "hostWriteResolved"; effectId: string; receipt: HostWriteReceipt; now: string }>
   | Readonly<{ kind: "reconciliationResolved"; effectId: string; observation: ReconcileObservation; now: string }>

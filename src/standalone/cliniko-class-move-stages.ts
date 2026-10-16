@@ -1,10 +1,11 @@
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
+import type { ClassMovementStage } from "../core/class-movement-progress.ts";
 import { withClinikoReservation } from "../cliniko/read-budget.ts";
 import type { ClinikoBudgetDenial, ClinikoRequestBudget } from "../cliniko/read-budget.ts";
 import type { ClinikoClassMoveFailure, ClinikoClassMoveOutcome, ClinikoClassMovePermit } from "./cliniko-class-attendance-move.ts";
 
-export type ClassMoveStage = "replacement" | "original" | "association" | "compensation" | "compensationInspection";
+export type ClassMoveStage = ClassMovementStage;
 export type ClassMoveStageConfirmation = Readonly<{ contractVersion: string; confirmationRef: string; expiresAt: string; verificationRef: string }>;
 /** Each stage requires its own current, independently validated played consent.
  * A nonce or a parsed native review is never sufficient authority. */

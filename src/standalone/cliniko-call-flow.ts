@@ -415,7 +415,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     if (this.closed || this.#staffActive || this.#verificationRequired || !(this.#owner instanceof ClinikoBookingSession)) return denied;
     const state = await this.#config.ledger.read(this.#config.receipt.callId, this.#config.receipt.scope);
     if (!state.ok || this.closed || state.value.sessionLease?.sessionId !== this.#config.sessionId) return denied;
-    if ((this.#tasks?.currentActions(state.value) ?? Object.values(state.value.actions)).some(action => ["committed", "uncertain", "needsReview", "dispatched"].includes(action.status)))
+    if ((this.#tasks?.currentActions(state.value) ?? Object.values(state.value.actions)).some(action => (!!action.classMovement || ["committed", "uncertain", "needsReview", "dispatched"].includes(action.status))))
       return { kind: "clarify", reason: "changeAfterSend" };
     const host = this.#owner.effects;
     if (!(host instanceof ClinikoCatalogueBookingHost)) return denied;

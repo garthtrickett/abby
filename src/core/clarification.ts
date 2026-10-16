@@ -2,6 +2,7 @@ import { financialEvidenceText, isFinancialEvidenceReason } from "./financial-ev
 import type { FinancialEvidenceReason } from "./financial-evidence.ts";
 import { normalizedSpokenName } from "./pending-location.ts";
 import { confirmedActionText } from "./action-outcome.ts";
+import { classMovementOutcomeText } from "./class-movement-continuation.ts";
 import type { ActionState, MenuClarificationReason } from "./model.ts";
 
 const notices: Record<Exclude<MenuClarificationReason, "changeAfterSend" | "oldAppointmentAfterMove" | FinancialEvidenceReason>, string> = {
@@ -22,19 +23,20 @@ const notices: Record<Exclude<MenuClarificationReason, "changeAfterSend" | "oldA
   serviceChoiceChanged: "Please choose the service and appointment length again so we can check the clinic's return-visit rules. The previous service choice cannot be used to book.",
 };
 
-export function clarificationText(reason: MenuClarificationReason | undefined, latest?: Pick<ActionState, "kind" | "status">, approvedLocation?: string): string {
+export function clarificationText(reason: MenuClarificationReason | undefined, latest?: Pick<ActionState, "kind" | "status" | "classMovement">, approvedLocation?: string): string {
   if (isFinancialEvidenceReason(reason)) return financialEvidenceText(reason, latest);
   if (reason === "oldAppointmentAfterMove") {
     if (latest?.kind === "reschedule" && latest.status === "committed")
       return "Your original appointment has already been moved to the confirmed new time. I haven't canceled the replacement appointment. Please contact the clinic if you want to change or cancel that appointment.";
     // The caller's description cannot establish that a move happened. Use the
     // actual receipt, or recheck the target when no action was possibly sent.
-    return latest && ["committed", "uncertain", "needsReview", "dispatched"].includes(latest.status)
+    return latest && (latest.classMovement || ["committed", "uncertain", "needsReview", "dispatched"].includes(latest.status))
       ? clarificationText("changeAfterSend", latest) : notices.targetDisagreement;
   }
   if (reason === "searchPreferenceUnavailable" && normalizedSpokenName(approvedLocation))
     return `This call supports appointments at ${approvedLocation}. I can’t use that practitioner or another branch on this call. Please contact the clinic for another practitioner or location.`;
   if (reason !== "changeAfterSend") return reason ? notices[reason] : "Could you repeat that for me?";
-  const outcome = latest?.status === "committed" ? confirmedActionText(latest.kind) : "I can't confirm the previous action yet.";
+  const outcome = latest?.classMovement ? classMovementOutcomeText(latest.classMovement)
+    : latest?.status === "committed" ? confirmedActionText(latest.kind) : "I can't confirm the previous action yet.";
   return `${outcome} I haven't made another change. Please contact the clinic to review it before trying another change.`;
 }
