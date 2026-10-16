@@ -130,6 +130,12 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     if (!proof || permission === undefined || select === undefined || allow === undefined) return undefined;
     return Object.freeze({ proof: proof.proof, permit: 2 * (proof.ownership + permission), passSelect: select, passAllow: allow });
   }
+  #passWorkAdmitted(context: Context, observedRequests: number | undefined): boolean {
+    if (observedRequests === undefined) return false;
+    return context.move.quotaStaging
+      ? classMoveStageRequestCeilings(this.#stageRequestCosts(), true) !== undefined
+      : observedRequests + 9 * this.#proofRequestFloor() <= 180;
+  }
   #requests(context: Context, p: Prepared): number | undefined {
     if (!context.move.quotaStaging) return p.offer.pass ? 180 :
       context.source.practitionerId === context.destination.practitionerId && context.source.appointmentTypeId === context.destination.appointmentTypeId ? 120 : 180;
@@ -255,7 +261,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
           if (context.move.membership === "nativeCaseSessions") {
             const observed = await this.#passEvidence(context, target!)?.selectWithWorkload(this.#nativeRequest(context, target!, item), "proposal", signal);
             const requests = observed && observedClassMoveRequests(observed.minimumNativeRequests, target!.session, item.session, this.#source === this.#destination);
-            if (!observed || requests === undefined || requests + 9 * this.#proofRequestFloor() > 180) continue;
+            if (!observed || !this.#passWorkAdmitted(context, requests)) continue;
             const pass = observed.binding;
             Object.freeze(pass.source); Object.freeze(pass.destination); Object.freeze(pass);
             item = { ...item, pass };
@@ -332,7 +338,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     if (!offer.pass) return true;
     const current = await this.#passEvidence(context, target)?.selectWithWorkload(this.#nativeRequest(context, target, offer), "proposal", signal);
     const requests = current && observedClassMoveRequests(current.minimumNativeRequests, source, destination, this.#source === this.#destination);
-    return !!current && isDeepStrictEqual(current.binding, offer.pass) && requests !== undefined && requests + 9 * this.#proofRequestFloor() <= 180;
+    return !!current && isDeepStrictEqual(current.binding, offer.pass) && this.#passWorkAdmitted(context, requests);
   }
   #terms(context: Context, target: Target, offer: Offer, expiresAt: string): Move["terms"] | undefined {
     const fee = OwnerFileClassMovePolicy.termsFor(context.move, target.session.startsAt, this.#now());

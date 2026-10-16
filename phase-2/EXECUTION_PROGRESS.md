@@ -969,3 +969,68 @@ test/cliniko/verification-request-cost.test.ts
 test/cliniko/class-move-staged-call-flow.test.ts` passed43 cases, zero failures/
 cancellations/skips, log `be9df097-1792159977225.log`. Facts were reviewed
 against the narrow type changes and directly cited fingerprints refreshed.
+
+
+### Corrected full TypeScript and four-phase PostgreSQL results
+
+Frozen746227e641f0f2ddc655ca4b3c3ded896ae8f837 passed `npm run typecheck`
+in77.84s, work1792160079246/log `be9df097-1792160079246.log`, exit0 at
+14:15:57.443130UTC. All1162 input hashes remained unchanged. Scope peak
+1,427,951,616 bytes (1.330GiB), all high/max/OOM events0, no explicit heap/
+scope limit change. Actual PID absence was checked14:16:07.810009UTC and
+the heavy slot released before any further heavy request.
+
+The separately coordinated `bash scripts/with-postgres.sh env
+ABBY_LEDGER=postgres node --test --test-concurrency=1
+test/cliniko/class-move-stages-process.test.ts` passed both cases with zero
+failures/cancellations/skips, work1792160239383/log
+`be9df097-1792160239383.log`, exit0 at14:20:35.638228UTC. The first case
+completed four phases over three real rolling quota resets with the unchanged
+180 cap,210-second deadline and exactly three mutations. The second killed its
+own sender and discovered the native review from a fresh process without any
+mutation. Database canary scans passed. Total job196.04s, test runtime191.55s.
+Own scope peak183,398,400 bytes excludes the Docker PostgreSQL server; no
+scope OOM/high/max events occurred. All1162 source inputs stayed unchanged.
+Natural terminal and PID absence were reported with a14:20:45UTC release
+cutoff; no additional heavy job was automatically launched. This is focused
+process/database evidence, not whole-suite, rebuilt signed serving, disposable
+backup, operator or real-provider acceptance.
+
+### Large staged caller menu: legacy whole-window rejection corrected
+
+Source review found two remaining legacy total-move filters in the pass offer
+and final proposal observations. They hid a valid separately approved large
+staged offer even when all complete phase ceilings fit180. The unchanged
+light reproduction failed at85 claims with no eligible offer, log
+`be9df097-1792160453328.log`. A registered E2E-419 comparison reproduced one
+legacy pass and one staged failure, log `be9df097-1792160507949.log`.
+
+The private host now requires current complete pass phase ceilings at both
+checks whenever staging is independently approved. It still requires complete
+current native observations and unchanged entitlement; legacy execution keeps
+its existing whole-move request gate. The first corrected comparison admitted
+the proposal but failed a newly added fixture's capitalized `Option one` regex;
+actual wording is `option one`, log `be9df097-1792160527788.log`. The fixture
+now asserts the actual wording. A larger complete cross-service/case host
+journey with999 history and201 roster records was added to the existing
+played-consent journey matrix.
+
+`ABBY_LEDGER=memory node --test --test-concurrency=1
+test/cliniko/class-move-request-cost.test.ts
+test/cliniko/class-move-staged-host.test.ts` passed29 cases with zero
+failures/cancellations/skips, log `be9df097-1792160568045.log`. Both legacy
+refusal and staged proposal are asserted; the large staged host completes
+all four fresh confirmed phases within180 claims per window. No native
+replay, expiry, quota or authority assertion was removed. Manifest1.234
+retains419 IDs/full-call planned; product claims and cited hashes were reviewed
+for this narrow correction. The full typecheck/PG results above qualify746,
+not a full new-source run. The later host-only delta still needs full TypeScript.
+The PG worker/native execution changed by neither menu correction nor fixture
+addition retains its focused earlier evidence; no full PG rerun is inferred.
+
+The host-only delta also passed40 existing ordinary/pass host cases under
+`ABBY_LEDGER=memory node --test --test-concurrency=1
+test/cliniko/class-move-host.test.ts test/cliniko/class-pass-move-host.test.ts`,
+log `be9df097-1792160680932.log`, zero failures/cancellations/skips. The
+updated manifest/facts scope passed both contracts, log
+`be9df097-1792160668488.log`. No broader run is inferred from these scopes.

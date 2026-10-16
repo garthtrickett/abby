@@ -6,8 +6,9 @@ import { decodeClinikoReview } from "../../src/cliniko/review-request.ts";
 import { randomUUID } from "node:crypto";
 import type { ClassMovementConsent } from "../../src/core/class-movement-consent.ts";
 
-for (const pass of [false, true]) test(`E2E-419 actual staged ${pass ? "pass" : "ordinary"} host needs distinct played SAM effects across quota windows`, async () => {
-  const f = await classMoveFixture(false, false, pass ? {} : undefined, true);
+for (const variant of ["ordinary", "pass", "largeCrossCasePass"] as const) test(`E2E-419 actual staged ${variant} host needs distinct played SAM effects across quota windows`, async () => {
+  const pass = variant !== "ordinary", large = variant === "largeCrossCasePass";
+  const f = await classMoveFixture(large, false, large ? { differentCase: true, history: 999, rosterHistory: 201 } : pass ? {} : undefined, true);
   const signal = new AbortController().signal, at = () => f.config.clock();
   try {
     await f.verify(); const action = await f.prepare(); await f.play(); await f.pause(61);

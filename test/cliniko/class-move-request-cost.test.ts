@@ -81,3 +81,25 @@ test(`E2E-419 changed callback cost ${when} retires a private stage without anot
     assert.equal(f.writes.length, 1); assert.equal(f.native.attendees.find(row => row.id === "101")!.cancelled_at, null);
   } finally { await f.close(); }
 });
+
+
+for (const staged of [false, true]) test(`E2E-419 large cross-case pass menu uses ${staged ? "complete separate phase ceilings" : "the legacy whole-window gate"}`, async () => {
+  const f = await classMoveFixture(true, false, { differentCase: true, history: 999, rosterHistory: 201 }, staged);
+  const at = () => f.config.clock();
+  try {
+    await f.verify();
+    if (staged) {
+      const action = await f.prepare();
+      assert.equal(action.status, "awaitingConfirmation");
+      assert.match(f.steps.find(step => step.stage === "offers")!.text, /option one/);
+    } else {
+      resultValue(await f.reception.readReschedulingMenu(f.scope, f.turn("targets"), "targets", "2026-10-08", "2026-10-08", at())); await f.play();
+      resultValue(await f.reception.selectReschedulingMenu(f.scope, f.turn("target"), "targets", 1, at())); await f.play();
+      resultValue(await f.reception.readReschedulingMenu(f.scope, f.turn("offers"), "offers", "2026-10-09", "2026-10-09", at()));
+      assert.match((await f.state()).callerMessages.at(-1)!, /couldn't find an eligible/);
+      assert.equal(Object.keys((await f.state()).actions).length, 0);
+    }
+    assert.equal(f.writes.length, 0); assert.equal(f.recalls.length, 0);
+    assert.ok(f.windowClaims.every(count => count <= 180));
+  } finally { await f.close(); }
+});

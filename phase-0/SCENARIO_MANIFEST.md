@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.233
+# Scenario manifest, version 1.234
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -892,3 +892,15 @@ costs and any phase above180 remain explicit refusals. High-cost serving
 cohorts, full typecheck, rebuilt signed serving, operator resolution, mixed/
 concurrent/process/database/backup and cloud acceptance remain unfinished.
 Version1.233 keeps419 stable IDs and all full-call evidence planned.
+
+
+## Four-phase PostgreSQL and large caller menu qualification
+
+Frozen746 source passed full TypeScript and the focused real PostgreSQL
+four-phase/three-reset process cases, including read-only discovery after sender
+loss and database canary scans. These do not establish full serving, backup or
+operator acceptance. A later host-only correction replaces the legacy whole-move
+filter for separately approved staging with complete per-phase admission; legacy
+execution keeps its existing limit. Large cross-case proposal and complete host
+journey checks pass in the29-case host/cost scope. The later source needs its own
+full typecheck. Manifest1.234 retains419 IDs and planned full-call evidence.
