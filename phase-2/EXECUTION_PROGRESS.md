@@ -1162,3 +1162,15 @@ cited fingerprints were reviewed. Corrected-source full TypeScript, rebuilt
 signed serving, broader mixed/concurrent/high-cost cohorts, independent review,
 real clinic/operator and authoritative cloud acceptance remain open. PR467's
 billing startup failures remain unresolved externally. Gap10/all13 stay active.
+
+
+The corrected runtime at `2dcdcf4` passed full runtime-source checking, but the
+full command still failed two TS2339 diagnostics in the new process test's
+canary setup: its generic ActionRequest had not been narrowed to reschedule.
+Tracked work1792163371729, log `be9df097-1792163371729.log`, naturally
+finished15:10:48.092618UTC exit2 after76.16s;1,168 inputs unchanged,
+peak1,594,728,448B, OOM/high/max0. An explicit assertion that the synthetic
+caller request is a reschedule now narrows its patient fields. No runtime or
+provider logic changes; the preceding PostgreSQL results cover the same worker
+and recovery graph before this test assertion. Another full check is pending;
+no automatic heavy retry followed the failure.

@@ -47,11 +47,13 @@ test("E2E-419 fresh staff process inspects " + variant + " with PostgreSQL and b
     assert.equal(review.request.operation.kind, "classMove");
     if (review.request.operation.kind !== "classMove") throw new Error("synthetic movement required");
     const payload = String(x.f.recalls[0]!.notes).split("\n").find(line => line.startsWith("z1:")); assert.ok(payload);
+    const caller = x.initial.mutation.request;
+    assert.ok(caller.kind === "reschedule", "the synthetic caller owns a class move");
     // All values come from the synthetic parent; none is sent as worker authority.
     const canaries = [
-      { label: "patient", value: x.initial.mutation.request.patient.patientRef },
+      { label: "patient", value: caller.patient.patientRef },
       { label: "contact", value: "registered-session@example.test" },
-      { label: "caller_grant", value: x.initial.mutation.request.patient.verificationRef },
+      { label: "caller_grant", value: caller.patient.verificationRef },
       { label: "native_root", value: review.request.operation.attendanceActionId },
       { label: "email_code", value: x.f.mail[0]!.code },
       { label: "staff_grant_prefix", value: "staff-class-review:" },
