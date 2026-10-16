@@ -2572,3 +2572,25 @@ E2E-353 plus reproduction and receipt controls pass5/5 (`work1792193704146`),
 This establishes the fixture bug and its local qualification; an isolated pass
 does not prove it caused the earlier routed booking-menu15s timeout. Full-graph
 qualification and the independent backup timeout diagnosis remain open.
+
+Source62b3ef9 full TypeScript passed (`work1792193819955`),
+23:37:00.433379–23:38:31.352061UTC,1185 inputs unchanged,
+peak1,402,355,712B/2GiB/CPU200%/Swap0/1536MiB heap,no memory limit/OOM events.
+Four additional original signed workflow files preserve played selection,
+private intake, corrections and guided service booking (`work1792193923033`),
+23:38:43–23:39:23.124207UTC, default4-file concurrency and original deadlines.
+The tests pass without generated runtime artifacts in this worktree. Scope
+peak419,258,368B/1GiB/CPU200%; aggregate Docker separately accounted under
+1GiB/CPU200%/Swap0, no memory limit/OOM events. Only owned databases were used.
+
+Separately, the entire original signed runner failure file passed38/38,
+0skips (`work1792193786175`),23:36:26–23:37:57.972060UTC on private resend
+source4325251/docsdd3,1184inputs/451runtime unchanged. Nodepeak344,838,144B,
+Docker252,211,200B,1GiB/CPU200% each,Swap0 and no memory limit/OOM events.
+The original30s backup timeout did not reproduce; this is not proof of its
+cause or resolution in the full graph. The initial optional Docker observer
+used an invalid `.ID` template field. A corrected `.Actor.ID` read-only query
+recovered117 retained own-labelled lifecycle events;22 complete observed
+create-to-die lifetimes were0.67–1.16s. The daemon event buffer is partial,
+so this does not describe every backup or replace the failed full-run evidence.
+No source assertion, timeout or privacy scan was bypassed.
