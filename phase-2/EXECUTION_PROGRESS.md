@@ -10,7 +10,7 @@
 | 2 Delivery baseline | Remote main verified at `9a29e51e7f7e0a765db7674c6c75ff2087260473`; integrated draft [PR #457](https://github.com/garthtrickett/abby/pull/457) remains at `4e19e1783e2324480c9e0d0923eeaf825e04692e`. Its GitHub jobs never started because of account billing/spending limits. Focused local qualification of the receipt candidate is recorded below; whole-candidate CI remains outstanding. |
 | 3 Exact receipt foundation | Implemented and locally qualified in `codex/abby-provider-ack-receipt`, stacked on the published plans and integrated candidate. The full interval is captured, sent and validated. Existing post-write host success gates remain. Independent review and exact-head CI remain outstanding. |
 | 4 Individual booking | Published in draft [PR #460](https://github.com/garthtrickett/abby/pull/460), `codex/abby-provider-ack-individual`, based on receipt correction `92a16e5`. Final online/roster availability follows preparation; exact acknowledgement survives host/review/worker cancellation. Focused, isolated database/process/compiled-location and complete local `npm test` checks passed. Independent review and cloud qualification remain open; cloud jobs have not started because of billing. |
-| 5 Native class creation | Implemented candidate in `codex/abby-provider-ack-class`, based on stage 4 `40a51f2`. Exact attendee acknowledgement and final double capacity ordering apply to ordinary/approved-pass creation. Focused, process-loss/privacy and unchanged movement/cancellation regressions passed; corrected compiled cases, final typecheck and manifest checks passed. Full local `npm test` is running. Publication, independent review and cloud qualification remain open. |
+| 5 Native class creation | Implemented candidate in `codex/abby-provider-ack-class`, based on stage 4 `40a51f2`. Exact attendee acknowledgement and final double capacity ordering apply to ordinary/approved-pass creation. Focused, process-loss/privacy and unchanged movement/cancellation regressions passed; corrected compiled cases, final typecheck and manifest checks passed. Full local `npm test` is running. Published in draft [PR #461](https://github.com/garthtrickett/abby/pull/461); independent review and cloud qualification remain open. |
 | 6 Earlier-gap qualification | Pending the booking runtime steps. Preserve all gaps 1–9 and their remaining engineering/acceptance requirements. |
 | 7 Class/pass completion | Pending; staged caller/SAM/operator integration, complete cost admission and broader combinations remain required. |
 | 8 Payments | Pending gap 11 specification and implementation, including audit R18/R19 and any necessary approved receipt attachment dependency. |
@@ -87,8 +87,14 @@ Required manual acceptance before clinic activation remains ordinary and class s
 
 ## Native class creation runtime candidate
 
-Stage 5 is implemented on `codex/abby-provider-ack-class`, based on individual
-candidate `40a51f2f6c7182f394dee6b02c1fae66ce316171`. It is not landed or activated.
+Stage 5 runtime `de8b1d921ee4d271a167443b6c521d86a187964d` is published in draft
+[PR #461](https://github.com/garthtrickett/abby/pull/461),
+`codex/abby-provider-ack-class`, based on individual candidate
+`40a51f2f6c7182f394dee6b02c1fae66ce316171`. It is not landed or activated.
+Exact-head push run `38877593063` and PR run `38877638829` failed with no
+executed steps. Checks `116896272685` and `116896427317` independently reported
+the account billing/spending condition. This establishes no code failure; no
+unchanged workflow was rerun or account/repository policy changed to bypass it.
 `ClinikoClassBookingHost` completes class permission, exact played consent,
 approved pass/history, proof, metadata, policy/SAM/review and POST quota work
 before the final complete double occurrence/attendance observation. The reader's
