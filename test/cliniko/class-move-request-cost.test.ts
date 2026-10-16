@@ -103,3 +103,39 @@ for (const staged of [false, true]) test(`E2E-419 large cross-case pass menu use
     assert.ok(f.windowClaims.every(count => count <= 180));
   } finally { await f.close(); }
 });
+
+test("E2E-419 staged pass menu refuses a native phase that cannot also admit protected preparation", async () => {
+  const f = await classMoveFixture(false, false, { differentCase: true }, true), at = () => f.config.clock();
+  try {
+    const binding = { scope: f.scope, credentialFingerprint: clinikoCredentialFingerprint(f.native.config.apiKey), budget: f.config.cliniko.rateBudget };
+    Object.assign(f.config.permission, { allows: declareClinikoRequestCost(f.config.permission.allows, binding, 1) });
+    const authority = f.config.classPassMoveAuthority!;
+    Object.assign(authority, { select: declareClinikoRequestCost(authority.select, binding, 1), allows: declareClinikoRequestCost(authority.allows, binding, 2) });
+    assert.equal(classMoveStageRequestCeilings({ proof: 1, permit: 2, passSelect: 1, passAllow: 2 }, true)?.replacement, 178);
+    await f.verify();
+    resultValue(await f.reception.readReschedulingMenu(f.scope, f.turn("targets"), "targets", "2026-10-08", "2026-10-08", at())); await f.play();
+    resultValue(await f.reception.selectReschedulingMenu(f.scope, f.turn("target"), "targets", 1, at())); await f.play();
+    resultValue(await f.reception.readReschedulingMenu(f.scope, f.turn("offers"), "offers", "2026-10-09", "2026-10-09", at()));
+    assert.match((await f.state()).callerMessages.at(-1)!, /couldn't find an eligible/);
+    assert.equal(Object.keys((await f.state()).actions).length, 0);
+    assert.equal(f.writes.length, 0); assert.equal(f.recalls.length, 0);
+  } finally { await f.close(); }
+});
+
+test("E2E-419 staged pass proposal admits a complete caller window exactly at the physical limit", async () => {
+  const f = await classMoveFixture(false, false, { differentCase: true }, true);
+  try {
+    const binding = { scope: f.scope, credentialFingerprint: clinikoCredentialFingerprint(f.native.config.apiKey), budget: f.config.cliniko.rateBudget };
+    // A conservative complete callback ceiling may exceed its fixture's actual
+    // I/O. This remains an exact same-account declaration, not a cost floor.
+    f.sessionConfig.lookup.candidates = declareClinikoRequestCost(f.sessionConfig.lookup.candidates, binding, 4);
+    const authority = f.config.classPassMoveAuthority!;
+    Object.assign(authority, { allows: declareClinikoRequestCost(authority.allows, binding, 3) });
+    assert.equal(f.session.nativeRequestCostCeilings(binding)?.proof, 5);
+    assert.equal(classMoveStageRequestCeilings({ proof: 5, permit: 0, passSelect: 0, passAllow: 3 }, true)?.replacement, 175);
+    await f.verify();
+    const action = await f.prepare();
+    assert.equal(action.status, "awaitingConfirmation");
+    assert.equal(f.writes.length, 0); assert.equal(f.recalls.length, 0);
+  } finally { await f.close(); }
+});

@@ -1374,3 +1374,66 @@ unchanged. Wrapper1338309 is absent and the actual terminal/release was sent to
 Gust. Its corrected356 diagnostic retains the next heavy slot. No pass case,
 full typecheck or unchanged retry is bundled. The wording correction is in the
 uncompiled parent test, leaving the448 serving artifacts unchanged.
+
+### Ordinary signed pass and maximum-history proposal failure
+
+Frozen `b202c4b` passes the one ordinary signed compiled case:
+`bash scripts/with-postgres.sh env ABBY_LEDGER=postgres node --test
+--test-concurrency=1 --test-name-pattern="compiled signed ordinary"
+test/voice/class-move-staged-runner.test.ts`.
+Work1792166520114/log `be9df097-1792166520114.log` ran from
+16:02:00.762557 to16:04:32.009481UTC, natural exit0,1 case/zero skips,
+scope peak234,102,784B excluding Docker PostgreSQL/OOM0. All assertions
+completed: distinct played stages, two exact native writes, continuation clock
+not ahead of host, actual180 request budget/no residual reservations, exactly
+the allowed phone-ID index and private canaries absent from every other column,
+unfiltered backup, public speech/model turns and raw runner output. Source1170
+inputs/448 compiled artifacts were unchanged. This is an ordinary synthetic
+journey, not full serving/class/pass or real-provider acceptance.
+
+The separately coordinated maximum-history cross-case pass case on that same
+source/build failed before the initial proposal. Exact command changes only
+the name filter to `compiled signed maximum-history`. Work1792167045664/log
+`be9df097-1792167045664.log` ran16:10:46.166244–16:11:08.150256UTC,
+natural exit1, scope peak215,216,128B excluding Docker PostgreSQL/OOM0,
+source/artifacts unchanged. It received a fixed rescheduling-options refusal
+instead of the expected initial readback. No staged pass completion or privacy
+tail passed. Earlier guard-only work1792166792328 refused at PSI.19 before
+PostgreSQL/node; it is not a failed semantic case or a new release cutoff.
+
+A light memory probe using the real ClinikoPatientCandidateReader for the
+additional lookup read reproduces the proposal-budget problem:
+work1792167215121/log `be9df097-1792167215121.log`, natural exit0.
+The same999-history/201-roster cross-service fixture prepares with proof cost1
+at175 claims (targets20, selected21, offers85, proposal175). With proof cost2,
+the initial menu progression reaches100 claims and the proposal reaches a denied
+181st attempt, with no writes/reviews. This is a measured memory reproduction,
+not new PostgreSQL qualification. The initial proposal needs its own bounded
+quota preparation; later phase waits cannot repair a failure before any action.
+
+### Complete staged caller-window admission, separate follow-on
+
+Dedicated branch `codex/abby-class-stage-window-admission` keeps the signed
+fixture's frozen source/artifacts separate. A memory reproduction first failed
+on a misleading offer: native replacement cost178 fit180, but its caller
+preparation added3, making181. Log `be9df097-1792166938670.log` records the red
+case. The class host now uses one calculation for ordinary/pass offers,
+proposals, initial capacity and continuation preparation, requiring every native
+phase plus conservative protected preparation to fit180. Compensation and
+inspection are included. The native coordinator's reservation bounds remain
+unchanged; headroom is still no reservation, consent or send authority. Existing
+legacy execution retains its separate whole-move contract.
+
+`ABBY_LEDGER=memory node --test --test-concurrency=1
+test/cliniko/class-move-request-cost.test.ts
+test/cliniko/class-move-phase-wait.test.ts` passes19 cases/zero skips,
+log `be9df097-1792167013731.log`,18.05s. It includes the corrected181 refusal
+before an offer and an exactly180 complete caller window preparing a proposal.
+The related staged/legacy host command over `class-move-staged-host.test.ts`,
+`class-move-host.test.ts` and `class-pass-move-host.test.ts` passes57 cases,
+zero skips, log `be9df097-1792167084616.log`,107.56s. These are memory results.
+Manifest1.238 retains419 IDs/full-call planned; reviewed facts/fingerprints
+describe the narrower evidence. Current full TypeScript, serving rebuild,
+combined/mixed/concurrent cohorts, initial high-history quota preparation and
+independent/cloud/clinic acceptance remain open. Gust a20f owns the next heavy
+slot; no new Abby compiler or PostgreSQL job is bundled.

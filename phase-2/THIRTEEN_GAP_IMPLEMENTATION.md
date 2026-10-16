@@ -4203,3 +4203,15 @@ Manifest1.237 keeps419 IDs/full-call planned. Corrected graph rebuild, signed
 ordinary/maximum-history pass execution, full TypeScript, combined/mixed/
 concurrent cohorts, independent/clinic/operator/cloud acceptance stay open.
 See the execution ledger for exact logs and source-drift limits.
+
+The later `b202c4b` ordinary signed staged case passes its exact native writes,
+continuation clock, PostgreSQL quota and database/backup/output privacy checks.
+Its maximum-history cross-case pass case refuses before the initial proposal;
+a real-candidate-reader memory probe reproduces proposal budget exhaustion at
+the181st attempt when proof requires2 requests. No staged pass completion is
+claimed. A separate complete caller-window admission correction rejects a
+native178/preparation3 cohort before an offer and admits a complete180 cohort;
+19 focused and57 staged/legacy host memory checks pass. Manifest1.238 retains
+419 IDs/full-call planned. Initial high-history proposal quota handling,
+full new-source TypeScript/build/serving and broader acceptance remain open.
+All thirteen gaps remain active, with Stripe selected for gap11.

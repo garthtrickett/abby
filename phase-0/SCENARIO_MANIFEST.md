@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.237
+# Scenario manifest, version 1.238
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a

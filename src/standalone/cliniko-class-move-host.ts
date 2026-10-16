@@ -13,7 +13,7 @@ import type { ClinikoClassSession as Occurrence } from "../cliniko/class-attenda
 import type { ClinikoAttendanceConfig } from "../cliniko/class-attendance-write.ts";
 import { checkClinikoHeadroom, clinikoCredentialFingerprint, withClinikoReservation } from "../cliniko/read-budget.ts";
 import { observedClassMoveRequests, classMoveStageRequestCeilings } from "../cliniko/class-move-workload.ts";
-import type { ClassMoveStageRequestCosts } from "../cliniko/class-move-workload.ts";
+import type { ClassMoveStageRequestCosts, ClassMoveStageRequestCeilings } from "../cliniko/class-move-workload.ts";
 import { clinikoRequestCeiling } from "../cliniko/request-cost.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { sameScope } from "./appointment-change-authority.ts";
@@ -134,13 +134,23 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
   #passWorkAdmitted(context: Context, observedRequests: number | undefined): boolean {
     if (observedRequests === undefined) return false;
     return context.move.quotaStaging
-      ? classMoveStageRequestCeilings(this.#stageRequestCosts(), true) !== undefined
+      ? this.#stageWindowRequests(true) !== undefined
       : observedRequests + 9 * this.#proofRequestFloor() <= 180;
+  }
+  #stageWindowRequests(pass: boolean, costs = this.#stageRequestCosts()): ClassMoveStageRequestCeilings | undefined {
+    const native = classMoveStageRequestCeilings(costs, pass);
+    if (!native || !costs) return undefined;
+    // A pending phase also needs protected preparation before its new readback:
+    // one proof, two ownership checks and one permission. permit conservatively
+    // bounds two ownership/permission pairs. Native reservations remain separate.
+    const windows = Object.fromEntries(Object.entries(native).map(([stage, requests]) =>
+      [stage, requests === undefined ? NaN : requests + costs.proof + costs.permit]));
+    return Object.values(windows).every(requests => Number.isSafeInteger(requests) && requests <= 180) ? Object.freeze(windows) : undefined;
   }
   #requests(context: Context, p: Prepared): number | undefined {
     if (!context.move.quotaStaging) return p.offer.pass ? 180 :
       context.source.practitionerId === context.destination.practitionerId && context.source.appointmentTypeId === context.destination.appointmentTypeId ? 120 : 180;
-    return classMoveStageRequestCeilings(this.#stageRequestCosts(), !!p.offer.pass)?.replacement;
+    return this.#stageWindowRequests(!!p.offer.pass)?.replacement;
   }
   #nativeRequest(context: Context, target: Target, offer: Offer): ClinikoClassMoveRequest {
     return { scope: this.#config.scope, patientId: target.patientId, verificationRef: target.verificationRef, actionId: randomUUID(),
@@ -257,6 +267,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
               duration !== context.destination.durationMinutes * 60000 || Date.parse(session.startsAt) < Date.parse(this.#now()) + context.destination.minNoticeMinutes * 60000 ||
               Date.parse(session.startsAt) - Date.parse(this.#now()) > Math.min(context.move.maxAdvanceDays, context.destination.maxAdvanceDays) * 86400000 ||
               query.window && !matchesBookingSearchWindow(session.startsAt, context.move.timeZone, query.window)) continue;
+          if (context.move.quotaStaging && !this.#stageWindowRequests(context.move.membership === "nativeCaseSessions")) continue;
           let item: Offer = { ref: `class-move-offer:${randomUUID()}`, session, expiresAt, version: context.version };
           if (!await this.#permit(context, target!, item, "offers", signal)) return denied();
           if (context.move.membership === "nativeCaseSessions") {
@@ -346,7 +357,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     return contract ? { ...contract, expiresAt } : undefined;
   }
   #request(context: Context, target: Target, offer: Offer): Move | undefined {
-    if (context.move.quotaStaging && !classMoveStageRequestCeilings(this.#stageRequestCosts(), !!offer.pass)) return undefined;
+    if (context.move.quotaStaging && !this.#stageWindowRequests(!!offer.pass)) return undefined;
     const now = this.#now(), at = Date.parse(now), start = Date.parse(offer.session.startsAt), end = Date.parse(offer.session.endsAt);
     if (!Number.isFinite(at) || !Number.isFinite(start) || !Number.isFinite(end) ||
         start - at < context.destination.minNoticeMinutes * 60000 ||
@@ -411,12 +422,10 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
       // Admit the complete phase plus preparation before consuming protected
       // proof. Otherwise a full account can retire a valid owner on a read
       // denial, and an unexplained silent wait reaches the transport idle limit.
-      // Preparation uses one full proof, two ownership checks and one permit;
-      // costs.permit already bounds two ownership/permit pairs. This is no hold:
+      // Use the same complete bound that admitted the offer. This is no hold:
       // the native phase still reserves and each request still claims normally.
-      const phase = classMoveStageRequestCeilings(owner.costs, !!owner.prepared.offer.pass)?.[owner.continuation.stage];
-      const required = phase === undefined ? NaN : phase + owner.costs.proof + owner.costs.permit;
-      if (!Number.isSafeInteger(required) || required > 180) return denied();
+      const required = this.#stageWindowRequests(!!owner.prepared.offer.pass, owner.costs)?.[owner.continuation.stage];
+      if (required === undefined) return denied();
       const capacity = await awaitUntilAbort(checkClinikoHeadroom(c.cliniko.rateBudget, required), signal);
       if (capacity === undefined) return denied();
       const admitted = await this.#ready(signal);

@@ -1,7 +1,7 @@
 {
   "verifiedDate": "2026-10-16",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "638b22887294621f364240aee9d85e5adf5cfe2fcc2da8062929e339f9478082",
+  "factsSha256": "d1194525619b2b4847957e1deb842c0f78e599c4828969e58ee8b7ca1681654c",
   "sources": {
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
     "docs/adr/0003-class-movement-staff-resolution.md": "683bdd10660afc00309bac21e32ceda976573aa5e29aca4106fb1cddcb71b62f",
@@ -27,7 +27,7 @@
     "src/standalone/cliniko-booking-offers.ts": "3977b6204843a68ea817bfadcf8e850c00f0f837ddf42ac9f7a766ced3580c5c",
     "src/standalone/cliniko-call-flow.ts": "491c5b07742ab5636a16656a765bbd5c2e37446f9628d05aac3bd7b53b8c0984",
     "src/standalone/cliniko-class-booking-host.ts": "18778acf511cf931269414caf46114ad54756f3335962f1827ee71fb7cd2f5bd",
-    "src/standalone/cliniko-class-move-host.ts": "dd7b9c4800218a6b9c04d1152358c04b06f39ee07cf5151f91ca601cad1a0551",
+    "src/standalone/cliniko-class-move-host.ts": "f67b5db71f7f48d193f24e189d622f3e723be107757c8632dfc9518e96493698",
     "src/standalone/cliniko-class-move-recovery.ts": "be3b1dcde0e38ada0b536919c2ee289d7642c6e719a06f25eced092dd924c4b3",
     "src/standalone/cliniko-intake-booking-session.ts": "96a258341828980bb9255f66a8d17b4409a43636a91aac660f9a73ac9ee9250d",
     "src/standalone/cliniko-phone-lookup.ts": "ec3fe7a7d70902dcfdb3a4df3848db574c50116d6e400622a2156f7d36a577c8",
@@ -46,7 +46,7 @@
     "test/cliniko/class-move-phase-wait.test.ts": "8af6512a79aeed2f3b7f460641c299ad6225e6f59c307e005e76da76dc4edb38",
     "test/cliniko/class-move-recovery-process.test.ts": "cd0083104ad60ee12502d42343beccb0c12e3777b7268b314caaa5ef828cb4fc",
     "test/cliniko/class-move-recovery.test.ts": "1dac4ccd910a97fd5bdeb439981036cbe9d5f10bab81bd9a541628840ca16832",
-    "test/cliniko/class-move-request-cost.test.ts": "096e0c9e37e34cb89793b2b500989a89d052fa10a9f9417bced9e249371d52be",
+    "test/cliniko/class-move-request-cost.test.ts": "73ca607bd82298243aea11ca420cd291a9c7b704e57b4dfcc072bf114f412a83",
     "test/cliniko/class-move-staged-call-flow.test.ts": "f692b6e507a4b93d8ee6661f0a74e143ab5e4dbed0c63360f7a0362380c06881",
     "test/cliniko/class-move-staged-host.test.ts": "7f6d7821083ed27e5d62cb18f0e3bfde9ca082b4aa480b12a24edd9a30e3a58b",
     "test/cliniko/class-move-stages.test.ts": "47803c0dd6d6219a5c188d740dde7766363803f39d12ddbe92fa01edfd387c55",
