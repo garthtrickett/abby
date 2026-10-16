@@ -408,8 +408,9 @@ These contracts include real successful menu playback before selection,
 rejected late positive options/evidence, no extra protected read and no host
 mutation. Manifest 1.230 adds this text witness to existing E2E-353/E2E-358
 without adding a scenario or promoting planned full-call evidence. Full
-typecheck, PostgreSQL/compiled qualification, broader regressions, review and
-exact-head cloud gates remain pending. The earlier whole-suite PostgreSQL
+typecheck subsequently passed as recorded below. PostgreSQL/compiled
+qualification, broader regressions, review and exact-head cloud gates remain
+pending. The earlier whole-suite PostgreSQL
 result remains failed; this correction does not establish its timing cause.
 No heavy validation is queued during the requeued Gust e252 slot.
 
@@ -431,6 +432,27 @@ through that run. Adding the concrete `book` action kind fixes the fixture's
 typed shape; all 24 original deadline boundary cases then passed again,
 zero failures/cancellations/skips, log `be9df097-1792152120474.log`, using the
 same focused command above. No assertion, deadline or concurrency changed.
-Full typecheck of this corrected fixture remains pending. The one authorized
-heavy job ended and released the slot to Gust at the conservative
-12:01:36 UTC cutoff; no automatic retry or follow-on heavy job was launched.
+The initial authorized heavy job ended and released the slot to Gust at the
+conservative 12:01:36 UTC cutoff; no automatic retry or follow-on heavy job
+was launched.
+
+After another explicit single-job swap and the operator's instruction to
+start following the memory-floor audit, full `npm run typecheck` of corrected
+commit `5a6f1bdd38c8d68ed0f4f931ecb500dd6b912b8b` passed, natural exit 0,
+13:37:43.625256–13:38:48.886175 UTC (65.26 seconds), log
+`be9df097-1792157863343.log`. All 1,143 frozen inputs remained unchanged.
+The whole escaped scope peaked at 1,421,070,336 bytes (about 1.32 GiB), with
+zero high/max/OOM/OOM-kill events. This run had no explicit heap or scope
+memory cap; actual `memory.max`, `memory.high` and `memory.swap.max` were
+`max`. The earlier 4,500,000 KiB prelaunch floor was an uncalibrated agent
+choice copied from a focused PostgreSQL diagnostic, not a measured TypeScript
+requirement or reserved capacity. The operator explicitly authorized this
+single start after that audit; it establishes no automatic future launch rule.
+
+The paired wait was consumed and all tracked processes were verified absent
+at the new conservative 13:38:58.613751 UTC release cutoff. Gust's requeued
+e252 diagnostic retains the next heavy slot under its own fresh admission
+checks. No follow-on Abby heavy or native-owner preparation used this slot.
+PostgreSQL/compiled qualification of this menu delta, broader regressions,
+review and exact-head cloud gates remain open; the previous failed whole-suite
+result and its unresolved timing cause remain recorded above.
