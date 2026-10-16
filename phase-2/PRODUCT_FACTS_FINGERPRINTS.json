@@ -1,7 +1,7 @@
 {
   "verifiedDate": "2026-10-16",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "3cdc8d0e4a3bafee15a5bfc5059d932ef7a7869a431e3466f6e8ce20d346c6a9",
+  "factsSha256": "32a06be8a91f7f8ab33167e711eb055159ba48ef8e08a098d64506e7ad22c4c0",
   "sources": {
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
     "docs/adr/0003-class-movement-staff-resolution.md": "683bdd10660afc00309bac21e32ceda976573aa5e29aca4106fb1cddcb71b62f",
@@ -27,7 +27,7 @@
     "src/standalone/cliniko-booking-guard.ts": "4e182592ac6d2d1d6081d221889588b561a961a8819341bc1a1c2154cff93bd4",
     "src/standalone/cliniko-booking-host.ts": "b7d66230a6096193420a061d58018adc4c5c2bebbe894d406660822b0fa80ae4",
     "src/standalone/cliniko-booking-offers.ts": "3977b6204843a68ea817bfadcf8e850c00f0f837ddf42ac9f7a766ced3580c5c",
-    "src/standalone/cliniko-call-flow.ts": "bc2fc2e159f78510c646bea6bbdc1973d9d93d7b74bc6713b891c7a88e372533",
+    "src/standalone/cliniko-call-flow.ts": "c1ee92165803629c2951429422956391cbdae47d5a974b01c7aaacb6d008ae89",
     "src/standalone/cliniko-class-booking-host.ts": "18778acf511cf931269414caf46114ad54756f3335962f1827ee71fb7cd2f5bd",
     "src/standalone/cliniko-class-move-host.ts": "fe9908cdf71c772f86e69404fa5a3cff1a95c84005fbd29b8fdd042cfb20594d",
     "src/standalone/cliniko-class-move-recovery.ts": "be3b1dcde0e38ada0b536919c2ee289d7642c6e719a06f25eced092dd924c4b3",
