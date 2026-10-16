@@ -65,7 +65,18 @@ for (const pass of [false, true]) test(`E2E-419 compiled signed ${pass ? "maximu
       }
       const words = stage === "original" ? /separate confirmation to cancel the original/ : stage === "association" ? /separate confirmation to associate the replacement/ : /separate confirmation to inspect whether/;
       assert.match(call.spoken.at(-1)!, words);
+      if (!pass) {
+        // Deliberately delay the synthetic clock without inventing quiet packets.
+        // Playback processing and the next real utterance must stay ordered.
+        const ticks = call.messages.filter(row => row.kind === "clockAdvanced").length;
+        call.child.send({ kind: "advanceClock", milliseconds: 1500 });
+        await voiceUntil(() => call.messages.filter(row => row.kind === "clockAdvanced").length > ticks, "bounded delayed media callback");
+      }
       await call.mark(); await call.say("Yes");
+      const timing = call.messages.filter(row => row.kind === "classPhaseAffirmation").at(-1)?.diagnostic as
+        { outcome: string; turnToPlayedMs: number | null; turnToClockMs: number } | undefined;
+      assert.ok(timing && timing.outcome === "accepted" && typeof timing.turnToPlayedMs === "number" &&
+        timing.turnToPlayedMs >= 0 && timing.turnToClockMs <= 0, "real phase affirmation follows processed playback and cannot outrun the host clock");
       assert.equal(writes(call).length, count + (stage === "associationInspection" ? 0 : 1));
       assert.equal(call.messages.filter(row => row.kind === "classWriteOutcome").at(-1)!.actionStatus,
         "classMovement", "native receipt remains a staged movement receipt through final inspection");

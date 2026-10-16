@@ -1837,3 +1837,21 @@ fixed diagnostic. The refined actual-transport/playback suite passes13 cases,
 work1792176308731. This proves a concrete timestamp fixture defect and bounded
 correction; actual new-source TypeScript, signed PostgreSQL and complete healthy
 full-context qualification remain required. No clean regression is claimed.
+
+
+Further ordering review found that a sent WebSocket playback mark and the next
+IPC clock request used separate channels. The synthetic clock could advance
+before the server processed the earlier mark. Staging now receives a private
+correlated mark-processing receipt from the original TwilioConnectedCall.receive
+result before advancing the next turn's clock. It retains the same total10s
+fixture mark wait. The opaque mark token exists only in private fixture IPC;
+no mark names enter diagnostics, model/speech, stdout or persistent data. Clear
+fences still remain ignored, not played. Non-staged transport is unchanged.
+
+The ordinary signed witness now deliberately ages the fixture clock1500ms
+without inventing silence packets before phase playback. The existing180s test
+deadline and actual database quota are unchanged. Each actual subsequent SAM
+affirmation must report accepted with a nonnegative time after playedAt and
+no future time beyond the host. This exercises delayed callbacks even outside
+a busy full suite. It is prepared, not yet executed. All such new-source
+PostgreSQL and full TypeScript claims remain open.

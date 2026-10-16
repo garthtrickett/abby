@@ -1,3 +1,4 @@
+import { TwilioConnectedCall } from "../../src/voice/twilio-connected-call.ts";
 import { alignedSyntheticReplyEnd } from "./synthetic-media-timeline.ts";
 import { CallRuntime } from "../../src/core/runtime.ts";
 import assert from "node:assert/strict";
@@ -57,6 +58,20 @@ if (operation === "reschedule" && (process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS ==
 const c = f.flowConfig, apiKey = process.env.ABBY_CLINIKO_API_KEY!, now = c.clock!;
 const mediaClockOrigin = Date.parse(now());
 if (staging) {
+  const receive = TwilioConnectedCall.prototype.receive;
+  TwilioConnectedCall.prototype.receive = function(this: TwilioConnectedCall, raw: string | Uint8Array) {
+    let markName: string | undefined;
+    try { const event = JSON.parse(typeof raw === "string" ? raw : Buffer.from(raw).toString("utf8"));
+      if (event.event === "mark" && typeof event.mark?.name === "string") markName = event.mark.name;
+    } catch { /* the real receiver validates malformed input */ }
+    const received = receive.call(this, raw);
+    if (!markName) return received;
+    return received.then(result => {
+      try { if (process.connected) process.send?.({ kind: "classMarkProcessed", markName, accepted: result.ok,
+        diagnostic: result.ok ? result.value.kind : result.error.kind }); } catch { /* receipt cannot change the result */ }
+      return result;
+    });
+  };
   const accept = CallRuntime.prototype.acceptTurn;
   CallRuntime.prototype.acceptTurn = async function(this: CallRuntime, ...args: Parameters<CallRuntime["acceptTurn"]>) {
     const [turn, interpretation] = args;

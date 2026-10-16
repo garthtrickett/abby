@@ -18,7 +18,7 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 import { voiceUntil } from "./cliniko-workflow-voice.ts";
 import type { LocationScope } from "../../src/core/model.ts";
 
-type Message = { kind: string; diagnostic?: unknown; aheadByMs?: number; actionStatus?: string; text?: string; method?: string; path?: string; body?: Record<string, unknown>;
+type Message = { kind: string; markName?: string; diagnostic?: unknown; aheadByMs?: number; actionStatus?: string; text?: string; method?: string; path?: string; body?: Record<string, unknown>;
   originalActive?: boolean; replacementActive?: boolean; sourceUsed?: number; destinationUsed?: number; caseLinked?: boolean;
   phase?: string; elapsedMs?: number;
   claims?: number; denialKind?: string;
@@ -121,7 +121,8 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
     const binding = /<Parameter name="abbyBinding" value="([^"]+)"/.exec(await response.text())?.[1]; assert.ok(binding);
     socket = new WebSocket(`ws://127.0.0.1:${port}/twilio/media/`, { headers: { "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, streamUrl, {}) } });
     const send = (event: object) => socket!.send(JSON.stringify({ ...event, streamSid, sequenceNumber: String(sequence++) }));
-    const playback = new SyntheticPlaybackReceipts(name => send({ event: "mark", mark: { name } }));
+    let lastSentMark: string | undefined;
+    const playback = new SyntheticPlaybackReceipts(name => { lastSentMark = name; send({ event: "mark", mark: { name } }); });
     socket.on("close", code => { transportCloseCode = code; });
     socket.on("message", data => { if (!closed) playback.receive(JSON.parse(data.toString())); });
     await once(socket, "open"); socket.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
@@ -172,8 +173,17 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
       send({ event: "media", media: { track: "inbound", ...packet, payload: Buffer.alloc(160, voiced ? 0x9f : 0xff).toString("base64") } });
     };
     const mark = async () => {
+      const deadline = Date.now() + 10000;
       await voiceUntil(() => playback.hasPendingAfter(), "runner playback mark");
       assert.equal(playback.acknowledgeLatest(), true);
+      if (options.classQuotaStaging) {
+        // Wire and IPC use separate channels. Complete this real receipt before
+        // the next turn advances the synthetic host clock.
+        const name = lastSentMark; assert.ok(name);
+        await voiceUntil(() => messages.some(row => row.kind === "classMarkProcessed" && row.markName === name),
+          "processed staged playback receipt", Math.max(1, deadline - Date.now()));
+        assert.equal(messages.find(row => row.kind === "classMarkProcessed" && row.markName === name)!.accepted, true);
+      }
     };
     await mark();
     return { child, messages, output, scope, locations, db, connectionString, mark, say, media, close, signedWebhook,
