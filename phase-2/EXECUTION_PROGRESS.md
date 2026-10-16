@@ -2169,3 +2169,53 @@ the actual previously failing signed PostgreSQL case are still required. No
 compiled success, full current-graph regression, cloud review or clinic
 acceptance is claimed. The native-account limit stays180 and existing scenario
 deadlines are unchanged. All thirteen gaps remain active.
+
+### Complete corrected pass choice needs fresh original evidence
+
+Routing-only3592 passes full TypeScript and fresh serving build in
+work1792182306383:20:25:06.581036–20:26:39.234674UTC, natural0,1181 inputs
+unchanged/451 artifacts pinned; only compiledCallFlow changed versusa139.
+Scope peak1,605,345,280B/OOMhighmax0; exitfile0/wrapper318683 absence verified.
+No3592 PostgreSQL case started. A light extended memory control1792182596580
+shows that, after the restored date menu, selecting the corrected pass option
+still safely refuses with only the old cancelled action and no write/review.
+Its unused PG reservation was explicitly withdrawn before launch. This scoped
+build pass is not complete correction acceptance.
+
+The old target's selection lifetime cannot survive the next required quota
+window. It is not extended. A new corrected date search may instead capture
+new original evidence while the old selection is still live: exact same
+patient, original occurrence, attendee, interval, current source policy/terms
+and independent target permission are re-inspected. Only that complete fresh
+observation creates a new private target reference with the current policy/
+proof-bounded deadline. The final menu still rechecks context/version/owner.
+Original cancellation or interval drift refuses; no source citation alone
+grants authority. The new source binding is published only with the successful
+new menu, and never mutates the cancelled request or its old quote/menu.
+
+The complete-choice red1792182767437 fails at the expected bounded corrected
+selection wait. The fresh-evidence implementation passes five focused cases
+1792182816865 and20 neighbouring/ordinary/pass cases1792182888022. A separate
+late-inspection control holds the session active while the original target
+expires during the independent permission/read interval. It passes only with
+the final original-selection expiry check (1792183043605). Removing just that
+check deliberately makes the dedicated assertion fail true-versus-false in
+negative mutation1792183077168; the wrapper then restores the exact original
+source and verifies its hash. The mutation is an expected negative witness,
+not a passing weakened guard or a published source change.
+
+Final restored source passes21 focused cases, zero skips/cancellations,
+work1792183114317 (34.738s): complete ordinary/full-pass corrected choice across
+a bounded wait, expired target, current permission loss, original cancellation/
+time drift, expiry during inspection, existing correction/no-replay and staged
+caller/verification contracts. The test fixture's permission hook accepts an
+awaitable result to isolate that race; its production-facing async signature
+and compiled fixture behavior are unchanged.
+
+Current additional runtime input is ClassMoveHost's private fresh-original
+inspection; no core protocol, provider write, stored queue, policy activation,
+quota ceiling, old expiry or scenario deadline changes. All native reads keep
+the physical180 account guard. This source needs a new whole TypeScript check,
+serving build and the previously failed signed PostgreSQL pass case. No such
+new-source compiled or full-graph acceptance is claimed yet. Other correction/
+maximum/concurrent cohorts and the thirteen-gap goal remain active.

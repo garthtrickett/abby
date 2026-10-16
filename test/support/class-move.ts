@@ -75,7 +75,7 @@ export async function classMoveFixture(different = false, near = false, passes?:
   const destinationPolicy = resultValue(await OwnerFileClassPolicy.capture({ ...binding, path: destinationPath, practitionerId: destination.practitionerId, appointmentTypeId: destination.appointmentTypeId }));
   const movePolicy = resultValue(await OwnerFileClassMovePolicy.capture({ ...binding, path: movePath, sourceServiceRef: source.serviceRef, destinationServiceRef: destination.serviceRef }));
   let lost: "review" | "replacement" | "original" | "compensation" | "association" | undefined, permitted = true;
-  let phasePermission: (phase: Parameters<ClassMovePermission["allows"]>[0]["phase"]) => boolean = () => true;
+  let phasePermission: (phase: Parameters<ClassMovePermission["allows"]>[0]["phase"]) => boolean | Promise<boolean> = () => true;
   let onWrite: ((phase: string) => void | Promise<void>) | undefined;
   const recalls: Record<string, unknown>[] = [], writes: { path: string; body: Record<string, unknown> }[] = [];
   let callState = f.state;
