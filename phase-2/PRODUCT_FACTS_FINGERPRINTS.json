@@ -66,7 +66,7 @@
     "test/storage/owning-host-write-contract.test.ts": "63fe6e4cddc29f33c0aae2fbc4a0c1c154f612d8e506cd869cbf001c5de70090",
     "test/support/class-move-recovery-worker.ts": "91f2fcf5ba89165efcf65445d2c515d3304f034e1e1f1090bec0a8d6eca77e1d",
     "test/support/class-move-recovery.ts": "1d0c1cedbb269c6fb6ffd3d0d42be995aedc91faec81865cdb7df4ea7b6ccbbc",
-    "test/support/staged-class-move-journey.ts": "dd9efb5fdae3de4f99506d6da70076fcc8f22b30630f9f8c95b82dcdb5aae325",
+    "test/support/staged-class-move-journey.ts": "927e9903a2751be39b39ded05956f4dfe92d51c87f892bfa7031d2da10273d80",
     "test/text/booking-menu-deadline.test.ts": "cf2c6f24a08c0846e65fbc9be9a4646b18a0f734b6fe0dd9cf1c2da2e7fcc022",
     "test/text/class-movement-consent.test.ts": "755c5624f53974e574ba1e556b26c4bf2d668fc6cf888564c4fc16a566cb1e8f",
     "test/text/class-movement-receipt.test.ts": "663c5de1ba65b9a2032481080a54fe59a2f92d454e5ef87b30932f9fc7af7491",

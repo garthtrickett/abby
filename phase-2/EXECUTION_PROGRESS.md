@@ -1735,3 +1735,8 @@ untouched. Preserve actual natural terminal and the first failing excerpt.
 Preparation-only native Node syntax checks pass for the shared helper and new
 correction file; facts/registry pass2, work1792171979665. These are metadata
 and parsing checks, not executed correction journeys or full TypeScript.
+
+A source review additionally requires the exact synthetic approved no-fee and
+same-case unchanged/different-case release/use disclosures in both initial and
+corrected readbacks. This asserts the captured contract rather than inferring
+pass consent from three native writes. Execution remains pending.

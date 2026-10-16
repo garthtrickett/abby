@@ -38,6 +38,13 @@ async function selectOption(call: Call, words: string) {
 export type StagedMoveScenario = Readonly<{ pass?: "full" | "transfer"; correction?: "ordinal" | "date";
   different?: boolean; maximum?: true; waits: number }>;
 
+function assertMoveReadback(call: Call, scenario: StagedMoveScenario) {
+  const spoken = call.spoken.at(-1)!;
+  assert.match(spoken, /Move only your/); assert.match(spoken, /No move fee applies/);
+  if (scenario.pass) assert.match(spoken, scenario.pass === "transfer"
+    ? /original pass releases one session.*destination pass uses one session/ : /pass session use unchanged/);
+}
+
 /** Drive real signed serving, current proof/played consent and physical quota;
  * observe exact effects plus database/backup/output privacy. */
 export async function stagedMoveJourney(scenario: StagedMoveScenario) {
@@ -46,7 +53,7 @@ export async function stagedMoveJourney(scenario: StagedMoveScenario) {
     await call.say("Start"); await call.mark(); await call.verify();
     await call.say("Appointments"); await call.mark(); await call.say("The first time please."); await call.mark();
     await call.say("Times"); await call.mark(); await selectOption(call, "The first time please.");
-    assert.match(call.spoken.at(-1)!, /Move only your/); assert.equal(writes(call).length, 0); await call.mark();
+    assertMoveReadback(call, scenario); assert.equal(writes(call).length, 0); await call.mark();
     if (scenario.correction) {
       await call.say(scenario.correction === "date" ? "Actually, Saturday" : "No, the second time please.");
       if (scenario.correction === "date") {
@@ -56,7 +63,7 @@ export async function stagedMoveJourney(scenario: StagedMoveScenario) {
         const wait = /wait about (\d+) seconds, then choose your option again/.exec(call.spoken.at(-1)!);
         if (wait) { await call.mark(); await waitForQuota(call, Number(wait[1])); await selectOption(call, "The second time please."); }
       }
-      assert.match(call.spoken.at(-1)!, /Move only your/);
+      assertMoveReadback(call, scenario);
       if (scenario.different) assert.match(call.spoken.at(-1)!, /Reformer Pilates.*Second Instructor.*30 minutes/);
       assert.equal(call.mutations.length, 0, "correcting a played readback cannot send or create a review");
       assert.equal(call.messages.some(row => row.kind === "classWriteOutcome"), false);
