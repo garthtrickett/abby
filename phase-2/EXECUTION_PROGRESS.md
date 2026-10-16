@@ -10,8 +10,8 @@
 | 2 Delivery baseline | Remote main verified at `9a29e51e7f7e0a765db7674c6c75ff2087260473`; integrated draft [PR #457](https://github.com/garthtrickett/abby/pull/457) remains at `4e19e1783e2324480c9e0d0923eeaf825e04692e`. Its GitHub jobs never started because of account billing/spending limits. Focused local qualification of the receipt candidate is recorded below; whole-candidate CI remains outstanding. |
 | 3 Exact receipt foundation | Implemented and locally qualified in `codex/abby-provider-ack-receipt`, stacked on the published plans and integrated candidate. The full interval is captured, sent and validated. Existing post-write host success gates remain. Independent review and exact-head CI remain outstanding. |
 | 4 Individual booking | Published in draft [PR #460](https://github.com/garthtrickett/abby/pull/460), `codex/abby-provider-ack-individual`, based on receipt correction `92a16e5`. Final online/roster availability follows preparation; exact acknowledgement survives host/review/worker cancellation. Focused, isolated database/process/compiled-location and complete local `npm test` checks passed. Independent review and cloud qualification remain open; cloud jobs have not started because of billing. |
-| 5 Native class creation | Implemented candidate in `codex/abby-provider-ack-class`, based on stage 4 `40a51f2`. Exact attendee acknowledgement and final double capacity ordering apply to ordinary/approved-pass creation. Focused, process-loss/privacy and unchanged movement/cancellation regressions passed; corrected compiled cases, final typecheck and manifest checks passed. Full local `npm test` is running. Published in draft [PR #461](https://github.com/garthtrickett/abby/pull/461); independent review and cloud qualification remain open. |
-| 6 Earlier-gap qualification | Combined text suite running; full PostgreSQL migration/schema/composition qualification is queued to run only after it passes. Dispatch review identified missing synchronous captured session-lease expiry checks after final availability/capacity; reproduce and correct in an isolated follow-up. Preserve all gaps 1–9 and their remaining engineering/acceptance requirements. |
+| 5 Native class creation | Implemented candidate in `codex/abby-provider-ack-class`, based on stage 4 `40a51f2`. Exact attendee acknowledgement and final double capacity ordering apply to ordinary/approved-pass creation. Focused, process-loss/privacy and unchanged movement/cancellation regressions passed; corrected compiled cases, final typecheck and manifest checks passed. The full class text pool ended with 2,214 passes, one E2E-353 deadline failure and 225 gated skips; isolated E2E-353 rerun passed. Combined correction qualification remains open. Published in draft [PR #461](https://github.com/garthtrickett/abby/pull/461); independent review and cloud qualification remain open. |
+| 6 Earlier-gap qualification | Dispatch-lease omission reproduced for online/roster/class creation and corrected in `codex/abby-booking-dispatch-lease`. Twelve final-read/transport expiry/renewal cases and 124 shared-host regressions pass; typecheck and ordering checks pass. Corrected full `npm test` is running. Full PostgreSQL migration/schema/composition qualification remains next, held for shared-droplet compute coordination after natural completion of the current suite. The original full class run failed E2E-353; its unchanged isolated rerun passed. Preserve all gaps 1–9 and their remaining engineering/acceptance requirements. |
 | 7 Class/pass completion | Pending; staged caller/SAM/operator integration, complete cost admission and broader combinations remain required. |
 | 8 Payments | Pending gap 11 specification and implementation, including audit R18/R19 and any necessary approved receipt attachment dependency. The owner selected Stripe Checkout on October16; clinic account/policy acceptance and live activation remain distinct. |
 | 9 Outbound | Pending gap 12, audit R20/R21 and contact-policy decisions. |
@@ -140,7 +140,7 @@ Executed stage 5 checks and active qualification:
 | `bash scripts/with-postgres.sh bash -c 'npm run build:voice-tests && npm run db:migrate && ABBY_LEDGER=postgres node --test --test-concurrency=2 test/voice/class-runner.test.ts test/voice/class-pass-runner.test.ts test/voice/class-pass-cancellation-runner.test.ts test/voice/class-service-runner.test.ts test/cliniko/class-booking-recovery-process.test.ts test/storage/owning-host-write-contract.test.ts'` | First run: 48 passed, 2 failed, zero cancelled/skipped. Both failures were old creation-veto assertions for post-send extra pass use/overcapacity; the exact acknowledged result was committed. Cancellation, multiple-service, process/privacy and owning-diary cases passed. The corrected two-file rerun below preserves exact acknowledgement/no-GET/no-replay assertions. |
 
 | `bash scripts/with-postgres.sh bash -c 'ABBY_LEDGER=postgres node --test --test-concurrency=2 test/voice/class-runner.test.ts test/voice/class-pass-runner.test.ts'` | 22 passed; zero failed/cancelled/skipped. Exact ordinary/pass creation confirms despite post-send overcapacity/extra use, with no post-create native GET; outcome queries retain success and do not repeat the create. Pre-send denial, lost-response uncertainty and separately inspected cancellation remain covered. |
-| Full combined `npm test` via tracked user-systemd scope | Running in `Abby class combined complete local suite`; no full-suite pass is claimed yet. The earlier stage 4 full pass does not qualify the class delta. |
+| Full combined `npm test` via tracked user-systemd scope | Completed exit 1. Typecheck and builds passed; main pool: 2,214 passed, 1 failed (E2E-353 new-patient service-catalogue voice menu deadline), 225 gated skips, zero cancelled. The separate ordered runner was not reached. Isolated unchanged E2E-353 rerun subsequently passed (one top-level test covering its 16 cases). This is not a full-suite pass; the earlier stage 4 full pass does not qualify this delta. |
 
 Early focused runs similarly found assertions expecting post-create inspections;
 they were corrected to distinguish exact creation truth from nonexact/lost
@@ -149,6 +149,58 @@ notice; it now follows that notice, renews the ordinary lease and obtains a fres
 affirmation within the original offer/proof expiry. No budget limit or timeout
 was weakened. Full composed qualification, independent review, cloud execution
 and all actual clinic/provider/operator acceptance remain separate open gates.
+
+## Composed dispatch lease correction
+
+Stage 6 source review found that booking preparation validated the current
+session lease, but final synchronous dispatch checks retained only patient/offer
+expiry and local proof/lifetime. A lease could expire during the last native read
+while the proof and offer remained valid. Actual SAM reproduction in the
+isolated `codex/abby-booking-dispatch-lease` worktree based on class `ae15000`
+sent one POST in each expired online/roster/class case; their observed-renewal
+controls passed. The initial six-case reproduction had three failures and three
+passes, all without skips. This is a pre-send correctness gap, independent of
+the later exact-acknowledgement success policy.
+
+The correction retains the exact lease deadline from the last validated SAM
+snapshot before final availability/capacity. Individual dispatch binds it to its
+prepared request; the class owner holds its own captured deadline. The deadline
+must remain live both when the native read returns and at transport invocation.
+An already observed renewal supplies its newer deadline; an unobserved renewal
+cannot extend this captured send window. No extra ledger/provider/policy read,
+new timer, remote-stop replica, schema, dependency, setting or durable
+patient-bearing state is introduced. Other operation contracts and established
+acknowledgement results retain their semantics.
+
+Executed correction checks:
+
+| Command | Result |
+| --- | --- |
+| `npm ci` | Passed; no dependency change. |
+| `node --test --test-concurrency=2 test/cliniko/booking-dispatch-lease.test.ts test/cliniko/provider-acknowledged-booking.test.ts test/cliniko/class-booking-acknowledgement.test.ts` | First corrected version:24 passed, zero failed/cancelled/skipped. Includes the original six lease cases plus actual no-async-preparation ordering and acknowledgement/abort boundaries. |
+| `node --test test/cliniko/booking-dispatch-lease.test.ts` after adding the transport boundary | 12 passed, zero failed/cancelled/skipped. Online, roster and class each refuse expiry after the native read and immediately before transport; observed renewals succeed at both points; no replay occurs. |
+| `node --test --test-concurrency=2 test/cliniko/standalone-booking.test.ts test/cliniko/roster-booking.test.ts test/cliniko/intake-booking-session.test.ts test/cliniko/class-booking-host.test.ts test/cliniko/class-pass-booking-host.test.ts test/cliniko/reviewed-send.test.ts test/text/effect-deadline.test.ts` | 124 passed, zero failed/cancelled/skipped. |
+| Initial `npm run typecheck` after the source correction | Passed; the final-source typecheck subsequently passed inside the running combined suite after the expanded test file. |
+| `node --test test/contract/scenario-manifest.test.ts` | Passed, 1 check; manifest1.228 retains418 IDs and full-call limits. Current individual creation assertions no longer prescribe the superseded inspection veto; the earlier embedded E2E-266 contract is unchanged. |
+| `node --test test/voice/intake-service-catalogue.test.ts` on unchanged class source after the full-run E2E-353 failure | Passed, one top-level check covering its16 internal cases. No deadline, concurrency, assertion or source changed. The full-run deadline failure remains recorded, not dismissed as a proven environmental issue. |
+| Corrected full `npm test` | Running in tracked user-systemd scope `Abby corrected booking complete local suite`, default file concurrency and original deadlines. |
+| Complete PostgreSQL qualification | Not started. The queued prerequisite waiter was intentionally terminated (exit143, no test verdict) after a shared-droplet coordination request, leaving the current suite untouched. After its natural completion, allow the other project's bounded diagnostic window and await actual start/terminal release plus fresh guards before starting another heavy job. No estimated-time automatic restart. The pending qualification includes migration up/down/up, generation/parity and full `ABBY_LEDGER=postgres npm run test:postgres`. |
+
+The original PostgreSQL queue was intentionally stopped before any test began
+when the lease omission was reproduced. Its stopped wrapper is shown as
+ORPHANED on the work board and supplies no test result. A replacement queue
+waiting for the original class suite ended exit1 when that prerequisite failed;
+it also ran no PostgreSQL tests. The corrected-source queue then waited for the corrected suite. A subsequent
+compute-coordination request intentionally stopped only that prerequisite waiter
+before any PostgreSQL test began; the original local suite continues normally.
+PostgreSQL qualification remains required after the coordinated window, rather
+than treating waiter termination or timeout as a test result.
+
+ADRs retain the same decision; this fixes an existing lease invariant. Product
+facts and their31 directly cited source/test/ADR fingerprints are refreshed.
+Independent review, exact-head cloud qualification, broader earlier-gap
+engineering and all external acceptance remain open. No full integration,
+landing, clinic activation or Aeva deletion is claimed.
 
 ## Gap 11 provider selection
 

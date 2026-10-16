@@ -94,6 +94,7 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
   #busy = false;
   #attempted = false;
   #epoch = 0;
+  #dispatchLeaseExpiry: number | undefined;
   private constructor(config: ClinikoClassBookingConfig, approval: ClassApproval) {
     super();
     this.#config = config;
@@ -331,13 +332,17 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
   /** All pass/history, policy, permission and SAM work precedes final capacity. */
   async #authorizeForSend(prepared: Prepared, mutation: HostMutation, signal: AbortSignal): Promise<boolean> {
     const c = this.#config, choice = prepared.choice, now = this.#now();
+    this.#dispatchLeaseExpiry = undefined;
     if (!await this.#ready(now, signal, mutation) || mutation.payloadDigest !== digestActionRequest(prepared.request)) return false;
     const patient = await this.#inspectChoice(choice, now, "commit", signal, false);
     const approval = await c.classPolicy.current(c.scope);
     if (!patient || !approval.ok || patient.patientRef !== prepared.request.patient.patientRef ||
         patient.verificationRef !== prepared.request.patient.verificationRef ||
         !isDeepStrictEqual(choice.offer.terms, { ...approval.value.bookingTerms, expiresAt: choice.offer.expiresAt }) ||
-        (approval.value.membership === "nativeCaseSessions") !== !!choice.pass || !await this.#ready(this.#now(), signal, mutation)) return false;
+        (approval.value.membership === "nativeCaseSessions") !== !!choice.pass) return false;
+    const state = await this.#ready(this.#now(), signal, mutation);
+    if (!state) return false;
+    this.#dispatchLeaseExpiry = Date.parse(state.sessionLease!.expiresAt);
     const day = clinicDateAt(approval.value.timeZone, new Date(choice.session.startsAt));
     const lower = clinicDayStartUtc(approval.value.timeZone, day);
     const next = new Date(Date.parse(`${day}T00:00:00.000Z`) + 86400000).toISOString().slice(0, 10);
@@ -351,7 +356,8 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
   /** Synchronous captured expiry and local proof/lifetime checks at dispatch. */
   #currentForSend(prepared: Prepared, signal: AbortSignal): boolean {
     const now = this.#now(), at = this.#time(now), choice = prepared.choice;
-    return at !== undefined && this.#prepared === prepared && !this.#lifetime.signal.aborted && !signal.aborted &&
+    return at !== undefined && this.#dispatchLeaseExpiry !== undefined && this.#dispatchLeaseExpiry > at &&
+      this.#prepared === prepared && !this.#lifetime.signal.aborted && !signal.aborted &&
       this.#config.verification.proof.ownsLiveReference(choice.verificationRef, "appointments.book", now) &&
       Date.parse(prepared.request.patient.expiresAt) > at && Date.parse(choice.offer.expiresAt) > at && Date.parse(choice.session.startsAt) > at;
   }

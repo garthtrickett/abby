@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.227
+# Scenario manifest, version 1.228
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -821,3 +821,17 @@ is unchanged. Native stages wait for the quota consumed by verification itself.
 This is text/native and isolated PostgreSQL evidence; the staged caller/SAM
 confirmation and renewal route, human resolution and activation remain open.
 Full-call evidence stays planned.
+
+## Dispatch lease qualification, October16
+
+The creation runtime now retains the exact session-lease expiry observed during
+final preparation. Online, roster and native class dispatch refuse if that
+window expires after the final read or immediately before transport, even when
+the patient proof and offer remain live. A renewal already observed during
+preparation supplies the new deadline; no new database read follows availability.
+The boundary fixture covers expired and renewed cases at both points through
+actual SAM hosts. This adds E2E-279/E2E-392 text witnesses without adding scenario
+IDs or promoting full-call, clinic or cloud evidence. Current creation assertions
+also use exact acknowledgement wording; E2E-266's earlier embedded host retains
+its separately inspected contract. See [execution progress](../phase-2/EXECUTION_PROGRESS.md)
+for exact commands, results and outstanding qualification.

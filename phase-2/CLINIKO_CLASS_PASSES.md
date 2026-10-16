@@ -93,6 +93,10 @@ proof, metadata, settings, write-stop, SAM/review and POST quota preparation
 before the final complete double occurrence/attendance observation. After that
 observation only synchronous original-expiry, local proof/lifetime and exact
 request checks may precede the one native POST; no hidden quota wait follows it.
+The session-lease deadline observed during preparation must remain live after
+final capacity and at transport. An already observed renewal supplies its newer
+deadline; an unobserved renewal cannot prolong that captured send window. No
+additional ledger read is placed after capacity.
 Ordinary protected reads and movement keep their existing metadata/proof
 bracketing.
 
