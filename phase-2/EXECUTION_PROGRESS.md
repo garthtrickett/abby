@@ -1974,3 +1974,11 @@ receipt before sending the affirmative over a different transport. The denied
 staff control must actually read the selected provider review while performing
 no protected attendance/case reads; a startup failure cannot satisfy that
 control by doing no work. These added checks remain unexecuted.
+
+Direct source review found the signed fake provider's approved User-Agent uses
+test@example.test, while the original standalone cold fixture uses
+dev@example.test. The private signed worker mode now binds that same signed
+fixture contact identity as well as its existing fixed credential. The original
+worker mode remains unchanged. Neither string is a real sender or clinic
+configuration. Compiled/signed execution and old-worker preservation are still
+required; this source correction has not been exercised.

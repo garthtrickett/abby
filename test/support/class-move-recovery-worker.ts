@@ -50,7 +50,7 @@ try {
   const pass = await movement.value.current(input.scope);
   if (!pass.ok) throw new Error("cold recovery movement unavailable");
   const recovery = new ClinikoClassMoveRecovery({ scope: input.scope,
-    cliniko: { apiKey, contactEmail: "dev@example.test", businessId: input.businessId, rateBudget: nativeBudget },
+    cliniko: { apiKey, contactEmail: signed ? "test@example.test" : "dev@example.test", businessId: input.businessId, rateBudget: nativeBudget },
     sourcePolicy: a.value, destinationPolicy: b.value, movePolicy: movement.value, directory, authority, clock, fetchPort,
     ...(pass.value.membership === "nativeCaseSessions" ? { classPassMoveAuthority: {
       select: async () => ({ source: { patientCaseId: "811222333444555666", entitlementRef: "private-move-source-entitlement" },
