@@ -2550,3 +2550,25 @@ This qualifies the narrow resend change locally; the complete combined graph
 still retains the failed c54 evidence and separate unresolved intake/backup
 failures. No clinic, delivery, deployment or authoritative cloud acceptance is
 inferred.
+
+### Signed in-process caller clear receipts
+
+The in-process clinical voice fixture echoed clear-fence marks only when a test
+explicitly requested its interruption observation hint. Its ordinary turn path
+could therefore leave real transport clears unacknowledged and count a clear
+fence itself as a spoken reply. A signed HTTP/WebSocket reproduction leaves the
+service guide unplayed and sends the next utterance without that hint. Before
+the fixture correction (`work1792193606381`), fresh speech stalls at the unchanged
+10s wait. It is an actual wire reproduction, not an injected host assertion.
+
+Reuse the existing SyntheticPlaybackReceipts transport helper for every clear,
+ignore already-cleared markers when waiting for replies/private prompts, and
+keep explicit interruption as an observation hint. Genuine played marks still
+wait for processed wire receipts. No application code, proof, quota or deadline
+changes. The unplayed service choice still creates no registration/email/write.
+The reproduction passes (`work1792193660419`), and the complete original16-mode
+E2E-353 plus reproduction and receipt controls pass5/5 (`work1792193704146`),
+23:35:04.873276–23:35:56.658160UTC, original concurrency/deadlines preserved.
+This establishes the fixture bug and its local qualification; an isolated pass
+does not prove it caused the earlier routed booking-menu15s timeout. Full-graph
+qualification and the independent backup timeout diagnosis remain open.
