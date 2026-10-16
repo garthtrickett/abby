@@ -246,6 +246,22 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
       reservable: false, choices: choices.map(choice => ({ startsAt: choice.session.startsAt, endsAt: choice.session.endsAt, expiresAt: choice.expiresAt })),
       ...(stage === "offers" ? { practitionerName: context.destination.practitionerName, appointmentTypeName: context.destination.className, locationName: context.destination.locationName } : {}) } as ReschedulingMenuRead;
   }
+  async #freshCorrectedTarget(context: Context, prior: Target, signal: AbortSignal): Promise<Target | undefined> {
+    if (!await this.#permit(context, prior, undefined, "targets", signal)) return undefined;
+    const read = await this.#source.inspect(this.#config.scope, context.grant.verificationRef, prior.session.sessionRef,
+      prior.session.startsAt, prior.session.endsAt, this.#now(), signal);
+    if (!read.ok || read.value.patientRef !== prior.patientId || read.value.timeZone !== context.move.timeZone) return undefined;
+    const session = read.value.sessions.find(row => row.sessionRef === prior.session.sessionRef);
+    if (!session || session.startsAt !== prior.session.startsAt || session.endsAt !== prior.session.endsAt ||
+        session.attendance.kind !== "one" || session.attendance.attendeeRef !== prior.attendeeId ||
+        Date.parse(session.endsAt) - Date.parse(session.startsAt) !== context.source.durationMinutes * 60000 ||
+        !OwnerFileClassMovePolicy.termsFor(context.move, session.startsAt, this.#now())) return undefined;
+    const target: Target = { ...prior, ref: `class-move-target:${randomUUID()}`, session,
+      verificationRef: context.grant.verificationRef, expiresAt: this.#expires(context) };
+    if (!await this.#permit(context, target, undefined, "targets", signal)) return undefined;
+    const now = Date.parse(this.#now());
+    return Date.parse(prior.expiresAt) > now && Date.parse(target.expiresAt) > now ? target : undefined;
+  }
   reschedulingMenuAvailable() { return !this.#attempted && !this.#lifetime.signal.aborted && !this.#config.signal.aborted; }
   async readReschedulingMenu(query: ReschedulingMenuReadQuery): Promise<Result<ReschedulingMenuRead, HostReadFailure>> {
     if (!this.#matches(query) || this.#busy || this.#attempted || query.stage === "practitioners" || query.nextPractitioners ||
@@ -255,12 +271,17 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
       const state = await this.#ready(signal), context = await this.#context(signal);
       if (!state || !context || this.#prepared && !preparationMayBeDiscarded(state, this.#prepared.request, this.#prepared.revision)) return denied();
       const range = this.#range(query, context); if (!range) return denied();
-      const target = this.#target;
+      let target = this.#target;
       const correcting = query.stage === "offers" && query.correctingAppointmentRef === target?.ref && !!this.#prepared &&
         this.#prepared.target === target && preparationMayBeDiscarded(state, this.#prepared.request, this.#prepared.revision);
       if (query.correctingAppointmentRef !== undefined && !correcting) return denied();
       if (query.stage === "offers" && (!target || target.version !== context.version || Date.parse(target.expiresAt) <= Date.parse(this.#now()) ||
           !correcting && (!query.priorTurnId || state.processedTurnIds.at(-1) !== query.priorTurnId || state.presentations[noticePresentationId(this.#config.callId, query.priorTurnId)]?.status !== "played"))) return denied();
+      if (correcting && context.move.quotaStaging) {
+        const refreshed = await this.#freshCorrectedTarget(context, target!, signal);
+        if (!refreshed) return denied();
+        target = refreshed;
+      }
       this.#menu = undefined; this.#previous = undefined; this.#offers.clear(); this.#prepared = undefined;
       if (query.stage === "targets") this.#target = undefined;
       const read = await (query.stage === "targets" ? this.#source : this.#destination).candidates(query.scope, context.grant.verificationRef, range.from, range.to, this.#now(), signal);
@@ -300,6 +321,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
       if (new Set(choices.map(item => item.session.startsAt)).size !== choices.length) return denied();
       const current = await this.#context(signal, context.grant.verificationRef);
       if (!current || current.version !== context.version || !await this.#ready(signal) || epoch !== this.#epoch) return denied();
+      if (correcting && context.move.quotaStaging) this.#target = target;
       this.#menu = { turnId: query.turnId, stage: query.stage, version: context.version,
         ...(query.stage === "targets" ? { targets: targets.slice(0, 3) } : { offers: offers.slice(0, 3) }) };
       const snapshot = this.#snapshot(context, query.stage, choices.slice(0, 3));
