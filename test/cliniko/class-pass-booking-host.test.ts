@@ -41,7 +41,7 @@ test("E2E-406 actual class pass booking binds one approved case to played consen
     assert.deepEqual(review.request.operation.pass, { patientCaseId: f.pass.caseId, entitlementRef: f.pass.entitlementRef,
       usageFingerprint: review.request.operation.pass!.usageFingerprint, used: 1, maximum: 2 });
     assert.match(String(f.recalls[0]!.notes), /class attendance review v2/);
-    assert.ok(f.pass.queries.some(q => q.phase === "commit")); assert.ok(f.pass.queries.some(q => q.phase === "inspection"));
+    assert.ok(f.pass.queries.some(q => q.phase === "commit")); assert.equal(f.pass.queries.some(q => q.phase === "inspection"), false);
     assert.equal(f.pass.rows.length, 2); assert.equal(f.native.attendees.filter(row => row.id === "401").length, 1); assert.ok(f.claims <= 200);
     resultValue(await f.drain()); assert.equal(f.writes.length, 1);
   } finally { await f.close(); }
@@ -85,7 +85,7 @@ for (const afterReview of [false, true]) for (const fault of ["authority", "case
   });
 
 for (const fault of ["wrongCase", "lost", "extraUse", "sameNetUse", "authority", "expiry", "deleted"] as const)
-  test(`E2E-406 ${fault} after a pass send stays unconfirmed without replay`, async () => {
+  test(`E2E-406 ${fault} after pass dispatch preserves exact creation truth without replay`, async () => {
     const f = await classBookingFixture({ passes: true });
     try {
       await f.verify(); const action = await f.propose();
@@ -103,7 +103,7 @@ for (const fault of ["wrongCase", "lost", "extraUse", "sameNetUse", "authority",
         }
       });
       resultValue(await confirmPass(f)); resultValue(await f.drain());
-      assert.equal((await f.state()).actions[action.key]!.status, "uncertain");
+      assert.equal((await f.state()).actions[action.key]!.status, ["wrongCase", "lost", "deleted"].includes(fault) ? "uncertain" : "committed");
       assert.deepEqual([f.recalls.length, f.writes.length], [1, 1]);
       resultValue(await f.drain()); assert.equal(f.writes.length, 1);
     } finally { await f.close(); }

@@ -47,7 +47,7 @@ A confirmed request is checked and attempted once under the approved external pr
 
 ## Provider acknowledged booking
 
-An external booking whose exact authorized appointment creation is established by the provider's successful acknowledgement. Later observation or notification failure cannot erase that established result; a missing or ambiguous acknowledgement remains uncertain.
+An external booking whose exact authorized appointment or class attendance creation is established by the provider's successful acknowledgement. Later observation or notification failure cannot erase that established result; a missing or ambiguous acknowledgement remains uncertain. Creation alone establishes neither payment nor an unlinked class attendance required for a separate move.
 
 ## Review request
 

@@ -37,20 +37,23 @@ function setup(fetchPort: typeof fetch, rateBudget?: ClinikoRequestBudget, deadl
 const live = () => new AbortController().signal;
 
 test("an already validated booking outcome survives reviewed-send abort without weakening other operations", async () => {
-  for (const operation of ["book", "cancel", "reschedule"] as const) {
+  for (const operation of ["book", "classBook", "cancel", "reschedule"] as const) {
     const controller = new AbortController();
     const { gate } = setup(async (_url, init) => accepted(init));
     let established: string | undefined;
-    const result = await gate.run(request(operation), {
+    const confirmed = operation === "classBook" ? { ...request(), operation: { kind: "classBook" as const,
+      sessionId: "94", attendanceActionId: "7a6b240c-94fa-45d8-ae0b-f4ee91cb2bd1", practitionerId: "22", appointmentTypeId: "33",
+      startsAt: "2026-10-08T04:00:00Z", endsAt: "2026-10-08T04:30:00Z" } } : request(operation);
+    const result = await gate.run(confirmed, {
       authorize: async () => true,
       send: async () => { established = "exact-native-receipt"; controller.abort(); return new Promise<string>(() => undefined); },
       acknowledgedBooking: () => established,
     }, controller.signal);
-    if (operation === "book") {
+    if (operation === "book" || operation === "classBook") {
       assert.ok(result.ok);
       assert.equal(result.value.outcome, "exact-native-receipt");
     } else assert.deepEqual(result, { ok: false, error: { kind: "mutationUncertain" } });
-    assert.equal((await gate.run(request(operation), { authorize: async () => true, send: async () => "never" }, live())).ok, false);
+    assert.equal((await gate.run(confirmed, { authorize: async () => true, send: async () => "never" }, live())).ok, false);
   }
 });
 

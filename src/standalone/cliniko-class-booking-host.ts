@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import { ClinikoClassAttendanceReader } from "../cliniko/class-attendance-read.ts";
 import type { ClinikoClassSession } from "../cliniko/class-attendance-read.ts";
 import { ClinikoClassAttendanceWriter } from "../cliniko/class-attendance-write.ts";
-import type { ClinikoAttendanceConfig, ClinikoAttendanceRequest } from "../cliniko/class-attendance-write.ts";
+import type { ClinikoAttendanceConfig, ClinikoAttendanceRequest, ClinikoAttendanceWrite } from "../cliniko/class-attendance-write.ts";
 import { ClinikoRecallWriter } from "../cliniko/recall-write.ts";
 import type { ClinikoReviewRequest } from "../cliniko/review-request.ts";
 import { checkClinikoHeadroom, clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
@@ -328,6 +328,33 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
     const patient = await this.#inspectChoice(prepared.choice, now, phase, signal, readNative);
     return !!patient && patient.patientRef === prepared.request.patient.patientRef && patient.verificationRef === prepared.request.patient.verificationRef && !!await this.#ready(this.#now(), signal, mutation);
   }
+  /** All pass/history, policy, permission and SAM work precedes final capacity. */
+  async #authorizeForSend(prepared: Prepared, mutation: HostMutation, signal: AbortSignal): Promise<boolean> {
+    const c = this.#config, choice = prepared.choice, now = this.#now();
+    if (!await this.#ready(now, signal, mutation) || mutation.payloadDigest !== digestActionRequest(prepared.request)) return false;
+    const patient = await this.#inspectChoice(choice, now, "commit", signal, false);
+    const approval = await c.classPolicy.current(c.scope);
+    if (!patient || !approval.ok || patient.patientRef !== prepared.request.patient.patientRef ||
+        patient.verificationRef !== prepared.request.patient.verificationRef ||
+        !isDeepStrictEqual(choice.offer.terms, { ...approval.value.bookingTerms, expiresAt: choice.offer.expiresAt }) ||
+        (approval.value.membership === "nativeCaseSessions") !== !!choice.pass || !await this.#ready(this.#now(), signal, mutation)) return false;
+    const day = clinicDateAt(approval.value.timeZone, new Date(choice.session.startsAt));
+    const lower = clinicDayStartUtc(approval.value.timeZone, day);
+    const next = new Date(Date.parse(`${day}T00:00:00.000Z`) + 86400000).toISOString().slice(0, 10);
+    const read = await this.#reader.inspectForSend(c.scope, choice.verificationRef, choice.session.sessionRef,
+      new Date(Math.max(Date.parse(lower), Date.parse(this.#now()))).toISOString(), clinicDayStartUtc(approval.value.timeZone, next), this.#now(), signal);
+    const observed = read.ok ? read.value.sessions[0] : undefined;
+    return !!read.ok && !!observed && this.#currentForSend(prepared, signal) && read.value.patientRef === choice.patientRef &&
+      read.value.timeZone === approval.value.timeZone && observed.startsAt === choice.session.startsAt && observed.endsAt === choice.session.endsAt &&
+      observed.capacity === choice.session.capacity && !observed.overCapacity && observed.attendance.kind === "none" && observed.remainingPlaces > 0;
+  }
+  /** Synchronous captured expiry and local proof/lifetime checks at dispatch. */
+  #currentForSend(prepared: Prepared, signal: AbortSignal): boolean {
+    const now = this.#now(), at = this.#time(now), choice = prepared.choice;
+    return at !== undefined && this.#prepared === prepared && !this.#lifetime.signal.aborted && !signal.aborted &&
+      this.#config.verification.proof.ownsLiveReference(choice.verificationRef, "appointments.book", now) &&
+      Date.parse(prepared.request.patient.expiresAt) > at && Date.parse(choice.offer.expiresAt) > at && Date.parse(choice.session.startsAt) > at;
+  }
   async checkConfirmationCapacity(query: BookingMenuQuery & Readonly<{ actionKey: string; digest: string }>): Promise<Result<Readonly<{ kind: "ready" }> | Readonly<{ kind: "wait"; seconds: number }>, HostReadFailure>> {
     if (!this.#passes) return ok({ kind: "ready" });
     const p = this.#prepared;
@@ -354,7 +381,8 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
     if (Date.parse(p.choice.offer.expiresAt) <= Date.parse(this.#now()) + (seconds + 3) * 1000) return err({ kind: "expired", target: "offer" });
     return ok({ kind: "wait", seconds });
   }
-  async write(mutation: HostMutation, now: string, external?: AbortSignal): Promise<HostWriteReceipt> {
+  async write(mutation: HostMutation, now: string, external?: AbortSignal,
+    onBookingAcknowledged?: Parameters<HostEffects["write"]>[3]): Promise<HostWriteReceipt> {
     const prepared = this.#prepared, c = this.#config, reject = (): HostWriteReceipt => ({ kind: "rejected", actionKey: mutation.actionKey, reason: "forbidden" });
     if (!prepared || this.#attempted || this.#busy || this.#lifetime.signal.aborted || mutation.kind !== "book" || mutation.request.kind !== "book" || mutation.notification ||
       !sameScope(mutation.scope, c.scope) || mutation.policyVersion !== c.policyVersion || digestActionRequest(mutation.request) !== mutation.payloadDigest ||
@@ -366,32 +394,28 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
     const a = await c.classPolicy.current(c.scope);
     if (!a.ok || choice.pass && await checkClinikoHeadroom(c.cliniko.rateBudget, 180) !== null)
       return reject();
-    const provider: ClinikoAttendanceRequest = { kind: "book", scope: c.scope, patientId: choice.patientRef, sessionId: choice.session.sessionRef, actionId,
+    const provider: Extract<ClinikoAttendanceRequest, { kind: "book" }> = { kind: "book", scope: c.scope, patientId: choice.patientRef, sessionId: choice.session.sessionRef, actionId,
       ...(choice.pass ? { patientCaseId: choice.pass.selection.patientCaseId } : {}) };
     const review: ClinikoReviewRequest = { scope: c.scope, patientId: choice.patientRef, businessId: a.value.businessId, credentialFingerprint: a.value.credentialFingerprint, policyVersion: c.policyVersion,
       termsVersion: a.value.bookingTerms.version, timeZone: a.value.timeZone, createdAt: now, operation: { kind: "classBook", sessionId: choice.session.sessionRef, attendanceActionId: actionId,
         practitionerId: a.value.practitionerId, appointmentTypeId: a.value.appointmentTypeId, startsAt: choice.session.startsAt, endsAt: choice.session.endsAt,
         ...(choice.pass ? { pass: { ...choice.pass.selection, usageFingerprint: choice.pass.usageFingerprint, maximum: choice.pass.maximum, used: choice.pass.used } } : {}) } };
+    let acknowledged: Extract<ClinikoAttendanceWrite, { kind: "accepted" }> | undefined;
+    let committed: Extract<HostWriteReceipt, { kind: "committed" }> | undefined;
     const result = await this.#review.run(review, {
       authorize: (_request, stop) => this.#authorize(prepared, mutation, "commit", stop),
-      send: async (_request, stop) => {
-        const sent = await this.#writer.executeOnce(provider, stop, final => this.#authorize(prepared, mutation, "commit", final));
-        if (!sent.ok || sent.value.kind !== "accepted")
-          return sent;
-        // The exact own-attendee GET is bracketed by fresh patient, class permission,
-        // policy and dispatched-SAM checks. Full native occurrence/capacity
-        // inspection below is independently required before a committed receipt.
-        const inspected = await this.#writer.inspect(provider, sent.value.attendeeRef, stop, final => this.#authorize(prepared, mutation, "inspection", final, false));
-        if (!inspected.ok || !inspected.value || !await this.#authorize(prepared, mutation, "inspection", stop))
-          return ok({ kind: "uncertain" as const });
-        if (choice.pass && this.#passes) {
-          const attendeeId = /^cliniko:attendee:([1-9][0-9]{0,18})$/.exec(sent.value.attendeeRef)?.[1];
-          if (!attendeeId || !await this.#passes.inspectAddition(choice.pass, prepared.request.patient, choice.session, a.value, this.#now(), attendeeId, stop) ||
-            !await this.#authorize(prepared, mutation, "inspection", stop, false)) return ok({ kind: "uncertain" as const });
-        }
-        return sent;
-      },
+      acknowledgedBooking: () => acknowledged ? ok(acknowledged) : undefined,
+      send: (_request, stop) => this.#writer.executeBookingOnce(provider, stop, {
+        beforeSend: final => this.#authorizeForSend(prepared, mutation, final),
+        current: final => this.#currentForSend(prepared, final),
+        acknowledged: receipt => {
+          acknowledged = receipt;
+          committed = Object.freeze({ kind: "committed", actionKey: mutation.actionKey, hostRef: receipt.attendeeRef });
+          try { onBookingAcknowledged?.(committed); } catch { /* Native success survives observer failure. */ }
+        },
+      }),
     }, signal);
+    if (committed) return committed;
     if (!result.ok)
       return ["reviewUncertain", "mutationUncertain"].includes(result.error.kind) ? uncertain() : reject();
     if (!result.value.outcome.ok)

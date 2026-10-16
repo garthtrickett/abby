@@ -40,7 +40,7 @@ async function affirm(call: Call) {
 
 describe("compiled native pass booking", { concurrency: 2 }, () => {
 for (const fault of ["none", "denyPass", "changePass", "depletePass", "loseWrite", "extraPassUseAfterWrite"] as const)
-  test(`E2E-406 separately compiled pass booking ${fault} uses ordinary consent, shared native budget and exact post-send case checks`, options, async () => {
+  test(`E2E-406 separately compiled pass booking ${fault} uses ordinary consent, shared native budget and exact creation acknowledgement`, options, async () => {
     await withClinicalRunner("book", async call => {
       await prepare(call);
       if (fault !== "none") {
@@ -59,12 +59,18 @@ for (const fault of ["none", "denyPass", "changePass", "depletePass", "loseWrite
         if (review.request.operation.kind !== "classBook") assert.fail("wrong pass review");
         assert.equal(review.request.operation.pass?.patientCaseId, caseId); assert.equal(review.request.operation.pass?.used, 1);
       } else assert.equal(call.mutations.length, 0);
-      if (fault === "none") {
+      if (fault === "none" || fault === "extraPassUseAfterWrite") {
         const budgets = await call.db.selectFrom("cliniko_request_budgets").select(["sent_at_ms", "max_per_minute"]).execute();
         assert.equal(call.spoken.at(-1), "Your booking is confirmed.", JSON.stringify(budgets.map(row => ({ used: Array.isArray(row.sent_at_ms) ? row.sent_at_ms.length : -1, limit: row.max_per_minute }))));
         assert.ok(budgets.every(row => row.max_per_minute === 180 && Array.isArray(row.sent_at_ms) && row.sent_at_ms.length <= 180));
         assert.ok(call.messages.some(row => row.kind === "providerRequest" && row.path === `/v1/patient_cases/${caseId}/attendees`));
         assert.equal(call.messages.filter(row => row.kind === "classWriteOutcome").at(-1)!.actionStatus, "committed");
+        const dispatch = call.messages.findIndex(row => row.kind === "providerRequest" && row.method === "POST" && row.path === "/v1/attendees");
+        assert.ok(dispatch >= 0);
+        assert.equal(call.messages.slice(dispatch + 1).some(row => row.kind === "providerRequest" && row.method === "GET"), false);
+        await call.mark(); await call.say("What happened?");
+        assert.match(call.spoken.at(-1)!, /confirmed/);
+        assert.equal(call.mutations.filter(row => row.path === "/v1/attendees").length, 1);
       } else {
         assert.equal(call.spoken.at(-1)!.includes("is confirmed"), false);
         if (!beforeSend) {

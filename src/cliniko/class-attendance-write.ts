@@ -27,6 +27,13 @@ export type ClinikoAttendanceWrite = Readonly<{ kind: "accepted"; attendeeRef: s
  * capacity/duplicates, selected case/counters, fee/member policy, played
  * consent and owned review. A case link alone is not a paid entitlement. */
 export type ClinikoAttendancePermit = (signal: AbortSignal) => Promise<boolean>;
+/** Creation-only trusted callbacks. Current is synchronous local expiry/lifetime;
+ * acknowledged runs only after the complete exact native response is validated. */
+export type ClinikoClassBookingChecks = Readonly<{
+  beforeSend: ClinikoAttendancePermit;
+  current(signal: AbortSignal): boolean;
+  acknowledged(receipt: Extract<ClinikoAttendanceWrite, { kind: "accepted" }>): void;
+}>;
 const object = (v: unknown): Record<string, unknown> | undefined => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : undefined;
 const id = (v: unknown): v is string => typeof v === "string" && /^[1-9][0-9]{0,18}$/.test(v);
 const uuid = (v: unknown): v is string => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
@@ -60,8 +67,8 @@ async function permitted(check: ClinikoAttendancePermit, signal: AbortSignal): P
 /** Native attendee writes only: never modify a shared class, cancel all repeats,
  * adjust credits, issue refunds or implement a move implicitly. Linking a case
  * only updates that association; it cannot change booking, notes or arrival.
- * Accepted is a provider acknowledgement, not a caller confirmation. The host must inspect
- * the exact record and current class capacity before declaring completion. */
+ * Generic accepted outcomes retain the caller's operation-specific inspection
+ * contract. executeBookingOnce separately establishes creation acknowledgement. */
 export class ClinikoClassAttendanceWriter {
   readonly #config: ClinikoAttendanceConfig;
   readonly #base: string;
@@ -93,6 +100,19 @@ export class ClinikoClassAttendanceWriter {
           row.notes === notes(request.creationActionId) && link(row.patient_case) === `${this.#base}/patient_cases/${request.patientCaseId}`);
   }
   async executeOnce(input: ClinikoAttendanceRequest, signal: AbortSignal, beforeSend: ClinikoAttendancePermit): Promise<Result<ClinikoAttendanceWrite, ClinikoAttendanceFailure>> {
+    return this.#executeOnce(input, signal, beforeSend);
+  }
+  /** Exact creation receipt only. It does not prove capacity exclusion, payment,
+   * pass balance or unlinked staging; cancellation/move/relink use their own contract. */
+  async executeBookingOnce(input: Extract<ClinikoAttendanceRequest, { kind: "book" }>, signal: AbortSignal,
+    checks: ClinikoClassBookingChecks): Promise<Result<ClinikoAttendanceWrite, ClinikoAttendanceFailure>> {
+    if (input?.kind !== "book" || typeof checks?.beforeSend !== "function" || typeof checks.current !== "function" ||
+        typeof checks.acknowledged !== "function") return err({ kind: "invalidQuery" });
+    const captured = Object.freeze({ ...checks });
+    return this.#executeOnce(input, signal, captured.beforeSend, captured);
+  }
+  async #executeOnce(input: ClinikoAttendanceRequest, signal: AbortSignal, beforeSend: ClinikoAttendancePermit,
+    booking?: ClinikoClassBookingChecks): Promise<Result<ClinikoAttendanceWrite, ClinikoAttendanceFailure>> {
     if (!validRequest(input)) return err({ kind: "invalidQuery" });
     if (!sameScope(input.scope, this.#config.scope)) return err({ kind: "scopeMismatch" });
     const request = structuredClone(input);
@@ -110,6 +130,12 @@ export class ClinikoClassAttendanceWriter {
     }
     // There is no await between this last abort check and provider invocation.
     if (stop.aborted) { this.#attempted.delete(request.actionId); return err({ kind: "unavailable" }); }
+    try {
+      if (booking && booking.current(stop) !== true) {
+        this.#attempted.delete(request.actionId); return err({ kind: "forbidden" });
+      }
+    } catch { this.#attempted.delete(request.actionId); return err({ kind: "forbidden" }); }
+    if (stop.aborted) { this.#attempted.delete(request.actionId); return err({ kind: "unavailable" }); }
     let response: Response | undefined;
     try {
       response = await untilAbort(this.#fetch(`${this.#base}${request.kind === "book" ? "/attendees" : `/attendees/${request.attendeeId}${request.kind === "cancel" ? "/cancel" : ""}`}`, {
@@ -125,7 +151,15 @@ export class ClinikoClassAttendanceWriter {
     if (request.kind === "cancel") return response.status === 204 && !stop.aborted ? ok({ kind: "accepted", attendeeRef: `cliniko:attendee:${request.attendeeId}` }) : ok({ kind: "uncertain" });
     if (response.status !== (request.kind === "book" ? 201 : 200)) return ok({ kind: "uncertain" });
     const body = await untilAbort(boundedClinikoJson(response), stop), row = body?.ok ? object(body.value) : undefined;
-    return row && !stop.aborted && this.#matches(row, request) ? ok({ kind: "accepted", attendeeRef: `cliniko:attendee:${row.id}` }) : ok({ kind: "uncertain" });
+    if (!row || stop.aborted || !this.#matches(row, request)) return ok({ kind: "uncertain" });
+    // The optional field's absence is NOT no-association proof. A no-pass
+    // creation claims only attendance creation; it cannot accept a returned
+    // unapproved case. Staged moves still require inspectUnlinked's native filter.
+    if (booking && request.kind === "book" && request.patientCaseId === undefined && Object.hasOwn(row, "patient_case"))
+      return ok({ kind: "uncertain" });
+    const accepted = Object.freeze({ kind: "accepted" as const, attendeeRef: `cliniko:attendee:${row.id}` });
+    try { booking?.acknowledged(accepted); } catch { /* An observer cannot erase the validated receipt. */ }
+    return ok(accepted);
   }
   /** Exact guarded record inspection after clear acknowledgement. It grants no
    * automatic retry, refund or upgrade of an earlier uncertain call outcome. */

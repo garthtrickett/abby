@@ -10,7 +10,7 @@
 | 2 Delivery baseline | Remote main verified at `9a29e51e7f7e0a765db7674c6c75ff2087260473`; integrated draft [PR #457](https://github.com/garthtrickett/abby/pull/457) remains at `4e19e1783e2324480c9e0d0923eeaf825e04692e`. Its GitHub jobs never started because of account billing/spending limits. Focused local qualification of the receipt candidate is recorded below; whole-candidate CI remains outstanding. |
 | 3 Exact receipt foundation | Implemented and locally qualified in `codex/abby-provider-ack-receipt`, stacked on the published plans and integrated candidate. The full interval is captured, sent and validated. Existing post-write host success gates remain. Independent review and exact-head CI remain outstanding. |
 | 4 Individual booking | Published in draft [PR #460](https://github.com/garthtrickett/abby/pull/460), `codex/abby-provider-ack-individual`, based on receipt correction `92a16e5`. Final online/roster availability follows preparation; exact acknowledgement survives host/review/worker cancellation. Focused, isolated database/process/compiled-location and complete local `npm test` checks passed. Independent review and cloud qualification remain open; cloud jobs have not started because of billing. |
-| 5 Native class creation | Pending stage 4, then exact attendee acknowledgement and final capacity ordering without weakening movement/pass contracts. |
+| 5 Native class creation | Implemented candidate in `codex/abby-provider-ack-class`, based on stage 4 `40a51f2`. Exact attendee acknowledgement and final double capacity ordering apply to ordinary/approved-pass creation. Focused, process-loss/privacy and unchanged movement/cancellation regressions passed; corrected compiled cases, final typecheck and manifest checks passed. Full local `npm test` is running. Publication, independent review and cloud qualification remain open. |
 | 6 Earlier-gap qualification | Pending the booking runtime steps. Preserve all gaps 1–9 and their remaining engineering/acceptance requirements. |
 | 7 Class/pass completion | Pending; staged caller/SAM/operator integration, complete cost admission and broader combinations remain required. |
 | 8 Payments | Pending gap 11 specification and implementation, including audit R18/R19 and any necessary approved receipt attachment dependency. |
@@ -62,13 +62,13 @@ Full text/browser/PostgreSQL suites and hosted CI are not established by the foc
 
 ## Individual booking runtime candidate
 
-Runtime commit `86e09b444818356113af626379de5f165817bcf0` is published in draft PR #460 against `92a16e58b559dbd730ad8f0c50c4f23ecbe57bbb`. Its push run `38872610729` and PR run `38872618610` failed before job execution. Check `116880049725` independently reported the same billing/spending condition. Full local qualification continues in the tracked `Abby individual complete local suite` user-systemd scope; observation timeouts have not stopped or restarted that job.
+Runtime commit `86e09b444818356113af626379de5f165817bcf0` is published in draft PR #460 against `92a16e58b559dbd730ad8f0c50c4f23ecbe57bbb`. Its push run `38872610729` and PR run `38872618610` failed before job execution. Check `116880049725` independently reported the same billing/spending condition. Full local qualification subsequently completed successfully in the tracked `Abby individual complete local suite` user-systemd scope; its exit 0 and results were consumed without restarting after observation timeouts.
 
 The stage 4 delta is based on receipt PR #459, including its separate fixture correction. `ClinikoBookingGuard.authorizeForSend` and concrete/catalogue offer dispatch paths finish proof, file/catalogue approval, SAM settings, shared write-stop checks and native metadata preparation before final availability. The POST budget is claimed before this path; unavailable quota refuses before sending, without a quota wait after the final observation. Online reads retain complete pagination. Roster dispatch retains its complete double calendar observation and performs no later metadata refresh; ordinary protected proposal/reschedule reads keep their existing refresh contract. Immediately before transport invocation, only synchronous original-expiry, local proof/lifetime and abort checks remain.
 
 The individual host returns committed on the exact validated creation acknowledgement and performs no created-row/conflict GET or automatic review closure. A synchronous trusted acknowledgement notification propagates that established result through the host, reviewed-send wrapper and effect worker. The worker accepts only its matching booking action while its dispatch is still pending; late reports cannot reopen a finished dispatch, reports for other operations are ignored, and normal runtime action/version/lease acceptance still applies. Unparsed/held/lost/nonexact responses remain uncertain. No local durable acknowledgement/attempt record, automatic observer, timer extension, slot reservation or additional setting is introduced.
 
-Catalogue, intake-to-booking and normal call-flow adapters forward the trusted notification. Native class creation, class movement/pass relinking, rescheduling, cancellation, correction, resend and the earlier embedded/owning-diary contracts retain their existing completion semantics. Product notes and ADR 0002 activate only the individual contract in this candidate; the class step remains pending. All thirteen gaps and external acceptance requirements remain in scope. Audit R11 starts with a small [product facts reference](PRODUCT_FACTS.md), kept separate from public FAQs/support advice; its content and 21 cited source/test/ADR files have matching fingerprints, without an automated behavioral or publication attestation.
+Catalogue, intake-to-booking and normal call-flow adapters forward the trusted notification. At stage 4, native class creation and the other operations retained their existing completion semantics. Product notes and ADR 0002 activated only the individual contract in that candidate; the separate class revision is recorded below. Class movement/pass relinking, rescheduling, cancellation, correction, resend and the earlier embedded/owning-diary contracts remain unchanged by the creation revisions. All thirteen gaps and external acceptance requirements remain in scope. Audit R11 starts with a small [product facts reference](PRODUCT_FACTS.md), kept separate from public FAQs/support advice; its content and 21 cited source/test/ADR files have matching fingerprints, without an automated behavioral or publication attestation.
 
 Executed stage 4 checks:
 
@@ -84,6 +84,65 @@ Executed stage 4 checks:
 The first runtime focused run exposed old policy assertions expecting post-write inspection vetoes and a held conflict-read checkpoint that this flow no longer invokes. They were replaced with explicit acknowledgement/no-GET assertions and a held unacknowledged-create case, retaining lost-response/no-replay coverage. An intake composition test similarly expected conflict/inspection failure to override success; it now distinguishes those acknowledged outcomes from actual review/create failures. Early focused runs failed on these cases; the corrected narrow runs above passed. One broader pre-final run had 121 passes, one outdated intake-policy assertion failure and six database-only skips; those skips are not evidence. The isolated run above subsequently executed all six compiled-location cases. Final full-suite qualification remains separate.
 
 Required manual acceptance before clinic activation remains ordinary and class success with owned native fixtures, exact independent diary inspection after the caller result, and interrupted-review discovery. The individual change specifically needs audible ordinary confirmation on a valid acknowledgement and truthful uncertainty on a lost/nonexact response, without retry or automatic compensation. Check end-of-call behavior and cleanup separately. No clinic call, live provider mutation, real email send or deployment has been performed by this work.
+
+## Native class creation runtime candidate
+
+Stage 5 is implemented on `codex/abby-provider-ack-class`, based on individual
+candidate `40a51f2f6c7182f394dee6b02c1fae66ce316171`. It is not landed or activated.
+`ClinikoClassBookingHost` completes class permission, exact played consent,
+approved pass/history, proof, metadata, policy/SAM/review and POST quota work
+before the final complete double occurrence/attendance observation. The reader's
+creation-only `inspectForSend` path leaves ordinary protected reads and movement
+bracketing intact. Immediately before transport, synchronous original expiry,
+local proof/lifetime and request checks remain; there is no intervening awaited
+policy, patient, entitlement or quota work.
+
+`ClinikoClassAttendanceWriter.executeBookingOnce` validates exact bounded native
+HTTP 201 attendee/self, patient, occurrence, action marker, explicit active state
+and requested case. It synchronously reports the receipt through the existing
+host/review/worker result path. Later capacity/duplicate/pass-use races, observer
+failure or cancellation cannot turn that established creation into uncertainty.
+Lost, nonexact or unparsed responses still cannot confirm or replay. No post-create
+GET, automatic compensation, observer job, review closure, extra setting,
+dependency or standalone durable patient-bearing state was introduced.
+
+Ordinary creation can acknowledge an omitted optional case property without
+claiming no association. A returned unapproved case or undocumented null/empty
+shape remains nonexact. A pass response must return its approved case. The official
+OpenAPI bundle retrieved again October 16 matches the October 14 SHA256 recorded
+in the class notes; it documents no concrete nil-link shape. Class moves still
+use their separate native null-filter inspection for required unlinked staging.
+Cancellation, movement, compensation and relinking use the existing generic
+writer and their operation-specific case/effect inspection. Creation alone proves
+neither payment nor atomic capacity/pass exclusion.
+
+The docs/ADRs, product facts and scenario descriptions now reflect this scoped
+creation revision. Manifest 1.227 retains all 418 scenarios and their full-call
+acceptance limits. Older execution entries retain their historical meaning.
+
+Executed stage 5 checks and active qualification:
+
+| Command | Result |
+| --- | --- |
+| `npm ci` | Passed; no dependency change. |
+| `npm run typecheck` after the process fixtures | Passed again after the additional dispatch-invalidation tests and compiled assertions. The scenario-manifest test also passed (1 check). |
+| `node --test --test-concurrency=2 test/cliniko/class-booking-acknowledgement.test.ts test/cliniko/class-booking-host.test.ts test/cliniko/class-pass-booking-host.test.ts test/cliniko/reviewed-send.test.ts` | 70 passed; zero failed/cancelled/skipped. Exact ordinary/pass acknowledgements, actual SAM ordering, no post-create GET, host shutdown after acknowledgement, current approvals and unchanged review requirements. |
+| `node --test test/cliniko/class-booking-acknowledgement.test.ts` after final invalidation cases | 10 passed; zero failed/cancelled/skipped. Also proves local lifetime, proof revocation and original offer expiry after final capacity each prevent transport dispatch. |
+| `node --test --test-concurrency=2 test/cliniko/class-attendance-read.test.ts test/cliniko/class-attendance-write.test.ts test/cliniko/class-attendance-case-write.test.ts test/cliniko/class-attendance-staging.test.ts test/cliniko/class-attendance-move.test.ts test/cliniko/class-cancellation-host.test.ts` | 162 passed; zero failed/cancelled/skipped. The original invocation also named two nonexistent files; those were not executed and supply no evidence. The actual cancellation/movement host files ran separately below. |
+| `node --test --test-concurrency=2 test/cliniko/class-pass-cancellation-host.test.ts test/cliniko/class-pass-move-host.test.ts test/cliniko/class-pass-movement.test.ts test/cliniko/class-move-host.test.ts test/cliniko/class-move-stages.test.ts` | 148 passed; zero failed/cancelled/skipped. |
+| `bash scripts/with-postgres.sh node --test test/cliniko/class-booking-recovery-process.test.ts` | 4 passed; zero failed/cancelled/skipped. Actual SAM owner SIGKILL while review acknowledgement is held, after saved review before clinical dispatch, with create response held, and after committed result before caller confirmation. Independent cold account/type-only discovery finds pending review and makes no provider mutation; actual PostgreSQL/table/backup and process-output canaries remain absent. Disposable native state outlives each killed child; the harness cleans its owned databases, files and server. |
+| `bash scripts/with-postgres.sh bash -c 'npm run build:voice-tests && npm run db:migrate && ABBY_LEDGER=postgres node --test --test-concurrency=2 test/voice/class-runner.test.ts test/voice/class-pass-runner.test.ts test/voice/class-pass-cancellation-runner.test.ts test/voice/class-service-runner.test.ts test/cliniko/class-booking-recovery-process.test.ts test/storage/owning-host-write-contract.test.ts'` | First run: 48 passed, 2 failed, zero cancelled/skipped. Both failures were old creation-veto assertions for post-send extra pass use/overcapacity; the exact acknowledged result was committed. Cancellation, multiple-service, process/privacy and owning-diary cases passed. The corrected two-file rerun below preserves exact acknowledgement/no-GET/no-replay assertions. |
+
+| `bash scripts/with-postgres.sh bash -c 'ABBY_LEDGER=postgres node --test --test-concurrency=2 test/voice/class-runner.test.ts test/voice/class-pass-runner.test.ts'` | 22 passed; zero failed/cancelled/skipped. Exact ordinary/pass creation confirms despite post-send overcapacity/extra use, with no post-create native GET; outcome queries retain success and do not repeat the create. Pre-send denial, lost-response uncertainty and separately inspected cancellation remain covered. |
+| Full combined `npm test` via tracked user-systemd scope | Running in `Abby class combined complete local suite`; no full-suite pass is claimed yet. The earlier stage 4 full pass does not qualify the class delta. |
+
+Early focused runs similarly found assertions expecting post-create inspections;
+they were corrected to distinguish exact creation truth from nonexact/lost
+responses. A new pass ordering test initially stopped at the existing quota-wait
+notice; it now follows that notice, renews the ordinary lease and obtains a fresh
+affirmation within the original offer/proof expiry. No budget limit or timeout
+was weakened. Full composed qualification, independent review, cloud execution
+and all actual clinic/provider/operator acceptance remain separate open gates.
 
 ## Review, acceptance and remaining limits
 

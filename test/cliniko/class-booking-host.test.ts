@@ -95,7 +95,7 @@ for (const lost of ["review", "write"] as const)
     }
   });
 for (const race of ["overCapacity", "duplicateOwn", "permission"] as const)
-  test(`E2E-392 native ${race} after attendee create cannot produce a caller confirmation`, async () => {
+  test(`E2E-392 native ${race} after dispatch does not veto an exact attendee creation acknowledgement`, async () => {
     const f = await classBookingFixture();
     try {
       await f.verify();
@@ -112,7 +112,7 @@ for (const race of ["overCapacity", "duplicateOwn", "permission"] as const)
       });
       resultValue(await f.drain());
       assert.equal(f.writes.length, 1);
-      assert.notEqual((await f.state()).actions[action.key]!.status, "committed");
+      assert.equal((await f.state()).actions[action.key]!.status, "committed");
       assert.equal(f.recalls.length, 1);
       assert.equal((await f.discovery()).pending.length, 1);
       resultValue(await f.drain());

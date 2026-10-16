@@ -1,6 +1,6 @@
 # Standalone Cliniko best-effort booking
 
-**Individual runtime revision:** [ADR 0002](../docs/adr/0002-provider-acknowledged-booking.md) makes exact provider acknowledgement the individual creation success boundary after final online/roster availability. Native class creation is staged separately. Clinic activation, independent review and exact-head CI remain separate gates.
+**Booking runtime revision:** [ADR 0002](../docs/adr/0002-provider-acknowledged-booking.md) makes exact provider acknowledgement the individual creation success boundary after final online/roster availability. Native class creation now follows the equivalent final-capacity/attendee-acknowledgement contract, including an independently approved pass; see [class passes](CLINIKO_CLASS_PASSES.md#creation-acknowledgement-revision). Movement, cancellation and relinking retain their separate inspection requirements. Clinic activation, independent review and exact-head CI remain separate gates.
 
 ## Status and declared contract
 

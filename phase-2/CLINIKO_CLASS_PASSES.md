@@ -68,27 +68,68 @@ has no financial or reservation authority.
 
 `ClinikoClassAttendanceWriter` can attach an explicitly supplied case when
 creating one attendee. Its guarded native POST includes `patient_case_id`,
-and both acknowledgement and subsequent exact inspection must match the
-requested patient, session and case. An incorrect case acknowledgement or lost
-response remains uncertain and cannot replay. Cancellation does not accept a
-new case association. Existing requests without a case retain their original
-wire body.
+and the exact creation acknowledgement must match the requested patient,
+session and case. The earlier E405 inspected integration is historical evidence;
+the current caller creation contract is revised below. An incorrect case
+acknowledgement or lost response remains uncertain and cannot replay.
+Cancellation does not accept a new case association. Requests without a case
+retain their original wire body.
 
 The native integration fixture combines protected case reads, current native
 class capacity/duplicate reads, guarded creation and exact case inspection.
 It proves that a late budget wait rechecks depletion, and that a concurrent
 additional use can overdraw the case even after provider acknowledgement.
-This is no atomic reservation; the caller host must inspect the resulting
-case before reporting success and preserve uncertainty without another send.
+This is no atomic reservation. The earlier caller policy required resulting-case
+inspection; the creation acknowledgement revision below removes that success
+veto. Existing movement, cancellation and relinking retain their required
+case inspections.
+
+## Creation acknowledgement revision
+
+[ADR 0002](../docs/adr/0002-provider-acknowledged-booking.md) now applies to
+ordinary and approved-pass class creation. `ClinikoClassBookingHost` completes
+current independent permission, exact played consent, approved case/history,
+proof, metadata, settings, write-stop, SAM/review and POST quota preparation
+before the final complete double occurrence/attendance observation. After that
+observation only synchronous original-expiry, local proof/lifetime and exact
+request checks may precede the one native POST; no hidden quota wait follows it.
+Ordinary protected reads and movement keep their existing metadata/proof
+bracketing.
+
+`executeBookingOnce` validates bounded HTTP 201, attendee ID/self, patient,
+occurrence, creation marker, explicit active state and requested case. It reports
+the established result synchronously through the host/review/worker result path.
+There is no mandatory post-create attendee/capacity/pass-use GET. A subsequent
+over-capacity, duplicate, entitlement change, proof expiry, observer or speech
+failure cannot erase an exact acknowledged creation. Missing, held/unparsed,
+lost or nonexact responses remain uncertain without replay or automatic review
+closure. Cliniko-owned review and independent discovery remain required.
+
+The provider OpenAPI bundle was checked again on October 16, 2026 and has the
+same SHA256 recorded above. `Attendee.patient_case` is optional and documents an
+object link, without a concrete nil-link shape. An ordinary response may omit
+it and establish creation, without proving the attendance is unlinked. A
+returned case without approval, including an undocumented null/empty shape,
+cannot acknowledge the exact authorized request. An approved-pass response must
+contain the exact requested case link. A move that requires an unlinked
+replacement still needs the separate native null-filter observations described
+below; an omitted field cannot authorize original cancellation.
+
+Creation proves neither payment nor atomic capacity/pass exclusion. Native
+cancellation, movement, compensation and linking continue to use `executeOnce`
+and their operation-specific inspection/recovery contracts. Exact source and
+executed synthetic results are recorded in [execution progress](EXECUTION_PROGRESS.md);
+clinic/provider/staff acceptance and authoritative CI remain separate gates.
 
 ## Remaining caller and lifecycle work
 
 1. E406 supplies the independent pass-selection contract and local
    service/location/terms/permission checks. Actual clinic-owned entitlement
    provisioning and separate financial evidence still need acceptance.
-2. E406 locally qualifies the binding from private selection through normal
-   played consent, owned review, native send and final exact case/attendance
-   inspection. Broader catalogue/correction/acceptance qualification remains.
+2. E406 originally qualified private selection, played consent, owned review,
+   native send and final exact case/attendance inspection. Current creation
+   uses the revision above. Broader catalogue/correction/acceptance qualification
+   remains.
 3. E407 supplies explicit native cancellation effect/inspection contracts and
    caller journeys, including full/expired/closed cases and lost outcomes.
    Movement, cross-service consumption/recovery and broader clinic-rule

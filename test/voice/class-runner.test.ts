@@ -20,7 +20,7 @@ const prepare = async (call: Call, operation: "book" | "cancel") => {
 
 describe("actual compiled class attendance runner", { concurrency: 2 }, () => {
   for (const operation of ["book", "cancel"] as const) for (const lost of [false, true])
-    test(`E2E-395 compiled class ${operation} ${lost ? "unknown response" : "exact inspected receipt"} through the normal host factory and shared request budget`, options, async () => {
+    test(`E2E-395 compiled class ${operation} ${lost ? "unknown response" : operation === "book" ? "exact creation acknowledgement" : "exact inspected receipt"} through the normal host factory and shared request budget`, options, async () => {
       await withClinicalRunner(operation, async call => {
         await prepare(call, operation); await call.mark();
         if (lost) call.child.send({ kind: "loseWrite" });
@@ -49,6 +49,11 @@ describe("actual compiled class attendance runner", { concurrency: 2 }, () => {
           if (process.env.ABBY_CLASS_DIAGNOSTICS === "1") process.stdout.write(`${JSON.stringify({ operation, ...diagnostic })}\n`);
           assert.equal(call.spoken.at(-1)!, operation === "book" ? "Your booking is confirmed." : "Your appointment cancellation is confirmed.", JSON.stringify(diagnostic));
           assert.equal(call.messages.filter(row => row.kind === "classWriteOutcome").at(-1)!.actionStatus, "committed");
+          if (operation === "book") {
+            const dispatch = call.messages.findIndex(row => row.kind === "providerRequest" && row.method === "POST" && row.path === "/v1/attendees");
+            assert.ok(dispatch >= 0);
+            assert.equal(call.messages.slice(dispatch + 1).some(row => row.kind === "providerRequest" && row.method === "GET"), false);
+          }
         }
         assert.ok(call.messages.some(row => row.kind === "classPermissionDecision" && row.allowed === true));
         const code = call.messages.find(row => row.kind === "verificationEmail")!.code!;
@@ -84,17 +89,21 @@ describe("actual compiled class attendance runner", { concurrency: 2 }, () => {
     });
 
   for (const afterWrite of [false, true])
-    test(`E2E-395 compiled class capacity ${afterWrite ? "race after write" : "lost before write"} cannot become a confirmed booking`, options, async () => {
+    test(`E2E-395 compiled class capacity ${afterWrite ? "race after write preserves exact acknowledged creation" : "lost before write prevents booking"}`, options, async () => {
       await withClinicalRunner("book", async call => {
         await prepare(call, "book"); await call.mark(); call.child.send({ kind: afterWrite ? "overbookAfterWrite" : "fillClass" });
         await voiceUntil(() => call.messages.some(row => row.kind === (afterWrite ? "classRaceArmed" : "classOccupied")), "native class capacity change");
         await call.say("Yes");
         assert.equal(attendances(call).length, afterWrite ? 1 : 0);
         assert.equal(call.mutations.filter(row => row.path === "/v1/recalls").length, afterWrite ? 1 : 0);
-        assert.equal(call.spoken.at(-1)!.includes("is confirmed"), false);
+        assert.equal(call.spoken.at(-1)!.includes("is confirmed"), afterWrite);
         if (afterWrite) {
-          assert.match(call.spoken.at(-1)!, /can't confirm|couldn't confirm|not confirmed|unconfirmed/i);
-          await call.mark(); await call.say("What happened?"); assert.equal(attendances(call).length, 1);
+          assert.equal(call.messages.filter(row => row.kind === "classWriteOutcome").at(-1)!.actionStatus, "committed");
+          const dispatch = call.messages.findIndex(row => row.kind === "providerRequest" && row.method === "POST" && row.path === "/v1/attendees");
+          assert.ok(dispatch >= 0);
+          assert.equal(call.messages.slice(dispatch + 1).some(row => row.kind === "providerRequest" && row.method === "GET"), false);
+          await call.mark(); await call.say("What happened?");
+          assert.match(call.spoken.at(-1)!, /confirmed/); assert.equal(attendances(call).length, 1);
         }
         await call.scan(verificationCanaries);
       }, { classes: true });

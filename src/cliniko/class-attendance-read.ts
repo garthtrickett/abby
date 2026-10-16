@@ -140,8 +140,9 @@ export class ClinikoClassAttendanceReader {
     return { timeZone: business.time_zone_identifier, typeCapacity: Number(type.max_attendees),
       metadataRequests: 3 + Math.max(1, Math.ceil(businesses.length / 100)) + Math.max(1, Math.ceil(types.length / 100)) };
   }
-  async #snapshot(from: string, to: string, signal: AbortSignal, selected?: readonly string[], metadataAfter = false): Promise<Snapshot> {
-    const c = this.#config, metadata = metadataAfter ? undefined : await this.#metadata(signal);
+  async #snapshot(from: string, to: string, signal: AbortSignal, selected?: readonly string[], metadataAfter = false,
+    preparedMetadata?: Pick<Snapshot, "timeZone" | "typeCapacity" | "metadataRequests">): Promise<Snapshot> {
+    const c = this.#config, metadata = preparedMetadata ?? (metadataAfter ? undefined : await this.#metadata(signal));
     const groups = selected ? await Promise.all(selected.map(async ref => {
       const row = object(await this.#get(`/group_appointments/${ref}`, signal));
       if (!row || row.id !== ref) return fail("malformed");
@@ -189,7 +190,7 @@ export class ClinikoClassAttendanceReader {
    * A selected candidate still requires strict inspect/inspectPair before SAM
    * preparation and every move write uses its own strict current observations. */
   async candidates(scope: LocationScope, verificationRef: string, from: string, to: string, now: string, signal: AbortSignal): Promise<Result<ClinikoClassRead & Readonly<{ purpose: "menuCandidates" }>, ClinikoClassReadFailure>> {
-    const read = await this.#read(scope, verificationRef, from, to, now, signal, undefined, true);
+    const read = await this.#read(scope, verificationRef, from, to, now, signal, undefined, "candidates");
     return read.ok ? ok({ ...read.value, purpose: "menuCandidates" }) : read;
   }
   /** Re-read one existing occurrence; a remembered menu choice is never fresh capacity evidence. */
@@ -197,13 +198,21 @@ export class ClinikoClassAttendanceReader {
     if (!id(sessionRef)) return err({ kind: "invalidQuery" });
     return this.#read(scope, verificationRef, from, to, now, signal, [sessionRef]);
   }
+  /** Creation dispatch only: finish native metadata/proof before the final
+   * double occurrence/attendance observation. No protected read or move uses this as a shortcut. */
+  async inspectForSend(scope: LocationScope, verificationRef: string, sessionRef: string, from: string, to: string, now: string, signal: AbortSignal): Promise<Result<ClinikoClassRead, ClinikoClassReadFailure>> {
+    if (!id(sessionRef)) return err({ kind: "invalidQuery" });
+    return this.#read(scope, verificationRef, from, to, now, signal, [sessionRef], "dispatch");
+  }
   /** One coherent double snapshot for the two exact existing occurrences in a
    * move. Metadata and proof are shared within this read, never across calls. */
   async inspectPair(scope: LocationScope, verificationRef: string, sessionRefs: readonly [string, string], from: string, to: string, now: string, signal: AbortSignal): Promise<Result<ClinikoClassRead, ClinikoClassReadFailure>> {
     if (!Array.isArray(sessionRefs) || sessionRefs.length !== 2 || !sessionRefs.every(id) || sessionRefs[0] === sessionRefs[1]) return err({ kind: "invalidQuery" });
     return this.#read(scope, verificationRef, from, to, now, signal, [...sessionRefs]);
   }
-  async #read(scope: LocationScope, ref: string, from: string, to: string, now: string, parentSignal: AbortSignal, selected?: readonly string[], candidates = false): Promise<Result<ClinikoClassRead, ClinikoClassReadFailure>> {
+  async #read(scope: LocationScope, ref: string, from: string, to: string, now: string, parentSignal: AbortSignal,
+    selected?: readonly string[], mode: "protected" | "candidates" | "dispatch" = "protected"): Promise<Result<ClinikoClassRead, ClinikoClassReadFailure>> {
+    const candidates = mode === "candidates", forSend = mode === "dispatch";
     if (!scopeValid(scope) || !sameScope(scope, this.#config.scope)) return err({ kind: "scopeMismatch" });
     const start = instant(from), end = instant(to), supplied = instant(now);
     let observed: number | undefined; try { observed = instant(this.#clock()); } catch { return err({ kind: "unavailable" }); }
@@ -213,13 +222,17 @@ export class ClinikoClassAttendanceReader {
     const signal = AbortSignal.any([parentSignal, AbortSignal.timeout(15_000)]);
     const work = (async (): Promise<Result<ClinikoClassRead, ClinikoClassReadFailure>> => {
       try {
-        const patient = await this.#verified(scope, ref, signal), before = await this.#snapshot(from, to, signal, selected);
-        // Native metadata brackets the two complete class/roster snapshots:
-        // before the first, after the second. No middle duplicate is needed.
-        // Menu candidates retain their separate closing metadata check.
-        const after = candidates ? before : await this.#snapshot(from, to, signal, selected, true);
+        const patient = await this.#verified(scope, ref, signal);
+        const preparedMetadata = forSend ? await this.#metadata(signal) : undefined;
+        const preparedPatient = forSend ? await this.#verified(scope, ref, signal) : undefined;
+        const before = await this.#snapshot(from, to, signal, selected, false, preparedMetadata);
+        // Protected reads bracket both observations with metadata/proof;
+        // creation dispatch prepares those first, then observes final capacity.
+        const after = candidates ? before : await this.#snapshot(from, to, signal, selected, !forSend, preparedMetadata);
         const metadata = candidates ? await this.#metadata(signal) : { timeZone: after.timeZone, typeCapacity: after.typeCapacity, metadataRequests: after.metadataRequests };
-        const current = await this.#verified(scope, ref, signal);
+        const current = preparedPatient ?? await this.#verified(scope, ref, signal);
+        const finalAt = forSend ? instant(this.#clock()) : undefined;
+        if (forSend && (signal.aborted || finalAt === undefined || Date.parse(current.expiresAt) <= finalAt)) return err({ kind: "unavailable" });
         if (patient.patientRef !== current.patientRef || !isDeepStrictEqual(before, after) ||
           !isDeepStrictEqual(metadata, { timeZone: after.timeZone, typeCapacity: after.typeCapacity, metadataRequests: after.metadataRequests })) return err({ kind: "changed" });
         return ok({ scope: { ...scope }, sourceRef: `cliniko:classes:${this.#config.businessId}:${this.#config.practitionerId}:${this.#config.appointmentTypeId}`,

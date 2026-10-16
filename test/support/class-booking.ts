@@ -14,12 +14,19 @@ import { classAttendanceFixture, classAttendee, classLink, classBase as base } f
 import { callerVerificationFixture, verificationNow, verificationCanaries } from "./caller-verification.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 import type { ClassPassAuthority, ClassPassAuthorityQuery, ClassPassSelection } from "../../src/standalone/cliniko-class-pass-booking.ts";
-export async function classBookingFixture(options: { passes?: boolean } = {}) {
+import type { LocationScope } from "../../src/core/model.ts";
+import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
+import type { PatientVerificationBudget } from "../../src/standalone/email-patient-authority.ts";
+export async function classBookingFixture(options: { passes?: boolean; fetchAround?: (port: typeof fetch) => typeof fetch;
+  scope?: LocationScope; folder?: string; budget?: ClinikoRequestBudget; verificationBudget?: PatientVerificationBudget } = {}) {
   let sourceTime = verificationNow;
-  const nativeBudget = new ClinikoReadBudget(200, () => Date.parse(sourceTime));
+  const nativeBudget = options.budget ?? new ClinikoReadBudget(200, () => Date.parse(sourceTime));
   let claims = 0;
-  const budget = { claim: () => { claims++; return nativeBudget.claim(); }, observe429: nativeBudget.observe429.bind(nativeBudget), checkHeadroom: nativeBudget.checkHeadroom.bind(nativeBudget) };
-  const f = await callerVerificationFixture({ apiKey: "synthetic-class-au5", bookingExecute: true, operation: "appointments.book", rateBudget: budget });
+  const budget = { claim: () => { claims++; return nativeBudget.claim(); }, observe429: nativeBudget.observe429.bind(nativeBudget),
+    ...(nativeBudget.checkHeadroom ? { checkHeadroom: nativeBudget.checkHeadroom.bind(nativeBudget) } : {}) };
+  const f = await callerVerificationFixture({ apiKey: "synthetic-class-au5", bookingExecute: true, operation: "appointments.book", rateBudget: budget,
+    ...(options.scope ? { scope: options.scope } : {}), ...(options.folder ? { folder: options.folder } : {}),
+    ...(options.verificationBudget ? { budget: options.verificationBudget } : {}) });
   let callState = () => f.state();
   const native = classAttendanceFixture({ scope: f.scope, now: verificationNow, patientId: verificationCanaries[2]!, rateBudget: budget });
   let permitted = true, lostReview = false, lostWrite = false, onRecall = async () => { }, onWrite = async () => { };
@@ -50,7 +57,7 @@ export async function classBookingFixture(options: { passes?: boolean } = {}) {
   await writeFile(path, JSON.stringify(approval), { mode: 0o600 });
   const policy = resultValue(await OwnerFileClassPolicy.capture({ path, scope: f.scope, policyVersion: f.sessionConfig.policyVersion, businessId: "11", practitionerId: "22", appointmentTypeId: "33",
     credentialFingerprint: approval.credentialFingerprint, recallTypeId: "7", timeZone: approval.timeZone, directory: new OwnerFileAdminDirectory(f.accountPath, f.scope), clock: () => sourceTime }));
-  const fetchPort: typeof fetch = async (value, init) => {
+  const baseFetchPort: typeof fetch = async (value, init) => {
     const url = new URL(String(value)), method = init?.method ?? "GET";
     if (url.pathname.startsWith(`/v1/patient_cases/${caseId}`)) {
       assert.equal(method, "GET"); onCaseRead(url.pathname);
@@ -99,6 +106,7 @@ export async function classBookingFixture(options: { passes?: boolean } = {}) {
     if (url.pathname.startsWith("/v1/patients/")) return f.fetchPort(value, init);
     return native.fetchPort(value, init);
   };
+  const fetchPort = options.fetchAround ? options.fetchAround(baseFetchPort) : baseFetchPort;
   const host = resultValue(await ClinikoClassBookingHost.create({ scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion,
     ledger: f.ledger, policies: f.policies, verification: f.session, classPolicy: policy, permission: { allows: async () => permitted },
     ...(options.passes ? { classPassAuthority: passAuthority } : {}), cliniko: native.config, clock: () => sourceTime, signal: lifetime.signal, fetchPort }));

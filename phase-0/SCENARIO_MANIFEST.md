@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.226
+# Scenario manifest, version 1.227
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -453,17 +453,16 @@ needs caller-level review. These are provider contracts; approved SAM/staff
 composition, class movement, memberships and serving evidence remain planned.
 
 
-E2E-392 qualifies a transient text class-booking host using actual caller code
-verification, private native class choices, played SAM terms/affirmation and
-Cliniko-owned class review before one inspected attendance create. Scoped class
-approval and independent entitlement are separate from ordinary booking and
-channel possession. Unknown or racing results never claim completion or replay.
-Optional approved booking terms bind the offer expiry and preserve legacy
-wording. Native read proof now receives abort signals. The review protocol
-distinguishes class session, attendee and action identities; decoded notes never
-grant authority. Class cancellation/movement, real credits, normal signed/
-compiled serving and clinic activation remain unfinished. No synthetic voice or
-production full-call evidence is promoted.
+E2E-392 qualifies the transient text class-booking host with caller code
+verification, private choices, played class terms/affirmation and Cliniko-owned
+review. The booking revision completes preparation before final complete native
+capacity and acknowledges only an exact attendee creation. Lost or nonexact
+responses remain unknown without replay; later capacity/duplicate changes and
+local cancellation cannot erase exact success. New process-loss cases kill the
+actual owner before/after dispatch and after established acknowledgement; fresh
+account/type-only discovery makes no replacement mutation. PostgreSQL and backup
+canary scans cover that recovery path. These synthetic checks establish no
+clinic activation, real credits or full-call acceptance.
 
 
 E2E-393 adds actual text cancellation of one class attendee through cancellation-
@@ -496,21 +495,16 @@ service. Multiple class-service selection, compiled class runner subprocesses,
 movement and membership/pass/credit processing remain unfinished.
 
 
-E2E-395 adds sixteen actual compiled class runner journeys through the ordinary
-host factory, physical PostgreSQL account budget/contact revision and signed
-HTTP/WebSocket admission. Booking/cancellation remain separate operation proofs
-and class permissions. Played terms and private keypad precede exact inspected
-attendance; cancellations exclude repeats. Unknown responses/outcome queries
-never replay. Current caller/class permission, withdrawn approval and changed
-policy prevent mutation after consent. Denied permission and failed code delivery
-cannot issue patient authority. Capacity lost before send prevents writing;
-overcapacity after create leaves one review and unresolved attendance. Ordinary
-readiness and a non-allowlisted caller stay disabled. Native SAM assertions follow
-the actual host after contact-revision rebinding. Patient/code/recipient canaries
-are absent from public model/transcription, process output and PostgreSQL.
-The compiled fixture uses synthetic HTTP/model/media and no real mail or number;
-carrier and real clinic acceptance remain planned. Multiple class-service
-selection, movement and membership/pass/credit processing remain unfinished.
+E2E-395 covers sixteen compiled class runner journeys through ordinary host
+provisioning, physical PostgreSQL budget/contact revisions and signed admission.
+Private keypad and played terms precede exact acknowledged attendee creation or
+separately inspected occurrence-only cancellation. Current authority, policy,
+approval and failed delivery deny before send; lost responses and outcome
+queries never replay. Capacity loss before sending prevents creation. A later
+capacity race preserves exact acknowledged creation and its review, with no
+post-create GET. Caller/code canaries stay out of model/transcription, child
+output and PostgreSQL. The fixture's synthetic HTTP/model/media do not establish
+real mail, acoustic/carrier or clinic acceptance; full-call evidence stays planned.
 
 
 E2E-396 adds complete owner-approved class service catalogues, three-label played
@@ -666,16 +660,17 @@ SAM/compiled pass selection, review linkage, consumption/release and financial
 lifecycle work remain unfinished. Full-call evidence stays planned.
 
 
-E2E-406 binds approved native class passes through ordinary caller booking:
-independent private case selection, played one-session terms, a versioned owned
-review and an exact inspected attendee association precede confirmation. The
-final check proves one added active attendance against the entire prior case
-state; a concurrent association swap cannot hide behind unchanged net counts.
-Signed compiled runner journeys cover the last available session and revoked,
-changed, depleted, lost-response and concurrent-use cases under the ordinary
-shared account budget. Public/model and PostgreSQL privacy scans remain
-mandatory. Native pass cancellation/movement, financial provisioning and real
-acceptance remain unfinished. Full-call evidence stays planned.
+E2E-406 binds ordinary pass booking to independent exact case selection, played
+one-session terms, versioned owned review, complete entitlement/history
+preparation and final native capacity. Exact acknowledged creation must return
+the approved case. No post-create pass-use inspection gates confirmation.
+Lost/wrong-case/inactive responses remain uncertain, while later extra use,
+unchanged-net swaps, expiry or authority changes cannot erase exact success.
+Compiled cases cover last-session success, pre-send denials, lost response and
+concurrent consumption with no repeat send. Public/model/PostgreSQL privacy
+remains mandatory. Payment, atomic pass/capacity exclusion, broader qualification
+and real acceptance remain open. Cancellation/movement retain their separately
+inspected effects; full-call evidence stays planned.
 
 
 E2E-407 adds ordinary caller cancellation for explicitly approved native passes.
