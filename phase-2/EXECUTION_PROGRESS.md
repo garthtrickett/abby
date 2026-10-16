@@ -2491,3 +2491,13 @@ The running37a job and its historical runner remain unchanged.
 Current corrected-source full TypeScript and combined regression are pending;
 independent review, authoritative cloud checks and external acceptance remain
 open. All13 gaps remain active, including Stripe11, outbound12 and writeback13.
+
+Full TypeScript on corrected source5cb passed (`work1792189721192`),
+22:28:41.435040–22:30:05.691622UTC,1183 pinned inputs unchanged,
+peak1,433,866,240B, no memory limit/OOM event. The first bounded attempt
+(`work1792189594406`) aborted134/SIGABRT at V8's automatically selected
+~1GiB heap limit; that is not a code verdict. The passing rerun explicitly
+sets `NODE_OPTIONS=--max-old-space-size=1536` within the unchanged2GiB
+MemoryMax/Swap0/CPU200% scope. No assertion, deadline or source change was
+made between these attempts. Documentation following5cb preserves every
+one of those1183 TypeScript/configuration/package input hashes.
