@@ -1034,3 +1034,24 @@ test/cliniko/class-move-host.test.ts test/cliniko/class-pass-move-host.test.ts`,
 log `be9df097-1792160680932.log`, zero failures/cancellations/skips. The
 updated manifest/facts scope passed both contracts, log
 `be9df097-1792160668488.log`. No broader run is inferred from these scopes.
+
+
+### Frozen93b final native caller source typecheck
+
+The separately coordinated standalone `npm run typecheck` passed on
+93b51cf791fa537f5717da453b0eb8641688eea7, work1792160778784/log
+`be9df097-1792160778784.log`, natural exit0 at14:27:27.186872UTC after
+68.18s. All1162 TS/dependency/config hashes remained unchanged. Measured
+scope peak1,596,239,872 bytes (1.487GiB), all high/max/OOM counters0, no
+explicit heap/scope cap change. PIDs were absent at14:27:47.183894UTC;
+release cutoff14:27:48UTC was reported to Gust. No further heavy job followed.
+This qualifies the final host menu delta for TypeScript, in addition to its
+29 focused host/cost and40 legacy-host cases. Earlier746 two-case focused
+PostgreSQL evidence covers unchanged native execution and worker code; no
+new full serving/database/backup or whole-suite run is claimed.
+
+The follow-on remains draft work above PR465. Independent operator resolution,
+high-cost/mixed/concurrent cohorts, rebuilt signed serving, disposable backup/
+output privacy and authoritative cloud acceptance remain open. All13 gaps stay
+active; Stripe remains selected for gap11. No deployment, provider access or
+clinic activation occurred.

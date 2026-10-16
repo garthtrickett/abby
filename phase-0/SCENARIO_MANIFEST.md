@@ -902,5 +902,5 @@ loss and database canary scans. These do not establish full serving, backup or
 operator acceptance. A later host-only correction replaces the legacy whole-move
 filter for separately approved staging with complete per-phase admission; legacy
 execution keeps its existing limit. Large cross-case proposal and complete host
-journey checks pass in the29-case host/cost scope. The later source needs its own
+journey checks pass in the29-case host/cost scope. Frozen93b subsequently passed its own
 full typecheck. Manifest1.234 retains419 IDs and planned full-call evidence.
