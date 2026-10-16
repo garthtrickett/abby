@@ -50,7 +50,7 @@
     "test/cliniko/class-move-recovery.test.ts": "1dac4ccd910a97fd5bdeb439981036cbe9d5f10bab81bd9a541628840ca16832",
     "test/cliniko/class-move-request-cost.test.ts": "73ca607bd82298243aea11ca420cd291a9c7b704e57b4dfcc072bf114f412a83",
     "test/cliniko/class-move-staged-call-flow.test.ts": "737d7ec313e65118430ca7e461217f507b0941237165c4d541b64bd57325d219",
-    "test/cliniko/class-move-staged-host.test.ts": "090732ca05104d343ec3dc63fa7b25ce855d3c9d07feb58e6dcd4b23725a41d4",
+    "test/cliniko/class-move-staged-host.test.ts": "a000d95f0d3b4b600415b4f1eb567ce7f524012032fac7560658075f1943a35a",
     "test/cliniko/class-move-stages.test.ts": "47803c0dd6d6219a5c188d740dde7766363803f39d12ddbe92fa01edfd387c55",
     "test/cliniko/class-movement-verifier.test.ts": "58c336efc7fa7b2211a8d75094acaf599485acb45eab9c19706a39db37dc7984",
     "test/cliniko/class-pass-booking-host.test.ts": "9c2d8fc914ab83bb14b171bacfdaa2c117234fd676d6cb2fb01e2693745e5853",

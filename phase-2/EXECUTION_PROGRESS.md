@@ -1511,3 +1511,16 @@ large-pass case and preserves staged/legacy host and actual VoiceSession
 assertions. Reviewed facts/registry2 checks pass in
 `be9df097-1792169171353.log`. No full TypeScript, serving build, PostgreSQL or
 whole-suite result is inferred from this memory qualification.
+
+### First complete proposal-candidate TypeScript check
+
+Frozen `95ce030` full `npm run typecheck` ran alone on gust-contabo,
+work1792169366012/log `be9df097-1792169366012.log`,
+16:49:26.248817–16:50:25.744775UTC, natural exit2/59.50s,
+peak1,597,673,472B/OOMhighmax0,1170 source inputs unchanged. One diagnostic:
+`class-move-staged-host.test.ts(24,43)` TS7022 on `previousWrites` inference.
+The saved mail/write counts now have explicit numeric types. Runtime emitted
+no diagnostics, which is not a separately passing runtime typecheck. The98
+passing memory run precedes this erased test-only annotation. No unchanged
+heavy retry or serving build is bundled; the actual terminal and absent wrapper
+were reported and the next corrected check requires fresh coordination.

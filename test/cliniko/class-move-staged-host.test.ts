@@ -21,7 +21,7 @@ for (const variant of ["ordinary", "pass", "largeCrossCasePass"] as const) test(
     const initialQuote = structuredClone(action.mutation.request);
     for (const stage of pass ? ["original", "association", "associationInspection"] : ["original"]) {
       await f.play(); await f.pause(61);
-      const previousMail = f.mail.length, previousWrites = f.writes.length;
+      const previousMail: number = f.mail.length, previousWrites: number = f.writes.length;
       let prepared = resultValue(await f.host.prepareClassMovementContinuation(action.key, signal));
       if (prepared.kind === "verificationRequired") {
         const until = Date.now() + 5000;
