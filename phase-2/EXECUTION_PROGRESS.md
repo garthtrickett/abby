@@ -2153,3 +2153,29 @@ privacy qualification remains frozen elsewhere and is not changed by this
 preparation. This case does not model two admitted callers competing for one
 last seat and does not promise atomic native exclusion. Those broader limits
 remain explicit. No production source, dependencies or runtime policy changed.
+
+### Strengthened signed staff public privacy qualification passes
+
+Frozen a1398d756f239ecd438eda26657939b6a23f10f2 closes the direct public
+model/speech canary assertion finding. The explicitly coordinated two-stage
+work1792180711947 passed `npm run typecheck` (58.172s) then ONE strengthened
+signed uncertain-to-cold-staff PostgreSQL case (199.761s), zero skips. The
+focused command is the same single-case command recorded above; only the four
+Node assertion lines differ. There was no serving rebuild or other case.
+
+Actual qualification19:58:32.410521–20:02:56.621652UTC, natural exit0. Source1180
+and all451 previously built serving artifacts stayed unchanged throughout.
+Scope peak1,574,223,872B excludes Docker PostgreSQL; OOM/high/max0. Exitfile0 and
+wrapper311733 absence verified20:03:10UTC, and actual terminal/release sent
+promptly. Runner SHA256:
+`abac93caf6008dca834eec23bfa476f58dbcd4a8476156dbadb7284f1fc040fc`.
+Log:`/home/gust/paseo/paseo-home/work/logs/be9df097-1792180711947.log`.
+
+This proves the scoped ordinary caller-uncertainty/denied staff/native
+inspection/separate acknowledgement path and its direct public/SQL/backup/
+process privacy assertions on a139. It does not establish real operator
+acceptance, signed pass/restoration/process-death breadth, or qualification of
+the new concurrency branch/test. The three correction/mixed cases and extracted
+maximum-history preservation remain unrun on a139. Independent and cloud gates
+remain open; GitHub draft470/471 runs failed before startup under billing,
+not a test verdict. The full thirteen-gap goal remains active.
