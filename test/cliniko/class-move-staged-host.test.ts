@@ -21,12 +21,14 @@ for (const variant of ["ordinary", "pass", "largeCrossCasePass"] as const) test(
     const initialQuote = structuredClone(action.mutation.request);
     for (const stage of pass ? ["original", "association", "associationInspection"] : ["original"]) {
       await f.play(); await f.pause(61);
+      const previousMail = f.mail.length, previousWrites = f.writes.length;
       let prepared = resultValue(await f.host.prepareClassMovementContinuation(action.key, signal));
       if (prepared.kind === "verificationRequired") {
         const until = Date.now() + 5000;
-        while (f.mail.length < 2 && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 2));
-        assert.equal(f.mail.length, 2);
-        assert.deepEqual(await f.host.submitClassMovementCode(f.mail[1]!.code, signal), { verified: true });
+        while (f.mail.length <= previousMail && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 2));
+        assert.equal(f.mail.length, previousMail + 1, "each renewal delivers its own current challenge");
+        assert.deepEqual(await f.host.submitClassMovementCode(f.mail.at(-1)!.code, signal), { verified: true });
+        assert.equal(f.writes.length, previousWrites, "a renewed proof cannot dispatch a stage");
         await f.pause(61);
         prepared = resultValue(await f.host.prepareClassMovementContinuation(action.key, signal));
       }

@@ -142,6 +142,7 @@ export interface ReschedulingMenuHost {
   selectReschedulingMenu(query: ReschedulingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>):
     Promise<Result<Readonly<{ kind: "targetSelected"; snapshot: Exclude<import("./rescheduling-menu.ts").ReschedulingMenuRead, import("./rescheduling-menu.ts").ReschedulingPractitionerRead> }> |
       Readonly<{ kind: "practitionerSelected"; snapshot: import("./rescheduling-menu.ts").ReschedulingPractitionerRead }> |
+      Readonly<{ kind: "selectionWait"; seconds: number }> |
       Readonly<{ kind: "actionSelection"; verificationRef: string; targetRef: string; offerRef: string }>, HostReadFailure>>;
 }
 export interface BookingMenuHost {

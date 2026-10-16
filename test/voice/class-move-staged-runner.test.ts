@@ -29,12 +29,20 @@ async function waitForQuota(call: Call, seconds: number) {
   assert.equal(writes(call).length, before, "waiting cannot dispatch a stage");
 }
 for (const pass of [false, true]) test(`E2E-419 compiled signed ${pass ? "maximum-history cross-case pass" : "ordinary"} move requires every played phase`, {
-  skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: pass ? 300000 : 180000,
+  // Pass preparation adds one selection window before the initial write and
+  // three continuation windows. Allow five bounded60s waits plus60s serving/
+  // scanning; the ordinary journey retains its two-window180s budget.
+  skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: (pass ? 5 : 2) * 60000 + 60000,
 }, async () => {
   await withClinicalRunner("reschedule", async call => {
     await call.say("Start"); await call.mark(); await call.verify();
     await call.say("Appointments"); await call.mark(); await call.say("The first time please."); await call.mark();
     await call.say("Times"); await call.mark(); await call.say("The first time please.");
+    const selectionWait = /wait about (\d+) seconds, then choose your option again/.exec(call.spoken.at(-1)!);
+    if (selectionWait) {
+      assert.equal(writes(call).length, 0); assert.equal(call.mutations.length, 0);
+      await call.mark(); await waitForQuota(call, Number(selectionWait[1])); await call.say("The first time please.");
+    }
     assert.match(call.spoken.at(-1)!, /Move only your/); assert.equal(writes(call).length, 0); await call.mark();
     await affirmClassPassMove(call);
     assert.equal(writes(call).length, 1); assert.match(call.spoken.at(-1)!, /overall class move is not confirmed/);
@@ -65,6 +73,8 @@ for (const pass of [false, true]) test(`E2E-419 compiled signed ${pass ? "maximu
       await call.mark();
     }
     assert.equal(call.spoken.at(-1), "Your class move is confirmed.");
+    assert.ok(call.spoken.filter(text => /wait about \d+ seconds/.test(text)).length <= (pass ? 5 : 2),
+      "the qualification budget cannot hide additional quota windows");
     const timings = call.messages.filter(row => row.kind === "classTurnTiming");
     assert.ok(timings.length > 0 && timings.every(row => typeof row.aheadByMs === "number" && row.aheadByMs <= 0),
       "the actual synthetic speech turn cannot outrun the captured host clock");

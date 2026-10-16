@@ -4,6 +4,44 @@ import { TextReception } from "../../src/reference/text-reception.ts";
 import { createOpenAIClinicalIntentResolver } from "../../src/standalone/openai-clinical-intent.ts";
 import { classMoveCallFlowFixture } from "../support/class-move-call-flow.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
+import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
+import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
+import { declareClinikoRequestCost } from "../../src/cliniko/request-cost.ts";
+
+test("admitted staged pass selection retains ordinal routing only after the bounded wait is played", async () => {
+  const f = await classMoveCallFlowFixture(true, true, { differentCase: true, history: 999, rosterHistory: 201 }, true), at = () => f.config.clock();
+  try {
+    const binding = { scope: f.scope, credentialFingerprint: clinikoCredentialFingerprint(f.native.config.apiKey), budget: f.config.cliniko.rateBudget };
+    const reader = resultValue(ClinikoPatientCandidateReader.create({ scope: f.scope, apiKey: f.native.config.apiKey,
+      contactEmail: f.native.config.contactEmail, rateBudget: binding.budget }, f.fetchPort, at));
+    const original = f.sessionConfig.lookup.candidates;
+    f.sessionConfig.lookup.candidates = declareClinikoRequestCost(async (...args: Parameters<typeof original>) => {
+      assert.equal(resultValue(await reader.hasCurrentPhone(f.scope, "482746192837465", f.inbound.presentedCallerNumber!, "61")), true);
+      return original(...args);
+    }, binding, 1);
+    const reception = new TextReception(f.ledger, f.policies, f.flow, undefined, undefined, undefined, undefined, at);
+    const resolver = createOpenAIClinicalIntentResolver({ owner: f.flow, apiKey: "synthetic", model: "synthetic", clinicDate: () => "2026-10-04",
+      fetch: async () => { throw new Error("explicit class workflow and played ordinal retry must use finite routing"); } });
+    const start = f.turn("start", "Move my Pilates class"), intent = resultValue(await resolver(start));
+    assert.ok(intent.kind === "workflow");
+    resultValue(await reception.startWorkflow(f.scope, start, "reschedule", at(), undefined,
+      new AbortController().signal, undefined, undefined, undefined, true, intent.classSelectionRef)); await f.play();
+    const until = Date.now() + 5000;
+    while (!f.mail.length && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 2));
+    assert.equal((await f.flow.submitCode(f.mail[0]!.code)).verified, true);
+    resultValue(await reception.readReschedulingMenu(f.scope, f.turn("targets"), "targets", "2026-10-08", "2026-10-08", at())); await f.play();
+    resultValue(await reception.selectReschedulingMenu(f.scope, f.turn("target"), "targets", 1, at())); await f.play();
+    resultValue(await reception.readReschedulingMenu(f.scope, f.turn("offers"), "offers", "2026-10-09", "2026-10-09", at())); await f.play();
+    const wait = resultValue(await reception.selectReschedulingMenu(f.scope, f.turn("choose", "one"), "offers", 1, at()));
+    assert.match(wait.callerMessages.at(-1)!, /wait about 60 seconds.*choose your option again/i);
+    assert.deepEqual(await f.flow.spokenMenuIntent("The first time please."), { kind: "clarify", reason: "menuUnavailable" });
+    await f.play(); await f.pause(61);
+    assert.deepEqual(resultValue(await resolver(f.turn("retry-route", "The first time please."))), { kind: "reschedulingChoice", stage: "offers", choice: 1 });
+    const state = resultValue(await reception.selectReschedulingMenu(f.scope, f.turn("retry-choice", "one"), "offers", 1, at()));
+    assert.equal(Object.values(state.actions).at(-1)!.status, "awaitingConfirmation");
+    assert.equal(f.writes.length, 0); assert.equal(f.recalls.length, 0);
+  } finally { await f.close(); }
+});
 
 for (const pass of [false, true]) test(`E2E-419 admitted ${pass ? "pass" : "ordinary"} flow prepares only its private next stage and routes fresh codes separately`, async () => {
   const f = await classMoveCallFlowFixture(false, false, pass ? {} : undefined, true), signal = new AbortController().signal;

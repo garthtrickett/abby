@@ -302,6 +302,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "bookingMenuFailure" }>
   | Readonly<{ kind: "reschedulingMenu"; snapshot: import("./rescheduling-menu.ts").ReschedulingMenuRead }>
   | Readonly<{ kind: "reschedulingMenuFailure" }>
+  | Readonly<{ kind: "reschedulingMenuWait"; seconds: number }>
   | Readonly<{ kind: "ambiguousTarget" }>;
 
 export const STAFF_REASONS = ["callerRequested", "verificationFailed", "unsupported", "uncertainAction",

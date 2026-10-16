@@ -1043,6 +1043,10 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   async selectReschedulingMenu(query: ReschedulingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>) {
     const result = await (this.#rescheduling()?.selectReschedulingMenu(query) ?? readDenied());
     if (result.ok && !query.signal.aborted && !this.closed && !this.#patientLifetime.signal.aborted) {
+      if (result.value.kind === "selectionWait") {
+        this.#spokenMenu.selectionWait(query.menuTurnId, query.turnId); this.#searchMenu.clear();
+        return result;
+      }
       this.#publicMenu = undefined;
       if (result.value.kind === "targetSelected") {
         this.#reschedulingTargetSelected = true; this.#spokenMenu.clear(); this.#spokenPractitioners.clear();

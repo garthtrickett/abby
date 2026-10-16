@@ -170,7 +170,16 @@ export async function classMoveFixture(different = false, near = false, passes?:
     resultValue(await activeReception.readReschedulingMenu(f.scope, turn("targets"), "targets", "2026-10-08", "2026-10-08", now)); await record("targets"); await play();
     resultValue(await activeReception.selectReschedulingMenu(f.scope, turn("target-one", "one"), "targets", 1, now)); await record("targetSelected"); await play();
     resultValue(await activeReception.readReschedulingMenu(f.scope, turn("offers"), "offers", near ? "2026-10-04" : "2026-10-09", near ? "2026-10-04" : "2026-10-09", now)); await record("offers"); await play();
-    resultValue(await activeReception.selectReschedulingMenu(f.scope, turn("offer-one", "one"), "offers", 1, now)); await record("offerSelected");
+    resultValue(await activeReception.selectReschedulingMenu(f.scope, turn("offer-one", "one"), "offers", 1, now));
+    const selected = await f.state(), notice = selected.pendingPresentationId ? selected.presentations[selected.pendingPresentationId] : undefined;
+    if (staging && notice?.kind === "notice" && notice.confirmationWaitSeconds !== undefined) {
+      assert.match(notice.approvedText, /choose your option again/);
+      assert.ok(notice.confirmationWaitSeconds >= 1 && notice.confirmationWaitSeconds <= 60);
+      assert.equal(Object.keys(selected.actions).length, 0); assert.equal(writes.length, 0); assert.equal(recalls.length, 0);
+      await record("proposalWait"); await play(); await pause(notice.confirmationWaitSeconds + 1);
+      resultValue(await activeReception.selectReschedulingMenu(f.scope, turn("offer-after-wait", "one"), "offers", 1, now));
+    }
+    await record("offerSelected");
     const action = Object.values((await f.state()).actions).at(-1); assert.equal(action?.status, "awaitingConfirmation", JSON.stringify({ claims, steps, last: (await f.state()).callerMessages.at(-1) })); return action!;
   };
   const pause = async (seconds: number) => {

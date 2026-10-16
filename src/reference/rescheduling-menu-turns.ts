@@ -75,7 +75,8 @@ export class ReschedulingMenuTurns {
           if (menuTurnId && notice?.status === "played" && notice.kind === "notice") {
             const selected = await untilAbort(this.host.selectReschedulingMenu!({ ...query, menuTurnId, choice: operation.choice }), signal);
             if (selected?.ok && !signal.aborted) {
-              if (selected.value.kind === "targetSelected" || selected.value.kind === "practitionerSelected") interpretation = { kind: "reschedulingMenu", snapshot: structuredClone(selected.value.snapshot) };
+              if (selected.value.kind === "selectionWait") interpretation = { kind: "reschedulingMenuWait", seconds: selected.value.seconds };
+              else if (selected.value.kind === "targetSelected" || selected.value.kind === "practitionerSelected") interpretation = { kind: "reschedulingMenu", snapshot: structuredClone(selected.value.snapshot) };
               else {
                 const evidence = await untilAbort(this.host.resolveAppointmentChange!({ scope, callId: turn.callId, sessionId: turn.sessionId!,
                   policyVersion: query.policyVersion, now, kind: "reschedule", verificationRef: selected.value.verificationRef,

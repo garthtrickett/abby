@@ -4215,3 +4215,19 @@ native178/preparation3 cohort before an offer and admits a complete180 cohort;
 419 IDs/full-call planned. Initial high-history proposal quota handling,
 full new-source TypeScript/build/serving and broader acceptance remain open.
 All thirteen gaps remain active, with Stripe selected for gap11.
+
+The follow-on initial proposal now has a separate bounded workload/headroom
+check and played selection-wait route before protected proof reads. A valid
+private choice must still be unexpired; fresh class/pass inspection can issue a
+new captured staged quote, while played quote expiry remains immutable.
+Focused boundary/cost29 and admitted finite-routing3 checks pass. The broader
+memory69-case run has one remaining fixed-mail-index fixture failure; its focused
+current-challenge correction passes after migration to gust-contabo and the full
+affected memory rerun is tracked. Manifest1.239/full-call planned; full TypeScript,
+new serving build and the corrected five-quota-window signed pass remain open.
+This is continued gap10 engineering, not closure of gap10 or the thirteen-gap goal.
+
+The corrected full affected memory rerun on gust-contabo passes98 cases/zero
+skips, including current-challenge renewal, staged/legacy hosts, finite ordinal
+routing, gateway authority and actual VoiceSession. Exact log and command are
+in the execution ledger. TypeScript/build/PostgreSQL qualification stays open.

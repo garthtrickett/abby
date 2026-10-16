@@ -9,6 +9,8 @@ import type { AppointmentChangeEvidenceHost, AppointmentChangeEvidenceQuery, Boo
 import type { LedgerStore } from "../core/ledger.ts";
 import type { ReschedulingMenuRead } from "../core/rescheduling-menu.ts";
 import { ClinikoClassAttendanceReader } from "../cliniko/class-attendance-read.ts";
+import { CLINIKO_CLASS_COLLECTION_PAGE_LIMIT, CLINIKO_CLASS_METADATA_REQUEST_LIMIT } from "../cliniko/class-attendance-read.ts";
+import { CLINIKO_CASE_ASSOCIATION_LIMIT } from "../cliniko/patient-case-sessions.ts";
 import type { ClinikoClassSession as Occurrence } from "../cliniko/class-attendance-read.ts";
 import type { ClinikoAttendanceConfig } from "../cliniko/class-attendance-write.ts";
 import { checkClinikoHeadroom, clinikoCredentialFingerprint, withClinikoReservation } from "../cliniko/read-budget.ts";
@@ -134,7 +136,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
   #passWorkAdmitted(context: Context, observedRequests: number | undefined): boolean {
     if (observedRequests === undefined) return false;
     return context.move.quotaStaging
-      ? this.#stageWindowRequests(true) !== undefined
+      ? this.#stageWindowRequests(true) !== undefined && this.#proposalRequests(true) !== undefined
       : observedRequests + 9 * this.#proofRequestFloor() <= 180;
   }
   #stageWindowRequests(pass: boolean, costs = this.#stageRequestCosts()): ClassMoveStageRequestCeilings | undefined {
@@ -146,6 +148,18 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     const windows = Object.fromEntries(Object.entries(native).map(([stage, requests]) =>
       [stage, requests === undefined ? NaN : requests + costs.proof + costs.permit]));
     return Object.values(windows).every(requests => Number.isSafeInteger(requests) && requests <= 180) ? Object.freeze(windows) : undefined;
+  }
+  #proposalRequests(pass: boolean, costs = this.#stageRequestCosts()): number | undefined {
+    if (!costs || !this.#stageWindowRequests(pass, costs)) return undefined;
+    // Selection plus fresh proposal: double snapshots of both class services,
+    // both complete case histories when applicable, 6/10 full proofs (including
+    // verifier capture), six ownership/permission pairs, six pass selections and
+    // one pass allow. permit already bounds two ownership/permission pairs.
+    const classes = 4 * (CLINIKO_CLASS_METADATA_REQUEST_LIMIT + 1 + CLINIKO_CLASS_COLLECTION_PAGE_LIMIT);
+    const cases = pass ? 4 * (1 + Math.ceil(CLINIKO_CASE_ASSOCIATION_LIMIT / 100)) : 0;
+    const requests = classes + cases + (pass ? 10 : 6) * costs.proof + 3 * costs.permit +
+      (pass ? 6 * costs.passSelect + costs.passAllow : 0);
+    return Number.isSafeInteger(requests) && requests <= 180 ? requests : undefined;
   }
   #requests(context: Context, p: Prepared): number | undefined {
     if (!context.move.quotaStaging) return p.offer.pass ? 180 :
@@ -267,7 +281,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
               duration !== context.destination.durationMinutes * 60000 || Date.parse(session.startsAt) < Date.parse(this.#now()) + context.destination.minNoticeMinutes * 60000 ||
               Date.parse(session.startsAt) - Date.parse(this.#now()) > Math.min(context.move.maxAdvanceDays, context.destination.maxAdvanceDays) * 86400000 ||
               query.window && !matchesBookingSearchWindow(session.startsAt, context.move.timeZone, query.window)) continue;
-          if (context.move.quotaStaging && !this.#stageWindowRequests(context.move.membership === "nativeCaseSessions")) continue;
+          if (context.move.quotaStaging && this.#proposalRequests(context.move.membership === "nativeCaseSessions") === undefined) continue;
           let item: Offer = { ref: `class-move-offer:${randomUUID()}`, session, expiresAt, version: context.version };
           if (!await this.#permit(context, target!, item, "offers", signal)) return denied();
           if (context.move.membership === "nativeCaseSessions") {
@@ -302,8 +316,26 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
       if (!context || !state || context.version !== menu.version || state.pendingPresentationId || state.processedTurnIds.at(-1) !== menu.turnId ||
           state.presentations[noticePresentationId(query.callId, menu.turnId)]?.status !== "played") return denied<never>();
       const target = menu.stage === "targets" ? menu.targets?.[query.choice - 1] : this.#target, offer = menu.stage === "offers" ? menu.offers?.[query.choice - 1] : undefined;
-      if (!target || Date.parse(target.expiresAt) <= Date.parse(this.#now()) || menu.stage === "offers" && (!offer || Date.parse(offer.expiresAt) <= Date.parse(this.#now())) ||
-          !await this.#config.verification.verifiedSubject("appointments.reschedule", signal) || !await this.#permit(context, target, offer, "proposal", signal) || epoch !== this.#epoch) return denied<never>();
+      if (!target || Date.parse(target.expiresAt) <= Date.parse(this.#now()) || menu.stage === "offers" && (!offer || Date.parse(offer.expiresAt) <= Date.parse(this.#now()))) return denied<never>();
+      if (menu.stage === "offers" && context.move.quotaStaging) {
+        const costs = this.#stageRequestCosts(), requests = this.#proposalRequests(!!offer!.pass, costs);
+        if (requests === undefined) return denied<never>();
+        const capacity = await awaitUntilAbort(checkClinikoHeadroom(this.#config.cliniko.rateBudget, requests), signal);
+        const live = await this.#ready(signal), checked = await this.#context(signal, target.verificationRef);
+        if (capacity === undefined || !live || !checked || checked.version !== context.version || live.conversationRevision !== state.conversationRevision ||
+            live.pendingPresentationId || epoch !== this.#epoch || !isDeepStrictEqual(costs, this.#stageRequestCosts()) || signal.aborted) return denied<never>();
+        if (capacity !== null) {
+          if (capacity.kind !== "rateLimited" || !Number.isSafeInteger(capacity.retryAfterMs) || capacity.retryAfterMs! < 1 || capacity.retryAfterMs! > 60000) return denied<never>();
+          const seconds = Math.ceil(capacity.retryAfterMs! / 1000);
+          if (Math.min(Date.parse(target.expiresAt), Date.parse(offer!.expiresAt)) <= Date.parse(this.#now()) + (seconds + 3) * 1000) return denied<never>();
+          // Only a played wait notice can become the next selection turn. The
+          // private choices retain their original expiry and no SAM action exists.
+          this.#menu = { ...menu, turnId: query.turnId };
+          return ok({ kind: "selectionWait" as const, seconds });
+        }
+      }
+      if (!await this.#config.verification.verifiedSubject("appointments.reschedule", signal) ||
+          !await this.#permit(context, target, offer, "proposal", signal) || epoch !== this.#epoch) return denied<never>();
       const current = await this.#context(signal, target.verificationRef);
       if (!current || current.version !== menu.version) return denied<never>();
       if (menu.stage === "targets") { this.#target = target; return ok({ kind: "targetSelected" as const, snapshot: this.#snapshot(context, "selectedTarget", [target]) as Exclude<ReschedulingMenuRead, import("../core/rescheduling-menu.ts").ReschedulingPractitionerRead> }); }
@@ -356,14 +388,17 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     const contract = classMoveContract(context.source, context.destination, context.move, target.session.startsAt, this.#now(), offer.pass);
     return contract ? { ...contract, expiresAt } : undefined;
   }
-  #request(context: Context, target: Target, offer: Offer): Move | undefined {
-    if (context.move.quotaStaging && !this.#stageWindowRequests(!!offer.pass)) return undefined;
+  #request(context: Context, target: Target, offer: Offer, quoteExpiresAt?: string): Move | undefined {
+    if (context.move.quotaStaging && this.#proposalRequests(!!offer.pass) === undefined) return undefined;
     const now = this.#now(), at = Date.parse(now), start = Date.parse(offer.session.startsAt), end = Date.parse(offer.session.endsAt);
     if (!Number.isFinite(at) || !Number.isFinite(start) || !Number.isFinite(end) ||
         start - at < context.destination.minNoticeMinutes * 60000 ||
         start - at > Math.min(context.move.maxAdvanceDays, context.destination.maxAdvanceDays) * 86400000 ||
         end - start !== context.destination.durationMinutes * 60000) return undefined;
-    const expiresAt = new Date(Math.min(Date.parse(target.expiresAt), Date.parse(offer.expiresAt))).toISOString();
+    // A freshly inspected staged proposal has its own captured quote lifetime.
+    // Rechecks reuse that exact deadline; they cannot renew a played quote.
+    const expiresAt = new Date(Math.min(quoteExpiresAt === undefined ? Math.min(Date.parse(target.expiresAt), Date.parse(offer.expiresAt)) : Date.parse(quoteExpiresAt),
+      Date.parse(this.#expires(context)))).toISOString();
     const terms = this.#terms(context, target, offer, expiresAt);
     if (!terms || Date.parse(expiresAt) <= at) return undefined;
     return { kind: "reschedule", patient: { scope: { ...context.source.scope }, patientRef: target.patientId, verificationRef: target.verificationRef, expiresAt: context.grant.expiresAt }, target: { scope: { ...context.source.scope }, appointmentRef: target.ref, patientRef: target.patientId,
@@ -382,10 +417,12 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     try {
       const state = await this.#ready(signal), context = await this.#context(signal, target.verificationRef);
       if (!state || !context || context.version !== target.version || context.version !== offer.version || this.#prepared && !preparationMayBeDiscarded(state, this.#prepared.request, this.#prepared.revision) ||
+          Math.min(Date.parse(target.expiresAt), Date.parse(offer.expiresAt)) <= Date.parse(this.#now()) ||
           !await this.#permit(context, target, offer, "proposal", signal) || !await this.#nativePair(context, target, offer, signal)) return denied();
       const current = await this.#context(signal, target.verificationRef), after = await this.#ready(signal);
       if (!current || current.version !== context.version || !after || after.conversationRevision !== state.conversationRevision || !await this.#permit(current, target, offer, "proposal", signal)) return denied();
-      const request = this.#request(current, target, offer); if (!request) return denied();
+      if (Math.min(Date.parse(target.expiresAt), Date.parse(offer.expiresAt)) <= Date.parse(this.#now())) return denied();
+      const request = this.#request(current, target, offer, current.move.quotaStaging ? this.#expires(current) : undefined); if (!request) return denied();
       if (current.move.quotaStaging && !this.#movementVerifier) {
         const verifier = await ClassMovementVerifier.capture(c.verification, c.clock, AbortSignal.any([c.signal, this.#lifetime.signal]));
         if (!verifier.ok) return denied();
@@ -525,14 +562,14 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     const signal = this.#signal(query.signal), state = await this.#ready(signal), context = await this.#context(signal, p.target.verificationRef);
     const pending = (value: CallState | undefined) => value?.actions[query.actionKey]?.status === "awaitingConfirmation" &&
       value.actions[query.actionKey]!.digest === query.digest && value.presentations[value.actions[query.actionKey]!.presentationId]?.status === "played";
-    const request = context ? this.#request(context, p.target, p.offer) : undefined;
+    const request = context ? this.#request(context, p.target, p.offer, p.request.terms.expiresAt) : undefined;
     if (!pending(state) || !context || context.version !== p.version || !request || digestActionRequest(request) !== query.digest ||
         !await this.#permit(context, p.target, p.offer, "review", signal) || p.offer.pass &&
         await this.#passEvidence(context, p.target, request.terms.version)?.authorized(p.offer.pass, this.#nativeRequest(context, p.target, p.offer), "commit", signal) !== true) return denied();
     const requests = this.#requests(context, p); if (requests === undefined) return denied();
     const capacity = await checkClinikoHeadroom(this.#config.cliniko.rateBudget, requests);
     const after = await this.#context(signal, p.target.verificationRef), current = await this.#ready(signal);
-    const refreshed = after ? this.#request(after, p.target, p.offer) : undefined;
+    const refreshed = after ? this.#request(after, p.target, p.offer, p.request.terms.expiresAt) : undefined;
     if (!after || after.version !== p.version || !pending(current) || current!.conversationRevision !== state!.conversationRevision ||
         !refreshed || digestActionRequest(refreshed) !== query.digest || this.#prepared !== p || signal.aborted ||
         !await this.#permit(after, p.target, p.offer, "review", signal) || p.offer.pass &&
@@ -549,7 +586,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
         mutation.policyVersion !== c.policyVersion || mutation.payloadDigest !== digestActionRequest(p.request) || digestActionRequest(mutation.request) !== mutation.payloadDigest ||
         !Number.isFinite(Date.parse(now)) || Math.abs(Date.parse(now) - Date.parse(this.#now())) > 30000) return reject();
     this.#attempted = true; const signal = this.#signal(external, 30000), context = await this.#context(signal, p.target.verificationRef, mutation);
-    const request = context ? this.#request(context, p.target, p.offer) : undefined;
+    const request = context ? this.#request(context, p.target, p.offer, p.request.terms.expiresAt) : undefined;
     if (!context || context.version !== p.version || !request || digestActionRequest(request) !== mutation.payloadDigest) return reject();
     const sameService = context.source.practitionerId === context.destination.practitionerId && context.source.appointmentTypeId === context.destination.appointmentTypeId;
     const requests = this.#requests(context, p); if (requests === undefined || await checkClinikoHeadroom(c.cliniko.rateBudget, requests) !== null || signal.aborted) return reject();

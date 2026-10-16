@@ -51,6 +51,12 @@ export class PlayedMenuSelection {
   #previous: Readonly<{ menu: Menu; selectionTurnId: string; selectedStartsAt: string }> | undefined;
   remember(menu: Menu): void { this.#previous = undefined; this.#menu = structuredClone(menu); }
   clear(): void { this.#menu = undefined; this.#previous = undefined; }
+  selectionWait(menuTurnId: string, waitTurnId: string): void {
+    const menu = this.#menu;
+    this.#previous = undefined;
+    this.#menu = menu?.kind === "rescheduling" && menu.stage === "offers" && menu.turnId === menuTurnId
+      ? { ...menu, turnId: waitTurnId } : undefined;
+  }
   consumed(turnId: string, choice: 1 | 2 | 3): void {
     const menu = this.#menu, selected = menu?.snapshot.choices[choice - 1];
     this.#previous = menu && selected ? { menu, selectionTurnId: turnId, selectedStartsAt: selected.startsAt } : undefined;

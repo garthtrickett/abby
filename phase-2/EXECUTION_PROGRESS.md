@@ -1437,3 +1437,77 @@ describe the narrower evidence. Current full TypeScript, serving rebuild,
 combined/mixed/concurrent cohorts, initial high-history quota preparation and
 independent/cloud/clinic acceptance remain open. Gust a20f owns the next heavy
 slot; no new Abby compiler or PostgreSQL job is bundled.
+
+### Initial staged proposal quota preparation and captured fresh quotes
+
+The initial two-request-proof reproduction is now a committed-test candidate.
+Its red log `be9df097-1792167671457.log` reaches181 claims instead of stopping
+at100 before protected selection/proposal reads. The host now separately
+budgets selection plus fresh proposal: complete double class snapshots, complete
+case histories, up to6/10 full proofs for ordinary/pass, conservative ownership/
+permission pairs and current pass callbacks. Every admitted proposal and native
+caller window must fit180; native stage reservations and actual claims remain
+independent. Initial unknown, oversized or unavailable capacity refuses.
+
+Insufficient known capacity returns only a bounded selectionWait1–60s result.
+The reference gateway creates a fixed notice with the existing post-playback
+explicit-wait listening metadata. Both the private host menu and admitted finite
+ordinal router bind retry to that played notice; their original choices keep
+their selection expiry. No SAM action, consent, clinical mutation or review is
+created while waiting. Expired or changed choices cannot be refreshed by retry.
+
+A still-valid chosen pair can receive a newly issued staged proposal only after
+fresh strict class/pass inspection, current proof, permission and matching policy.
+That new quote captures the current approved offer lifetime bounded by policy and
+proof. It has its own SAM readback/digest. Confirmation and write rechecks reuse
+the captured deadline and cannot renew a played quote. The original menu's
+selection expiry remains unchanged. This separates menu validity from a fresh
+inspected quote; it does not prolong an old quote, proof or confirmation.
+
+The focused positive first passed in `be9df097-1792167757984.log`. Expanded
+boundary/cost qualification initially passed27/29; the two failures were fixtures
+assuming an immediate proposal. The helper now follows the actual played wait
+and fresh caller selection with the existing simulated rolling-budget/lease
+clock. Corrected29/29 pass in `be9df097-1792167959926.log`, including unplayed
+notice, expired menu, expired played quote, permission/policy/capacity changes and
+malformed wait bounds. A new admitted catalogue/finite-ordinal retry first failed
+because its fixture omitted the actual class selection reference; resolving the
+ordinary finite class intent supplies that reference. All3 admitted cases pass
+in `be9df097-1792168103121.log`. The broader memory host/gateway/VoiceSession
+run `be9df097-1792168137215.log` passed68/69; it is not green. The remaining
+large-pass test used fixed mail index1 at a later renewal. It now awaits exactly
+one new current challenge per renewal and confirms code entry cannot dispatch.
+The focused corrected case passes on gust-contabo in
+`be9df097-1792168965994.log`; the full affected memory rerun is tracked separately.
+
+The new signed fixture follows the selection notice before its initial readback.
+Its previously unqualified pass journey now includes five maximum60s quota
+windows: selection/proposal, initial replacement and three continuations. Its
+qualification deadline is explicitly derived as300s plus60s for serving and
+database/backup scans; another assertion prohibits extra quota windows. This
+replaces the earlier300s assumption made before selection quota preparation was
+implemented. The earlier b202300s slot finished with its initial-proposal failure;
+no active job's deadline changed. The ordinary180s case, per-turn20s response
+deadline, existing qualified legacy tests, product expiry and physical quota
+remain unchanged. No new signed pass success is claimed.
+
+The authorized host migration preserved these files and logs. Actual hostname,
+goal, terminal work handles and dependency symlink were revalidated on
+gust-contabo. Source-host PIDs are retired; no old compiler/test was restarted.
+New heavy jobs require new host-local source/dependency/board/process/pressure
+checks and compute coordination. Manifest1.239 retains419 IDs/full-call planned;
+facts/fingerprints describe the source and bounded memory evidence. Current full
+TypeScript, new serving build and signed pass/ordinary qualification remain open,
+along with mixed/concurrent/clinic/operator/cloud acceptance and all13-gap work.
+
+The complete corrected affected memory command on gust-contabo passes98 cases,
+zero failures/skips, work1792169056746/log `be9df097-1792169056746.log`,
+116.54s. Files: `class-move-phase-wait`, `class-move-request-cost`,
+`class-move-staged-host`, `class-move-host`, `class-pass-move-host`,
+`class-move-staged-call-flow`, `class-movement-turns`, and
+`class-move-staged-session`, all with `ABBY_LEDGER=memory node --test
+--test-concurrency=1`. The98 result includes the corrected current-challenge
+large-pass case and preserves staged/legacy host and actual VoiceSession
+assertions. Reviewed facts/registry2 checks pass in
+`be9df097-1792169171353.log`. No full TypeScript, serving build, PostgreSQL or
+whole-suite result is inferred from this memory qualification.

@@ -618,6 +618,12 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
     case "reschedulingMenuFailure":
       state.callerMessages.push("I can't check or select those rescheduling options right now. Please request fresh options or contact the clinic directly.");
       break;
+    case "reschedulingMenuWait":
+      if (turn.quality !== "clear" || state.pendingPresentationId || !Number.isSafeInteger(interpretation.seconds) ||
+          interpretation.seconds < 1 || interpretation.seconds > 60 || !state.policy.automationEnabled ||
+          !state.policy.reschedulingEnabled || !state.policy.staffWorkEnabled || state.policy.capabilities.reschedule !== "execute") return err({ kind: "invalidTransition" });
+      state.callerMessages.push(`The booking system needs a moment. Please wait about ${interpretation.seconds} seconds, then choose your option again. Your appointment has not been moved.`);
+      break;
     case "bookingMenu": {
       const menu = bookingMenuPresentation(interpretation.snapshot, { scope: state.policy.scope, callId: state.callId,
         sessionId: turn.sessionId ?? "", policyVersion: state.policy.policyVersion }, now, state.policy.voiceProfile?.locale ?? "en-AU");
@@ -652,7 +658,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   if (newMessages.length > 0 && !state.pendingPresentationId) {
     const id = noticePresentationId(state.callId, turn.turnId);
     state.presentations[id] = { kind: "notice", id, approvedText: newMessages.join(" "), status: "pending",
-      ...(interpretation.kind === "confirmationWait" ? { confirmationWaitSeconds: interpretation.seconds } :
+      ...(interpretation.kind === "confirmationWait" || interpretation.kind === "reschedulingMenuWait" ? { confirmationWaitSeconds: interpretation.seconds } :
         interpretation.kind === "classMovementPreparation" && interpretation.preparation.kind === "quotaWait"
           ? { confirmationWaitSeconds: interpretation.preparation.seconds } : {}) };
     state.pendingPresentationId = id;
