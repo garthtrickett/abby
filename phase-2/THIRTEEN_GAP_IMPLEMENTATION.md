@@ -3907,15 +3907,40 @@ run. Source remained fixed at94fd49; default concurrency/deadlines were retained
 The skips are not database/browser acceptance. The earlier class failure stays
 recorded; this passing correction run does not prove its environmental cause.
 
-PostgreSQL migration up/down/up, generated-schema parity and complete database
-qualification remain unstarted. The current suite was never interrupted; only
-its queued PostgreSQL prerequisite waiter was stopped before tests. After the
-suite's actual natural terminal, the next heavy window was yielded to the
-single coordinated Gust643f diagnostic. No automatic Abby restart is queued;
-await the diagnostic's actual terminal release before the next heavy job.
+The corrected `npm test` was never interrupted; only its queued PostgreSQL
+prerequisite waiter was stopped before tests. After the first coordinated
+Gust643f diagnostic naturally released its slot, fresh guards admitted the
+actual full PostgreSQL qualification. Its natural exit1 and precise failures
+are recorded below; prerequisite-waiter termination supplies no test result.
 
 Exact-head cloud push38880747568 and PR38880804698 had no executed steps;
 inspected check116906810004 reported account billing/spending limits. Independent
 review, cloud qualification, remaining earlier-gap/class engineering and all
 clinic/provider/operational acceptance remain open. No integration completion,
 merge, deployment, live provider write, real mail or Aeva deletion is claimed.
+
+## October16 complete PostgreSQL qualification result
+
+The fixed94fd49 runtime under documentation-only f01b9d2 completed the full
+isolated database command naturally, exit1, after46m55s. The tracked log is
+`be9df097-1792144314355.log`; wrapper1140136 is absent and its exit file and
+`work wait` terminal were consumed. Migration up/down/up, generated-schema
+parity and voice/dashboard/admin/availability builds passed. Main pool:
+2,958 passed,4 failed,1 existing C-LIVE-40 skip,zero cancellations across2,963
+tests. The separate ordered runner did not execute because the main pool failed.
+
+E2E-358 first-time South offline booking and E2E-354 first-time service/gender
+integration timed out after registration while obtaining booking times;
+E2E-380 cancelled-content resend timed out waiting for its private prompt.
+E2E-353 new-patient variants reached the existing15-second booking-menu
+deadline and ended with `invalidTransition`. These failures are not dismissed
+as environmental. The actual command, locations and unchanged first-failure
+reproduction are recorded in [execution progress](EXECUTION_PROGRESS.md#complete-postgresql-result-and-next-diagnostic).
+Full database qualification remains failed; the earlier corrected `npm test`
+pass establishes only its own scope.
+
+The terminal notifier sent actual release to the named Gust coordinator at
+10:38:50UTC and finished exit0. The next heavy slot remains yielded to one
+corrected frozen Gust7fa76986 diagnostic after its own fresh guards. No heavy
+Abby rerun is queued or timed automatically; light staged-class source work
+continues while actual Gust start/terminal release is pending.

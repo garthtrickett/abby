@@ -11,7 +11,7 @@
 | 3 Exact receipt foundation | Implemented and locally qualified in `codex/abby-provider-ack-receipt`, stacked on the published plans and integrated candidate. The full interval is captured, sent and validated. Existing post-write host success gates remain. Independent review and exact-head CI remain outstanding. |
 | 4 Individual booking | Published in draft [PR #460](https://github.com/garthtrickett/abby/pull/460), `codex/abby-provider-ack-individual`, based on receipt correction `92a16e5`. Final online/roster availability follows preparation; exact acknowledgement survives host/review/worker cancellation. Focused, isolated database/process/compiled-location and complete local `npm test` checks passed. Independent review and cloud qualification remain open; cloud jobs have not started because of billing. |
 | 5 Native class creation | Implemented candidate in `codex/abby-provider-ack-class`, based on stage 4 `40a51f2`. Exact attendee acknowledgement and final double capacity ordering apply to ordinary/approved-pass creation. Focused, process-loss/privacy and unchanged movement/cancellation regressions passed; corrected compiled cases, final typecheck and manifest checks passed. The full class text pool ended with 2,214 passes, one E2E-353 deadline failure and 225 gated skips; isolated E2E-353 rerun passed. Combined correction qualification remains open. Published in draft [PR #461](https://github.com/garthtrickett/abby/pull/461); independent review and cloud qualification remain open. |
-| 6 Earlier-gap qualification | Dispatch-lease omission reproduced for online/roster/class creation and corrected in `codex/abby-booking-dispatch-lease`. Twelve final-read/transport expiry/renewal cases and 124 shared-host regressions pass; typecheck and ordering checks pass. Corrected full `npm test` passed:2,227 main-pool passes,225 gated skips,zero failures/cancellations; separate ordered runner6 passes,zero skips. Full PostgreSQL migration/schema/composition qualification remains next. The suite finished naturally; the next heavy window is yielded to one Gust diagnostic and remains held until its actual release. The original full class run failed E2E-353; its unchanged isolated rerun passed. Preserve all gaps 1–9 and their remaining engineering/acceptance requirements. |
+| 6 Earlier-gap qualification | Dispatch-lease omission reproduced for online/roster/class creation and corrected in `codex/abby-booking-dispatch-lease`. Twelve final-read/transport expiry/renewal cases and 124 shared-host regressions pass; typecheck and ordering checks pass. Corrected full `npm test` passed:2,227 main-pool passes,225 gated skips,zero failures/cancellations; separate ordered runner6 passes,zero skips. Full PostgreSQL qualification finished naturally, exit1:2,958 passes,4 failures,1 existing gated skip,zero cancellations; migrations, generation/parity and builds passed, ordered runner not reached. First-failure reproduction remains next after the single corrected Gust7fa diagnostic actually releases its yielded window. The original full class run failed E2E-353; its unchanged isolated rerun passed. Preserve all gaps 1–9 and their remaining engineering/acceptance requirements. |
 | 7 Class/pass completion | Pending; staged caller/SAM/operator integration, complete cost admission and broader combinations remain required. |
 | 8 Payments | Pending gap 11 specification and implementation, including audit R18/R19 and any necessary approved receipt attachment dependency. The owner selected Stripe Checkout on October16; clinic account/policy acceptance and live activation remain distinct. |
 | 9 Outbound | Pending gap 12, audit R20/R21 and contact-policy decisions. |
@@ -190,7 +190,7 @@ Executed correction checks:
 | `node --test test/contract/scenario-manifest.test.ts` | Passed, 1 check; manifest1.228 retains418 IDs and full-call limits. Current individual creation assertions no longer prescribe the superseded inspection veto; the earlier embedded E2E-266 contract is unchanged. |
 | `node --test test/voice/intake-service-catalogue.test.ts` on unchanged class source after the full-run E2E-353 failure | Passed, one top-level check covering its16 internal cases. No deadline, concurrency, assertion or source changed. The full-run deadline failure remains recorded, not dismissed as a proven environmental issue. |
 | Corrected full `npm test` | Passed, exit0, in tracked user-systemd scope `Abby corrected booking complete local suite`, log `be9df097-1792142756182.log`. Natural terminal consumed after21m10s; wrapper1087159 is absent. Final-source typecheck and builds passed; main pool:2,227 passed,225 gated skips,zero failures/cancellations; separate ordered runner:6 passed,zero failures/cancellations/skips. E2E-353 passed in this full run. Default concurrency and original deadlines were retained; runtime source stayed fixed at94fd49. Gated skips do not establish PostgreSQL/browser acceptance. |
-| Complete PostgreSQL qualification | Not started. The queued prerequisite waiter was intentionally terminated (exit143, no test verdict) after a shared-droplet coordination request, leaving the current suite untouched. The suite has now finished naturally and the next heavy window is yielded to the other project's single bounded diagnostic. Await its actual start/terminal release and applicable fresh guards before starting another heavy job. No estimated-time automatic restart. The pending qualification includes migration up/down/up, generation/parity and full `ABBY_LEDGER=postgres npm run test:postgres`. |
+| Complete PostgreSQL qualification | Failed, natural exit1 after46m55s, tracked `Abby corrected booking full PostgreSQL qualification after Gust release`, log `be9df097-1792144314355.log`. Migration up/down/up, generation/parity and voice/dashboard/admin/availability builds passed. Main pool:2,958 passed,4 failed,1 existing C-LIVE-40 skip,zero cancellations; separate ordered runner was not reached. Runtime source remained94fd49; documentation headf01b9d2. Failure details and the next compute handoff are recorded below. |
 
 The original PostgreSQL queue was intentionally stopped before any test began
 when the lease omission was reproduced. Its stopped wrapper is shown as
@@ -201,8 +201,8 @@ compute-coordination request intentionally stopped only that prerequisite waiter
 before any PostgreSQL test began; the original local suite subsequently finished
 naturally, exit0. The handoff was published on the shared work board at09:47UTC.
 No new heavy Abby job or automatic restart was queued.
-PostgreSQL qualification remains required after the coordinated window, rather
-than treating waiter termination or timeout as a test result.
+Those prerequisite-waiter outcomes establish no PostgreSQL result. The later
+actual database qualification is recorded below, separately from their termination.
 
 ADRs retain the same decision; this fixes an existing lease invariant. Product
 facts and their31 directly cited source/test/ADR fingerprints are refreshed.
@@ -239,3 +239,44 @@ Author review compared the receipt delta with booking step 1: exact interval evi
 No live clinic test is needed to claim this narrow synthetic receipt foundation. Before the later booking policy is activated, propose separately authorized ordinary/class success and interrupted-review discovery tests using owned provider fixtures; check audible result, independent native state and cleanup separately. A manual diary read is acceptance evidence and must not become a runtime success gate again. The clinic must accept the remaining external races and recovery workflow.
 
 GitHub's exact PR #457 job `116295932632` reported no steps and the annotation: “The job was not started because recent account payments have failed or your spending limit needs to be increased.” No code failure was established by that job. Only the account owner can resolve that condition; no billing, workflow, test threshold or repository policy was changed to bypass it. Local engineering can continue, but required cloud qualification and landing remain open.
+
+## Complete PostgreSQL result and next diagnostic
+
+After Gust643f naturally terminated and released its window, fresh Abby guards
+admitted the isolated database job at09:51:54UTC. Runtime94fd49 stayed fixed
+throughout; f01b9d2 contains documentation only. The job finished naturally,
+exit1, after46m55s. The authoritative work exit file and `work wait` were
+consumed; wrapper1140136 is absent. No test was interrupted.
+
+Command inside the tracked user-systemd scope:
+
+```sh
+bash scripts/with-postgres.sh bash -c 'npm run db:migrate && npm run db:migrate -- down && npm run db:migrate && npm run db:generate && git diff --exit-code -- src/storage/generated && ABBY_LEDGER=postgres npm run test:postgres'
+```
+
+Migration up/down/up, generation/parity and builds passed. The main test command
+reported2,963 tests:2,958 passes,4 failures,1 existing C-LIVE-40 skip and zero
+cancellations. The ordered runner follows `&&` and did not execute. This is
+failed whole-suite qualification, independently of the earlier passing `npm test`.
+
+| Failed scenario | Current evidence |
+| --- | --- |
+| E2E-358 first-time South registration then offline approved female member booking | `compiled-roster-coverage.test.ts:62`: clinical runner response timed out after the patient create succeeded, during booking-time request/selection. |
+| E2E-380 cancelled-content resend | `confirmation-resend-content-runner.test.ts:16`: private runner prompt timed out. |
+| E2E-353 new-patient service variants | Booking-menu diagnostics reached the existing15-second deadline after registration and returned `invalidTransition`; variants are retained in the original aggregate error. |
+| E2E-354 first-time initial service/gender integration | `integrated-clinical-runner.test.ts:48`: clinical runner response timed out. Existing-patient sibling passed. |
+
+The first failure needs an unchanged isolated reproduction before attributing
+any result to machine load or changing code. Original deadlines, assertions
+and full-suite concurrency remain intact. After the coordinated compute window
+releases, start with the actual E2E-358 file in fresh isolated PostgreSQL and
+the same source/build, then adapt the next diagnostic to that result. No
+unchanged full-suite rerun is queued.
+
+The tracked notifier naturally finished exit0 and its Paseo send acknowledged
+`status: sent` to coordinator `b5c49e2b-2177-4cbe-98f3-46387cbbe2dd` at10:38:50UTC.
+The next heavy Abby window is held/yielded to ONE corrected frozen Gust7fa76986
+diagnostic, subject to that lane's own fresh guards and actual start/terminal
+release. Abby heavy diagnostics, builds and database jobs remain unqueued
+until its actual release and Abby's own fresh checks. Light source work can
+continue. This note neither starts a compiler nor uses an estimated handoff.
