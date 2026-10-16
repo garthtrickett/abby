@@ -2501,3 +2501,35 @@ sets `NODE_OPTIONS=--max-old-space-size=1536` within the unchanged2GiB
 MemoryMax/Swap0/CPU200% scope. No assertion, deadline or source change was
 made between these attempts. Documentation following5cb preserves every
 one of those1183 TypeScript/configuration/package input hashes.
+
+### Correctedc54 full terminal and private resend task-finalization regression
+
+`work1792189854216` naturally finished23:20:16.323165UTC, exit1:
+3174tests/3169pass/4fail/1existing C-LIVE-40skip,0cancelled; ordered followup
+notrun. All nine37a failing checks passed in this run. New failures were the
+accepted private confirmation-resend child, new-patient routed service menu
+read and clear-model-failure backup scan (with the failed parent test also
+reported). The first reports accepted private menu but no selection result;
+new-patient diagnostic reaches the unchanged15s booking-menu deadline, and
+the dump probe reaches its unchanged30s timeout. Those are not blanket proof
+of an environment cause. Source1183/runtime451 hashes remained unchanged;
+454generated artifacts recorded. Nodepeak808,214,528B, aggregate ownDocker
+558,903,296B, all memory limit/OOM events0. Wrapper/scopes/owncontainers absent.
+
+A separate local ordering test reproduces a real private resend gap: the menu
+continuation sets `choice` before its task's `finally` clears `working`. A
+post-play digit in that promise ordering is discarded by the working guard.
+The prior wait recognizes only `menu`, missing that finalization interval.
+`work1792193039699` supplies the red (2pass/1fail). The narrow correction also
+waits for the existing menu task during `choice`, only after the same current
+owner's actual menu-playback proof. No playback/proof/policy guard, task deadline
+or native quota changes. It neither retains earlier unplayed digits nor revives
+closed owners.
+
+Current four ordering/security controls pass (`work1792193131015`),276.396ms,
+peak42,131,456B, all memory limit/OOM events0: post-play selection survives,
+unplayed selection never revives, competing choices select at most once, and
+withdrawn refresh/stop deny. Full TypeScript/fresh serving build and compiled
+resend qualification are next. This deterministic race does not by itself
+establish that every full-suite timeout shares its cause; the other failures
+remain for first-cause diagnosis. Current full regression remains failed.

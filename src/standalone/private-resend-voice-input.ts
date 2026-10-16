@@ -53,7 +53,8 @@ export class PrivateResendVoiceInput implements PrivateKeypadInput {
     if (digit === "*") { this.stop(); return "failed"; }
     // A playback receipt can precede the final native authority refresh. Keep a
     // post-play choice until that refresh completes; never retain an unplayed choice.
-    if (this.#working && this.#stage === "menu" && /^[1-5]$/.test(digit) && await owner.resendMenuPlaybackCompleted()) await this.#task;
+    if (this.#working && (this.#stage === "menu" || this.#stage === "choice") && /^[1-5]$/.test(digit) &&
+        await owner.resendMenuPlaybackCompleted()) await this.#task;
     if (this.#lifetime.signal.aborted || owner.closed) return "failed";
     if (this.#working) return "pending";
     if (this.#stage === "choice" && (digit === "4" && this.#hasNext || digit === "5" && this.#hasPrevious)) {
