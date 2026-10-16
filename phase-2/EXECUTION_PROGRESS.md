@@ -2586,3 +2586,20 @@ intent/terms, caller/service permissions, one-shot payable creation and exact
 readonly unknown recovery, durable provider-owned pending work, actual link/
 receipt delivery and independently authorized expiry/race/process/backup
 journeys are still unfinished. The receptionist financial refusal remains.
+
+Stripe source689 full TypeScript passed (`work1792190926033`),
+22:48:46.308004–22:50:26.062461UTC, all1187 pinned inputs unchanged,
+peak1,424,814,080B;2GiB/Swap0/CPU200%, Node old-space1536MiB, all memory
+limit/OOM events0. It launched only after the original regression ended and
+fresh live admission passed; the earlier memory deferral did not start npm.
+Documentation after689 preserves those1187 source/configuration/package hashes.
+
+Original37a full regression naturally ended22:48:03.205941UTC
+(`work1792187834929`),3174tests/3164pass/9fail/1existing C-LIVE-40skip,
+0cancelled; ordered followup did not run.1183source/451pinned runtime hashes
+were unchanged,454generated artifacts captured. Nodepeak867,307,520B,
+aggregate own Dockerpeak567,083,008B, all memory limit/OOM events0. Its tracked
+wrapper, scopes and own uniquely labelled containers were verified absent.
+Correctedc54 full regression remains live; all four previously failing budget
+tests have passed in that cohort, with no failures reported at the latest
+checkpoint. That is not yet a complete corrected-graph regression verdict.
