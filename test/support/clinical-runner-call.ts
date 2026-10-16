@@ -1,3 +1,4 @@
+import { SyntheticPlaybackReceipts } from "./synthetic-playback-receipts.ts";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -116,9 +117,10 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
     const response = await signedWebhook(); assert.equal(response.status, 200);
     const binding = /<Parameter name="abbyBinding" value="([^"]+)"/.exec(await response.text())?.[1]; assert.ok(binding);
     socket = new WebSocket(`ws://127.0.0.1:${port}/twilio/media/`, { headers: { "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, streamUrl, {}) } });
-    const wire: { event: string; mark?: { name: string } }[] = [], ack = new Set<string>(); socket.on("message", data => wire.push(JSON.parse(data.toString())));
-    await once(socket, "open"); socket.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
     const send = (event: object) => socket!.send(JSON.stringify({ ...event, streamSid, sequenceNumber: String(sequence++) }));
+    const playback = new SyntheticPlaybackReceipts(name => send({ event: "mark", mark: { name } }));
+    socket.on("message", data => { if (!closed) playback.receive(JSON.parse(data.toString())); });
+    await once(socket, "open"); socket.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
     send({ event: "start", start: { accountSid, callSid, streamSid, tracks: ["inbound"], customParameters: { abbyBinding: binding }, mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 } } });
     const count = (kind: string) => messages.filter(m => m.kind === kind).length;
     const say = async (text: string, privateField = false, expectFailure = false) => {
@@ -133,7 +135,7 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
         await voiceUntil(() => count("classDiagnostic") > probes || child.exitCode !== null, "class continuation state", 1000);
         beforeState = messages.filter(row => row.kind === "classDiagnostic").at(-1)?.diagnostic;
       }
-      const accepted = privateField ? "privateInputAccepted" : "inputAccepted", beforeAccepted = count(accepted), beforeSpeech = count("speech");
+      const accepted = privateField ? "privateInputAccepted" : "inputAccepted", beforeAccepted = count(accepted), beforeSpeech = count("speech"), beforeMarks = playback.count;
       child.send({ kind: privateField ? "privateInput" : "input", text }); await voiceUntil(() => count(accepted) > beforeAccepted, "caller input reaches runner");
       if (options.locations) {
         const beforeClock = count("clockAdvanced"); child.send({ kind: "advanceClock", milliseconds: (chunk + 42) * 20 });
@@ -143,7 +145,8 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
       // Two voiced frames plus 800 ms of silence complete the actual turn.
       for (let i = 0; i < 42; i++) media(i < 2);
       try {
-        await voiceUntil(() => count("speech") > beforeSpeech || child.exitCode !== null || (expectFailure && socket!.readyState === WebSocket.CLOSED), "clinical runner response", 20_000);
+        await voiceUntil(() => (count("speech") > beforeSpeech && playback.hasPendingAfter(beforeMarks)) || child.exitCode !== null ||
+          (expectFailure && socket!.readyState === WebSocket.CLOSED), "clinical runner response", 20_000);
       } catch (error) {
         if (!options.classQuotaStaging) throw error;
         const probes = count("classDiagnostic"); child.send({ kind: "classDiagnostic" });
@@ -158,8 +161,8 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
     };
     const media = (voiced: boolean) => send({ event: "media", media: { track: "inbound", chunk: String(++chunk), timestamp: String((chunk - 1) * 20), payload: Buffer.alloc(160, voiced ? 0x9f : 0xff).toString("base64") } });
     const mark = async () => {
-      await voiceUntil(() => wire.some(m => m.event === "mark" && m.mark && !ack.has(m.mark.name)), "runner playback mark");
-      const m = wire.filter(m => m.event === "mark" && m.mark && !ack.has(m.mark.name)).at(-1)!.mark!; ack.add(m.name); send({ event: "mark", mark: m });
+      await voiceUntil(() => playback.hasPendingAfter(), "runner playback mark");
+      assert.equal(playback.acknowledgeLatest(), true);
     };
     await mark();
     return { child, messages, output, scope, locations, db, connectionString, mark, say, media, close, signedWebhook,
@@ -167,8 +170,8 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
       async quietAfterPrivateInput() { for (let i = 0; i < 40; i++) { media(false); await new Promise<void>(resolve => setTimeout(resolve, 20)); } },
       get spoken() { return messages.filter(m => m.kind === "speech").map(m => m.text!); },
       get mutations() { return messages.filter(m => m.kind === "providerMutation"); },
-      async digit(digit: string) { const before = count("speech"); send({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
-        await voiceUntil(() => count("speech") > before, "private runner prompt"); },
+      async digit(digit: string) { const before = count("speech"), marks = playback.count; send({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+        await voiceUntil(() => count("speech") > before && playback.hasPendingAfter(marks), "private runner prompt"); },
       async verify(expected = true) { const resultsBefore = count("verificationResult"); await voiceUntil(() => count("verificationEmail") > 0, "runner verification mail"); const mail = messages.filter(m => m.kind === "verificationEmail").at(-1)!;
         assert.ok(mail.code); for (const digit of `${mail.code}#`) send({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
         await voiceUntil(() => count("verificationResult") > resultsBefore, "completed private runner verification");

@@ -1702,3 +1702,39 @@ that recent account payments failed or the spending limit needs increasing.
 This is a cloud-startup blocker, not a source regression or passing CI. No
 billing/configuration change or unchanged retry push was made. Draft469 remains
 unmerged; current combined engineering continues locally.
+
+### Synthetic caller clear-fence and reply boundary defect
+
+During the still-running combined6a55 full suite1792171749450, the ordinary
+staged signed journey failed157.39s at staged-runner line68, the Yes for original
+cancellation, with socket3/child live and unavailable diagnostic state. Only the
+initial code was issued; two provider mutations (review/replacement), one native
+write outcome and120 clock ticks were recorded. The maximum-history staged
+signed case passed271.80s in this combined run. The outer unmigrated shared
+schema separately causes storage failures. No clean overall regression follows.
+No active source, schema, assertion, deadline or concurrency was changed.
+
+Source inspection found the shared synthetic compiled caller recorded outbound
+marks but ignored clear messages. The actual stream emits a clear fence and
+waits for its echo; the fixture can leave it unresolved until the normal2s
+clear deadline. Also say/digit waited only for speech IPC, allowing an old
+unacknowledged marker to precede the new response's actual wire mark. A
+separate test helper first preserved the old behavior, and the real stream
+clear-fence test failed false != true after2s, work1792173191681. The second
+fresh-response boundary case passed. This establishes a fixture protocol defect;
+it does not establish the ordinary journey failure's complete timing cause.
+
+The isolated correction automatically echoes outstanding completion marks and
+the final fence exactly once in wire order on clear. The real production stream
+classifies these as ignored, never played. Explicit normal playback still needs
+its own manual receipt. Say/digit retain their existing deadlines but await a
+new wire marker as well as speech IPC; an older prompt cannot satisfy the
+response boundary. No production consent, timer, admission or transport code
+changed. Five pure protocol cases (including existing Twilio stream tests)
+passed work1792173249345. New-source full TypeScript, affected signed journeys,
+healthy-schema combined regression and cloud/review/clinic acceptance remain
+open. The existing full run continues naturally and is not retried in parallel.
+
+Adding the already-played-before-clear case and reviewed facts/registry yields
+eight passing cases/zero skips, work1792173314782. No signed acceptance is
+inferred from these pure wire and metadata checks.
