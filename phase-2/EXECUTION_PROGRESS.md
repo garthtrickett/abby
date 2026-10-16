@@ -2603,3 +2603,41 @@ wrapper, scopes and own uniquely labelled containers were verified absent.
 Correctedc54 full regression remains live; all four previously failing budget
 tests have passed in that cohort, with no failures reported at the latest
 checkpoint. That is not yet a complete corrected-graph regression verdict.
+
+### Gap11 readonly discovery after uncertain Stripe creation
+
+A separate provider-only patch adds `StripeCheckoutDiscovery.find`. The trusted
+owner supplies the original effect-attempt creation window, exact random action
+reference, amount and currency. It verifies the current Stripe account, scans
+all statuses with documented created/cursor/limit parameters and returns only
+one observed reference after a complete bounded scan. No phone/customer/latest
+fallback or unsupported metadata/client-reference server filter is used.
+
+The scan bounds each window to1hour, each page to100records and the operation
+to10pages plus its original shared deadline/body limits. Duplicate/cyclic rows,
+malformed/out-of-window/scope evidence, competing same-action Sessions, wrong
+amount/currency or an incomplete/failed/cancelled later page cannot release an
+earlier candidate. A complete miss remains `notObserved`; neither a miss nor an
+observed candidate authorizes POST replay, creates an acknowledgement or proves
+payment. Independent producer quiescence and fresh exact provider/native intent
+inspection still belong to the approved financial owner. Listing is not an
+atomic snapshot of every other actor.
+
+The existing read-only money inspector and discovery share an internal bounded
+Stripe read operation, preserving fixed origin/GET-only/account headers,
+credential/privacy/clock/abort/body cleanup and exact financial validations.
+There is no new generic provider framework or local event/payment store.
+
+`work1792192237035` passes26/26,0skips,1.733s, peak67,637,248B and all memory
+limit/OOM events0. This includes all19 prior signature/money/receipt/privacy
+contracts and7 new discovery/completeness/ambiguity/cancellation/binding checks.
+Full TypeScript on this changed graph is the next qualification. No real API,
+provider/payment creation or clinical/email effect occurred.
+
+Primary list contract checked16October2026:
+https://docs.stripe.com/api/checkout/sessions/list.
+The engineering pending-work owner question remains with the operator, with the
+concrete proposed contract in the separate `codex/abby-stripe-financial-intent`
+worktree. That decision still precedes dependent durable workflow wiring; these
+readonly provider checks are independent. All13 gaps and current class full
+regression remain active; no payment lifecycle or activation claim follows.
