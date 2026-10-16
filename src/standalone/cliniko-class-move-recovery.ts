@@ -128,9 +128,11 @@ export class ClinikoClassMoveRecovery {
       cancellationReason: o.cancellationReason, compensation: o.compensation, ...(o.pass ? { pass: o.pass } : {}) };
     const inspect = await withVerifiedClinikoRead({ proof, scope: c.scope, verificationRef: reference, clock: c.clock }, signal,
       async (scoped, stop) => {
-        const source = ClinikoClassAttendanceReader.create({ ...c.cliniko, scope: c.scope, ...context.source }, scoped, c.fetchPort, c.clock);
-        const destination = ClinikoClassAttendanceReader.create({ ...c.cliniko, scope: c.scope, ...context.destination }, scoped, c.fetchPort, c.clock);
-        const writer = ClinikoClassAttendanceWriter.create({ ...c.cliniko, scope: c.scope, ...context.destination }, c.fetchPort);
+        const nativeConfig = (service: typeof context.source) => ({ ...c.cliniko, scope: c.scope,
+          practitionerId: service.practitionerId, appointmentTypeId: service.appointmentTypeId, className: service.className });
+        const source = ClinikoClassAttendanceReader.create(nativeConfig(context.source), scoped, c.fetchPort, c.clock);
+        const destination = ClinikoClassAttendanceReader.create(nativeConfig(context.destination), scoped, c.fetchPort, c.clock);
+        const writer = ClinikoClassAttendanceWriter.create(nativeConfig(context.destination), c.fetchPort);
         if (!source.ok || !destination.ok || !writer.ok) return undefined;
         const from = o.startsAt < o.newStartsAt ? o.startsAt : o.newStartsAt, to = o.endsAt > o.newEndsAt ? o.endsAt : o.newEndsAt;
         const a = await source.value.inspect(c.scope, reference, o.sessionId, from, to, c.clock(), stop);

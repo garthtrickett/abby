@@ -1121,3 +1121,44 @@ qualifies the distinction between staff assessment and caller completion. The
 fixture now accepts the explicit lost-reply mode; unchanged modes retain their
 previous behavior. The earlier facts/registry/portability/gap-trace scope passed
 all4 contracts, log `be9df097-1792162101415.log`.
+
+
+### Cold staff process, database and backup qualification
+
+The first operator full TypeScript run at frozen `351543f` failed on three
+TS2783 duplicate `scope` spreads, log `be9df097-1792162292035.log`.
+It finished naturally at14:52:44.497362UTC in72.24s, peak1,595,772,928B,
+OOM/high/max0 and1,165 unchanged source inputs. The correction constructs
+explicit native scope/practitioner/type/class-name config rather than spreading
+policy records into readers/writer. No authorization or inspection check changed.
+The corrected28-case memory recovery file passed, log
+`be9df097-1792162395552.log`. After extracting its exact fixture for shared
+process use, all28 passed again in33.54s, log
+`be9df097-1792162884106.log`. These results overlap earlier memory coverage.
+
+New command:
+`bash scripts/with-postgres.sh env ABBY_LEDGER=postgres node --test
+--test-concurrency=1 test/cliniko/class-move-recovery-process.test.ts`.
+Tracked work1792162929384 passed2 cases, zero failures/cancellations/skips,
+log `be9df097-1792162929384.log`. Actual start15:02:09.628049UTC and
+natural terminal15:02:24.142825UTC;1,168 exact source inputs unchanged.
+Scope peak217,210,880B excludes the Docker PostgreSQL server; all
+OOM/high/max counters0. No follow-on heavy job ran.
+
+A new worker process uses captured owner policies/directory and independently
+installed synthetic staff/financial ports to inspect provider-held records. Its
+input contains native citations and nonpatient configuration, no serialized
+caller proof/code/action root/patient identity/stage capability. The parent
+retains synthetic Cliniko state only. Cases observe moved state after an applied
+pass association loses its reply, and exact cancelled replacement restoration.
+The worker sends GETs only; original ended caller state and provider write count
+remain unchanged. Fresh real PostgreSQL native claims are positive and at most180,
+reservations empty; nine private canaries are absent from database, disposable
+pg_dump backup, worker input and fixed public output. Synthetic host permission
+is explicit; this is no real authentication/investigation or clinic acceptance.
+
+Manifest1.236 keeps419 stable IDs and full-call planned. Product claims and
+cited fingerprints were reviewed. Corrected-source full TypeScript, rebuilt
+signed serving, broader mixed/concurrent/high-cost cohorts, independent review,
+real clinic/operator and authoritative cloud acceptance remain open. PR467's
+billing startup failures remain unresolved externally. Gap10/all13 stay active.

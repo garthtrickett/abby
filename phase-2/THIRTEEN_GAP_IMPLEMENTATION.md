@@ -4167,3 +4167,15 @@ retains419 IDs/full-call planned. Full new-source TypeScript, operator process/
 database/backup/output privacy, signed serving, broader cohorts and real
 operator/cloud acceptance remain open. This advances numbered requirement6
 without closing gap10 or changing the13-gap execution order.
+
+
+Cold staff process checkpoint: two isolated PostgreSQL fresh-worker cases now
+pass, including exact ordinary restoration and moved observation after an
+uncertain pass reply. Real request-budget rows, database/backup/input/output
+canary scans, unchanged ended caller state and GET-only provider traffic are
+checked. The extracted28-case memory regression also passes. Manifest1.236
+retains419 IDs/full-call planned. Initial full TypeScript found three duplicate
+scope spreads; explicit native config corrects them, with a separate corrected
+full check still pending. Exact commands, logs and boundaries are in the
+execution ledger. Rebuilt signed serving, broad cohorts, independent/real
+operator/cloud acceptance and remaining13-gap execution stay open.

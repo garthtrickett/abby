@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.235
+# Scenario manifest, version 1.236
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -922,5 +922,7 @@ recovery/live staged/legacy movement/dashboard-listener scope passes89 memory
 cases, with separate fixed-output HTTP checks. Full operator-source typecheck,
 process/database/backup, signed serving and real operator acceptance remain
 pending. The initial route covers current contracts/upcoming occurrences; other
-investigations stay manual in Cliniko. Version1.235 retains419 IDs/full-call
+investigations stay manual in Cliniko. Version1.236 retains419 IDs/full-call
 planned. This is not completed gap10 or clinic activation.
+
+E2E-419 adds two isolated PostgreSQL cold staff process cases: current moved state after an uncertain pass association reply, and exact ordinary restoration. A fresh worker receives citations and synthetic host configuration, never caller proof/code/action root/patient identity. Real request-budget rows, database and disposable backup scans pass; the ended caller action and provider writes remain unchanged. These are focused synthetic staff observations, not rebuilt signed serving or real operator acceptance. Full-call evidence remains planned.
