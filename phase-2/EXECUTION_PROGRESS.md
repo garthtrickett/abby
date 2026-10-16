@@ -1982,3 +1982,89 @@ fixture contact identity as well as its existing fixed credential. The original
 worker mode remains unchanged. Neither string is a real sender or clinic
 configuration. Compiled/signed execution and old-worker preservation are still
 required; this source correction has not been exercised.
+
+### Combined media/deadline correction qualifies the full migrated regression
+
+Frozen b2022c29f156ecd239a254e8c61c2f5cca586e60 completed the declared
+qualification on gust-contabo with Node v22.23.2. Work1792176751212 passed
+`npm run typecheck` (61.43s), `npm run build:voice-tests` (29.59s),30 migrated
+PostgreSQL admission/consent cases and the isolated ordinary signed staged
+journey (139.026s), all without skips. The latter deliberately includes the
+1500ms callback gap and actual nonstale/nonfuture accepted phase assertions.
+1175 source inputs stayed unchanged and449 compiled JavaScript artifacts were
+pinned. Overall natural terminal18:56:38.139865UTC, exit0; wrapper214347 absent.
+Scope peak1,601,040,384B excludes Docker PostgreSQL; OOM/high/max counters0.
+
+The separately coordinated complete regression work1792177167568 started
+18:59:27.997883UTC and ended naturally19:27:32.760200UTC, exit0 (28m4.76s).
+The exact outer test command, against its new disposable database, was:
+
+```sh
+bash scripts/with-postgres.sh bash -c 'npm run db:migrate && ABBY_LEDGER=postgres npm run test:postgres'
+```
+
+The repository script rebuilt serving and dashboards and ran the complete
+Node PostgreSQL cohort at its original default4-file concurrency and original
+deadlines. It passed3156 of3157 tests, zero failures/cancellations,20 suites;
+the sole unchanged skip is C-LIVE-40's real demo-created patient case. The
+conditional ordered-node runner then ran and passed all6 checks, zero skips,
+including forward/reverse file dispatch at concurrency1 and2 and descendant
+cleanup controls. Main gate duration1628.586s; ordered gate16.988s.
+
+Both formerly failing full-context cases now pass: immutable admitted startup
+deadline and ordinary staged signed movement137.638s. Maximum-history
+cross-case staged pass also passes268.782s, and both existing cold staff
+process/database/backup cases pass. This closes those local regression
+failures on this exact graph; it does not claim every new correction/recovery
+cohort or external acceptance is complete. Clear-fence handling alone was
+insufficient: the later source also corrects elapsed-media and cross-channel
+playback processing order, without relaxing production consent.
+
+The final runner verified all1175 source inputs unchanged and pinned452
+generated artifacts. Scope peak1,009,278,976B excludes Docker PostgreSQL; all
+OOM/high/max counters0. Authoritative exitfile0 and current-host wrapper216749
+absence were verified19:27:40UTC and actual release sent to Gust promptly.
+No automatic follow-on job launched. Log:
+`/home/gust/paseo/paseo-home/work/logs/be9df097-1792177167568.log`.
+Runner SHA256:30b68970045db4ffedb33921aa5d28f7941acab47bb7a19782f40ac55b47a192.
+
+Direct author review against combined6a55a12 found no material standards or
+scope defect. Production src/scripts/dependencies are unchanged by this fixture
+correction; native180 quota, proof/lease/terms guards, existing scenario
+deadlines and concurrency stay intact. No independent review is claimed.
+Earlier outer-schema and healthy-schema failures remain preserved above.
+Cloud runner startup/account billing, independent review and real clinic,
+provider, operator, acoustic and deployment acceptance remain separate.
+
+Gap10 still needs its new correction/mixed, signed-call-to-cold-staff and
+concurrent breadth qualified. The isolated408e28ba preparation includes the
+corrected media/deadline source but has no TypeScript/build/signed/cold result
+yet; a reserved standalone TypeScript check awaits final handoff. It cannot
+borrow this b202 full pass. All thirteen gaps remain active in execution order,
+with Stripe selected for gap11 and no payment, outbound or writeback completion
+inferred from class-pass counters or this green regression.
+
+### Signed staff/correction preparation passes full TypeScript
+
+The separate frozen408e28ba45556c2558a2cb98087996000653b473 graph passed ONE
+standalone `npm run typecheck`, work1792178992009, from
+19:29:52.292898UTC to19:31:02.707329UTC (70.30s). All1180 source inputs
+remained unchanged, scope peak1,603,665,920B and OOM/high/max counters0.
+Authoritative exitfile0 and wrapper304053 absence were verified19:31:10UTC;
+actual terminal/release was sent promptly. No build, PostgreSQL, correction or
+staff journey was bundled. This validates types only, not the prepared behavior.
+
+This documentation merge brings in the preceding graph's complete green
+regression evidence without changing those1180 TypeScript inputs. Parent
+b202's3156-pass main gate and6-pass ordered gate do not execute the new shared
+driver/correction/staff graph. Its fresh serving build, preserved baseline and
+old-worker cases, new correction/mixed and signed uncertainty-to-cold-staff
+journeys remain open, as do concurrent breadth and independent/external gates.
+
+Draft470 integration and471 fixture correction are published. Exact-head PR
+runs38955302016 and38955314379 each failed all four jobs before startup, with
+zero steps; fresh annotations cite account payments or the spending limit.
+Push runs38955292572 and38955306070 also ended failure. PR bodies record that
+blocker separately from local green evidence. No billing/workflow/permission
+change, unchanged retry push or main merge occurred. Independent engineering
+continues through the thirteen-gap execution order.

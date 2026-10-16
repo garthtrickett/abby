@@ -4239,3 +4239,14 @@ assertions. Manifest1.240 adds scoped synthetic voice evidence for E2E-419,
 keeping419 IDs/full-call planned. Exact results and remaining combined/mixed/
 concurrent/correction/acceptance work are in the execution ledger. No gap10 or
 whole-thirteen-gap completion is inferred.
+
+The combined booking-menu/staged source b2022c29 now passes full TypeScript,
+fresh serving build and the complete explicitly migrated PostgreSQL regression:
+3156 passed, zero failures/cancellations, one existing live-demo skip, followed
+by all6 ordered-runner checks passing. The original4-file concurrency and
+deadlines are unchanged. Both former full-context failures pass after the
+store-owned admission-deadline oracle and synthetic elapsed-media/processed
+playback ordering corrections. Exact runs, commands, source/artifact pins and
+limits are in the execution ledger. This closes that local regression gate;
+new staged correction/mixed, signed-to-cold-staff and concurrent cohorts, cloud
+review and external acceptance remain open. All thirteen gaps remain active.
