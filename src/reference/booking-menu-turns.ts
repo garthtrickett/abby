@@ -18,8 +18,8 @@ async function untilAbort<T>(pending: Promise<T>, signal: AbortSignal): Promise<
 
 /** Both agent commands use real SAM turns/presentation receipts, with private host selection state. */
 export class BookingMenuTurns {
-  private readonly ledger: LedgerStore; private readonly policies: PolicyStore; private readonly host: Host; private readonly clock: (() => string) | undefined;
-  constructor(ledger: LedgerStore, policies: PolicyStore, host: Host, clock?: () => string) { this.ledger = ledger; this.policies = policies; this.host = host; this.clock = clock; }
+  private readonly ledger: LedgerStore; private readonly policies: PolicyStore; private readonly host: Host; private readonly clock: () => string;
+  constructor(ledger: LedgerStore, policies: PolicyStore, host: Host, clock: () => string) { this.ledger = ledger; this.policies = policies; this.host = host; this.clock = clock; }
   enabled(): boolean { return this.host.bookingMenuAvailable?.() === true && !!this.host.readBookingMenu && !!this.host.selectBookingMenu; }
   async #ready(scope: LocationScope, turn: FinalCallerTurn, now: string, signal: AbortSignal): Promise<Result<CallState, Failure>> {
     const runtime = new CallRuntime(this.ledger, scope), state = await untilAbort(runtime.read(turn.callId), signal);
@@ -76,9 +76,18 @@ export class BookingMenuTurns {
           }
         }
       }
-      const acceptedAt = interpretation.kind === "bookingHorizon" ? (this.clock?.() ?? now) : now;
+      const acceptedAt = interpretation.kind === "bookingHorizon" ? this.clock() : now;
       const fresh = await this.#ready(scope, turn, acceptedAt, signal);
-      if (!fresh.ok) return external?.aborted ? err({ kind: "staleTurn" }) : fresh;
+      if (external?.aborted) return err({ kind: "staleTurn" });
+      if (controller.signal.aborted) {
+        // Native expiry supplies no menu or selection authority. Only the
+        // generic refusal may cross the atomic live lease/revision boundary,
+        // at the current trusted time; the canceled read is never resumed.
+        const failedAt = this.clock();
+        if (!Number.isFinite(Date.parse(failedAt)) || Date.parse(failedAt) < Date.parse(now)) return err({ kind: "invalidTransition" });
+        return runtime.acceptTurn(turn, { kind: "bookingMenuFailure" }, failedAt, revision);
+      }
+      if (!fresh.ok) return fresh;
       if (signal.aborted) return err({ kind: "effectFailure" });
       return runtime.acceptTurn(turn, interpretation, acceptedAt, revision);
     } catch { return err({ kind: external?.aborted ? "staleTurn" : "effectFailure" }); }

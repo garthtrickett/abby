@@ -372,3 +372,51 @@ establish the original timing cause or qualify this reader delta. The failed
 whole PostgreSQL suite remains failed; reader PostgreSQL qualification,
 independent review and required cloud checks remain outstanding. No landing
 or clinic activation is claimed.
+
+
+## Booking menu deadline refusal correction
+
+The failed full PostgreSQL suite reported an E2E-353 menu read at the original
+15-second deadline followed by `invalidTransition`. Unchanged isolated first-
+failure and four-file PostgreSQL reproductions later passed. Their timing
+cause remains unproven. A separate deterministic held-read gateway test did
+reproduce a source defect: the deadline aborted the native read and then the
+final readiness check reused that already-aborted signal, preventing the
+intended `bookingMenuFailure` notice from being recorded.
+
+The unmodified-source reproduction failed, natural exit 1, log
+`be9df097-1792149262049.log`. The correction leaves the deadline and canceled
+native read intact. After initial authority was established, only the generic
+retry/fresh-options notice may cross the atomic current call/session/lease and
+conversation-revision boundary at a mandatory trusted clock. It carries no
+native selection, patient information or send authority. External abort takes
+precedence; invalid or backwards time is refused. Positive evidence still
+requires the original fresh readiness checks. No timeout can resume or replay
+the read, and no staff/provider write is created.
+
+Eight initial deadline/clock boundaries passed, log
+`be9df097-1792149511578.log`. Extending those same boundaries to held menu
+reads, private option selection and booking-evidence resolution passed all
+24 cases with zero failures/cancellations/skips, natural exit 0, log
+`be9df097-1792149758791.log`. Command:
+
+```sh
+env ABBY_LEDGER=memory node --test test/text/booking-menu-deadline.test.ts
+```
+
+These contracts include real successful menu playback before selection,
+rejected late positive options/evidence, no extra protected read and no host
+mutation. Manifest 1.230 adds this text witness to existing E2E-353/E2E-358
+without adding a scenario or promoting planned full-call evidence. Full
+typecheck, PostgreSQL/compiled qualification, broader regressions, review and
+exact-head cloud gates remain pending. The earlier whole-suite PostgreSQL
+result remains failed; this correction does not establish its timing cause.
+No heavy validation is queued during the requeued Gust e252 slot.
+
+
+The timeout witness manifest and no-number trace contracts passed two cases,
+zero failures/cancellations/skips, natural exit 0, log
+`be9df097-1792149878847.log`, command `node --test --test-concurrency=1
+test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts`.
+The candidate is now based on qualified reader fixture commit `cd9b4ca`;
+its menu source and new witness were preserved through that rebase.

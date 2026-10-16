@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.229
+# Scenario manifest, version 1.230
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -837,3 +837,17 @@ its separately inspected contract. See [execution progress](../phase-2/EXECUTION
 for exact commands, results and outstanding qualification.
 
 E2E-362/E2E-373 also qualify completed and uncertain correction/resend outcomes through the scoped call-review and reporting gateway. Fixed redacted fields preserve the actual outcome; private proof, host and request references remain absent, foreign scope is denied, and unknown action kinds remain corrupt. This is local SAM/reader evidence, with no new provider write or external acceptance claim.
+
+
+## Booking menu timeout refusal, October 16
+
+E2E-353/E2E-358 add deterministic gateway/SAM contracts at the unchanged
+15-second native menu deadline. Held initial reads, private option selection
+and booking-evidence resolution produce only the generic fresh-options notice
+when the same call/session/revision and current lease remain valid. External
+abort in either ordering, conversation change, ended call, expired lease and
+invalid/backwards trusted time cannot publish that notice. Late options or
+private evidence cannot create an action, trigger another protected read or
+perform a provider/staff write. These text contracts do not qualify the compiled
+journey or establish the cause of the earlier slow native reads. Full-call
+evidence remains planned; the registry retains 418 stable scenario IDs.
