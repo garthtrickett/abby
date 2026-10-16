@@ -1,0 +1,138 @@
+{
+  "sourceHead": "c7018ee53a671f32d908acab354bbd2ecf604c62",
+  "observedDate": "2026-10-14",
+  "fixture": "ordinary classMoveFixture; synthetic records only",
+  "purpose": "Red investigation evidence for larger complete-history movement; these failures are not an acceptance target.",
+  "expectedBehavior": "Complete the requested move with every required inspection, or identify unsupported work before clinical effects. Unknown sends and incomplete final observations must remain uncertain without replay.",
+  "method": "Mixed cancelled/DNA/archived/deleted linked history on unrelated bookings. Played proposal, normal61-second fixture pause with lease renewals, then a fresh affirmative under the original180-request budget. Not acoustic/carrier evidence.",
+  "log": "4590eee3-1792019613718.log",
+  "observations": [
+    {
+      "different": false,
+      "total": 10,
+      "status": "committed",
+      "claims": 224,
+      "windows": [
+        83,
+        141
+      ],
+      "writes": [
+        "/v1/attendees",
+        "/v1/attendees/101/cancel",
+        "/v1/attendees/401"
+      ],
+      "recalls": 1
+    },
+    {
+      "different": false,
+      "total": 101,
+      "status": "committed",
+      "claims": 246,
+      "windows": [
+        91,
+        155
+      ],
+      "writes": [
+        "/v1/attendees",
+        "/v1/attendees/101/cancel",
+        "/v1/attendees/401"
+      ],
+      "recalls": 1
+    },
+    {
+      "different": false,
+      "total": 301,
+      "status": "uncertain",
+      "claims": 289,
+      "windows": [
+        107,
+        180
+      ],
+      "writes": [
+        "/v1/attendees",
+        "/v1/attendees/101/cancel",
+        "/v1/attendees/401"
+      ],
+      "recalls": 1
+    },
+    {
+      "different": false,
+      "total": 1000,
+      "status": "uncertain",
+      "claims": 338,
+      "windows": [
+        155,
+        180
+      ],
+      "writes": [
+        "/v1/attendees",
+        "/v1/attendees/101/cancel"
+      ],
+      "recalls": 1
+    },
+    {
+      "different": true,
+      "total": 10,
+      "status": "committed",
+      "claims": 275,
+      "windows": [
+        100,
+        175
+      ],
+      "writes": [
+        "/v1/attendees",
+        "/v1/attendees/101/cancel",
+        "/v1/attendees/401"
+      ],
+      "recalls": 1
+    },
+    {
+      "different": true,
+      "total": 101,
+      "status": "uncertain",
+      "claims": 290,
+      "windows": [
+        108,
+        180
+      ],
+      "writes": [
+        "/v1/attendees",
+        "/v1/attendees/101/cancel",
+        "/v1/attendees/401"
+      ],
+      "recalls": 1
+    },
+    {
+      "different": true,
+      "total": 301,
+      "status": "uncertain",
+      "claims": 305,
+      "windows": [
+        124,
+        180
+      ],
+      "writes": [
+        "/v1/attendees",
+        "/v1/attendees/101/cancel",
+        "/v1/attendees/401"
+      ],
+      "recalls": 1
+    },
+    {
+      "different": true,
+      "total": 1000,
+      "status": "uncertain",
+      "claims": 353,
+      "windows": [
+        172,
+        180
+      ],
+      "writes": [
+        "/v1/attendees",
+        "/v1/attendees/101/cancel"
+      ],
+      "recalls": 1
+    }
+  ],
+  "providerStateDefaults": "Original fixtures returned all case records without explicit state inclusion. E411 adds independent hidden-state coverage. These observations are synthetic request-cost evidence, not live provider acceptance."
+}

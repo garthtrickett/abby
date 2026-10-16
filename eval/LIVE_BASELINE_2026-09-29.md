@@ -1,5 +1,107 @@
 # Live synthetic evaluation baseline — 2026-09-29
 
+## Repeated native PCMU diagnostic — 2026-10-14
+
+The earlier PCMU screen failed to capture its outbound bytes because the
+adapter normally tears down with terminate(), while that screen recorded only
+close(). A new owner-only diagnostic captures close, terminate and close events
+exactly once. Twenty-five offline checks cover both formats, both teardown
+paths, all six original clips and wrong-format acknowledgment rejection before
+any audio is sent. Independently calculated whole-signal24kHz interpolation and
+8kHz PCMU hashes match the adapter/frame projection, including the exact decoded
+16kHz fixture signal for PCMU.
+
+The corrected live comparison holds model, generic clinic context, pinned input,
+three repeats, concurrency2 and20ms pacing fixed. Only the wire format differs.
+All36 actual outbound captures match their expected per-case hashes; each arm
+has18 actual provider format/context acknowledgments and exactly18 terminal
+captures. [Aggregate evidence and hashes](baselines/native-pcmu-repeated-20261014-v1.json)
+retain those facts without transcripts.
+
+| Wire format | Runs | Critical misses | WER | Final p95 | Gate |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Current24kHz PCM, fixed generic clinic context | 18 | 5 | 28.03% | 872ms | fail |
+| Native8kHz PCMU projection, same context | 18 | 4 | 35.61% | 932ms | fail |
+
+Both fail the unchanged zero-critical/maximum10% WER criteria. Neither arm has
+provider failures, empty/truncated/delayed finals or missing repeats. PCMU is
+rejected as a quality candidate. The result does not establish a conversion
+fault. This remains a diagnostic projection: the wrapper retains the real
+provider acknowledgment, then privately maps its format for the unchanged
+production adapter. Locally captured queued bytes are not a provider-generated
+receive-byte hash or a production PCMU binding. No production source, physical
+voice profile, threshold, corpus, dependency or admission changed.
+
+Exact commands:
+
+```sh
+node /home/gust/code/abby/eval/results/screen-native-pcmu-20261014.mjs --preflight
+node --import /tmp/abby-evaluation-key.mjs /home/gust/code/abby/eval/results/screen-native-pcmu-20261014.mjs
+node /tmp/abby-verify-native-pcmu-20261014.mjs
+```
+
+Tracked job `Abby repeated native PCMU wire qualified comparison` completes
+exit1 for failed quality in1m26s, log `4590eee3-1792008794475.log`. Offline and
+independent evidence checks exit0. Reports and runner are retained owner-only;
+all source/corpus/report/runner hashes are recorded. The official
+[Realtime client-event reference](https://developers.openai.com/api/reference/resources/realtime/client-events)
+documents transcription-session PCM and PCMU formats. Real acoustic, clinic,
+human and carrier gates remain open; speech admission stays on hold.
+
+
+## Current synthetic comparison — 2026-10-14
+
+The unchanged six-clip noisy corpus was replayed through the production Realtime
+adapter for three repeats per case, two concurrent sessions per configuration.
+All54 results, repeat identities, pinned clip/source hashes and machine
+assessments were independently recomputed before recording the
+[aggregate evidence](baselines/synthetic-speech-comparison-20261014-v1.json).
+Only the selected existing evaluation credential entered the synthetic runner;
+raw reports remain owner-only under the canonical ignored `eval/results/` path.
+
+| Configuration | Runs | Critical misses | WER | Final p95 after commit | Provider failures | Gate |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Current `gpt-live-transcribe` defaults | 18 | 11 | 41.67% | 1,170ms | 0 | fail |
+| Same model with only `near_field` reduction added | 18 | 11 | 50.76% | 1,048ms | 0 | fail |
+| `gpt-transcribe`, other controls unchanged | 18 | 10 | 30.30% | 1,117ms | 0 | fail |
+
+All three fail the unchanged zero-critical and maximum10% WER criteria. No empty,
+truncated, delayed or provider-failed cases occurred; every case has all three
+repeats. Near-field reduction is rejected. The committed-turn model improves WER
+but still fails, with most remaining recognition errors in the `slt` voice. No
+configuration is promoted and all finals remain `needsClarification`. No clean,
+safety or synthesis gate is claimed for these candidates; no threshold, pinned
+corpus, production adapter, dependency or readiness setting changed.
+
+[Official OpenAI documentation](https://developers.openai.com/api/docs/guides/realtime-transcription#transcribe-a-committed-turn)
+describes `gpt-transcribe` for committed-turn finals and documents transcription
+context and delay controls. This explains the bounded comparison; it does not
+establish Abby quality or a production choice. The earlier October5–8 filter,
+context, PCMU and supplementary-voice investigations below remain relevant and
+must be reviewed before repeating those candidates. Synthetic-source waveform
+and conversion evidence should be inspected before further parameter screens.
+The generator already emits16kHz PCM and normalizes telephone frames; no
+sample-rate defect is established by this comparison.
+
+Exact executed commands (each report is immutable and must use a new output path
+for a later run):
+
+```sh
+node /tmp/abby-synthetic-transcription-eval.mjs --out /home/gust/code/abby/eval/results/20261014-original-noise-recheck18.json --corpus transcription-noise-v1 --repeats 3 --concurrency 2
+node /tmp/abby-synthetic-transcription-eval.mjs --out /home/gust/code/abby/eval/results/20261014-near-field-noise-recheck18.json --corpus transcription-noise-v1 --repeats 3 --concurrency 2 --noise-reduction near_field
+node /tmp/abby-synthetic-transcription-eval.mjs --out /home/gust/code/abby/eval/results/20261014-committed-model-noise18.json --corpus transcription-noise-v1 --repeats 3 --concurrency 2 --model gpt-transcribe
+node /tmp/abby-verify-noise-recheck-20261014.mjs
+```
+
+Tracked logs are `4590eee3-1792007998300.log` (45s),
+`4590eee3-1792007998413.log` (46s) and `4590eee3-1792008079677.log` (43s).
+Every evaluation exits1 for its failed quality gate; the independent artifact
+verification exits0. The aggregate includes report SHA-256, exact source inputs,
+thresholds and metrics without transcripts. Production remains on hold; human,
+clinic and carrier acceptance remain pending. This is progress in diagnosis,
+not completion of speech quality or the full thirteen-gap objective.
+
+
 All runs used patient-free synthetic fixtures, an account-provided OpenAI API key, and owner-only reports under ignored `eval/results/`. No key value or real patient content is in this file. The reports retain repeat-level proposals or transcripts for local review; this summary records only counts and configuration evidence.
 
 ## Replacement voice fixtures and original-noise control — 2026-10-08
@@ -744,3 +846,88 @@ that validated tree. The eight exact-head PR jobs were individually verified
 billing-blocked before execution; GitHub CI is not claimed green. Earlier failed
 runs and their qualified diagnoses remain retained in the private investigation.
 This local regression pass does not satisfy speech or clinic activation gates.
+
+## October 15: input audit and fixed booking speech supplement
+
+This investigation keeps the original source-matched failures and all release
+thresholds. The [aggregate](baselines/synthetic-booking-speech-20261015-v1.json)
+pins private reports, diagnostic snapshots, production and evaluation source
+hashes, and original corpus hashes. No production transcription, normalization,
+model default or original fixture was changed.
+
+Independent FFmpeg decoding matches all 256 mu-law octets exactly. The original
+six noisy clips have no clipped samples. Repeated-sample 8-to-16 kHz conversion
+has a measurable spectral image: a 2 kHz synthetic tone gives a 6 kHz image of
+-7.66 dB, compared with -91.87 dB after bandlimited conversion. This observation
+does not establish an ASR remedy. A paired one-repeat screen across the six
+unchanged noisy clips gives:
+
+| Candidate | Critical / runs | WER | Assessment |
+| --- | --- | --- | --- |
+| Default live transcription, original input | 4 / 6 | 40.91% | Fail |
+| Default live transcription, bandlimited input | 3 / 6 | 38.64% | Fail |
+| Committed transcription with static clinic context, original input | 1 / 6 | 13.64% | Fail |
+| Committed transcription with static clinic context, bandlimited input | 1 / 6 | 13.64% | Fail; one final took 11.55 seconds |
+
+All screens also lack the required three repeats; they reject hypotheses rather
+than qualify a candidate. A separate direct `gpt-realtime-2.1` audio-to-text
+literal-transcription probe was stopped after its first critical miss on NS-006:
+“chest pain” became “cash today.” It has no production role. The
+[Realtime conversation protocol](https://developers.openai.com/api/docs/guides/realtime-conversations)
+supports the diagnostic's committed audio and text response; that capability
+alone establishes no recognition accuracy. The
+[transcription guide](https://developers.openai.com/api/docs/guides/realtime-transcription)
+describes the production transcription session/commit protocol and retains the
+need for representative evaluation.
+
+The owner chose continued synthetic audio. A fixed supplement therefore adds
+four ordinary booking phrases for each of `coral` and `cedar`: date/time,
+correction, keeping the original appointment and hour-versus-45-minute duration.
+Each generated source feeds a quiet and seeded 10 dB noisy telephone version,
+providing eight source clips, sixteen normalized PCM fixtures and sixteen
+private WAV exports for later listening. The generator accepts no arbitrary
+caller text or recording path. Its production synthesis adapter checks the
+provider's literal transcript; acoustic word fidelity remains unverified.
+
+Actual unprompted production-adapter recognition replayed all sixteen pinned
+clips three times with two concurrent sessions. Provider acknowledgment and the
+complete transmitted 24 kHz bytes were captured without headers or credentials.
+Results: **42 exact, one noncritical mismatch, five critical, zero provider
+failures**, overall WER **1.85%**, final p95 **1,775 ms**. Quiet clips match
+**24/24**; noisy clips match **18/24**, with one mismatch and five critical misses.
+Two critical misses render “fifteenth” as “15th”; three change “Please book” into
+“We booked.” The unchanged lexical rubric counts both categories as critical.
+Correction and cancellation-withdrawal terms survive all repeats. No threshold,
+expected wording or critical-term list was relaxed after observing results.
+
+`scripts/verify-booking-speech.py` independently reconstructs seeded noise,
+FFmpeg mu-law encoding/decoding, normalized telephone bytes, WAV payloads and all
+48 transmitted audio hashes. It recomputes every verdict, WER and stored timing
+assessment, including both condition groups. It rejects a fabricated passing
+assessment and refuses optimized Python. This verifies stored provenance and
+arithmetic; it is not independent network timing or acoustic comprehension.
+
+Tracked evidence (all logs use the shared work board):
+
+- Codec/input audit: `4590eee3-1792024240429.log`, exit 0.
+- Interpolation/model screen: `4590eee3-1792024300476.log`, instrumentation exit 0;
+  all candidate assessments fail.
+- Direct-audio screen: `4590eee3-1792024597409.log`, instrumentation exit 0;
+  candidate rejected on its first critical miss.
+- Initial fixture regression: `4590eee3-1792024972450.log`, six pass, one fails
+  because the existing category parser excludes digits. Fixture category corrected
+  without changing the parser; subsequent fixture/type gate passes in
+  `4590eee3-1792025001830.log`.
+- Eight live source renders: `4590eee3-1792025079587.log`, exit 0, 19 seconds.
+- Actual 48-run recognition: `4590eee3-1792025340912.log`, **exit 1**, 2m28s.
+- Focused fixture/ASR/media/original-gate regression:
+  `4590eee3-1792025488331.log`, 27 pass, zero fail/cancel/skip.
+- Current independent verifier plus false-pass/optimized-Python denials:
+  `4590eee3-1792025900260.log`, exit 0, 16 seconds.
+
+The supplement uses a distinct schema and corpus version. A regression proves
+it cannot replace the original failing noise report in the aggregate release
+gate. Same-provider generation and recognition, two synthetic voices and
+controlled white noise do not establish human accents, real room noise, packet
+loss, live-call playback or clinic acceptance. All finals remain
+`needsClarification`, admission remains on hold, and no candidate is promoted.

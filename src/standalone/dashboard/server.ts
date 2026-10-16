@@ -1,4 +1,6 @@
+import { ClinikoConfirmationResendRecovery } from "../cliniko-confirmation-resend-recovery.ts";
 import { readFile } from "node:fs/promises";
+import { isDeepStrictEqual } from "node:util";
 import { createServer } from "node:http";
 import type { IncomingMessage, RequestListener, Server, ServerResponse } from "node:http";
 import { CommandGateway } from "../../reference/command-gateway.ts";
@@ -8,6 +10,7 @@ import { matchesSchema } from "../../reference/schema-shapes.ts";
 import { validNotificationKind, validNotificationOwner } from "../../core/notification-policy.ts";
 import { validVoiceSettingValue } from "../../core/voice-profile.ts";
 import { publicSpeechGateStatus } from "../speech-gate-public-status.ts";
+import { ClinikoPatientCorrectionRecovery } from "../cliniko-patient-correction-recovery.ts";
 
 const maxCommandBytes = 24_000;
 const document = (signOutPath?: string) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body>${signOutPath ? `<nav><a href="${signOutPath}">Sign out</a></nav>` : ""}<main><div id="app"></div><div id="availability-setup"></div><div id="greeting-setup"></div><div id="voice-setup"></div><div id="automation-setup"></div><div id="speech-gate"></div><div id="operational-daily"></div></main><script type="module" src="/app.js"></script></body></html>`;
@@ -79,6 +82,9 @@ export type HostDashboardIdentity = Readonly<{
   gatewayFor: (actor: HostActor) => CommandGateway | Promise<CommandGateway>;
   /** Optional owner report reader; the response is reduced to fixed aggregate fields. */
   readSpeechGate?: () => Promise<unknown>;
+  /** Optional privileged account recovery; identity and investigation/quiescence authority are host-owned. */
+  confirmationResendRecoveryFor?: (actor: HostActor, request: IncomingMessage) => ClinikoConfirmationResendRecovery | Promise<ClinikoConfirmationResendRecovery>;
+  correctionRecoveryFor?: (actor: HostActor, request: IncomingMessage) => ClinikoPatientCorrectionRecovery | Promise<ClinikoPatientCorrectionRecovery>;
   /** Optional host-specific wording constraint applied before the generic policy command. */
   greetingTextValidator?: (text: string) => boolean;
   /** The host may challenge an absent identity; other authorization failures remain forbidden. */
@@ -108,7 +114,9 @@ export async function createHostAuthenticatedDashboardRequestHandler(identity: H
       (identity.signOutPath !== undefined && (typeof identity.signOutPath !== "string" ||
         !/^\/[A-Za-z0-9/_-]+$/.test(identity.signOutPath) || identity.signOutPath.startsWith("//"))) ||
       (identity.greetingTextValidator !== undefined && typeof identity.greetingTextValidator !== "function") ||
-      (identity.readSpeechGate !== undefined && typeof identity.readSpeechGate !== "function")) {
+      (identity.readSpeechGate !== undefined && typeof identity.readSpeechGate !== "function") ||
+      (identity.correctionRecoveryFor !== undefined && typeof identity.correctionRecoveryFor !== "function") ||
+      (identity.confirmationResendRecoveryFor !== undefined && typeof identity.confirmationResendRecoveryFor !== "function")) {
     throw new RangeError("invalid dashboard identity configuration");
   }
   const [bundle, stylesheet] = await Promise.all([
@@ -131,7 +139,21 @@ export async function createHostAuthenticatedDashboardRequestHandler(identity: H
         return json(response, 403, { ok: false, error: { kind: "forbidden" } });
       }
       return handle(request, response, gateway, bundle, stylesheet, boundOrigin.origin, identity.surface,
-        identity.readSpeechGate, actor.role === "clinicAdmin", identity.greetingTextValidator, identity.signOutPath);
+        identity.readSpeechGate, actor.role === "clinicAdmin", identity.greetingTextValidator, identity.signOutPath,
+        identity.correctionRecoveryFor ? async input => {
+          const recovery = await identity.correctionRecoveryFor!(actor, request);
+          if (!(recovery instanceof ClinikoPatientCorrectionRecovery)) return undefined;
+          const currentActor = await identity.resolveActor(request);
+          if (!currentActor || !isDeepStrictEqual(currentActor, actor)) return undefined;
+          return recovery.resolve(input, undefined, currentActor);
+        } : undefined,
+        identity.confirmationResendRecoveryFor ? async input => {
+          const recovery = await identity.confirmationResendRecoveryFor!(actor, request);
+          if (!(recovery instanceof ClinikoConfirmationResendRecovery)) return undefined;
+          const currentActor = await identity.resolveActor(request);
+          if (!currentActor || !isDeepStrictEqual(currentActor, actor)) return undefined;
+          return recovery.inspect(input, undefined, currentActor);
+        } : undefined);
     } catch { return json(response, 403, { ok: false, error: { kind: "forbidden" } }); }
   })(); };
 }
@@ -140,7 +162,9 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
                       bundle: string, stylesheet: string, authenticatedOrigin?: string,
                       surface: "full" | "availabilitySetup" = "full",
                       readSpeechGate?: () => Promise<unknown>, speechGateAdmin = false,
-                      greetingTextValidator?: (text: string) => boolean, signOutPath?: string): Promise<void> {
+                      greetingTextValidator?: (text: string) => boolean, signOutPath?: string,
+                      correctionRecovery?: (input: Parameters<ClinikoPatientCorrectionRecovery["resolve"]>[0]) => Promise<Awaited<ReturnType<ClinikoPatientCorrectionRecovery["resolve"]>> | undefined>,
+                      resendRecovery?: (input: Parameters<ClinikoConfirmationResendRecovery["inspect"]>[0]) => Promise<Awaited<ReturnType<ClinikoConfirmationResendRecovery["inspect"]>> | undefined>): Promise<void> {
   try {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (surface === "availabilitySetup" && !(
@@ -154,6 +178,27 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     if (request.method === "POST" && url.pathname.startsWith("/api/") &&
         !acceptsCommandOrigin(request, authenticatedOrigin)) {
       return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+    }
+    if (request.method === "POST" && url.pathname === "/api/confirmation-resends/receipt") {
+      if (!authenticatedOrigin || !resendRecovery) return json(response, 404, { ok: false, error: { kind: "notFound" } });
+      if (!speechGateAdmin) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+      const input = record(await body(request));
+      if (url.searchParams.size || !input || Object.keys(input).sort().join(",") !== "recallRef,requestRef" ||
+          typeof input.requestRef !== "string" || typeof input.recallRef !== "string") return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      const result = await resendRecovery({ requestRef: input.requestRef, recallRef: input.recallRef });
+      return result?.ok ? json(response, 200, { ok: true, value: result.value })
+        : json(response, 403, { ok: false, error: { kind: "confirmationResendRecoveryUnavailable" } });
+    }
+    if (request.method === "POST" && url.pathname === "/api/patient-corrections/resolve-reviewed") {
+      if (!authenticatedOrigin || !correctionRecovery) return json(response, 404, { ok: false, error: { kind: "notFound" } });
+      if (!speechGateAdmin) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+      const input = record(await body(request));
+      if (url.searchParams.size || !input || Object.keys(input).sort().join(",") !== "correctionRef,recallRef,reviewAcknowledged" ||
+          typeof input.correctionRef !== "string" || typeof input.recallRef !== "string" || input.reviewAcknowledged !== true)
+        return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      const result = await correctionRecovery({ correctionRef: input.correctionRef, recallRef: input.recallRef, reviewAcknowledged: true });
+      return result?.ok ? json(response, 200, { ok: true, value: { kind: "contactReviewResolved", alreadyResolved: result.value.alreadyResolved } })
+        : json(response, 403, { ok: false, error: { kind: "correctionRecoveryUnavailable" } });
     }
     if (request.method === "GET" && url.pathname === "/") return asset(response, "text/html; charset=utf-8", document(signOutPath));
     if (request.method === "GET" && url.pathname === "/app.js") return asset(response, "text/javascript; charset=utf-8", bundle);
@@ -235,6 +280,13 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
         return json(response, 400, { ok: false, error: { kind: "invalid" } });
       }
       command = { kind: "settings.patients.firstTimeIntake.audit.v1", ...(cursor === null ? {} : { afterVersion: Number(cursor) }) };
+    }
+    if (request.method === "GET" && url.pathname === "/api/settings/patient-corrections-audit") {
+      const cursor = url.searchParams.get("after");
+      if (cursor !== null && (!/^(0|[1-9][0-9]*)$/.test(cursor) || !Number.isSafeInteger(Number(cursor)))) {
+        return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      }
+      command = { kind: "settings.patients.corrections.audit.v1", ...(cursor === null ? {} : { afterVersion: Number(cursor) }) };
     }
     if (request.method === "GET" && url.pathname === "/api/settings/staffed-destination-options") {
       if (url.searchParams.size !== 0) return json(response, 400, { ok: false, error: { kind: "invalid" } });
@@ -343,6 +395,15 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
         return json(response, 400, { ok: false, error: { kind: "invalid" } });
       }
       command = { kind: "settings.patients.firstTimeIntake.enabled.change.v1", expectedVersion: input.expectedVersion, enabled: input.enabled };
+    }
+    if (request.method === "POST" && url.pathname === "/api/settings/patient-corrections-enabled") {
+      if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });
+      const input = record(await body(request));
+      if (!input || Object.keys(input).sort().join(",") !== "enabled,expectedVersion" ||
+          typeof input.expectedVersion !== "string" || typeof input.enabled !== "boolean") {
+        return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      }
+      command = { kind: "settings.patients.corrections.enabled.change.v1", expectedVersion: input.expectedVersion, enabled: input.enabled };
     }
     if (request.method === "POST" && url.pathname === "/api/settings/staffed-destination") {
       if (!request.headers["content-type"]?.startsWith("application/json")) return json(response, 415, { ok: false, error: { kind: "invalid" } });

@@ -21,6 +21,7 @@ export type CallTerminal = Readonly<{ reason: CallTerminalReason; at: string }>;
 export type AdmissionReceipt = Readonly<{ callId: string; scope: LocationScope; admission: Admission; lifecycle: "starting" | "active" | "ended" }>;
 export type AdmissionResult = Readonly<{ kind: "created" | "duplicate"; receipt: AdmissionReceipt }>;
 export type PendingLocationRoute = Readonly<{
+  candidateServices?: import("./location-services.ts").LocationServices;
   tenantId: string;
   clinicId: string;
   /** Captured before a shared-number prompt. Legacy stored routes without it grant no new voice authority. */
@@ -55,7 +56,7 @@ export const POSSIBLE_SEND_RECOVERY_DELAY_MS = 60_000;
 export type StaffDestination =
   | Readonly<{ kind: "owner"; ownerRef: string }>
   | Readonly<{ kind: "queue"; queueRef: string }>;
-export type ActionKind = "book" | "cancel" | "reschedule" | "intake";
+export type ActionKind = "book" | "cancel" | "reschedule" | "intake" | "patientUpdate" | "confirmationResend";
 /** Routing to patient information is not a clinical mutation capability. */
 export type WorkflowOperation = ActionKind | "appointments.read";
 export type CapabilityId = ActionKind | "transfer";
@@ -63,7 +64,7 @@ export type CapabilityMode = "execute" | "requestOnly" | "unavailable";
 
 /** Host permissions are independent of saved clinic toggles. */
 export type AppointmentSettingModes = Readonly<{ cancellation?: CapabilityMode; rescheduling?: CapabilityMode }>;
-export type PatientSettingModes = AppointmentSettingModes & Readonly<{ intake?: CapabilityMode }>;
+export type PatientSettingModes = AppointmentSettingModes & Readonly<{ intake?: CapabilityMode; patientUpdate?: CapabilityMode }>;
 export type StaffedInterval = Readonly<{ startsAt: string; endsAt: string }>;
 /** Sunday is 0; endMinute before startMinute crosses midnight. */
 export type LocalStaffWindow = Readonly<{ weekday: number; startMinute: number; endMinute: number }>;
@@ -121,6 +122,9 @@ export type CallPolicy = Readonly<{
   /** Clinic-wide; absent legacy snapshots are disabled at version 0. */
   firstTimeIntakeEnabled?: boolean;
   firstTimeIntakeVersion?: string;
+  /** Independent clinic-wide preference; legacy snapshots are disabled at version 0. */
+  patientCorrectionsEnabled?: boolean;
+  patientCorrectionsVersion?: string;
   /** Clinic preferences are public configuration; they are not host send authority. */
   notificationSettings?: import("./notification-policy.ts").NotificationSettings;
   /** Current scoped host declarations captured at admission; absent means no managed delivery. */
@@ -135,7 +139,10 @@ export type CallPolicy = Readonly<{
   afterHoursInfo?: ApprovedAfterHoursInfo;
   /** Host-approved, location-scoped public safety wording; absent means generic fallback. */
   urgentResponse?: ApprovedUrgentResponse;
-  capabilities: Readonly<Record<CapabilityId, CapabilityMode>>;
+  /** Existing hosts omit patientUpdate; absence denies the new operation. */
+  capabilities: Readonly<Record<Exclude<CapabilityId, "patientUpdate" | "confirmationResend">, CapabilityMode> & { patientUpdate?: CapabilityMode; confirmationResend?: CapabilityMode }>;
+  /** Current independently approved host binding, never a patient/message digest. */
+  confirmationResendVersion?: string;
   transferDestinationRef?: string;
   /** Current host route declaration captured at admission, never setting authority. */
   transferDestinationVersion?: string;
@@ -162,6 +169,8 @@ export type VerifiedPatient = Readonly<{
   expiresAt: string;
 }>;
 export type BookableOffer = Readonly<{
+  /** Optional host-approved booking terms share the exact offer expiry and action digest. */
+  terms?: AppointmentChangeTerms;
   scope: LocationScope;
   offerRef: string;
   serviceRef: string;
@@ -188,8 +197,11 @@ export type AppointmentChangeTerms = Readonly<{
 export type ActionRequest =
   | Readonly<{ kind: "book"; patient: VerifiedPatient; offer: BookableOffer }>
   | Readonly<{ kind: "cancel"; patient: VerifiedPatient; target: AppointmentTarget; terms: AppointmentChangeTerms }>
-  | Readonly<{ kind: "reschedule"; patient: VerifiedPatient; target: AppointmentTarget; offer: BookableOffer; terms: AppointmentChangeTerms }>
-  | Readonly<{ kind: "intake"; scope: LocationScope; approvedDraftRef: string; consentRef: string; duplicateCheckRef: string; recoveryContract?: "callerMediated" }>;
+  | Readonly<{ kind: "reschedule"; patient: VerifiedPatient; target: AppointmentTarget; offer: BookableOffer; terms: AppointmentChangeTerms; practitionerChange?: true; serviceChange?: Readonly<{ fromServiceName: string }> }>
+  | Readonly<{ kind: "intake"; scope: LocationScope; approvedDraftRef: string; consentRef: string; duplicateCheckRef: string; recoveryContract?: "callerMediated" }>
+  /** Patient values and value digests remain in the private owner, never in SAM. */
+  | Readonly<{ kind: "patientUpdate"; patient: VerifiedPatient; correctionRef: string; consentRef: string; correctionVersion: string; expiresAt: string }>
+  | Readonly<{ kind: "confirmationResend"; scope: LocationScope; requestRef: string; resendVersion: string; expiresAt: string }>;
 
 export type FinalCallerTurn = Readonly<{
   callId: string;
@@ -245,9 +257,13 @@ export type AppointmentRead = Readonly<{
 }>;
 
 export type MenuClarificationReason = "menuAmbiguous" | "menuRejected" | "menuUnavailable" | "proposalCorrection" |
-  "changeAmbiguous" | "targetDisagreement" | "changeUnsupported" | "changeAfterSend" | "oldAppointmentAfterMove" | "searchPreferenceUnavailable" | "clinicalAdviceUnavailable" | "unattendedAnnouncement" |
+  "changeAmbiguous" | "targetDisagreement" | "changeUnsupported" | "serviceChoiceChanged" | "serviceSelectionUnavailable" | "changeAfterSend" | "oldAppointmentAfterMove" | "searchPreferenceUnavailable" | "clinicalAdviceUnavailable" | "unattendedAnnouncement" |
   "paymentEvidenceUnavailable" | "coverageEvidenceUnavailable" | "refundEvidenceUnavailable" | "reservationEvidenceUnavailable" | "arrivalAccessUnavailable" | "publicFactConflict" | "serviceArrangementUnavailable";
 export type TurnInterpretation =
+  | Readonly<{ kind: "previousPractitioner"; snapshot: import("./previous-practitioner.ts").PreviousPractitionerRead }>
+  | Readonly<{ kind: "previousPractitionerUnavailable" }>
+  | Readonly<{ kind: "serviceQuestion"; question: import("./booking-service-question.ts").BookingServiceQuestion }>
+  | Readonly<{ kind: "classServiceQuestion"; question: import("./class-service-question.ts").ClassServiceQuestion }>
   | Readonly<{ kind: "conversationControl"; notice: import("./conversation-control.ts").ConversationControlNotice }>
   | Readonly<{ kind: "conversationPresence" }>
   | Readonly<{ kind: "missedCallReasonUnavailable" }>
@@ -255,7 +271,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "bookingHorizonFailure" }>
   | Readonly<{ kind: "requestBoundary"; reason: import("./request-boundary.ts").RequestBoundary }>
   | Readonly<{ kind: "callerIdentityDenied"; reason: import("./caller-identity.ts").CallerIdentityDenial }>
-  | Readonly<{ kind: "workflowStarted"; operation: WorkflowOperation; next: "codeRequired" | "intakeRequired" }>
+  | Readonly<{ kind: "workflowStarted"; operation: WorkflowOperation; next: "codeRequired" | "intakeRequired" | "representativeRequired"; advanceTask?: true }>
   | Readonly<{ kind: "outcomeQuery" }>
   | Readonly<{ kind: "notificationOutcomeQuery" }>
   | Readonly<{ kind: "staffOutcomeQuery"; reviewProcess?: import("./staff-review-process.ts").StaffReviewProcess }>
@@ -268,6 +284,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason; approvedLocation?: string }>
   | Readonly<{ kind: "requestAction"; request: ActionRequest }>
   | Readonly<{ kind: "affirm"; actionKey: string; digest: string; affirmative: boolean }>
+  | Readonly<{ kind: "confirmationWait"; actionKey: string; digest: string; seconds: number }>
   | Readonly<{ kind: "handoff"; reason: StaffReason; requestedPerson?: string; staffWorkUnavailable?: true }>
   | Readonly<{ kind: "transfer"; reason: StaffReason }>
   | Readonly<{ kind: "readFailure"; target: "patient" | "offer" | "appointment"; failure: "unavailable" | "notFound" }>
@@ -324,6 +341,8 @@ export type Presentation =
     kind: "notice";
     id: string;
     approvedText: string;
+    /** Only a core-validated confirmation wait can extend this notice's listening interval. */
+    confirmationWaitSeconds?: number;
     status: "pending" | "started" | "played" | "interrupted" | "failed" | "unproven" | "superseded";
   }>
   | Readonly<{
@@ -442,6 +461,8 @@ export type CallState = {
   callerIdentityDenied?: import("./caller-identity.ts").CallerIdentityDenial;
   /** Negative-command receipt only; no patient identity or permission. */
   lastRequestBoundary?: Readonly<{ turnId: string; reason: import("./request-boundary.ts").RequestBoundary }>;
+  /** Accepted workflow receipt only; contains no patient identity or permission. */
+  lastWorkflowStart?: Readonly<{ turnId: string; operation: WorkflowOperation; next: "codeRequired" | "intakeRequired" | "representativeRequired" }>;
   callId: string;
   policy: CallPolicy;
   lifecycle: "starting" | "active" | "ended";
@@ -452,6 +473,8 @@ export type CallState = {
   conversationRevision: number;
   processedTurnIds: string[];
   actions: Record<string, ActionState>;
+  /** Settled prior-task action keys remain in actions; current-task outcome queries exclude them. */
+  previousTaskActionKeys?: readonly string[];
   presentations: Record<string, Presentation>;
   pendingPresentationId?: string;
   effects: Record<string, Effect>;
@@ -491,6 +514,9 @@ export type TransitionAction =
   | Readonly<{ kind: "nonAffirmativeFinal"; turn: FinalCallerTurn; expectedConversationRevision: number; now: string }>
   | Readonly<{ kind: "silenceTimeout"; sessionId: string; stage: "retry" | "final"; now: string }>
   | Readonly<{ kind: "privateIntakePrompt"; sessionId: string; presentationId: string; now: string }>
+  | Readonly<{ kind: "privateCorrectionPrompt"; sessionId: string; presentationId: string; now: string }>
+  | Readonly<{ kind: "privateResendPrompt"; sessionId: string; presentationId: string; now: string }>
+  | Readonly<{ kind: "privateRepresentativePrompt"; operation: "book" | "cancel" | "reschedule" | "appointments.read"; sessionId: string; presentationId: string; now: string }>
   | Readonly<{ kind: "callerTurn"; turn: FinalCallerTurn; interpretation: TurnInterpretation; now: string; expectedConversationRevision?: number }>
   | Readonly<{ kind: "modelResolved"; effectId: string; result: Result<import("../model/proposal.ts").ModelProposal, import("../model/proposal.ts").ModelFailure>; now: string }>
   | Readonly<{ kind: "modelKnowledgeResolved"; effectId: string; result: Result<readonly ApprovedKnowledge[], Readonly<{ kind: "invalidQuery" | "unavailable" }>>;

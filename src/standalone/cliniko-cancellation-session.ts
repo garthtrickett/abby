@@ -1,3 +1,5 @@
+import { createWorkflowCallerVerification } from "./workflow-caller-verification.ts";
+import type { RepresentativeWorkflowSelection } from "./workflow-caller-verification.ts";
 import { ClinikoCancellationWriter } from "../cliniko/cancellation-write.ts";
 import { ClinikoRecallWriter } from "../cliniko/recall-write.ts";
 import { clinikoCredentialFingerprint, isClinikoRequestBudget } from "../cliniko/read-budget.ts";
@@ -24,6 +26,7 @@ export type ClinikoCancellationSessionConfig = Readonly<{
   directory: AdminDirectory; callerApprovalPath: string; cancellationApprovalPath: string;
   cliniko: Readonly<{ apiKey: string; contactEmail: string; businessId: string; recallTypeId: string;
     timeZone: string; countryCallingCode: string; rateBudget: ClinikoRequestBudget }>;
+  representative?: RepresentativeWorkflowSelection;
   signal: AbortSignal; fetchPort?: typeof fetch; clock?: () => string; timeoutMs?: number;
 }>;
 type Failure = Readonly<{ kind: "cancellationSessionUnavailable" }>;
@@ -56,7 +59,7 @@ export class ClinikoCancellationSession {
           !isClinikoRequestBudget(incoming.cliniko?.rateBudget) ||
           (incoming.timeoutMs !== undefined && (!Number.isSafeInteger(incoming.timeoutMs) || incoming.timeoutMs < 1 || incoming.timeoutMs > 20_000))) return unavailable();
       // Freeze caller/provider bindings before the first async approval read.
-      const config = Object.freeze({ ...incoming, receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound),
+      const config = Object.freeze({ ...incoming, ...(incoming.representative ? { representative: Object.freeze({ ...incoming.representative }) } : {}), receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound),
         cliniko: Object.freeze({ ...incoming.cliniko }), clock: incoming.clock ?? (() => new Date().toISOString()) });
       const scope = config.receipt.scope, fetchPort = config.fetchPort ?? fetch;
       const stopped = new Promise<undefined>(resolve => {
@@ -86,12 +89,13 @@ export class ClinikoCancellationSession {
             current.value.capabilities.cancel === "execute" && current.value.staffWorkEnabled === true && admitted.ok &&
             admitted.value.policy.capabilities.cancel === "execute" && admitted.value.policy.staffWorkEnabled === true });
         } };
-        const session = CallerVerificationSession.create({ receipt: config.receipt, inbound: config.inbound, sessionId: config.sessionId,
+        const session = await createWorkflowCallerVerification({ receipt: config.receipt, inbound: config.inbound, sessionId: config.sessionId,
           policyVersion: config.policyVersion, operation: "appointments.cancel", ledger: config.ledger, policyStore: config.policies,
           policy: verificationPolicy, lookup: config.lookup, contact: new ClinikoVerificationContactReader({ ...config.cliniko, scope }, fetchPort),
-          permission: config.permission, budget: config.verificationBudget, delivery: config.delivery, clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) });
-        if (!session.ok || settled) return undefined;
+          permission: config.permission, budget: config.verificationBudget, delivery: config.delivery, clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) }, { credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey), businessId: config.cliniko.businessId, timeZone: config.cliniko.timeZone }, config.signal, caller.value, config.representative);
+        if (!session.ok) return undefined;
         verification = session.value;
+        if (settled || config.signal.aborted) { verification.dispose(); return undefined; }
         const source = ClinikoCancellationAuthority.create({ ...config.cliniko, scope, callId: config.receipt.callId,
           sessionId: config.sessionId, policyVersion: config.policyVersion, proof: verification.proof,
           policy: policy.value, clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) }, fetchPort);

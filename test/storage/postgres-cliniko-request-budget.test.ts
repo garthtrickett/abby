@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { createHash, randomUUID } from "node:crypto";
 import test, { after } from "node:test";
 import { ClinikoAvailabilityReader } from "../../src/cliniko/availability.ts";
 import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
 import type { ClinikoBudgetDenial, ClinikoBudgetOperationalEvent } from "../../src/cliniko/read-budget.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
+import { checkClinikoHeadroom } from "../../src/cliniko/read-budget.ts";
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
@@ -15,6 +17,11 @@ after(async () => { await Promise.all([firstDb.destroy(), secondDb.destroy()]); 
 test("E2E-156 separate standalone Cliniko readers share one PostgreSQL request budget", async () => {
   const scope = { tenantId: "budget-standalone", clinicId: "clinic", locationId: "main" };
   const apiKey = "synthetic-shared-budget-key-au5";
+  // Other credentials can already own rows in the shared PostgreSQL cohort.
+  const unrelated = new PostgresClinikoRequestBudget(secondDb, {
+    apiKey: `synthetic-unrelated-${randomUUID()}-au5`, maxPerMinute: 1,
+  });
+  assert.equal(await unrelated.claim(), null);
   const events: ClinikoBudgetOperationalEvent[] = [];
   const first = new PostgresClinikoRequestBudget(firstDb, { apiKey, maxPerMinute: 1,
     onEvent: event => { events.push(event); } });
@@ -55,10 +62,13 @@ test("E2E-156 separate standalone Cliniko readers share one PostgreSQL request b
   const deniedClaims = claims.filter(result => result?.kind === "rateLimited");
   assert.ok(deniedClaims.length >= denied);
   assert.deepEqual(events, Array(deniedClaims.length).fill("claimRateLimited"));
-  const rows = await firstDb.selectFrom("cliniko_request_budgets").selectAll().execute();
+  const stored = await firstDb.selectFrom("cliniko_request_budgets").selectAll().execute();
+  assert.equal(JSON.stringify(stored).includes(apiKey), false);
+  const budgetRef = createHash("sha256").update(`abby-cliniko-budget-v1\0${apiKey}`).digest("hex");
+  const rows = stored.filter(row => row.budget_ref === budgetRef);
+  assert.ok(stored.some(row => row.budget_ref !== budgetRef), "unrelated credential rows remain present");
   assert.equal(rows.length, 1);
   assert.match(rows[0]!.budget_ref, /^[0-9a-f]{64}$/);
-  assert.equal(JSON.stringify(rows).includes(apiKey), false);
   assert.deepEqual(Object.keys(rows[0]!).sort(), ["budget_ref", "cooldown_until_ms", "max_per_minute", "sent_at_ms"]);
 });
 
@@ -144,4 +154,22 @@ test("E2E-160 conflicting limits for one Cliniko user fail closed", async () => 
   const misconfigured = new PostgresClinikoRequestBudget(secondDb, { apiKey: "synthetic-other-key-au5",
     sharedUserRef: "synthetic-user-e2e-160", maxPerMinute: 2 });
   assert.deepEqual(await misconfigured.claim(), { kind: "unavailable" });
+});
+
+test("E2E-398 E2E-402 PostgreSQL headroom uses current shared claims, relative waits and cooldown without reserving capacity", async () => {
+  const apiKey = `synthetic-headroom-${crypto.randomUUID()}-au5`;
+  const first = new PostgresClinikoRequestBudget(firstDb, { apiKey, maxPerMinute: 4 });
+  const second = new PostgresClinikoRequestBudget(secondDb, { apiKey, maxPerMinute: 4 });
+  assert.equal(await checkClinikoHeadroom(first, 4), null); assert.equal(await checkClinikoHeadroom(second, 4), null);
+  assert.equal(await first.claim(), null);
+  const wait = await checkClinikoHeadroom(second, 4);
+  assert.equal(wait?.kind, "rateLimited");
+  if (wait?.kind !== "rateLimited") throw new Error("missing account wait");
+  assert.ok(Number.isSafeInteger(wait.retryAfterMs) && wait.retryAfterMs! > 0 && wait.retryAfterMs! <= 60000,
+    "database supplies its own relative wait; no clinic clock conversion is needed");
+  assert.equal(await checkClinikoHeadroom(second, 3), null);
+  assert.equal(await second.claim(), null); assert.equal(await first.claim(), null); assert.equal(await second.claim(), null);
+  assert.equal((await first.claim())?.kind, "rateLimited");
+  await first.observe429(null); assert.equal((await checkClinikoHeadroom(second, 1))?.kind, "rateLimited");
+  assert.equal((await checkClinikoHeadroom(second, 0))?.kind, "unavailable");
 });

@@ -18,7 +18,7 @@ import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 
 type Member = Readonly<{ practitionerId: string; name: string; host: ClinikoBookingHost }>;
 type Config = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string; ledger: LedgerStore;
-  catalogue: OwnerFileBookingCatalogue; members: readonly Member[] }>;
+  catalogue: OwnerFileBookingCatalogue; members: readonly Member[]; initialPreference?: BookingSearchPreference }>;
 const denied = <T>(): Result<T, HostReadFailure> => err({ kind: "unavailable", target: "offer" });
 
 /** One admitted location, one patient verifier and one possible send. Every
@@ -38,6 +38,8 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
   constructor(config: Config) {
     super();
     if (!(config.catalogue instanceof OwnerFileBookingCatalogue) || !config.members.length || config.members.length > 3 || config.members.some(member => !(member.host instanceof ClinikoBookingHost))) throw new TypeError("invalid approved catalogue composition");
+    if (config.initialPreference !== undefined && !validBookingSearchPreference(config.initialPreference)) throw new TypeError("invalid initial practitioner preference");
+    this.#preference = config.initialPreference && Object.freeze({ ...config.initialPreference });
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }), members: Object.freeze(config.members.map(member => Object.freeze({ ...member }))) });
   }
   bookingMenuAvailable(): boolean { return !this.#lifetime.signal.aborted && !this.#attempted; }
@@ -85,7 +87,9 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
     this.#menu = { turnId: query.turnId, member: winner.member };
     return ok({ ...winner.read, locationName: profile.locationName, searchScope: { locationName: profile.locationName,
       practitioners: members.map(member => member.name), from: query.from, to: query.to,
-      selection: preference?.practitioner === "any" ? "earliestApproved" : preference?.practitioner ? "preferred" : "default" } });
+      selection: preference?.practitioner === "any" ? "earliestApproved" : preference?.practitioner ? "preferred" : "default" },
+      ...(completed.some(item => item.read.maxSearchDays !== undefined)
+        ? { maxSearchDays: Math.min(...completed.map(item => item.read.maxSearchDays ?? 7)) } : {}) });
   }
   async selectBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>) {
     const menu = this.#menu;

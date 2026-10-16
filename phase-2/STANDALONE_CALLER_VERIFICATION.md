@@ -1,6 +1,6 @@
 # Standalone caller verification composition
 
-**Status:** locally implemented text composition, with synthetic mail, registered contact and patient/action permission. Production caller capabilities remain unavailable. D-17 selected the method; it did not approve a clinic rollout. E2E-274/275 add dedicated code entry and current operator approval to the existing E2E-269/273 verifier/proof foundation.
+**Status:** locally implemented text composition, with synthetic registered contact, clinic approval and patient/action permission. The optional [SMTP delivery adapter](VERIFICATION_SMTP_DELIVERY.md) now connects the actual verifier to real loopback TLS and SMTP using synthetic accounts and messages. Production caller capabilities remain unavailable. D-17 selected the method; it did not approve a clinic rollout. E2E-274/275 add dedicated code entry and current operator approval to the existing E2E-269/273 verifier/proof foundation.
 
 ## Boundaries
 
@@ -68,6 +68,15 @@ The text test carries the private proof into `CommandGateway.appointments.read.v
 - E2E-275 covers exact operator approval, enabled/disabled whole text journeys, current approver membership, unsafe/missing/expanded files and replacement during held membership reads. Existing administrator-directory and magic-link behavior remain regression-covered after extracting the shared bounded file reader.
 - Mail, contact, patient permission and actual clinic approvals in these journeys are synthetic. They do not prove a mailbox, human review, fee/consent policy, carrier voice path or live clinical activation.
 - Open gates: selected email service and approved sender/retention policy; actual patient self/proxy/minor action-permission source; complete clinic approval/rehearsal; production call-owner integration and secret-input routing; existing independent appointment/staff execution gates. Production support remains `unavailable`.
+
+The optional SMTP adapter supplies the existing delivery port without changing
+verification policy or permissions. Its local tests prove certificate/name
+validation before authentication, one fixed message accepted by SMTP, actual
+caller proof and protected read, no proof or resend after a lost acceptance
+reply, and denial before any SMTP command when independent permission is
+absent. These use synthetic contact/account/certificate data and do not prove
+an approved sender or real mailbox. See [configuration, acceptance and local
+qualification](VERIFICATION_SMTP_DELIVERY.md).
 
 `OwnerFileClinicApproval` now owns the shared bounded current approval/membership algorithm, with separate exact decoders for verification and [cancellation policy](CLINIKO_CANCELLATION_AUTHORITY.md). The caller gate retains its typed failures, operation scope, default denial and existing enabled/disabled behavior; E2E-274/275 are regression-run after the extraction.
 

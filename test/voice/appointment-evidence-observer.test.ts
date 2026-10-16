@@ -60,7 +60,7 @@ for (const outcome of ["within deadline", "expired"] as const) {
           assert.equal(settled.ok, false);
           if (settled.ok) throw new Error("expired evidence cannot be accepted");
           assert.match(String(settled.error), /effectFailure/);
-          await voiceUntil(() => evidenceSignal!.aborted, "original evidence deadline");
+          assert.equal(evidenceSignal!.aborted, true, "outer evidence deadline must reach the provider before settlement");
           release(); await voiceUntil(() => returned, "late synthetic evidence returned");
           assert.equal(Object.keys((await call.state()).actions).length, 0);
         }

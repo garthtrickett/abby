@@ -5,6 +5,8 @@ export interface PrivateKeypadInput {
   claim(callId: string, sessionId: string): boolean;
   start(): boolean;
   blocked(): boolean;
+  /** Optional current private-workflow edit key while ordinary speech is open. */
+  handlesDigit?(digit: string): boolean;
   accept(digit: string): Promise<"pending" | "verified" | "failed">;
   /** Optional private registration transcription. OTP collection always discards media. */
   acceptMedia?(frame: MediaFrame): Promise<"pending" | "failed">;

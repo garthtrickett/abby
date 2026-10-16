@@ -1,0 +1,85 @@
+{
+  "schema": "abby.synthetic-speech-recheck.aggregate.v1",
+  "date": "2026-10-13",
+  "patientFree": true,
+  "sourceHead": "5fa4fe4b10274c0db5074b87a7e6911827c8e981",
+  "publicationBase": "9a29e51e7f7e0a765db7674c6c75ff2087260473",
+  "sourceFiles": [
+    {
+      "path": "src/voice/openai-realtime-transcription.ts",
+      "sha256": "2104a7321c544d8fddd5939b7613c00968979dc888d22aa61730bb6c721c1df0"
+    },
+    {
+      "path": "src/voice/transcription-evaluation.ts",
+      "sha256": "3ea30413b80cd28ecf337aaf9ad156dc6d5fd946ee74f81678654f9f2a41943d"
+    },
+    {
+      "path": "src/voice/transcription-evaluation-gate.ts",
+      "sha256": "44f7973d65f8de8261db8030bfbb14ce827a0c14b9b35756c2640133c956357c"
+    },
+    {
+      "path": "scripts/evaluate-transcription.ts",
+      "sha256": "0ccffb2847436140c6da8403f96b39b77b561dd76d905e827ede85c5c36413b4"
+    }
+  ],
+  "currentSourceInputsMatch": true,
+  "creditProbe": {
+    "requests": 1,
+    "httpStatus": 200,
+    "providerAccepted": true,
+    "model": "gpt-transcribe",
+    "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791872201198.log"
+  },
+  "noise": {
+    "model": "gpt-live-transcribe",
+    "corpusVersion": "transcription-noise-v1",
+    "corpusSha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+    "assessment": {
+      "status": "fail",
+      "failures": [
+        "critical",
+        "wordErrorRate"
+      ],
+      "metrics": {
+        "cases": 6,
+        "runs": 18,
+        "critical": 12,
+        "providerFailures": 0,
+        "empty": 0,
+        "truncated": 0,
+        "delayed": 0,
+        "wordErrorRate": 0.4015151515151515,
+        "finalP95Ms": 835,
+        "missingRepeats": []
+      },
+      "thresholds": {
+        "version": "transcription-synthetic-gate-v1",
+        "minRepeatsPerCase": 3,
+        "maxCritical": 0,
+        "maxProviderFailures": 0,
+        "maxEmpty": 0,
+        "maxTruncated": 0,
+        "maxWordErrorRate": 0.1,
+        "maxFinalP95Ms": 2500,
+        "maxIndividualFinalMs": 5000
+      }
+    },
+    "log": "/home/gust/paseo/paseo-home/work/logs/4590eee3-1791872285614.log",
+    "exitCode": 1
+  },
+  "evidence": [
+    {
+      "path": "eval/results/20261013-original-noise-full18.json",
+      "sha256": "2071999a11ba139d4166c1384be018f6f2447c8e9560a16b31917641cbfe47c0"
+    },
+    {
+      "path": "eval/results/20261013-synthetic-speech-credit-check.json",
+      "sha256": "6e9187c20a757ed191a330031f6183583a525417e12a5f6a5bffd23de2d2bfed"
+    }
+  ],
+  "productionAdmission": "hold",
+  "releaseGate": "unverified",
+  "carrierEvidence": false,
+  "humanEvidence": false,
+  "interpretation": "Provider access is available for these requests. The unchanged default noisy transcription gate still fails; no model, threshold, corpus or production readiness is promoted."
+}

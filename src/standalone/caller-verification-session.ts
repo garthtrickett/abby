@@ -1,9 +1,11 @@
 import type { VerificationContact } from "../cliniko/verification-contact.ts";
+import { ClinikoVerificationContactReader } from "../cliniko/verification-contact.ts";
 import type { PolicyStore } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
-import type { AdmissionReceipt, Result } from "../core/model.ts";
+import type { AdmissionReceipt, Result, VerifiedPatient } from "../core/model.ts";
 import { callIdFor } from "../voice/admission.ts";
+import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { AuthenticatedInboundCall } from "../voice/admission.ts";
 import type { CallerCandidateLookup } from "../voice/caller-candidates.ts";
 import { sameScope } from "./appointment-change-authority.ts";
@@ -32,6 +34,7 @@ export class CallerVerificationSession {
   #busy = false;
   #closed = false;
   #grant: Grant | undefined;
+  #subject: string | undefined;
 
   private constructor(incoming: Config) {
     const config = Object.freeze({ ...incoming, receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound) });
@@ -86,7 +89,7 @@ export class CallerVerificationSession {
     }
     // Read call ownership last, after any asynchronous policy/stop reads.
     const state = await ledger.read(receipt.callId, receipt.scope);
-    if (!state.ok || state.value.callId !== receipt.callId || state.value.lifecycle !== "active" ||
+    if (!state.ok || state.value.callId !== receipt.callId || state.value.lifecycle !== "active" || state.value.callerIdentityDenied !== undefined ||
         !sameScope(state.value.policy.scope, receipt.scope) || state.value.policy.automationEnabled !== true ||
         state.value.policy.policyVersion !== policyVersion || !state.value.sessionLease ||
         state.value.sessionLease.sessionId !== sessionId ||
@@ -101,12 +104,33 @@ export class CallerVerificationSession {
     return { callId: this.#config.receipt.callId, sessionId: this.#config.sessionId };
   }
 
+  /** Private native composition only. Scope/call matching cannot substitute for
+   * the Cliniko account that supplied the registered verification channel. */
+  matchesClinikoAccount(credentialFingerprint: string): boolean {
+    const contact = this.#config.contact;
+    if (this.#closed || !(contact instanceof ClinikoVerificationContactReader)) return false;
+    const selection = contact.selection(), scope = this.#config.receipt.scope;
+    return selection.credentialFingerprint === credentialFingerprint && selection.scope.tenantId === scope.tenantId && selection.scope.clinicId === scope.clinicId;
+  }
+
+  /** Representative roots must possess their own native registered channel.
+   * A delegated subject verifier cannot become a new delegating caller. */
+  usesSelfRegisteredContact(): boolean {
+    return !this.#closed && this.#config.contact.constructor === ClinikoVerificationContactReader;
+  }
+
+  usesContactRevision(owner: import("../cliniko/contact-revision.ts").ClinikoContactRevisionReader): boolean {
+    return !this.#closed && this.#config.contact instanceof ClinikoVerificationContactReader && this.#config.contact.usesContactRevision(owner);
+  }
+
   /** Immediate, identical wording even if lookup, approval or mail is unavailable. No resend. */
   begin(): Readonly<{ prompt: string }> {
     if (!this.#closed && !this.#pending) {
       this.#pending = this.#email.start(this.#config.operation).catch(() => undefined);
     }
-    return { prompt: verificationPrompt };
+    return { prompt: this.#config.operation === "patients.update"
+      ? "If you receive a verification code at your registered email, enter it here. I cannot access or change your patient details until verification succeeds."
+      : verificationPrompt };
   }
 
   /** Only the trusted secret-entry owner calls this. Do not create a FinalCallerTurn from its input. */
@@ -121,7 +145,9 @@ export class CallerVerificationSession {
       const issued = await this.#proof.issue(answered.value, this.#config.operation);
       if (!issued.ok || this.#closed) return { verified: false };
       this.#grant = issued.value;
-      if (!await this.verified()) return { verified: false };
+      const subject = await this.verifiedSubject(this.#config.operation);
+      if (!subject || this.#closed || this.#grant !== issued.value) return { verified: false };
+      this.#subject = subject.patientRef;
       return { verified: true };
     } catch { this.dispose(); return { verified: false }; }
     finally { this.#busy = false; }
@@ -138,8 +164,71 @@ export class CallerVerificationSession {
     } catch { this.dispose(); return undefined; }
   }
 
+  /** Private ownership check for non-disclosing policy/candidate gates only.
+   * It does not revalidate native contact or patient permission. Protected
+   * contact and operation boundaries must still call verifiedSubject. */
+  async ownsCurrentProof(operation: PatientOperation, verificationRef: string, signal: AbortSignal): Promise<boolean> {
+    const grant = this.#grant;
+    if (this.#closed || signal.aborted || operation !== this.#config.operation || !grant || grant.verificationRef !== verificationRef ||
+        !this.#proof.ownsLiveReference(verificationRef, operation, this.#now())) return false;
+    const policy = await this.#config.policy.current(this.#config.receipt.scope);
+    return policy.ok && policy.value.enabled && sameScope(policy.value.scope, this.#config.receipt.scope) && policy.value.version === this.#config.policyVersion &&
+      await this.#active() && !signal.aborted && this.#grant === grant && this.#proof.ownsLiveReference(verificationRef, operation, this.#now());
+  }
+
+  /** Private routing metadata only. Native readers still validate the grant. */
+  async ownedGrant(operation: PatientOperation, signal: AbortSignal): Promise<Grant | undefined> {
+    const grant = this.#grant;
+    return grant && await this.ownsCurrentProof(operation, grant.verificationRef, signal) ? { ...grant } : undefined;
+  }
+
+  /** Private live-workflow handoff, never a caller/model resend command. Retire
+   * this owner before looking up a fresh challenge. The successor must verify
+   * the original patient again under the same admitted call and operation.
+   * Expiry is not extended, and a failed handoff cannot restore the old proof. */
+  async renewOnce(verificationRef: string, external: AbortSignal): Promise<Result<CallerVerificationSession, Readonly<{ kind: "verificationUnavailable" }>>> {
+    const unavailable = () => err({ kind: "verificationUnavailable" as const });
+    const grant = this.#grant, patientId = this.#subject, config = this.#config;
+    if (this.#closed || this.#busy || !grant || !patientId || verificationRef !== grant.verificationRef ||
+        !(external instanceof AbortSignal) || external.aborted) return unavailable();
+    this.#busy = true;
+    // No old reader, captured proof object or concurrent answer keeps access
+    // while current admission/policy and the successor are being checked.
+    this.#grant = undefined; this.#subject = undefined;
+    this.#email.close(); this.#proof.dispose();
+    const signal = AbortSignal.any([external, AbortSignal.timeout(config.timeoutMs ?? 5000)]);
+    let successor: CallerVerificationSession | undefined;
+    try {
+      const active = await awaitUntilAbort(this.#active(), signal);
+      if (active !== true || signal.aborted || this.#closed) return unavailable();
+      const lookup: CallerCandidateLookup = { candidates: async (scope, number) => {
+        const found = await config.lookup.candidates(scope, number);
+        return found.ok && found.value.kind === "one" && found.value.candidateIds.length === 1 && found.value.candidateIds[0] === patientId
+          ? found : ok({ kind: "none", candidateIds: [] });
+      } };
+      const created = CallerVerificationSession.create({ ...config, lookup });
+      if (!created.ok) return unavailable();
+      successor = created.value;
+      const current = await awaitUntilAbort(successor.#active(), signal);
+      if (current !== true || signal.aborted || this.#closed) { successor.dispose(); return unavailable(); }
+      return ok(successor);
+    } catch { successor?.dispose(); return unavailable(); }
+    finally { this.dispose(); this.#busy = false; }
+  }
+
+  /** Trusted native owner only. Never return this patient-bearing value through a model/caller command. */
+  async verifiedSubject(operation: PatientOperation, signal?: AbortSignal): Promise<VerifiedPatient | undefined> {
+    const grant = this.#grant;
+    if (operation !== this.#config.operation || signal?.aborted || this.#closed || !grant) return undefined;
+    try {
+      const checked = await this.#proof.verifyOperation(this.#config.receipt.scope, grant.verificationRef, operation, this.#now(), signal);
+      if (!checked.ok || signal?.aborted || this.#closed || this.#grant !== grant) { this.dispose(); return undefined; }
+      return structuredClone(checked.value);
+    } catch { this.dispose(); return undefined; }
+  }
+
   /** Supplied to a trusted protected reader/writer; not an agent command or proof-issuance endpoint. */
   get proof(): TransientPatientProofHost { return this.#proof; }
 
-  dispose(): void { this.#closed = true; this.#email.close(); this.#proof.dispose(); this.#grant = undefined; }
+  dispose(): void { this.#closed = true; this.#email.close(); this.#proof.dispose(); this.#grant = undefined; this.#subject = undefined; }
 }

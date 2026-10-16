@@ -64,6 +64,57 @@ The Realtime runner also accepts `--model gpt-transcribe` for OpenAI's committed
 
 For a bounded comparison with OpenAI's file transcription endpoint, run `npm run eval:file-transcription -- --out eval/results/file-transcription-noise.json`. This converts only the pinned synthetic PCM fixtures to 16 kHz WAV in memory and uses `gpt-transcribe` by default. `--model gpt-4o-transcribe` selects the second supported candidate; `--corpus` also accepts `transcription-safety-v1`, and `--repeats` and `--concurrency` have the same bounded options as the realtime runner. For a patient-free context screen, `--model gpt-transcribe --context clinic-v1` sends the same fixed clinic prompt used by the Realtime probe plus four static keywords and the English language hint. No caller or patient data enters that context. The report pins its context version and hash as well as exact words, missing critical terms, response time, corpus and runner hashes, and an unverified release gate. [Official OpenAI Docs](https://developers.openai.com/api/docs/guides/speech-to-text#add-transcription-context) describe those file-transcription fields and recommend Realtime transcription for live call audio. This file endpoint is an offline comparison, not the live call adapter; its results cannot promote a caller turn to `clear`.
 
+## Fixed booking, date and correction speech supplement
+
+`transcription-booking-v1.json` pins sixteen patient-free telephone clips: four
+fixed phrases spoken by each of two synthetic voices, with quiet and seeded
+10 dB noise versions sharing the same source render. The phrases cover dates
+and times, corrections, withdrawal of cancellation and appointment duration.
+The original telephony, noise and safety corpora and their acceptance thresholds
+remain separate. The supplement cannot replace those required gate inputs.
+
+Generate a new private bundle with FFmpeg installed and the owner-only API key
+already available in the process environment:
+
+```sh
+node scripts/build-booking-transcription-fixtures.ts --out-dir /absolute/fresh/private-bundle
+```
+
+The directory must be new. It is created with mode 0700; its eight normalized
+source renders, sixteen PCM fixtures, sixteen WAV listening exports, corpus and
+incremental generation report use mode 0600 and exclusive creation. Only the
+fixed synthetic phrases and voices are supported. The production synthesis
+adapter checks the provider-reported transcript; this does not independently
+establish the words audible in the audio. A fresh render produces new hashes;
+review and explicitly version changed fixtures before replacing the bundled
+corpus. Generating a bundle does not install it or enable caller traffic.
+
+Evaluate the pinned repository corpus and verify its stored evidence:
+
+```sh
+node scripts/evaluate-booking-transcription.ts --repeats 3 --concurrency 2 --out /absolute/fresh/private-report.json
+python3 scripts/verify-booking-speech.py --bundle /absolute/matching/private-bundle --report /absolute/fresh/private-report.json --out /absolute/fresh/private-verification.json
+```
+
+The evaluator accepts only the fixed bundled corpus, with one to ten repeats
+and one to four concurrent sessions. It records source hashes, acknowledged
+unprompted transcription settings, complete transmitted 24 kHz audio hashes and
+unchanged machine assessments. Its report uses a distinct supplemental schema;
+all transcript finals remain `needsClarification`. A failed assessment exits 1.
+The independent Python verifier reconstructs noise, codec bytes, WAV exports and
+all transmitted audio, then recalculates scoring and stored latency arithmetic.
+It rejects a fabricated passing assessment and refuses optimized Python, which
+would disable its assertions. It makes no provider calls and cannot verify
+network timing, acoustic word fidelity, human comprehension or carrier playback.
+
+The [October 15 aggregate](baselines/synthetic-booking-speech-20261015-v1.json)
+records 48 actual runs: quiet 24/24 exact; noisy 18/24 exact, one noncritical
+mismatch and five critical misses. Two critical misses render “fifteenth” as
+“15th”; three change a booking request into a past-tense assertion. Overall WER
+is 1.85%, but the zero-critical requirement fails. Earlier original-noise
+interpolation/model screens also fail. Same-provider synthetic generation and
+recognition do not establish real-call quality, and no candidate is promoted.
+
 ## Signed local live speech evaluation
 
 `test/live/signed-openai-voice.test.ts` is an opt-in integration test for a standalone greeting, one caller turn, and clinic-approved keypad recovery. It starts an isolated PostgreSQL database, signs synthetic Twilio webhook and WebSocket messages, calls the real OpenAI Speech and Realtime transcription APIs, sends a patient-free Flite clip through G.711 media, and checks non-silent outbound media and three returned local completion marks. The real transcript remains `needsClarification`, so the composed call speaks the approved clarification without querying an intent model or Cliniko. After that mark, keypad 2 reads a fake Cliniko availability response for tomorrow and speaks only provisional times. The test scans the database for the synthetic caller number, provider call ID, appointment ID, and appointment time. It needs FFmpeg to generate the inbound G.711 clip and uses no real Cliniko patient data or telephone number. With `ABBY_OPENAI_API_KEY` in the process environment, run:

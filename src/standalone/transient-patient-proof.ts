@@ -5,7 +5,8 @@ import type { LocationScope, Result, VerifiedPatient } from "../core/model.ts";
 import { validCallerCandidates } from "../voice/caller-candidates.ts";
 import type { CallerCandidateLookup } from "../voice/caller-candidates.ts";
 
-export type PatientOperation = "appointments.read" | "appointments.book" | "appointments.cancel" | "appointments.reschedule" | "staff.request";
+export const patientOperations = Object.freeze(["appointments.read", "appointments.book", "appointments.cancel", "appointments.reschedule", "appointments.resend", "staff.request", "patients.update"] as const);
+export type PatientOperation = typeof patientOperations[number];
 export type VerificationFailure = Readonly<{ kind: "disabled" | "denied" | "unavailable" | "attemptsExhausted" | "disconnected" }>;
 export type VerificationToken = string;
 export type PatientAuthorityRequest = Readonly<{
@@ -62,7 +63,7 @@ type LiveProof = Readonly<{
   operations: readonly PatientOperation[];
   expiresAt: string;
 }>;
-const operations: readonly PatientOperation[] = ["appointments.read", "appointments.book", "appointments.cancel", "appointments.reschedule", "staff.request"];
+const operations: readonly PatientOperation[] = patientOperations;
 const maxProofMs = 5 * 60_000;
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
@@ -241,6 +242,25 @@ export class TransientPatientProofHost implements PatientProofHost {
         operation, policyVersion: this.#policyVersion, signal })), stopped]) === true;
     } catch { return false; }
     finally { clearTimeout(timer); signal.removeEventListener("abort", onAbort); controller.abort(); this.#refreshes.delete(controller); }
+  }
+
+  /** Private metadata only; protected reads still require verifyOperation. */
+  ownsLiveReference(verificationRef: string, operation: PatientOperation, now: string): boolean {
+    try {
+      const proof = this.#proof, at = instant(this.#clock()), supplied = instant(now);
+      return !this.#closed && !!proof && proof.verificationRef === verificationRef && proof.operations.includes(operation) &&
+        at !== undefined && supplied !== undefined && Math.abs(at - supplied) <= 30_000 && instant(proof.expiresAt)! > at + 120_000;
+    } catch { return false; }
+  }
+
+  /** Trusted native composition only: metadata for an already-issued reference.
+   * This is not protected-read authority. The receiving native source must
+   * verifyOperation before and after its provider reads. */
+  async currentReference(scope: LocationScope, verificationRef: string, operation: PatientOperation, now: string): Promise<Result<VerifiedPatient, HostReadFailure>> {
+    const proof = this.#proof;
+    if (!validScope(scope) || !sameScope(scope, this.#scope) || !proof || !this.ownsLiveReference(verificationRef, operation, now) || !await this.#enabled() ||
+        this.#proof !== proof || !this.ownsLiveReference(verificationRef, operation, now)) return err({ kind: "notFound", target: "patient" });
+    return ok({ scope: this.#scope, patientRef: proof.patientId, verificationRef: proof.verificationRef, expiresAt: proof.expiresAt });
   }
 
   async verifyOperation(scope: LocationScope, verificationRef: string, operation: PatientOperation,

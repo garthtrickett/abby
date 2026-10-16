@@ -3,6 +3,19 @@ import test from "node:test";
 import { ClinikoAppointmentReader } from "../../src/cliniko/appointments.ts";
 import type { PatientAuthorityRequest } from "../../src/standalone/transient-patient-proof.ts";
 import { emailFixture, scope, initial, apiKey } from "../support/email-patient-fixture.ts";
+import { SyntheticContactRevision } from "../support/contact-revision.ts";
+import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
+import { EmailPatientAuthority } from "../../src/standalone/email-patient-authority.ts";
+
+test("E2E-364 an account revision changing during verification prevents issuing a code", async () => {
+  const owner = new SyntheticContactRevision(scope.tenantId, [clinikoCredentialFingerprint(apiKey)]);
+  const f = emailFixture({ contactRevision: owner });
+  const authority = new EmailPatientAuthority({ ...f.config, permission: { allows: async () => {
+    const begun = await owner.begin(); assert.ok(begun.ok); await owner.complete(begun.value); return true;
+  } } });
+  try { await authority.start("appointments.read"); assert.equal(f.mail.length, 0); }
+  finally { authority.close(); f.authority.close(); f.proof.dispose(); }
+});
 
 test("E2E-269 email-code verification reaches the existing call-bound proof and protected Cliniko appointment read", async () => {
   const f = emailFixture(); let appointmentReads = 0;

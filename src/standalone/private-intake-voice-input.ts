@@ -1,3 +1,5 @@
+import type { ClinikoIntakeSession } from "./cliniko-intake-session.ts";
+import { clinikoIntakeAdditionalFields } from "../cliniko/patient-intake.ts";
 import type { ClinikoIntakeDraft } from "../cliniko/patient-intake.ts";
 import { err, ok } from "../core/model.ts";
 import { MediaTurnController } from "../voice/media-turn-controller.ts";
@@ -6,16 +8,13 @@ import type { PrivateKeypadInput } from "../voice/private-keypad-input.ts";
 import { TurnAssembler } from "../voice/turn-assembler.ts";
 import type { TranscriptFailure } from "../voice/turn-assembler.ts";
 import type { ClinikoCallFlow } from "./cliniko-call-flow.ts";
-import { privateIntakeField } from "./private-intake-field.ts";
+import { privateRegistrationField, registrationFieldPrompts } from "./private-registration-field.ts";
+import type { RegistrationSpokenField } from "./private-registration-field.ts";
 import { PrivateWorkflowKeypad } from "./private-workflow-keypad.ts";
 
 const fields = ["firstName", "lastName", "dateOfBirth", "email"] as const;
-type Field = typeof fields[number];
+type Field = RegistrationSpokenField;
 type Stage = "routing" | "start" | "terms" | "acknowledge" | "prompt" | "field" | "readback" | "code" | "ready" | "closed";
-const prompts: Record<Field, string> = {
-  firstName: "Please say your first name.", lastName: "Please say your last name.",
-  dateOfBirth: "Please say your date of birth, using the day, month name and year.", email: "Please say your email address. You may say at and dot.",
-};
 export type PrivateIntakeVoiceConfig = Readonly<{
   callId: string; sessionId: string; phone: string; owner: () => ClinikoCallFlow | undefined;
   present(text: string, signal: AbortSignal): Promise<boolean>;
@@ -28,10 +27,14 @@ export class PrivateIntakeVoiceInput implements PrivateKeypadInput {
   readonly #config: PrivateIntakeVoiceConfig;
   readonly #keypad: PrivateWorkflowKeypad;
   readonly #lifetime = new AbortController();
-  readonly #media: MediaTurnController<void, TranscriptFailure>;
+  #media: MediaTurnController<void, TranscriptFailure>;
+  #mediaSessionId: string;
+  #collectionEpoch = 0;
   readonly #onClose = () => this.stop();
   #stage: Stage = "routing";
+  #intake: ClinikoIntakeSession | undefined;
   #draft: Partial<Record<Field, string>> = {};
+  #fields: readonly Field[] = fields;
   #field = 0;
   #fragment: string | undefined;
   #attempts = 0;
@@ -41,16 +44,22 @@ export class PrivateIntakeVoiceInput implements PrivateKeypadInput {
   constructor(config: PrivateIntakeVoiceConfig) {
     if (!/^\+[1-9][0-9]{7,14}$/.test(config.phone) || !(config.signal instanceof AbortSignal)) throw new TypeError("invalid private intake voice input");
     this.#config = Object.freeze({ ...config }); this.#keypad = new PrivateWorkflowKeypad(config);
-    const privateSession = `${config.sessionId}:private-intake`, assembler = new TurnAssembler(config.callId, privateSession, "private-intake");
+    this.#mediaSessionId = `${config.sessionId}:private-intake`;
+    this.#media = this.#createMedia();
+    config.signal.addEventListener("abort", this.#onClose, { once: true }); if (config.signal.aborted) this.stop();
+  }
+  #createMedia(): MediaTurnController<void, TranscriptFailure> {
+    const config = this.#config;
+    const privateSession = this.#mediaSessionId, assembler = new TurnAssembler(config.callId, privateSession, "private-intake");
     let transcription: TranscriptionPort | undefined;
     const privateTranscription = () => transcription ??= config.transcriptionFactory(privateSession);
-    this.#media = new MediaTurnController(privateSession, {
+    return new MediaTurnController(privateSession, {
       speechStarted: async () => this.#stage === "field" ? ok(assembler.beginSpeech()) : err({ kind: "invalidTranscript" }),
       acceptTranscript: event => assembler.accept(event),
       finishTurn: async now => {
         const final = assembler.finish(now); if (!final.ok) return final;
         if (this.#stage !== "field" || this.#working) return err({ kind: "invalidTranscript" });
-        const value = final.value.quality === "clear" ? privateIntakeField(fields[this.#field]!, final.value.text, this.#fragment) : undefined;
+        const value = final.value.quality === "clear" ? privateRegistrationField(this.#fields[this.#field]!, final.value.text, this.#config.owner()!.privatePhoneCountry, this.#fragment) : undefined;
         this.#stage = "prompt";
         this.#launch(async () => {
           if (!value || value.kind !== "value") {
@@ -59,8 +68,8 @@ export class PrivateIntakeVoiceInput implements PrivateKeypadInput {
             if (++this.#attempts >= 3) { this.stop(); return; }
             await this.#prompt(); return;
           }
-          this.#draft[fields[this.#field]!] = value.value; this.#fragment = undefined; this.#field++; this.#attempts = 0;
-          if (this.#field < fields.length) { await this.#prompt(); return; }
+          this.#draft[this.#fields[this.#field]!] = value.value; this.#fragment = undefined; this.#field++; this.#attempts = 0;
+          if (this.#field < this.#fields.length) { await this.#prompt(); return; }
           this.#stage = "readback";
           const result = await this.#config.owner()!.collectIntake({ ...this.#draft, patientPhone: config.phone, phoneType: "Mobile" } as ClinikoIntakeDraft);
           this.#draft = {};
@@ -72,7 +81,6 @@ export class PrivateIntakeVoiceInput implements PrivateKeypadInput {
       },
     }, { accept: (...args) => privateTranscription().accept(...args), flush: (...args) => privateTranscription().flush(...args),
       cancel: generation => transcription?.cancel?.(generation) ?? Promise.resolve(), close: () => transcription?.close?.() ?? Promise.resolve() }, config.mediaOptions);
-    config.signal.addEventListener("abort", this.#onClose, { once: true }); if (config.signal.aborted) this.stop();
   }
   #launch(run: () => Promise<void>): void {
     if (this.#working || this.#lifetime.signal.aborted) return;
@@ -81,7 +89,7 @@ export class PrivateIntakeVoiceInput implements PrivateKeypadInput {
   }
   async #prompt(): Promise<void> {
     this.#stage = "prompt";
-    if (!await this.#config.present(this.#fragment ? "Please continue your email address, starting with the word continue, or say actually followed by the full address to replace it." : prompts[fields[this.#field]!], this.#lifetime.signal) || this.#lifetime.signal.aborted) { this.stop(); return; }
+    if (!await this.#config.present(this.#fragment ? "Please continue your email address, starting with the word continue, or say actually followed by the full address to replace it." : registrationFieldPrompts[this.#fields[this.#field]!], this.#lifetime.signal) || this.#lifetime.signal.aborted) { this.stop(); return; }
     this.#stage = "field";
   }
   claim(callId: string, sessionId: string): boolean { return this.#keypad.claim(callId, sessionId); }
@@ -90,6 +98,19 @@ export class PrivateIntakeVoiceInput implements PrivateKeypadInput {
     if (this.#stage === "closed") return true;
     const codeBlocked = this.#keypad.blocked();
     if (this.#config.owner()?.workflow !== "intake") return codeBlocked;
+    const intake = this.#config.owner()?.intake;
+    if (intake && intake !== this.#intake) {
+      // A pre-registration service correction replaces only an unsent owner.
+      // Repeat private consent/collection; no old draft or code crosses owners.
+      if (this.#working || !["routing", "start", "ready"].includes(this.#stage)) { this.stop(); return true; }
+      if (this.#intake) {
+        void this.#media.stop().catch(() => undefined);
+        this.#mediaSessionId = `${this.#config.sessionId}:private-intake:${++this.#collectionEpoch}`;
+        this.#sequence = 0; this.#media = this.#createMedia();
+      }
+      this.#intake = intake; this.#stage = "start"; this.#draft = {}; this.#fields = fields; this.#field = 0;
+      this.#fragment = undefined; this.#recoveryRef = undefined; this.#attempts = 0;
+    }
     if (this.#stage === "routing") this.#stage = "start";
     return this.#stage !== "ready" || codeBlocked;
   }
@@ -109,6 +130,7 @@ export class PrivateIntakeVoiceInput implements PrivateKeypadInput {
       this.#launch(async () => { const result = await this.#config.owner()!.intake!.begin();
         if (!result.ok || this.#lifetime.signal.aborted) { this.stop(); return; }
         this.#recoveryRef = result.value.recoveryRef;
+        this.#fields = [...fields, ...clinikoIntakeAdditionalFields.filter(field => result.value.requiredFields.includes(field))];
         if (!await this.#config.present("Press one to acknowledge these privacy, registration and call-failure terms. Press star to stop.", this.#lifetime.signal)) { this.stop(); return; }
         this.#stage = "acknowledge";
       });
@@ -123,13 +145,13 @@ export class PrivateIntakeVoiceInput implements PrivateKeypadInput {
   async acceptMedia(frame: MediaFrame): Promise<"pending" | "failed"> {
     if (this.#stage === "closed") return "failed";
     if (this.#stage !== "field") return "pending";
-    const result = await this.#media.acceptMedia({ ...frame, sessionId: `${this.#config.sessionId}:private-intake`, sequence: this.#sequence++ });
+    const result = await this.#media.acceptMedia({ ...frame, sessionId: this.#mediaSessionId, sequence: this.#sequence++ });
     if (!result.ok) { this.stop(); return "failed"; }
     return "pending";
   }
   stop(): void {
     if (this.#stage === "closed") return;
     this.#stage = "closed"; this.#lifetime.abort(); this.#config.signal.removeEventListener("abort", this.#onClose);
-    this.#draft = {}; this.#fragment = undefined; this.#recoveryRef = undefined; this.#keypad.stop(); void this.#media.stop().catch(() => undefined);
+    this.#draft = {}; this.#intake = undefined; this.#fragment = undefined; this.#recoveryRef = undefined; this.#keypad.stop(); void this.#media.stop().catch(() => undefined);
   }
 }

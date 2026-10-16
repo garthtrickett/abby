@@ -1,0 +1,10 @@
+{
+  "schema": "abby.native-opening-before.v1",
+  "sourceHead": "e68336ad0c5d758063faf862ef716b34393e037a",
+  "patientFree": true,
+  "validLegacyOwnerApproval": true,
+  "returnedDatedOpeningWithRepeatMetadata": true,
+  "listOk": false,
+  "clinicalPosts": 0,
+  "availabilityReads": 1
+}

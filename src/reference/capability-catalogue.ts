@@ -49,7 +49,8 @@ const notificationKind = choice("bookingConfirmation", "cancellationConfirmation
 const notificationBinding = (kind: string): JsonSchema => object({ scope, kind: { const: kind },
   owner: choice("host", "abby"), settingsVersion: key, hostVersion: key });
 const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: nonEmpty, automationEnabled: bool, bookingEnabled: bool,
-  cancellationEnabled: bool, reschedulingEnabled: bool, firstTimeIntakeEnabled: bool, firstTimeIntakeVersion: key, afterHoursMode, afterHoursInfo,
+  cancellationEnabled: bool, reschedulingEnabled: bool, firstTimeIntakeEnabled: bool, firstTimeIntakeVersion: key,
+  patientCorrectionsEnabled: bool, patientCorrectionsVersion: key, afterHoursMode, afterHoursInfo,
   voiceSettings: voicePreferences, voiceProfile,
   notificationSettings: object({ version: key, owners: object({ bookingConfirmation: notificationOwner,
     cancellationConfirmation: notificationOwner, reschedulingConfirmation: notificationOwner }) }),
@@ -59,8 +60,8 @@ const policy = optional({ scope, policyVersion: nonEmpty, automationVersion: non
   urgentResponse: object({ scope, version: key, ownerRef: key,
     approvedText: { type: "string", minLength: 1, maxLength: 1_500 }, approved: { const: true },
     effectiveFrom: str, effectiveUntil: str }),
-  capabilities: object({ book: capabilityMode, cancel: capabilityMode, reschedule: capabilityMode,
-    intake: capabilityMode, transfer: capabilityMode }), transferDestinationRef: key, transferDestinationVersion: key,
+  capabilities: optional({ book: capabilityMode, cancel: capabilityMode, reschedule: capabilityMode,
+    intake: capabilityMode, transfer: capabilityMode, patientUpdate: capabilityMode, confirmationResend: capabilityMode }, ["book", "cancel", "reschedule", "intake", "transfer"]), confirmationResendVersion: key, transferDestinationRef: key, transferDestinationVersion: key,
   staffedIntervals: { type: "array", items: object({ startsAt: str, endsAt: str }), maxItems: 512 },
   staffedCoverage: object({ startsAt: str, endsAt: str }),
   staffSchedule: object({ scope, version: key, ownerRef: key, approved: { const: true },
@@ -101,7 +102,7 @@ const staffScheduleAuditPage = optional({ entries: array(optional({ version: key
 const greetingAuditPage = optional({ entries: array(optional({ version: key, enabled: bool,
   previousEnabled: bool, greetingVersion: key, actorRef: key, changedAt: str },
 ["version", "enabled", "previousEnabled", "actorRef", "changedAt"])), nextAfterVersion: uint }, ["entries"]);
-const actionKind = choice("book", "cancel", "reschedule", "intake");
+const actionKind = choice("book", "cancel", "reschedule", "intake", "patientUpdate", "confirmationResend");
 const actionStatus = choice("awaitingConfirmation", "ready", "dispatched", "committed", "rejected",
   "unsupported", "uncertain", "needsReview", "canceled");
 const staffReason = choice(...STAFF_REASONS);
@@ -220,7 +221,7 @@ export type CapabilityDescriptor = Readonly<{
 
 export type CapabilityPrecondition = "expectedPolicyVersion" | "expectedAutomationVersion" | "expectedClinicIntakeVersion" | "expectedClinicNotificationVersion" | "expectedClinicVoiceVersion" | "hostVoiceProfileForSet" |
   "hostManagedNotificationForSet" | "hostStaffedDestinationForSet" | "readinessForEnable" | "activeCall" | "bookingEnabledForExecution" |
-  "currentCallSession" | "appointmentChangeEnabledForExecution" | "intakeEnabledForExecution" |
+  "currentCallSession" | "appointmentChangeEnabledForExecution" | "intakeEnabledForExecution" | "expectedClinicCorrectionVersion" |
   "hostEvidenceForExecution" | "approvedKnowledgeForAnswer" | "availabilityHostConfigured" |
   "appointmentHostConfigured" | "hostIssuedPatientProof" |
   "callReviewAvailable" | "outcomeReportAvailable" | "staffQueueAvailable" | "operationalDailyAvailable" |
@@ -298,6 +299,12 @@ export const capabilityCatalogue = {
   "settings.patients.firstTimeIntake.audit.v1": entry("settings.patients.firstTimeIntake.audit.v1",
     optional({ kind: { const: "settings.patients.firstTimeIntake.audit.v1" }, afterVersion: uint }, ["kind"]),
     reply("firstTimeIntakeSettingAudit", "page", clinicIntakeAuditPage), "read", "clinicAdmin"),
+  "settings.patients.corrections.enabled.change.v1": entry("settings.patients.corrections.enabled.change.v1",
+    object({ kind: { const: "settings.patients.corrections.enabled.change.v1" }, expectedVersion: key, enabled: bool }),
+    reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedClinicCorrectionVersion"]),
+  "settings.patients.corrections.audit.v1": entry("settings.patients.corrections.audit.v1",
+    optional({ kind: { const: "settings.patients.corrections.audit.v1" }, afterVersion: uint }, ["kind"]),
+    reply("patientCorrectionSettingAudit", "page", clinicIntakeAuditPage), "read", "clinicAdmin"),
   "settings.routing.staffedDestination.change.v1": entry("settings.routing.staffedDestination.change.v1",
     object({ kind: { const: "settings.routing.staffedDestination.change.v1" }, expectedVersion: key, destinationRef: nullableRouteRef }),
     reply("settings", "policy", policy), "policyChange", "clinicAdmin", "none", ["expectedPolicyVersion", "hostStaffedDestinationForSet"]),
@@ -376,6 +383,14 @@ export const capabilityCatalogue = {
     object({ kind: { const: "patients.intake.propose.v1" }, turn: sessionTurn, draftRef: key, now: str }),
     reply("intakeProposal", "progress", progress), "proposalOnly", "permittedActor", "callerConfirmation",
     ["activeCall", "currentCallSession", "intakeEnabledForExecution", "hostEvidenceForExecution"]),
+  "patients.correction.propose.v1": entry("patients.correction.propose.v1",
+    object({ kind: { const: "patients.correction.propose.v1" }, turn: sessionTurn, correctionRef: key, now: str }),
+    reply("patientCorrectionProposal", "progress", progress), "proposalOnly", "permittedActor", "callerConfirmation",
+    ["activeCall", "currentCallSession", "hostEvidenceForExecution"]),
+  "notifications.resend.propose.v1": entry("notifications.resend.propose.v1",
+    object({ kind: { const: "notifications.resend.propose.v1" }, turn: sessionTurn, requestRef: key, now: str }),
+    reply("confirmationResendProposal", "progress", progress), "proposalOnly", "permittedActor", "callerConfirmation",
+    ["activeCall", "currentCallSession", "hostEvidenceForExecution"]),
   "calls.urgent.respond.v1": entry("calls.urgent.respond.v1",
     object({ kind: { const: "calls.urgent.respond.v1" }, turn, now: str }),
     reply("urgentResponseProgress", "progress", progress), "proposalOnly", "permittedActor", "none", ["activeCall"]),
@@ -459,10 +474,10 @@ export const capabilityCatalogue = {
     reply("clinicAvailabilityApprovalState", "state", clinicAvailabilityApprovalState),
     "policyChange", "clinicAdmin", "none", ["availabilitySetupAvailable", "expectedAvailabilityApprovalVersion"]),
   "rescheduling.menu.read.v1": entry("rescheduling.menu.read.v1",
-    optional({ kind: { const: "rescheduling.menu.read.v1" }, turn: sessionTurn, stage: { enum: ["targets", "offers"] }, from: str, to: str, now: str, window: bookingWindow }, ["kind", "turn", "stage", "from", "to", "now"]),
+    optional({ kind: { const: "rescheduling.menu.read.v1" }, turn: sessionTurn, stage: { enum: ["targets", "practitioners", "offers"] }, from: str, to: str, now: str, window: bookingWindow, nextPractitioners: { const: true } }, ["kind", "turn", "stage", "from", "to", "now"]),
     reply("appointmentChangeProposal", "progress", progress), "read", "permittedActor", "none", ["activeCall", "currentCallSession", "hostIssuedPatientProof", "appointmentChangeEnabledForExecution"]),
   "rescheduling.menu.select.v1": entry("rescheduling.menu.select.v1",
-    object({ kind: { const: "rescheduling.menu.select.v1" }, turn: sessionTurn, stage: { enum: ["targets", "offers"] }, choice: { type: "integer", minimum: 1, maximum: 3 }, now: str }),
+    object({ kind: { const: "rescheduling.menu.select.v1" }, turn: sessionTurn, stage: { enum: ["targets", "practitioners", "offers"] }, choice: { type: "integer", minimum: 1, maximum: 3 }, now: str }),
     reply("appointmentChangeProposal", "progress", progress), "proposalOnly", "permittedActor", "callerConfirmation", ["activeCall", "currentCallSession", "hostIssuedPatientProof", "appointmentChangeEnabledForExecution"]),
   "booking.offers.read.v1": entry("booking.offers.read.v1",
     optional({ kind: { const: "booking.offers.read.v1" }, turn: sessionTurn, from: str, to: str, now: str, window: bookingWindow, preference: bookingPreference }, ["kind", "turn", "from", "to", "now"]),

@@ -88,6 +88,8 @@ for (const kind of kinds) {
       text: "Northside", quality: "clear" }));
     value(await app.policy.changeAutomationEnabled(app.north, "0", true, "admin"));
     const bound = value(await session.finishTurn(now));
+    assert.notEqual(bound.kind, "locationInformation");
+    assert.ok("receipt" in bound);
     assert.deepEqual(bound.receipt.scope, app.north);
     assert.equal(value(await app.ledger.findPendingLocation(bound.receipt.callId))?.choiceEvidence?.sessionId, "session");
     value(await new CallRuntime(app.ledger, app.north).activate(bound.receipt.callId, "session", now));

@@ -1,3 +1,4 @@
+import type { ClinicPatientCorrectionAuditPage } from "../../core/clinic-patient-correction-setting.ts";
 import { validVoiceCatalogue, validVoicePolicy, validVoiceVersion, validVoiceSettingKind, validVoiceSettingValue, validVoiceRef } from "../../core/voice-profile.ts";
 import type { VoiceCatalogue, VoiceSettingKind } from "../../core/voice-profile.ts";
 import type { VoiceSettingAuditPage } from "../../core/clinic-voice-setting.ts";
@@ -57,9 +58,11 @@ export type DashboardPort = Readonly<{
   cancellationAudit(afterVersion?: number): Promise<Result<CancellationSettingAuditPage, DashboardFailure>>;
   reschedulingAudit(afterVersion?: number): Promise<Result<ReschedulingSettingAuditPage, DashboardFailure>>;
   firstTimeIntakeAudit(afterVersion?: number): Promise<Result<ClinicIntakeAuditPage, DashboardFailure>>;
+  patientCorrectionsAudit(afterVersion?: number): Promise<Result<ClinicPatientCorrectionAuditPage, DashboardFailure>>;
   changeCancellationEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   changeReschedulingEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   changeFirstTimeIntakeEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
+  changePatientCorrectionsEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>>;
   afterHoursAudit(afterVersion?: number): Promise<Result<AfterHoursSettingAuditPage, DashboardFailure>>;
   changeAfterHours(expectedVersion: string, mode: AfterHoursMode, infoVersion?: string, approvedText?: string): Promise<Result<CallPolicy, DashboardFailure>>;
   urgentAudit(afterVersion?: number): Promise<Result<UrgentSettingAuditPage, DashboardFailure>>;
@@ -149,6 +152,8 @@ function policy(value: unknown): Result<CallPolicy, DashboardFailure> {
     && (current.transferDestinationRef === undefined || validStaffedDestinationRef(current.transferDestinationRef))
     && (current.transferDestinationVersion === undefined || validStaffedDestinationRef(current.transferDestinationVersion))
     && (current.firstTimeIntakeEnabled === undefined || typeof current.firstTimeIntakeEnabled === "boolean")
+    && (current.patientCorrectionsEnabled === undefined || typeof current.patientCorrectionsEnabled === "boolean")
+    && (current.patientCorrectionsVersion === undefined || (typeof current.patientCorrectionsVersion === "string" && /^(0|[1-9][0-9]*)$/.test(current.patientCorrectionsVersion)))
     && (current.firstTimeIntakeVersion === undefined || (typeof current.firstTimeIntakeVersion === "string" && /^(0|[1-9][0-9]*)$/.test(current.firstTimeIntakeVersion)))
     && record(current.scope) && validAfterHoursSetting(current.afterHoursMode ?? "staffRequest", current.afterHoursInfo,
       current.scope as CallPolicy["scope"]) &&
@@ -483,8 +488,25 @@ export class FetchDashboardPort implements DashboardPort {
     return ok(reply.page);
   }
 
+  async patientCorrectionsAudit(afterVersion?: number): Promise<Result<ClinicPatientCorrectionAuditPage, DashboardFailure>> {
+    const result = await request(`/api/settings/patient-corrections-audit${afterVersion === undefined ? "" : `?after=${afterVersion}`}`);
+    if (!result.ok) return result;
+    if (!matchesSchema(capabilityDescriptor("settings.patients.corrections.audit.v1").resultSchema,
+      { ok: true, value: result.value })) return err({ kind: "malformed" });
+    const reply = result.value as Extract<GatewayReply, { kind: "patientCorrectionSettingAudit" }>;
+    if (reply.page.entries.some(entry => !/^(0|[1-9][0-9]*)$/.test(entry.version) ||
+        !Number.isFinite(Date.parse(entry.changedAt)))) return err({ kind: "malformed" });
+    return ok(reply.page);
+  }
+
   async changeFirstTimeIntakeEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>> {
     const result = await request("/api/settings/first-time-intake-enabled", { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion, enabled }) });
+    return result.ok ? policy(result.value) : result;
+  }
+
+  async changePatientCorrectionsEnabled(expectedVersion: string, enabled: boolean): Promise<Result<CallPolicy, DashboardFailure>> {
+    const result = await request("/api/settings/patient-corrections-enabled", { method: "POST",
       headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion, enabled }) });
     return result.ok ? policy(result.value) : result;
   }

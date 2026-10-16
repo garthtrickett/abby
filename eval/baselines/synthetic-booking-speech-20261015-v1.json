@@ -1,0 +1,628 @@
+{
+  "schema": "abby.synthetic-booking-speech.aggregate.v1",
+  "date": "2026-10-15",
+  "sourceHead": "e3f405c8cdd3882b87d9cd07647efa9eb1e489fa",
+  "patientFree": true,
+  "sourceBinding": "New scripts and fixed corpus are hashed before publication; no production voice source changed.",
+  "originalTranscriptionSources": [
+    {
+      "path": "src/voice/openai-realtime-transcription.ts",
+      "sha256": "2104a7321c544d8fddd5939b7613c00968979dc888d22aa61730bb6c721c1df0"
+    },
+    {
+      "path": "src/voice/transcription-evaluation.ts",
+      "sha256": "3ea30413b80cd28ecf337aaf9ad156dc6d5fd946ee74f81678654f9f2a41943d"
+    },
+    {
+      "path": "src/voice/transcription-evaluation-gate.ts",
+      "sha256": "44f7973d65f8de8261db8030bfbb14ce827a0c14b9b35756c2640133c956357c"
+    },
+    {
+      "path": "scripts/evaluate-transcription.ts",
+      "sha256": "0ccffb2847436140c6da8403f96b39b77b561dd76d905e827ede85c5c36413b4"
+    }
+  ],
+  "originalSourcesMatch": true,
+  "originalCorpora": [
+    {
+      "path": "eval/transcription-v1.json",
+      "sha256": "2d3fabc12d13699ffecc4017d64ba9cedc91373e001529abf135a6f311357905"
+    },
+    {
+      "path": "eval/transcription-telephony-v1.json",
+      "sha256": "65645afaeeaca6c91342b8e690c184affd58e004f3438cfa0cccfdd18e3f8e1a"
+    },
+    {
+      "path": "eval/transcription-noise-v1.json",
+      "sha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2"
+    },
+    {
+      "path": "eval/transcription-safety-v1.json",
+      "sha256": "fb261dfa87cfd036307346874b439b63596a7b9390109cc3d22965f5fda795da"
+    }
+  ],
+  "originalNoiseBaseline": {
+    "path": "eval/baselines/synthetic-speech-comparison-20261014-v1.json",
+    "sha256": "6ec85596b22636249f8daf6cb87f798406b8bde6ed798fb45d1543ac940b17f5",
+    "status": "fail",
+    "critical": 11,
+    "runs": 18,
+    "wordErrorRate": 0.4166666666666667
+  },
+  "codecAudit": {
+    "all256PcmuOctetsMatchFfmpeg": true,
+    "maximumDecoderDifference": 0,
+    "signalFrequencyHz": 2000,
+    "imageFrequencyHz": 6000,
+    "heldImageDb": -7.6555137067572065,
+    "bandlimitedImageDb": -91.8661644813021
+  },
+  "interpolationScreen": {
+    "runs": 24,
+    "repeatsPerCase": 1,
+    "qualification": false,
+    "variants": [
+      {
+        "id": "live-control",
+        "model": "gpt-live-transcribe",
+        "bandlimited": false,
+        "counts": {
+          "match": 1,
+          "mismatch": 1,
+          "critical": 4,
+          "providerFailure": 0
+        },
+        "assessment": {
+          "status": "fail",
+          "failures": [
+            "insufficientRepeats",
+            "critical",
+            "wordErrorRate"
+          ],
+          "metrics": {
+            "cases": 6,
+            "runs": 6,
+            "critical": 4,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 0,
+            "wordErrorRate": 0.4090909090909091,
+            "finalP95Ms": 845,
+            "missingRepeats": [
+              "NS-001",
+              "NS-002",
+              "NS-003",
+              "NS-004",
+              "NS-005",
+              "NS-006"
+            ]
+          },
+          "thresholds": {
+            "version": "transcription-synthetic-gate-v1",
+            "minRepeatsPerCase": 3,
+            "maxCritical": 0,
+            "maxProviderFailures": 0,
+            "maxEmpty": 0,
+            "maxTruncated": 0,
+            "maxWordErrorRate": 0.1,
+            "maxFinalP95Ms": 2500,
+            "maxIndividualFinalMs": 5000
+          }
+        }
+      },
+      {
+        "id": "live-bandlimited",
+        "model": "gpt-live-transcribe",
+        "bandlimited": true,
+        "counts": {
+          "match": 1,
+          "mismatch": 2,
+          "critical": 3,
+          "providerFailure": 0
+        },
+        "assessment": {
+          "status": "fail",
+          "failures": [
+            "insufficientRepeats",
+            "critical",
+            "wordErrorRate"
+          ],
+          "metrics": {
+            "cases": 6,
+            "runs": 6,
+            "critical": 3,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 0,
+            "wordErrorRate": 0.38636363636363635,
+            "finalP95Ms": 854,
+            "missingRepeats": [
+              "NS-001",
+              "NS-002",
+              "NS-003",
+              "NS-004",
+              "NS-005",
+              "NS-006"
+            ]
+          },
+          "thresholds": {
+            "version": "transcription-synthetic-gate-v1",
+            "minRepeatsPerCase": 3,
+            "maxCritical": 0,
+            "maxProviderFailures": 0,
+            "maxEmpty": 0,
+            "maxTruncated": 0,
+            "maxWordErrorRate": 0.1,
+            "maxFinalP95Ms": 2500,
+            "maxIndividualFinalMs": 5000
+          }
+        }
+      },
+      {
+        "id": "committed-context-control",
+        "model": "gpt-transcribe",
+        "bandlimited": false,
+        "counts": {
+          "match": 4,
+          "mismatch": 1,
+          "critical": 1,
+          "providerFailure": 0
+        },
+        "assessment": {
+          "status": "fail",
+          "failures": [
+            "insufficientRepeats",
+            "critical",
+            "wordErrorRate"
+          ],
+          "metrics": {
+            "cases": 6,
+            "runs": 6,
+            "critical": 1,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 0,
+            "wordErrorRate": 0.13636363636363635,
+            "finalP95Ms": 831,
+            "missingRepeats": [
+              "NS-001",
+              "NS-002",
+              "NS-003",
+              "NS-004",
+              "NS-005",
+              "NS-006"
+            ]
+          },
+          "thresholds": {
+            "version": "transcription-synthetic-gate-v1",
+            "minRepeatsPerCase": 3,
+            "maxCritical": 0,
+            "maxProviderFailures": 0,
+            "maxEmpty": 0,
+            "maxTruncated": 0,
+            "maxWordErrorRate": 0.1,
+            "maxFinalP95Ms": 2500,
+            "maxIndividualFinalMs": 5000
+          }
+        }
+      },
+      {
+        "id": "committed-context-bandlimited",
+        "model": "gpt-transcribe",
+        "bandlimited": true,
+        "counts": {
+          "match": 4,
+          "mismatch": 1,
+          "critical": 1,
+          "providerFailure": 0
+        },
+        "assessment": {
+          "status": "fail",
+          "failures": [
+            "insufficientRepeats",
+            "critical",
+            "wordErrorRate",
+            "finalP95",
+            "delayed"
+          ],
+          "metrics": {
+            "cases": 6,
+            "runs": 6,
+            "critical": 1,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 1,
+            "wordErrorRate": 0.13636363636363635,
+            "finalP95Ms": 11549,
+            "missingRepeats": [
+              "NS-001",
+              "NS-002",
+              "NS-003",
+              "NS-004",
+              "NS-005",
+              "NS-006"
+            ]
+          },
+          "thresholds": {
+            "version": "transcription-synthetic-gate-v1",
+            "minRepeatsPerCase": 3,
+            "maxCritical": 0,
+            "maxProviderFailures": 0,
+            "maxEmpty": 0,
+            "maxTruncated": 0,
+            "maxWordErrorRate": 0.1,
+            "maxFinalP95Ms": 2500,
+            "maxIndividualFinalMs": 5000
+          }
+        }
+      }
+    ],
+    "interpretation": "A spectral image exists in repeated-sample upsampling. Bandlimited interpolation did not fix original noisy recognition. Screens fail accuracy and minimum repeats; no candidate was promoted."
+  },
+  "directAudioScreen": {
+    "model": "gpt-realtime-2.1",
+    "runs": 1,
+    "stoppedOnRejectedCandidate": true,
+    "assessment": {
+      "status": "fail",
+      "failures": [
+        "insufficientRepeats",
+        "critical",
+        "wordErrorRate"
+      ],
+      "metrics": {
+        "cases": 6,
+        "runs": 1,
+        "critical": 1,
+        "providerFailures": 0,
+        "empty": 0,
+        "truncated": 0,
+        "delayed": 0,
+        "wordErrorRate": 0.2222222222222222,
+        "finalP95Ms": 1260,
+        "missingRepeats": [
+          "NS-001",
+          "NS-002",
+          "NS-003",
+          "NS-004",
+          "NS-005",
+          "NS-006"
+        ]
+      },
+      "thresholds": {
+        "version": "transcription-synthetic-gate-v1",
+        "minRepeatsPerCase": 3,
+        "maxCritical": 0,
+        "maxProviderFailures": 0,
+        "maxEmpty": 0,
+        "maxTruncated": 0,
+        "maxWordErrorRate": 0.1,
+        "maxFinalP95Ms": 2500,
+        "maxIndividualFinalMs": 5000
+      }
+    },
+    "interpretation": "A direct literal audio-to-text diagnostic changed chest pain to cash today on NS-006 and was rejected after the first critical miss. It is not the production transcription adapter."
+  },
+  "generation": {
+    "configuration": {
+      "model": "gpt-realtime-2.1-mini",
+      "voices": [
+        "coral",
+        "cedar"
+      ],
+      "providerTranscriptCheck": "productionAdapterLiteralMatch",
+      "acousticMatch": "unverified"
+    },
+    "sourceFiles": [
+      {
+        "path": "scripts/build-booking-transcription-fixtures.ts",
+        "sha256": "769626ba2686f79f22485fc5cd92c17500d7084c083bd91477e9b48342e6a640"
+      },
+      {
+        "path": "scripts/lib/booking-speech-fixtures.ts",
+        "sha256": "b0ee3b1917b0879744b903b233bf2fcf99e12acc941e3fea62ff32388f1c4360"
+      },
+      {
+        "path": "src/voice/openai-realtime-speech-synthesis.ts",
+        "sha256": "cb5308593d5f9ef9db1a8b139be58ab0134b37d382d6e33dd112f06ae2bcf5bd"
+      },
+      {
+        "path": "src/voice/transport-media-normalizer.ts",
+        "sha256": "aed85f0c56b7ca4f435c6e89c125b6be87d72aba660c2a781ab0bf6f0acb301a"
+      }
+    ],
+    "sourceClips": 8,
+    "telephoneClips": 16,
+    "wavExports": 16,
+    "voices": [
+      "coral",
+      "cedar"
+    ],
+    "phrases": [
+      "date-time",
+      "correction",
+      "withdrawal",
+      "duration"
+    ],
+    "noise": {
+      "kind": "seededWhite",
+      "nominalSnrDb": 10,
+      "stage": "beforePcmuEncoding"
+    },
+    "clippedSamples": 0
+  },
+  "evaluation": {
+    "configuration": {
+      "model": "gpt-live-transcribe",
+      "corpusVersion": "transcription-booking-v1",
+      "corpusSha256": "af1c631f9d359329bf8f6aec2e4909389085f8d93eecdc6becc982c1334471a3",
+      "repeats": 3,
+      "concurrency": 2,
+      "sourceFiles": [
+        {
+          "path": "scripts/evaluate-booking-transcription.ts",
+          "sha256": "c44a01c9dacd2446a26e66e2841821b3ef5b3d062fe952114ba3d705469f71ab"
+        },
+        {
+          "path": "scripts/lib/booking-speech-fixtures.ts",
+          "sha256": "b0ee3b1917b0879744b903b233bf2fcf99e12acc941e3fea62ff32388f1c4360"
+        },
+        {
+          "path": "src/voice/openai-realtime-transcription.ts",
+          "sha256": "2104a7321c544d8fddd5939b7613c00968979dc888d22aa61730bb6c721c1df0"
+        },
+        {
+          "path": "src/voice/transcription-evaluation.ts",
+          "sha256": "3ea30413b80cd28ecf337aaf9ad156dc6d5fd946ee74f81678654f9f2a41943d"
+        },
+        {
+          "path": "src/voice/transcription-evaluation-gate.ts",
+          "sha256": "44f7973d65f8de8261db8030bfbb14ce827a0c14b9b35756c2640133c956357c"
+        }
+      ]
+    },
+    "startedAt": "2026-10-15T00:49:01.343Z",
+    "finishedAt": "2026-10-15T00:51:29.323Z",
+    "counts": {
+      "match": 42,
+      "mismatch": 1,
+      "critical": 5,
+      "providerFailure": 0
+    },
+    "assessment": {
+      "status": "fail",
+      "failures": [
+        "critical"
+      ],
+      "metrics": {
+        "cases": 16,
+        "runs": 48,
+        "critical": 5,
+        "providerFailures": 0,
+        "empty": 0,
+        "truncated": 0,
+        "delayed": 0,
+        "wordErrorRate": 0.018518518518518517,
+        "finalP95Ms": 1775,
+        "missingRepeats": []
+      },
+      "thresholds": {
+        "version": "transcription-synthetic-gate-v1",
+        "minRepeatsPerCase": 3,
+        "maxCritical": 0,
+        "maxProviderFailures": 0,
+        "maxEmpty": 0,
+        "maxTruncated": 0,
+        "maxWordErrorRate": 0.1,
+        "maxFinalP95Ms": 2500,
+        "maxIndividualFinalMs": 5000
+      }
+    },
+    "groups": [
+      {
+        "condition": "quiet",
+        "assessment": {
+          "status": "pass",
+          "failures": [],
+          "metrics": {
+            "cases": 8,
+            "runs": 24,
+            "critical": 0,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 0,
+            "wordErrorRate": 0,
+            "finalP95Ms": 1775,
+            "missingRepeats": []
+          },
+          "thresholds": {
+            "version": "transcription-synthetic-gate-v1",
+            "minRepeatsPerCase": 3,
+            "maxCritical": 0,
+            "maxProviderFailures": 0,
+            "maxEmpty": 0,
+            "maxTruncated": 0,
+            "maxWordErrorRate": 0.1,
+            "maxFinalP95Ms": 2500,
+            "maxIndividualFinalMs": 5000
+          }
+        }
+      },
+      {
+        "condition": "noise",
+        "assessment": {
+          "status": "fail",
+          "failures": [
+            "critical"
+          ],
+          "metrics": {
+            "cases": 8,
+            "runs": 24,
+            "critical": 5,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 0,
+            "wordErrorRate": 0.037037037037037035,
+            "finalP95Ms": 1583,
+            "missingRepeats": []
+          },
+          "thresholds": {
+            "version": "transcription-synthetic-gate-v1",
+            "minRepeatsPerCase": 3,
+            "maxCritical": 0,
+            "maxProviderFailures": 0,
+            "maxEmpty": 0,
+            "maxTruncated": 0,
+            "maxWordErrorRate": 0.1,
+            "maxFinalP95Ms": 2500,
+            "maxIndividualFinalMs": 5000
+          }
+        }
+      }
+    ],
+    "criticalBuckets": [
+      {
+        "caseId": "BK-002",
+        "repeats": [
+          2,
+          3
+        ],
+        "kind": "spoken ordinal rendered numerically",
+        "count": 2
+      },
+      {
+        "caseId": "BK-010",
+        "repeats": [
+          1,
+          2,
+          3
+        ],
+        "kind": "booking request changed to past-tense assertion",
+        "count": 3
+      }
+    ],
+    "noncriticalMismatch": {
+      "caseId": "BK-008",
+      "repeat": 1,
+      "kind": "request wording changed while required duration terms remained"
+    },
+    "allFinals": "needsClarification"
+  },
+  "verification": {
+    "path": "eval/results/e414-booking-evidence-verification-v2.json",
+    "sha256": "560c11ffabef31d2415eada0ae5b9a32242373a97d72441a982cd22c1bcc4752",
+    "verifierSha256": "1d42fc25b54c8494356065fa119c03c944c20c5878e3493874976c34a2da0170",
+    "sources": 8,
+    "telephoneClips": 16,
+    "wavExports": 16,
+    "wireHashesVerified": 48,
+    "caseRepeatsVerified": 48,
+    "assessmentRecomputed": true,
+    "falsePassReportRejected": true,
+    "optimizedPythonRejected": true,
+    "log": "4590eee3-1792025900260.log"
+  },
+  "privateArtifacts": [
+    {
+      "path": "eval/results/e414-audio-audit.mjs",
+      "sha256": "d61c0b337932d524de8b9f761394bb65236512153df2a8402c3fccecf84b80a4"
+    },
+    {
+      "path": "eval/results/e414-audio-audit.json",
+      "sha256": "24efc3a68ceb4301d77debe730c2650d19cdf246d1e287d4eb2a2fb52a0ead4c"
+    },
+    {
+      "path": "eval/results/e414-interpolation-screen.mjs",
+      "sha256": "cfb9690eee353e084ebd43da763ea798583846520d903bd1279a4dab849a57de"
+    },
+    {
+      "path": "eval/results/e414-interpolation-screen-v1.json",
+      "sha256": "80b3f92871e00bb2d351c711091708cf6faa58fd41fd12b3f5d8307fc4468830"
+    },
+    {
+      "path": "eval/results/e414-direct-audio-screen.mjs",
+      "sha256": "5f432030fb2fb4dee7ff0a466ab2131097a4d027f445398e1519e466ff1229d8"
+    },
+    {
+      "path": "eval/results/e414-direct-audio-screen-v1.json",
+      "sha256": "3fee032799c4f0898ed81468ea1704a353e147409d1f8da4738802004d0893af"
+    },
+    {
+      "path": "eval/results/e414-verifier-negatives.py",
+      "sha256": "c51ad2d46eb82001af08a7623f1efa96805313920eff461953671beb28d7442d"
+    },
+    {
+      "path": "eval/results/e414-booking-corpus-v1/generation.json",
+      "sha256": "66f686172f796e84a48e6e9a1bd12f22be9ee9f7a7b965a0585e7854bd956167"
+    },
+    {
+      "path": "eval/results/e414-booking-transcription-repeat48.json",
+      "sha256": "fdb63523e032d813caa5e9e1773d8fda396a3ab6f50abf75647bdf1363744014"
+    },
+    {
+      "path": "eval/results/e414-booking-evidence-verification-v2.json",
+      "sha256": "560c11ffabef31d2415eada0ae5b9a32242373a97d72441a982cd22c1bcc4752"
+    }
+  ],
+  "validation": {
+    "fixtureBoundaryFirstAttempt": {
+      "log": "4590eee3-1792024972450.log",
+      "passed": 6,
+      "failed": 1,
+      "cause": "Category names with digits rejected by existing corpus parser; corrected fixture category without changing the parser."
+    },
+    "fixtureTypeGate": {
+      "log": "4590eee3-1792025001830.log",
+      "status": "pass"
+    },
+    "liveGeneration": {
+      "log": "4590eee3-1792025079587.log",
+      "exitCode": 0
+    },
+    "liveRepeatEvaluation": {
+      "log": "4590eee3-1792025340912.log",
+      "exitCode": 1,
+      "cause": "five critical transcripts; genuine failed qualification"
+    },
+    "focusedRegression": {
+      "log": "4590eee3-1792025488331.log",
+      "passed": 27,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    "finalSourceGate": {
+      "command": "npm run typecheck && node --test test/voice/booking-speech-fixtures.test.ts test/voice/transcription-evaluation.test.ts test/voice/transcription-evaluation-gate.test.ts test/voice/openai-realtime-transcription.test.ts test/voice/transport-media-normalizer.test.ts test/voice/speech-gate-status.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts && git diff --check",
+      "log": "4590eee3-1792026233701.log",
+      "status": "pass",
+      "passed": 29,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "elapsed": "1m05s"
+    }
+  },
+  "limits": [
+    "Provider-reported synthesis word matching is not independent acoustic fidelity",
+    "Same provider generated and recognized the new voices",
+    "Timing verification recomputes stored arithmetic, not network or audible playback",
+    "Original noisy/safety gates remain separate and failing",
+    "Human and carrier acceptance remain unrun",
+    "Noise is controlled seeded interference, not measured clinic acoustics, accents, packet loss or a real caller.",
+    "Provider final latency is not first audible response latency.",
+    "Date spelling normalization remains unchanged; two ordinal-format misses still count as critical.",
+    "The new supplemental corpus cannot substitute for the original telephony, noisy and safety release gates.",
+    "Private diagnostic snapshots retain their original paths and source hashes; they are historical probes, not supported production adapters."
+  ],
+  "productionAdmission": "hold",
+  "releaseGate": "unverified",
+  "humanReview": "notRun",
+  "carrier": "notRun",
+  "goalComplete": false
+}

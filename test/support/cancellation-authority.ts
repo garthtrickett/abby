@@ -14,7 +14,8 @@ import type { PatientVerificationBudget } from "../../src/standalone/email-patie
 import type { LocationScope } from "../../src/core/model.ts";
 
 export async function concreteCancellationFixture(options: { scope?: LocationScope; scenario?: CancellationScenario;
-  budget?: PatientVerificationBudget; folder?: string; timeoutMs?: number; multiple?: boolean; startsAt?: string } = {}) {
+  budget?: PatientVerificationBudget; folder?: string; timeoutMs?: number; multiple?: boolean; startsAt?: string;
+  onHeldTarget?: (signal: AbortSignal | undefined) => void } = {}) {
   const scope = options.scope ?? { tenantId: `authority-${crypto.randomUUID()}`, clinicId: "clinic", locationId: "main" };
   const folder = options.folder ?? await mkdtemp(join(tmpdir(), "abby-cancellation-policy-"));
   const path = join(folder, "cancellation.json"), accountPath = join(folder, "accounts.json");
@@ -45,7 +46,9 @@ export async function concreteCancellationFixture(options: { scope?: LocationSco
         const response = await port(value, init);
         if (url.pathname === "/v1/recalls" && method === "POST") await onRecall();
         if (url.pathname === "/v1/individual_appointments/91" && method === "GET") {
-          if (holdExact) await new Promise<void>(resolve => { heldTargetSignal = init?.signal ?? undefined; release = resolve; });
+          if (holdExact) await new Promise<void>(resolve => {
+            heldTargetSignal = init?.signal ?? undefined; release = resolve; options.onHeldTarget?.(heldTargetSignal);
+          });
           const appointment = await response.json();
           if (options.startsAt) { appointment.starts_at = options.startsAt; appointment.ends_at = new Date(Date.parse(options.startsAt) + 1_800_000).toISOString(); }
           if (failure === "patient") appointment.patient.links.self = "https://api.au5.cliniko.com/v1/patients/43";

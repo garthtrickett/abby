@@ -216,3 +216,17 @@ test("E2E-292 malformed refreshed draft denies an attestation instead of throwin
   assert.equal(await host.attest(request, "send"), null);
   host.dispose();
 });
+
+
+test("E2E-369 optional intake fields remain bound when host evidence changes or removes them", async () => {
+  for (const removed of [false, true]) {
+    let evidence: HostIntakeEvidence = { ...baseEvidence, draft: { ...baseEvidence.draft, address1: "private initial address", postCode: "3999" } };
+    const host = authority(clinicianSource(() => evidence));
+    try {
+      const request = await prepared(host); assert.equal(request.address1, "private initial address");
+      assert.ok(await host.attest(request, "read"));
+      evidence = { ...evidence, draft: removed ? { ...baseEvidence.draft } : { ...evidence.draft, address1: "changed private address" } };
+      assert.equal(await host.attest(request, "read"), null);
+    } finally { host.dispose(); }
+  }
+});

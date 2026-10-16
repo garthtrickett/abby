@@ -117,6 +117,15 @@ export class CallRuntime {
   privateIntakePrompt(callId: string, presentationId: string, sessionId: string, now: string) {
     return this.update(callId, { kind: "privateIntakePrompt", presentationId, sessionId, now });
   }
+  privateCorrectionPrompt(callId: string, presentationId: string, sessionId: string, now: string) {
+    return this.update(callId, { kind: "privateCorrectionPrompt", presentationId, sessionId, now });
+  }
+  privateResendPrompt(callId: string, presentationId: string, sessionId: string, now: string) {
+    return this.update(callId, { kind: "privateResendPrompt", presentationId, sessionId, now });
+  }
+  privateRepresentativePrompt(callId: string, presentationId: string, sessionId: string, operation: "book" | "cancel" | "reschedule" | "appointments.read", now: string) {
+    return this.update(callId, { kind: "privateRepresentativePrompt", presentationId, sessionId, operation, now });
+  }
 
   acceptModelResult(callId: string, effectId: string,
                     result: Extract<TransitionAction, { kind: "modelResolved" }>["result"], now: string): Promise<Result<CallState, TransitionFailure>> {

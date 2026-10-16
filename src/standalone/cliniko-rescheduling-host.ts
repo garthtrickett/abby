@@ -112,7 +112,7 @@ export class ClinikoReschedulingHost extends NoStoredKnowledge
       timeZone: config.timeZone, createdAt: now, operation: { kind: "reschedule", appointmentId: provider.appointmentId,
         newStartsAt: new Date(provider.newStartsAt).toISOString(), newEndsAt: new Date(provider.newEndsAt).toISOString(), practitionerId: provider.practitionerId,
         appointmentTypeId: provider.appointmentTypeId, startsAt: new Date(provider.startsAt).toISOString(),
-        endsAt: new Date(provider.endsAt).toISOString() } };
+        endsAt: new Date(provider.endsAt).toISOString(), ...(provider.newPractitionerId ? { newPractitionerId: provider.newPractitionerId } : {}) } };
     const result = await this.#review.run(confirmed, {
       authorize: async (_request, stop) => this.#guard.authorize(prepared, mutation, this.#now(), stop),
       send: async (_request, stop) => config.rescheduling.rescheduleOnce(provider, stop, {

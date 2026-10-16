@@ -1,3 +1,5 @@
+import { createWorkflowCallerVerification } from "./workflow-caller-verification.ts";
+import type { RepresentativeWorkflowSelection } from "./workflow-caller-verification.ts";
 import { ClinikoReschedulingMenu } from "./cliniko-rescheduling-menu.ts";
 import { ClinikoCancellationWriter } from "../cliniko/cancellation-write.ts";
 import { OwnerFileReschedulingPolicy } from "./owner-file-rescheduling-policy.ts";
@@ -25,8 +27,11 @@ export type ClinikoReschedulingSessionConfig = Readonly<{
   ledger: LedgerStore; policies: PolicyStore; lookup: CallerCandidateLookup;
   permission: PatientVerificationPermission; verificationBudget: PatientVerificationBudget; delivery: PatientCodeDelivery;
   directory: AdminDirectory; callerApprovalPath: string; bookingApprovalPath: string; reschedulingApprovalPath: string;
+  destination?: Readonly<{ practitionerId: string; bookingApprovalPath: string }>;
+  practitioners?: readonly Readonly<{ practitionerId: string; bookingApprovalPath: string }>[];
   cliniko: Readonly<{ apiKey: string; contactEmail: string; businessId: string; practitionerId: string; appointmentTypeId: string; recallTypeId: string;
     timeZone: string; countryCallingCode: string; rateBudget: ClinikoRequestBudget }>;
+  representative?: RepresentativeWorkflowSelection;
   signal: AbortSignal; fetchPort?: typeof fetch; clock?: () => string; timeoutMs?: number;
 }>;
 type Failure = Readonly<{ kind: "reschedulingSessionUnavailable" }>;
@@ -58,10 +63,14 @@ export class ClinikoReschedulingSession {
     const dispose = () => { host?.dispose(); menu?.dispose(); authority?.dispose(); verification?.dispose(); };
     try {
       if (!incoming || !(incoming.signal instanceof AbortSignal) || incoming.signal.aborted ||
+          incoming.destination && incoming.practitioners !== undefined ||
+          incoming.practitioners !== undefined && (!Array.isArray(incoming.practitioners) || incoming.practitioners.length > 23) ||
           !isClinikoRequestBudget(incoming.cliniko?.rateBudget) ||
           (incoming.timeoutMs !== undefined && (!Number.isSafeInteger(incoming.timeoutMs) || incoming.timeoutMs < 1 || incoming.timeoutMs > 20_000))) return unavailable();
       // Freeze caller/provider bindings before the first async approval read.
-      const config = Object.freeze({ ...incoming, receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound),
+      const config = Object.freeze({ ...incoming, ...(incoming.representative ? { representative: Object.freeze({ ...incoming.representative }) } : {}), receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound),
+        ...(incoming.destination ? { destination: Object.freeze({ ...incoming.destination }) } : {}),
+        ...(incoming.practitioners ? { practitioners: Object.freeze(incoming.practitioners.map(member => Object.freeze({ ...member }))) } : {}),
         cliniko: Object.freeze({ ...incoming.cliniko }), clock: incoming.clock ?? (() => new Date().toISOString()) });
       const scope = config.receipt.scope, fetchPort = config.fetchPort ?? fetch;
       const stopped = new Promise<undefined>(resolve => {
@@ -84,8 +93,9 @@ export class ClinikoReschedulingSession {
         const caller = await OwnerFileCallerPolicy.capture({ path: config.callerApprovalPath, scope, policyVersion: config.policyVersion,
           operation: "appointments.reschedule", directory: config.directory, clock: config.clock });
         if (!caller.ok || settled) return undefined;
-        const policy = await OwnerFileBookingPolicy.capture({ path: config.bookingApprovalPath, scope,
-          policyVersion: config.policyVersion, businessId: config.cliniko.businessId, practitionerId: config.cliniko.practitionerId, appointmentTypeId: config.cliniko.appointmentTypeId, recallTypeId: config.cliniko.recallTypeId,
+        const destinationId = config.destination?.practitionerId ?? config.cliniko.practitionerId;
+        const policy = await OwnerFileBookingPolicy.capture({ path: config.destination?.bookingApprovalPath ?? config.bookingApprovalPath, scope,
+          policyVersion: config.policyVersion, businessId: config.cliniko.businessId, practitionerId: destinationId, appointmentTypeId: config.cliniko.appointmentTypeId, recallTypeId: config.cliniko.recallTypeId,
           credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey), timeZone: config.cliniko.timeZone,
           directory: config.directory, clock: config.clock });
         if (!policy.ok || settled) return undefined;
@@ -94,6 +104,21 @@ export class ClinikoReschedulingSession {
           credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey), timeZone: config.cliniko.timeZone,
           directory: config.directory, clock: config.clock });
         if (!fees.ok || settled) return undefined;
+        const practitionerPolicies: OwnerFileBookingPolicy[] = [];
+        for (const member of config.practitioners ?? []) {
+          const captured = await OwnerFileBookingPolicy.capture({ path: member.bookingApprovalPath, scope,
+            policyVersion: config.policyVersion, businessId: config.cliniko.businessId, practitionerId: member.practitionerId,
+            appointmentTypeId: config.cliniko.appointmentTypeId, recallTypeId: config.cliniko.recallTypeId,
+            credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey), timeZone: config.cliniko.timeZone,
+            directory: config.directory, clock: config.clock });
+          if (!captured.ok || settled) return undefined;
+          practitionerPolicies.push(captured.value);
+        }
+        if (destinationId !== config.cliniko.practitionerId) {
+          const destination = await policy.value.current(scope), current = await fees.value.current(scope);
+          if (!destination.ok || !current.ok || !current.value.practitionerMoves?.some(move => move.fromPractitionerId === config.cliniko.practitionerId &&
+              move.toPractitionerId === destinationId && move.appointmentTypeId === config.cliniko.appointmentTypeId && move.durationMinutes === destination.value.durationMinutes)) return undefined;
+        }
         const verificationPolicy = { operation: "appointments.reschedule" as const, current: async (bound: typeof scope) => {
           const method = await caller.value.current(bound);
           if (!method.ok) return method;
@@ -106,15 +131,16 @@ export class ClinikoReschedulingSession {
             current.value.capabilities.reschedule === "execute" && current.value.staffWorkEnabled === true && admitted.ok &&
             admitted.value.policy.capabilities.reschedule === "execute" && admitted.value.policy.staffWorkEnabled === true });
         } };
-        const session = CallerVerificationSession.create({ receipt: config.receipt, inbound: config.inbound, sessionId: config.sessionId,
+        const session = await createWorkflowCallerVerification({ receipt: config.receipt, inbound: config.inbound, sessionId: config.sessionId,
           policyVersion: config.policyVersion, operation: "appointments.reschedule", ledger: config.ledger, policyStore: config.policies,
           policy: verificationPolicy, lookup: config.lookup, contact: new ClinikoVerificationContactReader({ ...config.cliniko, scope }, fetchPort),
-          permission: config.permission, budget: config.verificationBudget, delivery: config.delivery, clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) });
-        if (!session.ok || settled) return undefined;
+          permission: config.permission, budget: config.verificationBudget, delivery: config.delivery, clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) }, { credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey), businessId: config.cliniko.businessId, timeZone: config.cliniko.timeZone }, config.signal, caller.value, config.representative);
+        if (!session.ok) return undefined;
         verification = session.value;
-        const source = ClinikoReschedulingAuthority.create({ ...config.cliniko, scope, callId: config.receipt.callId,
+        if (settled || config.signal.aborted) { verification.dispose(); return undefined; }
+        const source = ClinikoReschedulingAuthority.create({ ...config.cliniko, practitionerId: destinationId, scope, callId: config.receipt.callId,
           sessionId: config.sessionId, policyVersion: config.policyVersion, proof: verification.proof,
-          policy: policy.value, feePolicy: fees.value, clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) }, fetchPort);
+          policy: policy.value, feePolicy: fees.value, ...(config.practitioners !== undefined ? { practitionerPolicies } : {}), clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) }, fetchPort);
         const cancellation = ClinikoCancellationWriter.create({ ...config.cliniko, scope }, fetchPort, config.clock);
         const rescheduling = ClinikoRescheduleWriter.create({ ...config.cliniko, scope }, fetchPort, config.clock);
         const recalls = ClinikoRecallWriter.create({ ...config.cliniko, scope }, fetchPort);

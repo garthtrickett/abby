@@ -20,8 +20,10 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 
 export async function standaloneBookingFixture(options: { scope?: LocationScope; verificationBudget?: PatientVerificationBudget; rateBudget?: ClinikoRequestBudget;
   fetchPort?: typeof fetch; fetchAround?: (port: typeof fetch) => typeof fetch;
-  authorityFor?: (config: Omit<ClinikoBookingOffersConfig, "policy">, port: typeof fetch) => Promise<ClinikoBookingAuthority>; operation?: PatientOperation; staffWorkEnabled?: boolean; lostRecall?: boolean; lostBooking?: boolean } = {}) {
-  const f = await callerVerificationFixture({ operation: options.operation ?? "appointments.book", bookingExecute: true, ...(options.staffWorkEnabled === undefined ? {} : { staffWorkEnabled: options.staffWorkEnabled }), ...(options.scope ? { scope: options.scope } : {}) });
+  authorityFor?: (config: Omit<ClinikoBookingOffersConfig, "policy">, port: typeof fetch) => Promise<ClinikoBookingAuthority>; operation?: PatientOperation; staffWorkEnabled?: boolean; lostRecall?: boolean; lostBooking?: boolean; appointmentChanges?: true } = {}) {
+  const f = await callerVerificationFixture({ operation: options.operation ?? "appointments.book", bookingExecute: true,
+    ...(options.appointmentChanges ? { cancellationExecute: true, reschedulingExecute: true } : {}),
+    ...(options.staffWorkEnabled === undefined ? {} : { staffWorkEnabled: options.staffWorkEnabled }), ...(options.scope ? { scope: options.scope } : {}) });
   f.session.dispose();
   const apiKey = "synthetic-session-au5", base = "https://api.au5.cliniko.com/v1";
   const traffic: string[] = [], mail: { email: string; code: string }[] = [], recalls: Record<string, unknown>[] = [];

@@ -18,6 +18,8 @@ const notices: Record<Exclude<MenuClarificationReason, "changeAfterSend" | "oldA
   changeAmbiguous: "Would you like to move the existing appointment, or cancel it without a replacement? Each needs exact details and a new confirmation.",
   targetDisagreement: "Let's check which appointment you mean before changing anything. Please request your appointments again.",
   changeUnsupported: "I can't change the patient or appointment type or duration in this workflow. Please contact the clinic about that change.",
+  serviceSelectionUnavailable: "I can’t check the service options right now. Please contact the clinic for help with this booking.",
+  serviceChoiceChanged: "Please choose the service and appointment length again so we can check the clinic's return-visit rules. The previous service choice cannot be used to book.",
 };
 
 export function clarificationText(reason: MenuClarificationReason | undefined, latest?: Pick<ActionState, "kind" | "status">, approvedLocation?: string): string {

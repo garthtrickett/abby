@@ -1,6 +1,8 @@
 import { voiceImportHistory } from "../portability/voice-history.ts";
 import type { ClinicVoiceArchiveRow } from "../portability/voice-history.ts";
 import { MemoryClinicIntakeSettingStore } from "./clinic-intake-setting-store.ts";
+import { MemoryClinicPatientCorrectionSettingStore } from "./clinic-patient-correction-setting-store.ts";
+import type { ClinicPatientCorrectionAuditEntry, ClinicPatientCorrectionAuditPage } from "../core/clinic-patient-correction-setting.ts";
 import { notificationArchiveSnapshot, notificationImportHistory } from "../portability/notification-history.ts";
 import type { ClinicNotificationArchiveRow } from "../portability/notification-history.ts";
 import { MemoryClinicNotificationSettingStore } from "./clinic-notification-setting-store.ts";
@@ -72,6 +74,7 @@ export type ImportedReferenceClinicAutomation = Readonly<{
   sourceVersion: number;
   sourceEnabled: boolean;
   intake?: Readonly<{ history: readonly ClinicIntakeAuditEntry[]; sourceVersion: number; sourceEnabled: boolean }>;
+  patientCorrections?: Readonly<{ history: readonly ClinicPatientCorrectionAuditEntry[]; sourceVersion: number; sourceEnabled: boolean }>;
   notifications?: readonly ClinicNotificationArchiveRow[];
   voices?: readonly ClinicVoiceArchiveRow[];
 }>;
@@ -93,6 +96,8 @@ export class MemoryPolicyStore implements PolicyStore {
   private readonly hostCancellationMode: CapabilityMode;
   private readonly hostReschedulingMode: CapabilityMode;
   private readonly hostIntakeMode: CapabilityMode;
+  private readonly hostPatientUpdateMode: CapabilityMode;
+  private readonly corrections: MemoryClinicPatientCorrectionSettingStore;
   private readonly intake: MemoryClinicIntakeSettingStore;
   private readonly notifications: MemoryClinicNotificationSettingStore;
   private readonly notificationRegistry: NotificationRegistry;
@@ -109,6 +114,7 @@ export class MemoryPolicyStore implements PolicyStore {
     this.hostBookingMode = hostBookingMode;
     this.clock = clock;
     this.intake = new MemoryClinicIntakeSettingStore(clock);
+    this.corrections = new MemoryClinicPatientCorrectionSettingStore(clock);
     this.notifications = new MemoryClinicNotificationSettingStore(clock, notificationRegistry);
     this.notificationRegistry = notificationRegistry;
     this.voices = new MemoryClinicVoiceSettingStore(voiceRegistry, clock);
@@ -117,6 +123,7 @@ export class MemoryPolicyStore implements PolicyStore {
     this.hostCancellationMode = typeof hostPatientModes === "string" ? hostPatientModes : hostPatientModes.cancellation ?? "unavailable";
     this.hostReschedulingMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.rescheduling ?? "unavailable";
     this.hostIntakeMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.intake ?? "unavailable";
+    this.hostPatientUpdateMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.patientUpdate ?? "unavailable";
     this.staffedDestinationRegistry = staffedDestinationRegistry;
   }
 
@@ -133,10 +140,11 @@ export class MemoryPolicyStore implements PolicyStore {
                       intake?: ImportedReferenceClinicAutomation["intake"],
                       staffedDestinationHistory: readonly StaffedDestinationAuditEntry[] = [],
                       notifications: readonly ClinicNotificationArchiveRow[] = [],
-                      voices: readonly ClinicVoiceArchiveRow[] = []): MemoryPolicyStore {
+                      voices: readonly ClinicVoiceArchiveRow[] = [],
+                      patientCorrections?: ImportedReferenceClinicAutomation["patientCorrections"]): MemoryPolicyStore {
     return MemoryPolicyStore.fromImportedMany(
       [{ scope, policy: sourceHead, bookingHistory, afterHoursHistory, urgentHistory, staffScheduleHistory, greetingHistory, cancellationHistory, reschedulingHistory, staffedDestinationHistory }],
-      [{ scope, history: automationHistory, sourceVersion: sourceAutomationVersion, sourceEnabled: sourceAutomationEnabled, notifications, voices, ...(intake ? { intake } : {}) }],
+      [{ scope, history: automationHistory, sourceVersion: sourceAutomationVersion, sourceEnabled: sourceAutomationEnabled, notifications, voices, ...(intake ? { intake } : {}), ...(patientCorrections ? { patientCorrections } : {}) }],
       importActorRef, importedAt);
   }
 
@@ -198,6 +206,8 @@ export class MemoryPolicyStore implements PolicyStore {
       store.automationChanges.set(key, automation);
       store.intake.importDisabled(clinic.scope, { version: String(clinic.intake?.sourceVersion ?? 0),
         enabled: clinic.intake?.sourceEnabled ?? false }, clinic.intake?.history ?? [], importActorRef, importedAt);
+      store.corrections.importDisabled(clinic.scope, { version: String(clinic.patientCorrections?.sourceVersion ?? 0),
+        enabled: clinic.patientCorrections?.sourceEnabled ?? false }, clinic.patientCorrections?.history ?? [], importActorRef, importedAt);
       const notifications = notificationArchiveSnapshot(notificationImportHistory(clinic.notifications, importActorRef, importedAt));
       store.notifications.importSnapshot(clinic.scope, notifications.settings, notifications.history);
       store.voices.importHistory(voiceClinicScope(clinic.scope), voiceImportHistory(clinic.voices, importActorRef, importedAt));
@@ -208,13 +218,17 @@ export class MemoryPolicyStore implements PolicyStore {
   private effective(policy: CallPolicy): CallPolicy {
     const automation = this.clinicAutomation.get(clinicKey(policy.scope));
     const intake = this.intake.current(policy.scope);
+    const corrections = this.corrections.current(policy.scope);
     return { ...policy, cancellationEnabled: policy.cancellationEnabled ?? false, reschedulingEnabled: policy.reschedulingEnabled ?? false,
       automationVersion: String(automation?.version ?? 0), automationEnabled: automation?.enabled ?? false,
       firstTimeIntakeVersion: intake.version, firstTimeIntakeEnabled: intake.enabled,
+      patientCorrectionsVersion: corrections.version, patientCorrectionsEnabled: corrections.enabled,
       capabilities: { ...policy.capabilities, book: policy.bookingEnabled ? this.hostBookingMode : "unavailable",
         cancel: policy.cancellationEnabled === true ? this.hostCancellationMode : "unavailable",
         reschedule: policy.reschedulingEnabled === true ? this.hostReschedulingMode : "unavailable",
-        intake: intake.enabled ? this.hostIntakeMode : "unavailable" } };
+        intake: intake.enabled ? this.hostIntakeMode : "unavailable",
+        ...(corrections.version !== "0" || this.hostPatientUpdateMode !== "unavailable" || policy.capabilities.patientUpdate !== undefined
+          ? { patientUpdate: corrections.enabled ? this.hostPatientUpdateMode : "unavailable" } : {}) } };
   }
 
   async read(scope: LocationScope): Promise<Result<CallPolicy, PolicyFailure>> {
@@ -335,6 +349,15 @@ export class MemoryPolicyStore implements PolicyStore {
 
   async listFirstTimeIntakeChanges(scope: LocationScope, afterVersion?: number): Promise<Result<ClinicIntakeAuditPage, PolicyFailure>> {
     return this.intake.listChanges(scope, afterVersion);
+  }
+
+  async changePatientCorrectionsEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean,
+                                       actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+    const changed = await this.corrections.changeEnabled(scope, expectedVersion, enabled, actorRef);
+    return changed.ok ? this.read(scope) : changed;
+  }
+  async listPatientCorrectionChanges(scope: LocationScope, afterVersion?: number): Promise<Result<ClinicPatientCorrectionAuditPage, PolicyFailure>> {
+    return this.corrections.listChanges(scope, afterVersion);
   }
 
   async changeBookingEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {

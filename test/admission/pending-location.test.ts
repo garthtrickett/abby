@@ -38,6 +38,21 @@ function fixture(kind: "memory" | "postgres") {
 }
 
 for (const kind of kinds) {
+  test(`E2E-352 ${kind}: service-informed admission requires played prompt evidence`, async () => {
+    const app = fixture(kind);
+    const route = { ...app.route, candidateServices: app.route.candidateLocationIds.map(locationId => ({ locationId,
+      services: [{ name: "Physiotherapy", visitKind: "initial" as const, durationMinutes: 60 }] })) };
+    value(await app.ledger.reservePendingLocation(app.callId, route, app.admission));
+    const attached = value(await app.ledger.attachPendingLocationSession(app.callId, "service-session", now));
+    const version = attached.sessionLease!.version;
+    assert.equal((await app.ledger.bindPendingLocation(app.callId, app.policy, "service-session", version, "before-prompt", now)).ok, false);
+    value(await app.ledger.startPendingLocationPrompt(app.callId, "service-prompt", "service-session", version, now));
+    value(await app.ledger.resolvePendingLocationPrompt(app.callId, "service-prompt", "service-session", version, "queued", now));
+    assert.equal((await app.ledger.bindPendingLocation(app.callId, app.policy, "service-session", version, "queued-prompt", now)).ok, false);
+    value(await app.ledger.resolvePendingLocationPrompt(app.callId, "service-prompt", "service-session", version, "played", now));
+    assert.deepEqual(value(await app.ledger.bindPendingLocation(app.callId, app.policy, "service-session", version, "played-prompt", now)).receipt.scope, app.scope);
+  });
+
   test(`${kind}: pending location reservation is durable, replay-safe, and prevents a second admission`, async () => {
     const app = fixture(kind);
     const [first, retry] = await Promise.all([

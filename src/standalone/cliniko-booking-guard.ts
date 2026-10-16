@@ -9,6 +9,7 @@ import { sameClinikoBookingEvidence, validClinikoBookingEvidence } from "./clini
 import type { ClinikoBookingAuthority, ClinikoBookingQuery, PreparedClinikoBooking } from "./cliniko-booking-authority.ts";
 import { approvalInstant, approvalRef } from "./owner-file-clinic-approval.ts";
 import { TransientPatientProofHost } from "./transient-patient-proof.ts";
+import { ClinikoBookingOffers } from "./cliniko-booking-offers.ts";
 
 export type ClinikoBookingGuardConfig = Readonly<{
   scope: LocationScope; callId: string; sessionId: string; policyVersion: string; ledger: LedgerStore;
@@ -27,6 +28,7 @@ async function untilAbort<Value>(pending: Promise<Value>, signal: AbortSignal): 
 export class ClinikoBookingGuard {
   readonly #config: ClinikoBookingGuardConfig;
   #closed = false;
+  readonly #nativeReads = new WeakMap<object, ClinikoBookingQuery>();
   constructor(config: ClinikoBookingGuardConfig) {
     if (!config.scope || ![config.scope.tenantId, config.scope.clinicId, config.scope.locationId,
       config.callId, config.sessionId, config.policyVersion].every(approvalRef) ||
@@ -82,7 +84,16 @@ export class ClinikoBookingGuard {
       if (!patient?.ok || !validClinikoId(patient.value.patientRef) || this.#closed || signal.aborted) return err({ kind: "notFound", target: "patient" });
       const query: ClinikoBookingQuery = Object.freeze({ scope: Object.freeze({ ...config.scope }), callId: config.callId, sessionId: config.sessionId, policyVersion: config.policyVersion,
         patientId: patient.value.patientRef, verificationRef, offerRef, phase, now, signal });
-      const evidence = await untilAbort(Promise.resolve().then(() => config.authority.resolve(query)), signal);
+      // The actual guard brackets this native availability read with fresh
+      // patient/representative validation. Its one-use private receipt lets the
+      // concrete offers reader check current ownership inside that same read,
+      // without repeating both native validations inside the bracket.
+      const receipt = Object.freeze({}); this.#nativeReads.set(receipt, query);
+      let evidence;
+      try {
+        evidence = await untilAbort(Promise.resolve().then(() => config.authority instanceof ClinikoBookingOffers
+          ? config.authority.resolve(query, undefined, { source: this, receipt }) : config.authority.resolve(query)), signal);
+      } finally { this.#nativeReads.delete(receipt); }
       const selected = evidence?.ok ? structuredClone(evidence.value) : undefined;
       const fresh = this.#time(now);
       if (!selected || this.#closed || signal.aborted || fresh === undefined ||
@@ -97,6 +108,13 @@ export class ClinikoBookingGuard {
       const { phase: _phase, signal: _signal, ...bound } = query;
       return ok({ request: structuredClone(request), query: structuredClone(bound), evidence: selected });
     } catch { return denied(); }
+  }
+  consumeNativeRead(receipt: object, query: ClinikoBookingQuery, proof: TransientPatientProofHost): boolean {
+    const captured = this.#nativeReads.get(receipt); this.#nativeReads.delete(receipt);
+    return !!captured && !this.#closed && !captured.signal.aborted && proof === this.#config.proof && query.signal === captured.signal &&
+      sameScope(query.scope, captured.scope) && query.callId === captured.callId && query.sessionId === captured.sessionId &&
+      query.policyVersion === captured.policyVersion && query.patientId === captured.patientId && query.verificationRef === captured.verificationRef &&
+      query.offerRef === captured.offerRef && query.phase === captured.phase && query.now === captured.now;
   }
   async authorize(prepared: PreparedClinikoBooking, mutation: HostMutation, now: string, signal: AbortSignal): Promise<boolean> {
     try {

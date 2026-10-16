@@ -42,6 +42,9 @@ export class ClinikoPhoneLookup {
     if (this.scan) return this.refreshStaged(scope, this.scan);
     const head = await this.index.head(scope);
     if (!head.ok) return head;
+    const revision = await this.index.contactRevision(scope, this.credentialFingerprint());
+    if (!revision.ok) return revision;
+    if (revision.value.blocked) return err({ kind: "contactChanged" });
     const generation = head.value?.generation ?? null;
     const snapshot = await this.reader.readPhoneSnapshot(scope, this.countryCallingCode, 100_000, this.waitUntil);
     if (!snapshot.ok) {
@@ -49,7 +52,7 @@ export class ClinikoPhoneLookup {
       return stale.ok ? snapshot : stale;
     }
     const published = await this.index.publish(scope, snapshot.value.links, this.countryCallingCode,
-      this.credentialFingerprint(), generation);
+      this.credentialFingerprint(), generation, revision.value.version);
     if (published.ok || published.error.kind === "generationChanged") return published;
     const stale = await this.index.markStale(scope, generation);
     return stale.ok ? published : stale;

@@ -1,3 +1,7 @@
+import { writeConfirmationResendCarryover, reconcileConfirmationResendCarryover } from "./postgres-confirmation-resend-carryover.ts";
+import { validConfirmationResendArchiveHistory } from "../portability/confirmation-resend-history.ts";
+import { validPatientCorrectionArchiveHistory } from "../portability/patient-correction-history.ts";
+import { writePatientCorrectionCarryover } from "./postgres-patient-correction-carryover.ts";
 import { validVoiceArchiveHistory } from "../portability/voice-history.ts";
 import { writeVoiceCarryover } from "./postgres-voice-carryover.ts";
 import { validClinicIntakeArchiveHistory } from "../portability/clinic-intake-history.ts";
@@ -24,8 +28,9 @@ type RegistryRow = { archive_id: string; manifest_digest: string; receipt: Refer
   source_history: TenantConfigArchiveData };
 
 function minimalHistory(data: TenantConfigArchiveData): boolean {
-  return Array.isArray(data?.clinics) && data.clinics.every(clinic => validClinicIntakeArchiveHistory(clinic.clinicIntake) && validNotificationArchiveHistory(clinic.clinicNotifications) && validVoiceArchiveHistory(clinic.clinicVoice)) &&
+  return Array.isArray(data?.clinics) && data.clinics.every(clinic => validClinicIntakeArchiveHistory(clinic.clinicIntake) && validPatientCorrectionArchiveHistory(clinic.clinicPatientCorrections) && validNotificationArchiveHistory(clinic.clinicNotifications) && validVoiceArchiveHistory(clinic.clinicVoice)) &&
     Array.isArray(data?.locations) && data.locations.length > 0 && data.locations.every(location =>
+    validConfirmationResendArchiveHistory(location.confirmationResends) &&
     Array.isArray(location.policies) && location.policies.length > 0 &&
     location.policies.every((row: ConfigArchiveData["policies"][number]) => row.storageShape === "standaloneMinimal") &&
     Array.isArray(location.knowledge) && location.knowledge.length === 0);
@@ -73,9 +78,11 @@ async function existing(db: Kysely<Database> | Transaction<Database>, tenantId: 
 async function occupied(db: Kysely<Database> | Transaction<Database>, tenantId: string): Promise<boolean> {
   const result = await sql<{ occupied: boolean }>`select (
     exists(select 1 from tenant_portability_fences where tenant_id = ${tenantId}) or
+    exists(select 1 from confirmation_resend_journal where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_settings where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_automation where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_intake_settings where tenant_id = ${tenantId}) or
+    exists(select 1 from clinic_patient_correction_settings where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_notification_settings where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_voice_settings where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_knowledge_heads where tenant_id = ${tenantId}) or
@@ -210,6 +217,7 @@ async function writeClinic(trx: Transaction<Database>, scope: LocationScope,
        ${actorRef}, true, ${importedAt}::timestamptz)`.execute(trx);
   }
   const reason = mode === "standaloneMinimal" ? "cutover" : "Imported configuration awaiting target readiness";
+  await writePatientCorrectionCarryover(trx, scope, clinic.clinicPatientCorrections, actorRef, importedAt);
   await writeNotificationCarryover(trx, scope, clinic.clinicNotifications, actorRef, importedAt);
   await writeVoiceCarryover(trx, { tenantId: scope.tenantId, clinicId: scope.clinicId }, clinic.clinicVoice, actorRef, importedAt);
   await sql`insert into clinic_write_stop (tenant_id, clinic_id, version, stopped, actor_ref, reason, changed_at)
@@ -266,6 +274,8 @@ export class PostgresTenantConfigArchiveImporter {
     try {
       const row = await existing(this.db, targetTenantId);
       if (row && this.mode === "standaloneMinimal" && !minimalHistory(row.source_history)) return err({ kind: "storageFailure" });
+      if (row && row.archive_id === validated.value.archiveId && row.manifest_digest === validated.value.manifestDigest &&
+          !await reconcileConfirmationResendCarryover(this.db, row.source_history)) return err({ kind: "storageFailure" });
       if (row) return row.archive_id === validated.value.archiveId && row.manifest_digest === validated.value.manifestDigest
         ? ok({ ...row.receipt, status: "alreadyStaged" })
         : err({ kind: row.archive_id === validated.value.archiveId ? "archiveConflict" : "targetOccupied" });
@@ -292,6 +302,8 @@ export class PostgresTenantConfigArchiveImporter {
         await sql`select pg_advisory_xact_lock(172934501, hashtext(${targetTenantId}))`.execute(trx);
         const row = await existing(trx, targetTenantId);
         if (row && this.mode === "standaloneMinimal" && !minimalHistory(row.source_history)) return err({ kind: "storageFailure" });
+        if (row && row.archive_id === data.archiveId && row.manifest_digest === data.manifestDigest &&
+            !await reconcileConfirmationResendCarryover(trx, row.source_history)) return err({ kind: "storageFailure" });
         if (row) return row.archive_id === data.archiveId && row.manifest_digest === data.manifestDigest
           ? ok(row.receipt)
           : err({ kind: row.archive_id === data.archiveId ? "archiveConflict" : "targetOccupied" });
@@ -302,6 +314,7 @@ export class PostgresTenantConfigArchiveImporter {
           const clinic = data.clinics.find(item => item.sourceClinicId === location.sourceScope.clinicId);
           if (!clinic) throw new Error("validated clinic absent");
           await writeLocation(trx, location, clinic, mapperFromReceipt, actor, importedAt, this.mode);
+          await writeConfirmationResendCarryover(trx, location.targetScope, location.confirmationResends);
         }
         for (const clinic of data.clinics) {
           const location = data.locations.find(item => item.sourceScope.clinicId === clinic.sourceClinicId);

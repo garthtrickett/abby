@@ -85,6 +85,14 @@ test("E2E-233 owner speech-gate status is aggregate-only and refuses stale or pu
     await writePrivate(reports.noise!, noise);
     assert.equal(cli(setPath).status, 2);
 
+    // E2E-161: a cleaner supplemental corpus cannot replace the original failing noise
+    // gate, even when its own synthetic recognition results look successful.
+    await writePrivate(reports.noise!, { ...noise, kind: "abby.synthetic-booking-transcription.v1",
+      configuration: { ...noise.configuration, corpusVersion: "transcription-booking-v1" } });
+    assert.equal(cli(setPath).status, 1);
+    await writePrivate(reports.noise!, noise);
+    assert.equal(cli(setPath).status, 2);
+
     await chmod(setPath, 0o644);
     const publicSet = cli(setPath);
     assert.equal(publicSet.status, 1);

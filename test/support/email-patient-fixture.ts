@@ -12,6 +12,7 @@ export const apiKey = "synthetic-otp-key-au5";
 const number = "+61400111222";
 const base = "https://api.au5.cliniko.com/v1";
 export function emailFixture(options: { scope?: typeof scope; patientId?: string; budget?: PatientVerificationBudget; deadlineMs?: number;
+  contactRevision?: import("../../src/cliniko/contact-revision.ts").ClinikoContactRevisionReader;
   delivery?: (email: string, code: string, signal: AbortSignal) => Promise<boolean> } = {}) {
   const boundScope = options.scope ?? scope;
   const patientId = options.patientId ?? "42";
@@ -20,7 +21,8 @@ export function emailFixture(options: { scope?: typeof scope; patientId?: string
   const mail: Array<{ email: string; code: string }> = [], reads: string[] = [];
   const config = { scope: boundScope, callId: "otp-call", sessionId: "otp-session", policyVersion: "policy", presentedNumber: number,
     operations: ["appointments.read"] as const, lookup: { candidates: async () => ok(candidates) },
-    contact: new ClinikoVerificationContactReader({ scope: boundScope, apiKey, contactEmail: "test@example.test", countryCallingCode: "61" },
+    contact: new ClinikoVerificationContactReader({ scope: boundScope, apiKey, contactEmail: "test@example.test", countryCallingCode: "61",
+      ...(options.contactRevision ? { contactRevision: options.contactRevision } : {}) },
       async url => {
         reads.push(String(url)); assert.equal(String(url), `${base}/patients/${patientId}`);
         return Response.json({ id: patientId, email, archived_at: null,

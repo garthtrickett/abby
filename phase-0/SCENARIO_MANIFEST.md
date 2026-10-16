@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.146
+# Scenario manifest, version 1.226
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -18,7 +18,7 @@ observation is retained in
 `eval/baselines/second-call-batch-automated-before-v1.json`. Production carrier,
 clinic approval and real speech activation remain separate gates.
 
-[SCENARIO_MANIFEST.json](SCENARIO_MANIFEST.json) tracks the 347 stable E2E IDs in [Technical Design Section 11](../TECHNICAL_DESIGN.md#11-verification-design). The design table owns each journey's wording; the registry adds its requirement mapping, fixture family, intended compositions, earliest implementation phase, and evidence status. Each scenario's fixture ID is `fixture-` plus its lowercase E2E ID. The capability and setting maps cover the current agent catalogue and its behavior settings. `test/contract/scenario-manifest.test.ts` checks the design and catalogue for drift, duplicate or missing IDs, and test-file references.
+[SCENARIO_MANIFEST.json](SCENARIO_MANIFEST.json) tracks the 418 stable E2E IDs in [Technical Design Section 11](../TECHNICAL_DESIGN.md#11-verification-design). The design table owns each journey's wording; the registry adds its requirement mapping, fixture family, intended compositions, earliest implementation phase, and evidence status. Each scenario's fixture ID is `fixture-` plus its lowercase E2E ID. The capability and setting maps cover the current agent catalogue and its behavior settings. `test/contract/scenario-manifest.test.ts` checks the design and catalogue for drift, duplicate or missing IDs, and test-file references.
 
 Every `fullCallEvidence` entry is **planned**. Existing text, browser, provider-contract, and synthetic voice tests are valuable evidence, but none proves the complete full-call scenario with the required production entry point and transport observations. `E2E-125` through `E2E-127` record passing **text-only** evidence from availability, startup refusal, and configuration portability journeys. `E2E-128` through `E2E-146` record passing **synthetic voice** evidence for speech generation, playback acknowledgment, Realtime transcription, Twilio media protocol handling, signed Twilio ingress, a local socket through Abby's actual call owner, transient presentation content, a disposable standalone voice ledger, process-local stream replay refusal, static post-stream fallback routing, transient availability intent selection, the composed standalone server, one bounded clarification before fallback, a clinic-approved keypad availability route, live-call lease renewal with terminal socket closure, greeting interruption through a returned clear fence, startup refusal of unsafe storage, a host-owned embedded voice call, a keyed embedded voice booking after exact playback and affirmation, and correlation of an early Realtime final with its later commit acknowledgment. `E2E-147` adds a passing text journey for a Cliniko slot returned on the wrong clinic-local date. `E2E-148` adds synthetic voice evidence for interchangeable host-owned availability ports in the embedded composition. `E2E-149` adds a signed local socket through a buyer-process embedded voice composition and a host-owned diary. `E2E-150` adds a bounded synthetic speech loop with missing safety-word detection; a separate opt-in run exercises the live synthesis and transcription adapters. `E2E-151` adds an opt-in pre-output speech fallback through a signed local standalone socket, with interruption and post-output safety checks at the playback port. `E2E-152` adds pinned telephone-band synthetic speech fixtures and the opt-in live transcription evaluation path. `E2E-153` adds a signed local keypad journey proving an online-booking-ineligible Cliniko business cannot yield times or a booking claim. `E2E-154` adds startup refusal for a Cliniko reader bound to the wrong route scope. `E2E-155` adds startup refusal for a missing or invalid clinic-approved keypad route. `E2E-156` through `E2E-160` add PostgreSQL-coordinated Cliniko request-budget journeys across two readers and failure cases. `E2E-161` adds pinned two-speaker noisy synthetic audio for the transcription evaluation path. `E2E-162` verifies that the committed-turn Realtime model candidate remains untrusted. `E2E-163` requires a shared PostgreSQL Cliniko budget at standalone voice startup and checks that signed local keypad reads charge it. `E2E-164` adds versioned per-location omission reconciliation and legacy archive compatibility. `E2E-165` blocks number publication when unlisted target configuration appears after import. `E2E-166` requires a fresh target clinic phone-index generation before synthetic number publication. `E2E-167` reconciles the imported write-stop audit event before publication. `E2E-168` rejects a changed durable import receipt before publication. `E2E-169` proves graceful local signed-stream shutdown and owner release. `E2E-170` proves cross-process active call exclusion and terminal loss of the PostgreSQL lock session. `E2E-171` proves default local process startup and refusal. `E2E-172` proves restricted test-call admission, keypad response, interruption, forged stream rejection, and shutdown through the isolated runner process. All remain planned for full-call evidence. `fixtureState` describes only the named fixture's current implementation level, not release approval.
 
@@ -312,6 +312,517 @@ E2E-344 covers twenty-four signed clinical, eligibility, public-description, urg
 
 E2E-345 covers twenty-two signed arrival, competing-fact and private-message journeys. No access, current staff presence, transfer outcome or corrected address is inferred. Operator approval still owns source content; arbitrary contradictions inside a single approved paragraph are not interpreted. Real carrier/mail/clinic activation remains planned.
 
-E2E-346 covers twenty-one signed practitioner/service constraint journeys, including three independently approved canonical/any-practitioner sends with exact native location, type and approved spoken duration. Gender, aliases, prior practitioner history, style and ranking are not inferred. Different durations or types need clinic handling. Real carrier/mail/clinic activation remains planned.
+E2E-346 covers twenty-one signed practitioner/service constraint journeys, including three independently approved canonical/any-practitioner sends with exact native location, type and approved spoken duration. Gender, aliases, prior practitioner history, style and ranking are not inferred. Without an optional approved service catalogue, different durations or types need clinic handling. Real carrier/mail/clinic activation remains planned.
 
 E2E-347 covers twenty-one signed class/home/mode/practitioner-boundary journeys, exact individually verified cancellation and same-practitioner movement, and private class/home-service messages. No class inventory, membership redemption, home-visit arrangement, mode switch or cross-practitioner source change is implemented or inferred. Unsupported requests need clinic handling. Real carrier/mail/clinic activation remains planned.
+
+E2E-346 also covers optional exact multi-service booking: independently approved provider types/durations and declared initial/follow-up rules, actual signed calls, fresh verification after replacing an unsent service, stale parent authority before and after review, provider duration/online flags, unknown writes and prevention of guessed defaults. Caller-attested return answers are evaluated only under the approved self-report basis; they are not inferred Cliniko history. E2E-348 adds guided questions and E2E-349 adds approved gender/name/any preferences. Prior-practitioner history, broader cross-location discovery and intake variant selection remain open. Full-call and real speech qualification remain separate.
+
+E2E-348 covers ten signed guided-service journeys. Ordinary answers require the last question’s actual played receipt, current clinic approval and call/session binding. Initial/follow-up, approved duration and required caller return attestations are resolved before verification. Unsupported durations reask; unplayed questions and changed/revoked source cannot advance; disallowed follow-ups cannot issue proof. Facts remain transient and outside classifier HTTP. Carrier and clinic activation remain planned.
+
+E2E-349 covers sixteen signed practitioner-preference journeys and separate strict-schema/current-writer tests. Approved gender labels are optional public clinic metadata, never inferred from names or provider responses. Any/gender search completes all eligible-member reads before claiming earliest availability. Current parent approval binds every exact independent writer; a missing/failing member cannot broaden the preference. Guided questions precede verification, preference changes cancel unsent proposals and require fresh proof, and known/unknown prior sends cannot be repeated. Ordinary time preferences cannot silently become service/practitioner changes. Carrier and clinic activation remain planned.
+
+E2E-350 covers ten signed generic-entry journeys and strict route/schema/abort checks. A validated book route can start the current public questions, but cannot supply service, visit-kind, duration, return answers, preference or private bindings. Direct no-choice private booking remains denied. Played question receipts and current authority still bind answers before proof; an unsent restart requires fresh verification, while known/unknown prior sends remain unchanged. Initial unavailable options use a truthful service-unavailable notice. Real model accuracy, speech, carrier and clinic activation remain separate.
+
+E2E-351 covers fifteen signed previous-practitioner journeys plus approval and pagination tests. A new history policy grants only a bounded previous-practitioner read; existing upcoming enquiry approval remains unchanged. Fresh read proof precedes native patient/business/time/order/link/flag validation. All latest-time ties are resolved before naming one recorded practitioner. A later booking needs new book proof for the pinned subject and current named-member approval; history does not infer attendance, suitability or return-rule answers. Unknown/revoked/foreign histories cannot disclose or choose a default. Unconfigured clinics retain the earlier unsupported-history guidance. Real clinic/model/speech/carrier acceptance remains planned.
+
+E2E-352 exercises approved shared-number public service discovery before admission, followed by explicit location choice, fresh scoped verification and one inspected native booking at each of two different Cliniko businesses. Discovery cannot choose a location or read patient/provider records. Changed/revoked authority and unplayed replies block binding; definite send failure retains the same reply, uncertain sends never replay, and private code entry starts only after admission. Owner-file and PostgreSQL canary checks accompany the signed synthetic journeys. Real carrier, speech and clinic acceptance remain planned.
+
+E2E-353 covers sixteen signed new-patient service journeys with independently approved initial variants and members. Played choice precedes private consent/readback/code, then separate registration and booking confirmations. A pre-creation duration correction requires fresh private collection; known or unknown sends cannot recreate a patient. Revocation, unsupported follow-up, drift, incomplete group reads and denied independent booking permission remain explicit. Private fields/codes and PostgreSQL canaries are checked; real clinic, mail, model, speech and carrier acceptance remain planned.
+
+
+E2E-311 additionally proves named staff requests through a separately compiled standalone runner, actual signed ingress and private verification. Four local cases cover one saved Cliniko recall, unknown write without replay or a human-receipt claim, independent permission denial before mail, and revocation before send. Status queries retain truthful uncertainty and do not resend. Real staff acceptance and deployment remain open.
+
+E2E-294 also records real loopback TLS/SMTP delivery through the actual caller verifier and protected read, with synthetic account/contact/certificate data. Independent permission denial stops before submission; authentication, certificate, malformed reply, abort and unknown acceptance faults cannot grant proof or trigger resend. This supplementary text evidence does not prove live mailbox receipt or carrier behavior; see [the SMTP delivery contract](../phase-2/VERIFICATION_SMTP_DELIVERY.md).
+
+
+
+E2E-220 additionally covers the optional durable aggregate receiver: authenticated exact payloads and clinic binding, retained days/configured thresholds, concurrent file/process deduplication, real HTTP response loss after storage, actual SIGKILL and compiled reader/receiver restart. Incomplete bodies, unsafe/corrupt storage and invalid records cannot report acceptance. Receipts contain only date/counter/first count/threshold, never patient, call, token or webhook key. This is local transport acceptance, not human paging or clinical activation.
+
+
+E2E-220 also covers independently approved Cliniko full-type queue monitoring through actual provider reads and durable receiver delivery. Current approver membership, declared duty/backup, cadence, credential/type/zone and destination/token bindings are rechecked after scanning and before every alert. Incomplete/rate-limited/failed reads are unavailable rather than healthy zero; revocation, abort, partial acceptance and lost results cannot invent success or retry within one run. Compiled monitor processes qualify known/unavailable outcomes with no patient persistence. Human paging, acknowledgment and clinic acceptance remain open.
+
+
+E2E-220 also qualifies optional authenticated operator responsibility: approved owner/backup identity, first observation, explicit acknowledgment, concurrent one-winner storage, restart reconstruction, expiry and current authority. Actual TLS and PostgreSQL sign-in browser actions reject forged identity, wrong hosts and cross-origin writes. Incomplete or oversized HTTP bodies cannot acknowledge. Transport acceptance remains distinct from a real operator action and patient completion; external paging and clinic recipient acceptance remain open. The full-call gate remains planned.
+
+E2E-354 qualifies the compiled clinical runner with current service/intake variants and actual loopback TLS SMTP. Two separate confirmations govern new-patient registration and exact member/type booking; independently approved existing workflows and operator monitoring remain separate authority. Current source includes the evidence unions from drafts453–456. This does not establish carrier, real recipient, clinic acceptance or acoustic quality. Shared-number service discovery is qualified in the transient composition; provisioning multiple clinical locations through the production CLI remains open.
+
+
+E2E-355 qualifies six compiled shared-number journeys with independent location hosts, distinct policy versions/greetings and actual TLS recipients. Public service discovery precedes any private input or patient authority. Exact native business/type/member bodies, selected-scope counters, pre-binding/post-verification approval withdrawal, independent permission denial and private new-patient registration followed by separate booking confirmation are inspected. PostgreSQL/output/private-media canaries remain. Real clinic, recipient, acoustic and carrier acceptance and exact-head CI remain open.
+
+
+E2E-356 qualifies complete longer online searches under an independent current booking approval, including one actual compiled two-month caller journey, exact native late-range booking and private canaries. Source faults cover later failure/incomplete pages, label drift, abort, policy withdrawal and no partial publication. Exact calendar pairs and bounded menu evidence retain legacy limits and earlier time filters. Search/source/presentation limits derive from the host approval. The offline roster/extra-availability/busy-source engine remains incomplete; neither this scenario nor synthetic media proves acoustic, carrier or real-clinic activation.
+
+
+E2E-357 records independent offline booking approval, complete native daily/extra/busy reads across practitioner locations, fresh proposal/send checks, DST folds/gaps, midnight duration and native pagination. Compiled synthetic caller tests cover a confirmed hour booking, a failed busy source and a slot occupied after proposal. Recurring interval interpretation remains unsupported and denies offers; this is partial gap6 implementation. Real clinic, acoustic, carrier and exact-head CI acceptance remain open.
+
+
+E2E-358 adds complete adaptive busy reads without raising per-read page or request limits, Sunday0/7 mapping and compiled offline returning/first-time caller coverage. North/South service durations, native business/member/subject, separate TLS recipients and registration/book confirmations are inspected. A two-month caller reads more than1,000 busy records before a late native booking; failed halves, changed crossing records and exhausted budgets deny partial offers. Recurrence interpretation and real calendar/clinic, acoustic, carrier and CI acceptance remain open.
+
+
+E2E-359 adds an explicitly approved source/destination practitioner pair, exact type/duration and independent destination booking approval. Compiled changed/same-time and uncertain moves inspect named played confirmation, one PATCH to the original appointment and old/new practitioner review context. Pair/destination/permission drift denies sending; terminal uncertainty cannot replay. Destination is currently a frozen trusted host setup choice; general caller selection among an approved practitioner directory remains gap7 work. Real clinic/provider/acoustic/carrier and exact-head CI acceptance remain open.
+
+
+E2E-360 covers current approved practitioner directories, source-practitioner preference, played name/ordinal choice, pagination, stale-time invalidation and changed/same-time signed moves. Two compiled journeys use the actual clinical resolver, PostgreSQL, TLS verification and one native PATCH; uncertainty cannot replay. General caller directory selection is implemented locally, while real-model/acoustic/provider/clinic/carrier acceptance and authoritative exact-head CI remain open.
+
+
+E2E-361 records the patient-correction provider edge and independent owner-file policy: exact original/current snapshots, allowlisted PATCH fields, current clinic/account/administrator approval, private consent and adult self eligibility, operation-specific registered-email verification, played-confirmation attestation, prospective email proof, one possible send, cancellation/concurrency fencing and distinct contact-review outcome. Existing caller update workflow, settings, private collection, real proof/index synchronization, required registration fields and confirmation resend remain gap8 work. Voice/full-call evidence is planned; this row does not activate patient updates.
+
+
+E2E-362 records private existing-patient corrections through separate registered/prospective verification, privately completed readback, host reference-only proposal, separately played SAM confirmation, native review and one inspected PATCH. A claimed attempt consumes the old channel proof; post-send inspection is limited to that transaction and fresh independent permission. Lost review/write, failed synchronization, revoked permission, old draft/code references and malformed public payloads cannot confirm or replay. SAM and model progress retain no correction values or value digests. Signed/compiled ordinary caller routing, concrete account-wide synchronization, settings and carrier evidence remain unfinished.
+
+
+E2E-363 records independent clinic-wide patient-correction settings, admin-only versioned edits/audit, persistent CAS and location isolation, dashboard controls and captured-call revocation after disable/re-enable. Preference alone supplies no host or patient permission. Only public metadata persists; minimal storage denies native mutation activation. Ordinary correction voice routing, account-wide contact synchronization and remaining gap8 work stay open.
+
+
+E2E-364 records durable account contact revisions, alias/clinic-wide phone-index invalidation, captured scan revisions, and registered-channel and new-registration proof revocation. Unknown changes remain blocked across restarts; exact native inspection consumes only its own change. Ordinary correction voice routing, operator recovery of uncertain changes, setting portability and remaining gap8 work stay open. Voice/full-call evidence remains planned.
+
+
+E2E-365 adds ordinary patient correction routing and private field/keypad input through the actual compiled signed runner. Independent correction playback, registered and prospective codes, separate SAM confirmation, inspected narrow PATCH, unknown-result fencing, permission withdrawal, consent decline and private email fragments are qualified locally. Real model/acoustic/clinic/carrier acceptance and operator recovery remain open.
+
+
+E2E-366 adds durable correction/native-review reference binding, legacy migration preservation, actual process-loss checkpoints and privileged authenticated HTTP recovery. Administrator identity, current permission, native review consistency and independently established investigation/quiescence govern resolution. Recovery removes only its own local block without replay or a caller-success claim. This is source/SAM/process evidence; real host/operator, acoustic, clinic and carrier acceptance remain open.
+
+
+E2E-367 qualifies private correction edits/reset after readback, played preparation or prospective-email collection through compiled signed callers. Entering edits immediately withdraws old references/codes and cancels unsent actions; new private media, fresh readback and separate confirmation are required. Collection budgets and post-send denial remain. Synthetic caller evidence does not establish real acoustic/model/clinic/carrier acceptance.
+
+
+E2E-368 adds public clinic-wide patient-correction preference/history export and import. Source audits are retained, enabled sources receive one target disable, and legacy absence stays version-zero disabled. Semantic/private row faults, omitted or occupied clinics, source setting drift and target correction-history edits are rejected. This is configuration portability evidence; patient proofs/private values, clinical permissions and real carrier/clinic approval are not transferred.
+
+
+E2E-369 adds approved clinic-required address fields to private registration. Complete collection/readback, prospective proof, transient binding of all fields and native response/inspection govern proven creation; a later booking still requires its own permission/confirmation. Four compiled signed cases cover completion, missing values, withdrawal and inspection mismatch. Unsupported requirements are refused, legacy bodies/host metadata binding remain compatible, and no real acoustic/clinic/mail/carrier qualification is claimed.
+
+E2E-370 adds a private fixed-content appointment confirmation SMTP adapter and shared TLS transport. Synthetic loopback SMTP qualifies local-time rendering, Unicode MIME, injection rejection, acceptance/rejection/uncertainty, abort and no internal retry. The existing verification message remains separate. Caller resend authorization, durable resend fencing, current appointment/recipient resolution, SAM/compiled voice routing and real sender/mailbox acceptance remain planned.
+
+E2E-371 adds independently current resend approval and a distinct registered-channel proof operation, plus migration047 and a scoped PostgreSQL submission journal. Synthetic real SMTP/PG qualifies racing claims, lost acceptance/completion, fresh-store status without replay, immutable outcomes, scope/source bindings, freeze and retained history. This is source/provider-port evidence: fresh native appointment/recipient assembly, played caller consent, native review ownership, SAM/compiled voice routing and actual clinic/mail/carrier activation remain open.
+
+E2E-372 adds a private native resend evidence/session owner and correlated review/SMTP references. Synthetic native HTTP, actual registered proof, PostgreSQL and TLS SMTP qualify private readback, a separate trusted confirmation port, fresh target/recipient/authority checks before/after native review and durable claim, and no replay after loss. This is source/native-port evidence; the actual SAM confirmation implementation, compiled caller/serving routing, process recovery and journal portability remain open.
+
+E2E-373 adds a reference-only resend capability and actual SAM native host adapter. A separately captured approved source, blank private playback notice, public confirmation playback, affirmative action digest and dispatched/possibly-sent effect govern one reviewed SMTP attempt. Seven new core/native tests qualify consent, source loss, uncertainty, gateway privacy and receipt-only queries/reconciliation. Signed compiled caller/serving routing, process recovery and portability remain open.
+
+E2E-374 qualifies the admitted resend workflow and its separate resend-only verification, private appointment menu, fresh ordinal selection, private recipient/details readback and actual SAM dispatch. Native selection, source/permission loss, superseding turns, interrupted playback and closure are covered with synthetic fixtures. Public progress carries counts and random references. Signed voice routing, private media transport and compiled serving composition remain open.
+
+E2E-375 qualifies explicit resend intent and actual signed compiled-server routing with private OTP, played keypad selection, native recipient/details readback and separately affirmed SAM sending. Private media/code canaries, early/post-play choice timing, refusal, permission/source withdrawal, keypad stop and uncertain SMTP outcomes are checked synthetically. Real carrier, model/acoustic and clinic/mailbox acceptance remain unproven.
+
+E2E-376 qualifies private resend pages of three, next/previous keypad navigation, canonical native list rechecks and exact seventh-appointment selection through signed compiled serving. Changed lists, unplayed input, invalid boundaries/ordinals and failed playback deny choices; re-entering a menu withdraws old prepared references. Full list/recipient/code remain private. Recovery, portability, clinic-specific content and real deployment qualification remain open.
+
+E2E-377 qualifies authenticated cold resend receipt lookup and five actual sender SIGKILL checkpoints. Current independent staff permission, source/membership and native context guard fixed receipt-only output; checked-off recalls do not prove mail acceptance, mismatched message IDs remain unknown and restarted submitters issue no SMTP. Native read-only recovery performs no journal completion or mail/native mutation; PostgreSQL/live-backup/output canaries are checked. Real operator-host adoption and deployment acceptance remain open.
+
+E2E-378 qualifies resend submission-history transfer through single/multi-location configuration archives, reference history and atomic native imports. Original UUIDs, owner bindings, statuses and timestamps survive mapping; imported claims cannot submit again. Semantic validation, journal-only occupancy/scope checks, rollback, source/frozen drift and target cutover reconciliation are checked. Cross-tenant staff receipt inspection still requires validated native-review provenance; import does not establish live-sender quiescence.
+
+E2E-379 qualifies authenticated target staff receipt inspection after one/two/three reviewed transfers. Original logical scopes survive later exports through validated retained import records; wrong reader account/scope, receipt/digest/barrier drift, revoked permission/source and body-supplied origins deny inspection. New target activity retains its own scope. HTTP returns fixed receipt status only and performs no send/native mutation. Actual clinic session/inspection-host provisioning and operator acceptance remain open.
+
+E2E-380 qualifies explicitly approved v2 in-person, telehealth and cancelled resend content. Current appointment type and complete patient/booking attendee evidence bind the same-clinic patient link; staff links are never mailed. Cancelled history remains bounded and privately labelled; mode/status/recipient/permission drift withdraws the exact send. Signed compiled calls keep private content outside ordinary transcription, model turns, database and stdout, with separately played SAM consent and one reviewed submission. The elapsed-clock regression preserves selection after forty seconds of renewed call authority. Full-call, actual clinic/sender/recipient and operator acceptance remain open.
+
+E2E-381 qualifies the same-caller multiple-action sequence: exact clinic approval, fresh per-task verification and consent, two native records and preserved receipts. Signed compiled calls retain the first success when the second write is unknown, enforce the task limit and keep codes/recipients/records private. Another-person selection, proxy/minor authority, cross-operation/catalogue sequence coverage and real clinic acceptance remain open; this is a checkpoint within gap9, not completion of it.
+
+E2E-382 qualifies native private related-person selection and actual subject verification/protected reads. A family link never grants permission; clinic-approved age and independent authority distinguish adult representatives from guardians. Complete paging, stale references, contact/source/member/permission/lease withdrawal and actual shared API-budget coverage are tested. Ordinary voice routing, representative mutations, callers without their own native record, alternative guardian channels and actual clinic acceptance remain open. Full-call and synthetic voice evidence remain planned.
+
+E2E-383 qualifies native representative workflow composition: adult/guardian booking and related-person cancellation/move with fresh subject codes, current clinical permission, played SAM consent, one native mutation and protected inspection. Exact binding, denied method/permission and late construction are covered. Native one-use evidence brackets public destination reads while protected sources keep fresh checks. All full native operations share the unchanged200-request budget. Ordinary private voice routing and full-call evidence remain planned; gap9 and the full13 objective remain incomplete.
+
+E2E-384 qualifies the trusted private selected-person CallFlow route through the existing keypad and actual native booking. Exact operation and call binding, revision drift, forged refs, constructor injection and self-only task-process denial are checked; ordinary operation requests cannot silently revert the patient to the caller. Public intent context omits identity, contact and code fields. Ordinary private identity speech, multiple-person tasks, synthetic voice and full-call qualification remain open.
+
+E2E-385 qualifies a call-owned native actor/patient verification lifecycle and a private media component. Actor permission stays separate, subject verification reaches one confirmed native booking, and account/call/inbound/budget mismatches deny construction. Private name/birth-date finals and both code phases stay outside ordinary intent context; played caller instructions and resettable patient readback gate collection/delivery. This component proof does not activate ordinary representative speech, serving or real playback; synthetic voice/full-call evidence remains planned.
+
+E2E-386 adds ordinary explicit representative startup and actual private VoiceSession playback to the signed synthetic serving composition. Caller and patient codes remain separate; private name/date-of-birth collection and readback precede independently approved subject verification and one played, inspected native booking. Exact workflow receipts prevent early or foreign activation; early start keys and disconnect cannot send verification mail. SAM text stays blank for private notices, ordinary transcripts/model turns exclude private fields, and isolated PostgreSQL canary scans remain empty. This is synthetic serving evidence; actual clinic, speech, mailbox and carrier acceptance and multiple-person task sequences remain unproven.
+
+E2E-387 qualifies an explicitly approved independentlyVerifiedPatients task sequence through the actual signed synthetic serving composition. Two different patients receive separate fresh caller and patient verification, private identity readback and played booking confirmations, with one native write per task. The caller remains pinned; the first receipt is immutable and cannot replay. Legacy same-caller approval, uncertain prior actions, caller/approval drift and interrupted preparation deny continuation. A one-use guard-owned native-read receipt and private menu references avoid redundant validation while fresh native authority still brackets protected availability and inspection; the full two-booking path stays under the unchanged shared200-request budget. Full production/carrier evidence and other operation/catalogue/representative-channel journeys remain planned.
+
+E2E-388 adds enquiry-only task settlement after actual played successful protected-read notices. A signed synthetic call privately verifies the caller and each of two different patients, reports their distinct appointment times and performs no clinical write. Failed/unplayed reads, previous workflow receipts, withdrawn sequence approval, task limits and altered retired read receipts deny progression. Old choice references cannot select a new patient. Prior results are preserved, and private field/code database scans remain empty. This is native/synthetic evidence, not actual clinic/mailbox/speech/carrier acceptance or every operation combination.
+
+E2E-389 qualifies ordinary related-patient cancellation and rescheduling through signed synthetic private caller/patient verification, actual played target/offer/consent and one inspected native change. A read for one patient followed by cancellation for another uses fresh operation proofs and preserves the first result. Independent caller permission withdrawal and unknown native responses prevent completion/replay; wrong-operation proof cannot authorize a move. Native caller appointments remain unchanged, PATCH fixture inspection retains the target patient, and isolated privacy scans remain empty. Broader patient/action/catalogue/staff combinations and actual clinic/mailbox/speech/carrier acceptance remain unproven.
+
+
+E2E-390 qualifies the protected native class reader using patient-free provider
+fixtures. It discovers actual existing occurrences, counts complete active
+attendance and privately identifies only the verified patient's own attendee
+record. Twice-observed sources and final metadata/proof checks reject drift,
+partial pages, foreign links and permission withdrawal. Class notes and other
+patients do not enter the result. This is provider/read-only evidence; ordinary
+class dialogue, class mutations, membership credits and full-call evidence are
+still planned. It adds no live capability or approval.
+
+
+E2E-391 adds native single-attendee create/cancel and exact inspection with a
+mandatory trusted authority check after final budget waits. The synthetic
+authority uses the actual private class reader and separate permission. Unknown
+responses never replay within the live writer, cancellations exclude repeats,
+and other patient/shared class records stay unchanged. A positive native
+acknowledgement is distinct from completion: a concurrently full class still
+needs caller-level review. These are provider contracts; approved SAM/staff
+composition, class movement, memberships and serving evidence remain planned.
+
+
+E2E-392 qualifies a transient text class-booking host using actual caller code
+verification, private native class choices, played SAM terms/affirmation and
+Cliniko-owned class review before one inspected attendance create. Scoped class
+approval and independent entitlement are separate from ordinary booking and
+channel possession. Unknown or racing results never claim completion or replay.
+Optional approved booking terms bind the offer expiry and preserve legacy
+wording. Native read proof now receives abort signals. The review protocol
+distinguishes class session, attendee and action identities; decoded notes never
+grant authority. Class cancellation/movement, real credits, normal signed/
+compiled serving and clinic activation remain unfinished. No synthetic voice or
+production full-call evidence is promoted.
+
+
+E2E-393 adds actual text cancellation of one class attendee through cancellation-
+bound caller proof, independent class permission, current class and fee policy,
+played class/time/terms confirmation, SAM affirmation and an acknowledged
+Cliniko-owned class review before one exact native PATCH/readback. A played
+ordinal choice distinguishes several classes. Full shared classes can still
+release an owned place; other patients, occurrences and shared records are not
+changed. Booking-only proof, ambiguity, revocation, changed fee boundaries,
+unplayed consent and uncertain responses cannot grant a commit or replay.
+This supplies text/native evidence only. Normal signed/compiled class routing,
+class movement, membership/credit reconciliation and real activation remain
+open, and no synthetic voice or full-call evidence is promoted.
+
+
+E2E-394 adds admitted class ownership and the explicit class selector through
+ordinary clinical intent, signed HTTP/WebSocket serving and private keypad.
+The text owner and routing tests deny mismatched/revoked approvals, wrong
+operations, call/session, representative/service ambiguity, stop and close.
+Four synthetic signed journeys prove class book/cancel, exact attendee writes,
+played class/fee terms and separate affirmation, plus lost-response no replay.
+The positive booking corrects the first played choice before dispatch and
+writes only the second occurrence within the same200-request account budget.
+The exact attendee GET retains current proof, permission, policy and SAM checks;
+a separate final full native occurrence/capacity inspection is required before
+commitment. Default unconfigured classes retain the unsupported boundary.
+This is synthetic provider/model/media evidence, not real model, acoustic,
+carrier or clinic readiness. Each configured route currently selects one class
+service. Multiple class-service selection, compiled class runner subprocesses,
+movement and membership/pass/credit processing remain unfinished.
+
+
+E2E-395 adds sixteen actual compiled class runner journeys through the ordinary
+host factory, physical PostgreSQL account budget/contact revision and signed
+HTTP/WebSocket admission. Booking/cancellation remain separate operation proofs
+and class permissions. Played terms and private keypad precede exact inspected
+attendance; cancellations exclude repeats. Unknown responses/outcome queries
+never replay. Current caller/class permission, withdrawn approval and changed
+policy prevent mutation after consent. Denied permission and failed code delivery
+cannot issue patient authority. Capacity lost before send prevents writing;
+overcapacity after create leaves one review and unresolved attendance. Ordinary
+readiness and a non-allowlisted caller stay disabled. Native SAM assertions follow
+the actual host after contact-revision rebinding. Patient/code/recipient canaries
+are absent from public model/transcription, process output and PostgreSQL.
+The compiled fixture uses synthetic HTTP/model/media and no real mail or number;
+carrier and real clinic acceptance remain planned. Multiple class-service
+selection, movement and membership/pass/credit processing remain unfinished.
+
+
+E2E-396 adds complete owner-approved class service catalogues, three-label played
+pages and private call/session/turn/revision/operation-bound choices. Different
+instructors and durations remain bound to their selected native class type.
+Actual text and separately compiled signed voice book/cancel the second service
+with fresh caller proof, played class/time/fee terms and one inspected attendance
+write. Cancellation remains available while booking is disabled. Invalid or
+duplicate entries cannot be skipped. Unplayed, changed, withdrawn, stale, closed
+and stopped selection, forged/wrong-operation/wrong-turn handles and current
+setting withdrawal cannot authorize class work. Existing malformed-native
+response tests retain their unfiltered fixture; only the multi-service fixture
+filters its deliberately configured native services. Full carrier/clinic evidence
+remains planned; movement and membership/pass/credit processing remain unfinished.
+
+
+E2E-397 qualifies the native class movement foundation, not a conversational
+move workflow. It creates and inspects a replacement before original attendance
+cancellation, then inspects both final occurrences. A known-unsent original
+cancellation may compensate only the exact replacement under independent current
+authority. Unknown replies never trigger replay or unsafe rollback. Paired native
+reads share fresh metadata/proof within one double snapshot and retain complete
+capacity and exact record binding. Different instructor/type/duration movement
+and compensation use the unchanged 180-request test budget. A dedicated bounded
+classMove review records both occurrences and the root marker; killed sender
+processes lose transient state while a fresh process rediscovers only owned
+provider review work, without replay or local patient persistence. Admitted move
+ownership, operation proof, SAM menus/proposals/played consent and signed/compiled
+move serving remain unfinished, along with membership/pass/credit processing.
+
+
+E2E-398 adds the protected class-move host and actual text SAM menus, proposal,
+played fee/recovery consent and separate affirmation. Current independent move
+authority and source/destination/move owner approvals surround the native work.
+The confirmation names both services when type or duration changes. Lost review
+or attendance replies remain uncertain; known-unsent original cancellation can
+compensate only the inspected replacement. Strict native proposal/commit reads
+retain double snapshots. Candidate menus use explicitly non-reserving reads.
+Same-service movement fits one 180-request window; different-service movement
+is qualified after a caller pause with actual lease renewal. A non-reserving
+headroom check rejects known insufficient budget before review or attendance
+writes; it does not guarantee capacity against other concurrent users. A pause
+crossing minimum notice also sends no change. Memory and PostgreSQL headroom
+checks never consume claims or bypass shared cooldown. Explicit class service
+replacement cannot reach the individual in-place adapter. Admitted call routing,
+ordinary signed/compiled class movement and membership/pass/credit processing
+remain unfinished. Synthetic text evidence is not production readiness.
+
+
+E2E-399 connects movement to the admitted class session and ordinary single or
+multiple class service routing. Current independent source/destination/move
+approvals gate operation-specific email proof. Move availability is public;
+approval paths, native bindings and private selections stay in the owner.
+Played class choices work while booking and cancellation remain disabled.
+Unavailable move approval removes movement availability without removing an
+otherwise approved class service. Ordinary model movement requires that public
+availability; it cannot manufacture a move approval. Actual signed voice uses
+private keypad verification, native target/replacement menus, played fee/recovery
+consent and separate affirmation before one reviewed, inspected two-leg move.
+Lost original cancellation replies stay uncertain without replay; current
+permission withdrawal prevents both attendance writes. Public model/transcription/
+speech and PostgreSQL exclude registered patient/email/code canaries. The real
+ordinary target path uses canonical bounded timestamp ranges, now accepted by
+the class host. Compiled movement, pre-send corrections, conversational budget
+pacing and membership/pass/credit processing still require implementation or
+qualification. Synthetic voice does not prove clinic/mail/carrier/acoustic
+acceptance or completion of the full thirteen-item objective.
+
+
+E2E-400 adds seventeen separately compiled movement journeys through the
+exported runner, actual host/contact-revision rebinding, signed admission,
+private keypad proof and shared PostgreSQL request budget. Single and catalogue
+class movement require played target/replacement and fee/recovery consent before
+one owned review and exact native legs. Lost review/replacement/original replies
+remain uncertain without replay. Patient/class permission, source/destination/
+move approvals, approving membership, policy and capacity withdrawal prevent
+mutations after consent. Known-unsent original cancellation can compensate only
+the exact replacement. A capacity race can send that compensation yet exhaust
+the real180-request budget before final native verification; this remains
+uncertain even when the synthetic provider's resulting records look restored.
+No budget, deadline or observation requirement is relaxed. Public model/media,
+child output and PostgreSQL exclude code/email/patient canaries. Ordinary
+readiness and a foreign caller remain denied. Corrections, conversational budget
+pacing, cross-service compiled movement and membership/pass/credits remain open,
+as do actual clinic/mail/acoustic/carrier acceptance and authoritative cloud
+qualification. No completion of gap10 or the full13 objective is inferred.
+
+
+E2E-401 adds pre-send class movement correction. A different played replacement
+uses only a privately issued offer; a new date requires fresh options while
+retaining the exact original target from a cancelled SAM request. Old consent
+is superseded and strict paired native proposal evidence plus renewed played
+fee/recovery terms and separate affirmation remain required. Same and different
+service/duration text moves write only the corrected occurrence after a valid
+caller pause with actual lease renewal and unchanged180-request windows. Actual
+signed voice ordinal/date corrections cancel the first action and prepare a
+new unplayed proposal; they send no attendance changes. Permission/approval loss,
+expired choices, foreign original target, changed original or full replacement
+cannot become corrected actions. Committed moves cannot replay through old
+menus. Public model/media and PostgreSQL scans exclude patient/email/code
+canaries. Complete signed/compiled corrected commitment across quota windows,
+conversational budget pacing and membership/pass/credits remain unfinished.
+
+
+E2E-402 adds guarded class-move capacity pacing before confirmation dispatch.
+A played bounded wait retains the unsent action and requires another affirmative;
+it reserves neither the replacement nor API requests. Relative waits use each
+budget’s own clock. Same-service and cross-service signed ordinal corrected commitments
+and a separately compiled cross-service ordinal corrected commitment pass across real
+minute-scale waits with continuous quiet synthetic media and automatic lease
+renewal. Permission/approval withdrawal, expiry, correction and aborted or stale
+capacity reads cannot authorize a write. Normal native evidence, write admission,
+180-request limits, request claims and proof/offer/effect deadlines remain intact.
+Public model/media and PostgreSQL canary scans pass. Full-call activation remains
+planned; membership/pass/credits, real clinic/mail/acoustic/carrier acceptance and
+cloud qualification remain open. Concurrent quota recovery uncertainty remains
+explicit. This checkpoint does not complete gap10 or the full13 objective.
+
+
+E2E-403 completes four synthetic full date-correction journeys: signed and
+separately compiled, each for same-service and different instructor/type/duration
+class movement. A new date menu and exact replacement selection supersede old
+consent; signed callers interrupt that earlier confirmation. A real account wait,
+continuous quiet media, normal lease renewal and another affirmative precede one
+owned movement review and exactly the corrected replacement/original-cancellation
+mutations. Native inspection, actual180-request limits and public/PostgreSQL
+privacy scans pass. This is additional synthetic qualification of existing
+production behavior. Membership/pass/credits, real acceptance and full13 closure
+remain unfinished; full-call evidence stays planned.
+
+
+E2E-404 adds an explicit approved mode for dated native busy occurrences carrying
+repeat metadata. Individual appointments, group appointments and unavailable
+blocks retain their exact native interval and all-business practitioner scope.
+Legacy plans still deny that source shape; malformed metadata, unstable calendars,
+withdrawn approval and late recurring conflicts cannot send a booking. The native
+reader retains adaptive complete-range handling across1201 records. Compiled
+calls exclude a13:00 recurring conflict, choose14:00 and recheck before sending,
+with denied legacy/late-change cases and private-data scans. Repeat-rule expansion
+for extra opening hours remains unsupported. This is partial recurrence progress;
+full gap6, actual acceptance and the full13 objective remain open.
+
+
+E2E-405 adds a private native patient-case session counter and exact case-linked
+attendee creation/inspection. Complete paginated associations across services,
+clinic-date boundaries, cancellation/DNA rules, current patient proof and
+independent permission are required. Native notes/referrals are discarded.
+Incomplete or drifting sources deny, depleted cases cannot send, lost or
+wrong-case acknowledgements remain uncertain, and a concurrent overdraw is
+reported without another send. The counter grants no payment, credit or
+reservation authority. This is native adapter qualification only; ordinary
+SAM/compiled pass selection, review linkage, consumption/release and financial
+lifecycle work remain unfinished. Full-call evidence stays planned.
+
+
+E2E-406 binds approved native class passes through ordinary caller booking:
+independent private case selection, played one-session terms, a versioned owned
+review and an exact inspected attendee association precede confirmation. The
+final check proves one added active attendance against the entire prior case
+state; a concurrent association swap cannot hide behind unchanged net counts.
+Signed compiled runner journeys cover the last available session and revoked,
+changed, depleted, lost-response and concurrent-use cases under the ordinary
+shared account budget. Public/model and PostgreSQL privacy scans remain
+mandatory. Native pass cancellation/movement, financial provisioning and real
+acceptance remain unfinished. Full-call evidence stays planned.
+
+
+E2E-407 adds ordinary caller cancellation for explicitly approved native passes.
+Independent case/attendance/effect authority and played fee/pass terms precede
+one reviewed native cancellation. The actual rules may release one session,
+leave usage unchanged or consume one previously excluded session. Final
+inspection requires that exact effect and unchanged remaining case state.
+Expired/closed/full passes may lose attendance without gaining validity or
+money. Source/permission drift, lost acknowledgements and same-net association
+swaps cannot confirm or replay. Cancellation quota waits preserve consent
+without dispatch and require another affirmative under normal leases and the
+real account limit. Public/model/PostgreSQL privacy remains mandatory. Native
+pass movement and the remaining full13 requirements stay open; full-call
+evidence remains planned.
+
+E2E-408 supplies private native prerequisites for pass movement: an exact
+Abby-created replacement attendance can receive an independently approved case
+association through the documented attendee update. Its body changes only
+`patient_case_id`; wrong/lost acknowledgements remain uncertain without replay.
+Whole-case movement inspection requires exactly the cancelled original on its
+old class and the active replacement on its new class. Rules, other associations
+and counters must agree with the complete previous state; equal net usage cannot
+hide a concurrent swap. Two exact native `patient_case_id:!?` queries prove
+presently unlinked staging; omission of a case response field is insufficient.
+Auto-linking, changed staging observations, permission loss and incomplete
+responses deny. This is adapter evidence only. Host-approved staging,
+compensation and caller host/review/compiled movement remain unfinished.
+
+
+E2E-409 composes native pass movement: independently approved source/destination
+cases and effects, owned review, unlinked replacement, original cancellation,
+destination association and complete final case inspection. Full passes and
+cross-case/service/instructor/duration changes are covered under the unchanged
+physical180 account budget. Compensation is restricted to an unsent original
+cancellation, and cancelled replacement staging must still be proved unlinked.
+Unknown legs and concurrent source/case/capacity changes cannot confirm or replay.
+The versioned private review uses a strict complete tuple under the unchanged
+1000-character summary bound. This is native coordinator qualification only;
+ordinary played host consent, signed/compiled pass movement and broader history
+qualification remain unfinished. Full-call evidence stays planned.
+
+
+E2E-410 adds ordinary caller pass movement with explicit six-effect owner terms,
+independent selection and effect authority, exact private offer binding, played
+SAM consent and current-case checks. Real operation proof and native contact
+are verified before and after each read-only observation group between writes.
+Revocation discards the entire observation, and the temporary proof cannot
+cross a write. Full same-case and cross-case/service/instructor/duration movements now pass
+separately compiled signed runner journeys, including exact native case effects,
+selection/permission/rule denial, lost association and concurrent-use uncertainty.
+All plain private canaries and every bounded encoded review fragment are checked
+against public voice/model and PostgreSQL storage. Physical quota, deadlines and normal
+leases remain unchanged. Broader history/catalogue/correction qualification,
+financial provisioning and actual clinic/cloud acceptance remain open.
+Full-call evidence stays planned.
+
+
+E2E-411 extends ordinary pass movement through complete mixed multi-page
+histories, including501 same-case and201 cross-case/service/instructor/duration
+associations under the unchanged physical quota. Exact unlinked staging and
+current class/case checks share a private proof group before cancellation.
+Complete source-case observations require the approved cancellation reason;
+final linked-attendance inspection remains mandatory. Native metadata now
+brackets both full roster snapshots. Same-count changes on the last page and
+proof revocation deny confirmation; over-limit additions cannot yield an offer.
+Separately compiled signed serving now qualifies the larger histories and
+last-page concurrency case, with PostgreSQL privacy scans and explicit native
+state inclusion. Intentional competing account claims retain an exhausted-quota
+negative while reduced read costs permit verified recovery when quota remains.
+Broader history-cost admission and staged quota handling, remaining
+catalogue/correction/financial/clinic/cloud acceptance
+and all full13 requirements remain open. Full-call evidence stays planned.
+
+
+E2E-412 combines complete same-case source/destination observations while retaining
+both target permissions at both proof boundaries and separate clinic-date eligibility.
+Ordinary movement qualifies999 linked historical records; native success request
+counts match the workload lower bound across page boundaries. Known workloads
+above the physical180-request window cannot yield an ordinary move offer and
+are checked again before replacement dispatch. This lower bound does not reserve
+quota or cover all extra metadata/roster pagination, concurrent consumers or
+recovery. Separately compiled signed serving passed the999-record success and oversized-transfer
+denial journeys with PostgreSQL privacy scans. Staged movement, remaining
+catalogue/correction/financial provisioning and clinic/cloud/speech acceptance
+remain open; full-call evidence stays planned.
+
+
+E2E-413 binds class booking/cancellation/movement verification to the same native
+Cliniko credential. Same-call identity and current target approvals cannot
+transfer a patient proof across credentials. Three synthetic boundary regressions
+first fail on construction acceptance, then pass by denying before provider I/O.
+A pre-fix movement additionally reproduced a protected class read. Baseline
+stores only booleans/counts and the source commit, without patient/contact/code
+or raw credentials. Matching-account native/pass and rebuilt compiled serving regressions passed.
+This scenario
+remains textImplemented and full-call evidence stays planned.
+
+
+E2E-414 adds independently approved dated native recurring extra openings. Busy
+recurrence authority alone cannot enable openings, and neither approval expands
+repeat metadata into unreturned dates. Current complete stable native sources,
+late cross-business conflict checks and separately played consent bind one exact
+inspected booking through the compiled runner. Original calendar quotas,
+verification and privacy remain. This is synthetic implementation evidence;
+real clinic acceptance, live speech/mail/carrier and authoritative cloud gates
+remain open, and full-call evidence stays planned.
+
+
+E2E-415 adds observed native class workload to pass movement admission. Complete
+relationship pages and inactive attendance contribute cost, and a replacement
+can add a new attendance page. The pre-change witness exhausts quota after all
+three clinical legs; corrected offer, proposal and pre-write checks deny known
+oversized work and inspection overflow while retaining qualified actual compiled
+moves. Counts stay transient and private, and do not grant patient or financial
+rights. This is observed-shape engineering evidence, not reservations, staged
+recovery, arbitrary permission-I/O bounds or real source/clinic/cloud/speech/mail/
+carrier acceptance. Full-call evidence remains planned.
+
+
+E2E-416 adds shared account allocations to the actual class movement host.
+Ordinary claims cannot spend held capacity; owner claims cannot fall back after
+exhaustion or closure. A database guard also protects the same row from older
+workers, with real process-death expiry and migration rollback checks. The
+separately compiled runner completes one exact native pass move while another
+process is denied. Existing compensation, larger histories, corrections and
+renewed consent remain qualified with unchanged quotas/deadlines/concurrency.
+Allocation stores no patient/call/action identifiers and grants no clinical or
+financial authority. Multi-window staging, durable recovery, broader combinations,
+financial provisioning and real clinic/cloud/voice acceptance remain unfinished.
+Full-call evidence stays planned.
+
+
+E2E-417 adds a native staged execution interface for native case-pass moves whose complete
+observed work exceeds a quota window. It requires separate approval and fresh
+phase consent/proof, with same-patient private proof renewal and an unchanged
+Cliniko-owned review before/after later phases. Actual PostgreSQL tests complete
+three legs over two real quota resets and discover the review from a fresh
+process after killing its sender. Maximum known native page/proof cost stays
+within180 per stage. This is text/native process implementation evidence;
+staged caller/SAM dialogue, actual verifier renewal wiring, operator resolution
+and clinical activation remain unfinished. Full-call evidence stays planned.
+
+
+E2E-418 adds private same-patient verifier succession and its native staged-move
+composition. A new challenge replaces retired authority, consumes the shared
+verification budget and requires current permission. The original proof expiry
+is unchanged. Native stages wait for the quota consumed by verification itself.
+This is text/native and isolated PostgreSQL evidence; the staged caller/SAM
+confirmation and renewal route, human resolution and activation remain open.
+Full-call evidence stays planned.

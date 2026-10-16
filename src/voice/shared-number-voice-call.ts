@@ -21,6 +21,7 @@ export type SharedVoiceStart =
   | Readonly<{ kind: "locationChoice"; prompt: PrelocationPromptResult }>
   | Readonly<{ kind: "admitted"; receipt: AdmissionReceipt; state: CallState }>;
 export type SharedVoiceTurn =
+  | Readonly<{ kind: "locationInformation"; pending: PendingLocationCall }>
   | Readonly<{ kind: "locationBound"; receipt: AdmissionReceipt; state: CallState }>
   | Readonly<{ kind: "callerTurn"; state: CallState }>;
 export type FullVoiceSessionFactory = (receipt: AdmissionReceipt, sessionId: string, playback: PlaybackPort) => VoiceSession;
@@ -207,6 +208,7 @@ export class SharedNumberVoiceCall {
       if (this.prelocation) {
         const chosen = await this.prelocation.finishTurn(now);
         if (!chosen.ok) return chosen;
+        if (chosen.value.kind === "locationInformation") return ok(chosen.value);
         this.receipt = chosen.value.receipt;
         this.prelocation = undefined;
         const attached = await this.attachBound(now);

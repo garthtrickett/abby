@@ -43,17 +43,17 @@ export class ClinikoCancellationHost extends NoStoredKnowledge
 
   #now(): string { return (this.#config.clock ?? (() => new Date().toISOString()))(); }
 
-  async resolveAppointmentChange(query: AppointmentChangeEvidenceQuery): Promise<Result<Extract<ActionRequest,
+  async resolveAppointmentChange(query: AppointmentChangeEvidenceQuery, external?: AbortSignal): Promise<Result<Extract<ActionRequest,
     { kind: "cancel" | "reschedule" }>, HostReadFailure>> {
-    if (this.#lifetime.signal.aborted || this.#busy || this.#attempted || this.#prepared || query?.kind !== "cancel") {
+    if (this.#lifetime.signal.aborted || external?.aborted || this.#busy || this.#attempted || this.#prepared || query?.kind !== "cancel") {
       return err({ kind: "unavailable", target: "appointment" });
     }
     this.#busy = true;
+    const signal = AbortSignal.any([this.#lifetime.signal, ...(external ? [external] : []), AbortSignal.timeout(15_000)]);
     try {
-      const selected = await this.#guard.resolve(query, "proposal",
-        AbortSignal.any([this.#lifetime.signal, AbortSignal.timeout(15_000)]));
+      const selected = await this.#guard.resolve(query, "proposal", signal);
       if (!selected.ok) return selected;
-      if (selected.value.request.target.timeZone !== this.#config.timeZone || this.#lifetime.signal.aborted) {
+      if (selected.value.request.target.timeZone !== this.#config.timeZone || signal.aborted) {
         return err({ kind: "unavailable", target: "appointment" });
       }
       this.#prepared = selected.value;

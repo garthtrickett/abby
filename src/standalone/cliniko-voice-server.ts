@@ -34,10 +34,15 @@ import { validKeypadGreetingText } from "./keypad-greeting.ts";
 import { StandaloneOperationalCounters } from "./operational-counters.ts";
 import type { OperationalCounterKind, OperationalCounterStore } from "../voice/operational-counts.ts";
 import { createStandaloneTransientVoiceCall } from "./transient-voice-composition.ts";
+import { ClinikoVoiceClinicalHost } from "./cliniko-voice-clinical-host.ts";
+import { ClinikoClinicalLocationGroup } from "./cliniko-clinical-location-group.ts";
+import { sameScope } from "./appointment-change-authority.ts";
 
 type ClinikoVoiceRouteBase = Readonly<{
   dialedNumber: string;
   scope: LocationScope;
+  /** Required public name when locations share a number. */
+  spokenName?: string;
   routeVersion: string;
   approval: Pick<ClinikoCatalogueSetup, "readApprovedRoute">;
   rateBudget: PostgresClinikoRequestBudget;
@@ -45,6 +50,8 @@ type ClinikoVoiceRouteBase = Readonly<{
   keypadAvailabilityGreeting: ApprovedGreeting;
   /** Must agree with the approved keypad wording; absent means disabled. */
   sevenDayAvailabilityEnabled?: boolean;
+  /** Independently provisioned clinic host; does not grant admission readiness. */
+  clinicalHost?: ClinikoVoiceClinicalHost;
 }>;
 
 export type ClinikoVoiceRoute = ClinikoVoiceRouteBase & (
@@ -116,7 +123,7 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
   const twilio = { ...config.twilio, bindingKey: new Uint8Array(config.twilio.bindingKey),
     fallbackNumbers: { ...config.twilio.fallbackNumbers } };
   const fallbackNumbers = Object.keys(twilio.fallbackNumbers);
-  const routes = new Map<string, ClinikoVoiceRoute>();
+  const routes = new Map<string, ClinikoVoiceRoute[]>();
   for (const route of config.routes) {
     if (!(route.rateBudget instanceof PostgresClinikoRequestBudget)) {
       throw new RangeError("invalid clinic voice route");
@@ -136,22 +143,36 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     if (!route.scope.tenantId || !route.scope.clinicId || !route.scope.locationId ||
         !route.routeVersion?.trim() || !readerBindingValid ||
         !route.approval || typeof route.approval.readApprovedRoute !== "function" ||
-        !route.rateBudget.matchesDatabase(config.db) || routes.has(route.dialedNumber) ||
+        !route.rateBudget.matchesDatabase(config.db) ||
         !Object.hasOwn(twilio.fallbackNumbers, route.dialedNumber)) {
       throw new RangeError("invalid clinic voice route");
     }
     const greeting = route.keypadAvailabilityGreeting;
+    if (route.clinicalHost !== undefined && (!(route.clinicalHost instanceof ClinikoVoiceClinicalHost) ||
+        !route.clinicalHost.usesBudget(route.rateBudget))) {
+      throw new RangeError("invalid clinical voice host");
+    }
     if ((route.sevenDayAvailabilityEnabled !== undefined && typeof route.sevenDayAvailabilityEnabled !== "boolean") ||
         !validKeypadGreeting(greeting, route.scope, route.sevenDayAvailabilityEnabled === true)) {
       throw new RangeError("invalid keypad availability greeting");
     }
-    routes.set(route.dialedNumber, { ...route, scope: structuredClone(route.scope),
-      keypadAvailabilityGreeting: structuredClone(greeting) });
+    const group = routes.get(route.dialedNumber) ?? [];
+    if (group.some(member => sameScope(member.scope, route.scope))) throw new RangeError("duplicate clinic voice location");
+    group.push({ ...route, scope: structuredClone(route.scope), keypadAvailabilityGreeting: structuredClone(greeting) });
+    routes.set(route.dialedNumber, group);
   }
   if (routes.size !== fallbackNumbers.length) throw new RangeError("incomplete clinic voice routes");
+  for (const group of routes.values()) {
+    if (group.length > 32 || group.length > 1 && group.some(route => !route.clinicalHost?.locationServiceSource ||
+        !route.spokenName?.trim() || route.scope.tenantId !== group[0]!.scope.tenantId ||
+        route.scope.clinicId !== group[0]!.scope.clinicId || route.routeVersion !== group[0]!.routeVersion)) {
+      throw new RangeError("invalid shared-number clinical locations");
+    }
+  }
+  const allRoutes = [...routes.values()].flat();
   const operationalRead = config.operationalRead ? { tokenHex: config.operationalRead.tokenHex,
     scope: structuredClone(config.operationalRead.scope) } : undefined;
-  if (operationalRead && ![...routes.values()].some(route =>
+  if (operationalRead && !allRoutes.some(route =>
       route.scope.tenantId === operationalRead.scope.tenantId &&
       route.scope.clinicId === operationalRead.scope.clinicId &&
       route.scope.locationId === operationalRead.scope.locationId)) {
@@ -159,9 +180,10 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
   }
   const operationalCounters = config.operationalCounters ?? new StandaloneOperationalCounters();
   const ingress = new TwilioSignedIngress(twilio);
-  const routingHost = new ReferenceNumberRoutingHost([...routes.values()].map(route => ({
+  const routingHost = new ReferenceNumberRoutingHost(allRoutes.map(route => ({
     accountRef: twilio.accountSid, dialedNumber: route.dialedNumber,
     ...route.scope, routeVersion: route.routeVersion,
+    ...(route.spokenName ? { spokenName: route.spokenName } : {}),
   })));
   const approvedRoute = async (route: ClinikoVoiceRoute): Promise<Readonly<{
     approval: ClinikoSelectionApproval; readers: readonly ClinikoAvailabilityReader[];
@@ -173,6 +195,7 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
       const result = await route.approval.readApprovedRoute(route.scope, binding);
       if (!result.ok) return null;
       const approval = result.value;
+      if (route.clinicalHost && !route.clinicalHost.matches(approval)) return null;
       const dynamic = isDynamicRoute(route);
       if (!isClinikoApprovalState({ version: 1, approval }) ||
           !approval.scope || approval.scope.tenantId !== route.scope.tenantId ||
@@ -231,7 +254,7 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     throw new RangeError("speech fallback deadline unavailable");
   }
   const voiceProfiles = config.voiceProfiles ?? new OpenAIVoiceProfileHost({ apiKey: openaiApiKey,
-    mode: "keypadAvailability", ...(config.transcriptionFactory ? { customTranscription: {
+    mode: allRoutes.some(route => route.clinicalHost) ? "conversation" : "keypadAvailability", ...(config.transcriptionFactory ? { customTranscription: {
       version: "host-transcription.v1", create: config.transcriptionFactory } } : {}), ...(config.openai.speechModel ? { primaryModel: config.openai.speechModel } : {}),
     ...(config.openai.speechFallbackModel ? { fallbackModel: config.openai.speechFallbackModel, primaryFirstChunkMs } : {}),
     runtime: { ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}), ...(playbackOptions ? { playbackOptions } : {}) },
@@ -253,21 +276,24 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     ...(config.health ? { health: config.health } : {}),
     admitWebhook: async event => {
       if (!event || event.key.accountRef !== twilio.accountSid) return false;
-      const route = routes.get(event.dialedNumber);
-      if (!route) return false;
+      const group = routes.get(event.dialedNumber);
+      const route = group?.[0];
+      if (!route || !group) return false;
       if (config.admitWebhook && !await config.admitWebhook(event).catch(() => false)) {
         count(route.scope, "admissionDenied");
         return false;
       }
-      const approved = !!await approvedRoute(route);
+      const approved = (await Promise.all(group.map(approvedRoute))).every(Boolean);
       if (!approved) count(route.scope, "admissionDenied");
       return approved;
     },
     async createCall(stream, send, close) {
-    const route = routes.get(stream.event.dialedNumber);
-    if (!route || stream.event.key.accountRef !== twilio.accountSid) throw new Error("clinic route unavailable");
-    const approved = await approvedRoute(route);
-    if (!approved) {
+    const group = routes.get(stream.event.dialedNumber);
+    const route = group?.[0];
+    if (!route || !group || stream.event.key.accountRef !== twilio.accountSid) throw new Error("clinic route unavailable");
+    const approvals = await Promise.all(group.map(approvedRoute));
+    const approved = approvals[0];
+    if (!approved || approvals.some(value => !value)) {
       count(route.scope, "admissionDenied");
       throw new Error("clinic catalogue approval unavailable");
     }
@@ -276,15 +302,34 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     const classifyIntent = createOpenAIAvailabilityIntentResolver({ apiKey: openaiApiKey,
       model: config.openai.intentModel, clinicDate: approved.clinicDate,
       ...(config.openai.fetch ? { fetch: config.openai.fetch } : {}) });
+    const locations = group.length > 1 ? new ClinikoClinicalLocationGroup(group.map((member, index) => ({
+      scope: member.scope, host: member.clinicalHost!, approval: approvals[index]!.approval,
+    })), async scope => {
+      const member = group.find(member => sameScope(member.scope, scope));
+      return member ? (await approvedRoute(member))?.approval ?? null : null;
+    }) : undefined;
+    let diagnosticScope = route.scope;
+    let ownerStarted = false;
+    const recordOwner = (scope: LocationScope) => {
+      diagnosticScope = scope;
+      if (!ownerStarted) { ownerStarted = true; count(scope, "callOwnerStarted"); }
+    };
     const composed = await createStandaloneTransientVoiceCall({ db: config.db, routingHost,
-      expectedPolicyVersion: approved.approval.selection.policyVersion,
+      ...(locations ? { onLocationBound: recordOwner } : {}),
+      ...(locations ? { expectedPolicyVersions: locations.policyVersions,
+        locationServiceSources: locations.serviceSources.map(source => ({ ...source, ...(config.now ? { clock: config.now } : {}) })) }
+        : { expectedPolicyVersion: approved.approval.selection.policyVersion }),
       stream, send, closeTransport: close, voiceProfiles,
-      availability,
-      approvedGreeting: route.keypadAvailabilityGreeting,
-      greetingValidator: greeting => validKeypadGreeting(greeting, route.scope,
-        route.sevenDayAvailabilityEnabled === true),
-      keypadAvailabilityRange: (digit: string) => keypadAvailabilityRange(approved.clinicDate, digit,
-        route.sevenDayAvailabilityEnabled === true),
+      ...(!locations ? { availability, approvedGreeting: route.clinicalHost?.greeting ?? route.keypadAvailabilityGreeting } : {}),
+      greetingValidator: greeting => {
+        const member = greeting && group.find(member => sameScope(member.scope, greeting.scope));
+        return !!member && (member.clinicalHost
+          ? validGreetingShape(greeting, member.scope) && JSON.stringify(greeting) === JSON.stringify(member.clinicalHost.greeting)
+          : validKeypadGreeting(greeting, member.scope, member.sevenDayAvailabilityEnabled === true));
+      },
+      ...(locations ? { clinicalWorkflow: locations.workflow() } : route.clinicalHost ? { clinicalWorkflow: route.clinicalHost.workflow(approved.approval) } : {
+        keypadAvailabilityRange: (digit: string) => keypadAvailabilityRange(approved.clinicDate, digit,
+          route.sevenDayAvailabilityEnabled === true) }),
       resolveIntent: async (turn, signal) => {
         try {
           const result = await classifyIntent(turn, signal);
@@ -302,16 +347,16 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     });
     if (!composed.ok) throw new Error("standalone voice storage unavailable");
     const call = composed.value;
-    count(route.scope, "callOwnerStarted");
+    if (!locations) recordOwner(route.scope);
     let failed = false;
     let ended = false;
     const markEnded = () => {
-      if (!ended) { ended = true; count(route.scope, "callEnded"); }
+      if (!ended) { ended = true; count(diagnosticScope, "callEnded"); }
     };
     return {
       async receive(raw: string) {
         const result = await call.receive(raw);
-        if (!result.ok && !failed) { failed = true; count(route.scope, "voiceFailure"); }
+        if (!result.ok && !failed) { failed = true; count(diagnosticScope, "voiceFailure"); }
         if (!result.ok) markEnded();
         return result;
       },

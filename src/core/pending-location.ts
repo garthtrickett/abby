@@ -1,3 +1,6 @@
+import { normalizedSpokenName } from "./spoken-name.ts";
+export { normalizedSpokenName } from "./spoken-name.ts";
+import { validLocationServices } from "./location-services.ts";
 import { validVoiceProfile, validVoicePolicy, sameVoiceProfile } from "./voice-profile.ts";
 import { createHash } from "node:crypto";
 import { err, ok } from "./model.ts";
@@ -10,11 +13,6 @@ function validRef(value: unknown): value is string {
   return typeof value === "string" && !!value.trim() && value.length <= 256;
 }
 
-export function normalizedSpokenName(value: unknown): string | undefined {
-  if (typeof value !== "string" || value.length > 80 || /[\p{Cc}\p{Cf}]/u.test(value)) return undefined;
-  const normalized = value.trim().replace(/\s+/gu, " ").toLocaleLowerCase("en-AU");
-  return normalized && /^[\p{L}\p{N}](?:[\p{L}\p{N} .,'&-]*[\p{L}\p{N}])?$/u.test(normalized) ? normalized : undefined;
-}
 
 export function validCandidateNames(ids: readonly string[], names: unknown): boolean {
   if (!Array.isArray(names) || names.length !== ids.length) return false;
@@ -36,7 +34,8 @@ export function validPendingRoute(route: unknown): route is PendingLocationRoute
     Array.isArray(value.candidateLocationIds) && value.candidateLocationIds.length >= 2 &&
     value.candidateLocationIds.length <= 32 && value.candidateLocationIds.every(validRef) &&
     new Set(value.candidateLocationIds).size === value.candidateLocationIds.length &&
-    validCandidateNames(value.candidateLocationIds, value.candidateNames);
+    validCandidateNames(value.candidateLocationIds, value.candidateNames) &&
+    (value.candidateServices === undefined || validLocationServices(value.candidateLocationIds, value.candidateServices));
 }
 
 export function pendingCallId(key: Admission["key"]): string {
@@ -158,6 +157,7 @@ export function pendingMatchesAdmission(pending: PendingLocationCall, admission:
 
 export function policyMatchesPending(pending: PendingLocationCall, policy: CallPolicy): boolean {
   return policy.scope.tenantId === pending.route.tenantId && policy.scope.clinicId === pending.route.clinicId &&
+    (pending.route.candidateServices === undefined || pending.prompt?.status === "played") &&
     pending.route.candidateLocationIds.includes(policy.scope.locationId) &&
     policy.numberRouteVersion === pending.route.routeVersion &&
     (pending.route.voiceProfile === undefined || validVoicePolicy(policy, policy.scope) && !!policy.voiceProfile &&

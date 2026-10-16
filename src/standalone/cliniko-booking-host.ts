@@ -92,9 +92,11 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
       send: async (_request, stop): Promise<Result<ClinikoBookingWrite, ClinikoBookingFailure>> => {
         const sent = await config.writer.writeOnce(providerRequest, stop, finalStop => this.#guard.authorize(prepared, mutation, this.#now(), finalStop));
         if (!sent.ok || sent.value.kind !== "accepted") return sent;
-        if (!await this.#guard.mayInspect(prepared, mutation, this.#now(), stop)) return ok({ kind: "uncertain" });
+        // Each native reader checks authority immediately before its request.
+        // The next reader's check also revalidates after the preceding read;
+        // final result interpretation revalidates after the last native read.
         const readBack = await config.writer.inspectCreated(providerRequest, sent.value.appointmentRef, source.endsAt, stop, finalStop => this.#guard.mayInspect(prepared, mutation, this.#now(), finalStop));
-        if (!readBack.ok || !readBack.value || !await this.#guard.mayInspect(prepared, mutation, this.#now(), stop)) return ok({ kind: "uncertain" });
+        if (!readBack.ok || !readBack.value) return ok({ kind: "uncertain" });
         const conflicts = await config.writer.inspectConflicts(sent.value.appointmentRef, stop, finalStop => this.#guard.mayInspect(prepared, mutation, this.#now(), finalStop));
         if (!conflicts.ok || conflicts.value || !await this.#guard.mayInspect(prepared, mutation, this.#now(), stop)) return ok({ kind: "uncertain" });
         return sent;

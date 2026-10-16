@@ -4,6 +4,7 @@ import { claimClinikoBudget, ClinikoReadBudget, clinikoCredentialFingerprint, is
 import type { ClinikoRequestBudget } from "./read-budget.ts";
 import { normalizePatientPhone } from "./phone-number.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
+import type { ClinikoContactRevisionReader } from "./contact-revision.ts";
 
 export type ClinikoClinicScope = Pick<LocationScope, "tenantId" | "clinicId">;
 export type ClinikoPatientConfig = Readonly<{
@@ -11,6 +12,7 @@ export type ClinikoPatientConfig = Readonly<{
   apiKey: string;
   contactEmail: string;
   rateBudget?: ClinikoRequestBudget;
+  contactRevision?: ClinikoContactRevisionReader;
 }>;
 
 /** A candidate is never a verification proof or permission to disclose a record. */
