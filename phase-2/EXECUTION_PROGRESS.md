@@ -20,6 +20,8 @@
 
 The three detailed plans retain the requirements and acceptance matrices. No source merge, deployment, real provider mutation, mail send or Aeva deletion is established by this ledger.
 
+The [manual acceptance proposal](MANUAL_ACCEPTANCE_PROPOSAL.md) describes the operator observations still required. It records no executed acceptance or new permission.
+
 ## Preservation evidence
 
 The independently retrieved Aeva tree is `34a642be8da7884b924eb02e7ccae731bd428276`, tree `d77435a1d7cbdcfcceca942f66b8daf625f36ba7`, with 5,431 blobs. Each of the 113 fetched references matched both its remote Git blob hash and the pinned local tree. This resolves the audit's previously unverified remote retrieval for those explicit references; it is retrieval evidence, not a full archive or proof that Aeva tests pass.
