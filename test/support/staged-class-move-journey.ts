@@ -45,6 +45,14 @@ function assertMoveReadback(call: Call, scenario: StagedMoveScenario) {
     ? /original pass releases one session.*destination pass uses one session/ : /pass session use unchanged/);
 }
 
+function assertPhaseAffirmation(call: Call) {
+  const timing = call.messages.filter(row => row.kind === "classPhaseAffirmation").at(-1)?.diagnostic as
+    { outcome: string; turnToPlayedMs: number | null; turnToClockMs: number } | undefined;
+  assert.ok(timing && timing.outcome === "accepted" && typeof timing.turnToPlayedMs === "number" &&
+    timing.turnToPlayedMs >= 0 && timing.turnToClockMs <= 0,
+    "real phase affirmation follows processed playback and cannot outrun the host clock");
+}
+
 export async function prepareSignedStagedReplacement(call: Call, scenario: StagedMoveScenario) {
   await call.say("Start"); await call.mark(); await call.verify();
   await call.say("Appointments"); await call.mark(); await call.say("The first time please."); await call.mark();
@@ -66,6 +74,15 @@ export async function prepareSignedStagedReplacement(call: Call, scenario: Stage
     await call.mark();
   }
   await affirmClassPassMove(call);
+  if (writes(call).length === 0) {
+    // A native allocation can park before the replacement exists. Continuing
+    // prepares fresh proof/readback; neither the original yes nor code sends it.
+    assert.match(call.spoken.at(-1)!, /I have not sent the replacement attendance/);
+    await call.mark(); await prepareSignedStagedPhase(call, "replacement");
+    assert.equal(writes(call).length, 0);
+    await call.mark(); await call.say("Yes");
+    assertPhaseAffirmation(call);
+  }
   assert.equal(writes(call).length, 1); assert.match(call.spoken.at(-1)!, /overall class move is not confirmed/);
   await call.mark();
 }
@@ -86,7 +103,7 @@ export async function prepareSignedStagedPhase(call: Call, stage: string) {
     }
     break;
   }
-  const words = stage === "original" ? /separate confirmation to cancel the original/ : stage === "association" ? /separate confirmation to associate the replacement/ : /separate confirmation to inspect whether/;
+  const words = stage === "replacement" ? /separate confirmation to create the replacement/ : stage === "original" ? /separate confirmation to cancel the original/ : stage === "association" ? /separate confirmation to associate the replacement/ : /separate confirmation to inspect whether/;
   assert.match(call.spoken.at(-1)!, words);
 }
 
@@ -107,10 +124,7 @@ export async function stagedMoveJourney(scenario: StagedMoveScenario) {
         await voiceUntil(() => call.messages.filter(row => row.kind === "clockAdvanced").length > ticks, "bounded delayed media callback");
       }
       await call.mark(); await call.say("Yes");
-      const timing = call.messages.filter(row => row.kind === "classPhaseAffirmation").at(-1)?.diagnostic as
-        { outcome: string; turnToPlayedMs: number | null; turnToClockMs: number } | undefined;
-      assert.ok(timing && timing.outcome === "accepted" && typeof timing.turnToPlayedMs === "number" &&
-        timing.turnToPlayedMs >= 0 && timing.turnToClockMs <= 0, "real phase affirmation follows processed playback and cannot outrun the host clock");
+      assertPhaseAffirmation(call);
       assert.equal(writes(call).length, count + (stage === "associationInspection" ? 0 : 1));
       assert.equal(call.messages.filter(row => row.kind === "classWriteOutcome").at(-1)!.actionStatus,
         "classMovement", "native receipt remains a staged movement receipt through final inspection");

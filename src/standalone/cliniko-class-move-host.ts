@@ -14,6 +14,7 @@ import { CLINIKO_CASE_ASSOCIATION_LIMIT } from "../cliniko/patient-case-sessions
 import type { ClinikoClassSession as Occurrence } from "../cliniko/class-attendance-read.ts";
 import type { ClinikoAttendanceConfig } from "../cliniko/class-attendance-write.ts";
 import { checkClinikoHeadroom, clinikoCredentialFingerprint, withClinikoReservation } from "../cliniko/read-budget.ts";
+import type { ClinikoBudgetDenial } from "../cliniko/read-budget.ts";
 import { observedClassMoveRequests, classMoveStageRequestCeilings } from "../cliniko/class-move-workload.ts";
 import type { ClassMoveStageRequestCosts, ClassMoveStageRequestCeilings } from "../cliniko/class-move-workload.ts";
 import { clinikoRequestCeiling } from "../cliniko/request-cost.ts";
@@ -58,6 +59,8 @@ export type ClinikoClassMoveHostConfig = Readonly<{
 }>;
 type Move = Extract<ActionRequest, { kind: "reschedule" }>;
 type Context = Readonly<{ source: ClassApproval; destination: ClassApproval; move: ClassMoveApproval; grant: Readonly<{ verificationRef: string; expiresAt: string }>; version: string }>;
+const boundedQuotaWait = (value: ClinikoBudgetDenial | null): boolean => value?.kind === "rateLimited" &&
+  Number.isSafeInteger(value.retryAfterMs) && value.retryAfterMs! >= 1 && value.retryAfterMs! <= 60000;
 type Target = Readonly<{ ref: string; session: Occurrence; attendeeId: string; verificationRef: string; patientId: string; expiresAt: string; version: string }>;
 type Offer = Readonly<{ ref: string; session: Occurrence; expiresAt: string; version: string; pass?: ClassMovementPass }>;
 type Menu = Readonly<{ turnId: string; stage: "targets" | "offers"; version: string; targets?: readonly Target[]; offers?: readonly Offer[] }>;
@@ -596,7 +599,10 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
         !refreshed || digestActionRequest(refreshed) !== query.digest || this.#prepared !== p || signal.aborted ||
         !await this.#permit(after, p.target, p.offer, "review", signal) || p.offer.pass &&
         await this.#passEvidence(after, p.target, refreshed.terms.version)?.authorized(p.offer.pass, this.#nativeRequest(after, p.target, p.offer), "commit", signal) !== true) return denied();
-    if (capacity === null) return ok({ kind: "ready" });
+    // A captured staged owner can park before its replacement send. Its native
+    // allocation still gates all I/O; continuation can renew proof and requires
+    // a new played phase consent instead of replaying this initial affirmation.
+    if (capacity === null || context.move.quotaStaging && boundedQuotaWait(capacity)) return ok({ kind: "ready" });
     if (capacity.kind !== "rateLimited" || !Number.isSafeInteger(capacity.retryAfterMs) || capacity.retryAfterMs! < 1 || capacity.retryAfterMs! > 60000) return denied();
     const seconds = Math.ceil(capacity.retryAfterMs! / 1000);
     if (Date.parse(request.terms.expiresAt) <= Date.parse(this.#now()) + (seconds + 3) * 1000) return err({ kind: "expired", target: "offer" });
@@ -611,7 +617,9 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     const request = context ? this.#request(context, p.target, p.offer, p.request.terms.expiresAt) : undefined;
     if (!context || context.version !== p.version || !request || digestActionRequest(request) !== mutation.payloadDigest) return reject();
     const sameService = context.source.practitionerId === context.destination.practitionerId && context.source.appointmentTypeId === context.destination.appointmentTypeId;
-    const requests = this.#requests(context, p); if (requests === undefined || await checkClinikoHeadroom(c.cliniko.rateBudget, requests) !== null || signal.aborted) return reject();
+    const requests = this.#requests(context, p); if (requests === undefined) return reject();
+    const capacity = await checkClinikoHeadroom(c.cliniko.rateBudget, requests);
+    if (capacity !== null && (!context.move.quotaStaging || !boundedQuotaWait(capacity)) || signal.aborted) return reject();
     const lifetime = AbortSignal.any([c.signal, this.#lifetime.signal]);
     const verifier = context.move.quotaStaging ? this.#movementVerifier : undefined;
     if (context.move.quotaStaging && !verifier) return reject();
