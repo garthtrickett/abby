@@ -1793,3 +1793,47 @@ The memory consent and reviewed facts/registry pass10, work1792175255013.
 The admitted deadline is captured as an immutable string immediately before
 activation, rather than reading a potentially aliased receipt after activation.
 The actual corrected PostgreSQL case remains unrun.
+
+### Healthy52e920 full natural terminal and separate staged timestamp reproduction
+
+Full migrated suite1792174592309 ended naturally18:44:35.756236UTC, exit1;
+wrapper127430 absent and actual slot released. It ran28m2.98s with3150 tests,
+3147 pass/two fail/zero cancelled/one skip; ordered runner did not run.
+Source1173 unchanged/451 generated artifacts pinned; scope peak1,130,401,792B
+excludes Docker PostgreSQL, all OOM/high/max0. The shared-schema startup problem
+is fixed. The remaining failures are the admission-deadline test oracle and
+ordinary staged original-phase Yes. Maximum-history staged pass succeeds.
+
+The latter fails152.84s with closeCode1008, marks10/outstandingfalse, child
+alive, review/replacement only, no original cancellation. Thus the earlier
+real clear-fence fixture defect is not the complete full-context explanation;
+its isolated ordinary pass cannot close this failure. Production consent
+explicitly rejects a turn timestamp before its playedAt. Real quota waits age
+the fixture host clock by elapsed seconds, but its media timestamps previously
+counted20ms per callback; delayed/dropped quiet callbacks can make the later
+utterance stale. No active source or guard changed during the full run.
+
+An actual TwilioMediaStream reproduction using original counter-only timestamps
+fails work1792176098869: a later Yes normalizes before a readback played during
+that elapsed interval. End-only media reconciliation passes12 initial protocol
+checks1792176187033, but a refinement then fails the first speech frame in
+work1792176270105 (five pass/one fail). A last-frame-only correction still
+allowed early speech before playedAt; it was not accepted as complete.
+
+The refined test fixture separates contiguous packet sequence from elapsed
+media time. It receives the actual bounded synthetic host clock and reserves
+the existing42-frame utterance after that instant. Missing silence packets
+advance timestamps rather than fabricating audio or packet numbers. All new
+speech samples must follow previous playback; the last packet cannot outrun
+the confirmed host clock. Existing15s clock-step/15min fixture bounds,42 frames,
+20ms cadence,700ms turn silence,20s response timeout, native180 quota and all
+SAM/lease/proof/terms/played-affirmation guards remain. Non-staged media behavior
+is unchanged. This is test transport modeling, not clinical authority.
+
+A staging-only observer records only the actual phase acceptance/error enum and
+two time differences at CallRuntime.acceptTurn; it returns the original result
+and cannot change consent. No raw text, identifiers, codes or proof leaves the
+fixed diagnostic. The refined actual-transport/playback suite passes13 cases,
+work1792176308731. This proves a concrete timestamp fixture defect and bounded
+correction; actual new-source TypeScript, signed PostgreSQL and complete healthy
+full-context qualification remain required. No clean regression is claimed.

@@ -1,7 +1,7 @@
 {
   "verifiedDate": "2026-10-16",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "5af2d3bc45d0e82022119f9208294f7166c9d33ad950f44d10a4614f286d79d1",
+  "factsSha256": "32052f8584a2ca5de46434baeca373815014ad94bc10a13569f4285da6e13906",
   "sources": {
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
     "docs/adr/0003-class-movement-staff-resolution.md": "683bdd10660afc00309bac21e32ceda976573aa5e29aca4106fb1cddcb71b62f",
@@ -66,6 +66,7 @@
     "test/storage/owning-host-write-contract.test.ts": "63fe6e4cddc29f33c0aae2fbc4a0c1c154f612d8e506cd869cbf001c5de70090",
     "test/support/class-move-recovery-worker.ts": "91f2fcf5ba89165efcf65445d2c515d3304f034e1e1f1090bec0a8d6eca77e1d",
     "test/support/class-move-recovery.ts": "1d0c1cedbb269c6fb6ffd3d0d42be995aedc91faec81865cdb7df4ea7b6ccbbc",
+    "test/support/synthetic-media-timeline.ts": "c32af1fe918c824557ad4704b3da8af36c9ec0a8399d859e26e5f8d5811d7ef1",
     "test/text/booking-menu-deadline.test.ts": "cf2c6f24a08c0846e65fbc9be9a4646b18a0f734b6fe0dd9cf1c2da2e7fcc022",
     "test/text/class-movement-consent.test.ts": "1ff94adb26665cb9d686c0efa99d40864b8fd54e3436d41026e0f9cf2a6317af",
     "test/text/class-movement-receipt.test.ts": "663c5de1ba65b9a2032481080a54fe59a2f92d454e5ef87b30932f9fc7af7491",
@@ -75,7 +76,8 @@
     "test/voice/class-move-staged-runner.test.ts": "a2fdf79237c4f1a28f4f7b22818077e70d125d6d882750123d9c86aeefec9bd9",
     "test/voice/class-move-staged-session.test.ts": "4266e54e3348220ac5efb1d7ac8935b87b53b4a137d4ab9243580b55249db443",
     "test/voice/class-pass-runner.test.ts": "bea619a4f8a7a2970067743c3686bc3ab531ad9bfaf907667fc30d0f4a6a6091",
-    "test/voice/class-runner.test.ts": "59428433d441ac52f5239ed7e1094e01f057f05c0ae88f8ffcba586982163716"
+    "test/voice/class-runner.test.ts": "59428433d441ac52f5239ed7e1094e01f057f05c0ae88f8ffcba586982163716",
+    "test/voice/synthetic-media-timeline.test.ts": "ebbed4cc6f63226753401391837e1d60815a84fd015a9ef53bec231787f7c6b2"
   },
   "limits": "Content/source drift aid only; no automated behavioral, deployment or publication attestation."
 }
