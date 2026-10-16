@@ -72,7 +72,7 @@ test(`E2E-353/E2E-358 booking menu ${phase} deadline preserves ${boundary} bound
     context.mock.timers.tick(bookingMenuDeadlineMs - 1);
     assert.equal(readSignal?.aborted, false);
     if (boundary === "revision") resultValue(await app.runtime.acceptTurn(
-      { ...turn, turnId: "newer-turn", text: "Another request" }, { kind: "unavailableAction" }, proposalNow));
+      { ...turn, turnId: "newer-turn", text: "Another request" }, { kind: "unavailableAction", actionKind: "book" }, proposalNow));
     if (boundary === "ended") resultValue(await app.runtime.endCall(turn.callId, turn.sessionId, proposalNow));
     const before = resultValue(await app.runtime.read(turn.callId));
     clock = boundary === "invalidClock" ? "invalid" : boundary === "backwardsClock" ?

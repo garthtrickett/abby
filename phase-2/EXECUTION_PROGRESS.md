@@ -420,3 +420,17 @@ zero failures/cancellations/skips, natural exit 0, log
 test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts`.
 The candidate is now based on qualified reader fixture commit `cd9b4ca`;
 its menu source and new witness were preserved through that rebase.
+
+
+The first full typecheck of frozen booking-menu `2cf1d511a4f089b952369528a0f2ec45dc57d20d`
+finished naturally with exit 2 at 12:01:33 UTC, log
+`be9df097-1792152027020.log`. Its only diagnostic was the new test's
+`unavailableAction` newer-turn fixture missing the required `actionKind`.
+The runtime source and all 1,143 frozen typecheck inputs stayed unchanged
+through that run. Adding the concrete `book` action kind fixes the fixture's
+typed shape; all 24 original deadline boundary cases then passed again,
+zero failures/cancellations/skips, log `be9df097-1792152120474.log`, using the
+same focused command above. No assertion, deadline or concurrency changed.
+Full typecheck of this corrected fixture remains pending. The one authorized
+heavy job ended and released the slot to Gust at the conservative
+12:01:36 UTC cutoff; no automatic retry or follow-on heavy job was launched.
