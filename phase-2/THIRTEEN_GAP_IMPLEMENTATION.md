@@ -4188,3 +4188,18 @@ backup privacy cases above remain the bounded evidence, with the later test-only
 kind-narrowing delta explicit in the execution ledger. This is a draft source
 checkpoint; rebuilt signed serving, broad cohorts, independent/real operator/
 cloud acceptance and the full13-gap order remain active.
+
+
+Staged signed serving remains in progress. The first ordinary compiled journey
+failed after an unannounced silence exceeded the existing transport listening
+contract. Initial confirmation already supports explicit quota waits; later
+phase preparation now has a bounded quotaWait notice before protected proof
+work, preserves the pending private owner and requires a fresh caller request,
+readback and affirmation afterward. No silence deadline, expiry, quota or
+permission was extended. The missing-wait memory reproduction was red;15
+bounds/gateway/renewal/voice contracts and57 native host/cost/recovery cases
+passed, with the final abort-aware wait delta separately covered by5 cases.
+Manifest1.237 keeps419 IDs/full-call planned. Corrected graph rebuild, signed
+ordinary/maximum-history pass execution, full TypeScript, combined/mixed/
+concurrent cohorts, independent/clinic/operator/cloud acceptance stay open.
+See the execution ledger for exact logs and source-drift limits.

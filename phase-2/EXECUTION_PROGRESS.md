@@ -1239,3 +1239,63 @@ deadlines are180 seconds for ordinary/two real windows,300 seconds for pass/
 four real windows plus private renewal and privacy scans; no existing test's
 deadline changes. Only the uncompiled test changes after the build; emitted
 serving/fixture graph stays unchanged. Semantic execution remains pending.
+
+
+### Signed ordinary failure exposes the phase-wait serving boundary
+
+ONE ordinary case on `08f18ef`/448 pinned compiled files ran via
+`bash scripts/with-postgres.sh env ABBY_LEDGER=postgres node --test
+--test-concurrency=1 --test-name-pattern="compiled signed ordinary"
+test/voice/class-move-staged-runner.test.ts`, work1792164241199,
+log `be9df097-1792164241199.log`. It failed1 case, zero skips/cancellations,
+naturally terminal15:25:34.595489UTC after93.11s, scope peak203,845,632B
+excluding Docker PostgreSQL, OOM/high/max0, source/artifact pins unchanged.
+Initial affirmation after the artificial61-second silence produced no response
+within the unchanged20-second response bound. Heavy slot was released; no
+unchanged retry or pass case followed.
+
+Static tracing found the fixture exceeded the existing15-second listening/
+playback protocol. Initial quota waiting already has a bounded caller-facing
+confirmation-wait notice; the fixture now follows that actual flow rather than
+sleeping unannounced before yes. Later phases lacked equivalent preparation
+wait metadata: a full account could consume/retire proof while attempting the
+next read, and a silent wait could not preserve the transport. The new memory
+reproduction failed at the missing notice, log
+`be9df097-1792164585419.log`. A narrow correction returns a1–60-second
+quotaWait preparation before protected proof work; the core preserves pending
+state and emits fixed listening metadata, with no consent/reservation/send.
+The native preflight includes the complete phase plus one full proof and the
+existing two ownership/permit-pair bound for preparation. Unknown capacity or
+total above180 refuses. The actual phase still reserves and every request
+still claims; concurrent theft remains a safe refusal. Cancellation aborts
+headroom observation and current state/costs are rechecked before any notice.
+
+The first corrected memory contract passed1 case, log
+`be9df097-1792164624946.log`. The bounds/gateway/renewal/voice scope
+`ABBY_LEDGER=memory node --test --test-concurrency=1
+test/cliniko/class-move-phase-wait.test.ts test/text/class-movement-turns.test.ts
+test/cliniko/class-move-staged-call-flow.test.ts
+test/voice/class-move-staged-session.test.ts` passed15 cases in19.65s,
+log `be9df097-1792164686100.log`. These overlap the first case. A later
+abort-aware headroom await still needs its final focused rerun. Manifest1.237
+retains419 IDs/full-call planned; the compiled test remains unregistered as
+passing. Rebuild, signed ordinary/pass execution, full new-source TypeScript,
+independent/real operator/cloud acceptance and all13 gaps stay open.
+
+
+The staged native host/cost/cold recovery regression command
+`ABBY_LEDGER=memory node --test --test-concurrency=1
+test/cliniko/class-move-staged-host.test.ts
+ test/cliniko/class-move-request-cost.test.ts
+ test/cliniko/class-move-recovery.test.ts` passed57 cases, log
+`be9df097-1792164747034.log`,49.56s. The abort-aware await was added
+while this light matrix was in flight, so this is not claimed as an exact-frozen
+whole-matrix result for that last edit. The final phase-wait file, including
+actual held-headroom cancellation, passed5 cases after that edit, log
+`be9df097-1792164831617.log`: cancellation resolves without waiting for the
+budget callback, late release cannot change state, and a fresh request can still
+prepare from the private owner. The assertion/deadline/physical limit remains
+unchanged. The corrected signed fixture now follows the existing initial
+confirmation wait and new explicit phase preparation waits; it does not sleep
+unannounced or alter the transport's silence deadline. New rebuilt graph and
+signed ordinary/pass runtime qualification remain pending.

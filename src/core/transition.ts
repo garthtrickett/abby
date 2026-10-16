@@ -346,6 +346,10 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
         state.callerMessages.push("I cannot verify permission to continue this class move. The clinic needs to review it before any further change.");
       } else if (interpretation.preparation.kind === "verificationRequired") {
         state.callerMessages.push("Before the next class stage, verify your registered email again. If you receive a six-digit code, enter it on the keypad, then press pound. Star clears your entry. Please do not say the code aloud. Verification alone makes no attendance change.");
+      } else if (interpretation.preparation.kind === "quotaWait") {
+        const seconds = interpretation.preparation.seconds;
+        if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > 60) return err({ kind: "invalidTransition" });
+        state.callerMessages.push(`The booking system needs a moment. Please wait about ${seconds} seconds, then ask to continue your class move. I have not sent another stage. The overall class move is not confirmed.`);
       } else {
         if (interpretation.preparation.expectedConversationRevision !== state.conversationRevision - 1) return err({ kind: "staleTurn" });
         const prepared = prepareClassMovementConsent(state, interpretation.actionKey, interpretation.preparation.evidence, now);
@@ -648,7 +652,9 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   if (newMessages.length > 0 && !state.pendingPresentationId) {
     const id = noticePresentationId(state.callId, turn.turnId);
     state.presentations[id] = { kind: "notice", id, approvedText: newMessages.join(" "), status: "pending",
-      ...(interpretation.kind === "confirmationWait" ? { confirmationWaitSeconds: interpretation.seconds } : {}) };
+      ...(interpretation.kind === "confirmationWait" ? { confirmationWaitSeconds: interpretation.seconds } :
+        interpretation.kind === "classMovementPreparation" && interpretation.preparation.kind === "quotaWait"
+          ? { confirmationWaitSeconds: interpretation.preparation.seconds } : {}) };
     state.pendingPresentationId = id;
   }
   state.processedTurnIds.push(turn.turnId);

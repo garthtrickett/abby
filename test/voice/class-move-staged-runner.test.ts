@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { withClinicalRunner } from "../support/clinical-runner-call.ts";
+import { affirmClassPassMove } from "../support/class-pass-move-runner.ts";
 import { voiceUntil } from "../support/cliniko-workflow-voice.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
@@ -10,7 +11,8 @@ import { verificationCanaries } from "../support/caller-verification.ts";
 
 type Call = Parameters<Parameters<typeof withClinicalRunner>[1]>[0];
 const writes = (call: Call) => call.mutations.filter(row => row.path?.startsWith("/v1/attendees"));
-async function nextRealWindow(call: Call) {
+async function waitForQuota(call: Call, seconds: number) {
+  assert.ok(Number.isSafeInteger(seconds) && seconds >= 1 && seconds <= 60);
   const before = writes(call).length, clocks = call.messages.filter(row => row.kind === "clockAdvanced").length;
   let sent = 0;
   // Real elapsed time releases the actual PostgreSQL budget. Synthetic clock
@@ -19,10 +21,10 @@ async function nextRealWindow(call: Call) {
   const tick = () => { sent++; call.child.send({ kind: "advanceClock", milliseconds: 1000 }); };
   const ticks = setInterval(tick, 1000);
   const quiet = setInterval(() => call.media(false), 20);
-  try { await new Promise<void>(resolve => setTimeout(resolve, 61000)); }
+  try { await new Promise<void>(resolve => setTimeout(resolve, seconds * 1000 + 500)); }
   finally { clearInterval(ticks); clearInterval(quiet); }
   // Timer scheduling must not make the proof-age assertion probabilistic.
-  while (sent < 61) { tick(); call.media(false); await voiceUntil(() => call.messages.filter(row => row.kind === "clockAdvanced").length >= clocks + sent, "bounded phase clock tick"); }
+  while (sent < seconds) { tick(); call.media(false); await voiceUntil(() => call.messages.filter(row => row.kind === "clockAdvanced").length >= clocks + sent, "bounded phase clock tick"); }
   await voiceUntil(() => call.messages.filter(row => row.kind === "clockAdvanced").length >= clocks + sent, "quota-window proof age");
   assert.equal(writes(call).length, before, "waiting cannot dispatch a stage");
 }
@@ -34,18 +36,24 @@ for (const pass of [false, true]) test(`E2E-419 compiled signed ${pass ? "maximu
     await call.say("Appointments"); await call.mark(); await call.say("The first time please."); await call.mark();
     await call.say("Times"); await call.mark(); await call.say("The first time please.");
     assert.match(call.spoken.at(-1)!, /Move only your/); assert.equal(writes(call).length, 0); await call.mark();
-    await nextRealWindow(call);
-    await call.say("Yes");
+    await affirmClassPassMove(call);
     assert.equal(writes(call).length, 1); assert.match(call.spoken.at(-1)!, /overall class move is not confirmed/);
     await call.mark();
     for (const [index, stage] of (pass ? ["original", "association", "associationInspection"] : ["original"]).entries()) {
-      await nextRealWindow(call);
       const count = writes(call).length, mailCount = call.messages.filter(row => row.kind === "verificationEmail").length;
       await call.say("Continue my class move"); assert.equal(writes(call).length, count);
-      if (/registered email again/.test(call.spoken.at(-1)!)) {
-        await call.mark();
-        await voiceUntil(() => call.messages.filter(row => row.kind === "verificationEmail").length > mailCount, "fresh private phase verification");
-        await call.verify(); await call.say("Continue my class move"); assert.equal(writes(call).length, count);
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const wait = /wait about (\d+) seconds, then ask to continue/.exec(call.spoken.at(-1)!);
+        if (wait) {
+          await call.mark(); await waitForQuota(call, Number(wait[1]));
+          await call.say("Continue my class move"); assert.equal(writes(call).length, count); continue;
+        }
+        if (/registered email again/.test(call.spoken.at(-1)!)) {
+          await call.mark();
+          await voiceUntil(() => call.messages.filter(row => row.kind === "verificationEmail").length > mailCount, "fresh private phase verification");
+          await call.verify(); await call.say("Continue my class move"); assert.equal(writes(call).length, count); continue;
+        }
+        break;
       }
       const words = stage === "original" ? /separate confirmation to cancel the original/ : stage === "association" ? /separate confirmation to associate the replacement/ : /separate confirmation to inspect whether/;
       assert.match(call.spoken.at(-1)!, words);

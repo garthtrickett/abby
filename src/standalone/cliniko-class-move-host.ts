@@ -408,6 +408,24 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
       if (!isDeepStrictEqual(this.#stageRequestCosts(), owner.costs)) {
         owner.continuation = undefined; owner.verifier.dispose(); return ok({ kind: "needsReview" });
       }
+      // Admit the complete phase plus preparation before consuming protected
+      // proof. Otherwise a full account can retire a valid owner on a read
+      // denial, and an unexplained silent wait reaches the transport idle limit.
+      // Preparation uses one full proof, two ownership checks and one permit;
+      // costs.permit already bounds two ownership/permit pairs. This is no hold:
+      // the native phase still reserves and each request still claims normally.
+      const phase = classMoveStageRequestCeilings(owner.costs, !!owner.prepared.offer.pass)?.[owner.continuation.stage];
+      const required = phase === undefined ? NaN : phase + owner.costs.proof + owner.costs.permit;
+      if (!Number.isSafeInteger(required) || required > 180) return denied();
+      const capacity = await awaitUntilAbort(checkClinikoHeadroom(c.cliniko.rateBudget, required), signal);
+      if (capacity === undefined) return denied();
+      const admitted = await this.#ready(signal);
+      if (!admitted || admitted.conversationRevision !== before.conversationRevision || !this.#pendingOwner(admitted, owner) ||
+          admitted.pendingPresentationId || this.#staged !== owner || !isDeepStrictEqual(this.#stageRequestCosts(), owner.costs) || signal.aborted) return denied();
+      if (capacity !== null) {
+        return capacity.kind === "rateLimited" && Number.isSafeInteger(capacity.retryAfterMs) && capacity.retryAfterMs! >= 1 && capacity.retryAfterMs! <= 60000
+          ? ok({ kind: "quotaWait", seconds: Math.ceil(capacity.retryAfterMs! / 1000) }) : denied();
+      }
       // Expired proof must reach private succession before any protected read
       // can clear the source grant. Code entry still cannot dispatch a stage.
       const proof = await owner.verifier.prepare(signal);
