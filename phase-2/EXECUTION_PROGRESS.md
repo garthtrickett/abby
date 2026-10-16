@@ -2641,3 +2641,13 @@ concrete proposed contract in the separate `codex/abby-stripe-financial-intent`
 worktree. That decision still precedes dependent durable workflow wiring; these
 readonly provider checks are independent. All13 gaps and current class full
 regression remain active; no payment lifecycle or activation claim follows.
+
+Discovery source883 full TypeScript passed (`work1792192308480`),
+23:11:48.780646–23:13:21.787355UTC,1190 inputs unchanged;
+peak1,406,476,288B within2GiB/Swap0/CPU200%, Nodeoldspace1536MiB,
+all memory limit/OOM events0. Documentation following883 preserves every
+source/configuration/package hash. Current correctedc54 full class/budget
+regression remains live: all nine37a failures have passed in that cohort,
+including all five disposable-PG setup-dependent cases. Its final whole verdict
+and ordered followup remain pending; authoritative cloud/independent/clinic/
+provider/operator acceptance is still open.
