@@ -2442,3 +2442,52 @@ All thirteen gaps remain active. The next task is the complete migrated
 PostgreSQL regression on the current combined graph, then remaining independent
 engineering in EXECUTION_ORDER including owner-selected Stripe11, outbound12
 and approvedwriteback13. No current full regression/activation is claimed yet.
+
+### Current full-regression failures: migration isolation and measured database CPU budget
+
+The frozen37a full migrated regression (`work1792187834929`) has failed;
+its final counts are pending natural completion. The earlier focused077
+passes and parentf57 full pass do not qualify this changed graph.
+
+The first four failures are request-budget tests1719/1721/1722/1723 returning
+`unavailable`. The disposable main PostgreSQL log at22:13:04UTC records missing
+`cliniko_request_reservations` relations. The allocation migration test was
+rolling back048 in the same ambient database as concurrent budget readers.
+A separate owned worktree reproduced this deterministically: after rollback,
+an unrelated account's claim fails instead of retaining its current schema
+(`work1792189342208`, one intentional failing control). This correction gives
+only the destructive migration test a fresh UUID database and two connections,
+retains rollback/upgrade/active-owner/prior-claim assertions, checks the ambient
+cohort remains usable while the private schema is rolled back, and destroys
+only its own database. Production budgets, quotas and migrations are unchanged.
+
+`work1792189379186` passed both complete budget files concurrently:
+`node --test --test-concurrency=4 test/storage/cliniko-budget-reservation.test.ts test/storage/postgres-cliniko-request-budget.test.ts`,
+18passed/0failed/0skipped,37.755s test duration. Node peak157,855,744B;
+aggregate own Docker peak115,593,216B; all memory limit/OOM events0.
+The red/green controls used512MiB Node/512MiB aggregate Docker caps, Swap0,
+CPU200%/100%, separate source/database/temporary paths and live shared-host
+admission. They did not mutate or interrupt the running full suite.
+
+Separately, several full-suite cases failed during disposable-PG startup and
+cleanup around26s. A diagnostic invoked four unmodified fixture helpers in
+parallel, exposing nested errors with their original15s readiness/10s Docker
+command deadlines. With1GiB aggregate Docker/CPU100%, all four missed readiness;
+three also timed out in cleanup (`work1792189472083`). Docker logs showed a
+final server only becoming ready near the original15s deadline. The group
+used19.190CPU-seconds, was throttled in162/258 periods, and accumulated44.386s
+aggregate throttling; peak325,861,376B and no memory limit/OOM event.
+
+The otherwise identical prospective CPU200% control
+(`work1792189521226`) passed: four migrated owners in9.805–10.095s and all
+closed in11.654–11.933s. Aggregate Docker peak355,840,000B, Node peak97,566,720B,
+all memory limit/OOM events0. Future full runs therefore retain the1GiB Docker
+RAM cap but use CPU200% for that group; Node remains1.5GiB/CPU200%. This is a
+prospective resource-budget correction, with unchanged test concurrency,
+quotas, assertions and deadlines. It supports the startup diagnosis without
+claiming every historical setup error has independently been proven identical.
+The running37a job and its historical runner remain unchanged.
+
+Current corrected-source full TypeScript and combined regression are pending;
+independent review, authoritative cloud checks and external acceptance remain
+open. All13 gaps remain active, including Stripe11, outbound12 and writeback13.

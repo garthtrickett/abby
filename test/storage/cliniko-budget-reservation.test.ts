@@ -176,14 +176,29 @@ test("E2E-416 unavailable allocation storage cannot invoke a native task", async
 });
 
 test("E2E-416 allocation migration preserves prior claims and refuses rollback over a live owner", async () => {
-  const apiKey = key(), budget = new PostgresClinikoRequestBudget(firstDb, { apiKey, maxPerMinute: 3 });
-  assert.equal(await budget.claim(), null);
-  await migrateTo(firstDb, "047_confirmation_resend_journal");
-  assert.deepEqual(await budget.claim(), { kind: "unavailable" });
-  await migrate(firstDb); assert.equal(await budget.checkHeadroom(2), null);
-  assert.equal((await budget.withReservation(2, new AbortController().signal, async () => {
-    await assert.rejects(migrateTo(secondDb, "047_confirmation_resend_journal"), /active Cliniko allocations/);
+  assert.equal(process.env.ABBY_ISOLATED_POSTGRES_PROBE, "1", "migration probe requires disposable PostgreSQL");
+  const name = `abby_test_allocation_${randomUUID().replaceAll("-", "")}`;
+  const target = new URL(url!); target.pathname = "/" + name;
+  await sql.raw(`create database "${name}"`).execute(firstDb);
+  const isolated = connectPostgres(target.toString()), other = connectPostgres(target.toString());
+  try {
+    await migrate(isolated);
+    const apiKey = key(), budget = new PostgresClinikoRequestBudget(isolated, { apiKey, maxPerMinute: 3 });
     assert.equal(await budget.claim(), null);
-  })).kind, "completed");
-  assert.equal(await budget.claim(), null); assert.equal((await budget.claim())?.kind, "rateLimited");
+    const cohort = new PostgresClinikoRequestBudget(firstDb, { apiKey: key(), maxPerMinute: 2 });
+    assert.equal(await cohort.claim(), null);
+    // Rollback owns only this database; concurrent readers retain the current schema.
+    await migrateTo(isolated, "047_confirmation_resend_journal");
+    assert.deepEqual(await budget.claim(), { kind: "unavailable" });
+    assert.equal(await cohort.claim(), null, "migration rollback must not remove another test owner's allocation table");
+    await migrate(isolated); assert.equal(await budget.checkHeadroom(2), null);
+    assert.equal((await budget.withReservation(2, new AbortController().signal, async () => {
+      await assert.rejects(migrateTo(other, "047_confirmation_resend_journal"), /active Cliniko allocations/);
+      assert.equal(await budget.claim(), null);
+    })).kind, "completed");
+    assert.equal(await budget.claim(), null); assert.equal((await budget.claim())?.kind, "rateLimited");
+  } finally {
+    try { await Promise.all([isolated.destroy(), other.destroy()]); }
+    finally { await sql.raw(`drop database "${name}" with (force)`).execute(firstDb); }
+  }
 });
