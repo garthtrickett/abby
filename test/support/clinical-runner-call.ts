@@ -123,7 +123,7 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
     const count = (kind: string) => messages.filter(m => m.kind === kind).length;
     const say = async (text: string, privateField = false, expectFailure = false) => {
       if (options.classQuotaStaging) {
-        const aligned = count("mediaClockAligned"); child.send({ kind: "alignMediaClock", elapsedMs: (chunk + 42) * 20 });
+        const aligned = count("mediaClockAligned"); child.send({ kind: "alignMediaClock", elapsedMs: (chunk + 41) * 20 });
         await voiceUntil(() => count("mediaClockAligned") > aligned, "synthetic class media clock");
         assert.equal(messages.filter(row => row.kind === "mediaClockAligned").at(-1)!.allowed, true);
       }

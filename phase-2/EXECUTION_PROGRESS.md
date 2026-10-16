@@ -1339,3 +1339,17 @@ alone. Near-limit callback cohorts can still be offered and then refused by
 the stricter combined preparation bound. This is safe refusal, not complete
 serving admission. Centralize/test the host's combined admission before closing
 that requirement; retain the native-only coordinator's separate ceilings.
+
+
+Clock/diagnostic fixture source `d1ba686` passes `npm run build:voice-tests`,
+work1792165676851/log `be9df097-1792165676851.log`, natural exit0
+15:48:49.316928UTC,51.89s, peak868,241,408B/OOMhighmax0,
+1,170 unchanged inputs and448 pinned JavaScript artifacts. The new test-driver
+alignment targets the last transmitted frame's timestamp `(chunk+41)*20`, not
+one frame past it, so playback timestamps cannot be placed20ms after the
+completed affirmation. This last adjustment changes only the uncompiled test
+driver, with the built serving/fixture graph unchanged. Rebuilt syntax/type
+qualification does not establish the clock hypothesis or a semantic pass.
+The next separately coordinated ordinary run must measure its continuation
+skew and preserve all existing deadline/permission/state assertions. No pass
+case or whole-suite claim is made.
